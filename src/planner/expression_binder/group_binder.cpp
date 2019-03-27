@@ -1,6 +1,7 @@
 #include "planner/expression_binder/group_binder.hpp"
 
-#include "parser/expression/bound_columnref_expression.hpp"
+#include "planner/expression/bound_columnref_expression.hpp"
+#include "planner/expression/bound_constant_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "parser/query_node/select_node.hpp"
@@ -8,27 +9,31 @@
 using namespace duckdb;
 using namespace std;
 
-GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode &node,
+GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode &node, size_t group_index,
                          unordered_map<string, uint32_t> &alias_map, unordered_map<string, uint32_t> &group_alias_map)
-    : SelectNodeBinder(binder, context, node), alias_map(alias_map), group_alias_map(group_alias_map) {
+    : ExpressionBinder(binder, context), node(node), alias_map(alias_map), group_alias_map(group_alias_map), group_index(group_index) {
 }
 
-BindResult GroupBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth, bool root_expression) {
-	switch (expr->GetExpressionClass()) {
+BindResult GroupBinder::BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression) {
+	if (root_expression && depth == 0) {
+		switch(expr.expression_class) {
+		case ExpressionClass::COLUMN_REF:
+			return BindColumnRef((ColumnRefExpression&) expr);
+		case ExpressionClass::CONSTANT:
+			return BindConstant((ConstantExpression&) expr);
+		default:
+			break;
+		}
+	}
+	switch (expr.expression_class) {
 	case ExpressionClass::AGGREGATE:
-		return BindResult(move(expr), "GROUP BY clause cannot contain aggregates!");
+		return BindResult("GROUP BY clause cannot contain aggregates!");
+	case ExpressionClass::DEFAULT:
+		return BindResult("GROUP BY clause cannot contain DEFAULT clause");
 	case ExpressionClass::WINDOW:
-		return BindResult(move(expr), "GROUP clause cannot contain window functions!");
-	case ExpressionClass::SUBQUERY:
-		return BindSubqueryExpression(move(expr), depth);
-	case ExpressionClass::FUNCTION:
-		return BindFunctionExpression(move(expr), depth);
-	case ExpressionClass::COLUMN_REF:
-		return BindColumnRef(move(expr), depth, root_expression);
-	case ExpressionClass::CONSTANT:
-		return BindConstant(move(expr), depth, root_expression);
+		return BindResult("GROUP BY clause cannot contain window functions!");
 	default:
-		return BindChildren(move(expr), depth);
+		return ExpressionBinder::BindExpression(expr, depth);
 	}
 }
 
@@ -39,7 +44,7 @@ BindResult GroupBinder::BindSelectRef(uint32_t entry) {
 		// e.g. GROUP BY k, k or GROUP BY 1, 1
 		// in this case, we can just replace the grouping with a constant since the second grouping has no effect
 		// (the constant grouping will be optimized out later)
-		return BindResult(make_unique<ConstantExpression>(42));
+		return BindResult(make_unique<BoundConstantExpression>(SQLType(SQLTypeId::INTEGER), Value(42)));
 	}
 	if (entry >= node.select_list.size()) {
 		throw BinderException("GROUP BY term out of range - should be between 1 and %d", (int)node.select_list.size());
@@ -47,45 +52,38 @@ BindResult GroupBinder::BindSelectRef(uint32_t entry) {
 	// we replace the root expression, also replace the unbound expression
 	unbound_expression = node.select_list[entry]->Copy();
 	// move the expression that this refers to here and bind it
-	auto result = move(node.select_list[entry]);
-	BindAndResolveType(&result, false);
+	auto select_entry = move(node.select_list[entry]);
+	auto binding = Bind(select_entry, false);
 	// now replace the original expression in the select list with a reference to this group
-	node.select_list[entry] = make_unique<BoundColumnRefExpression>(
-	    *result, result->return_type, ColumnBinding(node.binding.group_index, bind_index), 0);
+	// node.select_list[entry] = make_unique<BoundColumnRefExpression>(
+	//     *binding, binding->return_type, binding->sql_type, ColumnBinding(group_index, bind_index), 0);
 	// insert into the set of used aliases
 	used_aliases.insert(entry);
-	return BindResult(move(result));
+	return BindResult(move(binding));
 }
 
-BindResult GroupBinder::BindConstant(unique_ptr<Expression> expr, uint32_t depth, bool root_expression) {
-	assert(expr->type == ExpressionType::VALUE_CONSTANT);
-	if (root_expression && depth == 0) {
-		// constant as root expression
-		auto &constant = (ConstantExpression &)*expr;
-		if (!TypeIsIntegral(constant.value.type)) {
-			// non-integral expression, we just leave the constant here.
-			return BindResult(move(expr));
-		}
-		// INTEGER constant: we use the integer as an index into the select list (e.g. GROUP BY 1)
-		auto index = constant.value.GetNumericValue();
-		return BindSelectRef(index - 1);
+BindResult GroupBinder::BindConstant(ConstantExpression &constant) {
+	// constant as root expression
+	if (!TypeIsIntegral(constant.value.type)) {
+		// non-integral expression, we just leave the constant here.
+		return ExpressionBinder::BindExpression(constant, 0);
 	}
-	return BindResult(move(expr));
+	// INTEGER constant: we use the integer as an index into the select list (e.g. GROUP BY 1)
+	auto index = constant.value.GetNumericValue();
+	return BindSelectRef(index - 1);
 }
 
-BindResult GroupBinder::BindColumnRef(unique_ptr<Expression> expr, uint32_t depth, bool root_expression) {
-	assert(expr->type == ExpressionType::COLUMN_REF);
+BindResult GroupBinder::BindColumnRef(ColumnRefExpression &colref) {
 	// columns in GROUP BY clauses:
 	// FIRST refer to the original tables, and
 	// THEN if no match is found refer to aliases in the SELECT list
 	// THEN if no match is found, refer to outer queries
 
 	// first try to bind to the base columns (original tables)
-	auto result = ExpressionBinder::BindColumnRefExpression(move(expr), depth);
-	if (result.HasError() && root_expression && depth == 0) {
+	auto result = ExpressionBinder::BindExpression(colref, 0);
+	if (result.HasError()) {
 		// failed to bind the column and the node is the root expression with depth = 0
 		// check if refers to an alias in the select clause
-		auto &colref = (ColumnRefExpression &)*result.expression;
 		auto alias_name = colref.column_name;
 		if (!colref.table_name.empty()) {
 			// explicit table name: not an alias reference

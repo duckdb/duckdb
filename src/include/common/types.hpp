@@ -67,7 +67,7 @@ struct SQLType {
 	uint16_t width;
 	uint8_t scale;
 
-	SQLType(SQLTypeId id, uint16_t width = 0, uint8_t scale = 0) : id(id), width(width), scale(scale) {
+	SQLType(SQLTypeId id = SQLTypeId::INVALID, uint16_t width = 0, uint8_t scale = 0) : id(id), width(width), scale(scale) {
 	}
 
 	bool operator==(const SQLType &rhs) const {

@@ -20,16 +20,16 @@ static SQLType ResolveInType(OperatorExpression &op, vector<unique_ptr<Expressio
 	}
 	// cast all children to the same type
 	for (size_t i = 0; i < children.size(); i++) {
-		children[i] = AddCastToType(move(children[i]), cast_type);
+		children[i] = AddCastToType(move(children[i]), max_type);
 	}
 	// (NOT) IN always returns a boolean
 	return SQLType(SQLTypeId::BOOLEAN);
 }
 
 static SQLType ResolveAddType(OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
-	switch (children[0].sql_type.id) {
+	switch (children[0]->sql_type.id) {
 	case SQLTypeId::DATE:
-		switch (children[1].sql_type.id) {
+		switch (children[1]->sql_type.id) {
 		case SQLTypeId::TINYINT:
 		case SQLTypeId::SMALLINT:
 		case SQLTypeId::INTEGER:
@@ -50,9 +50,9 @@ static SQLType ResolveAddType(OperatorExpression &op, vector<unique_ptr<Expressi
 }
 
 static SQLType ResolveSubtractType(OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
-	switch (children[0].sql_type.id) {
+	switch (children[0]->sql_type.id) {
 	case SQLTypeId::DATE:
-		switch (children[1].sql_type.id) {
+		switch (children[1]->sql_type.id) {
 		case SQLTypeId::DATE:
 			// dates can be subtracted from dates, the result is an integer (amount of days)
 			return SQLType(SQLTypeId::INTEGER);
@@ -94,7 +94,7 @@ static SQLType ResolveArithmeticType(OperatorExpression &op, vector<unique_ptr<E
 	assert(children.size() == 2);
 	auto left_type = children[0]->sql_type;
 	auto right_type = children[1]->sql_type;
-	if (IsNumericType(left_type) && IsNumericType(right_type)) {
+	if (IsNumericType(left_type.id) && IsNumericType(right_type.id)) {
 		// both are numeric, return the max type and cast the children
 		auto result_type = MaxSQLType(left_type, right_type);
 		children[0] = AddCastToType(move(children[0]), result_type);
@@ -132,7 +132,8 @@ static SQLType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Exp
 	case ExpressionType::OPERATOR_SUBTRACT:
 	case ExpressionType::OPERATOR_MULTIPLY:
 	case ExpressionType::OPERATOR_DIVIDE:
-	case ExpressionType::OPERATOR_MOD:
+	default:
+		assert(op.type == ExpressionType::OPERATOR_MOD);
 		return ResolveArithmeticType(op, children);
 	}
 }
@@ -141,10 +142,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, uint32_t dep
 	// bind the children of the operator expression
 	string error;
 	for (size_t i = 0; i < op.children.size(); i++) {
-		string result = Bind(&op.children[i], depth);
-		if (!result.empty()) {
-			error = result;
-		}
+		BindChild(op.children[i], depth, error);
 	}
 	if (!error.empty()) {
 		return BindResult(error);
@@ -159,5 +157,5 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, uint32_t dep
 
 	auto result = make_unique<BoundOperatorExpression>(op.type, GetInternalType(result_type), result_type);
 	result->children = move(children);
-	return move(result);
+	return BindResult(move(result));
 }

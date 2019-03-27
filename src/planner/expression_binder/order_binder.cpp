@@ -1,6 +1,6 @@
 #include "planner/expression_binder/order_binder.hpp"
 
-#include "parser/expression/bound_columnref_expression.hpp"
+#include "planner/expression/bound_columnref_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "parser/query_node/select_node.hpp"
@@ -8,23 +8,21 @@
 using namespace duckdb;
 using namespace std;
 
-OrderBinder::OrderBinder(Binder &binder, ClientContext &context, SelectNode &node,
-                         unordered_map<string, uint32_t> &alias_map, expression_map_t<uint32_t> &projection_map)
-    : SelectNodeBinder(binder, context, node), alias_map(alias_map), projection_map(projection_map) {
+OrderBinder::OrderBinder(size_t projection_index, SelectNode &node, unordered_map<string, uint32_t> &alias_map, expression_map_t<uint32_t> &projection_map) : 
+	projection_index(projection_index), node(node), alias_map(alias_map), projection_map(projection_map) {
 }
 
-BindResult OrderBinder::CreateProjectionReference(Expression &expr, size_t index) {
-	return BindResult(make_unique<BoundColumnRefExpression>(expr, TypeId::INVALID,
-	                                                        ColumnBinding(node.binding.projection_index, index), 0));
+unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &expr, size_t index) {
+	return make_unique<BoundColumnRefExpression>(expr.GetName(), TypeId::INVALID, SQLType(SQLTypeId::INVALID), ColumnBinding(projection_index, index));
 }
 
-BindResult OrderBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth, bool root_expression) {
+unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	// in the ORDER BY clause we do not bind children
 	// we bind ONLY to the select list
 	// if there is no matching entry in the SELECT list already, we add the expression to the SELECT list and refer the
 	// new expression the new entry will then be bound later during the binding of the SELECT list we also don't do type
 	// resolution here: this only happens after the SELECT list has been bound
-	switch (expr->GetExpressionClass()) {
+	switch (expr->expression_class) {
 	case ExpressionClass::CONSTANT: {
 		// ORDER BY constant
 		// is the ORDER BY expression a constant integer? (e.g. ORDER BY 1)
@@ -34,7 +32,7 @@ BindResult OrderBinder::BindExpression(unique_ptr<Expression> expr, uint32_t dep
 			// non-integral expression, we just leave the constant here.
 			// ORDER BY <constant> has no effect
 			// CONTROVERSIAL: maybe we should throw an error
-			return BindResult(nullptr);
+			return nullptr;
 		}
 		// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
 		auto index = constant.value.GetNumericValue();

@@ -7,7 +7,7 @@ using namespace duckdb;
 using namespace std;
 
 static SQLType ResolveSumType(SQLType input_type) {
-	switch (child.sql_type.id) {
+	switch (input_type.id) {
 	case SQLTypeId::SQLNULL:
 	case SQLTypeId::TINYINT:
 	case SQLTypeId::SMALLINT:
@@ -19,12 +19,12 @@ static SQLType ResolveSumType(SQLType input_type) {
 	case SQLTypeId::DECIMAL:
 		return SQLType(SQLTypeId::DECIMAL);
 	default:
-		throw BinderException("Unsupported SQLType %s for SUM aggregate", SQLTypeToString(child.sql_type));
+		throw BinderException("Unsupported SQLType %s for SUM aggregate", SQLTypeToString(input_type));
 	}
 }
 
 static SQLType ResolveSTDDevType(SQLType input_type) {
-	switch (child.sql_type.id) {
+	switch (input_type.id) {
 	case SQLTypeId::SQLNULL:
 	case SQLTypeId::TINYINT:
 	case SQLTypeId::SMALLINT:
@@ -35,7 +35,7 @@ static SQLType ResolveSTDDevType(SQLType input_type) {
 	case SQLTypeId::DECIMAL:
 		return SQLType(SQLTypeId::DECIMAL);
 	default:
-		throw BinderException("Unsupported SQLType %s for STDDEV_SAMP aggregate", SQLTypeToString(child.sql_type));
+		throw BinderException("Unsupported SQLType %s for STDDEV_SAMP aggregate", SQLTypeToString(input_type));
 	}
 }
 
@@ -75,45 +75,25 @@ static SQLType ResolveAggregateType(AggregateExpression &aggr, unique_ptr<Expres
 	*child = AddCastToType(move(*child), result_type);
 }
 
-BindResult SelectBinder::BindExpression(AggregateExpression &aggr, uint32_t depth) {
+BindResult SelectBinder::BindAggregate(AggregateExpression &aggr, uint32_t depth) {
 	// first bind the child of the aggregate expression (if any)
 	if (aggr.child) {
 		AggregateBinder aggregate_binder(binder, context, node);
 		string result = aggregate_binder.Bind(&aggr.child, 0);
 		if (!result.empty()) {
+			// FIXME: check if columns were bound for subqueries
 			return BindResult(result);
 		}
 	}
-	// successfully bound child, determine result types
-	auto child = aggr.child ? GetExpression(*aggr.child) : nullptr;
+	auto child = GetExpression(aggr.child);
 	SQLType result_type = ResolveAggregateType(aggr, &child);
-	return BindResult(
-	    make_unique<BoundAggregateExpression>(GetInternalType(result_type), result_type, aggr.type, move(child)));
+	// create the aggregate
+	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(result_type), result_type, aggr.type, move(child));
+	// now create a column reference referring to this aggregate
+	auto colref = make_unique<BoundColumnRefExpression>(
+		aggr.GetName(), aggr->return_type, aggr->sql_type,
+		ColumnBinding(node.aggregate_index, node.aggregates.size()), depth);
+	// move the aggregate expression into the set of bound aggregates
+	node.aggregates.push_back(move(aggregate));
+	return BindResult(move(colref));
 }
-
-// BindResult SelectBinder::BindAggregate(unique_ptr<Expression> expr, uint32_t depth) {
-// 	assert(expr && expr->GetExpressionClass() == ExpressionClass::AGGREGATE);
-// 	// bind the children of the aggregation
-// 	AggregateBinder aggregate_binder(binder, context, node);
-// 	auto bind_result = aggregate_binder.BindChildren(move(expr), 0);
-// 	if (aggregate_binder.BoundColumns() || !bind_result.HasError()) {
-// 		// columns were bound or binding was successful!
-// 		// that means this aggregation belongs to this node
-// 		// check if we have to resolve any errors by binding with parent binders
-// 		bind_result = BindCorrelatedColumns(move(bind_result), true);
-// 		// if there is still an error after this, we could not successfully bind the aggregate
-// 		if (bind_result.HasError()) {
-// 			throw BinderException(bind_result.error);
-// 		}
-// 		bind_result.expression->ResolveType();
-// 		ExtractCorrelatedExpressions(binder, *bind_result.expression);
-// 		// successfully bound: extract the aggregation and place it inside the set of aggregates for this node
-// 		auto colref = make_unique<BoundColumnRefExpression>(
-// 		    *bind_result.expression, bind_result.expression->return_type,
-// 		    ColumnBinding(node.binding.aggregate_index, node.binding.aggregates.size()), depth);
-// 		// move the aggregate expression into the set of bound aggregates
-// 		node.binding.aggregates.push_back(move(bind_result.expression));
-// 		return BindResult(move(colref));
-// 	}
-// 	return bind_result;
-// }

@@ -8,21 +8,23 @@
 
 #pragma once
 
-#include "planner/expression_binder.hpp"
+#include "parser/parsed_expression.hpp"
 
 namespace duckdb {
+class Expression;
+class SelectNode;
 
 //! The ORDER binder is responsible for binding an expression within the ORDER BY clause of a SQL statement
-class OrderBinder : public SelectNodeBinder {
+class OrderBinder {
 public:
-	OrderBinder(Binder &binder, ClientContext &context, SelectNode &node, unordered_map<string, uint32_t> &alias_map,
-	            expression_map_t<uint32_t> &projection_map);
+	OrderBinder(size_t projection_index, SelectNode &node, unordered_map<string, uint32_t> &alias_map, expression_map_t<uint32_t> &projection_map);
 
-	BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth, bool root_expression = false) override;
-
+	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> expr);
 private:
-	BindResult CreateProjectionReference(Expression &expr, size_t index);
+	unique_ptr<Expression> CreateProjectionReference(ParsedExpression &expr, size_t index);
 
+	size_t projection_index;
+	SelectNode &node;
 	unordered_map<string, uint32_t> &alias_map;
 	expression_map_t<uint32_t> &projection_map;
 };

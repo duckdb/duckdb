@@ -6,5 +6,5 @@ using namespace duckdb;
 using namespace std;
 
 BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, uint32_t depth) {
-	return BindResult(make_unique<BoundParameterExpression>(parameter_nr));
+	return BindResult(make_unique<BoundParameterExpression>(expr.parameter_nr));
 }

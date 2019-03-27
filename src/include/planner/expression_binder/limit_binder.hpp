@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/expression_binder/aggregate_binder.hpp
+// planner/expression_binder/limit_binder.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,11 +12,11 @@
 
 namespace duckdb {
 
-//! The AggregateBinder is responsible for binding aggregate statements extracted from a SELECT clause (by the
-//! SelectBinder)
-class AggregateBinder : public ExpressionBinder {
+//! The LIMIT binder is responsible for binding an expression within the LIMIT clause of a SQL statement
+class LimitBinder : public ExpressionBinder {
 public:
-	AggregateBinder(Binder &binder, ClientContext &context);
+	LimitBinder(Binder &binder, ClientContext &context);
+
 protected:
 	BindResult BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression = false) override;
 };

@@ -13,11 +13,11 @@
 namespace duckdb {
 
 //! The CHECK binder is responsible for binding an expression within a CHECK constraint
-class CheckBinder : public ExpressionBinder {
-public:
-	CheckBinder(Binder &binder, ClientContext &context);
+// class CheckBinder : public ExpressionBinder {
+// public:
+// 	CheckBinder(Binder &binder, ClientContext &context);
 
-	BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth, bool root_expression = false) override;
-};
+// 	BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth, bool root_expression = false) override;
+// };
 
 } // namespace duckdb

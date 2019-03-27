@@ -5,19 +5,23 @@
 #include "planner/expression_binder/check_binder.hpp"
 #include "planner/statement/bound_create_table_statement.hpp"
 
+#include "main/client_context.hpp"
+#include "main/database.hpp"
+
 using namespace duckdb;
 using namespace std;
 
 unique_ptr<BoundSQLStatement> Binder::Bind(CreateTableStatement &stmt) {
 	auto result = make_unique<BoundCreateTableStatement>();
 	if (stmt.query) {
-		result->query = Bind(*stmt.query);
+		result->query = unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*stmt.query));
 	} else {
 		// bind any constraints
 		// first create a fake table
-		bind_context.AddDummyTable(stmt.info->table, stmt.info->columns);
+		// bind_context.AddDummyTable(stmt.info->table, stmt.info->columns);
 		for (auto &cond : stmt.info->constraints) {
 			if (cond->type == ConstraintType::CHECK) {
+				assert(0);
 				throw BinderException("Failed: binding CHECK constraints not handled yet");
 			}
 		}

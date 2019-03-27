@@ -3,6 +3,8 @@
 #include "parser/tableref/table_function.hpp"
 #include "planner/binder.hpp"
 #include "planner/tableref/bound_table_function.hpp"
+#include "planner/expression_binder/limit_binder.hpp"
+
 #include "main/database.hpp"
 
 using namespace duckdb;
@@ -18,7 +20,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunction &ref) {
 	auto result = make_unique<BoundTableFunction>(function, bind_index);
 	for (auto &child : function_definition->children) {
 		LimitBinder binder(*this, context);
-		result->parameters.push_back(binder.BindAndResolveType(*child));
+		result->parameters.push_back(binder.Bind(child));
 	}
 	bind_context.AddTableFunction(bind_index,
 	                              ref.alias.empty() ? function_definition->function_name : ref.alias, function);

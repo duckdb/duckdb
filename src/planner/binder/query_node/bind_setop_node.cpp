@@ -1,4 +1,4 @@
-#include "parser/expression/bound_expression.hpp"
+#include "planner/expression/bound_columnref_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "parser/query_node/set_operation_node.hpp"
@@ -65,7 +65,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 	result->setop_index = GenerateTableIndex();
 
 	vector<size_t> order_references;
-	if (statement.HasOrder()) {
+	if (statement.orders.size() > 0) {
 		// handle the ORDER BY
 		// NOTE: we handle the ORDER BY in SET OPERATIONS before binding the children
 		// we do so we can perform expression comparisons BEFORE type resolution/binding
@@ -129,14 +129,14 @@ unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 	MoveCorrelatedExpressions(*result->right_binder);
 
 	// now both sides have been bound we can resolve types
-	if (statement.left->types.size() != statement.right->types.size()) {
+	if (result->left->types.size() != result->right->types.size()) {
 		throw Exception("Set operations can only apply to expressions with the "
 		                "same number of result columns");
 	}
 
 	// figure out the types of the setop result by picking the max of both
-	for (size_t i = 0; i < statement.left->types.size(); i++) {
-		auto result_type = MaxSQLType(statement.left->types[i], statement.right->types[i]);
+	for (size_t i = 0; i < result->left->types.size(); i++) {
+		auto result_type = MaxSQLType(result->left->types[i], result->right->types[i]);
 		result->types.push_back(result_type);
 	}
 
@@ -144,10 +144,14 @@ unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 	assert(order_references.size() == statement.orders.size());
 	for (size_t i = 0; i < statement.orders.size(); i++) {
 		auto entry = order_references[i];
-		if (entry >= statement.types.size()) {
-			throw BinderException("ORDER term out of range - should be between 1 and %d", (int)statement.types.size());
+		if (entry >= result->types.size()) {
+			throw BinderException("ORDER term out of range - should be between 1 and %d", (int)result->types.size());
 		}
-		statement.orders[i].expression = make_unique<BoundColumnRefExpression>(
-		    "", statement.types[entry], ColumnBinding(binding.setop_index, entry));
+		BoundOrderByNode node;
+		node.expression = make_unique<BoundColumnRefExpression>(
+		    GetInternalType(result->types[entry]), result->types[entry], ColumnBinding(result->setop_index, entry));
+		node.type = statement.orders[i].type;
+		result->orders.push_back(move(node));
 	}
+	return move(result);
 }

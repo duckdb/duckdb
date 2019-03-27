@@ -3,6 +3,9 @@
 #include "planner/expression_binder/update_binder.hpp"
 #include "planner/expression_binder/where_binder.hpp"
 #include "planner/statement/bound_update_statement.hpp"
+#include "planner/tableref/bound_basetableref.hpp"
+
+#include "planner/expression/bound_default_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -30,11 +33,11 @@ unique_ptr<BoundSQLStatement> Binder::Bind(UpdateStatement &stmt) {
 		result->column_ids.push_back(column.oid);
 
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
-			result->expression.push_back(
+			result->expressions.push_back(
 			    make_unique<BoundDefaultExpression>(GetInternalType(column.type), column.type));
 		} else {
 			UpdateBinder binder(*this, context);
-			result->expressions.push_back(binder.Bind(expression));
+			result->expressions.push_back(binder.Bind(expr));
 			// FIXME: check if we need to create a cast
 			// // now check if we have to create a cast
 			// auto expression = move(stmt.expressions[i]);

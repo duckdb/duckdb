@@ -12,6 +12,8 @@
 #include "parser/tokens.hpp"
 #include "planner/expression.hpp"
 
+#include "common/exception.hpp"
+
 namespace duckdb {
 
 class Binder;
@@ -58,8 +60,11 @@ public:
 	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
 	virtual ~ExpressionBinder();
 
-	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr);
+	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, bool root_expression = true);
 
+	bool BoundColumns() {
+		return bound_columns;
+	}
 protected:
 	string Bind(unique_ptr<ParsedExpression> *expr, uint32_t depth, bool root_expression = false);
 
@@ -75,14 +80,12 @@ protected:
 	BindResult BindExpression(OperatorExpression &expr, uint32_t depth);
 	BindResult BindExpression(ParameterExpression &expr, uint32_t depth);
 	BindResult BindExpression(StarExpression &expr, uint32_t depth);
-	BindResult BindExpression(SubqueryExpression &expr, uint32_t depth);
+	// BindResult BindExpression(SubqueryExpression &expr, uint32_t depth);
 
 	// Bind table names to ColumnRefExpressions
 	void BindTableNames(ParsedExpression &expr);
 
-	bool BoundColumns() {
-		return bound_columns;
-	}
+	void BindChild(unique_ptr<ParsedExpression> &expr, uint32_t depth, string &error);
 
 protected:
 	unique_ptr<Expression> BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
@@ -91,11 +94,10 @@ protected:
 	ClientContext &context;
 	ExpressionBinder *stored_binder;
 	bool bound_columns = false;
-
-private:
-	//! Retrieves an expression from a BoundExpression node
-	unique_ptr<Expression> GetExpression(ParsedExpression &expr);
-	unique_ptr<Expression> AddCastToType(unique_ptr<Expression> expr, SQLType target_type);
 };
 
+//! Cast an expression to the specified SQL type if required
+unique_ptr<Expression> AddCastToType(unique_ptr<Expression> expr, SQLType target_type);
+//! Retrieves an expression from a BoundExpression node
+unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression> &expr);
 } // namespace duckdb

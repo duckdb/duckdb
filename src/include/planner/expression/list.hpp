@@ -6,7 +6,6 @@
 #include "planner/expression/bound_conjunction_expression.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
 #include "planner/expression/bound_default_expression.hpp"
-#include "planner/expression/bound_expression.hpp"
 #include "planner/expression/bound_function_expression.hpp"
 #include "planner/expression/bound_operator_expression.hpp"
 #include "planner/expression/bound_parameter_expression.hpp"

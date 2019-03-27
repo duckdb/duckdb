@@ -1,13 +1,17 @@
 #include "parser/statement/insert_statement.hpp"
 #include "planner/binder.hpp"
 #include "planner/statement/bound_insert_statement.hpp"
+#include "planner/expression_binder/where_binder.hpp"
+
+#include "main/client_context.hpp"
+#include "main/database.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
-	auto result = make_unique<BoundInsertStatement>() result->table =
-	    context.db.catalog.GetTable(context.ActiveTransaction(), stmt.schema, stmt.table);
+	auto result = make_unique<BoundInsertStatement>();
+	result->table = context.db.catalog.GetTable(context.ActiveTransaction(), stmt.schema, stmt.table);
 
 	if (stmt.columns.size() > 0) {
 		// insertion statement specifies column list
@@ -31,11 +35,11 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 	}
 
 	if (stmt.select_statement) {
-		result->select_statement = Bind(*stmt.select_statement);
+		result->select_statement = unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*stmt.select_statement));
 	} else {
 		int expected_columns = stmt.columns.size() == 0 ? result->table->columns.size() : stmt.columns.size();
 		// visit the expressions
-		for (auto &expression_list : statement.values) {
+		for (auto &expression_list : stmt.values) {
 			if (expression_list.size() != expected_columns) {
 				string msg =
 				    StringUtil::Format(stmt.columns.size() == 0 ? "table %s has %d columns but %d values were supplied"

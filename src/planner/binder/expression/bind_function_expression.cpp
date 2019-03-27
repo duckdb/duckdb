@@ -2,6 +2,9 @@
 #include "planner/expression/bound_function_expression.hpp"
 #include "planner/expression_binder.hpp"
 
+#include "main/client_context.hpp"
+#include "main/database.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -9,10 +12,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, uint32
 	// bind the children of the function expression
 	string error;
 	for (size_t i = 0; i < function.children.size(); i++) {
-		string result = Bind(&function.children[i], depth);
-		if (!result.empty()) {
-			error = result;
-		}
+		BindChild(function.children[i], depth, error);
 	}
 	if (!error.empty()) {
 		return BindResult(error);

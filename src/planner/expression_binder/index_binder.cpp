@@ -6,19 +6,15 @@ using namespace std;
 IndexBinder::IndexBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
 }
 
-BindResult IndexBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth, bool root_expression) {
-	switch (expr->GetExpressionClass()) {
+BindResult IndexBinder::BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression) {
+	switch (expr.expression_class) {
 	case ExpressionClass::AGGREGATE:
-		return BindResult(move(expr), "aggregate functions are not allowed in index expressions");
+		return BindResult("aggregate functions are not allowed in index expressions");
 	case ExpressionClass::WINDOW:
-		return BindResult(move(expr), "window functions are not allowed in index expressions");
+		return BindResult("window functions are not allowed in index expressions");
 	case ExpressionClass::SUBQUERY:
-		return BindResult(move(expr), "cannot use subquery in index expressions");
-	case ExpressionClass::COLUMN_REF:
-		return BindColumnRefExpression(move(expr), depth);
-	case ExpressionClass::FUNCTION:
-		return BindFunctionExpression(move(expr), depth);
+		return BindResult("cannot use subquery in index expressions");
 	default:
-		return BindChildren(move(expr), depth);
+		return ExpressionBinder::BindExpression(expr, depth);
 	}
 }

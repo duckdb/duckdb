@@ -3,6 +3,8 @@
 #include "planner/binder.hpp"
 #include "planner/statement/bound_execute_statement.hpp"
 
+#include "main/client_context.hpp"
+
 using namespace duckdb;
 using namespace std;
 

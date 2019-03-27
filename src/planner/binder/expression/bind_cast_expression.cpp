@@ -6,12 +6,12 @@ using namespace std;
 
 BindResult ExpressionBinder::BindExpression(CastExpression &expr, uint32_t depth) {
 	// first try to bind the child of the cast expression
-	string result = Bind(&expr.child, depth);
-	if (!result.empty()) {
-		return BindResult(result);
+	string error = Bind(&expr.child, depth);
+	if (!error.empty()) {
+		return BindResult(error);
 	}
 	// the children have been successfully resolved
-	auto child = GetExpression(*expr.child);
+	auto child = GetExpression(expr.child);
 	if (child->type == ExpressionType::VALUE_PARAMETER) {
 		// parameter: move types into the parameter expression itself
 		child->return_type = GetInternalType(expr.cast_type);

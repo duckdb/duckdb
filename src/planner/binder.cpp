@@ -5,6 +5,9 @@
 #include "planner/bound_sql_statement.hpp"
 #include "planner/bound_tableref.hpp"
 #include "planner/expression.hpp"
+
+#include "planner/expression_binder/limit_binder.hpp"
+#include "execution/expression_executor.hpp"
 // #include "parser/tableref/table_function.hpp"
 
 // #include "parser/query_node.hpp"
@@ -44,14 +47,43 @@ unique_ptr<BoundSQLStatement> Binder::Bind(SQLStatement &statement) {
 	}
 }
 
+static int64_t BindLimit(LimitBinder &binder, unique_ptr<ParsedExpression> &expr) {
+	auto bound_expr = binder.Bind(expr);
+	Value value = ExpressionExecutor::EvaluateScalar(*bound_expr);
+	if (!TypeIsNumeric(value.type)) {
+		throw BinderException("LIMIT clause can only contain numeric constants!");
+	}
+	int64_t limit_value = value.GetNumericValue();
+	if (limit_value < 0) {
+		throw BinderException("LIMIT must not be negative");
+	}
+	return limit_value;
+}
+
 unique_ptr<BoundQueryNode> Binder::Bind(QueryNode &node) {
+	unique_ptr<BoundQueryNode> result;
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
-		return Bind((SelectNode &)node);
+		result = Bind((SelectNode &)node);
+		break;
 	default:
 		assert(node.type == QueryNodeType::SET_OPERATION_NODE);
-		return Bind((SetOperationNode &)node);
+		result = Bind((SetOperationNode &)node);
+		break;
 	}
+	// bind the limit nodes
+	LimitBinder binder(*this, context);
+	if (node.limit) {
+		result->limit = BindLimit(binder, node.limit);
+		result->offset = 0;
+	}
+	if (node.offset) {
+		result->offset = BindLimit(binder, node.offset);
+		if (!node.limit) {
+			result->limit = std::numeric_limits<int64_t>::max();
+		}
+	}
+	return result;
 }
 
 unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
