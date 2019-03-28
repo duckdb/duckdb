@@ -10,11 +10,26 @@ ExpressionExecutor::ExpressionExecutor()
 	: chunk(nullptr) {
 }
 
+ExpressionExecutor::ExpressionExecutor(DataChunk *child_chunk) :
+	chunk(child_chunk) {
+}
+
 ExpressionExecutor::ExpressionExecutor(DataChunk &child_chunk) :
 	chunk(&child_chunk) {
 }
 
 void ExpressionExecutor::Execute(vector<unique_ptr<Expression>> &expressions, DataChunk &result) {
+	assert(expressions.size() == result.column_count);
+	assert(expressions.size() > 0);
+	for (size_t i = 0; i < expressions.size(); i++) {
+		ExecuteExpression(*expressions[i], result.data[i]);
+		result.heap.MergeHeap(result.data[i].string_heap);
+	}
+	result.sel_vector = result.data[0].sel_vector;
+	result.Verify();
+}
+
+void ExpressionExecutor::Execute(vector<Expression*> &expressions, DataChunk &result) {
 	assert(expressions.size() == result.column_count);
 	assert(expressions.size() > 0);
 	for (size_t i = 0; i < expressions.size(); i++) {
@@ -35,7 +50,7 @@ void ExpressionExecutor::Merge(std::vector<std::unique_ptr<Expression>> &express
 }
 
 void ExpressionExecutor::ExecuteExpression(Expression &expr, Vector &result) {
-	if (expr->type == ExpressionType::VALUE_PARAMETER) {
+	if (expr.type == ExpressionType::VALUE_PARAMETER) {
 		throw Exception("Cannot execute a parameter expression");
 	}
 	Vector vector;
@@ -81,9 +96,9 @@ void ExpressionExecutor::MergeExpression(Expression &expr, Vector &result) {
 Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 	assert(expr.IsScalar());
 	// use an ExpressionExecutor to execute the expression
-	ExpressionExecutor executor(nullptr);
+	ExpressionExecutor executor;
 	Vector result(expr.return_type, true, false);
-	executor.ExecuteExpression(&expr, result);
+	executor.ExecuteExpression(expr, result);
 	assert(result.count == 1);
 	return result.GetValue(0);
 }

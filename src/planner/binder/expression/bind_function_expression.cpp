@@ -44,7 +44,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, uint32
 	// types match up, get the result type
 	auto return_type = func->return_type(types);
 	// now create the function
-	auto result = make_unique<BoundFunctionExpression>(GetInternalType(return_type), return_type, func);
+	auto result = make_unique<BoundFunctionExpression>(GetInternalType(return_type), func, return_type);
 	result->children = move(children);
 	return BindResult(move(result));
 }

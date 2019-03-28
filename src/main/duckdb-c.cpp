@@ -118,6 +118,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 				out->columns[col].nullmask[row++] = chunk->data[col].nullmask[k];
 			}
 		}
+		// FIXME: use SQL types
 		// then write the data
 		switch (result->types[col]) {
 		case TypeId::BOOLEAN:
@@ -135,7 +136,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 		case TypeId::BIGINT:
 			WriteData<int64_t>(out, result->collection, col);
 			break;
-		case TypeId::DECIMAL:
+		case TypeId::DOUBLE:
 			WriteData<double>(out, result->collection, col);
 			break;
 		case TypeId::POINTER:
@@ -155,25 +156,25 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 			}
 			break;
 		}
-		case TypeId::DATE: {
-			size_t row = 0;
-			duckdb_date *target = (duckdb_date *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
-				date_t *source = (date_t *)chunk->data[col].data;
-				for (size_t k = 0; k < chunk->data[col].count; k++) {
-					if (!chunk->data[col].nullmask[k]) {
-						int32_t year, month, day;
-						Date::Convert(source[k], year, month, day);
-						target[row].year = year;
-						target[row].month = month;
-						target[row].day = day;
-					}
-					row++;
-				}
-			}
-			break;
-		}
-		case TypeId::TIMESTAMP:
+		// case TypeId::DATE: {
+		// 	size_t row = 0;
+		// 	duckdb_date *target = (duckdb_date *)out->columns[col].data;
+		// 	for (auto &chunk : result->collection.chunks) {
+		// 		date_t *source = (date_t *)chunk->data[col].data;
+		// 		for (size_t k = 0; k < chunk->data[col].count; k++) {
+		// 			if (!chunk->data[col].nullmask[k]) {
+		// 				int32_t year, month, day;
+		// 				Date::Convert(source[k], year, month, day);
+		// 				target[row].year = year;
+		// 				target[row].month = month;
+		// 				target[row].day = day;
+		// 			}
+		// 			row++;
+		// 		}
+		// 	}
+		// 	break;
+		// }
+		// case TypeId::TIMESTAMP:
 		default:
 			// unsupported type for C API
 			assert(0);
@@ -229,14 +230,14 @@ duckdb_type ConvertCPPTypeToC(TypeId type) {
 		return DUCKDB_TYPE_INTEGER;
 	case TypeId::BIGINT:
 		return DUCKDB_TYPE_BIGINT;
-	case TypeId::DECIMAL:
-		return DUCKDB_TYPE_DECIMAL;
+	case TypeId::DOUBLE:
+		return DUCKDB_TYPE_DOUBLE;
 	case TypeId::POINTER:
 		return DUCKDB_TYPE_POINTER;
-	case TypeId::TIMESTAMP:
-		return DUCKDB_TYPE_TIMESTAMP;
-	case TypeId::DATE:
-		return DUCKDB_TYPE_DATE;
+	// case TypeId::TIMESTAMP:
+	// 	return DUCKDB_TYPE_TIMESTAMP;
+	// case TypeId::DATE:
+	// 	return DUCKDB_TYPE_DATE;
 	case TypeId::VARCHAR:
 		return DUCKDB_TYPE_VARCHAR;
 	default:
@@ -256,7 +257,7 @@ size_t GetCTypeSize(duckdb_type type) {
 		return sizeof(int32_t);
 	case DUCKDB_TYPE_BIGINT:
 		return sizeof(int64_t);
-	case DUCKDB_TYPE_DECIMAL:
+	case DUCKDB_TYPE_DOUBLE:
 		return sizeof(double);
 	case DUCKDB_TYPE_POINTER:
 		return sizeof(uint64_t);
@@ -297,17 +298,17 @@ static Value GetCValue(duckdb_result *result, uint32_t col, uint64_t row) {
 		return Value::INTEGER(UnsafeFetch<int32_t>(result, col, row));
 	case DUCKDB_TYPE_BIGINT:
 		return Value::BIGINT(UnsafeFetch<int64_t>(result, col, row));
-	case DUCKDB_TYPE_DECIMAL:
+	case DUCKDB_TYPE_DOUBLE:
 		return Value(UnsafeFetch<double>(result, col, row));
 	case DUCKDB_TYPE_POINTER:
 		return Value::POINTER(UnsafeFetch<uint64_t>(result, col, row));
-	case DUCKDB_TYPE_DATE: {
-		auto date = UnsafeFetch<duckdb_date>(result, col, row);
-		return Value::DATE(Date::FromDate(date.year, date.month, date.day));
-	}
+	// case DUCKDB_TYPE_DATE: {
+	// 	auto date = UnsafeFetch<duckdb_date>(result, col, row);
+	// 	return Value::DATE(Date::FromDate(date.year, date.month, date.day));
+	// }
 	case DUCKDB_TYPE_VARCHAR:
 		return Value(string(UnsafeFetch<const char *>(result, col, row)));
-	case DUCKDB_TYPE_TIMESTAMP:
+	// case DUCKDB_TYPE_TIMESTAMP:
 	default:
 		// invalid type for C to C++ conversion
 		assert(0);

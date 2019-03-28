@@ -1,25 +1,27 @@
-#include "main/client_context.hpp"
-#include "main/database.hpp"
-#include "parser/expression/list.hpp"
-#include "parser/query_node/list.hpp"
-#include "parser/statement/list.hpp"
-#include "parser/tableref/list.hpp"
 #include "planner/binder.hpp"
 #include "planner/logical_plan_generator.hpp"
-#include "planner/operator/list.hpp"
 #include "planner/subquery/flatten_dependent_join.hpp"
 
-#include <algorithm>
-#include <map>
+#include "planner/expression/bound_aggregate_expression.hpp"
+#include "planner/expression/bound_cast_expression.hpp"
+#include "planner/expression/bound_columnref_expression.hpp"
+#include "planner/expression/bound_comparison_expression.hpp"
+#include "planner/expression/bound_constant_expression.hpp"
+#include "planner/expression/bound_reference_expression.hpp"
+#include "planner/expression/bound_subquery_expression.hpp"
+
+#include "planner/operator/list.hpp"
+
+#include "planner/expression_iterator.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubqueryExpression &expr,
-                                                       SubqueryExpression &subquery, unique_ptr<LogicalOperator> &root,
+                                                       unique_ptr<LogicalOperator> &root,
                                                        unique_ptr<LogicalOperator> plan) {
 	assert(!expr.IsCorrelated());
-	switch (subquery.subquery_type) {
+	switch (expr.subquery_type) {
 	case SubqueryType::EXISTS: {
 		// uncorrelated EXISTS
 		// we only care about existence, hence we push a LIMIT 1 operator
@@ -28,8 +30,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		plan = move(limit);
 
 		// now we push a COUNT(*) aggregate onto the limit, this will be either 0 or 1 (EXISTS or NOT EXISTS)
-		auto count_star = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_COUNT_STAR, nullptr);
-		count_star->ResolveType();
+		auto count_star = make_unique<BoundAggregateExpression>(TypeId::BIGINT, ExpressionType::AGGREGATE_COUNT_STAR, nullptr);
 		auto count_type = count_star->return_type;
 		vector<unique_ptr<Expression>> aggregate_list;
 		aggregate_list.push_back(move(count_star));
@@ -40,10 +41,10 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		plan = move(aggregate);
 
 		// now we push a projection with a comparison to 1
-		auto left_child = make_unique<BoundColumnRefExpression>("", count_type, ColumnBinding(aggregate_index, 0));
-		auto right_child = make_unique<ConstantExpression>(Value::Numeric(count_type, 1));
+		auto left_child = make_unique<BoundColumnRefExpression>(count_type, ColumnBinding(aggregate_index, 0));
+		auto right_child = make_unique<BoundConstantExpression>(Value::Numeric(count_type, 1));
 		auto comparison =
-		    make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left_child), move(right_child));
+		    make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left_child), move(right_child));
 
 		vector<unique_ptr<Expression>> projection_list;
 		projection_list.push_back(move(comparison));
@@ -61,7 +62,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// we replace the original subquery with a ColumnRefExpression refering to the result of the projection (either
 		// TRUE or FALSE)
-		return make_unique<BoundColumnRefExpression>(expr, TypeId::BOOLEAN, ColumnBinding(projection_index, 0));
+		return make_unique<BoundColumnRefExpression>(expr.GetName(), TypeId::BOOLEAN, ColumnBinding(projection_index, 0));
 	}
 	case SubqueryType::SCALAR: {
 		// in the uncorrelated case we are only interested in the first result of the query
@@ -71,9 +72,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		plan = move(limit);
 		// we push an aggregate that returns the FIRST element
 		vector<unique_ptr<Expression>> expressions;
-		auto bound = make_unique<BoundExpression>(expr.return_type, 0);
-		auto first_agg = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_FIRST, move(bound));
-		first_agg->ResolveType();
+		auto bound = make_unique<BoundReferenceExpression>(expr.return_type, 0);
+		auto first_agg = make_unique<BoundAggregateExpression>(expr.return_type, ExpressionType::AGGREGATE_FIRST, move(bound));
 		expressions.push_back(move(first_agg));
 		auto aggr_index = binder.GenerateTableIndex();
 		auto aggr = make_unique<LogicalAggregate>(binder.GenerateTableIndex(), aggr_index, move(expressions));
@@ -91,10 +91,10 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// we replace the original subquery with a BoundColumnRefExpression refering to the first result of the
 		// aggregation
-		return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(aggr_index, 0));
+		return make_unique<BoundColumnRefExpression>(expr.GetName(), expr.return_type, ColumnBinding(aggr_index, 0));
 	}
 	default: {
-		assert(subquery.subquery_type == SubqueryType::ANY);
+		assert(expr.subquery_type == SubqueryType::ANY);
 		// we generate a MARK join that results in either (TRUE, FALSE or NULL)
 		// subquery has NULL values -> result is (TRUE or NULL)
 		// subquery has no NULL values -> result is (TRUE, FALSE or NULL [if input is NULL])
@@ -102,7 +102,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		plan->ResolveOperatorTypes();
 		assert(plan->types.size() == 1);
 		auto right_type = plan->types[0];
-		auto return_type = max(subquery.child->return_type, right_type);
+		auto return_type = max(expr.child->return_type, right_type);
 
 		auto subquery_index = binder.GenerateTableIndex();
 		auto logical_subquery = make_unique<LogicalSubquery>(move(plan), subquery_index);
@@ -114,15 +114,15 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		join->AddChild(move(plan));
 		// create the JOIN condition
 		JoinCondition cond;
-		cond.left = CastExpression::AddCastToType(return_type, move(subquery.child));
-		cond.right = CastExpression::AddCastToType(
-		    return_type, make_unique<BoundColumnRefExpression>("", right_type, ColumnBinding(subquery_index, 0)));
-		cond.comparison = subquery.comparison_type;
+		cond.left = BoundCastExpression::AddCastToType(return_type, move(expr.child));
+		cond.right = BoundCastExpression::AddCastToType(
+		    return_type, make_unique<BoundColumnRefExpression>(right_type, ColumnBinding(subquery_index, 0)));
+		cond.comparison = expr.comparison_type;
 		join->conditions.push_back(move(cond));
 		root = move(join);
 
 		// we replace the original subquery with a BoundColumnRefExpression refering to the mark column
-		return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(subquery_index, 0));
+		return make_unique<BoundColumnRefExpression>(expr.GetName(), expr.return_type, ColumnBinding(subquery_index, 0));
 	}
 	}
 }
@@ -133,7 +133,7 @@ static unique_ptr<LogicalDelimJoin> CreateDuplicateEliminatedJoin(vector<Correla
 	for (size_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		delim_join->duplicate_eliminated_columns.push_back(
-		    make_unique<BoundColumnRefExpression>("", col.type, col.binding));
+		    make_unique<BoundColumnRefExpression>(col.type, col.binding));
 	}
 	return delim_join;
 }
@@ -153,7 +153,7 @@ static void CreateDelimJoinConditions(LogicalDelimJoin &delim_join, vector<Corre
 }
 
 static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubqueryExpression &expr,
-                                                     SubqueryExpression &subquery, unique_ptr<LogicalOperator> &root,
+                                                     unique_ptr<LogicalOperator> &root,
                                                      unique_ptr<LogicalOperator> plan) {
 	auto &correlated_columns = expr.binder->correlated_columns;
 	assert(expr.IsCorrelated());
@@ -161,7 +161,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 	// for a more in-depth explanation of this code, read the paper "Unnesting Arbitrary Subqueries"
 	// we handle three types of correlated subqueries: Scalar, EXISTS and ANY
 	// all three cases are very similar with some minor changes (mainly the type of join performed at the end)
-	switch (subquery.subquery_type) {
+	switch (expr.subquery_type) {
 	case SubqueryType::SCALAR: {
 		// correlated SCALAR query
 		// first push a DUPLICATE ELIMINATED join
@@ -197,7 +197,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		delim_join->AddChild(move(subquery));
 		root = move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the data element returned by the join
-		return make_unique<BoundColumnRefExpression>(expr, expr.return_type,
+		return make_unique<BoundColumnRefExpression>(expr.GetName(), expr.return_type,
 		                                             ColumnBinding(subquery_index, flatten.data_offset));
 	}
 	case SubqueryType::EXISTS: {
@@ -220,10 +220,10 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		delim_join->AddChild(move(subquery_node));
 		root = move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the marker
-		return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(subquery_index, 0));
+		return make_unique<BoundColumnRefExpression>(expr.GetName(), expr.return_type, ColumnBinding(subquery_index, 0));
 	}
 	default: {
-		assert(subquery.subquery_type == SubqueryType::ANY);
+		assert(expr.subquery_type == SubqueryType::ANY);
 		// correlated ANY query
 		// this query is similar to the correlated SCALAR query
 		// however, in this case we push a correlated MARK join
@@ -234,7 +234,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		plan->ResolveOperatorTypes();
 		assert(plan->types.size() == 1);
 		auto right_type = plan->types[0];
-		auto return_type = max(subquery.child->return_type, right_type);
+		auto return_type = max(expr.child->return_type, right_type);
 
 		auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK);
 		// LHS
@@ -251,16 +251,16 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		CreateDelimJoinConditions(*delim_join, correlated_columns, ColumnBinding(subquery_index, flatten.delim_offset));
 		// add the actual condition based on the ANY/ALL predicate
 		JoinCondition compare_cond;
-		compare_cond.left = CastExpression::AddCastToType(return_type, move(subquery.child));
-		compare_cond.right = CastExpression::AddCastToType(
-		    return_type, make_unique<BoundColumnRefExpression>("", right_type, ColumnBinding(subquery_index, 0)));
-		compare_cond.comparison = subquery.comparison_type;
+		compare_cond.left = BoundCastExpression::AddCastToType(return_type, move(expr.child));
+		compare_cond.right = BoundCastExpression::AddCastToType(
+		    return_type, make_unique<BoundColumnRefExpression>(right_type, ColumnBinding(subquery_index, 0)));
+		compare_cond.comparison = expr.comparison_type;
 		delim_join->conditions.push_back(move(compare_cond));
 
 		delim_join->AddChild(move(subquery_node));
 		root = move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the marker
-		return make_unique<BoundColumnRefExpression>(expr, expr.return_type,
+		return make_unique<BoundColumnRefExpression>(expr.GetName(), expr.return_type,
 		                                             ColumnBinding(subquery_index, flatten.data_offset));
 	}
 	}
@@ -269,9 +269,9 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 static unique_ptr<Expression> PlanSubquery(Binder &binder, ClientContext &context, BoundSubqueryExpression &expr,
                                            unique_ptr<LogicalOperator> &root);
 
-class PlanSubqueries : public LogicalOperatorVisitor {
+class RecursiveSubqueryPlanner : public LogicalOperatorVisitor {
 public:
-	PlanSubqueries(Binder &binder, ClientContext &context) : binder(binder), context(context) {
+	RecursiveSubqueryPlanner(Binder &binder, ClientContext &context) : binder(binder), context(context) {
 	}
 	void VisitOperator(LogicalOperator &op) override {
 		if (op.children.size() > 0) {
@@ -294,52 +294,52 @@ private:
 	ClientContext &context;
 };
 
-static unique_ptr<Expression> PlanSubquery(Binder &binder, ClientContext &context, BoundSubqueryExpression &expr,
-                                           unique_ptr<LogicalOperator> &root) {
-	auto &subquery = (SubqueryExpression &)*expr.subquery;
+unique_ptr<Expression> PlanSubquery(Binder &binder, ClientContext &context,
+                                    BoundSubqueryExpression &expr, unique_ptr<LogicalOperator> &root) {
+	assert(root);
 	// first we translate the QueryNode of the subquery into a logical plan
 	// note that we do not plan nested subqueries yet
 	LogicalPlanGenerator generator(*expr.binder, context);
 	generator.plan_subquery = false;
-	generator.CreatePlan(*subquery.subquery);
-	if (!generator.root) {
-		throw Exception("Can't plan subquery");
-	}
-	if (!root) {
-		throw Exception("Subquery cannot be root of a plan");
-	}
+	auto subquery_root = generator.CreatePlan(*expr.subquery);
+	assert(subquery_root);
+	
 	// now we actually flatten the subquery
-	auto plan = move(generator.root);
+	auto plan = move(subquery_root);
 	unique_ptr<Expression> result_expression;
 	if (!expr.IsCorrelated()) {
-		result_expression = PlanUncorrelatedSubquery(binder, expr, subquery, root, move(plan));
+		result_expression = PlanUncorrelatedSubquery(binder, expr, root, move(plan));
 	} else {
-		result_expression = PlanCorrelatedSubquery(binder, expr, subquery, root, move(plan));
+		result_expression = PlanCorrelatedSubquery(binder, expr, root, move(plan));
 	}
 	// finally, we recursively plan the nested subqueries (if there are any)
 	if (generator.has_unplanned_subqueries) {
-		PlanSubqueries plan(binder, context);
+		RecursiveSubqueryPlanner plan(binder, context);
 		plan.VisitOperator(*root);
 	}
 	return result_expression;
 }
 
-unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpression &expr,
-                                                          unique_ptr<Expression> *expr_ptr) {
-	// first visit the children of the Subquery expression, if any
-	if (expr.child) {
-		PlanSubqueries(&expr.child, root);
-	}
-	if (expr.IsCorrelated() && !plan_subquery) {
-		// detected a nested correlated subquery
-		// we don't plan it yet here, we are currently planning a subquery
-		// nested subqueries will only be planned AFTER the current subquery has been flattened entirely
-		has_unplanned_subqueries = true;
-		return nullptr;
-	}
-	return PlanSubquery(binder, context, expr, root);
-}
+void LogicalPlanGenerator::PlanSubqueries(unique_ptr<Expression> *expr_ptr, unique_ptr<LogicalOperator> *root) {
+	auto &expr = **expr_ptr;
 
-void LogicalPlanGenerator::PlanSubqueries(unique_ptr<Expression> *expr, unique_ptr<LogicalOperator> *root) {
-	throw Exception("FIXME: visit expression recursively and call VisitReplace on BoundSubqueries");
+	// first visit the children of the node, if any
+	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
+		PlanSubqueries(&expr, root);
+		return expr;
+	});
+
+	// check if this is a subquery node
+	if (expr.type == ExpressionType::SUBQUERY) {
+		auto &subquery = (BoundSubqueryExpression&) expr;
+		// subquery node! plan it
+		if (subquery.IsCorrelated() && !plan_subquery) {
+			// detected a nested correlated subquery
+			// we don't plan it yet here, we are currently planning a subquery
+			// nested subqueries will only be planned AFTER the current subquery has been flattened entirely
+			has_unplanned_subqueries = true;
+			return;
+		}
+		*expr_ptr = PlanSubquery(binder, context, subquery, *root);
+	}
 }

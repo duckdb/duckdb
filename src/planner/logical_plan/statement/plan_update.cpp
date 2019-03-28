@@ -1,6 +1,13 @@
 #include "planner/logical_plan_generator.hpp"
 #include "planner/statement/bound_update_statement.hpp"
 
+#include "planner/expression/bound_columnref_expression.hpp"
+
+#include "planner/operator/logical_filter.hpp"
+#include "planner/operator/logical_get.hpp"
+#include "planner/operator/logical_projection.hpp"
+#include "planner/operator/logical_update.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -29,7 +36,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundUpdateStatemen
 			// move the expression into the LogicalProjection
 			auto expression = move(stmt.expressions[i]);
 			stmt.expressions[i] = make_unique<BoundColumnRefExpression>(
-			    "", expression->return_type, ColumnBinding(stmt.proj_index, projection_expressions.size()));
+			    expression->return_type, ColumnBinding(stmt.proj_index, projection_expressions.size()));
 			projection_expressions.push_back(move(expression));
 		}
 	}

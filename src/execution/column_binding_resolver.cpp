@@ -1,7 +1,7 @@
 #include "execution/column_binding_resolver.hpp"
 
-#include "parser/expression/list.hpp"
-#include "planner/operator/list.hpp"
+#include "planner/expression/bound_columnref_expression.hpp"
+#include "planner/expression/bound_reference_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -24,5 +24,5 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	if (index == (uint32_t)-1) {
 		throw Exception("Failed to bind column ref");
 	}
-	return make_unique<BoundExpression>(expr.alias, expr.return_type, index);
+	return make_unique<BoundReferenceExpression>(expr.alias, expr.return_type, index, expr.sql_type);
 }

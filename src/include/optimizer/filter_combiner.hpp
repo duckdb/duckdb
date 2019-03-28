@@ -8,7 +8,8 @@
 
 #pragma once
 
-#include "parser/parsed_expression.hpp"
+#include "planner/expression.hpp"
+#include "common/types/value.hpp"
 
 namespace duckdb {
 

@@ -3,7 +3,7 @@
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
 #include "main/client_context.hpp"
-#include "parser/expression/bound_expression.hpp"
+#include "planner/expression/bound_reference_expression.hpp"
 #include "storage/data_table.hpp"
 
 using namespace duckdb;
@@ -36,7 +36,7 @@ void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			} else {
 				assert(expressions[i]->type == ExpressionType::BOUND_REF);
 				// index into child chunk
-				auto &binding = (BoundExpression &)*expressions[i];
+				auto &binding = (BoundReferenceExpression &)*expressions[i];
 				update_chunk.data[i].Reference(state->child_chunk.data[binding.index]);
 			}
 		}

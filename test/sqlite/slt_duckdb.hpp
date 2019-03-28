@@ -95,7 +95,7 @@ static int duckdbQuery(void *pConn,       /* Connection created by xConnect */
 				case DUCKDB_TYPE_BIGINT:
 					snprintf(buffer, BUFSIZ, "%d", (int)((int64_t *)actual_column.data)[r]);
 					break;
-				case DUCKDB_TYPE_DECIMAL:
+				case DUCKDB_TYPE_DOUBLE:
 					// cast to INT seems to be the trick here
 					snprintf(buffer, BUFSIZ, "%d", (int)((double *)actual_column.data)[r]);
 					break;

@@ -91,7 +91,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, uint32_t depth) {
 	// create a BoundColumnRef that references this entry
 	auto colref = make_unique<BoundColumnRefExpression>(
 	    *window.GetName(), result->return_type,
-	    ColumnBinding(node.window_index, node.windows.size()), depth);
+	    ColumnBinding(node.window_index, node.windows.size()), result->sql_type, depth);
 	// move the WINDOW expression into the set of bound windows
 	node.windows.push_back(move(result));
 	return BindResult(move(colref));

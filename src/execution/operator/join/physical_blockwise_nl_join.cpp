@@ -154,7 +154,7 @@ void PhysicalBlockwiseNLJoin::_GetChunk(ClientContext &context, DataChunk &chunk
 		}
 		// now perform the computation
 		ExpressionExecutor executor(chunk);
-		executor.ExecuteExpression(condition.get(), result);
+		executor.ExecuteExpression(*condition, result);
 
 		// create the result
 		VectorOperations::ExecType<bool>(result, [&](bool match, size_t i, size_t k) {

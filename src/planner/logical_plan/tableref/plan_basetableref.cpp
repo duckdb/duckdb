@@ -1,6 +1,8 @@
 #include "planner/logical_plan_generator.hpp"
 #include "planner/tableref/bound_basetableref.hpp"
 
+#include "planner/operator/logical_get.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -10,7 +12,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundBaseTableRef &
 
 	vector<column_t> column_ids;
 	// look in the context for this table which columns are required
-	for (auto &bound_column : ref.bound_columns[alias]) {
+	for (auto &bound_column : ref.bound_columns) {
 		column_ids.push_back(table->name_map[bound_column]);
 	}
 	if (require_row_id || column_ids.size() == 0) {

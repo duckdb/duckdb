@@ -75,7 +75,7 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 
 		insert_chunk.Initialize(types);
 		temp_chunk.Initialize(types);
-		ExpressionExecutor executor(children.size() == 0 ? nullptr : state);
+		ExpressionExecutor executor(children.size() == 0 ? nullptr : &state->child_chunk);
 
 		// loop over all the constants
 		for (auto &list : insert_values) {
@@ -90,7 +90,7 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 						// get value from constants
 						assert(column_index_map[i] < (int)list.size());
 						auto &expr = list[column_index_map[i]];
-						executor.ExecuteExpression(expr.get(), temp_chunk.data[i]);
+						executor.ExecuteExpression(*expr, temp_chunk.data[i]);
 						assert(temp_chunk.data[i].count == 1);
 						// append to the insert chunk
 						insert_chunk.data[i].Append(temp_chunk.data[i]);
@@ -105,7 +105,7 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 						temp_chunk.data[i].count = 1;
 						temp_chunk.data[i].SetValue(0, table->columns[i].default_value);
 					} else {
-						executor.ExecuteExpression(expr.get(), temp_chunk.data[i]);
+						executor.ExecuteExpression(*expr, temp_chunk.data[i]);
 					}
 					assert(temp_chunk.data[i].count == 1);
 					// append to the insert chunk

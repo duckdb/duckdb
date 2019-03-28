@@ -5,10 +5,8 @@
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
 #include "execution/window_segment_tree.hpp"
-#include "parser/expression/aggregate_expression.hpp"
-#include "parser/expression/bound_expression.hpp"
-#include "parser/expression/constant_expression.hpp"
-#include "parser/expression/window_expression.hpp"
+#include "planner/expression/bound_reference_expression.hpp"
+#include "planner/expression/bound_window_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -59,7 +57,7 @@ static void MaterializeExpression(ClientContext &context, Expression *expr, Chun
 		DataChunk chunk;
 		chunk.Initialize(types);
 		ExpressionExecutor executor(*input.chunks[i]);
-		executor.ExecuteExpression(expr, chunk.data[0]);
+		executor.ExecuteExpression(*expr, chunk.data[0]);
 
 		chunk.Verify();
 		output.Append(chunk);
@@ -70,27 +68,25 @@ static void MaterializeExpression(ClientContext &context, Expression *expr, Chun
 	}
 }
 
-static void SortCollectionForWindow(ClientContext &context, WindowExpression *wexpr, ChunkCollection &input,
+static void SortCollectionForWindow(ClientContext &context, BoundWindowExpression *wexpr, ChunkCollection &input,
                                     ChunkCollection &output) {
 	vector<TypeId> sort_types;
 	vector<Expression *> exprs;
-	OrderByDescription odesc;
+	vector<OrderType> orders;
 
 	// we sort by both 1) partition by expression list and 2) order by expressions
 	for (size_t prt_idx = 0; prt_idx < wexpr->partitions.size(); prt_idx++) {
 		auto &pexpr = wexpr->partitions[prt_idx];
 		sort_types.push_back(pexpr->return_type);
 		exprs.push_back(pexpr.get());
-		odesc.orders.push_back(
-		    OrderByNode(OrderType::ASCENDING, make_unique<BoundExpression>(pexpr->return_type, exprs.size() - 1)));
+		orders.push_back(OrderType::ASCENDING);
 	}
 
 	for (size_t ord_idx = 0; ord_idx < wexpr->orders.size(); ord_idx++) {
 		auto &oexpr = wexpr->orders[ord_idx].expression;
 		sort_types.push_back(oexpr->return_type);
 		exprs.push_back(oexpr.get());
-		odesc.orders.push_back(OrderByNode(wexpr->orders[ord_idx].type,
-		                                   make_unique<BoundExpression>(oexpr->return_type, exprs.size() - 1)));
+		orders.push_back(wexpr->orders[ord_idx].type);
 	}
 
 	assert(sort_types.size() > 0);
@@ -101,7 +97,7 @@ static void SortCollectionForWindow(ClientContext &context, WindowExpression *we
 		sort_chunk.Initialize(sort_types);
 
 		ExpressionExecutor executor(*input.chunks[i]);
-		executor.Execute(sort_chunk, [&](size_t i) { return exprs[i]; }, exprs.size());
+		executor.Execute(exprs, sort_chunk);
 		sort_chunk.Verify();
 		output.Append(sort_chunk);
 	}
@@ -109,7 +105,7 @@ static void SortCollectionForWindow(ClientContext &context, WindowExpression *we
 	assert(input.count == output.count);
 
 	auto sorted_vector = unique_ptr<uint64_t[]>(new uint64_t[input.count]);
-	output.Sort(odesc, sorted_vector.get());
+	output.Sort(orders, sorted_vector.get());
 
 	input.Reorder(sorted_vector.get());
 	output.Reorder(sorted_vector.get());
@@ -127,12 +123,12 @@ struct WindowBoundariesState {
 	vector<Value> row_prev;
 };
 
-static bool WindowNeedsRank(WindowExpression *wexpr) {
+static bool WindowNeedsRank(BoundWindowExpression *wexpr) {
 	return wexpr->type == ExpressionType::WINDOW_PERCENT_RANK || wexpr->type == ExpressionType::WINDOW_RANK ||
 	       wexpr->type == ExpressionType::WINDOW_RANK_DENSE || wexpr->type == ExpressionType::WINDOW_CUME_DIST;
 }
 
-static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &input, size_t input_size, size_t row_idx,
+static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection &input, size_t input_size, size_t row_idx,
                                    ChunkCollection &boundary_start_collection, ChunkCollection &boundary_end_collection,
                                    WindowBoundariesState &bounds) {
 
@@ -249,7 +245,7 @@ static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &inp
 	}
 }
 
-static void ComputeWindowExpression(ClientContext &context, WindowExpression *wexpr, ChunkCollection &input,
+static void ComputeWindowExpression(ClientContext &context, BoundWindowExpression *wexpr, ChunkCollection &input,
                                     ChunkCollection &output, size_t output_idx) {
 
 	ChunkCollection sort_collection;
@@ -483,7 +479,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 		for (size_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
 			assert(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::WINDOW);
 			// sort by partition and order clause in window def
-			auto wexpr = reinterpret_cast<WindowExpression *>(select_list[expr_idx].get());
+			auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
 			ComputeWindowExpression(context, wexpr, big_data, window_results, window_output_idx++);
 		}
 	}

@@ -4,9 +4,9 @@
 #include "execution/operator/join/physical_blockwise_nl_join.hpp"
 #include "execution/operator/list.hpp"
 #include "main/client_context.hpp"
-#include "parser/expression/list.hpp"
+#include "planner/expression/list.hpp"
 #include "planner/operator/list.hpp"
-#include "storage/order_index.hpp"
+#include "execution/order_index.hpp"
 #include "storage/storage_manager.hpp"
 
 #include <unordered_set>
@@ -183,7 +183,7 @@ static unique_ptr<PhysicalOperator> CreateDistinct(unique_ptr<PhysicalOperator> 
 	auto &types = child->GetTypes();
 	vector<unique_ptr<Expression>> groups, expressions;
 	for (size_t i = 0; i < types.size(); i++) {
-		groups.push_back(make_unique<BoundExpression>(types[i], i));
+		groups.push_back(make_unique<BoundReferenceExpression>(types[i], SQLTypeId::INVALID, i));
 	}
 	auto groupby =
 	    make_unique<PhysicalHashAggregate>(types, move(expressions), move(groups), PhysicalOperatorType::DISTINCT);
@@ -217,7 +217,7 @@ void PhysicalPlanGenerator::Visit(LogicalDelete &op) {
 	// get the index of the row_id column
 	assert(op.expressions.size() == 1);
 	assert(op.expressions[0]->type == ExpressionType::BOUND_REF);
-	auto &bound_ref = (BoundExpression &)*op.expressions[0];
+	auto &bound_ref = (BoundReferenceExpression &)*op.expressions[0];
 
 	auto del = make_unique<PhysicalDelete>(op, *op.table, *op.table->storage, bound_ref.index);
 	del->children.push_back(move(plan));

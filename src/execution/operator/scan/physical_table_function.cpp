@@ -3,7 +3,7 @@
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "execution/expression_executor.hpp"
 #include "main/client_context.hpp"
-#include "parser/expression/function_expression.hpp"
+#include "planner/expression/bound_function_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -21,12 +21,17 @@ void PhysicalTableFunction::_GetChunk(ClientContext &context, DataChunk &chunk, 
 		state->initialized = true;
 	}
 	// create the input arguments
-	DataChunk input;
-	input.Initialize(function->arguments);
+	vector<TypeId> input_types;
+	for(auto &argument_type : function->arguments) {
+		input_types.push_back(GetInternalType(argument_type));
+	}
 
-	ExpressionExecutor executor(nullptr);
+	DataChunk input;
+	input.Initialize(input_types);
+
+	ExpressionExecutor executor;
 	assert(function_call->type == ExpressionType::FUNCTION);
-	executor.Execute(((FunctionExpression *)function_call.get())->children, input);
+	executor.Execute(((BoundFunctionExpression *)function_call.get())->children, input);
 
 	// run main code
 	function->function(context, input, chunk, state->function_data.get());

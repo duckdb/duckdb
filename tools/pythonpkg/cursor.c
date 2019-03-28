@@ -200,7 +200,7 @@ PyObject *duckdb_cursor_iternext(duckdb_Cursor *self) {
 		case DUCKDB_TYPE_BIGINT:
 			val = Py_BuildValue("L", ((int64_t *)col.data)[self->offset]);
 			break;
-		case DUCKDB_TYPE_DECIMAL:
+		case DUCKDB_TYPE_DOUBLE:
 			val = Py_BuildValue("d", ((double *)col.data)[self->offset]);
 			break;
 		case DUCKDB_TYPE_VARCHAR:

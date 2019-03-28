@@ -21,8 +21,8 @@ ArithmeticSimplificationRule::ArithmeticSimplificationRule(ExpressionRewriter &r
 
 unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
                                                            bool &changes_made) {
-	auto root = (OperatorExpression *)bindings[0];
-	auto constant = (ConstantExpression *)bindings[1];
+	auto root = (BoundOperatorExpression *)bindings[0];
+	auto constant = (BoundConstantExpression *)bindings[1];
 	int constant_child = root->children[0].get() == constant ? 0 : 1;
 	assert(root->children.size() == 2);
 	// any arithmetic operator involving NULL is always NULL

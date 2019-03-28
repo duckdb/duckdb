@@ -142,11 +142,11 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(OperatorExpression &expr, 
 	// create the JOIN condition
 	JoinCondition cond;
 	cond.left = move(expr.children[0]);
-	cond.right = make_unique<BoundColumnRefExpression>("", in_type, ColumnBinding(subquery_index, 0));
+	cond.right = make_unique<BoundColumnRefExpression>(in_type, ColumnBinding(subquery_index, 0));
 	cond.comparison = ExpressionType::COMPARE_EQUAL;
 	join->conditions.push_back(move(cond));
 	root = move(join);
 
 	// we replace the original subquery with a BoundColumnRefExpression refering to the mark column
-	return make_unique<BoundColumnRefExpression>(expr, TypeId::BOOLEAN, ColumnBinding(subquery_index, 0));
+	return make_unique<BoundColumnRefExpression>(expr.GetName(), TypeId::BOOLEAN, ColumnBinding(subquery_index, 0));
 }

@@ -1,4 +1,4 @@
-#include "storage/order_index.hpp"
+#include "execution/order_index.hpp"
 
 #include "common/exception.hpp"
 #include "common/types/static_vector.hpp"
@@ -25,13 +25,11 @@ static size_t GetTupleSize(TypeId type) {
 		return templated_get_tuple_size<int8_t>();
 	case TypeId::SMALLINT:
 		return templated_get_tuple_size<int16_t>();
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		return templated_get_tuple_size<int32_t>();
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		return templated_get_tuple_size<int64_t>();
-	case TypeId::DECIMAL:
+	case TypeId::DOUBLE:
 		return templated_get_tuple_size<double>();
 	default:
 		throw NotImplementedException("Unimplemented type");
@@ -131,13 +129,11 @@ size_t OrderIndex::SearchLTE(Value value) {
 		return binary_search_lte<int8_t>(data.get(), value.value_.tinyint, count);
 	case TypeId::SMALLINT:
 		return binary_search_lte<int16_t>(data.get(), value.value_.smallint, count);
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		return binary_search_lte<int32_t>(data.get(), value.value_.integer, count);
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		return binary_search_lte<int64_t>(data.get(), value.value_.bigint, count);
-	case TypeId::DECIMAL:
+	case TypeId::DOUBLE:
 		return binary_search_lte<double>(data.get(), value.value_.decimal, count);
 	default:
 		throw NotImplementedException("Unimplemented type for index search");
@@ -151,13 +147,11 @@ size_t OrderIndex::SearchGTE(Value value) {
 		return binary_search_gte<int8_t>(data.get(), value.value_.tinyint, count);
 	case TypeId::SMALLINT:
 		return binary_search_gte<int16_t>(data.get(), value.value_.smallint, count);
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		return binary_search_gte<int32_t>(data.get(), value.value_.integer, count);
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		return binary_search_gte<int64_t>(data.get(), value.value_.bigint, count);
-	case TypeId::DECIMAL:
+	case TypeId::DOUBLE:
 		return binary_search_gte<double>(data.get(), value.value_.decimal, count);
 	default:
 		throw NotImplementedException("Unimplemented type for index search");
@@ -171,13 +165,11 @@ size_t OrderIndex::SearchLT(Value value) {
 		return binary_search_lt<int8_t>(data.get(), value.value_.tinyint, count);
 	case TypeId::SMALLINT:
 		return binary_search_lt<int16_t>(data.get(), value.value_.smallint, count);
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		return binary_search_lt<int32_t>(data.get(), value.value_.integer, count);
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		return binary_search_lt<int64_t>(data.get(), value.value_.bigint, count);
-	case TypeId::DECIMAL:
+	case TypeId::DOUBLE:
 		return binary_search_lt<double>(data.get(), value.value_.decimal, count);
 	default:
 		throw NotImplementedException("Unimplemented type for index search");
@@ -191,13 +183,11 @@ size_t OrderIndex::SearchGT(Value value) {
 		return binary_search_gt<int8_t>(data.get(), value.value_.tinyint, count);
 	case TypeId::SMALLINT:
 		return binary_search_gt<int16_t>(data.get(), value.value_.smallint, count);
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		return binary_search_gt<int32_t>(data.get(), value.value_.integer, count);
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		return binary_search_gt<int64_t>(data.get(), value.value_.bigint, count);
-	case TypeId::DECIMAL:
+	case TypeId::DOUBLE:
 		return binary_search_gt<double>(data.get(), value.value_.decimal, count);
 	default:
 		throw NotImplementedException("Unimplemented type for index search");
@@ -228,15 +218,13 @@ void OrderIndex::Scan(size_t &position_from, size_t &position_to, Value value, V
 	case TypeId::SMALLINT:
 		result_identifiers.count = templated_scan<int16_t>(position_from, position_to, data.get(), row_ids);
 		break;
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		result_identifiers.count = templated_scan<int32_t>(position_from, position_to, data.get(), row_ids);
 		break;
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		result_identifiers.count = templated_scan<int64_t>(position_from, position_to, data.get(), row_ids);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::DOUBLE:
 		result_identifiers.count = templated_scan<double>(position_from, position_to, data.get(), row_ids);
 		break;
 	default:
@@ -321,15 +309,13 @@ static void insert_data(uint8_t *dataptr, DataChunk &input, Vector &row_ids) {
 	case TypeId::SMALLINT:
 		templated_insert<int16_t>(dataptr, input, row_ids);
 		break;
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		templated_insert<int32_t>(dataptr, input, row_ids);
 		break;
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		templated_insert<int64_t>(dataptr, input, row_ids);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::DOUBLE:
 		templated_insert<double>(dataptr, input, row_ids);
 		break;
 	default:
@@ -373,15 +359,13 @@ void OrderIndex::Sort() {
 	case TypeId::SMALLINT:
 		templated_sort<int16_t>(data.get(), count);
 		break;
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		templated_sort<int32_t>(data.get(), count);
 		break;
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		templated_sort<int64_t>(data.get(), count);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::DOUBLE:
 		templated_sort<double>(data.get(), count);
 		break;
 	default:
@@ -476,15 +460,13 @@ void OrderIndex::Print() {
 	case TypeId::SMALLINT:
 		templated_print<int16_t>(data.get(), count);
 		break;
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		templated_print<int32_t>(data.get(), count);
 		break;
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		templated_print<int64_t>(data.get(), count);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::DOUBLE:
 		templated_print<double>(data.get(), count);
 		break;
 	default:

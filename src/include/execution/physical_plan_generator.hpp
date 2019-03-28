@@ -29,7 +29,6 @@ public:
 	void CreatePlan(unique_ptr<LogicalOperator> logical);
 
 	void VisitOperator(LogicalOperator &op) override;
-
 protected:
 	void Visit(LogicalAggregate &op);
 	void Visit(LogicalAnyJoin &op);
@@ -58,9 +57,6 @@ protected:
 	void Visit(LogicalPrepare &expr);
 	void Visit(LogicalWindow &expr);
 	void Visit(LogicalExecute &op);
-
-	using SQLNodeVisitor::Visit;
-
 public:
 	void Print() {
 		plan->Print();

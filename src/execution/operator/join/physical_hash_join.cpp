@@ -36,7 +36,7 @@ void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk, Physi
 			state->join_keys.Reset();
 			ExpressionExecutor executor(right_chunk);
 			for (size_t i = 0; i < conditions.size(); i++) {
-				executor.ExecuteExpression(conditions[i].right.get(), state->join_keys.data[i]);
+				executor.ExecuteExpression(*conditions[i].right, state->join_keys.data[i]);
 			}
 			// build the HT
 			hash_table->Build(state->join_keys, right_chunk);
@@ -109,7 +109,7 @@ void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk, Physi
 		state->join_keys.Reset();
 		ExpressionExecutor executor(state->child_chunk);
 		for (size_t i = 0; i < conditions.size(); i++) {
-			executor.ExecuteExpression(conditions[i].left.get(), state->join_keys.data[i]);
+			executor.ExecuteExpression(*conditions[i].left, state->join_keys.data[i]);
 		}
 		// perform the actual probe
 		state->scan_structure = hash_table->Probe(state->join_keys);

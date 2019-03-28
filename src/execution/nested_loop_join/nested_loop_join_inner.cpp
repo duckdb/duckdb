@@ -69,13 +69,11 @@ static size_t nested_loop_join_operator(Vector &left, Vector &right, size_t &lpo
 		return NLTYPE::template Operation<int8_t, OP>(left, right, lpos, rpos, lvector, rvector, current_match_count);
 	case TypeId::SMALLINT:
 		return NLTYPE::template Operation<int16_t, OP>(left, right, lpos, rpos, lvector, rvector, current_match_count);
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		return NLTYPE::template Operation<int32_t, OP>(left, right, lpos, rpos, lvector, rvector, current_match_count);
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		return NLTYPE::template Operation<int64_t, OP>(left, right, lpos, rpos, lvector, rvector, current_match_count);
-	case TypeId::DECIMAL:
+	case TypeId::DOUBLE:
 		return NLTYPE::template Operation<double, OP>(left, right, lpos, rpos, lvector, rvector, current_match_count);
 	case TypeId::POINTER:
 		return NLTYPE::template Operation<uint64_t, OP>(left, right, lpos, rpos, lvector, rvector, current_match_count);

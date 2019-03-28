@@ -9,7 +9,6 @@
 #pragma once
 
 #include "common/types/data_chunk.hpp"
-#include "parser/query_node.hpp"
 
 namespace duckdb {
 
@@ -59,7 +58,7 @@ public:
 		return *chunks[LocateChunk(index)];
 	}
 
-	void Sort(vector<OrderByNode> &desc, uint64_t result[]);
+	void Sort(vector<OrderType> &desc, uint64_t result[]);
 	//! Reorders the rows in the collection according to the given indices. NB: order is changed!
 	void Reorder(uint64_t order[]);
 

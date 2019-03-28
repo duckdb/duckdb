@@ -252,7 +252,7 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	case DUCKDB_TYPE_INTEGER:
 	case DUCKDB_TYPE_BIGINT: /* TODO: Maybe blob? */
 		return SQLITE_INTEGER;
-	case DUCKDB_TYPE_DECIMAL:
+	case DUCKDB_TYPE_DOUBLE:
 		return SQLITE_FLOAT;
 	case DUCKDB_TYPE_POINTER:
 	case DUCKDB_TYPE_DATE:

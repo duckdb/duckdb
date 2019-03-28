@@ -41,8 +41,8 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, uint32_t depth) {
 		column_list.push_back(colref.column_name);
 	}
 	binding.table_index = index;
-	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(entry.type), entry.type,
-	                                                        binding, depth));
+	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(entry.type),
+	                                                        binding, entry.type, depth));
 }
 
 void TableBinding::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &select_list) {
@@ -86,7 +86,7 @@ BindResult SubqueryBinding::Bind(ColumnRefExpression &colref, uint32_t depth) {
 	assert(column_entry->second < subquery.types.size());
 	SQLType sql_type = subquery.types[column_entry->second];
 	return BindResult(
-	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(sql_type), sql_type, binding, depth));
+	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(sql_type), binding, sql_type, depth));
 }
 
 void SubqueryBinding::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &select_list) {
@@ -114,7 +114,7 @@ BindResult TableFunctionBinding::Bind(ColumnRefExpression &colref, uint32_t dept
 	binding.column_index = column_entry->second;
 	SQLType sql_type = function->return_values[column_entry->second].type;
 	return BindResult(
-	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(sql_type), sql_type, binding, depth));
+	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(sql_type), binding, sql_type, depth));
 }
 
 void TableFunctionBinding::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &select_list) {

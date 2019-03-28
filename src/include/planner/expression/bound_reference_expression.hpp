@@ -15,8 +15,8 @@ namespace duckdb {
 //! A BoundReferenceExpression represents a physical index into a DataChunk
 class BoundReferenceExpression : public Expression {
 public:
-	BoundReferenceExpression(string alias, TypeId type, SQLType sql_type, uint32_t index);
-	BoundReferenceExpression(TypeId type, SQLType sql_type, uint32_t index);
+	BoundReferenceExpression(string alias, TypeId type, uint32_t index, SQLType sql_type = SQLType());
+	BoundReferenceExpression(TypeId type, uint32_t index, SQLType sql_type = SQLType());
 
 	//! Index used to access data in the chunks
 	uint32_t index;

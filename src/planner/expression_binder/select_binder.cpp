@@ -63,6 +63,6 @@ unique_ptr<Expression> SelectBinder::TryBindGroup(ParsedExpression &expr, uint32
 		return nullptr;
 	}
 	auto &group = node.groups[group_entry];
-	return make_unique<BoundColumnRefExpression>(expr.GetName(), group->return_type, group->sql_type,
-	                                             ColumnBinding(node.group_index, group_entry), depth);
+	return make_unique<BoundColumnRefExpression>(expr.GetName(), group->return_type,
+	                                             ColumnBinding(node.group_index, group_entry), group->sql_type, depth);
 }

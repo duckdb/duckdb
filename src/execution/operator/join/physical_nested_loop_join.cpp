@@ -17,6 +17,11 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<P
     : PhysicalComparisonJoin(op, PhysicalOperatorType::NESTED_LOOP_JOIN, move(cond), join_type) {
 	children.push_back(move(left));
 	children.push_back(move(right));
+	
+	for(auto &cond : conditions) {
+		left_expressions.push_back(cond.left.get());
+		right_expressions.push_back(cond.right.get());
+	}
 }
 
 //! Remove NULL values from a chunk; returns true if the chunk had NULL values
@@ -102,7 +107,7 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 			}
 			// resolve the join expression of the right side
 			ExpressionExecutor executor(new_chunk);
-			executor.Execute(right_condition, [&](size_t i) { return conditions[i].right.get(); }, conditions.size());
+			executor.Execute(right_expressions, right_condition);
 
 			state->right_data.Append(new_chunk);
 			state->right_chunks.Append(right_condition);
@@ -166,8 +171,7 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 				// resolve the left join condition for the current chunk
 				state->left_join_condition.Reset();
 				ExpressionExecutor executor(state->child_chunk);
-				executor.Execute(state->left_join_condition, [&](size_t i) { return conditions[i].left.get(); },
-				                 conditions.size());
+				executor.Execute(left_expressions, state->left_join_condition);
 				if (type != JoinType::MARK) {
 					// immediately disqualify any tuples from the left side that have NULL values
 					// we don't do this for the MARK join on the LHS, because the tuple will still be output, just with

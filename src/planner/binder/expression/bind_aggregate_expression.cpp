@@ -88,11 +88,10 @@ BindResult SelectBinder::BindAggregate(AggregateExpression &aggr, uint32_t depth
 	auto child = GetExpression(aggr.child);
 	SQLType result_type = ResolveAggregateType(aggr, &child);
 	// create the aggregate
-	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(result_type), result_type, aggr.type, move(child));
+	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(result_type), aggr.type, move(child), result_type);
 	// now create a column reference referring to this aggregate
 	auto colref = make_unique<BoundColumnRefExpression>(
-		aggr.GetName(), aggr->return_type, aggr->sql_type,
-		ColumnBinding(node.aggregate_index, node.aggregates.size()), depth);
+		aggr.GetName(), aggr->return_type, ColumnBinding(node.aggregate_index, node.aggregates.size()), aggr->sql_type, depth);
 	// move the aggregate expression into the set of bound aggregates
 	node.aggregates.push_back(move(aggregate));
 	return BindResult(move(colref));

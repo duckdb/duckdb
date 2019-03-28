@@ -10,6 +10,7 @@
 
 #include "common/types/chunk_collection.hpp"
 #include "execution/physical_operator.hpp"
+#include "planner/bound_query_node.hpp"
 
 namespace duckdb {
 
@@ -17,15 +18,15 @@ namespace duckdb {
 //! the data but only add a selection vector.
 class PhysicalOrder : public PhysicalOperator {
 public:
-	PhysicalOrder(LogicalOperator &op, OrderByDescription description)
-	    : PhysicalOperator(PhysicalOperatorType::ORDER_BY, op.types), description(std::move(description)) {
+	PhysicalOrder(LogicalOperator &op, vector<BoundOrderByNode> orders)
+	    : PhysicalOperator(PhysicalOperatorType::ORDER_BY, op.types), orders(move(orders)) {
 	}
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
-	OrderByDescription description;
+	vector<BoundOrderByNode> orders;
 };
 
 class PhysicalOrderOperatorState : public PhysicalOperatorState {

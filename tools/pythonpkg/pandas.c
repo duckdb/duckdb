@@ -102,7 +102,7 @@ PyObject *PyArrayObject_FromCol(duckdb_result *result, size_t col_idx, char **re
 	case DUCKDB_TYPE_BIGINT:
 		BAT_TO_NP(b, int64_t, NPY_INT64);
 		break;
-	case DUCKDB_TYPE_DECIMAL:
+	case DUCKDB_TYPE_DOUBLE:
 		BAT_TO_NP(b, double, NPY_FLOAT64);
 		break;
 	case DUCKDB_TYPE_VARCHAR: {

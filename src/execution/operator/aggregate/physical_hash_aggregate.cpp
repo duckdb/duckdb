@@ -2,7 +2,7 @@
 
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
-#include "parser/expression/aggregate_expression.hpp"
+#include "planner/expression/bound_aggregate_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -28,21 +28,21 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk, 
 			}
 		}
 
-		ExpressionExecutor executor(state);
+		ExpressionExecutor executor(state->child_chunk);
 		// aggregation with groups
 		DataChunk &group_chunk = state->group_chunk;
 		DataChunk &payload_chunk = state->payload_chunk;
 		executor.Execute(groups, group_chunk);
-		executor.Execute(payload_chunk,
-		                 [&](size_t i) {
-			                 auto &aggr = (AggregateExpression &)*aggregates[i];
-			                 if (!aggr.child) {
-				                 state->payload_chunk.data[i].count = group_chunk.size();
-				                 state->payload_chunk.data[i].sel_vector = group_chunk.sel_vector;
-			                 }
-			                 return aggr.child.get();
-		                 },
-		                 aggregates.size());
+		for(size_t i = 0; i < aggregates.size(); i++) {
+			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
+			if (aggr.child) {
+				executor.ExecuteExpression(*aggregates[i], payload_chunk.data[i]);
+				payload_chunk.heap.MergeHeap(payload_chunk.data[i].string_heap);
+			} else {
+				payload_chunk.data[i].count = group_chunk.size();
+				payload_chunk.data[i].sel_vector = group_chunk.sel_vector;
+			}
+		}
 
 		group_chunk.Verify();
 		payload_chunk.Verify();
@@ -111,7 +111,7 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 	}
 	for (auto &expr : aggregates) {
 		assert(expr->GetExpressionClass() == ExpressionClass::AGGREGATE);
-		auto &aggr = (AggregateExpression &)*expr;
+		auto &aggr = (BoundAggregateExpression &)*expr;
 		aggregate_kind.push_back(expr->type);
 		if (aggr.child) {
 			payload_types.push_back(aggr.child->return_type);

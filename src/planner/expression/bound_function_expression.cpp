@@ -6,8 +6,9 @@
 using namespace duckdb;
 using namespace std;
 
-BoundFunctionExpression::BoundFunctionExpression(TypeId return_type, SQLType sql_type,
-                                                 ScalarFunctionCatalogEntry *bound_function)
+BoundFunctionExpression::BoundFunctionExpression(TypeId return_type,
+                                                 ScalarFunctionCatalogEntry *bound_function,
+												 SQLType sql_type)
     : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, return_type, sql_type),
       bound_function(bound_function) {
 }
@@ -49,7 +50,7 @@ bool BoundFunctionExpression::Equals(const BaseExpression *other_) const {
 }
 
 unique_ptr<Expression> BoundFunctionExpression::Copy() {
-	auto copy = make_unique<BoundFunctionExpression>(return_type, sql_type, bound_function);
+	auto copy = make_unique<BoundFunctionExpression>(return_type, bound_function, sql_type);
 	for (auto &child : children) {
 		copy->children.push_back(child->Copy());
 	}

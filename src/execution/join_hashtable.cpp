@@ -192,15 +192,16 @@ static void FillNullMask(Vector &v) {
 	case TypeId::SMALLINT:
 		FillNullMask<int16_t>(v);
 		break;
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		FillNullMask<int32_t>(v);
 		break;
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		FillNullMask<int64_t>(v);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		FillNullMask<float>(v);
+		break;
+	case TypeId::DOUBLE:
 		FillNullMask<double>(v);
 		break;
 	case TypeId::VARCHAR:

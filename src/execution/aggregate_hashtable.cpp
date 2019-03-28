@@ -269,8 +269,8 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 
 			// convert input to floating point if required
 			Vector payload_double;
-			if (payload.data[payload_idx].type != TypeId::DECIMAL) {
-				payload_double.Initialize(TypeId::DECIMAL);
+			if (payload.data[payload_idx].type != TypeId::DOUBLE) {
+				payload_double.Initialize(TypeId::DOUBLE);
 				VectorOperations::Cast(payload.data[payload_idx], payload_double);
 			} else {
 				payload_double.Reference(payload.data[payload_idx]);

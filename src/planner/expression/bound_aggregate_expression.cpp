@@ -3,8 +3,8 @@
 using namespace duckdb;
 using namespace std;
 
-BoundAggregateExpression::BoundAggregateExpression(TypeId return_type, SQLType sql_type, ExpressionType type,
-                                                   unique_ptr<Expression> child)
+BoundAggregateExpression::BoundAggregateExpression(TypeId return_type, ExpressionType type,
+                                                   unique_ptr<Expression> child, SQLType sql_type)
     : Expression(type, ExpressionClass::BOUND_AGGREGATE, return_type, sql_type), child(move(child)) {
 }
 
@@ -22,7 +22,7 @@ bool BoundAggregateExpression::Equals(const BaseExpression *other_) const {
 
 unique_ptr<Expression> BoundAggregateExpression::Copy() {
 	auto new_child = child ? child->Copy() : nullptr;
-	auto new_aggregate = make_unique<BoundAggregateExpression>(return_type, sql_type, type, move(new_child));
+	auto new_aggregate = make_unique<BoundAggregateExpression>(return_type, type, move(new_child), sql_type);
 	new_aggregate->CopyProperties(*this);
 	return move(new_aggregate);
 }

@@ -1,13 +1,11 @@
-#include "parser/expression/aggregate_expression.hpp"
-#include "parser/expression/bound_expression.hpp"
-#include "parser/query_node/select_node.hpp"
+#include "planner/query_node/bound_select_node.hpp"
 #include "planner/logical_plan_generator.hpp"
 #include "planner/operator/list.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(SelectNode &statement) {
+unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSelectNode &statement) {
 	unique_ptr<LogicalOperator> root;
 	if (statement.from_table) {
 		// SELECT with FROM
@@ -24,8 +22,8 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(SelectNode &stateme
 		root = move(filter);
 	}
 
-	if (statement.HasAggregation()) {
-		if (statement.HasGroup()) {
+	if (statement.aggregates.size() > 0 || statement.groups.size() > 0) {
+		if (statement.groups.size() > 0) {
 			// visit the groups
 			for (size_t i = 0; i < statement.groups.size(); i++) {
 				auto &group = statement.groups[i];
@@ -33,19 +31,19 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(SelectNode &stateme
 			}
 		}
 		// now visit all aggregate expressions
-		for (auto &expr : statement.binding.aggregates) {
+		for (auto &expr : statement.aggregates) {
 			PlanSubqueries(&expr, &root);
 		}
 		// finally create the aggregate node with the group_index and aggregate_index as obtained from the binder
-		auto aggregate = make_unique<LogicalAggregate>(statement.binding.group_index, statement.binding.aggregate_index,
-		                                               move(statement.binding.aggregates));
+		auto aggregate = make_unique<LogicalAggregate>(statement.group_index, statement.aggregate_index,
+		                                               move(statement.aggregates));
 		aggregate->groups = move(statement.groups);
 
 		aggregate->AddChild(move(root));
 		root = move(aggregate);
 	}
 
-	if (statement.HasHaving()) {
+	if (statement.having) {
 		PlanSubqueries(&statement.having, &root);
 		auto having = make_unique<LogicalFilter>(move(statement.having));
 
@@ -53,9 +51,9 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(SelectNode &stateme
 		root = move(having);
 	}
 
-	if (statement.HasWindow()) {
-		auto win = make_unique<LogicalWindow>(statement.binding.window_index);
-		win->expressions = move(statement.binding.windows);
+	if (statement.windows.size() > 0) {
+		auto win = make_unique<LogicalWindow>(statement.window_index);
+		win->expressions = move(statement.windows);
 		// visit the window expressions
 		for (auto &expr : win->expressions) {
 			PlanSubqueries(&expr, &root);
@@ -71,10 +69,10 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(SelectNode &stateme
 
 	// check if we need to prune extra columns that were introduced into the select list (by e.g. the ORDER BY or HAVING
 	// clauses)
-	bool prune_columns = statement.select_list.size() > statement.binding.column_count;
+	bool prune_columns = statement.select_list.size() > statement.column_count;
 
 	// create the projection
-	auto proj = make_unique<LogicalProjection>(statement.binding.projection_index, move(statement.select_list));
+	auto proj = make_unique<LogicalProjection>(statement.projection_index, move(statement.select_list));
 	proj->AddChild(move(root));
 	root = move(proj);
 
@@ -84,9 +82,9 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(SelectNode &stateme
 	// add a prune node if necessary
 	if (prune_columns) {
 		assert(root);
-		auto prune = make_unique<LogicalPruneColumns>(statement.binding.column_count);
+		auto prune = make_unique<LogicalPruneColumns>(statement.column_count);
 		prune->AddChild(move(root));
 		root = move(prune);
 	}
-	return move(root);
+	return root;
 }

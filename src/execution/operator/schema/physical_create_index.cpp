@@ -4,7 +4,7 @@
 #include "execution/expression_executor.hpp"
 #include "main/client_context.hpp"
 #include "storage/data_table.hpp"
-#include "storage/order_index.hpp"
+#include "execution/order_index.hpp"
 
 using namespace duckdb;
 using namespace std;

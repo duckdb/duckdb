@@ -66,7 +66,7 @@ void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context, DataChunk &ch
 			ExpressionExecutor executor(chunk_to_order);
 			for (size_t k = 0; k < conditions.size(); k++) {
 				// resolve the join key
-				executor.ExecuteExpression(conditions[k].right.get(), state->join_keys.data[k]);
+				executor.ExecuteExpression(*conditions[k].right, state->join_keys.data[k]);
 				OrderVector(state->join_keys.data[k], state->right_orders[i]);
 				if (state->right_orders[i].count < state->join_keys.data[k].count) {
 					// the amount of entries in the order vector is smaller than the amount of entries in the vector
@@ -95,7 +95,7 @@ void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context, DataChunk &ch
 			state->join_keys.Reset();
 			ExpressionExecutor executor(state->child_chunk);
 			for (size_t k = 0; k < conditions.size(); k++) {
-				executor.ExecuteExpression(conditions[k].left.get(), state->join_keys.data[k]);
+				executor.ExecuteExpression(*conditions[k].left, state->join_keys.data[k]);
 				// sort by join key
 				OrderVector(state->join_keys.data[k], state->left_orders);
 			}

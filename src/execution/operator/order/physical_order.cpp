@@ -22,9 +22,13 @@ void PhysicalOrder::_GetChunk(ClientContext &context, DataChunk &chunk, Physical
 		// now perform the actual ordering of the data
 		// compute the sorting columns from the input data
 		vector<TypeId> sort_types;
-		for (size_t i = 0; i < description.orders.size(); i++) {
-			auto &expr = description.orders[i].expression;
+		vector<Expression*> order_expressions;
+		vector<OrderType> order_types;
+		for (size_t i = 0; i < orders.size(); i++) {
+			auto &expr = orders[i].expression;
 			sort_types.push_back(expr->return_type);
+			order_expressions.push_back(expr.get());
+			order_types.push_back(orders[i].type);
 		}
 
 		ChunkCollection sort_collection;
@@ -33,8 +37,7 @@ void PhysicalOrder::_GetChunk(ClientContext &context, DataChunk &chunk, Physical
 			sort_chunk.Initialize(sort_types);
 
 			ExpressionExecutor executor(*big_data.chunks[i]);
-			executor.Execute(sort_chunk, [&](size_t i) { return description.orders[i].expression.get(); },
-			                 description.orders.size());
+			executor.Execute(order_expressions, sort_chunk);
 			sort_collection.Append(sort_chunk);
 		}
 
@@ -42,7 +45,7 @@ void PhysicalOrder::_GetChunk(ClientContext &context, DataChunk &chunk, Physical
 
 		// now perform the actual sort
 		state->sorted_vector = unique_ptr<uint64_t[]>(new uint64_t[sort_collection.count]);
-		sort_collection.Sort(description, state->sorted_vector.get());
+		sort_collection.Sort(order_types, state->sorted_vector.get());
 	}
 
 	if (state->position >= big_data.count) {

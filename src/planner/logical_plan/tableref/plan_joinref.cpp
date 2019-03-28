@@ -1,16 +1,22 @@
-#include "main/client_context.hpp"
-#include "main/database.hpp"
-#include "parser/expression/list.hpp"
-#include "parser/query_node/list.hpp"
-#include "parser/statement/list.hpp"
-#include "parser/tableref/list.hpp"
-#include "planner/binder.hpp"
 #include "planner/logical_plan_generator.hpp"
-#include "planner/operator/list.hpp"
+
+#include "parser/expression/comparison_expression.hpp"
+
+#include "planner/expression/bound_comparison_expression.hpp"
+#include "planner/expression/bound_conjunction_expression.hpp"
+#include "planner/expression/bound_constant_expression.hpp"
+#include "planner/expression/bound_columnref_expression.hpp"
+#include "planner/expression/bound_operator_expression.hpp"
+#include "planner/expression/bound_subquery_expression.hpp"
+
 #include "planner/operator/logical_any_join.hpp"
+#include "planner/operator/logical_comparison_join.hpp"
+#include "planner/operator/logical_cross_product.hpp"
+#include "planner/operator/logical_filter.hpp"
+
 #include "planner/tableref/bound_joinref.hpp"
 
-#include <map>
+#include "planner/expression_iterator.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -68,8 +74,8 @@ JoinSide LogicalComparisonJoin::GetJoinSide(Expression &expression, unordered_se
 		return side;
 	}
 	JoinSide join_side = JoinSide::NONE;
-	ExpressionIterator::EnumerateChildren(expression, [&](Expression *child) {
-		auto child_side = GetJoinSide(*child, left_bindings, right_bindings);
+	ExpressionIterator::EnumerateChildren(expression, [&](Expression &child) {
+		auto child_side = GetJoinSide(child, left_bindings, right_bindings);
 		join_side = CombineJoinSide(child_side, join_side);
 	});
 	return join_side;
@@ -89,7 +95,7 @@ bool LogicalComparisonJoin::CreateJoinCondition(Expression &expr, unordered_set<
                                                 unordered_set<size_t> &right_bindings,
                                                 vector<JoinCondition> &conditions) {
 	// comparison
-	auto &comparison = (ComparisonExpression &)expr;
+	auto &comparison = (BoundComparisonExpression &)expr;
 	auto left_side = LogicalComparisonJoin::GetJoinSide(*comparison.left, left_bindings, right_bindings);
 	auto right_side = LogicalComparisonJoin::GetJoinSide(*comparison.right, left_bindings, right_bindings);
 	if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
@@ -112,7 +118,7 @@ bool LogicalComparisonJoin::CreateJoinCondition(Expression &expr, unordered_set<
 }
 
 unique_ptr<Expression> LogicalComparisonJoin::CreateExpressionFromCondition(JoinCondition cond) {
-	return make_unique<ComparisonExpression>(cond.comparison, move(cond.left), move(cond.right));
+	return make_unique<BoundComparisonExpression>(cond.comparison, move(cond.left), move(cond.right));
 }
 
 unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, unique_ptr<LogicalOperator> left_child,
@@ -149,7 +155,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 				continue;
 			}
 		} else if (expr->type == ExpressionType::OPERATOR_NOT) {
-			auto &not_expr = (OperatorExpression &)*expr;
+			auto &not_expr = (BoundOperatorExpression &)*expr;
 			assert(not_expr.children.size() == 1);
 			ExpressionType child_type = not_expr.children[0]->GetExpressionType();
 			// the condition is ON NOT (EXPRESSION)
@@ -195,7 +201,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 	} else {
 		if (arbitrary_expressions.size() == 0) {
 			// all conditions were pushed down, add TRUE predicate
-			arbitrary_expressions.push_back(make_unique<ConstantExpression>(Value::BOOLEAN(true)));
+			arbitrary_expressions.push_back(make_unique<BoundConstantExpression>(Value::BOOLEAN(true)));
 		}
 		// if we get here we could not create any JoinConditions
 		// turn this into an arbitrary expression join
@@ -207,7 +213,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 		// do the same with any remaining conditions
 		any_join->condition = move(arbitrary_expressions[0]);
 		for (size_t i = 1; i < arbitrary_expressions.size(); i++) {
-			any_join->condition = make_unique<ConjunctionExpression>(
+			any_join->condition = make_unique<BoundConjunctionExpression>(
 			    ExpressionType::CONJUNCTION_AND, move(any_join->condition), move(arbitrary_expressions[i]));
 		}
 		return move(any_join);
@@ -226,10 +232,12 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundJoinRef &ref) 
 		cross_product->AddChild(move(left));
 		cross_product->AddChild(move(right));
 
+		unique_ptr<LogicalOperator> root = move(cross_product);
+
 		auto filter = make_unique<LogicalFilter>(move(ref.condition));
 		// visit the expressions in the filter
 		for (size_t i = 0; i < filter->expressions.size(); i++) {
-			VisitExpression(&filter->expressions[i]);
+			PlanSubqueries(&filter->expressions[i], &root);
 		}
 		filter->AddChild(move(root));
 		return move(filter);
@@ -242,12 +250,11 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundJoinRef &ref) 
 
 	// find the table bindings on the LHS and RHS of the join
 	unordered_set<size_t> left_bindings, right_bindings;
-	LogicalJoin::GetTableReferences(*left_child, left_bindings);
-	LogicalJoin::GetTableReferences(*right_child, right_bindings);
+	LogicalJoin::GetTableReferences(*left, left_bindings);
+	LogicalJoin::GetTableReferences(*right, right_bindings);
 	// now create the join operator from the set of join conditions
-	auto result = LogicalComparisonJoin::CreateJoin(ref.type, move(left_child), move(right_child), left_bindings,
+	return LogicalComparisonJoin::CreateJoin(ref.type, move(left), move(right), left_bindings,
 	                                                right_bindings, expressions);
-	return move(result);
 
 	// LogicalOperator *join;
 	// if (result->type == LogicalOperatorType::FILTER) {

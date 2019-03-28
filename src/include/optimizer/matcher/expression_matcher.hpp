@@ -12,7 +12,7 @@
 #include "optimizer/matcher/expression_type_matcher.hpp"
 #include "optimizer/matcher/set_matcher.hpp"
 #include "optimizer/matcher/type_matcher.hpp"
-#include "parser/expression/list.hpp"
+#include "planner/expression/list.hpp"
 #include "planner/logical_operator.hpp"
 
 namespace duckdb {
@@ -56,7 +56,7 @@ public:
 	}
 
 	bool Match(Expression *expr, vector<Expression *> &bindings) override {
-		if (!expression->Equals(expr)) {
+		if (!Expression::Equals(expression, expr)) {
 			return false;
 		}
 		bindings.push_back(expr);
@@ -88,7 +88,7 @@ public:
 		if (!ExpressionMatcher::Match(expr_, bindings)) {
 			return false;
 		}
-		auto expr = (CaseExpression *)expr_;
+		auto expr = (BoundCaseExpression *)expr_;
 		if (check && !check->Match(expr->check.get(), bindings)) {
 			return false;
 		}
@@ -113,7 +113,7 @@ public:
 		if (!ExpressionMatcher::Match(expr_, bindings)) {
 			return false;
 		}
-		auto expr = (CastExpression *)expr_;
+		auto expr = (BoundCastExpression *)expr_;
 		if (child && !child->Match(expr->child.get(), bindings)) {
 			return false;
 		}
@@ -134,7 +134,7 @@ public:
 		if (!ExpressionMatcher::Match(expr_, bindings)) {
 			return false;
 		}
-		auto expr = (ComparisonExpression *)expr_;
+		auto expr = (BoundComparisonExpression *)expr_;
 		vector<Expression *> expressions = {expr->left.get(), expr->right.get()};
 		return SetMatcher::Match(matchers, expressions, bindings, policy);
 	}
@@ -153,7 +153,7 @@ public:
 		if (!ExpressionMatcher::Match(expr_, bindings)) {
 			return false;
 		}
-		auto expr = (ConjunctionExpression *)expr_;
+		auto expr = (BoundConjunctionExpression *)expr_;
 		vector<Expression *> expressions = {expr->left.get(), expr->right.get()};
 		return SetMatcher::Match(matchers, expressions, bindings, policy);
 	}
@@ -172,7 +172,7 @@ public:
 		if (!ExpressionMatcher::Match(expr_, bindings)) {
 			return false;
 		}
-		auto expr = (OperatorExpression *)expr_;
+		auto expr = (BoundOperatorExpression *)expr_;
 		return SetMatcher::Match(matchers, expr->children, bindings, policy);
 	}
 };

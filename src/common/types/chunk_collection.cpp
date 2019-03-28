@@ -115,7 +115,7 @@ static int8_t compare_value(Vector &left_vec, Vector &right_vec, size_t vector_i
 	return false;
 }
 
-static int compare_tuple(ChunkCollection *sort_by, vector<OrderByNode> &desc, size_t left, size_t right) {
+static int compare_tuple(ChunkCollection *sort_by, vector<OrderType> &desc, size_t left, size_t right) {
 	assert(sort_by);
 
 	size_t chunk_idx_left = left / STANDARD_VECTOR_SIZE;
@@ -127,7 +127,7 @@ static int compare_tuple(ChunkCollection *sort_by, vector<OrderByNode> &desc, si
 	auto &right_chunk = sort_by->chunks[chunk_idx_right];
 
 	for (size_t col_idx = 0; col_idx < desc.size(); col_idx++) {
-		auto order_type = desc[col_idx].type;
+		auto order_type = desc[col_idx];
 
 		Vector &left_vec = left_chunk->data[col_idx];
 		Vector &right_vec = right_chunk->data[col_idx];
@@ -147,7 +147,7 @@ static int compare_tuple(ChunkCollection *sort_by, vector<OrderByNode> &desc, si
 	return 0;
 }
 
-static int64_t _quicksort_initial(ChunkCollection *sort_by, vector<OrderByNode> &desc, uint64_t *result) {
+static int64_t _quicksort_initial(ChunkCollection *sort_by, vector<OrderType> &desc, uint64_t *result) {
 	// select pivot
 	int64_t pivot = 0;
 	int64_t low = 0, high = sort_by->count - 1;
@@ -164,7 +164,7 @@ static int64_t _quicksort_initial(ChunkCollection *sort_by, vector<OrderByNode> 
 	return low;
 }
 
-static void _quicksort_inplace(ChunkCollection *sort_by, vector<OrderByNode> &desc, uint64_t *result, int64_t left,
+static void _quicksort_inplace(ChunkCollection *sort_by, vector<OrderType> &desc, uint64_t *result, int64_t left,
                                int64_t right) {
 	if (left >= right) {
 		return;
@@ -197,7 +197,7 @@ static void _quicksort_inplace(ChunkCollection *sort_by, vector<OrderByNode> &de
 	_quicksort_inplace(sort_by, desc, result, part + 1, right);
 }
 
-void ChunkCollection::Sort(vector<OrderByNode> &desc, uint64_t result[]) {
+void ChunkCollection::Sort(vector<OrderType> &desc, uint64_t result[]) {
 	assert(result);
 	if (count == 0)
 		return;

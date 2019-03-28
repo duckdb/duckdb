@@ -27,7 +27,7 @@ private:
 	//! First iteration: count how many times each expression occurs
 	void CountExpressions(Expression &expr, expression_map_t<CSENode> &expression_count);
 	//! Second iteration: perform the actual replacement of the duplicate expressions with common subexpressions nodes
-	Expression *PerformCSEReplacement(Expression *expr, expression_map_t<CSENode> &expression_count);
+	void PerformCSEReplacement(unique_ptr<Expression> *expr, expression_map_t<CSENode> &expression_count);
 
 	//! Main method to extract common subexpressions
 	void ExtractCommonSubExpresions(LogicalOperator &op);

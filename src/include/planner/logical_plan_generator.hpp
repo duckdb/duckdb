@@ -23,6 +23,10 @@ public:
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundSQLStatement &statement);
 
+	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
+
+	//! Whether or not subqueries should be planned already
+	bool plan_subquery = true;
 private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectStatement &statement);
 	unique_ptr<LogicalOperator> CreatePlan(BoundInsertStatement &statement);
@@ -32,8 +36,6 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundCreateTableStatement &statement);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCreateIndexStatement &statement);
 	unique_ptr<LogicalOperator> CreatePlan(BoundExecuteStatement &statement);
-
-	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
@@ -50,11 +52,10 @@ private:
 
 	void PlanSubqueries(unique_ptr<Expression> *expr, unique_ptr<LogicalOperator> *root);
 
-	//! Whether or not subqueries should be planned already
-	bool plan_subquery = true;
+public:
 	bool has_unplanned_subqueries = false;
 	bool allow_parameter = false;
-
+private:
 	//! A reference to the current binder
 	Binder &binder;
 	//! Whether or not we require row ids to be projected

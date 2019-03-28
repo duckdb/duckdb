@@ -124,7 +124,7 @@ namespace duckdb {
 unique_ptr<Expression> AddCastToType(unique_ptr<Expression> expr, SQLType target_type) {
 	assert(expr);
 	if (expr->GetExpressionClass() == ExpressionClass::PARAMETER || expr->sql_type != target_type) {
-		return make_unique<BoundCastExpression>(GetInternalType(target_type), target_type, move(expr));
+		return make_unique<BoundCastExpression>(GetInternalType(target_type), move(expr), target_type);
 	}
 	return expr;
 }

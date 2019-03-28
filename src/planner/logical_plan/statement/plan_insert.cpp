@@ -19,7 +19,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundInsertStatemen
 		//  visit the expressions
 		for (auto &expression_list : stmt.values) {
 			for (size_t col_idx = 0; col_idx < expression_list.size(); col_idx++) {
-				auto &expression = expression_list[col_idx];
+//				auto &expression = expression_list[col_idx];
 				throw Exception("FIXME: Plan insert statement values");
 				// if (expression->GetExpressionType() == ExpressionType::VALUE_PARAMETER) {
 				// 	size_t table_col_idx = col_idx;

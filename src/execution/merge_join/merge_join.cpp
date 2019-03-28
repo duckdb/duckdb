@@ -11,13 +11,11 @@ template <class MJ, class L_ARG, class R_ARG> static size_t merge_join(L_ARG &l,
 		return MJ::template Operation<int8_t>(l, r);
 	case TypeId::SMALLINT:
 		return MJ::template Operation<int16_t>(l, r);
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		return MJ::template Operation<int32_t>(l, r);
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		return MJ::template Operation<int64_t>(l, r);
-	case TypeId::DECIMAL:
+	case TypeId::DOUBLE:
 		return MJ::template Operation<double>(l, r);
 	case TypeId::VARCHAR:
 		return MJ::template Operation<const char *>(l, r);

@@ -17,7 +17,7 @@ class BoundParameterExpression : public Expression {
 public:
 	BoundParameterExpression(size_t parameter_nr)
 	    : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, TypeId::INVALID,
-	                 SQLType(SQLTypeId::INVALID)),
+	                 SQLType()),
 	      parameter_nr(parameter_nr) {
 	}
 

@@ -9,6 +9,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundCreateTableSta
 	unique_ptr<LogicalOperator> root;
 	if (stmt.query) {
 		// create table from query
+		auto sql_types = stmt.query->node->types;
 		root = CreatePlan(*stmt.query);
 
 		// generate the table info from the query
@@ -17,7 +18,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundCreateTableSta
 		auto &types = root->types;
 		assert(names.size() == types.size());
 		for (size_t i = 0; i < names.size(); i++) {
-			stmt.info->columns.push_back(ColumnDefinition(names[i], types[i]));
+			stmt.info->columns.push_back(ColumnDefinition(names[i], sql_types[i]));
 		}
 	}
 	if (stmt.info->temporary) {

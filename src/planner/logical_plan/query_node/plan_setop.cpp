@@ -1,12 +1,19 @@
 #include "planner/logical_plan_generator.hpp"
 #include "planner/query_node/bound_set_operation_node.hpp"
 
+#include "planner/expression/bound_cast_expression.hpp"
+#include "planner/expression/bound_columnref_expression.hpp"
+
+#include "planner/operator/logical_projection.hpp"
+#include "planner/operator/logical_set_operation.hpp"
+#include "planner/operator/logical_subquery.hpp"
+
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<LogicalOperator> LogicalPlanGenerator::CastSetOpToTypes(vector<TypeId> &source_types,
-                                                                   vector<TypeId> &target_types,
-                                                                   unique_ptr<LogicalOperator> op) {
+static unique_ptr<LogicalOperator> CastSetOpToTypes(Binder &binder, vector<SQLType> &source_types,
+                                                    vector<SQLType> &target_types,
+                                                    unique_ptr<LogicalOperator> op) {
 	assert(op);
 	// first check if we even need to cast
 	assert(source_types.size() == target_types.size());
@@ -21,10 +28,10 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CastSetOpToTypes(vector<TypeId
 		assert(node->expressions.size() == source_types.size());
 		// add the casts to the selection list
 		for (size_t i = 0; i < target_types.size(); i++) {
-			if (node->expressions[i]->return_type != target_types[i]) {
+			if (node->expressions[i]->sql_type != target_types[i]) {
 				// differing types, have to add a cast
 				string alias = node->expressions[i]->alias;
-				node->expressions[i] = make_unique<CastExpression>(target_types[i], move(node->expressions[i]));
+				node->expressions[i] = make_unique<BoundCastExpression>(GetInternalType(target_types[i]), move(node->expressions[i]), target_types[i]);
 				node->expressions[i]->alias = alias;
 			}
 		}
@@ -43,10 +50,10 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CastSetOpToTypes(vector<TypeId
 		vector<unique_ptr<Expression>> select_list;
 		for (size_t i = 0; i < target_types.size(); i++) {
 			unique_ptr<Expression> result =
-			    make_unique<BoundColumnRefExpression>("", source_types[i], ColumnBinding(subquery_index, i));
+			    make_unique<BoundColumnRefExpression>(GetInternalType(source_types[i]), ColumnBinding(subquery_index, i), source_types[i]);
 			if (source_types[i] != target_types[i]) {
 				// add a cast only if the source and target types are not equivalent
-				result = make_unique<CastExpression>(target_types[i], move(result));
+				result = make_unique<BoundCastExpression>(GetInternalType(target_types[i]), move(result), target_types[i]);
 			}
 			select_list.push_back(move(result));
 		}
@@ -61,15 +68,12 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSetOperationNo
 	LogicalPlanGenerator generator_left(*node.left_binder, context);
 	LogicalPlanGenerator generator_right(*node.right_binder, context);
 
-	generator_left.CreatePlan(*node.left);
-	auto left_node = move(generator_left.root);
-
-	generator_right.CreatePlan(*node.right);
-	auto right_node = move(generator_right.root);
+	auto left_node = generator_left.CreatePlan(*node.left);
+	auto right_node = generator_right.CreatePlan(*node.right);
 
 	// for both the left and right sides, cast them to the same types
-	left_node = CastSetOpToTypes(node.left->types, node.types, move(left_node));
-	right_node = CastSetOpToTypes(node.right->types, node.types, move(right_node));
+	left_node = CastSetOpToTypes(binder, node.left->types, node.types, move(left_node));
+	right_node = CastSetOpToTypes(binder, node.right->types, node.types, move(right_node));
 
 	// create actual logical ops for setops
 	LogicalOperatorType logical_type;
@@ -85,7 +89,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSetOperationNo
 		logical_type = LogicalOperatorType::INTERSECT;
 		break;
 	}
-	root = make_unique<LogicalSetOperation>(binding.setop_index, node.types.size(), move(left_node), move(right_node),
+	auto root = make_unique<LogicalSetOperation>(node.setop_index, node.types.size(), move(left_node), move(right_node),
 	                                        logical_type);
 
 	return VisitQueryNode(node, move(root));

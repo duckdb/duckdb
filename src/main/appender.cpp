@@ -83,7 +83,7 @@ void Appender::AppendString(const char *value) {
 }
 
 void Appender::AppendDouble(double value) {
-	CheckAppend(TypeId::DECIMAL);
+	CheckAppend(TypeId::DOUBLE);
 	auto &col = chunk.data[column++];
 	((double *)col.data)[col.count++] = value;
 }

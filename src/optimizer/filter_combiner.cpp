@@ -2,7 +2,8 @@
 
 #include "execution/expression_executor.hpp"
 #include "parser/expression/comparison_expression.hpp"
-#include "parser/expression/constant_expression.hpp"
+#include "planner/expression/bound_comparison_expression.hpp"
+#include "planner/expression/bound_constant_expression.hpp"
 #include "planner/operator/logical_empty_result.hpp"
 #include "planner/operator/logical_filter.hpp"
 
@@ -93,16 +94,16 @@ void FilterCombiner::GenerateFilters(std::function<void(unique_ptr<Expression> f
 		// for each entry generate an equality expression comparing to each other
 		for (size_t i = 0; i < entries.size(); i++) {
 			for (size_t k = i + 1; k < entries.size(); k++) {
-				auto comparison = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, entries[i]->Copy(),
+				auto comparison = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, entries[i]->Copy(),
 				                                                    entries[k]->Copy());
 				callback(move(comparison));
 			}
 			// for each entry also create a comparison with each constant
 			for (size_t k = 0; k < constant_list.size(); k++) {
 				auto info = constant_list[k];
-				auto constant = make_unique<ConstantExpression>(info.constant);
+				auto constant = make_unique<BoundConstantExpression>(info.constant);
 				auto comparison =
-				    make_unique<ComparisonExpression>(info.comparison_type, entries[i]->Copy(), move(constant));
+				    make_unique<BoundComparisonExpression>(info.comparison_type, entries[i]->Copy(), move(constant));
 				callback(move(comparison));
 			}
 		}
@@ -140,7 +141,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 		// only comparisons supported for now
 		return FilterResult::UNSUPPORTED;
 	}
-	auto &comparison = (ComparisonExpression &)*expr;
+	auto &comparison = (BoundComparisonExpression &)*expr;
 	if (comparison.type != ExpressionType::COMPARE_LESSTHAN &&
 	    comparison.type != ExpressionType::COMPARE_LESSTHANOREQUALTO &&
 	    comparison.type != ExpressionType::COMPARE_GREATERTHAN &&

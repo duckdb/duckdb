@@ -20,16 +20,17 @@ namespace duckdb {
 class ExpressionExecutor {
 public:
 	ExpressionExecutor();
+	ExpressionExecutor(DataChunk *child_chunk);
 	ExpressionExecutor(DataChunk &child_chunk);
 
 	//! Executes a set of expressions and stores them in the result chunk
 	void Execute(vector<unique_ptr<Expression>> &expressions, DataChunk &result);
+	void Execute(vector<Expression*> &expressions, DataChunk &result);
 	//! Executes a set of column expresions and merges them using the logical
 	//! AND operator
 	void Merge(vector<std::unique_ptr<Expression>> &expressions, Vector &result);
 	//! Execute a single abstract expression and store the result in result
 	void ExecuteExpression(Expression &expr, Vector &result);
-
 	//! Evaluate a scalar expression and fold it into a single value
 	static Value EvaluateScalar(Expression &expr);
 protected:

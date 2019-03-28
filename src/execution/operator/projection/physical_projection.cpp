@@ -14,6 +14,6 @@ void PhysicalProjection::_GetChunk(ClientContext &context, DataChunk &chunk, Phy
 		return;
 	}
 
-	ExpressionExecutor executor(state);
+	ExpressionExecutor executor(state->child_chunk);
 	executor.Execute(select_list, chunk);
 }

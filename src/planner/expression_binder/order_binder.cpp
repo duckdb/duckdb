@@ -13,7 +13,7 @@ OrderBinder::OrderBinder(size_t projection_index, SelectNode &node, unordered_ma
 }
 
 unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &expr, size_t index) {
-	return make_unique<BoundColumnRefExpression>(expr.GetName(), TypeId::INVALID, SQLType(SQLTypeId::INVALID), ColumnBinding(projection_index, index));
+	return make_unique<BoundColumnRefExpression>(expr.GetName(), TypeId::INVALID, ColumnBinding(projection_index, index));
 }
 
 unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
