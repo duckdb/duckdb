@@ -44565,7 +44565,7 @@ makeSetOp(SetOperation op, bool all, Node *larg, Node *rarg)
 List *
 SystemFuncName(char *name)
 {
-	return list_make2(makeString("pg_catalog"), makeString(name));
+	return list_make2(makeString("main"), makeString(name));
 }
 
 /* SystemTypeName()
