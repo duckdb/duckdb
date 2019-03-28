@@ -26,7 +26,8 @@ unique_ptr<SelectStatement> Transformer::TransformSelect(Node *node) {
 
 	// may contain windows so second
 	if (stmt->withClause) {
-		TransformCTE(reinterpret_cast<WithClause *>(stmt->withClause), *result);
+		// TODO this is borked
+		//TransformCTE(reinterpret_cast<WithClause *>(stmt->withClause), *result);
 	}
 
 	result->node = TransformSelectNode(stmt);
