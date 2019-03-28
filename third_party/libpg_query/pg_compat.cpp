@@ -33,7 +33,9 @@ char *pstrdup(const char *in) {
     //throw std::runtime_error("pstrdup NOT IMPLEMENTED");
 }
 void* palloc(size_t n) {
-	return malloc(n);
+	void* ptr = malloc(n);
+	memset(ptr, 0, n);
+	return ptr;
     //throw std::runtime_error("palloc NOT IMPLEMENTED");
 }
 void pfree(void* ptr) {
