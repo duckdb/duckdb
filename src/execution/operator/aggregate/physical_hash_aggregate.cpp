@@ -110,7 +110,7 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 		group_types.push_back(expr->return_type);
 	}
 	for (auto &expr : aggregates) {
-		assert(expr->GetExpressionClass() == ExpressionClass::AGGREGATE);
+		assert(expr->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 		auto &aggr = (BoundAggregateExpression &)*expr;
 		aggregate_kind.push_back(expr->type);
 		if (aggr.child) {

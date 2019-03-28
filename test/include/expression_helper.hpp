@@ -1,7 +1,8 @@
 #include "catch.hpp"
 #include "duckdb.hpp"
 #include "optimizer/expression_rewriter.hpp"
-#include "parser/expression.hpp"
+#include "parser/parsed_expression.hpp"
+#include "planner/parsed_expression.hpp"
 #include "planner/planner.hpp"
 
 namespace duckdb {
@@ -12,7 +13,8 @@ class ExpressionHelper {
 public:
 	ExpressionHelper(ClientContext &context);
 
-	unique_ptr<Expression> ParseExpression(string expression);
+	unique_ptr<ParsedExpression> ParseExpression(string expression);
+	unique_ptr<Expression> BindExpression(string expression);
 	unique_ptr<Expression> ApplyExpressionRule(unique_ptr<Expression> root,
 	                                           LogicalOperatorType root_type = LogicalOperatorType::PROJECTION);
 

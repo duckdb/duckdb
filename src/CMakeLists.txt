@@ -1,5 +1,6 @@
 add_definitions(-DDUCKDB)
 
+add_subdirectory(optimizer)
 add_subdirectory(planner)
 add_subdirectory(parser)
 add_subdirectory(function)
@@ -8,7 +9,6 @@ add_subdirectory(common)
 add_subdirectory(execution)
 add_subdirectory(main)
 add_subdirectory(storage)
-add_subdirectory(optimizer)
 add_subdirectory(transaction)
 
 set(DUCKDB_LINK_LIBS pg_query hyperloglog Threads::Threads)

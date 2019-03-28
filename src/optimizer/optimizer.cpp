@@ -6,7 +6,9 @@
 #include "optimizer/filter_pushdown.hpp"
 #include "optimizer/join_order_optimizer.hpp"
 #include "optimizer/rule/list.hpp"
-#include "parser/expression/common_subexpression.hpp"
+
+#include "planner/expression/bound_columnref_expression.hpp"
+#include "planner/expression/common_subexpression.hpp"
 #include "planner/binder.hpp"
 #include "planner/operator/list.hpp"
 
@@ -51,7 +53,7 @@ public:
 		return op;
 	}
 
-	unique_ptr<Expression> VisitReplace(OperatorExpression &expr, unique_ptr<Expression> *expr_ptr) override;
+	unique_ptr<Expression> VisitReplace(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 };
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {
@@ -87,7 +89,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	return plan;
 }
 
-unique_ptr<Expression> InClauseRewriter::VisitReplace(OperatorExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	if (expr.type != ExpressionType::COMPARE_IN) {
 		return nullptr;
 	}

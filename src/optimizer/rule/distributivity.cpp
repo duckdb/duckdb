@@ -16,7 +16,7 @@ DistributivityRule::DistributivityRule(ExpressionRewriter &rewriter) : Rule(rewr
 static void GatherAndExpressions(Expression *expression, vector<Expression *> &result) {
 	if (expression->type == ExpressionType::CONJUNCTION_AND) {
 		// gather expressions
-		ExpressionIterator::EnumerateChildren(*expression, [&](Expression *child) { GatherAndExpressions(child, result); });
+		ExpressionIterator::EnumerateChildren(*expression, [&](Expression &child) { GatherAndExpressions(&child, result); });
 	} else {
 		// just add the expression
 		result.push_back(expression);
@@ -26,12 +26,12 @@ static void GatherAndExpressions(Expression *expression, vector<Expression *> &r
 static void GatherOrExpressions(Expression *expression, vector<vector<Expression *>> &result) {
 	assert(expression->type == ExpressionType::CONJUNCTION_OR);
 	// traverse the children
-	ExpressionIterator::EnumerateChildren(*expression, [&](Expression *child) {
-		if (child->type == ExpressionType::CONJUNCTION_OR) {
-			GatherOrExpressions(child, result);
+	ExpressionIterator::EnumerateChildren(*expression, [&](Expression &child) {
+		if (child.type == ExpressionType::CONJUNCTION_OR) {
+			GatherOrExpressions(&child, result);
 		} else {
 			vector<Expression *> new_expressions;
-			GatherAndExpressions(child, new_expressions);
+			GatherAndExpressions(&child, new_expressions);
 			result.push_back(new_expressions);
 		}
 	});
@@ -43,7 +43,7 @@ static unique_ptr<Expression> Prune(unique_ptr<Expression> root) {
 		return nullptr;
 	}
 	if (root->type == ExpressionType::CONJUNCTION_OR || root->type == ExpressionType::CONJUNCTION_AND) {
-		auto &conj = (ConjunctionExpression &)*root;
+		auto &conj = (BoundConjunctionExpression &)*root;
 		// conjunction, prune recursively
 		conj.left = Prune(move(conj.left));
 		conj.right = Prune(move(conj.right));
@@ -67,7 +67,7 @@ static unique_ptr<Expression> Prune(unique_ptr<Expression> root) {
 
 unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
                                                  bool &changes_made) {
-	auto initial_or = (ConjunctionExpression *)bindings[0];
+	auto initial_or = (BoundConjunctionExpression *)bindings[0];
 	// gather all the expressions inside AND expressions
 	vector<vector<Expression *>> gathered_expressions;
 	GatherOrExpressions(initial_or, gathered_expressions);
@@ -89,7 +89,7 @@ unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Exp
 			matches[j] = -1;
 			for (size_t k = 0; k < gathered_expressions[j].size(); k++) {
 				auto other_entry = gathered_expressions[j][k];
-				if (entry->Equals(other_entry)) {
+				if (Expression::Equals(entry, other_entry)) {
 					// match found
 					matches[j] = k;
 					break;
@@ -123,10 +123,10 @@ unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Exp
 			} else {
 				// no new root yet, create a new OR expression with the children
 				// of the main root
-				left_child = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, move(initial_or->left),
+				left_child = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR, move(initial_or->left),
 				                                                move(initial_or->right));
 			}
-			new_root = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(left_child),
+			new_root = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(left_child),
 			                                              move(right_child));
 		}
 	}

@@ -69,13 +69,13 @@ private:
 
 class ConstantExpressionMatcher : public ExpressionMatcher {
 public:
-	ConstantExpressionMatcher() : ExpressionMatcher(ExpressionClass::CONSTANT) {
+	ConstantExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_CONSTANT) {
 	}
 };
 
 class CaseExpressionMatcher : public ExpressionMatcher {
 public:
-	CaseExpressionMatcher() : ExpressionMatcher(ExpressionClass::CASE) {
+	CaseExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_CASE) {
 	}
 	//! The check expression to match (if any)
 	unique_ptr<ExpressionMatcher> check;
@@ -104,7 +104,7 @@ public:
 
 class CastExpressionMatcher : public ExpressionMatcher {
 public:
-	CastExpressionMatcher() : ExpressionMatcher(ExpressionClass::CAST) {
+	CastExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_CAST) {
 	}
 	//! The child expression to match (if any)
 	unique_ptr<ExpressionMatcher> child;
@@ -123,7 +123,7 @@ public:
 
 class ComparisonExpressionMatcher : public ExpressionMatcher {
 public:
-	ComparisonExpressionMatcher() : ExpressionMatcher(ExpressionClass::COMPARISON) {
+	ComparisonExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_COMPARISON) {
 	}
 	//! The matchers for the child expressions
 	vector<unique_ptr<ExpressionMatcher>> matchers;
@@ -142,7 +142,7 @@ public:
 
 class ConjunctionExpressionMatcher : public ExpressionMatcher {
 public:
-	ConjunctionExpressionMatcher() : ExpressionMatcher(ExpressionClass::CONJUNCTION) {
+	ConjunctionExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_CONJUNCTION) {
 	}
 	//! The matchers for the child expressions
 	vector<unique_ptr<ExpressionMatcher>> matchers;
@@ -161,7 +161,7 @@ public:
 
 class OperatorExpressionMatcher : public ExpressionMatcher {
 public:
-	OperatorExpressionMatcher() : ExpressionMatcher(ExpressionClass::OPERATOR) {
+	OperatorExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_OPERATOR) {
 	}
 	//! The matchers for the child expressions
 	vector<unique_ptr<ExpressionMatcher>> matchers;
@@ -186,15 +186,7 @@ public:
 
 	bool Match(Expression *expr, vector<Expression *> &bindings) override {
 		// we match on ANY expression that is a scalar expression
-		if (!expr->IsScalar()) {
-			return false;
-		}
-		// ...except if it is an Aggregate or Window function
-		if (expr->IsAggregate() || expr->IsWindow()) {
-			return false;
-		}
-		// also, if an expression contains a parameter for a prepared statement anywhere, we do not match
-		if (expr->HasParameter()) {
+		if (!expr->IsFoldable()) {
 			return false;
 		}
 		bindings.push_back(expr);

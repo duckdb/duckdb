@@ -65,9 +65,10 @@ public:
 	bool BoundColumns() {
 		return bound_columns;
 	}
-protected:
+
 	string Bind(unique_ptr<ParsedExpression> *expr, uint32_t depth, bool root_expression = false);
 
+protected:
 	virtual BindResult BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression = false);
 
 	BindResult BindExpression(CaseExpression &expr, uint32_t depth);

@@ -33,5 +33,5 @@ unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<Ex
 	// use an ExpressionExecutor to execute the expression
 	auto result_value = ExpressionExecutor::EvaluateScalar(*root);
 	// now get the value from the result vector and insert it back into the plan as a constant expression
-	return make_unique<ConstantExpression>(result_value.CastAs(root->return_type));
+	return make_unique<BoundConstantExpression>(result_value.CastAs(root->return_type));
 }

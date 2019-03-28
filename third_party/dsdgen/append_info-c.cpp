@@ -62,7 +62,7 @@ void append_date(append_info *info, int64_t value) {
 	date_t dTemp;
 	jtodt(&dTemp, (int)value);
 	auto ddate = duckdb::Date::FromDate(dTemp.year, dTemp.month, dTemp.day);
-	append_value(info, duckdb::Value::DATE(ddate));
+	append_value(info, duckdb::Value::INTEGER(ddate));
 }
 
 void append_decimal(append_info *info, decimal_t *val) {

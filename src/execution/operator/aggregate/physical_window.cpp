@@ -477,7 +477,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 		size_t window_output_idx = 0;
 		// we can have multiple window functions
 		for (size_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
-			assert(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::WINDOW);
+			assert(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 			// sort by partition and order clause in window def
 			auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
 			ComputeWindowExpression(context, wexpr, big_data, window_results, window_output_idx++);

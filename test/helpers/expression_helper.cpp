@@ -34,7 +34,7 @@ bool ExpressionHelper::VerifyRewrite(string input, string expected_output) {
 	return equals;
 }
 
-unique_ptr<Expression> ExpressionHelper::ParseExpression(string expression) {
+unique_ptr<ParsedExpression> ExpressionHelper::ParseExpression(string expression) {
 	string query = "SELECT " + expression;
 
 	Parser parser(context);
@@ -45,11 +45,10 @@ unique_ptr<Expression> ExpressionHelper::ParseExpression(string expression) {
 	auto &select = *((SelectStatement *)parser.statements[0].get());
 
 	auto &select_list = select.node->GetSelectList();
-	SetColumnRefTypes(*select_list[0]);
-	select_list[0]->ResolveType();
-
 	return move(select_list[0]);
 }
+
+
 
 unique_ptr<LogicalOperator> ExpressionHelper::ParseLogicalTree(string query) {
 	Parser parser(context);

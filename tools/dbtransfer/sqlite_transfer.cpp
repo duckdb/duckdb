@@ -174,11 +174,11 @@ unique_ptr<QueryResult> QueryDatabase(vector<TypeId> result_types, sqlite3 *sqli
 					result_chunk.data[i].count--;
 					break;
 				}
-				case TypeId::DATE: {
-					auto unix_time = sqlite3_column_int64(stmt, i);
-					((date_t *)result_chunk.data[i].data)[result_chunk.data[i].count] = Date::EpochToDate(unix_time);
-					break;
-				}
+				// case TypeId::DATE: {
+				// 	auto unix_time = sqlite3_column_int64(stmt, i);
+				// 	((date_t *)result_chunk.data[i].data)[result_chunk.data[i].count] = Date::EpochToDate(unix_time);
+				// 	break;
+				// }
 				default:
 					throw NotImplementedException("Unimplemented type for SQLite -> DuckDB type conversion");
 				}

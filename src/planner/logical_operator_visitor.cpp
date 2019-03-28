@@ -128,6 +128,10 @@ unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundParameterExpres
 	return nullptr;
 }
 
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) {
+	return nullptr;
+}
+
 unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundWindowExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }

@@ -10,7 +10,7 @@ static bool ValuesAreEqual(Value result_value, Value value) {
 		// NULL = NULL in checking code
 		return true;
 	}
-	if (value.type == TypeId::DECIMAL) {
+	if (value.type == TypeId::DOUBLE) {
 		// round to two decimals
 		auto left = StringUtil::Format("%.2f", value.value_.decimal);
 		auto right = StringUtil::Format("%.2f", result_value.value_.decimal);

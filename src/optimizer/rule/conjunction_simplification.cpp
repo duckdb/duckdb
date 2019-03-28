@@ -15,7 +15,7 @@ ConjunctionSimplificationRule::ConjunctionSimplificationRule(ExpressionRewriter 
 
 unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
                                                             bool &changes_made) {
-	auto conjunction = (ConjunctionExpression *)bindings[0];
+	auto conjunction = (BoundConjunctionExpression *)bindings[0];
 	auto constant_expr = bindings[1];
 	// the constant_expr is a scalar expression that we have to fold
 	// use an ExpressionExecutor to execute the expression
@@ -28,7 +28,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 	if (conjunction->type == ExpressionType::CONJUNCTION_AND) {
 		if (!constant_value.value_.boolean) {
 			// FALSE in AND, result of expression is false
-			return make_unique<ConstantExpression>(Value::BOOLEAN(false));
+			return make_unique<BoundConstantExpression>(Value::BOOLEAN(false));
 		} else {
 			// TRUE in AND, result of expression is the RHS
 			return constant_expr == conjunction->left.get() ? move(conjunction->right) : move(conjunction->left);
@@ -40,7 +40,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 			return constant_expr == conjunction->left.get() ? move(conjunction->right) : move(conjunction->left);
 		} else {
 			// TRUE in OR, result of expression is true
-			return make_unique<ConstantExpression>(Value::BOOLEAN(true));
+			return make_unique<BoundConstantExpression>(Value::BOOLEAN(true));
 		}
 	}
 }

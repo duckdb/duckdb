@@ -19,7 +19,7 @@ static void ReplaceSetOpBindings(LogicalSetOperation &setop, Expression &expr, s
 		// replace the reference to the set operation with a reference to the child subquery
 		colref.binding.table_index = child_index;
 	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression *child) { ReplaceSetOpBindings(setop, *child, child_index); });
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ReplaceSetOpBindings(setop, child, child_index); });
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<LogicalOperator> op) {

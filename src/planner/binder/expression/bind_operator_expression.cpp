@@ -119,8 +119,6 @@ static SQLType ResolveArithmeticType(OperatorExpression &op, vector<unique_ptr<E
 
 static SQLType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
 	switch (op.type) {
-	case ExpressionType::OPERATOR_NOT:
-		return ResolveNotType(op, children);
 	case ExpressionType::OPERATOR_IS_NULL:
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
 		// IS (NOT) NULL always returns a boolean, and does not cast its children
@@ -132,9 +130,11 @@ static SQLType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Exp
 	case ExpressionType::OPERATOR_SUBTRACT:
 	case ExpressionType::OPERATOR_MULTIPLY:
 	case ExpressionType::OPERATOR_DIVIDE:
-	default:
-		assert(op.type == ExpressionType::OPERATOR_MOD);
+	case ExpressionType::OPERATOR_MOD:
 		return ResolveArithmeticType(op, children);
+	default:
+		assert(op.type == ExpressionType::OPERATOR_NOT);
+		return ResolveNotType(op, children);
 	}
 }
 

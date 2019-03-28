@@ -3,6 +3,8 @@
 #include "common/exception.hpp"
 #include "common/value_operations/value_operations.hpp"
 
+#include "parser/expression/comparison_expression.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -29,10 +31,10 @@ MoveConstantsRule::MoveConstantsRule(ExpressionRewriter &rewriter) : Rule(rewrit
 
 unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
                                                 bool &changes_made) {
-	auto comparison = (ComparisonExpression *)bindings[0];
-	auto outer_constant = (ConstantExpression *)bindings[1];
-	auto arithmetic = (OperatorExpression *)bindings[2];
-	auto inner_constant = (ConstantExpression *)bindings[3];
+	auto comparison = (BoundComparisonExpression *)bindings[0];
+	auto outer_constant = (BoundConstantExpression *)bindings[1];
+	auto arithmetic = (BoundOperatorExpression *)bindings[2];
+	auto inner_constant = (BoundConstantExpression *)bindings[3];
 
 	int arithmetic_child_index = arithmetic->children[0].get() == inner_constant ? 1 : 0;
 	if (arithmetic->type == ExpressionType::OPERATOR_ADD) {

@@ -9,6 +9,8 @@
 #include "execution/order_index.hpp"
 #include "storage/storage_manager.hpp"
 
+#include "parser/expression/comparison_expression.hpp"
+
 #include <unordered_set>
 
 using namespace duckdb;
@@ -183,7 +185,7 @@ static unique_ptr<PhysicalOperator> CreateDistinct(unique_ptr<PhysicalOperator> 
 	auto &types = child->GetTypes();
 	vector<unique_ptr<Expression>> groups, expressions;
 	for (size_t i = 0; i < types.size(); i++) {
-		groups.push_back(make_unique<BoundReferenceExpression>(types[i], SQLTypeId::INVALID, i));
+		groups.push_back(make_unique<BoundReferenceExpression>(types[i], i));
 	}
 	auto groupby =
 	    make_unique<PhysicalHashAggregate>(types, move(expressions), move(groups), PhysicalOperatorType::DISTINCT);
@@ -295,12 +297,12 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, Logic
 				// bindings[0] = the expression
 				// bindings[1] = the index expression
 				// bindings[2] = the constant
-				auto comparison = (ComparisonExpression *)bindings[0];
-				assert(bindings[0]->GetExpressionClass() == ExpressionClass::COMPARISON);
-				assert(bindings[1]->Equals(order_index->expressions[0].get()));
+				auto comparison = (BoundComparisonExpression *)bindings[0];
+				assert(bindings[0]->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
+				assert(Expression::Equals(bindings[1], order_index->expressions[0].get()));
 				assert(bindings[2]->type == ExpressionType::VALUE_CONSTANT);
 
-				auto constant_value = ((ConstantExpression *)bindings[2])->value;
+				auto constant_value = ((BoundConstantExpression *)bindings[2])->value;
 				auto comparison_type = comparison->type;
 				if (comparison->right.get() == bindings[1]) {
 					// the expression is on the right side, we flip them around
@@ -548,7 +550,7 @@ void PhysicalPlanGenerator::Visit(LogicalOrder &op) {
 
 	assert(plan); // Order cannot be the first node of a plan!
 
-	auto order = make_unique<PhysicalOrder>(op, move(op.description));
+	auto order = make_unique<PhysicalOrder>(op, move(op.orders));
 	order->children.push_back(move(plan));
 	this->plan = move(order);
 }
@@ -585,29 +587,28 @@ void PhysicalPlanGenerator::Visit(LogicalPruneColumns &op) {
 	}
 }
 
-// we use this to find parameters in the prepared statement
-class PrepareParameterVisitor : public SQLNodeVisitor {
-public:
-	PrepareParameterVisitor(unordered_map<size_t, ParameterExpression *> &parameter_expression_map)
-	    : parameter_expression_map(parameter_expression_map) {
-	}
+// // we use this to find parameters in the prepared statement
+// class PrepareParameterVisitor : public SQLNodeVisitor {
+// public:
+// 	PrepareParameterVisitor(unordered_map<size_t, ParameterExpression *> &parameter_expression_map)
+// 	    : parameter_expression_map(parameter_expression_map) {
+// 	}
 
-protected:
-	using SQLNodeVisitor::Visit;
-	void Visit(ParameterExpression &expr) override {
-		if (expr.return_type == TypeId::INVALID) {
-			throw Exception("Could not determine type for prepared statement parameter. Consider using a CAST on it.");
-		}
-		auto it = parameter_expression_map.find(expr.parameter_nr);
-		if (it != parameter_expression_map.end()) {
-			throw Exception("Duplicate parameter index. Use $1, $2 etc. to differentiate.");
-		}
-		parameter_expression_map[expr.parameter_nr] = &expr;
-	}
+// protected:
+// 	void Visit(ParameterExpression &expr) override {
+// 		if (expr.return_type == TypeId::INVALID) {
+// 			throw Exception("Could not determine type for prepared statement parameter. Consider using a CAST on it.");
+// 		}
+// 		auto it = parameter_expression_map.find(expr.parameter_nr);
+// 		if (it != parameter_expression_map.end()) {
+// 			throw Exception("Duplicate parameter index. Use $1, $2 etc. to differentiate.");
+// 		}
+// 		parameter_expression_map[expr.parameter_nr] = &expr;
+// 	}
 
-private:
-	unordered_map<size_t, ParameterExpression *> &parameter_expression_map;
-};
+// private:
+// 	unordered_map<size_t, ParameterExpression *> &parameter_expression_map;
+// };
 
 void PhysicalPlanGenerator::Visit(LogicalPrepare &op) {
 	assert(!plan); // prepare has to be top node
@@ -624,9 +625,9 @@ void PhysicalPlanGenerator::Visit(LogicalPrepare &op) {
 	VisitOperator(*op.children[0]);
 	assert(plan);
 
-	// find parameters and add to info
-	PrepareParameterVisitor ppv(entry->parameter_expression_map);
-	plan->Accept(&ppv);
+	// // find parameters and add to info
+	// PrepareParameterVisitor ppv(entry->parameter_expression_map);
+	// plan->Accept(&ppv);
 
 	entry->types = plan->types;
 	entry->plan = move(plan);
@@ -648,7 +649,9 @@ void PhysicalPlanGenerator::Visit(LogicalTableFunction &op) {
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
 
 	assert(!plan); // Table function has to be first node of the plan!
-	plan = make_unique<PhysicalTableFunction>(op, op.function, move(op.function_call));
+	assert(0);
+	throw Exception("FIXME: create physical table function");
+	//plan = make_unique<PhysicalTableFunction>(op, op.function, move(op.expressions));
 }
 
 void PhysicalPlanGenerator::Visit(LogicalCopy &op) {
@@ -723,8 +726,8 @@ void PhysicalPlanGenerator::Visit(LogicalSetOperation &op) {
 		for (size_t i = 0; i < types.size(); i++) {
 			JoinCondition cond;
 			cond.comparison = ExpressionType::COMPARE_EQUAL;
-			cond.left = make_unique<BoundExpression>(types[i], i);
-			cond.right = make_unique<BoundExpression>(types[i], i);
+			cond.left = make_unique<BoundReferenceExpression>(types[i], i);
+			cond.right = make_unique<BoundReferenceExpression>(types[i], i);
 			cond.null_values_are_equal = true;
 			conditions.push_back(move(cond));
 		}

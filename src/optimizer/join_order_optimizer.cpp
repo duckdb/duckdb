@@ -1,6 +1,8 @@
 #include "optimizer/join_order_optimizer.hpp"
 
-#include "parser/expression/list.hpp"
+#include "parser/expression/comparison_expression.hpp"
+
+#include "planner/expression/list.hpp"
 #include "planner/operator/list.hpp"
 
 #include "planner/expression_iterator.hpp"
@@ -37,8 +39,8 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<s
 	}
 	assert(expression.type != ExpressionType::SUBQUERY);
 	bool can_reorder = true;
-	ExpressionIterator::EnumerateChildren(expression, [&](Expression *expr) {
-		if (!ExtractBindings(*expr, bindings)) {
+	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) {
+		if (!ExtractBindings(expr, bindings)) {
 			can_reorder = false;
 			return;
 		}
@@ -503,8 +505,8 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				       (RelationSet::IsSubset(left.first, f->right_set) &&
 				        RelationSet::IsSubset(right.first, f->left_set)));
 				JoinCondition cond;
-				assert(condition->GetExpressionClass() == ExpressionClass::COMPARISON);
-				auto &comparison = (ComparisonExpression &)*condition;
+				assert(condition->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
+				auto &comparison = (BoundComparisonExpression &)*condition;
 				// we need to figure out which side is which by looking at the relations available to us
 				bool invert = RelationSet::IsSubset(left.first, f->left_set) ? false : true;
 				cond.left = !invert ? move(comparison.left) : move(comparison.right);
@@ -567,8 +569,8 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				}
 				// create the join condition
 				JoinCondition cond;
-				assert(filter->GetExpressionClass() == ExpressionClass::COMPARISON);
-				auto &comparison = (ComparisonExpression &)*filter;
+				assert(filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
+				auto &comparison = (BoundComparisonExpression &)*filter;
 				// we need to figure out which side is which by looking at the relations available to us
 				cond.left = !invert ? move(comparison.left) : move(comparison.right);
 				cond.right = !invert ? move(comparison.right) : move(comparison.left);
@@ -659,7 +661,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			assert(join.expressions.size() == 0);
 			for (auto &cond : join.conditions) {
 				filters.push_back(
-				    make_unique<ComparisonExpression>(cond.comparison, move(cond.left), move(cond.right)));
+				    make_unique<BoundComparisonExpression>(cond.comparison, move(cond.left), move(cond.right)));
 			}
 			join.conditions.clear();
 		} else {
@@ -678,8 +680,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		filter_info->set = set_manager.GetRelation(bindings);
 		filter_info->filter_index = i;
 		// now check if it can be used as a join predicate
-		if (filter->GetExpressionClass() == ExpressionClass::COMPARISON) {
-			auto comparison = (ComparisonExpression *)filter.get();
+		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+			auto comparison = (BoundComparisonExpression *)filter.get();
 			// extract the bindings that are required for the left and right side of the comparison
 			unordered_set<size_t> left_bindings, right_bindings;
 			ExtractBindings(*comparison->left, left_bindings);

@@ -1,6 +1,8 @@
 #include "optimizer/filter_pushdown.hpp"
 #include "planner/operator/logical_comparison_join.hpp"
 
+#include "planner/expression/bound_operator_expression.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -43,7 +45,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 			// the MARK join is always TRUE or FALSE, and never NULL this happens in the case of a correlated EXISTS
 			// clause
 			if (filters[i]->filter->type == ExpressionType::OPERATOR_NOT) {
-				auto &op_expr = (OperatorExpression &)*filters[i]->filter;
+				auto &op_expr = (BoundOperatorExpression &)*filters[i]->filter;
 				if (op_expr.children[0]->type == ExpressionType::BOUND_COLUMN_REF) {
 					// the filter is NOT(marker), check the join conditions
 					bool all_null_values_are_equal = true;

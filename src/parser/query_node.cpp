@@ -44,8 +44,8 @@ void QueryNode::CopyProperties(QueryNode &other) {
 		other.orders.push_back(OrderByNode(order.type, order.expression->Copy()));
 	}
 	// limit
-	other.limit = limit->Copy();
-	other.offset = offset->Copy();
+	other.limit = limit ? limit->Copy() : nullptr;
+	other.offset = offset ? offset->Copy() : nullptr;
 }
 
 void QueryNode::Serialize(Serializer &serializer) {

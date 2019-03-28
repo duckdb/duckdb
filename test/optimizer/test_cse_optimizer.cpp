@@ -49,8 +49,8 @@ TEST_CASE("Test CSE Optimizer", "[optimizer]") {
 	REQUIRE(tree->type == LogicalOperatorType::PROJECTION);
 	REQUIRE(tree->children[0]->type == LogicalOperatorType::FILTER);
 	auto &filter = *tree->children[0];
-	REQUIRE(filter.expressions[0]->GetExpressionClass() == ExpressionClass::COMPARISON);
-	REQUIRE(filter.expressions[1]->GetExpressionClass() == ExpressionClass::COMPARISON);
+	REQUIRE(filter.expressions[0]->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
+	REQUIRE(filter.expressions[1]->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
 	auto &lcomp = (ComparisonExpression &)*filter.expressions[0];
 	auto &rcomp = (ComparisonExpression &)*filter.expressions[1];
 	REQUIRE(lcomp.left->type == ExpressionType::COMMON_SUBEXPRESSION);

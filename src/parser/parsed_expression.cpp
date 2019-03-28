@@ -24,8 +24,11 @@ bool ParsedExpression::IsWindow() const {
 
 bool ParsedExpression::IsScalar() const {
 	bool is_scalar = true;
-	ParsedExpressionIterator::EnumerateChildren(*this,
-	                                            [&](const ParsedExpression &child) { is_scalar |= child.IsScalar(); });
+	ParsedExpressionIterator::EnumerateChildren(*this, [&](const ParsedExpression &child) {
+		if (!child.IsScalar()) {
+			is_scalar = false;
+		}
+	});
 	return is_scalar;
 }
 

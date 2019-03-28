@@ -128,7 +128,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			// for any COUNT aggregate we replace references to the column with: CASE WHEN COUNT(*) IS NULL THEN 0
 			// ELSE COUNT(*) END
 			for (size_t i = 0; i < aggr.expressions.size(); i++) {
-				assert(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::AGGREGATE);
+				assert(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 				if (aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT ||
 				    aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT_STAR ||
 				    aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT_DISTINCT) {

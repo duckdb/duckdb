@@ -137,7 +137,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 		}
 	}
 	assert(!expr->IsScalar());
-	if (expr->GetExpressionClass() != ExpressionClass::COMPARISON) {
+	if (expr->GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
 		// only comparisons supported for now
 		return FilterResult::UNSUPPORTED;
 	}

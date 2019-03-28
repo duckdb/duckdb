@@ -27,7 +27,7 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 	assert(root->children.size() == 2);
 	// any arithmetic operator involving NULL is always NULL
 	if (constant->value.is_null) {
-		return make_unique<ConstantExpression>(Value(root->return_type));
+		return make_unique<BoundConstantExpression>(Value(root->return_type));
 	}
 	switch (root->type) {
 	case ExpressionType::OPERATOR_ADD:
@@ -58,7 +58,7 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 				return move(root->children[1 - constant_child]);
 			} else if (constant->value == 0) {
 				// divide by 0, replace with NULL
-				return make_unique<ConstantExpression>(Value(root->return_type));
+				return make_unique<BoundConstantExpression>(Value(root->return_type));
 			}
 		}
 		break;

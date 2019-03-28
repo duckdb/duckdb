@@ -19,7 +19,7 @@ PhysicalAggregate::PhysicalAggregate(vector<TypeId> types, vector<unique_ptr<Exp
 		is_implicit_aggr = false;
 	}
 	for (auto &expr : select_list) {
-		assert(expr->expression_class == ExpressionClass::AGGREGATE);
+		assert(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
 		aggregates.push_back(move(expr));
 	}
 }

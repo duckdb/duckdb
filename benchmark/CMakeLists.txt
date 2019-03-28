@@ -9,4 +9,4 @@ add_subdirectory(tpch)
 add_subdirectory(tpcds)
 
 add_executable(benchmark_runner benchmark_runner.cpp ${BENCHMARK_OBJECT_FILES})
-target_link_libraries(benchmark_runner duckdb dbgen dsdgen tpce test_helpers sqlite_transfer)
+target_link_libraries(benchmark_runner duckdb dbgen dsdgen test_helpers tpce sqlite_transfer)

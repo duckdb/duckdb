@@ -1,6 +1,11 @@
 #include "parser/expression/window_expression.hpp"
+
+#include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/expression/bound_window_expression.hpp"
-#include "planner/select_binder.hpp"
+
+#include "planner/expression_binder/select_binder.hpp"
+
+#include "planner/query_node/bound_select_node.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -8,12 +13,12 @@ using namespace std;
 static SQLType ResolveWindowExpressionType(ExpressionType window_type, SQLType child_type) {
 	switch (window_type) {
 	case ExpressionType::WINDOW_SUM:
-		switch (child_type) {
-		case TypeId::BOOLEAN:
-		case TypeId::TINYINT:
-		case TypeId::SMALLINT:
-		case TypeId::INTEGER:
-		case TypeId::BIGINT:
+		switch (child_type.id) {
+		case SQLTypeId::BOOLEAN:
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
+		case SQLTypeId::BIGINT:
 			return SQLType(SQLTypeId::BIGINT);
 		default:
 			return child_type;
@@ -37,7 +42,7 @@ static SQLType ResolveWindowExpressionType(ExpressionType window_type, SQLType c
 		return child_type;
 	case ExpressionType::WINDOW_LEAD:
 	default:
-		assert(type == ExpressionType::WINDOW_LAG);
+		assert(window_type == ExpressionType::WINDOW_LAG);
 		assert(child_type.id != SQLTypeId::INVALID); // "Window function needs an expression"
 		return child_type;
 	}
@@ -90,7 +95,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, uint32_t depth) {
 	result->default_expr = GetExpression(window.default_expr);
 	// create a BoundColumnRef that references this entry
 	auto colref = make_unique<BoundColumnRefExpression>(
-	    *window.GetName(), result->return_type,
+	    window.GetName(), result->return_type,
 	    ColumnBinding(node.window_index, node.windows.size()), result->sql_type, depth);
 	// move the WINDOW expression into the set of bound windows
 	node.windows.push_back(move(result));

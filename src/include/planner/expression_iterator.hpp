@@ -17,6 +17,7 @@ namespace duckdb {
 
 class ExpressionIterator {
 public:
+	static void EnumerateChildren(const Expression &expression, std::function<void(const Expression &child)> callback);
 	static void EnumerateChildren(Expression &expression, std::function<void(Expression &child)> callback);
 	static void EnumerateChildren(Expression &expression,
 	                              std::function<unique_ptr<Expression>(unique_ptr<Expression> child)> callback);
