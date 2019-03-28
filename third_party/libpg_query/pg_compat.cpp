@@ -39,7 +39,7 @@ void* palloc(size_t n) {
     //throw std::runtime_error("palloc NOT IMPLEMENTED");
 }
 void pfree(void* ptr) {
-    throw std::runtime_error("pfree NOT IMPLEMENTED");
+    free(ptr);
 }
 void* palloc0fast(size_t n) {
     return palloc(n);
