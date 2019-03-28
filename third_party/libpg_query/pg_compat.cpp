@@ -88,16 +88,3 @@ DefElem * defWithOids(bool value) {
 unsigned char *unicode_to_utf8(pg_wchar c, unsigned char *utf8string) {
     throw std::runtime_error("unicode_to_utf8 NOT IMPLEMENTED");
 }
-extern "C" {
-#include "parser/parser.h"
-}
-int main() {
-	printf("hello world\n");
-//	List* a = raw_parser(	"select sum(a+2) FROM b");
-	List* a = raw_parser(	"select\n l_returnflag,\n l_linestatus,\n sum(l_quantity) as sum_qty,\n sum(l_extendedprice) as sum_base_price,\n sum(l_extendedprice * (1 - l_discount)) as sum_disc_price,\n sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge,\n avg(l_quantity) as avg_qty,\n avg(l_extendedprice) as avg_price,\n avg(l_discount) as avg_disc,\n count(*) as count_order\nfrom\n lineitem\nwhere\n l_shipdate <= cast('1998-09-02' as date)\ngroup by\n l_returnflag,\n l_linestatus\norder by\n l_returnflag,\n l_linestatus;\n");
-
-	printf("%d\n", list_length(a));
-	Node* one = (Node*) a->head->data.ptr_value;
-	printf("%d\n", one->type);
-	SelectStmt* sel = (SelectStmt*) one;
-}
