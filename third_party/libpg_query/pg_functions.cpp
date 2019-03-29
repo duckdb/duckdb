@@ -4,7 +4,7 @@
 #include <mutex>
 #include "pg_functions.h"
 #include "parser/parser.h"
-
+#include <stdarg.h>
 
 #ifdef _MSC_VER
 // TODO windows support for thread local storage
