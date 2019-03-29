@@ -5,10 +5,47 @@
 #include "pg_functions.h"
 #include "parser/parser.h"
 #include <stdarg.h>
+#include <mutex>
+
 
 #ifdef _MSC_VER
-// TODO windows support for thread local storage
-# error No Windows support yet :/
+#include <windows.h>
+
+static DWORD key = nullptr;
+std::mutex key_once;
+
+static void init_thread_storage() {
+	if (!key) {
+		std::lock_guard<std::mutex> lock(key_once);
+		if (!key && (key = TlsAlloc()) == TLS_OUT_OF_INDEXES) {
+			throw std::runtime_error("Failed to allocate per-thread storage");
+		}
+	}
+
+	void* ptr = TlsGetValue(key);
+	if (!ptr && GetLastError() != ERROR_SUCCESS) {
+		throw std::runtime_error("Failed to access per-thread storage");
+	}
+	if (!ptr) {
+		ptr = malloc(sizeof(parser_state));
+		if (!ptr) {
+			throw std::runtime_error("Memory allocation failure");
+		}
+		if (!TlsSetValue(key, ptr))
+			throw std::runtime_error("Failed to set per-thread storage");
+	}
+}
+
+static parser_state* get_parser_state() {
+	parser_state* ptr =  (parser_state* ) TlsGetValue(key);
+	if (!ptr) {
+		throw std::runtime_error("Failed to access per-thread storage");
+	}
+
+	return ptr;
+}
+
+
 #else
 
 #include <pthread.h>
@@ -46,12 +83,19 @@ static void init_thread_storage() {
     	if (!ptr) {
     		throw std::runtime_error("Memory allocation failure");
     	}
-        pthread_setspecific(key, ptr);
+        if (pthread_setspecific(key, ptr) != 0) {
+    		throw std::runtime_error("Failed to set per-thread storage");
+        }
     }
 }
 
 static parser_state* get_parser_state() {
-	return (parser_state* ) pthread_getspecific(key);
+	parser_state* ptr = (parser_state* ) pthread_getspecific(key);
+	if (!ptr) {
+		throw std::runtime_error("Failed to access per-thread storage");
+
+	}
+	return ptr;
 }
 #endif
 
