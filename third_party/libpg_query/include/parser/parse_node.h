@@ -255,7 +255,7 @@ typedef struct ParseCallbackState
 {
 	ParseState *pstate;
 	int			location;
-	ErrorContextCallback errcallback;
+	void* errcallback;
 } ParseCallbackState;
 
 

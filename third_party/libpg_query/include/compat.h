@@ -88,19 +88,21 @@ typedef struct varlena bytea;
 
 typedef int MemoryContext;
 
-#define NOTICE		18
-#define WARNING		19
-#define ERROR		20
+enum PostgresErrorLevel {
+	NOTICE,
+	WARNING,
+	ERROR
+};
 
-#define ERRCODE_SYNTAX_ERROR 1
-#define ERRCODE_FEATURE_NOT_SUPPORTED 2
-#define ERRCODE_INVALID_PARAMETER_VALUE 3
-#define ERRCODE_WINDOWING_ERROR 4
-#define ERRCODE_RESERVED_NAME 5
-#define ERRCODE_INVALID_ESCAPE_SEQUENCE 6
-#define ERRCODE_NONSTANDARD_USE_OF_ESCAPE_CHARACTER 7
-
-
+enum PostgresParserErrors {
+	ERRCODE_SYNTAX_ERROR,
+	ERRCODE_FEATURE_NOT_SUPPORTED,
+	ERRCODE_INVALID_PARAMETER_VALUE,
+	ERRCODE_WINDOWING_ERROR,
+	ERRCODE_RESERVED_NAME,
+	ERRCODE_INVALID_ESCAPE_SEQUENCE,
+	ERRCODE_NONSTANDARD_USE_OF_ESCAPE_CHARACTER
+};
 
 #define ereport_domain(elevel, rest)	\
 	do { \
@@ -112,15 +114,6 @@ typedef int MemoryContext;
 #define ereport(elevel, rest)	\
 	ereport_domain(elevel, rest)
 
-typedef struct ErrorContextCallback
-{
-	struct ErrorContextCallback *previous;
-	void		(*callback) (void *arg);
-	void	   *arg;
-} ErrorContextCallback;
-
-
-// rather specific stuff below, we might these headers after all
 
 #define		  REPLICA_IDENTITY_DEFAULT	'd'
 #define		  REPLICA_IDENTITY_NOTHING	'n'
@@ -145,21 +138,18 @@ typedef struct ErrorContextCallback
 
 #define INTERVAL_MASK(b) (1 << (b))
 
-/* NoLock is not a lock mode, but a flag value meaning "don't get a lock" */
-#define NoLock					0
 
-#define AccessShareLock			1		/* SELECT */
-#define RowShareLock			2		/* SELECT FOR UPDATE/FOR SHARE */
-#define RowExclusiveLock		3		/* INSERT, UPDATE, DELETE */
-#define ShareUpdateExclusiveLock 4		/* VACUUM (non-FULL),ANALYZE, CREATE
-										 * INDEX CONCURRENTLY */
-#define ShareLock				5		/* CREATE INDEX (WITHOUT CONCURRENTLY) */
-#define ShareRowExclusiveLock	6		/* like EXCLUSIVE MODE, but allows ROW
-										 * SHARE */
-#define ExclusiveLock			7		/* blocks ROW SHARE/SELECT...FOR
-										 * UPDATE */
-#define AccessExclusiveLock		8		/* ALTER TABLE, DROP TABLE, VACUUM
-										 * FULL, and unqualified LOCK TABLE */
+enum PostgresLockTypes {
+	NoLock,
+	AccessShareLock,
+	RowShareLock,
+	RowExclusiveLock,
+	ShareUpdateExclusiveLock,
+	ShareLock,
+	ShareRowExclusiveLock,
+	ExclusiveLock,
+	AccessExclusiveLock
+};
 
 typedef enum
 {

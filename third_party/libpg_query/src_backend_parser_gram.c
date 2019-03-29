@@ -43711,7 +43711,7 @@ yyreduce:
 						 * "public" and "none" are not keywords, but they must
 						 * be treated specially here.
 						 */
-						RoleSpec *n;
+						RoleSpec *n = NULL;
 						if (strcmp((yyvsp[(1) - (1)].str), "public") == 0)
 						{
 							n = (RoleSpec *) makeRoleSpec(ROLESPEC_PUBLIC, (yylsp[(1) - (1)]));
