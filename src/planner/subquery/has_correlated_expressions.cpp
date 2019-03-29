@@ -15,7 +15,8 @@ void HasCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
 	VisitOperatorExpressions(op);
 }
 
-unique_ptr<Expression> HasCorrelatedExpressions::VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> HasCorrelatedExpressions::VisitReplace(BoundColumnRefExpression &expr,
+                                                              unique_ptr<Expression> *expr_ptr) {
 	if (expr.depth == 0) {
 		return nullptr;
 	}
@@ -25,7 +26,8 @@ unique_ptr<Expression> HasCorrelatedExpressions::VisitReplace(BoundColumnRefExpr
 	return nullptr;
 }
 
-unique_ptr<Expression> HasCorrelatedExpressions::VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> HasCorrelatedExpressions::VisitReplace(BoundSubqueryExpression &expr,
+                                                              unique_ptr<Expression> *expr_ptr) {
 	if (!expr.IsCorrelated()) {
 		return nullptr;
 	}

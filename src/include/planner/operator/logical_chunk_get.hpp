@@ -22,14 +22,6 @@ public:
 		chunk_types = types;
 	}
 
-	vector<string> GetNames() override {
-		vector<string> names;
-		for (size_t i = 0; i < chunk_types.size(); i++) {
-			names.push_back(std::to_string(i));
-		}
-		return names;
-	}
-
 	//! The table index in the current bind context
 	size_t table_index;
 	//! The types of the chunk

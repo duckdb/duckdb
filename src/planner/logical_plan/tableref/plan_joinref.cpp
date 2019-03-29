@@ -1,22 +1,17 @@
-#include "planner/logical_plan_generator.hpp"
-
 #include "parser/expression/comparison_expression.hpp"
-
+#include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/expression/bound_comparison_expression.hpp"
 #include "planner/expression/bound_conjunction_expression.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/expression/bound_operator_expression.hpp"
 #include "planner/expression/bound_subquery_expression.hpp"
-
+#include "planner/expression_iterator.hpp"
+#include "planner/logical_plan_generator.hpp"
 #include "planner/operator/logical_any_join.hpp"
 #include "planner/operator/logical_comparison_join.hpp"
 #include "planner/operator/logical_cross_product.hpp"
 #include "planner/operator/logical_filter.hpp"
-
 #include "planner/tableref/bound_joinref.hpp"
-
-#include "planner/expression_iterator.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -253,8 +248,8 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundJoinRef &ref) 
 	LogicalJoin::GetTableReferences(*left, left_bindings);
 	LogicalJoin::GetTableReferences(*right, right_bindings);
 	// now create the join operator from the set of join conditions
-	return LogicalComparisonJoin::CreateJoin(ref.type, move(left), move(right), left_bindings,
-	                                                right_bindings, expressions);
+	return LogicalComparisonJoin::CreateJoin(ref.type, move(left), move(right), left_bindings, right_bindings,
+	                                         expressions);
 
 	// LogicalOperator *join;
 	// if (result->type == LogicalOperatorType::FILTER) {

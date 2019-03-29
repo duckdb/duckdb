@@ -1,8 +1,7 @@
 #include "optimizer/rule/distributivity.hpp"
 
-#include "planner/operator/logical_filter.hpp"
-
 #include "planner/expression_iterator.hpp"
+#include "planner/operator/logical_filter.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -16,7 +15,8 @@ DistributivityRule::DistributivityRule(ExpressionRewriter &rewriter) : Rule(rewr
 static void GatherAndExpressions(Expression *expression, vector<Expression *> &result) {
 	if (expression->type == ExpressionType::CONJUNCTION_AND) {
 		// gather expressions
-		ExpressionIterator::EnumerateChildren(*expression, [&](Expression &child) { GatherAndExpressions(&child, result); });
+		ExpressionIterator::EnumerateChildren(*expression,
+		                                      [&](Expression &child) { GatherAndExpressions(&child, result); });
 	} else {
 		// just add the expression
 		result.push_back(expression);
@@ -123,11 +123,11 @@ unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Exp
 			} else {
 				// no new root yet, create a new OR expression with the children
 				// of the main root
-				left_child = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR, move(initial_or->left),
-				                                                move(initial_or->right));
+				left_child = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR,
+				                                                     move(initial_or->left), move(initial_or->right));
 			}
 			new_root = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(left_child),
-			                                              move(right_child));
+			                                                   move(right_child));
 		}
 	}
 	if (new_root) {

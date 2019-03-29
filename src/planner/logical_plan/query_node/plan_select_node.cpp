@@ -1,6 +1,6 @@
-#include "planner/query_node/bound_select_node.hpp"
 #include "planner/logical_plan_generator.hpp"
 #include "planner/operator/list.hpp"
+#include "planner/query_node/bound_select_node.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -35,8 +35,8 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSelectNode &st
 			PlanSubqueries(&expr, &root);
 		}
 		// finally create the aggregate node with the group_index and aggregate_index as obtained from the binder
-		auto aggregate = make_unique<LogicalAggregate>(statement.group_index, statement.aggregate_index,
-		                                               move(statement.aggregates));
+		auto aggregate =
+		    make_unique<LogicalAggregate>(statement.group_index, statement.aggregate_index, move(statement.aggregates));
 		aggregate->groups = move(statement.groups);
 
 		aggregate->AddChild(move(root));

@@ -20,6 +20,7 @@ public:
 
 	//! The child type
 	unique_ptr<Expression> child;
+
 public:
 	string ToString() const override;
 

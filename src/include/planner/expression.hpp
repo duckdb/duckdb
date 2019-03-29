@@ -20,6 +20,7 @@ public:
 	TypeId return_type;
 	//! The SQL type of the expression
 	SQLType sql_type;
+
 public:
 	bool IsAggregate() const override;
 	bool IsWindow() const override;

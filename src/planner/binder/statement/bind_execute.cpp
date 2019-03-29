@@ -1,9 +1,8 @@
+#include "main/client_context.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "parser/statement/execute_statement.hpp"
 #include "planner/binder.hpp"
 #include "planner/statement/bound_execute_statement.hpp"
-
-#include "main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;

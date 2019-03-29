@@ -3,18 +3,18 @@
 #include "parser/expression/aggregate_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/window_expression.hpp"
-#include "planner/query_node/bound_select_node.hpp"
-#include "planner/expression_binder/aggregate_binder.hpp"
+#include "parser/parsed_expression_iterator.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/expression/bound_window_expression.hpp"
-#include "parser/parsed_expression_iterator.hpp"
+#include "planner/expression_binder/aggregate_binder.hpp"
+#include "planner/query_node/bound_select_node.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
                            expression_map_t<uint32_t> &group_map, unordered_map<string, uint32_t> &group_alias_map)
-    : ExpressionBinder(binder, context), inside_window(false),  node(node), group_map(group_map),
+    : ExpressionBinder(binder, context), inside_window(false), node(node), group_map(group_map),
       group_alias_map(group_alias_map) {
 }
 
@@ -28,9 +28,9 @@ BindResult SelectBinder::BindExpression(ParsedExpression &expr, uint32_t depth, 
 	case ExpressionClass::DEFAULT:
 		return BindResult("SELECT clause cannot contain DEFAULT clause");
 	case ExpressionClass::AGGREGATE:
-		return BindAggregate((AggregateExpression&) expr, depth);
+		return BindAggregate((AggregateExpression &)expr, depth);
 	case ExpressionClass::WINDOW:
-		return BindWindow((WindowExpression&) expr, depth);
+		return BindWindow((WindowExpression &)expr, depth);
 	default:
 		return ExpressionBinder::BindExpression(expr, depth);
 	}

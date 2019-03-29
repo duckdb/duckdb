@@ -1,16 +1,14 @@
 #include "planner/planner.hpp"
 
-#include "main/database.hpp"
-
 #include "common/serializer.hpp"
 #include "main/client_context.hpp"
+#include "main/database.hpp"
 #include "parser/statement/list.hpp"
 #include "planner/binder.hpp"
+#include "planner/bound_sql_statement.hpp"
 #include "planner/logical_plan_generator.hpp"
 #include "planner/operator/logical_explain.hpp"
 #include "planner/operator/logical_prepare.hpp"
-
-#include "planner/bound_sql_statement.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -23,6 +21,8 @@ void Planner::CreatePlan(SQLStatement &statement, bool allow_parameter) {
 	context.profiler.StartPhase("binder");
 	auto bound_statement = binder.Bind(statement);
 	context.profiler.EndPhase();
+
+	this->names = bound_statement->GetNames();
 
 	// now create a logical query plan from the query
 	context.profiler.StartPhase("logical_planner");
@@ -55,7 +55,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 			throw Exception("Query in view definition contains errors");
 		}
 
-		if (stmt.info->aliases.size() > plan->GetNames().size()) {
+		if (stmt.info->aliases.size() > dummy_statement.node->GetSelectList().size()) {
 			throw Exception("More VIEW aliases than columns in query result");
 		}
 
@@ -145,6 +145,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		auto explain = make_unique<LogicalExplain>(move(plan));
 		explain->parse_tree = parse_tree;
 		explain->logical_plan_unopt = logical_plan_unopt;
+		names = {"explain_key", "explain_value"};
 		plan = move(explain);
 		break;
 	}
@@ -152,7 +153,8 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		auto &stmt = *reinterpret_cast<PrepareStatement *>(statement.get());
 		auto statement_type = stmt.statement->type;
 		CreatePlan(*stmt.statement, true);
-		auto prepare = make_unique<LogicalPrepare>(stmt.name, statement_type, move(plan));
+		auto prepare = make_unique<LogicalPrepare>(stmt.name, statement_type, names, move(plan));
+		names = {"Success"};
 		plan = move(prepare);
 		break;
 	}

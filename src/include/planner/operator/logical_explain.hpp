@@ -23,10 +23,6 @@ public:
 	string logical_plan_unopt;
 	string logical_plan_opt;
 
-	vector<string> GetNames() override {
-		return {"explain_key", "explain_value"};
-	}
-
 protected:
 	void ResolveTypes() override {
 		types = {TypeId::VARCHAR, TypeId::VARCHAR};

@@ -1,12 +1,11 @@
+#include "main/client_context.hpp"
+#include "main/database.hpp"
 #include "parser/constraints/check_constraint.hpp"
 #include "parser/expression/cast_expression.hpp"
 #include "parser/statement/create_table_statement.hpp"
 #include "planner/binder.hpp"
 #include "planner/expression_binder/check_binder.hpp"
 #include "planner/statement/bound_create_table_statement.hpp"
-
-#include "main/client_context.hpp"
-#include "main/database.hpp"
 
 using namespace duckdb;
 using namespace std;

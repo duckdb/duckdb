@@ -20,14 +20,8 @@ public:
 	LogicalEmptyResult(unique_ptr<LogicalOperator> op);
 
 	vector<TypeId> return_types;
-	//! The names of the result set
-	vector<string> names;
 	//! The tables that would be bound at this location (if the subtree was not optimized away)
 	vector<BoundTable> bound_tables;
-
-	vector<string> GetNames() override {
-		return names;
-	}
 
 protected:
 	void ResolveTypes() override {

@@ -24,9 +24,10 @@ BindResult HavingBinder::BindExpression(ParsedExpression &expr, uint32_t depth, 
 	case ExpressionClass::WINDOW:
 		return BindResult("HAVING clause cannot contain window functions!");
 	case ExpressionClass::AGGREGATE:
-		return BindAggregate((AggregateExpression&) expr, depth);
+		return BindAggregate((AggregateExpression &)expr, depth);
 	case ExpressionClass::COLUMN_REF:
-		return BindResult(StringUtil::Format("column %s must appear in the GROUP BY clause or be used in an aggregate function",
+		return BindResult(
+		    StringUtil::Format("column %s must appear in the GROUP BY clause or be used in an aggregate function",
 		                       expr.ToString().c_str()));
 	default:
 		return ExpressionBinder::BindExpression(expr, depth);

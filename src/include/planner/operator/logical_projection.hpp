@@ -19,8 +19,6 @@ public:
 	    : LogicalOperator(LogicalOperatorType::PROJECTION, std::move(select_list)), table_index(table_index) {
 	}
 
-	vector<string> GetNames() override;
-
 	size_t table_index;
 
 protected:

@@ -13,6 +13,5 @@ LogicalEmptyResult::LogicalEmptyResult(unique_ptr<LogicalOperator> op)
 	this->bound_tables = resolver.bound_tables;
 
 	op->ResolveOperatorTypes();
-	this->names = op->GetNames();
 	this->return_types = op->types;
 }

@@ -21,10 +21,6 @@ public:
 	vector<vector<unique_ptr<Expression>>> insert_values;
 	vector<int> column_index_map;
 
-	vector<string> GetNames() override {
-		return {"Count"};
-	}
-
 	//! The base table to insert into
 	TableCatalogEntry *table;
 

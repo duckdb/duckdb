@@ -33,10 +33,10 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk, 
 		DataChunk &group_chunk = state->group_chunk;
 		DataChunk &payload_chunk = state->payload_chunk;
 		executor.Execute(groups, group_chunk);
-		for(size_t i = 0; i < aggregates.size(); i++) {
+		for (size_t i = 0; i < aggregates.size(); i++) {
 			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
 			if (aggr.child) {
-				executor.ExecuteExpression(*aggregates[i], payload_chunk.data[i]);
+				executor.ExecuteExpression(*aggr.child, payload_chunk.data[i]);
 				payload_chunk.heap.MergeHeap(payload_chunk.data[i].string_heap);
 			} else {
 				payload_chunk.data[i].count = group_chunk.size();

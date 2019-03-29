@@ -10,40 +10,9 @@
 
 #include "common/common.hpp"
 #include "planner/bound_tokens.hpp"
+#include "planner/logical_tokens.hpp"
 
 namespace duckdb {
-
-class LogicalAggregate;
-class LogicalAnyJoin;
-class LogicalChunkGet;
-class LogicalComparisonJoin;
-class LogicalCreateTable;
-class LogicalCreateIndex;
-class LogicalCrossProduct;
-class LogicalDelete;
-class LogicalDelimGet;
-class LogicalDelimJoin;
-class LogicalDistinct;
-class LogicalEmptyResult;
-class LogicalFilter;
-class LogicalGet;
-class LogicalJoin;
-class LogicalLimit;
-class LogicalOperator;
-class LogicalOrder;
-class LogicalProjection;
-class LogicalInsert;
-class LogicalCopy;
-class LogicalExplain;
-class LogicalSetOperation;
-class LogicalSubquery;
-class LogicalUpdate;
-class LogicalTableFunction;
-class LogicalPrepare;
-class LogicalPruneColumns;
-class LogicalWindow;
-class LogicalExecute;
-
 //! The LogicalOperatorVisitor is an abstract base class that implements the
 //! Visitor pattern on LogicalOperator.
 class LogicalOperatorVisitor {
@@ -52,6 +21,7 @@ public:
 
 	virtual void VisitOperator(LogicalOperator &op);
 	virtual void VisitExpression(unique_ptr<Expression> *expression);
+
 protected:
 	//! Automatically calls the Visit method for LogicalOperator children of the current operator. Can be overloaded to
 	//! change this behavior.

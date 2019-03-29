@@ -21,10 +21,6 @@ public:
 		this->expressions = move(expressions);
 	}
 
-	vector<string> GetNames() override {
-		return {"Count"};
-	}
-
 	//! The table to create the index for
 	TableCatalogEntry &table;
 	//! Column IDs needed for index creation

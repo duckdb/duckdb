@@ -1,8 +1,8 @@
-#include "planner/expression/bound_columnref_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "parser/query_node/set_operation_node.hpp"
 #include "planner/binder.hpp"
+#include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/query_node/bound_set_operation_node.hpp"
 
 using namespace duckdb;
@@ -56,7 +56,8 @@ static void GatherAliases(QueryNode &node, unordered_map<string, uint32_t> &alia
 
 unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 	auto result = make_unique<BoundSetOperationNode>();
-	result->type = statement.type;
+	result->setop_type = statement.setop_type;
+
 	// first recursively visit the set operations
 	// both the left and right sides have an independent BindContext and Binder
 	assert(statement.left);
@@ -123,6 +124,8 @@ unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 
 	result->right_binder = make_unique<Binder>(context, this);
 	result->right = result->right_binder->Bind(*statement.right);
+
+	result->names = result->left->names;
 
 	// move the correlated expressions from the child binders to this binder
 	MoveCorrelatedExpressions(*result->left_binder);

@@ -27,6 +27,7 @@ public:
 
 	//! Whether or not subqueries should be planned already
 	bool plan_subquery = true;
+
 private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectStatement &statement);
 	unique_ptr<LogicalOperator> CreatePlan(BoundInsertStatement &statement);
@@ -55,6 +56,7 @@ private:
 public:
 	bool has_unplanned_subqueries = false;
 	bool allow_parameter = false;
+
 private:
 	//! A reference to the current binder
 	Binder &binder;

@@ -8,11 +8,10 @@
 
 #pragma once
 
+#include "common/exception.hpp"
 #include "parser/parsed_expression.hpp"
 #include "parser/tokens.hpp"
 #include "planner/expression.hpp"
-
-#include "common/exception.hpp"
 
 namespace duckdb {
 

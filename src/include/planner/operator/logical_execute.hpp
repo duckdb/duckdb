@@ -21,10 +21,6 @@ public:
 
 	PreparedStatementCatalogEntry *prep;
 
-	vector<string> GetNames() override {
-		return prep->names;
-	}
-
 protected:
 	void ResolveTypes() override {
 		// already resolved

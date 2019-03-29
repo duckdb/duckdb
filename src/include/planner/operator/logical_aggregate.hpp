@@ -21,8 +21,6 @@ public:
 	      group_index(group_index), aggregate_index(aggregate_index) {
 	}
 
-	vector<string> GetNames() override;
-
 	//! The table index for the groups of the LogicalAggregate
 	size_t group_index;
 	//! The table index for the aggregates of the LogicalAggregate

@@ -1,7 +1,6 @@
 #include "planner/logical_plan_generator.hpp"
-#include "planner/tableref/bound_crossproductref.hpp"
-
 #include "planner/operator/logical_cross_product.hpp"
+#include "planner/tableref/bound_crossproductref.hpp"
 
 using namespace duckdb;
 using namespace std;

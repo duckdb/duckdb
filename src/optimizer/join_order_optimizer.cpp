@@ -1,11 +1,9 @@
 #include "optimizer/join_order_optimizer.hpp"
 
 #include "parser/expression/comparison_expression.hpp"
-
 #include "planner/expression/list.hpp"
-#include "planner/operator/list.hpp"
-
 #include "planner/expression_iterator.hpp"
+#include "planner/operator/list.hpp"
 
 using namespace duckdb;
 using namespace std;

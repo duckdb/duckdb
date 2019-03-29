@@ -20,10 +20,6 @@ public:
 	    : LogicalOperator(LogicalOperatorType::ORDER_BY), orders(move(orders)) {
 	}
 
-	vector<string> GetNames() override {
-		return children[0]->GetNames();
-	}
-
 	vector<BoundOrderByNode> orders;
 
 	size_t ExpressionCount() override;

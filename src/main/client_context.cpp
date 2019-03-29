@@ -142,7 +142,7 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 
 	auto plan = move(planner.plan);
 	// extract the result column names from the plan
-	auto names = plan->GetNames();
+	auto names = planner.names;
 #ifdef DEBUG
 	if (enable_optimizer) {
 #endif
@@ -167,12 +167,11 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 	profiler.StartPhase("physical_planner");
 	// now convert logical query plan into a physical query plan
 	PhysicalPlanGenerator physical_planner(*this);
-	physical_planner.CreatePlan(move(plan));
-	assert(physical_planner.plan);
+	auto physical_plan = physical_planner.CreatePlan(move(plan));
 	profiler.EndPhase();
 
 	// store the physical plan in the context for calls to Fetch()
-	execution_context.physical_plan = move(physical_planner.plan);
+	execution_context.physical_plan = move(physical_plan);
 	execution_context.physical_state = execution_context.physical_plan->GetOperatorState();
 
 	auto types = execution_context.physical_plan->GetTypes();

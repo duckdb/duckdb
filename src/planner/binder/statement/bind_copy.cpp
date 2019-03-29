@@ -1,7 +1,7 @@
+#include "main/database.hpp"
 #include "parser/statement/copy_statement.hpp"
 #include "planner/binder.hpp"
 #include "planner/statement/bound_copy_statement.hpp"
-#include "main/database.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,9 +1,8 @@
 #include "optimizer/cse_optimizer.hpp"
 
+#include "planner/expression_iterator.hpp"
 #include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_projection.hpp"
-
-#include "planner/expression_iterator.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -22,7 +21,7 @@ void CommonSubExpressionOptimizer::VisitOperator(LogicalOperator &op) {
 
 void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, expression_map_t<CSENode> &expression_count) {
 	// we only consider expressions with children for CSE elimination
-	switch(expr.expression_class) {
+	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_COLUMN_REF:
 	case ExpressionClass::BOUND_CONSTANT:
 	case ExpressionClass::BOUND_PARAMETER:
@@ -39,15 +38,13 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, expression
 		node->second.count++;
 	}
 	// recursively count the children
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
-		CountExpressions(child, expression_count);
-	});
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { CountExpressions(child, expression_count); });
 }
 
 void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> *expr_ptr,
-                                                                expression_map_t<CSENode> &expression_count) {
+                                                         expression_map_t<CSENode> &expression_count) {
 	Expression &expr = **expr_ptr;
-	switch(expr.expression_class) {
+	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_COLUMN_REF:
 	case ExpressionClass::BOUND_CONSTANT:
 	case ExpressionClass::BOUND_PARAMETER:

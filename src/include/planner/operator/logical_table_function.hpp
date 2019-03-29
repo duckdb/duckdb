@@ -17,8 +17,7 @@ class LogicalTableFunction : public LogicalOperator {
 public:
 	LogicalTableFunction(TableFunctionCatalogEntry *function, size_t table_index,
 	                     vector<unique_ptr<Expression>> parameters)
-	    : LogicalOperator(LogicalOperatorType::TABLE_FUNCTION), function(function),
-	      table_index(table_index) {
+	    : LogicalOperator(LogicalOperatorType::TABLE_FUNCTION), function(function), table_index(table_index) {
 		expressions = move(parameters);
 	}
 
@@ -26,8 +25,6 @@ public:
 	TableFunctionCatalogEntry *function;
 	//! The table index of the table-producing function
 	size_t table_index;
-
-	vector<string> GetNames() override;
 
 protected:
 	void ResolveTypes() override;

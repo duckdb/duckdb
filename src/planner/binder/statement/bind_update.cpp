@@ -1,11 +1,10 @@
 #include "parser/statement/update_statement.hpp"
 #include "planner/binder.hpp"
+#include "planner/expression/bound_default_expression.hpp"
 #include "planner/expression_binder/update_binder.hpp"
 #include "planner/expression_binder/where_binder.hpp"
 #include "planner/statement/bound_update_statement.hpp"
 #include "planner/tableref/bound_basetableref.hpp"
-
-#include "planner/expression/bound_default_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

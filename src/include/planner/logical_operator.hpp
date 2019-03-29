@@ -41,9 +41,6 @@ public:
 		return type;
 	}
 
-	//! Return a vector of the column names that will be returned by this
-	//! operator
-	virtual vector<string> GetNames() = 0;
 	//! Resolve the types of the logical operator and its children
 	void ResolveOperatorTypes();
 

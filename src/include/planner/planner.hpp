@@ -24,10 +24,10 @@ public:
 	void CreatePlan(unique_ptr<SQLStatement> statement);
 
 	unique_ptr<LogicalOperator> plan;
+	vector<string> names;
 
 	Binder binder;
 	ClientContext &context;
-
 private:
 	void CreatePlan(SQLStatement &statement, bool allow_parameter = false);
 };

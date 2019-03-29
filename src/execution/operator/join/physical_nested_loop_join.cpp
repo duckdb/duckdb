@@ -17,8 +17,8 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<P
     : PhysicalComparisonJoin(op, PhysicalOperatorType::NESTED_LOOP_JOIN, move(cond), join_type) {
 	children.push_back(move(left));
 	children.push_back(move(right));
-	
-	for(auto &cond : conditions) {
+
+	for (auto &cond : conditions) {
 		left_expressions.push_back(cond.left.get());
 		right_expressions.push_back(cond.right.get());
 	}

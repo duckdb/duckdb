@@ -1,10 +1,7 @@
 #include "parser/expression/window_expression.hpp"
-
 #include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/expression/bound_window_expression.hpp"
-
 #include "planner/expression_binder/select_binder.hpp"
-
 #include "planner/query_node/bound_select_node.hpp"
 
 using namespace duckdb;
@@ -33,7 +30,7 @@ static SQLType ResolveWindowExpressionType(ExpressionType window_type, SQLType c
 	case ExpressionType::WINDOW_RANK:
 	case ExpressionType::WINDOW_RANK_DENSE:
 	case ExpressionType::WINDOW_NTILE:
-			return SQLType(SQLTypeId::BIGINT);
+		return SQLType(SQLTypeId::BIGINT);
 	case ExpressionType::WINDOW_MIN:
 	case ExpressionType::WINDOW_MAX:
 	case ExpressionType::WINDOW_FIRST_VALUE:
@@ -60,10 +57,10 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, uint32_t depth) {
 	this->inside_window = true;
 	string error;
 	BindChild(window.child, depth, error);
-	for(auto &child : window.partitions) {
+	for (auto &child : window.partitions) {
 		BindChild(child, depth, error);
 	}
-	for(auto &order : window.orders) {
+	for (auto &order : window.orders) {
 		BindChild(order.expression, depth, error);
 	}
 	BindChild(window.start_expr, depth, error);
@@ -80,10 +77,10 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, uint32_t depth) {
 	SQLType sql_type = ResolveWindowExpressionType(window.type, child ? child->sql_type : SQLType());
 	auto result = make_unique<BoundWindowExpression>(window.type, GetInternalType(sql_type), sql_type);
 	result->child = move(child);
-	for(auto &child : window.partitions) {
+	for (auto &child : window.partitions) {
 		result->partitions.push_back(GetExpression(child));
 	}
-	for(auto &order : window.orders) {
+	for (auto &order : window.orders) {
 		BoundOrderByNode bound_order;
 		bound_order.expression = GetExpression(order.expression);
 		bound_order.type = order.type;
@@ -94,9 +91,9 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, uint32_t depth) {
 	result->offset_expr = GetExpression(window.offset_expr);
 	result->default_expr = GetExpression(window.default_expr);
 	// create a BoundColumnRef that references this entry
-	auto colref = make_unique<BoundColumnRefExpression>(
-	    window.GetName(), result->return_type,
-	    ColumnBinding(node.window_index, node.windows.size()), result->sql_type, depth);
+	auto colref = make_unique<BoundColumnRefExpression>(window.GetName(), result->return_type,
+	                                                    ColumnBinding(node.window_index, node.windows.size()),
+	                                                    result->sql_type, depth);
 	// move the WINDOW expression into the set of bound windows
 	node.windows.push_back(move(result));
 	return BindResult(move(colref));

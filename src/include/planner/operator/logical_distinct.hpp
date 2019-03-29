@@ -18,10 +18,6 @@ public:
 	LogicalDistinct() : LogicalOperator(LogicalOperatorType::DISTINCT) {
 	}
 
-	vector<string> GetNames() override {
-		return children[0]->GetNames();
-	}
-
 protected:
 	void ResolveTypes() override {
 		types = children[0]->types;

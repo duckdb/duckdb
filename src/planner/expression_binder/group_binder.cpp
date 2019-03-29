@@ -1,26 +1,27 @@
 #include "planner/expression_binder/group_binder.hpp"
 
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression/bound_constant_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "parser/query_node/select_node.hpp"
+#include "planner/expression/bound_columnref_expression.hpp"
+#include "planner/expression/bound_constant_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode &node, size_t group_index,
                          unordered_map<string, uint32_t> &alias_map, unordered_map<string, uint32_t> &group_alias_map)
-    : ExpressionBinder(binder, context), node(node), alias_map(alias_map), group_alias_map(group_alias_map), group_index(group_index) {
+    : ExpressionBinder(binder, context), node(node), alias_map(alias_map), group_alias_map(group_alias_map),
+      group_index(group_index) {
 }
 
 BindResult GroupBinder::BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression) {
 	if (root_expression && depth == 0) {
-		switch(expr.expression_class) {
+		switch (expr.expression_class) {
 		case ExpressionClass::COLUMN_REF:
-			return BindColumnRef((ColumnRefExpression&) expr);
+			return BindColumnRef((ColumnRefExpression &)expr);
 		case ExpressionClass::CONSTANT:
-			return BindConstant((ConstantExpression&) expr);
+			return BindConstant((ConstantExpression &)expr);
 		default:
 			break;
 		}

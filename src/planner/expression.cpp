@@ -2,7 +2,6 @@
 
 #include "common/exception.hpp"
 #include "common/types/hash.hpp"
-
 #include "planner/expression_iterator.hpp"
 
 using namespace duckdb;
@@ -14,15 +13,13 @@ Expression::Expression(ExpressionType type, ExpressionClass expression_class, Ty
 
 bool Expression::IsAggregate() const {
 	bool is_aggregate = false;
-	ExpressionIterator::EnumerateChildren(
-	    *this, [&](const Expression &child) { is_aggregate |= child.IsAggregate(); });
+	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) { is_aggregate |= child.IsAggregate(); });
 	return is_aggregate;
 }
 
 bool Expression::IsWindow() const {
 	bool is_window = false;
-	ExpressionIterator::EnumerateChildren(*this,
-	                                            [&](const Expression &child) { is_window |= child.IsWindow(); });
+	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) { is_window |= child.IsWindow(); });
 	return is_window;
 }
 
@@ -38,22 +35,21 @@ bool Expression::IsScalar() const {
 
 bool Expression::HasParameter() const {
 	bool has_parameter = false;
-	ExpressionIterator::EnumerateChildren(
-	    *this, [&](const Expression &child) { has_parameter |= child.HasParameter(); });
+	ExpressionIterator::EnumerateChildren(*this,
+	                                      [&](const Expression &child) { has_parameter |= child.HasParameter(); });
 	return has_parameter;
 }
 
 bool Expression::HasSubquery() const {
 	bool has_subquery = false;
-	ExpressionIterator::EnumerateChildren(
-	    *this, [&](const Expression &child) { has_subquery |= child.HasSubquery(); });
+	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) { has_subquery |= child.HasSubquery(); });
 	return has_subquery;
 }
 
 uint64_t Expression::Hash() const {
 	uint64_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
 	hash = CombineHash(hash, duckdb::Hash<uint32_t>((uint32_t)return_type));
-	ExpressionIterator::EnumerateChildren(
-	    *this, [&](const Expression &child) { hash = CombineHash(child.Hash(), hash); });
+	ExpressionIterator::EnumerateChildren(*this,
+	                                      [&](const Expression &child) { hash = CombineHash(child.Hash(), hash); });
 	return hash;
 }

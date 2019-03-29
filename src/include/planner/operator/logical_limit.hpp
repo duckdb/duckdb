@@ -19,10 +19,6 @@ public:
 	    : LogicalOperator(LogicalOperatorType::LIMIT), limit(limit), offset(offset) {
 	}
 
-	vector<string> GetNames() override {
-		return children[0]->GetNames();
-	}
-
 	//! The maximum amount of elements to emit
 	int64_t limit;
 	//! The offset from the start to begin emitting elements

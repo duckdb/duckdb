@@ -1,19 +1,16 @@
-#include "planner/logical_plan_generator.hpp"
-#include "planner/query_node/bound_set_operation_node.hpp"
-
 #include "planner/expression/bound_cast_expression.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
-
+#include "planner/logical_plan_generator.hpp"
 #include "planner/operator/logical_projection.hpp"
 #include "planner/operator/logical_set_operation.hpp"
 #include "planner/operator/logical_subquery.hpp"
+#include "planner/query_node/bound_set_operation_node.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 static unique_ptr<LogicalOperator> CastSetOpToTypes(Binder &binder, vector<SQLType> &source_types,
-                                                    vector<SQLType> &target_types,
-                                                    unique_ptr<LogicalOperator> op) {
+                                                    vector<SQLType> &target_types, unique_ptr<LogicalOperator> op) {
 	assert(op);
 	// first check if we even need to cast
 	assert(source_types.size() == target_types.size());
@@ -31,7 +28,8 @@ static unique_ptr<LogicalOperator> CastSetOpToTypes(Binder &binder, vector<SQLTy
 			if (node->expressions[i]->sql_type != target_types[i]) {
 				// differing types, have to add a cast
 				string alias = node->expressions[i]->alias;
-				node->expressions[i] = make_unique<BoundCastExpression>(GetInternalType(target_types[i]), move(node->expressions[i]), target_types[i]);
+				node->expressions[i] = make_unique<BoundCastExpression>(GetInternalType(target_types[i]),
+				                                                        move(node->expressions[i]), target_types[i]);
 				node->expressions[i]->alias = alias;
 			}
 		}
@@ -49,11 +47,12 @@ static unique_ptr<LogicalOperator> CastSetOpToTypes(Binder &binder, vector<SQLTy
 		// now generate the expression list
 		vector<unique_ptr<Expression>> select_list;
 		for (size_t i = 0; i < target_types.size(); i++) {
-			unique_ptr<Expression> result =
-			    make_unique<BoundColumnRefExpression>(GetInternalType(source_types[i]), ColumnBinding(subquery_index, i), source_types[i]);
+			unique_ptr<Expression> result = make_unique<BoundColumnRefExpression>(
+			    GetInternalType(source_types[i]), ColumnBinding(subquery_index, i), source_types[i]);
 			if (source_types[i] != target_types[i]) {
 				// add a cast only if the source and target types are not equivalent
-				result = make_unique<BoundCastExpression>(GetInternalType(target_types[i]), move(result), target_types[i]);
+				result =
+				    make_unique<BoundCastExpression>(GetInternalType(target_types[i]), move(result), target_types[i]);
 			}
 			select_list.push_back(move(result));
 		}
@@ -90,7 +89,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSetOperationNo
 		break;
 	}
 	auto root = make_unique<LogicalSetOperation>(node.setop_index, node.types.size(), move(left_node), move(right_node),
-	                                        logical_type);
+	                                             logical_type);
 
 	return VisitQueryNode(node, move(root));
 }

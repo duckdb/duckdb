@@ -18,10 +18,6 @@ public:
 	    : LogicalOperator(LogicalOperatorType::UPDATE, std::move(expressions)), table(table), columns(columns) {
 	}
 
-	vector<string> GetNames() override {
-		return {"Count"};
-	}
-
 	TableCatalogEntry *table;
 	vector<column_t> columns;
 

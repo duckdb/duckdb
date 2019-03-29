@@ -41,8 +41,8 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, uint32_t depth) {
 		column_list.push_back(colref.column_name);
 	}
 	binding.table_index = index;
-	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(entry.type),
-	                                                        binding, entry.type, depth));
+	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(entry.type), binding,
+	                                                        entry.type, depth));
 }
 
 void TableBinding::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &select_list) {
@@ -61,8 +61,7 @@ SubqueryBinding::SubqueryBinding(const string &alias, SubqueryRef &ref, BoundQue
 			names.push_back(name);
 		}
 	} else {
-		for (auto &entry : select_list) {
-			auto name = entry->GetName();
+		for (auto &name : subquery.names) {
 			name_map[name] = names.size();
 			names.push_back(name);
 		}

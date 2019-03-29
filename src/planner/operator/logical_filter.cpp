@@ -13,10 +13,6 @@ LogicalFilter::LogicalFilter(unique_ptr<Expression> expression) : LogicalOperato
 LogicalFilter::LogicalFilter() : LogicalOperator(LogicalOperatorType::FILTER) {
 }
 
-vector<string> LogicalFilter::GetNames() {
-	return children[0]->GetNames();
-}
-
 void LogicalFilter::ResolveTypes() {
 	types = children[0]->types;
 }

@@ -21,6 +21,7 @@ public:
 	void VisitOperator(LogicalOperator &op) override;
 
 	bool has_correlated_expressions;
+
 protected:
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;

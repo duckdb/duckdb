@@ -10,9 +10,9 @@
 
 #include "planner/bound_sql_statement.hpp"
 
-namespace duckdb {
-class PreparedStatementCatalogEntry;
+#include "catalog/catalog_entry/prepared_statement_catalog_entry.hpp"
 
+namespace duckdb {
 //! Bound equivalent to ExecuteStatement
 class BoundExecuteStatement : public BoundSQLStatement {
 public:
@@ -23,5 +23,9 @@ public:
 	vector<Value> values;
 	//! The prepared statement to execute
 	PreparedStatementCatalogEntry *prep;
+public:
+	vector<string> GetNames() override {
+		return prep->names;
+	}
 };
 } // namespace duckdb

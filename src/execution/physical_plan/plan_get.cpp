@@ -1,0 +1,17 @@
+#include "execution/physical_plan_generator.hpp"
+#include "planner/operator/logical_get.hpp"
+#include "execution/operator/scan/physical_dummy_scan.hpp"
+#include "execution/operator/scan/physical_table_scan.hpp"
+
+using namespace duckdb;
+using namespace std;
+
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
+	assert(op.children.size() == 0);
+
+	if (!op.table) {
+		return make_unique<PhysicalDummyScan>(op.types);
+	} else {
+		return make_unique<PhysicalTableScan>(op, *op.table, *op.table->storage, op.column_ids);
+	}
+}

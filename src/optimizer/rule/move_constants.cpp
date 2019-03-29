@@ -2,7 +2,6 @@
 
 #include "common/exception.hpp"
 #include "common/value_operations/value_operations.hpp"
-
 #include "parser/expression/comparison_expression.hpp"
 
 using namespace duckdb;

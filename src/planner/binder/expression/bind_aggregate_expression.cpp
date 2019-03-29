@@ -1,11 +1,8 @@
 #include "parser/expression/aggregate_expression.hpp"
-
 #include "planner/expression/bound_aggregate_expression.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
-
 #include "planner/expression_binder/aggregate_binder.hpp"
 #include "planner/expression_binder/select_binder.hpp"
-
 #include "planner/query_node/bound_select_node.hpp"
 
 using namespace duckdb;
@@ -95,10 +92,12 @@ BindResult SelectBinder::BindAggregate(AggregateExpression &aggr, uint32_t depth
 	auto child = GetExpression(aggr.child);
 	SQLType result_type = ResolveAggregateType(aggr, &child);
 	// create the aggregate
-	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(result_type), aggr.type, move(child), result_type);
+	auto aggregate =
+	    make_unique<BoundAggregateExpression>(GetInternalType(result_type), aggr.type, move(child), result_type);
 	// now create a column reference referring to this aggregate
-	auto colref = make_unique<BoundColumnRefExpression>(
-		aggr.GetName(), aggregate->return_type, ColumnBinding(node.aggregate_index, node.aggregates.size()), aggregate->sql_type, depth);
+	auto colref = make_unique<BoundColumnRefExpression>(aggr.GetName(), aggregate->return_type,
+	                                                    ColumnBinding(node.aggregate_index, node.aggregates.size()),
+	                                                    aggregate->sql_type, depth);
 	// move the aggregate expression into the set of bound aggregates
 	node.aggregates.push_back(move(aggregate));
 	return BindResult(move(colref));

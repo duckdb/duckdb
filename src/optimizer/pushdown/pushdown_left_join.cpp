@@ -3,10 +3,9 @@
 #include "optimizer/optimizer.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
+#include "planner/expression_iterator.hpp"
 #include "planner/operator/logical_comparison_join.hpp"
 #include "planner/operator/logical_filter.hpp"
-
-#include "planner/expression_iterator.hpp"
 
 using namespace duckdb;
 using namespace std;

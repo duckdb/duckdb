@@ -8,21 +8,21 @@
 
 #pragma once
 
-#include "planner/expression.hpp"
 #include "common/types/value.hpp"
+#include "planner/expression.hpp"
 
 namespace duckdb {
 
 class BoundParameterExpression : public Expression {
 public:
 	BoundParameterExpression(size_t parameter_nr)
-	    : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, TypeId::INVALID,
-	                 SQLType()),
+	    : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, TypeId::INVALID, SQLType()),
 	      parameter_nr(parameter_nr) {
 	}
 
 	size_t parameter_nr;
 	Value value;
+
 public:
 	bool IsScalar() const override {
 		return true;

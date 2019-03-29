@@ -25,5 +25,9 @@ public:
 	unique_ptr<BoundSelectStatement> query;
 	//! The schema to create the table in
 	SchemaCatalogEntry *schema;
+public:
+	vector<string> GetNames() override {
+		return {"Count"};
+	}
 };
 } // namespace duckdb

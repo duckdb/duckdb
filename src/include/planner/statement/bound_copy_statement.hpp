@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "planner/bound_sql_statement.hpp"
 #include "planner/bound_query_node.hpp"
+#include "planner/bound_sql_statement.hpp"
 
 namespace duckdb {
 class TableCatalogEntry;
@@ -26,5 +26,9 @@ public:
 	TableCatalogEntry *table;
 	// The bound SQL statement (only for COPY from database -> file)
 	unique_ptr<BoundQueryNode> select_statement;
+public:
+	vector<string> GetNames() override {
+		return {"Count"};
+	}
 };
 } // namespace duckdb

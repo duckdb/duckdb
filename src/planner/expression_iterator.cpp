@@ -6,7 +6,7 @@ using namespace duckdb;
 using namespace std;
 
 void ExpressionIterator::EnumerateChildren(const Expression &expr, function<void(const Expression &child)> callback) {
-	EnumerateChildren((Expression&) expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
+	EnumerateChildren((Expression &)expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
 		callback(*child);
 		return child;
 	});
@@ -19,8 +19,8 @@ void ExpressionIterator::EnumerateChildren(Expression &expr, std::function<void(
 	});
 }
 
-void ExpressionIterator::EnumerateChildren(
-    Expression &expr, function<unique_ptr<Expression>(unique_ptr<Expression> child)> callback) {
+void ExpressionIterator::EnumerateChildren(Expression &expr,
+                                           function<unique_ptr<Expression>(unique_ptr<Expression> child)> callback) {
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_AGGREGATE: {
 		auto &aggr_expr = (BoundAggregateExpression &)expr;

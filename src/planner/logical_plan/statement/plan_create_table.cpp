@@ -10,11 +10,11 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundCreateTableSta
 	if (stmt.query) {
 		// create table from query
 		auto sql_types = stmt.query->node->types;
+		auto names = stmt.query->node->names;
 		root = CreatePlan(*stmt.query);
 
 		// generate the table info from the query
 		root->ResolveOperatorTypes();
-		auto names = root->GetNames();
 		auto &types = root->types;
 		assert(names.size() == types.size());
 		for (size_t i = 0; i < names.size(); i++) {

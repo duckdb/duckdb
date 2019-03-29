@@ -151,7 +151,8 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 		                               last_chunk->version_pointers + last_chunk->count);
 		// now insert the elements into the vector
 		for (size_t i = 0; i < chunk.column_count; i++) {
-			char *target = last_chunk->columns[i] + last_chunk->count * GetTypeIdSize(GetInternalType(table.columns[i].type));
+			char *target =
+			    last_chunk->columns[i] + last_chunk->count * GetTypeIdSize(GetInternalType(table.columns[i].type));
 			VectorOperations::CopyToStorage(chunk.data[i], target, 0, current_count);
 		}
 		// now increase the count of the chunk

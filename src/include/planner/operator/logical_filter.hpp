@@ -18,7 +18,6 @@ public:
 	LogicalFilter(unique_ptr<Expression> expression);
 	LogicalFilter();
 
-	vector<string> GetNames() override;
 	bool SplitPredicates() {
 		return SplitPredicates(expressions);
 	}

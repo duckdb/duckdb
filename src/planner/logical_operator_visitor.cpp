@@ -1,9 +1,8 @@
 #include "planner/logical_operator_visitor.hpp"
 
 #include "planner/expression/list.hpp"
-#include "planner/operator/list.hpp"
-
 #include "planner/expression_iterator.hpp"
+#include "planner/operator/list.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -33,40 +32,40 @@ void LogicalOperatorVisitor::VisitOperatorExpressions(LogicalOperator &op) {
 void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression) {
 	auto &expr = **expression;
 	unique_ptr<Expression> result;
-	switch(expr.GetExpressionClass()) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_AGGREGATE:
-		result = VisitReplace((BoundAggregateExpression&) expr, expression);
+		result = VisitReplace((BoundAggregateExpression &)expr, expression);
 		break;
 	case ExpressionClass::BOUND_CASE:
-		result = VisitReplace((BoundCaseExpression&) expr, expression);
+		result = VisitReplace((BoundCaseExpression &)expr, expression);
 		break;
 	case ExpressionClass::BOUND_CAST:
-		result = VisitReplace((BoundCastExpression&) expr, expression);
+		result = VisitReplace((BoundCastExpression &)expr, expression);
 		break;
 	case ExpressionClass::BOUND_COLUMN_REF:
-		result = VisitReplace((BoundColumnRefExpression&) expr, expression);
+		result = VisitReplace((BoundColumnRefExpression &)expr, expression);
 		break;
 	case ExpressionClass::BOUND_COMPARISON:
-		result = VisitReplace((BoundComparisonExpression&) expr, expression);
+		result = VisitReplace((BoundComparisonExpression &)expr, expression);
 		break;
 	case ExpressionClass::BOUND_CONJUNCTION:
-		result = VisitReplace((BoundConjunctionExpression&) expr, expression);
+		result = VisitReplace((BoundConjunctionExpression &)expr, expression);
 		break;
 	case ExpressionClass::BOUND_CONSTANT:
-		result = VisitReplace((BoundConstantExpression&) expr, expression);
+		result = VisitReplace((BoundConstantExpression &)expr, expression);
 		break;
 	case ExpressionClass::BOUND_FUNCTION:
-		result = VisitReplace((BoundFunctionExpression&) expr, expression);
+		result = VisitReplace((BoundFunctionExpression &)expr, expression);
 		break;
 	case ExpressionClass::BOUND_SUBQUERY:
-		result = VisitReplace((BoundSubqueryExpression&) expr, expression);
+		result = VisitReplace((BoundSubqueryExpression &)expr, expression);
 		break;
 	case ExpressionClass::BOUND_OPERATOR:
-		result = VisitReplace((BoundOperatorExpression&) expr, expression);
+		result = VisitReplace((BoundOperatorExpression &)expr, expression);
 		break;
 	default:
 		assert(expr.GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-		result = VisitReplace((BoundWindowExpression&) expr, expression);
+		result = VisitReplace((BoundWindowExpression &)expr, expression);
 		break;
 	}
 	if (result) {
@@ -84,54 +83,67 @@ void LogicalOperatorVisitor::VisitExpressionChildren(Expression &expr) {
 	});
 }
 
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundAggregateExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundAggregateExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }
 
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundCaseExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundCaseExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }
 
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundCastExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundCastExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }
 
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundColumnRefExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }
 
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundComparisonExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundComparisonExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }
 
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundConjunctionExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundConjunctionExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }
 
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundConstantExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundConstantExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }
 
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundDefaultExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundDefaultExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }
 
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundFunctionExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundFunctionExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }
 
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundOperatorExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }
 
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundParameterExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundParameterExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }
 
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundSubqueryExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }
 
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundWindowExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundWindowExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }

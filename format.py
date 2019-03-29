@@ -72,9 +72,9 @@ def format_directory(directory, sort_includes=True):
 							list = [os.path.join(dp, f) for dp, dn, filenames in os.walk(directory) for f in filenames if os.path.splitext(f)[1] == '.hpp' and not f.endswith("list.hpp")]
 							list = [x.replace('src/include/', '') for x in list]
 							list.sort()
-							with open(full_path, "w") as f:
+							with open(full_path, "w") as file:
 								for x in list:
-									f.write('#include "%s"\n' % (x))
+									file.write('#include "%s"\n' % (x))
 						elif ext == ".hpp" and directory.startswith("src/include"):
 							# format header in files
 							header_middle ="// "+ os.path.relpath(full_path, script_dir) + "\n"

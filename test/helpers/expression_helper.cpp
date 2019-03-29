@@ -3,10 +3,9 @@
 #include "duckdb.hpp"
 #include "parser/parser.hpp"
 #include "parser/statement/select_statement.hpp"
+#include "planner/expression_iterator.hpp"
 #include "planner/operator/logical_projection.hpp"
 #include "planner/planner.hpp"
-
-#include "planner/expression_iterator.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -47,8 +46,6 @@ unique_ptr<ParsedExpression> ExpressionHelper::ParseExpression(string expression
 	auto &select_list = select.node->GetSelectList();
 	return move(select_list[0]);
 }
-
-
 
 unique_ptr<LogicalOperator> ExpressionHelper::ParseLogicalTree(string query) {
 	Parser parser(context);

@@ -6,9 +6,8 @@
 using namespace duckdb;
 using namespace std;
 
-BoundFunctionExpression::BoundFunctionExpression(TypeId return_type,
-                                                 ScalarFunctionCatalogEntry *bound_function,
-												 SQLType sql_type)
+BoundFunctionExpression::BoundFunctionExpression(TypeId return_type, ScalarFunctionCatalogEntry *bound_function,
+                                                 SQLType sql_type)
     : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, return_type, sql_type),
       bound_function(bound_function) {
 }

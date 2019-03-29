@@ -94,8 +94,8 @@ void FilterCombiner::GenerateFilters(std::function<void(unique_ptr<Expression> f
 		// for each entry generate an equality expression comparing to each other
 		for (size_t i = 0; i < entries.size(); i++) {
 			for (size_t k = i + 1; k < entries.size(); k++) {
-				auto comparison = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, entries[i]->Copy(),
-				                                                    entries[k]->Copy());
+				auto comparison = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL,
+				                                                         entries[i]->Copy(), entries[k]->Copy());
 				callback(move(comparison));
 			}
 			// for each entry also create a comparison with each constant

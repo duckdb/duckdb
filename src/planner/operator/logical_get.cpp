@@ -6,15 +6,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<string> LogicalGet::GetNames() {
-	assert(table);
-	vector<string> names;
-	for (auto &column : table->columns) {
-		names.push_back(column.name);
-	}
-	return names;
-}
-
 void LogicalGet::ResolveTypes() {
 	if (column_ids.size() == 0) {
 		types = {TypeId::INTEGER};

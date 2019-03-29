@@ -16,6 +16,7 @@ namespace duckdb {
 class UpdateBinder : public ExpressionBinder {
 public:
 	UpdateBinder(Binder &binder, ClientContext &context);
+
 protected:
 	BindResult BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression = false) override;
 };

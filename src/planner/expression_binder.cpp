@@ -138,4 +138,4 @@ unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression> &expr) {
 	return move(((BoundExpression &)*expr).expr);
 }
 
-}
+} // namespace duckdb

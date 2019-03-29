@@ -19,10 +19,6 @@ public:
 	    : LogicalOperator(LogicalOperatorType::COPY), table(table), info(move(info)) {
 	}
 
-	vector<string> GetNames() override {
-		return {"Count"};
-	}
-
 	TableCatalogEntry *table;
 	unique_ptr<CopyInformation> info;
 	vector<string> names;

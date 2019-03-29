@@ -22,7 +22,7 @@ void PhysicalTableFunction::_GetChunk(ClientContext &context, DataChunk &chunk, 
 	}
 	// create the input arguments
 	vector<TypeId> input_types;
-	for(auto &argument_type : function->arguments) {
+	for (auto &argument_type : function->arguments) {
 		input_types.push_back(GetInternalType(argument_type));
 	}
 

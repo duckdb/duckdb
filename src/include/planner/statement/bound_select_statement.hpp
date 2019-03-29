@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "planner/bound_sql_statement.hpp"
 #include "planner/bound_query_node.hpp"
+#include "planner/bound_sql_statement.hpp"
 
 namespace duckdb {
 
@@ -21,5 +21,9 @@ public:
 
 	//! The main query node
 	unique_ptr<BoundQueryNode> node;
+public:
+	vector<string> GetNames() override {
+		return node->names;
+	}
 };
 } // namespace duckdb

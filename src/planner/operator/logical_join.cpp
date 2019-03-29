@@ -1,31 +1,13 @@
 #include "planner/operator/logical_join.hpp"
 
 #include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/table_binding_resolver.hpp"
-
 #include "planner/expression_iterator.hpp"
+#include "planner/table_binding_resolver.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 LogicalJoin::LogicalJoin(JoinType type, LogicalOperatorType logical_type) : LogicalOperator(logical_type), type(type) {
-}
-
-vector<string> LogicalJoin::GetNames() {
-	auto names = children[0]->GetNames();
-	if (type == JoinType::SEMI || type == JoinType::ANTI) {
-		// for SEMI and ANTI join we only project the left hand side
-		return names;
-	}
-	if (type == JoinType::MARK) {
-		// MARK join has an additional MARK attribute
-		names.push_back("MARK");
-		return names;
-	}
-	// for other joins we project both sides
-	auto right_names = children[1]->GetNames();
-	names.insert(names.end(), right_names.begin(), right_names.end());
-	return names;
 }
 
 void LogicalJoin::ResolveTypes() {

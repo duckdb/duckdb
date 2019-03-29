@@ -23,29 +23,29 @@ template <class OP, bool IGNORE_NULL> static Value templated_binary_operation(co
 		return result;
 	}
 	result.is_null = false;
-	if (TypeIsIntegral(left.type) && TypeIsIntegral(right.type) &&
-	    (left.type < TypeId::BIGINT || right.type < TypeId::BIGINT)) {
-		// upcast integer types if necessary
-		Value left_cast = left.CastAs(TypeId::BIGINT);
-		Value right_cast = right.CastAs(TypeId::BIGINT);
-		result = templated_binary_operation<OP, IGNORE_NULL>(left_cast, right_cast);
-		if (result.is_null) {
-			result.type = max(left.type, right.type);
-		} else {
-			auto type = max(MinimalType(result.GetNumericValue()), max(left.type, right.type));
-			result = result.CastAs(type);
-		}
-		return result;
-	}
-	if (TypeIsIntegral(left.type) && TypeIsNumeric(right.type)) {
-		Value left_cast = left.CastAs(right.type);
-		return templated_binary_operation<OP, IGNORE_NULL>(left_cast, right);
-	}
-	if (TypeIsNumeric(left.type) && TypeIsIntegral(right.type)) {
-		Value right_cast = right.CastAs(left.type);
-		return templated_binary_operation<OP, IGNORE_NULL>(left, right_cast);
-	}
 	if (left.type != right.type) {
+		if (TypeIsIntegral(left.type) && TypeIsIntegral(right.type) &&
+		    (left.type < TypeId::BIGINT || right.type < TypeId::BIGINT)) {
+			// upcast integer types if necessary
+			Value left_cast = left.CastAs(TypeId::BIGINT);
+			Value right_cast = right.CastAs(TypeId::BIGINT);
+			result = templated_binary_operation<OP, IGNORE_NULL>(left_cast, right_cast);
+			if (result.is_null) {
+				result.type = max(left.type, right.type);
+			} else {
+				auto type = max(MinimalType(result.GetNumericValue()), max(left.type, right.type));
+				result = result.CastAs(type);
+			}
+			return result;
+		}
+		if (TypeIsIntegral(left.type) && TypeIsNumeric(right.type)) {
+			Value left_cast = left.CastAs(right.type);
+			return templated_binary_operation<OP, IGNORE_NULL>(left_cast, right);
+		}
+		if (TypeIsNumeric(left.type) && TypeIsIntegral(right.type)) {
+			Value right_cast = right.CastAs(left.type);
+			return templated_binary_operation<OP, IGNORE_NULL>(left, right_cast);
+		}
 		throw TypeMismatchException(left.type, right.type, "Cannot perform binary operation on these two types");
 	}
 	result.type = left.type;

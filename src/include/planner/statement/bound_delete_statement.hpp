@@ -21,5 +21,9 @@ public:
 
 	unique_ptr<Expression> condition;
 	unique_ptr<BoundTableRef> table;
+public:
+	vector<string> GetNames() override {
+		return {"Count"};
+	}
 };
 } // namespace duckdb

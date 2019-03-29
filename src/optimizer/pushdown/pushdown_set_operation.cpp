@@ -1,9 +1,8 @@
 #include "optimizer/filter_pushdown.hpp"
 #include "optimizer/optimizer.hpp"
+#include "planner/expression_iterator.hpp"
 #include "planner/operator/logical_set_operation.hpp"
 #include "planner/operator/logical_subquery.hpp"
-
-#include "planner/expression_iterator.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -19,7 +18,8 @@ static void ReplaceSetOpBindings(LogicalSetOperation &setop, Expression &expr, s
 		// replace the reference to the set operation with a reference to the child subquery
 		colref.binding.table_index = child_index;
 	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ReplaceSetOpBindings(setop, child, child_index); });
+	ExpressionIterator::EnumerateChildren(expr,
+	                                      [&](Expression &child) { ReplaceSetOpBindings(setop, child, child_index); });
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<LogicalOperator> op) {

@@ -28,7 +28,6 @@ unique_ptr<Expression> BoundCastExpression::Copy() {
 	return move(copy);
 }
 
-
 unique_ptr<Expression> BoundCastExpression::AddCastToType(TypeId target_type, unique_ptr<Expression> expr) {
 	assert(expr);
 	if (expr->GetExpressionClass() == ExpressionClass::PARAMETER || expr->return_type != target_type) {

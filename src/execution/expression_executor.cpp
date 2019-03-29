@@ -6,16 +6,13 @@
 using namespace duckdb;
 using namespace std;
 
-ExpressionExecutor::ExpressionExecutor()
-	: chunk(nullptr) {
+ExpressionExecutor::ExpressionExecutor() : chunk(nullptr) {
 }
 
-ExpressionExecutor::ExpressionExecutor(DataChunk *child_chunk) :
-	chunk(child_chunk) {
+ExpressionExecutor::ExpressionExecutor(DataChunk *child_chunk) : chunk(child_chunk) {
 }
 
-ExpressionExecutor::ExpressionExecutor(DataChunk &child_chunk) :
-	chunk(&child_chunk) {
+ExpressionExecutor::ExpressionExecutor(DataChunk &child_chunk) : chunk(&child_chunk) {
 }
 
 void ExpressionExecutor::Execute(vector<unique_ptr<Expression>> &expressions, DataChunk &result) {
@@ -29,7 +26,7 @@ void ExpressionExecutor::Execute(vector<unique_ptr<Expression>> &expressions, Da
 	result.Verify();
 }
 
-void ExpressionExecutor::Execute(vector<Expression*> &expressions, DataChunk &result) {
+void ExpressionExecutor::Execute(vector<Expression *> &expressions, DataChunk &result) {
 	assert(expressions.size() == result.column_count);
 	assert(expressions.size() > 0);
 	for (size_t i = 0; i < expressions.size(); i++) {
@@ -112,37 +109,37 @@ void ExpressionExecutor::Verify(Expression &expr, Vector &vector) {
 }
 
 void ExpressionExecutor::Execute(Expression &expr, Vector &result) {
-	switch(expr.expression_class) {
+	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_REF:
-		Execute((BoundReferenceExpression &) expr, result);
+		Execute((BoundReferenceExpression &)expr, result);
 		break;
 	case ExpressionClass::BOUND_CASE:
-		Execute((BoundCaseExpression &) expr, result);
+		Execute((BoundCaseExpression &)expr, result);
 		break;
 	case ExpressionClass::BOUND_CAST:
-		Execute((BoundCastExpression &) expr, result);
+		Execute((BoundCastExpression &)expr, result);
 		break;
 	case ExpressionClass::COMMON_SUBEXPRESSION:
-		Execute((CommonSubExpression &) expr, result);
+		Execute((CommonSubExpression &)expr, result);
 		break;
 	case ExpressionClass::BOUND_COMPARISON:
-		Execute((BoundComparisonExpression &) expr, result);
+		Execute((BoundComparisonExpression &)expr, result);
 		break;
 	case ExpressionClass::BOUND_CONJUNCTION:
-		Execute((BoundConjunctionExpression &) expr, result);
+		Execute((BoundConjunctionExpression &)expr, result);
 		break;
 	case ExpressionClass::BOUND_CONSTANT:
-		Execute((BoundConstantExpression &) expr, result);
+		Execute((BoundConstantExpression &)expr, result);
 		break;
 	case ExpressionClass::BOUND_FUNCTION:
-		Execute((BoundFunctionExpression &) expr, result);
+		Execute((BoundFunctionExpression &)expr, result);
 		break;
 	case ExpressionClass::BOUND_OPERATOR:
-		Execute((BoundOperatorExpression &) expr, result);
+		Execute((BoundOperatorExpression &)expr, result);
 		break;
 	default:
 		assert(expr.expression_class == ExpressionClass::BOUND_PARAMETER);
-		Execute((BoundParameterExpression &) expr, result);
+		Execute((BoundParameterExpression &)expr, result);
 		break;
 	}
 	Verify(expr, result);

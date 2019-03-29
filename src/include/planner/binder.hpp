@@ -28,8 +28,9 @@ struct CorrelatedColumnInfo {
 	string name;
 	size_t depth;
 
-	CorrelatedColumnInfo(BoundColumnRefExpression &expr) : 
-		binding(expr.binding), type(expr.return_type), sql_type(expr.sql_type), name(expr.GetName()), depth(expr.depth) {
+	CorrelatedColumnInfo(BoundColumnRefExpression &expr)
+	    : binding(expr.binding), type(expr.return_type), sql_type(expr.sql_type), name(expr.GetName()),
+	      depth(expr.depth) {
 	}
 
 	bool operator==(const CorrelatedColumnInfo &rhs) const {

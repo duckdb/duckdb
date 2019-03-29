@@ -18,17 +18,14 @@ class TableCatalogEntry;
 
 class LogicalPrepare : public LogicalOperator {
 public:
-	LogicalPrepare(string name, StatementType statement_type, unique_ptr<LogicalOperator> logical_plan)
-	    : LogicalOperator(LogicalOperatorType::PREPARE), name(name), statement_type(statement_type) {
+	LogicalPrepare(string name, StatementType statement_type, vector<string> names, unique_ptr<LogicalOperator> logical_plan)
+	    : LogicalOperator(LogicalOperatorType::PREPARE), name(name), statement_type(statement_type), names(names) {
 		children.push_back(move(logical_plan));
 	}
 
 	string name;
 	StatementType statement_type;
-
-	vector<string> GetNames() override {
-		return {"Success"};
-	}
+	vector<string> names;
 
 	void GetTableBindings(unordered_set<TableCatalogEntry *> &result_list);
 

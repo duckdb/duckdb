@@ -18,6 +18,8 @@ public:
 	virtual ~BoundSQLStatement() {
 	}
 
+	virtual vector<string> GetNames() = 0;
+
 	StatementType type;
 };
 } // namespace duckdb

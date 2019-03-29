@@ -10,60 +10,54 @@
 
 #include "common/common.hpp"
 #include "execution/physical_operator.hpp"
-#include "planner/bind_context.hpp"
 #include "planner/logical_operator.hpp"
-#include "planner/logical_operator_visitor.hpp"
-
-#include <vector>
+#include "planner/logical_tokens.hpp"
 
 namespace duckdb {
 class ClientContext;
 
 //! The physical plan generator generates a physical execution plan from a
 //! logical query plan
-class PhysicalPlanGenerator : public LogicalOperatorVisitor {
+class PhysicalPlanGenerator {
 public:
 	PhysicalPlanGenerator(ClientContext &context) : context(context) {
 	}
 
-	void CreatePlan(unique_ptr<LogicalOperator> logical);
-
-	void VisitOperator(LogicalOperator &op) override;
+	//! Creates a plan from the logical operator. This involves resolving column bindings and generating physical operator nodes.
+	unique_ptr<PhysicalOperator> CreatePlan(unique_ptr<LogicalOperator> logical);
+	
 protected:
-	void Visit(LogicalAggregate &op);
-	void Visit(LogicalAnyJoin &op);
-	void Visit(LogicalChunkGet &op);
-	void Visit(LogicalComparisonJoin &op);
-	void Visit(LogicalCreateTable &op);
-	void Visit(LogicalCreateIndex &op);
-	void Visit(LogicalCrossProduct &op);
-	void Visit(LogicalDelete &op);
-	void Visit(LogicalDelimGet &op);
-	void Visit(LogicalDelimJoin &op);
-	void Visit(LogicalDistinct &op);
-	void Visit(LogicalEmptyResult &op);
-	void Visit(LogicalFilter &op);
-	void Visit(LogicalGet &op);
-	void Visit(LogicalLimit &op);
-	void Visit(LogicalOrder &op);
-	void Visit(LogicalProjection &op);
-	void Visit(LogicalInsert &op);
-	void Visit(LogicalCopy &op);
-	void Visit(LogicalExplain &op);
-	void Visit(LogicalSetOperation &op);
-	void Visit(LogicalUpdate &op);
-	void Visit(LogicalTableFunction &expr);
-	void Visit(LogicalPruneColumns &expr);
-	void Visit(LogicalPrepare &expr);
-	void Visit(LogicalWindow &expr);
-	void Visit(LogicalExecute &op);
-public:
-	void Print() {
-		plan->Print();
-	}
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalOperator &op);
 
-	unique_ptr<PhysicalOperator> plan;
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalAggregate &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalAnyJoin &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalChunkGet &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalComparisonJoin &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreateTable &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreateIndex &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalCrossProduct &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalDelete &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalDelimGet &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalDelimJoin &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalDistinct &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalEmptyResult &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalFilter &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalGet &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalLimit &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalOrder &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalProjection &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalInsert &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalCopy &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalExplain &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalSetOperation &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalUpdate &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalTableFunction &expr);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalPruneColumns &expr);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalPrepare &expr);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalWindow &expr);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalExecute &op);
 
+	unique_ptr<PhysicalOperator> CreateDistinct(unique_ptr<PhysicalOperator> child);
 private:
 	ClientContext &context;
 };

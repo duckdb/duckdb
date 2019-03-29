@@ -28,10 +28,6 @@ public:
 	//! The tables that are bound underneath the subquery
 	vector<BoundTable> bound_tables;
 
-	vector<string> GetNames() override {
-		return children[0]->GetNames();
-	}
-
 protected:
 	void ResolveTypes() override {
 		types = children[0]->types;

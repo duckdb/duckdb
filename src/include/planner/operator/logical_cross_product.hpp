@@ -18,8 +18,6 @@ public:
 	LogicalCrossProduct() : LogicalOperator(LogicalOperatorType::CROSS_PRODUCT) {
 	}
 
-	vector<string> GetNames() override;
-
 protected:
 	void ResolveTypes() override;
 };

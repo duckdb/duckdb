@@ -48,7 +48,8 @@ using column_binding_map_t = unordered_map<ColumnBinding, T, ColumnBindingHashFu
 class BoundColumnRefExpression : public Expression {
 public:
 	BoundColumnRefExpression(TypeId type, ColumnBinding binding, SQLType sql_type = SQLType(), uint32_t depth = 0);
-	BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, SQLType sql_type = SQLType(), uint32_t depth = 0);
+	BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, SQLType sql_type = SQLType(),
+	                         uint32_t depth = 0);
 
 	//! Column index set by the binder, used to generate the final BoundExpression
 	ColumnBinding binding;

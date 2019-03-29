@@ -33,6 +33,9 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	}
 	statement.select_list = move(new_select_list);
 
+	for(auto &entry : statement.select_list) {
+		result->names.push_back(entry->GetName());
+	}
 	result->column_count = statement.select_list.size();
 	result->projection_index = GenerateTableIndex();
 	result->group_index = GenerateTableIndex();
@@ -100,7 +103,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 			// if we wouldn't do this then (SELECT test.a FROM test GROUP BY a) would not work because "test.a" <> "a"
 			// hence we convert "a" -> "test.a" in the unbound expression
 			unbound_groups[i] = move(group_binder.unbound_expression);
-			// FIXME: bind table names 
+			// FIXME: bind table names
 			// group_binder.BindTableNames(*unbound_groups[i]);
 			group_map[unbound_groups[i].get()] = i;
 		}
@@ -117,7 +120,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	// after that, we bind to the SELECT list
 	SelectBinder select_binder(*this, context, *result, group_map, group_alias_map);
 	for (size_t i = 0; i < statement.select_list.size(); i++) {
-		//select_binder.BindTableNames(*statement.select_list[i]);
+		// select_binder.BindTableNames(*statement.select_list[i]);
 		result->select_list.push_back(select_binder.Bind(statement.select_list[i]));
 	}
 	for (size_t i = 0; i < result->column_count; i++) {

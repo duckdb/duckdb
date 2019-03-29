@@ -10,8 +10,8 @@
 
 #include "common/common.hpp"
 #include "common/types/data_chunk.hpp"
-#include "planner/expression.hpp"
 #include "planner/bound_tokens.hpp"
+#include "planner/expression.hpp"
 
 namespace duckdb {
 
@@ -25,7 +25,7 @@ public:
 
 	//! Executes a set of expressions and stores them in the result chunk
 	void Execute(vector<unique_ptr<Expression>> &expressions, DataChunk &result);
-	void Execute(vector<Expression*> &expressions, DataChunk &result);
+	void Execute(vector<Expression *> &expressions, DataChunk &result);
 	//! Executes a set of column expresions and merges them using the logical
 	//! AND operator
 	void Merge(vector<std::unique_ptr<Expression>> &expressions, Vector &result);
@@ -33,6 +33,7 @@ public:
 	void ExecuteExpression(Expression &expr, Vector &result);
 	//! Evaluate a scalar expression and fold it into a single value
 	static Value EvaluateScalar(Expression &expr);
+
 protected:
 	void Execute(Expression &expr, Vector &result);
 
@@ -53,6 +54,7 @@ protected:
 
 	//! Verify that the output of a step in the ExpressionExecutor is correct
 	void Verify(Expression &expr, Vector &result);
+
 private:
 	//! The data chunk of the current physical operator, used to resolve e.g.
 	//! column references

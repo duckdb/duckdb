@@ -22,6 +22,7 @@ class SelectBinder : public ExpressionBinder {
 public:
 	SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, expression_map_t<uint32_t> &group_map,
 	             unordered_map<string, uint32_t> &group_alias_map);
+
 protected:
 	BindResult BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression = false) override;
 
@@ -30,6 +31,7 @@ protected:
 	BoundSelectNode &node;
 	expression_map_t<uint32_t> &group_map;
 	unordered_map<string, uint32_t> &group_alias_map;
+
 protected:
 	BindResult BindAggregate(AggregateExpression &expr, uint32_t depth);
 	BindResult BindWindow(WindowExpression &expr, uint32_t depth);

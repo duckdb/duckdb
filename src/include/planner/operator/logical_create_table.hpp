@@ -18,10 +18,6 @@ public:
 	    : LogicalOperator(LogicalOperatorType::CREATE_TABLE), schema(schema), info(move(info)) {
 	}
 
-	vector<string> GetNames() override {
-		return {"Count"};
-	}
-
 	//! Schema to insert to
 	SchemaCatalogEntry *schema;
 	//! Create Table information

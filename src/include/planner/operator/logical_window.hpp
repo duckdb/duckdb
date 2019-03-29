@@ -19,8 +19,6 @@ public:
 	LogicalWindow(size_t window_index) : LogicalOperator(LogicalOperatorType::WINDOW), window_index(window_index) {
 	}
 
-	vector<string> GetNames() override;
-
 	size_t window_index;
 
 protected:

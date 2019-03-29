@@ -33,7 +33,7 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, Vector &result) 
 			Vector intermediate;
 			Execute(*expr.children[child], intermediate);
 			VectorOperations::Equals(left, intermediate, comp_res);
-			
+
 			if (child == 1) {
 				// first child: move to result
 				comp_res.Move(result);

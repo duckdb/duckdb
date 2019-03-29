@@ -19,8 +19,6 @@ class LogicalJoin : public LogicalOperator {
 public:
 	LogicalJoin(JoinType type, LogicalOperatorType logical_type = LogicalOperatorType::JOIN);
 
-	vector<string> GetNames() override;
-
 	// Gets the set of table references that are reachable from this node
 	static void GetTableReferences(LogicalOperator &op, unordered_set<size_t> &bindings);
 	static void GetExpressionBindings(Expression &expr, unordered_set<size_t> &bindings);

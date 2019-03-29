@@ -6,10 +6,9 @@
 #include "optimizer/filter_pushdown.hpp"
 #include "optimizer/join_order_optimizer.hpp"
 #include "optimizer/rule/list.hpp"
-
+#include "planner/binder.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/expression/common_subexpression.hpp"
-#include "planner/binder.hpp"
 #include "planner/operator/list.hpp"
 
 using namespace duckdb;

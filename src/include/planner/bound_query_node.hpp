@@ -42,6 +42,8 @@ public:
 	//! OFFSET
 	int64_t offset = -1;
 
+	//! The names returned by this QueryNode.
+	vector<string> names;
 	//! The types returned by this QueryNode.
 	vector<SQLType> types;
 

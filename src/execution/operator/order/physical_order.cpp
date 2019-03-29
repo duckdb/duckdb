@@ -22,7 +22,7 @@ void PhysicalOrder::_GetChunk(ClientContext &context, DataChunk &chunk, Physical
 		// now perform the actual ordering of the data
 		// compute the sorting columns from the input data
 		vector<TypeId> sort_types;
-		vector<Expression*> order_expressions;
+		vector<Expression *> order_expressions;
 		vector<OrderType> order_types;
 		for (size_t i = 0; i < orders.size(); i++) {
 			auto &expr = orders[i].expression;

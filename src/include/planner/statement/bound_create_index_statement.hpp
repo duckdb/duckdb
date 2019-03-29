@@ -27,5 +27,9 @@ public:
 	vector<unique_ptr<Expression>> expressions;
 	// Info for index creation
 	unique_ptr<CreateIndexInformation> info;
+public:
+	vector<string> GetNames() override {
+		return {"Count"};
+	}
 };
 } // namespace duckdb

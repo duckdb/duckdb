@@ -1,11 +1,10 @@
 #include "planner/subquery/rewrite_correlated_expressions.hpp"
 
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression/bound_subquery_expression.hpp"
 #include "planner/expression/bound_case_expression.hpp"
+#include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
 #include "planner/expression/bound_operator_expression.hpp"
-
+#include "planner/expression/bound_subquery_expression.hpp"
 #include "planner/expression_iterator.hpp"
 
 using namespace duckdb;
@@ -20,7 +19,8 @@ void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
 	VisitOperatorExpressions(op);
 }
 
-unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRefExpression &expr,
+                                                                  unique_ptr<Expression> *expr_ptr) {
 	if (expr.depth == 0) {
 		return nullptr;
 	}
@@ -34,7 +34,8 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRef
 	return nullptr;
 }
 
-unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundSubqueryExpression &expr,
+                                                                  unique_ptr<Expression> *expr_ptr) {
 	if (!expr.IsCorrelated()) {
 		return nullptr;
 	}
@@ -99,7 +100,8 @@ unique_ptr<Expression> RewriteCountAggregates::VisitReplace(BoundColumnRefExpres
 	if (entry != replacement_map.end()) {
 		// reference to a COUNT(*) aggregate
 		// replace this with CASE WHEN COUNT(*) IS NULL THEN 0 ELSE COUNT(*) END
-		auto is_null = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, TypeId::BOOLEAN, SQLType(SQLTypeId::BOOLEAN));
+		auto is_null = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, TypeId::BOOLEAN,
+		                                                    SQLType(SQLTypeId::BOOLEAN));
 		is_null->children.push_back(expr.Copy());
 		auto check = move(is_null);
 		auto result_if_true = make_unique<BoundConstantExpression>(Value::Numeric(expr.return_type, 0), expr.sql_type);

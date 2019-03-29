@@ -1,9 +1,9 @@
 #include "main/client_context.hpp"
+#include "main/database.hpp"
 #include "parser/tableref/basetableref.hpp"
 #include "parser/tableref/subqueryref.hpp"
 #include "planner/binder.hpp"
 #include "planner/tableref/bound_basetableref.hpp"
-#include "main/database.hpp"
 
 using namespace duckdb;
 using namespace std;

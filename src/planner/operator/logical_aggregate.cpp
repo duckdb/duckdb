@@ -3,17 +3,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<string> LogicalAggregate::GetNames() {
-	vector<string> names;
-	for (auto &expr : groups) {
-		names.push_back(expr->GetName());
-	}
-	for (auto &exp : expressions) {
-		names.push_back(exp->GetName());
-	}
-	return names;
-}
-
 void LogicalAggregate::ResolveTypes() {
 	for (auto &expr : groups) {
 		types.push_back(expr->return_type);

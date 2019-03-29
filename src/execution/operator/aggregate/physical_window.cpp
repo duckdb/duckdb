@@ -128,9 +128,9 @@ static bool WindowNeedsRank(BoundWindowExpression *wexpr) {
 	       wexpr->type == ExpressionType::WINDOW_RANK_DENSE || wexpr->type == ExpressionType::WINDOW_CUME_DIST;
 }
 
-static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection &input, size_t input_size, size_t row_idx,
-                                   ChunkCollection &boundary_start_collection, ChunkCollection &boundary_end_collection,
-                                   WindowBoundariesState &bounds) {
+static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection &input, size_t input_size,
+                                   size_t row_idx, ChunkCollection &boundary_start_collection,
+                                   ChunkCollection &boundary_end_collection, WindowBoundariesState &bounds) {
 
 	if (input.column_count() > 0) {
 		vector<Value> row_cur = input.GetRow(row_idx);
