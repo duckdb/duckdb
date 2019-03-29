@@ -13,7 +13,7 @@
 #include "parser/tokens.hpp"
 
 namespace postgres {
-#include "compat.h"
+#include "pg_definitions.h"
 #include "nodes/parsenodes.h"
 } // namespace postgres
 

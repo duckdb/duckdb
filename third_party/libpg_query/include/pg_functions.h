@@ -2,11 +2,11 @@
 #define PG_COMPAT_H
 
 
-#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "compat.h"
+#include "pg_definitions.h"
+
 #include "nodes/pg_list.h"
 #include "nodes/parsenodes.h"
 

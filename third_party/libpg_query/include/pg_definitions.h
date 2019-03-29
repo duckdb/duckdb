@@ -9,6 +9,8 @@
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdbool.h>
+
 
 typedef uintptr_t Datum;
 typedef uint64_t Size;
@@ -31,9 +33,6 @@ typedef uint16_t uint16;
 
 typedef uint8_t uint8;
 
-#ifndef __cplusplus
-typedef uint8_t bool;
-#endif
 #define true 1
 #define false 0
 #define TRUE 1
@@ -92,10 +91,8 @@ typedef struct varlena bytea;
 
 typedef int MemoryContext;
 
-// TODO evil global
-extern  bool operator_precedence_warning;
-
 enum PostgresErrorLevel {
+	UNDEFINED,
 	NOTICE,
 	WARNING,
 	ERROR
@@ -156,7 +153,5 @@ enum PostgresAttributIdentityTypes {
 	ATTRIBUTE_IDENTITY_ALWAYS,
 	ATTRIBUTE_IDENTITY_BY_DEFAULT
 };
-
-#include "pg_compat.h"
 
 #endif

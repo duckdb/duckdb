@@ -21,7 +21,7 @@
  *
  *-------------------------------------------------------------------------
  */
-#include "compat.h"
+#include "pg_functions.h"
 
 #ifndef FRONTEND
 

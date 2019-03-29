@@ -22,7 +22,7 @@
  *
  *-------------------------------------------------------------------------
  */
-#include "compat.h"
+#include "pg_functions.h"
 
 #include <ctype.h>
 

@@ -27,7 +27,7 @@
  *-------------------------------------------------------------------------
  */
 
-#include "compat.h"
+#include "pg_functions.h"
 
 #include "parser/gramparse.h"
 #include "parser/parser.h"

@@ -8565,7 +8565,7 @@ static yyconst struct yy_trans_info *yy_start_state_list[27] =
  *
  *-------------------------------------------------------------------------
  */
-#include "compat.h"
+#include "pg_definitions.h"
 
 #include <ctype.h>
 //#include <unistd.h>

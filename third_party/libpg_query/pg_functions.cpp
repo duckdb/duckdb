@@ -1,16 +1,16 @@
-#include "pg_compat.h"
-
 #include <stdexcept>
 #include <string>
+#include <thread>
+#include <mutex>
+#include "pg_functions.h"
 
-bool operator_precedence_warning;
 
 int pg_err_code;
 int pg_err_pos;
 char pg_err_msg[BUFSIZ];
 
 int ereport(int code, ...) {
-	std::string err = "parser error : " + std::string(pg_err_msg);
+	std::string err = "parser error : " + std::string(pg_err_msg) + " " + std::to_string(pg_err_pos);
     throw std::runtime_error(err);
 }
 void elog(int code, char* fmt,...) {

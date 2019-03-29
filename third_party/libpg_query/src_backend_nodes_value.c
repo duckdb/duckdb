@@ -20,7 +20,7 @@
  *
  *-------------------------------------------------------------------------
  */
-#include "compat.h"
+#include "pg_functions.h"
 
 #include "nodes/parsenodes.h"
 
