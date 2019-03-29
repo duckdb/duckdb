@@ -3,27 +3,77 @@
 #include <thread>
 #include <mutex>
 #include "pg_functions.h"
+#include "parser/parser.h"
 
 
-int pg_err_code;
-int pg_err_pos;
-char pg_err_msg[BUFSIZ];
+#ifdef _MSC_VER
+# error No Windows support yet :/
+#else
+
+#include <pthread.h>
+
+static pthread_key_t key;
+static pthread_once_t key_once = PTHREAD_ONCE_INIT;
+
+typedef struct parser_state_str parser_state;
+struct parser_state_str {
+	int pg_err_code;
+	int pg_err_pos;
+	char pg_err_msg[BUFSIZ];
+};
+
+static void create_key() {
+    pthread_key_create(&key, NULL);
+
+}
+
+static void init_thread_storage() {
+	pthread_once(&key_once, create_key);
+	void* ptr;
+    if ((ptr = pthread_getspecific(key)) == NULL) {
+    	ptr = malloc(sizeof(parser_state));
+        pthread_setspecific(key, ptr);
+    }
+}
+
+static parser_state* get_parser_state() {
+	return (parser_state* ) pthread_getspecific(key);
+}
+
+#endif
+
+
+void pg_parser_init() {
+	init_thread_storage();
+
+	get_parser_state()->pg_err_code = UNDEFINED;
+}
+void pg_parser_parse(const char* query, parse_result *res) {
+	res->parse_tree = raw_parser(query);
+	auto state = get_parser_state();
+	res->success = state->pg_err_code == UNDEFINED;
+	res->error_location = state->pg_err_pos;
+	res->error_message = state->pg_err_msg;
+}
+void pg_parser_cleanup() {
+	// TODO
+}
 
 int ereport(int code, ...) {
-	std::string err = "parser error : " + std::string(pg_err_msg) + " " + std::to_string(pg_err_pos);
+	std::string err = "parser error : " + std::string(get_parser_state()->pg_err_msg);
     throw std::runtime_error(err);
 }
 void elog(int code, char* fmt,...) {
     throw std::runtime_error("elog NOT IMPLEMENTED");
 }
 int errcode(int sqlerrcode) {
-	pg_err_code = sqlerrcode;
+	get_parser_state()->pg_err_code = sqlerrcode;
 	return 1;
 }
 int errmsg(char* fmt, ...) {
 	 va_list argptr;
 	 va_start(argptr, fmt);
-	 vsnprintf(pg_err_msg, BUFSIZ, fmt, argptr);
+	 vsnprintf(get_parser_state()->pg_err_msg, BUFSIZ, fmt, argptr);
 	 va_end(argptr);
 	 return 1;
 }
@@ -37,7 +87,7 @@ int	errdetail(const char *fmt,...) {
     throw std::runtime_error("errdetail NOT IMPLEMENTED");
 }
 int	errposition(int cursorpos) {
-	pg_err_pos = cursorpos;
+	get_parser_state()->pg_err_pos = cursorpos;
 	return 1;
 }
 char *psprintf(const char *fmt,...) {
@@ -132,5 +182,4 @@ DefElem * defWithOids(bool value) {
 unsigned char *unicode_to_utf8(pg_wchar c, unsigned char *utf8string) {
     throw std::runtime_error("unicode_to_utf8 NOT IMPLEMENTED");
 }
-
 

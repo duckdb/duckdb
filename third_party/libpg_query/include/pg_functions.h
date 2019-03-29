@@ -1,18 +1,29 @@
 #ifndef PG_COMPAT_H
 #define PG_COMPAT_H
 
-
-#include <stdint.h>
+//#include <stdint.h>
 #include <stdlib.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "pg_definitions.h"
 
 #include "nodes/pg_list.h"
 #include "nodes/parsenodes.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+typedef struct parse_result_str parse_result;
+struct parse_result_str {
+	bool success;
+	List* parse_tree;
+	char* error_message;
+	int error_location;
+};
+
+void pg_parser_init();
+void pg_parser_parse(const char* query, parse_result *res);
+void pg_parser_cleanup();
 
 // error handling
 int ereport(int code, ...);

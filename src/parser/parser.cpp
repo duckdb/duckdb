@@ -1,6 +1,7 @@
 #include "parser/parser.hpp"
 
 #include "parser/transformer.hpp"
+#include "postgres_parser.hpp"
 
 namespace postgres {
 #include "parser/parser.h"
@@ -11,18 +12,6 @@ using namespace postgres;
 using namespace duckdb;
 using namespace std;
 
-
-struct PGParseContext {
-	void *context = nullptr;
-	List* result= nullptr;
-
-	~PGParseContext() {
-		if (context) {
-//			pg_query_parse_finish(context);
-//			pg_query_free_parse_result(result);
-		}
-	}
-};
 
 Parser::Parser(ClientContext &context) : context(context) {
 }
@@ -35,19 +24,16 @@ void Parser::ParseQuery(string query) {
 		return;
 	}
 
-	PGParseContext parse_context;
-	// use the postgres parser to parse the query
-	//parse_context.context = pg_query_parse_init();
-	parse_context.result = raw_parser(query.c_str());
-	// check if it succeeded
-//	if (parse_context.result.error) {
-//		throw ParserException(string(parse_context.result.error->message) + "[" +
-//		                      to_string(parse_context.result.error->lineno) + ":" +
-//		                      to_string(parse_context.result.error->cursorpos) + "]");
-//		return;
-//	}
+	PostgresParser parser;
+	parser.Parse(query);
 
-	if (!parse_context.result) {
+	if (!parser.success) {
+		throw ParserException(parser.error_message + "[" +
+		                      to_string(parser.error_location) + "]");
+		return;
+	}
+
+	if (!parser.parse_tree) {
 		// empty statement
 		return;
 	}
@@ -55,7 +41,7 @@ void Parser::ParseQuery(string query) {
 	// if it succeeded, we transform the Postgres parse tree into a list of
 	// SQLStatements
 	Transformer transformer;
-	transformer.TransformParseTree(parse_context.result, statements);
+	transformer.TransformParseTree(parser.parse_tree, statements);
 }
 
 enum class PragmaType : uint8_t { NOTHING, ASSIGNMENT, CALL };
