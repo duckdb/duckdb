@@ -1,19 +1,33 @@
 #include "pg_compat.h"
 
 #include <stdexcept>
+#include <string>
 
 bool operator_precedence_warning;
 
+int pg_err_code;
+int pg_err_pos;
+char pg_err_msg[BUFSIZ];
+
+int ereport(int code, ...) {
+	std::string err = "parser error : " + std::string(pg_err_msg);
+    throw std::runtime_error(err);
+}
 void elog(int code, char* fmt,...) {
     throw std::runtime_error("elog NOT IMPLEMENTED");
 }
 int errcode(int sqlerrcode) {
-    throw std::runtime_error("errcode()");
+	pg_err_code = sqlerrcode;
+	return 1;
 }
-void errmsg(char* fmt, ...) {
-    throw std::runtime_error("errmsg NOT IMPLEMENTED");
+int errmsg(char* fmt, ...) {
+	 va_list argptr;
+	 va_start(argptr, fmt);
+	 vsnprintf(pg_err_msg, BUFSIZ, fmt, argptr);
+	 va_end(argptr);
+	 return 1;
 }
-void errhint(char* msg) {
+int errhint(char* msg) {
     throw std::runtime_error("errhint NOT IMPLEMENTED");
 }
 int	errmsg_internal(const char *fmt,...) {
@@ -23,7 +37,8 @@ int	errdetail(const char *fmt,...) {
     throw std::runtime_error("errdetail NOT IMPLEMENTED");
 }
 int	errposition(int cursorpos) {
-    throw std::runtime_error("errposition NOT IMPLEMENTED");
+	pg_err_pos = cursorpos;
+	return 1;
 }
 char *psprintf(const char *fmt,...) {
     throw std::runtime_error("psprintf NOT IMPLEMENTED");
@@ -63,19 +78,48 @@ bool equal(const void *a, const void *b) {
 int exprLocation(const Node *expr) {
     throw std::runtime_error("exprLocation NOT IMPLEMENTED");
 }
-int pg_database_encoding_max_length(void) {
-    //throw std::runtime_error("pg_database_encoding_max_length NOT IMPLEMENTED");
-	return 4; // UTF8
-}
 int	pg_get_client_encoding(void) {
     throw std::runtime_error("pg_get_client_encoding NOT IMPLEMENTED");
 }
 bool pg_verifymbstr(const char *mbstr, int len, bool noError) {
     throw std::runtime_error("pg_verifymbstr NOT IMPLEMENTED");
 }
-int	pg_mbstrlen_with_len(const char *mbstr, int len) {
-    throw std::runtime_error("pg_mbstrlen_with_len NOT IMPLEMENTED");
+
+
+int pg_database_encoding_max_length(void) {
+    //throw std::runtime_error("pg_database_encoding_max_length NOT IMPLEMENTED");
+	return 4; // UTF8
 }
+
+static int
+pg_utf_mblen(const unsigned char *s)
+{
+	int			len;
+
+	if ((*s & 0x80) == 0)
+		len = 1;
+	else if ((*s & 0xe0) == 0xc0)
+		len = 2;
+	else if ((*s & 0xf0) == 0xe0)
+		len = 3;
+	else if ((*s & 0xf8) == 0xf0)
+		len = 4;
+#ifdef NOT_USED
+	else if ((*s & 0xfc) == 0xf8)
+		len = 5;
+	else if ((*s & 0xfe) == 0xfc)
+		len = 6;
+#endif
+	else
+		len = 1;
+	return len;
+}
+
+
+int	pg_mbstrlen_with_len(const char *mbstr, int len) {
+	return pg_utf_mblen((const unsigned char*) mbstr);
+}
+
 int pg_mbcliplen(const char *mbstr, int len, int limit) {
     throw std::runtime_error("pg_mbcliplen NOT IMPLEMENTED");
 }
@@ -88,3 +132,5 @@ DefElem * defWithOids(bool value) {
 unsigned char *unicode_to_utf8(pg_wchar c, unsigned char *utf8string) {
     throw std::runtime_error("unicode_to_utf8 NOT IMPLEMENTED");
 }
+
+

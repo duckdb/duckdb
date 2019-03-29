@@ -15,10 +15,12 @@ extern "C" {
 #endif
 
 // error handling
+int ereport(int code, ...);
+
 void elog(int code, char* fmt,...);
 int errcode(int sqlerrcode);
-void errmsg(char* fmt, ...);
-void errhint(char* msg);
+int errmsg(char* fmt, ...);
+int errhint(char* msg);
 int	errmsg_internal(const char *fmt,...);
 int	errdetail(const char *fmt,...);
 int	errposition(int cursorpos);

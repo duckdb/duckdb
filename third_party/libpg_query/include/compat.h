@@ -59,6 +59,10 @@ typedef uint8_t bool;
 #define PG_USE_INLINE
 #define STATIC_IF_INLINE static inline
 
+#define AMTYPE_INDEX					'i'
+#define DEFAULT_INDEX_TYPE	"btree"
+#define INTERVAL_MASK(b) (1 << (b))
+
 
 typedef struct
 {
@@ -88,6 +92,9 @@ typedef struct varlena bytea;
 
 typedef int MemoryContext;
 
+// TODO evil global
+extern  bool operator_precedence_warning;
+
 enum PostgresErrorLevel {
 	NOTICE,
 	WARNING,
@@ -101,43 +108,29 @@ enum PostgresParserErrors {
 	ERRCODE_WINDOWING_ERROR,
 	ERRCODE_RESERVED_NAME,
 	ERRCODE_INVALID_ESCAPE_SEQUENCE,
-	ERRCODE_NONSTANDARD_USE_OF_ESCAPE_CHARACTER
+	ERRCODE_NONSTANDARD_USE_OF_ESCAPE_CHARACTER,
+	ERRCODE_NAME_TOO_LONG
 };
 
-#define ereport_domain(elevel, rest)	\
-	do { \
-		const int elevel_ = (elevel); \
-		/* something */ \
-		errcode(elevel); \
-	} while(0)
+enum PostgresReplicaIdentity {
+	REPLICA_IDENTITY_DEFAULT,
+	REPLICA_IDENTITY_NOTHING,
+	REPLICA_IDENTITY_FULL,
+	REPLICA_IDENTITY_INDEX
+};
 
-#define ereport(elevel, rest)	\
-	ereport_domain(elevel, rest)
+enum PostgresRelPersistence {
+	RELPERSISTENCE_TEMP,
+	RELPERSISTENCE_UNLOGGED,
+	RELPERSISTENCE_PERMANENT
+};
 
-
-#define		  REPLICA_IDENTITY_DEFAULT	'd'
-#define		  REPLICA_IDENTITY_NOTHING	'n'
-#define		  REPLICA_IDENTITY_FULL		'f'
-#define		  REPLICA_IDENTITY_INDEX	'i'
-
-#define		  RELPERSISTENCE_TEMP		't'
-#define		  RELPERSISTENCE_UNLOGGED	'u'
-#define		  RELPERSISTENCE_PERMANENT	'p'
-
-#define		  ATTRIBUTE_IDENTITY_ALWAYS		'a'
-#define		  ATTRIBUTE_IDENTITY_BY_DEFAULT 'd'
-
-#define AMTYPE_INDEX					'i'
-
-#define DEFAULT_INDEX_TYPE	"btree"
-
-#define TRIGGER_FIRES_ON_ORIGIN				'O'
-#define TRIGGER_FIRES_ALWAYS				'A'
-#define TRIGGER_FIRES_ON_REPLICA			'R'
-#define TRIGGER_DISABLED					'D'
-
-#define INTERVAL_MASK(b) (1 << (b))
-
+enum PostgresTriggerConfig {
+	TRIGGER_FIRES_ON_ORIGIN,
+	TRIGGER_FIRES_ALWAYS,
+	TRIGGER_FIRES_ON_REPLICA,
+	TRIGGER_DISABLED
+};
 
 enum PostgresLockTypes {
 	NoLock,
@@ -151,17 +144,19 @@ enum PostgresLockTypes {
 	AccessExclusiveLock
 };
 
-typedef enum
+enum XmlStandaloneType
 {
 	XML_STANDALONE_YES,
 	XML_STANDALONE_NO,
 	XML_STANDALONE_NO_VALUE,
 	XML_STANDALONE_OMITTED
-}	XmlStandaloneType;
+};
 
-extern  bool operator_precedence_warning;
+enum PostgresAttributIdentityTypes {
+	ATTRIBUTE_IDENTITY_ALWAYS,
+	ATTRIBUTE_IDENTITY_BY_DEFAULT
+};
 
 #include "pg_compat.h"
-
 
 #endif
