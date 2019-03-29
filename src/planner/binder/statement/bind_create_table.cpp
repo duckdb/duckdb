@@ -6,9 +6,26 @@
 #include "planner/binder.hpp"
 #include "planner/expression_binder/check_binder.hpp"
 #include "planner/statement/bound_create_table_statement.hpp"
+#include "planner/constraints/bound_check_constraint.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+void Binder::BindConstraints(string table, vector<ColumnDefinition> &columns, vector<unique_ptr<Constraint>> &constraints) {
+	CheckBinder binder(*this, context, table, columns);
+	for(size_t i = 0; i < constraints.size(); i++) {
+		auto &cond = constraints[i];
+		if (cond->type == ConstraintType::CHECK) {
+			auto &check = (CheckConstraint&) *cond;
+			auto unbound_constraint = make_unique<CheckConstraint>(check.expression->Copy());
+			auto condition = binder.Bind(check.expression);
+			if (condition->sql_type != SQLTypeId::INTEGER) {
+				condition = AddCastToType(move(condition), SQLTypeId::INTEGER);
+			}
+			constraints[i] = make_unique<BoundCheckConstraint>(move(condition), move(unbound_constraint));
+		}
+	}
+}
 
 unique_ptr<BoundSQLStatement> Binder::Bind(CreateTableStatement &stmt) {
 	auto result = make_unique<BoundCreateTableStatement>();
@@ -16,26 +33,10 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CreateTableStatement &stmt) {
 		result->query = unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*stmt.query));
 	} else {
 		// bind any constraints
-		// first create a fake table
-		// bind_context.AddDummyTable(stmt.info->table, stmt.info->columns);
-		for (auto &cond : stmt.info->constraints) {
-			if (cond->type == ConstraintType::CHECK) {
-				assert(0);
-				throw BinderException("Failed: binding CHECK constraints not handled yet");
-			}
-		}
+		BindConstraints(stmt.info->table, stmt.info->columns, stmt.info->constraints);
 	}
 	// bind the schema
 	result->schema = context.db.catalog.GetSchema(context.ActiveTransaction(), stmt.info->schema);
 	result->info = move(stmt.info);
 	return move(result);
 }
-
-// void Binder::Visit(CheckConstraint &constraint) {
-// 	CheckBinder binder(*this, context);
-// 	binder.BindAndResolveType(&constraint.expression);
-// 	// the CHECK constraint should always return an INTEGER value
-// 	if (constraint.expression->return_type != TypeId::INTEGER) {
-// 		constraint.expression = make_unique<CastExpression>(TypeId::INTEGER, move(constraint.expression));
-// 	}
-// }

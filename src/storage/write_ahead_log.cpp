@@ -9,6 +9,7 @@
 #include "main/database.hpp"
 #include "transaction/transaction.hpp"
 #include "transaction/transaction_manager.hpp"
+#include "planner/binder.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -95,7 +96,7 @@ void WriteAheadLog::Initialize(string &path) {
 // Replay Entries
 //===--------------------------------------------------------------------===//
 bool ReplayDropTable(Transaction &transaction, Catalog &catalog, Deserializer &source);
-bool ReplayCreateTable(Transaction &transaction, Catalog &catalog, Deserializer &source);
+bool ReplayCreateTable(ClientContext &context, Catalog &catalog, Deserializer &source);
 bool ReplayCreateView(Transaction &transaction, Catalog &catalog, Deserializer &source);
 bool ReplayDropView(Transaction &transaction, Catalog &catalog, Deserializer &source);
 bool ReplayDropSchema(Transaction &transaction, Catalog &catalog, Deserializer &source);
@@ -108,7 +109,7 @@ bool ReplayEntry(ClientContext &context, DuckDB &database, WALEntry entry, Deser
 	case WALEntry::DROP_TABLE:
 		return ReplayDropTable(context.ActiveTransaction(), database.catalog, source);
 	case WALEntry::CREATE_TABLE:
-		return ReplayCreateTable(context.ActiveTransaction(), database.catalog, source);
+		return ReplayCreateTable(context, database.catalog, source);
 	case WALEntry::CREATE_VIEW:
 		return ReplayCreateView(context.ActiveTransaction(), database.catalog, source);
 	case WALEntry::DROP_VIEW:
@@ -167,11 +168,15 @@ void WriteAheadLog::WriteCreateTable(TableCatalogEntry *entry) {
 	WriteEntry(WALEntry::CREATE_TABLE, serializer);
 }
 
-bool ReplayCreateTable(Transaction &transaction, Catalog &catalog, Deserializer &source) {
+bool ReplayCreateTable(ClientContext &context, Catalog &catalog, Deserializer &source) {
 	auto info = TableCatalogEntry::Deserialize(source);
 
+	// bind the constraints to the table again
+	Binder binder(context);
+	binder.BindConstraints(info->table, info->columns, info->constraints);
+	
 	// try {
-	catalog.CreateTable(transaction, info.get());
+	catalog.CreateTable(context.ActiveTransaction(), info.get());
 	// catch(...) {
 	//	return false
 	//}

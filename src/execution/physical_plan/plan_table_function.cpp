@@ -8,7 +8,7 @@ using namespace std;
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalTableFunction &op) {
 	assert(op.children.size() == 0);
 	
-	assert(0);
+	// assert(0);
 	throw Exception("FIXME: create physical table function");
 	// plan = make_unique<PhysicalTableFunction>(op, op.function, move(op.expressions));
 }

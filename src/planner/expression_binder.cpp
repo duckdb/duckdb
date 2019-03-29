@@ -49,8 +49,8 @@ BindResult ExpressionBinder::BindExpression(ParsedExpression &expr, uint32_t dep
 		return BindExpression((FunctionExpression &)expr, depth);
 	case ExpressionClass::OPERATOR:
 		return BindExpression((OperatorExpression &)expr, depth);
-	// case ExpressionClass::SUBQUERY:
-	// 	return BindExpression((SubqueryExpression &)expr, depth);
+	case ExpressionClass::SUBQUERY:
+		return BindExpression((SubqueryExpression &)expr, depth);
 	default:
 		assert(expr.GetExpressionClass() == ExpressionClass::PARAMETER);
 		return BindExpression((ParameterExpression &)expr, depth);

@@ -80,7 +80,7 @@ protected:
 	BindResult BindExpression(OperatorExpression &expr, uint32_t depth);
 	BindResult BindExpression(ParameterExpression &expr, uint32_t depth);
 	BindResult BindExpression(StarExpression &expr, uint32_t depth);
-	// BindResult BindExpression(SubqueryExpression &expr, uint32_t depth);
+	BindResult BindExpression(SubqueryExpression &expr, uint32_t depth);
 
 	// Bind table names to ColumnRefExpressions
 	void BindTableNames(ParsedExpression &expr);

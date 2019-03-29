@@ -14,7 +14,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundUpdateStatemen
 	require_row_id = true;
 	// create the table scan
 	auto root = CreatePlan(*stmt.table);
-	assert(root->type != LogicalOperatorType::GET);
+	assert(root->type == LogicalOperatorType::GET);
 
 	auto &get = (LogicalGet &)*root;
 	// create the filter (if any)

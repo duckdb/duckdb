@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-BindResult ExpressionBinder::Bind(SubqueryExpression &subquery, uint32_t depth) {
+BindResult ExpressionBinder::BindExpression(SubqueryExpression &subquery, uint32_t depth) {
 	throw BinderException("FIXME: subquery binding");
 	// // first bind the children of the subquery, if any
 	// if (expr.child) {

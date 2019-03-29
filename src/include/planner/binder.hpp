@@ -12,6 +12,7 @@
 #include "parser/tokens.hpp"
 #include "planner/bind_context.hpp"
 #include "planner/bound_tokens.hpp"
+#include "parser/column_definition.hpp"
 // #include "planner/bound_sql_statement.hpp"
 // #include "planner/bound_query_node.hpp"
 // #include "planner/bound_tableref.hpp"
@@ -50,6 +51,7 @@ public:
 
 	unique_ptr<BoundSQLStatement> Bind(SQLStatement &statement);
 
+	void BindConstraints(string table, vector<ColumnDefinition> &columns, vector<unique_ptr<Constraint>> &constraints);
 private:
 	unique_ptr<BoundSQLStatement> Bind(SelectStatement &stmt);
 	unique_ptr<BoundSQLStatement> Bind(InsertStatement &stmt);

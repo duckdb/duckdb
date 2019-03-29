@@ -67,8 +67,6 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 		if (!bound_expr) {
 			// ORDER BY non-integer constant
 			// remove the expression from the ORDER BY list
-			statement.orders.erase(statement.orders.begin() + i);
-			i--;
 			continue;
 		}
 		assert(bound_expr->type == ExpressionType::BOUND_COLUMN_REF);
@@ -137,8 +135,8 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	}
 
 	// resolve the types of the ORDER BY clause
-	for (size_t i = 0; i < statement.orders.size(); i++) {
-		assert(statement.orders[i].expression->type == ExpressionType::BOUND_COLUMN_REF);
+	for (size_t i = 0; i < result->orders.size(); i++) {
+		assert(result->orders[i].expression->type == ExpressionType::BOUND_COLUMN_REF);
 		auto &order = (BoundColumnRefExpression &)*result->orders[i].expression;
 		assert(order.binding.column_index < statement.select_list.size());
 		order.return_type = result->select_list[order.binding.column_index]->return_type;

@@ -7,6 +7,7 @@
 #include "execution/expression_executor.hpp"
 #include "main/client_context.hpp"
 #include "parser/constraints/list.hpp"
+#include "planner/constraints/bound_check_constraint.hpp"
 #include "transaction/transaction.hpp"
 #include "transaction/transaction_manager.hpp"
 
@@ -60,28 +61,26 @@ void DataTable::VerifyConstraints(TableCatalogEntry &table, ClientContext &conte
 			break;
 		}
 		case ConstraintType::CHECK: {
-			assert(0);
-			throw Exception("FIXME: check constraint");
-			// auto &check = *reinterpret_cast<CheckConstraint *>(constraint.get());
-			// ExpressionExecutor executor(chunk);
+			auto &check = *reinterpret_cast<BoundCheckConstraint *>(constraint.get());
+			ExpressionExecutor executor(chunk);
 
-			// Vector result(TypeId::INTEGER, true, false);
-			// try {
-			// 	executor.ExecuteExpression(*check.expression, result);
-			// } catch (Exception &ex) {
-			// 	throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name.c_str(),
-			// 	                          ex.GetMessage().c_str());
-			// } catch (...) {
-			// 	throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name.c_str());
-			// }
+			Vector result(TypeId::INTEGER, true, false);
+			try {
+				executor.ExecuteExpression(*check.expression, result);
+			} catch (Exception &ex) {
+				throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name.c_str(),
+				                          ex.GetMessage().c_str());
+			} catch (...) {
+				throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name.c_str());
+			}
 
-			// int *dataptr = (int *)result.data;
-			// for (size_t i = 0; i < result.count; i++) {
-			// 	size_t index = result.sel_vector ? result.sel_vector[i] : i;
-			// 	if (!result.nullmask[index] && dataptr[index] == 0) {
-			// 		throw ConstraintException("CHECK constraint failed: %s", table.name.c_str());
-			// 	}
-			// }
+			int *dataptr = (int *)result.data;
+			for (size_t i = 0; i < result.count; i++) {
+				size_t index = result.sel_vector ? result.sel_vector[i] : i;
+				if (!result.nullmask[index] && dataptr[index] == 0) {
+					throw ConstraintException("CHECK constraint failed: %s", table.name.c_str());
+				}
+			}
 			break;
 		}
 		case ConstraintType::DUMMY:
