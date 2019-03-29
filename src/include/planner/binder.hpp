@@ -96,7 +96,7 @@ public:
 	void AddCorrelatedColumn(CorrelatedColumnInfo info);
 
 	vector<CorrelatedColumnInfo> correlated_columns;
-
+	vector<BoundParameterExpression*> *parameters;
 private:
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);

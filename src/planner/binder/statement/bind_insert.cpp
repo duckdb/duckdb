@@ -8,21 +8,6 @@
 using namespace duckdb;
 using namespace std;
 
-// //  visit the expressions
-// for (auto &expression_list : stmt.values) {
-// 	for (size_t col_idx = 0; col_idx < expression_list.size(); col_idx++) {
-// 		auto &expression = expression_list[col_idx];
-// 		if (expression->type == ExpressionType::VALUE_PARAMETER) {
-// 			size_t table_col_idx = col_idx;
-// 			if (stmt.columns.size() > 0) { //  named cols
-// 				table_col_idx = insert->column_index_map[col_idx];
-// 			}
-// 			assert(table_col_idx < table->columns.size());
-// 			auto cast = AddCastToType(move(expression), table->columns[table_col_idx].type);
-// 			expression_list[col_idx] = move(cast);
-// 		}
-// 	}
-// }
 unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 	auto result = make_unique<BoundInsertStatement>();
 	auto table = context.db.catalog.GetTable(context.ActiveTransaction(), stmt.schema, stmt.table);

@@ -10,15 +10,18 @@
 #include "planner/operator/logical_explain.hpp"
 #include "planner/operator/logical_prepare.hpp"
 
+#include "planner/expression/bound_parameter_expression.hpp"
+
 using namespace duckdb;
 using namespace std;
 
 Planner::Planner(ClientContext &context) : binder(context), context(context) {
 }
 
-void Planner::CreatePlan(SQLStatement &statement, bool allow_parameter) {
+void Planner::CreatePlan(SQLStatement &statement, vector<BoundParameterExpression*> *parameters) {
 	// first bind the tables and columns to the catalog
 	context.profiler.StartPhase("binder");
+	binder.parameters = parameters;
 	auto bound_statement = binder.Bind(statement);
 	context.profiler.EndPhase();
 
@@ -26,7 +29,7 @@ void Planner::CreatePlan(SQLStatement &statement, bool allow_parameter) {
 
 	// now create a logical query plan from the query
 	context.profiler.StartPhase("logical_planner");
-	LogicalPlanGenerator logical_planner(binder, context, allow_parameter);
+	LogicalPlanGenerator logical_planner(binder, context);
 	this->plan = logical_planner.CreatePlan(*bound_statement);
 	context.profiler.EndPhase();
 }
@@ -152,8 +155,25 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::PREPARE: {
 		auto &stmt = *reinterpret_cast<PrepareStatement *>(statement.get());
 		auto statement_type = stmt.statement->type;
-		CreatePlan(*stmt.statement, true);
-		auto prepare = make_unique<LogicalPrepare>(stmt.name, statement_type, names, move(plan));
+		// first create the plan for the to-be-prepared statement
+		vector<BoundParameterExpression*> bound_parameters;
+		CreatePlan(*stmt.statement, &bound_parameters);
+		// set up a map of parameter number -> value entries
+		unordered_map<size_t, unique_ptr<Value>> value_map;
+		for(auto &expr : bound_parameters) {
+			// check if the type of the parameter could be resolved
+			if (expr->return_type == TypeId::INVALID) {
+				throw BinderException("Could not determine type of parameters: try adding explicit type casts");
+			}
+			auto value = make_unique<Value>(expr->return_type);
+			expr->value = value.get();
+			// check if the parameter number has been used before
+			if (value_map.find(expr->parameter_nr) != value_map.end()) {
+				throw BinderException("Duplicate parameter index. Use $1, $2 etc. to differentiate.");
+			}
+			value_map[expr->parameter_nr] = move(value);
+		}
+		auto prepare = make_unique<LogicalPrepare>(stmt.name, statement_type, names, move(value_map), move(plan));
 		names = {"Success"};
 		plan = move(prepare);
 		break;

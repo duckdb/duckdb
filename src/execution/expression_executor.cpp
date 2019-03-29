@@ -47,9 +47,6 @@ void ExpressionExecutor::Merge(std::vector<std::unique_ptr<Expression>> &express
 }
 
 void ExpressionExecutor::ExecuteExpression(Expression &expr, Vector &result) {
-	if (expr.type == ExpressionType::VALUE_PARAMETER) {
-		throw Exception("Cannot execute a parameter expression");
-	}
 	Vector vector;
 	Execute(expr, vector);
 	if (chunk) {

@@ -17,12 +17,11 @@ class BoundParameterExpression : public Expression {
 public:
 	BoundParameterExpression(size_t parameter_nr)
 	    : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, TypeId::INVALID, SQLType()),
-	      parameter_nr(parameter_nr) {
+	      parameter_nr(parameter_nr), value(nullptr) {
 	}
 
 	size_t parameter_nr;
-	Value value;
-
+	Value *value;
 public:
 	bool IsScalar() const override {
 		return true;

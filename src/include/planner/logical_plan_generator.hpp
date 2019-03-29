@@ -19,7 +19,7 @@ class ClientContext;
 //! statement
 class LogicalPlanGenerator {
 public:
-	LogicalPlanGenerator(Binder &binder, ClientContext &context, bool allow_parameter = false);
+	LogicalPlanGenerator(Binder &binder, ClientContext &context);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundSQLStatement &statement);
 
@@ -55,7 +55,6 @@ private:
 
 public:
 	bool has_unplanned_subqueries = false;
-	bool allow_parameter = false;
 
 private:
 	//! A reference to the current binder

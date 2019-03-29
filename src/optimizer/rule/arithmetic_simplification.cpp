@@ -2,6 +2,9 @@
 
 #include "common/exception.hpp"
 
+#include "planner/expression/bound_constant_expression.hpp"
+#include "planner/expression/bound_operator_expression.hpp"
+
 using namespace duckdb;
 using namespace std;
 

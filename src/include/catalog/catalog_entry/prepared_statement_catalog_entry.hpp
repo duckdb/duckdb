@@ -28,7 +28,7 @@ public:
 	}
 
 	unique_ptr<PhysicalOperator> plan;
-	unordered_map<size_t, BoundParameterExpression *> parameter_expression_map;
+	unordered_map<size_t, unique_ptr<Value>> value_map;
 	unordered_set<TableCatalogEntry *> tables;
 
 	vector<string> names;

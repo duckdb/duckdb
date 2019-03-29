@@ -101,6 +101,18 @@ static SQLType ResolveArithmeticType(OperatorExpression &op, vector<unique_ptr<E
 		children[1] = AddCastToType(move(children[1]), result_type);
 		return result_type;
 	}
+	if (children[0]->expression_class == ExpressionClass::BOUND_PARAMETER &&
+		children[1]->expression_class == ExpressionClass::BOUND_PARAMETER) {
+		throw BinderException("Could not resolve type for operator");
+	}
+	// always cast parameters to the type of the other expression
+	if (children[0]->expression_class == ExpressionClass::BOUND_PARAMETER) {
+		children[0] = AddCastToType(move(children[0]), children[1]->sql_type);
+		return children[1]->sql_type;
+	} else if (children[1]->expression_class == ExpressionClass::BOUND_PARAMETER) {
+		children[1] = AddCastToType(move(children[1]), children[0]->sql_type);
+		return children[0]->sql_type;
+	}
 	// non-numeric types in arithmetic operator, use per-operator type handling
 	switch (op.type) {
 	case ExpressionType::OPERATOR_ADD:

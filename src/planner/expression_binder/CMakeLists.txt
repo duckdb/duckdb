@@ -1,3 +1,3 @@
 
-add_library(duckdb_expression_binders OBJECT aggregate_binder.cpp check_binder.cpp group_binder.cpp having_binder.cpp limit_binder.cpp index_binder.cpp order_binder.cpp select_binder.cpp update_binder.cpp where_binder.cpp)
+add_library(duckdb_expression_binders OBJECT aggregate_binder.cpp check_binder.cpp constant_binder.cpp group_binder.cpp having_binder.cpp index_binder.cpp order_binder.cpp select_binder.cpp update_binder.cpp where_binder.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_expression_binders> PARENT_SCOPE)

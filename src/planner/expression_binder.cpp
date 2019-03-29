@@ -123,7 +123,10 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, uint32_t depth
 namespace duckdb {
 unique_ptr<Expression> AddCastToType(unique_ptr<Expression> expr, SQLType target_type) {
 	assert(expr);
-	if (expr->GetExpressionClass() == ExpressionClass::PARAMETER || expr->sql_type != target_type) {
+	if (expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
+		expr->sql_type = target_type;
+		expr->return_type = GetInternalType(target_type);
+	} else if (expr->sql_type != target_type) {
 		return make_unique<BoundCastExpression>(GetInternalType(target_type), move(expr), target_type);
 	}
 	return expr;

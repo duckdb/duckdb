@@ -6,7 +6,7 @@
 #include "planner/bound_sql_statement.hpp"
 #include "planner/bound_tableref.hpp"
 #include "planner/expression.hpp"
-#include "planner/expression_binder/limit_binder.hpp"
+#include "planner/expression_binder/constant_binder.hpp"
 // #include "parser/tableref/table_function.hpp"
 
 // #include "parser/query_node.hpp"
@@ -46,8 +46,9 @@ unique_ptr<BoundSQLStatement> Binder::Bind(SQLStatement &statement) {
 	}
 }
 
-static int64_t BindLimit(LimitBinder &binder, unique_ptr<ParsedExpression> &expr) {
-	auto bound_expr = binder.Bind(expr);
+static int64_t BindConstant(Binder &binder, ClientContext &context, string clause, unique_ptr<ParsedExpression> &expr) {
+	ConstantBinder constant_binder(binder, context, clause);
+	auto bound_expr = constant_binder.Bind(expr);
 	Value value = ExpressionExecutor::EvaluateScalar(*bound_expr);
 	if (!TypeIsNumeric(value.type)) {
 		throw BinderException("LIMIT clause can only contain numeric constants!");
@@ -71,13 +72,12 @@ unique_ptr<BoundQueryNode> Binder::Bind(QueryNode &node) {
 		break;
 	}
 	// bind the limit nodes
-	LimitBinder binder(*this, context);
 	if (node.limit) {
-		result->limit = BindLimit(binder, node.limit);
+		result->limit = BindConstant(*this, context, "LIMIT clause", node.limit);
 		result->offset = 0;
 	}
 	if (node.offset) {
-		result->offset = BindLimit(binder, node.offset);
+		result->offset = BindConstant(*this, context, "OFFSET clause", node.offset);
 		if (!node.limit) {
 			result->limit = std::numeric_limits<int64_t>::max();
 		}

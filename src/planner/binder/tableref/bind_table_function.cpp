@@ -3,7 +3,7 @@
 #include "parser/expression/function_expression.hpp"
 #include "parser/tableref/table_function.hpp"
 #include "planner/binder.hpp"
-#include "planner/expression_binder/limit_binder.hpp"
+#include "planner/expression_binder/constant_binder.hpp"
 #include "planner/tableref/bound_table_function.hpp"
 
 using namespace duckdb;
@@ -18,7 +18,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunction &ref) {
 	auto function = context.db.catalog.GetTableFunction(context.ActiveTransaction(), function_definition);
 	auto result = make_unique<BoundTableFunction>(function, bind_index);
 	for (auto &child : function_definition->children) {
-		LimitBinder binder(*this, context);
+		ConstantBinder binder(*this, context, "TABLE FUNCTION parameter");
 		result->parameters.push_back(binder.Bind(child));
 	}
 	bind_context.AddTableFunction(bind_index, ref.alias.empty() ? function_definition->function_name : ref.alias,

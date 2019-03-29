@@ -30,18 +30,18 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, Vector &result) 
 		for (size_t child = 1; child < expr.children.size(); child++) {
 			Vector comp_res(TypeId::BOOLEAN, true, false);
 
-			Vector intermediate;
-			Execute(*expr.children[child], intermediate);
-			VectorOperations::Equals(left, intermediate, comp_res);
+			Vector vector_to_check;
+			Execute(*expr.children[child], vector_to_check);
+			VectorOperations::Equals(left, vector_to_check, comp_res);
 
 			if (child == 1) {
 				// first child: move to result
-				comp_res.Move(result);
+				comp_res.Move(intermediate);
 			} else {
 				// otherwise OR together
 				Vector new_result(TypeId::BOOLEAN, true, false);
-				VectorOperations::Or(result, comp_res, new_result);
-				new_result.Move(result);
+				VectorOperations::Or(intermediate, comp_res, new_result);
+				new_result.Move(intermediate);
 			}
 		}
 		if (expr.type == ExpressionType::COMPARE_NOT_IN) {

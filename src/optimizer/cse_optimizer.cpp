@@ -4,6 +4,8 @@
 #include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_projection.hpp"
 
+#include "planner/expression/common_subexpression.hpp"
+
 using namespace duckdb;
 using namespace std;
 

@@ -7,8 +7,8 @@
 using namespace duckdb;
 using namespace std;
 
-LogicalPlanGenerator::LogicalPlanGenerator(Binder &binder, ClientContext &context, bool allow_parameter)
-    : plan_subquery(true), has_unplanned_subqueries(false), allow_parameter(allow_parameter), binder(binder),
+LogicalPlanGenerator::LogicalPlanGenerator(Binder &binder, ClientContext &context)
+    : plan_subquery(true), has_unplanned_subqueries(false), binder(binder),
       require_row_id(false), context(context) {
 }
 

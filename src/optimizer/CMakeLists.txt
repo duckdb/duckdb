@@ -1,4 +1,5 @@
 
+add_subdirectory(matcher)
 add_subdirectory(join_order)
 add_subdirectory(pushdown)
 add_subdirectory(rule)

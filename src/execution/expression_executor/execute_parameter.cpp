@@ -6,8 +6,7 @@ using namespace duckdb;
 using namespace std;
 
 void ExpressionExecutor::Execute(BoundParameterExpression &expr, Vector &result) {
-	if (expr.return_type == TypeId::INVALID) {
-		throw Exception("Stil missing a type for parameter");
-	}
-	result.Reference(expr.value);
+	assert(expr.value);
+	assert(expr.value->type == expr.return_type);
+	result.Reference(*expr.value);
 }

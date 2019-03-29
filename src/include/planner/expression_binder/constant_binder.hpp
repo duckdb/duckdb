@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/expression_binder/limit_binder.hpp
+// planner/expression_binder/constant_binder.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,11 +12,13 @@
 
 namespace duckdb {
 
-//! The LIMIT binder is responsible for binding an expression within the LIMIT clause of a SQL statement
-class LimitBinder : public ExpressionBinder {
+//! The Constant binder can bind ONLY constant foldable expressions (i.e. no subqueries, column refs, etc)
+class ConstantBinder : public ExpressionBinder {
 public:
-	LimitBinder(Binder &binder, ClientContext &context);
-
+	ConstantBinder(Binder &binder, ClientContext &context, string clause);
+	
+	//! The location where this binder is used, used for error messages
+	string clause;
 protected:
 	BindResult BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression = false) override;
 };

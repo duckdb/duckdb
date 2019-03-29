@@ -29,6 +29,6 @@ public:
 	Binder binder;
 	ClientContext &context;
 private:
-	void CreatePlan(SQLStatement &statement, bool allow_parameter = false);
+	void CreatePlan(SQLStatement &statement, vector<BoundParameterExpression*> *parameters = nullptr);
 };
 } // namespace duckdb

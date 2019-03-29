@@ -8,8 +8,10 @@
 #include "optimizer/rule/list.hpp"
 #include "planner/binder.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
+#include "planner/expression/bound_operator_expression.hpp"
 #include "planner/expression/common_subexpression.hpp"
 #include "planner/operator/list.hpp"
+
 
 using namespace duckdb;
 using namespace std;

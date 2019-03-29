@@ -97,6 +97,7 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	case ExpressionClass::BOUND_CONSTANT:
 	case ExpressionClass::BOUND_DEFAULT:
 	case ExpressionClass::BOUND_PARAMETER:
+	case ExpressionClass::BOUND_REF:
 		// these node types have no children
 		break;
 	default:

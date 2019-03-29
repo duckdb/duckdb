@@ -36,16 +36,9 @@ unique_ptr<BoundSQLStatement> Binder::Bind(UpdateStatement &stmt) {
 			    make_unique<BoundDefaultExpression>(GetInternalType(column.type), column.type));
 		} else {
 			UpdateBinder binder(*this, context);
-			result->expressions.push_back(binder.Bind(expr));
-			// FIXME: check if we need to create a cast
-			// // now check if we have to create a cast
-			// auto expression = move(stmt.expressions[i]);
-			// if (expression->return_type != column.type || expression->HasParameter()) {
-			// 	// differing types, create a cast
-			// 	expression = make_unique<CastExpression>(column.type, move(expression));
-			// 	VisitExpression(&expression);
-			// 	expression->ResolveType();
-			// }
+			auto bound_expr = binder.Bind(expr);
+			bound_expr = AddCastToType(move(bound_expr), column.type);
+			result->expressions.push_back(move(bound_expr));
 		}
 	}
 	return move(result);

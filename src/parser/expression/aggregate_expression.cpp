@@ -35,7 +35,7 @@ AggregateExpression::AggregateExpression(ExpressionType type, unique_ptr<ParsedE
 }
 
 string AggregateExpression::ToString() const {
-	return ExpressionTypeToString(type) + "(" + child->ToString() + ")";
+	return ExpressionTypeToString(type) + "(" + (child ? child->ToString() : string()) + ")";
 }
 
 bool AggregateExpression::Equals(const BaseExpression *other_) const {

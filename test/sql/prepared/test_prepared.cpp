@@ -5,20 +5,18 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("PREPARE for SELECT", "[prepared]") {
+TEST_CASE("Basic prepared statements", "[prepared]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS SELECT CAST($1 AS INTEGER), CAST($2 AS STRING)"));
 	result = con.Query("EXECUTE s1(42, 'dpfkg')");
-	REQUIRE(result->success);
+
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"dpfkg"}));
 
 	result = con.Query("EXECUTE s1(43, 'asdf')");
-	REQUIRE(result->success);
 	REQUIRE(CHECK_COLUMN(result, 0, {43}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"asdf"}));
 
@@ -36,6 +34,31 @@ TEST_CASE("PREPARE for SELECT", "[prepared]") {
 
 	// now its gone
 	REQUIRE_FAIL(con.Query("EXECUTE s1(42, 'dpfkg')"));
+
+	// prepare a statement that cannot be prepared
+	REQUIRE_FAIL(con.Query("PREPARE EXPLAIN SELECT 42"));
+
+	REQUIRE_FAIL(con.Query("PREPARE CREATE TABLE a(i INTEGER)"));
+	REQUIRE_FAIL(con.Query("SELECT * FROM a;"));
+
+	// cannot resolve type
+	REQUIRE_FAIL(con.Query("PREPARE s1 AS SELECT $1+$2"));
+
+	// but this works
+	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS SELECT NOT($1), 10+$2, $3+20, 4 IN (2, 3, $4), $5 IN (2, 3, 4)"));
+
+	result = con.Query("EXECUTE s1(1, 2, 3, 4, 2)");
+	REQUIRE(CHECK_COLUMN(result, 0, {false}));
+	REQUIRE(CHECK_COLUMN(result, 1, {12}));
+	REQUIRE(CHECK_COLUMN(result, 2, {23}));
+	REQUIRE(CHECK_COLUMN(result, 3, {true}));
+	REQUIRE(CHECK_COLUMN(result, 4, {true}));
+}
+
+TEST_CASE("PREPARE for SELECT clause", "[prepared]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a (i TINYINT)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (42)"));
