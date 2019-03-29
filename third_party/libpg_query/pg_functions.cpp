@@ -7,6 +7,7 @@
 
 
 #ifdef _MSC_VER
+// TODO windows support for thread local storage
 # error No Windows support yet :/
 #else
 
@@ -20,11 +21,17 @@ struct parser_state_str {
 	int pg_err_code;
 	int pg_err_pos;
 	char pg_err_msg[BUFSIZ];
+	char* base_ptr;
+	size_t malloc_size;
+	size_t malloc_pos;
+
 };
 
 static void create_key() {
-    pthread_key_create(&key, NULL);
-
+    int res = pthread_key_create(&key, NULL);
+    if (res != 0) {
+	    throw std::runtime_error("Failed to allocate per-thread storage");
+    }
 }
 
 static void init_thread_storage() {
@@ -32,6 +39,9 @@ static void init_thread_storage() {
 	void* ptr;
     if ((ptr = pthread_getspecific(key)) == NULL) {
     	ptr = malloc(sizeof(parser_state));
+    	if (!ptr) {
+    		throw std::runtime_error("Memory allocation failure");
+    	}
         pthread_setspecific(key, ptr);
     }
 }
@@ -39,24 +49,51 @@ static void init_thread_storage() {
 static parser_state* get_parser_state() {
 	return (parser_state* ) pthread_getspecific(key);
 }
-
 #endif
 
 
 void pg_parser_init() {
 	init_thread_storage();
-
-	get_parser_state()->pg_err_code = UNDEFINED;
+	parser_state* state = get_parser_state();
+	state->pg_err_code = UNDEFINED;
+	state->malloc_size = 102400; // TODO
+	state->malloc_pos = 0;
+	state->base_ptr = (char*) malloc(state->malloc_size);
+	if (!state->base_ptr) {
+	    throw std::runtime_error("Memory allocation failure");
+	}
 }
 void pg_parser_parse(const char* query, parse_result *res) {
 	res->parse_tree = raw_parser(query);
-	auto state = get_parser_state();
+	parser_state* state = get_parser_state();
 	res->success = state->pg_err_code == UNDEFINED;
 	res->error_location = state->pg_err_pos;
 	res->error_message = state->pg_err_msg;
 }
+
+void* palloc(size_t n) {
+	parser_state* state = get_parser_state();
+	if (state->malloc_pos + n > state->malloc_size) {
+		// TODO allocate additional memory here
+	    throw std::runtime_error("Query too big!");
+	}
+	void* ptr = state->base_ptr + state->malloc_pos;
+	memset(ptr, 0, n);
+	state->malloc_pos += n;
+	return ptr;
+}
+
 void pg_parser_cleanup() {
-	// TODO
+	parser_state* state = get_parser_state();
+	if (!state) {
+		return;
+	}
+
+	if (state->base_ptr) {
+		free(state->base_ptr);
+	}
+	free(state);
+	pthread_setspecific(key, NULL);
 }
 
 int ereport(int code, ...) {
@@ -93,22 +130,18 @@ int	errposition(int cursorpos) {
 char *psprintf(const char *fmt,...) {
     throw std::runtime_error("psprintf NOT IMPLEMENTED");
 }
+
 char *pstrdup(const char *in) {
-	return strdup(in);
-    //throw std::runtime_error("pstrdup NOT IMPLEMENTED");
+	char* new_str = (char*) palloc(strlen(in)+1);
+	memcpy(new_str, in, strlen(in));
+	return new_str;
 }
-void* palloc(size_t n) {
-	void* ptr = malloc(n);
-	memset(ptr, 0, n);
-	return ptr;
-    //throw std::runtime_error("palloc NOT IMPLEMENTED");
-}
+
 void pfree(void* ptr) {
-    free(ptr);
+    // nop, we free up entire context on parser cleanup
 }
-void* palloc0fast(size_t n) {
+void* palloc0fast(size_t n) { // very fast
     return palloc(n);
-	//throw std::runtime_error("palloc0fast NOT IMPLEMENTED");
 }
 void* repalloc(void* ptr, size_t n) {
     throw std::runtime_error("repalloc NOT IMPLEMENTED");
@@ -134,7 +167,6 @@ int	pg_get_client_encoding(void) {
 bool pg_verifymbstr(const char *mbstr, int len, bool noError) {
     throw std::runtime_error("pg_verifymbstr NOT IMPLEMENTED");
 }
-
 
 int pg_database_encoding_max_length(void) {
     //throw std::runtime_error("pg_database_encoding_max_length NOT IMPLEMENTED");
