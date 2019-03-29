@@ -14,9 +14,7 @@ PostgresParser::PostgresParser() : success(false), parse_tree(nullptr), error_me
 void PostgresParser::Parse(string query) {
 	pg_parser_init();
 	parse_result res;
-	try {
-		pg_parser_parse(query.c_str(), &res);
-	} catch (...) {}
+	pg_parser_parse(query.c_str(), &res);
 	success = res.success;
 
 	if (success) {

@@ -16,15 +16,19 @@
 static pthread_key_t key;
 static pthread_once_t key_once = PTHREAD_ONCE_INIT;
 
+// max parse tree size approx 100 MB, should be enough
+#define PG_MALLOC_SIZE 102400
+#define PG_MALLOC_LIMIT 1024
+
 typedef struct parser_state_str parser_state;
 struct parser_state_str {
 	int pg_err_code;
 	int pg_err_pos;
 	char pg_err_msg[BUFSIZ];
-	char* base_ptr;
-	size_t malloc_size;
-	size_t malloc_pos;
 
+	size_t malloc_pos;
+	size_t malloc_ptr_idx;
+	char* malloc_ptrs[PG_MALLOC_LIMIT];
 };
 
 static void create_key() {
@@ -52,46 +56,78 @@ static parser_state* get_parser_state() {
 #endif
 
 
-void pg_parser_init() {
-	init_thread_storage();
-	parser_state* state = get_parser_state();
-	state->pg_err_code = UNDEFINED;
-	state->malloc_size = 102400; // TODO
-	state->malloc_pos = 0;
-	state->base_ptr = (char*) malloc(state->malloc_size);
-	if (!state->base_ptr) {
-	    throw std::runtime_error("Memory allocation failure");
+static void allocate_new(parser_state* state) {
+	if (state->malloc_ptr_idx + 1 >= PG_MALLOC_LIMIT) {
+		throw std::runtime_error("Memory allocation failure");
 	}
+	char* base_ptr = (char*) malloc(PG_MALLOC_SIZE);
+	if (!base_ptr) {
+		throw std::runtime_error("Memory allocation failure");
+	}
+	state->malloc_ptrs[state->malloc_ptr_idx] = base_ptr;
+	state->malloc_ptr_idx++;
+	state->malloc_pos = 0;
 }
-void pg_parser_parse(const char* query, parse_result *res) {
-	res->parse_tree = raw_parser(query);
-	parser_state* state = get_parser_state();
-	res->success = state->pg_err_code == UNDEFINED;
-	res->error_location = state->pg_err_pos;
-	res->error_message = state->pg_err_msg;
-}
+
 
 void* palloc(size_t n) {
 	parser_state* state = get_parser_state();
-	if (state->malloc_pos + n > state->malloc_size) {
-		// TODO allocate additional memory here
-	    throw std::runtime_error("Query too big!");
+	if (n > PG_MALLOC_SIZE) {
+		throw std::runtime_error("Memory allocation request too large");
 	}
-	void* ptr = state->base_ptr + state->malloc_pos;
+	if (state->malloc_pos + n > PG_MALLOC_SIZE) {
+		allocate_new(state);
+	}
+	assert(state->malloc_pos + n <= PG_MALLOC_SIZE);
+
+
+	void* ptr = state->malloc_ptrs[state->malloc_ptr_idx-1] + state->malloc_pos;
 	memset(ptr, 0, n);
 	state->malloc_pos += n;
 	return ptr;
 }
+
+
+
+void pg_parser_init() {
+	init_thread_storage();
+	parser_state* state = get_parser_state();
+	state->pg_err_code = UNDEFINED;
+	state->pg_err_msg[0] = '\0';
+
+	state->malloc_ptr_idx = 0;
+	allocate_new(state);
+}
+
+void pg_parser_parse(const char* query, parse_result *res) {
+	parser_state* state = get_parser_state();
+
+	res->parse_tree = nullptr;
+	try{
+		res->parse_tree = raw_parser(query);
+		res->success = state->pg_err_code == UNDEFINED;
+	} catch (...) {
+		res->success = false;
+
+	}
+	res->error_message = state->pg_err_msg;
+	res->error_location = state->pg_err_pos;
+}
+
 
 void pg_parser_cleanup() {
 	parser_state* state = get_parser_state();
 	if (!state) {
 		return;
 	}
-
-	if (state->base_ptr) {
-		free(state->base_ptr);
+	for (size_t ptr_idx = 0; ptr_idx < state->malloc_ptr_idx; ptr_idx++) {
+		char* ptr = state->malloc_ptrs[ptr_idx];
+		if (ptr) {
+			free(ptr);
+			state->malloc_ptrs[ptr_idx] = nullptr;
+		}
 	}
+
 	free(state);
 	pthread_setspecific(key, NULL);
 }
