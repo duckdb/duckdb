@@ -27,11 +27,13 @@ void PhysicalTableFunction::_GetChunk(ClientContext &context, DataChunk &chunk, 
 	}
 
 	DataChunk input;
-	input.Initialize(input_types);
+	if (parameters.size() > 0) {
+		assert(parameters.size() == input_types.size());
+		input.Initialize(input_types);
 
-	ExpressionExecutor executor;
-	assert(function_call->type == ExpressionType::FUNCTION);
-	executor.Execute(((BoundFunctionExpression *)function_call.get())->children, input);
+		ExpressionExecutor executor;
+		executor.Execute(parameters, input);
+	}
 
 	// run main code
 	function->function(context, input, chunk, state->function_data.get());

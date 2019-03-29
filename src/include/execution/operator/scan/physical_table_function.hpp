@@ -17,15 +17,15 @@ namespace duckdb {
 class PhysicalTableFunction : public PhysicalOperator {
 public:
 	PhysicalTableFunction(LogicalOperator &op, TableFunctionCatalogEntry *function,
-	                      unique_ptr<Expression> function_call)
+	                      vector<unique_ptr<Expression>> parameters)
 	    : PhysicalOperator(PhysicalOperatorType::TABLE_FUNCTION, op.types), function(function),
-	      function_call(move(function_call)) {
+	      parameters(move(parameters)) {
 	}
 
 	//! Function to call
 	TableFunctionCatalogEntry *function;
 	//! Expressions
-	unique_ptr<Expression> function_call;
+	vector<unique_ptr<Expression>> parameters;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
