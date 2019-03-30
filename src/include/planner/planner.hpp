@@ -25,6 +25,7 @@ public:
 
 	unique_ptr<LogicalOperator> plan;
 	vector<string> names;
+	vector<SQLType> sql_types;
 
 	Binder binder;
 	ClientContext &context;

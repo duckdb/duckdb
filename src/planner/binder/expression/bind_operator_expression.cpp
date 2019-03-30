@@ -86,7 +86,7 @@ static SQLType ResolveDivideType(OperatorExpression &op, vector<unique_ptr<Expre
 }
 
 static SQLType ResolveModuloType(OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
-	throw BinderException("Unimplemented types for modulo: %s \% %s", SQLTypeToString(children[0]->sql_type).c_str(),
+	throw BinderException("Unimplemented types for modulo: %s mod %s", SQLTypeToString(children[0]->sql_type).c_str(),
 	                      SQLTypeToString(children[1]->sql_type).c_str());
 }
 

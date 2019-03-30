@@ -195,7 +195,9 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//
-	// Copy the data from source to target, casting if the types don't match
+	// Cast the data from the source type to the target type
+	static void Cast(Vector &source, Vector &result, SQLType source_type, SQLType target_type);
+	// Cast the data from the source type to the target type
 	static void Cast(Vector &source, Vector &result);
 	// Copy the data of <source> to the target location
 	static void Copy(Vector &source, void *target, size_t offset = 0, size_t element_count = 0);

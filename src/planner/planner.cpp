@@ -26,6 +26,7 @@ void Planner::CreatePlan(SQLStatement &statement, vector<BoundParameterExpressio
 	context.profiler.EndPhase();
 
 	this->names = bound_statement->GetNames();
+	this->sql_types = bound_statement->GetTypes();
 
 	// now create a logical query plan from the query
 	context.profiler.StartPhase("logical_planner");
@@ -149,6 +150,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		explain->parse_tree = parse_tree;
 		explain->logical_plan_unopt = logical_plan_unopt;
 		names = {"explain_key", "explain_value"};
+		sql_types = {SQLType(SQLTypeId::VARCHAR), SQLType(SQLTypeId::VARCHAR) };
 		plan = move(explain);
 		break;
 	}
@@ -173,8 +175,9 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 			}
 			value_map[expr->parameter_nr] = move(value);
 		}
-		auto prepare = make_unique<LogicalPrepare>(stmt.name, statement_type, names, move(value_map), move(plan));
+		auto prepare = make_unique<LogicalPrepare>(stmt.name, statement_type, names, sql_types, move(value_map), move(plan));
 		names = {"Success"};
+		sql_types = { SQLType(SQLTypeId::BOOLEAN) };
 		plan = move(prepare);
 		break;
 	}

@@ -64,24 +64,17 @@ void ExpressionExecutor::ExecuteExpression(Expression &expr, Vector &result) {
 		}
 		assert(vector.sel_vector == chunk->sel_vector);
 	}
-	if (result.type != vector.type) {
-		// cast to the expected type
-		VectorOperations::Cast(vector, result);
-	} else {
-		// types match, only move the data
-		vector.Move(result);
-	}
+	assert(result.type == vector.type);
+	vector.Move(result);
 }
 
 void ExpressionExecutor::MergeExpression(Expression &expr, Vector &result) {
 	Vector intermediate;
-	if (result.type != TypeId::BOOLEAN) {
-		throw NotImplementedException("Expected a boolean!");
-	}
 	Execute(expr, intermediate);
-	if (intermediate.type != TypeId::BOOLEAN) {
-		throw NotImplementedException("Expected a boolean!");
-	}
+
+	assert(result.type == TypeId::BOOLEAN);
+	assert(intermediate.type == TypeId::BOOLEAN);
+
 	StaticVector<bool> and_result;
 	VectorOperations::And(result, intermediate, and_result);
 	and_result.Move(result);

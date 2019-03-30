@@ -91,7 +91,10 @@ string SQLTypeToString(SQLType type);
 
 SQLType MaxSQLType(SQLType left, SQLType right);
 
+//! Gets the internal type associated with the given SQL type
 TypeId GetInternalType(SQLType type);
+//! Returns the "simplest" SQL type corresponding to the given type id (e.g. TypeId::INTEGER -> SQLTypeId::INTEGER)
+SQLType SQLTypeFromInternalType(TypeId type);
 
 //! Returns the TypeId for the given type
 template <class T> TypeId GetTypeId() {

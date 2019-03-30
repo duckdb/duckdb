@@ -10,6 +10,9 @@
 #include "common/serializer.hpp"
 #include "common/value_operations/value_operations.hpp"
 
+#include "common/types/date.hpp"
+#include "common/types/timestamp.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -173,32 +176,38 @@ int64_t Value::GetNumericValue() {
 	}
 }
 
-string Value::ToString() const {
-	if (is_null) {
-		return "NULL";
-	}
-	switch (type) {
-	case TypeId::BOOLEAN:
+string Value::ToString(SQLType sql_type) const {
+	switch (sql_type.id) {
+	case SQLTypeId::BOOLEAN:
 		return value_.boolean ? "True" : "False";
-	case TypeId::TINYINT:
+	case SQLTypeId::TINYINT:
 		return to_string(value_.tinyint);
-	case TypeId::SMALLINT:
+	case SQLTypeId::SMALLINT:
 		return to_string(value_.smallint);
-	case TypeId::INTEGER:
+	case SQLTypeId::INTEGER:
 		return to_string(value_.integer);
-	case TypeId::BIGINT:
+	case SQLTypeId::BIGINT:
 		return to_string(value_.bigint);
-	case TypeId::FLOAT:
+	case SQLTypeId::REAL:
 		return to_string(value_.real);
-	case TypeId::DOUBLE:
+	case SQLTypeId::DOUBLE:
 		return to_string(value_.decimal);
-	case TypeId::POINTER:
-		return to_string(value_.pointer);
-	case TypeId::VARCHAR:
+	case SQLTypeId::DATE:
+		return Date::ToString(value_.integer);
+	case SQLTypeId::TIMESTAMP:
+		return Timestamp::ToString(value_.bigint);
+	case SQLTypeId::VARCHAR:
 		return str_value;
 	default:
 		throw NotImplementedException("Unimplemented type for printing");
 	}
+}
+
+string Value::ToString() const {
+	if (is_null) {
+		return "NULL";
+	}
+	return ToString(SQLTypeFromInternalType(type));
 }
 
 //===--------------------------------------------------------------------===//

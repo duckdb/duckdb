@@ -5,6 +5,7 @@
 #include "nulls.h"
 #include "date.h"
 
+#include "common/types/date.hpp"
 #include "common/exception.hpp"
 #include "storage/data_table.hpp"
 #include <cstring>

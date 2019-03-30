@@ -21,6 +21,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPrepare &o
 	auto plan = CreatePlan(*op.children[0]);
 
 	entry->types = plan->types;
+	entry->sql_types = op.sql_types;
 	entry->plan = move(plan);
 
 	// now store plan in context

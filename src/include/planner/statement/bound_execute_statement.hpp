@@ -27,5 +27,8 @@ public:
 	vector<string> GetNames() override {
 		return prep->names;
 	}
+	vector<SQLType> GetTypes() override {
+		return prep->sql_types;
+	}
 };
 } // namespace duckdb

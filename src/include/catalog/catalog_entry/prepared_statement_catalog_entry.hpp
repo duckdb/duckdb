@@ -33,6 +33,7 @@ public:
 
 	vector<string> names;
 	vector<TypeId> types;
+	vector<SQLType> sql_types;
 	StatementType statement_type;
 };
 } // namespace duckdb

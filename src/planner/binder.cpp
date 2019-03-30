@@ -7,11 +7,6 @@
 #include "planner/bound_tableref.hpp"
 #include "planner/expression.hpp"
 #include "planner/expression_binder/constant_binder.hpp"
-// #include "parser/tableref/table_function.hpp"
-
-// #include "parser/query_node.hpp"
-// #include "parser/tableref/list.hpp"
-// #include "planner/expression_binder/where_binder.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -71,6 +66,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(QueryNode &node) {
 		result = Bind((SetOperationNode &)node);
 		break;
 	}
+	result->select_distinct = node.select_distinct;
 	// bind the limit nodes
 	if (node.limit) {
 		result->limit = BindConstant(*this, context, "LIMIT clause", node.limit);

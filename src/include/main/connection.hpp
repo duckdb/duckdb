@@ -15,8 +15,6 @@
 
 namespace duckdb {
 
-class DuckDB;
-
 //! A connection to a database. This represents a (client) connection that can
 //! be used to query the database.
 class Connection {

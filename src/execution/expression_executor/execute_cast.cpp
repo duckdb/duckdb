@@ -15,6 +15,6 @@ void ExpressionExecutor::Execute(BoundCastExpression &expr, Vector &result) {
 	} else {
 		// cast it to the type specified by the cast expression
 		result.Initialize(expr.return_type);
-		VectorOperations::Cast(child, result);
+		VectorOperations::Cast(child, result, expr.child->sql_type, expr.sql_type);
 	}
 }

@@ -1,4 +1,5 @@
 #include "main/connection_manager.hpp"
+#include "main/connection.hpp"
 
 using namespace duckdb;
 using namespace std;

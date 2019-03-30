@@ -46,6 +46,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 	} else {
 		int expected_columns = stmt.columns.size() == 0 ? result->table->columns.size() : stmt.columns.size();
 		// visit the expressions
+		WhereBinder binder(*this, context);
 		for (auto &expression_list : stmt.values) {
 			if (expression_list.size() != expected_columns) {
 				string msg =
@@ -58,14 +59,10 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			vector<unique_ptr<Expression>> list;
 
 			for (size_t col_idx = 0; col_idx < expression_list.size(); col_idx++) {
-				WhereBinder binder(*this, context);
+				size_t table_col_idx = stmt.columns.size() == 0 ? col_idx : named_column_map[col_idx];
+				assert(table_col_idx < table->columns.size());
 				auto bound_expr = binder.Bind(expression_list[col_idx]);
-				if (bound_expr->type == ExpressionType::VALUE_PARAMETER) {
-					// handle parameters in the insert list
-					size_t table_col_idx = stmt.columns.size() == 0 ? col_idx : named_column_map[col_idx];
-					assert(table_col_idx < table->columns.size());
-					bound_expr = AddCastToType(move(bound_expr), table->columns[table_col_idx].type);
-				}
+				bound_expr = AddCastToType(move(bound_expr), table->columns[table_col_idx].type);
 				list.push_back(move(bound_expr));
 			}
 			result->values.push_back(move(list));

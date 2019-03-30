@@ -7,6 +7,10 @@
 #include "planner/operator/logical_execute.hpp"
 #include "planner/planner.hpp"
 
+#include "main/materialized_query_result.hpp"
+#include "main/query_result.hpp"
+#include "main/stream_query_result.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -143,6 +147,8 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 	auto plan = move(planner.plan);
 	// extract the result column names from the plan
 	auto names = planner.names;
+	auto sql_types = planner.sql_types;
+
 #ifdef DEBUG
 	if (enable_optimizer) {
 #endif
@@ -175,19 +181,20 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 	execution_context.physical_state = execution_context.physical_plan->GetOperatorState();
 
 	auto types = execution_context.physical_plan->GetTypes();
+	assert(types.size() == sql_types.size());
 
 	if (create_stream_result) {
 		// successfully compiled SELECT clause and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
 		assert(!log_query_string);
-		return make_unique<StreamQueryResult>(*this, types, names);
+		return make_unique<StreamQueryResult>(*this, sql_types, types, names);
 	}
 	// check if we need to log the query string
 	if (log_query_string) {
 		ActiveTransaction().PushQuery(query);
 	}
 	// create a materialized result by continuously fetching
-	auto result = make_unique<MaterializedQueryResult>(types, names);
+	auto result = make_unique<MaterializedQueryResult>(sql_types, types, names);
 	while (true) {
 		auto chunk = FetchInternal();
 		if (chunk->size() == 0) {

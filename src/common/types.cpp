@@ -59,6 +59,30 @@ size_t GetTypeIdSize(TypeId type) {
 	}
 }
 
+SQLType SQLTypeFromInternalType(TypeId type) {
+	switch (type) {
+	case TypeId::BOOLEAN:
+		return SQLType(SQLTypeId::BOOLEAN);
+	case TypeId::TINYINT:
+		return SQLType(SQLTypeId::TINYINT);
+	case TypeId::SMALLINT:
+		return SQLType(SQLTypeId::SMALLINT);
+	case TypeId::INTEGER:
+		return SQLType(SQLTypeId::INTEGER);
+	case TypeId::BIGINT:
+		return SQLType(SQLTypeId::BIGINT);
+	case TypeId::FLOAT:
+		return SQLType(SQLTypeId::REAL);
+	case TypeId::DOUBLE:
+		return SQLType(SQLTypeId::DOUBLE);
+	case TypeId::VARCHAR:
+		return SQLType(SQLTypeId::VARCHAR);
+	default:
+		assert(type == TypeId::VARBINARY);
+		return SQLType(SQLTypeId::VARBINARY);
+	}
+}
+
 bool TypeIsConstantSize(TypeId type) {
 	return type < TypeId::VARCHAR;
 }

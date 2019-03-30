@@ -19,6 +19,7 @@ public:
 	}
 
 	virtual vector<string> GetNames() = 0;
+	virtual vector<SQLType> GetTypes() = 0;
 
 	StatementType type;
 };

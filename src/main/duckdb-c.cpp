@@ -1,12 +1,14 @@
 #include "common/vector_operations/vector_operations.hpp"
 #include "duckdb.h"
 #include "duckdb.hpp"
+#include "common/types/date.hpp"
 
 #include <cstring>
 
 using namespace duckdb;
 
-static duckdb_type ConvertCPPTypeToC(TypeId type);
+static SQLType ConvertCTypeToCPP(duckdb_type type);
+static duckdb_type ConvertCPPTypeToC(SQLType type);
 static size_t GetCTypeSize(duckdb_type type);
 
 struct DatabaseData {
@@ -95,7 +97,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 	// zero initialize the columns (so we can cleanly delete it in case a malloc fails)
 	memset(out->columns, 0, sizeof(duckdb_column) * out->column_count);
 	for (size_t i = 0; i < out->column_count; i++) {
-		out->columns[i].type = ConvertCPPTypeToC(result->types[i]);
+		out->columns[i].type = ConvertCPPTypeToC(result->sql_types[i]);
 		out->columns[i].name = strdup(result->names[i].c_str());
 		out->columns[i].nullmask = (bool *)malloc(sizeof(bool) * out->row_count);
 		out->columns[i].data = malloc(GetCTypeSize(out->columns[i].type) * out->row_count);
@@ -118,31 +120,30 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 				out->columns[col].nullmask[row++] = chunk->data[col].nullmask[k];
 			}
 		}
-		// FIXME: use SQL types
 		// then write the data
-		switch (result->types[col]) {
-		case TypeId::BOOLEAN:
+		switch (result->sql_types[col].id) {
+		case SQLTypeId::BOOLEAN:
 			WriteData<bool>(out, result->collection, col);
 			break;
-		case TypeId::TINYINT:
+		case SQLTypeId::TINYINT:
 			WriteData<int8_t>(out, result->collection, col);
 			break;
-		case TypeId::SMALLINT:
+		case SQLTypeId::SMALLINT:
 			WriteData<int16_t>(out, result->collection, col);
 			break;
-		case TypeId::INTEGER:
+		case SQLTypeId::INTEGER:
 			WriteData<int32_t>(out, result->collection, col);
 			break;
-		case TypeId::BIGINT:
+		case SQLTypeId::BIGINT:
 			WriteData<int64_t>(out, result->collection, col);
 			break;
-		case TypeId::DOUBLE:
+		case SQLTypeId::REAL:
+			WriteData<float>(out, result->collection, col);
+			break;
+		case SQLTypeId::DOUBLE:
 			WriteData<double>(out, result->collection, col);
 			break;
-		case TypeId::POINTER:
-			WriteData<uint64_t>(out, result->collection, col);
-			break;
-		case TypeId::VARCHAR: {
+		case SQLTypeId::VARCHAR: {
 			size_t row = 0;
 			const char **target = (const char **)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
@@ -156,25 +157,25 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 			}
 			break;
 		}
-		// case TypeId::DATE: {
-		// 	size_t row = 0;
-		// 	duckdb_date *target = (duckdb_date *)out->columns[col].data;
-		// 	for (auto &chunk : result->collection.chunks) {
-		// 		date_t *source = (date_t *)chunk->data[col].data;
-		// 		for (size_t k = 0; k < chunk->data[col].count; k++) {
-		// 			if (!chunk->data[col].nullmask[k]) {
-		// 				int32_t year, month, day;
-		// 				Date::Convert(source[k], year, month, day);
-		// 				target[row].year = year;
-		// 				target[row].month = month;
-		// 				target[row].day = day;
-		// 			}
-		// 			row++;
-		// 		}
-		// 	}
-		// 	break;
-		// }
-		// case TypeId::TIMESTAMP:
+		case SQLTypeId::DATE: {
+			size_t row = 0;
+			duckdb_date *target = (duckdb_date *)out->columns[col].data;
+			for (auto &chunk : result->collection.chunks) {
+				date_t *source = (date_t *)chunk->data[col].data;
+				for (size_t k = 0; k < chunk->data[col].count; k++) {
+					if (!chunk->data[col].nullmask[k]) {
+						int32_t year, month, day;
+						Date::Convert(source[k], year, month, day);
+						target[row].year = year;
+						target[row].month = month;
+						target[row].day = day;
+					}
+					row++;
+				}
+			}
+			break;
+		}
+		case SQLTypeId::TIMESTAMP:
 		default:
 			// unsupported type for C API
 			assert(0);
@@ -218,30 +219,53 @@ void duckdb_destroy_result(duckdb_result *result) {
 	memset(result, 0, sizeof(duckdb_result));
 }
 
-duckdb_type ConvertCPPTypeToC(TypeId type) {
-	switch (type) {
-	case TypeId::BOOLEAN:
+duckdb_type ConvertCPPTypeToC(SQLType sql_type) {
+	switch (sql_type.id) {
+	case SQLTypeId::BOOLEAN:
 		return DUCKDB_TYPE_BOOLEAN;
-	case TypeId::TINYINT:
+	case SQLTypeId::TINYINT:
 		return DUCKDB_TYPE_TINYINT;
-	case TypeId::SMALLINT:
+	case SQLTypeId::SMALLINT:
 		return DUCKDB_TYPE_SMALLINT;
-	case TypeId::INTEGER:
+	case SQLTypeId::INTEGER:
 		return DUCKDB_TYPE_INTEGER;
-	case TypeId::BIGINT:
+	case SQLTypeId::BIGINT:
 		return DUCKDB_TYPE_BIGINT;
-	case TypeId::DOUBLE:
+	case SQLTypeId::DOUBLE:
 		return DUCKDB_TYPE_DOUBLE;
-	case TypeId::POINTER:
-		return DUCKDB_TYPE_POINTER;
-	// case TypeId::TIMESTAMP:
-	// 	return DUCKDB_TYPE_TIMESTAMP;
-	// case TypeId::DATE:
-	// 	return DUCKDB_TYPE_DATE;
-	case TypeId::VARCHAR:
+	case SQLTypeId::TIMESTAMP:
+		return DUCKDB_TYPE_TIMESTAMP;
+	case SQLTypeId::DATE:
+		return DUCKDB_TYPE_DATE;
+	case SQLTypeId::VARCHAR:
 		return DUCKDB_TYPE_VARCHAR;
 	default:
 		return DUCKDB_TYPE_INVALID;
+	}
+}
+
+SQLType ConvertCTypeToCPP(duckdb_type type) {
+	switch (type) {
+	case DUCKDB_TYPE_BOOLEAN:
+		return SQLType(SQLTypeId::BOOLEAN);
+	case DUCKDB_TYPE_TINYINT:
+		return SQLType(SQLTypeId::TINYINT);
+	case DUCKDB_TYPE_SMALLINT:
+		return SQLType(SQLTypeId::SMALLINT);
+	case DUCKDB_TYPE_INTEGER:
+		return SQLType(SQLTypeId::INTEGER);
+	case DUCKDB_TYPE_BIGINT:
+		return SQLType(SQLTypeId::BIGINT);
+	case DUCKDB_TYPE_DOUBLE:
+		return SQLType(SQLTypeId::DOUBLE);
+	case DUCKDB_TYPE_TIMESTAMP:
+		return SQLType(SQLTypeId::TIMESTAMP);
+	case DUCKDB_TYPE_DATE:
+		return SQLType(SQLTypeId::DATE);
+	case DUCKDB_TYPE_VARCHAR:
+		return SQLType(SQLTypeId::VARCHAR);
+	default:
+		return SQLType(SQLTypeId::INVALID);
 	}
 }
 
@@ -259,8 +283,6 @@ size_t GetCTypeSize(duckdb_type type) {
 		return sizeof(int64_t);
 	case DUCKDB_TYPE_DOUBLE:
 		return sizeof(double);
-	case DUCKDB_TYPE_POINTER:
-		return sizeof(uint64_t);
 	case DUCKDB_TYPE_DATE:
 		return sizeof(duckdb_date);
 	case DUCKDB_TYPE_VARCHAR:
@@ -300,12 +322,10 @@ static Value GetCValue(duckdb_result *result, uint32_t col, uint64_t row) {
 		return Value::BIGINT(UnsafeFetch<int64_t>(result, col, row));
 	case DUCKDB_TYPE_DOUBLE:
 		return Value(UnsafeFetch<double>(result, col, row));
-	case DUCKDB_TYPE_POINTER:
-		return Value::POINTER(UnsafeFetch<uint64_t>(result, col, row));
-	// case DUCKDB_TYPE_DATE: {
-	// 	auto date = UnsafeFetch<duckdb_date>(result, col, row);
-	// 	return Value::DATE(Date::FromDate(date.year, date.month, date.day));
-	// }
+	case DUCKDB_TYPE_DATE: {
+		auto date = UnsafeFetch<duckdb_date>(result, col, row);
+		return Value::INTEGER(Date::FromDate(date.year, date.month, date.day));
+	}
 	case DUCKDB_TYPE_VARCHAR:
 		return Value(string(UnsafeFetch<const char *>(result, col, row)));
 	// case DUCKDB_TYPE_TIMESTAMP:
@@ -336,11 +356,7 @@ int64_t duckdb_value_int64(duckdb_result *result, uint32_t col, uint64_t row) {
 
 char *duckdb_value_varchar(duckdb_result *result, uint32_t col, uint64_t row) {
 	Value val = GetCValue(result, col, row);
-	if (val.is_null) {
-		return strdup("NULL");
-	} else {
-		return strdup(val.ToString().c_str());
-	}
+	return strdup(val.ToString(ConvertCTypeToCPP(result->columns[col].type)).c_str());
 }
 
 int32_t duckdb_value_int32_unsafe(duckdb_result *result, uint32_t col, uint64_t row) {

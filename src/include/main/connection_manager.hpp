@@ -8,11 +8,12 @@
 
 #pragma once
 
-#include "main/connection.hpp"
+#include "common/common.hpp"
 
 namespace duckdb {
 
 class DuckDB;
+class Connection;
 
 class ConnectionManager {
 public:

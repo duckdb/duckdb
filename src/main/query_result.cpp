@@ -8,8 +8,8 @@ using namespace std;
 QueryResult::QueryResult(QueryResultType type) : type(type), success(true) {
 }
 
-QueryResult::QueryResult(QueryResultType type, vector<TypeId> types, vector<string> names)
-    : type(type), types(types), names(names), success(true) {
+QueryResult::QueryResult(QueryResultType type, vector<SQLType> sql_types, vector<TypeId> types, vector<string> names)
+    : type(type), sql_types(sql_types), types(types), names(names), success(true) {
 	assert(types.size() == names.size());
 }
 
@@ -29,7 +29,7 @@ bool QueryResult::Equals(QueryResult &other) {
 		return false;
 	}
 	// compare types
-	if (types != other.types) {
+	if (sql_types != other.sql_types || types != other.types) {
 		return false;
 	}
 	// now compare the actual values

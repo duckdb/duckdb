@@ -6,8 +6,8 @@ using namespace std;
 MaterializedQueryResult::MaterializedQueryResult() : QueryResult(QueryResultType::MATERIALIZED_RESULT) {
 }
 
-MaterializedQueryResult::MaterializedQueryResult(vector<TypeId> types, vector<string> names)
-    : QueryResult(QueryResultType::MATERIALIZED_RESULT, types, names) {
+MaterializedQueryResult::MaterializedQueryResult(vector<SQLType> sql_types, vector<TypeId> types, vector<string> names)
+    : QueryResult(QueryResultType::MATERIALIZED_RESULT, sql_types, types, names) {
 }
 
 MaterializedQueryResult::MaterializedQueryResult(string error)

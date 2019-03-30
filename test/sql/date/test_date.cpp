@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "common/types/date.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -16,6 +17,7 @@ TEST_CASE("Test basic DATE functionality", "[date]") {
 
 	// check that we can select dates
 	result = con.Query("SELECT * FROM dates");
+	REQUIRE(result->sql_types[0] == SQLType(SQLTypeId::DATE));
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(Date::FromDate(1993, 8, 14)), Value()}));
 
 	// YEAR function
@@ -28,10 +30,12 @@ TEST_CASE("Test basic DATE functionality", "[date]") {
 
 	// check that we can add days to a date
 	result = con.Query("SELECT i + 5 FROM dates");
+	REQUIRE(result->sql_types[0] == SQLType(SQLTypeId::DATE));
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(Date::FromDate(1993, 8, 19)), Value()}));
 
 	// check that we can subtract days from a date
 	result = con.Query("SELECT i - 5 FROM dates");
+	REQUIRE(result->sql_types[0] == SQLType(SQLTypeId::DATE));
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(Date::FromDate(1993, 8, 9)), Value()}));
 
 	// HOWEVER, we can't divide or multiply or modulo
@@ -39,12 +43,12 @@ TEST_CASE("Test basic DATE functionality", "[date]") {
 	REQUIRE_FAIL(con.Query("SELECT i / 3 FROM dates"));
 	REQUIRE_FAIL(con.Query("SELECT i % 3 FROM dates"));
 
-	// FIXME: this
-	// // we also can't add two dates together
-	// REQUIRE_FAIL(con.Query("SELECT i + i FROM dates"));
-	// // but we can subtract them! resulting in an integer
-	// result = con.Query("SELECT (i + 5) - i FROM dates");
-	// REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(5)}));
+	// we also can't add two dates together
+	REQUIRE_FAIL(con.Query("SELECT i + i FROM dates"));
+	// but we can subtract them! resulting in an integer
+	result = con.Query("SELECT (i + 5) - i FROM dates");
+	REQUIRE(result->sql_types[0] == SQLType(SQLTypeId::INTEGER));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(5), Value()}));
 }
 
 TEST_CASE("Test out of range/incorrect date formats", "[date]") {

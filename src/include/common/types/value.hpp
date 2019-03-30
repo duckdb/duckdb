@@ -10,8 +10,6 @@
 
 #include "common/common.hpp"
 #include "common/exception.hpp"
-#include "common/types/date.hpp"
-#include "common/types/timestamp.hpp"
 
 #include <iostream>
 #include <memory.h>
@@ -82,6 +80,8 @@ public:
 
 	//! Convert this value to a string
 	string ToString() const;
+	//! Convert this value to a string, with the given display format
+	string ToString(SQLType type) const;
 
 	//! Cast this value to another type
 	Value CastAs(TypeId new_type) const;

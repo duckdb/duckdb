@@ -43,25 +43,15 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 					} else {
 						// get value from child chunk
 						assert((size_t)column_index_map[i] < chunk.column_count);
-						if (insert_chunk.data[i].type == chunk.data[column_index_map[i]].type) {
-							// matching type, reference
-							insert_chunk.data[i].Reference(chunk.data[column_index_map[i]]);
-						} else {
-							// non-matching type, cast
-							VectorOperations::Cast(chunk.data[column_index_map[i]], insert_chunk.data[i]);
-						}
+						assert(insert_chunk.data[i].type == chunk.data[column_index_map[i]].type);
+						insert_chunk.data[i].Reference(chunk.data[column_index_map[i]]);
 					}
 				}
 			} else {
 				// no columns specified, just append directly
 				for (size_t i = 0; i < insert_chunk.column_count; i++) {
-					if (insert_chunk.data[i].type == chunk.data[i].type) {
-						// matching type, reference
-						insert_chunk.data[i].Reference(chunk.data[i]);
-					} else {
-						// non-matching type, cast
-						VectorOperations::Cast(chunk.data[i], insert_chunk.data[i]);
-					}
+					assert(insert_chunk.data[i].type == chunk.data[i].type);
+					insert_chunk.data[i].Reference(chunk.data[i]);
 				}
 			}
 			table->storage->Append(*table, context, insert_chunk);

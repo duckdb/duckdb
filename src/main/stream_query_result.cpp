@@ -6,8 +6,8 @@
 using namespace duckdb;
 using namespace std;
 
-StreamQueryResult::StreamQueryResult(ClientContext &context, vector<TypeId> types, vector<string> names)
-    : QueryResult(QueryResultType::STREAM_RESULT, types, names), is_open(true), context(context) {
+StreamQueryResult::StreamQueryResult(ClientContext &context, vector<SQLType> sql_types, vector<TypeId> types, vector<string> names)
+    : QueryResult(QueryResultType::STREAM_RESULT, sql_types, types, names), is_open(true), context(context) {
 }
 
 StreamQueryResult::~StreamQueryResult() {
@@ -40,7 +40,7 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	if (!success) {
 		return make_unique<MaterializedQueryResult>(error);
 	}
-	auto result = make_unique<MaterializedQueryResult>(types, names);
+	auto result = make_unique<MaterializedQueryResult>(sql_types, types, names);
 	while (true) {
 		auto chunk = Fetch();
 		if (!chunk || chunk->size() == 0) {
