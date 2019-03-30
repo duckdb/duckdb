@@ -54,8 +54,8 @@ static pthread_key_t key;
 static pthread_once_t key_once = PTHREAD_ONCE_INIT;
 
 // max parse tree size approx 100 MB, should be enough
-#define PG_MALLOC_SIZE 102400
-#define PG_MALLOC_LIMIT 1024
+#define PG_MALLOC_SIZE 10240
+#define PG_MALLOC_LIMIT 1000
 
 typedef struct parser_state_str parser_state;
 struct parser_state_str {
@@ -100,11 +100,14 @@ static parser_state* get_parser_state() {
 #endif
 
 
-static void allocate_new(parser_state* state) {
+static void allocate_new(parser_state* state, size_t n) {
 	if (state->malloc_ptr_idx + 1 >= PG_MALLOC_LIMIT) {
 		throw std::runtime_error("Memory allocation failure");
 	}
-	char* base_ptr = (char*) malloc(PG_MALLOC_SIZE);
+	if (n < PG_MALLOC_SIZE) {
+		n = PG_MALLOC_SIZE;
+	}
+	char* base_ptr = (char*) malloc(n);
 	if (!base_ptr) {
 		throw std::runtime_error("Memory allocation failure");
 	}
@@ -116,14 +119,9 @@ static void allocate_new(parser_state* state) {
 
 void* palloc(size_t n) {
 	parser_state* state = get_parser_state();
-	if (n > PG_MALLOC_SIZE) {
-		throw std::runtime_error("Memory allocation request too large");
-	}
 	if (state->malloc_pos + n > PG_MALLOC_SIZE) {
-		allocate_new(state);
+		allocate_new(state, n);
 	}
-	assert(state->malloc_pos + n <= PG_MALLOC_SIZE);
-
 
 	void* ptr = state->malloc_ptrs[state->malloc_ptr_idx-1] + state->malloc_pos;
 	memset(ptr, 0, n);
@@ -140,7 +138,7 @@ void pg_parser_init() {
 	state->pg_err_msg[0] = '\0';
 
 	state->malloc_ptr_idx = 0;
-	allocate_new(state);
+	allocate_new(state, 1);
 }
 
 void pg_parser_parse(const char* query, parse_result *res) {
