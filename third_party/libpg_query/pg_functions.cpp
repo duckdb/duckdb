@@ -205,8 +205,37 @@ int	errposition(int cursorpos) {
 	get_parser_state()->pg_err_pos = cursorpos;
 	return 1;
 }
-char *psprintf(const char *fmt,...) {
-    throw std::runtime_error("psprintf NOT IMPLEMENTED");
+
+char *
+psprintf(const char *fmt,...)
+{
+	size_t		len = 128;		/* initial assumption about buffer size */
+
+	for (;;)
+	{
+		char	   *result;
+		va_list		args;
+		size_t		newlen;
+
+		/*
+		 * Allocate result buffer.  Note that in frontend this maps to malloc
+		 * with exit-on-error.
+		 */
+		result = (char *) palloc(len);
+
+		/* Try to format the data. */
+		va_start(args, fmt);
+		newlen = vsnprintf(result, len, fmt, args);
+
+		va_end(args);
+
+		if (newlen < len)
+			return result;		/* success */
+
+		/* Release buffer and loop around to try again with larger len. */
+		pfree(result);
+		len = newlen;
+	}
 }
 
 char *pstrdup(const char *in) {

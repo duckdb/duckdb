@@ -11,7 +11,6 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-
 typedef uintptr_t Datum;
 typedef uint64_t Size;
 
@@ -37,6 +36,8 @@ typedef uint8_t uint8;
 #define false 0
 #define TRUE 1
 #define FALSE 0
+
+#define HAVE_LONG_INT_64
 
 #define PG_INT32_MAX INT_MAX
 #define PGDLLIMPORT
