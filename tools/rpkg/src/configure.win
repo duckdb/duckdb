@@ -1,0 +1,16 @@
+# run cmake to build duckdb library
+
+cd ../../
+
+mkdir -p build/release_notest
+cd build/release_notest
+cmake -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLEAN=1 -DCMAKE_MAKE_PROGRAM="C:/Rtools/mingw_64/bin/mingw32-make.exe" -DCMAKE_C_COMPILER="C:/Rtools/mingw_64/bin/gcc.exe" -DCMAKE_CXX_COMPILER="C:/Rtools/mingw_64/bin/g++.exe" ../.. 
+cmake --build . --target duckdb_static
+cd ../../tools/rpkg
+
+rm -f src/*.*o
+if [ ! -f "../../build/release_notest/src/libduckdb_static.a" ] 
+then
+   echo "Build failed :/"
+   exit 1
+fi
