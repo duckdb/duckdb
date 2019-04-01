@@ -179,41 +179,6 @@ matrix:
         - test/Debug/unittest.exe
 
 
-    - os: windows
-      name: Python Package
-
-      language: cpp
-
-      before_install: 
-        - choco install python --version 3.7.3
-        - c:/python37/python.exe -m pip install --upgrade pip
-        - c:/python37/python.exe -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
-
-      script:
-        - cd tools/pythonpkg
-        - c:/python37/python.exe setup.py install
-        - c:/python37/python.exe -m pytest tests
-
-
-    - os: windows
-      name: R Package
-
-      language: cpp
-
-      before_script:
-        - choco install make
-        - choco install r.project -y --version 3.5.3
-        - wget "https://github.com/hannesmuehleisen/choco-rtools/raw/master/rtools.3.5.0.nupkg"
-        - choco install rtools -s rtools.3.5.0.nupkg -f -y
-
-      script:
-        - cd tools/rpkg
-        - C:/Program\ Files/R/R-3.5.3/bin/R.exe -f dependencies.R
-        - C:/Program\ Files/R/R-3.5.3/bin/R.exe CMD INSTALL --no-multiarch .
-        - cd tests
-        - C:/Program\ Files/R/R-3.5.3/bin/R.exe -f testthat.R
-
-
     - os: linux
       name: Python Package
 
@@ -244,6 +209,22 @@ matrix:
       script:
         - python3 setup.py install
         - python3 -m pytest tests
+
+
+    - os: windows
+      name: Python Package
+
+      language: cpp
+
+      before_install: 
+        - choco install python --version 3.7.3
+        - c:/python37/python.exe -m pip install --upgrade pip
+        - c:/python37/python.exe -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
+
+      script:
+        - cd tools/pythonpkg
+        - c:/python37/python.exe setup.py install
+        - c:/python37/python.exe -m pytest tests
 
 
     - os: linux
@@ -286,6 +267,25 @@ matrix:
 
       script:
         - R -f testthat.R
+
+
+    - os: windows
+      name: R Package
+
+      language: cpp
+
+      before_script:
+        - choco install make
+        - choco install r.project -y --version 3.5.3
+        - wget "https://github.com/hannesmuehleisen/choco-rtools/raw/master/rtools.3.5.0.nupkg"
+        - choco install rtools -s rtools.3.5.0.nupkg -f -y
+
+      script:
+        - cd tools/rpkg
+        - C:/Program\ Files/R/R-3.5.3/bin/R.exe -f dependencies.Rg
+        - C:/Program\ Files/R/R-3.5.3/bin/R.exe CMD INSTALL --no-multiarch .
+        - cd tests
+        - C:/Program\ Files/R/R-3.5.3/bin/R.exe -f testthat.R
 
 
 before_install:
