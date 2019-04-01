@@ -201,9 +201,9 @@ matrix:
       language: cpp
 
       before_install:
-        - bitsadmin /TRANSFER mydownloadjob "https://cran.r-project.org/bin/windows/Rtools/Rtools35.exe" "Rtools.exe" "https://cran.r-project.org/bin/windows/base/R-3.5.3-win.exe" "R.exe"
-        - Rtools.exe /VERYSILENT /DIR=C:/Rtools/
-        - R.exe /VERYSILENT /DIR=C:/R/
+        - bitsadmin /TRANSFER mydownloadjob "https://cran.r-project.org/bin/windows/Rtools/Rtools35.exe" "c:/Rtools.exe" "https://cran.r-project.org/bin/windows/base/R-3.5.3-win.exe" "c:/R.exe"
+        - c:/Rtools.exe /VERYSILENT /DIR=c:/Rtools/
+        - c:/R.exe /VERYSILENT /DIR=c:/R/
 
       script:
         - cd tools/rpkg
