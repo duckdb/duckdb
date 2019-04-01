@@ -208,7 +208,7 @@ matrix:
 
       script:
         - cd tools/rpkg
-        - C:/Program\ Files/R/R-3.5.3/bin/R.exe -f dependencies.Rg
+        - C:/Program\ Files/R/R-3.5.3/bin/R.exe -f dependencies.R
         - C:/Program\ Files/R/R-3.5.3/bin/R.exe CMD INSTALL --no-multiarch .
         - cd tests
         - C:/Program\ Files/R/R-3.5.3/bin/R.exe -f testthat.R
