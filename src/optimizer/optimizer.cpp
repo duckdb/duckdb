@@ -78,10 +78,10 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	context.profiler.EndPhase();
 
 	// then we extract common subexpressions inside the different operators
-	context.profiler.StartPhase("common_subexpressions");
-	CommonSubExpressionOptimizer cse_optimizer;
-	cse_optimizer.VisitOperator(*plan);
-	context.profiler.EndPhase();
+	// context.profiler.StartPhase("common_subexpressions");
+	// CommonSubExpressionOptimizer cse_optimizer;
+	// cse_optimizer.VisitOperator(*plan);
+	// context.profiler.EndPhase();
 
 	context.profiler.StartPhase("in_clause");
 	InClauseRewriter rewriter(*this);
@@ -151,5 +151,5 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	root = move(join);
 
 	// we replace the original subquery with a BoundColumnRefExpression refering to the mark column
-	return make_unique<BoundColumnRefExpression>(expr.GetName(), TypeId::BOOLEAN, ColumnBinding(subquery_index, 0));
+	return make_unique<BoundColumnRefExpression>("IN (...)", TypeId::BOOLEAN, ColumnBinding(subquery_index, 0));
 }

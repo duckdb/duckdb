@@ -3,7 +3,6 @@
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "parser/query_node/select_node.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
 
 using namespace duckdb;
@@ -57,8 +56,8 @@ BindResult GroupBinder::BindSelectRef(uint32_t entry) {
 	SQLType group_type;
 	auto binding = Bind(select_entry, &group_type, false);
 	// now replace the original expression in the select list with a reference to this group
-	// node.select_list[entry] = make_unique<BoundColumnRefExpression>(
-	//     *binding, binding->return_type, binding->sql_type, ColumnBinding(group_index, bind_index), 0);
+	group_alias_map[to_string(entry)] = bind_index;
+	node.select_list[entry] = make_unique<ColumnRefExpression>(to_string(entry));
 	// insert into the set of used aliases
 	used_aliases.insert(entry);
 	return BindResult(move(binding), group_type);

@@ -70,6 +70,9 @@ public:
 
 	string Bind(unique_ptr<ParsedExpression> *expr, uint32_t depth, bool root_expression = false);
 
+	// Bind table names to ColumnRefExpressions
+	void BindTableNames(ParsedExpression &expr);
+
 	//! The target type that should result from the binder. If the result is not of this type, a cast to this type will be added. Defaults to INVALID.
 	SQLType target_type;
 protected:
@@ -87,11 +90,7 @@ protected:
 	BindResult BindExpression(StarExpression &expr, uint32_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, uint32_t depth);
 
-	// Bind table names to ColumnRefExpressions
-	void BindTableNames(ParsedExpression &expr);
-
 	void BindChild(unique_ptr<ParsedExpression> &expr, uint32_t depth, string &error);
-
 protected:
 	bool BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
 

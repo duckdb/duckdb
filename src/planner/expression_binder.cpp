@@ -8,6 +8,7 @@
 #include "planner/expression/bound_cast_expression.hpp"
 #include "planner/expression/bound_parameter_expression.hpp"
 #include "planner/expression/bound_subquery_expression.hpp"
+#include "parser/parsed_expression_iterator.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -135,6 +136,20 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, uint32_t depth
 		*expr = make_unique<BoundExpression>(move(result.expression), result.sql_type);
 		return string();
 	}
+}
+
+
+void ExpressionBinder::BindTableNames(ParsedExpression &expr) {
+	if (expr.type == ExpressionType::COLUMN_REF) {
+		auto &colref = (ColumnRefExpression &)expr;
+		if (colref.table_name.empty()) {
+			// no table name: find a binding that contains this
+			colref.table_name = binder.bind_context.GetMatchingBinding(colref.column_name);
+		}
+	}
+	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
+		BindTableNames((ParsedExpression&) child);
+	});
 }
 
 namespace duckdb {

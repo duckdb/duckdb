@@ -27,7 +27,7 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 		} else if (right_cast != TypeId::INVALID) {
 			return templated_boolean_operation<OP>(left, right.CastAs(right_cast));
 		}
-		throw TypeMismatchException(left.type, right.type, "Cannot perform boolean operation on these two types");
+		return false;
 	}
 	switch (left.type) {
 	case TypeId::BOOLEAN:

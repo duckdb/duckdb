@@ -102,8 +102,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 			// if we wouldn't do this then (SELECT test.a FROM test GROUP BY a) would not work because "test.a" <> "a"
 			// hence we convert "a" -> "test.a" in the unbound expression
 			unbound_groups[i] = move(group_binder.unbound_expression);
-			// FIXME: bind table names
-			// group_binder.BindTableNames(*unbound_groups[i]);
+			group_binder.BindTableNames(*unbound_groups[i]);
 			info.map[unbound_groups[i].get()] = i;
 		}
 	}
@@ -111,8 +110,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	// bind the HAVING clause, if any
 	if (statement.having) {
 		HavingBinder having_binder(*this, context, *result, info);
-		// FIXME: bind table names
-		// having_binder.BindTableNames(*statement.having);
+		having_binder.BindTableNames(*statement.having);
 		result->having = having_binder.Bind(statement.having);
 	}
 
@@ -120,6 +118,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	SelectBinder select_binder(*this, context, *result, info);
 	for (size_t i = 0; i < statement.select_list.size(); i++) {
 		SQLType result_type;
+		select_binder.BindTableNames(*statement.select_list[i]);
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type);
 		result->select_list.push_back(move(expr));
 		if (i < result->column_count) {
