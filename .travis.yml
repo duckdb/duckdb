@@ -202,14 +202,14 @@ matrix:
 
       before_install:
         - choco install r.project -y
-        - wget https://github.com/leeper/choco-rtools/raw/master/rtools.3.4.0.nupkg
-        - choco install rtools -s rtools.3.4.0.nupkg -f -y
+        - wget https://github.com/hannesmuehleisen/choco-rtools/raw/master/rtools.3.5.0.nupkg
+        - choco install rtools -s rtools.3.5.0.nupkg -f -y
 
       script:
         - cd tools/rpkg
-        - C:/R/bin/R.exe CMD INSTALL .
+        - "C:/Program Files/R/R-3.5.3/bin/R.exe" CMD INSTALL .
         - cd tests
-        - C:/R/bin/R.exe -f testthat.R
+        - "C:/Program Files/R/R-3.5.3/bin/R.exe" -f testthat.R
 
 
     - os: linux
