@@ -206,36 +206,27 @@ int	errposition(int cursorpos) {
 	return 1;
 }
 
+
 char *
-psprintf(const char *fmt,...)
-{
-	size_t		len = 128;		/* initial assumption about buffer size */
+psprintf(const char *fmt,...) {
+	char buf[BUFSIZ];
+	va_list		args;
+	size_t newlen;
 
-	for (;;)
-	{
-		char	   *result;
-		va_list		args;
-		size_t		newlen;
-
-		/*
-		 * Allocate result buffer.  Note that in frontend this maps to malloc
-		 * with exit-on-error.
-		 */
-		result = (char *) palloc(len);
-
-		/* Try to format the data. */
-		va_start(args, fmt);
-		newlen = vsnprintf(result, len, fmt, args);
-
-		va_end(args);
-
-		if (newlen < len)
-			return result;		/* success */
-
-		/* Release buffer and loop around to try again with larger len. */
-		pfree(result);
-		len = newlen;
+	// attempt one: use stack buffer and determine length
+	va_start(args, fmt);
+	newlen = vsnprintf(buf, BUFSIZ, fmt, args);
+	va_end(args);
+	if (newlen < BUFSIZ) {
+		return pstrdup(buf);
 	}
+
+	// attempt two, malloc
+	char* mbuf = (char*) palloc(newlen);
+	va_start(args, fmt);
+	vsnprintf(mbuf, BUFSIZ, fmt, args);
+	va_end(args);
+	return mbuf;
 }
 
 char *pstrdup(const char *in) {
