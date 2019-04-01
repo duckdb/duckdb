@@ -9,7 +9,7 @@
 using namespace duckdb;
 using namespace std;
 
-static unique_ptr<LogicalOperator> CastSetOpToTypes(Binder &binder, vector<SQLType> &source_types,
+unique_ptr<LogicalOperator> LogicalPlanGenerator::CastLogicalOperatorToTypes(vector<SQLType> &source_types,
                                                     vector<SQLType> &target_types, unique_ptr<LogicalOperator> op) {
 	assert(op);
 	// first check if we even need to cast
@@ -71,8 +71,8 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSetOperationNo
 	auto right_node = generator_right.CreatePlan(*node.right);
 
 	// for both the left and right sides, cast them to the same types
-	left_node = CastSetOpToTypes(binder, node.left->types, node.types, move(left_node));
-	right_node = CastSetOpToTypes(binder, node.right->types, node.types, move(right_node));
+	left_node = CastLogicalOperatorToTypes(node.left->types, node.types, move(left_node));
+	right_node = CastLogicalOperatorToTypes(node.right->types, node.types, move(right_node));
 
 	// create actual logical ops for setops
 	LogicalOperatorType logical_type;

@@ -109,6 +109,8 @@ TEST_CASE("Test insert into statements", "[simpleinserts]") {
 	// insert into with default
 	result = con.Query("INSERT INTO integers VALUES (DEFAULT, 4);");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	// operations on default not supported
+	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES (DEFAULT+1, 4);"));
 
 	result = con.Query("INSERT INTO integers (i) SELECT j FROM integers;");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
@@ -168,8 +170,12 @@ TEST_CASE("Test insert with too few or too many cols", "[simpleinserts]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a(i integer, j integer)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (1, 2)"));
+	// scalar inserts
 	REQUIRE_FAIL(con.Query("INSERT INTO a VALUES (1)"));
 	REQUIRE_FAIL(con.Query("INSERT INTO a VALUES (1,2,3)"));
 	REQUIRE_FAIL(con.Query("INSERT INTO a VALUES (1,2),(3)"));
 	REQUIRE_FAIL(con.Query("INSERT INTO a VALUES (1,2),(3,4,5)"));
+	// also with queries
+	REQUIRE_FAIL(con.Query("INSERT INTO a SELECT 42"));
+
 }

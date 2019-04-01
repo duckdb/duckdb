@@ -28,6 +28,8 @@ public:
 	vector<vector<unique_ptr<Expression>>> values;
 	//! The insertion map ([table_index -> index in result, or -1 if not specified])
 	vector<int> column_index_map;
+	//! The expected types for the INSERT statement (obtained from the column types)
+	vector<SQLType> expected_types;
 public:
 	vector<string> GetNames() override {
 		return {"Count"};

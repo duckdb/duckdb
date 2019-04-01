@@ -53,6 +53,9 @@ private:
 
 	void PlanSubqueries(unique_ptr<Expression> *expr, unique_ptr<LogicalOperator> *root);
 
+
+	unique_ptr<LogicalOperator> CastLogicalOperatorToTypes(vector<SQLType> &source_types,
+                                                    vector<SQLType> &target_types, unique_ptr<LogicalOperator> op);
 public:
 	bool has_unplanned_subqueries = false;
 

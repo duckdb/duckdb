@@ -14,6 +14,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundInsertStatemen
 		// insert from select statement
 		// parse select statement and add to logical plan
 		auto root = CreatePlan(*stmt.select_statement);
+		root = CastLogicalOperatorToTypes(stmt.select_statement->node->types, stmt.expected_types, move(root));
 		insert->AddChild(move(root));
 	} else {
 		insert->insert_values = move(stmt.values);

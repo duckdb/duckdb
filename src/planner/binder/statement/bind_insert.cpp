@@ -2,7 +2,7 @@
 #include "main/database.hpp"
 #include "parser/statement/insert_statement.hpp"
 #include "planner/binder.hpp"
-#include "planner/expression_binder/where_binder.hpp"
+#include "planner/expression_binder/insert_binder.hpp"
 #include "planner/statement/bound_insert_statement.hpp"
 
 using namespace duckdb;
@@ -25,6 +25,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			if (entry == table->name_map.end()) {
 				throw BinderException("Column %s not found in table %s", stmt.columns[i].c_str(), table->name.c_str());
 			}
+			result->expected_types.push_back(table->columns[entry->second].type);
 			named_column_map.push_back(entry->second);
 		}
 		for (size_t i = 0; i < result->table->columns.size(); i++) {
@@ -38,15 +39,27 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 				result->column_index_map.push_back(entry->second);
 			}
 		}
+	} else {
+		for(size_t i = 0; i < result->table->columns.size(); i++) {
+			result->expected_types.push_back(table->columns[i].type);
+		}
 	}
 
+	int expected_columns = stmt.columns.size() == 0 ? result->table->columns.size() : stmt.columns.size();
 	if (stmt.select_statement) {
 		result->select_statement =
 		    unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*stmt.select_statement));
+		if (result->select_statement->node->types.size() != expected_columns) {
+			string msg =
+				StringUtil::Format(stmt.columns.size() == 0 ? "table %s has %d columns but %d values were supplied"
+															: "Column name/value mismatch for insert on %s: "
+																"expected %d columns but %d values were supplied",
+									result->table->name.c_str(), expected_columns, result->select_statement->node->types.size());
+			throw BinderException(msg);
+		}
 	} else {
-		int expected_columns = stmt.columns.size() == 0 ? result->table->columns.size() : stmt.columns.size();
 		// visit the expressions
-		WhereBinder binder(*this, context);
+		InsertBinder binder(*this, context);
 		for (auto &expression_list : stmt.values) {
 			if (expression_list.size() != expected_columns) {
 				string msg =

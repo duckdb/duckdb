@@ -6,6 +6,7 @@
 #include "parser/expression/subquery_expression.hpp"
 #include "planner/binder.hpp"
 #include "planner/expression/bound_cast_expression.hpp"
+#include "planner/expression/bound_default_expression.hpp"
 #include "planner/expression/bound_parameter_expression.hpp"
 #include "planner/expression/bound_subquery_expression.hpp"
 #include "parser/parsed_expression_iterator.hpp"
@@ -159,6 +160,10 @@ unique_ptr<Expression> AddCastToType(unique_ptr<Expression> expr, SQLType source
 		auto &parameter = (BoundParameterExpression&) *expr;
 		parameter.sql_type = target_type;
 		parameter.return_type = GetInternalType(target_type);
+	} else if (expr->expression_class == ExpressionClass::BOUND_DEFAULT) {
+		auto &def = (BoundDefaultExpression&) *expr;
+		def.sql_type = target_type;
+		def.return_type = GetInternalType(target_type);
 	} else if (source_type != target_type) {
 		return make_unique<BoundCastExpression>(GetInternalType(target_type), move(expr), source_type, target_type);
 	}
