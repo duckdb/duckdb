@@ -202,11 +202,8 @@ matrix:
 
       before_install:
         - choco install r.project -y
-        - git clone https://github.com/leeper/choco-rtools.git
-        - cd choco-rtools
-        - choco pack
+        - wget https://github.com/leeper/choco-rtools/raw/master/rtools.3.4.0.nupkg
         - choco install rtools -s rtools.3.4.0.nupkg -f -y
-        - cd ..
 
       script:
         - cd tools/rpkg
