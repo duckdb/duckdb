@@ -201,10 +201,10 @@ matrix:
       language: cpp
 
       before_install:
-        - curl "https://cran.r-project.org/bin/windows/Rtools/Rtools35.exe" -o Rtools.exe
         - curl "https://cran.r-project.org/bin/windows/base/R-3.5.3-win.exe" -o R.exe
-        - ./R.exe /VERYSILENT /DIR=c:/R/
-        - ./Rtools.exe /VERYSILENT /DIR=c:/Rtools/
+        - curl "https://cran.r-project.org/bin/windows/Rtools/Rtools35.exe" -o Rtools.exe
+        - cmd.exe /C R.exe /VERYSILENT /DIR=c:/R/
+        - cmd.exe /C Rtools.exe /VERYSILENT /DIR=c:/Rtools/
 
       script:
         - cd tools/rpkg
