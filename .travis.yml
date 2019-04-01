@@ -207,9 +207,9 @@ matrix:
 
       script:
         - cd tools/rpkg
-        - \"C:/Program Files/R/R-3.5.3/bin/R.exe\" CMD INSTALL .
+        - C:/Program\ Files/R/R-3.5.3/bin/R.exe CMD INSTALL .
         - cd tests
-        - \"C:/Program Files/R/R-3.5.3/bin/R.exe\" -f testthat.R
+        - C:/Program\ Files/R/R-3.5.3/bin/R.exe -f testthat.R
 
     - os: linux
       name: Python Package
