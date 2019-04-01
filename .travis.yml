@@ -194,6 +194,24 @@ matrix:
         - c:/python37/python.exe setup.py install
         - c:/python37/python.exe -m pytest tests
 
+    - os: windows
+      name: R Package
+
+      language: cpp
+
+      before_install:
+        - bitsadmin /transfer mydownloadjob  /download  /priority normal  ^ https://cran.r-project.org/bin/windows/Rtools/Rtools35.exe %TEMP%/Rtools.exe
+        - %TEMP%/Rtools.exe /VERYSILENT /DIR=C:/Rtools/
+        - bitsadmin /transfer mydownloadjob  /download  /priority normal  ^ https://cran.r-project.org/bin/windows/base/R-3.5.3-win.exe %TEMP%/R.exe
+        - %TEMP%/R.exe /VERYSILENT /DIR=C:/R/
+
+      script:
+        - cd tools/rpkg
+        - C:/R/bin/R.exe CMD INSTALL .
+        - cd tests
+        - C:/R/bin/R.exe -f testthat.R
+
+https://cran.r-project.org/bin/windows/Rtools/Rtools35.exe
 
     - os: linux
       name: Python Package

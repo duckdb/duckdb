@@ -24,6 +24,8 @@ struct parser_state_str {
 
 static __thread parser_state pg_parser_state;
 
+__thread Node *newNodeMacroHolder;
+
 static void allocate_new(parser_state* state, size_t n) {
 	if (state->malloc_ptr_idx + 1 >= PG_MALLOC_LIMIT) {
 		throw std::runtime_error("Memory allocation failure");
