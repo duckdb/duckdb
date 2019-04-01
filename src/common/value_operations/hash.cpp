@@ -23,8 +23,6 @@ uint64_t ValueOperations::Hash(const Value &op) {
 		return duckdb::Hash(op.value_.integer);
 	case TypeId::BIGINT:
 		return duckdb::Hash(op.value_.bigint);
-	case TypeId::FLOAT:
-		return duckdb::Hash(op.value_.real);
 	case TypeId::DOUBLE:
 		return duckdb::Hash(op.value_.decimal);
 	case TypeId::POINTER:

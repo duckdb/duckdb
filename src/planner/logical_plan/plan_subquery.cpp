@@ -102,7 +102,6 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		plan->ResolveOperatorTypes();
 		assert(plan->types.size() == 1);
 		auto right_type = plan->types[0];
-		auto return_type = max(expr.child->return_type, right_type);
 
 		auto subquery_index = binder.GenerateTableIndex();
 		auto logical_subquery = make_unique<LogicalSubquery>(move(plan), subquery_index);
@@ -114,9 +113,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		join->AddChild(move(plan));
 		// create the JOIN condition
 		JoinCondition cond;
-		cond.left = BoundCastExpression::AddCastToType(return_type, move(expr.child));
-		cond.right = BoundCastExpression::AddCastToType(
-		    return_type, make_unique<BoundColumnRefExpression>(right_type, ColumnBinding(subquery_index, 0)));
+		cond.left = move(expr.child);
+		cond.right = make_unique<BoundColumnRefExpression>(right_type, ColumnBinding(subquery_index, 0));
 		cond.comparison = expr.comparison_type;
 		join->conditions.push_back(move(cond));
 		root = move(join);
@@ -236,7 +234,6 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		plan->ResolveOperatorTypes();
 		assert(plan->types.size() == 1);
 		auto right_type = plan->types[0];
-		auto return_type = max(expr.child->return_type, right_type);
 
 		auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK);
 		// LHS
@@ -253,9 +250,8 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		CreateDelimJoinConditions(*delim_join, correlated_columns, ColumnBinding(subquery_index, flatten.delim_offset));
 		// add the actual condition based on the ANY/ALL predicate
 		JoinCondition compare_cond;
-		compare_cond.left = BoundCastExpression::AddCastToType(return_type, move(expr.child));
-		compare_cond.right = BoundCastExpression::AddCastToType(
-		    return_type, make_unique<BoundColumnRefExpression>(right_type, ColumnBinding(subquery_index, 0)));
+		compare_cond.left = move(expr.child);
+		compare_cond.right = make_unique<BoundColumnRefExpression>(right_type, ColumnBinding(subquery_index, 0));
 		compare_cond.comparison = expr.comparison_type;
 		delim_join->conditions.push_back(move(compare_cond));
 

@@ -19,8 +19,6 @@ public:
 	BoundExecuteStatement() : BoundSQLStatement(StatementType::EXECUTE) {
 	}
 
-	//! The substitution values
-	vector<Value> values;
 	//! The prepared statement to execute
 	PreparedStatementCatalogEntry *prep;
 public:

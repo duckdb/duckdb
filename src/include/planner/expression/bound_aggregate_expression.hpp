@@ -14,8 +14,7 @@ namespace duckdb {
 
 class BoundAggregateExpression : public Expression {
 public:
-	BoundAggregateExpression(TypeId return_type, ExpressionType type, unique_ptr<Expression> child,
-	                         SQLType sql_type = SQLType());
+	BoundAggregateExpression(TypeId return_type, ExpressionType type, unique_ptr<Expression> child);
 
 	//! The child of the aggregate expression
 	unique_ptr<Expression> child;

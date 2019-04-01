@@ -6,8 +6,8 @@
 using namespace duckdb;
 using namespace std;
 
-BoundConstantExpression::BoundConstantExpression(Value value, SQLType sql_type)
-    : Expression(ExpressionType::VALUE_CONSTANT, ExpressionClass::BOUND_CONSTANT, value.type, sql_type), value(value) {
+BoundConstantExpression::BoundConstantExpression(Value value)
+    : Expression(ExpressionType::VALUE_CONSTANT, ExpressionClass::BOUND_CONSTANT, value.type), value(value) {
 }
 
 string BoundConstantExpression::ToString() const {
@@ -28,7 +28,7 @@ uint64_t BoundConstantExpression::Hash() const {
 }
 
 unique_ptr<Expression> BoundConstantExpression::Copy() {
-	auto copy = make_unique<BoundConstantExpression>(value, sql_type);
+	auto copy = make_unique<BoundConstantExpression>(value);
 	copy->CopyProperties(*this);
 	return move(copy);
 }

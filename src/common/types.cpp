@@ -21,8 +21,6 @@ string TypeIdToString(TypeId type) {
 		return "BIGINT";
 	case TypeId::POINTER:
 		return "POINTER";
-	case TypeId::FLOAT:
-		return "FLOAT";
 	case TypeId::DOUBLE:
 		return "DOUBLE";
 	case TypeId::VARCHAR:
@@ -45,8 +43,6 @@ size_t GetTypeIdSize(TypeId type) {
 		return sizeof(int32_t);
 	case TypeId::BIGINT:
 		return sizeof(int64_t);
-	case TypeId::FLOAT:
-		return sizeof(float);
 	case TypeId::DOUBLE:
 		return sizeof(double);
 	case TypeId::POINTER:
@@ -71,10 +67,10 @@ SQLType SQLTypeFromInternalType(TypeId type) {
 		return SQLType(SQLTypeId::INTEGER);
 	case TypeId::BIGINT:
 		return SQLType(SQLTypeId::BIGINT);
-	case TypeId::FLOAT:
-		return SQLType(SQLTypeId::REAL);
 	case TypeId::DOUBLE:
 		return SQLType(SQLTypeId::DOUBLE);
+	case TypeId::POINTER:
+		return SQLType(SQLTypeId::POINTER);
 	case TypeId::VARCHAR:
 		return SQLType(SQLTypeId::VARCHAR);
 	default:
@@ -125,10 +121,10 @@ string SQLTypeIdToString(SQLTypeId id) {
 		return "DATE";
 	case SQLTypeId::TIMESTAMP:
 		return "TIMESTAMP";
-	case SQLTypeId::REAL:
-		return "REAL";
 	case SQLTypeId::DOUBLE:
 		return "DOUBLE";
+	case SQLTypeId::POINTER:
+		return "POINTER";
 	case SQLTypeId::DECIMAL:
 		return "DECIMAL";
 	case SQLTypeId::VARCHAR:
@@ -151,7 +147,6 @@ bool IsNumericType(SQLTypeId type) {
 	case SQLTypeId::SMALLINT:
 	case SQLTypeId::INTEGER:
 	case SQLTypeId::BIGINT:
-	case SQLTypeId::REAL:
 	case SQLTypeId::DOUBLE:
 	case SQLTypeId::DECIMAL:
 		return true;
@@ -168,14 +163,13 @@ TypeId GetInternalType(SQLType type) {
 		return TypeId::TINYINT;
 	case SQLTypeId::SMALLINT:
 		return TypeId::SMALLINT;
+	case SQLTypeId::SQLNULL:
 	case SQLTypeId::DATE:
 	case SQLTypeId::INTEGER:
 		return TypeId::INTEGER;
 	case SQLTypeId::BIGINT:
 	case SQLTypeId::TIMESTAMP:
 		return TypeId::BIGINT;
-	case SQLTypeId::REAL:
-		return TypeId::FLOAT;
 	case SQLTypeId::DOUBLE:
 		return TypeId::DOUBLE;
 	case SQLTypeId::DECIMAL:

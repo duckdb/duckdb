@@ -5,7 +5,7 @@ using namespace std;
 
 BoundConjunctionExpression::BoundConjunctionExpression(ExpressionType type, unique_ptr<Expression> left,
                                                        unique_ptr<Expression> right)
-    : Expression(type, ExpressionClass::BOUND_CONJUNCTION, TypeId::BOOLEAN, SQLType(SQLTypeId::BOOLEAN)),
+    : Expression(type, ExpressionClass::BOUND_CONJUNCTION, TypeId::BOOLEAN),
       left(move(left)), right(move(right)) {
 }
 

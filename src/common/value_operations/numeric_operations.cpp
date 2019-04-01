@@ -65,9 +65,6 @@ template <class OP, bool IGNORE_NULL> static Value templated_binary_operation(co
 	case TypeId::BIGINT:
 		result.value_.bigint = OP::Operation(left.value_.bigint, right.value_.bigint);
 		break;
-	case TypeId::FLOAT:
-		result.value_.real = OP::Operation(left.value_.real, right.value_.real);
-		break;
 	case TypeId::DOUBLE:
 		result.value_.decimal = OP::Operation(left.value_.decimal, right.value_.decimal);
 		break;

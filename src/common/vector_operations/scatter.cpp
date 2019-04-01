@@ -30,9 +30,6 @@ template <class OP> static void generic_scatter_loop(Vector &source, Vector &des
 	case TypeId::BIGINT:
 		scatter_templated_loop<int64_t, OP>(source, dest);
 		break;
-	case TypeId::FLOAT:
-		scatter_templated_loop<float, OP>(source, dest);
-		break;
 	case TypeId::DOUBLE:
 		scatter_templated_loop<double, OP>(source, dest);
 		break;

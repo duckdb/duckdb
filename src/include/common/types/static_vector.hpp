@@ -32,8 +32,6 @@ public:
 			type = TypeId::BIGINT;
 		} else if (std::is_same<T, uint64_t>::value) {
 			type = TypeId::POINTER;
-		} else if (std::is_same<T, float>::value) {
-			type = TypeId::FLOAT;
 		} else if (std::is_same<T, double>::value) {
 			type = TypeId::DOUBLE;
 		} else {

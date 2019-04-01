@@ -22,7 +22,7 @@ class SelectNode;
 struct BindResult {
 	BindResult(string error) : error(error) {
 	}
-	BindResult(unique_ptr<Expression> expr) : expression(move(expr)) {
+	BindResult(unique_ptr<Expression> expr, SQLType sql_type) : expression(move(expr)), sql_type(sql_type) {
 	}
 
 	bool HasError() {
@@ -30,6 +30,7 @@ struct BindResult {
 	}
 
 	unique_ptr<Expression> expression;
+	SQLType sql_type;
 	string error;
 };
 
@@ -38,11 +39,12 @@ struct BindResult {
 //! when dealing with subqueries.
 class BoundExpression : public ParsedExpression {
 public:
-	BoundExpression(unique_ptr<Expression> expr)
-	    : ParsedExpression(ExpressionType::INVALID, ExpressionClass::BOUND_EXPRESSION), expr(move(expr)) {
+	BoundExpression(unique_ptr<Expression> expr, SQLType sql_type)
+	    : ParsedExpression(ExpressionType::INVALID, ExpressionClass::BOUND_EXPRESSION), expr(move(expr)), sql_type(sql_type) {
 	}
 
 	unique_ptr<Expression> expr;
+	SQLType sql_type;
 
 public:
 	string ToString() const override {
@@ -59,14 +61,17 @@ public:
 	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
 	virtual ~ExpressionBinder();
 
-	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, bool root_expression = true);
+	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, SQLType *result_type = nullptr, bool root_expression = true);
 
+	//! Returns whether or not any columns have been bound by the expression binder
 	bool BoundColumns() {
 		return bound_columns;
 	}
 
 	string Bind(unique_ptr<ParsedExpression> *expr, uint32_t depth, bool root_expression = false);
 
+	//! The target type that should result from the binder. If the result is not of this type, a cast to this type will be added. Defaults to INVALID.
+	SQLType target_type;
 protected:
 	virtual BindResult BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression = false);
 
@@ -88,7 +93,7 @@ protected:
 	void BindChild(unique_ptr<ParsedExpression> &expr, uint32_t depth, string &error);
 
 protected:
-	unique_ptr<Expression> BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
+	bool BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
 
 	Binder &binder;
 	ClientContext &context;
@@ -97,7 +102,5 @@ protected:
 };
 
 //! Cast an expression to the specified SQL type if required
-unique_ptr<Expression> AddCastToType(unique_ptr<Expression> expr, SQLType target_type);
-//! Retrieves an expression from a BoundExpression node
-unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression> &expr);
+unique_ptr<Expression> AddCastToType(unique_ptr<Expression> expr, SQLType source_type, SQLType target_type);
 } // namespace duckdb

@@ -23,8 +23,6 @@ void templated_cast_loop(Vector &source, Vector &result) {
 			}
 		});
 	}
-	result.sel_vector = source.sel_vector;
-	result.count = source.count;
 }
 
 template <class SRC, class OP, bool IGNORE_NULL> static void result_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type) {
@@ -50,13 +48,13 @@ template <class SRC, class OP, bool IGNORE_NULL> static void result_cast_switch(
 		assert(result.type == TypeId::BIGINT);
 		templated_cast_loop<SRC, int64_t, OP, IGNORE_NULL>(source, result);
 		break;
-	case SQLTypeId::REAL:
-		assert(result.type == TypeId::FLOAT);
-		templated_cast_loop<SRC, float, OP, IGNORE_NULL>(source, result);
-		break;
 	case SQLTypeId::DOUBLE:
 		assert(result.type == TypeId::DOUBLE);
 		templated_cast_loop<SRC, double, OP, IGNORE_NULL>(source, result);
+		break;
+	case SQLTypeId::POINTER:
+		assert(result.type == TypeId::POINTER);
+		templated_cast_loop<SRC, uint64_t, OP, IGNORE_NULL>(source, result);
 		break;
 	case SQLTypeId::DATE:
 		assert(result.type == TypeId::INTEGER);
@@ -80,8 +78,6 @@ template <class SRC, class OP, bool IGNORE_NULL> static void result_cast_switch(
 				result_data[i] = result.string_heap.AddString(str);
 			}
 		});
-		result.sel_vector = source.sel_vector;
-		result.count = source.count;
 		break;
 	}
 	default:
@@ -94,6 +90,8 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 	}
 
 	result.nullmask = source.nullmask;
+	result.sel_vector = source.sel_vector;
+	result.count = source.count;
 	// first switch on source type
 	switch (source_type.id) {
 	case SQLTypeId::BOOLEAN:
@@ -116,13 +114,13 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 		assert(source.type == TypeId::BIGINT);
 		result_cast_switch<int64_t, operators::Cast, true>(source, result, source_type, target_type);
 		break;
-	case SQLTypeId::REAL:
-		assert(source.type == TypeId::FLOAT);
-		result_cast_switch<float, operators::Cast, true>(source, result, source_type, target_type);
-		break;
 	case SQLTypeId::DOUBLE:
 		assert(source.type == TypeId::DOUBLE);
 		result_cast_switch<double, operators::Cast, true>(source, result, source_type, target_type);
+		break;
+	case SQLTypeId::POINTER:
+		assert(source.type == TypeId::POINTER);
+		result_cast_switch<uint64_t, operators::Cast, true>(source, result, source_type, target_type);
 		break;
 	case SQLTypeId::DATE:
 		assert(source.type == TypeId::INTEGER);
@@ -135,6 +133,8 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 	case SQLTypeId::VARCHAR:
 		assert(source.type == TypeId::VARCHAR);
 		result_cast_switch<const char *, operators::Cast, true>(source, result, source_type, target_type);
+		break;
+	case SQLTypeId::SQLNULL:
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for cast");

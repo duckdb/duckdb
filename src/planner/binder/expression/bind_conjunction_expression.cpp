@@ -14,11 +14,11 @@ BindResult ExpressionBinder::BindExpression(ConjunctionExpression &expr, uint32_
 		return BindResult(error);
 	}
 	// the children have been successfully resolved
-	auto left = GetExpression(expr.left);
-	auto right = GetExpression(expr.right);
+	auto &left = (BoundExpression&)*expr.left;
+	auto &right = (BoundExpression&)*expr.right;
 	// cast the input types to boolean (if necessary)
-	left = AddCastToType(move(left), SQLType(SQLTypeId::BOOLEAN));
-	right = AddCastToType(move(right), SQLType(SQLTypeId::BOOLEAN));
+	left.expr = AddCastToType(move(left.expr), left.sql_type, SQLType(SQLTypeId::BOOLEAN));
+	right.expr = AddCastToType(move(right.expr), right.sql_type, SQLType(SQLTypeId::BOOLEAN));
 	// now create the bound conjunction expression
-	return BindResult(make_unique<BoundConjunctionExpression>(expr.type, move(left), move(right)));
+	return BindResult(make_unique<BoundConjunctionExpression>(expr.type, move(left.expr), move(right.expr)), SQLType(SQLTypeId::BOOLEAN));
 }

@@ -5,8 +5,8 @@
 using namespace duckdb;
 using namespace std;
 
-BoundSubqueryExpression::BoundSubqueryExpression(TypeId return_type, SQLType sql_type)
-    : Expression(ExpressionType::SUBQUERY, ExpressionClass::BOUND_SUBQUERY, return_type, sql_type) {
+BoundSubqueryExpression::BoundSubqueryExpression(TypeId return_type)
+    : Expression(ExpressionType::SUBQUERY, ExpressionClass::BOUND_SUBQUERY, return_type) {
 }
 
 string BoundSubqueryExpression::ToString() const {

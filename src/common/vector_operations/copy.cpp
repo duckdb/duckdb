@@ -71,9 +71,6 @@ template <bool SET_NULL> void generic_copy_loop(Vector &source, void *target, si
 	case TypeId::BIGINT:
 		copy_loop<int64_t, SET_NULL>(source, target, offset, element_count);
 		break;
-	case TypeId::FLOAT:
-		copy_loop<float, SET_NULL>(source, target, offset, element_count);
-		break;
 	case TypeId::DOUBLE:
 		copy_loop<double, SET_NULL>(source, target, offset, element_count);
 		break;

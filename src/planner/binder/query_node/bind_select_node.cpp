@@ -77,12 +77,11 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	}
 
 	vector<unique_ptr<ParsedExpression>> unbound_groups;
-	expression_map_t<uint32_t> group_map;
-	unordered_map<string, uint32_t> group_alias_map;
+	BoundGroupInformation info;
 	if (statement.groups.size() > 0) {
 		// the statement has a GROUP BY clause, bind it
 		unbound_groups.resize(statement.groups.size());
-		GroupBinder group_binder(*this, context, statement, result->group_index, alias_map, group_alias_map);
+		GroupBinder group_binder(*this, context, statement, result->group_index, alias_map, info.alias_map);
 		for (size_t i = 0; i < statement.groups.size(); i++) {
 			// we keep a copy of the unbound expression;
 			// we keep the unbound copy around to check for group references in the SELECT and HAVING clause
@@ -92,8 +91,10 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 			group_binder.bind_index = i;
 
 			// bind the groups
-			auto bound_expr = group_binder.Bind(statement.groups[i]);
+			SQLType group_type;
+			auto bound_expr = group_binder.Bind(statement.groups[i], &group_type);
 			assert(bound_expr->return_type != TypeId::INVALID);
+			info.group_types.push_back(group_type);
 			result->groups.push_back(move(bound_expr));
 
 			// in the unbound expression we DO bind the table names of any ColumnRefs
@@ -103,26 +104,27 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 			unbound_groups[i] = move(group_binder.unbound_expression);
 			// FIXME: bind table names
 			// group_binder.BindTableNames(*unbound_groups[i]);
-			group_map[unbound_groups[i].get()] = i;
+			info.map[unbound_groups[i].get()] = i;
 		}
 	}
 
 	// bind the HAVING clause, if any
 	if (statement.having) {
-		HavingBinder having_binder(*this, context, *result, group_map, group_alias_map);
+		HavingBinder having_binder(*this, context, *result, info);
 		// FIXME: bind table names
 		// having_binder.BindTableNames(*statement.having);
 		result->having = having_binder.Bind(statement.having);
 	}
 
 	// after that, we bind to the SELECT list
-	SelectBinder select_binder(*this, context, *result, group_map, group_alias_map);
+	SelectBinder select_binder(*this, context, *result, info);
 	for (size_t i = 0; i < statement.select_list.size(); i++) {
-		// select_binder.BindTableNames(*statement.select_list[i]);
-		result->select_list.push_back(select_binder.Bind(statement.select_list[i]));
-	}
-	for (size_t i = 0; i < result->column_count; i++) {
-		result->types.push_back(result->select_list[i]->sql_type);
+		SQLType result_type;
+		auto expr = select_binder.Bind(statement.select_list[i], &result_type);
+		result->select_list.push_back(move(expr));
+		if (i < result->column_count) {
+			result->types.push_back(result_type);
+		}
 	}
 	// in the normal select binder, we bind columns as if there is no aggregation
 	// i.e. in the query [SELECT i, SUM(i) FROM integers;] the "i" will be bound as a normal column
@@ -140,7 +142,6 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 		auto &order = (BoundColumnRefExpression &)*result->orders[i].expression;
 		assert(order.binding.column_index < statement.select_list.size());
 		order.return_type = result->select_list[order.binding.column_index]->return_type;
-		order.sql_type = result->select_list[order.binding.column_index]->sql_type;
 		assert(order.return_type != TypeId::INVALID);
 	}
 	return move(result);

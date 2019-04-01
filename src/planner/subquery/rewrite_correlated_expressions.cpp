@@ -100,11 +100,10 @@ unique_ptr<Expression> RewriteCountAggregates::VisitReplace(BoundColumnRefExpres
 	if (entry != replacement_map.end()) {
 		// reference to a COUNT(*) aggregate
 		// replace this with CASE WHEN COUNT(*) IS NULL THEN 0 ELSE COUNT(*) END
-		auto is_null = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, TypeId::BOOLEAN,
-		                                                    SQLType(SQLTypeId::BOOLEAN));
+		auto is_null = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, TypeId::BOOLEAN);
 		is_null->children.push_back(expr.Copy());
 		auto check = move(is_null);
-		auto result_if_true = make_unique<BoundConstantExpression>(Value::Numeric(expr.return_type, 0), expr.sql_type);
+		auto result_if_true = make_unique<BoundConstantExpression>(Value::Numeric(expr.return_type, 0));
 		auto result_if_false = move(*expr_ptr);
 		return make_unique<BoundCaseExpression>(move(check), move(result_if_true), move(result_if_false));
 	}

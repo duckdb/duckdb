@@ -20,6 +20,11 @@ class BoundParameterExpression;
 class PhysicalOperator;
 class TableCatalogEntry;
 
+struct PreparedValueEntry {
+	unique_ptr<Value> value;
+	SQLType target_type;
+};
+
 //! A view catalog entry
 class PreparedStatementCatalogEntry : public CatalogEntry {
 public:
@@ -28,7 +33,7 @@ public:
 	}
 
 	unique_ptr<PhysicalOperator> plan;
-	unordered_map<size_t, unique_ptr<Value>> value_map;
+	unordered_map<size_t, PreparedValueEntry> value_map;
 	unordered_set<TableCatalogEntry *> tables;
 
 	vector<string> names;

@@ -25,11 +25,11 @@ static unique_ptr<LogicalOperator> CastSetOpToTypes(Binder &binder, vector<SQLTy
 		assert(node->expressions.size() == source_types.size());
 		// add the casts to the selection list
 		for (size_t i = 0; i < target_types.size(); i++) {
-			if (node->expressions[i]->sql_type != target_types[i]) {
+			if (source_types[i] != target_types[i]) {
 				// differing types, have to add a cast
 				string alias = node->expressions[i]->alias;
 				node->expressions[i] = make_unique<BoundCastExpression>(GetInternalType(target_types[i]),
-				                                                        move(node->expressions[i]), target_types[i]);
+				                                                        move(node->expressions[i]), source_types[i], target_types[i]);
 				node->expressions[i]->alias = alias;
 			}
 		}
@@ -48,11 +48,11 @@ static unique_ptr<LogicalOperator> CastSetOpToTypes(Binder &binder, vector<SQLTy
 		vector<unique_ptr<Expression>> select_list;
 		for (size_t i = 0; i < target_types.size(); i++) {
 			unique_ptr<Expression> result = make_unique<BoundColumnRefExpression>(
-			    GetInternalType(source_types[i]), ColumnBinding(subquery_index, i), source_types[i]);
+			    GetInternalType(source_types[i]), ColumnBinding(subquery_index, i));
 			if (source_types[i] != target_types[i]) {
 				// add a cast only if the source and target types are not equivalent
 				result =
-				    make_unique<BoundCastExpression>(GetInternalType(target_types[i]), move(result), target_types[i]);
+				    make_unique<BoundCastExpression>(GetInternalType(target_types[i]), move(result), source_types[i], target_types[i]);
 			}
 			select_list.push_back(move(result));
 		}

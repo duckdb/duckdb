@@ -137,9 +137,6 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 		case SQLTypeId::BIGINT:
 			WriteData<int64_t>(out, result->collection, col);
 			break;
-		case SQLTypeId::REAL:
-			WriteData<float>(out, result->collection, col);
-			break;
 		case SQLTypeId::DOUBLE:
 			WriteData<double>(out, result->collection, col);
 			break;

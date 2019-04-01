@@ -33,9 +33,6 @@ void VectorOperations::AddInPlace(Vector &result, Vector &input) {
 	case TypeId::BIGINT:
 		templated_inplace_loop<int64_t, int64_t, operators::AddInPlace>(input, result);
 		break;
-	case TypeId::FLOAT:
-		templated_inplace_loop<float, float, operators::AddInPlace>(input, result);
-		break;
 	case TypeId::DOUBLE:
 		templated_inplace_loop<double, double, operators::AddInPlace>(input, result);
 		break;

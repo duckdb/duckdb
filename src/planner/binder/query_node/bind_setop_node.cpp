@@ -152,7 +152,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 		}
 		BoundOrderByNode node;
 		node.expression = make_unique<BoundColumnRefExpression>(
-		    GetInternalType(result->types[entry]), ColumnBinding(result->setop_index, entry), result->types[entry]);
+		    GetInternalType(result->types[entry]), ColumnBinding(result->setop_index, entry));
 		node.type = statement.orders[i].type;
 		result->orders.push_back(move(node));
 	}

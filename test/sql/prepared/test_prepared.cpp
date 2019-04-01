@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "common/file_system.hpp"
 #include "test_helpers.hpp"
+#include "common/types/date.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -118,6 +119,26 @@ TEST_CASE("PREPARE for INSERT", "[prepared]") {
 	// now we can
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE b"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE c"));
+}
+
+TEST_CASE("PREPARE many types for INSERT", "[prepared]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// prepare different types in insert
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(a TINYINT, b SMALLINT, c INTEGER, d BIGINT, e REAL, f DOUBLE, g DATE, h VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS INSERT INTO test VALUES ($1,$2,$3,$4,$5,$6,$7,$8);"));
+	REQUIRE_NO_FAIL(con.Query("EXECUTE s1(1,2,3,4,1.5,2.5,'1992-10-20', 'hello world');"));
+	result = con.Query("SELECT * FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {3}));
+	REQUIRE(CHECK_COLUMN(result, 3, {4}));
+	REQUIRE(CHECK_COLUMN(result, 4, {1.5}));
+	REQUIRE(CHECK_COLUMN(result, 5, {2.5}));
+	REQUIRE(CHECK_COLUMN(result, 6, {Value::DATE(1992, 10, 20)}));
+	REQUIRE(CHECK_COLUMN(result, 7, {"hello world"}));
 }
 
 TEST_CASE("PREPARE and DROPping tables", "[prepared]") {

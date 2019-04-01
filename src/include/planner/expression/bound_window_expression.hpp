@@ -16,7 +16,7 @@ namespace duckdb {
 
 class BoundWindowExpression : public Expression {
 public:
-	BoundWindowExpression(ExpressionType type, TypeId return_type, SQLType sql_type = SQLType());
+	BoundWindowExpression(ExpressionType type, TypeId return_type);
 
 	//! The child expression of the main window aggregate
 	unique_ptr<Expression> child;

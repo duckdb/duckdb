@@ -24,5 +24,5 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	if (index == (uint32_t)-1) {
 		throw Exception("Failed to bind column ref");
 	}
-	return make_unique<BoundReferenceExpression>(expr.alias, expr.return_type, index, expr.sql_type);
+	return make_unique<BoundReferenceExpression>(expr.alias, expr.return_type, index);
 }

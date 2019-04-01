@@ -3,8 +3,8 @@
 using namespace duckdb;
 using namespace std;
 
-BoundWindowExpression::BoundWindowExpression(ExpressionType type, TypeId return_type, SQLType sql_type)
-    : Expression(type, ExpressionClass::BOUND_WINDOW, return_type, sql_type) {
+BoundWindowExpression::BoundWindowExpression(ExpressionType type, TypeId return_type)
+    : Expression(type, ExpressionClass::BOUND_WINDOW, return_type) {
 }
 
 string BoundWindowExpression::ToString() const {
@@ -55,7 +55,7 @@ bool BoundWindowExpression::Equals(const BaseExpression *other_) const {
 }
 
 unique_ptr<Expression> BoundWindowExpression::Copy() {
-	auto new_window = make_unique<BoundWindowExpression>(type, return_type, sql_type);
+	auto new_window = make_unique<BoundWindowExpression>(type, return_type);
 	new_window->CopyProperties(*this);
 
 	new_window->child = child ? child->Copy() : nullptr;

@@ -9,16 +9,16 @@
 using namespace duckdb;
 using namespace std;
 
-HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
-                           expression_map_t<uint32_t> &group_map, unordered_map<string, uint32_t> &group_alias_map)
-    : SelectBinder(binder, context, node, group_map, group_alias_map) {
+HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
+    : SelectBinder(binder, context, node, info) {
+	target_type = SQLType(SQLTypeId::BOOLEAN);
 }
 
 BindResult HavingBinder::BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression) {
 	// check if the expression binds to one of the groups
-	auto group_binding = TryBindGroup(expr, depth);
-	if (group_binding) {
-		return BindResult(move(group_binding));
+	auto group_index = TryBindGroup(expr, depth);
+	if (group_index >= 0) {
+		return BindGroup(expr, depth, group_index);
 	}
 	switch (expr.expression_class) {
 	case ExpressionClass::WINDOW:

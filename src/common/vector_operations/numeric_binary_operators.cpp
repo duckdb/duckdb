@@ -30,9 +30,6 @@ void VectorOperations::Add(Vector &left, Vector &right, Vector &result) {
 	case TypeId::BIGINT:
 		templated_binary_loop<int64_t, int64_t, int64_t, operators::Add>(left, right, result);
 		break;
-	case TypeId::FLOAT:
-		templated_binary_loop<float, float, float, operators::Add>(left, right, result);
-		break;
 	case TypeId::DOUBLE:
 		templated_binary_loop<double, double, double, operators::Add>(left, right, result);
 		break;
@@ -62,9 +59,6 @@ void VectorOperations::Subtract(Vector &left, Vector &right, Vector &result) {
 	case TypeId::BIGINT:
 		templated_binary_loop<int64_t, int64_t, int64_t, operators::Subtract>(left, right, result);
 		break;
-	case TypeId::FLOAT:
-		templated_binary_loop<float, float, float, operators::Subtract>(left, right, result);
-		break;
 	case TypeId::DOUBLE:
 		templated_binary_loop<double, double, double, operators::Subtract>(left, right, result);
 		break;
@@ -93,9 +87,6 @@ void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result) {
 		break;
 	case TypeId::BIGINT:
 		templated_binary_loop<int64_t, int64_t, int64_t, operators::Multiply>(left, right, result);
-		break;
-	case TypeId::FLOAT:
-		templated_binary_loop<float, float, float, operators::Multiply>(left, right, result);
 		break;
 	case TypeId::DOUBLE:
 		templated_binary_loop<double, double, double, operators::Multiply>(left, right, result);
@@ -183,9 +174,6 @@ void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
 		break;
 	case TypeId::BIGINT:
 		templated_division_loop<int64_t>(left, right, result);
-		break;
-	case TypeId::FLOAT:
-		templated_division_loop<float>(left, right, result);
 		break;
 	case TypeId::DOUBLE:
 		templated_division_loop<double>(left, right, result);

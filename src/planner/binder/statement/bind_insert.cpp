@@ -61,8 +61,8 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			for (size_t col_idx = 0; col_idx < expression_list.size(); col_idx++) {
 				size_t table_col_idx = stmt.columns.size() == 0 ? col_idx : named_column_map[col_idx];
 				assert(table_col_idx < table->columns.size());
+				binder.target_type = table->columns[table_col_idx].type;
 				auto bound_expr = binder.Bind(expression_list[col_idx]);
-				bound_expr = AddCastToType(move(bound_expr), table->columns[table_col_idx].type);
 				list.push_back(move(bound_expr));
 			}
 			result->values.push_back(move(list));

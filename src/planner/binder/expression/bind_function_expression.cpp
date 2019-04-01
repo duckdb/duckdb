@@ -24,9 +24,9 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, uint32
 	vector<SQLType> types;
 	vector<unique_ptr<Expression>> children;
 	for (size_t i = 0; i < function.children.size(); i++) {
-		auto child = GetExpression(function.children[i]);
-		types.push_back(child->sql_type);
-		children.push_back(move(child));
+		auto &child = (BoundExpression&)*function.children[i];
+		types.push_back(child.sql_type);
+		children.push_back(move(child.expr));
 	}
 	// now check if the child types match up with the function
 	if (!func->matches(types)) {
@@ -43,7 +43,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, uint32
 	// types match up, get the result type
 	auto return_type = func->return_type(types);
 	// now create the function
-	auto result = make_unique<BoundFunctionExpression>(GetInternalType(return_type), func, return_type);
+	auto result = make_unique<BoundFunctionExpression>(GetInternalType(return_type), func);
 	result->children = move(children);
-	return BindResult(move(result));
+	return BindResult(move(result), return_type);
 }

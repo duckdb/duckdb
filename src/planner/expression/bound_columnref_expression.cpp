@@ -3,19 +3,19 @@
 using namespace duckdb;
 using namespace std;
 
-BoundColumnRefExpression::BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, SQLType sql_type,
+BoundColumnRefExpression::BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding,
                                                    uint32_t depth)
-    : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, type, sql_type), binding(binding),
+    : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, type), binding(binding),
       depth(depth) {
 	this->alias = alias;
 }
 
-BoundColumnRefExpression::BoundColumnRefExpression(TypeId type, ColumnBinding binding, SQLType sql_type, uint32_t depth)
-    : BoundColumnRefExpression(string(), type, binding, sql_type, depth) {
+BoundColumnRefExpression::BoundColumnRefExpression(TypeId type, ColumnBinding binding, uint32_t depth)
+    : BoundColumnRefExpression(string(), type, binding, depth) {
 }
 
 unique_ptr<Expression> BoundColumnRefExpression::Copy() {
-	return make_unique<BoundColumnRefExpression>(alias, return_type, binding, sql_type, depth);
+	return make_unique<BoundColumnRefExpression>(alias, return_type, binding, depth);
 }
 
 uint64_t BoundColumnRefExpression::Hash() const {

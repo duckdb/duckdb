@@ -22,7 +22,6 @@ bool round_matches_arguments(vector<SQLType> &arguments) {
 	case SQLTypeId::SMALLINT:
 	case SQLTypeId::INTEGER:
 	case SQLTypeId::BIGINT:
-	case SQLTypeId::REAL:
 	case SQLTypeId::DOUBLE:
 		break;
 	default:

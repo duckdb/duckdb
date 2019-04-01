@@ -16,7 +16,6 @@ static SQLType ResolveSumType(SQLType input_type) {
 	case SQLTypeId::INTEGER:
 	case SQLTypeId::BIGINT:
 		return SQLType(SQLTypeId::BIGINT);
-	case SQLTypeId::REAL:
 	case SQLTypeId::DOUBLE:
 	case SQLTypeId::DECIMAL:
 		return SQLType(SQLTypeId::DECIMAL);
@@ -32,7 +31,6 @@ static SQLType ResolveSTDDevType(SQLType input_type) {
 	case SQLTypeId::SMALLINT:
 	case SQLTypeId::INTEGER:
 	case SQLTypeId::BIGINT:
-	case SQLTypeId::REAL:
 	case SQLTypeId::DOUBLE:
 	case SQLTypeId::DECIMAL:
 		return SQLType(SQLTypeId::DECIMAL);
@@ -41,7 +39,7 @@ static SQLType ResolveSTDDevType(SQLType input_type) {
 	}
 }
 
-static SQLType ResolveAggregateType(AggregateExpression &aggr, unique_ptr<Expression> *child) {
+static SQLType ResolveAggregateType(AggregateExpression &aggr, unique_ptr<Expression> *child, SQLType child_type) {
 	switch (aggr.type) {
 	case ExpressionType::AGGREGATE_COUNT_STAR:
 	case ExpressionType::AGGREGATE_COUNT:
@@ -56,7 +54,6 @@ static SQLType ResolveAggregateType(AggregateExpression &aggr, unique_ptr<Expres
 	// the remaining types require a child operator
 	assert(*child);
 	SQLType result_type;
-	SQLType child_type = (*child)->sql_type;
 	switch (aggr.type) {
 	case ExpressionType::AGGREGATE_MAX:
 	case ExpressionType::AGGREGATE_MIN:
@@ -74,7 +71,7 @@ static SQLType ResolveAggregateType(AggregateExpression &aggr, unique_ptr<Expres
 		break;
 	}
 	// add a cast to the child node
-	*child = AddCastToType(move(*child), result_type);
+	*child = AddCastToType(move(*child), child_type, result_type);
 	return result_type;
 }
 
@@ -89,16 +86,17 @@ BindResult SelectBinder::BindAggregate(AggregateExpression &aggr, uint32_t depth
 			return BindResult(result);
 		}
 	}
-	auto child = GetExpression(aggr.child);
-	SQLType result_type = ResolveAggregateType(aggr, &child);
+	auto &bound_expr = (BoundExpression &) *aggr.child;
+	auto child = move(bound_expr.expr);
+	SQLType result_type = ResolveAggregateType(aggr, &child, bound_expr.sql_type);
 	// create the aggregate
 	auto aggregate =
-	    make_unique<BoundAggregateExpression>(GetInternalType(result_type), aggr.type, move(child), result_type);
+	    make_unique<BoundAggregateExpression>(GetInternalType(result_type), aggr.type, move(child));
 	// now create a column reference referring to this aggregate
 	auto colref = make_unique<BoundColumnRefExpression>(aggr.GetName(), aggregate->return_type,
 	                                                    ColumnBinding(node.aggregate_index, node.aggregates.size()),
-	                                                    aggregate->sql_type, depth);
+	                                                    depth);
 	// move the aggregate expression into the set of bound aggregates
 	node.aggregates.push_back(move(aggregate));
-	return BindResult(move(colref));
+	return BindResult(move(colref), result_type);
 }

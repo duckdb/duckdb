@@ -7,6 +7,7 @@ using namespace std;
 
 CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table, vector<ColumnDefinition> &columns) :
 	ExpressionBinder(binder, context), table(table), columns(columns) {
+	target_type = SQLType(SQLTypeId::INTEGER);
 }
 
 BindResult CheckBinder::BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression) {
@@ -30,7 +31,7 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 	}
 	for(size_t i = 0; i < columns.size(); i++) {
 		if (colref.column_name == columns[i].name) {
-			return BindResult(make_unique<BoundReferenceExpression>(GetInternalType(columns[i].type), i, columns[i].type));
+			return BindResult(make_unique<BoundReferenceExpression>(GetInternalType(columns[i].type), i), columns[i].type);
 		}
 	}
 	throw BinderException("Table does not contain column %s referenced in check constraint!", colref.column_name.c_str());

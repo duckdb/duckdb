@@ -198,9 +198,6 @@ static void FillNullMask(Vector &v) {
 	case TypeId::BIGINT:
 		FillNullMask<int64_t>(v);
 		break;
-	case TypeId::FLOAT:
-		FillNullMask<float>(v);
-		break;
 	case TypeId::DOUBLE:
 		FillNullMask<double>(v);
 		break;

@@ -161,7 +161,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		vector<BoundParameterExpression*> bound_parameters;
 		CreatePlan(*stmt.statement, &bound_parameters);
 		// set up a map of parameter number -> value entries
-		unordered_map<size_t, unique_ptr<Value>> value_map;
+		unordered_map<size_t, PreparedValueEntry> value_map;
 		for(auto &expr : bound_parameters) {
 			// check if the type of the parameter could be resolved
 			if (expr->return_type == TypeId::INVALID) {
@@ -173,7 +173,10 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 			if (value_map.find(expr->parameter_nr) != value_map.end()) {
 				throw BinderException("Duplicate parameter index. Use $1, $2 etc. to differentiate.");
 			}
-			value_map[expr->parameter_nr] = move(value);
+			PreparedValueEntry entry;
+			entry.value = move(value);
+			entry.target_type = expr->sql_type;
+			value_map[expr->parameter_nr] = move(entry);
 		}
 		auto prepare = make_unique<LogicalPrepare>(stmt.name, statement_type, names, sql_types, move(value_map), move(plan));
 		names = {"Success"};

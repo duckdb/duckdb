@@ -22,12 +22,22 @@ unique_ptr<BoundSQLStatement> Binder::Bind(ExecuteStatement &stmt) {
 		throw BinderException("Parameter/argument count mismatch");
 	}
 	// bind the values
+	size_t param_idx = 1;
 	for (auto &expr : stmt.values) {
+		auto it = result->prep->value_map.find(param_idx);
+		if (it == result->prep->value_map.end()) {
+			throw Exception("Could not find parameter with this index");
+		}
+		auto &target = it->second;
+
 		ConstantBinder binder(*this, context, "EXECUTE statement");
+		binder.target_type = target.target_type;
 		auto bound_expr = binder.Bind(expr);
-		
+
 		Value value = ExpressionExecutor::EvaluateScalar(*bound_expr);
-		result->values.push_back(value);
+		assert(target.value);
+		*target.value = value;
+		param_idx++;
 	}
 	return move(result);
 }

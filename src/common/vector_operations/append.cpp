@@ -51,9 +51,6 @@ void VectorOperations::AppendFromStorage(Vector &source, Vector &target) {
 	case TypeId::BIGINT:
 		append_loop<int64_t>(source, target);
 		break;
-	case TypeId::FLOAT:
-		append_loop<float>(source, target);
-		break;
 	case TypeId::DOUBLE:
 		append_loop<double>(source, target);
 		break;

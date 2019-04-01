@@ -4,6 +4,7 @@ using namespace duckdb;
 using namespace std;
 
 WhereBinder::WhereBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
+	target_type = SQLType(SQLTypeId::BOOLEAN);
 }
 
 BindResult WhereBinder::BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression) {

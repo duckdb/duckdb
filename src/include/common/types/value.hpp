@@ -68,13 +68,13 @@ public:
 	static Value BIGINT(int64_t value);
 	//! Create a pointer Value from a specified value
 	static Value POINTER(uint64_t value);
-	//! Create a real Value from a specified value
-	static Value REAL(float value);
+	//! Create a date Value from a specified date
+	static Value DATE(int32_t year, int32_t month, int32_t day);
 
 	int64_t GetNumericValue();
 
 	//! Return a copy of this value
-	Value Copy() {
+	Value Copy() const {
 		return Value(*this);
 	}
 
@@ -84,7 +84,9 @@ public:
 	string ToString(SQLType type) const;
 
 	//! Cast this value to another type
-	Value CastAs(TypeId new_type) const;
+	Value CastAs(TypeId target_type) const;
+	//! Cast this value to another type
+	Value CastAs(SQLType source_type, SQLType target_type);
 
 	//! The type of the value
 	TypeId type;
@@ -98,7 +100,6 @@ public:
 		int16_t smallint;
 		int32_t integer;
 		int64_t bigint;
-		float real;
 		double decimal;
 		uint64_t pointer;
 	} value_;

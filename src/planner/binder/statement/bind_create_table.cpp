@@ -19,9 +19,6 @@ void Binder::BindConstraints(string table, vector<ColumnDefinition> &columns, ve
 			auto &check = (CheckConstraint&) *cond;
 			auto unbound_constraint = make_unique<CheckConstraint>(check.expression->Copy());
 			auto condition = binder.Bind(check.expression);
-			if (condition->sql_type != SQLTypeId::INTEGER) {
-				condition = AddCastToType(move(condition), SQLTypeId::INTEGER);
-			}
 			constraints[i] = make_unique<BoundCheckConstraint>(move(condition), move(unbound_constraint));
 		}
 	}

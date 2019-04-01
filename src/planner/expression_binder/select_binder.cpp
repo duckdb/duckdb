@@ -12,17 +12,15 @@
 using namespace duckdb;
 using namespace std;
 
-SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
-                           expression_map_t<uint32_t> &group_map, unordered_map<string, uint32_t> &group_alias_map)
-    : ExpressionBinder(binder, context), inside_window(false), node(node), group_map(group_map),
-      group_alias_map(group_alias_map) {
+SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
+    : ExpressionBinder(binder, context), inside_window(false), node(node), info(info) {
 }
 
 BindResult SelectBinder::BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression) {
 	// check if the expression binds to one of the groups
-	auto group_binding = TryBindGroup(expr, depth);
-	if (group_binding) {
-		return BindResult(move(group_binding));
+	auto group_index = TryBindGroup(expr, depth);
+	if (group_index >= 0) {
+		return BindGroup(expr, depth, group_index);
 	}
 	switch (expr.expression_class) {
 	case ExpressionClass::DEFAULT:
@@ -36,33 +34,30 @@ BindResult SelectBinder::BindExpression(ParsedExpression &expr, uint32_t depth, 
 	}
 }
 
-unique_ptr<Expression> SelectBinder::TryBindGroup(ParsedExpression &expr, uint32_t depth) {
-	uint32_t group_entry = (uint32_t)-1;
-	bool found_group = false;
+int32_t SelectBinder::TryBindGroup(ParsedExpression &expr, uint32_t depth) {
 	// first check the group alias map, if expr is a ColumnRefExpression
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto &colref = (ColumnRefExpression &)expr;
 		if (colref.table_name.empty()) {
-			auto alias_entry = group_alias_map.find(colref.column_name);
-			if (alias_entry != group_alias_map.end()) {
+			auto alias_entry = info.alias_map.find(colref.column_name);
+			if (alias_entry != info.alias_map.end()) {
 				// found entry!
-				group_entry = alias_entry->second;
-				found_group = true;
+				return alias_entry->second;
 			}
 		}
 	}
-	// now check the list of group columns for a match
-	if (!found_group) {
-		auto entry = group_map.find(&expr);
-		if (entry != group_map.end()) {
-			group_entry = entry->second;
-			found_group = true;
-		}
+	// no alias reference found
+	// check the list of group columns for a match
+	auto entry = info.map.find(&expr);
+	if (entry != info.map.end()) {
+		return entry->second;
 	}
-	if (!found_group) {
-		return nullptr;
-	}
-	auto &group = node.groups[group_entry];
-	return make_unique<BoundColumnRefExpression>(expr.GetName(), group->return_type,
-	                                             ColumnBinding(node.group_index, group_entry), group->sql_type, depth);
+	return -1;
+}
+
+BindResult SelectBinder::BindGroup(ParsedExpression &expr, uint32_t depth, int32_t group_index) {
+	auto &group = node.groups[group_index];
+	return BindResult(make_unique<BoundColumnRefExpression>(expr.GetName(), group->return_type,
+	                                             ColumnBinding(node.group_index, group_index), depth), info.group_types[group_index]);
+
 }

@@ -17,11 +17,16 @@ class WindowExpression;
 
 class BoundSelectNode;
 
+struct BoundGroupInformation {
+	expression_map_t<uint32_t> map;
+	unordered_map<string, uint32_t> alias_map;
+	vector<SQLType> group_types;
+};
+
 //! The SELECT binder is responsible for binding an expression within the SELECT clause of a SQL statement
 class SelectBinder : public ExpressionBinder {
 public:
-	SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, expression_map_t<uint32_t> &group_map,
-	             unordered_map<string, uint32_t> &group_alias_map);
+	SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info);
 
 protected:
 	BindResult BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression = false) override;
@@ -29,14 +34,14 @@ protected:
 	bool inside_window;
 
 	BoundSelectNode &node;
-	expression_map_t<uint32_t> &group_map;
-	unordered_map<string, uint32_t> &group_alias_map;
+	BoundGroupInformation &info;
 
 protected:
 	BindResult BindAggregate(AggregateExpression &expr, uint32_t depth);
 	BindResult BindWindow(WindowExpression &expr, uint32_t depth);
 
-	unique_ptr<Expression> TryBindGroup(ParsedExpression &expr, uint32_t depth);
+	int32_t TryBindGroup(ParsedExpression &expr, uint32_t depth);
+	BindResult BindGroup(ParsedExpression &expr, uint32_t depth, int32_t group_index);
 };
 
 } // namespace duckdb

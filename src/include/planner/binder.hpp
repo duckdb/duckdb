@@ -29,8 +29,8 @@ struct CorrelatedColumnInfo {
 	string name;
 	size_t depth;
 
-	CorrelatedColumnInfo(BoundColumnRefExpression &expr)
-	    : binding(expr.binding), type(expr.return_type), sql_type(expr.sql_type), name(expr.GetName()),
+	CorrelatedColumnInfo(BoundColumnRefExpression &expr, SQLType sql_type)
+	    : binding(expr.binding), type(expr.return_type), sql_type(sql_type), name(expr.GetName()),
 	      depth(expr.depth) {
 	}
 

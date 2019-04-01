@@ -1,5 +1,6 @@
 #include "parser/expression/cast_expression.hpp"
 #include "planner/expression_binder.hpp"
+#include "planner/expression/bound_parameter_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -11,14 +12,15 @@ BindResult ExpressionBinder::BindExpression(CastExpression &expr, uint32_t depth
 		return BindResult(error);
 	}
 	// the children have been successfully resolved
-	auto child = GetExpression(expr.child);
-	if (child->type == ExpressionType::VALUE_PARAMETER) {
+	auto &child = (BoundExpression&)*expr.child;
+	if (child.expr->type == ExpressionType::VALUE_PARAMETER) {
+		auto &parameter = (BoundParameterExpression&) *child.expr;
 		// parameter: move types into the parameter expression itself
-		child->return_type = GetInternalType(expr.cast_type);
-		child->sql_type = expr.cast_type;
+		parameter.return_type = GetInternalType(expr.cast_type);
+		parameter.sql_type = expr.cast_type;
 	} else {
 		// otherwise add a cast to the target type
-		child = AddCastToType(move(child), expr.cast_type);
+		child.expr = AddCastToType(move(child.expr), child.sql_type, expr.cast_type);
 	}
-	return BindResult(move(child));
+	return BindResult(move(child.expr), expr.cast_type);
 }

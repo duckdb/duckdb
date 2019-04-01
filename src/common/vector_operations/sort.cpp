@@ -111,9 +111,6 @@ void VectorOperations::Sort(Vector &vector, sel_t *sel_vector, size_t count, sel
 	case TypeId::BIGINT:
 		templated_quicksort<int64_t>(vector, sel_vector, count, result);
 		break;
-	case TypeId::FLOAT:
-		templated_quicksort<float>(vector, sel_vector, count, result);
-		break;
 	case TypeId::DOUBLE:
 		templated_quicksort<double>(vector, sel_vector, count, result);
 		break;

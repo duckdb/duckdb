@@ -33,11 +33,11 @@ unique_ptr<BoundSQLStatement> Binder::Bind(UpdateStatement &stmt) {
 
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
 			result->expressions.push_back(
-			    make_unique<BoundDefaultExpression>(GetInternalType(column.type), column.type));
+			    make_unique<BoundDefaultExpression>(GetInternalType(column.type)));
 		} else {
 			UpdateBinder binder(*this, context);
+			binder.target_type = column.type;
 			auto bound_expr = binder.Bind(expr);
-			bound_expr = AddCastToType(move(bound_expr), column.type);
 			result->expressions.push_back(move(bound_expr));
 		}
 	}

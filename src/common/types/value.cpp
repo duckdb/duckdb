@@ -12,6 +12,9 @@
 
 #include "common/types/date.hpp"
 #include "common/types/timestamp.hpp"
+#include "common/types/vector.hpp"
+
+#include "common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -36,9 +39,6 @@ Value Value::MinimumValue(TypeId type) {
 		break;
 	case TypeId::BIGINT:
 		result.value_.bigint = std::numeric_limits<int64_t>::min();
-		break;
-	case TypeId::FLOAT:
-		result.value_.real = std::numeric_limits<float>::min();
 		break;
 	case TypeId::DOUBLE:
 		result.value_.decimal = std::numeric_limits<double>::min();
@@ -68,9 +68,6 @@ Value Value::MaximumValue(TypeId type) {
 		break;
 	case TypeId::BIGINT:
 		result.value_.bigint = std::numeric_limits<int64_t>::max();
-		break;
-	case TypeId::FLOAT:
-		result.value_.real = std::numeric_limits<float>::max();
 		break;
 	case TypeId::DOUBLE:
 		result.value_.decimal = std::numeric_limits<double>::max();
@@ -120,11 +117,9 @@ Value Value::POINTER(uint64_t value) {
 	result.is_null = false;
 	return result;
 }
-Value Value::REAL(float value) {
-	Value result(TypeId::POINTER);
-	result.value_.real = value;
-	result.is_null = false;
-	return result;
+
+Value Value::DATE(int32_t year, int32_t month, int32_t day) {
+	return Value::INTEGER(Date::FromDate(year, month, day));
 }
 
 Value Value::Numeric(TypeId type, int64_t value) {
@@ -140,8 +135,6 @@ Value Value::Numeric(TypeId type, int64_t value) {
 		return Value::INTEGER(value);
 	case TypeId::BIGINT:
 		return Value::BIGINT(value);
-	case TypeId::FLOAT:
-		return Value::REAL((float)value);
 	case TypeId::DOUBLE:
 		return Value((double)value);
 	case TypeId::POINTER:
@@ -165,8 +158,6 @@ int64_t Value::GetNumericValue() {
 		return value_.integer;
 	case TypeId::BIGINT:
 		return value_.bigint;
-	case TypeId::FLOAT:
-		return value_.real;
 	case TypeId::DOUBLE:
 		return value_.decimal;
 	case TypeId::POINTER:
@@ -188,8 +179,6 @@ string Value::ToString(SQLType sql_type) const {
 		return to_string(value_.integer);
 	case SQLTypeId::BIGINT:
 		return to_string(value_.bigint);
-	case SQLTypeId::REAL:
-		return to_string(value_.real);
 	case SQLTypeId::DOUBLE:
 		return to_string(value_.decimal);
 	case SQLTypeId::DATE:
@@ -285,76 +274,19 @@ bool Value::operator>=(const int64_t &rhs) const {
 	return *this >= Value::Numeric(type, rhs);
 }
 
-template <class DST, class OP> DST Value::_cast(const Value &v) {
-	switch (v.type) {
-	case TypeId::BOOLEAN:
-		return OP::template Operation<bool, DST>(v.value_.boolean);
-	case TypeId::TINYINT:
-		return OP::template Operation<int8_t, DST>(v.value_.tinyint);
-	case TypeId::SMALLINT:
-		return OP::template Operation<int16_t, DST>(v.value_.smallint);
-	case TypeId::INTEGER:
-		return OP::template Operation<int32_t, DST>(v.value_.integer);
-	case TypeId::BIGINT:
-		return OP::template Operation<int64_t, DST>(v.value_.bigint);
-	case TypeId::FLOAT:
-		return OP::template Operation<float, DST>(v.value_.decimal);
-	case TypeId::DOUBLE:
-		return OP::template Operation<double, DST>(v.value_.decimal);
-	case TypeId::POINTER:
-		return OP::template Operation<uint64_t, DST>(v.value_.pointer);
-	case TypeId::VARCHAR:
-		return OP::template Operation<const char *, DST>(v.str_value.c_str());
-	default:
-		throw NotImplementedException("Unimplemented type for casting");
+Value Value::CastAs(SQLType source_type, SQLType target_type) {
+	if (source_type == target_type) {
+		return Copy();
 	}
+	Vector input, result;
+	input.Reference(*this);
+	result.Initialize(GetInternalType(target_type));
+	VectorOperations::Cast(input, result, source_type, target_type);
+	return result.GetValue(0);
 }
 
-Value Value::CastAs(TypeId new_type) const {
-	// check if we can just make a copy
-	if (new_type == this->type) {
-		return *this;
-	}
-	// have to do a cast
-	Value new_value;
-	new_value.type = new_type;
-	new_value.is_null = this->is_null;
-	if (is_null) {
-		return new_value;
-	}
-
-	switch (new_value.type) {
-	case TypeId::BOOLEAN:
-		new_value.value_.boolean = _cast<bool, operators::Cast>(*this);
-		break;
-	case TypeId::TINYINT:
-		new_value.value_.tinyint = _cast<int8_t, operators::Cast>(*this);
-		break;
-	case TypeId::SMALLINT:
-		new_value.value_.smallint = _cast<int16_t, operators::Cast>(*this);
-		break;
-	case TypeId::INTEGER:
-		new_value.value_.integer = _cast<int32_t, operators::Cast>(*this);
-		break;
-	case TypeId::BIGINT:
-		new_value.value_.bigint = _cast<int64_t, operators::Cast>(*this);
-		break;
-	case TypeId::FLOAT:
-		new_value.value_.real = _cast<float, operators::Cast>(*this);
-		break;
-	case TypeId::DOUBLE:
-		new_value.value_.decimal = _cast<double, operators::Cast>(*this);
-		break;
-	case TypeId::POINTER:
-		new_value.value_.pointer = _cast<uint64_t, operators::Cast>(*this);
-		break;
-	case TypeId::VARCHAR:
-		new_value.str_value = _cast<string, operators::Cast>(*this);
-		break;
-	default:
-		throw NotImplementedException("Unimplemented type for casting");
-	}
-	return new_value;
+Value Value::CastAs(TypeId target_type) const {
+	return Copy().CastAs(SQLTypeFromInternalType(type), SQLTypeFromInternalType(target_type));
 }
 
 void Value::Serialize(Serializer &serializer) {
@@ -376,9 +308,6 @@ void Value::Serialize(Serializer &serializer) {
 			break;
 		case TypeId::BIGINT:
 			serializer.Write<int64_t>(value_.bigint);
-			break;
-		case TypeId::FLOAT:
-			serializer.Write<float>(value_.real);
 			break;
 		case TypeId::DOUBLE:
 			serializer.Write<double>(value_.decimal);
@@ -418,9 +347,6 @@ Value Value::Deserialize(Deserializer &source) {
 		break;
 	case TypeId::BIGINT:
 		new_value.value_.bigint = source.Read<int64_t>();
-		break;
-	case TypeId::FLOAT:
-		new_value.value_.real = source.Read<double>();
 		break;
 	case TypeId::DOUBLE:
 		new_value.value_.decimal = source.Read<double>();
