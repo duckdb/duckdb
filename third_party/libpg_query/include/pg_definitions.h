@@ -3,8 +3,6 @@
 
 #ifndef COMPAT_H
 #define COMPAT_H
-
-#include <assert.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -47,6 +45,7 @@ typedef uint8_t uint8;
 #define PGDLLIMPORT
 
 #ifndef _MSC_VER
+#include <assert.h>
 #define Assert(a) assert(a);
 #define AssertMacro(p) ((void)assert(p))
 #else
