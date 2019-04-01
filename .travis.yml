@@ -275,7 +275,6 @@ matrix:
       language: cpp
 
       before_script:
-        - choco install make
         - choco install r.project -y --version 3.5.3
         - wget "https://github.com/hannesmuehleisen/choco-rtools/raw/master/rtools.3.5.0.nupkg"
         - choco install rtools -s rtools.3.5.0.nupkg -f -y
