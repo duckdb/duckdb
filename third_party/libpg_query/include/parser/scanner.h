@@ -125,6 +125,6 @@ extern void scanner_finish(core_yyscan_t yyscanner);
 extern int core_yylex(core_YYSTYPE *lvalp, YYLTYPE *llocp,
 		   core_yyscan_t yyscanner);
 extern int	scanner_errposition(int location, core_yyscan_t yyscanner);
-extern void scanner_yyerror(const char *message, core_yyscan_t yyscanner) pg_attribute_noreturn();
+extern void scanner_yyerror(const char *message, core_yyscan_t yyscanner); /*pg_attribute_noreturn();*/
 
 #endif							/* SCANNER_H */
