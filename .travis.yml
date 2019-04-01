@@ -194,6 +194,7 @@ matrix:
         - c:/python37/python.exe setup.py install
         - c:/python37/python.exe -m pytest tests
 
+
     - os: windows
       name: R Package
 
@@ -211,7 +212,6 @@ matrix:
         - cd tests
         - C:/R/bin/R.exe -f testthat.R
 
-https://cran.r-project.org/bin/windows/Rtools/Rtools35.exe
 
     - os: linux
       name: Python Package
