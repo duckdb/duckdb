@@ -200,17 +200,16 @@ matrix:
 
       language: cpp
 
-      before_install:
-        - choco install r.project -y
-        - wget https://github.com/hannesmuehleisen/choco-rtools/raw/master/rtools.3.5.0.nupkg
+      before_script:
+        - choco install r.project -y --version 3.5.3
+        - wget "https://github.com/hannesmuehleisen/choco-rtools/raw/master/rtools.3.5.0.nupkg"
         - choco install rtools -s rtools.3.5.0.nupkg -f -y
 
       script:
         - cd tools/rpkg
-        - "C:/Program Files/R/R-3.5.3/bin/R.exe" CMD INSTALL .
+        - \"C:/Program Files/R/R-3.5.3/bin/R.exe\" CMD INSTALL .
         - cd tests
-        - "C:/Program Files/R/R-3.5.3/bin/R.exe" -f testthat.R
-
+        - \"C:/Program Files/R/R-3.5.3/bin/R.exe\" -f testthat.R
 
     - os: linux
       name: Python Package
