@@ -45,7 +45,7 @@ typedef uint8_t uint8;
 #define _(a) (a)
 
 #define AssertMacro(p)	((void) assert(p))
-#define pg_attribute_noreturn() __attribute__((noreturn))
+#define pg_attribute_noreturn()
 #define lengthof(array) (sizeof (array) / sizeof ((array)[0]))
 #define CppConcat(x, y)			x##y
 
@@ -63,6 +63,9 @@ typedef uint8_t uint8;
 #define DEFAULT_INDEX_TYPE	"btree"
 #define INTERVAL_MASK(b) (1 << (b))
 
+#ifdef _MSC_VER
+#define __thread __declspec(thread)
+#endif
 
 typedef struct
 {

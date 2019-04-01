@@ -619,7 +619,7 @@ extern void mic2latin_with_table(const unsigned char *mic, unsigned char *p,
 extern bool pg_utf8_islegal(const unsigned char *source, int length);
 
 #ifdef WIN32
-extern WCHAR *pgwin32_message_to_UTF16(const char *str, int len, int *utf16len);
+//extern WCHAR *pgwin32_message_to_UTF16(const char *str, int len, int *utf16len);
 #endif
 
 #endif							/* PG_WCHAR_H */

@@ -7,52 +7,6 @@
 #include <stdarg.h>
 #include <mutex>
 
-
-#ifdef _MSC_VER
-#include <windows.h>
-
-static DWORD key = nullptr;
-std::mutex key_once;
-
-static void init_thread_storage() {
-	if (!key) {
-		std::lock_guard<std::mutex> lock(key_once);
-		if (!key && (key = TlsAlloc()) == TLS_OUT_OF_INDEXES) {
-			throw std::runtime_error("Failed to allocate per-thread storage");
-		}
-	}
-
-	void* ptr = TlsGetValue(key);
-	if (!ptr && GetLastError() != ERROR_SUCCESS) {
-		throw std::runtime_error("Failed to access per-thread storage");
-	}
-	if (!ptr) {
-		ptr = malloc(sizeof(parser_state));
-		if (!ptr) {
-			throw std::runtime_error("Memory allocation failure");
-		}
-		if (!TlsSetValue(key, ptr))
-			throw std::runtime_error("Failed to set per-thread storage");
-	}
-}
-
-static parser_state* get_parser_state() {
-	parser_state* ptr =  (parser_state* ) TlsGetValue(key);
-	if (!ptr) {
-		throw std::runtime_error("Failed to access per-thread storage");
-	}
-
-	return ptr;
-}
-
-
-#else
-
-#include <pthread.h>
-
-static pthread_key_t key;
-static pthread_once_t key_once = PTHREAD_ONCE_INIT;
-
 // max parse tree size approx 100 MB, should be enough
 #define PG_MALLOC_SIZE 10240
 #define PG_MALLOC_LIMIT 1000
@@ -65,40 +19,10 @@ struct parser_state_str {
 
 	size_t malloc_pos;
 	size_t malloc_ptr_idx;
-	char* malloc_ptrs[PG_MALLOC_LIMIT];
+	char *malloc_ptrs[PG_MALLOC_LIMIT];
 };
 
-static void create_key() {
-    int res = pthread_key_create(&key, NULL);
-    if (res != 0) {
-	    throw std::runtime_error("Failed to allocate per-thread storage");
-    }
-}
-
-static void init_thread_storage() {
-	pthread_once(&key_once, create_key);
-	void* ptr;
-    if ((ptr = pthread_getspecific(key)) == NULL) {
-    	ptr = malloc(sizeof(parser_state));
-    	if (!ptr) {
-    		throw std::runtime_error("Memory allocation failure");
-    	}
-        if (pthread_setspecific(key, ptr) != 0) {
-    		throw std::runtime_error("Failed to set per-thread storage");
-        }
-    }
-}
-
-static parser_state* get_parser_state() {
-	parser_state* ptr = (parser_state* ) pthread_getspecific(key);
-	if (!ptr) {
-		throw std::runtime_error("Failed to access per-thread storage");
-
-	}
-	return ptr;
-}
-#endif
-
+static __thread parser_state pg_parser_state;
 
 static void allocate_new(parser_state* state, size_t n) {
 	if (state->malloc_ptr_idx + 1 >= PG_MALLOC_LIMIT) {
@@ -118,77 +42,67 @@ static void allocate_new(parser_state* state, size_t n) {
 
 
 void* palloc(size_t n) {
-	parser_state* state = get_parser_state();
-	if (state->malloc_pos + n > PG_MALLOC_SIZE) {
-		allocate_new(state, n);
+	if (pg_parser_state.malloc_pos + n > PG_MALLOC_SIZE) {
+		allocate_new(&pg_parser_state, n);
 	}
 
-	void* ptr = state->malloc_ptrs[state->malloc_ptr_idx-1] + state->malloc_pos;
+	void *ptr = pg_parser_state.malloc_ptrs[pg_parser_state.malloc_ptr_idx - 1] + pg_parser_state.malloc_pos;
 	memset(ptr, 0, n);
-	state->malloc_pos += n;
+	pg_parser_state.malloc_pos += n;
 	return ptr;
 }
 
 
 
 void pg_parser_init() {
-	init_thread_storage();
-	parser_state* state = get_parser_state();
-	state->pg_err_code = UNDEFINED;
-	state->pg_err_msg[0] = '\0';
+	pg_parser_state.pg_err_code = UNDEFINED;
+	pg_parser_state.pg_err_msg[0] = '\0';
 
-	state->malloc_ptr_idx = 0;
-	allocate_new(state, 1);
+	pg_parser_state.malloc_ptr_idx = 0;
+	allocate_new(&pg_parser_state, 1);
 }
 
 void pg_parser_parse(const char* query, parse_result *res) {
-	parser_state* state = get_parser_state();
 
 	res->parse_tree = nullptr;
 	try{
 		res->parse_tree = raw_parser(query);
-		res->success = state->pg_err_code == UNDEFINED;
+		res->success = pg_parser_state.pg_err_code == UNDEFINED;
 	} catch (...) {
 		res->success = false;
 
 	}
-	res->error_message = state->pg_err_msg;
-	res->error_location = state->pg_err_pos;
+	res->error_message = pg_parser_state.pg_err_msg;
+	res->error_location = pg_parser_state.pg_err_pos;
 }
 
 
 void pg_parser_cleanup() {
-	parser_state* state = get_parser_state();
-	if (!state) {
-		return;
-	}
-	for (size_t ptr_idx = 0; ptr_idx < state->malloc_ptr_idx; ptr_idx++) {
-		char* ptr = state->malloc_ptrs[ptr_idx];
+
+	for (size_t ptr_idx = 0; ptr_idx < pg_parser_state.malloc_ptr_idx; ptr_idx++) {
+		char *ptr = pg_parser_state.malloc_ptrs[ptr_idx];
 		if (ptr) {
 			free(ptr);
-			state->malloc_ptrs[ptr_idx] = nullptr;
+			pg_parser_state.malloc_ptrs[ptr_idx] = nullptr;
 		}
 	}
-
-	free(state);
-	pthread_setspecific(key, NULL);
 }
 
 int ereport(int code, ...) {
-	std::string err = "parser error : " + std::string(get_parser_state()->pg_err_msg);
+	std::string err = "parser error : " + std::string(pg_parser_state.pg_err_msg);
     throw std::runtime_error(err);
 }
 void elog(int code, char* fmt,...) {
     throw std::runtime_error("elog NOT IMPLEMENTED");
 }
 int errcode(int sqlerrcode) {
-	get_parser_state()->pg_err_code = sqlerrcode;
+	pg_parser_state.pg_err_code = sqlerrcode;
 	return 1;
 }
 int errmsg(char* fmt, ...) {
 	 va_list argptr;
 	 va_start(argptr, fmt);
-	 vsnprintf(get_parser_state()->pg_err_msg, BUFSIZ, fmt, argptr);
+	 vsnprintf(pg_parser_state.pg_err_msg, BUFSIZ, fmt, argptr);
 	 va_end(argptr);
 	 return 1;
 }
@@ -202,7 +116,7 @@ int	errdetail(const char *fmt,...) {
     throw std::runtime_error("errdetail NOT IMPLEMENTED");
 }
 int	errposition(int cursorpos) {
-	get_parser_state()->pg_err_pos = cursorpos;
+	pg_parser_state.pg_err_pos = cursorpos;
 	return 1;
 }
 
