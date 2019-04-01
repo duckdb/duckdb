@@ -224,7 +224,7 @@ psprintf(const char *fmt,...) {
 	// attempt two, malloc
 	char* mbuf = (char*) palloc(newlen);
 	va_start(args, fmt);
-	vsnprintf(mbuf, BUFSIZ, fmt, args);
+	vsnprintf(mbuf, newlen, fmt, args);
 	va_end(args);
 	return mbuf;
 }
