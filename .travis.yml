@@ -201,10 +201,12 @@ matrix:
       language: cpp
 
       before_install:
-        - curl "https://cran.r-project.org/bin/windows/base/R-3.5.3-win.exe" -o R.exe
-        - curl "https://cran.r-project.org/bin/windows/Rtools/Rtools35.exe" -o Rtools.exe
-        - cmd.exe /C R.exe /VERYSILENT /DIR=c:/R/
-        - cmd.exe /C Rtools.exe /VERYSILENT /DIR=c:/Rtools/
+        - choco install r.project -y
+        - git clone https://github.com/leeper/choco-rtools.git
+        - cd choco-rtools
+        - choco pack
+        - choco install rtools -s rtools.3.4.0.nupkg -f -y
+        - cd ..
 
       script:
         - cd tools/rpkg
