@@ -201,9 +201,9 @@ matrix:
       language: cpp
 
       before_install:
-        - bitsadmin /transfer mydownloadjob /download /priority normal  ^ https://cran.r-project.org/bin/windows/Rtools/Rtools35.exe Rtools.exe
+        - bitsadmin /transfer mydownloadjob /download /priority normal  "https://cran.r-project.org/bin/windows/Rtools/Rtools35.exe" Rtools.exe
         - Rtools.exe /VERYSILENT /DIR=C:/Rtools/
-        - bitsadmin /transfer mydownloadjob /download /priority normal  ^ https://cran.r-project.org/bin/windows/base/R-3.5.3-win.exe R.exe
+        - bitsadmin /transfer mydownloadjob /download /priority normal  "https://cran.r-project.org/bin/windows/base/R-3.5.3-win.exe" R.exe
         - R.exe /VERYSILENT /DIR=C:/R/
 
       script:
