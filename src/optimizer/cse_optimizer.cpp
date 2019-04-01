@@ -27,6 +27,7 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, expression
 	case ExpressionClass::BOUND_COLUMN_REF:
 	case ExpressionClass::BOUND_CONSTANT:
 	case ExpressionClass::BOUND_PARAMETER:
+	case ExpressionClass::COMMON_SUBEXPRESSION:
 		return;
 	default:
 		break;
@@ -50,6 +51,7 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 	case ExpressionClass::BOUND_COLUMN_REF:
 	case ExpressionClass::BOUND_CONSTANT:
 	case ExpressionClass::BOUND_PARAMETER:
+	case ExpressionClass::COMMON_SUBEXPRESSION:
 		return;
 	default:
 		break;

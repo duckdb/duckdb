@@ -39,13 +39,16 @@ static SQLType ResolveWindowExpressionType(ExpressionType window_type, SQLType c
 		return child_type;
 	case ExpressionType::WINDOW_LEAD:
 	default:
-		assert(window_type == ExpressionType::WINDOW_LAG);
+		assert(window_type == ExpressionType::WINDOW_LAG || window_type == ExpressionType::WINDOW_LEAD);
 		assert(child_type.id != SQLTypeId::INVALID); // "Window function needs an expression"
 		return child_type;
 	}
 }
 
 static unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression>& expr) {
+	if (!expr) {
+		return nullptr;
+	}
 	assert(expr.get());
 	assert(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
 	return move(((BoundExpression&)*expr).expr);
@@ -96,6 +99,9 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, uint32_t depth) {
 	result->end_expr = GetExpression(window.end_expr);
 	result->offset_expr = GetExpression(window.offset_expr);
 	result->default_expr = GetExpression(window.default_expr);
+	result->start = window.start;
+	result->end = window.end;
+
 	// create a BoundColumnRef that references this entry
 	auto colref = make_unique<BoundColumnRefExpression>(window.GetName(), result->return_type,
 	                                                    ColumnBinding(node.window_index, node.windows.size()),

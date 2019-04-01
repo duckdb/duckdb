@@ -43,6 +43,7 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk, 
 				payload_chunk.data[i].sel_vector = group_chunk.sel_vector;
 			}
 		}
+		payload_chunk.sel_vector = group_chunk.sel_vector;
 
 		group_chunk.Verify();
 		payload_chunk.Verify();

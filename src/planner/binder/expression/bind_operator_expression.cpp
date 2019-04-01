@@ -109,7 +109,7 @@ static SQLType ResolveArithmeticType(OperatorExpression &op, vector<BoundExpress
 	if (children[0]->expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
 		children[0]->expr = AddCastToType(move(children[0]->expr), children[0]->sql_type, children[1]->sql_type);
 		return children[1]->sql_type;
-	} else if (children[1]->expression_class == ExpressionClass::BOUND_PARAMETER) {
+	} else if (children[1]->expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
 		children[1]->expr = AddCastToType(move(children[1]->expr), children[1]->sql_type, children[0]->sql_type);
 		return children[0]->sql_type;
 	}

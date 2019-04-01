@@ -77,6 +77,8 @@ static SQLType ResolveAggregateType(AggregateExpression &aggr, unique_ptr<Expres
 
 BindResult SelectBinder::BindAggregate(AggregateExpression &aggr, uint32_t depth) {
 	// first bind the child of the aggregate expression (if any)
+	unique_ptr<Expression> child;
+	SQLType child_type;
 	if (aggr.child) {
 		AggregateBinder aggregate_binder(binder, context);
 		string result = aggregate_binder.Bind(&aggr.child, 0);
@@ -85,10 +87,11 @@ BindResult SelectBinder::BindAggregate(AggregateExpression &aggr, uint32_t depth
 			// FIXME: proper subquery binding
 			return BindResult(result);
 		}
+		auto &bound_expr = (BoundExpression &) *aggr.child;
+		child_type = bound_expr.sql_type;
+		child = move(bound_expr.expr);
 	}
-	auto &bound_expr = (BoundExpression &) *aggr.child;
-	auto child = move(bound_expr.expr);
-	SQLType result_type = ResolveAggregateType(aggr, &child, bound_expr.sql_type);
+	SQLType result_type = ResolveAggregateType(aggr, &child, child_type);
 	// create the aggregate
 	auto aggregate =
 	    make_unique<BoundAggregateExpression>(GetInternalType(result_type), aggr.type, move(child));
