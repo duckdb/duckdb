@@ -1,2 +1,3 @@
 PKG_CXXFLAGS = -I../../../src/include
+CXX11STD = -std=c++11
 OBJECTS=duckdbr.o ../../../build/release_notest/src/libduckdb_static.a ../../../build/release_notest/third_party/libpg_query/libpg_query.a ../../../build/release_notest/third_party/hyperloglog/libhyperloglog.a 
