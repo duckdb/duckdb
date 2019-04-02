@@ -48,7 +48,6 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 	auto &result = materialized ? *materialized : (MaterializedQueryResult &)result_;
 	if (!result.success) {
 		fprintf(stderr, "Query failed with message: %s\n", result.error.c_str());
-		// FAIL(result->error.c_str());
 		return false;
 	}
 	if (!(result.names.size() == result.types.size())) {
@@ -59,19 +58,16 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 	if (values.size() == 0) {
 		if (result.collection.count != 0) {
 			result.Print();
-			// FAIL("Data size does not match value size!");
 			return false;
 		} else {
 			return true;
 		}
 	}
 	if (result.collection.count == 0) {
-		// FAIL("Data size does not match value size!");
 		result.Print();
 		return false;
 	}
 	if (column_number >= result.types.size()) {
-		// FAIL("Column number out of range of result!");
 		result.Print();
 		return false;
 	}
@@ -81,13 +77,11 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 			// ran out of chunks
 			result.Print();
 			return false;
-			// FAIL("Data size does not match value size!");
 		}
 		// check this vector
 		auto &vector = result.collection.chunks[chunk_index]->data[column_number];
 		if (i + vector.count > values.size()) {
 			// too many values in this vector
-			// FAIL("Too many values in result!");
 			result.Print();
 			return false;
 		}
@@ -128,13 +122,13 @@ string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
 		return materialized.error;
 	}
 	string error;
-	if (!compare_result(csv, materialized.collection, header, error)) {
+	if (!compare_result(csv, materialized.collection, materialized.sql_types, header, error)) {
 		return error;
 	}
 	return "";
 }
 
-bool parse_datachunk(string csv, DataChunk &result, bool has_header) {
+bool parse_datachunk(string csv, DataChunk &result, vector<SQLType> sql_types, bool has_header) {
 	istringstream f(csv);
 	string line;
 
@@ -173,7 +167,7 @@ bool parse_datachunk(string csv, DataChunk &result, bool has_header) {
 
 			// cast to the type of the column
 			try {
-				value = value.CastAs(result.data[i].type);
+				value = value.CastAs(SQLType(SQLTypeId::VARCHAR), sql_types[i]);
 			} catch (...) {
 				return false;
 			}
@@ -236,8 +230,8 @@ string show_diff(ChunkCollection &collection, DataChunk &chunk) {
 
 //! Compares the result of a pipe-delimited CSV with the given DataChunk
 //! Returns true if they are equal, and stores an error_message otherwise
-bool compare_result(string csv, ChunkCollection &collection, bool has_header, string &error_message) {
-	auto types = collection.types;
+bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql_types, bool has_header, string &error_message) {
+	assert(collection.types.size() == sql_types.size());
 	DataChunk correct_result;
 
 	istringstream f(csv);
@@ -251,7 +245,7 @@ bool compare_result(string csv, ChunkCollection &collection, bool has_header, st
 		if (line.back() == '|') {
 			split.push_back("");
 		}
-		if (split.size() != types.size()) {
+		if (split.size() != sql_types.size()) {
 			// column length is different
 			goto incorrect;
 		}
@@ -265,7 +259,7 @@ bool compare_result(string csv, ChunkCollection &collection, bool has_header, st
 		if (line.back() == '|') {
 			split.push_back("");
 		}
-		if (split.size() != types.size()) {
+		if (split.size() != sql_types.size()) {
 			// column length is different
 			goto incorrect;
 		}
@@ -277,7 +271,7 @@ bool compare_result(string csv, ChunkCollection &collection, bool has_header, st
 
 			// cast to the type of the column
 			try {
-				value = value.CastAs(types[i]);
+				value = value.CastAs(SQLType(SQLTypeId::VARCHAR), sql_types[i]);
 			} catch (...) {
 				goto incorrect;
 			}
@@ -294,8 +288,8 @@ bool compare_result(string csv, ChunkCollection &collection, bool has_header, st
 	}
 	return true;
 incorrect:
-	correct_result.Initialize(types);
-	if (!parse_datachunk(csv, correct_result, has_header)) {
+	correct_result.Initialize(collection.types);
+	if (!parse_datachunk(csv, correct_result, sql_types, has_header)) {
 		error_message = "Incorrect answer for query!\nProvided answer:\n" + collection.ToString() +
 		                "\nExpected answer [could not parse]:\n" + string(csv) + "\n";
 	} else {
