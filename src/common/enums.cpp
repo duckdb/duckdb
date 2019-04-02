@@ -79,7 +79,7 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 	case LogicalOperatorType::INVALID:
 		break;
 	}
-	return "INVALID";
+	throw ConversionException("Invalid LogicalOperatorType %d", type);
 }
 
 string PhysicalOperatorToString(PhysicalOperatorType type) {
@@ -163,7 +163,7 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 	case PhysicalOperatorType::INVALID:
 		break;
 	}
-	return "INVALID";
+	throw ConversionException("Invalid PhysicalOperatorType %d", type);
 }
 
 string ExpressionTypeToString(ExpressionType type) {
@@ -317,7 +317,7 @@ string ExpressionTypeToString(ExpressionType type) {
 	case ExpressionType::INVALID:
 		break;
 	}
-	return "INVALID";
+	throw ConversionException("Invalid ExpressionType %d", type);
 }
 
 string ExpressionTypeToOperator(ExpressionType type) {
@@ -380,7 +380,7 @@ string JoinTypeToString(JoinType type) {
 	case JoinType::INVALID:
 		break;
 	}
-	return "INVALID";
+	throw ConversionException("Invalid JoinType %d", type);
 }
 
 ExternalFileFormat StringToExternalFileFormat(const string &str) {

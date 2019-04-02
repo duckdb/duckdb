@@ -30,7 +30,7 @@ bool CaseExpression::Equals(const BaseExpression *other_) const {
 	return true;
 }
 
-unique_ptr<ParsedExpression> CaseExpression::Copy() {
+unique_ptr<ParsedExpression> CaseExpression::Copy() const {
 	auto copy = make_unique<CaseExpression>();
 	copy->CopyProperties(*this);
 	copy->check = check->Copy();

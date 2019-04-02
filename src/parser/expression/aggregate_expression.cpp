@@ -53,7 +53,7 @@ bool AggregateExpression::Equals(const BaseExpression *other_) const {
 	return true;
 }
 
-unique_ptr<ParsedExpression> AggregateExpression::Copy() {
+unique_ptr<ParsedExpression> AggregateExpression::Copy() const {
 	auto new_child = child ? child->Copy() : nullptr;
 	auto new_aggregate = make_unique<AggregateExpression>(type, move(new_child));
 	new_aggregate->CopyProperties(*this);

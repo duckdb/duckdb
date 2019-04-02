@@ -30,7 +30,7 @@ bool ConjunctionExpression::Equals(const BaseExpression *other_) const {
 	return false;
 }
 
-unique_ptr<ParsedExpression> ConjunctionExpression::Copy() {
+unique_ptr<ParsedExpression> ConjunctionExpression::Copy() const {
 	auto copy = make_unique<ConjunctionExpression>(type, left->Copy(), right->Copy());
 	copy->CopyProperties(*this);
 	return move(copy);

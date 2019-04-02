@@ -14,7 +14,7 @@ string ParameterExpression::ToString() const {
 	return "$" + std::to_string(parameter_nr);
 }
 
-unique_ptr<ParsedExpression> ParameterExpression::Copy() {
+unique_ptr<ParsedExpression> ParameterExpression::Copy() const {
 	auto copy = make_unique<ParameterExpression>();
 	copy->CopyProperties(*this);
 	return move(copy);

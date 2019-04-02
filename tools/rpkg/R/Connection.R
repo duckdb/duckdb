@@ -24,7 +24,7 @@ setClass(
 #' @export
 setMethod("show", "duckdb_connection",
           function(object) {
-            cat(sprintf("<duckdb_connection %s driver=%s dbdir='%s' connection=%s>\n", extptr_str(object@conn_ref), extptr_str(object@driver@database_ref), object@driver@dbdir))
+            cat(sprintf("<duckdb_connection %s driver=%s dbdir='%s'>\n", extptr_str(object@conn_ref), extptr_str(object@driver@database_ref), object@driver@dbdir))
           })
 
 #' @rdname DBI
@@ -59,6 +59,7 @@ setMethod("dbDisconnect", "duckdb_connection",
 #' @export
 setMethod("dbSendQuery", c("duckdb_connection", "character"),
           function(conn, statement, ...) {
+		    statement <- enc2utf8(statement)
             resultset <- .Call(duckdb_query_R, conn@conn_ref, statement)
             attr(resultset, "row.names") <-
               c(NA_integer_, as.integer(-1 * length(resultset[[1]])))
@@ -76,6 +77,7 @@ setMethod("dbSendQuery", c("duckdb_connection", "character"),
 #' @export
 setMethod("dbSendStatement", c("duckdb_connection", "character"),
           function(conn, statement, ...) {
+		    statement <- enc2utf8(statement)
             resultset <- .Call(duckdb_query_R, conn@conn_ref, statement)
             duckdb_result(
               connection = conn,
@@ -186,6 +188,18 @@ setMethod("dbWriteTable", c("duckdb_connection", "character", "data.frame"),
                 "CREATE TABLE %s (%s)", table_name, schema_str
               )))
             }
+			
+			if (length(value[[1]])) {
+				classes <- unlist(lapply(value, function(v){
+				  class(v)[[1]]
+				}))
+				for (c in names(classes[classes=="character"])) {
+				  value[[c]] <- enc2utf8(value[[c]])
+				}
+				for (c in names(classes[classes=="factor"])) {
+				  levels(value[[c]]) <- enc2utf8(levels(value[[c]]))
+				}
+			}
             
             .Call(duckdb_append_R, conn@conn_ref, name, value)
             invisible(TRUE)

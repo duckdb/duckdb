@@ -28,7 +28,7 @@ uint64_t ConstantExpression::Hash() const {
 	return CombineHash(ValueOperations::Hash(value), result);
 }
 
-unique_ptr<ParsedExpression> ConstantExpression::Copy() {
+unique_ptr<ParsedExpression> ConstantExpression::Copy() const {
 	auto copy = make_unique<ConstantExpression>(sql_type, value);
 	copy->CopyProperties(*this);
 	return move(copy);

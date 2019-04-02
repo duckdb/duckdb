@@ -56,7 +56,7 @@ bool OperatorExpression::Equals(const BaseExpression *other_) const {
 	return true;
 }
 
-unique_ptr<ParsedExpression> OperatorExpression::Copy() {
+unique_ptr<ParsedExpression> OperatorExpression::Copy() const {
 	auto copy = make_unique<OperatorExpression>(type);
 	copy->CopyProperties(*this);
 	for (auto &it : children) {

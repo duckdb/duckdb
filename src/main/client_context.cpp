@@ -6,6 +6,7 @@
 #include "parser/parser.hpp"
 #include "planner/operator/logical_execute.hpp"
 #include "planner/planner.hpp"
+#include "parser/statement/explain_statement.hpp"
 
 #include "main/materialized_query_result.hpp"
 #include "main/query_result.hpp"
@@ -380,6 +381,9 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		profiler.Disable();
 	}
 
+	// see below
+	auto statement_copy_for_explain = select_stmt->Copy();
+
 	auto original_result = make_unique<MaterializedQueryResult>(),
 	     copied_result = make_unique<MaterializedQueryResult>(),
 	     deserialized_result = make_unique<MaterializedQueryResult>(),
@@ -390,7 +394,20 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		original_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (Exception &ex) {
 		original_result->error = ex.GetMessage();
+		original_result->success = false;
 	}
+
+	// check explain, only if q does not already contain EXPLAIN
+	if (original_result->success) {
+		auto explain_q = "EXPLAIN " + query;
+		auto explain_stmt = make_unique<ExplainStatement>(move(statement_copy_for_explain));
+		try {
+			ExecuteStatementInternal(explain_q, move(explain_stmt), false);
+		} catch (Exception &ex) {
+			return "EXPLAIN failed but query did not";
+		}
+	}
+
 	// now execute the copied statement
 	try {
 		auto result = ExecuteStatementInternal(query, move(copied_stmt), false);
@@ -413,6 +430,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	} catch (Exception &ex) {
 		unoptimized_result->error = ex.GetMessage();
 	}
+
 	enable_optimizer = true;
 	if (profiling_is_enabled) {
 		profiler.Enable();
@@ -438,5 +456,6 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		result += "Unoptimized Result\n" + unoptimized_result->ToString();
 		return result;
 	}
+
 	return "";
 }

@@ -2,6 +2,7 @@
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "parser/query_node/select_node.hpp"
+#include "parser/tableref/joinref.hpp"
 #include "planner/binder.hpp"
 #include "planner/expression_binder/group_binder.hpp"
 #include "planner/expression_binder/having_binder.hpp"
@@ -26,6 +27,20 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 		if (select_element->GetExpressionType() == ExpressionType::STAR) {
 			// * statement, expand to all columns from the FROM clause
 			bind_context.GenerateAllColumnExpressions(new_select_list);
+			// TODO somewhat ugly
+			if (statement.from_table && statement.from_table->type == TableReferenceType::JOIN) {
+				auto join_ref = (JoinRef *)statement.from_table.get();
+				if (join_ref->using_hidden_columns.size() > 0) {
+					auto bak_select_list = move(new_select_list);
+					new_select_list.clear();
+					for (auto &expr : bak_select_list) {
+						if (join_ref->using_hidden_columns.find(expr) ==
+						    join_ref->using_hidden_columns.end()) {
+							new_select_list.push_back(move(expr));
+						}
+					}
+				}
+			}
 		} else {
 			// regular statement, add it to the list
 			new_select_list.push_back(move(select_element));

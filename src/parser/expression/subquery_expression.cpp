@@ -29,7 +29,7 @@ bool SubqueryExpression::Equals(const BaseExpression *other_) const {
 	return subquery_type == other->subquery_type && subquery->Equals(other->subquery.get());
 }
 
-unique_ptr<ParsedExpression> SubqueryExpression::Copy() {
+unique_ptr<ParsedExpression> SubqueryExpression::Copy() const {
 	auto copy = make_unique<SubqueryExpression>();
 	copy->CopyProperties(*this);
 	copy->subquery = subquery->Copy();

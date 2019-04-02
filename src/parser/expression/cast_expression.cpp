@@ -26,7 +26,7 @@ bool CastExpression::Equals(const BaseExpression *other_) const {
 	return true;
 }
 
-unique_ptr<ParsedExpression> CastExpression::Copy() {
+unique_ptr<ParsedExpression> CastExpression::Copy() const {
 	auto copy = make_unique<CastExpression>(cast_type, child->Copy());
 	copy->CopyProperties(*this);
 	return move(copy);

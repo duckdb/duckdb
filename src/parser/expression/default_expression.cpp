@@ -12,7 +12,7 @@ string DefaultExpression::ToString() const {
 	return "DEFAULT";
 }
 
-unique_ptr<ParsedExpression> DefaultExpression::Copy() {
+unique_ptr<ParsedExpression> DefaultExpression::Copy() const {
 	auto copy = make_unique<DefaultExpression>();
 	copy->CopyProperties(*this);
 	return move(copy);

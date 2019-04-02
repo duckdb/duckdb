@@ -42,7 +42,7 @@ uint64_t ColumnRefExpression::Hash() const {
 	return result;
 }
 
-unique_ptr<ParsedExpression> ColumnRefExpression::Copy() {
+unique_ptr<ParsedExpression> ColumnRefExpression::Copy() const {
 	auto copy = make_unique<ColumnRefExpression>(column_name, table_name);
 	copy->CopyProperties(*this);
 	return move(copy);

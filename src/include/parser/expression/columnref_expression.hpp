@@ -37,7 +37,7 @@ public:
 	bool Equals(const BaseExpression *other) const override;
 	uint64_t Hash() const override;
 
-	unique_ptr<ParsedExpression> Copy() override;
+	unique_ptr<ParsedExpression> Copy() const override;
 
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, Deserializer &source);

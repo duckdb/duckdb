@@ -11,11 +11,9 @@ unique_ptr<DropSchemaStatement> Transformer::TransformDropSchema(DropStmt *stmt)
 
 	info.cascade = stmt->behavior == DropBehavior::DROP_CASCADE;
 	info.if_exists = stmt->missing_ok;
-	for (auto cell = stmt->objects->head; cell != nullptr; cell = cell->next) {
-		auto table_list = reinterpret_cast<List *>(cell->data.ptr_value);
-		auto schema_value = reinterpret_cast<postgres::Value *>(table_list->head->data.ptr_value);
-		info.schema = schema_value->val.str;
-		break;
+	if (!stmt->objects || stmt->objects->length != 1) {
+		throw ParserException("DROP SCHEMA needs a single string parameter");
 	}
+	info.schema = string(((postgres::Value*) stmt->objects->head->data.ptr_value)->val.str);
 	return result;
 }

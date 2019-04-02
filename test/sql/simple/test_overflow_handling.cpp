@@ -17,6 +17,7 @@ TEST_CASE("Test handling of overflows in basic types", "[overflowhandling]") {
 	                          "NULL AS INTEGER ) ) AS INTEGER ) FROM test"));
 
 	// insert too large value for domain should cause error
+	// FIXME new pg parser zeroes first param
 	REQUIRE_FAIL(con.Query("INSERT INTO test VALUES (-1099511627776, 3)"));
 
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (12, 21), (14, 22)"));

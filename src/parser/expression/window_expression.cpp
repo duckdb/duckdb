@@ -78,7 +78,7 @@ bool WindowExpression::Equals(const BaseExpression *other_) const {
 	return true;
 }
 
-unique_ptr<ParsedExpression> WindowExpression::Copy() {
+unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	auto child_copy = child ? child->Copy() : nullptr;
 	auto new_window = make_unique<WindowExpression>(type, move(child_copy));
 	new_window->CopyProperties(*this);

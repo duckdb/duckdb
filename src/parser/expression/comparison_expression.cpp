@@ -86,7 +86,7 @@ bool ComparisonExpression::Equals(const BaseExpression *other_) const {
 	return true;
 }
 
-unique_ptr<ParsedExpression> ComparisonExpression::Copy() {
+unique_ptr<ParsedExpression> ComparisonExpression::Copy() const {
 	auto copy = make_unique<ComparisonExpression>(type, left->Copy(), right->Copy());
 	copy->CopyProperties(*this);
 	return move(copy);

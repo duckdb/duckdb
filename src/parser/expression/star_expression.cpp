@@ -10,7 +10,7 @@ string StarExpression::ToString() const {
 	return "*";
 }
 
-unique_ptr<ParsedExpression> StarExpression::Copy() {
+unique_ptr<ParsedExpression> StarExpression::Copy() const {
 	auto copy = make_unique<StarExpression>();
 	copy->CopyProperties(*this);
 	return move(copy);

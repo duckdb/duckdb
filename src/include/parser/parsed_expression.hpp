@@ -39,7 +39,7 @@ public:
 	uint64_t Hash() const override;
 
 	//! Create a copy of this expression
-	virtual unique_ptr<ParsedExpression> Copy() = 0;
+	virtual unique_ptr<ParsedExpression> Copy() const = 0;
 
 	//! Serializes an Expression to a stand-alone binary blob
 	virtual void Serialize(Serializer &serializer);
@@ -50,7 +50,7 @@ public:
 protected:
 	//! Copy base Expression properties from another expression to this one,
 	//! used in Copy method
-	void CopyProperties(ParsedExpression &other) {
+	void CopyProperties(const ParsedExpression &other) {
 		type = other.type;
 		expression_class = other.expression_class;
 		alias = other.alias;

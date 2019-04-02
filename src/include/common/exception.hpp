@@ -13,7 +13,7 @@
 
 #include <cstdio>
 #include <cstdlib>
-#ifndef _MSC_VER
+#ifndef _WIN32
 #include <cxxabi.h>
 #include <execinfo.h>
 #endif
@@ -158,7 +158,7 @@ public:
 		}
 	}
 
-#ifndef _MSC_VER
+#ifndef _WIN32
 	// Based on :: http://panthema.net/2008/0901-stacktrace-demangled/
 	static void PrintStackTrace(FILE *out = ::stderr, unsigned int max_frames = 63) {
 		::fprintf(out, "Stack Trace:\n");
