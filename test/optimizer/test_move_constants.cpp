@@ -1,15 +1,17 @@
 #include "common/helper.hpp"
 #include "expression_helper.hpp"
 #include "optimizer/rule/move_constants.hpp"
+#include "optimizer/rule/constant_folding.hpp"
+
 
 using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test move constants", "[optimizer]") {
-	DuckDB db(nullptr);
-	Connection con(db);
+	ExpressionHelper helper;
 
-	ExpressionHelper helper(con.context);
+	REQUIRE(helper.AddColumns("X INTEGER").empty());
+	helper.AddRule<ConstantFoldingRule>();
 	helper.AddRule<MoveConstantsRule>();
 
 	string input, expected_output;

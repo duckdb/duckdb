@@ -6,23 +6,23 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test case simplification", "[optimizer]") {
-	DuckDB db(nullptr);
-	Connection con(db);
+	ExpressionHelper helper;
 
-	ExpressionHelper helper(con.context);
+	REQUIRE(helper.AddColumns("X INTEGER").empty());
+
 	helper.AddRule<CaseSimplificationRule>();
 
 	string input, expected_output;
 
-	input = "CASE WHEN 1=1 THEN X ELSE Y END";
-	expected_output = "X";
+	input = "CASE WHEN 1=1 THEN X+1 ELSE X+2 END";
+	expected_output = "X+1";
 	REQUIRE(helper.VerifyRewrite(input, expected_output));
 
-	input = "CASE WHEN 1=0 THEN X ELSE Y END";
-	expected_output = "Y";
+	input = "CASE WHEN 1=0 THEN X+1 ELSE X+2 END";
+	expected_output = "X+2";
 	REQUIRE(helper.VerifyRewrite(input, expected_output));
 
-	input = "CASE WHEN NULL>3 THEN X ELSE Y END";
-	expected_output = "Y";
+	input = "CASE WHEN NULL>3 THEN X+1 ELSE X+2 END";
+	expected_output = "X+2";
 	REQUIRE(helper.VerifyRewrite(input, expected_output));
 }

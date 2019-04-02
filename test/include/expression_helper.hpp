@@ -2,7 +2,7 @@
 #include "duckdb.hpp"
 #include "optimizer/expression_rewriter.hpp"
 #include "parser/parsed_expression.hpp"
-#include "planner/parsed_expression.hpp"
+#include "planner/expression.hpp"
 #include "planner/planner.hpp"
 
 namespace duckdb {
@@ -11,14 +11,13 @@ class ClientContext;
 
 class ExpressionHelper {
 public:
-	ExpressionHelper(ClientContext &context);
+	ExpressionHelper();
 
-	unique_ptr<ParsedExpression> ParseExpression(string expression);
-	unique_ptr<Expression> BindExpression(string expression);
+	unique_ptr<Expression> ParseExpression(string expression);
 	unique_ptr<Expression> ApplyExpressionRule(unique_ptr<Expression> root,
 	                                           LogicalOperatorType root_type = LogicalOperatorType::PROJECTION);
 
-	unique_ptr<LogicalOperator> ParseLogicalTree(string query);
+	// unique_ptr<LogicalOperator> ParseLogicalTree(string query);
 
 	template <class T> void AddRule() {
 		rewriter.rules.push_back(make_unique<T>(rewriter));
@@ -26,9 +25,13 @@ public:
 
 	bool VerifyRewrite(string input, string expected_output);
 
+	string AddColumns(string columns);
 private:
-	ClientContext &context;
+	DuckDB db;
+	Connection con;
 	ExpressionRewriter rewriter;
+
+	string from_clause;
 };
 
 } // namespace duckdb

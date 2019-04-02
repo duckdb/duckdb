@@ -7,23 +7,23 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Comparison simplification test", "[optimizer]") {
-	DuckDB db(nullptr);
-	Connection con(db);
+	ExpressionHelper helper;
 
-	ExpressionHelper helper(con.context);
+	REQUIRE(helper.AddColumns("X INTEGER").empty());
+
 	helper.AddRule<ComparisonSimplificationRule>();
 
 	string input, expected_output;
 
 	input = "X=NULL";
-	expected_output = "NULL::BOOLEAN";
+	expected_output = "NULL";
 	REQUIRE(helper.VerifyRewrite(input, expected_output));
 
 	input = "X>NULL";
-	expected_output = "NULL::BOOLEAN";
+	expected_output = "NULL";
 	REQUIRE(helper.VerifyRewrite(input, expected_output));
 
 	input = "NULL>X";
-	expected_output = "NULL::BOOLEAN";
+	expected_output = "NULL";
 	REQUIRE(helper.VerifyRewrite(input, expected_output));
 }

@@ -2,30 +2,25 @@
 
 #include "duckdb.hpp"
 #include "parser/parser.hpp"
-#include "parser/statement/select_statement.hpp"
+#include "planner/statement/bound_select_statement.hpp"
+#include "planner/bound_query_node.hpp"
 #include "planner/expression_iterator.hpp"
 #include "planner/operator/logical_projection.hpp"
 #include "planner/planner.hpp"
+#include "planner/binder.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-//! Set column ref types to a specific type (faking binding them)
-static void SetColumnRefTypes(Expression &op, TypeId colref_type = TypeId::INTEGER) {
-	if (op.type == ExpressionType::COLUMN_REF) {
-		op.return_type = colref_type;
-	}
-	op.EnumerateChildren([&](Expression *child) { SetColumnRefTypes(*child, colref_type); });
-}
-
-ExpressionHelper::ExpressionHelper(ClientContext &context) : context(context), rewriter(context) {
+ExpressionHelper::ExpressionHelper() : db(nullptr), con(db), rewriter(con.context) {
+	con.Query("BEGIN TRANSACTION");
 }
 
 bool ExpressionHelper::VerifyRewrite(string input, string expected_output) {
 	auto root = ParseExpression(input);
 	auto result = ApplyExpressionRule(move(root));
 	auto expected_result = ParseExpression(expected_output);
-	bool equals = result->Equals(expected_result.get());
+	bool equals = Expression::Equals(result.get(), expected_result.get());
 	if (!equals) {
 		result->Print();
 		expected_result->Print();
@@ -33,30 +28,43 @@ bool ExpressionHelper::VerifyRewrite(string input, string expected_output) {
 	return equals;
 }
 
-unique_ptr<ParsedExpression> ExpressionHelper::ParseExpression(string expression) {
-	string query = "SELECT " + expression;
+string ExpressionHelper::AddColumns(string columns) {
+	if (!from_clause.empty()) {
+		con.Query("DROP TABLE expression_helper");
+	}
+	auto result = con.Query("CREATE TABLE expression_helper(" + columns + ")");
+	if (!result->success) {
+		return result->error;
+	}
+	from_clause = " FROM expression_helper";
+	return string();
+}
 
-	Parser parser(context);
+unique_ptr<Expression> ExpressionHelper::ParseExpression(string expression) {
+	string query = "SELECT " + expression + from_clause;
+
+	Parser parser(con.context);
 	parser.ParseQuery(query.c_str());
 	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT) {
 		return nullptr;
 	}
-	auto &select = *((SelectStatement *)parser.statements[0].get());
+	Binder binder(con.context);
+	auto bound_statement = binder.Bind(*parser.statements[0]);
 
-	auto &select_list = select.node->GetSelectList();
+	auto &select_list = (vector<unique_ptr<Expression>>&) ((BoundSelectStatement&)*bound_statement).node->GetSelectList();
 	return move(select_list[0]);
 }
 
-unique_ptr<LogicalOperator> ExpressionHelper::ParseLogicalTree(string query) {
-	Parser parser(context);
-	parser.ParseQuery(query.c_str());
-	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT) {
-		return nullptr;
-	}
-	Planner planner(context);
-	planner.CreatePlan(move(parser.statements[0]));
-	return move(planner.plan);
-}
+// unique_ptr<LogicalOperator> ExpressionHelper::ParseLogicalTree(string query) {
+// 	Parser parser(context);
+// 	parser.ParseQuery(query.c_str());
+// 	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT) {
+// 		return nullptr;
+// 	}
+// 	Planner planner(context);
+// 	planner.CreatePlan(move(parser.statements[0]));
+// 	return move(planner.plan);
+// }
 
 unique_ptr<Expression> ExpressionHelper::ApplyExpressionRule(unique_ptr<Expression> root,
                                                              LogicalOperatorType root_type) {

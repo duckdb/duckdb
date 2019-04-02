@@ -7,10 +7,10 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Arithmetic simplification test", "[optimizer]") {
-	DuckDB db(nullptr);
-	Connection con(db);
+	ExpressionHelper helper;
 
-	ExpressionHelper helper(con.context);
+	REQUIRE(helper.AddColumns("X INTEGER").empty());
+
 	helper.AddRule<ArithmeticSimplificationRule>();
 
 	string input, expected_output;

@@ -8,14 +8,10 @@
 
 #pragma once
 
-// #include "parser/sql_statement.hpp"
 #include "parser/tokens.hpp"
 #include "planner/bind_context.hpp"
 #include "planner/bound_tokens.hpp"
 #include "parser/column_definition.hpp"
-// #include "planner/bound_sql_statement.hpp"
-// #include "planner/bound_query_node.hpp"
-// #include "planner/bound_tableref.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
 
 namespace duckdb {

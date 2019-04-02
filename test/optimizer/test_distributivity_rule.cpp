@@ -6,10 +6,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Distributivity test", "[optimizer]") {
-	DuckDB db(nullptr);
-	Connection con(db);
+	ExpressionHelper helper;
 
-	ExpressionHelper helper(con.context);
+	REQUIRE(helper.AddColumns("A BOOLEAN, B BOOLEAN, C BOOLEAN, D BOOLEAN, X BOOLEAN, Y BOOLEAN, Z BOOLEAN").empty());
 	helper.AddRule<DistributivityRule>();
 
 	string input, expected_output;
@@ -42,6 +41,7 @@ TEST_CASE("Distributivity test", "[optimizer]") {
 	expected_output = "(X AND (A OR B)) OR (Y AND (C OR D))";
 	REQUIRE(helper.VerifyRewrite(input, expected_output));
 
+	REQUIRE(helper.AddColumns("X INTEGER, Y INTEGER, Z INTEGER").empty());
 	input = "(X=1 AND Y=1) OR (X=1 AND Z=1)";
 	expected_output = "X=1 AND (Y=1 OR Z=1)";
 	REQUIRE(helper.VerifyRewrite(input, expected_output));

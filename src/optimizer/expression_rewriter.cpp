@@ -8,20 +8,22 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const vector<Rule *> &rules,
-                                                      unique_ptr<Expression> expr) {
+                                                      unique_ptr<Expression> expr, bool &changes_made) {
 	for (auto &rule : rules) {
 		vector<Expression *> bindings;
 		if (rule->root->Match(expr.get(), bindings)) {
 			// the rule matches! try to apply it
-			bool changes_made = false;
-			auto result = rule->Apply(op, bindings, changes_made);
+			bool rule_made_change = false;
+			auto result = rule->Apply(op, bindings, rule_made_change);
 			if (result) {
+				changes_made = true;
 				// the base node changed: the rule applied changes
 				// rerun on the new node
-				return ExpressionRewriter::ApplyRules(op, rules, move(result));
-			} else if (changes_made) {
+				return ExpressionRewriter::ApplyRules(op, rules, move(result), changes_made);
+			} else if (rule_made_change) {
+				changes_made = true;
 				// the base node didn't change, but changes were made, rerun
-				return ExpressionRewriter::ApplyRules(op, rules, move(expr));
+				return ExpressionRewriter::ApplyRules(op, rules, move(expr), changes_made);
 			}
 			// else nothing changed, continue to the next rule
 			continue;
@@ -30,7 +32,7 @@ unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const
 	// no changes could be made to this node
 	// recursively run on the children of this node
 	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
-		return ExpressionRewriter::ApplyRules(op, rules, move(child));
+		return ExpressionRewriter::ApplyRules(op, rules, move(child), changes_made);
 	});
 	return expr;
 }
@@ -58,7 +60,11 @@ void ExpressionRewriter::Apply(LogicalOperator &root) {
 		return;
 	}
 	for (size_t i = 0; i < root.expressions.size(); i++) {
-		root.expressions[i] = ExpressionRewriter::ApplyRules(root, to_apply_rules, move(root.expressions[i]));
+		bool changes_made;
+		do {
+			changes_made = false;
+			root.expressions[i] = ExpressionRewriter::ApplyRules(root, to_apply_rules, move(root.expressions[i]), changes_made);
+		} while(changes_made);
 	}
 
 	// if it is a LogicalFilter, we split up filter conjunctions again

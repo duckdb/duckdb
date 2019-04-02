@@ -29,7 +29,7 @@ public:
 private:
 	//! Apply a set of rules to a specific expression
 	static unique_ptr<Expression> ApplyRules(LogicalOperator &op, const vector<Rule *> &rules,
-	                                         unique_ptr<Expression> expr);
+	                                         unique_ptr<Expression> expr, bool &changes_made);
 };
 
 } // namespace duckdb
