@@ -16,6 +16,16 @@ TEST_CASE("Test scalar NULL handling", "[nullhandling]") {
 	// scalar NULL addition
 	result = con.Query("SELECT 3 + NULL");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	result = con.Query("SELECT NULL + 3");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+
+	// NULL on both sides
+	result = con.Query("SELECT NULL + NULL");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+
+	// nested NULL addition
+	result = con.Query("SELECT 1 + (NULL + NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 
 	// division by zero
 	result = con.Query("SELECT 4 / 0");

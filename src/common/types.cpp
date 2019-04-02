@@ -131,6 +131,8 @@ string SQLTypeIdToString(SQLTypeId id) {
 		return "VARCHAR";
 	case SQLTypeId::CHAR:
 		return "CHAR";
+	case SQLTypeId::SQLNULL:
+		return "NULL";
 	default:
 		return "VARBINARY";
 	}

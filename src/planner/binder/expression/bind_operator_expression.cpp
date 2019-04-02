@@ -101,6 +101,14 @@ static SQLType ResolveArithmeticType(OperatorExpression &op, vector<BoundExpress
 		children[1]->expr = AddCastToType(move(children[1]->expr), children[1]->sql_type, result_type);
 		return result_type;
 	}
+	if (left_type.id == SQLTypeId::SQLNULL) {
+		children[0]->expr = AddCastToType(move(children[0]->expr), children[0]->sql_type, right_type);
+		return right_type.id;
+	} else if (right_type.id == SQLTypeId::SQLNULL) {
+		children[1]->expr = AddCastToType(move(children[1]->expr), children[1]->sql_type, left_type);
+		return left_type.id;
+	}
+
 	if (children[0]->expr->expression_class == ExpressionClass::BOUND_PARAMETER &&
 		children[1]->expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
 		throw BinderException("Could not resolve type for operator");

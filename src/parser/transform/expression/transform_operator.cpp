@@ -124,7 +124,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
 			return right_expr;
 		case ExpressionType::OPERATOR_SUBTRACT:
 			target_type = ExpressionType::OPERATOR_MULTIPLY;
-			left_expr = make_unique<ConstantExpression>(SQLType(SQLTypeId::TINYINT), Value(-1));
+			left_expr = make_unique<ConstantExpression>(SQLType(SQLTypeId::TINYINT), Value::TINYINT(-1));
 			break;
 		default:
 			throw Exception("Unknown unary operator");
