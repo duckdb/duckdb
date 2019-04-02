@@ -8,11 +8,13 @@
 #include "planner/operator/logical_projection.hpp"
 #include "planner/planner.hpp"
 #include "planner/binder.hpp"
+#include "optimizer/rule/constant_folding.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-ExpressionHelper::ExpressionHelper() : db(nullptr), con(db), rewriter(con.context) {
+ExpressionHelper::ExpressionHelper() :
+	db(nullptr), con(db), rewriter(con.context) {
 	con.Query("BEGIN TRANSACTION");
 }
 
@@ -22,7 +24,9 @@ bool ExpressionHelper::VerifyRewrite(string input, string expected_output) {
 	auto expected_result = ParseExpression(expected_output);
 	bool equals = Expression::Equals(result.get(), expected_result.get());
 	if (!equals) {
+		printf("Optimized result does not equal expected result!\n");
 		result->Print();
+		printf("Expected:\n");
 		expected_result->Print();
 	}
 	return equals;
@@ -66,13 +70,11 @@ unique_ptr<LogicalOperator> ExpressionHelper::ParseLogicalTree(string query) {
 	return move(planner.plan);
 }
 
-unique_ptr<Expression> ExpressionHelper::ApplyExpressionRule(unique_ptr<Expression> root,
-                                                             LogicalOperatorType root_type) {
+unique_ptr<Expression> ExpressionHelper::ApplyExpressionRule(unique_ptr<Expression> root) {
 	// make a logical projection
 	vector<unique_ptr<Expression>> expressions;
 	expressions.push_back(move(root));
 	auto proj = make_unique<LogicalProjection>(0, move(expressions));
-	proj->type = root_type;
 	rewriter.Apply(*proj);
 	return move(proj->expressions[0]);
 }

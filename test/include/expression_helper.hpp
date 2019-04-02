@@ -14,8 +14,7 @@ public:
 	ExpressionHelper();
 
 	unique_ptr<Expression> ParseExpression(string expression);
-	unique_ptr<Expression> ApplyExpressionRule(unique_ptr<Expression> root,
-	                                           LogicalOperatorType root_type = LogicalOperatorType::PROJECTION);
+	unique_ptr<Expression> ApplyExpressionRule(unique_ptr<Expression> root);
 
 	unique_ptr<LogicalOperator> ParseLogicalTree(string query);
 

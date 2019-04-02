@@ -23,7 +23,7 @@ unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const
 			} else if (rule_made_change) {
 				changes_made = true;
 				// the base node didn't change, but changes were made, rerun
-				return ExpressionRewriter::ApplyRules(op, rules, move(expr), changes_made);
+				return expr;
 			}
 			// else nothing changed, continue to the next rule
 			continue;

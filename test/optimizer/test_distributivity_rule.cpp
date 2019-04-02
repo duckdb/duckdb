@@ -13,6 +13,9 @@ TEST_CASE("Distributivity test", "[optimizer]") {
 
 	string input, expected_output;
 
+	// "(NULL AND FALSE) OR (NULL AND TRUE)"
+	// "NULL AND (FALSE OR TRUE)"
+
 	input = "(X AND A AND B) OR (A AND X AND C) OR (X AND B AND D)";
 	expected_output = "X AND ((A AND (B OR C)) OR (B AND D))";
 	REQUIRE(helper.VerifyRewrite(input, expected_output));

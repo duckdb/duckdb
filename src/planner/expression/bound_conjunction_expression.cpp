@@ -22,7 +22,7 @@ bool BoundConjunctionExpression::Equals(const BaseExpression *other_) const {
 	if (Expression::Equals(left.get(), other->left.get()) && Expression::Equals(right.get(), other->right.get())) {
 		return true;
 	}
-	if (Expression::Equals(left.get(), other->right.get()) && Expression::Equals(left.get(), other->right.get())) {
+	if (Expression::Equals(left.get(), other->right.get()) && Expression::Equals(right.get(), other->left.get())) {
 		return true;
 	}
 	return false;
