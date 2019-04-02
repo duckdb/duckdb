@@ -15,6 +15,7 @@
 
 namespace duckdb {
 class BoundQueryNode;
+class BoundTableRef;
 
 class ExpressionIterator {
 public:
@@ -25,6 +26,7 @@ public:
 
 	static void EnumerateExpression(unique_ptr<Expression> &expr, std::function<void(Expression &child)> callback);
 
+	static void EnumerateTableRefChildren(BoundTableRef& ref, std::function<void(Expression &child)> callback);
 	static void EnumerateQueryNodeChildren(BoundQueryNode &node,
 	                              std::function<void(Expression &child)> callback);
 };

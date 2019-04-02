@@ -9,6 +9,10 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSubqueryRef &r
 	// generate the logical plan for the subquery
 	// this happens separately from the current LogicalPlan generation
 	LogicalPlanGenerator generator(*ref.binder, context);
+	generator.plan_subquery = plan_subquery;
 	auto subquery = generator.CreatePlan(*ref.subquery);
+	if (generator.has_unplanned_subqueries) {
+		has_unplanned_subqueries = true;
+	}
 	return make_unique<LogicalSubquery>(move(subquery), ref.bind_index);
 }
