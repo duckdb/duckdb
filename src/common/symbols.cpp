@@ -188,6 +188,7 @@ template class std::vector<int>;
 INSTANTIATE_VECTOR(std::vector<WALEntryData>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Rule>>);
 template class std::vector<std::vector<Expression *>>;
+template class std::vector<SQLType>;
 
 template struct std::atomic<size_t>;
 template class std::bitset<STANDARD_VECTOR_SIZE>;

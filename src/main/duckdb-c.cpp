@@ -137,6 +137,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 		case SQLTypeId::BIGINT:
 			WriteData<int64_t>(out, result->collection, col);
 			break;
+		case SQLTypeId::DECIMAL:
 		case SQLTypeId::DOUBLE:
 			WriteData<double>(out, result->collection, col);
 			break;
@@ -228,6 +229,7 @@ duckdb_type ConvertCPPTypeToC(SQLType sql_type) {
 		return DUCKDB_TYPE_INTEGER;
 	case SQLTypeId::BIGINT:
 		return DUCKDB_TYPE_BIGINT;
+	case SQLTypeId::DECIMAL:
 	case SQLTypeId::DOUBLE:
 		return DUCKDB_TYPE_DOUBLE;
 	case SQLTypeId::TIMESTAMP:
