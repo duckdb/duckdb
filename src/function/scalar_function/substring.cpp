@@ -39,8 +39,8 @@ void substring_function(Vector inputs[], size_t input_count, BoundFunctionExpres
 	    input, offset, length, result,
 	    [&](size_t input_index, size_t offset_index, size_t length_index, size_t result_index) {
 		    auto input_string = input_data[input_index];
-		    auto offset = offset_data[offset_index] - 1; // minus one because SQL starts counting at 1
-		    auto length = length_data[length_index];
+		    size_t offset = offset_data[offset_index] - 1; // minus one because SQL starts counting at 1
+		    size_t length = length_data[length_index];
 
 		    if (input.nullmask[input_index]) {
 			    return;

@@ -104,7 +104,7 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 		}
 		while (getline(from_csv, line)) {
 			bool in_quotes = false;
-			int64_t start = 0;
+			size_t start = 0;
 			int64_t column = 0;
 			int64_t expected_column_count =
 			    info.select_list.size() > 0 ? info.select_list.size() : insert_chunk.column_count;

@@ -66,7 +66,7 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &source) {
 	auto select_distinct = source.Read<bool>();
 	auto limit = source.ReadOptional<ParsedExpression>();
 	auto offset = source.ReadOptional<ParsedExpression>();
-	auto order_count = source.Read<int64_t>();
+	size_t order_count = source.Read<int64_t>();
 	vector<OrderByNode> orders;
 	for (size_t i = 0; i < order_count; i++) {
 		OrderByNode node;

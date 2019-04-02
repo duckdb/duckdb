@@ -11,6 +11,8 @@
 #include "common/types/value.hpp"
 #include "planner/expression.hpp"
 
+#include <functional>
+
 namespace duckdb {
 
 enum class ValueComparisonResult { PRUNE_LEFT, PRUNE_RIGHT, UNSATISFIABLE_CONDITION, PRUNE_NOTHING };

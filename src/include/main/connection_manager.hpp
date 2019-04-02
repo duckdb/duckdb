@@ -10,6 +10,8 @@
 
 #include "common/common.hpp"
 
+#include <mutex>
+
 namespace duckdb {
 
 class DuckDB;

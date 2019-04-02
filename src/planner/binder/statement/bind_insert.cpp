@@ -45,7 +45,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 		}
 	}
 
-	int expected_columns = stmt.columns.size() == 0 ? result->table->columns.size() : stmt.columns.size();
+	size_t expected_columns = stmt.columns.size() == 0 ? result->table->columns.size() : stmt.columns.size();
 	if (stmt.select_statement) {
 		result->select_statement =
 		    unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*stmt.select_statement));
@@ -54,7 +54,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 				StringUtil::Format(stmt.columns.size() == 0 ? "table %s has %d columns but %d values were supplied"
 															: "Column name/value mismatch for insert on %s: "
 																"expected %d columns but %d values were supplied",
-									result->table->name.c_str(), expected_columns, result->select_statement->node->types.size());
+									result->table->name.c_str(), (int) expected_columns, (int) result->select_statement->node->types.size());
 			throw BinderException(msg);
 		}
 	} else {
@@ -66,7 +66,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 				    StringUtil::Format(stmt.columns.size() == 0 ? "table %s has %d columns but %d values were supplied"
 				                                                : "Column name/value mismatch for insert on %s: "
 				                                                  "expected %d columns but %d values were supplied",
-				                       result->table->name.c_str(), expected_columns, expression_list.size());
+				                       result->table->name.c_str(), (int) expected_columns, (int) expression_list.size());
 				throw BinderException(msg);
 			}
 			vector<unique_ptr<Expression>> list;

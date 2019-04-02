@@ -27,7 +27,7 @@ template <class SRC> static uint64_t cast_to_uint64_overflow_check(SRC value) {
 }
 
 template <class DST> static DST cast_from_uint64_overflow_check(uint64_t value) {
-	if (value > MaximumValue<DST>()) {
+	if (value > (uint64_t) MaximumValue<DST>()) {
 		throw ValueOutOfRangeException((int64_t)value, TypeId::POINTER, GetTypeId<DST>());
 	}
 	return (DST)value;

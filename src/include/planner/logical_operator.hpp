@@ -13,6 +13,8 @@
 #include "planner/expression.hpp"
 #include "planner/logical_operator_visitor.hpp"
 
+#include <functional>
+
 namespace duckdb {
 
 //! LogicalOperator is the base class of the logical operators present in the
