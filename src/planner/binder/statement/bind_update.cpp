@@ -13,7 +13,9 @@ unique_ptr<BoundSQLStatement> Binder::Bind(UpdateStatement &stmt) {
 	auto result = make_unique<BoundUpdateStatement>();
 	// visit the table reference
 	result->table = Bind(*stmt.table);
-	assert(result->table->type == TableReferenceType::BASE_TABLE);
+	if (result->table->type != TableReferenceType::BASE_TABLE) {
+		throw BinderException("Can only update base table!");
+	}
 	auto table = ((BoundBaseTableRef &)*result->table).table;
 	result->proj_index = GenerateTableIndex();
 	// project any additional columns required for the condition/expressions

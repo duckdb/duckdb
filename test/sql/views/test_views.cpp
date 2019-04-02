@@ -36,6 +36,24 @@ TEST_CASE("Test view creation", "[views]") {
 	REQUIRE_FAIL(con.Query("CREATE VIEW v1 AS SELECT * FROM dontexist"));
 }
 
+TEST_CASE("Test deleting/updating views", "[views]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// create a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t1 VALUES (41), (42), (43)"));
+	// create a view
+	REQUIRE_NO_FAIL(con.Query("CREATE VIEW v1 AS SELECT i AS j FROM t1 WHERE i < 43"));
+
+	// try to delete from the view
+	REQUIRE_FAIL(con.Query("DELETE FROM v1;"));
+	// try to update the view
+	REQUIRE_FAIL(con.Query("UPDATE v1 SET j=1;"));
+}
+
 TEST_CASE("Test view creation with alias", "[views]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
