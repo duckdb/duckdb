@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-AggregateBinder::AggregateBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
+AggregateBinder::AggregateBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context, true) {
 }
 
 BindResult AggregateBinder::BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression) {

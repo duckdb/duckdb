@@ -81,11 +81,24 @@ BindResult SelectBinder::BindAggregate(AggregateExpression &aggr, uint32_t depth
 	SQLType child_type;
 	if (aggr.child) {
 		AggregateBinder aggregate_binder(binder, context);
-		string result = aggregate_binder.Bind(&aggr.child, 0);
-		if (!result.empty()) {
-			// FIXME: check if columns were bound for subqueries
-			// FIXME: proper subquery binding
-			return BindResult(result);
+		string error = aggregate_binder.Bind(&aggr.child, 0);
+		if (!error.empty()) {
+			// failed to bind child
+			if (aggregate_binder.BoundColumns()) {
+				// however, we bound columns!
+				// that means this aggregation belongs to this node
+				// check if we have to resolve any errors by binding with parent binders
+				bool success = aggregate_binder.BindCorrelatedColumns(aggr.child);
+				// if there is still an error after this, we could not successfully bind the aggregate
+				if (!success) {
+					throw BinderException(error);
+				}
+				auto &bound_expr = (BoundExpression &) *aggr.child;
+				ExtractCorrelatedExpressions(binder, *bound_expr.expr);
+			} else {
+				// we didn't bind columns, try again in children
+				return BindResult(error);
+			}
 		}
 		auto &bound_expr = (BoundExpression &) *aggr.child;
 		child_type = bound_expr.sql_type;

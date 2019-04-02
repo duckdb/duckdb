@@ -14,6 +14,7 @@
 #include <functional>
 
 namespace duckdb {
+class BoundQueryNode;
 
 class ExpressionIterator {
 public:
@@ -21,6 +22,11 @@ public:
 	static void EnumerateChildren(Expression &expression, std::function<void(Expression &child)> callback);
 	static void EnumerateChildren(Expression &expression,
 	                              std::function<unique_ptr<Expression>(unique_ptr<Expression> child)> callback);
+
+	static void EnumerateExpression(unique_ptr<Expression> &expr, std::function<void(Expression &child)> callback);
+
+	static void EnumerateQueryNodeChildren(BoundQueryNode &node,
+	                              std::function<void(Expression &child)> callback);
 };
 
 } // namespace duckdb

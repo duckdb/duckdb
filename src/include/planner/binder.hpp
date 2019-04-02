@@ -25,12 +25,11 @@ class ExpressionBinder;
 struct CorrelatedColumnInfo {
 	ColumnBinding binding;
 	TypeId type;
-	SQLType sql_type;
 	string name;
 	size_t depth;
 
-	CorrelatedColumnInfo(BoundColumnRefExpression &expr, SQLType sql_type)
-	    : binding(expr.binding), type(expr.return_type), sql_type(sql_type), name(expr.GetName()),
+	CorrelatedColumnInfo(BoundColumnRefExpression &expr)
+	    : binding(expr.binding), type(expr.return_type), name(expr.GetName()),
 	      depth(expr.depth) {
 	}
 
@@ -51,6 +50,8 @@ public:
 
 	unique_ptr<BoundSQLStatement> Bind(SQLStatement &statement);
 
+	unique_ptr<BoundQueryNode> Bind(QueryNode &node);
+
 	void BindConstraints(string table, vector<ColumnDefinition> &columns, vector<unique_ptr<Constraint>> &constraints);
 private:
 	unique_ptr<BoundSQLStatement> Bind(SelectStatement &stmt);
@@ -62,7 +63,6 @@ private:
 	unique_ptr<BoundSQLStatement> Bind(CreateIndexStatement &stmt);
 	unique_ptr<BoundSQLStatement> Bind(ExecuteStatement &stmt);
 
-	unique_ptr<BoundQueryNode> Bind(QueryNode &node);
 	unique_ptr<BoundQueryNode> Bind(SelectNode &node);
 	unique_ptr<BoundQueryNode> Bind(SetOperationNode &node);
 

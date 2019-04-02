@@ -73,6 +73,8 @@ public:
 	// Bind table names to ColumnRefExpressions
 	void BindTableNames(ParsedExpression &expr);
 
+	bool BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
+
 	//! The target type that should result from the binder. If the result is not of this type, a cast to this type will be added. Defaults to INVALID.
 	SQLType target_type;
 protected:
@@ -92,7 +94,7 @@ protected:
 
 	void BindChild(unique_ptr<ParsedExpression> &expr, uint32_t depth, string &error);
 protected:
-	bool BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
+	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
 
 	Binder &binder;
 	ClientContext &context;

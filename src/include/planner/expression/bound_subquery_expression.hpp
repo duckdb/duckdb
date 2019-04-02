@@ -32,6 +32,10 @@ public:
 	unique_ptr<Expression> child;
 	//! The comparison type of the child expression with the subquery (in case of ANY, ALL operators)
 	ExpressionType comparison_type;
+	//! The SQLType of the subquery result. Only used for ANY expressions.
+	SQLType child_type;
+	//! The target SQLType of the subquery result (i.e. to which type it should be casted, if child_type <> child_target). Only used for ANY expressions.
+	SQLType child_target;
 
 public:
 	bool HasSubquery() const override {

@@ -79,6 +79,7 @@ void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expr,
 		}
 		break;
 	}
+	case ExpressionClass::BOUND_EXPRESSION:
 	case ExpressionClass::COLUMN_REF:
 	case ExpressionClass::CONSTANT:
 	case ExpressionClass::DEFAULT:

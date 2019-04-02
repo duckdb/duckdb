@@ -69,6 +69,9 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 	case ExpressionClass::BOUND_REF:
 		result = VisitReplace((BoundReferenceExpression &)expr, expression);
 		break;
+	case ExpressionClass::BOUND_DEFAULT:
+		result = VisitReplace((BoundDefaultExpression &)expr, expression);
+		break;
 	case ExpressionClass::COMMON_SUBEXPRESSION:
 		result = VisitReplace((CommonSubExpression &)expr, expression);
 		break;

@@ -248,48 +248,32 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundJoinRef &ref) 
 	LogicalJoin::GetTableReferences(*left, left_bindings);
 	LogicalJoin::GetTableReferences(*right, right_bindings);
 	// now create the join operator from the set of join conditions
-	return LogicalComparisonJoin::CreateJoin(ref.type, move(left), move(right), left_bindings, right_bindings,
+	auto result = LogicalComparisonJoin::CreateJoin(ref.type, move(left), move(right), left_bindings, right_bindings,
 	                                         expressions);
 
-	// LogicalOperator *join;
-	// if (result->type == LogicalOperatorType::FILTER) {
-	// 	join = result->children[0].get();
-	// } else {
-	// 	join = result.get();
-	// }
+	LogicalOperator *join;
+	if (result->type == LogicalOperatorType::FILTER) {
+		join = result->children[0].get();
+	} else {
+		join = result.get();
+	}
 
-	// // we visit the expressions depending on the type of join
-	// if (join->type == LogicalOperatorType::COMPARISON_JOIN) {
-	// 	// comparison join
-	// 	// in this join we visit the expressions on the LHS with the LHS as root node
-	// 	// and the expressions on the RHS with the RHS as root node
-	// 	auto &comp_join = (LogicalComparisonJoin &)*join;
-
-	// 	// first visit the left conditions
-	// 	auto left = move(comp_join.children[0]);
-	// 	for (size_t i = 0; i < comp_join.conditions.size(); i++) {
-	// 		VisitExpression(&comp_join.conditions[i].left);
-	// 	}
-	// 	comp_join.children[0] = move(left);
-	// 	// now visit the right conditions
-	// 	root = move(comp_join.children[1]);
-	// 	for (size_t i = 0; i < comp_join.conditions.size(); i++) {
-	// 		VisitExpression(&comp_join.conditions[i].right);
-	// 	}
-	// 	comp_join.children[1] = move(root);
-	// 	// move the join as the root node
-	// 	return move(result);
-	// } else if (join->type == LogicalOperatorType::ANY_JOIN) {
-	// 	auto &any_join = (LogicalAnyJoin &)*join;
-	// 	// for the any join we just visit the condition
-	// 	if (any_join.condition->HasSubquery()) {
-	// 		throw NotImplementedException("Cannot perform non-inner join on subquery!");
-	// 	}
-	// 	VisitExpression(&any_join.condition);
-	// 	return move(result);
-	// } else {
-	// 	// no conditions left: must be a cross product
-	// 	assert(join->type == LogicalOperatorType::CROSS_PRODUCT);
-	// 	return move(result);
-	// }
+	// we visit the expressions depending on the type of join
+	if (join->type == LogicalOperatorType::COMPARISON_JOIN) {
+		// comparison join
+		// in this join we visit the expressions on the LHS with the LHS as root node
+		// and the expressions on the RHS with the RHS as root node
+		auto &comp_join = (LogicalComparisonJoin &)*join;
+		for (size_t i = 0; i < comp_join.conditions.size(); i++) {
+			PlanSubqueries(&comp_join.conditions[i].left, &comp_join.children[0]);
+			PlanSubqueries(&comp_join.conditions[i].right, &comp_join.children[1]);
+		}
+	} else if (join->type == LogicalOperatorType::ANY_JOIN) {
+		auto &any_join = (LogicalAnyJoin &)*join;
+		// for the any join we just visit the condition
+		if (any_join.condition->HasSubquery()) {
+			throw NotImplementedException("Cannot perform non-inner join on subquery!");
+		}
+	}
+	return result;
 }

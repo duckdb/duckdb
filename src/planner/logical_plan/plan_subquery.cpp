@@ -99,10 +99,6 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// subquery has NULL values -> result is (TRUE or NULL)
 		// subquery has no NULL values -> result is (TRUE, FALSE or NULL [if input is NULL])
 		// first we push a subquery to the right hand side
-		plan->ResolveOperatorTypes();
-		assert(plan->types.size() == 1);
-		auto right_type = plan->types[0];
-
 		auto subquery_index = binder.GenerateTableIndex();
 		auto logical_subquery = make_unique<LogicalSubquery>(move(plan), subquery_index);
 		plan = move(logical_subquery);
@@ -114,7 +110,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// create the JOIN condition
 		JoinCondition cond;
 		cond.left = move(expr.child);
-		cond.right = make_unique<BoundColumnRefExpression>(right_type, ColumnBinding(subquery_index, 0));
+		cond.right = AddCastToType(make_unique<BoundColumnRefExpression>(GetInternalType(expr.child_type), ColumnBinding(subquery_index, 0)), expr.child_type, expr.child_target);
 		cond.comparison = expr.comparison_type;
 		join->conditions.push_back(move(cond));
 		root = move(join);
@@ -231,10 +227,6 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		// the correlated mark join handles this case by itself
 		// as the MARK join has one extra join condition (the original condition, of the ANY expression, e.g.
 		// [i=ANY(...)])
-		plan->ResolveOperatorTypes();
-		assert(plan->types.size() == 1);
-		auto right_type = plan->types[0];
-
 		auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK);
 		// LHS
 		delim_join->AddChild(move(root));
@@ -251,7 +243,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		// add the actual condition based on the ANY/ALL predicate
 		JoinCondition compare_cond;
 		compare_cond.left = move(expr.child);
-		compare_cond.right = make_unique<BoundColumnRefExpression>(right_type, ColumnBinding(subquery_index, 0));
+		compare_cond.right = AddCastToType(make_unique<BoundColumnRefExpression>(GetInternalType(expr.child_type), ColumnBinding(subquery_index, 0)), expr.child_type, expr.child_target);
 		compare_cond.comparison = expr.comparison_type;
 		delim_join->conditions.push_back(move(compare_cond));
 
@@ -328,7 +320,7 @@ void LogicalPlanGenerator::PlanSubqueries(unique_ptr<Expression> *expr_ptr, uniq
 	});
 
 	// check if this is a subquery node
-	if (expr.type == ExpressionType::SUBQUERY) {
+	if (expr.expression_class == ExpressionClass::BOUND_SUBQUERY) {
 		auto &subquery = (BoundSubqueryExpression &)expr;
 		// subquery node! plan it
 		if (subquery.IsCorrelated() && !plan_subquery) {

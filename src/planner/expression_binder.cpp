@@ -10,6 +10,7 @@
 #include "planner/expression/bound_parameter_expression.hpp"
 #include "planner/expression/bound_subquery_expression.hpp"
 #include "parser/parsed_expression_iterator.hpp"
+#include "planner/expression_iterator.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -91,6 +92,16 @@ void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, uint32_t de
 	}
 }
 
+void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &expr) {
+	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &bound_colref = (BoundColumnRefExpression &)expr;
+		if (bound_colref.depth > 0) {
+			binder.AddCorrelatedColumn(CorrelatedColumnInfo(bound_colref));
+		}
+	}
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ExtractCorrelatedExpressions(binder, child); });
+}
+
 unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, SQLType *result_type, bool root_expression) {
 	// bind the main expression
 	auto error_msg = Bind(&expr, 0, root_expression);
@@ -100,6 +111,8 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 		if (!success) {
 			throw BinderException(error_msg);
 		}
+		auto bound_expr = (BoundExpression*) expr.get();
+		ExtractCorrelatedExpressions(binder, *bound_expr->expr);
 	}
 	assert(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
 	auto bound_expr = (BoundExpression*) expr.get();

@@ -59,15 +59,6 @@ public:
 	//! Deserializes a blob back into a QueryNode, returns nullptr if
 	//! deserialization is not possible
 	static unique_ptr<QueryNode> Deserialize(Deserializer &source);
-
-	// //! Whether or not the query has a LIMIT clause
-	// bool HasLimit() {
-	// 	return limit || offset;
-	// }
-	// //! Whether or not the query has an ORDER BY clause
-	// bool HasOrder() {
-	// 	return orders.size() > 0;
-	// }
 protected:
 	void CopyProperties(QueryNode &other);
 };
