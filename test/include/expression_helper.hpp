@@ -17,7 +17,7 @@ public:
 	unique_ptr<Expression> ApplyExpressionRule(unique_ptr<Expression> root,
 	                                           LogicalOperatorType root_type = LogicalOperatorType::PROJECTION);
 
-	// unique_ptr<LogicalOperator> ParseLogicalTree(string query);
+	unique_ptr<LogicalOperator> ParseLogicalTree(string query);
 
 	template <class T> void AddRule() {
 		rewriter.rules.push_back(make_unique<T>(rewriter));
@@ -26,9 +26,10 @@ public:
 	bool VerifyRewrite(string input, string expected_output);
 
 	string AddColumns(string columns);
-private:
+
 	DuckDB db;
 	Connection con;
+private:
 	ExpressionRewriter rewriter;
 
 	string from_clause;
