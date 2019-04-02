@@ -30,7 +30,9 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, uint32_t d
 			binder.AddCorrelatedColumn(corr);
 		}
 	}
-
+	if (expr.subquery_type != SubqueryType::EXISTS && bound_node->types.size() > 1) {
+		throw BinderException("Subquery returns %zu columns - expected 1", bound_node->types.size());
+	}
 
 	SQLType return_type = expr.subquery_type == SubqueryType::SCALAR ? bound_node->types[0] : SQLType(SQLTypeId::BOOLEAN);
 
