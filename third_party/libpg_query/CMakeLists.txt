@@ -3,27 +3,11 @@ cmake_minimum_required(VERSION 2.8.7)
 project(pg_query CXX C)
 
 # this code imitates the Makefile in /third_party/libpg_query/
-file(GLOB_RECURSE pg_query_srcs ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c)
-list(REMOVE_ITEM pg_query_srcs
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/pg_query_fingerprint_defs.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/pg_query_fingerprint_conds.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/pg_query_fingerprint.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/pg_query_json_defs.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/pg_query_json_conds.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/pg_query_json_helper.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/pg_query_json_plpgsql.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/pg_query_json.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/postgres/guc-file.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/postgres/scan.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/postgres/src_backend_libpq_pqcomm.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/postgres/src_backend_postmaster_postmaster.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/postgres/src_backend_storage_ipc_ipc.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/postgres/src_backend_utils_misc_guc.c")
+file(GLOB_RECURSE pg_query_srcs ${CMAKE_CURRENT_SOURCE_DIR}/*.c)
 
-include_directories(.)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/postgres/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-add_library(pg_query STATIC ${pg_query_srcs})
+add_library(pg_query STATIC postgres_parser.cpp pg_functions.cpp src_backend_parser_parser.c src_backend_parser_gram.c src_backend_nodes_list.c src_backend_parser_scansup.c src_backend_nodes_makefuncs.c  src_backend_nodes_value.c src_backend_parser_scan.c  src_common_keywords.c)
 
 IF (NOT MSVC)
   set_target_properties(pg_query PROPERTIES COMPILE_FLAGS "-Wno-unused-function -Wno-unused-variable")

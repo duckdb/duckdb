@@ -5,7 +5,7 @@
 
 using namespace std;
 
-#ifndef _MSC_VER
+#ifndef _WIN32
 #include <cstdio>
 #include <dirent.h>
 #include <sys/stat.h>

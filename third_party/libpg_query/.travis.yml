@@ -1,5 +1,0 @@
-language: c
-script: make
-compiler:
-  - clang
-  - gcc

@@ -21,7 +21,7 @@ unique_ptr<CreateTableStatement> Transformer::TransformCreateTable(Node *node) {
 	}
 	info.table = stmt->relation->relname;
 	info.if_not_exists = stmt->if_not_exists;
-	info.temporary = stmt->relation->relpersistence == 't'; // yeah totally a char
+	info.temporary = stmt->relation->relpersistence == PostgresRelPersistence::RELPERSISTENCE_TEMP;
 
 	assert(stmt->tableElts);
 
