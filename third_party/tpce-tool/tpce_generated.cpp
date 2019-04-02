@@ -95,7 +95,7 @@ template <typename T> class DuckDBBaseLoader : public CBaseLoader<T> {
 
 class DuckDBSectorLoad : public DuckDBBaseLoader<SECTOR_ROW> {
 public:
-	DuckDBSectorLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBSectorLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -107,14 +107,14 @@ public:
 		size_t column = 0;
 
 		append_string(chunk, index, column, next_record.SC_ID);
-		append_string(chunk, index, column, next_record.SC_NAME);	
+		append_string(chunk, index, column, next_record.SC_NAME);
 	}
 
 };
-	
+
 class DuckDBLastTradeLoad : public DuckDBBaseLoader<LAST_TRADE_ROW> {
 public:
-	DuckDBLastTradeLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBLastTradeLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -129,14 +129,14 @@ public:
 		append_timestamp(chunk, index, column, next_record.LT_DTS);
 		append_double(chunk, index, column, next_record.LT_PRICE);
 		append_double(chunk, index, column, next_record.LT_OPEN_PRICE);
-		append_bigint(chunk, index, column, next_record.LT_VOL);	
+		append_bigint(chunk, index, column, next_record.LT_VOL);
 	}
 
 };
-	
+
 class DuckDBFinancialLoad : public DuckDBBaseLoader<FINANCIAL_ROW> {
 public:
-	DuckDBFinancialLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBFinancialLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -160,14 +160,14 @@ public:
 		append_double(chunk, index, column, next_record.FI_ASSETS);
 		append_double(chunk, index, column, next_record.FI_LIABILITY);
 		append_bigint(chunk, index, column, next_record.FI_OUT_BASIC);
-		append_bigint(chunk, index, column, next_record.FI_OUT_DILUT);	
+		append_bigint(chunk, index, column, next_record.FI_OUT_DILUT);
 	}
 
 };
-	
+
 class DuckDBTradeLoad : public DuckDBBaseLoader<TRADE_ROW> {
 public:
-	DuckDBTradeLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBTradeLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -192,14 +192,14 @@ public:
 		append_double(chunk, index, column, next_record.T_CHRG);
 		append_double(chunk, index, column, next_record.T_COMM);
 		append_double(chunk, index, column, next_record.T_TAX);
-		append_bool(chunk, index, column, next_record.T_LIFO);	
+		append_bool(chunk, index, column, next_record.T_LIFO);
 	}
 
 };
-	
+
 class DuckDBSettlementLoad : public DuckDBBaseLoader<SETTLEMENT_ROW> {
 public:
-	DuckDBSettlementLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBSettlementLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -213,14 +213,14 @@ public:
 		append_bigint(chunk, index, column, next_record.SE_T_ID);
 		append_string(chunk, index, column, next_record.SE_CASH_TYPE);
 		append_timestamp(chunk, index, column, next_record.SE_CASH_DUE_DATE);
-		append_double(chunk, index, column, next_record.SE_AMT);	
+		append_double(chunk, index, column, next_record.SE_AMT);
 	}
 
 };
-	
+
 class DuckDBCommissionRateLoad : public DuckDBBaseLoader<COMMISSION_RATE_ROW> {
 public:
-	DuckDBCommissionRateLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBCommissionRateLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -236,14 +236,14 @@ public:
 		append_string(chunk, index, column, next_record.CR_EX_ID);
 		append_value(chunk, index, column, next_record.CR_FROM_QTY);
 		append_value(chunk, index, column, next_record.CR_TO_QTY);
-		append_double(chunk, index, column, next_record.CR_RATE);	
+		append_double(chunk, index, column, next_record.CR_RATE);
 	}
 
 };
-	
+
 class DuckDBCustomerAccountLoad : public DuckDBBaseLoader<CUSTOMER_ACCOUNT_ROW> {
 public:
-	DuckDBCustomerAccountLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBCustomerAccountLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -259,14 +259,14 @@ public:
 		append_bigint(chunk, index, column, next_record.CA_C_ID);
 		append_string(chunk, index, column, next_record.CA_NAME);
 		append_char(chunk, index, column, next_record.CA_TAX_ST);
-		append_double(chunk, index, column, next_record.CA_BAL);	
+		append_double(chunk, index, column, next_record.CA_BAL);
 	}
 
 };
-	
+
 class DuckDBCashTransactionLoad : public DuckDBBaseLoader<CASH_TRANSACTION_ROW> {
 public:
-	DuckDBCashTransactionLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBCashTransactionLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -280,14 +280,14 @@ public:
 		append_bigint(chunk, index, column, next_record.CT_T_ID);
 		append_timestamp(chunk, index, column, next_record.CT_DTS);
 		append_double(chunk, index, column, next_record.CT_AMT);
-		append_string(chunk, index, column, next_record.CT_NAME);	
+		append_string(chunk, index, column, next_record.CT_NAME);
 	}
 
 };
-	
+
 class DuckDBTaxRateLoad : public DuckDBBaseLoader<TAX_RATE_ROW> {
 public:
-	DuckDBTaxRateLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBTaxRateLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -300,14 +300,14 @@ public:
 
 		append_string(chunk, index, column, next_record.TX_ID);
 		append_string(chunk, index, column, next_record.TX_NAME);
-		append_double(chunk, index, column, next_record.TX_RATE);	
+		append_double(chunk, index, column, next_record.TX_RATE);
 	}
 
 };
-	
+
 class DuckDBCustomerTaxrateLoad : public DuckDBBaseLoader<CUSTOMER_TAXRATE_ROW> {
 public:
-	DuckDBCustomerTaxrateLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBCustomerTaxrateLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -319,14 +319,14 @@ public:
 		size_t column = 0;
 
 		append_string(chunk, index, column, next_record.CX_TX_ID);
-		append_bigint(chunk, index, column, next_record.CX_C_ID);	
+		append_bigint(chunk, index, column, next_record.CX_C_ID);
 	}
 
 };
-	
+
 class DuckDBNewsXRefLoad : public DuckDBBaseLoader<NEWS_XREF_ROW> {
 public:
-	DuckDBNewsXRefLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBNewsXRefLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -338,14 +338,14 @@ public:
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.NX_NI_ID);
-		append_bigint(chunk, index, column, next_record.NX_CO_ID);	
+		append_bigint(chunk, index, column, next_record.NX_CO_ID);
 	}
 
 };
-	
+
 class DuckDBChargeLoad : public DuckDBBaseLoader<CHARGE_ROW> {
 public:
-	DuckDBChargeLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBChargeLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -358,14 +358,14 @@ public:
 
 		append_string(chunk, index, column, next_record.CH_TT_ID);
 		append_value(chunk, index, column, next_record.CH_C_TIER);
-		append_double(chunk, index, column, next_record.CH_CHRG);	
+		append_double(chunk, index, column, next_record.CH_CHRG);
 	}
 
 };
-	
+
 class DuckDBTradeTypeLoad : public DuckDBBaseLoader<TRADE_TYPE_ROW> {
 public:
-	DuckDBTradeTypeLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBTradeTypeLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -379,14 +379,14 @@ public:
 		append_string(chunk, index, column, next_record.TT_ID);
 		append_string(chunk, index, column, next_record.TT_NAME);
 		append_bool(chunk, index, column, next_record.TT_IS_SELL);
-		append_bool(chunk, index, column, next_record.TT_IS_MRKT);	
+		append_bool(chunk, index, column, next_record.TT_IS_MRKT);
 	}
 
 };
-	
+
 class DuckDBHoldingLoad : public DuckDBBaseLoader<HOLDING_ROW> {
 public:
-	DuckDBHoldingLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBHoldingLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -402,14 +402,14 @@ public:
 		append_string(chunk, index, column, next_record.H_S_SYMB);
 		append_timestamp(chunk, index, column, next_record.H_DTS);
 		append_double(chunk, index, column, next_record.H_PRICE);
-		append_value(chunk, index, column, next_record.H_QTY);	
+		append_value(chunk, index, column, next_record.H_QTY);
 	}
 
 };
-	
+
 class DuckDBDailyMarketLoad : public DuckDBBaseLoader<DAILY_MARKET_ROW> {
 public:
-	DuckDBDailyMarketLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBDailyMarketLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -425,14 +425,14 @@ public:
 		append_double(chunk, index, column, next_record.DM_CLOSE);
 		append_double(chunk, index, column, next_record.DM_HIGH);
 		append_double(chunk, index, column, next_record.DM_LOW);
-		append_bigint(chunk, index, column, next_record.DM_VOL);	
+		append_bigint(chunk, index, column, next_record.DM_VOL);
 	}
 
 };
-	
+
 class DuckDBExchangeLoad : public DuckDBBaseLoader<EXCHANGE_ROW> {
 public:
-	DuckDBExchangeLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBExchangeLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -449,14 +449,14 @@ public:
 		append_value(chunk, index, column, next_record.EX_OPEN);
 		append_value(chunk, index, column, next_record.EX_CLOSE);
 		append_string(chunk, index, column, next_record.EX_DESC);
-		append_bigint(chunk, index, column, next_record.EX_AD_ID);	
+		append_bigint(chunk, index, column, next_record.EX_AD_ID);
 	}
 
 };
-	
+
 class DuckDBCompanyLoad : public DuckDBBaseLoader<COMPANY_ROW> {
 public:
-	DuckDBCompanyLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBCompanyLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -475,14 +475,14 @@ public:
 		append_string(chunk, index, column, next_record.CO_CEO);
 		append_bigint(chunk, index, column, next_record.CO_AD_ID);
 		append_string(chunk, index, column, next_record.CO_DESC);
-		append_timestamp(chunk, index, column, next_record.CO_OPEN_DATE);	
+		append_timestamp(chunk, index, column, next_record.CO_OPEN_DATE);
 	}
 
 };
-	
+
 class DuckDBCompanyCompetitorLoad : public DuckDBBaseLoader<COMPANY_COMPETITOR_ROW> {
 public:
-	DuckDBCompanyCompetitorLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBCompanyCompetitorLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -495,14 +495,14 @@ public:
 
 		append_bigint(chunk, index, column, next_record.CP_CO_ID);
 		append_bigint(chunk, index, column, next_record.CP_COMP_CO_ID);
-		append_string(chunk, index, column, next_record.CP_IN_ID);	
+		append_string(chunk, index, column, next_record.CP_IN_ID);
 	}
 
 };
-	
+
 class DuckDBAccountPermissionLoad : public DuckDBBaseLoader<ACCOUNT_PERMISSION_ROW> {
 public:
-	DuckDBAccountPermissionLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBAccountPermissionLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -517,14 +517,14 @@ public:
 		append_string(chunk, index, column, next_record.AP_ACL);
 		append_string(chunk, index, column, next_record.AP_TAX_ID);
 		append_string(chunk, index, column, next_record.AP_L_NAME);
-		append_string(chunk, index, column, next_record.AP_F_NAME);	
+		append_string(chunk, index, column, next_record.AP_F_NAME);
 	}
 
 };
-	
+
 class DuckDBBrokerLoad : public DuckDBBaseLoader<BROKER_ROW> {
 public:
-	DuckDBBrokerLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBBrokerLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -539,14 +539,14 @@ public:
 		append_string(chunk, index, column, next_record.B_ST_ID);
 		append_string(chunk, index, column, next_record.B_NAME);
 		append_value(chunk, index, column, next_record.B_NUM_TRADES);
-		append_double(chunk, index, column, next_record.B_COMM_TOTAL);	
+		append_double(chunk, index, column, next_record.B_COMM_TOTAL);
 	}
 
 };
-	
+
 class DuckDBTradeHistoryLoad : public DuckDBBaseLoader<TRADE_HISTORY_ROW> {
 public:
-	DuckDBTradeHistoryLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBTradeHistoryLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -559,14 +559,14 @@ public:
 
 		append_bigint(chunk, index, column, next_record.TH_T_ID);
 		append_timestamp(chunk, index, column, next_record.TH_DTS);
-		append_string(chunk, index, column, next_record.TH_ST_ID);	
+		append_string(chunk, index, column, next_record.TH_ST_ID);
 	}
 
 };
-	
+
 class DuckDBWatchItemLoad : public DuckDBBaseLoader<WATCH_ITEM_ROW> {
 public:
-	DuckDBWatchItemLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBWatchItemLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -578,14 +578,14 @@ public:
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.WI_WL_ID);
-		append_string(chunk, index, column, next_record.WI_S_SYMB);	
+		append_string(chunk, index, column, next_record.WI_S_SYMB);
 	}
 
 };
-	
+
 class DuckDBHoldingHistoryLoad : public DuckDBBaseLoader<HOLDING_HISTORY_ROW> {
 public:
-	DuckDBHoldingHistoryLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBHoldingHistoryLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -599,14 +599,14 @@ public:
 		append_bigint(chunk, index, column, next_record.HH_H_T_ID);
 		append_bigint(chunk, index, column, next_record.HH_T_ID);
 		append_value(chunk, index, column, next_record.HH_BEFORE_QTY);
-		append_value(chunk, index, column, next_record.HH_AFTER_QTY);	
+		append_value(chunk, index, column, next_record.HH_AFTER_QTY);
 	}
 
 };
-	
+
 class DuckDBAddressLoad : public DuckDBBaseLoader<ADDRESS_ROW> {
 public:
-	DuckDBAddressLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBAddressLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -621,14 +621,14 @@ public:
 		append_string(chunk, index, column, next_record.AD_LINE1);
 		append_string(chunk, index, column, next_record.AD_LINE2);
 		append_string(chunk, index, column, next_record.AD_ZC_CODE);
-		append_string(chunk, index, column, next_record.AD_CTRY);	
+		append_string(chunk, index, column, next_record.AD_CTRY);
 	}
 
 };
-	
+
 class DuckDBNewsItemLoad : public DuckDBBaseLoader<NEWS_ITEM_ROW> {
 public:
-	DuckDBNewsItemLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBNewsItemLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -645,14 +645,14 @@ public:
 		append_string(chunk, index, column, next_record.NI_ITEM);
 		append_timestamp(chunk, index, column, next_record.NI_DTS);
 		append_string(chunk, index, column, next_record.NI_SOURCE);
-		append_string(chunk, index, column, next_record.NI_AUTHOR);	
+		append_string(chunk, index, column, next_record.NI_AUTHOR);
 	}
 
 };
-	
+
 class DuckDBWatchListLoad : public DuckDBBaseLoader<WATCH_LIST_ROW> {
 public:
-	DuckDBWatchListLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBWatchListLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -664,14 +664,14 @@ public:
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.WL_ID);
-		append_bigint(chunk, index, column, next_record.WL_C_ID);	
+		append_bigint(chunk, index, column, next_record.WL_C_ID);
 	}
 
 };
-	
+
 class DuckDBCustomerLoad : public DuckDBBaseLoader<CUSTOMER_ROW> {
 public:
-	DuckDBCustomerLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBCustomerLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -705,14 +705,14 @@ public:
 		append_string(chunk, index, column, next_record.C_LOCAL_3);
 		append_string(chunk, index, column, next_record.C_EXT_3);
 		append_string(chunk, index, column, next_record.C_EMAIL_1);
-		append_string(chunk, index, column, next_record.C_EMAIL_2);	
+		append_string(chunk, index, column, next_record.C_EMAIL_2);
 	}
 
 };
-	
+
 class DuckDBHoldingSummaryLoad : public DuckDBBaseLoader<HOLDING_SUMMARY_ROW> {
 public:
-	DuckDBHoldingSummaryLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBHoldingSummaryLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -725,14 +725,14 @@ public:
 
 		append_bigint(chunk, index, column, next_record.HS_CA_ID);
 		append_string(chunk, index, column, next_record.HS_S_SYMB);
-		append_value(chunk, index, column, next_record.HS_QTY);	
+		append_value(chunk, index, column, next_record.HS_QTY);
 	}
 
 };
-	
+
 class DuckDBStatusTypeLoad : public DuckDBBaseLoader<STATUS_TYPE_ROW> {
 public:
-	DuckDBStatusTypeLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBStatusTypeLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -744,14 +744,14 @@ public:
 		size_t column = 0;
 
 		append_string(chunk, index, column, next_record.ST_ID);
-		append_string(chunk, index, column, next_record.ST_NAME);	
+		append_string(chunk, index, column, next_record.ST_NAME);
 	}
 
 };
-	
+
 class DuckDBIndustryLoad : public DuckDBBaseLoader<INDUSTRY_ROW> {
 public:
-	DuckDBIndustryLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBIndustryLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -764,14 +764,14 @@ public:
 
 		append_string(chunk, index, column, next_record.IN_ID);
 		append_string(chunk, index, column, next_record.IN_NAME);
-		append_string(chunk, index, column, next_record.IN_SC_ID);	
+		append_string(chunk, index, column, next_record.IN_SC_ID);
 	}
 
 };
-	
+
 class DuckDBZipCodeLoad : public DuckDBBaseLoader<ZIP_CODE_ROW> {
 public:
-	DuckDBZipCodeLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBZipCodeLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -784,14 +784,14 @@ public:
 
 		append_string(chunk, index, column, next_record.ZC_CODE);
 		append_string(chunk, index, column, next_record.ZC_TOWN);
-		append_string(chunk, index, column, next_record.ZC_DIV);	
+		append_string(chunk, index, column, next_record.ZC_DIV);
 	}
 
 };
-	
+
 class DuckDBTradeRequestLoad : public DuckDBBaseLoader<TRADE_REQUEST_ROW> {
 public:
-	DuckDBTradeRequestLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBTradeRequestLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -807,14 +807,14 @@ public:
 		append_string(chunk, index, column, next_record.TR_S_SYMB);
 		append_value(chunk, index, column, next_record.TR_QTY);
 		append_double(chunk, index, column, next_record.TR_BID_PRICE);
-		append_bigint(chunk, index, column, next_record.TR_B_ID);	
+		append_bigint(chunk, index, column, next_record.TR_B_ID);
 	}
 
 };
-	
+
 class DuckDBSecurityLoad : public DuckDBBaseLoader<SECURITY_ROW> {
 public:
-	DuckDBSecurityLoad(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDBSecurityLoad(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -840,11 +840,11 @@ public:
 		append_double(chunk, index, column, next_record.S_52WK_LOW);
 		append_timestamp(chunk, index, column, next_record.S_52WK_LOW_DATE);
 		append_double(chunk, index, column, next_record.S_DIVIDEND);
-		append_double(chunk, index, column, next_record.S_YIELD);	
+		append_double(chunk, index, column, next_record.S_YIELD);
 	}
 
 };
-	
+
 CBaseLoader<SECTOR_ROW> *
 DuckDBLoaderFactory::CreateSectorLoader() {
 	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
@@ -1078,325 +1078,325 @@ DuckDBLoaderFactory::CreateSecurityLoader() {
 
 static vector<ColumnDefinition> SectorColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("sc_id", TypeId::VARCHAR),
-	    ColumnDefinition("sc_name", TypeId::VARCHAR)};
+	    ColumnDefinition("sc_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("sc_name", SQLType(SQLTypeId::VARCHAR))};
 }
 
 static vector<ColumnDefinition> LastTradeColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("lt_s_symb", TypeId::VARCHAR),
-	    ColumnDefinition("lt_dts", TypeId::TIMESTAMP),
-	    ColumnDefinition("lt_price", TypeId::DECIMAL),
-	    ColumnDefinition("lt_open_price", TypeId::DECIMAL),
-	    ColumnDefinition("lt_vol", TypeId::BIGINT)};
+	    ColumnDefinition("lt_s_symb", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("lt_dts", SQLType(SQLTypeId::TIMESTAMP)),
+	    ColumnDefinition("lt_price", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("lt_open_price", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("lt_vol", SQLType(SQLTypeId::BIGINT))};
 }
 
 static vector<ColumnDefinition> FinancialColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("fi_co_id", TypeId::BIGINT),
-	    ColumnDefinition("fi_year", TypeId::INTEGER),
-	    ColumnDefinition("fi_qtr", TypeId::INTEGER),
-	    ColumnDefinition("fi_qtr_start_date", TypeId::TIMESTAMP),
-	    ColumnDefinition("fi_revenue", TypeId::DECIMAL),
-	    ColumnDefinition("fi_net_earn", TypeId::DECIMAL),
-	    ColumnDefinition("fi_basic_eps", TypeId::DECIMAL),
-	    ColumnDefinition("fi_dilut_eps", TypeId::DECIMAL),
-	    ColumnDefinition("fi_margin", TypeId::DECIMAL),
-	    ColumnDefinition("fi_inventory", TypeId::DECIMAL),
-	    ColumnDefinition("fi_assets", TypeId::DECIMAL),
-	    ColumnDefinition("fi_liability", TypeId::DECIMAL),
-	    ColumnDefinition("fi_out_basic", TypeId::BIGINT),
-	    ColumnDefinition("fi_out_dilut", TypeId::BIGINT)};
+	    ColumnDefinition("fi_co_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("fi_year", SQLType(SQLTypeId::INTEGER)),
+	    ColumnDefinition("fi_qtr", SQLType(SQLTypeId::INTEGER)),
+	    ColumnDefinition("fi_qtr_start_date", SQLType(SQLTypeId::TIMESTAMP)),
+	    ColumnDefinition("fi_revenue", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("fi_net_earn", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("fi_basic_eps", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("fi_dilut_eps", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("fi_margin", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("fi_inventory", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("fi_assets", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("fi_liability", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("fi_out_basic", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("fi_out_dilut", SQLType(SQLTypeId::BIGINT))};
 }
 
 static vector<ColumnDefinition> TradeColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("t_id", TypeId::BIGINT),
-	    ColumnDefinition("t_dts", TypeId::TIMESTAMP),
-	    ColumnDefinition("t_st_id", TypeId::VARCHAR),
-	    ColumnDefinition("t_tt_id", TypeId::VARCHAR),
-	    ColumnDefinition("t_is_cash", TypeId::BOOLEAN),
-	    ColumnDefinition("t_s_symb", TypeId::VARCHAR),
-	    ColumnDefinition("t_qty", TypeId::INTEGER),
-	    ColumnDefinition("t_bid_price", TypeId::DECIMAL),
-	    ColumnDefinition("t_ca_id", TypeId::BIGINT),
-	    ColumnDefinition("t_exec_name", TypeId::VARCHAR),
-	    ColumnDefinition("t_trade_price", TypeId::DECIMAL),
-	    ColumnDefinition("t_chrg", TypeId::DECIMAL),
-	    ColumnDefinition("t_comm", TypeId::DECIMAL),
-	    ColumnDefinition("t_tax", TypeId::DECIMAL),
-	    ColumnDefinition("t_lifo", TypeId::BOOLEAN)};
+	    ColumnDefinition("t_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("t_dts", SQLType(SQLTypeId::TIMESTAMP)),
+	    ColumnDefinition("t_st_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("t_tt_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("t_is_cash", SQLType(SQLTypeId::BOOLEAN)),
+	    ColumnDefinition("t_s_symb", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("t_qty", SQLType(SQLTypeId::INTEGER)),
+	    ColumnDefinition("t_bid_price", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("t_ca_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("t_exec_name", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("t_trade_price", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("t_chrg", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("t_comm", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("t_tax", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("t_lifo", SQLType(SQLTypeId::BOOLEAN))};
 }
 
 static vector<ColumnDefinition> SettlementColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("se_t_id", TypeId::BIGINT),
-	    ColumnDefinition("se_cash_type", TypeId::VARCHAR),
-	    ColumnDefinition("se_cash_due_date", TypeId::TIMESTAMP),
-	    ColumnDefinition("se_amt", TypeId::DECIMAL)};
+	    ColumnDefinition("se_t_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("se_cash_type", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("se_cash_due_date", SQLType(SQLTypeId::TIMESTAMP)),
+	    ColumnDefinition("se_amt", SQLType(SQLTypeId::DECIMAL))};
 }
 
 static vector<ColumnDefinition> CommissionRateColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("cr_c_tier", TypeId::INTEGER),
-	    ColumnDefinition("cr_tt_id", TypeId::VARCHAR),
-	    ColumnDefinition("cr_ex_id", TypeId::VARCHAR),
-	    ColumnDefinition("cr_from_qty", TypeId::INTEGER),
-	    ColumnDefinition("cr_to_qty", TypeId::INTEGER),
-	    ColumnDefinition("cr_rate", TypeId::DECIMAL)};
+	    ColumnDefinition("cr_c_tier", SQLType(SQLTypeId::INTEGER)),
+	    ColumnDefinition("cr_tt_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("cr_ex_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("cr_from_qty", SQLType(SQLTypeId::INTEGER)),
+	    ColumnDefinition("cr_to_qty", SQLType(SQLTypeId::INTEGER)),
+	    ColumnDefinition("cr_rate", SQLType(SQLTypeId::DECIMAL))};
 }
 
 static vector<ColumnDefinition> CustomerAccountColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("ca_id", TypeId::BIGINT),
-	    ColumnDefinition("ca_b_id", TypeId::BIGINT),
-	    ColumnDefinition("ca_c_id", TypeId::BIGINT),
-	    ColumnDefinition("ca_name", TypeId::VARCHAR),
-	    ColumnDefinition("ca_tax_st", TypeId::VARCHAR),
-	    ColumnDefinition("ca_bal", TypeId::DECIMAL)};
+	    ColumnDefinition("ca_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("ca_b_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("ca_c_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("ca_name", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("ca_tax_st", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("ca_bal", SQLType(SQLTypeId::DECIMAL))};
 }
 
 static vector<ColumnDefinition> CashTransactionColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("ct_t_id", TypeId::BIGINT),
-	    ColumnDefinition("ct_dts", TypeId::TIMESTAMP),
-	    ColumnDefinition("ct_amt", TypeId::DECIMAL),
-	    ColumnDefinition("ct_name", TypeId::VARCHAR)};
+	    ColumnDefinition("ct_t_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("ct_dts", SQLType(SQLTypeId::TIMESTAMP)),
+	    ColumnDefinition("ct_amt", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("ct_name", SQLType(SQLTypeId::VARCHAR))};
 }
 
 static vector<ColumnDefinition> TaxRateColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("tx_id", TypeId::VARCHAR),
-	    ColumnDefinition("tx_name", TypeId::VARCHAR),
-	    ColumnDefinition("tx_rate", TypeId::DECIMAL)};
+	    ColumnDefinition("tx_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("tx_name", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("tx_rate", SQLType(SQLTypeId::DECIMAL))};
 }
 
 static vector<ColumnDefinition> CustomerTaxrateColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("cx_tx_id", TypeId::VARCHAR),
-	    ColumnDefinition("cx_c_id", TypeId::BIGINT)};
+	    ColumnDefinition("cx_tx_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("cx_c_id", SQLType(SQLTypeId::BIGINT))};
 }
 
 static vector<ColumnDefinition> NewsXrefColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("nx_ni_id", TypeId::BIGINT),
-	    ColumnDefinition("nx_co_id", TypeId::BIGINT)};
+	    ColumnDefinition("nx_ni_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("nx_co_id", SQLType(SQLTypeId::BIGINT))};
 }
 
 static vector<ColumnDefinition> ChargeColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("ch_tt_id", TypeId::VARCHAR),
-	    ColumnDefinition("ch_c_tier", TypeId::INTEGER),
-	    ColumnDefinition("ch_chrg", TypeId::DECIMAL)};
+	    ColumnDefinition("ch_tt_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("ch_c_tier", SQLType(SQLTypeId::INTEGER)),
+	    ColumnDefinition("ch_chrg", SQLType(SQLTypeId::DECIMAL))};
 }
 
 static vector<ColumnDefinition> TradeTypeColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("tt_id", TypeId::VARCHAR),
-	    ColumnDefinition("tt_name", TypeId::VARCHAR),
-	    ColumnDefinition("tt_is_sell", TypeId::BOOLEAN),
-	    ColumnDefinition("tt_is_mrkt", TypeId::BOOLEAN)};
+	    ColumnDefinition("tt_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("tt_name", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("tt_is_sell", SQLType(SQLTypeId::BOOLEAN)),
+	    ColumnDefinition("tt_is_mrkt", SQLType(SQLTypeId::BOOLEAN))};
 }
 
 static vector<ColumnDefinition> HoldingColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("h_t_id", TypeId::BIGINT),
-	    ColumnDefinition("h_ca_id", TypeId::BIGINT),
-	    ColumnDefinition("h_s_symb", TypeId::VARCHAR),
-	    ColumnDefinition("h_dts", TypeId::TIMESTAMP),
-	    ColumnDefinition("h_price", TypeId::DECIMAL),
-	    ColumnDefinition("h_qty", TypeId::INTEGER)};
+	    ColumnDefinition("h_t_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("h_ca_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("h_s_symb", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("h_dts", SQLType(SQLTypeId::TIMESTAMP)),
+	    ColumnDefinition("h_price", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("h_qty", SQLType(SQLTypeId::INTEGER))};
 }
 
 static vector<ColumnDefinition> DailyMarketColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("dm_date", TypeId::TIMESTAMP),
-	    ColumnDefinition("dm_s_symb", TypeId::VARCHAR),
-	    ColumnDefinition("dm_close", TypeId::DECIMAL),
-	    ColumnDefinition("dm_high", TypeId::DECIMAL),
-	    ColumnDefinition("dm_low", TypeId::DECIMAL),
-	    ColumnDefinition("dm_vol", TypeId::BIGINT)};
+	    ColumnDefinition("dm_date", SQLType(SQLTypeId::TIMESTAMP)),
+	    ColumnDefinition("dm_s_symb", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("dm_close", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("dm_high", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("dm_low", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("dm_vol", SQLType(SQLTypeId::BIGINT))};
 }
 
 static vector<ColumnDefinition> ExchangeColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("ex_id", TypeId::VARCHAR),
-	    ColumnDefinition("ex_name", TypeId::VARCHAR),
-	    ColumnDefinition("ex_num_symb", TypeId::INTEGER),
-	    ColumnDefinition("ex_open", TypeId::INTEGER),
-	    ColumnDefinition("ex_close", TypeId::INTEGER),
-	    ColumnDefinition("ex_desc", TypeId::VARCHAR),
-	    ColumnDefinition("ex_ad_id", TypeId::BIGINT)};
+	    ColumnDefinition("ex_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("ex_name", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("ex_num_symb", SQLType(SQLTypeId::INTEGER)),
+	    ColumnDefinition("ex_open", SQLType(SQLTypeId::INTEGER)),
+	    ColumnDefinition("ex_close", SQLType(SQLTypeId::INTEGER)),
+	    ColumnDefinition("ex_desc", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("ex_ad_id", SQLType(SQLTypeId::BIGINT))};
 }
 
 static vector<ColumnDefinition> CompanyColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("co_id", TypeId::BIGINT),
-	    ColumnDefinition("co_st_id", TypeId::VARCHAR),
-	    ColumnDefinition("co_name", TypeId::VARCHAR),
-	    ColumnDefinition("co_in_id", TypeId::VARCHAR),
-	    ColumnDefinition("co_sp_rate", TypeId::VARCHAR),
-	    ColumnDefinition("co_ceo", TypeId::VARCHAR),
-	    ColumnDefinition("co_ad_id", TypeId::BIGINT),
-	    ColumnDefinition("co_desc", TypeId::VARCHAR),
-	    ColumnDefinition("co_open_date", TypeId::TIMESTAMP)};
+	    ColumnDefinition("co_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("co_st_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("co_name", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("co_in_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("co_sp_rate", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("co_ceo", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("co_ad_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("co_desc", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("co_open_date", SQLType(SQLTypeId::TIMESTAMP))};
 }
 
 static vector<ColumnDefinition> CompanyCompetitorColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("cp_co_id", TypeId::BIGINT),
-	    ColumnDefinition("cp_comp_co_id", TypeId::BIGINT),
-	    ColumnDefinition("cp_in_id", TypeId::VARCHAR)};
+	    ColumnDefinition("cp_co_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("cp_comp_co_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("cp_in_id", SQLType(SQLTypeId::VARCHAR))};
 }
 
 static vector<ColumnDefinition> AccountPermissionColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("ap_ca_id", TypeId::BIGINT),
-	    ColumnDefinition("ap_acl", TypeId::VARCHAR),
-	    ColumnDefinition("ap_tax_id", TypeId::VARCHAR),
-	    ColumnDefinition("ap_l_name", TypeId::VARCHAR),
-	    ColumnDefinition("ap_f_name", TypeId::VARCHAR)};
+	    ColumnDefinition("ap_ca_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("ap_acl", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("ap_tax_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("ap_l_name", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("ap_f_name", SQLType(SQLTypeId::VARCHAR))};
 }
 
 static vector<ColumnDefinition> BrokerColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("b_id", TypeId::BIGINT),
-	    ColumnDefinition("b_st_id", TypeId::VARCHAR),
-	    ColumnDefinition("b_name", TypeId::VARCHAR),
-	    ColumnDefinition("b_num_trades", TypeId::INTEGER),
-	    ColumnDefinition("b_comm_total", TypeId::DECIMAL)};
+	    ColumnDefinition("b_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("b_st_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("b_name", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("b_num_trades", SQLType(SQLTypeId::INTEGER)),
+	    ColumnDefinition("b_comm_total", SQLType(SQLTypeId::DECIMAL))};
 }
 
 static vector<ColumnDefinition> TradeHistoryColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("th_t_id", TypeId::BIGINT),
-	    ColumnDefinition("th_dts", TypeId::TIMESTAMP),
-	    ColumnDefinition("th_st_id", TypeId::VARCHAR)};
+	    ColumnDefinition("th_t_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("th_dts", SQLType(SQLTypeId::TIMESTAMP)),
+	    ColumnDefinition("th_st_id", SQLType(SQLTypeId::VARCHAR))};
 }
 
 static vector<ColumnDefinition> WatchItemColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("wi_wl_id", TypeId::BIGINT),
-	    ColumnDefinition("wi_s_symb", TypeId::VARCHAR)};
+	    ColumnDefinition("wi_wl_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("wi_s_symb", SQLType(SQLTypeId::VARCHAR))};
 }
 
 static vector<ColumnDefinition> HoldingHistoryColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("hh_h_t_id", TypeId::BIGINT),
-	    ColumnDefinition("hh_t_id", TypeId::BIGINT),
-	    ColumnDefinition("hh_before_qty", TypeId::INTEGER),
-	    ColumnDefinition("hh_after_qty", TypeId::INTEGER)};
+	    ColumnDefinition("hh_h_t_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("hh_t_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("hh_before_qty", SQLType(SQLTypeId::INTEGER)),
+	    ColumnDefinition("hh_after_qty", SQLType(SQLTypeId::INTEGER))};
 }
 
 static vector<ColumnDefinition> AddressColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("ad_id", TypeId::BIGINT),
-	    ColumnDefinition("ad_line1", TypeId::VARCHAR),
-	    ColumnDefinition("ad_line2", TypeId::VARCHAR),
-	    ColumnDefinition("ad_zc_code", TypeId::VARCHAR),
-	    ColumnDefinition("ad_ctry", TypeId::VARCHAR)};
+	    ColumnDefinition("ad_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("ad_line1", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("ad_line2", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("ad_zc_code", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("ad_ctry", SQLType(SQLTypeId::VARCHAR))};
 }
 
 static vector<ColumnDefinition> NewsItemColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("ni_id", TypeId::BIGINT),
-	    ColumnDefinition("ni_headline", TypeId::VARCHAR),
-	    ColumnDefinition("ni_summary", TypeId::VARCHAR),
-	    ColumnDefinition("ni_item", TypeId::VARCHAR),
-	    ColumnDefinition("ni_dts", TypeId::TIMESTAMP),
-	    ColumnDefinition("ni_source", TypeId::VARCHAR),
-	    ColumnDefinition("ni_author", TypeId::VARCHAR)};
+	    ColumnDefinition("ni_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("ni_headline", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("ni_summary", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("ni_item", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("ni_dts", SQLType(SQLTypeId::TIMESTAMP)),
+	    ColumnDefinition("ni_source", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("ni_author", SQLType(SQLTypeId::VARCHAR))};
 }
 
 static vector<ColumnDefinition> WatchListColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("wl_id", TypeId::BIGINT),
-	    ColumnDefinition("wl_c_id", TypeId::BIGINT)};
+	    ColumnDefinition("wl_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("wl_c_id", SQLType(SQLTypeId::BIGINT))};
 }
 
 static vector<ColumnDefinition> CustomerColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("c_id", TypeId::BIGINT),
-	    ColumnDefinition("c_tax_id", TypeId::VARCHAR),
-	    ColumnDefinition("c_st_id", TypeId::VARCHAR),
-	    ColumnDefinition("c_l_name", TypeId::VARCHAR),
-	    ColumnDefinition("c_f_name", TypeId::VARCHAR),
-	    ColumnDefinition("c_m_name", TypeId::VARCHAR),
-	    ColumnDefinition("c_gndr", TypeId::VARCHAR),
-	    ColumnDefinition("c_tier", TypeId::VARCHAR),
-	    ColumnDefinition("c_dob", TypeId::TIMESTAMP),
-	    ColumnDefinition("c_ad_id", TypeId::BIGINT),
-	    ColumnDefinition("c_ctry_1", TypeId::VARCHAR),
-	    ColumnDefinition("c_area_1", TypeId::VARCHAR),
-	    ColumnDefinition("c_local_1", TypeId::VARCHAR),
-	    ColumnDefinition("c_ext_1", TypeId::VARCHAR),
-	    ColumnDefinition("c_ctry_2", TypeId::VARCHAR),
-	    ColumnDefinition("c_area_2", TypeId::VARCHAR),
-	    ColumnDefinition("c_local_2", TypeId::VARCHAR),
-	    ColumnDefinition("c_ext_2", TypeId::VARCHAR),
-	    ColumnDefinition("c_ctry_3", TypeId::VARCHAR),
-	    ColumnDefinition("c_area_3", TypeId::VARCHAR),
-	    ColumnDefinition("c_local_3", TypeId::VARCHAR),
-	    ColumnDefinition("c_ext_3", TypeId::VARCHAR),
-	    ColumnDefinition("c_email_1", TypeId::VARCHAR),
-	    ColumnDefinition("c_email_2", TypeId::VARCHAR)};
+	    ColumnDefinition("c_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("c_tax_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_st_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_l_name", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_f_name", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_m_name", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_gndr", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_tier", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_dob", SQLType(SQLTypeId::TIMESTAMP)),
+	    ColumnDefinition("c_ad_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("c_ctry_1", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_area_1", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_local_1", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_ext_1", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_ctry_2", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_area_2", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_local_2", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_ext_2", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_ctry_3", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_area_3", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_local_3", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_ext_3", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_email_1", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("c_email_2", SQLType(SQLTypeId::VARCHAR))};
 }
 
 static vector<ColumnDefinition> HoldingSummaryColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("hs_ca_id", TypeId::BIGINT),
-	    ColumnDefinition("hs_s_symb", TypeId::VARCHAR),
-	    ColumnDefinition("hs_qty", TypeId::INTEGER)};
+	    ColumnDefinition("hs_ca_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("hs_s_symb", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("hs_qty", SQLType(SQLTypeId::INTEGER))};
 }
 
 static vector<ColumnDefinition> StatusTypeColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("st_id", TypeId::VARCHAR),
-	    ColumnDefinition("st_name", TypeId::VARCHAR)};
+	    ColumnDefinition("st_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("st_name", SQLType(SQLTypeId::VARCHAR))};
 }
 
 static vector<ColumnDefinition> IndustryColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("in_id", TypeId::VARCHAR),
-	    ColumnDefinition("in_name", TypeId::VARCHAR),
-	    ColumnDefinition("in_sc_id", TypeId::VARCHAR)};
+	    ColumnDefinition("in_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("in_name", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("in_sc_id", SQLType(SQLTypeId::VARCHAR))};
 }
 
 static vector<ColumnDefinition> ZipCodeColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("zc_code", TypeId::VARCHAR),
-	    ColumnDefinition("zc_town", TypeId::VARCHAR),
-	    ColumnDefinition("zc_div", TypeId::VARCHAR)};
+	    ColumnDefinition("zc_code", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("zc_town", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("zc_div", SQLType(SQLTypeId::VARCHAR))};
 }
 
 static vector<ColumnDefinition> TradeRequestColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("tr_t_id", TypeId::BIGINT),
-	    ColumnDefinition("tr_tt_id", TypeId::VARCHAR),
-	    ColumnDefinition("tr_s_symb", TypeId::VARCHAR),
-	    ColumnDefinition("tr_qty", TypeId::INTEGER),
-	    ColumnDefinition("tr_bid_price", TypeId::DECIMAL),
-	    ColumnDefinition("tr_b_id", TypeId::BIGINT)};
+	    ColumnDefinition("tr_t_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("tr_tt_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("tr_s_symb", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("tr_qty", SQLType(SQLTypeId::INTEGER)),
+	    ColumnDefinition("tr_bid_price", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("tr_b_id", SQLType(SQLTypeId::BIGINT))};
 }
 
 static vector<ColumnDefinition> SecurityColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("s_symb", TypeId::VARCHAR),
-	    ColumnDefinition("s_issue", TypeId::VARCHAR),
-	    ColumnDefinition("s_st_id", TypeId::VARCHAR),
-	    ColumnDefinition("s_name", TypeId::VARCHAR),
-	    ColumnDefinition("s_ex_id", TypeId::VARCHAR),
-	    ColumnDefinition("s_co_id", TypeId::BIGINT),
-	    ColumnDefinition("s_num_out", TypeId::BIGINT),
-	    ColumnDefinition("s_start_date", TypeId::TIMESTAMP),
-	    ColumnDefinition("s_exch_date", TypeId::TIMESTAMP),
-	    ColumnDefinition("s_pe", TypeId::DECIMAL),
-	    ColumnDefinition("s_52wk_high", TypeId::DECIMAL),
-	    ColumnDefinition("s_52wk_high_date", TypeId::TIMESTAMP),
-	    ColumnDefinition("s_52wk_low", TypeId::DECIMAL),
-	    ColumnDefinition("s_52wk_low_date", TypeId::TIMESTAMP),
-	    ColumnDefinition("s_dividend", TypeId::DECIMAL),
-	    ColumnDefinition("s_yield", TypeId::DECIMAL)};
+	    ColumnDefinition("s_symb", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("s_issue", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("s_st_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("s_name", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("s_ex_id", SQLType(SQLTypeId::VARCHAR)),
+	    ColumnDefinition("s_co_id", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("s_num_out", SQLType(SQLTypeId::BIGINT)),
+	    ColumnDefinition("s_start_date", SQLType(SQLTypeId::TIMESTAMP)),
+	    ColumnDefinition("s_exch_date", SQLType(SQLTypeId::TIMESTAMP)),
+	    ColumnDefinition("s_pe", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("s_52wk_high", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("s_52wk_high_date", SQLType(SQLTypeId::TIMESTAMP)),
+	    ColumnDefinition("s_52wk_low", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("s_52wk_low_date", SQLType(SQLTypeId::TIMESTAMP)),
+	    ColumnDefinition("s_dividend", SQLType(SQLTypeId::DECIMAL)),
+	    ColumnDefinition("s_yield", SQLType(SQLTypeId::DECIMAL))};
 }
 
 void CreateTPCESchema(duckdb::DuckDB &db, duckdb::Transaction &transaction, std::string &schema, std::string &suffix) {

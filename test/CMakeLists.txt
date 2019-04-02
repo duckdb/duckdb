@@ -16,13 +16,13 @@ IF (NOT WIN32)
   add_subdirectory(sqlserver)
   add_subdirectory(sqlite)
   add_subdirectory(sqlsmith)
-#   add_subdirectory(tpce)
+  add_subdirectory(tpce)
 ENDIF()
 
 add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
 
 IF (NOT WIN32)
-  target_link_libraries(unittest duckdb dbgen dsdgen test_helpers) # tpce
+  target_link_libraries(unittest duckdb dbgen dsdgen test_helpers tpce)
 ELSE()
   target_link_libraries(unittest duckdb_static test_helpers)
 ENDIF()
