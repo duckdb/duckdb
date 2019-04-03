@@ -9,7 +9,7 @@ BoundAggregateExpression::BoundAggregateExpression(TypeId return_type, Expressio
 }
 
 string BoundAggregateExpression::ToString() const {
-	return ExpressionTypeToString(type) + "(" + child->ToString() + ")";
+	return ExpressionTypeToString(type) + "(" + (child ? child->ToString() : string()) + ")";
 }
 
 bool BoundAggregateExpression::Equals(const BaseExpression *other_) const {

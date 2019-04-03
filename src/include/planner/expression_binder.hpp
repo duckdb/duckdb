@@ -51,7 +51,7 @@ public:
 		return "BOUND_EXPRESSION";
 	}
 
-	unique_ptr<ParsedExpression> Copy() override {
+	unique_ptr<ParsedExpression> Copy() const override {
 		throw SerializationException("Cannot copy or serialize bound expression");
 	}
 };

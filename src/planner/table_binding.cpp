@@ -7,6 +7,7 @@
 #include "planner/bound_query_node.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/tableref/bound_basetableref.hpp"
+#include "planner/bind_context.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -45,8 +46,12 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, uint32_t depth) {
 	                                                        depth), entry.type);
 }
 
-void TableBinding::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &select_list) {
+void TableBinding::GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) {
 	for (auto &column : bound->table->columns) {
+		string column_string = alias + "." + column.name;
+		if (context.hidden_columns.find(column_string) != context.hidden_columns.end()) {
+			continue;
+		}
 		select_list.push_back(make_unique<ColumnRefExpression>(column.name, alias));
 	}
 }
@@ -88,7 +93,7 @@ BindResult SubqueryBinding::Bind(ColumnRefExpression &colref, uint32_t depth) {
 	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(sql_type), binding, depth), sql_type);
 }
 
-void SubqueryBinding::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &select_list) {
+void SubqueryBinding::GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) {
 	for (auto &column_name : names) {
 		select_list.push_back(make_unique<ColumnRefExpression>(column_name, alias));
 	}
@@ -116,7 +121,7 @@ BindResult TableFunctionBinding::Bind(ColumnRefExpression &colref, uint32_t dept
 	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(sql_type), binding, depth), sql_type);
 }
 
-void TableFunctionBinding::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &select_list) {
+void TableFunctionBinding::GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) {
 	for (auto &column : function->return_values) {
 		select_list.push_back(make_unique<ColumnRefExpression>(column.name, alias));
 	}

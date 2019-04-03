@@ -102,4 +102,6 @@ struct ExpressionEquality {
 template <typename T>
 using expression_map_t = unordered_map<BaseExpression *, T, ExpressionHashFunction, ExpressionEquality>;
 
+using expression_set_t = unordered_set<BaseExpression *, ExpressionHashFunction, ExpressionEquality>;
+
 } // namespace duckdb

@@ -7,6 +7,8 @@
 #include "planner/expression/bound_operator_expression.hpp"
 #include "planner/expression/bound_comparison_expression.hpp"
 
+#include "test_helpers.hpp"
+
 using namespace duckdb;
 using namespace std;
 

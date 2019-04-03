@@ -66,11 +66,11 @@ unique_ptr<TableRef> Transformer::TransformJoin(JoinExpr *root) {
 		}
 		assert(using_column_names.size() > 0);
 
-		unique_ptr<Expression> join_condition = nullptr;
+		unique_ptr<ParsedExpression> join_condition = nullptr;
 		for (auto column_name : using_column_names) {
 			auto left_expr = make_unique<ColumnRefExpression>(column_name, get_tablename_union(result->left.get()));
 			auto right_expr = make_unique<ColumnRefExpression>(column_name, get_tablename_union(result->right.get()));
-			result->using_hidden_columns.insert(right_expr->Copy());
+			result->hidden_columns.insert(right_expr->table_name + "." + right_expr->column_name);
 			auto comp_expr =
 			    make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left_expr), move(right_expr));
 			if (!join_condition) {

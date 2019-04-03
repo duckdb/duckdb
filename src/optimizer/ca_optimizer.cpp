@@ -3,6 +3,8 @@
 #include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_projection.hpp"
 
+#include "planner/expression_iterator.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -74,9 +76,9 @@ void CommonAggregateOptimizer::find_bound_references(Expression& expression, con
 		}
 	}
 
-	expression.EnumerateChildren(
-		[this, &aggregate, &aggregate_to_projection_map]
-		(Expression *expression) {find_bound_references(*expression, aggregate, aggregate_to_projection_map);});
+	ExpressionIterator::EnumerateChildren(expression,
+		[&]
+		(Expression &expression) {find_bound_references(expression, aggregate, aggregate_to_projection_map);});
 }
 
 void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator& projection) {
@@ -109,7 +111,7 @@ void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator
 		Expression* aggregate_expression = aggregate_to_projections.first;
 
 		new_aggregate_expressions.push_back(aggregate_expression->Copy());
-		
+
 		aggregate_index++;
 	}
 	// TODO this fixes sqlite issues but is probably not the underlying issue

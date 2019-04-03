@@ -374,4 +374,20 @@ TEST_CASE("Test USING joins", "[joins]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {2}));
 	REQUIRE(CHECK_COLUMN(result, 2, {3}));
 	REQUIRE(CHECK_COLUMN(result, 3, {3}));
+
+	// multiple joins with using
+	// FIXME:
+	// result = con.Query("SELECT * FROM t1 JOIN t2 USING(a,b) JOIN t2 t2b USING (a,b);");
+	// REQUIRE(result->names.size() == 5);
+	// REQUIRE(result->names[0] == "a");
+	// REQUIRE(result->names[1] == "b");
+	// REQUIRE(result->names[2] == "c");
+	// REQUIRE(result->names[3] == "c");
+	// REQUIRE(result->names[4] == "c");
+
+	// REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	// REQUIRE(CHECK_COLUMN(result, 2, {3}));
+	// REQUIRE(CHECK_COLUMN(result, 3, {3}));
+	// REQUIRE(CHECK_COLUMN(result, 4, {3}));
 }

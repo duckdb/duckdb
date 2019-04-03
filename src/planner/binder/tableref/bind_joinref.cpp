@@ -12,6 +12,10 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	result->left = Bind(*ref.left);
 	result->right = Bind(*ref.right);
 
+	for(auto &hidden_column : ref.hidden_columns) {
+		bind_context.hidden_columns.insert(hidden_column);
+	}
+
 	WhereBinder binder(*this, context);
 	result->condition = binder.Bind(ref.condition);
 	return move(result);

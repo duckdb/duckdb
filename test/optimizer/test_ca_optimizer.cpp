@@ -5,25 +5,25 @@
 #include "optimizer/ca_optimizer.hpp"
 #include "planner/operator/logical_window.hpp"
 
+#include "planner/expression/bound_operator_expression.hpp"
+#include "planner/expression/bound_comparison_expression.hpp"
+#include "planner/expression/bound_window_expression.hpp"
+
 using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test common aggregate optimizer", "[aggregations]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-
 	LogicalProjection*	projection;
 	LogicalFilter*		filter;
 	LogicalWindow*		window;
 	LogicalAggregate*	aggregate;
 
 
-    con.Query("BEGIN TRANSACTION");
-	con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)");
-
     // now we expect duplicate aggregates to be reduced to a single occurence.
-	ExpressionHelper helper(con.context);
+	ExpressionHelper helper;
     CommonAggregateOptimizer optimizer;
+
+	helper.con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)");
 
 	/* before optimization
 	PROJECTION[a, b] // a, b point to different aggregate expressions.
@@ -87,17 +87,19 @@ TEST_CASE("Test common aggregate optimizer", "[aggregations]") {
 	*/
 	REQUIRE(aggregate->expressions.size() == 1);
 
+	auto &op_expression = (BoundOperatorExpression&) *tree->expressions[0];
 	// Left SUM expression of addition operator expression.
-	auto sum_expression_l  = static_cast<BoundColumnRefExpression*>(tree->expressions[0]->GetChild(0));
+	auto &sum_expression_l  = (BoundColumnRefExpression&) *op_expression.children[0];
 	// Right SUM expression of addition operator expression.
-	auto sum_expression_r  = static_cast<BoundColumnRefExpression*>(tree->expressions[0]->GetChild(1));
+	auto &sum_expression_r  = (BoundColumnRefExpression&) *op_expression.children[1];
 	// Left SUM side of comparison expression.
-	auto filter_expression = static_cast<BoundColumnRefExpression*>(filter->expressions[0]->GetChild(0));
+	auto &comp_expression = (BoundComparisonExpression&)*filter->expressions[0];
+	auto &filter_expression = (BoundColumnRefExpression&)*comp_expression.left;
 
 	// sum_expressions all point to the same column index
-	REQUIRE(sum_expression_l-> binding.column_index == 0);
-	REQUIRE(sum_expression_r-> binding.column_index == 0);
-	REQUIRE(filter_expression->binding.column_index == 0);
+	REQUIRE(sum_expression_l.binding.column_index == 0);
+	REQUIRE(sum_expression_r.binding.column_index == 0);
+	REQUIRE(filter_expression.binding.column_index == 0);
 
 	/*
 	ORDER_BY
@@ -128,7 +130,12 @@ TEST_CASE("Test common aggregate optimizer", "[aggregations]") {
 	*/
 	REQUIRE(aggregate->expressions.size() == 1);
 
+
 	// sum expression corresponding to the partition in the over clause.
-	auto sum_expression_part  = static_cast<BoundColumnRefExpression*>(window->expressions[0]->GetChild(0));
-	REQUIRE(sum_expression_part->binding.column_index == 0);
+	auto &window_expression = (BoundWindowExpression&) *window->expressions[0];
+	auto &bound_op = (BoundOperatorExpression&) *window_expression.child;
+	auto &sum_expression_left  = (BoundColumnRefExpression&)*bound_op.children[0];
+	auto &sum_expression_right  = (BoundColumnRefExpression&)*bound_op.children[1];
+	REQUIRE(sum_expression_left.binding.column_index == 0);
+	REQUIRE(sum_expression_right.binding.column_index == 0);
 }

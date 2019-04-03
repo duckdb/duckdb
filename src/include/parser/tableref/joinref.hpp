@@ -28,9 +28,8 @@ public:
 	unique_ptr<ParsedExpression> condition;
 	//! The join type
 	JoinType type;
-	//! The columns that are hidden by the using clause
-	expression_set_t using_hidden_columns;
-
+	//! Columns hidden from SELECT * expansion (because of USING clause)
+	unordered_set<string> hidden_columns;
 public:
 	bool Equals(const TableRef *other_) const override;
 

@@ -12,7 +12,7 @@
 #include "planner/operator/logical_projection.hpp"
 #include "planner/operator/logical_aggregate.hpp"
 
-#include "parser/expression/bound_columnref_expression.hpp"
+#include "planner/expression/bound_columnref_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

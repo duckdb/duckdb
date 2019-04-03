@@ -14,6 +14,7 @@
 #include "planner/expression_binder.hpp"
 
 namespace duckdb {
+class BindContext;
 class BoundBaseTableRef;
 class BoundQueryNode;
 class ColumnRefExpression;
@@ -33,7 +34,7 @@ struct Binding {
 
 	virtual bool HasMatchingBinding(const string &column_name) = 0;
 	virtual BindResult Bind(ColumnRefExpression &colref, uint32_t depth) = 0;
-	virtual void GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &select_list) = 0;
+	virtual void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) = 0;
 
 	BindingType type;
 	string alias;
@@ -46,7 +47,7 @@ struct TableBinding : public Binding {
 
 	bool HasMatchingBinding(const string &column_name) override;
 	BindResult Bind(ColumnRefExpression &colref, uint32_t depth) override;
-	void GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &select_list) override;
+	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
 
 	BoundBaseTableRef *bound;
 };
@@ -57,7 +58,7 @@ struct SubqueryBinding : public Binding {
 
 	bool HasMatchingBinding(const string &column_name) override;
 	BindResult Bind(ColumnRefExpression &colref, uint32_t depth) override;
-	void GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &select_list) override;
+	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
 
 	BoundQueryNode &subquery;
 	//! Column names of the subquery
@@ -72,7 +73,7 @@ struct TableFunctionBinding : public Binding {
 
 	bool HasMatchingBinding(const string &column_name) override;
 	BindResult Bind(ColumnRefExpression &colref, uint32_t depth) override;
-	void GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &select_list) override;
+	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
 
 	TableFunctionCatalogEntry *function;
 };

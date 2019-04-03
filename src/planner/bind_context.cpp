@@ -50,7 +50,7 @@ void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpressio
 	// we have to bind the tables and subqueries in order of table_index
 	for (auto &entry : bindings_list) {
 		auto binding = entry.second;
-		binding->GenerateAllColumnExpressions(new_select_list);
+		binding->GenerateAllColumnExpressions(*this, new_select_list);
 	}
 }
 

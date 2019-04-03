@@ -43,6 +43,7 @@ public:
 	//! Adds a table function with a given alias to the BindContext
 	void AddTableFunction(size_t index, const string &alias, TableFunctionCatalogEntry *function_entry);
 
+	unordered_set<string> hidden_columns;
 private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);
 
