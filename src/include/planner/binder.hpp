@@ -13,6 +13,7 @@
 #include "planner/bound_tokens.hpp"
 #include "parser/column_definition.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
+#include "common/unordered_map.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -73,7 +74,7 @@ public:
 	void AddCTE(const string &name, QueryNode *cte);
 	unique_ptr<QueryNode> FindCTE(const string &name);
 
-	std::unordered_map<string, QueryNode *> CTE_bindings;
+	unordered_map<string, QueryNode *> CTE_bindings;
 
 	//! Generates an unused index for a table
 	size_t GenerateTableIndex();

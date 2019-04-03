@@ -3,7 +3,7 @@
 #include "common/printer.hpp"
 #include "execution/physical_operator.hpp"
 
-#include <iostream>
+#include "common/fstream.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -221,7 +221,7 @@ string QueryProfiler::ToJSON() const {
 }
 
 void QueryProfiler::WriteToFile(const char *path, string &info) const {
-	std::ofstream out(path);
+	ofstream out(path);
 	out << info;
 	out.close();
 }

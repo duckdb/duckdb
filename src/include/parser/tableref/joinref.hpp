@@ -8,10 +8,9 @@
 
 #pragma once
 
+#include "common/unordered_set.hpp"
 #include "parser/parsed_expression.hpp"
 #include "parser/tableref.hpp"
-
-#include <unordered_set>
 
 namespace duckdb {
 //! Represents a JOIN between two expressions

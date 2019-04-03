@@ -13,8 +13,6 @@
 #include "storage/storage_manager.hpp"
 #include "transaction/transaction_manager.hpp"
 
-#include <unordered_set>
-
 namespace duckdb {
 
 //! The database object. This object holds the catalog and all the

@@ -11,9 +11,7 @@
 #include "catalog/catalog_entry.hpp"
 #include "catalog/catalog_set.hpp"
 #include "transaction/transaction.hpp"
-
-#include <string>
-#include <unordered_map>
+#include "common/unordered_map.hpp"
 
 namespace duckdb {
 
@@ -30,7 +28,7 @@ public:
 	//! List of return columns
 	vector<ColumnDefinition> return_values;
 	//! A map of return-column name to column index
-	std::unordered_map<string, column_t> name_map;
+	unordered_map<string, column_t> name_map;
 	//! Input arguments
 	vector<SQLType> arguments;
 	//! Init function pointer

@@ -10,6 +10,7 @@
 
 #include "common/constants.hpp"
 #include "common/exception.hpp"
+#include "common/fstream.hpp"
 
 namespace duckdb {
 /**

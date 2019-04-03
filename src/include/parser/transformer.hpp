@@ -11,6 +11,7 @@
 #include "parser/column_definition.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "parser/tokens.hpp"
+#include "common/unordered_map.hpp"
 
 namespace postgres {
 #include "pg_definitions.h"
@@ -153,7 +154,7 @@ private:
 	void TransformWindowDef(postgres::WindowDef *window_spec, WindowExpression *expr);
 
 	//! Holds window expressions defined by name. We need those when transforming the expressions referring to them.
-	map<string, postgres::WindowDef *> window_clauses;
+	unordered_map<string, postgres::WindowDef *> window_clauses;
 };
 
 } // namespace duckdb

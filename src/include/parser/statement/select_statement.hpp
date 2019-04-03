@@ -13,6 +13,7 @@
 #include "parser/query_node/select_node.hpp"
 #include "parser/sql_statement.hpp"
 #include "parser/tableref.hpp"
+#include "common/unordered_map.hpp"
 
 namespace duckdb {
 

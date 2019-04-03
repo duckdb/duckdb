@@ -9,6 +9,8 @@
 #pragma once
 
 #include "planner/expression_binder.hpp"
+#include "common/unordered_map.hpp"
+#include "parser/expression_map.hpp"
 
 namespace duckdb {
 class AggregateExpression;

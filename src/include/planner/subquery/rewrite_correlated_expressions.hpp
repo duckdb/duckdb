@@ -10,6 +10,7 @@
 
 #include "planner/binder.hpp"
 #include "planner/logical_operator.hpp"
+#include "planner/column_binding_map.hpp"
 
 namespace duckdb {
 

@@ -11,11 +11,11 @@
 #pragma once
 
 #include "benchmark.hpp"
+#include "common/vector.hpp"
 
 #include <fstream>
 #include <memory>
 #include <string>
-#include <vector>
 
 namespace duckdb {
 

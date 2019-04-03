@@ -8,39 +8,10 @@
 
 #pragma once
 
-#include "common/types/hash.hpp"
 #include "planner/expression.hpp"
+#include "planner/column_binding.hpp"
 
 namespace duckdb {
-
-struct ColumnBinding {
-	uint32_t table_index;
-	uint32_t column_index;
-
-	ColumnBinding() : table_index((uint32_t)-1), column_index((uint32_t)-1) {
-	}
-	ColumnBinding(uint32_t table, uint32_t column) : table_index(table), column_index(column) {
-	}
-
-	bool operator==(const ColumnBinding &rhs) const {
-		return table_index == rhs.table_index && column_index == rhs.column_index;
-	}
-};
-
-struct ColumnBindingHashFunction {
-	size_t operator()(const ColumnBinding &a) const {
-		return CombineHash(Hash<uint32_t>(a.table_index), Hash<uint32_t>(a.column_index));
-	}
-};
-
-struct ColumnBindingEquality {
-	bool operator()(const ColumnBinding &a, const ColumnBinding &b) const {
-		return a == b;
-	}
-};
-
-template <typename T>
-using column_binding_map_t = unordered_map<ColumnBinding, T, ColumnBindingHashFunction, ColumnBindingEquality>;
 
 //! A BoundColumnRef expression represents a ColumnRef expression that was bound to an actual table and column index. It
 //! is not yet executable, however. The ColumnBindingResolver transforms the BoundColumnRefExpressions into

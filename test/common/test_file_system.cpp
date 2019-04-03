@@ -1,14 +1,13 @@
 #include "catch.hpp"
 #include "common/file_system.hpp"
-
-#include <vector>
+#include "common/fstream.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 static void create_dummy_file(string fname) {
-	std::ofstream outfile(fname);
-	outfile << "I_AM_A_DUMMY" << std::endl;
+	ofstream outfile(fname);
+	outfile << "I_AM_A_DUMMY" << endl;
 	outfile.close();
 }
 

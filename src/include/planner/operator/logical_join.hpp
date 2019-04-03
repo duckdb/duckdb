@@ -9,8 +9,7 @@
 #pragma once
 
 #include "planner/logical_operator.hpp"
-
-#include <unordered_set>
+#include "common/unordered_set.hpp"
 
 namespace duckdb {
 

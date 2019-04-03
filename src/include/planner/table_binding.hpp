@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "common/unordered_map.hpp"
 #include "parser/column_definition.hpp"
 #include "parser/parsed_expression.hpp"
 #include "planner/expression_binder.hpp"

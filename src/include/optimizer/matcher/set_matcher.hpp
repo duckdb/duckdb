@@ -9,8 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
-
-#include <unordered_set>
+#include "common/unordered_set.hpp"
 
 namespace duckdb {
 

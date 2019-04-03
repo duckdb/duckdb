@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "common/unordered_set.hpp"
 
 #include <mutex>
 

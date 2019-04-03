@@ -14,9 +14,7 @@
 #include "parser/constraint.hpp"
 #include "parser/parsed_data.hpp"
 
-#include <string>
-#include <unordered_map>
-#include <vector>
+#include "common/unordered_map.hpp"
 
 namespace duckdb {
 
@@ -41,7 +39,7 @@ public:
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<Constraint>> constraints;
 	//! A map of column name to column index
-	std::unordered_map<string, column_t> name_map;
+	unordered_map<string, column_t> name_map;
 
 	unique_ptr<CatalogEntry> AlterEntry(AlterInformation *info);
 	//! Returns whether or not a column with the given name exists

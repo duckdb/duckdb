@@ -1,4 +1,5 @@
 #include "planner/expression/bound_columnref_expression.hpp"
+#include "common/types/hash.hpp"
 
 using namespace duckdb;
 using namespace std;

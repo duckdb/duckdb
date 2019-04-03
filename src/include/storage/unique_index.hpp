@@ -10,6 +10,7 @@
 
 #include "common/types/data_chunk.hpp"
 #include "common/types/tuple.hpp"
+#include "common/unordered_set.hpp"
 
 #include <mutex>
 

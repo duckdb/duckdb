@@ -11,12 +11,11 @@
 #include "catalog/catalog_entry.hpp"
 #include "common/common.hpp"
 #include "transaction/transaction.hpp"
+#include "common/unordered_map.hpp"
 
 #include <functional>
 #include <memory>
 #include <mutex>
-#include <string>
-#include <unordered_map>
 
 namespace duckdb {
 
@@ -67,7 +66,7 @@ private:
 	//! The catalog lock is used to make changes to the data
 	std::mutex catalog_lock;
 	//! The set of entries present in the CatalogSet.
-	std::unordered_map<string, unique_ptr<CatalogEntry>> data;
+	unordered_map<string, unique_ptr<CatalogEntry>> data;
 };
 
 } // namespace duckdb

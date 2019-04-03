@@ -12,9 +12,9 @@
 #include "common/profiler.hpp"
 #include "common/string_util.hpp"
 #include "common/types/data_chunk.hpp"
+#include "common/unordered_map.hpp"
 
 #include <stack>
-#include <unordered_map>
 
 namespace duckdb {
 class PhysicalOperator;
@@ -99,15 +99,15 @@ private:
 	//! The timer used to time the execution time of the individual Physical Operators
 	Profiler op;
 	//! A map of a Physical Operator pointer to a tree node
-	std::unordered_map<PhysicalOperator *, TreeNode *> tree_map;
+	unordered_map<PhysicalOperator *, TreeNode *> tree_map;
 	//! The stack of Physical Operators that are currently active
 	std::stack<PhysicalOperator *> execution_stack;
 
 	//! The timer used to time the individual phases of the planning process
 	Profiler phase_profiler;
 	//! A mapping of the phase names to the timings
-	std::unordered_map<string, double> phase_timings;
+	unordered_map<string, double> phase_timings;
 	//! The stack of currently active phases
-	std::vector<string> phase_stack;
+	vector<string> phase_stack;
 };
 } // namespace duckdb

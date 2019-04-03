@@ -16,6 +16,8 @@
 #include "planner/expression.hpp"
 #include "planner/expression_binder.hpp"
 #include "planner/table_binding.hpp"
+#include "common/unordered_map.hpp"
+#include "common/unordered_set.hpp"
 
 namespace duckdb {
 class BoundQueryNode;
@@ -48,7 +50,7 @@ private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);
 
 	//! The set of bindings
-	std::unordered_map<string, unique_ptr<Binding>> bindings;
+	unordered_map<string, unique_ptr<Binding>> bindings;
 	//! The list of bindings in insertion order
 	vector<std::pair<string, Binding *>> bindings_list;
 };

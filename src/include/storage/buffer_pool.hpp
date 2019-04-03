@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "common/unordered_map.hpp"
 #include "storage/page.hpp"
 
 #include <atomic>
@@ -21,7 +22,7 @@ class BufferPool {
 	void LoadPage(int64_t page_identifier);
 
 	std::mutex loading_lock;
-	std::unordered_map<int64_t, Page *> loading_pages;
+	unordered_map<int64_t, Page *> loading_pages;
 	PageQueue cooling_queue;
 };
 

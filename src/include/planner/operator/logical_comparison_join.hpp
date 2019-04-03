@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/constants.hpp"
+#include "common/unordered_set.hpp"
 #include "parser/parsed_expression.hpp"
 #include "planner/operator/logical_join.hpp"
 

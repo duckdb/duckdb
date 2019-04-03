@@ -10,8 +10,8 @@
 
 #include "planner/logical_operator.hpp"
 #include "catalog/catalog_entry/prepared_statement_catalog_entry.hpp"
-
-#include <unordered_set>
+#include "common/unordered_map.hpp"
+#include "common/unordered_set.hpp"
 
 namespace duckdb {
 

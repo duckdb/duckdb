@@ -11,8 +11,10 @@
 #include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_projection.hpp"
 #include "planner/operator/logical_aggregate.hpp"
-
 #include "planner/expression/bound_columnref_expression.hpp"
+
+#include "common/unordered_map.hpp"
+#include "parser/expression_map.hpp"
 
 using namespace duckdb;
 using namespace std;

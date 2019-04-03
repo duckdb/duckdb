@@ -12,9 +12,11 @@
 #include "optimizer/join_order/relation.hpp"
 #include "planner/logical_operator.hpp"
 #include "planner/logical_operator_visitor.hpp"
+#include "common/unordered_map.hpp"
+#include "common/unordered_set.hpp"
+#include "parser/expression_map.hpp"
 
 #include <functional>
-#include <unordered_set>
 
 namespace duckdb {
 

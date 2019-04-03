@@ -14,10 +14,6 @@
 #include "parser/constraint.hpp"
 #include "parser/parsed_data.hpp"
 
-#include <string>
-#include <unordered_map>
-#include <vector>
-
 namespace duckdb {
 
 class ColumnStatistics;

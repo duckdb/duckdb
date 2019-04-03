@@ -14,9 +14,6 @@
 #include "parser/parsed_data.hpp"
 #include "transaction/transaction.hpp"
 
-#include <string>
-#include <unordered_map>
-
 namespace duckdb {
 
 class SchemaCatalogEntry;

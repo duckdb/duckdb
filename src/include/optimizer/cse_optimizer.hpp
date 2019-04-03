@@ -10,6 +10,7 @@
 
 #include "optimizer/rule.hpp"
 #include "planner/logical_operator_visitor.hpp"
+#include "parser/expression_map.hpp"
 
 namespace duckdb {
 //! The CommonSubExpression optimizer traverses the expressions of a LogicalOperator to look for duplicate expressions,

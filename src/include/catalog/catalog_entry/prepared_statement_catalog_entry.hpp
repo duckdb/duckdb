@@ -10,9 +10,8 @@
 
 #include "catalog/catalog_entry.hpp"
 #include "execution/physical_operator.hpp"
-
-#include <string>
-#include <unordered_set>
+#include "common/unordered_map.hpp"
+#include "common/unordered_set.hpp"
 
 namespace duckdb {
 
