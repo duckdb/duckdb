@@ -73,20 +73,21 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 			UNPROTECT(1); // varname
 
 			SEXP varvalue = NULL;
-			switch (result->types[col_idx]) {
-			case TypeId::BOOLEAN:
+			switch (result->sql_types[col_idx].id) {
+			case SQLTypeId::BOOLEAN:
 				varvalue = PROTECT(NEW_LOGICAL(nrows));
 				break;
-			case TypeId::TINYINT:
-			case TypeId::SMALLINT:
-			case TypeId::INTEGER:
+			case SQLTypeId::TINYINT:
+			case SQLTypeId::SMALLINT:
+			case SQLTypeId::INTEGER:
 				varvalue = PROTECT(NEW_INTEGER(nrows));
 				break;
-			case TypeId::BIGINT:
-			case TypeId::DECIMAL:
+			case SQLTypeId::BIGINT:
+			case SQLTypeId::DOUBLE:
+			case SQLTypeId::DECIMAL:
 				varvalue = PROTECT(NEW_NUMERIC(nrows));
 				break;
-			case TypeId::VARCHAR:
+			case SQLTypeId::VARCHAR:
 				varvalue = PROTECT(NEW_STRING(nrows));
 				break;
 			default:
@@ -134,7 +135,7 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 				case TypeId::BIGINT:
 					vector_to_r<uint64_t, double>(chunk->data[col_idx], NUMERIC_POINTER(dest), dest_offset, NA_REAL);
 					break;
-				case TypeId::DECIMAL:
+				case TypeId::DOUBLE:
 					vector_to_r<double, double>(chunk->data[col_idx], NUMERIC_POINTER(dest), dest_offset, NA_REAL);
 					break;
 				case TypeId::VARCHAR:

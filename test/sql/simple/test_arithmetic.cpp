@@ -96,4 +96,7 @@ TEST_CASE("SQLogicTest inspired arithmetic tests", "[arithmetic]") {
 
 	result = con.Query("SELECT DISTINCT - col2 AS col2 FROM tab1 WHERE NOT 18 BETWEEN NULL AND ( + col0 * + CAST ( NULL AS INTEGER ) + - 3 / col2 ) OR NOT col0 BETWEEN col2 + + col1 AND NULL ORDER BY 1 DESC;");
 	REQUIRE(CHECK_COLUMN(result, 0, {-68, -96}));
+
+	result = con.Query("SELECT MIN ( DISTINCT + CAST ( NULL AS INTEGER ) ) * COUNT ( * ) * - + 16 * CASE + + AVG ( ALL 97 ) WHEN ( + NULLIF ( SUM ( CAST ( NULL AS REAL ) ), 6 ) ) THEN 51 * 31 + - 6 WHEN + 48 * - 34 THEN NULL WHEN 91 * + ( SUM ( CAST ( NULL AS INTEGER ) ) ) THEN NULL END * - 4 + - 67;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 }

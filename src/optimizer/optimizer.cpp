@@ -78,10 +78,10 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	plan = optimizer.Optimize(move(plan));
 	context.profiler.EndPhase();
 	// next we make sure that multiple occurences of the same aggregation are only computed once
-	context.profiler.StartPhase("common_aggregate_expressions");
-	CommonAggregateOptimizer ca_optimizer;
-	ca_optimizer.VisitOperator(*plan);
-	context.profiler.EndPhase();
+	// context.profiler.StartPhase("common_aggregate_expressions");
+	// CommonAggregateOptimizer ca_optimizer;
+	// ca_optimizer.VisitOperator(*plan);
+	// context.profiler.EndPhase();
 
 	// then we extract common subexpressions inside the different operators
 	// context.profiler.StartPhase("common_subexpressions");
