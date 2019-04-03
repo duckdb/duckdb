@@ -9,10 +9,16 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "common/bitset.hpp"
 #include "common/types/string_heap.hpp"
 #include "common/types/value.hpp"
 
 namespace duckdb {
+//! Type used for nullmasks
+typedef bitset<STANDARD_VECTOR_SIZE> nullmask_t;
+
+//! Zero NULL mask: filled with the value 0 [READ ONLY]
+extern nullmask_t ZERO_MASK;
 
 //!  Vector of values of a specified TypeId.
 /*!

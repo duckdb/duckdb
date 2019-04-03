@@ -18,7 +18,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 		// insertion statement specifies column list
 
 		// create a mapping of (list index) -> (column index)
-		map<string, int> column_name_map;
+		unordered_map<string, int> column_name_map;
 		for (size_t i = 0; i < stmt.columns.size(); i++) {
 			column_name_map[stmt.columns[i]] = i;
 			auto entry = table->name_map.find(stmt.columns[i]);

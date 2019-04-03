@@ -11,11 +11,8 @@
 #pragma once
 
 #include "benchmark.hpp"
-#include "common/vector.hpp"
-
-#include <fstream>
-#include <memory>
-#include <string>
+#include "common/constants.hpp"
+#include "common/fstream.hpp"
 
 namespace duckdb {
 
@@ -43,8 +40,8 @@ public:
 	void RunBenchmarks();
 
 	vector<Benchmark *> benchmarks;
-	std::ofstream out_file;
-	std::ofstream log_file;
+	ofstream out_file;
+	ofstream log_file;
 };
 
 } // namespace duckdb

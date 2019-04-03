@@ -8,6 +8,10 @@
 using namespace duckdb;
 using namespace std;
 
+namespace duckdb {
+nullmask_t ZERO_MASK = nullmask_t(0);
+}
+
 Vector::Vector(TypeId type, bool create_data, bool zero_data)
     : type(type), count(0), data(nullptr), sel_vector(nullptr) {
 	if (create_data) {
