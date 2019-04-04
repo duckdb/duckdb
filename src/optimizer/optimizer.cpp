@@ -6,6 +6,7 @@
 #include "optimizer/cse_optimizer.hpp"
 #include "optimizer/filter_pushdown.hpp"
 #include "optimizer/join_order_optimizer.hpp"
+#include "optimizer/index_scan.hpp"
 #include "optimizer/rule/list.hpp"
 #include "planner/binder.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
@@ -69,6 +70,12 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	context.profiler.StartPhase("filter_pushdown");
 	FilterPushdown filter_pushdown(*this);
 	plan = filter_pushdown.Rewrite(move(plan));
+	context.profiler.EndPhase();
+
+	// check if filters match with existing indexes, if true transforms filters to index scans
+	context.profiler.StartPhase("index_scan");
+	IndexScan index_scan(*this);
+	plan = index_scan.Optimize(move(plan));
 	context.profiler.EndPhase();
 
 	// then we perform the join ordering optimization

@@ -1,0 +1,30 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// optimizer/index_scan.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
+#include "optimizer/filter_combiner.hpp"
+#include "optimizer/rule.hpp"
+
+namespace duckdb {
+    class Optimizer;
+
+    class IndexScan {
+    public:
+        IndexScan(Optimizer &optimizer) : optimizer(optimizer) {
+        }
+        //! Optimize Filters in Index Scans
+        unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> node);
+    private:
+        Optimizer &optimizer;
+        //! Transform a Filter in an index scan
+        unique_ptr<LogicalOperator> TransformFilterToIndexScan(unique_ptr<LogicalOperator> op);
+
+    };
+
+} // namespace duckdb
