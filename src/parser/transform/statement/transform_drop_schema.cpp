@@ -14,6 +14,6 @@ unique_ptr<DropSchemaStatement> Transformer::TransformDropSchema(DropStmt *stmt)
 	if (!stmt->objects || stmt->objects->length != 1) {
 		throw ParserException("DROP SCHEMA needs a single string parameter");
 	}
-	info.schema = string(((postgres::Value*) stmt->objects->head->data.ptr_value)->val.str);
+	info.schema = string(((postgres::Value *)stmt->objects->head->data.ptr_value)->val.str);
 	return result;
 }

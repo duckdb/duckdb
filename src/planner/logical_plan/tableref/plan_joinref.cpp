@@ -249,7 +249,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundJoinRef &ref) 
 	LogicalJoin::GetTableReferences(*right, right_bindings);
 	// now create the join operator from the set of join conditions
 	auto result = LogicalComparisonJoin::CreateJoin(ref.type, move(left), move(right), left_bindings, right_bindings,
-	                                         expressions);
+	                                                expressions);
 
 	LogicalOperator *join;
 	if (result->type == LogicalOperatorType::FILTER) {

@@ -1,6 +1,6 @@
 #include "execution/physical_plan_generator.hpp"
-#include "execution/column_binding_resolver.hpp"
 
+#include "execution/column_binding_resolver.hpp"
 #include "main/client_context.hpp"
 
 using namespace duckdb;
@@ -91,4 +91,3 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan(*op.children[0]);
 	}
 }
-

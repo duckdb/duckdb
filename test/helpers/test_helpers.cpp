@@ -230,7 +230,8 @@ string show_diff(ChunkCollection &collection, DataChunk &chunk) {
 
 //! Compares the result of a pipe-delimited CSV with the given DataChunk
 //! Returns true if they are equal, and stores an error_message otherwise
-bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql_types, bool has_header, string &error_message) {
+bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql_types, bool has_header,
+                    string &error_message) {
 	assert(collection.types.size() == sql_types.size());
 	DataChunk correct_result;
 

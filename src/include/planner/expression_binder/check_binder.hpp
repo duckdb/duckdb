@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "planner/expression_binder.hpp"
 #include "parser/column_definition.hpp"
+#include "planner/expression_binder.hpp"
 
 namespace duckdb {
 //! The CHECK binder is responsible for binding an expression within a CHECK constraint
@@ -19,6 +19,7 @@ public:
 
 	string table;
 	vector<ColumnDefinition> &columns;
+
 protected:
 	BindResult BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression = false) override;
 

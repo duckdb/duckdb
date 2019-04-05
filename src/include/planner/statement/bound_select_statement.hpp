@@ -21,6 +21,7 @@ public:
 
 	//! The main query node
 	unique_ptr<BoundQueryNode> node;
+
 public:
 	vector<string> GetNames() override {
 		return node->names;

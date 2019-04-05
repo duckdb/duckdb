@@ -1,11 +1,11 @@
 #include "dbgen.hpp"
 
 #include "common/exception.hpp"
+#include "common/types/date.hpp"
 #include "dbgen_gunk.hpp"
 #include "main/client_context.hpp"
 #include "storage/data_table.hpp"
 #include "tpch_constants.hpp"
-#include "common/types/date.hpp"
 
 #define DECLARER /* EXTERN references get defined here */
 

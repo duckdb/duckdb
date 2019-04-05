@@ -1,7 +1,7 @@
+#include "execution/operator/persistent/physical_delete.hpp"
 #include "execution/physical_plan_generator.hpp"
 #include "planner/expression/bound_reference_expression.hpp"
 #include "planner/operator/logical_delete.hpp"
-#include "execution/operator/persistent/physical_delete.hpp"
 
 using namespace duckdb;
 using namespace std;

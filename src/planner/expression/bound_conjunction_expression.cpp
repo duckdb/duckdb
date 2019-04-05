@@ -5,8 +5,7 @@ using namespace std;
 
 BoundConjunctionExpression::BoundConjunctionExpression(ExpressionType type, unique_ptr<Expression> left,
                                                        unique_ptr<Expression> right)
-    : Expression(type, ExpressionClass::BOUND_CONJUNCTION, TypeId::BOOLEAN),
-      left(move(left)), right(move(right)) {
+    : Expression(type, ExpressionClass::BOUND_CONJUNCTION, TypeId::BOOLEAN), left(move(left)), right(move(right)) {
 }
 
 string BoundConjunctionExpression::ToString() const {

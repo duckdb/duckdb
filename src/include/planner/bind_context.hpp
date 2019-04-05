@@ -11,13 +11,13 @@
 #include "catalog/catalog.hpp"
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "common/unordered_map.hpp"
+#include "common/unordered_set.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/parsed_expression.hpp"
 #include "planner/expression.hpp"
 #include "planner/expression_binder.hpp"
 #include "planner/table_binding.hpp"
-#include "common/unordered_map.hpp"
-#include "common/unordered_set.hpp"
 
 namespace duckdb {
 class BoundQueryNode;
@@ -46,6 +46,7 @@ public:
 	void AddTableFunction(size_t index, const string &alias, TableFunctionCatalogEntry *function_entry);
 
 	unordered_set<string> hidden_columns;
+
 private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);
 

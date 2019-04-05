@@ -27,10 +27,10 @@
 #include "planner/logical_operator.hpp"
 #include "planner/operator/list.hpp"
 #include "planner/operator/logical_join.hpp"
-#include "planner/statement/list.hpp"
-#include "planner/tableref/list.hpp"
 #include "planner/query_node/bound_select_node.hpp"
 #include "planner/query_node/bound_set_operation_node.hpp"
+#include "planner/statement/list.hpp"
+#include "planner/tableref/list.hpp"
 #include "storage/data_table.hpp"
 #include "storage/write_ahead_log.hpp"
 
@@ -154,7 +154,6 @@ template class std::unique_ptr<Relation>;
 template class std::unique_ptr<CatalogSet>;
 template class std::unique_ptr<PreparedStatementCatalogEntry>;
 template class std::unique_ptr<Binder>;
-
 
 #define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                                                          \
 	template VECTOR_DEFINITION::size_type VECTOR_DEFINITION::size() const;                                             \

@@ -1,10 +1,10 @@
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
+#include "parser/expression_map.hpp"
 #include "parser/query_node/set_operation_node.hpp"
 #include "planner/binder.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/query_node/bound_set_operation_node.hpp"
-#include "parser/expression_map.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -152,8 +152,8 @@ unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 			throw BinderException("ORDER term out of range - should be between 1 and %d", (int)result->types.size());
 		}
 		BoundOrderByNode node;
-		node.expression = make_unique<BoundColumnRefExpression>(
-		    GetInternalType(result->types[entry]), ColumnBinding(result->setop_index, entry));
+		node.expression = make_unique<BoundColumnRefExpression>(GetInternalType(result->types[entry]),
+		                                                        ColumnBinding(result->setop_index, entry));
 		node.type = statement.orders[i].type;
 		result->orders.push_back(move(node));
 	}

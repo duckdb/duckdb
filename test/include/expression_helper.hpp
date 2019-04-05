@@ -28,6 +28,7 @@ public:
 
 	DuckDB db;
 	Connection con;
+
 private:
 	ExpressionRewriter rewriter;
 

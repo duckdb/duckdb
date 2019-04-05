@@ -177,5 +177,4 @@ TEST_CASE("Test insert with too few or too many cols", "[simpleinserts]") {
 	REQUIRE_FAIL(con.Query("INSERT INTO a VALUES (1,2),(3,4,5)"));
 	// also with queries
 	REQUIRE_FAIL(con.Query("INSERT INTO a SELECT 42"));
-
 }

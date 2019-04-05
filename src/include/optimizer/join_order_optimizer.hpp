@@ -8,13 +8,13 @@
 
 #pragma once
 
-#include "optimizer/join_order/query_graph.hpp"
-#include "optimizer/join_order/relation.hpp"
-#include "planner/logical_operator.hpp"
-#include "planner/logical_operator_visitor.hpp"
 #include "common/unordered_map.hpp"
 #include "common/unordered_set.hpp"
+#include "optimizer/join_order/query_graph.hpp"
+#include "optimizer/join_order/relation.hpp"
 #include "parser/expression_map.hpp"
+#include "planner/logical_operator.hpp"
+#include "planner/logical_operator_visitor.hpp"
 
 #include <functional>
 

@@ -31,7 +31,8 @@ struct OrderIndexScanState : public IndexScanState {
 class OrderIndex : public Index {
 public:
 	OrderIndex(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, vector<TypeId> expression_types,
-	           vector<unique_ptr<Expression>> expressions, size_t initial_capacity);
+	           vector<unique_ptr<Expression>> expressions, size_t initial_capacity,
+	           vector<unique_ptr<Expression>> unbinded_expressions);
 
 	//! Appends data into the index, but does not perform the sort yet! This can
 	//! be done separately by calling the OrderIndex::Sort() method
@@ -71,6 +72,8 @@ public:
 	vector<TypeId> types;
 	//! The expressions to evaluate
 	vector<unique_ptr<Expression>> expressions;
+	//! Unbinded expressions to be used in the optimizer
+	vector<unique_ptr<Expression>> unbinded_expressions;
 	//! The size of one tuple
 	size_t tuple_size;
 	//! The big sorted list

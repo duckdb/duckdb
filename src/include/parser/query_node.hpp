@@ -59,6 +59,7 @@ public:
 	//! Deserializes a blob back into a QueryNode, returns nullptr if
 	//! deserialization is not possible
 	static unique_ptr<QueryNode> Deserialize(Deserializer &source);
+
 protected:
 	void CopyProperties(QueryNode &other);
 };

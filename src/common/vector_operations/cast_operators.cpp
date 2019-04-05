@@ -25,7 +25,8 @@ void templated_cast_loop(Vector &source, Vector &result) {
 	}
 }
 
-template <class SRC, class OP, bool IGNORE_NULL> static void result_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type) {
+template <class SRC, class OP, bool IGNORE_NULL>
+static void result_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type) {
 	// now switch on the result type
 	switch (target_type.id) {
 	case SQLTypeId::BOOLEAN:
@@ -144,5 +145,6 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 }
 
 void VectorOperations::Cast(Vector &source, Vector &result) {
-	return VectorOperations::Cast(source, result, SQLTypeFromInternalType(source.type), SQLTypeFromInternalType(result.type));
+	return VectorOperations::Cast(source, result, SQLTypeFromInternalType(source.type),
+	                              SQLTypeFromInternalType(result.type));
 }

@@ -19,6 +19,7 @@ public:
 	}
 
 	SQLType sql_type;
+
 public:
 	bool IsScalar() const override {
 		return false;

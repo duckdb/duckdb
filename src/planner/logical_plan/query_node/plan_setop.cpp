@@ -10,7 +10,8 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<LogicalOperator> LogicalPlanGenerator::CastLogicalOperatorToTypes(vector<SQLType> &source_types,
-                                                    vector<SQLType> &target_types, unique_ptr<LogicalOperator> op) {
+                                                                             vector<SQLType> &target_types,
+                                                                             unique_ptr<LogicalOperator> op) {
 	assert(op);
 	// first check if we even need to cast
 	assert(source_types.size() == target_types.size());
@@ -28,8 +29,8 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CastLogicalOperatorToTypes(vec
 			if (source_types[i] != target_types[i]) {
 				// differing types, have to add a cast
 				string alias = node->expressions[i]->alias;
-				node->expressions[i] = make_unique<BoundCastExpression>(GetInternalType(target_types[i]),
-				                                                        move(node->expressions[i]), source_types[i], target_types[i]);
+				node->expressions[i] = make_unique<BoundCastExpression>(
+				    GetInternalType(target_types[i]), move(node->expressions[i]), source_types[i], target_types[i]);
 				node->expressions[i]->alias = alias;
 			}
 		}
@@ -47,12 +48,12 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CastLogicalOperatorToTypes(vec
 		// now generate the expression list
 		vector<unique_ptr<Expression>> select_list;
 		for (size_t i = 0; i < target_types.size(); i++) {
-			unique_ptr<Expression> result = make_unique<BoundColumnRefExpression>(
-			    GetInternalType(source_types[i]), ColumnBinding(subquery_index, i));
+			unique_ptr<Expression> result = make_unique<BoundColumnRefExpression>(GetInternalType(source_types[i]),
+			                                                                      ColumnBinding(subquery_index, i));
 			if (source_types[i] != target_types[i]) {
 				// add a cast only if the source and target types are not equivalent
-				result =
-				    make_unique<BoundCastExpression>(GetInternalType(target_types[i]), move(result), source_types[i], target_types[i]);
+				result = make_unique<BoundCastExpression>(GetInternalType(target_types[i]), move(result),
+				                                          source_types[i], target_types[i]);
 			}
 			select_list.push_back(move(result));
 		}

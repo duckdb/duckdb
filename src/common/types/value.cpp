@@ -8,12 +8,10 @@
 #include "common/operator/numeric_binary_operators.hpp"
 #include "common/printer.hpp"
 #include "common/serializer.hpp"
-#include "common/value_operations/value_operations.hpp"
-
 #include "common/types/date.hpp"
 #include "common/types/timestamp.hpp"
 #include "common/types/vector.hpp"
-
+#include "common/value_operations/value_operations.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;

@@ -44,7 +44,7 @@ void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk, Ph
 
 	// FIXME: use estimated table size as initial index size
 	auto order_index = make_unique<OrderIndex>(*table.storage, column_ids, types, result_types, move(expressions),
-	                                           STANDARD_VECTOR_SIZE);
+	                                           STANDARD_VECTOR_SIZE, move(unbinded_expressions));
 	// now we start incrementally building the index
 	while (true) {
 		intermediate.Reset();

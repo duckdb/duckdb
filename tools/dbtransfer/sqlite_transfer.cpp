@@ -132,7 +132,7 @@ unique_ptr<QueryResult> QueryDatabase(vector<SQLType> result_types, sqlite3 *sql
 		result->names.push_back(sqlite3_column_name(stmt, i));
 	}
 	vector<TypeId> typeids;
-	for(auto &tp : result_types) {
+	for (auto &tp : result_types) {
 		typeids.push_back(GetInternalType(tp));
 	}
 	DataChunk result_chunk;

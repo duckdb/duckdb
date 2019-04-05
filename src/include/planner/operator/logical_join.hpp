@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "planner/logical_operator.hpp"
 #include "common/unordered_set.hpp"
+#include "planner/logical_operator.hpp"
 
 namespace duckdb {
 

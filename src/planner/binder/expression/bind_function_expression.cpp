@@ -24,7 +24,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, uint32
 	vector<SQLType> types;
 	vector<unique_ptr<Expression>> children;
 	for (size_t i = 0; i < function.children.size(); i++) {
-		auto &child = (BoundExpression&)*function.children[i];
+		auto &child = (BoundExpression &)*function.children[i];
 		types.push_back(child.sql_type);
 		children.push_back(move(child.expr));
 	}

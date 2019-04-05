@@ -22,6 +22,7 @@ public:
 	SQLType source_type;
 	//! The SQL type to cast to
 	SQLType target_type;
+
 public:
 	string ToString() const override;
 

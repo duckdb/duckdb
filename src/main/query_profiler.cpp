@@ -1,9 +1,8 @@
 #include "main/query_profiler.hpp"
 
+#include "common/fstream.hpp"
 #include "common/printer.hpp"
 #include "execution/physical_operator.hpp"
-
-#include "common/fstream.hpp"
 
 using namespace duckdb;
 using namespace std;

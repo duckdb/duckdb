@@ -30,12 +30,13 @@ public:
 	vector<int> column_index_map;
 	//! The expected types for the INSERT statement (obtained from the column types)
 	vector<SQLType> expected_types;
+
 public:
 	vector<string> GetNames() override {
 		return {"Count"};
 	}
 	vector<SQLType> GetTypes() override {
-		return { SQLType(SQLTypeId::BIGINT) };
+		return {SQLType(SQLTypeId::BIGINT)};
 	}
 };
 } // namespace duckdb

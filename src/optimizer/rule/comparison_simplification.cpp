@@ -1,7 +1,6 @@
 #include "optimizer/rule/comparison_simplification.hpp"
 
 #include "execution/expression_executor.hpp"
-
 #include "planner/expression/bound_constant_expression.hpp"
 
 using namespace duckdb;

@@ -8,8 +8,7 @@ using namespace duckdb;
 using namespace std;
 
 LogicalPlanGenerator::LogicalPlanGenerator(Binder &binder, ClientContext &context)
-    : plan_subquery(true), has_unplanned_subqueries(false), binder(binder),
-      require_row_id(false), context(context) {
+    : plan_subquery(true), has_unplanned_subqueries(false), binder(binder), require_row_id(false), context(context) {
 }
 
 unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSQLStatement &statement) {

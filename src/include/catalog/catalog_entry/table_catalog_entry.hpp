@@ -10,11 +10,10 @@
 
 #include "catalog/catalog_entry.hpp"
 #include "common/types/statistics.hpp"
+#include "common/unordered_map.hpp"
 #include "parser/column_definition.hpp"
 #include "parser/constraint.hpp"
 #include "parser/parsed_data.hpp"
-
-#include "common/unordered_map.hpp"
 
 namespace duckdb {
 
