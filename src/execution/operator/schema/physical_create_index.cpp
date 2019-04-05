@@ -33,17 +33,18 @@ void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk, Ph
 	}
 	result.Initialize(result_types);
 
-	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	auto index_types = table.GetTypes(column_ids);
 
 	ScanStructure ss;
 	table.storage->InitializeScan(ss);
 
 	DataChunk intermediate;
+	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	auto types = table.GetTypes(column_ids);
 	intermediate.Initialize(types);
 
 	// FIXME: use estimated table size as initial index size
-	auto order_index = make_unique<OrderIndex>(*table.storage, column_ids, types, result_types, move(expressions),
+	auto order_index = make_unique<OrderIndex>(*table.storage, column_ids, index_types, result_types, move(expressions),
 	                                           STANDARD_VECTOR_SIZE);
 	// now we start incrementally building the index
 	while (true) {
