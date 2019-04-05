@@ -31,6 +31,8 @@ public:
 	ClientContext &context;
 
 private:
-	void CreatePlan(SQLStatement &statement, vector<BoundParameterExpression *> *parameters = nullptr);
+	void CreatePlan(SQLStatement &statement, vector<BoundParameterExpression*> *parameters = nullptr);
+
+	void VerifyQuery(BoundSQLStatement &statement);
 };
 } // namespace duckdb
