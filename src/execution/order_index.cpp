@@ -416,7 +416,7 @@ void OrderIndex::Update(ClientContext &context, vector<column_t> &update_columns
 	// FIXME this method is ugly, but if we use a different DataChunk the column
 	// references will not be aligned properly
 	DataChunk temp_chunk;
-	temp_chunk.Initialize(types);
+	temp_chunk.Initialize(table.types);
 	temp_chunk.data[0].count = update_data.size();
 	for (size_t i = 0; i < column_ids.size(); i++) {
 		if (column_ids[i] == COLUMN_IDENTIFIER_ROW_ID) {
@@ -425,15 +425,13 @@ void OrderIndex::Update(ClientContext &context, vector<column_t> &update_columns
 		bool found_column = false;
 		for (size_t j = 0; i < update_columns.size(); j++) {
 			if (column_ids[i] == update_columns[j]) {
-				temp_chunk.data[0].Reference(update_data.data[update_columns[j]]);
+				temp_chunk.data[column_ids[i]].Reference(update_data.data[update_columns[j]]);
 				found_column = true;
 				break;
 			}
 		}
 		assert(found_column);
 	}
-	temp_chunk.sel_vector = temp_chunk.data[0].sel_vector;
-	temp_chunk.Verify();
 
 	// now resolve the expressions on the temp_chunk
 	ExpressionExecutor executor(temp_chunk);

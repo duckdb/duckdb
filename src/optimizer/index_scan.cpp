@@ -15,8 +15,12 @@ using namespace std;
 unique_ptr<LogicalOperator> IndexScan::Optimize(unique_ptr<LogicalOperator> op) {
 	if (op->type == LogicalOperatorType::FILTER && op->children[0]->type == LogicalOperatorType::GET)
 		return TransformFilterToIndexScan(move(op));
-	if (op->children.size())
-		op->children[0] = Optimize(move(op->children[0]));
+        for (auto &child : op->children) {
+            child = Optimize(move(child));
+        }
+
+//	if (op->children.size())
+//		op->children[0] = Optimize(move(op->children[0]));
 	return op;
 }
 
