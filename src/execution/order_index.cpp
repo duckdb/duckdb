@@ -40,7 +40,7 @@ OrderIndex::OrderIndex(DataTable &table, vector<column_t> column_ids, vector<Typ
                        vector<TypeId> expression_types, vector<unique_ptr<Expression>> expressions,
                        size_t initial_capacity, vector<unique_ptr<Expression>> unbinded_expressions)
     : Index(IndexType::ORDER_INDEX), table(table), column_ids(column_ids), types(types), expressions(move(expressions)),
-      tuple_size(0), data(nullptr), count(0), capacity(0), unbinded_expressions(move(unbinded_expressions)) {
+      unbinded_expressions(move(unbinded_expressions)),tuple_size(0), data(nullptr), count(0), capacity(0) {
 	// size of tuple is size of column id plus size of types
 	tuple_size = GetTupleSize(types[0]);
 	// initialize the data

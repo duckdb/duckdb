@@ -393,14 +393,13 @@ ExternalFileFormat StringToExternalFileFormat(const string &str) {
 
 IndexType StringToIndexType(const string &str) {
 	string upper_str = StringUtil::Upper(str);
-	if (upper_str == "INVALID") {
-		return IndexType::INVALID;
-	} else if (upper_str == "BTREE") {
-		return IndexType::BTREE;
+     if (upper_str == "ORDER_INDEX") {
+		return IndexType::ORDER_INDEX;
+	} else if (upper_str == "ART") {
+		return IndexType::ART;
 	} else {
 		throw ConversionException(StringUtil::Format("No IndexType conversion from string '%s'", upper_str.c_str()));
 	}
-	return IndexType::INVALID;
 }
 
 } // namespace duckdb

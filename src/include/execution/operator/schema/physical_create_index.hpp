@@ -9,6 +9,8 @@
 #pragma once
 
 #include "execution/physical_operator.hpp"
+#include "execution/order_index.hpp"
+#include "storage/data_table.hpp"
 
 #include <fstream>
 
@@ -36,5 +38,8 @@ public:
 	unique_ptr<CreateIndexInformation> info;
 	//! Unbinded expressions to be used in the optimizer
 	vector<unique_ptr<Expression>> unbinded_expressions;
+
+private:
+	void createOrderIndex(ScanStructure *ss,DataChunk *intermediate,vector<TypeId> *result_types,DataChunk *result);
 };
 } // namespace duckdb

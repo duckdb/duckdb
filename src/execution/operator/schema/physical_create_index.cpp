@@ -2,12 +2,36 @@
 
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "execution/expression_executor.hpp"
-#include "execution/order_index.hpp"
 #include "main/client_context.hpp"
-#include "storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+void PhysicalCreateIndex::createOrderIndex(ScanStructure *ss,DataChunk *intermediate,vector<TypeId> *result_types,DataChunk *result){
+	// FIXME: use estimated table size as initial index size
+	auto order_index = make_unique<OrderIndex>(*table.storage, column_ids, types, *result_types, move(expressions),
+											   STANDARD_VECTOR_SIZE, move(unbinded_expressions));
+	// now we start incrementally building the index
+	while (true) {
+		intermediate->Reset();
+
+		// scan a new chunk from the table to index
+		table.storage->CreateIndexScan(*ss, column_ids, *intermediate);
+		if (intermediate->size() == 0) {
+			// finished scanning for index creation
+			// release all locks
+			break;
+		}
+		// resolve the expressions for this chunk
+		ExpressionExecutor executor(intermediate);
+		executor.Execute(order_index->expressions, *result);
+
+		order_index->Insert(*result, intermediate->data[intermediate->column_count - 1]);
+	}
+	// after we have finished inserting everything we sort the index
+	order_index->Sort();
+	table.storage->indexes.push_back(move(order_index));
+}
 
 void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	if (column_ids.size() == 0) {
@@ -42,30 +66,14 @@ void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk, Ph
 	auto types = table.GetTypes(column_ids);
 	intermediate.Initialize(types);
 
-	// FIXME: use estimated table size as initial index size
-	auto order_index = make_unique<OrderIndex>(*table.storage, column_ids, types, result_types, move(expressions),
-	                                           STANDARD_VECTOR_SIZE, move(unbinded_expressions));
-	// now we start incrementally building the index
-	while (true) {
-		intermediate.Reset();
-
-		// scan a new chunk from the table to index
-		table.storage->CreateIndexScan(ss, column_ids, intermediate);
-		if (intermediate.size() == 0) {
-			// finished scanning for index creation
-			// release all locks
+	switch (info->index_type) {
+		case IndexType::ART:
+			createOrderIndex(&ss,&intermediate, &result_types,&result);
 			break;
-		}
-		// resolve the expressions for this chunk
-		ExpressionExecutor executor(intermediate);
-		executor.Execute(order_index->expressions, result);
-
-		order_index->Insert(result, intermediate.data[intermediate.column_count - 1]);
+		case IndexType::ORDER_INDEX:
+			createOrderIndex(&ss,&intermediate, &result_types,&result);
+			break;
 	}
-	// after we have finished inserting everything we sort the index
-	order_index->Sort();
-
-	table.storage->indexes.push_back(move(order_index));
 
 	chunk.data[0].count = 1;
 	chunk.data[0].SetValue(0, Value::BIGINT(0));

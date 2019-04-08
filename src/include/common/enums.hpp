@@ -325,9 +325,8 @@ enum class JoinType : uint8_t {
 //===--------------------------------------------------------------------===//
 
 enum class IndexType {
-	INVALID = 0,     // invalid index type
 	ORDER_INDEX = 1, // Order Index
-	BTREE = 2        // B+-Tree
+	ART = 2        // Adaptive Radix Tree
 };
 
 //===--------------------------------------------------------------------===//
