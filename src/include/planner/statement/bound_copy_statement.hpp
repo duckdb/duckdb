@@ -26,12 +26,13 @@ public:
 	TableCatalogEntry *table;
 	// The bound SQL statement (only for COPY from database -> file)
 	unique_ptr<BoundQueryNode> select_statement;
+
 public:
 	vector<string> GetNames() override {
 		return {"Count"};
 	}
 	vector<SQLType> GetTypes() override {
-		return { SQLType(SQLTypeId::BIGINT) };
+		return {SQLType(SQLTypeId::BIGINT)};
 	}
 };
 } // namespace duckdb

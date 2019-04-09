@@ -6,7 +6,8 @@
 using namespace duckdb;
 using namespace std;
 
-StreamQueryResult::StreamQueryResult(ClientContext &context, vector<SQLType> sql_types, vector<TypeId> types, vector<string> names)
+StreamQueryResult::StreamQueryResult(ClientContext &context, vector<SQLType> sql_types, vector<TypeId> types,
+                                     vector<string> names)
     : QueryResult(QueryResultType::STREAM_RESULT, sql_types, types, names), is_open(true), context(context) {
 }
 

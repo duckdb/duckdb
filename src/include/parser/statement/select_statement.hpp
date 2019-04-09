@@ -8,12 +8,12 @@
 
 #pragma once
 
+#include "common/unordered_map.hpp"
 #include "parser/parsed_expression.hpp"
 #include "parser/query_node.hpp"
 #include "parser/query_node/select_node.hpp"
 #include "parser/sql_statement.hpp"
 #include "parser/tableref.hpp"
-#include "common/unordered_map.hpp"
 
 namespace duckdb {
 

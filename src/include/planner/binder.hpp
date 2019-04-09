@@ -8,12 +8,12 @@
 
 #pragma once
 
+#include "common/unordered_map.hpp"
+#include "parser/column_definition.hpp"
 #include "parser/tokens.hpp"
 #include "planner/bind_context.hpp"
 #include "planner/bound_tokens.hpp"
-#include "parser/column_definition.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
-#include "common/unordered_map.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -26,8 +26,7 @@ struct CorrelatedColumnInfo {
 	size_t depth;
 
 	CorrelatedColumnInfo(BoundColumnRefExpression &expr)
-	    : binding(expr.binding), type(expr.return_type), name(expr.GetName()),
-	      depth(expr.depth) {
+	    : binding(expr.binding), type(expr.return_type), name(expr.GetName()), depth(expr.depth) {
 	}
 
 	bool operator==(const CorrelatedColumnInfo &rhs) const {
@@ -50,6 +49,7 @@ public:
 	unique_ptr<BoundQueryNode> Bind(QueryNode &node);
 
 	void BindConstraints(string table, vector<ColumnDefinition> &columns, vector<unique_ptr<Constraint>> &constraints);
+
 private:
 	unique_ptr<BoundSQLStatement> Bind(SelectStatement &stmt);
 	unique_ptr<BoundSQLStatement> Bind(InsertStatement &stmt);
@@ -93,7 +93,8 @@ public:
 	void AddCorrelatedColumn(CorrelatedColumnInfo info);
 
 	vector<CorrelatedColumnInfo> correlated_columns;
-	vector<BoundParameterExpression*> *parameters;
+	vector<BoundParameterExpression *> *parameters;
+
 private:
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);

@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "planner/expression_binder.hpp"
 #include "common/unordered_map.hpp"
 #include "common/unordered_set.hpp"
+#include "planner/expression_binder.hpp"
 
 namespace duckdb {
 class ConstantExpression;

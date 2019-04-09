@@ -1,10 +1,10 @@
-#include "execution/physical_plan_generator.hpp"
-#include "planner/operator/logical_delim_join.hpp"
+#include "execution/aggregate_hashtable.hpp"
 #include "execution/operator/join/physical_delim_join.hpp"
 #include "execution/operator/join/physical_hash_join.hpp"
 #include "execution/operator/projection/physical_projection.hpp"
 #include "execution/operator/scan/physical_chunk_scan.hpp"
-#include "execution/aggregate_hashtable.hpp"
+#include "execution/physical_plan_generator.hpp"
+#include "planner/operator/logical_delim_join.hpp"
 
 using namespace duckdb;
 using namespace std;

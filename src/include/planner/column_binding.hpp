@@ -26,4 +26,4 @@ struct ColumnBinding {
 	}
 };
 
-}
+} // namespace duckdb

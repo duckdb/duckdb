@@ -6,11 +6,10 @@
 #include "parser/statement/list.hpp"
 #include "planner/binder.hpp"
 #include "planner/bound_sql_statement.hpp"
+#include "planner/expression/bound_parameter_expression.hpp"
 #include "planner/logical_plan_generator.hpp"
 #include "planner/operator/logical_explain.hpp"
 #include "planner/operator/logical_prepare.hpp"
-
-#include "planner/expression/bound_parameter_expression.hpp"
 #include "planner/statement/bound_select_statement.hpp"
 
 using namespace duckdb;
@@ -19,7 +18,7 @@ using namespace std;
 Planner::Planner(ClientContext &context) : binder(context), context(context) {
 }
 
-void Planner::CreatePlan(SQLStatement &statement, vector<BoundParameterExpression*> *parameters) {
+void Planner::CreatePlan(SQLStatement &statement, vector<BoundParameterExpression *> *parameters) {
 	// first bind the tables and columns to the catalog
 	context.profiler.StartPhase("binder");
 	binder.parameters = parameters;
@@ -153,7 +152,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		explain->parse_tree = parse_tree;
 		explain->logical_plan_unopt = logical_plan_unopt;
 		names = {"explain_key", "explain_value"};
-		sql_types = {SQLType(SQLTypeId::VARCHAR), SQLType(SQLTypeId::VARCHAR) };
+		sql_types = {SQLType(SQLTypeId::VARCHAR), SQLType(SQLTypeId::VARCHAR)};
 		plan = move(explain);
 		break;
 	}
@@ -161,11 +160,11 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		auto &stmt = *reinterpret_cast<PrepareStatement *>(statement.get());
 		auto statement_type = stmt.statement->type;
 		// first create the plan for the to-be-prepared statement
-		vector<BoundParameterExpression*> bound_parameters;
+		vector<BoundParameterExpression *> bound_parameters;
 		CreatePlan(*stmt.statement, &bound_parameters);
 		// set up a map of parameter number -> value entries
 		unordered_map<size_t, PreparedValueEntry> value_map;
-		for(auto &expr : bound_parameters) {
+		for (auto &expr : bound_parameters) {
 			// check if the type of the parameter could be resolved
 			if (expr->return_type == TypeId::INVALID) {
 				throw BinderException("Could not determine type of parameters: try adding explicit type casts");
@@ -181,9 +180,10 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 			entry.target_type = expr->sql_type;
 			value_map[expr->parameter_nr] = move(entry);
 		}
-		auto prepare = make_unique<LogicalPrepare>(stmt.name, statement_type, names, sql_types, move(value_map), move(plan));
+		auto prepare =
+		    make_unique<LogicalPrepare>(stmt.name, statement_type, names, sql_types, move(value_map), move(plan));
 		names = {"Success"};
-		sql_types = { SQLType(SQLTypeId::BOOLEAN) };
+		sql_types = {SQLType(SQLTypeId::BOOLEAN)};
 		plan = move(prepare);
 		break;
 	}
@@ -206,9 +206,9 @@ void Planner::VerifyQuery(BoundSQLStatement &statement) {
 	if (statement.type != StatementType::SELECT) {
 		return;
 	}
-	auto &select = (BoundSelectStatement&) statement;
+	auto &select = (BoundSelectStatement &)statement;
 	auto &expr_list = select.node->GetSelectList();
-	for(auto &expr : expr_list) {
+	for (auto &expr : expr_list) {
 		if (expr->HasSubquery()) {
 			// can't copy subqueries
 			continue;
@@ -221,9 +221,9 @@ void Planner::VerifyQuery(BoundSQLStatement &statement) {
 	}
 
 	// double loop to verify that (in)equality of hashes
-	for(size_t i = 0; i < expr_list.size(); i++) {
+	for (size_t i = 0; i < expr_list.size(); i++) {
 		auto outer_hash = expr_list[i]->Hash();
-		for(size_t j = 0; j < expr_list.size(); j++) {
+		for (size_t j = 0; j < expr_list.size(); j++) {
 			auto inner_hash = expr_list[j]->Hash();
 			if (outer_hash != inner_hash) {
 				// if hashes are not equivalent the expressions should not be equivalent

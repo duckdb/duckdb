@@ -32,9 +32,13 @@ public:
 	Value(int32_t val) : type(TypeId::INTEGER), is_null(false) {
 		value_.integer = val;
 	}
+	//! Create a FLOAT value
+	Value(float val) : type(TypeId::FLOAT), is_null(false) {
+		value_.float_ = val;
+	}
 	//! Create a DOUBLE value
 	Value(double val) : type(TypeId::DOUBLE), is_null(false) {
-		value_.decimal = val;
+		value_.double_ = val;
 	}
 	//! Create a VARCHAR value
 	Value(const char *val) : Value(val ? string(val) : string()) {
@@ -100,7 +104,8 @@ public:
 		int16_t smallint;
 		int32_t integer;
 		int64_t bigint;
-		double decimal;
+		float float_;
+		double double_;
 		uint64_t pointer;
 	} value_;
 

@@ -31,4 +31,4 @@ using expression_map_t = unordered_map<BaseExpression *, T, ExpressionHashFuncti
 
 using expression_set_t = unordered_set<BaseExpression *, ExpressionHashFunction, ExpressionEquality>;
 
-}
+} // namespace duckdb

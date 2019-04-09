@@ -7,9 +7,9 @@
 #include "main/client_context.hpp"
 #include "main/connection.hpp"
 #include "main/database.hpp"
+#include "planner/binder.hpp"
 #include "transaction/transaction.hpp"
 #include "transaction/transaction_manager.hpp"
-#include "planner/binder.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -174,7 +174,7 @@ bool ReplayCreateTable(ClientContext &context, Catalog &catalog, Deserializer &s
 	// bind the constraints to the table again
 	Binder binder(context);
 	binder.BindConstraints(info->table, info->columns, info->constraints);
-	
+
 	// try {
 	catalog.CreateTable(context.ActiveTransaction(), info.get());
 	// catch(...) {

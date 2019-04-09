@@ -3,7 +3,6 @@
 #include "expression_helper.hpp"
 #include "optimizer/rule/conjunction_simplification.hpp"
 
-
 using namespace duckdb;
 using namespace std;
 

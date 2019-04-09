@@ -1,7 +1,7 @@
 #include "parser/expression/subquery_expression.hpp"
+#include "planner/binder.hpp"
 #include "planner/expression/bound_subquery_expression.hpp"
 #include "planner/expression_binder.hpp"
-#include "planner/binder.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -14,7 +14,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, uint32_t d
 			return BindResult(result);
 		}
 	}
-	auto child = (BoundExpression*) expr.child.get();
+	auto child = (BoundExpression *)expr.child.get();
 	// bind the subquery in a new binder
 	auto subquery_binder = make_unique<Binder>(context, &binder);
 	// the subquery may refer to CTEs from the parent query
@@ -34,7 +34,8 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, uint32_t d
 		throw BinderException("Subquery returns %zu columns - expected 1", bound_node->types.size());
 	}
 
-	SQLType return_type = expr.subquery_type == SubqueryType::SCALAR ? bound_node->types[0] : SQLType(SQLTypeId::BOOLEAN);
+	SQLType return_type =
+	    expr.subquery_type == SubqueryType::SCALAR ? bound_node->types[0] : SQLType(SQLTypeId::BOOLEAN);
 
 	auto result = make_unique<BoundSubqueryExpression>(GetInternalType(return_type));
 	if (expr.subquery_type == SubqueryType::ANY) {
@@ -51,7 +52,6 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, uint32_t d
 	result->subquery_type = expr.subquery_type;
 	result->child = child ? move(child->expr) : nullptr;
 	result->comparison_type = expr.comparison_type;
-
 
 	return BindResult(move(result), return_type);
 }

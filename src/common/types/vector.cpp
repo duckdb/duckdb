@@ -60,8 +60,11 @@ void Vector::Reference(Value &value) {
 	case TypeId::BIGINT:
 		data = (char *)&value.value_.bigint;
 		break;
+	case TypeId::FLOAT:
+		data = (char *)&value.value_.float_;
+		break;
 	case TypeId::DOUBLE:
-		data = (char *)&value.value_.decimal;
+		data = (char *)&value.value_.double_;
 		break;
 	case TypeId::POINTER:
 		data = (char *)&value.value_.pointer;
@@ -126,8 +129,11 @@ void Vector::SetValue(size_t index_, Value val) {
 	case TypeId::BIGINT:
 		((int64_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.bigint;
 		break;
+	case TypeId::FLOAT:
+		((float *)data)[index] = newVal.is_null ? 0 : newVal.value_.float_;
+		break;
 	case TypeId::DOUBLE:
-		((double *)data)[index] = newVal.is_null ? 0 : newVal.value_.decimal;
+		((double *)data)[index] = newVal.is_null ? 0 : newVal.value_.double_;
 		break;
 	case TypeId::POINTER:
 		((uint64_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.pointer;
@@ -178,6 +184,8 @@ Value Vector::GetValue(size_t index) const {
 		return Value::BIGINT(((int64_t *)data)[entry]);
 	case TypeId::POINTER:
 		return Value::POINTER(((uint64_t *)data)[entry]);
+	case TypeId::FLOAT:
+		return Value(((float *)data)[entry]);
 	case TypeId::DOUBLE:
 		return Value(((double *)data)[entry]);
 	case TypeId::VARCHAR: {

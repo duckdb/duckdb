@@ -27,12 +27,13 @@ public:
 	vector<unique_ptr<Expression>> expressions;
 	// Info for index creation
 	unique_ptr<CreateIndexInformation> info;
+
 public:
 	vector<string> GetNames() override {
 		return {"Count"};
 	}
 	vector<SQLType> GetTypes() override {
-		return { SQLType(SQLTypeId::BIGINT) };
+		return {SQLType(SQLTypeId::BIGINT)};
 	}
 };
 } // namespace duckdb

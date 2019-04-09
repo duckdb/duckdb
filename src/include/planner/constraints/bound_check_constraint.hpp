@@ -8,9 +8,9 @@
 
 #pragma once
 
+#include "common/exception.hpp"
 #include "parser/constraints/check_constraint.hpp"
 #include "planner/expression.hpp"
-#include "common/exception.hpp"
 
 namespace duckdb {
 
@@ -20,7 +20,8 @@ class BoundCheckConstraint : public Constraint {
 public:
 	BoundCheckConstraint(unique_ptr<Expression> expression, unique_ptr<CheckConstraint> unbound_constraint)
 	    : Constraint(ConstraintType::CHECK), expression(move(expression)),
-	      unbound_constraint(move(unbound_constraint)){}
+	      unbound_constraint(move(unbound_constraint)) {
+	}
 
 	unique_ptr<Expression> expression;
 	unique_ptr<CheckConstraint> unbound_constraint;

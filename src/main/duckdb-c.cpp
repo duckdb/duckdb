@@ -1,7 +1,7 @@
+#include "common/types/date.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 #include "duckdb.h"
 #include "duckdb.hpp"
-#include "common/types/date.hpp"
 
 #include <cstring>
 

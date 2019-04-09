@@ -22,7 +22,7 @@ bool Transformer::TransformParseTree(List *tree, vector<unique_ptr<SQLStatement>
 unique_ptr<SQLStatement> Transformer::TransformStatement(Node *stmt) {
 	switch (stmt->type) {
 	case T_RawStmt:
-		return TransformStatement(((RawStmt*)stmt)->stmt);
+		return TransformStatement(((RawStmt *)stmt)->stmt);
 	case T_SelectStmt:
 		return TransformSelect(stmt);
 	case T_CreateStmt:

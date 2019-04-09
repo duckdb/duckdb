@@ -5,14 +5,14 @@
 using namespace duckdb;
 using namespace std;
 
-static SQLType ResolveNotType(OperatorExpression &op, vector<BoundExpression*> &children) {
+static SQLType ResolveNotType(OperatorExpression &op, vector<BoundExpression *> &children) {
 	// NOT expression, cast child to BOOLEAN
 	assert(children.size() == 1);
 	children[0]->expr = AddCastToType(move(children[0]->expr), children[0]->sql_type, SQLType(SQLTypeId::BOOLEAN));
 	return SQLType(SQLTypeId::BOOLEAN);
 }
 
-static SQLType ResolveInType(OperatorExpression &op, vector<BoundExpression*> &children) {
+static SQLType ResolveInType(OperatorExpression &op, vector<BoundExpression *> &children) {
 	// get the maximum type from the children
 	SQLType max_type = children[0]->sql_type;
 	for (size_t i = 1; i < children.size(); i++) {
@@ -26,7 +26,7 @@ static SQLType ResolveInType(OperatorExpression &op, vector<BoundExpression*> &c
 	return SQLType(SQLTypeId::BOOLEAN);
 }
 
-static SQLType ResolveAddType(OperatorExpression &op, vector<BoundExpression*> &children) {
+static SQLType ResolveAddType(OperatorExpression &op, vector<BoundExpression *> &children) {
 	switch (children[0]->sql_type.id) {
 	case SQLTypeId::DATE:
 		switch (children[1]->sql_type.id) {
@@ -36,7 +36,8 @@ static SQLType ResolveAddType(OperatorExpression &op, vector<BoundExpression*> &
 		case SQLTypeId::BIGINT:
 			// integers can be added to dates, the result is a date again
 			// need to cast child to INTEGER
-			children[1]->expr = AddCastToType(move(children[1]->expr), children[1]->sql_type, SQLType(SQLTypeId::INTEGER));
+			children[1]->expr =
+			    AddCastToType(move(children[1]->expr), children[1]->sql_type, SQLType(SQLTypeId::INTEGER));
 			return SQLType(SQLTypeId::DATE);
 		default:
 			break;
@@ -49,7 +50,7 @@ static SQLType ResolveAddType(OperatorExpression &op, vector<BoundExpression*> &
 	                      SQLTypeToString(children[1]->sql_type).c_str());
 }
 
-static SQLType ResolveSubtractType(OperatorExpression &op, vector<BoundExpression*> &children) {
+static SQLType ResolveSubtractType(OperatorExpression &op, vector<BoundExpression *> &children) {
 	switch (children[0]->sql_type.id) {
 	case SQLTypeId::DATE:
 		switch (children[1]->sql_type.id) {
@@ -62,7 +63,8 @@ static SQLType ResolveSubtractType(OperatorExpression &op, vector<BoundExpressio
 		case SQLTypeId::BIGINT:
 			// integers can be subtracted from dates, the result is a date again
 			// need to cast child to INTEGER
-			children[1]->expr = AddCastToType(move(children[1]->expr), children[1]->sql_type, SQLType(SQLTypeId::INTEGER));
+			children[1]->expr =
+			    AddCastToType(move(children[1]->expr), children[1]->sql_type, SQLType(SQLTypeId::INTEGER));
 			return SQLType(SQLTypeId::DATE);
 		default:
 			break;
@@ -75,22 +77,22 @@ static SQLType ResolveSubtractType(OperatorExpression &op, vector<BoundExpressio
 	                      SQLTypeToString(children[1]->sql_type).c_str());
 }
 
-static SQLType ResolveMultiplyType(OperatorExpression &op, vector<BoundExpression*> &children) {
+static SQLType ResolveMultiplyType(OperatorExpression &op, vector<BoundExpression *> &children) {
 	throw BinderException("Unimplemented types for divide: %s * %s", SQLTypeToString(children[0]->sql_type).c_str(),
 	                      SQLTypeToString(children[1]->sql_type).c_str());
 }
 
-static SQLType ResolveDivideType(OperatorExpression &op, vector<BoundExpression*> &children) {
+static SQLType ResolveDivideType(OperatorExpression &op, vector<BoundExpression *> &children) {
 	throw BinderException("Unimplemented types for divide: %s / %s", SQLTypeToString(children[0]->sql_type).c_str(),
 	                      SQLTypeToString(children[1]->sql_type).c_str());
 }
 
-static SQLType ResolveModuloType(OperatorExpression &op, vector<BoundExpression*> &children) {
+static SQLType ResolveModuloType(OperatorExpression &op, vector<BoundExpression *> &children) {
 	throw BinderException("Unimplemented types for modulo: %s mod %s", SQLTypeToString(children[0]->sql_type).c_str(),
 	                      SQLTypeToString(children[1]->sql_type).c_str());
 }
 
-static SQLType ResolveArithmeticType(OperatorExpression &op, vector<BoundExpression*> &children) {
+static SQLType ResolveArithmeticType(OperatorExpression &op, vector<BoundExpression *> &children) {
 	assert(children.size() == 2);
 	auto left_type = children[0]->sql_type;
 	auto right_type = children[1]->sql_type;
@@ -110,7 +112,7 @@ static SQLType ResolveArithmeticType(OperatorExpression &op, vector<BoundExpress
 	}
 
 	if (children[0]->expr->expression_class == ExpressionClass::BOUND_PARAMETER &&
-		children[1]->expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
+	    children[1]->expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
 		throw BinderException("Could not resolve type for operator");
 	}
 	// always cast parameters to the type of the other expression
@@ -137,7 +139,7 @@ static SQLType ResolveArithmeticType(OperatorExpression &op, vector<BoundExpress
 	}
 }
 
-static SQLType ResolveOperatorType(OperatorExpression &op, vector<BoundExpression*> &children) {
+static SQLType ResolveOperatorType(OperatorExpression &op, vector<BoundExpression *> &children) {
 	switch (op.type) {
 	case ExpressionType::OPERATOR_IS_NULL:
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
@@ -168,16 +170,16 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, uint32_t dep
 		return BindResult(error);
 	}
 	// all children bound successfully, extract them
-	vector<BoundExpression*> children;
+	vector<BoundExpression *> children;
 	for (size_t i = 0; i < op.children.size(); i++) {
 		assert(op.children[i]->expression_class == ExpressionClass::BOUND_EXPRESSION);
-		children.push_back((BoundExpression*)op.children[i].get());
+		children.push_back((BoundExpression *)op.children[i].get());
 	}
 	// now resolve the types
 	SQLType result_type = ResolveOperatorType(op, children);
 
 	auto result = make_unique<BoundOperatorExpression>(op.type, GetInternalType(result_type));
-	for(auto &child : children) {
+	for (auto &child : children) {
 		result->children.push_back(move(child->expr));
 	}
 	return BindResult(move(result), result_type);

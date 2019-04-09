@@ -2,15 +2,14 @@
 
 #include "execution/physical_plan_generator.hpp"
 #include "main/database.hpp"
-#include "optimizer/optimizer.hpp"
-#include "parser/parser.hpp"
-#include "planner/operator/logical_execute.hpp"
-#include "planner/planner.hpp"
-#include "parser/statement/explain_statement.hpp"
-
 #include "main/materialized_query_result.hpp"
 #include "main/query_result.hpp"
 #include "main/stream_query_result.hpp"
+#include "optimizer/optimizer.hpp"
+#include "parser/parser.hpp"
+#include "parser/statement/explain_statement.hpp"
+#include "planner/operator/logical_execute.hpp"
+#include "planner/planner.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -50,8 +50,11 @@ void VectorOperations::Set(Vector &result, Value value) {
 		case TypeId::BIGINT:
 			templated_set_loop<int64_t>(result, value.value_.bigint);
 			break;
+		case TypeId::FLOAT:
+			templated_set_loop<float>(result, value.value_.float_);
+			break;
 		case TypeId::DOUBLE:
-			templated_set_loop<double>(result, value.value_.decimal);
+			templated_set_loop<double>(result, value.value_.double_);
 			break;
 		case TypeId::POINTER:
 			templated_set_loop<uint64_t>(result, value.value_.pointer);

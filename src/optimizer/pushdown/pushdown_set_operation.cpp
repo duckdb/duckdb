@@ -1,11 +1,10 @@
 #include "optimizer/filter_pushdown.hpp"
 #include "optimizer/optimizer.hpp"
+#include "planner/binder.hpp"
+#include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/expression_iterator.hpp"
 #include "planner/operator/logical_set_operation.hpp"
 #include "planner/operator/logical_subquery.hpp"
-
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/binder.hpp"
 
 using namespace duckdb;
 using namespace std;

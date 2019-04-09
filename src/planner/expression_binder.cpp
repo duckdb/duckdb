@@ -4,12 +4,12 @@
 #include "main/database.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/subquery_expression.hpp"
+#include "parser/parsed_expression_iterator.hpp"
 #include "planner/binder.hpp"
 #include "planner/expression/bound_cast_expression.hpp"
 #include "planner/expression/bound_default_expression.hpp"
 #include "planner/expression/bound_parameter_expression.hpp"
 #include "planner/expression/bound_subquery_expression.hpp"
-#include "parser/parsed_expression_iterator.hpp"
 #include "planner/expression_iterator.hpp"
 
 using namespace duckdb;
@@ -99,10 +99,12 @@ void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &
 			binder.AddCorrelatedColumn(CorrelatedColumnInfo(bound_colref));
 		}
 	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ExtractCorrelatedExpressions(binder, child); });
+	ExpressionIterator::EnumerateChildren(expr,
+	                                      [&](Expression &child) { ExtractCorrelatedExpressions(binder, child); });
 }
 
-unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, SQLType *result_type, bool root_expression) {
+unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, SQLType *result_type,
+                                              bool root_expression) {
 	// bind the main expression
 	auto error_msg = Bind(&expr, 0, root_expression);
 	if (!error_msg.empty()) {
@@ -111,11 +113,11 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 		if (!success) {
 			throw BinderException(error_msg);
 		}
-		auto bound_expr = (BoundExpression*) expr.get();
+		auto bound_expr = (BoundExpression *)expr.get();
 		ExtractCorrelatedExpressions(binder, *bound_expr->expr);
 	}
 	assert(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
-	auto bound_expr = (BoundExpression*) expr.get();
+	auto bound_expr = (BoundExpression *)expr.get();
 	unique_ptr<Expression> result = move(bound_expr->expr);
 	if (target_type.id != SQLTypeId::INVALID) {
 		// the binder has a specific target type: add a cast to that type
@@ -124,7 +126,7 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 		if (bound_expr->sql_type.id == SQLTypeId::SQLNULL) {
 			// SQL NULL type is only used internally in the binder
 			// cast to INTEGER if we encounter it outside of the binder
-			bound_expr->sql_type =  SQLType(SQLTypeId::INTEGER);
+			bound_expr->sql_type = SQLType(SQLTypeId::INTEGER);
 			result = AddCastToType(move(result), bound_expr->sql_type, bound_expr->sql_type);
 		}
 	}
@@ -152,7 +154,6 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, uint32_t depth
 	}
 }
 
-
 void ExpressionBinder::BindTableNames(ParsedExpression &expr) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto &colref = (ColumnRefExpression &)expr;
@@ -161,20 +162,19 @@ void ExpressionBinder::BindTableNames(ParsedExpression &expr) {
 			colref.table_name = binder.bind_context.GetMatchingBinding(colref.column_name);
 		}
 	}
-	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
-		BindTableNames((ParsedExpression&) child);
-	});
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { BindTableNames((ParsedExpression &)child); });
 }
 
 namespace duckdb {
 unique_ptr<Expression> AddCastToType(unique_ptr<Expression> expr, SQLType source_type, SQLType target_type) {
 	assert(expr);
 	if (expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
-		auto &parameter = (BoundParameterExpression&) *expr;
+		auto &parameter = (BoundParameterExpression &)*expr;
 		parameter.sql_type = target_type;
 		parameter.return_type = GetInternalType(target_type);
 	} else if (expr->expression_class == ExpressionClass::BOUND_DEFAULT) {
-		auto &def = (BoundDefaultExpression&) *expr;
+		auto &def = (BoundDefaultExpression &)*expr;
 		def.sql_type = target_type;
 		def.return_type = GetInternalType(target_type);
 	} else if (source_type != target_type) {

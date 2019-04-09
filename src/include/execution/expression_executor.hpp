@@ -9,8 +9,8 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/unordered_map.hpp"
 #include "common/types/data_chunk.hpp"
+#include "common/unordered_map.hpp"
 #include "planner/bound_tokens.hpp"
 #include "planner/expression.hpp"
 

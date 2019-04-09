@@ -61,7 +61,8 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 		}
 	}
 	// now rewrite any correlated BoundColumnRef expressions inside the subquery
-	ExpressionIterator::EnumerateQueryNodeChildren(*expr.subquery, [&](Expression &child) { RewriteCorrelatedExpressions(child); });
+	ExpressionIterator::EnumerateQueryNodeChildren(*expr.subquery,
+	                                               [&](Expression &child) { RewriteCorrelatedExpressions(child); });
 }
 
 void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelatedExpressions(Expression &child) {

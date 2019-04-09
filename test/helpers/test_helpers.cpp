@@ -10,18 +10,25 @@ static bool ValuesAreEqual(Value result_value, Value value) {
 		// NULL = NULL in checking code
 		return true;
 	}
-	if (value.type == TypeId::DOUBLE) {
-		// round to two decimals
-		auto left = StringUtil::Format("%.2f", value.value_.decimal);
-		auto right = StringUtil::Format("%.2f", result_value.value_.decimal);
-		if (left != right) {
-			double ldecimal = value.value_.decimal;
-			double rdecimal = result_value.value_.decimal;
-			if (ldecimal < 0.99 * rdecimal || ldecimal > 1.01 * rdecimal) {
-				return false;
-			}
+
+	switch (value.type) {
+	case TypeId::FLOAT: {
+		double ldecimal = value.value_.float_;
+		double rdecimal = result_value.value_.float_;
+		if (ldecimal < 0.99 * rdecimal || ldecimal > 1.01 * rdecimal) {
+			return false;
 		}
-	} else if (value.type == TypeId::VARCHAR) {
+		break;
+	}
+	case TypeId::DOUBLE: {
+		double ldecimal = value.value_.double_;
+		double rdecimal = result_value.value_.double_;
+		if (ldecimal < 0.99 * rdecimal || ldecimal > 1.01 * rdecimal) {
+			return false;
+		}
+		break;
+	}
+	case TypeId::VARCHAR: {
 		// some results might contain padding spaces, e.g. when rendering
 		// VARCHAR(10) and the string only has 6 characters, they will be padded
 		// with spaces to 10 in the rendering. We don't do that here yet as we
@@ -32,10 +39,12 @@ static bool ValuesAreEqual(Value result_value, Value value) {
 		StringUtil::RTrim(left);
 		StringUtil::RTrim(right);
 		return left == right;
-	} else {
+	}
+	default:
 		if (value != result_value) {
 			return false;
 		}
+		break;
 	}
 	return true;
 }
@@ -230,7 +239,8 @@ string show_diff(ChunkCollection &collection, DataChunk &chunk) {
 
 //! Compares the result of a pipe-delimited CSV with the given DataChunk
 //! Returns true if they are equal, and stores an error_message otherwise
-bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql_types, bool has_header, string &error_message) {
+bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql_types, bool has_header,
+                    string &error_message) {
 	assert(collection.types.size() == sql_types.size());
 	DataChunk correct_result;
 

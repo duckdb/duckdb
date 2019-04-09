@@ -2,11 +2,9 @@
 #include "common/helper.hpp"
 #include "expression_helper.hpp"
 #include "optimizer/cse_optimizer.hpp"
-
-#include "planner/expression/common_subexpression.hpp"
-#include "planner/expression/bound_operator_expression.hpp"
 #include "planner/expression/bound_comparison_expression.hpp"
-
+#include "planner/expression/bound_operator_expression.hpp"
+#include "planner/expression/common_subexpression.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -60,7 +58,6 @@ TEST_CASE("Test CSE Optimizer", "[optimizer]") {
 	REQUIRE(lcomp.left->type == ExpressionType::COMMON_SUBEXPRESSION);
 	REQUIRE(rcomp.left->type == ExpressionType::COMMON_SUBEXPRESSION);
 }
-
 
 TEST_CASE("CSE NULL*MIN(42) defense", "[optimizer]") {
 	DuckDB db(nullptr);

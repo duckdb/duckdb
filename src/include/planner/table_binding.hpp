@@ -35,7 +35,8 @@ struct Binding {
 
 	virtual bool HasMatchingBinding(const string &column_name) = 0;
 	virtual BindResult Bind(ColumnRefExpression &colref, uint32_t depth) = 0;
-	virtual void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) = 0;
+	virtual void GenerateAllColumnExpressions(BindContext &context,
+	                                          vector<unique_ptr<ParsedExpression>> &select_list) = 0;
 
 	BindingType type;
 	string alias;

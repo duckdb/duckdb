@@ -1,6 +1,6 @@
+#include "execution/operator/projection/physical_projection.hpp"
 #include "execution/physical_plan_generator.hpp"
 #include "planner/operator/logical_projection.hpp"
-#include "execution/operator/projection/physical_projection.hpp"
 
 using namespace duckdb;
 using namespace std;

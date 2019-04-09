@@ -28,6 +28,9 @@ void SetNullValue(uint8_t *ptr, TypeId type) {
 	case TypeId::BIGINT:
 		*((int64_t *)ptr) = NullValue<int64_t>();
 		break;
+	case TypeId::FLOAT:
+		*((float *)ptr) = NullValue<float>();
+		break;
 	case TypeId::DOUBLE:
 		*((double *)ptr) = NullValue<double>();
 		break;

@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "planner/binder.hpp"
-#include "planner/logical_operator.hpp"
 #include "common/unordered_map.hpp"
+#include "planner/binder.hpp"
 #include "planner/column_binding_map.hpp"
+#include "planner/logical_operator.hpp"
 
 namespace duckdb {
 

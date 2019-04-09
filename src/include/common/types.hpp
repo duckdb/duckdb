@@ -56,11 +56,12 @@ enum class SQLTypeId : uint8_t {
 	TIMESTAMP = 8,
 	REAL = 9,
 	DOUBLE = 10,
-	DECIMAL = 11,
-	CHAR = 12,
-	VARCHAR = 13,
-	VARBINARY = 14,
-	POINTER = 15
+	FLOAT = 11,
+	DECIMAL = 12,
+	CHAR = 13,
+	VARCHAR = 14,
+	VARBINARY = 15,
+	POINTER = 16
 };
 
 struct SQLType {

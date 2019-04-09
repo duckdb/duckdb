@@ -16,9 +16,9 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, uint32_t depth
 	}
 	// the children have been successfully resolved
 	// now resolve the type of the result
-	auto &check = (BoundExpression&)*expr.check;
-	auto &result_if_true = (BoundExpression&)*expr.result_if_true;
-	auto &result_if_false = (BoundExpression&)*expr.result_if_false;
+	auto &check = (BoundExpression &)*expr.check;
+	auto &result_if_true = (BoundExpression &)*expr.result_if_true;
+	auto &result_if_false = (BoundExpression &)*expr.result_if_false;
 	// add a cast to BOOLEAN in the CHECK condition
 	check.expr = AddCastToType(move(check.expr), check.sql_type, SQLType(SQLTypeId::BOOLEAN));
 	// now obtain the result type of the input types
@@ -27,5 +27,7 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, uint32_t depth
 	result_if_true.expr = AddCastToType(move(result_if_true.expr), result_if_true.sql_type, return_type);
 	result_if_false.expr = AddCastToType(move(result_if_false.expr), result_if_false.sql_type, return_type);
 	// now create the bound case expression
-	return BindResult(make_unique<BoundCaseExpression>(move(check.expr), move(result_if_true.expr), move(result_if_false.expr)), return_type);
+	return BindResult(
+	    make_unique<BoundCaseExpression>(move(check.expr), move(result_if_true.expr), move(result_if_false.expr)),
+	    return_type);
 }

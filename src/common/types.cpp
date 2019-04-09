@@ -21,13 +21,16 @@ string TypeIdToString(TypeId type) {
 		return "BIGINT";
 	case TypeId::POINTER:
 		return "POINTER";
+	case TypeId::FLOAT:
+		return "FLOAT";
 	case TypeId::DOUBLE:
 		return "DOUBLE";
 	case TypeId::VARCHAR:
 		return "VARCHAR";
-	default:
-		assert(type == TypeId::VARBINARY);
+	case TypeId::VARBINARY:
 		return "VARBINARY";
+	default:
+		throw ConversionException("Invalid TypeId %d", type);
 	}
 }
 
@@ -43,15 +46,18 @@ size_t GetTypeIdSize(TypeId type) {
 		return sizeof(int32_t);
 	case TypeId::BIGINT:
 		return sizeof(int64_t);
+	case TypeId::FLOAT:
+		return sizeof(float);
 	case TypeId::DOUBLE:
 		return sizeof(double);
 	case TypeId::POINTER:
 		return sizeof(uint64_t);
 	case TypeId::VARCHAR:
 		return sizeof(void *);
-	default:
-		assert(type == TypeId::VARBINARY);
+	case TypeId::VARBINARY:
 		return sizeof(blob_t);
+	default:
+		throw ConversionException("Invalid TypeId %d", type);
 	}
 }
 
@@ -67,15 +73,18 @@ SQLType SQLTypeFromInternalType(TypeId type) {
 		return SQLType(SQLTypeId::INTEGER);
 	case TypeId::BIGINT:
 		return SQLType(SQLTypeId::BIGINT);
+	case TypeId::FLOAT:
+		return SQLType(SQLTypeId::FLOAT);
 	case TypeId::DOUBLE:
 		return SQLType(SQLTypeId::DOUBLE);
 	case TypeId::POINTER:
 		return SQLType(SQLTypeId::POINTER);
 	case TypeId::VARCHAR:
 		return SQLType(SQLTypeId::VARCHAR);
-	default:
-		assert(type == TypeId::VARBINARY);
+	case TypeId::VARBINARY:
 		return SQLType(SQLTypeId::VARBINARY);
+	default:
+		throw ConversionException("Invalid TypeId %d", type);
 	}
 }
 
@@ -121,6 +130,8 @@ string SQLTypeIdToString(SQLTypeId id) {
 		return "DATE";
 	case SQLTypeId::TIMESTAMP:
 		return "TIMESTAMP";
+	case SQLTypeId::FLOAT:
+		return "FLOAT";
 	case SQLTypeId::DOUBLE:
 		return "DOUBLE";
 	case SQLTypeId::POINTER:
@@ -129,12 +140,14 @@ string SQLTypeIdToString(SQLTypeId id) {
 		return "DECIMAL";
 	case SQLTypeId::VARCHAR:
 		return "VARCHAR";
+	case SQLTypeId::VARBINARY:
+		return "VARBINARY";
 	case SQLTypeId::CHAR:
 		return "CHAR";
 	case SQLTypeId::SQLNULL:
 		return "NULL";
 	default:
-		return "VARBINARY";
+		throw ConversionException("Invalid SQLTypeId %d", id);
 	}
 }
 
@@ -149,6 +162,7 @@ bool IsNumericType(SQLTypeId type) {
 	case SQLTypeId::SMALLINT:
 	case SQLTypeId::INTEGER:
 	case SQLTypeId::BIGINT:
+	case SQLTypeId::FLOAT:
 	case SQLTypeId::DOUBLE:
 	case SQLTypeId::DECIMAL:
 		return true;
@@ -172,6 +186,8 @@ TypeId GetInternalType(SQLType type) {
 	case SQLTypeId::BIGINT:
 	case SQLTypeId::TIMESTAMP:
 		return TypeId::BIGINT;
+	case SQLTypeId::FLOAT:
+		return TypeId::FLOAT;
 	case SQLTypeId::DOUBLE:
 		return TypeId::DOUBLE;
 	case SQLTypeId::DECIMAL:
@@ -180,9 +196,10 @@ TypeId GetInternalType(SQLType type) {
 	case SQLTypeId::VARCHAR:
 	case SQLTypeId::CHAR:
 		return TypeId::VARCHAR;
-	default:
-		assert(type.id == SQLTypeId::VARBINARY);
+	case SQLTypeId::VARBINARY:
 		return TypeId::VARBINARY;
+	default:
+		throw ConversionException("Invalid SQLType %d", type);
 	}
 }
 

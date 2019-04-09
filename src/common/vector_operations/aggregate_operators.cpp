@@ -32,8 +32,11 @@ template <class OP> static void generic_fold_loop(Vector &input, Value &result) 
 	case TypeId::BIGINT:
 		templated_unary_fold<int64_t, int64_t, OP>(input, &result.value_.bigint);
 		break;
+	case TypeId::FLOAT:
+		templated_unary_fold<float, float, OP>(input, &result.value_.float_);
+		break;
 	case TypeId::DOUBLE:
-		templated_unary_fold<double, double, OP>(input, &result.value_.decimal);
+		templated_unary_fold<double, double, OP>(input, &result.value_.double_);
 		break;
 	case TypeId::POINTER:
 		templated_unary_fold<uint64_t, uint64_t, OP>(input, &result.value_.pointer);
@@ -125,10 +128,6 @@ bool VectorOperations::Contains(Vector &vector, Value &value) {
 	if (vector.count == 0) {
 		return false;
 	}
-	// first perform a comparison using Equals
-	// then return TRUE if any of the comparisons are true
-	// FIXME: this can be done more efficiently in one loop
-
 	ConstantVector right(value.CastAs(vector.type));
 	StaticVector<bool> comparison_result;
 	VectorOperations::Equals(vector, right, comparison_result);

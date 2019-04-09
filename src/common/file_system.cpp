@@ -124,7 +124,6 @@ void CreateDirectory(const string &directory) {
 	}
 }
 
-
 static void delete_dir_special_snowflake_windows(const char *dirname) {
 	if (strlen(dirname) + 3 > MAX_PATH) {
 		throw IOException("Pathname too long");
@@ -173,7 +172,6 @@ static void delete_dir_special_snowflake_windows(const char *dirname) {
 void RemoveDirectory(const string &directory) {
 	delete_dir_special_snowflake_windows(directory.c_str());
 }
-
 
 bool ListFiles(const string &directory, function<void(string)> callback) {
 	string search_dir = JoinPath(directory, "*");

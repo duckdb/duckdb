@@ -34,7 +34,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	}
 	statement.select_list = move(new_select_list);
 
-	for(auto &entry : statement.select_list) {
+	for (auto &entry : statement.select_list) {
 		result->names.push_back(entry->GetName());
 	}
 	result->column_count = statement.select_list.size();
