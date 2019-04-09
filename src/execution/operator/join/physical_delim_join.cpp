@@ -56,6 +56,6 @@ unique_ptr<PhysicalOperatorState> PhysicalDelimJoin::GetOperatorState() {
 	return make_unique<PhysicalDelimJoinState>(children[0].get());
 }
 
-string PhysicalDelimJoin::ExtraRenderInformation() {
+string PhysicalDelimJoin::ExtraRenderInformation() const {
 	return join->ExtraRenderInformation();
 }

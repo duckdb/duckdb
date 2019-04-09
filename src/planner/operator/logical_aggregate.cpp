@@ -44,7 +44,7 @@ string LogicalAggregate::ParamsToString() const {
 		result += "[";
 		for (size_t i = 0; i < groups.size(); i++) {
 			auto &child = groups[i];
-			result += child->ToString();
+			result += child->GetName();
 			if (i < groups.size() - 1) {
 				result += ", ";
 			}

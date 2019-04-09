@@ -17,6 +17,6 @@ unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {
 	return make_unique<PhysicalTableScanOperatorState>(table);
 }
 
-string PhysicalTableScan::ExtraRenderInformation() {
+string PhysicalTableScan::ExtraRenderInformation() const {
 	return tableref.name;
 }

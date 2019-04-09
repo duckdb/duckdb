@@ -9,7 +9,7 @@ string LogicalOperator::ParamsToString() const {
 		result += "[";
 		for (size_t i = 0; i < expressions.size(); i++) {
 			auto &child = expressions[i];
-			result += child->ToString();
+			result += child->GetName();
 			if (i < expressions.size() - 1) {
 				result += ", ";
 			}

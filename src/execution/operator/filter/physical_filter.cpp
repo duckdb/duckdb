@@ -29,10 +29,10 @@ void PhysicalFilter::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 	} while (chunk.size() == 0);
 }
 
-string PhysicalFilter::ExtraRenderInformation() {
+string PhysicalFilter::ExtraRenderInformation() const {
 	string extra_info;
 	for (auto &expr : expressions) {
-		extra_info += expr->ToString() + "\n";
+		extra_info += expr->GetName() + "\n";
 	}
 	return extra_info;
 }

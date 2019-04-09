@@ -10,8 +10,8 @@ BoundCaseExpression::BoundCaseExpression(unique_ptr<Expression> check, unique_pt
 }
 
 string BoundCaseExpression::ToString() const {
-	return "CASE WHEN (" + check->ToString() + ") THEN (" + result_if_true->ToString() + ") ELSE (" +
-	       result_if_false->ToString() + ")";
+	return "CASE WHEN (" + check->GetName() + ") THEN (" + result_if_true->GetName() + ") ELSE (" +
+	       result_if_false->GetName() + ")";
 }
 
 bool BoundCaseExpression::Equals(const BaseExpression *other_) const {

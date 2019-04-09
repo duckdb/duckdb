@@ -10,7 +10,7 @@ BoundConjunctionExpression::BoundConjunctionExpression(ExpressionType type, uniq
 }
 
 string BoundConjunctionExpression::ToString() const {
-	return left->ToString() + " " + ExpressionTypeToOperator(type) + " " + right->ToString();
+	return left->GetName() + " " + ExpressionTypeToOperator(type) + " " + right->GetName();
 }
 
 bool BoundConjunctionExpression::Equals(const BaseExpression *other_) const {

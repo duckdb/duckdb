@@ -8,7 +8,7 @@ BoundCastExpression::BoundCastExpression(TypeId target, unique_ptr<Expression> c
 }
 
 string BoundCastExpression::ToString() const {
-	return "CAST[" + TypeIdToString(return_type) + "](" + child->ToString() + ")";
+	return "CAST[" + TypeIdToString(return_type) + "](" + child->GetName() + ")";
 }
 
 bool BoundCastExpression::Equals(const BaseExpression *other_) const {

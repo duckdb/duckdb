@@ -10,7 +10,7 @@ BoundComparisonExpression::BoundComparisonExpression(ExpressionType type, unique
 }
 
 string BoundComparisonExpression::ToString() const {
-	return left->ToString() + ExpressionTypeToOperator(type) + right->ToString();
+	return left->GetName() + ExpressionTypeToOperator(type) + right->GetName();
 }
 
 bool BoundComparisonExpression::Equals(const BaseExpression *other_) const {

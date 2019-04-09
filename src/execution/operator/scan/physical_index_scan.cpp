@@ -36,7 +36,7 @@ void PhysicalIndexScan::_GetChunk(ClientContext &context, DataChunk &chunk, Phys
 	index.Scan(context.ActiveTransaction(), state->scan_state.get(), chunk);
 }
 
-string PhysicalIndexScan::ExtraRenderInformation() {
+string PhysicalIndexScan::ExtraRenderInformation() const {
 	return tableref.name + "[" + low_value.ToString() + "]";
 }
 
