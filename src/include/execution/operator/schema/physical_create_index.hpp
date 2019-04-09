@@ -9,7 +9,7 @@
 #pragma once
 
 #include "execution/physical_operator.hpp"
-#include "execution/order_index.hpp"
+#include "execution/index/order_index.hpp"
 #include "storage/data_table.hpp"
 
 #include <fstream>

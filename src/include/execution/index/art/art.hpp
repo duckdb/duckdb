@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/order_index.hpp
+// execution/art.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -15,71 +15,22 @@
 #include "parser/parsed_expression.hpp"
 #include "storage/data_table.hpp"
 #include "storage/index.hpp"
+#include "node.hpp"
+#include "node4.hpp"
+#include "node16.hpp"
+#include "node48.hpp"
+#include "node256.hpp"
 
 namespace duckdb {
-
     class ART : public Index {
     public:
-        //! Header of inner nodes
-        struct Node {
-            //! Length of Compressed Path
-            uint32_t prefixLength;
-            //! Number of non-null children
-            uint16_t count;
-            //! Node type (i.e., 4,16,48,256)
-            int8_t type;
-            //! compressed path (prefix)
-            uint8_t prefix[maxPrefixLength];
-
-            Node(int8_t type) : prefixLength(0),count(0),type(type) {}
-        };
-
-        struct Node4 : Node {
-            uint8_t key[4];
-            Node* child[4];
-
-            Node4() : Node(NodeType4) {
-                memset(key,0,sizeof(key));
-                memset(child,0,sizeof(child));
-            }
-        };
-
-        struct Node16 : Node {
-            uint8_t key[16];
-            Node* child[16];
-
-            Node16() : Node(NodeType16) {
-                memset(key,0,sizeof(key));
-                memset(child,0,sizeof(child));
-            }
-        };
-
-        struct Node48 : Node {
-            uint8_t childIndex[256];
-            Node* child[48];
-
-            Node48() : Node(NodeType48) {
-                memset(childIndex,48,sizeof(childIndex));
-                memset(child,0,sizeof(child));
-            }
-        };
-
-        struct Node256 : Node {
-            Node* child[256];
-
-            Node256() : Node(NodeType256) {
-                memset(child,0,sizeof(child));
-            }
-        };
-
         ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, vector<TypeId> expression_types,
                    vector<unique_ptr<Expression>> expressions, size_t initial_capacity,
                    vector<unique_ptr<Expression>> unbinded_expressions);
 
-        //! Appends data into the index, but does not perform the sort yet! This can
-        //! be done separately by calling the OrderIndex::Sort() method
+        //! Insert data into the index, one element at a time
         void Insert(DataChunk &data, Vector &row_ids);
-        //! Print the index to the console
+         //! Print the index to the console
         void Print();
 
         void BulkLoad(DataChunk &data, Vector &row_ids);
@@ -127,7 +78,6 @@ namespace duckdb {
 
     private:
         DataChunk expression_result;
-
         //! Get the start/end position in the index for a Less Than Equal Operator
         size_t SearchLTE(Value value);
         //! Get the start/end position in the index for a Greater Than Equal Operator
