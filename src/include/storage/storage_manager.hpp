@@ -10,6 +10,8 @@
 
 #include "common/helper.hpp"
 #include "storage/data_table.hpp"
+#include "storage/directory_block_manager.hpp"
+#include "storage/meta_block_writer.hpp"
 #include "storage/write_ahead_log.hpp"
 
 namespace duckdb {
@@ -33,6 +35,8 @@ public:
 	DuckDB &GetDatabase() {
 		return database;
 	}
+	//! The BlockManager to read/store meta information and data in blocks
+	unique_ptr<BlockManager> block_manager;
 
 private:
 	//! Load the database from a directory
@@ -44,6 +48,8 @@ private:
 	void CreateCheckpoint(int iteration);
 	//! Builds the data blocks for physical storage
 	void BuildDataBlocks();
+	void CreateCheckpoint2(int iteration);
+	void LoadCheckpoint();
 
 	//! The path of the database
 	string path;
