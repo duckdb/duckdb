@@ -19,7 +19,6 @@ struct Abs {
 	}
 };
 
-
 struct Round {
 	template <class T> static inline T Operation(T input, int8_t precision) {
 		if (precision < 0) {
@@ -29,6 +28,5 @@ struct Round {
 		return ((int64_t)(input * modifier)) / modifier;
 	}
 };
-
 
 } // namespace operators

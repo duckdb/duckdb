@@ -53,15 +53,16 @@ void VectorOperations::AddInPlace(Vector &left, int64_t right) {
 	VectorOperations::AddInPlace(left, right_vector);
 }
 
-
-template <class LEFT_TYPE, class RESULT_TYPE, class OP> void templated_inplace_divmod_loop(Vector &input, Vector &result) {
+template <class LEFT_TYPE, class RESULT_TYPE, class OP>
+void templated_inplace_divmod_loop(Vector &input, Vector &result) {
 	auto rdata = (LEFT_TYPE *)input.data;
 	auto result_data = (RESULT_TYPE *)result.data;
 	if (input.IsConstant()) { // a % 0 -> NULL
 		if (input.nullmask[0] || input.GetValue(0) == Value::Numeric(input.type, 0)) {
 			result.nullmask.set();
 		} else {
-			VectorOperations::Exec(result.sel_vector, result.count, [&](size_t i, size_t k) { OP::Operation(result_data[i], rdata[0]); });
+			VectorOperations::Exec(result.sel_vector, result.count,
+			                       [&](size_t i, size_t k) { OP::Operation(result_data[i], rdata[0]); });
 		}
 	} else {
 		// OR nullmasks together
@@ -77,7 +78,6 @@ template <class LEFT_TYPE, class RESULT_TYPE, class OP> void templated_inplace_d
 		});
 	}
 }
-
 
 //===--------------------------------------------------------------------===//
 // In-Place Modulo

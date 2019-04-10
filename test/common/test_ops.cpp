@@ -8,7 +8,6 @@
 using namespace duckdb;
 using namespace std;
 
-
 // TODO test selection vectors
 // TODO add bitwise ops
 // TODO add like
@@ -234,9 +233,7 @@ static void require_sg(Vector &v) {
 	VectorOperations::Gather::Set(p, r, false);
 	REQUIRE(r.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(1));
 	REQUIRE(r.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(0));
-
 }
-
 
 TEST_CASE("Scatter/gather numeric vectors", "[vector_ops]") {
 	Vector v(TypeId::TINYINT, true, false);
@@ -256,7 +253,6 @@ TEST_CASE("Scatter/gather numeric vectors", "[vector_ops]") {
 	v.Cast(TypeId::DOUBLE);
 	require_sg(v);
 }
-
 
 static void require_generate(TypeId t) {
 	Vector v(t, true, false);
@@ -292,7 +288,6 @@ static void require_arith(TypeId t) {
 	v1.SetValue(4, Value::BIGINT(42));
 	v1.SetNull(5, true);
 
-
 	v2.SetValue(0, Value::BIGINT(4));
 	v2.SetValue(1, Value::BIGINT(5));
 	v2.SetValue(2, Value::BIGINT(6));
@@ -302,7 +297,6 @@ static void require_arith(TypeId t) {
 
 	Vector r(t, true, false);
 	r.count = v1.count;
-
 
 	VectorOperations::Add(v1, v2, r);
 	REQUIRE(r.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(5));
@@ -351,7 +345,6 @@ static void require_arith(TypeId t) {
 	REQUIRE(r.GetValue(3).is_null);
 	REQUIRE(r.GetValue(4).is_null);
 	REQUIRE(r.GetValue(5).is_null);
-
 
 	Vector r2(t, true, false);
 	r2.count = v1.count;
@@ -434,7 +427,6 @@ static void require_mod(TypeId t) {
 	REQUIRE(v1.GetValue(5).is_null);
 	REQUIRE(v2.GetValue(6).is_null);
 
-
 	VectorOperations::ModuloInPlace(v1, 2);
 	REQUIRE(v1.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(0));
 	REQUIRE(v1.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(0));
@@ -444,7 +436,6 @@ static void require_mod(TypeId t) {
 	REQUIRE(v1.GetValue(5).is_null);
 	REQUIRE(v2.GetValue(6).is_null);
 }
-
 
 TEST_CASE("Arithmetic operations on vectors", "[vector_ops]") {
 	require_arith(TypeId::SMALLINT);
@@ -457,4 +448,3 @@ TEST_CASE("Arithmetic operations on vectors", "[vector_ops]") {
 	require_mod(TypeId::INTEGER);
 	require_mod(TypeId::BIGINT);
 }
-

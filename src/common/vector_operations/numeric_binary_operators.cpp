@@ -146,8 +146,7 @@ template <class T, class OP> void templated_divmod_loop(Vector &left, Vector &ri
 			// right side is normal constant, use left nullmask and do
 			// computation
 			result.nullmask = left.nullmask;
-			binary_loop_function_right_constant<T, T, T, OP>(ldata, constant, result_data, left.count,
-			                                                                left.sel_vector);
+			binary_loop_function_right_constant<T, T, T, OP>(ldata, constant, result_data, left.count, left.sel_vector);
 		}
 		result.sel_vector = left.sel_vector;
 		result.count = left.count;
