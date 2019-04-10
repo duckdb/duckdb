@@ -203,7 +203,7 @@ TEST_CASE("Compare vectors", "[vector_ops]") {
 }
 
 static void require_sg(Vector &v) {
-	uint64_t ptrs[v.count];
+	uint64_t ptrs[2];
 
 	Vector p(TypeId::POINTER, true, false);
 	p.count = v.count;
