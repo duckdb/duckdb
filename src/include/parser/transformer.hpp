@@ -14,8 +14,9 @@
 #include "parser/tokens.hpp"
 
 namespace postgres {
-#include "nodes/parsenodes.h"
 #include "pg_definitions.h"
+// don't reorder
+#include "nodes/parsenodes.h"
 } // namespace postgres
 
 namespace duckdb {
