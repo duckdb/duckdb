@@ -1,6 +1,6 @@
 #include "catch.hpp"
-#include "test_helpers.hpp"
 #include "common/types/date.hpp"
+#include "test_helpers.hpp"
 
 using namespace duckdb;
 using namespace std;

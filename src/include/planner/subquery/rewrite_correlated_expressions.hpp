@@ -9,8 +9,8 @@
 #pragma once
 
 #include "planner/binder.hpp"
-#include "planner/logical_operator.hpp"
 #include "planner/column_binding_map.hpp"
+#include "planner/logical_operator.hpp"
 
 namespace duckdb {
 

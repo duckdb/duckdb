@@ -14,8 +14,8 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, uint32_t
 		return BindResult(error);
 	}
 	// the children have been successfully resolved
-	auto &left = (BoundExpression&)*expr.left;
-	auto &right = (BoundExpression&)*expr.right;
+	auto &left = (BoundExpression &)*expr.left;
+	auto &right = (BoundExpression &)*expr.right;
 	// cast the input types to the same type
 	// now obtain the result type of the input types
 	auto input_type = MaxSQLType(left.sql_type, right.sql_type);
@@ -23,5 +23,6 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, uint32_t
 	left.expr = AddCastToType(move(left.expr), left.sql_type, input_type);
 	right.expr = AddCastToType(move(right.expr), right.sql_type, input_type);
 	// now create the bound comparison expression
-	return BindResult(make_unique<BoundComparisonExpression>(expr.type, move(left.expr), move(right.expr)), SQLType(SQLTypeId::BOOLEAN));
+	return BindResult(make_unique<BoundComparisonExpression>(expr.type, move(left.expr), move(right.expr)),
+	                  SQLType(SQLTypeId::BOOLEAN));
 }

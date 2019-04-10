@@ -13,7 +13,6 @@ using namespace postgres;
 using namespace duckdb;
 using namespace std;
 
-
 Parser::Parser(ClientContext &context) : context(context) {
 }
 
@@ -29,8 +28,7 @@ void Parser::ParseQuery(string query) {
 	parser.Parse(query);
 
 	if (!parser.success) {
-		throw ParserException(parser.error_message + "[" +
-		                      to_string(parser.error_location) + "]");
+		throw ParserException(parser.error_message + "[" + to_string(parser.error_location) + "]");
 		return;
 	}
 

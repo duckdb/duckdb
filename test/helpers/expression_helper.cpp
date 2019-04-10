@@ -1,20 +1,19 @@
 #include "expression_helper.hpp"
 
 #include "duckdb.hpp"
+#include "optimizer/rule/constant_folding.hpp"
 #include "parser/parser.hpp"
-#include "planner/statement/bound_select_statement.hpp"
+#include "planner/binder.hpp"
 #include "planner/bound_query_node.hpp"
 #include "planner/expression_iterator.hpp"
 #include "planner/operator/logical_projection.hpp"
 #include "planner/planner.hpp"
-#include "planner/binder.hpp"
-#include "optimizer/rule/constant_folding.hpp"
+#include "planner/statement/bound_select_statement.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-ExpressionHelper::ExpressionHelper() :
-	db(nullptr), con(db), rewriter(con.context) {
+ExpressionHelper::ExpressionHelper() : db(nullptr), con(db), rewriter(con.context) {
 	con.Query("BEGIN TRANSACTION");
 }
 
@@ -55,7 +54,8 @@ unique_ptr<Expression> ExpressionHelper::ParseExpression(string expression) {
 	Binder binder(con.context);
 	auto bound_statement = binder.Bind(*parser.statements[0]);
 
-	auto &select_list = (vector<unique_ptr<Expression>>&) ((BoundSelectStatement&)*bound_statement).node->GetSelectList();
+	auto &select_list =
+	    (vector<unique_ptr<Expression>> &)((BoundSelectStatement &)*bound_statement).node->GetSelectList();
 	return move(select_list[0]);
 }
 

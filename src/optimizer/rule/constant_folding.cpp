@@ -3,7 +3,6 @@
 #include "common/exception.hpp"
 #include "execution/expression_executor.hpp"
 #include "optimizer/expression_rewriter.hpp"
-
 #include "planner/expression/bound_constant_expression.hpp"
 
 using namespace duckdb;

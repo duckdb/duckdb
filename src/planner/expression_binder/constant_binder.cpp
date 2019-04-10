@@ -3,8 +3,8 @@
 using namespace duckdb;
 using namespace std;
 
-ConstantBinder::ConstantBinder(Binder &binder, ClientContext &context, string clause) :
-	ExpressionBinder(binder, context), clause(clause) {
+ConstantBinder::ConstantBinder(Binder &binder, ClientContext &context, string clause)
+    : ExpressionBinder(binder, context), clause(clause) {
 }
 
 BindResult ConstantBinder::BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression) {

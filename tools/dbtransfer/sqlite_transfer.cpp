@@ -86,7 +86,7 @@ bool TransferDatabase(Connection &con, sqlite3 *sqlite) {
 						// TODO
 						throw NotImplementedException("Transferring timestamps is not supported yet");
 					case SQLTypeId::DECIMAL:
-						rc = sqlite3_bind_double(stmt, bind_index, value.value_.decimal);
+						rc = sqlite3_bind_double(stmt, bind_index, value.value_.double_);
 						break;
 					case SQLTypeId::VARCHAR:
 						rc = sqlite3_bind_text(stmt, bind_index, value.ToString().c_str(), -1, SQLITE_TRANSIENT);
@@ -132,7 +132,7 @@ unique_ptr<QueryResult> QueryDatabase(vector<SQLType> result_types, sqlite3 *sql
 		result->names.push_back(sqlite3_column_name(stmt, i));
 	}
 	vector<TypeId> typeids;
-	for(auto &tp : result_types) {
+	for (auto &tp : result_types) {
 		typeids.push_back(GetInternalType(tp));
 	}
 	DataChunk result_chunk;

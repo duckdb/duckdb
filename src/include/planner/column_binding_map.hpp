@@ -9,8 +9,8 @@
 #pragma once
 
 #include "common/types/hash.hpp"
-#include "planner/column_binding.hpp"
 #include "common/unordered_map.hpp"
+#include "planner/column_binding.hpp"
 
 namespace duckdb {
 
@@ -29,4 +29,4 @@ struct ColumnBindingEquality {
 template <typename T>
 using column_binding_map_t = unordered_map<ColumnBinding, T, ColumnBindingHashFunction, ColumnBindingEquality>;
 
-}
+} // namespace duckdb

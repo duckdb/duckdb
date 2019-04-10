@@ -1,7 +1,6 @@
 #include "optimizer/rule/arithmetic_simplification.hpp"
 
 #include "common/exception.hpp"
-
 #include "planner/expression/bound_constant_expression.hpp"
 #include "planner/expression/bound_operator_expression.hpp"
 

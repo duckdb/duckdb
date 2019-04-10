@@ -29,12 +29,13 @@ public:
 	vector<unique_ptr<Expression>> expressions;
 	//! The projection index
 	size_t proj_index;
+
 public:
 	vector<string> GetNames() override {
 		return {"Count"};
 	}
 	vector<SQLType> GetTypes() override {
-		return { SQLType(SQLTypeId::BIGINT) };
+		return {SQLType(SQLTypeId::BIGINT)};
 	}
 };
 } // namespace duckdb

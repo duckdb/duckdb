@@ -1,7 +1,7 @@
+#include "execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "execution/physical_plan_generator.hpp"
 #include "planner/expression/bound_reference_expression.hpp"
 #include "planner/operator/logical_distinct.hpp"
-#include "execution/operator/aggregate/physical_hash_aggregate.hpp"
 
 using namespace duckdb;
 using namespace std;

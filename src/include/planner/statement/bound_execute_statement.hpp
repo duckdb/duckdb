@@ -8,9 +8,8 @@
 
 #pragma once
 
-#include "planner/bound_sql_statement.hpp"
-
 #include "catalog/catalog_entry/prepared_statement_catalog_entry.hpp"
+#include "planner/bound_sql_statement.hpp"
 
 namespace duckdb {
 //! Bound equivalent to ExecuteStatement
@@ -21,6 +20,7 @@ public:
 
 	//! The prepared statement to execute
 	PreparedStatementCatalogEntry *prep;
+
 public:
 	vector<string> GetNames() override {
 		return prep->names;

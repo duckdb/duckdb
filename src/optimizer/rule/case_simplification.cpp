@@ -1,7 +1,6 @@
 #include "optimizer/rule/case_simplification.hpp"
 
 #include "execution/expression_executor.hpp"
-
 #include "planner/expression/bound_case_expression.hpp"
 
 using namespace duckdb;

@@ -65,7 +65,6 @@ TEST_CASE("Test uncorrelated subqueries", "[subquery]") {
 	// but not if the star expands to more than one column!
 	REQUIRE_FAIL(con.Query("SELECT (SELECT * FROM integers i1, integers i2)"));
 
-
 	//  uncorrelated subquery in SELECT
 	result = con.Query("SELECT (SELECT i FROM integers WHERE i=1)");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));

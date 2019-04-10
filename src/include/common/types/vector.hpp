@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "common/common.hpp"
 #include "common/bitset.hpp"
+#include "common/common.hpp"
 #include "common/types/string_heap.hpp"
 #include "common/types/value.hpp"
 

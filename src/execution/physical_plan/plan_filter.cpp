@@ -1,20 +1,17 @@
-#include "execution/physical_plan_generator.hpp"
-#include "planner/operator/logical_filter.hpp"
 #include "execution/operator/filter/physical_filter.hpp"
-
-#include "planner/operator/logical_get.hpp"
-#include "optimizer/matcher/expression_matcher.hpp"
 #include "execution/operator/scan/physical_index_scan.hpp"
-#include "storage/data_table.hpp"
+#include "execution/order_index.hpp"
+#include "execution/physical_plan_generator.hpp"
+#include "optimizer/matcher/expression_matcher.hpp"
+#include "parser/expression/comparison_expression.hpp"
 #include "planner/expression/bound_comparison_expression.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
-#include "parser/expression/comparison_expression.hpp"
-
-#include "execution/order_index.hpp"
+#include "planner/operator/logical_filter.hpp"
+#include "planner/operator/logical_get.hpp"
+#include "storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;
-
 
 //! Attempt to create an index scan from a filter + get, if possible
 // FIXME: this should not be done here

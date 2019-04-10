@@ -30,6 +30,9 @@ void VectorOperations::Add(Vector &left, Vector &right, Vector &result) {
 	case TypeId::BIGINT:
 		templated_binary_loop<int64_t, int64_t, int64_t, operators::Add>(left, right, result);
 		break;
+	case TypeId::FLOAT:
+		templated_binary_loop<float, float, float, operators::Add>(left, right, result);
+		break;
 	case TypeId::DOUBLE:
 		templated_binary_loop<double, double, double, operators::Add>(left, right, result);
 		break;
@@ -58,6 +61,9 @@ void VectorOperations::Subtract(Vector &left, Vector &right, Vector &result) {
 		break;
 	case TypeId::BIGINT:
 		templated_binary_loop<int64_t, int64_t, int64_t, operators::Subtract>(left, right, result);
+		break;
+	case TypeId::FLOAT:
+		templated_binary_loop<float, float, float, operators::Subtract>(left, right, result);
 		break;
 	case TypeId::DOUBLE:
 		templated_binary_loop<double, double, double, operators::Subtract>(left, right, result);
@@ -88,6 +94,9 @@ void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result) {
 	case TypeId::BIGINT:
 		templated_binary_loop<int64_t, int64_t, int64_t, operators::Multiply>(left, right, result);
 		break;
+	case TypeId::FLOAT:
+		templated_binary_loop<float, float, float, operators::Multiply>(left, right, result);
+		break;
 	case TypeId::DOUBLE:
 		templated_binary_loop<double, double, double, operators::Multiply>(left, right, result);
 		break;
@@ -100,11 +109,10 @@ void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result) {
 }
 
 //===--------------------------------------------------------------------===//
-// Division
+// Division & Modulo
 //===--------------------------------------------------------------------===//
-// to handle (division by zero -> NULL) we have a separate function for handling
-// division
-template <class T> void templated_division_loop(Vector &left, Vector &right, Vector &result) {
+// to handle (division by zero -> NULL and modulo with 0 -> NULL) we have a separate function
+template <class T, class OP> void templated_divmod_loop(Vector &left, Vector &right, Vector &result) {
 	auto ldata = (T *)left.data;
 	auto rdata = (T *)right.data;
 	auto result_data = (T *)result.data;
@@ -122,7 +130,7 @@ template <class T> void templated_division_loop(Vector &left, Vector &right, Vec
 				if (rdata[i] == 0) {
 					result.nullmask[i] = true;
 				} else {
-					result_data[i] = constant / rdata[i];
+					result_data[i] = OP::Operation(constant, rdata[i]);
 				}
 			});
 		}
@@ -138,8 +146,7 @@ template <class T> void templated_division_loop(Vector &left, Vector &right, Vec
 			// right side is normal constant, use left nullmask and do
 			// computation
 			result.nullmask = left.nullmask;
-			binary_loop_function_right_constant<T, T, T, operators::Divide>(ldata, constant, result_data, left.count,
-			                                                                left.sel_vector);
+			binary_loop_function_right_constant<T, T, T, OP>(ldata, constant, result_data, left.count, left.sel_vector);
 		}
 		result.sel_vector = left.sel_vector;
 		result.count = left.count;
@@ -152,7 +159,7 @@ template <class T> void templated_division_loop(Vector &left, Vector &right, Vec
 			if (rdata[i] == 0) {
 				result.nullmask[i] = true;
 			} else {
-				result_data[i] = ldata[i] / rdata[i];
+				result_data[i] = OP::Operation(ldata[i], rdata[i]);
 			}
 		});
 		result.sel_vector = left.sel_vector;
@@ -164,22 +171,25 @@ void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
 	BINARY_TYPE_CHECK(left, right, result);
 	switch (left.type) {
 	case TypeId::TINYINT:
-		templated_division_loop<int8_t>(left, right, result);
+		templated_divmod_loop<int8_t, operators::Divide>(left, right, result);
 		break;
 	case TypeId::SMALLINT:
-		templated_division_loop<int16_t>(left, right, result);
+		templated_divmod_loop<int16_t, operators::Divide>(left, right, result);
 		break;
 	case TypeId::INTEGER:
-		templated_division_loop<int32_t>(left, right, result);
+		templated_divmod_loop<int32_t, operators::Divide>(left, right, result);
 		break;
 	case TypeId::BIGINT:
-		templated_division_loop<int64_t>(left, right, result);
+		templated_divmod_loop<int64_t, operators::Divide>(left, right, result);
+		break;
+	case TypeId::FLOAT:
+		templated_divmod_loop<float, operators::Divide>(left, right, result);
 		break;
 	case TypeId::DOUBLE:
-		templated_division_loop<double>(left, right, result);
+		templated_divmod_loop<double, operators::Divide>(left, right, result);
 		break;
 	case TypeId::POINTER:
-		templated_division_loop<uint64_t>(left, right, result);
+		templated_divmod_loop<uint64_t, operators::Divide>(left, right, result);
 		break;
 	default:
 		throw InvalidTypeException(left.type, "Invalid type for division");
@@ -193,21 +203,21 @@ void VectorOperations::Modulo(Vector &left, Vector &right, Vector &result) {
 	BINARY_TYPE_CHECK(left, right, result);
 	switch (left.type) {
 	case TypeId::TINYINT:
-		templated_binary_loop<int8_t, int8_t, int8_t, operators::Modulo>(left, right, result);
+		templated_divmod_loop<int8_t, operators::Modulo>(left, right, result);
 		break;
 	case TypeId::SMALLINT:
-		templated_binary_loop<int16_t, int16_t, int16_t, operators::Modulo>(left, right, result);
+		templated_divmod_loop<int16_t, operators::Modulo>(left, right, result);
 		break;
 	case TypeId::INTEGER:
-		templated_binary_loop<int32_t, int32_t, int32_t, operators::Modulo>(left, right, result);
+		templated_divmod_loop<int32_t, operators::Modulo>(left, right, result);
 		break;
 	case TypeId::BIGINT:
-		templated_binary_loop<int64_t, int64_t, int64_t, operators::Modulo>(left, right, result);
+		templated_divmod_loop<int64_t, operators::Modulo>(left, right, result);
 		break;
 	case TypeId::POINTER:
-		templated_binary_loop<uint64_t, uint64_t, uint64_t, operators::Modulo>(left, right, result);
+		templated_divmod_loop<uint64_t, operators::Modulo>(left, right, result);
 		break;
 	default:
-		throw InvalidTypeException(left.type, "Invalid type for modulo");
+		throw InvalidTypeException(left.type, "Invalid type for division");
 	}
 }

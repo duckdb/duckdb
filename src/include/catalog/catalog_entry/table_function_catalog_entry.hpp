@@ -10,8 +10,8 @@
 
 #include "catalog/catalog_entry.hpp"
 #include "catalog/catalog_set.hpp"
-#include "transaction/transaction.hpp"
 #include "common/unordered_map.hpp"
+#include "transaction/transaction.hpp"
 
 namespace duckdb {
 

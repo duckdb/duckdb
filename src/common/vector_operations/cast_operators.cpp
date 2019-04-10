@@ -25,7 +25,8 @@ void templated_cast_loop(Vector &source, Vector &result) {
 	}
 }
 
-template <class SRC, class OP, bool IGNORE_NULL> static void result_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type) {
+template <class SRC, class OP, bool IGNORE_NULL>
+static void result_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type) {
 	// now switch on the result type
 	switch (target_type.id) {
 	case SQLTypeId::BOOLEAN:
@@ -47,6 +48,10 @@ template <class SRC, class OP, bool IGNORE_NULL> static void result_cast_switch(
 	case SQLTypeId::BIGINT:
 		assert(result.type == TypeId::BIGINT);
 		templated_cast_loop<SRC, int64_t, OP, IGNORE_NULL>(source, result);
+		break;
+	case SQLTypeId::FLOAT:
+		assert(result.type == TypeId::FLOAT);
+		templated_cast_loop<SRC, float, OP, IGNORE_NULL>(source, result);
 		break;
 	case SQLTypeId::DECIMAL:
 	case SQLTypeId::DOUBLE:
@@ -115,6 +120,10 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 		assert(source.type == TypeId::BIGINT);
 		result_cast_switch<int64_t, operators::Cast, true>(source, result, source_type, target_type);
 		break;
+	case SQLTypeId::FLOAT:
+		assert(source.type == TypeId::FLOAT);
+		result_cast_switch<float, operators::Cast, true>(source, result, source_type, target_type);
+		break;
 	case SQLTypeId::DECIMAL:
 	case SQLTypeId::DOUBLE:
 		assert(source.type == TypeId::DOUBLE);
@@ -144,5 +153,6 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 }
 
 void VectorOperations::Cast(Vector &source, Vector &result) {
-	return VectorOperations::Cast(source, result, SQLTypeFromInternalType(source.type), SQLTypeFromInternalType(result.type));
+	return VectorOperations::Cast(source, result, SQLTypeFromInternalType(source.type),
+	                              SQLTypeFromInternalType(result.type));
 }

@@ -10,8 +10,8 @@
 
 #include "catalog/catalog_entry.hpp"
 #include "common/common.hpp"
-#include "transaction/transaction.hpp"
 #include "common/unordered_map.hpp"
+#include "transaction/transaction.hpp"
 
 #include <functional>
 #include <memory>

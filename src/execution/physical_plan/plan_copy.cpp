@@ -1,7 +1,7 @@
-#include "execution/physical_plan_generator.hpp"
-#include "planner/operator/logical_copy.hpp"
 #include "execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "execution/operator/persistent/physical_copy.hpp"
+#include "execution/physical_plan_generator.hpp"
+#include "planner/operator/logical_copy.hpp"
 
 using namespace duckdb;
 using namespace std;

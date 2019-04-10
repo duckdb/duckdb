@@ -8,9 +8,9 @@
 
 #pragma once
 
+#include "common/unordered_set.hpp"
 #include "optimizer/filter_combiner.hpp"
 #include "optimizer/rule.hpp"
-#include "common/unordered_set.hpp"
 
 namespace duckdb {
 

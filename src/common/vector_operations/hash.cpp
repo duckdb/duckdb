@@ -31,6 +31,9 @@ void VectorOperations::Hash(Vector &input, Vector &result) {
 	case TypeId::POINTER:
 		templated_unary_loop_process_null<uint64_t, uint64_t, operators::Hash>(input, result);
 		break;
+	case TypeId::FLOAT:
+		templated_unary_loop_process_null<float, uint64_t, operators::Hash>(input, result);
+		break;
 	case TypeId::DOUBLE:
 		templated_unary_loop_process_null<double, uint64_t, operators::Hash>(input, result);
 		break;

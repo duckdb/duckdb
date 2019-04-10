@@ -63,8 +63,9 @@ void ExpressionRewriter::Apply(LogicalOperator &root) {
 		bool changes_made;
 		do {
 			changes_made = false;
-			root.expressions[i] = ExpressionRewriter::ApplyRules(root, to_apply_rules, move(root.expressions[i]), changes_made);
-		} while(changes_made);
+			root.expressions[i] =
+			    ExpressionRewriter::ApplyRules(root, to_apply_rules, move(root.expressions[i]), changes_made);
+		} while (changes_made);
 	}
 
 	// if it is a LogicalFilter, we split up filter conjunctions again

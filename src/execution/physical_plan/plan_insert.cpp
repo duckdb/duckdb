@@ -1,6 +1,6 @@
+#include "execution/operator/persistent/physical_insert.hpp"
 #include "execution/physical_plan_generator.hpp"
 #include "planner/operator/logical_insert.hpp"
-#include "execution/operator/persistent/physical_insert.hpp"
 
 using namespace duckdb;
 using namespace std;

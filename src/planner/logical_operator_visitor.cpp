@@ -165,7 +165,7 @@ unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundWindowExpressio
 	return nullptr;
 }
 
-
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(CommonSubExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(CommonSubExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }

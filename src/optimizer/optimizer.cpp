@@ -13,7 +13,6 @@
 #include "planner/expression/common_subexpression.hpp"
 #include "planner/operator/list.hpp"
 
-
 using namespace duckdb;
 using namespace std;
 

@@ -118,8 +118,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			left_outer_join->children.push_back(move(plan));
 			for (size_t i = 0; i < correlated_columns.size(); i++) {
 				JoinCondition cond;
-				cond.left = make_unique<BoundColumnRefExpression>(
-				    correlated_columns[i].type, ColumnBinding(left_index, i));
+				cond.left =
+				    make_unique<BoundColumnRefExpression>(correlated_columns[i].type, ColumnBinding(left_index, i));
 				cond.right = make_unique<BoundColumnRefExpression>(
 				    correlated_columns[i].type,
 				    ColumnBinding(aggr.group_index, (aggr.groups.size() - correlated_columns.size()) + i));
@@ -289,7 +289,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			auto &w = (BoundWindowExpression &)*expr;
 			for (size_t i = 0; i < correlated_columns.size(); i++) {
 				w.partitions.push_back(make_unique<BoundColumnRefExpression>(
-				    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i)));
+				    correlated_columns[i].type,
+				    ColumnBinding(base_binding.table_index, base_binding.column_index + i)));
 			}
 		}
 		return plan;

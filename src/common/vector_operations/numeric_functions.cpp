@@ -31,6 +31,9 @@ void VectorOperations::Abs(Vector &input, Vector &result) {
 	case TypeId::BIGINT:
 		templated_unary_loop<int64_t, int64_t, operators::Abs>(input, result);
 		break;
+	case TypeId::FLOAT:
+		templated_unary_loop<float, float, operators::Abs>(input, result);
+		break;
 	case TypeId::DOUBLE:
 		templated_unary_loop<double, double, operators::Abs>(input, result);
 		break;
@@ -54,6 +57,10 @@ void VectorOperations::Round(Vector &input, Vector &precision, Vector &result) {
 	case TypeId::INTEGER:
 	case TypeId::BIGINT:
 		VectorOperations::Copy(input, result);
+		break;
+	case TypeId::FLOAT:
+		precision.Cast(TypeId::TINYINT);
+		templated_binary_loop<float, int8_t, float, operators::Round>(input, precision, result);
 		break;
 	case TypeId::DOUBLE:
 		precision.Cast(TypeId::TINYINT);

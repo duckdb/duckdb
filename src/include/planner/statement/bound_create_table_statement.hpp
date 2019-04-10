@@ -25,12 +25,13 @@ public:
 	unique_ptr<BoundSelectStatement> query;
 	//! The schema to create the table in
 	SchemaCatalogEntry *schema;
+
 public:
 	vector<string> GetNames() override {
 		return {"Count"};
 	}
 	vector<SQLType> GetTypes() override {
-		return { SQLType(SQLTypeId::BIGINT) };
+		return {SQLType(SQLTypeId::BIGINT)};
 	}
 };
 } // namespace duckdb

@@ -1,7 +1,6 @@
 #include "optimizer/rule/conjunction_simplification.hpp"
 
 #include "execution/expression_executor.hpp"
-
 #include "planner/expression/bound_conjunction_expression.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
 
