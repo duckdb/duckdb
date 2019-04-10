@@ -131,31 +131,6 @@ TEST_CASE("Case vectors", "[vector_ops]") {
 	require_case(v);
 }
 
-//
-// void VectorOperations::Equals(Vector &left, Vector &right, Vector &result) {
-//	templated_boolean_operation<operators::Equals>(left, right, result);
-//}
-//
-// void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result) {
-//	templated_boolean_operation<operators::NotEquals>(left, right, result);
-//}
-//
-// void VectorOperations::GreaterThanEquals(Vector &left, Vector &right, Vector &result) {
-//	templated_boolean_operation<operators::GreaterThanEquals>(left, right, result);
-//}
-//
-// void VectorOperations::LessThanEquals(Vector &left, Vector &right, Vector &result) {
-//	templated_boolean_operation<operators::LessThanEquals>(left, right, result);
-//}
-//
-// void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result) {
-//	templated_boolean_operation<operators::GreaterThan>(left, right, result);
-//}
-//
-// void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result) {
-//	templated_boolean_operation<operators::LessThan>(left, right, result);
-//}
-
 static void require_compare(Vector &val) {
 	Vector v1(val.type, true, false);
 	val.Copy(v1);
@@ -219,4 +194,58 @@ TEST_CASE("Compare vectors", "[vector_ops]") {
 	require_compare(v);
 	v.Cast(TypeId::VARCHAR);
 	require_compare(v);
+}
+
+static void require_sg(Vector &v) {
+	uint64_t ptrs[v.count];
+
+	Vector p(TypeId::POINTER, true, false);
+	p.count = v.count;
+	p.SetValue(0, Value::POINTER((uint64_t)&ptrs[0]));
+	p.SetValue(1, Value::POINTER((uint64_t)&ptrs[1]));
+
+	VectorOperations::Scatter::Set(v, p);
+
+	Vector r(v.type, true, false);
+	r.count = p.count;
+
+	VectorOperations::Gather::Set(p, r, false);
+	REQUIRE(r.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(1));
+	REQUIRE(r.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(0));
+
+	VectorOperations::Scatter::Add(v, p);
+	VectorOperations::Gather::Set(p, r, false);
+	REQUIRE(r.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
+	REQUIRE(r.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(0));
+
+	VectorOperations::Scatter::Max(v, p);
+	VectorOperations::Gather::Set(p, r, false);
+	REQUIRE(r.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
+	REQUIRE(r.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(0));
+
+	VectorOperations::Scatter::Min(v, p);
+	VectorOperations::Gather::Set(p, r, false);
+	REQUIRE(r.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(1));
+	REQUIRE(r.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(0));
+
+}
+
+
+TEST_CASE("Scatter/gather numeric vectors", "[vector_ops]") {
+	Vector v(TypeId::TINYINT, true, false);
+	v.count = 2;
+	v.SetValue(0, Value::TINYINT(true));
+	v.SetValue(1, Value::TINYINT(false));
+
+	require_sg(v);
+	v.Cast(TypeId::SMALLINT);
+	require_sg(v);
+	v.Cast(TypeId::INTEGER);
+	require_sg(v);
+	v.Cast(TypeId::BIGINT);
+	require_sg(v);
+	v.Cast(TypeId::FLOAT);
+	require_sg(v);
+	v.Cast(TypeId::DOUBLE);
+	require_sg(v);
 }
