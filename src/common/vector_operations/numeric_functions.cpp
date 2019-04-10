@@ -59,8 +59,10 @@ void VectorOperations::Round(Vector &input, Vector &precision, Vector &result) {
 		VectorOperations::Copy(input, result);
 		break;
 	case TypeId::FLOAT:
+		precision.Cast(TypeId::TINYINT);
+		templated_binary_loop<float, int8_t, float, operators::Round>(input, precision, result);
+		break;
 	case TypeId::DOUBLE:
-		input.Cast(TypeId::DOUBLE);
 		precision.Cast(TypeId::TINYINT);
 		templated_binary_loop<double, int8_t, double, operators::Round>(input, precision, result);
 		break;

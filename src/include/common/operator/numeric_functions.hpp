@@ -19,14 +19,16 @@ struct Abs {
 	}
 };
 
+
 struct Round {
-	static inline double Operation(double input, int8_t precision) {
+	template <class T> static inline T Operation(T input, int8_t precision) {
 		if (precision < 0) {
 			precision = 0;
 		}
-		double modifier = pow(10, precision);
+		T modifier = pow(10, precision);
 		return ((int64_t)(input * modifier)) / modifier;
 	}
 };
+
 
 } // namespace operators

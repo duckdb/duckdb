@@ -10,12 +10,12 @@ static bool ValuesAreEqual(Value result_value, Value value) {
 		// NULL = NULL in checking code
 		return true;
 	}
-
 	switch (value.type) {
 	case TypeId::FLOAT: {
-		double ldecimal = value.value_.float_;
-		double rdecimal = result_value.value_.float_;
-		if (ldecimal < 0.99 * rdecimal || ldecimal > 1.01 * rdecimal) {
+		float ldecimal = value.value_.float_;
+		float rdecimal = result_value.value_.float_;
+		float epsilon = fabs(rdecimal) * 0.01;
+		if (fabs(ldecimal - rdecimal) > epsilon) {
 			return false;
 		}
 		break;
@@ -23,7 +23,8 @@ static bool ValuesAreEqual(Value result_value, Value value) {
 	case TypeId::DOUBLE: {
 		double ldecimal = value.value_.double_;
 		double rdecimal = result_value.value_.double_;
-		if (ldecimal < 0.99 * rdecimal || ldecimal > 1.01 * rdecimal) {
+		double epsilon = fabs(rdecimal) * 0.01;
+		if (fabs(ldecimal - rdecimal) > epsilon) {
 			return false;
 		}
 		break;
