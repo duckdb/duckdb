@@ -30,6 +30,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_INTEGER,
 	// int64_t
 	DUCKDB_TYPE_BIGINT,
+	// float
+	DUCKDB_TYPE_FLOAT,
 	// double
 	DUCKDB_TYPE_DOUBLE,
 	// duckdb_timestamp
