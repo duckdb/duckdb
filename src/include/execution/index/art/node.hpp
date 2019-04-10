@@ -23,12 +23,16 @@ namespace duckdb {
         //! compressed path (prefix)
         uint8_t prefix[maxPrefixLength];
         static const uint8_t emptyMarker = 48;
-
         Node(NodeType type) : prefixLength(0), count(0), type(type) {}
-
+        //! Flip the sign bit, enables signed SSE comparison of unsigned values
+        static uint8_t flipSign(uint8_t keyByte);
+        //! Count trailing zeros, only defined for x>0 (from Hacker's Delight)
+        static inline unsigned ctz(uint16_t x);
+        //! Copies the prefix from the source to the destination node
+        static void copyPrefix(Node* src,Node* dst);
     private:
-        //! Helper function to compare two elements and return the smaller
-        unsigned min(unsigned a,unsigned b);
+        //! Compare two elements and return the smaller
+        static unsigned min(unsigned a, unsigned b);
         //! Find the leaf with smallest element in the tree
         Node* minimum(Node* node);
         //! Returns the stored in the leaf
@@ -41,6 +45,15 @@ namespace duckdb {
         void  loadKey(uintptr_t tid,uint8_t key[]);
         //! Find the next child for the keyByte
         Node * findChild(const uint8_t k, const Node *node);
+        //! Compare the key with the prefix of the node, return the number matching bytes
+        unsigned prefixMismatch(Node* node,uint8_t key[],unsigned depth,unsigned maxKeyLength);
+        //! Insert leaf into inner node
+        void insertLeaf(Node* node,Node** nodeRef,uint8_t key, Node* newNode);
+
+        };
+    class Leaf{
+    public:
+        uint64_t row_id;
     };
 
 }

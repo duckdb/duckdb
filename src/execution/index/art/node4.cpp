@@ -12,7 +12,7 @@ Node *Node4::getChild(const uint8_t k) const {
     return nullptr;
 }
 
-void Node4::insertNode4(Node4* node,Node** nodeRef,uint8_t keyByte,Node* child) {
+void Node4::insert(Node4* node,Node** nodeRef,uint8_t keyByte,Node* child) {
     // Insert leaf into inner node
     if (node->count<4) {
         // Insert element
@@ -33,6 +33,6 @@ void Node4::insertNode4(Node4* node,Node** nodeRef,uint8_t keyByte,Node* child) 
             newNode->key[i]=flipSign(node->key[i]);
         memcpy(newNode->child,node->child,node->count*sizeof(uintptr_t));
         delete node;
-        return insertNode16(newNode,nodeRef,keyByte,child);
+        return Node16::insert(newNode,nodeRef,keyByte,child);
     }
 }

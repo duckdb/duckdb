@@ -25,6 +25,32 @@ unsigned Node::min(unsigned a,unsigned b) {
     return (a<b)?a:b;
 }
 
+uint8_t Node::flipSign(uint8_t keyByte) {
+    return keyByte^128;
+}
+
+void Node::copyPrefix(Node* src,Node* dst) {
+    dst->prefixLength=src->prefixLength;
+    memcpy(dst->prefix,src->prefix,min(src->prefixLength,maxPrefixLength));
+}
+
+inline unsigned Node::ctz(uint16_t x) {
+    unsigned n = 1;
+    if ((x & 0xFF) == 0) {
+      n += 8;
+      x = x >> 8;
+    }
+    if ((x & 0x0F) == 0) {
+      n += 4;
+      x = x >> 4;
+    }
+    if ((x & 0x03) == 0) {
+      n += 2;
+      x = x >> 2;
+    }
+    return n - (x & 1);
+}
+
 Node* Node::minimum(Node* node) {
     if (!node)
         return NULL;
@@ -80,6 +106,41 @@ Node * Node::findChild(const uint8_t k, const Node *node) {
     assert(false);
 }
 
+unsigned Node::prefixMismatch(Node* node,uint8_t key[],unsigned depth,unsigned maxKeyLength) {
+    unsigned pos;
+    if (node->prefixLength>maxPrefixLength) {
+        for (pos=0;pos<maxPrefixLength;pos++)
+            if (key[depth+pos]!=node->prefix[pos])
+                return pos;
+        uint8_t minKey[maxKeyLength];
+        loadKey(getLeafValue(minimum(node)),minKey);
+        for (;pos<node->prefixLength;pos++)
+            if (key[depth+pos]!=minKey[depth+pos])
+                return pos;
+    } else {
+        for (pos=0;pos<node->prefixLength;pos++)
+            if (key[depth+pos]!=node->prefix[pos])
+                return pos;
+    }
+    return pos;
+}
+
+void Node::insertLeaf(Node* node,Node** nodeRef,uint8_t key, Node* newNode){
+    switch (node->type) {
+        case NodeType::N4:
+            Node4::insert(static_cast<Node4*>(node),nodeRef,key,newNode);
+            break;
+        case NodeType::N16:
+            Node16::insert(static_cast<Node16*>(node),nodeRef,key,newNode);
+            break;
+        case NodeType::N48:
+            Node48::insert(static_cast<Node48*>(node),nodeRef,key,newNode);
+            break;
+        case NodeType::N256:
+            Node256::insert(static_cast<Node256*>(node),nodeRef,key,newNode);
+            break;
+    }
+}
 
 
 void Node::insert(Node* node,Node** nodeRef,uint8_t key[],unsigned depth,uintptr_t value,unsigned maxKeyLength) {
@@ -103,8 +164,8 @@ void Node::insert(Node* node,Node** nodeRef,uint8_t key[],unsigned depth,uintptr
         memcpy(newNode->prefix,key+depth,min(newPrefixLength,maxPrefixLength));
         *nodeRef=newNode;
 
-        insertNode4(newNode,nodeRef,existingKey[depth+newPrefixLength],node);
-        insertNode4(newNode,nodeRef,key[depth+newPrefixLength],makeLeaf(value));
+        Node4::insert(newNode,nodeRef,existingKey[depth+newPrefixLength],node);
+        Node4::insert(newNode,nodeRef,key[depth+newPrefixLength],makeLeaf(value));
         return;
     }
 
@@ -118,36 +179,30 @@ void Node::insert(Node* node,Node** nodeRef,uint8_t key[],unsigned depth,uintptr
             newNode->prefixLength=mismatchPos;
             memcpy(newNode->prefix,node->prefix,min(mismatchPos,maxPrefixLength));
             // Break up prefix
-            if (node->prefixLength<ART:maxPrefixLength) {
-                insertNode4(newNode,nodeRef,node->prefix[mismatchPos],node);
+            if (node->prefixLength<maxPrefixLength) {
+                Node4::insert(newNode,nodeRef,node->prefix[mismatchPos],node);
                 node->prefixLength-=(mismatchPos+1);
                 memmove(node->prefix,node->prefix+mismatchPos+1,min(node->prefixLength,maxPrefixLength));
             } else {
                 node->prefixLength-=(mismatchPos+1);
                 uint8_t minKey[maxKeyLength];
                 loadKey(getLeafValue(minimum(node)),minKey);
-                insertNode4(newNode,nodeRef,minKey[depth+mismatchPos],node);
+                Node4::insert(newNode,nodeRef,minKey[depth+mismatchPos],node);
                 memmove(node->prefix,minKey+depth+mismatchPos+1,min(node->prefixLength,maxPrefixLength));
             }
-            insertNode4(newNode,nodeRef,key[depth+mismatchPos],makeLeaf(value));
+            Node4::insert(newNode,nodeRef,key[depth+mismatchPos],makeLeaf(value));
             return;
         }
         depth+=node->prefixLength;
     }
 
     // Recurse
-    Node** child=findChild(node,key[depth]);
-    if (*child) {
-        insert(*child,child,key,depth+1,value,maxKeyLength);
+    Node* child=findChild(key[depth],node);
+    if (child) {
+        insert(child,&child,key,depth+1,value,maxKeyLength);
         return;
     }
 
-    // Insert leaf into inner node
     Node* newNode=makeLeaf(value);
-    switch (node->type) {
-        case NodeType::N4: insertNode4(static_cast<Node4*>(node),nodeRef,key[depth],newNode); break;
-        case NodeType::N16: insertNode16(static_cast<Node16*>(node),nodeRef,key[depth],newNode); break;
-        case NodeType::N48: insertNode48(static_cast<Node48*>(node),nodeRef,key[depth],newNode); break;
-        case NodeType::N256: insertNode256(static_cast<Node256*>(node),nodeRef,key[depth],newNode); break;
-    }
+    insertLeaf(node,nodeRef,key[depth],newNode);
 }

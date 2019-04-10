@@ -10,6 +10,8 @@
 
 #include "execution/physical_operator.hpp"
 #include "execution/index/order_index.hpp"
+#include "execution/index/art/art.hpp"
+
 #include "storage/data_table.hpp"
 
 #include <fstream>
@@ -41,5 +43,7 @@ public:
 
 private:
 	void createOrderIndex(ScanStructure *ss,DataChunk *intermediate,vector<TypeId> *result_types,DataChunk *result);
+	void createARTIndex(ScanStructure *ss,DataChunk *intermediate,vector<TypeId> *result_types,DataChunk *result);
+
 };
 } // namespace duckdb

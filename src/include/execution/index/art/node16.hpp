@@ -13,5 +13,8 @@ namespace duckdb {
             memset(child,0,sizeof(child));
         }
         Node *getChild(const uint8_t k) const;
+
+        //! Insert leaf into inner node
+        void static insert(Node16* node,Node** nodeRef,uint8_t keyByte,Node* child);
     };
 }

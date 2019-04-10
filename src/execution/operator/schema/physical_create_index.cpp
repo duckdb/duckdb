@@ -33,6 +33,28 @@ void PhysicalCreateIndex::createOrderIndex(ScanStructure *ss,DataChunk *intermed
 	table.storage->indexes.push_back(move(order_index));
 }
 
+void PhysicalCreateIndex::createARTIndex(ScanStructure *ss,DataChunk *intermediate,vector<TypeId> *result_types,DataChunk *result){
+    auto art = make_unique<ART>(*table.storage, column_ids, types, *result_types, move(expressions),
+                                               STANDARD_VECTOR_SIZE, move(unbinded_expressions));
+    // now we start incrementally building the index
+    while (true) {
+        intermediate->Reset();
+        // scan a new chunk from the table to index
+        table.storage->CreateIndexScan(*ss, column_ids, *intermediate);
+        if (intermediate->size() == 0) {
+            // finished scanning for index creation
+            // release all locks
+            break;
+        }
+        // resolve the expressions for this chunk
+        ExpressionExecutor executor(intermediate);
+        executor.Execute(art->expressions, *result);
+
+        art->Insert(*result, intermediate->data[intermediate->column_count - 1]);
+    }
+    table.storage->indexes.push_back(move(art));
+}
+
 void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	if (column_ids.size() == 0) {
 		throw NotImplementedException("CREATE INDEX does not refer to any columns in the base table!");
@@ -68,7 +90,7 @@ void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk, Ph
 
 	switch (info->index_type) {
 		case IndexType::ART:
-			createOrderIndex(&ss,&intermediate, &result_types,&result);
+            createARTIndex(&ss,&intermediate, &result_types,&result);
 			break;
 		case IndexType::ORDER_INDEX:
 			createOrderIndex(&ss,&intermediate, &result_types,&result);

@@ -14,5 +14,7 @@ namespace duckdb {
         }
 
         Node *getChild(const uint8_t k) const;
-    };
+        static void insert(Node48* node,Node** nodeRef,uint8_t keyByte,Node* child);
+
+        };
 }
