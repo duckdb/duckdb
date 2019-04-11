@@ -11,6 +11,7 @@
 #include "common/types/data_chunk.hpp"
 #include "common/types/tuple.hpp"
 #include "parser/parsed_expression.hpp"
+#include "planner/expression.hpp"
 
 namespace duckdb {
 
@@ -29,13 +30,15 @@ struct IndexScanState {
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
 public:
-	Index(IndexType type) : type(type) {
+	Index(IndexType type,vector<unique_ptr<Expression>> expressions,vector<unique_ptr<Expression>> unbound_expressions) : type(type),expressions(move(expressions)),unbound_expressions(move(unbound_expressions)) {
 	}
-	virtual ~Index() {
-	}
+	virtual ~Index()=default;
 
 	IndexType type;
-
+	//! The expressions to evaluate
+	vector<unique_ptr<Expression>> expressions;
+	//! Unbound expressions to be used in the optimizer
+	vector<unique_ptr<Expression>> unbound_expressions;
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table when we only have one query predicate
 	virtual unique_ptr<IndexScanState> InitializeScanSinglePredicate(Transaction &transaction,

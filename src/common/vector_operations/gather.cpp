@@ -66,6 +66,9 @@ template <class LOOP, class OP> static void generic_gather_loop(Vector &source, 
 	case TypeId::BIGINT:
 		LOOP::template Operation<int64_t, OP>(source, dest);
 		break;
+	case TypeId::FLOAT:
+		LOOP::template Operation<float, OP>(source, dest);
+		break;
 	case TypeId::DOUBLE:
 		LOOP::template Operation<double, OP>(source, dest);
 		break;

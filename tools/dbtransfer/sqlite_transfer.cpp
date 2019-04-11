@@ -86,7 +86,7 @@ bool TransferDatabase(Connection &con, sqlite3 *sqlite) {
 						// TODO
 						throw NotImplementedException("Transferring timestamps is not supported yet");
 					case SQLTypeId::DECIMAL:
-						rc = sqlite3_bind_double(stmt, bind_index, value.value_.decimal);
+						rc = sqlite3_bind_double(stmt, bind_index, value.value_.double_);
 						break;
 					case SQLTypeId::VARCHAR:
 						rc = sqlite3_bind_text(stmt, bind_index, value.ToString().c_str(), -1, SQLITE_TRANSIENT);

@@ -199,8 +199,8 @@ unique_ptr<PhysicalOperatorState> PhysicalBlockwiseNLJoin::GetOperatorState() {
 	return make_unique<PhysicalBlockwiseNLJoinState>(children[0].get(), children[1].get());
 }
 
-string PhysicalBlockwiseNLJoin::ExtraRenderInformation() {
+string PhysicalBlockwiseNLJoin::ExtraRenderInformation() const {
 	string extra_info = JoinTypeToString(type) + "\n";
-	extra_info += condition->ToString();
+	extra_info += condition->GetName();
 	return extra_info;
 }

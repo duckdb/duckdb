@@ -136,7 +136,7 @@ TEST_CASE("PREPARE many types for INSERT", "[prepared]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {2}));
 	REQUIRE(CHECK_COLUMN(result, 2, {3}));
 	REQUIRE(CHECK_COLUMN(result, 3, {4}));
-	REQUIRE(CHECK_COLUMN(result, 4, {1.5}));
+	REQUIRE(CHECK_COLUMN(result, 4, {(float)1.5}));
 	REQUIRE(CHECK_COLUMN(result, 5, {2.5}));
 	REQUIRE(CHECK_COLUMN(result, 6, {Value::DATE(1992, 10, 20)}));
 	REQUIRE(CHECK_COLUMN(result, 7, {"hello world"}));

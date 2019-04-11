@@ -1,12 +1,18 @@
 #include "execution/physical_operator.hpp"
 
+#include "common/string_util.hpp"
 #include "main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 string PhysicalOperator::ToString(size_t depth) const {
-	string result = PhysicalOperatorToString(type);
+	string extra_info = StringUtil::Replace(ExtraRenderInformation(), "\n", " ");
+	StringUtil::RTrim(extra_info);
+	if (!extra_info.empty()) {
+		extra_info = "[" + extra_info + "]";
+	}
+	string result = PhysicalOperatorToString(type) + extra_info;
 	if (children.size() > 0) {
 		for (size_t i = 0; i < children.size(); i++) {
 			result += "\n" + string(depth * 4, ' ');

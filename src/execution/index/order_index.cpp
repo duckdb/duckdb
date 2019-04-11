@@ -38,9 +38,9 @@ static size_t GetTupleSize(TypeId type) {
 
 OrderIndex::OrderIndex(DataTable &table, vector<column_t> column_ids, vector<TypeId> types,
                        vector<TypeId> expression_types, vector<unique_ptr<Expression>> expressions,
-                       size_t initial_capacity, vector<unique_ptr<Expression>> unbinded_expressions)
-    : Index(IndexType::ORDER_INDEX), table(table), column_ids(column_ids), types(types), expressions(move(expressions)),
-      unbinded_expressions(move(unbinded_expressions)),tuple_size(0), data(nullptr), count(0), capacity(0) {
+                       size_t initial_capacity, vector<unique_ptr<Expression>> unbound_expressions)
+    : Index(IndexType::ORDER_INDEX,move(expressions),move(unbound_expressions))
+    		, table(table), column_ids(column_ids), types(types),tuple_size(0), data(nullptr), count(0), capacity(0) {
 	// size of tuple is size of column id plus size of types
 	tuple_size = GetTupleSize(types[0]);
 	// initialize the data
@@ -133,8 +133,10 @@ size_t OrderIndex::SearchLTE(Value value) {
 		return binary_search_lte<int32_t>(data.get(), value.value_.integer, count);
 	case TypeId::BIGINT:
 		return binary_search_lte<int64_t>(data.get(), value.value_.bigint, count);
+	case TypeId::FLOAT:
+		return binary_search_lte<float>(data.get(), value.value_.float_, count);
 	case TypeId::DOUBLE:
-		return binary_search_lte<double>(data.get(), value.value_.decimal, count);
+		return binary_search_lte<double>(data.get(), value.value_.double_, count);
 	default:
 		throw NotImplementedException("Unimplemented type for index search");
 	}
@@ -151,8 +153,10 @@ size_t OrderIndex::SearchGTE(Value value) {
 		return binary_search_gte<int32_t>(data.get(), value.value_.integer, count);
 	case TypeId::BIGINT:
 		return binary_search_gte<int64_t>(data.get(), value.value_.bigint, count);
+	case TypeId::FLOAT:
+		return binary_search_gte<float>(data.get(), value.value_.float_, count);
 	case TypeId::DOUBLE:
-		return binary_search_gte<double>(data.get(), value.value_.decimal, count);
+		return binary_search_gte<double>(data.get(), value.value_.double_, count);
 	default:
 		throw NotImplementedException("Unimplemented type for index search");
 	}
@@ -169,8 +173,10 @@ size_t OrderIndex::SearchLT(Value value) {
 		return binary_search_lt<int32_t>(data.get(), value.value_.integer, count);
 	case TypeId::BIGINT:
 		return binary_search_lt<int64_t>(data.get(), value.value_.bigint, count);
+	case TypeId::FLOAT:
+		return binary_search_lt<float>(data.get(), value.value_.float_, count);
 	case TypeId::DOUBLE:
-		return binary_search_lt<double>(data.get(), value.value_.decimal, count);
+		return binary_search_lt<double>(data.get(), value.value_.double_, count);
 	default:
 		throw NotImplementedException("Unimplemented type for index search");
 	}
@@ -187,8 +193,10 @@ size_t OrderIndex::SearchGT(Value value) {
 		return binary_search_gt<int32_t>(data.get(), value.value_.integer, count);
 	case TypeId::BIGINT:
 		return binary_search_gt<int64_t>(data.get(), value.value_.bigint, count);
+	case TypeId::FLOAT:
+		return binary_search_gt<float>(data.get(), value.value_.float_, count);
 	case TypeId::DOUBLE:
-		return binary_search_gt<double>(data.get(), value.value_.decimal, count);
+		return binary_search_gt<double>(data.get(), value.value_.double_, count);
 	default:
 		throw NotImplementedException("Unimplemented type for index search");
 	}

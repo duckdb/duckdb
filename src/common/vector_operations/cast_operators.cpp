@@ -49,6 +49,10 @@ static void result_cast_switch(Vector &source, Vector &result, SQLType source_ty
 		assert(result.type == TypeId::BIGINT);
 		templated_cast_loop<SRC, int64_t, OP, IGNORE_NULL>(source, result);
 		break;
+	case SQLTypeId::FLOAT:
+		assert(result.type == TypeId::FLOAT);
+		templated_cast_loop<SRC, float, OP, IGNORE_NULL>(source, result);
+		break;
 	case SQLTypeId::DECIMAL:
 	case SQLTypeId::DOUBLE:
 		assert(result.type == TypeId::DOUBLE);
@@ -115,6 +119,10 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 	case SQLTypeId::BIGINT:
 		assert(source.type == TypeId::BIGINT);
 		result_cast_switch<int64_t, operators::Cast, true>(source, result, source_type, target_type);
+		break;
+	case SQLTypeId::FLOAT:
+		assert(source.type == TypeId::FLOAT);
+		result_cast_switch<float, operators::Cast, true>(source, result, source_type, target_type);
 		break;
 	case SQLTypeId::DECIMAL:
 	case SQLTypeId::DOUBLE:

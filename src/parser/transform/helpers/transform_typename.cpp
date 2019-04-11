@@ -19,8 +19,9 @@ static SQLType TransformStringToSQLType(char *str) {
 		return SQLType(SQLTypeId::TIMESTAMP);
 	} else if (lower_str == "bool") {
 		return SQLType(SQLTypeId::BOOLEAN);
-	} else if (lower_str == "double" || lower_str == "float8" || lower_str == "numeric" || lower_str == "real" ||
-	           lower_str == "float4") {
+	} else if (lower_str == "float8" || lower_str == "real" || lower_str == "float4") {
+		return SQLType(SQLTypeId::FLOAT);
+	} else if (lower_str == "double" || lower_str == "numeric" || lower_str == "real" || lower_str == "float4") {
 		return SQLType(SQLTypeId::DOUBLE);
 	} else if (lower_str == "tinyint") {
 		return SQLType(SQLTypeId::TINYINT);

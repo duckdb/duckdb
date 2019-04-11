@@ -8,13 +8,14 @@
 
 #pragma once
 
+#include "common/unordered_map.hpp"
 #include "parser/column_definition.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "parser/tokens.hpp"
-#include "common/unordered_map.hpp"
 
 namespace postgres {
 #include "pg_definitions.h"
+// don't reorder
 #include "nodes/parsenodes.h"
 
 } // namespace postgres

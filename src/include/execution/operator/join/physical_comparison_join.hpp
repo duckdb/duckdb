@@ -18,7 +18,7 @@ public:
 	PhysicalComparisonJoin(LogicalOperator &op, PhysicalOperatorType type, vector<JoinCondition> cond,
 	                       JoinType join_type);
 
-	string ExtraRenderInformation() override;
+	string ExtraRenderInformation() const override;
 
 	vector<JoinCondition> conditions;
 };

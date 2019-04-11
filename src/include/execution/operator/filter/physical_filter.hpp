@@ -23,7 +23,7 @@ public:
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	string ExtraRenderInformation() override;
+	string ExtraRenderInformation() const override;
 
 	vector<unique_ptr<Expression>> expressions;
 };

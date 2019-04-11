@@ -17,7 +17,7 @@ string BoundFunctionExpression::ToString() const {
 		if (i > 0) {
 			str += ", ";
 		}
-		str += children[i]->ToString();
+		str += children[i]->GetName();
 	}
 	str += ")";
 	return str;

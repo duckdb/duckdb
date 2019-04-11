@@ -84,7 +84,7 @@ public:
 		return make_unique<PhysicalOperatorState>(children.size() == 0 ? nullptr : children[0].get());
 	}
 
-	virtual string ExtraRenderInformation() {
+	virtual string ExtraRenderInformation() const {
 		return "";
 	}
 

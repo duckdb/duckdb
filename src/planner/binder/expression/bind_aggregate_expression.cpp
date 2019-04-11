@@ -16,6 +16,8 @@ static SQLType ResolveSumType(SQLType input_type) {
 	case SQLTypeId::INTEGER:
 	case SQLTypeId::BIGINT:
 		return SQLType(SQLTypeId::BIGINT);
+	case SQLTypeId::FLOAT:
+		return SQLType(SQLTypeId::FLOAT);
 	case SQLTypeId::DOUBLE:
 	case SQLTypeId::DECIMAL:
 		return SQLType(SQLTypeId::DECIMAL);
@@ -31,6 +33,7 @@ static SQLType ResolveSTDDevType(SQLType input_type) {
 	case SQLTypeId::SMALLINT:
 	case SQLTypeId::INTEGER:
 	case SQLTypeId::BIGINT:
+	case SQLTypeId::FLOAT:
 	case SQLTypeId::DOUBLE:
 	case SQLTypeId::DECIMAL:
 		return SQLType(SQLTypeId::DECIMAL);
@@ -76,6 +79,7 @@ static SQLType ResolveAggregateType(AggregateExpression &aggr, unique_ptr<Expres
 }
 
 BindResult SelectBinder::BindAggregate(AggregateExpression &aggr, uint32_t depth) {
+	auto aggr_name = aggr.GetName();
 	// first bind the child of the aggregate expression (if any)
 	unique_ptr<Expression> child;
 	SQLType child_type;
@@ -109,7 +113,7 @@ BindResult SelectBinder::BindAggregate(AggregateExpression &aggr, uint32_t depth
 	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(result_type), aggr.type, move(child));
 	// now create a column reference referring to this aggregate
 	auto colref = make_unique<BoundColumnRefExpression>(
-	    aggr.GetName(), aggregate->return_type, ColumnBinding(node.aggregate_index, node.aggregates.size()), depth);
+	    aggr_name, aggregate->return_type, ColumnBinding(node.aggregate_index, node.aggregates.size()), depth);
 	// move the aggregate expression into the set of bound aggregates
 	node.aggregates.push_back(move(aggregate));
 	return BindResult(move(colref), result_type);

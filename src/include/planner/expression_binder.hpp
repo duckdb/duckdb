@@ -49,7 +49,7 @@ public:
 
 public:
 	string ToString() const override {
-		return "BOUND_EXPRESSION";
+		return expr->ToString();
 	}
 
 	unique_ptr<ParsedExpression> Copy() const override {

@@ -18,9 +18,6 @@ unique_ptr<LogicalOperator> IndexScan::Optimize(unique_ptr<LogicalOperator> op) 
         for (auto &child : op->children) {
             child = Optimize(move(child));
         }
-
-//	if (op->children.size())
-//		op->children[0] = Optimize(move(op->children[0]));
 	return op;
 }
 
@@ -45,9 +42,6 @@ unique_ptr<LogicalOperator> IndexScan::TransformFilterToIndexScan(unique_ptr<Log
 		Value low_value, high_value, equal_value;
 		int low_index = -1, high_index = -1, equal_index = -1;
 		auto &index = storage.indexes[j];
-		// FIXME: assume every index is order index currently
-		assert(index->type == IndexType::ORDER_INDEX);
-		auto order_index = (OrderIndex *)index.get();
 		// try to find a matching index for any of the filter expressions
 		auto expr = filter.expressions[0].get();
 		auto low_comparison_type = expr->type;
@@ -60,7 +54,7 @@ unique_ptr<LogicalOperator> IndexScan::TransformFilterToIndexScan(unique_ptr<Log
 			matcher.expr_type = make_unique<ComparisonExpressionTypeMatcher>();
 			// match on a constant comparison with the indexed expression
 			matcher.matchers.push_back(
-			    make_unique<ExpressionEqualityMatcher>(order_index->unbinded_expressions[0].get()));
+			    make_unique<ExpressionEqualityMatcher>(index->unbound_expressions[0].get()));
 			matcher.matchers.push_back(make_unique<ConstantExpressionMatcher>());
 
 			matcher.policy = SetMatcher::Policy::UNORDERED;
@@ -78,7 +72,7 @@ unique_ptr<LogicalOperator> IndexScan::TransformFilterToIndexScan(unique_ptr<Log
 
 				auto constant_value = ((BoundConstantExpression *)bindings[2])->value;
 				auto comparison_type = comparison->type;
-				if (comparison->right.get() == order_index->expressions[0].get()) {
+				if (comparison->right.get() == index->expressions[0].get()) {
 					// the expression is on the right side, we flip them around
 					comparison_type = ComparisonExpression::FlipComparisionExpression(comparison_type);
 				}
@@ -103,7 +97,7 @@ unique_ptr<LogicalOperator> IndexScan::TransformFilterToIndexScan(unique_ptr<Log
 			}
 		}
 		if (equal_index >= 0 || low_index >= 0 || high_index >= 0) {
-			auto logical_index_scan = make_unique<LogicalIndexScan>(*get->table, *get->table->storage, *order_index,
+			auto logical_index_scan = make_unique<LogicalIndexScan>(*get->table, *get->table->storage, *index,
 			                                                        get->column_ids, get->table_index);
 			if (equal_index >= 0) {
 				logical_index_scan->equal_value = equal_value;

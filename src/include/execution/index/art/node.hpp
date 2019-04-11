@@ -13,7 +13,7 @@ namespace duckdb {
 
     class Node {
     public:
-        void insert(Node* node,Node** nodeRef,uint8_t key[],unsigned depth,uintptr_t value,unsigned maxKeyLength);
+        static void insert(Node* node,Node** nodeRef,uint8_t key[],unsigned depth,uintptr_t value,unsigned maxKeyLength);
         //! length of the compressed path (prefix)
         uint32_t prefixLength;
         //! number of non-null children
@@ -36,19 +36,19 @@ namespace duckdb {
         //! Compare two elements and return the smaller
         static unsigned min(unsigned a, unsigned b);
         //! Find the leaf with smallest element in the tree
-        Node* minimum(Node* node);
+        static Node* minimum(Node* node);
         //! Returns the stored in the leaf
-        inline uint64_t getLeafValue(const Node* node);
+        static inline uint64_t getLeafValue(const Node* node);
         //! Checks if node is Leaf
-        inline bool isLeaf(Node* node);
+        static inline bool isLeaf(Node* node);
         //! Create a Leaf
-        inline Node* makeLeaf(uint64_t tid);
+        static inline Node* makeLeaf(uint64_t tid);
         //! Find the next child for the keyByte
-        Node * findChild(const uint8_t k, const Node *node);
+        static Node * findChild(const uint8_t k, const Node *node);
         //! Compare the key with the prefix of the node, return the number matching bytes
-        unsigned prefixMismatch(Node* node,uint8_t key[],unsigned depth,unsigned maxKeyLength);
+        static unsigned prefixMismatch(Node* node,uint8_t key[],unsigned depth,unsigned maxKeyLength);
         //! Insert leaf into inner node
-        void insertLeaf(Node* node,Node** nodeRef,uint8_t key, Node* newNode);
+        static void insertLeaf(Node* node,Node** nodeRef,uint8_t key, Node* newNode);
 
         };
     //!TODO: For duplicates

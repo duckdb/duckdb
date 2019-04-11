@@ -25,7 +25,7 @@ public:
 	                    vector<unique_ptr<Expression>> expressions, unique_ptr<CreateIndexInformation> info,
 	                    vector<unique_ptr<Expression>> unbinded_expressions)
 	    : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types), table(table), column_ids(column_ids),
-	      expressions(std::move(expressions)), info(std::move(info)), unbinded_expressions(move(unbinded_expressions)) {
+	      expressions(std::move(expressions)), info(std::move(info)), unbound_expressions(move(unbinded_expressions)) {
 	}
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
@@ -39,7 +39,7 @@ public:
 	//! Info for index creation
 	unique_ptr<CreateIndexInformation> info;
 	//! Unbinded expressions to be used in the optimizer
-	vector<unique_ptr<Expression>> unbinded_expressions;
+	vector<unique_ptr<Expression>> unbound_expressions;
 
 private:
 	void createOrderIndex(ScanStructure *ss,DataChunk *intermediate,vector<TypeId> *result_types,DataChunk *result);

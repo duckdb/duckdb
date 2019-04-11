@@ -10,7 +10,7 @@ using namespace std;
 void PhysicalCreateIndex::createOrderIndex(ScanStructure *ss,DataChunk *intermediate,vector<TypeId> *result_types,DataChunk *result){
 	// FIXME: use estimated table size as initial index size
 	auto order_index = make_unique<OrderIndex>(*table.storage, column_ids, types, *result_types, move(expressions),
-											   STANDARD_VECTOR_SIZE, move(unbinded_expressions));
+											   STANDARD_VECTOR_SIZE, move(unbound_expressions));
 	// now we start incrementally building the index
 	while (true) {
 		intermediate->Reset();
@@ -34,8 +34,7 @@ void PhysicalCreateIndex::createOrderIndex(ScanStructure *ss,DataChunk *intermed
 }
 
 void PhysicalCreateIndex::createARTIndex(ScanStructure *ss,DataChunk *intermediate,vector<TypeId> *result_types,DataChunk *result){
-    auto art = make_unique<ART>(*table.storage, column_ids, types, *result_types, move(expressions),
-                                               STANDARD_VECTOR_SIZE, move(unbinded_expressions));
+    auto art = make_unique<ART>(*table.storage, column_ids, types, *result_types, move(expressions), move(unbound_expressions));
     // now we start incrementally building the index
     while (true) {
         intermediate->Reset();
@@ -49,7 +48,7 @@ void PhysicalCreateIndex::createARTIndex(ScanStructure *ss,DataChunk *intermedia
         // resolve the expressions for this chunk
         ExpressionExecutor executor(intermediate);
         executor.Execute(art->expressions, *result);
-
+//
         art->Insert(*result, intermediate->data[intermediate->column_count - 1]);
     }
     table.storage->indexes.push_back(move(art));

@@ -38,8 +38,11 @@ Value Value::MinimumValue(TypeId type) {
 	case TypeId::BIGINT:
 		result.value_.bigint = std::numeric_limits<int64_t>::min();
 		break;
+	case TypeId::FLOAT:
+		result.value_.float_ = std::numeric_limits<float>::min();
+		break;
 	case TypeId::DOUBLE:
-		result.value_.decimal = std::numeric_limits<double>::min();
+		result.value_.double_ = std::numeric_limits<double>::min();
 		break;
 	case TypeId::POINTER:
 		result.value_.pointer = std::numeric_limits<uint64_t>::min();
@@ -67,8 +70,11 @@ Value Value::MaximumValue(TypeId type) {
 	case TypeId::BIGINT:
 		result.value_.bigint = std::numeric_limits<int64_t>::max();
 		break;
+	case TypeId::FLOAT:
+		result.value_.float_ = std::numeric_limits<float>::max();
+		break;
 	case TypeId::DOUBLE:
-		result.value_.decimal = std::numeric_limits<double>::max();
+		result.value_.double_ = std::numeric_limits<double>::max();
 		break;
 	case TypeId::POINTER:
 		result.value_.pointer = std::numeric_limits<uint64_t>::max();
@@ -133,6 +139,8 @@ Value Value::Numeric(TypeId type, int64_t value) {
 		return Value::INTEGER(value);
 	case TypeId::BIGINT:
 		return Value::BIGINT(value);
+	case TypeId::FLOAT:
+		return Value((float)value);
 	case TypeId::DOUBLE:
 		return Value((double)value);
 	case TypeId::POINTER:
@@ -156,8 +164,10 @@ int64_t Value::GetNumericValue() {
 		return value_.integer;
 	case TypeId::BIGINT:
 		return value_.bigint;
+	case TypeId::FLOAT:
+		return value_.float_;
 	case TypeId::DOUBLE:
-		return value_.decimal;
+		return value_.double_;
 	case TypeId::POINTER:
 		return value_.pointer;
 	default:
@@ -177,8 +187,10 @@ string Value::ToString(SQLType sql_type) const {
 		return to_string(value_.integer);
 	case SQLTypeId::BIGINT:
 		return to_string(value_.bigint);
+	case SQLTypeId::FLOAT:
+		return to_string(value_.float_);
 	case SQLTypeId::DOUBLE:
-		return to_string(value_.decimal);
+		return to_string(value_.double_);
 	case SQLTypeId::DATE:
 		return Date::ToString(value_.integer);
 	case SQLTypeId::TIMESTAMP:
@@ -307,8 +319,11 @@ void Value::Serialize(Serializer &serializer) {
 		case TypeId::BIGINT:
 			serializer.Write<int64_t>(value_.bigint);
 			break;
+		case TypeId::FLOAT:
+			serializer.Write<double>(value_.float_);
+			break;
 		case TypeId::DOUBLE:
-			serializer.Write<double>(value_.decimal);
+			serializer.Write<double>(value_.double_);
 			break;
 		case TypeId::POINTER:
 			serializer.Write<uint64_t>(value_.pointer);
@@ -346,8 +361,11 @@ Value Value::Deserialize(Deserializer &source) {
 	case TypeId::BIGINT:
 		new_value.value_.bigint = source.Read<int64_t>();
 		break;
+	case TypeId::FLOAT:
+		new_value.value_.float_ = source.Read<float>();
+		break;
 	case TypeId::DOUBLE:
-		new_value.value_.decimal = source.Read<double>();
+		new_value.value_.double_ = source.Read<double>();
 		break;
 	case TypeId::POINTER:
 		new_value.value_.pointer = source.Read<uint64_t>();

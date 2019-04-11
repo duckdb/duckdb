@@ -10,8 +10,6 @@
 #include "planner/logical_plan_generator.hpp"
 #include "planner/operator/logical_explain.hpp"
 #include "planner/operator/logical_prepare.hpp"
-
-#include "planner/expression/bound_parameter_expression.hpp"
 #include "planner/statement/bound_select_statement.hpp"
 
 using namespace duckdb;
@@ -208,9 +206,9 @@ void Planner::VerifyQuery(BoundSQLStatement &statement) {
 	if (statement.type != StatementType::SELECT) {
 		return;
 	}
-	auto &select = (BoundSelectStatement&) statement;
+	auto &select = (BoundSelectStatement &)statement;
 	auto &expr_list = select.node->GetSelectList();
-	for(auto &expr : expr_list) {
+	for (auto &expr : expr_list) {
 		if (expr->HasSubquery()) {
 			// can't copy subqueries
 			continue;
@@ -223,9 +221,9 @@ void Planner::VerifyQuery(BoundSQLStatement &statement) {
 	}
 
 	// double loop to verify that (in)equality of hashes
-	for(size_t i = 0; i < expr_list.size(); i++) {
+	for (size_t i = 0; i < expr_list.size(); i++) {
 		auto outer_hash = expr_list[i]->Hash();
-		for(size_t j = 0; j < expr_list.size(); j++) {
+		for (size_t j = 0; j < expr_list.size(); j++) {
 			auto inner_hash = expr_list[j]->Hash();
 			if (outer_hash != inner_hash) {
 				// if hashes are not equivalent the expressions should not be equivalent

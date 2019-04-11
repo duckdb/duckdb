@@ -10,18 +10,26 @@ static bool ValuesAreEqual(Value result_value, Value value) {
 		// NULL = NULL in checking code
 		return true;
 	}
-	if (value.type == TypeId::DOUBLE) {
-		// round to two decimals
-		auto left = StringUtil::Format("%.2f", value.value_.decimal);
-		auto right = StringUtil::Format("%.2f", result_value.value_.decimal);
-		if (left != right) {
-			double ldecimal = value.value_.decimal;
-			double rdecimal = result_value.value_.decimal;
-			if (ldecimal < 0.99 * rdecimal || ldecimal > 1.01 * rdecimal) {
-				return false;
-			}
+	switch (value.type) {
+	case TypeId::FLOAT: {
+		float ldecimal = value.value_.float_;
+		float rdecimal = result_value.value_.float_;
+		float epsilon = fabs(rdecimal) * 0.01;
+		if (fabs(ldecimal - rdecimal) > epsilon) {
+			return false;
 		}
-	} else if (value.type == TypeId::VARCHAR) {
+		break;
+	}
+	case TypeId::DOUBLE: {
+		double ldecimal = value.value_.double_;
+		double rdecimal = result_value.value_.double_;
+		double epsilon = fabs(rdecimal) * 0.01;
+		if (fabs(ldecimal - rdecimal) > epsilon) {
+			return false;
+		}
+		break;
+	}
+	case TypeId::VARCHAR: {
 		// some results might contain padding spaces, e.g. when rendering
 		// VARCHAR(10) and the string only has 6 characters, they will be padded
 		// with spaces to 10 in the rendering. We don't do that here yet as we
@@ -32,10 +40,12 @@ static bool ValuesAreEqual(Value result_value, Value value) {
 		StringUtil::RTrim(left);
 		StringUtil::RTrim(right);
 		return left == right;
-	} else {
+	}
+	default:
 		if (value != result_value) {
 			return false;
 		}
+		break;
 	}
 	return true;
 }

@@ -16,7 +16,7 @@ TEST_CASE("Test Index Scan Optimizer", "[index-optimizer]") {
 
 	con.Query("BEGIN TRANSACTION");
 	con.Query("CREATE TABLE integers(i INTEGER)");
-	con.Query("CREATE INDEX i_index ON integers(i)");
+	con.Query("CREATE INDEX i_index ON integers using ORDER_INDEX(i)");
 	// Checking if Optimizer is using index in simple case
 	auto tree = helper.ParseLogicalTree("SELECT i FROM integers where i > 10");
 	IndexScan index_scan;

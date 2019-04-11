@@ -191,7 +191,7 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Generate functions
 	//===--------------------------------------------------------------------===//
-	static void GenerateSequence(Vector &source, int64_t start = 0, int64_t increment = 1);
+	static void GenerateSequence(Vector &result, int64_t start = 0, int64_t increment = 1);
 	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//
