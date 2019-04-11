@@ -49,9 +49,11 @@ namespace duckdb {
         vector<unique_ptr<Expression>> unbinded_expressions;
         //! The actual index
         unique_ptr<uint8_t[]> data;
+        //! True if machine is little endian
+        bool is_little_endian = false;
     private:
         DataChunk expression_result;
-
+        template <class T> static void templated_insert(DataChunk &input, Vector &row_ids);
 
     };
 

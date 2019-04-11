@@ -7,14 +7,14 @@
 using namespace duckdb;
 
 inline bool Node::isLeaf(Node* node) {
-    return reinterpret_cast<uintptr_t>(node)&1;
+    return (reinterpret_cast<uint64_t>(node) & (static_cast<uint64_t>(1) << 63)) == (static_cast<uint64_t>(1) << 63);
 }
-inline Node*  Node::makeLeaf(uintptr_t tid) {
-    return reinterpret_cast<Node*>((tid<<1)|1);
+inline Node*  Node::makeLeaf(uint64_t tid) {
+    return reinterpret_cast<Node *>(tid | (static_cast<uint64_t>(1) << 63));
 }
 
-inline uintptr_t  Node::getLeafValue(Node* node) {
-    return reinterpret_cast<uintptr_t>(node)>>1;
+inline uint64_t  Node::getLeafValue(const Node* node) {
+    return (reinterpret_cast<uint64_t>(node) & ((static_cast<uint64_t>(1) << 63) - 1));
 }
 
 void  Node::loadKey(uintptr_t tid,uint8_t key[]) {

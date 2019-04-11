@@ -30,19 +30,19 @@ namespace duckdb {
         static inline unsigned ctz(uint16_t x);
         //! Copies the prefix from the source to the destination node
         static void copyPrefix(Node* src,Node* dst);
+        //! Store the key of the tuple into the key vector
+        static void loadKey(uintptr_t tid,uint8_t key[]);
     private:
         //! Compare two elements and return the smaller
         static unsigned min(unsigned a, unsigned b);
         //! Find the leaf with smallest element in the tree
         Node* minimum(Node* node);
         //! Returns the stored in the leaf
-        inline uintptr_t getLeafValue(Node* node);
+        inline uint64_t getLeafValue(const Node* node);
         //! Checks if node is Leaf
         inline bool isLeaf(Node* node);
         //! Create a Leaf
-        inline Node* makeLeaf(uintptr_t tid);
-        //! Store the key of the tuple into the key vector
-        void  loadKey(uintptr_t tid,uint8_t key[]);
+        inline Node* makeLeaf(uint64_t tid);
         //! Find the next child for the keyByte
         Node * findChild(const uint8_t k, const Node *node);
         //! Compare the key with the prefix of the node, return the number matching bytes
@@ -51,6 +51,7 @@ namespace duckdb {
         void insertLeaf(Node* node,Node** nodeRef,uint8_t key, Node* newNode);
 
         };
+    //!TODO: For duplicates
     class Leaf{
     public:
         uint64_t row_id;
