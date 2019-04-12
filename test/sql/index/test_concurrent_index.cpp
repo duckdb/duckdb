@@ -49,7 +49,7 @@ TEST_CASE("Concurrent reads during index creation", "[index][.]") {
 	}
 
 	// create the index
-	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using order_index(i)"));
 	is_finished = true;
 
 	for (size_t i = 0; i < THREAD_COUNT; i++) {
@@ -96,7 +96,7 @@ TEST_CASE("Concurrent writes during index creation", "[index][.]") {
 	}
 
 	// create the index
-	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using order_index(i)"));
 
 	for (size_t i = 0; i < THREAD_COUNT; i++) {
 		threads[i].join();
