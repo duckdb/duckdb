@@ -65,8 +65,6 @@ namespace duckdb {
         vector<column_t> column_ids;
         //! Types of the column identifiers
         vector<TypeId> types;
-//        //! The actual index
-//        unique_ptr<uint8_t[]> data;
         //! True if machine is little endian
         bool is_little_endian;
     private:
@@ -74,6 +72,15 @@ namespace duckdb {
 
         template <class P> void convert_to_big_endian(uintptr_t tid,uint8_t key[]) {
             switch(sizeof(P)){
+                case 1:
+                        reinterpret_cast<P*>(key)[0]=tid;
+                        return;
+                case 2:
+                        reinterpret_cast<P*>(key)[0]=__builtin_bswap16(tid);
+                        return;
+                case 4:
+                        reinterpret_cast<P*>(key)[0]=__builtin_bswap32(tid);
+                        return;
                 case 8:
                         reinterpret_cast<P*>(key)[0]=__builtin_bswap64(tid);
                         return;
@@ -91,13 +98,12 @@ namespace duckdb {
                         uint8_t minKey[maxPrefixLength];
                         if (is_little_endian){
                                 convert_to_big_endian<P>(input_data[i],minKey);
-                                uint8_t bin_data = flipSign(minKey[0]);
-                                Node::insert(tree,&tree,&bin_data,0,input_data[i],8);
                         }
                         else{
-                            uint8_t bin_data = flipSign(minKey[0]);
-                            Node::insert(tree,&tree,&bin_data,0,input_data[i],8);
+                                reinterpret_cast<P*>(minKey)[0]=input_data[i];
                         }
+                    minKey[0] = flipSign(minKey[0]);
+                    Node::insert(tree,&tree,minKey,0,input_data[i],8);
                 }
         }
         //! Get the start/end position in the index for a Less Than Equal Operator

@@ -117,6 +117,7 @@ TEST_CASE("Open Range Queries", "[orderidx-openrange]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(i) + ")"));
 	}
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using order_index(i)"));
+
 	result = con.Query("SELECT sum(i) FROM integers WHERE i>9");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	result = con.Query("SELECT sum(i) FROM integers WHERE 9<i");
@@ -143,6 +144,8 @@ TEST_CASE("Open Range Queries", "[orderidx-openrange]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 }
 
+
+
 TEST_CASE("Closed Range Queries", "[orderidx-closerange]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -163,4 +166,37 @@ TEST_CASE("Closed Range Queries", "[orderidx-closerange]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	result = con.Query("SELECT sum(i) FROM integers WHERE i>=5 and i<=2000 ");
 	REQUIRE(CHECK_COLUMN(result, 0, {2000990}));
+}
+
+TEST_CASE("ART Index", "[art]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i BIGINT)"));
+	for (size_t i = 0; i < 10; i++) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(i) + ")"));
+	}
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+    REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
+    REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+    for (size_t i = 0; i < 10; i++) {
+        REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(i) + ")"));
+    }
+    REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+    REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
+    REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i TINYINT)"));
+    for (size_t i = 0; i < 10; i++) {
+        REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(i) + ")"));
+    }
+    REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+    REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
+    REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+
+
+
 }

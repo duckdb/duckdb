@@ -6,9 +6,8 @@ namespace duckdb {
     enum class NodeType : uint8_t {
         N4 = 0, N16 = 1, N48 = 2, N256 = 3
     };
-    // The maximum prefix length for compressed paths stored in the
-    // header, if the path is longer it is loaded from the database on
-    // demand
+    //! The maximum prefix length for compressed paths stored in the
+    //! header, if the path is longer it is loaded from the database on demand
     static const unsigned maxPrefixLength=9;
 
     class Node {
