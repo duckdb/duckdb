@@ -12,7 +12,6 @@ namespace duckdb {
 
     class Node {
     public:
-        static void insert(Node* node,Node** nodeRef,uint8_t key[],unsigned depth,uintptr_t value,unsigned maxKeyLength);
         //! length of the compressed path (prefix)
         uint32_t prefixLength;
         //! number of non-null children
@@ -23,21 +22,26 @@ namespace duckdb {
         uint8_t prefix[maxPrefixLength];
         static const uint8_t emptyMarker = 48;
         Node(NodeType type) : prefixLength(0), count(0), type(type) {}
-        //! Flip the sign bit, enables signed SSE comparison of unsigned values
-        static uint8_t flipSign(uint8_t keyByte);
         //! Count trailing zeros, only defined for x>0 (from Hacker's Delight)
         static inline unsigned ctz(uint16_t x);
-        //! Copies the prefix from the source to the destination node
-        static void copyPrefix(Node* src,Node* dst);
+        //! Find the node with a matching key, optimistic version
+        Node* lookup(Node* node,uint8_t key[],unsigned keyLength,unsigned depth,unsigned maxKeyLength);
+        //! Insert the leaf value into the tree
+        static void insert(Node* node,Node** nodeRef,uint8_t key[],unsigned depth,uintptr_t value,unsigned maxKeyLength);
         //! Store the key of the tuple into the key vector
         static void loadKey(uintptr_t tid,uint8_t key[]);
+        //! Copies the prefix from the source to the destination node
+        static void copyPrefix(Node* src,Node* dst);
+        //! Flip the sign bit, enables signed SSE comparison of unsigned values
+        static uint8_t flipSign(uint8_t keyByte);
+        //! Returns the stored in the leaf
+        static inline uint64_t getLeafValue(const Node* node);
+
     private:
         //! Compare two elements and return the smaller
         static unsigned min(unsigned a, unsigned b);
         //! Find the leaf with smallest element in the tree
         static Node* minimum(Node* node);
-        //! Returns the stored in the leaf
-        static inline uint64_t getLeafValue(const Node* node);
         //! Checks if node is Leaf
         static inline bool isLeaf(Node* node);
         //! Create a Leaf
@@ -51,7 +55,7 @@ namespace duckdb {
 
         };
     //!TODO: For duplicates
-    class Leaf{
+    class Leaf: public Node{
     public:
         uint64_t row_id;
     };

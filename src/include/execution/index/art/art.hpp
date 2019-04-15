@@ -22,6 +22,16 @@
 #include "node256.hpp"
 
 namespace duckdb {
+    struct ARTIndexScanState : public IndexScanState {
+        Value value_left;
+        Value value_right;
+
+        ExpressionType expression_type_left;
+        ExpressionType expression_type_right;
+
+        ARTIndexScanState(vector<column_t> column_ids) : IndexScanState(column_ids) {
+        }
+    };
 
     class ART : public Index {
     public:
@@ -39,7 +49,7 @@ namespace duckdb {
         //! Initialize a scan on the index with the given expression and column ids
         //! to fetch from the base table for a single predicate
         unique_ptr<IndexScanState> InitializeScanSinglePredicate(Transaction &transaction, vector<column_t> column_ids,
-                                                                 Value value, ExpressionType expressionType) override{};
+                                                                 Value value, ExpressionType expressionType) override;
 
 
         //! Initialize a scan on the index with the given expression and column ids
@@ -49,11 +59,11 @@ namespace duckdb {
                                                                Value high_value,
                                                                ExpressionType high_expression_type) override{};
         //! Perform a lookup on the index
-        void Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) override{};
+        void Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) override;
 
-        // Append entries to the index
+        //! Append entries to the index
         void Append(ClientContext &context, DataChunk &entries, size_t row_identifier_start) override{};
-        // Update entries in the index
+        //! Update entries in the index
         void Update(ClientContext &context, vector<column_t> &column_ids, DataChunk &update_data,
                     Vector &row_identifiers) override{};
 
@@ -92,7 +102,7 @@ namespace duckdb {
         }
 
         template <class T,class P> void templated_insert(DataChunk &input, Vector &row_ids) {
-                auto input_data = (T *)input.data[0].data;
+                auto input_data = (P *)input.data[0].data;
                 auto row_identifiers = (uint64_t *)row_ids.data;
                 for (size_t i = 0; i < row_ids.count; i++) {
                         uint8_t minKey[maxPrefixLength];
@@ -102,9 +112,30 @@ namespace duckdb {
                         else{
                                 reinterpret_cast<P*>(minKey)[0]=input_data[i];
                         }
-                    minKey[0] = flipSign(minKey[0]);
+//                    minKey[0] = flipSign(minKey[0]);
                     Node::insert(tree,&tree,minKey,0,input_data[i],8);
+                    Node* leaf= ART::tree->lookup(tree,minKey,8,0,8);
+//                    assert (leaf != nullptr);
                 }
+        }
+
+        //TODO: For now only lookup
+        template <class T,class P> size_t templated_lookup(T key, uint64_t *result_ids) {
+                uint8_t minKey[maxPrefixLength];
+            if (is_little_endian){
+                convert_to_big_endian<P>(key,minKey);
+            }
+            else{
+                reinterpret_cast<P*>(minKey)[0]=key;
+            }
+                minKey[0] = flipSign(minKey[0]);
+                Node* leaf= ART::tree->lookup(tree,minKey,8,0,8);
+                if(leaf){
+                    auto possible_match = Node::getLeafValue(leaf);
+//                    assert(possible_match = 5);
+                }
+                return 1;
+
         }
         //! Get the start/end position in the index for a Less Than Equal Operator
         size_t SearchLTE(Value value);

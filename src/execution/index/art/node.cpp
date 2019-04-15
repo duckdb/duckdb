@@ -7,14 +7,16 @@
 using namespace duckdb;
 
 inline bool Node::isLeaf(Node* node) {
-    return (reinterpret_cast<uint64_t>(node) & (static_cast<uint64_t>(1) << 63)) == (static_cast<uint64_t>(1) << 63);
+    return reinterpret_cast<uintptr_t>(node)&1;
 }
 inline Node*  Node::makeLeaf(uint64_t tid) {
-    return reinterpret_cast<Node *>(tid | (static_cast<uint64_t>(1) << 63));
+    return reinterpret_cast<Node*>((tid<<1)|1);
+
+//    return reinterpret_cast<Node *>(tid | (static_cast<uint64_t>(1) << 63));
 }
 
 inline uint64_t  Node::getLeafValue(const Node* node) {
-    return (reinterpret_cast<uint64_t>(node) & ((static_cast<uint64_t>(1) << 63) - 1));
+    return reinterpret_cast<uintptr_t>(node)>>1;
 }
 
 void  Node::loadKey(uintptr_t tid,uint8_t key[]) {
@@ -144,8 +146,6 @@ void Node::insertLeaf(Node* node,Node** nodeRef,uint8_t key, Node* newNode){
 
 
 void Node::insert(Node* node,Node** nodeRef,uint8_t key[],unsigned depth,uintptr_t value,unsigned maxKeyLength) {
-    // Insert the leaf value into the tree
-
     if (node==NULL) {
         *nodeRef=makeLeaf(value);
         return;
@@ -205,4 +205,42 @@ void Node::insert(Node* node,Node** nodeRef,uint8_t key[],unsigned depth,uintptr
 
     Node* newNode=makeLeaf(value);
     insertLeaf(node,nodeRef,key[depth],newNode);
+}
+
+Node* Node::lookup(Node* node,uint8_t key[],unsigned keyLength,unsigned depth,unsigned maxKeyLength) {
+
+    bool skippedPrefix=false; // Did we optimistically skip some prefix without checking it?
+
+    while (node!=NULL) {
+        if (isLeaf(node)) {
+            if (!skippedPrefix&&depth==keyLength) // No check required
+                return node;
+
+            if (depth!=keyLength) {
+                // Check leaf
+                uint8_t leafKey[maxKeyLength];
+                loadKey(getLeafValue(node),leafKey);
+                for (unsigned i=(skippedPrefix?0:depth);i<keyLength;i++)
+                    if (leafKey[i]!=key[i])
+                        return NULL;
+            }
+            return node;
+        }
+
+        if (node->prefixLength) {
+            if (node->prefixLength<maxPrefixLength) {
+//                return node;
+                for (unsigned pos=0;pos<node->prefixLength;pos++)
+                    if (key[depth+pos]!=node->prefix[pos])
+                        return NULL;
+            } else
+                skippedPrefix=true;
+            depth+=node->prefixLength;
+        }
+
+        node=findChild(key[depth],node);
+        depth++;
+    }
+
+    return NULL;
 }

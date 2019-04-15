@@ -178,6 +178,10 @@ TEST_CASE("ART Index", "[art]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(i) + ")"));
 	}
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+//    result = con.Query("SELECT sum(i) FROM integers WHERE i=5 ");
+//    REQUIRE(CHECK_COLUMN(result, 0, {5}));
+
+
     REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
     REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 
@@ -196,7 +200,5 @@ TEST_CASE("ART Index", "[art]") {
     REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
     REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
     REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
-
-
 
 }
