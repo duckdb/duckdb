@@ -13,7 +13,7 @@ typedef struct {
 	int closed;
 	int reset;
 	int initialized;
-	duckdb_result result;
+	std::unique_ptr<duckdb::MaterializedQueryResult> result;
 } duckdb_Cursor;
 
 extern PyTypeObject duckdb_CursorType;

@@ -58,7 +58,7 @@ PyObject *duckdb_cursor_execute(duckdb_Cursor *self, PyObject *args) {
 	PyObject *operation;
 
 	if (!check_cursor(self)) {
-		goto error;
+	//FIXME	goto error;
 	}
 
 	duckdb_cursor_close(self, NULL);
@@ -75,13 +75,14 @@ PyObject *duckdb_cursor_execute(duckdb_Cursor *self, PyObject *args) {
 		goto error;
 	}
 
-	duckdb_query(self->connection->conn, sql, &self->result);
-	if (self->result.error_message) {
-		PyErr_SetString(duckdb_DatabaseError, self->result.error_message);
+	self->result = self->connection->conn->Query(sql);
+	if (!self->result->success) {
+		PyErr_SetString(duckdb_DatabaseError, self->result->error.c_str());
 		goto error;
 	}
+
 	self->closed = 0;
-	self->rowcount = self->result.row_count;
+	self->rowcount = self->result->collection.count;
 
 error:
 	if (PyErr_Occurred()) {
@@ -136,16 +137,16 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 	// TODO make sure there is an active result set
 
 	PyObject *col_dict = PyDict_New();
-	for (size_t col_idx = 0; col_idx < self->result.column_count; col_idx++) {
-		duckdb_column col = self->result.columns[col_idx];
-		char *return_message = "";
-		PyObject *arr = (PyObject *)PyMaskedArray_FromCol(&self->result, col_idx, &return_message);
+	for (size_t col_idx = 0; col_idx < self->result->collection.column_count(); col_idx++) {
+		PyObject *arr = (PyObject *)PyMaskedArray_FromCol(self->result.get(), col_idx);
 		if (!arr) {
-			PyErr_SetString(duckdb_DatabaseError, return_message);
+			PyErr_SetString(duckdb_DatabaseError, "conversion error");
 			return NULL;
 		}
-		PyDict_SetItem(col_dict, PyUnicode_FromString(col.name), arr);
+		PyDict_SetItem(col_dict, PyUnicode_FromString(self->result->names[col_idx].c_str()), arr);
 	}
+
+
 	Py_INCREF(col_dict);
 	return col_dict;
 }
@@ -174,37 +175,44 @@ PyObject *duckdb_cursor_iternext(duckdb_Cursor *self) {
 		return NULL;
 	}
 
-	PyObject *row = PyList_New(self->result.column_count);
+	auto ncol = self->result->collection.column_count();
+
+	PyObject *row = PyList_New(ncol);
 
 	//	DUCKDB_TYPE_TIMESTAMP,
 	//	DUCKDB_TYPE_DATE,
 
-	for (size_t col_idx = 0; col_idx < self->result.column_count; col_idx++) {
+	// FIXME actually switch on SQL types
+	for (size_t col_idx = 0; col_idx < ncol; col_idx++) {
 		PyObject *val = NULL;
-		duckdb_column col = self->result.columns[col_idx];
-		if (col.nullmask[self->offset]) {
+		auto dval = self->result->collection.GetValue(col_idx, self->offset);
+
+		if (dval.is_null) {
 			PyList_SetItem(row, col_idx, Py_None);
 			continue;
 		}
-		switch (col.type) {
-		case DUCKDB_TYPE_BOOLEAN:
-		case DUCKDB_TYPE_TINYINT:
-			val = Py_BuildValue("b", ((int8_t *)col.data)[self->offset]);
+		switch (dval.type) {
+		case duckdb::TypeId::BOOLEAN:
+		case duckdb::TypeId::TINYINT:
+			val = Py_BuildValue("b", dval.value_.tinyint);
 			break;
-		case DUCKDB_TYPE_SMALLINT:
-			val = Py_BuildValue("h", ((int16_t *)col.data)[self->offset]);
+		case duckdb::TypeId::SMALLINT:
+			val = Py_BuildValue("h", dval.value_.smallint);
 			break;
-		case DUCKDB_TYPE_INTEGER:
-			val = Py_BuildValue("i", ((int32_t *)col.data)[self->offset]);
+		case duckdb::TypeId::INTEGER:
+			val = Py_BuildValue("i", dval.value_.integer);
 			break;
-		case DUCKDB_TYPE_BIGINT:
-			val = Py_BuildValue("L", ((int64_t *)col.data)[self->offset]);
+		case duckdb::TypeId::BIGINT:
+			val = Py_BuildValue("L", dval.value_.bigint);
 			break;
-		case DUCKDB_TYPE_DOUBLE:
-			val = Py_BuildValue("d", ((double *)col.data)[self->offset]);
+		case duckdb::TypeId::FLOAT:
+			val = Py_BuildValue("f", dval.value_.float_);
 			break;
-		case DUCKDB_TYPE_VARCHAR:
-			val = Py_BuildValue("s", duckdb_value_varchar_unsafe(&self->result, col_idx, self->offset));
+		case duckdb::TypeId::DOUBLE:
+			val = Py_BuildValue("d", dval.value_.double_);
+			break;
+		case duckdb::TypeId::VARCHAR:
+			val = Py_BuildValue("s", dval.str_value.c_str());
 			break;
 		default:
 			// TODO complain
@@ -231,8 +239,7 @@ PyObject *duckdb_cursor_close(duckdb_Cursor *self, PyObject *args) {
 	if (!duckdb_check_connection(self->connection)) {
 		return NULL;
 	}
-
-	duckdb_destroy_result(&self->result);
+	self->result = nullptr;
 
 	self->closed = 1;
 	self->rowcount = 0;

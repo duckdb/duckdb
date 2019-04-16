@@ -4,6 +4,10 @@
 #include "module.h"
 #include "pythread.h"
 
+
+#include "duckdb.hpp"
+
+
 _Py_IDENTIFIER(cursor);
 
 int duckdb_connection_init(duckdb_Connection *self, PyObject *args, PyObject *kwargs) {
@@ -11,28 +15,22 @@ int duckdb_connection_init(duckdb_Connection *self, PyObject *args, PyObject *kw
 
 	char *database;
 	PyObject *database_obj;
-	int rc;
 
 	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O&|", kwlist, PyUnicode_FSConverter, &database_obj)) {
 		return -1;
 	}
 
 	database = PyBytes_AsString(database_obj);
-
-	Py_BEGIN_ALLOW_THREADS;
-	rc = duckdb_open((const char *)database, &self->db);
-	Py_END_ALLOW_THREADS;
-
 	Py_DECREF(database_obj);
 
-	if (rc != DuckDBSuccess) {
+	Py_BEGIN_ALLOW_THREADS;
+	try {
+		self->db = duckdb::make_unique<duckdb::DuckDB>(database);
+		self->conn = duckdb::make_unique<duckdb::Connection>(*self->db.get());
+	} catch (...) {
 		return -1;
 	}
-
-	rc = duckdb_connect(self->db, &self->conn);
-	if (rc != DuckDBSuccess) {
-		return -1;
-	}
+	Py_END_ALLOW_THREADS;
 
 	self->initialized = 1;
 	self->DatabaseError = duckdb_DatabaseError;
@@ -66,11 +64,9 @@ PyObject *duckdb_connection_cursor(duckdb_Connection *self, PyObject *args, PyOb
 PyObject *duckdb_connection_close(duckdb_Connection *self, PyObject *args) {
 	if (self->db) {
 		Py_BEGIN_ALLOW_THREADS;
-		duckdb_disconnect(&self->conn);
-		duckdb_close(&self->db);
+		self->conn = nullptr;
+		self->db = nullptr;
 		Py_END_ALLOW_THREADS;
-		self->db = NULL;
-		self->conn = NULL;
 	}
 	Py_RETURN_NONE;
 }
