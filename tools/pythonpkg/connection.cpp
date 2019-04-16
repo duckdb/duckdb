@@ -3,12 +3,8 @@
 #include "cursor.h"
 #include "module.h"
 #include "pythread.h"
-
-
 #include "duckdb.hpp"
 
-
-_Py_IDENTIFIER(cursor);
 
 int duckdb_connection_init(duckdb_Connection *self, PyObject *args, PyObject *kwargs) {
 	static char *kwlist[] = {"database", NULL};
@@ -88,34 +84,6 @@ int duckdb_check_connection(duckdb_Connection *con) {
 	} else {
 		return 1;
 	}
-}
-
-PyObject *duckdb_connection_execute(duckdb_Connection *self, PyObject *args) {
-	PyObject *cursor = 0;
-	PyObject *result = 0;
-	PyObject *method = 0;
-
-	cursor = _PyObject_CallMethodId((PyObject *)self, &PyId_cursor, NULL);
-	if (!cursor) {
-		goto error;
-	}
-
-	method = PyObject_GetAttrString(cursor, "execute");
-	if (!method) {
-		Py_CLEAR(cursor);
-		goto error;
-	}
-
-	result = PyObject_CallObject(method, args);
-	if (!result) {
-		Py_CLEAR(cursor);
-	}
-
-error:
-	Py_XDECREF(result);
-	Py_XDECREF(method);
-
-	return cursor;
 }
 
 static const char connection_doc[] = PyDoc_STR("DuckDB database connection object.");

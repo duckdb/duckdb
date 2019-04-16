@@ -1,7 +1,12 @@
 #include "cursor.h"
 
 #include "module.h"
-#include "pandas.h"
+
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION // motherfucker
+
+#include <numpy/arrayobject.h>
+#include <numpy/npy_common.h>
+
 
 PyObject *duckdb_cursor_iternext(duckdb_Cursor *self);
 
@@ -132,22 +137,129 @@ PyObject *duckdb_cursor_fetchall(duckdb_Cursor *self) {
 }
 
 static PyObject *fromdict_ref = NULL;
+static PyObject *mafunc_ref = NULL;
+
+
+static uint8_t duckdb_type_to_numpy_type(duckdb::TypeId type) {
+	switch (type) {
+		case duckdb::TypeId::BOOLEAN:
+		case duckdb::TypeId::TINYINT:
+			return NPY_INT8;
+		case duckdb::TypeId::SMALLINT:
+			return NPY_INT16;
+		case duckdb::TypeId::INTEGER:
+			return NPY_INT32;
+		case duckdb::TypeId::BIGINT:
+			return NPY_INT64;
+		case duckdb::TypeId::FLOAT:
+			return NPY_FLOAT32;
+		case duckdb::TypeId::DOUBLE:
+			return NPY_FLOAT64;
+		case duckdb::TypeId::VARCHAR:
+			return NPY_OBJECT;
+		default:
+			assert(0);
+	}
+	return 0;
+}
+
+
+typedef struct {
+	PyObject *array = nullptr;
+	PyObject *nullmask = nullptr;
+	bool found_nil = false;
+} duckdb_numpy_result;
+
 
 PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 	// TODO make sure there is an active result set
 
-	PyObject *col_dict = PyDict_New();
-	for (size_t col_idx = 0; col_idx < self->result->collection.column_count(); col_idx++) {
-		PyObject *arr = (PyObject *)PyMaskedArray_FromCol(self->result.get(), col_idx);
-		if (!arr) {
-			PyErr_SetString(duckdb_DatabaseError, "conversion error");
+	auto result = self->result.get();
+	assert(result);
+
+	auto ncol = result->collection.column_count();
+	auto nrow = result->collection.count;
+
+	auto cols = new duckdb_numpy_result[ncol];
+	npy_intp dims[1] = {static_cast<npy_intp>(nrow)};
+
+	// step 1: allocate data and nullmasks for columns
+	for (size_t col_idx = 0; col_idx < ncol; col_idx++) {
+		cols[col_idx].array = PyArray_EMPTY(1, dims, duckdb_type_to_numpy_type(result->types[col_idx]), 0);
+		cols[col_idx].nullmask = PyArray_EMPTY(1, dims, NPY_BOOL, 0);
+		if (!cols[col_idx].array || !cols[col_idx].nullmask) {
+			PyErr_SetString(duckdb_DatabaseError, "memory allocation error");
 			return NULL;
 		}
-		PyDict_SetItem(col_dict, PyUnicode_FromString(self->result->names[col_idx].c_str()), arr);
 	}
 
+	// step 2: fetch into the allocated arrays
+	size_t offset = 0;
+	while(true) {
+		auto chunk = result->Fetch();
+		if (chunk->size() == 0) break;
+		for (size_t col_idx = 0; col_idx < ncol; col_idx++) {
 
-	Py_INCREF(col_dict);
+			auto duckdb_type = result->types[col_idx];
+			auto duckdb_type_size =  duckdb::GetTypeIdSize(duckdb_type);
+
+			char* array_data = (char*) PyArray_DATA((PyArrayObject *)cols[col_idx].array);
+			bool* mask_data = (bool *)PyArray_DATA((PyArrayObject *)cols[col_idx].nullmask);
+
+			// collect null mask into numpy array for masked arrays
+			for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
+				mask_data[chunk_idx + offset] = chunk->data[col_idx].nullmask[chunk_idx];
+				cols[col_idx].found_nil = cols[col_idx].found_nil || mask_data[chunk_idx + offset];
+			}
+
+			switch(duckdb_type) {
+			case duckdb::TypeId::VARCHAR:
+				for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
+					PyObject *str_obj = nullptr;
+					if (!mask_data[chunk_idx + offset]) {
+						str_obj = PyUnicode_FromString(((const char**) chunk->data[col_idx].data)[chunk_idx]);
+					}
+					((PyObject**) array_data)[offset + chunk_idx] = str_obj;
+				}
+				break;
+			default: // direct mapping types
+				// TODO need to assert the types
+				assert(duckdb::TypeIsConstantSize(duckdb_type));
+				memcpy(array_data + (offset * duckdb_type_size), chunk->data[col_idx].data, duckdb_type_size * chunk->size());
+			}
+		}
+		offset += chunk->size();
+	}
+
+	// step 4: convert to masked arrays
+	PyObject *col_dict = PyDict_New();
+	assert(mafunc_ref);
+
+	for (size_t col_idx = 0; col_idx < ncol; col_idx++) {
+		PyObject *mask;
+		PyObject *maargs;
+
+		if (!cols[col_idx].found_nil) {
+			maargs = PyTuple_New(1);
+			PyTuple_SetItem(maargs, 0, cols[col_idx].array);
+			Py_DECREF(cols[col_idx].nullmask);
+		} else {
+			maargs = PyTuple_New(2);
+			PyTuple_SetItem(maargs, 0, cols[col_idx].array);
+			PyTuple_SetItem(maargs, 1, cols[col_idx].nullmask);
+		}
+
+		// actually construct the mask by calling the masked array constructor
+		mask = PyObject_CallObject(mafunc_ref, maargs);
+		Py_DECREF(maargs);
+		if (!mask) {
+			PyErr_SetString(duckdb_DatabaseError, "unknown error");
+			return NULL;
+		}
+		PyDict_SetItem(col_dict, PyUnicode_FromString(self->result->names[col_idx].c_str()), mask);
+	}
+	delete[] cols;
+
 	return col_dict;
 }
 
@@ -316,6 +428,9 @@ static void *duckdb_pandas_init() {
 		import_array();
 	}
 	return NULL;
+
+
+
 }
 
 extern int duckdb_cursor_setup_types(void) {
@@ -332,6 +447,12 @@ extern int duckdb_cursor_setup_types(void) {
 	fromdict_ref = PyObject_GetAttrString(dataframe, "from_dict");
 	if (!fromdict_ref) {
 		return -1;
+	}
+
+	mafunc_ref = PyObject_GetAttrString(PyImport_Import(PyUnicode_FromString("numpy.ma")), "masked_array");
+	if (!mafunc_ref) {
+		return -1;
+
 	}
 
 	duckdb_CursorType.tp_new = PyType_GenericNew;

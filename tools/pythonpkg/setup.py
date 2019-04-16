@@ -47,7 +47,7 @@ class CustomInstallCommand(install):
         install.run(self)
 
 includes = [numpy.get_include(), '../../src/include', '.']
-sources = ['connection.cpp', 'cursor.cpp', 'module.cpp', 'pandas.cpp']
+sources = ['connection.cpp', 'cursor.cpp', 'module.cpp']
 
 libduckdb = Extension('duckdb',
     include_dirs=includes,
