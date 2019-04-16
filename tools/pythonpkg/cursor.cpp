@@ -7,7 +7,6 @@
 #include <numpy/arrayobject.h>
 #include <numpy/npy_common.h>
 
-
 PyObject *duckdb_cursor_iternext(duckdb_Cursor *self);
 
 static const char errmsg_fetch_across_rollback[] =
@@ -63,7 +62,7 @@ PyObject *duckdb_cursor_execute(duckdb_Cursor *self, PyObject *args) {
 	PyObject *operation;
 
 	if (!check_cursor(self)) {
-	//FIXME	goto error;
+		// FIXME	goto error;
 	}
 
 	duckdb_cursor_close(self, NULL);
@@ -139,37 +138,34 @@ PyObject *duckdb_cursor_fetchall(duckdb_Cursor *self) {
 static PyObject *fromdict_ref = NULL;
 static PyObject *mafunc_ref = NULL;
 
-
 static uint8_t duckdb_type_to_numpy_type(duckdb::TypeId type) {
 	switch (type) {
-		case duckdb::TypeId::BOOLEAN:
-		case duckdb::TypeId::TINYINT:
-			return NPY_INT8;
-		case duckdb::TypeId::SMALLINT:
-			return NPY_INT16;
-		case duckdb::TypeId::INTEGER:
-			return NPY_INT32;
-		case duckdb::TypeId::BIGINT:
-			return NPY_INT64;
-		case duckdb::TypeId::FLOAT:
-			return NPY_FLOAT32;
-		case duckdb::TypeId::DOUBLE:
-			return NPY_FLOAT64;
-		case duckdb::TypeId::VARCHAR:
-			return NPY_OBJECT;
-		default:
-			assert(0);
+	case duckdb::TypeId::BOOLEAN:
+	case duckdb::TypeId::TINYINT:
+		return NPY_INT8;
+	case duckdb::TypeId::SMALLINT:
+		return NPY_INT16;
+	case duckdb::TypeId::INTEGER:
+		return NPY_INT32;
+	case duckdb::TypeId::BIGINT:
+		return NPY_INT64;
+	case duckdb::TypeId::FLOAT:
+		return NPY_FLOAT32;
+	case duckdb::TypeId::DOUBLE:
+		return NPY_FLOAT64;
+	case duckdb::TypeId::VARCHAR:
+		return NPY_OBJECT;
+	default:
+		assert(0);
 	}
 	return 0;
 }
-
 
 typedef struct {
 	PyObject *array = nullptr;
 	PyObject *nullmask = nullptr;
 	bool found_nil = false;
 } duckdb_numpy_result;
-
 
 PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 	// TODO make sure there is an active result set
@@ -195,16 +191,17 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 
 	// step 2: fetch into the allocated arrays
 	size_t offset = 0;
-	while(true) {
+	while (true) {
 		auto chunk = result->Fetch();
-		if (chunk->size() == 0) break;
+		if (chunk->size() == 0)
+			break;
 		for (size_t col_idx = 0; col_idx < ncol; col_idx++) {
 
 			auto duckdb_type = result->types[col_idx];
-			auto duckdb_type_size =  duckdb::GetTypeIdSize(duckdb_type);
+			auto duckdb_type_size = duckdb::GetTypeIdSize(duckdb_type);
 
-			char* array_data = (char*) PyArray_DATA((PyArrayObject *)cols[col_idx].array);
-			bool* mask_data = (bool *)PyArray_DATA((PyArrayObject *)cols[col_idx].nullmask);
+			char *array_data = (char *)PyArray_DATA((PyArrayObject *)cols[col_idx].array);
+			bool *mask_data = (bool *)PyArray_DATA((PyArrayObject *)cols[col_idx].nullmask);
 
 			// collect null mask into numpy array for masked arrays
 			for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
@@ -212,20 +209,21 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 				cols[col_idx].found_nil = cols[col_idx].found_nil || mask_data[chunk_idx + offset];
 			}
 
-			switch(duckdb_type) {
+			switch (duckdb_type) {
 			case duckdb::TypeId::VARCHAR:
 				for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
 					PyObject *str_obj = nullptr;
 					if (!mask_data[chunk_idx + offset]) {
-						str_obj = PyUnicode_FromString(((const char**) chunk->data[col_idx].data)[chunk_idx]);
+						str_obj = PyUnicode_FromString(((const char **)chunk->data[col_idx].data)[chunk_idx]);
 					}
-					((PyObject**) array_data)[offset + chunk_idx] = str_obj;
+					((PyObject **)array_data)[offset + chunk_idx] = str_obj;
 				}
 				break;
 			default: // direct mapping types
 				// TODO need to assert the types
 				assert(duckdb::TypeIsConstantSize(duckdb_type));
-				memcpy(array_data + (offset * duckdb_type_size), chunk->data[col_idx].data, duckdb_type_size * chunk->size());
+				memcpy(array_data + (offset * duckdb_type_size), chunk->data[col_idx].data,
+				       duckdb_type_size * chunk->size());
 			}
 		}
 		offset += chunk->size();
@@ -428,9 +426,6 @@ static void *duckdb_pandas_init() {
 		import_array();
 	}
 	return NULL;
-
-
-
 }
 
 extern int duckdb_cursor_setup_types(void) {
@@ -452,7 +447,6 @@ extern int duckdb_cursor_setup_types(void) {
 	mafunc_ref = PyObject_GetAttrString(PyImport_Import(PyUnicode_FromString("numpy.ma")), "masked_array");
 	if (!mafunc_ref) {
 		return -1;
-
 	}
 
 	duckdb_CursorType.tp_new = PyType_GenericNew;

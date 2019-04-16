@@ -24,14 +24,13 @@
 #ifndef DUCKDB_CONNECTION_H
 #define DUCKDB_CONNECTION_H
 #include "Python.h"
+#include "duckdb.hpp"
 #include "module.h"
 #include "pythread.h"
 #include "structmember.h"
-#include "duckdb.hpp"
 
 typedef struct {
-	PyObject_HEAD
-	std::unique_ptr<duckdb::DuckDB> db;
+	PyObject_HEAD std::unique_ptr<duckdb::DuckDB> db;
 	std::unique_ptr<duckdb::Connection> conn;
 
 	int initialized;

@@ -1,10 +1,9 @@
 #include "connection.h"
 
 #include "cursor.h"
+#include "duckdb.hpp"
 #include "module.h"
 #include "pythread.h"
-#include "duckdb.hpp"
-
 
 int duckdb_connection_init(duckdb_Connection *self, PyObject *args, PyObject *kwargs) {
 	static char *kwlist[] = {"database", NULL};
