@@ -29,6 +29,8 @@ struct DataPointer {
 	uint32_t offset;
 };
 
+constexpr const size_t CHUNK_THRESHOLD = 1024000; //! 1000 data chunks
+
 //! StorageManager is responsible for managing the physical storage of the
 //! database on disk
 class StorageManager {

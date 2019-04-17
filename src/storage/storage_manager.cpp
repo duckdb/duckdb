@@ -76,8 +76,9 @@ void StorageManager::CreateCheckpoint() {
 	// we scan the schemas
 	database.catalog.schemas.Scan(*transaction,
 	                              [&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
-
+    //! This is the meta_block for the entire file
 	MetaBlockWriter meta_writer(*block_manager);
+    //! This is the meta_block for tables info
 	MetaBlockWriter table_storage_writer(*block_manager);
 	// first we write the amount of schemas
 	meta_writer.Write<uint32_t>(schemas.size());
@@ -92,10 +93,16 @@ void StorageManager::CreateCheckpoint() {
 		for (auto &table : tables) {
 			// write the table meta data
 			Serializer serializer;
+            //! and serialize the table information
 			table->Serialize(serializer);
-			auto result = serializer.GetData();
-			meta_writer.Write((const char*) result.data.get(), result.size);
+			auto serialized_data = serializer.GetData();
+            //! write the seralized size
+			meta_writer.Write<uint32_t>(serialized_data.size);
+            //! and the data itself
+			meta_writer.Write((const char *)serialized_data.data.get(), serialized_data.size);
+			//! write the blockId for the table info
 			meta_writer.Write(table_storage_writer.current_block->id);
+            //! and the offset to where the info starts
 			meta_writer.Write(table_storage_writer.current_block->offset);
 			// now we need to write the table data
 			WriteTable(*transaction, table, table_storage_writer);
@@ -103,8 +110,59 @@ void StorageManager::CreateCheckpoint() {
 	}
 }
 
-#define CHUNK_THRESHOLD 1024000
-
+void StorageManager::WriteTable(Transaction &transaction, TableCatalogEntry *table,
+                                MetaBlockWriter &table_storage_writer) {
+	// buffer chunks until our big buffer is full
+	auto collection = make_unique<ChunkCollection>();
+	ScanStructure ss;
+	table->storage->InitializeScan(ss);
+	// we want to fetch all the column ids from the scan
+	// so make a list of all column ids of the table
+	vector<column_t> column_ids;
+	for (auto &column : table->columns) {
+		column_ids.push_back(column.oid);
+	}
+    //! get all types and initialize the chunk
+	auto types = table->GetTypes();
+	DataChunk chunk;
+	chunk.Initialize(types);
+    //! This are pointers to the column data
+	auto column_pointers = unique_ptr<vector<DataPointer>[]>(new vector<DataPointer>[table->columns.size()]);
+	while (true) {
+		chunk.Reset();
+		// we scan the chunk
+		table->storage->Scan(transaction, chunk, column_ids, ss);
+		collection->Append(chunk);
+		if (collection->count >= CHUNK_THRESHOLD || chunk.size() == 0) {
+			if (collection->count > 0) {
+				// chunk collection is full or scan is finished: now actually store the data
+				for (size_t i = 0; i < table->storage->types.size(); i++) {
+					// for each column store the data
+					WriteColumn(table, *collection, i, column_pointers[i]);
+				}
+				// reset the collection
+				collection = make_unique<ChunkCollection>();
+			}
+			if (chunk.size() == 0) {
+				break;
+			}
+		}
+	}
+	// write the table storage information
+	table_storage_writer.Write<uint32_t>(table->columns.size());
+	for (size_t i = 0; i < table->columns.size(); i++) {
+		auto &data_pointer_list = column_pointers[i];
+		table_storage_writer.Write<uint32_t>(data_pointer_list.size());
+		// then write the data pointers themselves
+		for (size_t k = 0; k < data_pointer_list.size(); k++) {
+			auto &data_pointer = data_pointer_list[k];
+			table_storage_writer.Write<double>(data_pointer.min);
+			table_storage_writer.Write<double>(data_pointer.max);
+			table_storage_writer.Write<block_id_t>(data_pointer.block_id);
+			table_storage_writer.Write<uint32_t>(data_pointer.offset);
+		}
+	}
+}
 
 template<class T>
 static void WriteDataFromVector(Vector &vector, size_t start, size_t end, double &min, double &max, bool *&nullmask, T *&data) {
@@ -113,6 +171,7 @@ static void WriteDataFromVector(Vector &vector, size_t start, size_t end, double
 		*nullmask = vector.nullmask[k];
 		*data = vector_data[k];
 
+        //! store min and max
 		if (*data < min) {
 			min = *data;
 		}
@@ -221,57 +280,6 @@ void StorageManager::WriteColumn(TableCatalogEntry *table, ChunkCollection& coll
 
 		break;
 
-	}
-}
-
-void StorageManager::WriteTable(Transaction &transaction, TableCatalogEntry *table, MetaBlockWriter& table_storage_writer) {
-	// buffer chunks until our big buffer is full
-	auto collection = make_unique<ChunkCollection>();
-	ScanStructure ss;
-	table->storage->InitializeScan(ss);
-	// we want to fetch all the column ids from the scan
-	// so make a list of all column ids of the table
-	vector<column_t> column_ids;
-	for(auto &column : table->columns) {
-		column_ids.push_back(column.oid);
-	}
-	auto types = table->GetTypes();
-	DataChunk chunk;
-	chunk.Initialize(types);
-	auto column_pointers = unique_ptr<vector<DataPointer>[]>(new vector<DataPointer>[table->columns.size()]);
-	while (true) {
-		chunk.Reset();
-		// we scan the chunk
-		table->storage->Scan(transaction, chunk, column_ids, ss);
-		collection->Append(chunk);
-		if (collection->count >= CHUNK_THRESHOLD || chunk.size() == 0) {
-			if (collection->count > 0) {
-				// chunk collection is full or scan is finished: now actually store the data
-				for(size_t i = 0; i < table->storage->types.size(); i++) {
-					// for each column store the data
-					WriteColumn(table, *collection, i, column_pointers[i]);
-				}
-				// reset the collection
-				collection = make_unique<ChunkCollection>();
-			}
-			if (chunk.size() == 0) {
-				break;
-			}
-		}
-	}
-	// write the table storage information
-	table_storage_writer.Write<uint32_t>(table->columns.size());
-	for(size_t i = 0; i < table->columns.size(); i++) {
-		auto &data_pointer_list = column_pointers[i];
-		table_storage_writer.Write<uint32_t>(data_pointer_list.size());
-		// then write the data pointers themselves
-		for(size_t k = 0; k < data_pointer_list.size(); k++) {
-			auto &data_pointer = data_pointer_list[k];
-			table_storage_writer.Write<double>(data_pointer.min);
-			table_storage_writer.Write<double>(data_pointer.max);
-			table_storage_writer.Write<block_id_t>(data_pointer.block_id);
-			table_storage_writer.Write<uint32_t>(data_pointer.offset);
-		}
 	}
 }
 
