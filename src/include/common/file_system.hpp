@@ -19,6 +19,8 @@ bool DirectoryExists(const string &directory);
 void CreateDirectory(const string &directory);
 //! Recursively remove a directory and all files in it
 void RemoveDirectory(const string &directory);
+//! Remove the file
+void RemoveFile(const string &fpath);
 //! List files in a directory, invoking the callback method for each one
 bool ListFiles(const string &directory, std::function<void(string)> callback);
 //! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID properties

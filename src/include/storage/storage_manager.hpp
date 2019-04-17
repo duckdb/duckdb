@@ -17,8 +17,17 @@
 namespace duckdb {
 
 class Catalog;
+class ChunkCollection;
 class DuckDB;
 class TransactionManager;
+class TableCatalogEntry;
+
+struct DataPointer {
+	double min;
+	double max;
+	block_id_t block_id;
+	uint32_t offset;
+};
 
 //! StorageManager is responsible for managing the physical storage of the
 //! database on disk
@@ -42,14 +51,14 @@ private:
 	//! Load the database from a directory
 	void LoadDatabase();
 	//! Load the initial database from the main storage (without WAL). Returns which alternate storage to write to.
-	int LoadFromStorage();
+	void LoadFromStorage();
 	//! Checkpoint the current state of the WAL and flush it to the main storage. This should be called BEFORE any
 	//! connction is available because right now the checkpointing cannot be done online. (TODO)
-	void CreateCheckpoint(int iteration);
-	//! Builds the data blocks for physical storage
-	void BuildDataBlocks();
-	void CreateCheckpoint2(int iteration);
-	void LoadCheckpoint();
+	void CreateCheckpoint();
+
+
+	void WriteTable(Transaction &transaction, TableCatalogEntry *table, MetaBlockWriter& table_storage_writer);
+	void WriteColumn(TableCatalogEntry *table, ChunkCollection& collection, int32_t index, vector<DataPointer>& column_pointers);
 
 	//! The path of the database
 	string path;

@@ -5,8 +5,19 @@
 
 using namespace std;
 
-#ifndef _WIN32
 #include <cstdio>
+
+namespace duckdb {
+
+void RemoveFile(const string &fpath) {
+	if (remove(fpath.c_str()) != 0) {
+		throw IOException("Error deleting file");
+	}
+}
+
+}
+
+#ifndef _WIN32
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/types.h>
