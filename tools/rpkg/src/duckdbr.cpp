@@ -83,6 +83,7 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 				varvalue = PROTECT(NEW_INTEGER(nrows));
 				break;
 			case SQLTypeId::BIGINT:
+			case SQLTypeId::FLOAT:
 			case SQLTypeId::DOUBLE:
 			case SQLTypeId::DECIMAL:
 				varvalue = PROTECT(NEW_NUMERIC(nrows));
@@ -135,6 +136,9 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 				case TypeId::BIGINT:
 					vector_to_r<uint64_t, double>(chunk->data[col_idx], NUMERIC_POINTER(dest), dest_offset, NA_REAL);
 					break;
+				case TypeId::FLOAT:
+					vector_to_r<float, double>(chunk->data[col_idx], NUMERIC_POINTER(dest), dest_offset, NA_REAL);
+					break;
 				case TypeId::DOUBLE:
 					vector_to_r<double, double>(chunk->data[col_idx], NUMERIC_POINTER(dest), dest_offset, NA_REAL);
 					break;
@@ -182,7 +186,7 @@ SEXP duckdb_startup_R(SEXP dbdirsexp) {
 		Rf_error("duckdb_startup_R: Need single string parameter");
 	}
 	char *dbdir = (char *)CHAR(STRING_ELT(dbdirsexp, 0));
-	if (strcmp(dbdir, ":memory:") == 0) {
+	if (strlen(dbdir) == 0 || strcmp(dbdir, ":memory:") == 0) {
 		dbdir = NULL;
 	}
 

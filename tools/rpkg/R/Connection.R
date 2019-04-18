@@ -2,12 +2,21 @@
 
 NULL
 
-duckdb_connection <- function(duckdb_driver) {
-  # TODO: Add arguments
+duckdb_connection <- function(duckdb_driver, dbdir, debug) {
+    if (debug) {
+        message("CONNECT_START ", dbdir)
+      }
+  database_ref = .Call(duckdb_startup_R, dbdir)
+  if (debug) {
+        message("CONNECT_END ", dbdir)
+      }
   new(
     "duckdb_connection",
-    conn_ref = .Call(duckdb_connect_R, duckdb_driver@database_ref),
-    driver = duckdb_driver
+    dbdir=dbdir,
+    database_ref = database_ref,
+    conn_ref = .Call(duckdb_connect_R, database_ref),
+    driver = duckdb_driver,
+    debug = debug
   )
 }
 
@@ -16,7 +25,7 @@ duckdb_connection <- function(duckdb_driver) {
 setClass(
   "duckdb_connection",
   contains = "DBIConnection",
-  slots = list(conn_ref = "externalptr", driver = "duckdb_driver")
+  slots = list(dbdir= "character", database_ref = "externalptr", conn_ref = "externalptr", driver = "duckdb_driver", debug="logical")
 )
 
 #' @rdname DBI
@@ -24,7 +33,7 @@ setClass(
 #' @export
 setMethod("show", "duckdb_connection",
           function(object) {
-            cat(sprintf("<duckdb_connection %s driver=%s dbdir='%s'>\n", extptr_str(object@conn_ref), extptr_str(object@driver@database_ref), object@driver@dbdir))
+            cat(sprintf("<duckdb_connection %s dbdir='%s' database_ref=%s>\n", extptr_str(object@conn_ref), object@dbdir, extptr_str(object@database_ref)))
           })
 
 #' @rdname DBI
@@ -50,7 +59,6 @@ setMethod("dbDisconnect", "duckdb_connection",
               warning("Connection already closed.", call. = FALSE)
             }
             .Call(duckdb_disconnect_R, conn@conn_ref)
-            
             invisible(TRUE)
           })
 
@@ -59,6 +67,9 @@ setMethod("dbDisconnect", "duckdb_connection",
 #' @export
 setMethod("dbSendQuery", c("duckdb_connection", "character"),
           function(conn, statement, ...) {
+            if (conn@debug) {
+              message("Q ", statement)
+            }
 		    statement <- enc2utf8(statement)
             resultset <- .Call(duckdb_query_R, conn@conn_ref, statement)
             attr(resultset, "row.names") <-
@@ -77,6 +88,9 @@ setMethod("dbSendQuery", c("duckdb_connection", "character"),
 #' @export
 setMethod("dbSendStatement", c("duckdb_connection", "character"),
           function(conn, statement, ...) {
+            if (conn@debug) {
+              message("S ", statement)
+            }
 		    statement <- enc2utf8(statement)
             resultset <- .Call(duckdb_query_R, conn@conn_ref, statement)
             duckdb_result(
@@ -272,7 +286,7 @@ setMethod("dbRemoveTable", c("duckdb_connection", "character"),
 setMethod("dbGetInfo", "duckdb_connection",
           function(dbObj, ...) {
             list(
-              dbname = dbObj@driver@dbdir,
+              dbname = dbObj@dbdir,
               db.version = NA,
               username = NA,
               host = NA,
