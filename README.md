@@ -1,7 +1,12 @@
+<img align="left" src="logo/duckdb-logo.png" height="120">
+
 # DuckDB, the SQLite for Analytics
 [![Travis](https://api.travis-ci.org/cwida/duckdb.svg?branch=master)](https://travis-ci.org/cwida/duckdb)
 [![CodeFactor](https://www.codefactor.io/repository/github/cwida/duckdb/badge)](https://www.codefactor.io/repository/github/cwida/duckdb)
 [![Coverage Status](https://coveralls.io/repos/github/cwida/duckdb/badge.svg?branch=master)](https://coveralls.io/github/cwida/duckdb?branch=master)
+
+<br>
+
 
 # Requirements
 DuckDB requires [CMake](https://cmake.org) to be installed and a `C++11` compliant compiler. GCC 4.9 and newer, Clang 3.9 and newer and VisualStudio 2017 are tested on each revision.
@@ -10,7 +15,7 @@ DuckDB requires [CMake](https://cmake.org) to be installed and a `C++11` complia
 Run `make` in the root directory to compile the sources. For development, use `make debug` to build a non-optimized debug versoin. You may run `make unit` and `make allunit` to verify that your version works properly after making changes.
 
 # Usage
-A command line utility based on `sqlite3` can be found in either `build/rekease/tools/shell/shell` (release, the default) or `build/debug/tools/shell/shell` (debug).
+A command line utility based on `sqlite3` can be found in either `build/release/tools/shell/shell` (release, the default) or `build/debug/tools/shell/shell` (debug).
 
 # Embedding
 As DuckDB is an embedded database, there is no database server to launch or client to connect to a running server. However, the database server can be embedded directly into an application using the C or C++ bindings. The main build process creates the shared library `build/release/src/libduckdb.[so|dylib|dll]` that can be linked against. A static library is built as well.
