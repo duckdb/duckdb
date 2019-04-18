@@ -59,8 +59,8 @@ private:
 	void CreateCheckpoint();
 
 
-	void WriteTable(Transaction &transaction, TableCatalogEntry *table, MetaBlockWriter& table_storage_writer);
-	void WriteColumn(TableCatalogEntry *table, ChunkCollection& collection, int32_t index, vector<DataPointer>& column_pointers);
+	void WriteTableData(Transaction &transaction, TableCatalogEntry *table, MetaBlockWriter& table_storage_writer);
+	void WriteColumnData(TableCatalogEntry *table, ChunkCollection& collection, int32_t index, vector<DataPointer>& column_pointers);
 
 	//! The path of the database
 	string path;

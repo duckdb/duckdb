@@ -77,19 +77,19 @@ void StorageManager::CreateCheckpoint() {
 	database.catalog.schemas.Scan(*transaction,
 	                              [&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
     //! This is the meta_block for the entire file
-	MetaBlockWriter meta_writer(*block_manager);
+	MetaBlockWriter main_meta_writer(*block_manager);
     //! This is the meta_block for tables info
-	MetaBlockWriter table_storage_writer(*block_manager);
+	MetaBlockWriter table_meta_writer(*block_manager);
 	// first we write the amount of schemas
-	meta_writer.Write<uint32_t>(schemas.size());
+	main_meta_writer.Write<uint32_t>(schemas.size());
 	// now for each schema we write the meta info of the schema
 	for (auto &schema : schemas) {
-		meta_writer.WriteString(schema->name);
-		// then, we fetch the tables
+		main_meta_writer.WriteString(schema->name);
+		// then, we fetch the tables information
 		vector<TableCatalogEntry *> tables;
 		schema->tables.Scan(*transaction, [&](CatalogEntry *entry) { tables.push_back((TableCatalogEntry *)entry); });
-		// and store the amount of tables
-		meta_writer.Write<uint32_t>(tables.size());
+		// and store the amount of tables in the meta_block
+		main_meta_writer.Write<uint32_t>(tables.size());
 		for (auto &table : tables) {
 			// write the table meta data
 			Serializer serializer;
@@ -97,20 +97,20 @@ void StorageManager::CreateCheckpoint() {
 			table->Serialize(serializer);
 			auto serialized_data = serializer.GetData();
             //! write the seralized size
-			meta_writer.Write<uint32_t>(serialized_data.size);
+			main_meta_writer.Write<uint32_t>(serialized_data.size);
             //! and the data itself
-			meta_writer.Write((const char *)serialized_data.data.get(), serialized_data.size);
+			main_meta_writer.Write((const char *)serialized_data.data.get(), serialized_data.size);
 			//! write the blockId for the table info
-			meta_writer.Write(table_storage_writer.current_block->id);
+			main_meta_writer.Write(table_meta_writer.current_block->id);
             //! and the offset to where the info starts
-			meta_writer.Write(table_storage_writer.current_block->offset);
+			main_meta_writer.Write(table_meta_writer.current_block->offset);
 			// now we need to write the table data
-			WriteTable(*transaction, table, table_storage_writer);
+			WriteTableData(*transaction, table, table_meta_writer);
 		}
 	}
 }
 
-void StorageManager::WriteTable(Transaction &transaction, TableCatalogEntry *table,
+void StorageManager::WriteTableData(Transaction &transaction, TableCatalogEntry *table,
                                 MetaBlockWriter &table_storage_writer) {
 	// buffer chunks until our big buffer is full
 	auto collection = make_unique<ChunkCollection>();
@@ -138,7 +138,7 @@ void StorageManager::WriteTable(Transaction &transaction, TableCatalogEntry *tab
 				// chunk collection is full or scan is finished: now actually store the data
 				for (size_t i = 0; i < table->storage->types.size(); i++) {
 					// for each column store the data
-					WriteColumn(table, *collection, i, column_pointers[i]);
+					WriteColumnData(table, *collection, i, column_pointers[i]);
 				}
 				// reset the collection
 				collection = make_unique<ChunkCollection>();
@@ -149,8 +149,10 @@ void StorageManager::WriteTable(Transaction &transaction, TableCatalogEntry *tab
 		}
 	}
 	// write the table storage information
+    // first, write the amount of columns
 	table_storage_writer.Write<uint32_t>(table->columns.size());
 	for (size_t i = 0; i < table->columns.size(); i++) {
+        // get a reference to the data column
 		auto &data_pointer_list = column_pointers[i];
 		table_storage_writer.Write<uint32_t>(data_pointer_list.size());
 		// then write the data pointers themselves
@@ -164,14 +166,15 @@ void StorageManager::WriteTable(Transaction &transaction, TableCatalogEntry *tab
 	}
 }
 
-template<class T>
-static void WriteDataFromVector(Vector &vector, size_t start, size_t end, double &min, double &max, bool *&nullmask, T *&data) {
-	T* vector_data = (T*) vector.data;
-	for(size_t k = start; k < end; k++) {
+template <class T>
+static void WriteDataFromVector(Vector &vector, size_t start, size_t end, double &min, double &max, bool *&nullmask,
+                                T *&data) {
+	T *vector_data = (T *)vector.data;
+	for (size_t k = start; k < end; k++) {
 		*nullmask = vector.nullmask[k];
 		*data = vector_data[k];
 
-        //! store min and max
+		//! store min and max
 		if (*data < min) {
 			min = *data;
 		}
@@ -184,30 +187,32 @@ static void WriteDataFromVector(Vector &vector, size_t start, size_t end, double
 	}
 }
 
-
-template<class T>
-static char* WriteDataFromCollection(ChunkCollection& collection, size_t column_index, size_t start, size_t end, double &min, double &max, bool *nullmask, char *dataptr) {
-	auto data = (T*) dataptr;
+template <class T>
+static char *WriteDataFromCollection(ChunkCollection &collection, size_t column_index, size_t start, size_t end,
+                                     double &min, double &max, bool *nullmask, char *dataptr) {
+	auto data = (T *)dataptr;
 	// write
 	size_t start_chunk = collection.LocateChunk(start);
 	size_t end_chunk = collection.LocateChunk(end);
 
 	// first chunk: might not write everything
 	size_t chunk_start = start % STANDARD_VECTOR_SIZE;
-	WriteDataFromVector(collection.chunks[start_chunk]->data[column_index], chunk_start, collection.chunks[start_chunk]->size(), min, max, nullmask, data);
+	WriteDataFromVector(collection.chunks[start_chunk]->data[column_index], chunk_start,
+	                    collection.chunks[start_chunk]->size(), min, max, nullmask, data);
 	// for everything in the middle we write everything
-	for(size_t chunk_idx = start_chunk + 1; chunk_idx < end_chunk; chunk_idx++) {
-		WriteDataFromVector(collection.chunks[chunk_idx]->data[column_index], 0, collection.chunks[chunk_idx]->size(), min, max, nullmask, data);
+	for (size_t chunk_idx = start_chunk + 1; chunk_idx < end_chunk; chunk_idx++) {
+		WriteDataFromVector(collection.chunks[chunk_idx]->data[column_index], 0, collection.chunks[chunk_idx]->size(),
+		                    min, max, nullmask, data);
 	}
-
 	// last chunk: might not write everything either
 	size_t chunk_end = end % STANDARD_VECTOR_SIZE;
 	WriteDataFromVector(collection.chunks[end_chunk]->data[column_index], 0, chunk_end, min, max, nullmask, data);
-	return (char*) data;
+	return (char *)data;
 }
 
-static char* WriteDataFromCollection(TypeId type, ChunkCollection& collection, size_t column_index, size_t start, size_t end, double &min, double &max, bool *nullmask, char *data) {
-	switch(type) {
+static char *WriteDataFromCollection(TypeId type, ChunkCollection &collection, size_t column_index, size_t start,
+                                     size_t end, double &min, double &max, bool *nullmask, char *data) {
+	switch (type) {
 	case TypeId::BOOLEAN:
 		return WriteDataFromCollection<bool>(collection, column_index, start, end, min, max, nullmask, data);
 	case TypeId::TINYINT:
@@ -227,9 +232,10 @@ static char* WriteDataFromCollection(TypeId type, ChunkCollection& collection, s
 	}
 }
 
-void StorageManager::WriteColumn(TableCatalogEntry *table, ChunkCollection& collection, int32_t column_index, vector<DataPointer>& column_pointers) {
+void StorageManager::WriteColumnData(TableCatalogEntry *table, ChunkCollection &collection, int32_t column_index,
+                                     vector<DataPointer> &column_pointers) {
 	auto internal_type = table->storage->types[column_index];
-	switch(internal_type) {
+	switch (internal_type) {
 	case TypeId::VARCHAR:
 		// string column
 		throw NotImplementedException("Not checkpointing string columns yet");
@@ -241,7 +247,7 @@ void StorageManager::WriteColumn(TableCatalogEntry *table, ChunkCollection& coll
 		size_t remaining_size = initial_size;
 		// take tuples until we can't anymore
 		size_t last_write = 0;
-		for(size_t i = 0; i < collection.count; i++) {
+		for (size_t i = 0; i < collection.count; i++) {
 			int tuple_size = GetTypeIdSize(internal_type) + sizeof(char);
 			if (tuple_size > remaining_size || i + 1 == collection.count) {
 				auto stored_buffer = unique_ptr<char[]>(new char[BLOCK_SIZE]);
@@ -250,36 +256,37 @@ void StorageManager::WriteColumn(TableCatalogEntry *table, ChunkCollection& coll
 				// set the metadata first
 				size_t tuple_count = i - last_write;
 				// tuple count
-				*((uint32_t*)buffer) = tuple_count;
+				*((uint32_t *)buffer) = tuple_count;
 				buffer += sizeof(uint32_t);
 				// compression type
-				*((uint32_t*)buffer) = 0;
+				*((uint32_t *)buffer) = 0;
 				buffer += sizeof(uint32_t);
 				// data offset
-				*((uint32_t*)buffer) = tuple_count * sizeof(char);
+				*((uint32_t *)buffer) = tuple_count * sizeof(char);
 				buffer += sizeof(uint32_t);
 
-				DataPointer pointer;
-				pointer.min = numeric_limits<double>::max();
-				pointer.max = numeric_limits<double>::min();
+				DataPointer data_pointer;
+				data_pointer.min = numeric_limits<double>::max();
+				data_pointer.max = numeric_limits<double>::min();
 
-				bool *nullmask = (bool*) buffer;
-				char *end = WriteDataFromCollection(internal_type, collection, column_index, last_write, i, pointer.min, pointer.max, nullmask, buffer + tuple_count * sizeof(char));
+				bool *nullmask = (bool *)buffer;
+				char *end =
+				    WriteDataFromCollection(internal_type, collection, column_index, last_write, i, data_pointer.min,
+				                            data_pointer.max, nullmask, buffer + tuple_count * sizeof(char));
 
 				auto block = block_manager->CreateBlock();
 				block->Write(stored_buffer.get(), end - stored_buffer.get());
 
-				pointer.block_id = block->id;
-				pointer.offset = 0;
+				data_pointer.block_id = block->id;
+				data_pointer.offset = 0;
 
-				column_pointers.push_back(pointer);
+				column_pointers.push_back(data_pointer);
 
 				last_write = i;
 			}
 		}
 
 		break;
-
 	}
 }
 

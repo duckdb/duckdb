@@ -24,7 +24,7 @@ void DirectoryBlockManager::Flush(unique_ptr<Block> &block) {
 	assert(block->offset > 0);
 	// the amount of data to be flushed
 	auto buffered_size = block->offset;
-	// delegates the writing to disk to block
+	// delegates the writing to block object
 	block->Write(data_buffer.get(), buffered_size);
 	// calls deleter for the old buffer and reset it
 	data_buffer.reset(new char[BLOCK_SIZE]);
