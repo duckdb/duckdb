@@ -9,7 +9,6 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/fstream_util.hpp"
 
 namespace duckdb {
 class DataChunk;
@@ -28,8 +27,7 @@ class Block {
 public:
 	Block(block_id_t id) : id(id) {
 	}
-	virtual ~Block() {
-	}
+	virtual ~Block() = default;
 
 	//! Writes new contents to the block
 	virtual void Write(char *buffer, size_t count) = 0;
@@ -37,8 +35,6 @@ public:
 	virtual size_t Read(char *buffer) = 0;
 	//! Read a set amount of bytes from a block into a buffer
 	virtual void Read(char *buffer, size_t offset, size_t count) = 0;
-
-	virtual bool HasNoSpace(DataChunk &chunk) = 0;
 
 	template <class T> T Read(uint32_t offset) {
 		T element;

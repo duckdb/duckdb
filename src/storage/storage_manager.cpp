@@ -63,6 +63,8 @@ void StorageManager::LoadDatabase() {
 			wal.Replay(wal_path);
 			// checkpoint the WAL
 			CreateCheckpoint();
+			// remove the WAL
+			RemoveFile(wal_path);
 		}
 	}
 	// initialize the WAL file
@@ -72,46 +74,62 @@ void StorageManager::LoadDatabase() {
 void StorageManager::CreateCheckpoint() {
 	auto transaction = database.transaction_manager.StartTransaction();
 
+    //! Set up the writers for the checkpoints
+	metadata_writer = make_unique<MetaBlockWriter>(*block_manager);
+	tabledata_writer = make_unique<MetaBlockWriter>(*block_manager);
+
+	// get the
+	auto meta_block = metadata_writer->current_block->id;
+
 	vector<SchemaCatalogEntry *> schemas;
 	// we scan the schemas
 	database.catalog.schemas.Scan(*transaction,
 	                              [&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
-    //! This is the meta_block for the entire file
-	MetaBlockWriter main_meta_writer(*block_manager);
-    //! This is the meta_block for tables info
-	MetaBlockWriter table_meta_writer(*block_manager);
-	// first we write the amount of schemas
-	main_meta_writer.Write<uint32_t>(schemas.size());
-	// now for each schema we write the meta info of the schema
+	// write the actual data into the database
+	// write the amount of schemas
+	metadata_writer->Write<uint32_t>(schemas.size());
 	for (auto &schema : schemas) {
-		main_meta_writer.WriteString(schema->name);
-		// then, we fetch the tables information
-		vector<TableCatalogEntry *> tables;
-		schema->tables.Scan(*transaction, [&](CatalogEntry *entry) { tables.push_back((TableCatalogEntry *)entry); });
-		// and store the amount of tables in the meta_block
-		main_meta_writer.Write<uint32_t>(tables.size());
-		for (auto &table : tables) {
-			// write the table meta data
-			Serializer serializer;
-            //! and serialize the table information
-			table->Serialize(serializer);
-			auto serialized_data = serializer.GetData();
-            //! write the seralized size
-			main_meta_writer.Write<uint32_t>(serialized_data.size);
-            //! and the data itself
-			main_meta_writer.Write((const char *)serialized_data.data.get(), serialized_data.size);
-			//! write the blockId for the table info
-			main_meta_writer.Write(table_meta_writer.current_block->id);
-            //! and the offset to where the info starts
-			main_meta_writer.Write(table_meta_writer.current_block->offset);
-			// now we need to write the table data
-			WriteTableData(*transaction, table, table_meta_writer);
-		}
+		WriteSchema(*transaction, schema);
+	}
+	// flush all the data to disk
+	metadata_writer->Flush();
+	tabledata_writer->Flush();
+	// finally write the updated header
+	block_manager->WriteHeader(STORAGE_VERSION, meta_block);
+}
+
+void StorageManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry *schema) {
+	// write the name of the schema
+	metadata_writer->WriteString(schema->name);
+	// then, we fetch the tables information
+	vector<TableCatalogEntry *> tables;
+	schema->tables.Scan(transaction, [&](CatalogEntry *entry) { tables.push_back((TableCatalogEntry *)entry); });
+	// and store the amount of tables in the meta_block
+	metadata_writer->Write<uint32_t>(tables.size());
+	for (auto &table : tables) {
+		WriteTable(transaction, table);
 	}
 }
 
-void StorageManager::WriteTableData(Transaction &transaction, TableCatalogEntry *table,
-                                MetaBlockWriter &table_storage_writer) {
+void StorageManager::WriteTable(Transaction &transaction, TableCatalogEntry *table) {
+	// write the table meta data
+	Serializer serializer;
+	//! and serialize the table information
+	table->Serialize(serializer);
+	auto serialized_data = serializer.GetData();
+	//! write the seralized size
+	metadata_writer->Write<uint32_t>(serialized_data.size);
+	//! and the data itself
+	metadata_writer->Write((const char *)serialized_data.data.get(), serialized_data.size);
+	//! write the blockId for the table info
+	metadata_writer->Write(tabledata_writer->current_block->id);
+	//! and the offset to where the info starts
+	metadata_writer->Write(tabledata_writer->current_block->offset);
+	// now we need to write the table data
+	WriteTableData(transaction, table);
+}
+
+void StorageManager::WriteTableData(Transaction &transaction, TableCatalogEntry *table) {
 	// buffer chunks until our big buffer is full
 	auto collection = make_unique<ChunkCollection>();
 	ScanStructure ss;
@@ -150,18 +168,18 @@ void StorageManager::WriteTableData(Transaction &transaction, TableCatalogEntry 
 	}
 	// write the table storage information
     // first, write the amount of columns
-	table_storage_writer.Write<uint32_t>(table->columns.size());
+	tabledata_writer->Write<uint32_t>(table->columns.size());
 	for (size_t i = 0; i < table->columns.size(); i++) {
         // get a reference to the data column
 		auto &data_pointer_list = column_pointers[i];
-		table_storage_writer.Write<uint32_t>(data_pointer_list.size());
+		tabledata_writer->Write<uint32_t>(data_pointer_list.size());
 		// then write the data pointers themselves
 		for (size_t k = 0; k < data_pointer_list.size(); k++) {
 			auto &data_pointer = data_pointer_list[k];
-			table_storage_writer.Write<double>(data_pointer.min);
-			table_storage_writer.Write<double>(data_pointer.max);
-			table_storage_writer.Write<block_id_t>(data_pointer.block_id);
-			table_storage_writer.Write<uint32_t>(data_pointer.offset);
+			tabledata_writer->Write<double>(data_pointer.min);
+			tabledata_writer->Write<double>(data_pointer.max);
+			tabledata_writer->Write<block_id_t>(data_pointer.block_id);
+			tabledata_writer->Write<uint32_t>(data_pointer.offset);
 		}
 	}
 }
@@ -291,6 +309,7 @@ void StorageManager::WriteColumnData(TableCatalogEntry *table, ChunkCollection &
 }
 
 void StorageManager::LoadFromStorage() {
+
 
 }
 

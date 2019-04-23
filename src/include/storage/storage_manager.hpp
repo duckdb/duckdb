@@ -59,7 +59,9 @@ private:
 	void CreateCheckpoint();
 
 
-	void WriteTableData(Transaction &transaction, TableCatalogEntry *table, MetaBlockWriter& table_storage_writer);
+	void WriteSchema(Transaction &transaction, SchemaCatalogEntry *schema);
+	void WriteTable(Transaction &transaction, TableCatalogEntry *table);
+	void WriteTableData(Transaction &transaction, TableCatalogEntry *table);
 	void WriteColumnData(TableCatalogEntry *table, ChunkCollection& collection, int32_t index, vector<DataPointer>& column_pointers);
 
 	//! The path of the database
@@ -68,6 +70,10 @@ private:
 	DuckDB &database;
 	//! The WriteAheadLog of the storage manager
 	WriteAheadLog wal;
+
+	unique_ptr<MetaBlockWriter> metadata_writer;
+	unique_ptr<MetaBlockWriter> tabledata_writer;
+
 };
 
 } // namespace duckdb
