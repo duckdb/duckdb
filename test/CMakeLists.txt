@@ -17,7 +17,8 @@ IF (NOT WIN32)
   add_subdirectory(sqlite)
   add_subdirectory(sqlsmith)
   add_subdirectory(tpce)
-ENDIF()
+  add_subdirectory(persistence)
+ ENDIF()
 
 add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
 
