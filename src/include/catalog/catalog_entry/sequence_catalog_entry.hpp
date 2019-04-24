@@ -11,6 +11,9 @@
 #include "catalog/catalog_entry.hpp"
 #include "parser/parsed_data.hpp"
 
+#include <atomic>
+#include <mutex>
+
 namespace duckdb {
 
 class SchemaCatalogEntry;
