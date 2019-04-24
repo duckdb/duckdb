@@ -1,38 +1,31 @@
 #include "connection.h"
 
 #include "cursor.h"
+#include "duckdb.hpp"
 #include "module.h"
 #include "pythread.h"
-
-_Py_IDENTIFIER(cursor);
 
 int duckdb_connection_init(duckdb_Connection *self, PyObject *args, PyObject *kwargs) {
 	static char *kwlist[] = {"database", NULL};
 
 	char *database;
 	PyObject *database_obj;
-	int rc;
 
 	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O&|", kwlist, PyUnicode_FSConverter, &database_obj)) {
 		return -1;
 	}
 
 	database = PyBytes_AsString(database_obj);
-
-	Py_BEGIN_ALLOW_THREADS;
-	rc = duckdb_open((const char *)database, &self->db);
-	Py_END_ALLOW_THREADS;
-
 	Py_DECREF(database_obj);
 
-	if (rc != DuckDBSuccess) {
+	Py_BEGIN_ALLOW_THREADS;
+	try {
+		self->db = duckdb::make_unique<duckdb::DuckDB>(database);
+		self->conn = duckdb::make_unique<duckdb::Connection>(*self->db.get());
+	} catch (...) {
 		return -1;
 	}
-
-	rc = duckdb_connect(self->db, &self->conn);
-	if (rc != DuckDBSuccess) {
-		return -1;
-	}
+	Py_END_ALLOW_THREADS;
 
 	self->initialized = 1;
 	self->DatabaseError = duckdb_DatabaseError;
@@ -66,11 +59,9 @@ PyObject *duckdb_connection_cursor(duckdb_Connection *self, PyObject *args, PyOb
 PyObject *duckdb_connection_close(duckdb_Connection *self, PyObject *args) {
 	if (self->db) {
 		Py_BEGIN_ALLOW_THREADS;
-		duckdb_disconnect(&self->conn);
-		duckdb_close(&self->db);
+		self->conn = nullptr;
+		self->db = nullptr;
 		Py_END_ALLOW_THREADS;
-		self->db = NULL;
-		self->conn = NULL;
 	}
 	Py_RETURN_NONE;
 }
@@ -92,34 +83,6 @@ int duckdb_check_connection(duckdb_Connection *con) {
 	} else {
 		return 1;
 	}
-}
-
-PyObject *duckdb_connection_execute(duckdb_Connection *self, PyObject *args) {
-	PyObject *cursor = 0;
-	PyObject *result = 0;
-	PyObject *method = 0;
-
-	cursor = _PyObject_CallMethodId((PyObject *)self, &PyId_cursor, NULL);
-	if (!cursor) {
-		goto error;
-	}
-
-	method = PyObject_GetAttrString(cursor, "execute");
-	if (!method) {
-		Py_CLEAR(cursor);
-		goto error;
-	}
-
-	result = PyObject_CallObject(method, args);
-	if (!result) {
-		Py_CLEAR(cursor);
-	}
-
-error:
-	Py_XDECREF(result);
-	Py_XDECREF(method);
-
-	return cursor;
 }
 
 static const char connection_doc[] = PyDoc_STR("DuckDB database connection object.");

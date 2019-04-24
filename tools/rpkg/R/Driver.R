@@ -18,13 +18,13 @@ NULL
 #' #' library(DBI)
 #' duckdb::duckdb()
 #' }
-duckdb <- function(dbdir=":memory:") {
-  new("duckdb_driver", dbdir=dbdir, database_ref=.Call(duckdb_startup_R, dbdir))
+duckdb <- function() {
+  new("duckdb_driver")
 }
 
 #' @rdname DBI
 #' @export
-setClass("duckdb_driver", contains = "DBIDriver", slots=list(dbdir="character", database_ref="externalptr"))
+setClass("duckdb_driver", contains = "DBIDriver")
 
 extptr_str <- function(e, n=5) {
   x <- .Call(duckdb_ptr_to_str, e)
@@ -37,7 +37,7 @@ extptr_str <- function(e, n=5) {
 setMethod(
   "show", "duckdb_driver",
   function(object) {
-    cat(sprintf("<duckdb_driver %s dbdir='%s'>\n", extptr_str(object@database_ref), object@dbdir))
+    cat("<duckdb_driver>\n")
   })
 
 #' @rdname DBI
@@ -45,8 +45,11 @@ setMethod(
 #' @export
 setMethod(
   "dbConnect", "duckdb_driver",
-  function(drv, ...) {
-    duckdb_connection(drv)
+  function(drv, dbdir=":memory:", ..., debug=getOption("duckdb.debug", FALSE), dbname=NA) {
+    if (!missing(dbname)) {
+      dbdir <- dbname
+    }
+    duckdb_connection(drv, dbdir=dbdir, debug=debug)
   }
 )
 
@@ -102,6 +105,7 @@ setMethod(
 
 #' @export
 duckdb_shutdown <- function(drv) {
+  stop("FIXME")
   if (!is(drv, "duckdb_driver")) {
     stop("pass a duckdb_driver object")
   }

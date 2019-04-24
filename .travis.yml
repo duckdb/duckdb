@@ -169,7 +169,7 @@ matrix:
 
 
     - os: windows
-      name: VS 2018
+      name: VS 2017
 
       language: c
 

@@ -47,18 +47,18 @@ class CustomInstallCommand(install):
         install.run(self)
 
 includes = [numpy.get_include(), '../../src/include', '.']
-sources = ['connection.c', 'cursor.c', 'module.c', 'pandas.c']
+sources = ['connection.cpp', 'cursor.cpp', 'module.cpp']
 
 libduckdb = Extension('duckdb',
     include_dirs=includes,
     sources=sources,
-    extra_compile_args=['-std=c99', '-Wall'],
+    extra_compile_args=['-std=c++11', '-Wall'],
     language='c++', # for linking c++ stdlib
     extra_objects=['../../build/release_notest/src/%sduckdb_static.%s' % (lib_prefix, archive_ext), '../../build/release_notest/third_party/libpg_query/%spg_query.%s' % (lib_prefix, archive_ext)])
 
 setup(
     name = "duckdb",
-    version = '0.0.1',
+    version = '0.0.2',
     description = 'DuckDB embedded database',
     keywords = 'DuckDB Database SQL OLAP',
     url="https://github.com/cwida/duckdb",
@@ -70,11 +70,7 @@ setup(
     setup_requires=['pytest-runner'],
     tests_require=['pytest'],
     classifiers = [
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
-        'Programming Language :: C',
-        'Topic :: Database',
         'Topic :: Database :: Database Engines/Servers',
         'Intended Audience :: Developers',
         'Development Status :: 3 - Alpha'
