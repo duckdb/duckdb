@@ -326,7 +326,7 @@ enum class JoinType : uint8_t {
 
 enum class IndexType {
 	ORDER_INDEX = 1, // Order Index
-	ART = 2        // Adaptive Radix Tree
+	ART = 2          // Adaptive Radix Tree
 };
 
 //===--------------------------------------------------------------------===//

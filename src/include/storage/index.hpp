@@ -30,9 +30,11 @@ struct IndexScanState {
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
 public:
-	Index(IndexType type,vector<unique_ptr<Expression>> expressions,vector<unique_ptr<Expression>> unbound_expressions) : type(type),expressions(move(expressions)),unbound_expressions(move(unbound_expressions)) {
+	Index(IndexType type, vector<unique_ptr<Expression>> expressions,
+	      vector<unique_ptr<Expression>> unbound_expressions)
+	    : type(type), expressions(move(expressions)), unbound_expressions(move(unbound_expressions)) {
 	}
-	virtual ~Index()=default;
+	virtual ~Index() = default;
 
 	IndexType type;
 	//! The expressions to evaluate

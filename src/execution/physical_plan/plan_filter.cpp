@@ -10,7 +10,6 @@
 using namespace duckdb;
 using namespace std;
 
-
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalFilter &op) {
 	assert(op.children.size() == 1);
 	unique_ptr<PhysicalOperator> plan = CreatePlan(*op.children[0]);

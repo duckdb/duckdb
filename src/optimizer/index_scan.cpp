@@ -15,9 +15,9 @@ using namespace std;
 unique_ptr<LogicalOperator> IndexScan::Optimize(unique_ptr<LogicalOperator> op) {
 	if (op->type == LogicalOperatorType::FILTER && op->children[0]->type == LogicalOperatorType::GET)
 		return TransformFilterToIndexScan(move(op));
-        for (auto &child : op->children) {
-            child = Optimize(move(child));
-        }
+	for (auto &child : op->children) {
+		child = Optimize(move(child));
+	}
 	return op;
 }
 
@@ -53,8 +53,7 @@ unique_ptr<LogicalOperator> IndexScan::TransformFilterToIndexScan(unique_ptr<Log
 			// match on a comparison type
 			matcher.expr_type = make_unique<ComparisonExpressionTypeMatcher>();
 			// match on a constant comparison with the indexed expression
-			matcher.matchers.push_back(
-			    make_unique<ExpressionEqualityMatcher>(index->unbound_expressions[0].get()));
+			matcher.matchers.push_back(make_unique<ExpressionEqualityMatcher>(index->unbound_expressions[0].get()));
 			matcher.matchers.push_back(make_unique<ConstantExpressionMatcher>());
 
 			matcher.policy = SetMatcher::Policy::UNORDERED;

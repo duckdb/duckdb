@@ -393,7 +393,7 @@ ExternalFileFormat StringToExternalFileFormat(const string &str) {
 
 IndexType StringToIndexType(const string &str) {
 	string upper_str = StringUtil::Upper(str);
-     if (upper_str == "ORDER_INDEX") {
+	if (upper_str == "ORDER_INDEX") {
 		return IndexType::ORDER_INDEX;
 	} else if (upper_str == "ART") {
 		return IndexType::ART;

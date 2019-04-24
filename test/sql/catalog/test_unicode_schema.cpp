@@ -21,7 +21,8 @@ TEST_CASE("Unicode schema", "[catalog]") {
 	                          "'Through the Looking-Glass', '🔮', 2);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO 👤🏠📕 VALUES (1, 1, '😍'), (1, 2, '🤢'), (2, 2, '🙂');"));
 
-	result = con.Query("SELECT 👤.🗣 AS 👤, 📕.💬 AS 📕 FROM 👤 JOIN 👤🏠📕 ON 👤.🔑 = 👤🏠📕.👤 JOIN 📕 ON "
+	result = con.Query("SELECT 👤.🗣 AS 👤, 📕.💬 AS 📕 FROM 👤 JOIN 👤🏠📕 ON 👤.🔑 = 👤🏠📕.👤 JOIN 📕 "
+	                   "ON "
 	                   "📕.🔑 "
 	                   "= "
 	                   "👤🏠📕.📕 "

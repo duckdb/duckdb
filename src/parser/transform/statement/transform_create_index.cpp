@@ -26,7 +26,8 @@ unique_ptr<CreateIndexStatement> Transformer::TransformCreateIndex(Node *node) {
 
 		if (index_element->name) {
 			// create a column reference expression
-			result->expressions.push_back(make_unique<ColumnRefExpression>(index_element->name,stmt->relation->relname));
+			result->expressions.push_back(
+			    make_unique<ColumnRefExpression>(index_element->name, stmt->relation->relname));
 		} else {
 			// parse the index expression
 			assert(index_element->expr);
