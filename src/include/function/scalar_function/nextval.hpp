@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// function/scalar_function/abs.hpp
+// function/scalar_function/nextval.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -14,34 +14,35 @@
 namespace duckdb {
 namespace function {
 
-void abs_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
-bool abs_matches_arguments(vector<SQLType> &arguments);
-SQLType abs_get_return_type(vector<SQLType> &arguments);
+void nextval_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
+bool nextval_matches_arguments(vector<SQLType> &arguments);
+SQLType nextval_get_return_type(vector<SQLType> &arguments);
+unique_ptr<FunctionData> nextval_bind(BoundFunctionExpression &expr, ClientContext &context);
 
-class AbsFunction {
+class NextvalFunction {
 public:
 	static const char *GetName() {
-		return "abs";
+		return "nextval";
 	}
 
 	static scalar_function_t GetFunction() {
-		return abs_function;
+		return nextval_function;
 	}
 
 	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return abs_matches_arguments;
+		return nextval_matches_arguments;
 	}
 
 	static get_return_type_function_t GetReturnTypeFunction() {
-		return abs_get_return_type;
+		return nextval_get_return_type;
 	}
 
 	static bind_scalar_function_t GetBindFunction() {
-		return nullptr;
+		return nextval_bind;
 	}
 
 	static bool HasSideEffects() {
-		return false;
+		return true;
 	}
 };
 

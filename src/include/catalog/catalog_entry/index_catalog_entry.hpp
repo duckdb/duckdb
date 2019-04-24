@@ -15,7 +15,7 @@ namespace duckdb {
 
 class SchemaCatalogEntry;
 
-//! A table catalog entry
+//! An index catalog entry
 class IndexCatalogEntry : public CatalogEntry {
 public:
 	//! Create a real TableCatalogEntry and initialize storage for it

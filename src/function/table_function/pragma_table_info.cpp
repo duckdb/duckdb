@@ -1,5 +1,6 @@
 #include "function/table_function/pragma_table_info.hpp"
 
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "catalog/catalog.hpp"
 #include "common/exception.hpp"
 #include "main/client_context.hpp"
@@ -10,20 +11,24 @@ using namespace std;
 namespace duckdb {
 namespace function {
 
-struct PragmaTableFunctionData : public TableFunctionData {
+struct PragmaTableFunctionData : public FunctionData {
 	PragmaTableFunctionData() : entry(nullptr), offset(0) {
+	}
+
+	unique_ptr<FunctionData> Copy() override {
+		throw NotImplementedException("Copy not required for table-producing function");
 	}
 
 	TableCatalogEntry *entry;
 	size_t offset;
 };
 
-TableFunctionData *pragma_table_info_init(ClientContext &context) {
+FunctionData *pragma_table_info_init(ClientContext &context) {
 	// initialize the function data structure
 	return new PragmaTableFunctionData();
 }
 
-void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &output, TableFunctionData *dataptr) {
+void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &output, FunctionData *dataptr) {
 	auto &data = *((PragmaTableFunctionData *)dataptr);
 	if (!data.entry) {
 		// first call: load the entry from the catalog

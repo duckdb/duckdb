@@ -395,6 +395,15 @@ public:
 	}
 };
 
+class SequenceException : public Exception {
+	SequenceException() = delete;
+
+public:
+	SequenceException(string msg, ...) : Exception(ExceptionType::SERIALIZATION, msg) {
+		FORMAT_CONSTRUCTOR(msg);
+	}
+};
+
 class InterruptException : public Exception {
 public:
 	InterruptException() : Exception(ExceptionType::INTERRUPT, "Interrupted!") {

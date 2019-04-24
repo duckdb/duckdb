@@ -1,5 +1,6 @@
 #include "parser/statement/drop_index_statement.hpp"
 #include "parser/statement/drop_schema_statement.hpp"
+#include "parser/statement/drop_sequence_statement.hpp"
 #include "parser/statement/drop_table_statement.hpp"
 #include "parser/statement/drop_view_statement.hpp"
 #include "parser/transformer.hpp"
@@ -24,6 +25,8 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(Node *node) {
 		return TransformDropIndex(stmt);
 	case OBJECT_VIEW:
 		return TransformDropView(stmt);
+	case OBJECT_SEQUENCE:
+		return TransformDropSequence(stmt);
 	default:
 		throw NotImplementedException("Cannot drop this type yet");
 	}

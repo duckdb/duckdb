@@ -1,4 +1,5 @@
 #include "execution/operator/persistent/physical_insert.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 
 #include "common/types/chunk_collection.hpp"
 #include "common/vector_operations/vector_operations.hpp"

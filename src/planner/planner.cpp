@@ -78,6 +78,16 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		context.db.catalog.DropSchema(context.ActiveTransaction(), stmt.info.get());
 		break;
 	}
+	case StatementType::CREATE_SEQUENCE: {
+		auto &stmt = *((CreateSequenceStatement *)statement.get());
+		context.db.catalog.CreateSequence(context.ActiveTransaction(), stmt.info.get());
+		break;
+	}
+	case StatementType::DROP_SEQUENCE: {
+		auto &stmt = *((DropSequenceStatement *)statement.get());
+		context.db.catalog.DropSequence(context.ActiveTransaction(), stmt.info.get());
+		break;
+	}
 	case StatementType::DROP_VIEW: {
 		auto &stmt = *((DropViewStatement *)statement.get());
 		context.db.catalog.DropView(context.ActiveTransaction(), stmt.info.get());

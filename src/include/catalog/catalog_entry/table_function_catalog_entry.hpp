@@ -9,14 +9,17 @@
 #pragma once
 
 #include "catalog/catalog_entry.hpp"
-#include "catalog/catalog_set.hpp"
 #include "common/unordered_map.hpp"
-#include "transaction/transaction.hpp"
+#include "parser/column_definition.hpp"
+#include "function/function.hpp"
 
 namespace duckdb {
 
 class Catalog;
 class Constraint;
+class SchemaCatalogEntry;
+
+struct CreateTableFunctionInformation;
 
 //! A table function in the catalog
 class TableFunctionCatalogEntry : public CatalogEntry {

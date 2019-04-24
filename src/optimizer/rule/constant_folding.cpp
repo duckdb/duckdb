@@ -29,7 +29,7 @@ unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<Ex
                                                   bool &changes_made) {
 	auto root = bindings[0];
 	// the root is a scalar expression that we have to fold
-	assert(root->IsScalar() && root->type != ExpressionType::VALUE_CONSTANT);
+	assert(root->IsFoldable() && root->type != ExpressionType::VALUE_CONSTANT);
 
 	// use an ExpressionExecutor to execute the expression
 	auto result_value = ExpressionExecutor::EvaluateScalar(*root);

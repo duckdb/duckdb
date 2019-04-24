@@ -14,6 +14,8 @@
 #include "parser/constraint.hpp"
 #include "parser/statement/select_statement.hpp"
 
+#include <limits>
+
 namespace duckdb {
 
 struct CreateTableInformation {
@@ -188,8 +190,12 @@ struct CreateScalarFunctionInformation {
 	//! Function that gives the return type of the function given the input
 	//! arguments
 	get_return_type_function_t return_type;
+	//! The bind function (if any)
+	bind_scalar_function_t bind;
+	//! Whether or not the function has side effects (e.g. sequence increments, random() functions, NOW()). Functions with side-effects cannot be constant-folded.
+	bool has_side_effects;
 
-	CreateScalarFunctionInformation() : schema(DEFAULT_SCHEMA), or_replace(false) {
+	CreateScalarFunctionInformation() : schema(DEFAULT_SCHEMA), or_replace(false), has_side_effects(false) {
 	}
 };
 
@@ -245,6 +251,45 @@ struct CopyInformation {
 	CopyInformation()
 	    : schema(DEFAULT_SCHEMA), is_from(false), delimiter(','), quote('"'), escape('"'), header(false),
 	      format(ExternalFileFormat::CSV) {
+	}
+};
+
+struct CreateSequenceInformation {
+	//! The schema to store the sequence in
+	string schema;
+	//! Sequence name to create
+	string name;
+	//! The increment value
+	int64_t increment;
+	//! The minimum value of the sequence
+	int64_t min_value;
+	//! The maximum value of the sequence
+	int64_t max_value;
+	//! The start value of the sequence
+	int64_t start_value;
+	//! Whether or not the sequence cycles
+	bool cycle;
+	//! Whether or not the sequence is temporary
+	bool temporary;
+	//! Whether or not to ignore errors on duplicate creation
+	bool if_not_exists;
+
+	CreateSequenceInformation() :
+	    schema(DEFAULT_SCHEMA), name(string()), increment(1), min_value(1), max_value(std::numeric_limits<int64_t>::max()),
+		start_value(1), cycle(false), temporary(false) {
+	}
+};
+
+struct DropSequenceInformation {
+	//! The schema of the sequence
+	string schema;
+	//! The name of the sequence to drop
+	string name;
+	//! Whether or not to ignore errors on non-existing DROP SEQUENCE statements
+	bool if_exists;
+
+	DropSequenceInformation() :
+	    schema(DEFAULT_SCHEMA), name(string()), if_exists(false) {
 	}
 };
 

@@ -14,8 +14,8 @@
 namespace duckdb {
 namespace function {
 
-TableFunctionData *pragma_table_info_init(ClientContext &);
-void pragma_table_info(ClientContext &, DataChunk &input, DataChunk &output, TableFunctionData *dataptr);
+FunctionData *pragma_table_info_init(ClientContext &);
+void pragma_table_info(ClientContext &, DataChunk &input, DataChunk &output, FunctionData *dataptr);
 
 class PragmaTableInfo {
 public:

@@ -25,6 +25,7 @@ class DeleteStatement;
 class DropSchemaStatement;
 class DropTableStatement;
 class DropIndexStatement;
+class DropSequenceStatement;
 class DropViewStatement;
 class InsertStatement;
 class SelectStatement;
@@ -33,6 +34,7 @@ class UpdateStatement;
 class PrepareStatement;
 class ExecuteStatement;
 class DeallocateStatement;
+class CreateSequenceStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node

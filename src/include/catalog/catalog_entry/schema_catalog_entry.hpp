@@ -10,6 +10,7 @@
 
 #include "catalog/catalog_entry.hpp"
 #include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "catalog/catalog_set.hpp"
@@ -38,6 +39,11 @@ public:
 	//! Creates a view with the given name in the schema
 	void DropView(Transaction &transaction, DropViewInformation *info);
 
+	//! Creates a sequence with the given name in the schema
+	void CreateSequence(Transaction &transaction, CreateSequenceInformation *info);
+	//! Creates a sequence with the given name in the schema
+	void DropSequence(Transaction &transaction, DropSequenceInformation *info);
+
 	//! Creates an index with the given name in the schema
 	bool CreateIndex(Transaction &transaction, CreateIndexInformation *info);
 	//! Drops a index with the given name
@@ -60,6 +66,8 @@ public:
 
 	//! Gets a scalar function with the given name
 	ScalarFunctionCatalogEntry *GetScalarFunction(Transaction &transaction, const string &name);
+	//! Gets the sequence with the given name
+	SequenceCatalogEntry *GetSequence(Transaction &transaction, const string &name);
 
 	//! Returns true if other objects depend on this object
 	virtual bool HasDependents(Transaction &transaction);
@@ -74,5 +82,7 @@ public:
 	CatalogSet table_functions;
 	//! The catalog set holding the scalar functions
 	CatalogSet scalar_functions;
+	//! The catalog set holding the sequences
+	CatalogSet sequences;
 };
 } // namespace duckdb

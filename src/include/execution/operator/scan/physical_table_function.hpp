@@ -10,6 +10,7 @@
 
 #include "execution/physical_operator.hpp"
 #include "storage/data_table.hpp"
+#include "function/function.hpp"
 
 namespace duckdb {
 
@@ -37,7 +38,7 @@ public:
 	PhysicalTableFunctionOperatorState() : PhysicalOperatorState(nullptr), initialized(false) {
 	}
 
-	unique_ptr<TableFunctionData> function_data;
+	unique_ptr<FunctionData> function_data;
 	bool initialized;
 };
 

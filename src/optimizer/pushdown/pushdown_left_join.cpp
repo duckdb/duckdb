@@ -44,7 +44,7 @@ static bool FilterRemovesNull(ExpressionRewriter &rewriter, Expression *expr, un
 
 	if (filter->expressions[0]->type != ExpressionType::VALUE_CONSTANT) {
 		// could not flatten the result
-		assert(!filter->expressions[0]->IsScalar());
+		assert(!filter->expressions[0]->IsFoldable());
 		return false;
 	}
 	// we flattened the result into a scalar, check if it is FALSE or NULL

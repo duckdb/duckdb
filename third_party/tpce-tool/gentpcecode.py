@@ -24,6 +24,7 @@ header.write("""
 #include "main/client_context.hpp"
 #include "main/database.hpp"
 #include "storage/data_table.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 
 #include "main/BaseLoader.h"
 #include "main/BaseLoaderFactory.h"
@@ -220,7 +221,7 @@ for table in tables.keys():
 	source.write("""
 class DuckDB${TABLENAME}Load : public DuckDBBaseLoader<${ROW_TYPE}> {
 public:
-	DuckDB${TABLENAME}Load(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDB${TABLENAME}Load(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -257,7 +258,7 @@ public:
 		source.write("\t\tappend_%s(chunk, index, column, next_record.%s);" % (funcname, name))
 		if i != len(collist) - 1:
 			source.write("\n")
-	source.write("""	
+	source.write("""
 	}
 
 };

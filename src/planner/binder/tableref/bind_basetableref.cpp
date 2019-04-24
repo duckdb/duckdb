@@ -4,6 +4,7 @@
 #include "parser/tableref/subqueryref.hpp"
 #include "planner/binder.hpp"
 #include "planner/tableref/bound_basetableref.hpp"
+#include "catalog/catalog_entry/view_catalog_entry.hpp"
 
 using namespace duckdb;
 using namespace std;

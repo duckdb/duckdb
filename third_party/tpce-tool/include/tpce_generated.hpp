@@ -10,6 +10,7 @@
 #include "main/client_context.hpp"
 #include "main/database.hpp"
 #include "storage/data_table.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 
 #include "main/BaseLoader.h"
 #include "main/BaseLoaderFactory.h"

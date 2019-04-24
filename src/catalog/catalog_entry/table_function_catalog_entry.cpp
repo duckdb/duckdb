@@ -1,8 +1,8 @@
-#include "catalog/catalog.hpp"
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "common/exception.hpp"
 #include "parser/constraints/list.hpp"
 #include "storage/storage_manager.hpp"
+#include "parser/parsed_data.hpp"
 
 #include <algorithm>
 

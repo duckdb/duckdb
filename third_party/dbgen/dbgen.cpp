@@ -6,6 +6,8 @@
 #include "main/client_context.hpp"
 #include "storage/data_table.hpp"
 #include "tpch_constants.hpp"
+#include "parser/column_definition.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 
 #define DECLARER /* EXTERN references get defined here */
 

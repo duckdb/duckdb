@@ -9,6 +9,7 @@
 #pragma once
 
 #include "execution/physical_operator.hpp"
+#include "parser/parsed_data.hpp"
 
 namespace duckdb {
 

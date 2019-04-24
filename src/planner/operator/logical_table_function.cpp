@@ -1,4 +1,5 @@
 #include "planner/operator/logical_table_function.hpp"
+#include "catalog/catalog_entry/table_function_catalog_entry.hpp"
 
 using namespace duckdb;
 using namespace std;

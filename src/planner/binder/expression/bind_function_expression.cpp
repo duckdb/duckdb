@@ -3,6 +3,7 @@
 #include "parser/expression/function_expression.hpp"
 #include "planner/expression/bound_function_expression.hpp"
 #include "planner/expression_binder.hpp"
+#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -45,5 +46,8 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, uint32
 	// now create the function
 	auto result = make_unique<BoundFunctionExpression>(GetInternalType(return_type), func);
 	result->children = move(children);
+	if (func->bind) {
+		result->bind_info = func->bind(*result, context);
+	}
 	return BindResult(move(result), return_type);
 }

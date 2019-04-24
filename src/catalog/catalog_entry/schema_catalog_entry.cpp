@@ -2,6 +2,7 @@
 
 #include "catalog/catalog.hpp"
 #include "catalog/catalog_entry/index_catalog_entry.hpp"
+#include "catalog/catalog_entry/view_catalog_entry.hpp"
 #include "common/exception.hpp"
 #include "parser/expression/function_expression.hpp"
 
@@ -46,6 +47,23 @@ void SchemaCatalogEntry::DropView(Transaction &transaction, DropViewInformation 
 	if (!tables.DropEntry(transaction, info->view_name, false)) {
 		if (!info->if_exists) {
 			throw CatalogException("View with name \"%s\" does not exist!", info->view_name.c_str());
+		}
+	}
+}
+
+void SchemaCatalogEntry::CreateSequence(Transaction &transaction, CreateSequenceInformation *info) {
+	auto sequence = make_unique_base<CatalogEntry, SequenceCatalogEntry>(catalog, this, info);
+	if (!sequences.CreateEntry(transaction, info->name, move(sequence))) {
+		if (!info->if_not_exists) {
+			throw CatalogException("Sequence with name \"%s\" already exists!", info->name.c_str());
+		}
+	}
+}
+
+void SchemaCatalogEntry::DropSequence(Transaction &transaction, DropSequenceInformation *info) {
+	if (!sequences.DropEntry(transaction, info->name, false)) {
+		if (!info->if_exists) {
+			throw CatalogException("Sequence with name \"%s\" does not exist!", info->name.c_str());
 		}
 	}
 }
@@ -174,6 +192,15 @@ ScalarFunctionCatalogEntry *SchemaCatalogEntry::GetScalarFunction(Transaction &t
 		throw CatalogException("Scalar Function with name %s does not exist!", name.c_str());
 	}
 	return (ScalarFunctionCatalogEntry *)entry;
+}
+
+SequenceCatalogEntry *SchemaCatalogEntry::GetSequence(Transaction &transaction, const string &name) {
+	auto entry = sequences.GetEntry(transaction, name);
+	if (!entry) {
+		throw CatalogException("Sequence Function with name %s does not exist!", name.c_str());
+	}
+	return (SequenceCatalogEntry *)entry;
+
 }
 
 bool SchemaCatalogEntry::HasDependents(Transaction &transaction) {

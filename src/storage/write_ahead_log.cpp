@@ -2,6 +2,9 @@
 
 #include "catalog/catalog.hpp"
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "catalog/catalog_entry/view_catalog_entry.hpp"
+
 #include "common/file_system.hpp"
 #include "common/serializer.hpp"
 #include "main/client_context.hpp"

@@ -99,7 +99,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	if (expr.type != ExpressionType::COMPARE_IN) {
 		return nullptr;
 	}
-	if (expr.children[0]->IsScalar()) {
+	if (expr.children[0]->IsFoldable()) {
 		// LHS is scalar: we can flatten the entire list
 		return nullptr;
 	}
@@ -113,7 +113,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	// we can only do this if the expressions in the expression list are scalar
 	for (size_t i = 1; i < expr.children.size(); i++) {
 		assert(expr.children[i]->return_type == in_type);
-		if (!expr.children[i]->IsScalar()) {
+		if (!expr.children[i]->IsFoldable()) {
 			// non-scalar expression
 			return nullptr;
 		}

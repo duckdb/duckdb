@@ -81,7 +81,7 @@ void ExpressionExecutor::MergeExpression(Expression &expr, Vector &result) {
 }
 
 Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
-	assert(expr.IsScalar());
+	assert(expr.IsFoldable());
 	// use an ExpressionExecutor to execute the expression
 	ExpressionExecutor executor;
 	Vector result(expr.return_type, true, false);

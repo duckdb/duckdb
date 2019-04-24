@@ -115,7 +115,7 @@ static int64_t extract_element(SpecifierType type, date_t element) {
 	}
 }
 
-void date_part_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result) {
+void date_part_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result) {
 	result.Initialize(TypeId::BIGINT);
 	result.nullmask = inputs[1].nullmask;
 	result.count = inputs[1].count;

@@ -1,11 +1,12 @@
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "catalog/catalog_entry/prepared_statement_catalog_entry.hpp"
 
 #include "catalog/catalog.hpp"
 #include "common/exception.hpp"
 #include "common/serializer.hpp"
 #include "parser/constraints/list.hpp"
 #include "storage/storage_manager.hpp"
-// TODO this pulls in all that stuff. Do we want that?
 #include "main/connection.hpp"
 #include "main/database.hpp"
 

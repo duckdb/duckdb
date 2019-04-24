@@ -13,8 +13,8 @@
 namespace duckdb {
 namespace function {
 
-void caseconvert_upper_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
-void caseconvert_lower_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
+void caseconvert_upper_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
+void caseconvert_lower_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
 
 bool caseconvert_matches_arguments(vector<SQLType> &arguments);
 SQLType caseconvert_get_return_type(vector<SQLType> &arguments);
@@ -36,6 +36,14 @@ public:
 	static get_return_type_function_t GetReturnTypeFunction() {
 		return caseconvert_get_return_type;
 	}
+
+	static bind_scalar_function_t GetBindFunction() {
+		return nullptr;
+	}
+
+	static bool HasSideEffects() {
+		return false;
+	}
 };
 
 class LowerFunction {
@@ -54,6 +62,14 @@ public:
 
 	static get_return_type_function_t GetReturnTypeFunction() {
 		return caseconvert_get_return_type;
+	}
+
+	static bind_scalar_function_t GetBindFunction() {
+		return nullptr;
+	}
+
+	static bool HasSideEffects() {
+		return false;
 	}
 };
 

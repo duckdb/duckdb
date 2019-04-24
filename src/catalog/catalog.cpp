@@ -4,6 +4,8 @@
 #include "parser/expression/function_expression.hpp"
 #include "storage/storage_manager.hpp"
 
+#include "catalog/catalog_entry/list.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -55,6 +57,16 @@ void Catalog::DropTable(Transaction &transaction, DropTableInformation *info) {
 	schema->DropTable(transaction, info);
 }
 
+void Catalog::CreateSequence(Transaction &transaction, CreateSequenceInformation *info) {
+	auto schema = GetSchema(transaction, info->schema);
+	schema->CreateSequence(transaction, info);
+}
+
+void Catalog::DropSequence(Transaction &transaction, DropSequenceInformation *info) {
+	auto schema = GetSchema(transaction, info->schema);
+	schema->DropSequence(transaction, info);
+}
+
 void Catalog::AlterTable(Transaction &transaction, AlterTableInformation *info) {
 	auto schema = GetSchema(transaction, info->schema);
 	schema->AlterTable(transaction, info);
@@ -71,6 +83,11 @@ TableCatalogEntry *Catalog::GetTable(Transaction &transaction, const string &sch
 CatalogEntry *Catalog::GetTableOrView(Transaction &transaction, const string &schema_name, const string &table_name) {
 	auto schema = GetSchema(transaction, schema_name);
 	return schema->GetTableOrView(transaction, table_name);
+}
+
+SequenceCatalogEntry *Catalog::GetSequence(Transaction &transaction, const string &schema_name, const string &sequence) {
+	auto schema = GetSchema(transaction, schema_name);
+	return schema->GetSequence(transaction, sequence);
 }
 
 void Catalog::CreateTableFunction(Transaction &transaction, CreateTableFunctionInformation *info) {

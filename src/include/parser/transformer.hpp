@@ -46,6 +46,8 @@ private:
 	unique_ptr<CreateTableStatement> TransformCreateTableAs(postgres::Node *node);
 	//! Transform a Postgres node into a CreateSchemaStatement
 	unique_ptr<CreateSchemaStatement> TransformCreateSchema(postgres::Node *node);
+	//! Transform a Postgres T_CreateSeqStmt node into a CreateSequenceStatement
+	unique_ptr<CreateSequenceStatement> TransformCreateSequence(postgres::Node *node);
 	//! Transform a Postgres T_ViewStmt node into a CreateViewStatement
 	unique_ptr<CreateViewStatement> TransformCreateView(postgres::Node *node);
 	//! Transform a Postgres T_DropStmt node into a Drop[Table,Schema]Statement
@@ -60,6 +62,8 @@ private:
 	unique_ptr<DropIndexStatement> TransformDropIndex(postgres::DropStmt *stmt);
 	//! Transform a Postgres DropStmt node into a DropSchemaStatement
 	unique_ptr<DropSchemaStatement> TransformDropSchema(postgres::DropStmt *stmt);
+	//! Transform a Postgres DropStmt node into a DropSequenceStatement
+	unique_ptr<DropSequenceStatement> TransformDropSequence(postgres::DropStmt *stmt);
 	//! Transform a Postgres DropStmt node into a DropViewStatement
 	unique_ptr<DropViewStatement> TransformDropView(postgres::DropStmt *stmt);
 	//! Transform a Postgres T_CopyStmt node into a CopyStatement
