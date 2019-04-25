@@ -16,7 +16,7 @@ using namespace duckdb;
 using namespace std;
 
 void TableCatalogEntry::Initialize(CreateTableInformation *info) {
-	for (auto entry : info->columns) {
+	for (auto &entry : info->columns) {
 		if (ColumnExists(entry.name)) {
 			throw CatalogException("Column with name %s already exists!", entry.name.c_str());
 		}
@@ -24,7 +24,7 @@ void TableCatalogEntry::Initialize(CreateTableInformation *info) {
 		column_t oid = columns.size();
 		name_map[entry.name] = oid;
 		entry.oid = oid;
-		columns.push_back(entry);
+		columns.push_back(move(entry));
 	}
 }
 
@@ -107,7 +107,11 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(AlterInformation *info) {
 		create_info.table = name;
 		bool found = false;
 		for (size_t i = 0; i < columns.size(); i++) {
-			create_info.columns.push_back(columns[i]);
+			ColumnDefinition copy(columns[i].name, columns[i].type);
+			copy.oid = columns[i].oid;
+			copy.default_value = columns[i].default_value ? columns[i].default_value->Copy() : nullptr;
+
+			create_info.columns.push_back(move(copy));
 			if (rename_info->name == columns[i].name) {
 				assert(!found);
 				create_info.columns[i].name = rename_info->new_name;
@@ -166,6 +170,7 @@ void TableCatalogEntry::Serialize(Serializer &serializer) {
 	for (auto &column : columns) {
 		serializer.WriteString(column.name);
 		column.type.Serialize(serializer);
+		serializer.WriteOptional(column.default_value);
 	}
 	serializer.Write<uint32_t>(constraints.size());
 	for (auto &constraint : constraints) {
@@ -183,7 +188,8 @@ unique_ptr<CreateTableInformation> TableCatalogEntry::Deserialize(Deserializer &
 	for (size_t i = 0; i < column_count; i++) {
 		auto column_name = source.Read<string>();
 		auto column_type = SQLType::Deserialize(source);
-		info->columns.push_back(ColumnDefinition(column_name, column_type, false));
+		auto default_value = source.ReadOptional<ParsedExpression>();
+		info->columns.push_back(ColumnDefinition(column_name, column_type, move(default_value)));
 	}
 	auto constraint_count = source.Read<uint32_t>();
 

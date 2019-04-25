@@ -33,7 +33,8 @@ void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 				auto &column = tableref.columns[columns[i]];
 				update_chunk.data[i].count = state->child_chunk.size();
 				update_chunk.data[i].sel_vector = state->child_chunk.sel_vector;
-				VectorOperations::Set(update_chunk.data[i], column.default_value);
+				throw NotImplementedException("DEFAULT value in update");
+				// VectorOperations::Set(update_chunk.data[i], column.default_value);
 			} else {
 				assert(expressions[i]->type == ExpressionType::BOUND_REF);
 				// index into child chunk

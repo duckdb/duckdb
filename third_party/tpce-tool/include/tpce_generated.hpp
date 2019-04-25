@@ -8,6 +8,7 @@
 
 #include "catalog/catalog.hpp"
 #include "main/client_context.hpp"
+#include "main/connection.hpp"
 #include "main/database.hpp"
 #include "storage/data_table.hpp"
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
@@ -70,6 +71,6 @@ namespace TPCE {
 		virtual CBaseLoader<ZIP_CODE_ROW> *CreateZipCodeLoader();
 	};
 
-void CreateTPCESchema(duckdb::DuckDB &db, duckdb::Transaction &transaction, std::string &schema, std::string &suffix);
+void CreateTPCESchema(duckdb::DuckDB &db, duckdb::Connection &con, std::string &schema, std::string &suffix);
 
 } /* namespace TPCE */

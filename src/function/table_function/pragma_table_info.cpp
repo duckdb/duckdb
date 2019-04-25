@@ -69,8 +69,9 @@ void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &outp
 		// "notnull", TypeId::BOOLEAN
 		// FIXME: look at constraints
 		output.data[3].SetValue(index, Value::BOOLEAN(false));
-		// "dflt_value", TypeId::BOOLEAN
-		output.data[4].SetValue(index, Value::BOOLEAN(column.has_default));
+		// "dflt_value", TypeId::VARCHAR
+		string def_value = column.default_value ? column.default_value->ToString() : "NULL";
+		output.data[4].SetValue(index, Value(def_value));
 		// "pk", TypeId::BOOLEAN
 		// FIXME: look at constraints
 		output.data[5].SetValue(index, Value::BOOLEAN(false));
