@@ -44,24 +44,20 @@ TEST_CASE("regex search test", "[regex]") {
 	result = con.Query("SELECT regexp_matches(CAST(NULL AS STRING), CAST(NULL AS STRING))");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 
-
 	result = con.Query("SELECT regexp_matches('foobarbequebaz', '(bar)(beque)')");
 	REQUIRE(CHECK_COLUMN(result, 0, {true}));
 
 	// postgres says throw error on invalid regex
 	REQUIRE_FAIL(con.Query("SELECT regexp_matches('', '\\X')"));
 
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE regex(s STRING, p STRING)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO regex VALUES ('asdf', 'sd'), ('asdf', '^sd'), (NULL, '^sd'), ('asdf', NULL)"));
+	result = con.Query("SELECT regexp_matches(s, '.*') FROM regex");
+	REQUIRE(CHECK_COLUMN(result, 0, {true, true, Value(), true}));
 
-//	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(s STRING, p STRING)"));
-//	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('Hello', 'World')"));
-//
-//
-//	result = con.Query("SELECT regexp_matches(s, '') FROM strings");
-//	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "hello hello", "world world"}));
-//
-
+	result = con.Query("SELECT regexp_matches(s, p) FROM regex");
+	REQUIRE(CHECK_COLUMN(result, 0, {true, false, Value(), Value()}));
 }
-
 
 TEST_CASE("regex replace test", "[regex]") {
 	unique_ptr<QueryResult> result;
@@ -71,5 +67,4 @@ TEST_CASE("regex replace test", "[regex]") {
 
 	result = con.Query("SELECT regexp_replace('foobarbaz', 'b..', 'X')");
 	REQUIRE(CHECK_COLUMN(result, 0, {"fooXbaz"}));
-
 }
