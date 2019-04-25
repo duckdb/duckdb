@@ -33,8 +33,7 @@ struct CreateTableInformation {
 
 	CreateTableInformation() : schema(DEFAULT_SCHEMA), if_not_exists(false), temporary(false) {
 	}
-	CreateTableInformation(string schema, string table, vector<ColumnDefinition> columns)
-	    : schema(schema), table(table), columns(columns), if_not_exists(false), temporary(false) {
+	CreateTableInformation(string schema, string name) : schema(schema), table(name), if_not_exists(false), temporary(false) {
 	}
 };
 

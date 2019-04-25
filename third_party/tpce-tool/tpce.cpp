@@ -1,5 +1,5 @@
 #include "common/exception.hpp"
-#include "main/client_context.hpp"
+#include "main/connection.hpp"
 #include "storage/data_table.hpp"
 
 #include "tpce_generated.hpp"
@@ -25,20 +25,18 @@ void dbgen(duckdb::DuckDB &db, uint32_t sf, std::string schema, std::string suff
 	CGenerateAndLoadStandardOutput Output;
 	unique_ptr<CGenerateAndLoad> pGenerateAndLoad;
 
-	ClientContext context(db);
-	context.transaction.BeginTransaction();
+	Connection con(db);
+	con.Query("BEGIN TRANSACTION");
 
-	auto &transaction = context.ActiveTransaction();
-
-	CreateTPCESchema(db, transaction, schema, suffix);
+	CreateTPCESchema(db, con, schema, suffix);
 
 	if (sf == 0) {
 		// schema only
-		context.transaction.Commit();
+		con.Query("COMMIT");
 		return;
 	}
 
-	pLoaderFactory = make_unique<DuckDBLoaderFactory>(&context, schema, suffix);
+	pLoaderFactory = make_unique<DuckDBLoaderFactory>(&con.context, schema, suffix);
 
 	// Create log formatter and logger instance
 	CLogFormatTab fmt;
@@ -62,7 +60,7 @@ void dbgen(duckdb::DuckDB &db, uint32_t sf, std::string schema, std::string suff
 	// Generate dynamic trade tables
 	pGenerateAndLoad->GenerateAndLoadGrowingTables();
 
-	context.transaction.Commit();
+	con.Query("COMMIT");
 }
 
 } // namespace tpce

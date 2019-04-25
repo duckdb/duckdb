@@ -41,7 +41,7 @@ public:
 		returns.push_back(ColumnDefinition("name", SQLType(SQLTypeId::VARCHAR)));
 		returns.push_back(ColumnDefinition("type", SQLType(SQLTypeId::VARCHAR)));
 		returns.push_back(ColumnDefinition("notnull", SQLType(SQLTypeId::BOOLEAN)));
-		returns.push_back(ColumnDefinition("dflt_value", SQLType(SQLTypeId::BOOLEAN)));
+		returns.push_back(ColumnDefinition("dflt_value", SQLType(SQLTypeId::VARCHAR)));
 		returns.push_back(ColumnDefinition("pk", SQLType(SQLTypeId::BOOLEAN)));
 	}
 };

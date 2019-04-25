@@ -25,7 +25,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, uint32_t depth) {
 		return BindResult(StringUtil::Format("Table \"%s\" does not have a column named \"%s\"",
 		                                     colref.table_name.c_str(), colref.column_name.c_str()));
 	}
-	auto entry = bound->table->GetColumn(colref.column_name);
+	auto &entry = bound->table->GetColumn(colref.column_name);
 	auto &column_list = bound->bound_columns;
 	// check if the entry already exists in the column list for the table
 	ColumnBinding binding;

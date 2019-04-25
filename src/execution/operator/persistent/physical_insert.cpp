@@ -40,7 +40,8 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 					if (column_index_map[i] < 0) {
 						// insert default value
 						insert_chunk.data[i].count = chunk.size();
-						VectorOperations::Set(insert_chunk.data[i], table->columns[i].default_value);
+						throw NotImplementedException("FIXME: default");
+						// VectorOperations::Set(insert_chunk.data[i], table->columns[i].default_value);
 					} else {
 						// get value from child chunk
 						assert((size_t)column_index_map[i] < chunk.column_count);
@@ -76,7 +77,8 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 					if (column_index_map[i] < 0) {
 						// insert default value
 						size_t index = insert_chunk.data[i].count++;
-						insert_chunk.data[i].SetValue(index, table->columns[i].default_value);
+						throw NotImplementedException("FIXME: default");
+						// insert_chunk.data[i].SetValue(index, table->columns[i].default_value);
 					} else {
 						// get value from constants
 						assert(column_index_map[i] < (int)list.size());
@@ -94,7 +96,8 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 					auto &expr = list[i];
 					if (expr->type == ExpressionType::VALUE_DEFAULT) {
 						temp_chunk.data[i].count = 1;
-						temp_chunk.data[i].SetValue(0, table->columns[i].default_value);
+						throw NotImplementedException("FIXME: default");
+						//temp_chunk.data[i].SetValue(0, table->columns[i].default_value);
 					} else {
 						executor.ExecuteExpression(*expr, temp_chunk.data[i]);
 					}

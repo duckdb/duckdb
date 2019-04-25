@@ -12,7 +12,7 @@ using namespace std;
 TableFunctionCatalogEntry::TableFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
                                                      CreateTableFunctionInformation *info)
     : CatalogEntry(CatalogType::TABLE_FUNCTION, catalog, info->name), schema(schema) {
-	for (auto entry : info->return_values) {
+	for (auto &entry : info->return_values) {
 		if (name_map.find(entry.name) != name_map.end()) {
 			throw CatalogException("Column with name %s already exists!", entry.name.c_str());
 		}
@@ -20,7 +20,7 @@ TableFunctionCatalogEntry::TableFunctionCatalogEntry(Catalog *catalog, SchemaCat
 		column_t oid = return_values.size();
 		name_map[entry.name] = oid;
 		entry.oid = oid;
-		return_values.push_back(entry);
+		return_values.push_back(move(entry));
 	}
 	arguments = info->arguments;
 

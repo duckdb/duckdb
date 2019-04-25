@@ -85,7 +85,7 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 		if (info.select_list.size() > 0) {
 			set_to_default.resize(types.size(), true);
 			for (size_t i = 0; i < info.select_list.size(); i++) {
-				auto column = table->GetColumn(info.select_list[i]);
+				auto &column = table->GetColumn(info.select_list[i]);
 				select_list_oid.push_back(column.oid);
 				set_to_default[column.oid] = false;
 			}
