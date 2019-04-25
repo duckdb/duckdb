@@ -5,6 +5,7 @@
 #include "function/scalar_function/length.hpp"
 #include "function/scalar_function/nextval.hpp"
 #include "function/scalar_function/regexp_matches.hpp"
+#include "function/scalar_function/regexp_replace.hpp"
 #include "function/scalar_function/round.hpp"
 #include "function/scalar_function/substring.hpp"
 #include "function/scalar_function/year.hpp"

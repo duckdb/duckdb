@@ -4,7 +4,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("search test", "[regex]") {
+TEST_CASE("regex search test", "[regex]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -18,10 +18,13 @@ TEST_CASE("search test", "[regex]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {false}));
 
 	result = con.Query("SELECT regexp_matches('asdf', '')");
-	REQUIRE(CHECK_COLUMN(result, 0, {false}));
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
 
-	// full matches only
+	// partial matches okay
 	result = con.Query("SELECT regexp_matches('asdf', 'sd')");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+
+	result = con.Query("SELECT regexp_matches('asdf', '^sdf$')");
 	REQUIRE(CHECK_COLUMN(result, 0, {false}));
 
 	// empty strings
@@ -41,6 +44,10 @@ TEST_CASE("search test", "[regex]") {
 	result = con.Query("SELECT regexp_matches(CAST(NULL AS STRING), CAST(NULL AS STRING))");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 
+
+	result = con.Query("SELECT regexp_matches('foobarbequebaz', '(bar)(beque)')");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+
 	// postgres says throw error on invalid regex
 	REQUIRE_FAIL(con.Query("SELECT regexp_matches('', '\\X')"));
 
@@ -53,5 +60,16 @@ TEST_CASE("search test", "[regex]") {
 //	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "hello hello", "world world"}));
 //
 
+}
+
+
+TEST_CASE("regex replace test", "[regex]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	result = con.Query("SELECT regexp_replace('foobarbaz', 'b..', 'X')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"fooXbaz"}));
 
 }

@@ -42,7 +42,7 @@ void regexp_matches_function(ExpressionExecutor &exec, Vector inputs[], size_t i
 			                             throw Exception(re.error());
 		                             }
 		                             // TODO if pattern is constant, create re object outside loop
-		                             result_data[result_index] = re.FullMatch(string, re);
+		                             result_data[result_index] = RE2::PartialMatch(string, re);
 	                             });
 }
 
