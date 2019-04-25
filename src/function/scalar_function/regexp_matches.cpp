@@ -4,23 +4,13 @@
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
 #include "planner/expression/bound_function_expression.hpp"
-#include "re2/re2.h"
 
 using namespace std;
 
 namespace duckdb {
 namespace function {
 
-struct RegexpMatchesBindData : public FunctionData {
-	unique_ptr<RE2> constant_pattern;
 
-	RegexpMatchesBindData(unique_ptr<RE2> constant_pattern) : constant_pattern(move(constant_pattern)) {
-	}
-
-	unique_ptr<FunctionData> Copy() override {
-		return make_unique<RegexpMatchesBindData>(move(constant_pattern));
-	}
-};
 
 void regexp_matches_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count,
                              BoundFunctionExpression &expr, Vector &result) {
@@ -74,7 +64,7 @@ SQLType regexp_matches_get_return_type(vector<SQLType> &arguments) {
 }
 
 unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionExpression &expr, ClientContext &context) {
-	// pattern is the second argument. If its constant, we can already prepare the pattern and store it.
+	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
 	assert(expr.children.size() == 2);
 	if (expr.children[1]->IsScalar()) {
 		Value pattern_str = ExpressionExecutor::EvaluateScalar(*expr.children[1]);
@@ -85,10 +75,14 @@ unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionExpressio
 			if (!re->ok()) {
 				throw Exception(re->error());
 			}
-			return make_unique<RegexpMatchesBindData>(move(re));
+
+			string range_min, range_max;
+			auto range_success = re->PossibleMatchRange(&range_min, &range_max, 1000);
+
+			return make_unique<RegexpMatchesBindData>(move(re), range_min, range_max, range_success);
 		}
 	}
-	return make_unique<RegexpMatchesBindData>(nullptr);
+	return make_unique<RegexpMatchesBindData>(nullptr, "", "", false	);
 }
 
 } // namespace function

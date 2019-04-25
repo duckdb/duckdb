@@ -5,6 +5,7 @@
 #include "optimizer/ca_optimizer.hpp"
 #include "optimizer/cse_optimizer.hpp"
 #include "optimizer/filter_pushdown.hpp"
+#include "optimizer/regex_range_filter.hpp"
 #include "optimizer/join_order_optimizer.hpp"
 #include "optimizer/rule/list.hpp"
 #include "planner/binder.hpp"
@@ -68,6 +69,11 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	context.profiler.StartPhase("filter_pushdown");
 	FilterPushdown filter_pushdown(*this);
 	plan = filter_pushdown.Rewrite(move(plan));
+	context.profiler.EndPhase();
+
+	context.profiler.StartPhase("regex_range");
+	RegexRangeFilter regex_opt;
+	plan = regex_opt.Rewrite(move(plan));
 	context.profiler.EndPhase();
 
 	// then we perform the join ordering optimization

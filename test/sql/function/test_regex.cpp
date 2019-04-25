@@ -59,6 +59,20 @@ TEST_CASE("regex search test", "[regex]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {true, false, Value(), Value()}));
 }
 
+TEST_CASE("regex filter push test", "[regex]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE regex(s STRING)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO regex VALUES ('asdf')"));
+
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM regex WHERE REGEXP_MATCHES(s, 'as(d|x)f')"));
+
+
+}
+
 TEST_CASE("regex replace test", "[regex]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
