@@ -18,6 +18,7 @@ void regexp_matches_function(ExpressionExecutor &exec, Vector inputs[], size_t i
                              BoundFunctionExpression &expr, Vector &result);
 bool regexp_matches_matches_arguments(vector<SQLType> &arguments);
 SQLType regexp_matches_get_return_type(vector<SQLType> &arguments);
+unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionExpression &expr, ClientContext &context);
 
 class RegexpMatchesFunction {
 public:
@@ -38,7 +39,7 @@ public:
 	}
 
 	static bind_scalar_function_t GetBindFunction() {
-		return nullptr;
+		return regexp_matches_get_bind_function;
 	}
 
 	static bool HasSideEffects() {
