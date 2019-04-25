@@ -92,13 +92,14 @@ private:
 	template <class T> size_t templated_lookup(TypeId type, T key, uint64_t *result_ids) {
 		uint8_t minKey[maxPrefixLength];
 		Node::convert_to_binary_comparable(type, key, minKey);
-
+		size_t result_count = 0;
 		auto leaf = static_cast<Leaf *>(tree->lookup(tree, minKey, 8, 0, 8, type));
 		if (leaf) {
-			result_ids[0] = leaf->row_id;
-			return 1;
+			for (size_t i = 0; i < leaf->num_elements; i ++){
+				result_ids[result_count++] = leaf->row_id[i];
+			}
 		}
-		return 0;
+		return result_count;
 	}
 
 	DataChunk expression_result;

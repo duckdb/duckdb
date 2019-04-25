@@ -31,7 +31,7 @@ void Node4::insert(Node4 *node, Node **nodeRef, uint8_t keyByte, Node *child) {
 		newNode->count = 4;
 		copyPrefix(node, newNode);
 		for (unsigned i = 0; i < 4; i++)
-			newNode->key[i] = flipSign(node->key[i]);
+			newNode->key[i] = node->key[i];
 		memcpy(newNode->child, node->child, node->count * sizeof(uintptr_t));
 		delete node;
 		return Node16::insert(newNode, nodeRef, keyByte, child);

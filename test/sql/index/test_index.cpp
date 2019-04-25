@@ -172,15 +172,16 @@ TEST_CASE("ART Index", "[art]") {
 
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i BIGINT)"));
-	for (size_t i = 0; i < 10; i++) {
+	for (size_t i = 0; i < 1000; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(i) + ")"));
-	}
+        REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(i) + ")"));
+    }
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
-	result = con.Query("SELECT i FROM integers WHERE i=5 ");
-	REQUIRE(CHECK_COLUMN(result, 0, {5}));
-	result = con.Query("SELECT i FROM integers WHERE i=8 ");
-	REQUIRE(CHECK_COLUMN(result, 0, {8}));
-	result = con.Query("SELECT i FROM integers WHERE i=11 ");
+	result = con.Query("SELECT sum(i) FROM integers WHERE i=5 ");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i=8 ");
+	REQUIRE(CHECK_COLUMN(result, 0, {16}));
+	result = con.Query("SELECT i FROM integers WHERE i=1001 ");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));

@@ -32,7 +32,7 @@ void Node16::insert(Node16 *node, Node **nodeRef, uint8_t keyByte, Node *child) 
 		*nodeRef = newNode;
 		memcpy(newNode->child, node->child, node->count * sizeof(uintptr_t));
 		for (unsigned i = 0; i < node->count; i++)
-			newNode->childIndex[flipSign(node->key[i])] = i;
+			newNode->childIndex[node->key[i]] = i;
 		copyPrefix(node, newNode);
 		newNode->count = node->count;
 		delete node;

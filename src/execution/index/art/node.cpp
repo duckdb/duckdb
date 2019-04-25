@@ -145,9 +145,19 @@ void Node::insert(Node *node, Node **nodeRef, uint8_t key[], unsigned depth, uin
 		auto leaf = static_cast<Leaf *>(node);
 		convert_to_binary_comparable(type, leaf->value, existingKey);
 		unsigned newPrefixLength = 0;
-		while (existingKey[depth + newPrefixLength] == key[depth + newPrefixLength])
+		// Leaf node is already there, update row_id vector
+		if (depth+newPrefixLength == maxKeyLength){
+			Leaf::insert(leaf,row_id);
+			return;
+		}
+		while (existingKey[depth + newPrefixLength] == key[depth + newPrefixLength]){
 			newPrefixLength++;
-
+			// Leaf node is already there, update row_id vector
+			if (depth+newPrefixLength == maxKeyLength){
+				Leaf::insert(leaf,row_id);
+				return;
+			}
+		}
 		Node4 *newNode = new Node4();
 		newNode->prefixLength = newPrefixLength;
 		memcpy(newNode->prefix, key + depth, min(newPrefixLength, maxPrefixLength));
