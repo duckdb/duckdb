@@ -66,9 +66,10 @@ TEST_CASE("regex filter push test", "[regex]") {
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE regex(s STRING)"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO regex VALUES ('asdf')"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO regex VALUES ('asdf'), ('xxxx'), ('aaaa')"));
 
-	REQUIRE_NO_FAIL(con.Query("SELECT * FROM regex WHERE REGEXP_MATCHES(s, 'as(d|x)f')"));
+	result = con.Query("SELECT s FROM regex WHERE REGEXP_MATCHES(s, 'as(c|d|e)f')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"asdf"}));
 
 
 }
