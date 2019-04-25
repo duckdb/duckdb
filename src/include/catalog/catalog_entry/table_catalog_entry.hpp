@@ -14,6 +14,7 @@
 #include "parser/column_definition.hpp"
 #include "parser/constraint.hpp"
 #include "parser/parsed_data.hpp"
+#include "planner/expression.hpp"
 
 namespace duckdb {
 
@@ -37,6 +38,8 @@ public:
 	vector<ColumnDefinition> columns;
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<Constraint>> constraints;
+	//! Bound default values
+	vector<unique_ptr<Expression>> bound_defaults;
 	//! A map of column name to column index
 	unordered_map<string, column_t> name_map;
 

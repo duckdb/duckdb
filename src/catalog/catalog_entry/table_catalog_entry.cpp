@@ -10,6 +10,8 @@
 #include "main/connection.hpp"
 #include "main/database.hpp"
 
+#include "planner/expression/bound_constant_expression.hpp"
+
 #include <algorithm>
 
 using namespace duckdb;
@@ -24,7 +26,17 @@ void TableCatalogEntry::Initialize(CreateTableInformation *info) {
 		column_t oid = columns.size();
 		name_map[entry.name] = oid;
 		entry.oid = oid;
+		// default to using NULL value as default
+		bound_defaults.push_back(make_unique<BoundConstantExpression>(Value(GetInternalType(entry.type))));
 		columns.push_back(move(entry));
+	}
+	assert(bound_defaults.size() == columns.size());
+	for(size_t i = 0; i < info->bound_defaults.size(); i++) {
+		auto &bound_default = info->bound_defaults[i];
+		if (bound_default) {
+			// explicit default: use the users' expression
+			bound_defaults[i] = move(bound_default);
+		}
 	}
 }
 

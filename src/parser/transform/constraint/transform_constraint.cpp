@@ -47,6 +47,8 @@ unique_ptr<Constraint> Transformer::TransformConstraint(postgres::ListCell *cell
 	case postgres::CONSTR_NULL:
 		return nullptr;
 	case postgres::CONSTR_DEFAULT:
+		column.default_value = TransformExpression(constraint->raw_expr);
+		return nullptr;
 	case postgres::CONSTR_FOREIGN:
 	default:
 		throw NotImplementedException("Constraint not implemented!");
