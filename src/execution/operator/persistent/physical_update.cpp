@@ -24,17 +24,14 @@ void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 		if (state->child_chunk.size() == 0) {
 			break;
 		}
+		ExpressionExecutor executor(state->child_chunk);
 		// update data in the base table
 		// the row ids are given to us as the last column of the child chunk
 		auto &row_ids = state->child_chunk.data[state->child_chunk.column_count - 1];
 		for (size_t i = 0; i < expressions.size(); i++) {
 			if (expressions[i]->type == ExpressionType::VALUE_DEFAULT) {
 				// default expression, set to the default value of the column
-				auto &column = tableref.columns[columns[i]];
-				update_chunk.data[i].count = state->child_chunk.size();
-				update_chunk.data[i].sel_vector = state->child_chunk.sel_vector;
-				throw NotImplementedException("DEFAULT value in update");
-				// VectorOperations::Set(update_chunk.data[i], column.default_value);
+				executor.ExecuteExpression(*tableref.bound_defaults[columns[i]], update_chunk.data[i]);
 			} else {
 				assert(expressions[i]->type == ExpressionType::BOUND_REF);
 				// index into child chunk

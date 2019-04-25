@@ -13,6 +13,7 @@
 #include "parser/column_definition.hpp"
 #include "parser/constraint.hpp"
 #include "parser/statement/select_statement.hpp"
+#include "planner/expression.hpp"
 
 #include <limits>
 
@@ -27,6 +28,8 @@ struct CreateTableInformation {
 	vector<ColumnDefinition> columns;
 	//! List of constraints on the table
 	vector<unique_ptr<Constraint>> constraints;
+	//! Bound default values
+	vector<unique_ptr<Expression>> bound_defaults;
 	//! Ignore if the entry already exists, instead of failing
 	bool if_not_exists = false;
 	bool temporary = false;
