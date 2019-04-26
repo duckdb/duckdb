@@ -16,7 +16,7 @@ public:
 	uint8_t childIndex[256];
 	Node *child[48];
 
-	Node48() : Node(NodeType::N48) {
+	Node48() : Node(NodeType::N48,this->maxPrefixLength) {
 		memset(childIndex, 48, sizeof(childIndex));
 		memset(child, 0, sizeof(child));
 	}

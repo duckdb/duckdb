@@ -14,7 +14,24 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, ve
 	if (*(char *)&n == 1) {
 		is_little_endian = true;
 	} else {
-		throw NotImplementedException("Big endian is not supported for ART index");
+		is_little_endian = false;
+	}
+	switch (types[0]) {
+		case TypeId::BOOLEAN:
+		case TypeId::TINYINT:
+			maxPrefix = 1;
+			break;
+		case TypeId::SMALLINT:
+			maxPrefix = 2;
+			break;
+		case TypeId::INTEGER:
+			maxPrefix = 4;
+			break;
+		case TypeId::BIGINT:
+			maxPrefix = 8;
+			break;
+		default:
+			throw InvalidTypeException(types[0], "Invalid type for index");
 	}
 }
 

@@ -6,9 +6,7 @@
 
 using namespace duckdb;
 
-inline uint64_t Node::getLeafValue(const Node *node) {
-	return reinterpret_cast<uintptr_t>(node) >> 1;
-}
+
 
 unsigned Node::min(unsigned a, unsigned b) {
 	return (a < b) ? a : b;
@@ -20,24 +18,57 @@ uint8_t Node::flipSign(uint8_t keyByte) {
 
 void Node::copyPrefix(Node *src, Node *dst) {
 	dst->prefixLength = src->prefixLength;
-	memcpy(dst->prefix, src->prefix, min(src->prefixLength, maxPrefixLength));
+	memcpy(dst->prefix, src->prefix, min(src->prefixLength, src->maxPrefixLength));
 }
 
-inline unsigned Node::ctz(uint16_t x) {
-	unsigned n = 1;
-	if ((x & 0xFF) == 0) {
-		n += 8;
-		x = x >> 8;
-	}
-	if ((x & 0x0F) == 0) {
-		n += 4;
-		x = x >> 4;
-	}
-	if ((x & 0x03) == 0) {
-		n += 2;
-		x = x >> 2;
-	}
-	return n - (x & 1);
+void Node::convert_to_binary_comparable(bool isLittleEndian, TypeId type, uintptr_t tid, uint8_t key[]) {
+    switch (type) {
+        case TypeId::BOOLEAN:
+            if (isLittleEndian){
+                reinterpret_cast<uint8_t *>(key)[0] = ((tid & 0xf0) >> 4) | ((tid & 0x0f) << 4);
+            }
+            else{
+                reinterpret_cast<uint8_t*>(key)[0]=tid;
+            }
+        case TypeId::TINYINT:
+            if (isLittleEndian){
+                reinterpret_cast<uint8_t *>(key)[0] = ((tid & 0xf0) >> 4) | ((tid & 0x0f) << 4);
+
+            }
+            else{
+                reinterpret_cast<uint8_t*>(key)[0]=tid;
+            }			key[0] = flipSign(key[0]);
+            break;
+        case TypeId::SMALLINT:
+            if (isLittleEndian){
+                reinterpret_cast<uint16_t *>(key)[0] = __builtin_bswap16(tid);
+            }
+            else{
+                reinterpret_cast<uint16_t *>(key)[0]=tid;
+            }
+            key[0] = flipSign(key[0]);
+            break;
+        case TypeId::INTEGER:
+            if (isLittleEndian){
+                reinterpret_cast<uint32_t *>(key)[0] = __builtin_bswap32(tid);
+            }
+            else{
+                reinterpret_cast<uint32_t *>(key)[0]=tid;
+            }
+            key[0] = flipSign(key[0]);
+            break;
+        case TypeId::BIGINT:
+            if (isLittleEndian){
+                reinterpret_cast<uint64_t *>(key)[0] = __builtin_bswap64(tid);
+            }
+            else{
+                reinterpret_cast<uint64_t *>(key)[0]=tid;
+            }
+            key[0] = flipSign(key[0]);
+            break;
+        default:
+            throw NotImplementedException("Unimplemented type for ART index");
+    }
 }
 
 Node *Node::minimum(Node *node) {
@@ -95,15 +126,15 @@ Node *Node::findChild(const uint8_t k, const Node *node) {
 	assert(false);
 }
 
-unsigned Node::prefixMismatch(Node *node, uint8_t key[], unsigned depth, unsigned maxKeyLength, TypeId type) {
+unsigned Node::prefixMismatch(bool isLittleEndian, Node *node, uint8_t key[], unsigned depth, unsigned maxKeyLength, TypeId type) {
 	unsigned pos;
-	if (node->prefixLength > maxPrefixLength) {
-		for (pos = 0; pos < maxPrefixLength; pos++)
+	if (node->prefixLength > node->maxPrefixLength) {
+		for (pos = 0; pos < node->maxPrefixLength; pos++)
 			if (key[depth + pos] != node->prefix[pos])
 				return pos;
 		uint8_t minKey[maxKeyLength];
 		auto leaf = static_cast<Leaf *>(minimum(node));
-		convert_to_binary_comparable(type, leaf->value, minKey);
+		convert_to_binary_comparable(isLittleEndian,type, leaf->value, minKey);
 		for (; pos < node->prefixLength; pos++)
 			if (key[depth + pos] != minKey[depth + pos])
 				return pos;
@@ -132,7 +163,7 @@ void Node::insertLeaf(Node *node, Node **nodeRef, uint8_t key, Node *newNode) {
 	}
 }
 
-void Node::insert(Node *node, Node **nodeRef, uint8_t key[], unsigned depth, uintptr_t value, unsigned maxKeyLength,
+void Node::insert(bool isLittleEndian,Node *node, Node **nodeRef, uint8_t key[], unsigned depth, uintptr_t value, unsigned maxKeyLength,
                   TypeId type, uint64_t row_id) {
 	if (node == NULL) {
 		*nodeRef = new Leaf(value, row_id);
@@ -143,7 +174,7 @@ void Node::insert(Node *node, Node **nodeRef, uint8_t key[], unsigned depth, uin
 		// Replace leaf with Node4 and store both leaves in it
 		uint8_t existingKey[maxKeyLength];
 		auto leaf = static_cast<Leaf *>(node);
-		convert_to_binary_comparable(type, leaf->value, existingKey);
+		convert_to_binary_comparable(isLittleEndian,type, leaf->value, existingKey);
 		unsigned newPrefixLength = 0;
 		// Leaf node is already there, update row_id vector
 		if (depth+newPrefixLength == maxKeyLength){
@@ -160,7 +191,7 @@ void Node::insert(Node *node, Node **nodeRef, uint8_t key[], unsigned depth, uin
 		}
 		Node4 *newNode = new Node4();
 		newNode->prefixLength = newPrefixLength;
-		memcpy(newNode->prefix, key + depth, min(newPrefixLength, maxPrefixLength));
+		memcpy(newNode->prefix, key + depth, min(newPrefixLength, node->maxPrefixLength));
 		*nodeRef = newNode;
 
 		Node4::insert(newNode, nodeRef, existingKey[depth + newPrefixLength], node);
@@ -170,25 +201,25 @@ void Node::insert(Node *node, Node **nodeRef, uint8_t key[], unsigned depth, uin
 
 	// Handle prefix of inner node
 	if (node->prefixLength) {
-		unsigned mismatchPos = prefixMismatch(node, key, depth, maxKeyLength, type);
+		unsigned mismatchPos = prefixMismatch(isLittleEndian,node, key, depth, maxKeyLength, type);
 		if (mismatchPos != node->prefixLength) {
 			// Prefix differs, create new node
 			Node4 *newNode = new Node4();
 			*nodeRef = newNode;
 			newNode->prefixLength = mismatchPos;
-			memcpy(newNode->prefix, node->prefix, min(mismatchPos, maxPrefixLength));
+			memcpy(newNode->prefix, node->prefix, min(mismatchPos, node->maxPrefixLength));
 			// Break up prefix
-			if (node->prefixLength < maxPrefixLength) {
+			if (node->prefixLength < node->maxPrefixLength) {
 				Node4::insert(newNode, nodeRef, node->prefix[mismatchPos], node);
 				node->prefixLength -= (mismatchPos + 1);
-				memmove(node->prefix, node->prefix + mismatchPos + 1, min(node->prefixLength, maxPrefixLength));
+				memmove(node->prefix, node->prefix + mismatchPos + 1, min(node->prefixLength, node->maxPrefixLength));
 			} else {
 				node->prefixLength -= (mismatchPos + 1);
 				uint8_t minKey[maxKeyLength];
 				auto leaf = static_cast<Leaf *>(minimum(node));
-				convert_to_binary_comparable(type, leaf->value, minKey);
+				convert_to_binary_comparable(isLittleEndian,type, leaf->value, minKey);
 				Node4::insert(newNode, nodeRef, minKey[depth + mismatchPos], node);
-				memmove(node->prefix, minKey + depth + mismatchPos + 1, min(node->prefixLength, maxPrefixLength));
+				memmove(node->prefix, minKey + depth + mismatchPos + 1, min(node->prefixLength, node->maxPrefixLength));
 			}
 			Node4::insert(newNode, nodeRef, key[depth + mismatchPos], new Leaf(value, row_id));
 			return;
@@ -199,7 +230,7 @@ void Node::insert(Node *node, Node **nodeRef, uint8_t key[], unsigned depth, uin
 	// Recurse
 	Node *child = findChild(key[depth], node);
 	if (child) {
-		insert(child, &child, key, depth + 1, value, maxKeyLength, type, row_id);
+		insert(isLittleEndian,child, &child, key, depth + 1, value, maxKeyLength, type, row_id);
 		return;
 	}
 
@@ -207,7 +238,7 @@ void Node::insert(Node *node, Node **nodeRef, uint8_t key[], unsigned depth, uin
 	insertLeaf(node, nodeRef, key[depth], newNode);
 }
 
-Node *Node::lookup(Node *node, uint8_t key[], unsigned keyLength, unsigned depth, unsigned maxKeyLength, TypeId type) {
+Node *Node::lookup(bool isLittleEndian,Node *node, uint8_t key[], unsigned keyLength, unsigned depth, unsigned maxKeyLength, TypeId type) {
 
 	bool skippedPrefix = false; // Did we optimistically skip some prefix without checking it?
 
@@ -220,7 +251,7 @@ Node *Node::lookup(Node *node, uint8_t key[], unsigned keyLength, unsigned depth
 				// Check leaf
 				uint8_t leafKey[maxKeyLength];
 				auto leaf = static_cast<Leaf *>(minimum(node));
-				convert_to_binary_comparable(type, leaf->value, leafKey);
+				convert_to_binary_comparable(isLittleEndian,type, leaf->value, leafKey);
 
 				for (unsigned i = (skippedPrefix ? 0 : depth); i < keyLength; i++)
 					if (leafKey[i] != key[i])
@@ -230,7 +261,7 @@ Node *Node::lookup(Node *node, uint8_t key[], unsigned keyLength, unsigned depth
 		}
 
 		if (node->prefixLength) {
-			if (node->prefixLength < maxPrefixLength) {
+			if (node->prefixLength < node->maxPrefixLength) {
 				for (unsigned pos = 0; pos < node->prefixLength; pos++)
 					if (key[depth + pos] != node->prefix[pos])
 						return NULL;

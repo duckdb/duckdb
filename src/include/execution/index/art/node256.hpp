@@ -15,7 +15,7 @@ class Node256 : public Node {
 public:
 	Node *child[256];
 
-	Node256() : Node(NodeType::N256) {
+	Node256() : Node(NodeType::N256,this->maxPrefixLength) {
 		memset(child, 0, sizeof(child));
 	}
 

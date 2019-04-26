@@ -16,7 +16,7 @@ public:
 	uint8_t key[16];
 	Node *child[16];
 
-	Node16() : Node(NodeType::N16) {
+	Node16() : Node(NodeType::N16,this->maxPrefixLength) {
 		memset(key, 0, sizeof(key));
 		memset(child, 0, sizeof(child));
 	}
