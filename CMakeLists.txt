@@ -41,6 +41,7 @@ ENDIF()
 
 include_directories(src/include)
 include_directories(third_party/hyperloglog)
+include_directories(third_party/re2)
 
 add_subdirectory(src)
 add_subdirectory(third_party)

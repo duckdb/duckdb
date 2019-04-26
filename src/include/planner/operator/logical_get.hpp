@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "planner/logical_operator.hpp"
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "planner/logical_operator.hpp"
 
 namespace duckdb {
 

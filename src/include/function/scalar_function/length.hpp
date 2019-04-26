@@ -14,7 +14,8 @@
 namespace duckdb {
 namespace function {
 
-void length_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
+void length_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr,
+                     Vector &result);
 bool length_matches_arguments(vector<SQLType> &arguments);
 SQLType length_get_return_type(vector<SQLType> &arguments);
 

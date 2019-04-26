@@ -24,7 +24,7 @@ public:
 	//! Create a real TableCatalogEntry and initialize storage for it
 	SequenceCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateSequenceInformation *info)
 	    : CatalogEntry(CatalogType::SEQUENCE, catalog, info->name), schema(schema), counter(info->start_value),
-		increment(info->increment), min_value(info->min_value), max_value(info->max_value), cycle(info->cycle) {
+	      increment(info->increment), min_value(info->min_value), max_value(info->max_value), cycle(info->cycle) {
 	}
 
 	//! The schema the table belongs to

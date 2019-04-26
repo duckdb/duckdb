@@ -36,7 +36,8 @@ struct CreateTableInformation {
 
 	CreateTableInformation() : schema(DEFAULT_SCHEMA), if_not_exists(false), temporary(false) {
 	}
-	CreateTableInformation(string schema, string name) : schema(schema), table(name), if_not_exists(false), temporary(false) {
+	CreateTableInformation(string schema, string name)
+	    : schema(schema), table(name), if_not_exists(false), temporary(false) {
 	}
 };
 
@@ -194,7 +195,8 @@ struct CreateScalarFunctionInformation {
 	get_return_type_function_t return_type;
 	//! The bind function (if any)
 	bind_scalar_function_t bind;
-	//! Whether or not the function has side effects (e.g. sequence increments, random() functions, NOW()). Functions with side-effects cannot be constant-folded.
+	//! Whether or not the function has side effects (e.g. sequence increments, random() functions, NOW()). Functions
+	//! with side-effects cannot be constant-folded.
 	bool has_side_effects;
 
 	CreateScalarFunctionInformation() : schema(DEFAULT_SCHEMA), or_replace(false), has_side_effects(false) {
@@ -276,9 +278,9 @@ struct CreateSequenceInformation {
 	//! Whether or not to ignore errors on duplicate creation
 	bool if_not_exists;
 
-	CreateSequenceInformation() :
-	    schema(DEFAULT_SCHEMA), name(string()), increment(1), min_value(1), max_value(std::numeric_limits<int64_t>::max()),
-		start_value(1), cycle(false), temporary(false) {
+	CreateSequenceInformation()
+	    : schema(DEFAULT_SCHEMA), name(string()), increment(1), min_value(1),
+	      max_value(std::numeric_limits<int64_t>::max()), start_value(1), cycle(false), temporary(false) {
 	}
 };
 
@@ -290,8 +292,7 @@ struct DropSequenceInformation {
 	//! Whether or not to ignore errors on non-existing DROP SEQUENCE statements
 	bool if_exists;
 
-	DropSequenceInformation() :
-	    schema(DEFAULT_SCHEMA), name(string()), if_exists(false) {
+	DropSequenceInformation() : schema(DEFAULT_SCHEMA), name(string()), if_exists(false) {
 	}
 };
 

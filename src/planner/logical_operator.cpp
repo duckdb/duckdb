@@ -1,4 +1,5 @@
 #include "planner/logical_operator.hpp"
+
 #include "common/printer.hpp"
 
 using namespace duckdb;

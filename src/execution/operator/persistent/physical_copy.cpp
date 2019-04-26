@@ -1,4 +1,5 @@
 #include "execution/operator/persistent/physical_copy.hpp"
+
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "common/file_system.hpp"
 #include "main/client_context.hpp"

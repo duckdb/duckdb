@@ -9,8 +9,8 @@
 #pragma once
 
 #include "execution/physical_operator.hpp"
-#include "storage/data_table.hpp"
 #include "function/function.hpp"
+#include "storage/data_table.hpp"
 
 namespace duckdb {
 

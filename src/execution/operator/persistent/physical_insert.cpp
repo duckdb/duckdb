@@ -1,6 +1,6 @@
 #include "execution/operator/persistent/physical_insert.hpp"
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
 
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "common/types/chunk_collection.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
@@ -30,7 +30,6 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 		// create the chunk to insert from
 		DataChunk insert_chunk;
 		auto types = table->GetTypes();
-
 
 		insert_chunk.Initialize(types);
 		for (auto &chunkptr : collection.chunks) {

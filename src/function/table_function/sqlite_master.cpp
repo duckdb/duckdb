@@ -1,8 +1,8 @@
 #include "function/table_function/sqlite_master.hpp"
 
+#include "catalog/catalog.hpp"
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "catalog/catalog.hpp"
 #include "common/exception.hpp"
 #include "main/client_context.hpp"
 #include "main/database.hpp"

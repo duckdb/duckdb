@@ -1,7 +1,7 @@
 #include "function/table_function/pragma_table_info.hpp"
 
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "catalog/catalog.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "common/exception.hpp"
 #include "main/client_context.hpp"
 #include "main/database.hpp"

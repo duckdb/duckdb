@@ -200,7 +200,6 @@ SequenceCatalogEntry *SchemaCatalogEntry::GetSequence(Transaction &transaction, 
 		throw CatalogException("Sequence Function with name %s does not exist!", name.c_str());
 	}
 	return (SequenceCatalogEntry *)entry;
-
 }
 
 bool SchemaCatalogEntry::HasDependents(Transaction &transaction) {

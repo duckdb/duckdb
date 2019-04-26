@@ -163,7 +163,6 @@ TEST_CASE("Test Sequences", "[sequence]") {
 	// temporary sequences not supported yet
 	REQUIRE_FAIL(con.Query("CREATE TEMPORARY SEQUENCE seq"));
 
-
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq;"));
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq2;"));
 	// we can use operations in nextval
@@ -245,7 +244,8 @@ struct ConcurrentData {
 	mutex lock;
 	vector<int64_t> results;
 
-	ConcurrentData(DuckDB &db) : db(db) {}
+	ConcurrentData(DuckDB &db) : db(db) {
+	}
 };
 
 #define THREAD_COUNT 20
@@ -253,7 +253,7 @@ struct ConcurrentData {
 
 static void append_values_from_sequence(ConcurrentData *data) {
 	Connection con(data->db);
-	for(size_t i = 0; i < INSERT_COUNT; i++) {
+	for (size_t i = 0; i < INSERT_COUNT; i++) {
 		auto result = con.Query("SELECT nextval('seq')");
 		int64_t res = result->GetValue(0, 0).GetNumericValue();
 		lock_guard<mutex> lock(data->lock);
