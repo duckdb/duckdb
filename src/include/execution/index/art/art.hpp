@@ -24,11 +24,9 @@
 
 namespace duckdb {
 struct ARTIndexScanState : public IndexScanState {
-	Value value_left;
-	Value value_right;
+	Value values[2];
+	ExpressionType expressions[2];
 	bool checked;
-	ExpressionType expression_type_left;
-	ExpressionType expression_type_right;
 
 	ARTIndexScanState(vector<column_t> column_ids) : IndexScanState(column_ids) {
 	}
@@ -82,12 +80,21 @@ public:
 	uint8_t maxPrefix;
 
 private:
-	template <class T> void templated_insert(DataChunk &input, Vector &row_ids) {
+		//! Insert the leaf value into the tree
+		void insert(bool isLittleEndian,Node *node, Node **nodeRef, Key& key, unsigned depth, uintptr_t value, unsigned maxKeyLength,
+                TypeId type, uint64_t row_id);
+
+    Node* lookupRange(Node *node, Key& low_key, Key& high_key,unsigned keyLength, unsigned depth);
+
+    //! Find the node with a matching key, optimistic version
+    Node* lookup(Node *node, Key& key, unsigned keyLength, unsigned depth);
+
+    template <class T> void templated_insert(DataChunk &input, Vector &row_ids) {
 		auto input_data = (T *)input.data[0].data;
 		auto row_identifiers = (uint64_t *)row_ids.data;
 		for (size_t i = 0; i < row_ids.count; i++) {
 			Key & key = *new Key(this->is_little_endian,input.data[0].type, input_data[i]);
-			Node::insert(this->is_little_endian,tree, &tree, key, 0, input_data[i], 8, input.data[0].type, row_identifiers[i]);
+			insert(this->is_little_endian,tree, &tree, key, 0, input_data[i], 8, input.data[0].type, row_identifiers[i]);
 		}
 	}
 
@@ -95,7 +102,7 @@ private:
 	template <class T> size_t templated_lookup(TypeId type, T data, uint64_t *result_ids) {
         Key& key= *new Key(this->is_little_endian, type, data);
         size_t result_count = 0;
-		auto leaf = static_cast<Leaf *>(tree->lookup(this->is_little_endian,tree, key, this->maxPrefix, 0, this->maxPrefix, type));
+		auto leaf = static_cast<Leaf *>(lookup(tree, key, this->maxPrefix, 0));
 		if (leaf) {
 			for (size_t i = 0; i < leaf->num_elements; i ++){
 				result_ids[result_count++] = leaf->row_id[i];

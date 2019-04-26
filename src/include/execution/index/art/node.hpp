@@ -33,18 +33,8 @@ public:
 		this->prefix = (uint8_t*) malloc(maxPrefixLength * sizeof(uint8_t));
 		this->maxPrefixLength = maxPrefixLength;
 	}
-	//! Find the node with a matching key, optimistic version
-	Node *lookup(bool isLittleEndian, Node *node, Key& key, unsigned keyLength, unsigned depth, unsigned maxKeyLength, TypeId type);
-	//! Insert the leaf value into the tree
-	static void insert(bool isLittleEndian, Node *node, Node **nodeRef, Key& key, unsigned depth, uintptr_t value,
-	                   unsigned maxKeyLength, TypeId type, uint64_t row_id);
 	//! Copies the prefix from the source to the destination node
 	static void copyPrefix(Node *src, Node *dst);
-
-
-private:
-	//! Compare two elements and return the smaller
-	static unsigned min(unsigned a, unsigned b);
 	//! Find the leaf with smallest element in the tree
 	static Node *minimum(Node *node);
 	//! Find the next child for the keyByte
@@ -53,6 +43,9 @@ private:
 	static unsigned prefixMismatch(bool isLittleEndian, Node *node, Key &key, size_t depth, unsigned maxKeyLength, TypeId type);
 	//! Insert leaf into inner node
 	static void insertLeaf(Node *node, Node **nodeRef, uint8_t key, Node *newNode);
+	//! Compare two elements and return the smaller
+	static unsigned min(unsigned a, unsigned b);
+
 };
 
 class Leaf : public Node {
