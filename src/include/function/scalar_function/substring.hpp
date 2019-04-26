@@ -14,7 +14,8 @@
 namespace duckdb {
 namespace function {
 
-void substring_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
+void substring_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr,
+                        Vector &result);
 bool substring_matches_arguments(vector<SQLType> &arguments);
 SQLType substring_get_return_type(vector<SQLType> &arguments);
 

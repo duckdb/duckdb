@@ -278,18 +278,18 @@ enum class StatementType : uint8_t {
 	// -----------------------------
 	// Create Types
 	// -----------------------------
-	CREATE_TABLE,  // create table statement type
-	CREATE_SCHEMA, // create schema statement type
-	CREATE_INDEX,  // create index statement type
-	CREATE_VIEW,   // create view statement type
+	CREATE_TABLE,    // create table statement type
+	CREATE_SCHEMA,   // create schema statement type
+	CREATE_INDEX,    // create index statement type
+	CREATE_VIEW,     // create view statement type
 	CREATE_SEQUENCE, // create sequence statement type
 
 	// -----------------------------
 	// Drop Types
 	// -----------------------------
-	DROP_TABLE,  // drop table statement type
-	DROP_SCHEMA, // drop table statement type
-	DROP_INDEX,  // drop index statement type
+	DROP_TABLE,   // drop table statement type
+	DROP_SCHEMA,  // drop table statement type
+	DROP_INDEX,   // drop index statement type
 	DROP_VIEW,    // drop view statement type
 	DROP_SEQUENCE // drop sequence statement type
 };

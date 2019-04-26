@@ -55,7 +55,4 @@ TEST_CASE("Test Row IDs", "[rowid]") {
 	result = con.Query("SELECT _duckdb_internal_rowid, rowid FROM b");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {5, 5, 5}));
-
-
-
 }

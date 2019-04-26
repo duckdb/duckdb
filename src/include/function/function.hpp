@@ -33,7 +33,8 @@ typedef void (*table_function_t)(ClientContext &, DataChunk &input, DataChunk &o
 typedef void (*table_function_final_t)(ClientContext &, FunctionData *dataptr);
 
 //! The type used for scalar functions
-typedef void (*scalar_function_t)(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
+typedef void (*scalar_function_t)(ExpressionExecutor &exec, Vector inputs[], size_t input_count,
+                                  BoundFunctionExpression &expr, Vector &result);
 //! Type used for checking if a function matches the input arguments
 typedef bool (*matches_argument_function_t)(vector<SQLType> &arguments);
 //! Gets the return type of the function given the types of the input argument

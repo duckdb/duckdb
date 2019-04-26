@@ -1,10 +1,9 @@
 #include "catalog/catalog.hpp"
 
+#include "catalog/catalog_entry/list.hpp"
 #include "common/exception.hpp"
 #include "parser/expression/function_expression.hpp"
 #include "storage/storage_manager.hpp"
-
-#include "catalog/catalog_entry/list.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -85,7 +84,8 @@ CatalogEntry *Catalog::GetTableOrView(Transaction &transaction, const string &sc
 	return schema->GetTableOrView(transaction, table_name);
 }
 
-SequenceCatalogEntry *Catalog::GetSequence(Transaction &transaction, const string &schema_name, const string &sequence) {
+SequenceCatalogEntry *Catalog::GetSequence(Transaction &transaction, const string &schema_name,
+                                           const string &sequence) {
 	auto schema = GetSchema(transaction, schema_name);
 	return schema->GetSequence(transaction, sequence);
 }

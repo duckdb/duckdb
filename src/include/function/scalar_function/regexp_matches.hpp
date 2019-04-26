@@ -12,7 +12,6 @@
 #include "function/function.hpp"
 #include "re2/re2.h"
 
-
 namespace duckdb {
 namespace function {
 
@@ -27,7 +26,9 @@ struct RegexpMatchesBindData : public FunctionData {
 	string range_min, range_max;
 	bool range_success;
 
-	RegexpMatchesBindData(std::unique_ptr<RE2> constant_pattern, string range_min, string range_max, bool range_success) : constant_pattern(std::move(constant_pattern)), range_min(range_min), range_max(range_max), range_success(range_success) {
+	RegexpMatchesBindData(std::unique_ptr<RE2> constant_pattern, string range_min, string range_max, bool range_success)
+	    : constant_pattern(std::move(constant_pattern)), range_min(range_min), range_max(range_max),
+	      range_success(range_success) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {

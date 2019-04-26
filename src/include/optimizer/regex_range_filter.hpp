@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// optimizer/filter_pushdown.hpp
+// optimizer/regex_range_filter.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -20,8 +20,6 @@ public:
 	}
 	//! Perform filter pushdown
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> node);
-
-
 };
 
 } // namespace duckdb

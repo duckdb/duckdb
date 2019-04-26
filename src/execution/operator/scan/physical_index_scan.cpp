@@ -1,6 +1,6 @@
 #include "execution/operator/scan/physical_index_scan.hpp"
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
 
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "main/client_context.hpp"
 
 using namespace duckdb;

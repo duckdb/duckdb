@@ -51,7 +51,8 @@ TEST_CASE("regex search test", "[regex]") {
 	REQUIRE_FAIL(con.Query("SELECT regexp_matches('', '\\X')"));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE regex(s STRING, p STRING)"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO regex VALUES ('asdf', 'sd'), ('asdf', '^sd'), (NULL, '^sd'), ('asdf', NULL)"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO regex VALUES ('asdf', 'sd'), ('asdf', '^sd'), (NULL, '^sd'), ('asdf', NULL)"));
 	result = con.Query("SELECT regexp_matches(s, '.*') FROM regex");
 	REQUIRE(CHECK_COLUMN(result, 0, {true, true, Value(), true}));
 
@@ -71,7 +72,14 @@ TEST_CASE("regex filter push test", "[regex]") {
 	result = con.Query("SELECT s FROM regex WHERE REGEXP_MATCHES(s, 'as(c|d|e)f')");
 	REQUIRE(CHECK_COLUMN(result, 0, {"asdf"}));
 
+	result = con.Query("SELECT s FROM regex WHERE NOT REGEXP_MATCHES(s, 'as(c|d|e)f')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"xxxx", "aaaa"}));
 
+	result = con.Query("SELECT s FROM regex WHERE REGEXP_MATCHES(s, 'as(c|d|e)f') AND s = 'asdf'");
+	REQUIRE(CHECK_COLUMN(result, 0, {"asdf"}));
+
+	result = con.Query("SELECT s FROM regex WHERE REGEXP_MATCHES(s, 'as(c|d|e)f') AND REGEXP_MATCHES(s, 'as[a-z]f')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"asdf"}));
 }
 
 TEST_CASE("regex replace test", "[regex]") {

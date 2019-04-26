@@ -52,5 +52,4 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddScalarFunction<function::NextvalFunction>(transaction, catalog);
 	AddScalarFunction<function::RegexpMatchesFunction>(transaction, catalog);
 	AddScalarFunction<function::RegexpReplaceFunction>(transaction, catalog);
-
 }
