@@ -15,6 +15,7 @@
 #include "parser/parsed_expression.hpp"
 #include "storage/data_table.hpp"
 #include "storage/index.hpp"
+#include "art_key.hpp"
 #include "node.hpp"
 #include "node4.hpp"
 #include "node16.hpp"
@@ -85,18 +86,16 @@ private:
 		auto input_data = (T *)input.data[0].data;
 		auto row_identifiers = (uint64_t *)row_ids.data;
 		for (size_t i = 0; i < row_ids.count; i++) {
-			uint8_t minKey[maxPrefix];
-			Node::convert_to_binary_comparable(this->is_little_endian,input.data[0].type, input_data[i], minKey);
-			Node::insert(this->is_little_endian,tree, &tree, minKey, 0, input_data[i], 8, input.data[0].type, row_identifiers[i]);
+			Key & key = *new Key(this->is_little_endian,input.data[0].type, input_data[i]);
+			Node::insert(this->is_little_endian,tree, &tree, key, 0, input_data[i], 8, input.data[0].type, row_identifiers[i]);
 		}
 	}
 
 	// TODO: For now only lookup
-	template <class T> size_t templated_lookup(TypeId type, T key, uint64_t *result_ids) {
-		uint8_t minKey[maxPrefix];
-		Node::convert_to_binary_comparable(this->is_little_endian,type, key, minKey);
-		size_t result_count = 0;
-		auto leaf = static_cast<Leaf *>(tree->lookup(this->is_little_endian,tree, minKey, this->maxPrefix, 0, this->maxPrefix, type));
+	template <class T> size_t templated_lookup(TypeId type, T data, uint64_t *result_ids) {
+        Key& key= *new Key(this->is_little_endian, type, data);
+        size_t result_count = 0;
+		auto leaf = static_cast<Leaf *>(tree->lookup(this->is_little_endian,tree, key, this->maxPrefix, 0, this->maxPrefix, type));
 		if (leaf) {
 			for (size_t i = 0; i < leaf->num_elements; i ++){
 				result_ids[result_count++] = leaf->row_id[i];

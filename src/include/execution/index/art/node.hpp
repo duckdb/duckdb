@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "art_key.hpp"
 #include <common/exception.hpp>
 #include "common/common.hpp"
 
@@ -33,17 +34,13 @@ public:
 		this->maxPrefixLength = maxPrefixLength;
 	}
 	//! Find the node with a matching key, optimistic version
-	Node *lookup(bool isLittleEndian, Node *node, uint8_t key[], unsigned keyLength, unsigned depth, unsigned maxKeyLength, TypeId type);
+	Node *lookup(bool isLittleEndian, Node *node, Key& key, unsigned keyLength, unsigned depth, unsigned maxKeyLength, TypeId type);
 	//! Insert the leaf value into the tree
-	static void insert(bool isLittleEndian, Node *node, Node **nodeRef, uint8_t key[], unsigned depth, uintptr_t value,
+	static void insert(bool isLittleEndian, Node *node, Node **nodeRef, Key& key, unsigned depth, uintptr_t value,
 	                   unsigned maxKeyLength, TypeId type, uint64_t row_id);
 	//! Copies the prefix from the source to the destination node
 	static void copyPrefix(Node *src, Node *dst);
-	//! Flip the sign bit, enables signed SSE comparison of unsigned values
-	static uint8_t flipSign(uint8_t keyByte);
 
-	//! Performs conversion to binary comparable format (i.e., swap bits to big-endian, swap MSB for signed integers)
-	static void convert_to_binary_comparable(bool isLittleEndian, TypeId type, uintptr_t tid, uint8_t key[]);
 
 private:
 	//! Compare two elements and return the smaller
@@ -53,7 +50,7 @@ private:
 	//! Find the next child for the keyByte
 	static Node *findChild(const uint8_t k, const Node *node);
 	//! Compare the key with the prefix of the node, return the number matching bytes
-	static unsigned prefixMismatch(bool isLittleEndian, Node *node, uint8_t key[], unsigned depth, unsigned maxKeyLength, TypeId type);
+	static unsigned prefixMismatch(bool isLittleEndian, Node *node, Key &key, size_t depth, unsigned maxKeyLength, TypeId type);
 	//! Insert leaf into inner node
 	static void insertLeaf(Node *node, Node **nodeRef, uint8_t key, Node *newNode);
 };
