@@ -194,6 +194,8 @@ struct CreateScalarFunctionInformation {
 	get_return_type_function_t return_type;
 	//! The bind function (if any)
 	bind_scalar_function_t bind;
+	// The dependency function (if any)
+	dependency_function_t dependency;
 	//! Whether or not the function has side effects (e.g. sequence increments, random() functions, NOW()). Functions with side-effects cannot be constant-folded.
 	bool has_side_effects;
 
@@ -289,9 +291,11 @@ struct DropSequenceInformation {
 	string name;
 	//! Whether or not to ignore errors on non-existing DROP SEQUENCE statements
 	bool if_exists;
+	//! Whether or not to drop all dependencies of the sequence as well
+	bool cascade;
 
 	DropSequenceInformation() :
-	    schema(DEFAULT_SCHEMA), name(string()), if_exists(false) {
+	    schema(DEFAULT_SCHEMA), name(string()), if_exists(false), cascade(false) {
 	}
 };
 

@@ -63,23 +63,23 @@ TEST_CASE("Test dependencies with multiple connections", "[catalog]") {
 	// after the cascade drop the prepared statement is invalidated
 	REQUIRE_FAIL(con2.Query("EXECUTE v"));
 
-	// dependency on a sequence
-	// REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq"));
-	// REQUIRE_NO_FAIL(con2.Query("PREPARE v AS SELECT nextval('seq')"));
-	// result = con2.Query("EXECUTE v");
-	// REQUIRE(CHECK_COLUMN(result, 0, {1}));
-	// // cannot drop sequence now
-	// REQUIRE_FAIL(con.Query("DROP SEQUENCE seq"));
-	// // check that the prepared statement still works
-	// result = con2.Query("EXECUTE v");
-	// REQUIRE(CHECK_COLUMN(result, 0, {1}));
-	// // cascade drop
-	// REQUIRE_NO_FAIL(con.Query("DROP SEQUENCE seq CASCADE"));
-	// // after the cascade drop the prepared statement is invalidated
-	// REQUIRE_FAIL(con2.Query("EXECUTE v"));
+	// dependency on a sequence for prepare
+	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq"));
+	REQUIRE_NO_FAIL(con2.Query("PREPARE v AS SELECT nextval('seq')"));
+	result = con2.Query("EXECUTE v");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	// cannot drop sequence now
+	REQUIRE_FAIL(con.Query("DROP SEQUENCE seq"));
+	// check that the prepared statement still works
+	result = con2.Query("EXECUTE v");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	// cascade drop
+	REQUIRE_NO_FAIL(con.Query("DROP SEQUENCE seq CASCADE"));
+	// after the cascade drop the prepared statement is invalidated
+	REQUIRE_FAIL(con2.Query("EXECUTE v"));
 }
 
-// TEST_CASE("Test parallel dependencies in multiple connections", "[catalog]") {
+// TEST_CASE("Test parallel dependencies in multiple connections", "[catalog][.]") {
 // 	unique_ptr<QueryResult> result;
 // 	DuckDB db(nullptr);
 // 	Connection con(db);

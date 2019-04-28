@@ -41,6 +41,10 @@ public:
 		return nullptr;
 	}
 
+	static dependency_function_t GetDependencyFunction() {
+		return nullptr;
+	}
+
 	static bool HasSideEffects() {
 		return false;
 	}
@@ -65,6 +69,10 @@ public:
 	}
 
 	static bind_scalar_function_t GetBindFunction() {
+		return nullptr;
+	}
+
+	static dependency_function_t GetDependencyFunction() {
 		return nullptr;
 	}
 

@@ -65,7 +65,7 @@ void SchemaCatalogEntry::CreateSequence(Transaction &transaction, CreateSequence
 }
 
 void SchemaCatalogEntry::DropSequence(Transaction &transaction, DropSequenceInformation *info) {
-	if (!sequences.DropEntry(transaction, info->name, false)) {
+	if (!sequences.DropEntry(transaction, info->name, info->cascade)) {
 		if (!info->if_exists) {
 			throw CatalogException("Sequence with name \"%s\" does not exist!", info->name.c_str());
 		}
