@@ -9,12 +9,13 @@
 using namespace duckdb;
 using namespace std;
 
-Catalog::Catalog(StorageManager &storage) : storage(storage) {
+Catalog::Catalog(StorageManager &storage) : storage(storage), schemas(*this), dependency_manager(*this) {
 }
 
 void Catalog::CreateSchema(Transaction &transaction, CreateSchemaInformation *info) {
+	unordered_set<CatalogEntry *> dependencies;
 	auto entry = make_unique_base<CatalogEntry, SchemaCatalogEntry>(this, info->schema);
-	if (!schemas.CreateEntry(transaction, info->schema, move(entry))) {
+	if (!schemas.CreateEntry(transaction, info->schema, move(entry), dependencies)) {
 		if (!info->if_not_exists) {
 			throw CatalogException("Schema with name %s already exists!", info->schema.c_str());
 		}

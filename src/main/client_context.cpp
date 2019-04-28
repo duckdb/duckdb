@@ -16,7 +16,7 @@ using namespace std;
 
 ClientContext::ClientContext(DuckDB &database)
     : db(database), transaction(database.transaction_manager), interrupted(false),
-      prepared_statements(make_unique<CatalogSet>()), open_result(nullptr) {
+      prepared_statements(make_unique<CatalogSet>(db.catalog)), open_result(nullptr) {
 }
 
 void ClientContext::Cleanup() {

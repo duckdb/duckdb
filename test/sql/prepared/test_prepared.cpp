@@ -112,13 +112,74 @@ TEST_CASE("PREPARE for INSERT", "[prepared]") {
 	REQUIRE_FAIL(con.Query("DROP TABLE b"));
 	REQUIRE_FAIL(con.Query("DROP TABLE c"));
 
-	// TODO also try this in different connections and transaction contexts
 	REQUIRE_NO_FAIL(con.Query("DEALLOCATE s2"));
 	REQUIRE_NO_FAIL(con.Query("DEALLOCATE s1"));
 
 	// now we can
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE b"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE c"));
+}
+
+TEST_CASE("PREPARE for DELETE/UPDATE", "[prepared]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// DELETE
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE b (i TINYINT)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO b VALUES (1), (2), (3), (4), (5)"));
+	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS DELETE FROM b WHERE i=$1"));
+
+	result = con.Query("SELECT * FROM b ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5}));
+	REQUIRE_NO_FAIL(con.Query("EXECUTE s1(3)"));
+
+	result = con.Query("SELECT * FROM b ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 4, 5}));
+
+	// cannot drop table now
+	REQUIRE_FAIL(con.Query("DROP TABLE b"));
+	// but we can with cascade
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE b CASCADE"));
+
+	// UPDATE
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE b (i TINYINT)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO b VALUES (1), (2), (3), (4), (5)"));
+	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS UPDATE b SET i=$1 WHERE i=$2"));
+
+	result = con.Query("SELECT * FROM b ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5}));
+	REQUIRE_NO_FAIL(con.Query("EXECUTE s1(6, 3)"));
+
+	result = con.Query("SELECT * FROM b ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 4, 5, 6}));
+
+	// cannot drop table now
+	REQUIRE_FAIL(con.Query("DROP TABLE b"));
+	// but we can with cascade
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE b CASCADE"));
+}
+
+TEST_CASE("PREPARE for UPDATE", "[prepared]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE b (i TINYINT)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO b VALUES (1), (2), (3), (4), (5)"));
+	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS DELETE FROM b WHERE i=$1"));
+
+	result = con.Query("SELECT * FROM b ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5}));
+	REQUIRE_NO_FAIL(con.Query("EXECUTE s1(3)"));
+
+	result = con.Query("SELECT * FROM b ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 4, 5}));
+
+	// cannot drop table now
+	REQUIRE_FAIL(con.Query("DROP TABLE b"));
+	// but we can with cascade
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE b CASCADE"));
 }
 
 TEST_CASE("PREPARE many types for INSERT", "[prepared]") {

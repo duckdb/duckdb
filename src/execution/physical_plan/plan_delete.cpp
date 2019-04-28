@@ -17,6 +17,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelete &op
 	// get the index of the row_id column
 	auto &bound_ref = (BoundReferenceExpression &)*op.expressions[0];
 
+	dependencies.insert(op.table);
 	auto del = make_unique<PhysicalDelete>(op, *op.table, *op.table->storage, bound_ref.index);
 	del->children.push_back(move(plan));
 	return move(del);

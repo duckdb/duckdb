@@ -211,27 +211,3 @@ unique_ptr<CreateTableInformation> TableCatalogEntry::Deserialize(Deserializer &
 	}
 	return info;
 }
-
-bool TableCatalogEntry::HasDependents(Transaction &transaction) {
-	bool found_table = false;
-
-	catalog->storage.GetDatabase().connection_manager.Scan([&](Connection *conn) {
-		auto &prep_catalog = conn->context.prepared_statements;
-		prep_catalog->Scan(transaction, [&](CatalogEntry *entry) {
-			assert(entry->type == CatalogType::PREPARED_STATEMENT);
-			auto prep_stmt = (PreparedStatementCatalogEntry *)entry;
-			// TODO add HasTable() call to prep_stmt or so
-			if (prep_stmt->tables.find(this) != prep_stmt->tables.end()) {
-				found_table = true;
-			}
-		});
-	});
-
-	if (found_table) {
-		return true;
-	}
-	return false;
-}
-
-void TableCatalogEntry::DropDependents(Transaction &transaction) {
-}

@@ -2,6 +2,7 @@
 #include "execution/operator/persistent/physical_copy.hpp"
 #include "execution/physical_plan_generator.hpp"
 #include "planner/operator/logical_copy.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -16,7 +17,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopy &op) 
 		copy->children.push_back(move(plan));
 		return move(copy);
 	} else {
-		// COPY from table
+		// COPY to table
+		dependencies.insert(op.table);
 		return make_unique<PhysicalCopy>(op, op.table, move(op.info));
 	}
 }
