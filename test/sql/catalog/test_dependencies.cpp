@@ -2,6 +2,7 @@
 #include "test_helpers.hpp"
 
 #include <thread>
+#include <chrono>
 
 using namespace duckdb;
 using namespace std;
@@ -77,13 +78,72 @@ TEST_CASE("Test dependencies with multiple connections", "[catalog]") {
 	REQUIRE_NO_FAIL(con.Query("DROP SEQUENCE seq CASCADE"));
 	// after the cascade drop the prepared statement is invalidated
 	REQUIRE_FAIL(con2.Query("EXECUTE v"));
+
+	// dependency on a sequence in a default value
 }
 
-// TEST_CASE("Test parallel dependencies in multiple connections", "[catalog][.]") {
-// 	unique_ptr<QueryResult> result;
-// 	DuckDB db(nullptr);
-// 	Connection con(db);
-// 	Connection con2(db);
+#define REPETITIONS 100
+volatile bool finished = false;
+
+static void create_drop_table(DuckDB *db) {
+	Connection con(*db);
+
+	while(!finished) {
+		// printf("[TABLE] Create table\n");
+		// create the table: this should never fail
+		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (4), (5)"));
+		REQUIRE_NO_FAIL(con.Query("COMMIT"));
+		// now wait a bit
+		this_thread::sleep_for(chrono::milliseconds(10));
+		// printf("[TABLE] Drop table\n");
+		// perform a cascade drop of the table
+		REQUIRE_NO_FAIL(con.Query("DROP TABLE integers CASCADE"));
+	}
+}
+
+static void create_use_prepared_statement(DuckDB *db) {
+	Connection con(*db);
+	unique_ptr<QueryResult> result;
+
+	for(int i = 0; i < REPETITIONS; i++) {
+		// printf("[PREPARE] Prepare statement\n");
+		while(true) {
+			// create the prepared statement
+			result = con.Query("PREPARE s1 AS SELECT SUM(i) FROM integers");
+			if (result->success) {
+				break;
+			}
+		}
+		// printf("[PREPARE] Query prepare\n");
+		while(true) {
+			// execute the prepared statement until the statement is dropped
+			result = con.Query("EXECUTE s1");
+			if (!result->success) {
+				break;
+			} else {
+				REQUIRE(CHECK_COLUMN(result, 0, {15}));
+			}
+		}
+	}
+	finished = true;
+}
 
 
-// }
+
+
+TEST_CASE("Test parallel dependencies in multiple connections", "[catalog][.]") {
+	DuckDB db(nullptr);
+
+	// in this test we create and drop a table in one thread (with CASCADE drop)
+	// in the other thread, we create a prepared statement and execute it
+	// the prepared statement depends on the table
+	// hence when the CASCADE drop is executed the prepared statement also needs to be dropped
+
+	thread table_thread = thread(create_drop_table, &db);
+	thread seq_thread = thread(create_use_prepared_statement, &db);
+
+	seq_thread.join();
+	table_thread.join();
+}
