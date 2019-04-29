@@ -62,7 +62,6 @@ void DependencyManager::DropObject(Transaction &transaction, CatalogEntry *objec
 	}
 }
 
-
 void DependencyManager::AlterObject(Transaction &transaction, CatalogEntry *old_obj, CatalogEntry *new_obj) {
 	assert(dependents_map.find(old_obj) != dependents_map.end());
 	assert(dependencies_map.find(old_obj) != dependencies_map.end());
@@ -101,6 +100,14 @@ void DependencyManager::AlterObject(Transaction &transaction, CatalogEntry *old_
 void DependencyManager::EraseObject(CatalogEntry *object) {
 	// obtain the writing lock
 	lock_guard<mutex> write_lock(catalog.write_lock);
+	EraseObjectInternal(object);
+}
+
+void DependencyManager::EraseObjectInternal(CatalogEntry *object) {
+	if (dependents_map.find(object) == dependents_map.end()) {
+		// dependencies already removed
+		return;
+	}
 	assert(dependents_map.find(object) != dependents_map.end());
 	assert(dependencies_map.find(object) != dependencies_map.end());
 	// now for each of the dependencies, erase the entries from the dependents_map
@@ -114,4 +121,18 @@ void DependencyManager::EraseObject(CatalogEntry *object) {
 	// erase the dependents and dependencies for this object
 	dependents_map.erase(object);
 	dependencies_map.erase(object);
+}
+
+void DependencyManager::ClearDependencies(CatalogSet &set) {
+	// obtain the writing lock
+	lock_guard<mutex> write_lock(catalog.write_lock);
+
+	// iterate over the objects in the CatalogSet
+	for(auto &entry : set.data) {
+		CatalogEntry *centry = entry.second.get();
+		while(centry) {
+			EraseObjectInternal(centry);
+			centry = centry->child.get();
+		}
+	}
 }

@@ -87,13 +87,24 @@ TEST_CASE("Test prepare dependencies with multiple connections", "[catalog]") {
 	DuckDB db(nullptr);
 	auto con = make_unique<Connection>(db);
 	auto con2 = make_unique<Connection>(db);
+	auto con3 = make_unique<Connection>(db);
 
+	// simple prepare: begin transaction before the second client calls PREPARE
 	REQUIRE_NO_FAIL(con->Query("CREATE TABLE integers(i INTEGER)"));
-
 	REQUIRE_NO_FAIL(con2->Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con->Query("PREPARE s1 AS SELECT * FROM integers"));
 	con.reset();
 	REQUIRE_NO_FAIL(con2->Query("COMMIT"));
+
+	con = make_unique<Connection>(db);
+	// three transactions
+	REQUIRE_NO_FAIL(con2->Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con->Query("PREPARE s1 AS SELECT * FROM integers"));
+	con.reset();
+	REQUIRE_NO_FAIL(con3->Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con3->Query("DROP TABLE integers CASCADE"));
+	REQUIRE_NO_FAIL(con2->Query("COMMIT"));
+	REQUIRE_NO_FAIL(con3->Query("COMMIT"));
 }
 
 #define REPETITIONS 100

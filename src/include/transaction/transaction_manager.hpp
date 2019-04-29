@@ -17,6 +17,7 @@
 
 namespace duckdb {
 
+class ClientContext;
 class StorageManager;
 class Transaction;
 
@@ -39,7 +40,7 @@ public:
 	//! Rollback the given transaction
 	void RollbackTransaction(Transaction *transaction);
 	//! Add the catalog set
-	void AddCatalogSet(unique_ptr<CatalogSet> catalog_set);
+	void AddCatalogSet(ClientContext &context, unique_ptr<CatalogSet> catalog_set);
 
 	transaction_t GetQueryNumber() {
 		return current_query_number++;

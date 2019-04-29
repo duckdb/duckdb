@@ -7,6 +7,9 @@
 
 #include "catalog/catalog_set.hpp"
 
+#include "main/client_context.hpp"
+#include "main/database.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -107,7 +110,6 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) {
 	active_transactions.erase(active_transactions.begin() + t_index);
 	// traverse the recently_committed transactions to see if we can remove any
 	size_t i = 0;
-	size_t largest_commit_id = 0;
 	for (; i < recently_committed_transactions.size(); i++) {
 		assert(recently_committed_transactions[i]);
 		lowest_stored_query = std::min(recently_committed_transactions[i]->start_time, lowest_stored_query);
@@ -171,7 +173,10 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) {
 	}
 }
 
-void TransactionManager::AddCatalogSet(unique_ptr<CatalogSet> catalog_set) {
+void TransactionManager::AddCatalogSet(ClientContext &context, unique_ptr<CatalogSet> catalog_set) {
+	// remove the dependencies from all entries of the CatalogSet
+	context.db.catalog.dependency_manager.ClearDependencies(*catalog_set);
+
 	lock_guard<mutex> lock(transaction_lock);
 
 	StoredCatalogSet set;
