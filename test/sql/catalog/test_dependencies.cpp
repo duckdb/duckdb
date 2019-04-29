@@ -82,6 +82,105 @@ TEST_CASE("Test dependencies with multiple connections", "[catalog]") {
 	// dependency on a sequence in a default value
 }
 
+TEST_CASE("Prepare dependencies and transactions", "[catalog]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	Connection con2(db);
+
+	// case one: prepared statement is created outside of transaction and committed
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (4), (5)"));
+	REQUIRE_NO_FAIL(con2.Query("PREPARE v AS SELECT SUM(i) FROM integers"));
+
+	// begin a transaction in con2
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
+	// now drop the table in con, with a cascading drop
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers CASCADE"));
+	// we can still execute v in con2
+	result = con2.Query("EXECUTE v");
+	REQUIRE(CHECK_COLUMN(result, 0, {15}));
+	// if we try to drop integers we get a conflict though
+	REQUIRE_FAIL(con2.Query("DROP TABLE integers CASCADE"));
+	// now we rollback
+	REQUIRE_NO_FAIL(con2.Query("ROLLBACK"));
+	// now we can't use the prepared statement anymore
+	REQUIRE_FAIL(con2.Query("EXECUTE v"));
+
+
+
+	// case two: prepared statement is created inside transaction
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (4), (5)"));
+
+	// begin a transaction and create a prepared statement
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con2.Query("PREPARE v AS SELECT SUM(i) FROM integers"));
+
+	// integers has a dependency: we can't drop it
+	REQUIRE_FAIL(con.Query("DROP TABLE integers"));
+	// now we can't drop integers even with cascade, because the dependency is not yet committed, this creates a write conflict on attempting to drop the dependency
+	REQUIRE_FAIL(con.Query("DROP TABLE integers CASCADE"));
+
+	// use the prepared statement
+	result = con2.Query("EXECUTE v");
+	REQUIRE(CHECK_COLUMN(result, 0, {15}));
+	// and commit
+	REQUIRE_NO_FAIL(con2.Query("COMMIT"));
+
+	// now we can commit the table
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers CASCADE"));
+
+
+
+	// case three: prepared statement is created inside transaction, and then rolled back
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (4), (5)"));
+
+	// begin a transaction and create a prepared statement
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con2.Query("PREPARE v AS SELECT SUM(i) FROM integers"));
+	// integers has a dependency: we can't drop it
+	REQUIRE_FAIL(con.Query("DROP TABLE integers"));
+	// rollback the prepared statement
+	REQUIRE_NO_FAIL(con2.Query("ROLLBACK"));
+	// depedency was rolled back: now we can drop it
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+
+
+
+
+	// case four: deallocate happens inside transaction
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (4), (5)"));
+	REQUIRE_NO_FAIL(con2.Query("PREPARE v AS SELECT SUM(i) FROM integers"));
+
+	// deallocate v inside transaction
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con2.Query("DEALLOCATE v"));
+
+	// we still can't drop integers because the dependency is still there
+	REQUIRE_FAIL(con.Query("DROP TABLE integers"));
+	// cascade gives a concurrency conflict
+	REQUIRE_FAIL(con.Query("DROP TABLE integers CASCADE"));
+	// now rollback the deallocation
+	REQUIRE_NO_FAIL(con2.Query("ROLLBACK"));
+	// still can't drop the table
+	REQUIRE_FAIL(con.Query("DROP TABLE integers"));
+	// we can use the prepared statement
+	result = con2.Query("EXECUTE v");
+	REQUIRE(CHECK_COLUMN(result, 0, {15}));
+	// now do the same, but commit the transaction
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con2.Query("DEALLOCATE v"));
+	// can't drop yet: not yet committed
+	REQUIRE_FAIL(con.Query("DROP TABLE integers"));
+	REQUIRE_FAIL(con.Query("DROP TABLE integers CASCADE"));
+	REQUIRE_NO_FAIL(con2.Query("COMMIT"));
+	// after committing we can drop
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+}
+
 TEST_CASE("Test prepare dependencies with multiple connections", "[catalog]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -91,17 +190,26 @@ TEST_CASE("Test prepare dependencies with multiple connections", "[catalog]") {
 
 	// simple prepare: begin transaction before the second client calls PREPARE
 	REQUIRE_NO_FAIL(con->Query("CREATE TABLE integers(i INTEGER)"));
+	// open a transaction in con2, this forces the prepared statement to be kept around until this transaction is closed
 	REQUIRE_NO_FAIL(con2->Query("BEGIN TRANSACTION"));
+	// we prepare a statement in con
 	REQUIRE_NO_FAIL(con->Query("PREPARE s1 AS SELECT * FROM integers"));
+	// now we drop con while the second client still has an active transaction
 	con.reset();
+	// now commit the transaction in the second client
 	REQUIRE_NO_FAIL(con2->Query("COMMIT"));
 
 	con = make_unique<Connection>(db);
 	// three transactions
+	// open a transaction in con2, this forces the prepared statement to be kept around until this transaction is closed
 	REQUIRE_NO_FAIL(con2->Query("BEGIN TRANSACTION"));
+	// create a prepare, this creates a dependency from s1 -> integers
 	REQUIRE_NO_FAIL(con->Query("PREPARE s1 AS SELECT * FROM integers"));
+	// drop the client
 	con.reset();
+	// now begin a transaction in con3
 	REQUIRE_NO_FAIL(con3->Query("BEGIN TRANSACTION"));
+	// drop the table integers with cascade, this should drop s1 as well
 	REQUIRE_NO_FAIL(con3->Query("DROP TABLE integers CASCADE"));
 	REQUIRE_NO_FAIL(con2->Query("COMMIT"));
 	REQUIRE_NO_FAIL(con3->Query("COMMIT"));
@@ -150,7 +258,7 @@ static void create_use_prepared_statement(DuckDB *db) {
 		}
 		// printf("[PREPARE] Query prepare\n");
 		while(true) {
-			// execute the prepared statement until the statement is dropped
+			// execute the prepared statement until the prepared statement is dropped because of the CASCADE in another thread
 			result = con.Query("EXECUTE s1");
 			if (!result->success) {
 				break;

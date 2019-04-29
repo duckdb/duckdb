@@ -201,6 +201,10 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 
 	// i.e. we have to place (entry) as (entry->parent) again
 	auto &to_be_removed_node = entry->parent;
+	if (!to_be_removed_node->deleted) {
+		// delete the entry from the dependency manager as well
+		catalog.dependency_manager.EraseObject(to_be_removed_node);
+	}
 	if (to_be_removed_node->parent) {
 		// if the to be removed node has a parent, set the child pointer to the
 		// to be restored node
