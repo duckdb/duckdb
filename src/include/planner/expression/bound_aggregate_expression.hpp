@@ -23,6 +23,9 @@ public:
 	bool IsAggregate() const override {
 		return true;
 	}
+	bool IsFoldable() const override {
+		return false;
+	}
 
 	string ToString() const override;
 

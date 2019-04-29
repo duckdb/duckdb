@@ -63,19 +63,6 @@ TEST_CASE("Test DEFAULT in tables", "[default]") {
 	// after dropping table we can drop seq
 	REQUIRE_NO_FAIL(con.Query("DROP SEQUENCE seq"));
 
-	// // test cascading drop of sequence
-	// REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq;"));
-	// REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER DEFAULT nextval('seq'), b INTEGER);"));
-	// REQUIRE_NO_FAIL(con.Query("DROP SEQUENCE seq CASCADE"));
-	// // table still exists!
-	// REQUIRE_NO_FAIL(con.Query("SELECT * FROM test"));
-	// // only the default value has been reset to NULL
-	// REQUIRE_NO_FAIL(con.Query("INSERT INTO test (b) VALUES (3);"));
-	// result = con.Query("SELECT * FROM test");
-	// REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
-	// REQUIRE(CHECK_COLUMN(result, 1, {3}));
-	// REQUIRE_NO_FAIL(con.Query("DROP TABLE test"));
-
 	// test default with update
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq;"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER DEFAULT nextval('seq'), b INTEGER);"));

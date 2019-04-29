@@ -7,7 +7,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test dependencies with multiple connections", "[catalog]") {
+TEST_CASE("Schema dependencies", "[catalog]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -17,9 +17,12 @@ TEST_CASE("Test dependencies with multiple connections", "[catalog]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA s1"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE s1.integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("SELECT * FROM s1.integers"));
+	// can't drop: dependency
 	REQUIRE_FAIL(con.Query("DROP SCHEMA s1"));
 	REQUIRE_NO_FAIL(con.Query("SELECT * FROM s1.integers"));
+	// we can drop with cascade though
 	REQUIRE_NO_FAIL(con.Query("DROP SCHEMA s1 CASCADE"));
+	// this also drops the table
 	REQUIRE_FAIL(con.Query("SELECT * FROM s1.integers"));
 
 	// schemas and dependencies
@@ -38,7 +41,7 @@ TEST_CASE("Test dependencies with multiple connections", "[catalog]") {
 	REQUIRE_NO_FAIL(con2.Query("ROLLBACK"));
 	// the table exists again
 	REQUIRE_NO_FAIL(con.Query("SELECT * FROM s1.integers"));
-	// try again
+	// try again, but this time we commit
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
 	// drop the schema entirely now
@@ -51,6 +54,13 @@ TEST_CASE("Test dependencies with multiple connections", "[catalog]") {
 	// however if we end the transaction in con2 the schema is gone
 	REQUIRE_NO_FAIL(con2.Query("ROLLBACK"));
 	REQUIRE_FAIL(con2.Query("CREATE TABLE s1.dummy(i INTEGER)"));
+}
+
+TEST_CASE("Prepared statement dependencies dependencies", "[catalog]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	Connection con2(db);
 
 	// prepared statements and dependencies
 	// dependency on a bound table
@@ -78,8 +88,50 @@ TEST_CASE("Test dependencies with multiple connections", "[catalog]") {
 	REQUIRE_NO_FAIL(con.Query("DROP SEQUENCE seq CASCADE"));
 	// after the cascade drop the prepared statement is invalidated
 	REQUIRE_FAIL(con2.Query("EXECUTE v"));
+}
+
+TEST_CASE("Default values and dependencies", "[catalog]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	Connection con2(db);
 
 	// dependency on a sequence in a default value
+	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER DEFAULT nextval('seq'), j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers (j) VALUES (1), (1), (1), (1), (1)"));
+
+	result = con2.Query("SELECT SUM(i) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {15}));
+	// we can't drop the sequence: the table depends on it
+	REQUIRE_FAIL(con.Query("DROP SEQUENCE seq"));
+	// cascade drop works
+	REQUIRE_NO_FAIL(con.Query("DROP SEQUENCE seq CASCADE"));
+	// but it also drops the table
+	REQUIRE_FAIL(con.Query("SELECT * FROM integers"));
+
+	// dependency on multiple sequences in default value
+	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq"));
+	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq1"));
+	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq2"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER DEFAULT nextval('seq' || CAST(nextval('seq') AS VARCHAR)), j INTEGER)"));
+
+	// seq1 exists, so the result of the first default value is 1
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers (j) VALUES (1)"));
+	// we can drop seq1 and seq2: the dependency is not fixed
+	REQUIRE_NO_FAIL(con.Query("DROP SEQUENCE seq1"));
+	REQUIRE_NO_FAIL(con.Query("DROP SEQUENCE seq2"));
+	// seq2 does not exist after this drop, so another insert fails
+	REQUIRE_FAIL(con.Query("INSERT INTO integers (j) VALUES (1)"));
+	// table is now [1, 1]: query it
+	result = con.Query("SELECT SUM(i) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	// we can't drop seq however: the dependency is fixed
+	REQUIRE_FAIL(con.Query("DROP SEQUENCE seq"));
+	// need to do a cascading drop
+	REQUIRE_NO_FAIL(con.Query("DROP SEQUENCE seq CASCADE"));
+	// now the table is gone
+	REQUIRE_FAIL(con.Query("SELECT * FROM integers"));
 }
 
 TEST_CASE("Prepare dependencies and transactions", "[catalog]") {
@@ -167,10 +219,10 @@ TEST_CASE("Prepare dependencies and transactions", "[catalog]") {
 	REQUIRE_NO_FAIL(con2.Query("ROLLBACK"));
 	// still can't drop the table
 	REQUIRE_FAIL(con.Query("DROP TABLE integers"));
-	// we can use the prepared statement
+	// we can use the prepared statement again
 	result = con2.Query("EXECUTE v");
 	REQUIRE(CHECK_COLUMN(result, 0, {15}));
-	// now do the same, but commit the transaction
+	// now do the same as before, but commit the transaction this time
 	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con2.Query("DEALLOCATE v"));
 	// can't drop yet: not yet committed

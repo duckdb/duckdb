@@ -31,6 +31,9 @@ public:
 	bool IsScalar() const override {
 		return false;
 	}
+	bool IsFoldable() const override {
+		return false;
+	}
 
 	string ToString() const override;
 

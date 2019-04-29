@@ -17,9 +17,10 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
 }
 
 void SchemaCatalogEntry::CreateTable(Transaction &transaction, CreateTableInformation *info) {
-	unordered_set<CatalogEntry *> dependencies { this };
+	info->dependencies.insert(this);
+
 	auto table = make_unique_base<CatalogEntry, TableCatalogEntry>(catalog, this, info);
-	if (!tables.CreateEntry(transaction, info->table, move(table), dependencies)) {
+	if (!tables.CreateEntry(transaction, info->table, move(table), info->dependencies)) {
 		if (!info->if_not_exists) {
 			throw CatalogException("Table or view with name \"%s\" already exists!", info->table.c_str());
 		}
