@@ -82,7 +82,22 @@ TEST_CASE("Test dependencies with multiple connections", "[catalog]") {
 	// dependency on a sequence in a default value
 }
 
+TEST_CASE("Test prepare dependencies with multiple connections", "[catalog]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	auto con = make_unique<Connection>(db);
+	auto con2 = make_unique<Connection>(db);
+
+	REQUIRE_NO_FAIL(con->Query("CREATE TABLE integers(i INTEGER)"));
+
+	REQUIRE_NO_FAIL(con2->Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con->Query("PREPARE s1 AS SELECT * FROM integers"));
+	con.reset();
+	REQUIRE_NO_FAIL(con2->Query("COMMIT"));
+}
+
 #define REPETITIONS 100
+#define SEQTHREADS 10
 volatile bool finished = false;
 
 static void create_drop_table(DuckDB *db) {
@@ -96,10 +111,16 @@ static void create_drop_table(DuckDB *db) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (4), (5)"));
 		REQUIRE_NO_FAIL(con.Query("COMMIT"));
 		// now wait a bit
-		this_thread::sleep_for(chrono::milliseconds(10));
+		this_thread::sleep_for(chrono::milliseconds(20));
 		// printf("[TABLE] Drop table\n");
 		// perform a cascade drop of the table
-		REQUIRE_NO_FAIL(con.Query("DROP TABLE integers CASCADE"));
+		// this can fail if a thread is still busy preparing a statement
+		while(true) {
+			auto result = con.Query("DROP TABLE integers CASCADE");
+			if (result->success) {
+				break;
+			}
+		}
 	}
 }
 
@@ -127,11 +148,7 @@ static void create_use_prepared_statement(DuckDB *db) {
 			}
 		}
 	}
-	finished = true;
 }
-
-
-
 
 TEST_CASE("Test parallel dependencies in multiple connections", "[catalog][.]") {
 	DuckDB db(nullptr);
@@ -142,8 +159,13 @@ TEST_CASE("Test parallel dependencies in multiple connections", "[catalog][.]") 
 	// hence when the CASCADE drop is executed the prepared statement also needs to be dropped
 
 	thread table_thread = thread(create_drop_table, &db);
-	thread seq_thread = thread(create_use_prepared_statement, &db);
-
-	seq_thread.join();
+	thread seq_threads[SEQTHREADS];
+	for(int i = 0; i < SEQTHREADS; i++) {
+	        seq_threads[i] = thread(create_use_prepared_statement, &db);
+	}
+	for(int i = 0; i < SEQTHREADS; i++) {
+	        seq_threads[i].join();
+	}
+	finished = true;
 	table_thread.join();
 }

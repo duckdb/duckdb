@@ -30,6 +30,7 @@ void ClientContext::Cleanup() {
 			transaction.Rollback();
 		}
 	}
+	db.transaction_manager.AddCatalogSet(move(prepared_statements));
 
 	return CleanupInternal();
 }

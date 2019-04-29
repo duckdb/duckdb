@@ -132,6 +132,7 @@ bool CatalogSet::DropEntry(Transaction &transaction, const string &name, bool ca
 }
 
 void CatalogSet::DropEntryInternal(Transaction &transaction, CatalogEntry &current, bool cascade, set_lock_map_t &lock_set) {
+	assert(data.find(current.name) != data.end());
 	// first check any dependencies of this object
 	current.catalog->dependency_manager.DropObject(transaction, &current, cascade, lock_set);
 
