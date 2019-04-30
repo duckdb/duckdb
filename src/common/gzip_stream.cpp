@@ -1,4 +1,5 @@
 #include "common/gzip_stream.hpp"
+
 #include "common/exception.hpp"
 #include "common/fstream_util.hpp"
 
@@ -12,7 +13,6 @@
 
 using namespace std;
 using namespace duckdb;
-
 
 /*
 
@@ -74,32 +74,36 @@ static const uint8_t GZIP_FLAG_NAME = 0x8;
 static const uint8_t GZIP_FLAG_COMMENT = 0x10;
 static const uint8_t GZIP_FLAG_ENCRYPT = 0x20;
 
-static const unsigned char GZIP_FLAG_UNSUPPORTED = GZIP_FLAG_ASCII | GZIP_FLAG_MULTIPART | GZIP_FLAG_EXTRA | GZIP_FLAG_COMMENT | GZIP_FLAG_ENCRYPT;
+static const uint8_t GZIP_HEADER_MINSIZE = 10;
+
+
+static const unsigned char GZIP_FLAG_UNSUPPORTED =
+    GZIP_FLAG_ASCII | GZIP_FLAG_MULTIPART | GZIP_FLAG_EXTRA | GZIP_FLAG_COMMENT | GZIP_FLAG_ENCRYPT;
 
 // read and check GZIP stream header
 GzipStreamBuf::GzipStreamBuf(string filename) {
-  	uint8_t gzip_hdr[10];
-  	data_start = 10;
+	uint8_t gzip_hdr[10];
+	data_start = GZIP_HEADER_MINSIZE;
 
-  	in_buff = new char [BUFSIZ];
+	in_buff = new char[BUFSIZ];
 	in_buff_start = in_buff;
 	in_buff_end = in_buff;
-	out_buff = new char [BUFSIZ];
+	out_buff = new char[BUFSIZ];
 
 	FstreamUtil::OpenFile(filename, input);
 
-  	input.read((char*) gzip_hdr, 10);
-  	if (!input) {
-  		throw Exception("Input is not a GZIP stream");
-  	}
-  	if (gzip_hdr[0] != 0x1F || gzip_hdr[1] != 0x8B) { // magic header
-  		throw Exception("Input is not a GZIP stream");
-  	}
-  	if (gzip_hdr[2] != GZIP_COMPRESSION_DEFLATE) { // compression method
-  		throw Exception("Unsupported GZIP compression method");
-  	}
+	input.read((char *)gzip_hdr, GZIP_HEADER_MINSIZE);
+	if (!input) {
+		throw Exception("Input is not a GZIP stream");
+	}
+	if (gzip_hdr[0] != 0x1F || gzip_hdr[1] != 0x8B) { // magic header
+		throw Exception("Input is not a GZIP stream");
+	}
+	if (gzip_hdr[2] != GZIP_COMPRESSION_DEFLATE) { // compression method
+		throw Exception("Unsupported GZIP compression method");
+	}
 	if (gzip_hdr[3] & GZIP_FLAG_UNSUPPORTED) {
-  		throw Exception("Unsupported GZIP archive");
+		throw Exception("Unsupported GZIP archive");
 	}
 
 	if (gzip_hdr[3] & GZIP_FLAG_NAME) {
@@ -112,21 +116,26 @@ GzipStreamBuf::GzipStreamBuf(string filename) {
 	mz_stream_ptr = new mz_stream();
 	// TODO use custom alloc/free methods in miniz to throw exceptions on OOM
 
-    auto ret = mz_inflateInit2((mz_streamp) mz_stream_ptr, -MZ_DEFAULT_WINDOW_BITS);
-    if (ret != MZ_OK) {
-  		throw Exception("Failed to initialize miniz");
-    }
+	auto ret = mz_inflateInit2((mz_streamp)mz_stream_ptr, -MZ_DEFAULT_WINDOW_BITS);
+	if (ret != MZ_OK) {
+		throw Exception("Failed to initialize miniz");
+	}
+	// initialize eback, gptr, egptr
+	setg(out_buff, out_buff, out_buff);
 }
 
 
-streambuf::int_type GzipStreamBuf::underflow(){
-	auto zstrm_p = (mz_streamp) mz_stream_ptr;
-	if (!zstrm_p) return 0;
-	 if (this->gptr() == this->egptr()) {
+// adapted from https://github.com/mateidavid/zstr
+streambuf::int_type GzipStreamBuf::underflow() {
+	auto zstrm_p = (mz_streamp)mz_stream_ptr;
+	if (!zstrm_p) {
+		return traits_type::eof();
+	}
+
+	if (gptr() == egptr()) {
 		// pointers for free region in output buffer
-		char * out_buff_free_start = out_buff;
-		do
-		{
+		char *out_buff_free_start = out_buff;
+		do {
 			assert(in_buff_start <= in_buff_end);
 			assert(in_buff_end <= in_buff_start + BUFSIZ);
 
@@ -135,27 +144,33 @@ streambuf::int_type GzipStreamBuf::underflow(){
 				// empty input buffer: refill from the start
 				in_buff_start = in_buff;
 				std::streamsize sz = input.rdbuf()->sgetn(in_buff, BUFSIZ);
+				if (sz == 0) {
+					break; // end of input
+				}
 				in_buff_end = in_buff + sz;
-				if (in_buff_end == in_buff_start) break; // end of input
 			}
 
 			assert(zstrm_p);
-			zstrm_p->next_in = reinterpret_cast< decltype(zstrm_p->next_in) >(in_buff_start);
+			zstrm_p->next_in = (unsigned char *)in_buff_start;
 			zstrm_p->avail_in = in_buff_end - in_buff_start;
-			zstrm_p->next_out = reinterpret_cast< decltype(zstrm_p->next_out) >(out_buff_free_start);
+			zstrm_p->next_out = (unsigned char *)out_buff_free_start;
 			zstrm_p->avail_out = (out_buff + BUFSIZ) - out_buff_free_start;
+
+			// actually decompress
 			auto ret = mz_inflate(zstrm_p, MZ_NO_FLUSH);
-			// process return code
-			if (ret != MZ_OK && ret != MZ_STREAM_END) throw Exception(mz_error(ret));
-			// update in&out pointers following inflate()
-			in_buff_start = reinterpret_cast< decltype(in_buff_start) >((char*) zstrm_p->next_in);
+
+			if (ret != MZ_OK && ret != MZ_STREAM_END) {
+				throw Exception(mz_error(ret));
+			}
+			// update pointers following inflate()
+			in_buff_start = (char *)zstrm_p->next_in;
 			in_buff_end = in_buff_start + zstrm_p->avail_in;
-			out_buff_free_start = reinterpret_cast< decltype(out_buff_free_start) >(zstrm_p->next_out);
+			out_buff_free_start = (char *)zstrm_p->next_out;
 			assert(out_buff_free_start + zstrm_p->avail_out == out_buff + BUFSIZ);
 			// if stream ended, deallocate inflator
-			if (ret == MZ_STREAM_END)
-			{
-				mz_stream_ptr = nullptr; // FIXME leak
+			if (ret == MZ_STREAM_END) {
+				delete zstrm_p;
+				mz_stream_ptr = nullptr;
 			}
 
 		} while (out_buff_free_start == out_buff);
@@ -164,11 +179,16 @@ streambuf::int_type GzipStreamBuf::underflow(){
 		// - out_buff_free_start != out_buff: output available
 		setg(out_buff, out_buff, out_buff_free_start);
 	}
-	return this->gptr() == this->egptr()
-		? traits_type::eof()
-		: traits_type::to_int_type(*this->gptr());
 
+	// ensure all those pointers point at something sane
+	assert(out_buff);
+	assert(gptr() <= egptr());
+	assert(eback() == out_buff);
+	assert(gptr() >= out_buff);
+	assert(gptr() <= out_buff + BUFSIZ);
+	assert(egptr() >= out_buff);
+	assert(egptr() <= out_buff + BUFSIZ);
+	assert(gptr() <= egptr());
 
-	return 0;
+	return this->gptr() == this->egptr() ? traits_type::eof() : traits_type::to_int_type(*this->gptr());
 }
-
