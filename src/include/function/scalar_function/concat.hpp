@@ -14,7 +14,8 @@
 namespace duckdb {
 namespace function {
 
-void concat_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
+void concat_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr,
+                     Vector &result);
 bool concat_matches_arguments(vector<SQLType> &arguments);
 SQLType concat_get_return_type(vector<SQLType> &arguments);
 

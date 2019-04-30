@@ -38,6 +38,7 @@ public:
 	//! The data chunk of the current physical operator, used to resolve
 	//! column references and determines the output cardinality
 	DataChunk *chunk;
+
 protected:
 	void Execute(Expression &expr, Vector &result);
 

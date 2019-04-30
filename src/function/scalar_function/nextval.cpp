@@ -1,17 +1,13 @@
 #include "function/scalar_function/nextval.hpp"
 
+#include "catalog/catalog.hpp"
+#include "catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "common/exception.hpp"
 #include "common/vector_operations/vector_operations.hpp"
-
-#include "catalog/catalog_entry/sequence_catalog_entry.hpp"
-
-#include "catalog/catalog.hpp"
-#include "main/database.hpp"
-#include "main/client_context.hpp"
-
-#include "planner/expression/bound_function_expression.hpp"
-
 #include "execution/expression_executor.hpp"
+#include "main/client_context.hpp"
+#include "main/database.hpp"
+#include "planner/expression/bound_function_expression.hpp"
 
 using namespace std;
 
@@ -34,7 +30,7 @@ struct NextvalBindData : public FunctionData {
 
 static void parse_schema_and_sequence(string input, string &schema, string &name) {
 	size_t start = 0;
-	for(const char *istr = input.c_str(); *istr; istr++) {
+	for (const char *istr = input.c_str(); *istr; istr++) {
 		if (*istr == '.') {
 			// separator
 			size_t len = istr - input.c_str();
@@ -74,17 +70,20 @@ static int64_t next_sequence_value(SequenceCatalogEntry *seq) {
 		result = seq->counter += seq->increment;
 		result -= seq->increment;
 		if (result < seq->min_value) {
-			throw SequenceException("nextval: reached minimum value of sequence \"%s\" (%lld)", seq->name.c_str(), seq->min_value);
+			throw SequenceException("nextval: reached minimum value of sequence \"%s\" (%lld)", seq->name.c_str(),
+			                        seq->min_value);
 		}
 		if (result > seq->max_value) {
-			throw SequenceException("nextval: reached maximum value of sequence \"%s\" (%lld)", seq->name.c_str(), seq->max_value);
+			throw SequenceException("nextval: reached maximum value of sequence \"%s\" (%lld)", seq->name.c_str(),
+			                        seq->max_value);
 		}
 	}
 	return result;
 }
 
-void nextval_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result) {
-	auto &info = (NextvalBindData&) *expr.bind_info;
+void nextval_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr,
+                      Vector &result) {
+	auto &info = (NextvalBindData &)*expr.bind_info;
 	assert(input_count == 1 && inputs[0].type == TypeId::VARCHAR);
 	result.Initialize(TypeId::BIGINT);
 
@@ -98,7 +97,7 @@ void nextval_function(ExpressionExecutor &exec, Vector inputs[], size_t input_co
 	if (info.sequence) {
 		// sequence to use is hard coded
 		// increment the sequence
-		int64_t *result_data = (int64_t*) result.data;
+		int64_t *result_data = (int64_t *)result.data;
 		VectorOperations::Exec(result, [&](size_t i, size_t k) {
 			// get the next value from the sequence
 			result_data[i] = next_sequence_value(info.sequence);
@@ -106,8 +105,8 @@ void nextval_function(ExpressionExecutor &exec, Vector inputs[], size_t input_co
 	} else {
 		// sequence to use comes from the input
 		assert(result.count == inputs[0].count && result.sel_vector == inputs[0].sel_vector);
-		int64_t *result_data = (int64_t*) result.data;
-		VectorOperations::ExecType<const char*>(inputs[0], [&](const char* value, size_t i, size_t k) {
+		int64_t *result_data = (int64_t *)result.data;
+		VectorOperations::ExecType<const char *>(inputs[0], [&](const char *value, size_t i, size_t k) {
 			// first get the sequence schema/name
 			string schema, seq;
 			string seqname = string(value);
@@ -118,7 +117,6 @@ void nextval_function(ExpressionExecutor &exec, Vector inputs[], size_t input_co
 			result_data[i] = next_sequence_value(sequence);
 		});
 	}
-
 }
 
 bool nextval_matches_arguments(vector<SQLType> &arguments) {

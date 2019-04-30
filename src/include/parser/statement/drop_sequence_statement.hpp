@@ -15,7 +15,8 @@ namespace duckdb {
 
 class DropSequenceStatement : public SQLStatement {
 public:
-	DropSequenceStatement() : SQLStatement(StatementType::DROP_SEQUENCE), info(make_unique<DropSequenceInformation>()){};
+	DropSequenceStatement()
+	    : SQLStatement(StatementType::DROP_SEQUENCE), info(make_unique<DropSequenceInformation>()){};
 
 	string ToString() const override {
 		return "DROP SEQUENCE";

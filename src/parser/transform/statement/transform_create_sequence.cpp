@@ -1,6 +1,6 @@
 #include "parser/statement/create_sequence_statement.hpp"
-#include "parser/transformer.hpp"
 #include "parser/tableref/basetableref.hpp"
+#include "parser/transformer.hpp"
 
 using namespace duckdb;
 using namespace postgres;
@@ -13,7 +13,7 @@ unique_ptr<CreateSequenceStatement> Transformer::TransformCreateSequence(Node *n
 
 	auto &info = *result->info;
 	auto sequence_name = TransformRangeVar(stmt->sequence);
-	auto &sequence_ref = (BaseTableRef&) *sequence_name;
+	auto &sequence_ref = (BaseTableRef &)*sequence_name;
 	info.schema = sequence_ref.schema_name;
 	info.name = sequence_ref.table_name;
 
@@ -24,7 +24,7 @@ unique_ptr<CreateSequenceStatement> Transformer::TransformCreateSequence(Node *n
 			string opt_name = string(def_elem->defname);
 
 			if (opt_name == "increment") {
-				auto val = (postgres::Value*) def_elem->arg;
+				auto val = (postgres::Value *)def_elem->arg;
 				assert(val->type == T_Integer);
 				info.increment = val->val.ival;
 				if (info.increment == 0) {
@@ -38,25 +38,25 @@ unique_ptr<CreateSequenceStatement> Transformer::TransformCreateSequence(Node *n
 					info.max_value = numeric_limits<int64_t>::max();
 				}
 			} else if (opt_name == "minvalue") {
-				auto val = (postgres::Value*) def_elem->arg;
+				auto val = (postgres::Value *)def_elem->arg;
 				assert(val->type == T_Integer);
 				info.min_value = val->val.ival;
 				if (info.increment > 0) {
 					info.start_value = info.min_value;
 				}
 			} else if (opt_name == "maxvalue") {
-				auto val = (postgres::Value*) def_elem->arg;
+				auto val = (postgres::Value *)def_elem->arg;
 				assert(val->type == T_Integer);
 				info.max_value = val->val.ival;
 				if (info.increment < 0) {
 					info.start_value = info.max_value;
 				}
 			} else if (opt_name == "start") {
-				auto val = (postgres::Value*) def_elem->arg;
+				auto val = (postgres::Value *)def_elem->arg;
 				assert(val->type == T_Integer);
 				info.start_value = val->val.ival;
 			} else if (opt_name == "cycle") {
-				auto val = (postgres::Value*) def_elem->arg;
+				auto val = (postgres::Value *)def_elem->arg;
 				assert(val->type == T_Integer);
 				info.cycle = val->val.ival > 0;
 			} else {
@@ -72,10 +72,12 @@ unique_ptr<CreateSequenceStatement> Transformer::TransformCreateSequence(Node *n
 		throw ParserException("MINVALUE (%lld) must be less than MAXVALUE (%lld)", info.min_value, info.max_value);
 	}
 	if (info.start_value < info.min_value) {
-		throw ParserException("START value (%lld) cannot be less than MINVALUE (%lld)", info.start_value, info.min_value);
+		throw ParserException("START value (%lld) cannot be less than MINVALUE (%lld)", info.start_value,
+		                      info.min_value);
 	}
 	if (info.start_value > info.max_value) {
-		throw ParserException("START value (%lld) cannot be greater than MAXVALUE (%lld)", info.start_value, info.max_value);
+		throw ParserException("START value (%lld) cannot be greater than MAXVALUE (%lld)", info.start_value,
+		                      info.max_value);
 	}
 	return result;
 }

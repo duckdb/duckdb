@@ -56,7 +56,7 @@ TEST_CASE("Test DEFAULT in tables", "[default]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test (b) VALUES (2), (4), (6), (2), (4);"));
 	result = con.Query("SELECT * FROM test ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5}));
-	REQUIRE(CHECK_COLUMN(result, 1, {2 ,4, 6, 2, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2, 4, 6, 2, 4}));
 	// // cannot drop sequence now
 	// REQUIRE_FAIL(con.Query("DROP SEQUENCE seq"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE test"));

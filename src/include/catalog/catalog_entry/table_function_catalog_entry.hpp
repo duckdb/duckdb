@@ -10,8 +10,8 @@
 
 #include "catalog/catalog_entry.hpp"
 #include "common/unordered_map.hpp"
-#include "parser/column_definition.hpp"
 #include "function/function.hpp"
+#include "parser/column_definition.hpp"
 
 namespace duckdb {
 

@@ -14,7 +14,8 @@
 namespace duckdb {
 namespace function {
 
-void nextval_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
+void nextval_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr,
+                      Vector &result);
 bool nextval_matches_arguments(vector<SQLType> &arguments);
 SQLType nextval_get_return_type(vector<SQLType> &arguments);
 unique_ptr<FunctionData> nextval_bind(BoundFunctionExpression &expr, ClientContext &context);

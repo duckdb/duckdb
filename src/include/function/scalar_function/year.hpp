@@ -14,7 +14,8 @@
 namespace duckdb {
 namespace function {
 
-void year_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
+void year_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr,
+                   Vector &result);
 bool year_matches_arguments(vector<SQLType> &arguments);
 SQLType year_get_return_type(vector<SQLType> &arguments);
 

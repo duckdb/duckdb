@@ -70,12 +70,14 @@ static void caseconvert_function(Vector inputs[], BoundFunctionExpression &expr,
 	});
 }
 
-void caseconvert_upper_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result) {
+void caseconvert_upper_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count,
+                                BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 1);
 	caseconvert_function<strtoupper>(inputs, expr, result);
 }
 
-void caseconvert_lower_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result) {
+void caseconvert_lower_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count,
+                                BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 1);
 	caseconvert_function<strtolower>(inputs, expr, result);
 }

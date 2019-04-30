@@ -1,16 +1,15 @@
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "catalog/catalog_entry/prepared_statement_catalog_entry.hpp"
 
 #include "catalog/catalog.hpp"
+#include "catalog/catalog_entry/prepared_statement_catalog_entry.hpp"
+#include "catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "common/exception.hpp"
 #include "common/serializer.hpp"
-#include "parser/constraints/list.hpp"
-#include "storage/storage_manager.hpp"
 #include "main/connection.hpp"
 #include "main/database.hpp"
-
+#include "parser/constraints/list.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
+#include "storage/storage_manager.hpp"
 
 #include <algorithm>
 
@@ -31,7 +30,7 @@ void TableCatalogEntry::Initialize(CreateTableInformation *info) {
 		columns.push_back(move(entry));
 	}
 	assert(bound_defaults.size() == columns.size());
-	for(size_t i = 0; i < info->bound_defaults.size(); i++) {
+	for (size_t i = 0; i < info->bound_defaults.size(); i++) {
 		auto &bound_default = info->bound_defaults[i];
 		if (bound_default) {
 			// explicit default: use the users' expression
