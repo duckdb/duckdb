@@ -20,6 +20,7 @@ PhysicalAggregate::PhysicalAggregate(vector<TypeId> types, vector<unique_ptr<Exp
 	}
 	for (auto &expr : select_list) {
 		assert(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
+		assert(expr->IsAggregate());
 		aggregates.push_back(move(expr));
 	}
 }

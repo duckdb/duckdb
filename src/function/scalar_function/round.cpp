@@ -8,7 +8,8 @@ using namespace std;
 namespace duckdb {
 namespace function {
 
-void round_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result) {
+void round_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr,
+                    Vector &result) {
 	result.Initialize(inputs[0].type);
 	VectorOperations::Round(inputs[0], inputs[1], result);
 }

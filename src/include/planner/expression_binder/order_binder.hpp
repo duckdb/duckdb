@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "parser/parsed_expression.hpp"
 #include "common/unordered_map.hpp"
 #include "parser/expression_map.hpp"
+#include "parser/parsed_expression.hpp"
 
 namespace duckdb {
 class Expression;

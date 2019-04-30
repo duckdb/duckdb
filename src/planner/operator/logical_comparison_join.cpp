@@ -13,8 +13,8 @@ string LogicalComparisonJoin::ParamsToString() const {
 		result += "[";
 		for (size_t i = 0; i < conditions.size(); i++) {
 			auto &cond = conditions[i];
-			result += ExpressionTypeToString(cond.comparison) + "(" + cond.left->ToString() + ", " +
-			          cond.right->ToString() + ")";
+			result += ExpressionTypeToString(cond.comparison) + "(" + cond.left->GetName() + ", " +
+			          cond.right->GetName() + ")";
 			if (i < conditions.size() - 1) {
 				result += ", ";
 			}

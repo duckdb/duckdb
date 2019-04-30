@@ -41,6 +41,9 @@ void VectorOperations::GenerateSequence(Vector &result, int64_t start, int64_t i
 	case TypeId::BIGINT:
 		templated_generate_sequence<int64_t>(result, start, increment);
 		break;
+	case TypeId::FLOAT:
+		templated_generate_sequence<float>(result, start, increment);
+		break;
 	case TypeId::DOUBLE:
 		templated_generate_sequence<double>(result, start, increment);
 		break;

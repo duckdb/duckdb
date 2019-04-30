@@ -14,7 +14,8 @@
 namespace duckdb {
 namespace function {
 
-void round_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
+void round_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr,
+                    Vector &result);
 bool round_matches_arguments(vector<SQLType> &arguments);
 SQLType round_get_return_type(vector<SQLType> &arguments);
 
@@ -34,6 +35,18 @@ public:
 
 	static get_return_type_function_t GetReturnTypeFunction() {
 		return round_get_return_type;
+	}
+
+	static bind_scalar_function_t GetBindFunction() {
+		return nullptr;
+	}
+
+	static dependency_function_t GetDependencyFunction() {
+		return nullptr;
+	}
+
+	static bool HasSideEffects() {
+		return false;
 	}
 };
 

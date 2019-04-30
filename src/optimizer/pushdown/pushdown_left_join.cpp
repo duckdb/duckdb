@@ -2,8 +2,8 @@
 #include "optimizer/filter_pushdown.hpp"
 #include "optimizer/optimizer.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression/bound_constant_expression.hpp"
 #include "planner/expression/bound_comparison_expression.hpp"
+#include "planner/expression/bound_constant_expression.hpp"
 #include "planner/expression_iterator.hpp"
 #include "planner/operator/logical_comparison_join.hpp"
 #include "planner/operator/logical_filter.hpp"
@@ -44,7 +44,7 @@ static bool FilterRemovesNull(ExpressionRewriter &rewriter, Expression *expr, un
 
 	if (filter->expressions[0]->type != ExpressionType::VALUE_CONSTANT) {
 		// could not flatten the result
-		assert(!filter->expressions[0]->IsScalar());
+		assert(!filter->expressions[0]->IsFoldable());
 		return false;
 	}
 	// we flattened the result into a scalar, check if it is FALSE or NULL

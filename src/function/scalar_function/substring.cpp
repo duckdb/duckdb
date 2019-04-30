@@ -8,7 +8,8 @@ using namespace std;
 namespace duckdb {
 namespace function {
 
-void substring_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result) {
+void substring_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr,
+                        Vector &result) {
 	assert(input_count == 3);
 	auto &input = inputs[0];
 	auto &offset = inputs[1];

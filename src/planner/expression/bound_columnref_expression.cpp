@@ -1,11 +1,11 @@
 #include "planner/expression/bound_columnref_expression.hpp"
+
 #include "common/types/hash.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-BoundColumnRefExpression::BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding,
-                                                   uint32_t depth)
+BoundColumnRefExpression::BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, uint32_t depth)
     : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, type), binding(binding),
       depth(depth) {
 	this->alias = alias;

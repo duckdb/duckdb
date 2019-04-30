@@ -19,8 +19,7 @@ namespace duckdb {
 //! The ExpressionMatcher class contains a set of matchers that can be used to pattern match Expressions
 class ExpressionMatcher {
 public:
-	ExpressionMatcher(ExpressionClass type = ExpressionClass::INVALID) :
-		expr_class(type) {
+	ExpressionMatcher(ExpressionClass type = ExpressionClass::INVALID) : expr_class(type) {
 	}
 	virtual ~ExpressionMatcher() {
 	}

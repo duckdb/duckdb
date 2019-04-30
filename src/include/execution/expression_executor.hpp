@@ -9,8 +9,8 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/unordered_map.hpp"
 #include "common/types/data_chunk.hpp"
+#include "common/unordered_map.hpp"
 #include "planner/bound_tokens.hpp"
 #include "planner/expression.hpp"
 
@@ -35,6 +35,10 @@ public:
 	//! Evaluate a scalar expression and fold it into a single value
 	static Value EvaluateScalar(Expression &expr);
 
+	//! The data chunk of the current physical operator, used to resolve
+	//! column references and determines the output cardinality
+	DataChunk *chunk;
+
 protected:
 	void Execute(Expression &expr, Vector &result);
 
@@ -57,9 +61,6 @@ protected:
 	void Verify(Expression &expr, Vector &result);
 
 private:
-	//! The data chunk of the current physical operator, used to resolve e.g.
-	//! column references
-	DataChunk *chunk;
 	//! The cached result of already-computed Common Subexpression results
 	unordered_map<Expression *, unique_ptr<Vector>> cached_cse;
 };

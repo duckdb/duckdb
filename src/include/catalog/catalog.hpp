@@ -9,11 +9,31 @@
 #pragma once
 
 #include "catalog/catalog_entry.hpp"
-#include "catalog/catalog_entry/list.hpp"
 #include "catalog/catalog_set.hpp"
+#include "catalog/dependency_manager.hpp"
+
+#include <mutex>
 
 namespace duckdb {
+struct CreateSchemaInformation;
+struct DropSchemaInformation;
+struct CreateTableInformation;
+struct DropTableInformation;
+struct AlterTableInformation;
+struct CreateTableFunctionInformation;
+struct CreateScalarFunctionInformation;
+struct CreateViewInformation;
+struct DropViewInformation;
+struct CreateSequenceInformation;
+struct DropSequenceInformation;
+struct DropIndexInformation;
 
+class FunctionExpression;
+class SchemaCatalogEntry;
+class TableCatalogEntry;
+class SequenceCatalogEntry;
+class TableFunctionCatalogEntry;
+class ScalarFunctionCatalogEntry;
 class StorageManager;
 
 //! The Catalog object represents the catalog of the database.
@@ -25,14 +45,12 @@ public:
 	void CreateSchema(Transaction &transaction, CreateSchemaInformation *info);
 	//! Drops a schema in the catalog.
 	void DropSchema(Transaction &transaction, DropSchemaInformation *info);
+
 	//! Creates a table in the catalog.
 	void CreateTable(Transaction &transaction, CreateTableInformation *info);
-	//! Creates a table in the catalog.
-	void CreateView(Transaction &transaction, CreateViewInformation *info);
-	//! Drops a view in the catalog.
-	void DropView(Transaction &transaction, DropViewInformation *info);
 	//! Drops a table from the catalog.
 	void DropTable(Transaction &transaction, DropTableInformation *info);
+
 	//! Alter an existing table in the catalog.
 	void AlterTable(Transaction &transaction, AlterTableInformation *info);
 	//! Create a table function in the catalog
@@ -40,12 +58,24 @@ public:
 	//! Create a scalar function in the catalog
 	void CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInformation *info);
 
+	//! Creates a table in the catalog.
+	void CreateView(Transaction &transaction, CreateViewInformation *info);
+	//! Drops a view in the catalog.
+	void DropView(Transaction &transaction, DropViewInformation *info);
+
+	//! Creates a table in the catalog.
+	void CreateSequence(Transaction &transaction, CreateSequenceInformation *info);
+	//! Drops a view in the catalog.
+	void DropSequence(Transaction &transaction, DropSequenceInformation *info);
+
 	//! Returns a pointer to the schema of the specified name. Throws an
 	//! exception if it does not exist.
 	SchemaCatalogEntry *GetSchema(Transaction &transaction, const string &name = DEFAULT_SCHEMA);
 	//! Returns a pointer to the table in the specified schema. Throws an
 	//! exception if the schema or the table does not exist.
 	TableCatalogEntry *GetTable(Transaction &transaction, const string &schema, const string &table);
+	//! Gets the sequence, if it exists
+	SequenceCatalogEntry *GetSequence(Transaction &transaction, const string &schema, const string &sequence);
 
 	CatalogEntry *GetTableOrView(Transaction &transaction, const string &schema, const string &table);
 
@@ -61,5 +91,9 @@ public:
 
 	//! The catalog set holding the schemas
 	CatalogSet schemas;
+	//! The DependencyManager manages dependencies between different catalog objects
+	DependencyManager dependency_manager;
+	//! Write lock for the catalog
+	std::mutex write_lock;
 };
 } // namespace duckdb

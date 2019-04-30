@@ -3,6 +3,7 @@
 #include "catalog/catalog.hpp"
 #include "function/scalar_function/list.hpp"
 #include "function/table_function/list.hpp"
+#include "parser/parsed_data.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -29,6 +30,9 @@ template <class T> static void AddScalarFunction(Transaction &transaction, Catal
 	info.function = T::GetFunction();
 	info.matches = T::GetMatchesArgumentFunction();
 	info.return_type = T::GetReturnTypeFunction();
+	info.bind = T::GetBindFunction();
+	info.dependency = T::GetDependencyFunction();
+	info.has_side_effects = T::HasSideEffects();
 
 	catalog.CreateScalarFunction(transaction, &info);
 }
@@ -36,6 +40,7 @@ template <class T> static void AddScalarFunction(Transaction &transaction, Catal
 void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddTableFunction<function::PragmaTableInfo>(transaction, catalog);
 	AddTableFunction<function::SQLiteMaster>(transaction, catalog);
+
 	AddScalarFunction<function::AbsFunction>(transaction, catalog);
 	AddScalarFunction<function::ConcatFunction>(transaction, catalog);
 	AddScalarFunction<function::DatePartFunction>(transaction, catalog);
@@ -45,4 +50,7 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddScalarFunction<function::YearFunction>(transaction, catalog);
 	AddScalarFunction<function::UpperFunction>(transaction, catalog);
 	AddScalarFunction<function::LowerFunction>(transaction, catalog);
+	AddScalarFunction<function::NextvalFunction>(transaction, catalog);
+	AddScalarFunction<function::RegexpMatchesFunction>(transaction, catalog);
+	AddScalarFunction<function::RegexpReplaceFunction>(transaction, catalog);
 }

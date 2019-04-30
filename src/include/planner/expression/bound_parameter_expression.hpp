@@ -23,12 +23,16 @@ public:
 	SQLType sql_type;
 	size_t parameter_nr;
 	Value *value;
+
 public:
 	bool IsScalar() const override {
 		return true;
 	}
 	bool HasParameter() const override {
 		return true;
+	}
+	bool IsFoldable() const override {
+		return false;
 	}
 
 	string ToString() const override {

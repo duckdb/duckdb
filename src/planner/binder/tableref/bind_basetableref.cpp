@@ -1,3 +1,4 @@
+#include "catalog/catalog_entry/view_catalog_entry.hpp"
 #include "main/client_context.hpp"
 #include "main/database.hpp"
 #include "parser/tableref/basetableref.hpp"

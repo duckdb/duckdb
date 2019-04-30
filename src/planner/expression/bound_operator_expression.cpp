@@ -12,15 +12,15 @@ string BoundOperatorExpression::ToString() const {
 	if (!op.empty()) {
 		// use the operator string to represent the operator
 		if (children.size() == 1) {
-			return op + children[0]->ToString();
+			return op + "(" + children[0]->GetName() + ")";
 		} else if (children.size() == 2) {
-			return children[0]->ToString() + " " + op + " " + children[1]->ToString();
+			return children[0]->GetName() + " " + op + " " + children[1]->GetName();
 		}
 	}
 	// if there is no operator we render it as a function
 	auto result = ExpressionTypeToString(type) + "(";
 	for (size_t i = 0; i < children.size(); i++) {
-		result += children[i]->ToString();
+		result += children[i]->GetName();
 		if (i + 1 < children.size()) {
 			result += ", ";
 		} else {

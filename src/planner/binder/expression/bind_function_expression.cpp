@@ -1,3 +1,4 @@
+#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "main/client_context.hpp"
 #include "main/database.hpp"
 #include "parser/expression/function_expression.hpp"
@@ -24,7 +25,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, uint32
 	vector<SQLType> types;
 	vector<unique_ptr<Expression>> children;
 	for (size_t i = 0; i < function.children.size(); i++) {
-		auto &child = (BoundExpression&)*function.children[i];
+		auto &child = (BoundExpression &)*function.children[i];
 		types.push_back(child.sql_type);
 		children.push_back(move(child.expr));
 	}
@@ -45,5 +46,8 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, uint32
 	// now create the function
 	auto result = make_unique<BoundFunctionExpression>(GetInternalType(return_type), func);
 	result->children = move(children);
+	if (func->bind) {
+		result->bind_info = func->bind(*result, context);
+	}
 	return BindResult(move(result), return_type);
 }

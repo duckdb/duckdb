@@ -27,8 +27,11 @@ Value ValueOperations::Abs(const Value &op) {
 	case TypeId::BIGINT:
 		result.value_.bigint = Abs::Operation(op.value_.bigint);
 		break;
+	case TypeId::FLOAT:
+		result.value_.float_ = Abs::Operation(op.value_.float_);
+		break;
 	case TypeId::DOUBLE:
-		result.value_.decimal = Abs::Operation(op.value_.decimal);
+		result.value_.double_ = Abs::Operation(op.value_.double_);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type");

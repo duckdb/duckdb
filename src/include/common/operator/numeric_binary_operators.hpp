@@ -39,6 +39,7 @@ struct Divide {
 
 struct Modulo {
 	template <class T> static inline T Operation(T left, T right) {
+		assert(right != 0);
 		return left % right;
 	}
 };

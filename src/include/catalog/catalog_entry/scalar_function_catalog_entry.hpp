@@ -23,7 +23,8 @@ class ScalarFunctionCatalogEntry : public CatalogEntry {
 public:
 	ScalarFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateScalarFunctionInformation *info)
 	    : CatalogEntry(CatalogType::SCALAR_FUNCTION, catalog, info->name), schema(schema), function(info->function),
-	      matches(info->matches), return_type(info->return_type) {
+	      matches(info->matches), return_type(info->return_type), bind(info->bind), dependency(info->dependency),
+	      has_side_effects(info->has_side_effects) {
 	}
 
 	//! The schema the table belongs to
@@ -35,5 +36,11 @@ public:
 	//! Function that gives the return type of the function given the input
 	//! arguments
 	get_return_type_function_t return_type;
+	//! The bind function
+	bind_scalar_function_t bind;
+	//! The dependency function
+	dependency_function_t dependency;
+
+	bool has_side_effects;
 };
 } // namespace duckdb

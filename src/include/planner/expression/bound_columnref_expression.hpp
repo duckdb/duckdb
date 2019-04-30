@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "planner/expression.hpp"
 #include "planner/column_binding.hpp"
+#include "planner/expression.hpp"
 
 namespace duckdb {
 
@@ -19,8 +19,7 @@ namespace duckdb {
 class BoundColumnRefExpression : public Expression {
 public:
 	BoundColumnRefExpression(TypeId type, ColumnBinding binding, uint32_t depth = 0);
-	BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding,
-	                         uint32_t depth = 0);
+	BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, uint32_t depth = 0);
 
 	//! Column index set by the binder, used to generate the final BoundExpression
 	ColumnBinding binding;
@@ -30,6 +29,9 @@ public:
 
 public:
 	bool IsScalar() const override {
+		return false;
+	}
+	bool IsFoldable() const override {
 		return false;
 	}
 

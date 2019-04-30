@@ -1,5 +1,5 @@
-#include "main/database.hpp"
 #include "main/client_context.hpp"
+#include "main/database.hpp"
 #include "parser/statement/copy_statement.hpp"
 #include "planner/binder.hpp"
 #include "planner/statement/bound_copy_statement.hpp"

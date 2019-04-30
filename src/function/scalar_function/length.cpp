@@ -8,7 +8,8 @@ using namespace std;
 namespace duckdb {
 namespace function {
 
-void length_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result) {
+void length_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr,
+                     Vector &result) {
 	assert(input_count == 1);
 	auto &input = inputs[0];
 	assert(input.type == TypeId::VARCHAR);

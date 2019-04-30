@@ -17,3 +17,11 @@ void PhysicalProjection::_GetChunk(ClientContext &context, DataChunk &chunk, Phy
 	ExpressionExecutor executor(state->child_chunk);
 	executor.Execute(select_list, chunk);
 }
+
+string PhysicalProjection::ExtraRenderInformation() const {
+	string extra_info;
+	for (auto &expr : select_list) {
+		extra_info += expr->GetName() + "\n";
+	}
+	return extra_info;
+}

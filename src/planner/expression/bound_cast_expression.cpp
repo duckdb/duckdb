@@ -3,12 +3,14 @@
 using namespace duckdb;
 using namespace std;
 
-BoundCastExpression::BoundCastExpression(TypeId target, unique_ptr<Expression> child, SQLType source_type, SQLType target_type)
-    : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, target), child(move(child)), source_type(source_type), target_type(target_type) {
+BoundCastExpression::BoundCastExpression(TypeId target, unique_ptr<Expression> child, SQLType source_type,
+                                         SQLType target_type)
+    : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, target), child(move(child)),
+      source_type(source_type), target_type(target_type) {
 }
 
 string BoundCastExpression::ToString() const {
-	return "CAST[" + TypeIdToString(return_type) + "](" + child->ToString() + ")";
+	return "CAST[" + TypeIdToString(return_type) + "](" + child->GetName() + ")";
 }
 
 bool BoundCastExpression::Equals(const BaseExpression *other_) const {

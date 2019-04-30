@@ -1,6 +1,8 @@
 #include "function/table_function/sqlite_master.hpp"
 
 #include "catalog/catalog.hpp"
+#include "catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "common/exception.hpp"
 #include "main/client_context.hpp"
 #include "main/database.hpp"
@@ -10,8 +12,12 @@ using namespace std;
 namespace duckdb {
 namespace function {
 
-struct SQLiteMasterData : public TableFunctionData {
+struct SQLiteMasterData : public FunctionData {
 	SQLiteMasterData() : initialized(false), offset(0) {
+	}
+
+	unique_ptr<FunctionData> Copy() override {
+		throw NotImplementedException("Copy not required for table-producing function");
 	}
 
 	bool initialized;
@@ -19,7 +25,7 @@ struct SQLiteMasterData : public TableFunctionData {
 	size_t offset;
 };
 
-TableFunctionData *sqlite_master_init(ClientContext &context) {
+FunctionData *sqlite_master_init(ClientContext &context) {
 	// initialize the function data structure
 	return new SQLiteMasterData();
 }
@@ -47,7 +53,7 @@ string GenerateQuery(CatalogEntry *entry) {
 	}
 }
 
-void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, TableFunctionData *dataptr) {
+void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, FunctionData *dataptr) {
 	auto &data = *((SQLiteMasterData *)dataptr);
 	if (!data.initialized) {
 		// scan all the schemas

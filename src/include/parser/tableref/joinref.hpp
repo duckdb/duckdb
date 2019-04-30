@@ -29,6 +29,7 @@ public:
 	JoinType type;
 	//! Columns hidden from SELECT * expansion (because of USING clause)
 	unordered_set<string> hidden_columns;
+
 public:
 	bool Equals(const TableRef *other_) const override;
 

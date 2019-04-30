@@ -25,7 +25,7 @@ public:
 
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
-	string ExtraRenderInformation() override;
+	string ExtraRenderInformation() const override;
 
 	unique_ptr<Expression> condition;
 };

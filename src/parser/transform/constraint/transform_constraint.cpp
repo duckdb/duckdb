@@ -23,7 +23,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(postgres::ListCell *cell
 	}
 }
 
-unique_ptr<Constraint> Transformer::TransformConstraint(postgres::ListCell *cell, ColumnDefinition column,
+unique_ptr<Constraint> Transformer::TransformConstraint(postgres::ListCell *cell, ColumnDefinition &column,
                                                         size_t index) {
 	auto constraint = reinterpret_cast<postgres::Constraint *>(cell->data.ptr_value);
 	assert(constraint);
@@ -46,8 +46,10 @@ unique_ptr<Constraint> Transformer::TransformConstraint(postgres::ListCell *cell
 		return make_unique<ParsedConstraint>(ConstraintType::UNIQUE, index);
 	case postgres::CONSTR_NULL:
 		return nullptr;
-	case postgres::CONSTR_FOREIGN:
 	case postgres::CONSTR_DEFAULT:
+		column.default_value = TransformExpression(constraint->raw_expr);
+		return nullptr;
+	case postgres::CONSTR_FOREIGN:
 	default:
 		throw NotImplementedException("Constraint not implemented!");
 	}

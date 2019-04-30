@@ -1,7 +1,7 @@
 #include "parser/expression/parameter_expression.hpp"
+#include "planner/binder.hpp"
 #include "planner/expression/bound_parameter_expression.hpp"
 #include "planner/expression_binder.hpp"
-#include "planner/binder.hpp"
 
 using namespace duckdb;
 using namespace std;

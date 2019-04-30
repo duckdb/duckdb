@@ -133,8 +133,10 @@ size_t OrderIndex::SearchLTE(Value value) {
 		return binary_search_lte<int32_t>(data.get(), value.value_.integer, count);
 	case TypeId::BIGINT:
 		return binary_search_lte<int64_t>(data.get(), value.value_.bigint, count);
+	case TypeId::FLOAT:
+		return binary_search_lte<float>(data.get(), value.value_.float_, count);
 	case TypeId::DOUBLE:
-		return binary_search_lte<double>(data.get(), value.value_.decimal, count);
+		return binary_search_lte<double>(data.get(), value.value_.double_, count);
 	default:
 		throw NotImplementedException("Unimplemented type for index search");
 	}
@@ -151,8 +153,10 @@ size_t OrderIndex::SearchGTE(Value value) {
 		return binary_search_gte<int32_t>(data.get(), value.value_.integer, count);
 	case TypeId::BIGINT:
 		return binary_search_gte<int64_t>(data.get(), value.value_.bigint, count);
+	case TypeId::FLOAT:
+		return binary_search_gte<float>(data.get(), value.value_.float_, count);
 	case TypeId::DOUBLE:
-		return binary_search_gte<double>(data.get(), value.value_.decimal, count);
+		return binary_search_gte<double>(data.get(), value.value_.double_, count);
 	default:
 		throw NotImplementedException("Unimplemented type for index search");
 	}
@@ -169,8 +173,10 @@ size_t OrderIndex::SearchLT(Value value) {
 		return binary_search_lt<int32_t>(data.get(), value.value_.integer, count);
 	case TypeId::BIGINT:
 		return binary_search_lt<int64_t>(data.get(), value.value_.bigint, count);
+	case TypeId::FLOAT:
+		return binary_search_lt<float>(data.get(), value.value_.float_, count);
 	case TypeId::DOUBLE:
-		return binary_search_lt<double>(data.get(), value.value_.decimal, count);
+		return binary_search_lt<double>(data.get(), value.value_.double_, count);
 	default:
 		throw NotImplementedException("Unimplemented type for index search");
 	}
@@ -187,14 +193,16 @@ size_t OrderIndex::SearchGT(Value value) {
 		return binary_search_gt<int32_t>(data.get(), value.value_.integer, count);
 	case TypeId::BIGINT:
 		return binary_search_gt<int64_t>(data.get(), value.value_.bigint, count);
+	case TypeId::FLOAT:
+		return binary_search_gt<float>(data.get(), value.value_.float_, count);
 	case TypeId::DOUBLE:
-		return binary_search_gt<double>(data.get(), value.value_.decimal, count);
+		return binary_search_gt<double>(data.get(), value.value_.double_, count);
 	default:
 		throw NotImplementedException("Unimplemented type for index search");
 	}
 }
 
-template <class T> static size_t templated_scan(size_t &from, size_t &to, uint8_t *data, uint64_t *result_ids) {
+template <class T> static size_t templated_scan(size_t &from, size_t &to, uint8_t *data, int64_t *result_ids) {
 	auto array = (SortChunk<T> *)data;
 	size_t result_count = 0;
 	for (; from < to; from++) {
@@ -208,8 +216,8 @@ template <class T> static size_t templated_scan(size_t &from, size_t &to, uint8_
 }
 
 void OrderIndex::Scan(size_t &position_from, size_t &position_to, Value value, Vector &result_identifiers) {
-	assert(result_identifiers.type == TypeId::POINTER);
-	auto row_ids = (uint64_t *)result_identifiers.data;
+	assert(result_identifiers.type == TypeId::BIGINT);
+	auto row_ids = (int64_t *)result_identifiers.data;
 	// perform the templated scan to find the tuples to extract
 	switch (types[0]) {
 	case TypeId::TINYINT:
@@ -280,7 +288,7 @@ unique_ptr<IndexScanState> OrderIndex::InitializeScanTwoPredicates(Transaction &
 void OrderIndex::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) {
 	auto state = (OrderIndexScanState *)ss;
 	// scan the index
-	StaticVector<uint64_t> result_identifiers;
+	StaticVector<int64_t> result_identifiers;
 	do {
 		Scan(state->current_index, state->final_index, state->value, result_identifiers);
 		if (result_identifiers.count == 0) {
@@ -294,7 +302,7 @@ void OrderIndex::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &r
 template <class T> static void templated_insert(uint8_t *dataptr, DataChunk &input, Vector &row_ids) {
 	auto actual_data = (SortChunk<T> *)dataptr;
 	auto input_data = (T *)input.data[0].data;
-	auto row_identifiers = (uint64_t *)row_ids.data;
+	auto row_identifiers = (int64_t *)row_ids.data;
 	for (size_t i = 0; i < row_ids.count; i++) {
 		actual_data[i].value = input_data[i];
 		actual_data[i].row_id = row_identifiers[i];
@@ -327,7 +335,7 @@ void OrderIndex::Insert(DataChunk &input, Vector &row_ids) {
 	if (input.column_count > 1) {
 		throw NotImplementedException("We only support single dimensional indexes currently");
 	}
-	assert(row_ids.type == TypeId::POINTER);
+	assert(row_ids.type == TypeId::BIGINT);
 	assert(input.size() == row_ids.count);
 	assert(types[0] == input.data[0].type);
 

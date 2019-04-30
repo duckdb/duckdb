@@ -2,14 +2,16 @@
 
 #include "catalog/catalog.hpp"
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "catalog/catalog_entry/view_catalog_entry.hpp"
 #include "common/file_system.hpp"
 #include "common/serializer.hpp"
 #include "main/client_context.hpp"
 #include "main/connection.hpp"
 #include "main/database.hpp"
+#include "planner/binder.hpp"
 #include "transaction/transaction.hpp"
 #include "transaction/transaction_manager.hpp"
-#include "planner/binder.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -174,7 +176,7 @@ bool ReplayCreateTable(ClientContext &context, Catalog &catalog, Deserializer &s
 	// bind the constraints to the table again
 	Binder binder(context);
 	binder.BindConstraints(info->table, info->columns, info->constraints);
-	
+
 	// try {
 	catalog.CreateTable(context.ActiveTransaction(), info.get());
 	// catch(...) {

@@ -34,7 +34,8 @@ public:
 	ExpressionType comparison_type;
 	//! The SQLType of the subquery result. Only used for ANY expressions.
 	SQLType child_type;
-	//! The target SQLType of the subquery result (i.e. to which type it should be casted, if child_type <> child_target). Only used for ANY expressions.
+	//! The target SQLType of the subquery result (i.e. to which type it should be casted, if child_type <>
+	//! child_target). Only used for ANY expressions.
 	SQLType child_target;
 
 public:
@@ -42,6 +43,9 @@ public:
 		return true;
 	}
 	bool IsScalar() const override {
+		return false;
+	}
+	bool IsFoldable() const override {
 		return false;
 	}
 

@@ -16,9 +16,10 @@ namespace duckdb {
 class ConstantBinder : public ExpressionBinder {
 public:
 	ConstantBinder(Binder &binder, ClientContext &context, string clause);
-	
+
 	//! The location where this binder is used, used for error messages
 	string clause;
+
 protected:
 	BindResult BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression = false) override;
 };

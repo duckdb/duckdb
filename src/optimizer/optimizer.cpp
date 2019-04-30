@@ -6,13 +6,13 @@
 #include "optimizer/cse_optimizer.hpp"
 #include "optimizer/filter_pushdown.hpp"
 #include "optimizer/join_order_optimizer.hpp"
+#include "optimizer/regex_range_filter.hpp"
 #include "optimizer/rule/list.hpp"
 #include "planner/binder.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/expression/bound_operator_expression.hpp"
 #include "planner/expression/common_subexpression.hpp"
 #include "planner/operator/list.hpp"
-
 
 using namespace duckdb;
 using namespace std;
@@ -71,6 +71,11 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	plan = filter_pushdown.Rewrite(move(plan));
 	context.profiler.EndPhase();
 
+	context.profiler.StartPhase("regex_range");
+	RegexRangeFilter regex_opt;
+	plan = regex_opt.Rewrite(move(plan));
+	context.profiler.EndPhase();
+
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
 	context.profiler.StartPhase("join_order");
@@ -100,7 +105,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	if (expr.type != ExpressionType::COMPARE_IN) {
 		return nullptr;
 	}
-	if (expr.children[0]->IsScalar()) {
+	if (expr.children[0]->IsFoldable()) {
 		// LHS is scalar: we can flatten the entire list
 		return nullptr;
 	}
@@ -114,7 +119,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	// we can only do this if the expressions in the expression list are scalar
 	for (size_t i = 1; i < expr.children.size(); i++) {
 		assert(expr.children[i]->return_type == in_type);
-		if (!expr.children[i]->IsScalar()) {
+		if (!expr.children[i]->IsFoldable()) {
 			// non-scalar expression
 			return nullptr;
 		}

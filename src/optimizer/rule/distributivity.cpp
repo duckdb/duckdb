@@ -1,12 +1,10 @@
 #include "optimizer/rule/distributivity.hpp"
 
 #include "optimizer/matcher/expression_matcher.hpp"
-
+#include "planner/expression/bound_conjunction_expression.hpp"
+#include "planner/expression/bound_constant_expression.hpp"
 #include "planner/expression_iterator.hpp"
 #include "planner/operator/logical_filter.hpp"
-
-#include "planner/expression/bound_constant_expression.hpp"
-#include "planner/expression/bound_conjunction_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

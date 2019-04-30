@@ -1,5 +1,6 @@
 #include "execution/operator/scan/physical_table_scan.hpp"
 
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "main/client_context.hpp"
 
 using namespace duckdb;
@@ -17,6 +18,6 @@ unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {
 	return make_unique<PhysicalTableScanOperatorState>(table);
 }
 
-string PhysicalTableScan::ExtraRenderInformation() {
+string PhysicalTableScan::ExtraRenderInformation() const {
 	return tableref.name;
 }

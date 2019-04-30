@@ -9,9 +9,9 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "optimizer/join_order/relation.hpp"
 #include "common/unordered_map.hpp"
 #include "common/unordered_set.hpp"
+#include "optimizer/join_order/relation.hpp"
 
 #include <functional>
 

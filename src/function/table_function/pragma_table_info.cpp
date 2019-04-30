@@ -1,6 +1,7 @@
 #include "function/table_function/pragma_table_info.hpp"
 
 #include "catalog/catalog.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "common/exception.hpp"
 #include "main/client_context.hpp"
 #include "main/database.hpp"
@@ -10,20 +11,24 @@ using namespace std;
 namespace duckdb {
 namespace function {
 
-struct PragmaTableFunctionData : public TableFunctionData {
+struct PragmaTableFunctionData : public FunctionData {
 	PragmaTableFunctionData() : entry(nullptr), offset(0) {
+	}
+
+	unique_ptr<FunctionData> Copy() override {
+		throw NotImplementedException("Copy not required for table-producing function");
 	}
 
 	TableCatalogEntry *entry;
 	size_t offset;
 };
 
-TableFunctionData *pragma_table_info_init(ClientContext &context) {
+FunctionData *pragma_table_info_init(ClientContext &context) {
 	// initialize the function data structure
 	return new PragmaTableFunctionData();
 }
 
-void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &output, TableFunctionData *dataptr) {
+void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &output, FunctionData *dataptr) {
 	auto &data = *((PragmaTableFunctionData *)dataptr);
 	if (!data.entry) {
 		// first call: load the entry from the catalog
@@ -64,8 +69,9 @@ void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &outp
 		// "notnull", TypeId::BOOLEAN
 		// FIXME: look at constraints
 		output.data[3].SetValue(index, Value::BOOLEAN(false));
-		// "dflt_value", TypeId::BOOLEAN
-		output.data[4].SetValue(index, Value::BOOLEAN(column.has_default));
+		// "dflt_value", TypeId::VARCHAR
+		string def_value = column.default_value ? column.default_value->ToString() : "NULL";
+		output.data[4].SetValue(index, Value(def_value));
 		// "pk", TypeId::BOOLEAN
 		// FIXME: look at constraints
 		output.data[5].SetValue(index, Value::BOOLEAN(false));

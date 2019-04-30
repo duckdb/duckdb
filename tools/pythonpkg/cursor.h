@@ -5,8 +5,7 @@
 #include "module.h"
 
 typedef struct {
-	PyObject_HEAD
-	duckdb_Connection *connection;
+	PyObject_HEAD duckdb_Connection *connection;
 
 	uint64_t rowcount;
 	uint64_t offset;
@@ -14,7 +13,7 @@ typedef struct {
 	int closed;
 	int reset;
 	int initialized;
-	duckdb_result result;
+	std::unique_ptr<duckdb::MaterializedQueryResult> result;
 } duckdb_Cursor;
 
 extern PyTypeObject duckdb_CursorType;

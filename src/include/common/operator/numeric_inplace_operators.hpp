@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <cassert>
+
 namespace operators {
 
 struct AddInPlace {
@@ -37,6 +39,7 @@ struct DivideInPlace {
 
 struct ModuloInPlace {
 	template <class T> static inline void Operation(T &left, T right) {
+		assert(right != 0);
 		left %= right;
 	}
 };

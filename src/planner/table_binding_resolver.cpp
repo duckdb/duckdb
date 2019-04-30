@@ -1,5 +1,7 @@
 #include "planner/table_binding_resolver.hpp"
 
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "planner/operator/list.hpp"
 
 using namespace duckdb;

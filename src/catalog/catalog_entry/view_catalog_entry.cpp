@@ -1,10 +1,8 @@
 #include "catalog/catalog_entry/view_catalog_entry.hpp"
 
-#include "catalog/catalog.hpp"
+#include "catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "common/exception.hpp"
 #include "common/serializer.hpp"
-#include "parser/constraints/list.hpp"
-#include "storage/storage_manager.hpp"
 
 #include <algorithm>
 

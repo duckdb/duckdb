@@ -2,11 +2,8 @@
 # The DuckDB R interface follows the R DBI specification
 library("DBI")
 
-# create a DuckDB driver, either as a temporary in-memory database (default) or with a file 
-drv <- duckdb::duckdb(":memory:")
-
-# create a connection, you can have many of those
-con <- dbConnect(drv)
+# create a DuckDB connection, either as a temporary in-memory database (default) or with a file 
+con <- dbConnect(duckdb::duckdb(), ":memory:")
 
 # write a data.frame to the database
 dbWriteTable(con, "iris", iris)
@@ -26,6 +23,3 @@ dbRemoveTable(con, "iris")
 
 # close the connection
 dbDisconnect(con)
-
-# shutdown the database 
-duckdb::duckdb_shutdown(drv)

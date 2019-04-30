@@ -1,4 +1,5 @@
 #include "planner/expression_binder/insert_binder.hpp"
+
 #include "planner/expression/bound_default_expression.hpp"
 
 using namespace duckdb;

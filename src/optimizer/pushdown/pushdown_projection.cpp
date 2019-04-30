@@ -1,8 +1,8 @@
 #include "optimizer/filter_pushdown.hpp"
+#include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/expression_iterator.hpp"
 #include "planner/operator/logical_empty_result.hpp"
 #include "planner/operator/logical_projection.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

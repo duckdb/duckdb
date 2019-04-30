@@ -1,12 +1,10 @@
 #ifndef DUCKDB_MODULE_H
 #define DUCKDB_MODULE_H
 #include "Python.h"
-#include "duckdb.h"
 
 #define MODULE_NAME "duckdb"
 
 typedef struct {
-	PyObject_HEAD duckdb_database *db;
 	PyObject *in_weakreflist; /* List of weak references */
 } duckdb_Database;
 

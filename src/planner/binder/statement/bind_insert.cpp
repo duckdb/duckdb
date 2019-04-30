@@ -25,6 +25,9 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			if (entry == table->name_map.end()) {
 				throw BinderException("Column %s not found in table %s", stmt.columns[i].c_str(), table->name.c_str());
 			}
+			if (entry->second == COLUMN_IDENTIFIER_ROW_ID) {
+				throw BinderException("Cannot explicitly insert values into rowid column");
+			}
 			result->expected_types.push_back(table->columns[entry->second].type);
 			named_column_map.push_back(entry->second);
 		}
@@ -40,7 +43,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			}
 		}
 	} else {
-		for(size_t i = 0; i < result->table->columns.size(); i++) {
+		for (size_t i = 0; i < result->table->columns.size(); i++) {
 			result->expected_types.push_back(table->columns[i].type);
 		}
 	}
@@ -50,11 +53,11 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 		result->select_statement =
 		    unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*stmt.select_statement));
 		if (result->select_statement->node->types.size() != expected_columns) {
-			string msg =
-				StringUtil::Format(stmt.columns.size() == 0 ? "table %s has %d columns but %d values were supplied"
-															: "Column name/value mismatch for insert on %s: "
-																"expected %d columns but %d values were supplied",
-									result->table->name.c_str(), (int) expected_columns, (int) result->select_statement->node->types.size());
+			string msg = StringUtil::Format(
+			    stmt.columns.size() == 0 ? "table %s has %d columns but %d values were supplied"
+			                             : "Column name/value mismatch for insert on %s: "
+			                               "expected %d columns but %d values were supplied",
+			    result->table->name.c_str(), (int)expected_columns, (int)result->select_statement->node->types.size());
 			throw BinderException(msg);
 		}
 	} else {
@@ -66,7 +69,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 				    StringUtil::Format(stmt.columns.size() == 0 ? "table %s has %d columns but %d values were supplied"
 				                                                : "Column name/value mismatch for insert on %s: "
 				                                                  "expected %d columns but %d values were supplied",
-				                       result->table->name.c_str(), (int) expected_columns, (int) expression_list.size());
+				                       result->table->name.c_str(), (int)expected_columns, (int)expression_list.size());
 				throw BinderException(msg);
 			}
 			vector<unique_ptr<Expression>> list;

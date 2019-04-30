@@ -11,7 +11,8 @@ using namespace std;
 namespace duckdb {
 namespace function {
 
-void concat_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result) {
+void concat_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr,
+                     Vector &result) {
 	assert(input_count == 2);
 	auto &input1 = inputs[0];
 	auto &input2 = inputs[1];

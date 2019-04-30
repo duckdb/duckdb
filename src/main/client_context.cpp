@@ -2,27 +2,26 @@
 
 #include "execution/physical_plan_generator.hpp"
 #include "main/database.hpp"
-#include "optimizer/optimizer.hpp"
-#include "parser/parser.hpp"
-#include "planner/operator/logical_execute.hpp"
-#include "planner/planner.hpp"
-#include "parser/statement/explain_statement.hpp"
-
 #include "main/materialized_query_result.hpp"
 #include "main/query_result.hpp"
 #include "main/stream_query_result.hpp"
+#include "optimizer/optimizer.hpp"
+#include "parser/parser.hpp"
+#include "parser/statement/explain_statement.hpp"
+#include "planner/operator/logical_execute.hpp"
+#include "planner/planner.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 ClientContext::ClientContext(DuckDB &database)
     : db(database), transaction(database.transaction_manager), interrupted(false),
-      prepared_statements(make_unique<CatalogSet>()), open_result(nullptr) {
+      prepared_statements(make_unique<CatalogSet>(db.catalog)), open_result(nullptr) {
 }
 
 void ClientContext::Cleanup() {
 	lock_guard<mutex> client_guard(context_lock);
-	if (is_invalidated) {
+	if (is_invalidated || !prepared_statements) {
 		return;
 	}
 	if (transaction.HasActiveTransaction()) {
@@ -31,7 +30,8 @@ void ClientContext::Cleanup() {
 			transaction.Rollback();
 		}
 	}
-
+	assert(prepared_statements);
+	db.transaction_manager.AddCatalogSet(*this, move(prepared_statements));
 	return CleanupInternal();
 }
 

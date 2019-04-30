@@ -1,8 +1,8 @@
-#include "execution/physical_plan_generator.hpp"
-#include "planner/operator/logical_set_operation.hpp"
-#include "execution/operator/set/physical_union.hpp"
 #include "execution/operator/join/physical_hash_join.hpp"
+#include "execution/operator/set/physical_union.hpp"
+#include "execution/physical_plan_generator.hpp"
 #include "planner/expression/bound_reference_expression.hpp"
+#include "planner/operator/logical_set_operation.hpp"
 
 using namespace duckdb;
 using namespace std;

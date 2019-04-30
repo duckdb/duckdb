@@ -1,12 +1,10 @@
 #include "planner/expression_iterator.hpp"
 
-#include "planner/expression/list.hpp"
 #include "planner/bound_query_node.hpp"
+#include "planner/expression/list.hpp"
 #include "planner/query_node/bound_select_node.hpp"
 #include "planner/query_node/bound_set_operation_node.hpp"
-
 #include "planner/tableref/list.hpp"
-
 
 using namespace duckdb;
 using namespace std;
@@ -120,7 +118,8 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	}
 }
 
-void ExpressionIterator::EnumerateExpression(unique_ptr<Expression> &expr, std::function<void(Expression &child)> callback) {
+void ExpressionIterator::EnumerateExpression(unique_ptr<Expression> &expr,
+                                             std::function<void(Expression &child)> callback) {
 	if (!expr) {
 		return;
 	}
@@ -131,23 +130,24 @@ void ExpressionIterator::EnumerateExpression(unique_ptr<Expression> &expr, std::
 	});
 }
 
-void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef& ref, std::function<void(Expression &child)> callback) {
-	switch(ref.type) {
+void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
+                                                   std::function<void(Expression &child)> callback) {
+	switch (ref.type) {
 	case TableReferenceType::CROSS_PRODUCT: {
-		auto &bound_crossproduct = (BoundCrossProductRef&) ref;
+		auto &bound_crossproduct = (BoundCrossProductRef &)ref;
 		EnumerateTableRefChildren(*bound_crossproduct.left, callback);
 		EnumerateTableRefChildren(*bound_crossproduct.right, callback);
 		break;
 	}
 	case TableReferenceType::JOIN: {
-		auto &bound_join = (BoundJoinRef&) ref;
+		auto &bound_join = (BoundJoinRef &)ref;
 		EnumerateExpression(bound_join.condition, callback);
 		EnumerateTableRefChildren(*bound_join.left, callback);
 		EnumerateTableRefChildren(*bound_join.right, callback);
 		break;
 	}
 	case TableReferenceType::SUBQUERY: {
-		auto &bound_subquery = (BoundSubqueryRef&) ref;
+		auto &bound_subquery = (BoundSubqueryRef &)ref;
 		EnumerateQueryNodeChildren(*bound_subquery.subquery, callback);
 		break;
 	}
@@ -155,21 +155,20 @@ void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef& ref, std::func
 		assert(ref.type == TableReferenceType::TABLE_FUNCTION || ref.type == TableReferenceType::BASE_TABLE);
 		break;
 	}
-
 }
 
 void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
-								std::function<void(Expression &child)> callback) {
-	switch(node.type) {
+                                                    std::function<void(Expression &child)> callback) {
+	switch (node.type) {
 	case QueryNodeType::SET_OPERATION_NODE: {
-		auto &bound_setop = (BoundSetOperationNode&) node;
+		auto &bound_setop = (BoundSetOperationNode &)node;
 		EnumerateQueryNodeChildren(*bound_setop.left, callback);
 		EnumerateQueryNodeChildren(*bound_setop.right, callback);
 		break;
 	}
 	default:
 		assert(node.type == QueryNodeType::SELECT_NODE);
-		auto &bound_select = (BoundSelectNode&) node;
+		auto &bound_select = (BoundSelectNode &)node;
 		for (size_t i = 0; i < bound_select.select_list.size(); i++) {
 			EnumerateExpression(bound_select.select_list[i], callback);
 		}

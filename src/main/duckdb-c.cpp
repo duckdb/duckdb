@@ -1,7 +1,7 @@
+#include "common/types/date.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 #include "duckdb.h"
 #include "duckdb.hpp"
-#include "common/types/date.hpp"
 
 #include <cstring>
 
@@ -137,6 +137,9 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 		case SQLTypeId::BIGINT:
 			WriteData<int64_t>(out, result->collection, col);
 			break;
+		case SQLTypeId::FLOAT:
+			WriteData<float>(out, result->collection, col);
+			break;
 		case SQLTypeId::DECIMAL:
 		case SQLTypeId::DOUBLE:
 			WriteData<double>(out, result->collection, col);
@@ -229,6 +232,8 @@ duckdb_type ConvertCPPTypeToC(SQLType sql_type) {
 		return DUCKDB_TYPE_INTEGER;
 	case SQLTypeId::BIGINT:
 		return DUCKDB_TYPE_BIGINT;
+	case SQLTypeId::FLOAT:
+		return DUCKDB_TYPE_FLOAT;
 	case SQLTypeId::DECIMAL:
 	case SQLTypeId::DOUBLE:
 		return DUCKDB_TYPE_DOUBLE;
@@ -255,6 +260,8 @@ SQLType ConvertCTypeToCPP(duckdb_type type) {
 		return SQLType(SQLTypeId::INTEGER);
 	case DUCKDB_TYPE_BIGINT:
 		return SQLType(SQLTypeId::BIGINT);
+	case DUCKDB_TYPE_FLOAT:
+		return SQLType(SQLTypeId::FLOAT);
 	case DUCKDB_TYPE_DOUBLE:
 		return SQLType(SQLTypeId::DOUBLE);
 	case DUCKDB_TYPE_TIMESTAMP:
@@ -280,6 +287,8 @@ size_t GetCTypeSize(duckdb_type type) {
 		return sizeof(int32_t);
 	case DUCKDB_TYPE_BIGINT:
 		return sizeof(int64_t);
+	case DUCKDB_TYPE_FLOAT:
+		return sizeof(float);
 	case DUCKDB_TYPE_DOUBLE:
 		return sizeof(double);
 	case DUCKDB_TYPE_DATE:
@@ -319,6 +328,8 @@ static Value GetCValue(duckdb_result *result, uint32_t col, uint64_t row) {
 		return Value::INTEGER(UnsafeFetch<int32_t>(result, col, row));
 	case DUCKDB_TYPE_BIGINT:
 		return Value::BIGINT(UnsafeFetch<int64_t>(result, col, row));
+	case DUCKDB_TYPE_FLOAT:
+		return Value(UnsafeFetch<float>(result, col, row));
 	case DUCKDB_TYPE_DOUBLE:
 		return Value(UnsafeFetch<double>(result, col, row));
 	case DUCKDB_TYPE_DATE: {

@@ -45,13 +45,13 @@ static SQLType ResolveWindowExpressionType(ExpressionType window_type, SQLType c
 	}
 }
 
-static unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression>& expr) {
+static unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression> &expr) {
 	if (!expr) {
 		return nullptr;
 	}
 	assert(expr.get());
 	assert(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
-	return move(((BoundExpression&)*expr).expr);
+	return move(((BoundExpression &)*expr).expr);
 }
 
 BindResult SelectBinder::BindWindow(WindowExpression &window, uint32_t depth) {
@@ -82,7 +82,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, uint32_t depth) {
 		return BindResult(error);
 	}
 	// fetch the children
-	auto *child = (BoundExpression*) window.child.get();
+	auto *child = (BoundExpression *)window.child.get();
 	SQLType sql_type = ResolveWindowExpressionType(window.type, window.child ? child->sql_type : SQLType());
 	auto result = make_unique<BoundWindowExpression>(window.type, GetInternalType(sql_type));
 	result->child = window.child ? move(child->expr) : nullptr;
@@ -104,8 +104,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, uint32_t depth) {
 
 	// create a BoundColumnRef that references this entry
 	auto colref = make_unique<BoundColumnRefExpression>(window.GetName(), result->return_type,
-	                                                    ColumnBinding(node.window_index, node.windows.size()),
-	                                                    depth);
+	                                                    ColumnBinding(node.window_index, node.windows.size()), depth);
 	// move the WINDOW expression into the set of bound windows
 	node.windows.push_back(move(result));
 	return BindResult(move(colref), sql_type);

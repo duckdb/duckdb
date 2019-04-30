@@ -9,9 +9,9 @@
 #pragma once
 
 #include "catalog/catalog_entry.hpp"
-#include "execution/physical_operator.hpp"
 #include "common/unordered_map.hpp"
 #include "common/unordered_set.hpp"
+#include "execution/physical_operator.hpp"
 
 namespace duckdb {
 

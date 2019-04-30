@@ -1,7 +1,6 @@
 #include "optimizer/rule/comparison_simplification.hpp"
 
 #include "execution/expression_executor.hpp"
-
 #include "planner/expression/bound_constant_expression.hpp"
 
 using namespace duckdb;
@@ -20,7 +19,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 	auto constant_expr = bindings[1];
 	// the constant_expr is a scalar expression that we have to fold
 	// use an ExpressionExecutor to execute the expression
-	assert(constant_expr->IsScalar());
+	assert(constant_expr->IsFoldable());
 	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr);
 	if (constant_value.is_null) {
 		// comparison with constant NULL, return NULL

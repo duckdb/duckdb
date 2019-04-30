@@ -9,9 +9,9 @@
 #pragma once
 
 #include "common/types/value.hpp"
-#include "planner/expression.hpp"
 #include "common/unordered_map.hpp"
 #include "parser/expression_map.hpp"
+#include "planner/expression.hpp"
 
 #include <functional>
 

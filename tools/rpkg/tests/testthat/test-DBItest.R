@@ -34,4 +34,9 @@ DBItest::test_all(c(
   "data_64_bit_lossless",  # not now,
   "roundtrip_64_bit_character",
   "roundtrip_64_bit_numeric",
-  "roundtrip_numeric_special"))
+  "roundtrip_numeric_special",
+
+  "begin_write_commit",
+  "remove_table_other_con",
+  "table_visible_in_other_connection"
+  ))

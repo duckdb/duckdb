@@ -10,8 +10,9 @@
 
 #include "catalog/catalog_entry.hpp"
 #include "common/common.hpp"
-#include "transaction/transaction.hpp"
 #include "common/unordered_map.hpp"
+#include "common/unordered_set.hpp"
+#include "transaction/transaction.hpp"
 
 #include <functional>
 #include <memory>
@@ -21,12 +22,19 @@ namespace duckdb {
 
 struct AlterInformation;
 
+typedef unordered_map<CatalogSet *, unique_ptr<std::lock_guard<std::mutex>>> set_lock_map_t;
+
 //! The Catalog Set stores (key, value) map of a set of AbstractCatalogEntries
 class CatalogSet {
+	friend class DependencyManager;
+
 public:
+	CatalogSet(Catalog &catalog);
+
 	//! Create an entry in the catalog set. Returns whether or not it was
 	//! successful.
-	bool CreateEntry(Transaction &transaction, const string &name, unique_ptr<CatalogEntry> value);
+	bool CreateEntry(Transaction &transaction, const string &name, unique_ptr<CatalogEntry> value,
+	                 unordered_set<CatalogEntry *> &dependencies);
 
 	bool AlterEntry(Transaction &transaction, const string &name, AlterInformation *alter_info);
 
@@ -37,12 +45,6 @@ public:
 	//! Rollback <entry> to be the currently valid entry for a certain catalog
 	//! entry
 	void Undo(CatalogEntry *entry);
-
-	//! Drops all entries
-	void DropAllEntries(Transaction &transaction);
-	//! Returns true if the catalog set is empty for the transaction, false
-	//! otherwise
-	bool IsEmpty(Transaction &transaction);
 
 	//! Scan the catalog set, invoking the callback method for every entry
 	template <class T> void Scan(Transaction &transaction, T &&callback) {
@@ -57,12 +59,16 @@ public:
 		}
 	}
 
+	static bool HasConflict(Transaction &transaction, CatalogEntry &current);
+
 private:
 	//! Drops an entry from the catalog set; must hold the catalog_lock to
 	//! safely call this
-	bool DropEntry(Transaction &transaction, CatalogEntry &entry, bool cascade);
+	void DropEntryInternal(Transaction &transaction, CatalogEntry &entry, bool cascade, set_lock_map_t &lock_set);
 	//! Given a root entry, gets the entry valid for this transaction
 	CatalogEntry *GetEntryForTransaction(Transaction &transaction, CatalogEntry *current);
+
+	Catalog &catalog;
 	//! The catalog lock is used to make changes to the data
 	std::mutex catalog_lock;
 	//! The set of entries present in the CatalogSet.

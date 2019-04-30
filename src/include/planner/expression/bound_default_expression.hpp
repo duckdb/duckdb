@@ -19,8 +19,12 @@ public:
 	}
 
 	SQLType sql_type;
+
 public:
 	bool IsScalar() const override {
+		return false;
+	}
+	bool IsFoldable() const override {
 		return false;
 	}
 

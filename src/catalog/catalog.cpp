@@ -1,5 +1,6 @@
 #include "catalog/catalog.hpp"
 
+#include "catalog/catalog_entry/list.hpp"
 #include "common/exception.hpp"
 #include "parser/expression/function_expression.hpp"
 #include "storage/storage_manager.hpp"
@@ -7,12 +8,13 @@
 using namespace duckdb;
 using namespace std;
 
-Catalog::Catalog(StorageManager &storage) : storage(storage) {
+Catalog::Catalog(StorageManager &storage) : storage(storage), schemas(*this), dependency_manager(*this) {
 }
 
 void Catalog::CreateSchema(Transaction &transaction, CreateSchemaInformation *info) {
+	unordered_set<CatalogEntry *> dependencies;
 	auto entry = make_unique_base<CatalogEntry, SchemaCatalogEntry>(this, info->schema);
-	if (!schemas.CreateEntry(transaction, info->schema, move(entry))) {
+	if (!schemas.CreateEntry(transaction, info->schema, move(entry), dependencies)) {
 		if (!info->if_not_exists) {
 			throw CatalogException("Schema with name %s already exists!", info->schema.c_str());
 		}
@@ -55,6 +57,16 @@ void Catalog::DropTable(Transaction &transaction, DropTableInformation *info) {
 	schema->DropTable(transaction, info);
 }
 
+void Catalog::CreateSequence(Transaction &transaction, CreateSequenceInformation *info) {
+	auto schema = GetSchema(transaction, info->schema);
+	schema->CreateSequence(transaction, info);
+}
+
+void Catalog::DropSequence(Transaction &transaction, DropSequenceInformation *info) {
+	auto schema = GetSchema(transaction, info->schema);
+	schema->DropSequence(transaction, info);
+}
+
 void Catalog::AlterTable(Transaction &transaction, AlterTableInformation *info) {
 	auto schema = GetSchema(transaction, info->schema);
 	schema->AlterTable(transaction, info);
@@ -71,6 +83,12 @@ TableCatalogEntry *Catalog::GetTable(Transaction &transaction, const string &sch
 CatalogEntry *Catalog::GetTableOrView(Transaction &transaction, const string &schema_name, const string &table_name) {
 	auto schema = GetSchema(transaction, schema_name);
 	return schema->GetTableOrView(transaction, table_name);
+}
+
+SequenceCatalogEntry *Catalog::GetSequence(Transaction &transaction, const string &schema_name,
+                                           const string &sequence) {
+	auto schema = GetSchema(transaction, schema_name);
+	return schema->GetSequence(transaction, sequence);
 }
 
 void Catalog::CreateTableFunction(Transaction &transaction, CreateTableFunctionInformation *info) {

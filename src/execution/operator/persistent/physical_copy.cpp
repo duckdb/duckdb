@@ -1,5 +1,6 @@
 #include "execution/operator/persistent/physical_copy.hpp"
 
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "common/file_system.hpp"
 #include "main/client_context.hpp"
 #include "storage/data_table.hpp"
@@ -85,7 +86,7 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 		if (info.select_list.size() > 0) {
 			set_to_default.resize(types.size(), true);
 			for (size_t i = 0; i < info.select_list.size(); i++) {
-				auto column = table->GetColumn(info.select_list[i]);
+				auto &column = table->GetColumn(info.select_list[i]);
 				select_list_oid.push_back(column.oid);
 				set_to_default[column.oid] = false;
 			}

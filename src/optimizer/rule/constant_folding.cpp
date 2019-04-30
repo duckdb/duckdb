@@ -3,13 +3,12 @@
 #include "common/exception.hpp"
 #include "execution/expression_executor.hpp"
 #include "optimizer/expression_rewriter.hpp"
-
 #include "planner/expression/bound_constant_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-//! The ScalarExpressionMatcher matches on any scalar expression (i.e. Expression::IsScalar is true)
+//! The ConstantFoldingExpressionMatcher matches on any scalar expression (i.e. Expression::IsFoldable is true)
 class ConstantFoldingExpressionMatcher : public FoldableConstantMatcher {
 public:
 	bool Match(Expression *expr, vector<Expression *> &bindings) override {
@@ -30,7 +29,7 @@ unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<Ex
                                                   bool &changes_made) {
 	auto root = bindings[0];
 	// the root is a scalar expression that we have to fold
-	assert(root->IsScalar() && root->type != ExpressionType::VALUE_CONSTANT);
+	assert(root->IsFoldable() && root->type != ExpressionType::VALUE_CONSTANT);
 
 	// use an ExpressionExecutor to execute the expression
 	auto result_value = ExpressionExecutor::EvaluateScalar(*root);

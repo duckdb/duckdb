@@ -4,10 +4,10 @@
 #include "catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/tableref/subqueryref.hpp"
+#include "planner/bind_context.hpp"
 #include "planner/bound_query_node.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/tableref/bound_basetableref.hpp"
-#include "planner/bind_context.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -21,11 +21,21 @@ bool TableBinding::HasMatchingBinding(const string &column_name) {
 }
 
 BindResult TableBinding::Bind(ColumnRefExpression &colref, uint32_t depth) {
-	if (!bound->table->ColumnExists(colref.column_name)) {
+	auto entry = bound->table->name_map.find(colref.column_name);
+	if (entry == bound->table->name_map.end()) {
 		return BindResult(StringUtil::Format("Table \"%s\" does not have a column named \"%s\"",
 		                                     colref.table_name.c_str(), colref.column_name.c_str()));
 	}
-	auto entry = bound->table->GetColumn(colref.column_name);
+	// fetch the type of the column
+	SQLType col_type;
+	if (entry->second == COLUMN_IDENTIFIER_ROW_ID) {
+		// row id: BIGINT type
+		col_type = SQLType(SQLTypeId::BIGINT);
+	} else {
+		// normal column: fetch type from base column
+		auto &col = bound->table->columns[entry->second];
+		col_type = col.type;
+	}
 	auto &column_list = bound->bound_columns;
 	// check if the entry already exists in the column list for the table
 	ColumnBinding binding;
@@ -42,11 +52,13 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, uint32_t depth) {
 		column_list.push_back(colref.column_name);
 	}
 	binding.table_index = index;
-	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(entry.type), binding,
-	                                                        depth), entry.type);
+	return BindResult(
+	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(col_type), binding, depth),
+	    col_type);
 }
 
-void TableBinding::GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) {
+void TableBinding::GenerateAllColumnExpressions(BindContext &context,
+                                                vector<unique_ptr<ParsedExpression>> &select_list) {
 	for (auto &column : bound->table->columns) {
 		string column_string = alias + "." + column.name;
 		if (context.hidden_columns.find(column_string) != context.hidden_columns.end()) {
@@ -93,7 +105,8 @@ BindResult SubqueryBinding::Bind(ColumnRefExpression &colref, uint32_t depth) {
 	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(sql_type), binding, depth), sql_type);
 }
 
-void SubqueryBinding::GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) {
+void SubqueryBinding::GenerateAllColumnExpressions(BindContext &context,
+                                                   vector<unique_ptr<ParsedExpression>> &select_list) {
 	for (auto &column_name : names) {
 		select_list.push_back(make_unique<ColumnRefExpression>(column_name, alias));
 	}
@@ -121,7 +134,8 @@ BindResult TableFunctionBinding::Bind(ColumnRefExpression &colref, uint32_t dept
 	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(sql_type), binding, depth), sql_type);
 }
 
-void TableFunctionBinding::GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) {
+void TableFunctionBinding::GenerateAllColumnExpressions(BindContext &context,
+                                                        vector<unique_ptr<ParsedExpression>> &select_list) {
 	for (auto &column : function->return_values) {
 		select_list.push_back(make_unique<ColumnRefExpression>(column.name, alias));
 	}

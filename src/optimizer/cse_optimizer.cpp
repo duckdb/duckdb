@@ -1,10 +1,9 @@
 #include "optimizer/cse_optimizer.hpp"
 
+#include "planner/expression/common_subexpression.hpp"
 #include "planner/expression_iterator.hpp"
 #include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_projection.hpp"
-
-#include "planner/expression/common_subexpression.hpp"
 
 using namespace duckdb;
 using namespace std;

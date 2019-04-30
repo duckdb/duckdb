@@ -1,16 +1,21 @@
+<img align="left" src="logo/duckdb-logo.png" height="120">
+
 # DuckDB, the SQLite for Analytics
 [![Travis](https://api.travis-ci.org/cwida/duckdb.svg?branch=master)](https://travis-ci.org/cwida/duckdb)
 [![CodeFactor](https://www.codefactor.io/repository/github/cwida/duckdb/badge)](https://www.codefactor.io/repository/github/cwida/duckdb)
 [![Coverage Status](https://coveralls.io/repos/github/cwida/duckdb/badge.svg?branch=master)](https://coveralls.io/github/cwida/duckdb?branch=master)
 
+<br>
+
+
 # Requirements
-DuckDB requires [CMake](https://cmake.org) to be installed and a `C++11` compliant compiler. To run all tests, a `git` installation is also required.
+DuckDB requires [CMake](https://cmake.org) to be installed and a `C++11` compliant compiler. GCC 4.9 and newer, Clang 3.9 and newer and VisualStudio 2017 are tested on each revision.
 
 ## Compiling
-Run `make` in the root directory to compile the sources into a debug version. Use `make opt` to create a release build, which is *critical to get best performance*. Once compilation is done, you may run `make unit` and `make allunit` to verify that your version works properly.
+Run `make` in the root directory to compile the sources. For development, use `make debug` to build a non-optimized debug versoin. You may run `make unit` and `make allunit` to verify that your version works properly after making changes.
 
 # Usage
-A command line utility based on `sqlite3` can be found in either `build/debug/tools/shell/shell` (debug) or `build/release/tools/shell/shell` (release).
+A command line utility based on `sqlite3` can be found in either `build/release/tools/shell/shell` (release, the default) or `build/debug/tools/shell/shell` (debug).
 
 # Embedding
 As DuckDB is an embedded database, there is no database server to launch or client to connect to a running server. However, the database server can be embedded directly into an application using the C or C++ bindings. The main build process creates the shared library `build/release/src/libduckdb.[so|dylib|dll]` that can be linked against. A static library is built as well.
@@ -30,6 +35,7 @@ DuckDB is implemented in C++ 11, should compile with GCC and clang, uses CMake t
 * Optimizer: DuckDB's optimizer draws inspiration from the papers "Dynamic programming strikes back" by Guido Moerkotte and Thomas Neumman as well as "Unnesting Arbitrary Queries" by Thomas Neumann and Alfons Kemper.
 * Concurrency control: Our MVCC implementation is inspired by the paper "Fast Serializable Multi-Version Concurrency Control for Main-Memory Database Systems" by Thomas Neumann, Tobias Mühlbauer and Alfons Kemper.
 * Storage: DuckDB uses DataBlocks for persistent storage as described in the paper "Data Blocks: Hybrid OLTP and OLAP on Compressed Storage using both Vectorization and Compilation" by Harald Lang, Tobias Mühlbauer, Florian Funke, Peter Boncz, Thomas Neumann and Alfons Kemper
+* Regular Expression: DuckDB uses Google's [RE2](https://github.com/google/re2) regular expression engine.
 
 ## Other pages
 * [Continuous Benchmarking (CB™)](http://www.duckdb.org/benchmarking/), runs TPC-H, TPC-DS and some microbenchmarks on every commit

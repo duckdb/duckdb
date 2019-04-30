@@ -15,7 +15,7 @@ void PhysicalTableFunction::_GetChunk(ClientContext &context, DataChunk &chunk, 
 		if (function->init) {
 			auto function_data = function->init(context);
 			if (function_data) {
-				state->function_data = unique_ptr<TableFunctionData>(function_data);
+				state->function_data = unique_ptr<FunctionData>(function_data);
 			}
 		}
 		state->initialized = true;

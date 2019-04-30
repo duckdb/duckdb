@@ -33,6 +33,9 @@ void VectorOperations::AddInPlace(Vector &result, Vector &input) {
 	case TypeId::BIGINT:
 		templated_inplace_loop<int64_t, int64_t, operators::AddInPlace>(input, result);
 		break;
+	case TypeId::FLOAT:
+		templated_inplace_loop<float, float, operators::AddInPlace>(input, result);
+		break;
 	case TypeId::DOUBLE:
 		templated_inplace_loop<double, double, operators::AddInPlace>(input, result);
 		break;
@@ -50,31 +53,57 @@ void VectorOperations::AddInPlace(Vector &left, int64_t right) {
 	VectorOperations::AddInPlace(left, right_vector);
 }
 
+template <class LEFT_TYPE, class RESULT_TYPE, class OP>
+void templated_inplace_divmod_loop(Vector &input, Vector &result) {
+	auto rdata = (LEFT_TYPE *)input.data;
+	auto result_data = (RESULT_TYPE *)result.data;
+	if (input.IsConstant()) { // a % 0 -> NULL
+		if (input.nullmask[0] || input.GetValue(0) == Value::Numeric(input.type, 0)) {
+			result.nullmask.set();
+		} else {
+			VectorOperations::Exec(result.sel_vector, result.count,
+			                       [&](size_t i, size_t k) { OP::Operation(result_data[i], rdata[0]); });
+		}
+	} else {
+		// OR nullmasks together
+		result.nullmask = input.nullmask | result.nullmask;
+		assert(result.sel_vector == input.sel_vector);
+		ASSERT_RESTRICT(rdata, rdata + result.count, result_data, result_data + result.count);
+		VectorOperations::Exec(result.sel_vector, result.count, [&](size_t i, size_t k) {
+			if (rdata[i] == 0) {
+				result.nullmask[i] = true;
+			} else {
+				OP::Operation(result_data[i], rdata[i]);
+			}
+		});
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // In-Place Modulo
 //===--------------------------------------------------------------------===//
-// left += right
+// left %= right
 void VectorOperations::ModuloInPlace(Vector &result, Vector &input) {
 	INPLACE_TYPE_CHECK(input, result);
-	// the inplace loops take the result as the last parameter
+	// the in-place loops take the result as the last parameter
 	switch (input.type) {
 	case TypeId::TINYINT:
-		templated_inplace_loop<int8_t, int8_t, operators::ModuloInPlace>(input, result);
+		templated_inplace_divmod_loop<int8_t, int8_t, operators::ModuloInPlace>(input, result);
 		break;
 	case TypeId::SMALLINT:
-		templated_inplace_loop<int16_t, int16_t, operators::ModuloInPlace>(input, result);
+		templated_inplace_divmod_loop<int16_t, int16_t, operators::ModuloInPlace>(input, result);
 		break;
 	case TypeId::INTEGER:
-		templated_inplace_loop<int32_t, int32_t, operators::ModuloInPlace>(input, result);
+		templated_inplace_divmod_loop<int32_t, int32_t, operators::ModuloInPlace>(input, result);
 		break;
 	case TypeId::BIGINT:
-		templated_inplace_loop<int64_t, int64_t, operators::ModuloInPlace>(input, result);
+		templated_inplace_divmod_loop<int64_t, int64_t, operators::ModuloInPlace>(input, result);
 		break;
 	case TypeId::POINTER:
-		templated_inplace_loop<uint64_t, uint64_t, operators::ModuloInPlace>(input, result);
+		templated_inplace_divmod_loop<uint64_t, uint64_t, operators::ModuloInPlace>(input, result);
 		break;
 	default:
-		throw InvalidTypeException(input.type, "Invalid type for addition");
+		throw InvalidTypeException(input.type, "Invalid type for in-place modulo");
 	}
 }
 

@@ -124,7 +124,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 	if (expr->HasParameter()) {
 		return FilterResult::UNSUPPORTED;
 	}
-	if (expr->IsScalar()) {
+	if (expr->IsFoldable()) {
 		// scalar condition, evaluate it
 		auto result = ExpressionExecutor::EvaluateScalar(*expr).CastAs(TypeId::BOOLEAN);
 		// check if the filter passes
@@ -136,7 +136,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 			return FilterResult::SUCCESS;
 		}
 	}
-	assert(!expr->IsScalar());
+	assert(!expr->IsFoldable());
 	if (expr->GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
 		// only comparisons supported for now
 		return FilterResult::UNSUPPORTED;

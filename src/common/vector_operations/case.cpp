@@ -64,6 +64,9 @@ void VectorOperations::Case(Vector &check, Vector &res_true, Vector &res_false, 
 	case TypeId::BIGINT:
 		case_loop<int64_t, RegularCase>(check, res_true, res_false, result);
 		break;
+	case TypeId::FLOAT:
+		case_loop<float, RegularCase>(check, res_true, res_false, result);
+		break;
 	case TypeId::DOUBLE:
 		case_loop<double, RegularCase>(check, res_true, res_false, result);
 		break;

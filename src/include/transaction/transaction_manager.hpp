@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "catalog/catalog_set.hpp"
 #include "common/common.hpp"
 
 #include <atomic>
@@ -16,8 +17,16 @@
 
 namespace duckdb {
 
+class ClientContext;
 class StorageManager;
 class Transaction;
+
+struct StoredCatalogSet {
+	//! Stored catalog set
+	unique_ptr<CatalogSet> stored_set;
+	//! The highest active query number when the catalog set was stored; used for cleaning up
+	transaction_t highest_active_query;
+};
 
 //! The Transaction Manager is responsible for creating and managing
 //! transactions
@@ -30,6 +39,8 @@ public:
 	void CommitTransaction(Transaction *transaction);
 	//! Rollback the given transaction
 	void RollbackTransaction(Transaction *transaction);
+	//! Add the catalog set
+	void AddCatalogSet(ClientContext &context, unique_ptr<CatalogSet> catalog_set);
 
 	transaction_t GetQueryNumber() {
 		return current_query_number++;
@@ -51,6 +62,8 @@ private:
 	vector<unique_ptr<Transaction>> recently_committed_transactions;
 	//! Transactions awaiting GC
 	vector<unique_ptr<Transaction>> old_transactions;
+	//! Catalog sets
+	vector<StoredCatalogSet> old_catalog_sets;
 	//! The lock used for transaction operations
 	std::mutex transaction_lock;
 	//! The storage manager
