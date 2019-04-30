@@ -266,6 +266,15 @@ TEST_CASE("Test prepare dependencies with multiple connections", "[catalog]") {
 #define SEQTHREADS 10
 volatile bool finished = false;
 
+static void RunQueryUntilSuccess(Connection &con, string query) {
+	while (true) {
+		auto result = con.Query(query);
+		if (result->success) {
+			break;
+		}
+	}
+}
+
 static void create_drop_table(DuckDB *db) {
 	Connection con(*db);
 
@@ -281,12 +290,7 @@ static void create_drop_table(DuckDB *db) {
 		// printf("[TABLE] Drop table\n");
 		// perform a cascade drop of the table
 		// this can fail if a thread is still busy preparing a statement
-		while (true) {
-			auto result = con.Query("DROP TABLE integers CASCADE");
-			if (result->success) {
-				break;
-			}
-		}
+		RunQueryUntilSuccess(con, "DROP TABLE integers CASCADE");
 	}
 }
 
@@ -296,13 +300,7 @@ static void create_use_prepared_statement(DuckDB *db) {
 
 	for (int i = 0; i < REPETITIONS; i++) {
 		// printf("[PREPARE] Prepare statement\n");
-		while (true) {
-			// create the prepared statement
-			result = con.Query("PREPARE s1 AS SELECT SUM(i) FROM integers");
-			if (result->success) {
-				break;
-			}
-		}
+		RunQueryUntilSuccess(con, "PREPARE s1 AS SELECT SUM(i) FROM integers");
 		// printf("[PREPARE] Query prepare\n");
 		while (true) {
 			// execute the prepared statement until the prepared statement is dropped because of the CASCADE in another
@@ -329,6 +327,66 @@ TEST_CASE("Test parallel dependencies in multiple connections", "[catalog][.]") 
 	thread seq_threads[SEQTHREADS];
 	for (int i = 0; i < SEQTHREADS; i++) {
 		seq_threads[i] = thread(create_use_prepared_statement, &db);
+	}
+	for (int i = 0; i < SEQTHREADS; i++) {
+		seq_threads[i].join();
+	}
+	finished = true;
+	table_thread.join();
+}
+
+static void create_drop_schema(DuckDB *db) {
+	Connection con(*db);
+
+	while (!finished) {
+		// create the schema: this should never fail
+		REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA s1"));
+		// now wait a bit
+		this_thread::sleep_for(chrono::milliseconds(20));
+		// perform a cascade drop of the schema
+		// this can fail if a thread is still busy creating something inside the schema
+		RunQueryUntilSuccess(con, "DROP SCHEMA s1 CASCADE");
+	}
+}
+
+static void create_use_table_view(DuckDB *db, int threadnr) {
+	Connection con(*db);
+	unique_ptr<QueryResult> result;
+	string tname = "integers" + to_string(threadnr);
+	string vname = "v" + to_string(threadnr);
+
+	for (int i = 0; i < REPETITIONS; i++) {
+		RunQueryUntilSuccess(con, "CREATE TABLE s1." + tname + "(i INTEGER)");
+		con.Query("INSERT INTO s1." + tname + " VALUES (1), (2), (3), (4), (5)");
+		RunQueryUntilSuccess(con, "CREATE VIEW s1." + vname + " AS SELECT 42");
+		while (true) {
+			result = con.Query("SELECT SUM(i) FROM s1." + tname);
+			if (!result->success) {
+				break;
+			} else {
+				REQUIRE(CHECK_COLUMN(result, 0, {15}));
+			}
+			result = con.Query("SELECT * FROM s1." + vname);
+			if (!result->success) {
+				break;
+			} else {
+				REQUIRE(CHECK_COLUMN(result, 0, {42}));
+			}
+		}
+	}
+}
+TEST_CASE("Test parallel dependencies with schemas and tables", "[catalog][.]") {
+	DuckDB db(nullptr);
+	// FIXME: this test crashes
+	return;
+
+	// in this test we create and drop a schema in one thread (with CASCADE drop)
+	// in other threads, we create tables and views and query those tables and views
+
+	thread table_thread = thread(create_drop_schema, &db);
+	thread seq_threads[SEQTHREADS];
+	for (int i = 0; i < SEQTHREADS; i++) {
+		seq_threads[i] = thread(create_use_table_view, &db, i);
 	}
 	for (int i = 0; i < SEQTHREADS; i++) {
 		seq_threads[i].join();
