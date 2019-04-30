@@ -1,6 +1,7 @@
 add_subdirectory(hyperloglog)
 add_subdirectory(libpg_query)
 add_subdirectory(re2)
+add_subdirectory(miniz)
 
 IF (NOT WIN32 AND NOT LEAN)
   add_subdirectory(dbgen)
