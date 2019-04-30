@@ -25,6 +25,9 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			if (entry == table->name_map.end()) {
 				throw BinderException("Column %s not found in table %s", stmt.columns[i].c_str(), table->name.c_str());
 			}
+			if (entry->second == COLUMN_IDENTIFIER_ROW_ID) {
+				throw BinderException("Cannot explicitly insert values into rowid column");
+			}
 			result->expected_types.push_back(table->columns[entry->second].type);
 			named_column_map.push_back(entry->second);
 		}
