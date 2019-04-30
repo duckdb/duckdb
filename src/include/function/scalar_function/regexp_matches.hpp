@@ -58,6 +58,10 @@ public:
 		return regexp_matches_get_bind_function;
 	}
 
+	static dependency_function_t GetDependencyFunction() {
+		return nullptr;
+	}
+
 	static bool HasSideEffects() {
 		return false;
 	}
