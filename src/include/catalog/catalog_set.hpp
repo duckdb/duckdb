@@ -9,11 +9,10 @@
 #pragma once
 
 #include "catalog/catalog_entry.hpp"
-#include "transaction/transaction.hpp"
-
 #include "common/common.hpp"
 #include "common/unordered_map.hpp"
 #include "common/unordered_set.hpp"
+#include "transaction/transaction.hpp"
 
 #include <functional>
 #include <memory>
@@ -23,17 +22,19 @@ namespace duckdb {
 
 struct AlterInformation;
 
-typedef unordered_map<CatalogSet*, unique_ptr<std::lock_guard<std::mutex>>> set_lock_map_t;
+typedef unordered_map<CatalogSet *, unique_ptr<std::lock_guard<std::mutex>>> set_lock_map_t;
 
 //! The Catalog Set stores (key, value) map of a set of AbstractCatalogEntries
 class CatalogSet {
 	friend class DependencyManager;
+
 public:
 	CatalogSet(Catalog &catalog);
 
 	//! Create an entry in the catalog set. Returns whether or not it was
 	//! successful.
-	bool CreateEntry(Transaction &transaction, const string &name, unique_ptr<CatalogEntry> value, unordered_set<CatalogEntry*> &dependencies);
+	bool CreateEntry(Transaction &transaction, const string &name, unique_ptr<CatalogEntry> value,
+	                 unordered_set<CatalogEntry *> &dependencies);
 
 	bool AlterEntry(Transaction &transaction, const string &name, AlterInformation *alter_info);
 
@@ -59,6 +60,7 @@ public:
 	}
 
 	static bool HasConflict(Transaction &transaction, CatalogEntry &current);
+
 private:
 	//! Drops an entry from the catalog set; must hold the catalog_lock to
 	//! safely call this

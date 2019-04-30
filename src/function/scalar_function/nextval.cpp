@@ -144,8 +144,8 @@ unique_ptr<FunctionData> nextval_bind(BoundFunctionExpression &expr, ClientConte
 	return make_unique<NextvalBindData>(context, sequence);
 }
 
-void nextval_dependency(BoundFunctionExpression &expr, unordered_set<CatalogEntry*> &dependencies) {
-	auto &info = (NextvalBindData&) *expr.bind_info;
+void nextval_dependency(BoundFunctionExpression &expr, unordered_set<CatalogEntry *> &dependencies) {
+	auto &info = (NextvalBindData &)*expr.bind_info;
 	if (info.sequence) {
 		dependencies.insert(info.sequence);
 	}

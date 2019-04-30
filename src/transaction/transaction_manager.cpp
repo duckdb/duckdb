@@ -1,14 +1,12 @@
 #include "transaction/transaction_manager.hpp"
 
+#include "catalog/catalog_set.hpp"
 #include "common/exception.hpp"
 #include "common/helper.hpp"
-#include "storage/storage_manager.hpp"
-#include "transaction/transaction.hpp"
-
-#include "catalog/catalog_set.hpp"
-
 #include "main/client_context.hpp"
 #include "main/database.hpp"
+#include "storage/storage_manager.hpp"
+#include "transaction/transaction.hpp"
 
 using namespace duckdb;
 using namespace std;

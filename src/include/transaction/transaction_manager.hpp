@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "common/common.hpp"
 #include "catalog/catalog_set.hpp"
+#include "common/common.hpp"
 
 #include <atomic>
 #include <memory>

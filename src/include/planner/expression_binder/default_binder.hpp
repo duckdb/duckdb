@@ -19,6 +19,7 @@ public:
 	DefaultBinder(Binder &binder, ClientContext &context, CreateTableInformation &info);
 
 	CreateTableInformation &info;
+
 protected:
 	BindResult BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression = false) override;
 };

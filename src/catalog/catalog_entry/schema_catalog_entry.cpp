@@ -12,8 +12,8 @@ using namespace duckdb;
 using namespace std;
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
-    : CatalogEntry(CatalogType::SCHEMA, catalog, name), tables(*catalog), indexes(*catalog),
-	table_functions(*catalog), scalar_functions(*catalog), sequences(*catalog) {
+    : CatalogEntry(CatalogType::SCHEMA, catalog, name), tables(*catalog), indexes(*catalog), table_functions(*catalog),
+      scalar_functions(*catalog), sequences(*catalog) {
 }
 
 void SchemaCatalogEntry::CreateTable(Transaction &transaction, CreateTableInformation *info) {
@@ -37,7 +37,7 @@ void SchemaCatalogEntry::CreateView(Transaction &transaction, CreateViewInformat
 		tables.DropEntry(transaction, info->view_name, false);
 	}
 
-	unordered_set<CatalogEntry *> dependencies { this };
+	unordered_set<CatalogEntry *> dependencies{this};
 	if (!tables.CreateEntry(transaction, info->view_name, move(view), dependencies)) {
 		throw CatalogException("T with name \"%s\" already exists!", info->view_name.c_str());
 	}
@@ -57,7 +57,7 @@ void SchemaCatalogEntry::DropView(Transaction &transaction, DropViewInformation 
 
 void SchemaCatalogEntry::CreateSequence(Transaction &transaction, CreateSequenceInformation *info) {
 	auto sequence = make_unique_base<CatalogEntry, SequenceCatalogEntry>(catalog, this, info);
-	unordered_set<CatalogEntry *> dependencies { this };
+	unordered_set<CatalogEntry *> dependencies{this};
 	if (!sequences.CreateEntry(transaction, info->name, move(sequence), dependencies)) {
 		if (!info->if_not_exists) {
 			throw CatalogException("Sequence with name \"%s\" already exists!", info->name.c_str());
@@ -75,7 +75,7 @@ void SchemaCatalogEntry::DropSequence(Transaction &transaction, DropSequenceInfo
 
 bool SchemaCatalogEntry::CreateIndex(Transaction &transaction, CreateIndexInformation *info) {
 	auto index = make_unique_base<CatalogEntry, IndexCatalogEntry>(catalog, this, info);
-	unordered_set<CatalogEntry *> dependencies { this };
+	unordered_set<CatalogEntry *> dependencies{this};
 	if (!indexes.CreateEntry(transaction, info->index_name, move(index), dependencies)) {
 		if (!info->if_not_exists) {
 			throw CatalogException("Index with name \"%s\" already exists!", info->index_name.c_str());
@@ -148,7 +148,7 @@ TableFunctionCatalogEntry *SchemaCatalogEntry::GetTableFunction(Transaction &tra
 
 void SchemaCatalogEntry::CreateTableFunction(Transaction &transaction, CreateTableFunctionInformation *info) {
 	auto table_function = make_unique_base<CatalogEntry, TableFunctionCatalogEntry>(catalog, this, info);
-	unordered_set<CatalogEntry *> dependencies { this };
+	unordered_set<CatalogEntry *> dependencies{this};
 	if (!table_functions.CreateEntry(transaction, info->name, move(table_function), dependencies)) {
 		if (!info->or_replace) {
 			throw CatalogException("Table function with name \"%s\" already exists!", info->name.c_str());
@@ -176,7 +176,7 @@ void SchemaCatalogEntry::DropTableFunction(Transaction &transaction, DropTableFu
 
 void SchemaCatalogEntry::CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInformation *info) {
 	auto scalar_function = make_unique_base<CatalogEntry, ScalarFunctionCatalogEntry>(catalog, this, info);
-	unordered_set<CatalogEntry *> dependencies { this };
+	unordered_set<CatalogEntry *> dependencies{this};
 
 	if (!scalar_functions.CreateEntry(transaction, info->name, move(scalar_function), dependencies)) {
 		if (!info->or_replace) {

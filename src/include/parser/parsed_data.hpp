@@ -33,7 +33,7 @@ struct CreateTableInformation {
 	//! Bound default values
 	vector<unique_ptr<Expression>> bound_defaults;
 	//! Dependents of the table (in e.g. default values)
-	unordered_set<CatalogEntry*> dependencies;
+	unordered_set<CatalogEntry *> dependencies;
 	//! Ignore if the entry already exists, instead of failing
 	bool if_not_exists = false;
 	bool temporary = false;
@@ -199,14 +199,10 @@ struct CreateScalarFunctionInformation {
 	get_return_type_function_t return_type;
 	//! The bind function (if any)
 	bind_scalar_function_t bind;
-<<<<<<< HEAD
 	// The dependency function (if any)
 	dependency_function_t dependency;
-	//! Whether or not the function has side effects (e.g. sequence increments, random() functions, NOW()). Functions with side-effects cannot be constant-folded.
-=======
 	//! Whether or not the function has side effects (e.g. sequence increments, random() functions, NOW()). Functions
 	//! with side-effects cannot be constant-folded.
->>>>>>> master
 	bool has_side_effects;
 
 	CreateScalarFunctionInformation() : schema(DEFAULT_SCHEMA), or_replace(false), has_side_effects(false) {

@@ -1,18 +1,17 @@
 #include "catalog/catalog_set.hpp"
-#include "catalog/catalog.hpp"
 
+#include "catalog/catalog.hpp"
 #include "common/exception.hpp"
 #include "transaction/transaction_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-CatalogSet::CatalogSet(Catalog &catalog) :
-	catalog(catalog) {
-
+CatalogSet::CatalogSet(Catalog &catalog) : catalog(catalog) {
 }
 
-bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, unique_ptr<CatalogEntry> value, unordered_set<CatalogEntry*> &dependencies) {
+bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, unique_ptr<CatalogEntry> value,
+                             unordered_set<CatalogEntry *> &dependencies) {
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.write_lock);
 	// lock this catalog set to disallow reading
@@ -131,7 +130,8 @@ bool CatalogSet::DropEntry(Transaction &transaction, const string &name, bool ca
 	return true;
 }
 
-void CatalogSet::DropEntryInternal(Transaction &transaction, CatalogEntry &current, bool cascade, set_lock_map_t &lock_set) {
+void CatalogSet::DropEntryInternal(Transaction &transaction, CatalogEntry &current, bool cascade,
+                                   set_lock_map_t &lock_set) {
 	assert(data.find(current.name) != data.end());
 	// first check any dependencies of this object
 	current.catalog->dependency_manager.DropObject(transaction, &current, cascade, lock_set);

@@ -1,8 +1,8 @@
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "execution/operator/persistent/physical_copy.hpp"
 #include "execution/physical_plan_generator.hpp"
 #include "planner/operator/logical_copy.hpp"
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
 
 using namespace duckdb;
 using namespace std;

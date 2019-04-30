@@ -1,8 +1,8 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
-#include <thread>
 #include <chrono>
+#include <thread>
 
 using namespace duckdb;
 using namespace std;
@@ -114,7 +114,8 @@ TEST_CASE("Default values and dependencies", "[catalog]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq"));
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq1"));
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq2"));
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER DEFAULT nextval('seq' || CAST(nextval('seq') AS VARCHAR)), j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query(
+	    "CREATE TABLE integers(i INTEGER DEFAULT nextval('seq' || CAST(nextval('seq') AS VARCHAR)), j INTEGER)"));
 
 	// seq1 exists, so the result of the first default value is 1
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers (j) VALUES (1)"));
@@ -159,8 +160,6 @@ TEST_CASE("Prepare dependencies and transactions", "[catalog]") {
 	// now we can't use the prepared statement anymore
 	REQUIRE_FAIL(con2.Query("EXECUTE v"));
 
-
-
 	// case two: prepared statement is created inside transaction
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (4), (5)"));
@@ -171,7 +170,8 @@ TEST_CASE("Prepare dependencies and transactions", "[catalog]") {
 
 	// integers has a dependency: we can't drop it
 	REQUIRE_FAIL(con.Query("DROP TABLE integers"));
-	// now we can't drop integers even with cascade, because the dependency is not yet committed, this creates a write conflict on attempting to drop the dependency
+	// now we can't drop integers even with cascade, because the dependency is not yet committed, this creates a write
+	// conflict on attempting to drop the dependency
 	REQUIRE_FAIL(con.Query("DROP TABLE integers CASCADE"));
 
 	// use the prepared statement
@@ -182,8 +182,6 @@ TEST_CASE("Prepare dependencies and transactions", "[catalog]") {
 
 	// now we can commit the table
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers CASCADE"));
-
-
 
 	// case three: prepared statement is created inside transaction, and then rolled back
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -198,9 +196,6 @@ TEST_CASE("Prepare dependencies and transactions", "[catalog]") {
 	REQUIRE_NO_FAIL(con2.Query("ROLLBACK"));
 	// depedency was rolled back: now we can drop it
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
-
-
-
 
 	// case four: deallocate happens inside transaction
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -274,7 +269,7 @@ volatile bool finished = false;
 static void create_drop_table(DuckDB *db) {
 	Connection con(*db);
 
-	while(!finished) {
+	while (!finished) {
 		// printf("[TABLE] Create table\n");
 		// create the table: this should never fail
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
@@ -286,7 +281,7 @@ static void create_drop_table(DuckDB *db) {
 		// printf("[TABLE] Drop table\n");
 		// perform a cascade drop of the table
 		// this can fail if a thread is still busy preparing a statement
-		while(true) {
+		while (true) {
 			auto result = con.Query("DROP TABLE integers CASCADE");
 			if (result->success) {
 				break;
@@ -299,9 +294,9 @@ static void create_use_prepared_statement(DuckDB *db) {
 	Connection con(*db);
 	unique_ptr<QueryResult> result;
 
-	for(int i = 0; i < REPETITIONS; i++) {
+	for (int i = 0; i < REPETITIONS; i++) {
 		// printf("[PREPARE] Prepare statement\n");
-		while(true) {
+		while (true) {
 			// create the prepared statement
 			result = con.Query("PREPARE s1 AS SELECT SUM(i) FROM integers");
 			if (result->success) {
@@ -309,8 +304,9 @@ static void create_use_prepared_statement(DuckDB *db) {
 			}
 		}
 		// printf("[PREPARE] Query prepare\n");
-		while(true) {
-			// execute the prepared statement until the prepared statement is dropped because of the CASCADE in another thread
+		while (true) {
+			// execute the prepared statement until the prepared statement is dropped because of the CASCADE in another
+			// thread
 			result = con.Query("EXECUTE s1");
 			if (!result->success) {
 				break;
@@ -331,11 +327,11 @@ TEST_CASE("Test parallel dependencies in multiple connections", "[catalog][.]") 
 
 	thread table_thread = thread(create_drop_table, &db);
 	thread seq_threads[SEQTHREADS];
-	for(int i = 0; i < SEQTHREADS; i++) {
-	        seq_threads[i] = thread(create_use_prepared_statement, &db);
+	for (int i = 0; i < SEQTHREADS; i++) {
+		seq_threads[i] = thread(create_use_prepared_statement, &db);
 	}
-	for(int i = 0; i < SEQTHREADS; i++) {
-	        seq_threads[i].join();
+	for (int i = 0; i < SEQTHREADS; i++) {
+		seq_threads[i].join();
 	}
 	finished = true;
 	table_thread.join();

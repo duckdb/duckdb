@@ -1,7 +1,7 @@
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "execution/operator/schema/physical_create_index.hpp"
 #include "execution/physical_plan_generator.hpp"
 #include "planner/operator/logical_create_index.hpp"
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,17 +1,18 @@
 #include "execution/physical_plan_generator.hpp"
 
+#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "execution/column_binding_resolver.hpp"
 #include "main/client_context.hpp"
-
 #include "planner/expression/bound_function_expression.hpp"
-#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 class DependencyExtractor : public LogicalOperatorVisitor {
 public:
-	DependencyExtractor(unordered_set<CatalogEntry*> &dependencies) : dependencies(dependencies) {}
+	DependencyExtractor(unordered_set<CatalogEntry *> &dependencies) : dependencies(dependencies) {
+	}
+
 protected:
 	unique_ptr<Expression> VisitReplace(BoundFunctionExpression &expr, unique_ptr<Expression> *expr_ptr) override {
 		// extract dependencies from the bound function expression
@@ -20,8 +21,9 @@ protected:
 		}
 		return nullptr;
 	}
+
 private:
-	unordered_set<CatalogEntry*> &dependencies;
+	unordered_set<CatalogEntry *> &dependencies;
 };
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> op) {

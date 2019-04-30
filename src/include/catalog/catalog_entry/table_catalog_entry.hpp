@@ -61,6 +61,7 @@ public:
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateTableInfo
 	static unique_ptr<CreateTableInformation> Deserialize(Deserializer &source);
+
 private:
 	void Initialize(CreateTableInformation *info);
 };

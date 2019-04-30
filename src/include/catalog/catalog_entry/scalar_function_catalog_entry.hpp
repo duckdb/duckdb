@@ -23,7 +23,8 @@ class ScalarFunctionCatalogEntry : public CatalogEntry {
 public:
 	ScalarFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateScalarFunctionInformation *info)
 	    : CatalogEntry(CatalogType::SCALAR_FUNCTION, catalog, info->name), schema(schema), function(info->function),
-	      matches(info->matches), return_type(info->return_type), bind(info->bind), dependency(info->dependency), has_side_effects(info->has_side_effects) {
+	      matches(info->matches), return_type(info->return_type), bind(info->bind), dependency(info->dependency),
+	      has_side_effects(info->has_side_effects) {
 	}
 
 	//! The schema the table belongs to

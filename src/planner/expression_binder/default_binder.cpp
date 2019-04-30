@@ -1,8 +1,9 @@
 #include "planner/expression_binder/default_binder.hpp"
+
+#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "parser/expression/function_expression.hpp"
 #include "parser/parsed_data.hpp"
 #include "planner/expression/bound_function_expression.hpp"
-#include "parser/expression/function_expression.hpp"
-#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -28,7 +29,7 @@ BindResult DefaultBinder::BindExpression(ParsedExpression &expr, uint32_t depth,
 		if (result.HasError()) {
 			return result;
 		}
-		auto &function = (BoundFunctionExpression&) *result.expression;
+		auto &function = (BoundFunctionExpression &)*result.expression;
 		if (function.bound_function->get_dependency) {
 			auto dependency = function.bound_function->get_dependency(function);
 			if (dependency) {

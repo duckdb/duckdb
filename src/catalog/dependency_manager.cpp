@@ -1,17 +1,17 @@
 #include "catalog/dependency_manager.hpp"
+
 #include "catalog/catalog.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-DependencyManager::DependencyManager(Catalog &catalog) :
-	catalog(catalog) {
-
+DependencyManager::DependencyManager(Catalog &catalog) : catalog(catalog) {
 }
 
-void DependencyManager::AddObject(Transaction &transaction, CatalogEntry *object, unordered_set<CatalogEntry*> &dependencies) {
+void DependencyManager::AddObject(Transaction &transaction, CatalogEntry *object,
+                                  unordered_set<CatalogEntry *> &dependencies) {
 	// check for each object in the sources if they were not deleted yet
-	for(auto &dependency : dependencies) {
+	for (auto &dependency : dependencies) {
 		auto entry = dependency->set->data.find(dependency->name);
 		assert(entry != dependency->set->data.end());
 
@@ -21,27 +21,29 @@ void DependencyManager::AddObject(Transaction &transaction, CatalogEntry *object
 		}
 	}
 	// add the object to the dependents_map of each object that it depents on
-	for(auto &dependency : dependencies) {
+	for (auto &dependency : dependencies) {
 		dependents_map[dependency].insert(object);
 	}
 	// create the dependents map for this object: it starts out empty
-	dependents_map[object] = unordered_set<CatalogEntry*>();
+	dependents_map[object] = unordered_set<CatalogEntry *>();
 	dependencies_map[object] = dependencies;
 }
 
-void DependencyManager::DropObject(Transaction &transaction, CatalogEntry *object, bool cascade, set_lock_map_t &lock_set) {
+void DependencyManager::DropObject(Transaction &transaction, CatalogEntry *object, bool cascade,
+                                   set_lock_map_t &lock_set) {
 	assert(dependents_map.find(object) != dependents_map.end());
 
 	// first check the objects that depend on this object
 	auto &dependent_objects = dependents_map[object];
-	for(auto &dep : dependent_objects) {
+	for (auto &dep : dependent_objects) {
 		// look up the entry in the catalog set
 		auto &catalog_set = *dep->set;
 		auto entry = catalog_set.data.find(dep->name);
 		assert(entry != catalog_set.data.end());
 		if (CatalogSet::HasConflict(transaction, *entry->second)) {
 			// current version has been written to by a currently active transaction
-			throw TransactionException("Catalog write-write conflict on drop with \"%s\": conflict with dependency", object->name.c_str());
+			throw TransactionException("Catalog write-write conflict on drop with \"%s\": conflict with dependency",
+			                           object->name.c_str());
 		}
 		// there is a current version that has been committed
 		if (entry->second->deleted) {
@@ -57,7 +59,6 @@ void DependencyManager::DropObject(Transaction &transaction, CatalogEntry *objec
 			throw CatalogException("Cannot drop entry \"%s\" because there are entries that "
 			                       "depend on it. Use DROP...CASCADE to drop all dependents.",
 			                       object->name.c_str());
-
 		}
 	}
 }
@@ -68,7 +69,7 @@ void DependencyManager::AlterObject(Transaction &transaction, CatalogEntry *old_
 
 	// first check the objects that depend on this object
 	auto &dependent_objects = dependents_map[old_obj];
-	for(auto &dep : dependent_objects) {
+	for (auto &dep : dependent_objects) {
 		// look up the entry in the catalog set
 		auto &catalog_set = *dep->set;
 		auto entry = catalog_set.data.find(dep->name);
@@ -85,15 +86,16 @@ void DependencyManager::AlterObject(Transaction &transaction, CatalogEntry *old_
 		// conflict: attempting to alter this object but the dependent object still exists
 		// no cascade and there are objects that depend on this object: throw error
 		throw CatalogException("Cannot alter entry \"%s\" because there are entries that "
-								"depend on it.", old_obj->name.c_str());
+		                       "depend on it.",
+		                       old_obj->name.c_str());
 	}
 	// add the new object to the dependents_map of each object that it depents on
 	auto &old_dependencies = dependencies_map[old_obj];
-	for(auto &dependency : old_dependencies) {
+	for (auto &dependency : old_dependencies) {
 		dependents_map[dependency].insert(new_obj);
 	}
 	// add the new object to the dependency manager
-	dependents_map[new_obj] = unordered_set<CatalogEntry*>();
+	dependents_map[new_obj] = unordered_set<CatalogEntry *>();
 	dependencies_map[new_obj] = old_dependencies;
 }
 
@@ -111,7 +113,7 @@ void DependencyManager::EraseObjectInternal(CatalogEntry *object) {
 	assert(dependents_map.find(object) != dependents_map.end());
 	assert(dependencies_map.find(object) != dependencies_map.end());
 	// now for each of the dependencies, erase the entries from the dependents_map
-	for(auto &dependency : dependencies_map[object]) {
+	for (auto &dependency : dependencies_map[object]) {
 		auto entry = dependents_map.find(dependency);
 		if (entry != dependents_map.end()) {
 			assert(entry->second.find(object) != entry->second.end());
@@ -128,9 +130,9 @@ void DependencyManager::ClearDependencies(CatalogSet &set) {
 	lock_guard<mutex> write_lock(catalog.write_lock);
 
 	// iterate over the objects in the CatalogSet
-	for(auto &entry : set.data) {
+	for (auto &entry : set.data) {
 		CatalogEntry *centry = entry.second.get();
-		while(centry) {
+		while (centry) {
 			EraseObjectInternal(centry);
 			centry = centry->child.get();
 		}
