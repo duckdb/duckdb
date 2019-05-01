@@ -80,58 +80,64 @@ static const uint8_t GZIP_HEADER_MINSIZE = 10;
 static const unsigned char GZIP_FLAG_UNSUPPORTED =
     GZIP_FLAG_ASCII | GZIP_FLAG_MULTIPART | GZIP_FLAG_EXTRA | GZIP_FLAG_COMMENT | GZIP_FLAG_ENCRYPT;
 
-// adapted from https://github.com/mateidavid/zstr
-streambuf::int_type GzipStreamBuf::underflow() {
-	if (!is_initialized) {
-		uint8_t gzip_hdr[10];
-		data_start = GZIP_HEADER_MINSIZE;
+void GzipStreamBuf::initialize() {
+	if (is_initialized) {
+		return;
+	}
+	uint8_t gzip_hdr[10];
+	data_start = GZIP_HEADER_MINSIZE;
 
-		in_buff = new char[BUFSIZ];
-		in_buff_start = in_buff;
-		in_buff_end = in_buff;
-		out_buff = new char[BUFSIZ];
+	in_buff = new char[BUFSIZ];
+	in_buff_start = in_buff;
+	in_buff_end = in_buff;
+	out_buff = new char[BUFSIZ];
 
-		if (!FileExists(filename)) {
-			throw Exception("File does not exist");
-		}
+	mz_stream_ptr = new mz_stream();
+	// TODO use custom alloc/free methods in miniz to throw exceptions on OOM
 
-		FstreamUtil::OpenFile(filename, input);
-
-		input.read((char *)gzip_hdr, GZIP_HEADER_MINSIZE);
-		if (!input) {
-			throw Exception("Input is not a GZIP stream");
-		}
-		if (gzip_hdr[0] != 0x1F || gzip_hdr[1] != 0x8B) { // magic header
-			throw Exception("Input is not a GZIP stream");
-		}
-		if (gzip_hdr[2] != GZIP_COMPRESSION_DEFLATE) { // compression method
-			throw Exception("Unsupported GZIP compression method");
-		}
-		if (gzip_hdr[3] & GZIP_FLAG_UNSUPPORTED) {
-			throw Exception("Unsupported GZIP archive");
-		}
-
-		if (gzip_hdr[3] & GZIP_FLAG_NAME) {
-			input.seekg(data_start, input.beg);
-			data_start += consume_string(input);
-		}
-		input.seekg(data_start, input.beg);
-		// stream is now set to beginning of payload data
-
-		mz_stream_ptr = new mz_stream();
-		// TODO use custom alloc/free methods in miniz to throw exceptions on OOM
-
-		auto ret = mz_inflateInit2((mz_streamp)mz_stream_ptr, -MZ_DEFAULT_WINDOW_BITS);
-		if (ret != MZ_OK) {
-			throw Exception("Failed to initialize miniz");
-		}
-		// initialize eback, gptr, egptr
-		setg(out_buff, out_buff, out_buff);
-		is_initialized = true;
+	if (!FileExists(filename)) {
+		throw Exception("File does not exist");
 	}
 
-	auto zstrm_p = (mz_streamp)mz_stream_ptr;
+	FstreamUtil::OpenFile(filename, input);
 
+	input.read((char *)gzip_hdr, GZIP_HEADER_MINSIZE);
+	if (!input) {
+		throw Exception("Input is not a GZIP stream");
+	}
+	if (gzip_hdr[0] != 0x1F || gzip_hdr[1] != 0x8B) { // magic header
+		throw Exception("Input is not a GZIP stream");
+	}
+	if (gzip_hdr[2] != GZIP_COMPRESSION_DEFLATE) { // compression method
+		throw Exception("Unsupported GZIP compression method");
+	}
+	if (gzip_hdr[3] & GZIP_FLAG_UNSUPPORTED) {
+		throw Exception("Unsupported GZIP archive");
+	}
+
+	if (gzip_hdr[3] & GZIP_FLAG_NAME) {
+		input.seekg(data_start, input.beg);
+		data_start += consume_string(input);
+	}
+	input.seekg(data_start, input.beg);
+	// stream is now set to beginning of payload data
+
+	auto ret = mz_inflateInit2((mz_streamp)mz_stream_ptr, -MZ_DEFAULT_WINDOW_BITS);
+	if (ret != MZ_OK) {
+		throw Exception("Failed to initialize miniz");
+	}
+	// initialize eback, gptr, egptr
+	setg(out_buff, out_buff, out_buff);
+	is_initialized = true;
+}
+
+streambuf::int_type GzipStreamBuf::underflow() {
+	if (!is_initialized) {
+		initialize();
+	}
+
+	// adapted from https://github.com/mateidavid/zstr
+	auto zstrm_p = (mz_streamp)mz_stream_ptr;
 	if (!zstrm_p) {
 		return traits_type::eof();
 	}
@@ -196,7 +202,9 @@ streambuf::int_type GzipStreamBuf::underflow() {
 }
 
 GzipStreamBuf::~GzipStreamBuf() {
-	delete in_buff;
-	delete out_buff;
-	delete (mz_streamp)mz_stream_ptr;
+	if (is_initialized) {
+		delete in_buff;
+		delete out_buff;
+		delete (mz_streamp)mz_stream_ptr;
+	}
 }

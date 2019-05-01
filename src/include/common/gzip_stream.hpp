@@ -28,6 +28,7 @@ public:
 	std::streambuf::int_type underflow() override;
 
 private:
+	void initialize();
 	std::fstream input;
 	size_t data_start;
 	void *mz_stream_ptr;                                    // void* so we don't have to include the header
