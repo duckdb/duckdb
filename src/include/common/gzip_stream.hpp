@@ -15,7 +15,8 @@ namespace duckdb {
 
 class GzipStreamBuf : public std::streambuf {
 public:
-	GzipStreamBuf(std::string filename);
+	GzipStreamBuf(std::string filename) : filename(filename) {
+	}
 
 	GzipStreamBuf(const GzipStreamBuf &) = delete;
 	GzipStreamBuf(GzipStreamBuf &&) = default;
@@ -31,6 +32,8 @@ private:
 	size_t data_start;
 	void *mz_stream_ptr;                                    // void* so we don't have to include the header
 	char *in_buff, *in_buff_start, *in_buff_end, *out_buff; // various buffers & pointers
+	bool is_initialized = false;
+	std::string filename;
 };
 
 class GzipStream : public std::istream {
