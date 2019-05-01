@@ -205,6 +205,8 @@ GzipStreamBuf::~GzipStreamBuf() {
 	if (is_initialized) {
 		delete in_buff;
 		delete out_buff;
-		delete (mz_streamp)mz_stream_ptr;
+		auto zstrm_p = (mz_streamp)mz_stream_ptr;
+		mz_inflateEnd(zstrm_p);
+		delete zstrm_p;
 	}
 }
