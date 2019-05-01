@@ -42,6 +42,9 @@ public:
 	GzipStream(std::string filename) : std::istream(new GzipStreamBuf(filename)) {
 		exceptions(std::ios_base::badbit);
 	}
+	~GzipStream() {
+        if (rdbuf()) delete rdbuf();
+	}
 }; // class istream
 
 } // namespace duckdb
