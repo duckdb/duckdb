@@ -177,6 +177,7 @@ streambuf::int_type GzipStreamBuf::underflow() {
 			assert(out_buff_free_start + zstrm_p->avail_out == out_buff + BUFSIZ);
 			// if stream ended, deallocate inflator
 			if (ret == MZ_STREAM_END) {
+				mz_inflateEnd(zstrm_p);
 				delete zstrm_p;
 				mz_stream_ptr = nullptr;
 			}
