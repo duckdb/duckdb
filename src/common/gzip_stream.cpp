@@ -203,8 +203,8 @@ streambuf::int_type GzipStreamBuf::underflow() {
 }
 
 GzipStreamBuf::~GzipStreamBuf() {
-	delete in_buff;
-	delete out_buff;
+	delete[] in_buff;
+	delete[] out_buff;
 	auto zstrm_p = (mz_streamp)mz_stream_ptr;
 	if (zstrm_p) {
 		mz_inflateEnd(zstrm_p);
