@@ -17,16 +17,12 @@ class GzipStreamBuf : public std::streambuf {
 public:
 	GzipStreamBuf(std::string filename);
 
-	// TODO do we need this?
 	GzipStreamBuf(const GzipStreamBuf &) = delete;
 	GzipStreamBuf(GzipStreamBuf &&) = default;
 	GzipStreamBuf &operator=(const GzipStreamBuf &) = delete;
 	GzipStreamBuf &operator=(GzipStreamBuf &&) = default;
 
-	virtual ~GzipStreamBuf() {
-		delete in_buff;
-		delete out_buff;
-	}
+	~GzipStreamBuf();
 
 	std::streambuf::int_type underflow() override;
 
@@ -42,7 +38,6 @@ public:
 	GzipStream(std::string filename) : std::istream(new GzipStreamBuf(filename)) {
 		exceptions(std::ios_base::badbit);
 	}
-
 }; // class istream
 
 } // namespace duckdb

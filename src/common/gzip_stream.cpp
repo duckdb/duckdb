@@ -1,6 +1,7 @@
 #include "common/gzip_stream.hpp"
 
 #include "common/exception.hpp"
+#include "common/file_system.hpp"
 #include "common/fstream_util.hpp"
 
 #include <cstdio>
@@ -76,7 +77,6 @@ static const uint8_t GZIP_FLAG_ENCRYPT = 0x20;
 
 static const uint8_t GZIP_HEADER_MINSIZE = 10;
 
-
 static const unsigned char GZIP_FLAG_UNSUPPORTED =
     GZIP_FLAG_ASCII | GZIP_FLAG_MULTIPART | GZIP_FLAG_EXTRA | GZIP_FLAG_COMMENT | GZIP_FLAG_ENCRYPT;
 
@@ -89,6 +89,10 @@ GzipStreamBuf::GzipStreamBuf(string filename) {
 	in_buff_start = in_buff;
 	in_buff_end = in_buff;
 	out_buff = new char[BUFSIZ];
+
+	if (!FileExists(filename)) {
+		throw Exception("File does not exist");
+	}
 
 	FstreamUtil::OpenFile(filename, input);
 
@@ -124,7 +128,6 @@ GzipStreamBuf::GzipStreamBuf(string filename) {
 	setg(out_buff, out_buff, out_buff);
 }
 
-
 // adapted from https://github.com/mateidavid/zstr
 streambuf::int_type GzipStreamBuf::underflow() {
 	auto zstrm_p = (mz_streamp)mz_stream_ptr;
@@ -150,15 +153,13 @@ streambuf::int_type GzipStreamBuf::underflow() {
 				in_buff_end = in_buff + sz;
 			}
 
+			// actually decompress
 			assert(zstrm_p);
 			zstrm_p->next_in = (unsigned char *)in_buff_start;
 			zstrm_p->avail_in = in_buff_end - in_buff_start;
 			zstrm_p->next_out = (unsigned char *)out_buff_free_start;
 			zstrm_p->avail_out = (out_buff + BUFSIZ) - out_buff_free_start;
-
-			// actually decompress
 			auto ret = mz_inflate(zstrm_p, MZ_NO_FLUSH);
-
 			if (ret != MZ_OK && ret != MZ_STREAM_END) {
 				throw Exception(mz_error(ret));
 			}
@@ -191,4 +192,10 @@ streambuf::int_type GzipStreamBuf::underflow() {
 	assert(gptr() <= egptr());
 
 	return this->gptr() == this->egptr() ? traits_type::eof() : traits_type::to_int_type(*this->gptr());
+}
+
+GzipStreamBuf::~GzipStreamBuf() {
+	delete in_buff;
+	delete out_buff;
+	delete (mz_streamp)mz_stream_ptr;
 }
