@@ -43,7 +43,7 @@ public:
 	//! A map of column name to column index
 	unordered_map<string, column_t> name_map;
 
-	unique_ptr<CatalogEntry> AlterEntry(AlterInformation *info);
+	unique_ptr<CatalogEntry> AlterEntry(AlterInformation *info) override;
 	//! Returns whether or not a column with the given name exists
 	bool ColumnExists(const string &name);
 	//! Returns the statistics of the oid-th column. Throws an exception if the
@@ -61,11 +61,6 @@ public:
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateTableInfo
 	static unique_ptr<CreateTableInformation> Deserialize(Deserializer &source);
-
-	//! Returns true if other objects depend on this object
-	virtual bool HasDependents(Transaction &transaction);
-	//! Function that drops all dependents (used for Cascade)
-	virtual void DropDependents(Transaction &transaction);
 
 private:
 	void Initialize(CreateTableInformation *info);

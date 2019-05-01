@@ -11,6 +11,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalUpdate &op
 
 	auto plan = CreatePlan(*op.children[0]);
 
+	dependencies.insert(op.table);
 	auto update = make_unique<PhysicalUpdate>(op, *op.table, *op.table->storage, op.columns, move(op.expressions));
 	update->children.push_back(move(plan));
 	return move(update);

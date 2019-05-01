@@ -16,12 +16,12 @@ using namespace std;
 
 ClientContext::ClientContext(DuckDB &database)
     : db(database), transaction(database.transaction_manager), interrupted(false),
-      prepared_statements(make_unique<CatalogSet>()), open_result(nullptr) {
+      prepared_statements(make_unique<CatalogSet>(db.catalog)), open_result(nullptr) {
 }
 
 void ClientContext::Cleanup() {
 	lock_guard<mutex> client_guard(context_lock);
-	if (is_invalidated) {
+	if (is_invalidated || !prepared_statements) {
 		return;
 	}
 	if (transaction.HasActiveTransaction()) {
@@ -30,7 +30,8 @@ void ClientContext::Cleanup() {
 			transaction.Rollback();
 		}
 	}
-
+	assert(prepared_statements);
+	db.transaction_manager.AddCatalogSet(*this, move(prepared_statements));
 	return CleanupInternal();
 }
 

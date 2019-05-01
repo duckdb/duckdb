@@ -27,7 +27,7 @@ public:
 	unique_ptr<FunctionData> bind_info;
 
 public:
-	bool IsFoldable() override;
+	bool IsFoldable() const override;
 	string ToString() const override;
 
 	uint64_t Hash() const override;

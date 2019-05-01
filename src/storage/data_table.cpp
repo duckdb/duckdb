@@ -185,16 +185,14 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 }
 
 void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers) {
-	if (row_identifiers.type != TypeId::POINTER) {
-		throw InvalidTypeException(row_identifiers.type, "Row identifiers must be POINTER type!");
-	}
+	assert(row_identifiers.type == TypeId::BIGINT);
 	if (row_identifiers.count == 0) {
 		return;
 	}
 
 	Transaction &transaction = context.ActiveTransaction();
 
-	auto ids = (uint64_t *)row_identifiers.data;
+	auto ids = (int64_t *)row_identifiers.data;
 	auto sel_vector = row_identifiers.sel_vector;
 	auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
 	// first find the chunk the row ids belong to
@@ -226,9 +224,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 
 void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers,
                        vector<column_t> &column_ids, DataChunk &updates) {
-	if (row_identifiers.type != TypeId::POINTER) {
-		throw InvalidTypeException(row_identifiers.type, "Row identifiers must be POINTER type!");
-	}
+	assert(row_identifiers.type == TypeId::BIGINT);
 	updates.Verify();
 	if (row_identifiers.count == 0) {
 		return;
@@ -242,7 +238,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 
 	Transaction &transaction = context.ActiveTransaction();
 
-	auto ids = (uint64_t *)row_identifiers.data;
+	auto ids = (int64_t *)row_identifiers.data;
 	auto sel_vector = row_identifiers.sel_vector;
 	auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
 	// first find the chunk the row ids belong to
@@ -317,8 +313,9 @@ void DataTable::RetrieveVersionedData(DataChunk &result, const vector<column_t> 
 	// get data from the alternate versions for each column
 	for (size_t j = 0; j < column_ids.size(); j++) {
 		if (column_ids[j] == COLUMN_IDENTIFIER_ROW_ID) {
+			assert(result.data[j].type == TypeId::BIGINT);
 			// assign the row identifiers
-			auto data = ((uint64_t *)result.data[j].data) + result.data[j].count;
+			auto data = ((int64_t *)result.data[j].data) + result.data[j].count;
 			for (size_t k = 0; k < alternate_version_count; k++) {
 				data[k] = alternate_version_index[k];
 			}
@@ -346,8 +343,8 @@ void DataTable::RetrieveBaseTableData(DataChunk &result, const vector<column_t> 
 		if (column_ids[j] == COLUMN_IDENTIFIER_ROW_ID) {
 			// generate the row identifiers
 			// first generate a sequence of identifiers
-			assert(result.data[j].type == TypeId::POINTER);
-			auto column_indexes = ((uint64_t *)result.data[j].data + result.data[j].count);
+			assert(result.data[j].type == TypeId::BIGINT);
+			auto column_indexes = ((int64_t *)result.data[j].data + result.data[j].count);
 			for (size_t i = 0; i < regular_count; i++) {
 				column_indexes[i] = current_chunk->start + current_offset + regular_entries[i];
 			}
@@ -445,8 +442,8 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<c
 
 void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids,
                       Vector &row_identifiers) {
-	assert(row_identifiers.type == TypeId::POINTER);
-	auto row_ids = (uint64_t *)row_identifiers.data;
+	assert(row_identifiers.type == TypeId::BIGINT);
+	auto row_ids = (int64_t *)row_identifiers.data;
 	// sort the row identifiers first
 	// this is done so we can minimize the amount of chunks that we lock
 	sel_t sort_vector[STANDARD_VECTOR_SIZE];

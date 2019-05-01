@@ -10,6 +10,9 @@
 
 #include "catalog/catalog_entry.hpp"
 #include "catalog/catalog_set.hpp"
+#include "catalog/dependency_manager.hpp"
+
+#include <mutex>
 
 namespace duckdb {
 struct CreateSchemaInformation;
@@ -88,5 +91,9 @@ public:
 
 	//! The catalog set holding the schemas
 	CatalogSet schemas;
+	//! The DependencyManager manages dependencies between different catalog objects
+	DependencyManager dependency_manager;
+	//! Write lock for the catalog
+	std::mutex write_lock;
 };
 } // namespace duckdb

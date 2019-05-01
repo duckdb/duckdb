@@ -19,6 +19,7 @@ void nextval_function(ExpressionExecutor &exec, Vector inputs[], size_t input_co
 bool nextval_matches_arguments(vector<SQLType> &arguments);
 SQLType nextval_get_return_type(vector<SQLType> &arguments);
 unique_ptr<FunctionData> nextval_bind(BoundFunctionExpression &expr, ClientContext &context);
+void nextval_dependency(BoundFunctionExpression &expr, unordered_set<CatalogEntry *> &dependencies);
 
 class NextvalFunction {
 public:
@@ -40,6 +41,10 @@ public:
 
 	static bind_scalar_function_t GetBindFunction() {
 		return nextval_bind;
+	}
+
+	static dependency_function_t GetDependencyFunction() {
+		return nextval_dependency;
 	}
 
 	static bool HasSideEffects() {

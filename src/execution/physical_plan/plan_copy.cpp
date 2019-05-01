@@ -1,3 +1,4 @@
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "execution/operator/persistent/physical_copy.hpp"
 #include "execution/physical_plan_generator.hpp"
@@ -16,7 +17,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopy &op) 
 		copy->children.push_back(move(plan));
 		return move(copy);
 	} else {
-		// COPY from table
+		// COPY to table
+		dependencies.insert(op.table);
 		return make_unique<PhysicalCopy>(op, op.table, move(op.info));
 	}
 }

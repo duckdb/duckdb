@@ -8,7 +8,7 @@
 using namespace duckdb;
 using namespace std;
 
-//! The ScalarExpressionMatcher matches on any scalar expression (i.e. Expression::IsScalar is true)
+//! The ConstantFoldingExpressionMatcher matches on any scalar expression (i.e. Expression::IsFoldable is true)
 class ConstantFoldingExpressionMatcher : public FoldableConstantMatcher {
 public:
 	bool Match(Expression *expr, vector<Expression *> &bindings) override {

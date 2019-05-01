@@ -183,9 +183,9 @@ void UniqueIndex::AddEntries(Transaction &transaction, UniqueIndexAddedEntries &
 
 	lock_guard<mutex> guard(index_lock);
 
-	assert(row_identifiers.type == TypeId::POINTER);
+	assert(row_identifiers.type == TypeId::BIGINT);
 
-	auto identifiers = (uint64_t *)row_identifiers.data;
+	auto identifiers = (int64_t *)row_identifiers.data;
 	for (size_t i = 0; i < row_identifiers.count; i++) {
 		auto row_identifier = row_identifiers.sel_vector ? identifiers[row_identifiers.sel_vector[i]] : identifiers[i];
 		UniqueIndexNode *entry = nullptr;
@@ -252,7 +252,7 @@ void UniqueIndex::Append(Transaction &transaction, vector<unique_ptr<UniqueIndex
 		index.serializer.Serialize(chunk, tuples);
 
 		// create the row number vector
-		Vector row_numbers(TypeId::POINTER, true, false);
+		Vector row_numbers(TypeId::BIGINT, true, false);
 		row_numbers.count = chunk.size();
 		VectorOperations::GenerateSequence(row_numbers, row_identifier_start);
 

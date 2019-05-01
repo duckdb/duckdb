@@ -21,11 +21,21 @@ bool TableBinding::HasMatchingBinding(const string &column_name) {
 }
 
 BindResult TableBinding::Bind(ColumnRefExpression &colref, uint32_t depth) {
-	if (!bound->table->ColumnExists(colref.column_name)) {
+	auto entry = bound->table->name_map.find(colref.column_name);
+	if (entry == bound->table->name_map.end()) {
 		return BindResult(StringUtil::Format("Table \"%s\" does not have a column named \"%s\"",
 		                                     colref.table_name.c_str(), colref.column_name.c_str()));
 	}
-	auto &entry = bound->table->GetColumn(colref.column_name);
+	// fetch the type of the column
+	SQLType col_type;
+	if (entry->second == COLUMN_IDENTIFIER_ROW_ID) {
+		// row id: BIGINT type
+		col_type = SQLType(SQLTypeId::BIGINT);
+	} else {
+		// normal column: fetch type from base column
+		auto &col = bound->table->columns[entry->second];
+		col_type = col.type;
+	}
 	auto &column_list = bound->bound_columns;
 	// check if the entry already exists in the column list for the table
 	ColumnBinding binding;
@@ -43,8 +53,8 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, uint32_t depth) {
 	}
 	binding.table_index = index;
 	return BindResult(
-	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(entry.type), binding, depth),
-	    entry.type);
+	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(col_type), binding, depth),
+	    col_type);
 }
 
 void TableBinding::GenerateAllColumnExpressions(BindContext &context,

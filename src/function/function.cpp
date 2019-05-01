@@ -31,6 +31,7 @@ template <class T> static void AddScalarFunction(Transaction &transaction, Catal
 	info.matches = T::GetMatchesArgumentFunction();
 	info.return_type = T::GetReturnTypeFunction();
 	info.bind = T::GetBindFunction();
+	info.dependency = T::GetDependencyFunction();
 	info.has_side_effects = T::HasSideEffects();
 
 	catalog.CreateScalarFunction(transaction, &info);

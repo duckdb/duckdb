@@ -25,9 +25,7 @@ public:
 	bool HasSubquery() const override;
 	bool IsScalar() const override;
 	bool HasParameter() const override;
-	virtual bool IsFoldable() {
-		return IsScalar() && !IsAggregate() && !IsWindow() && !HasParameter();
-	}
+	virtual bool IsFoldable() const;
 
 	uint64_t Hash() const override;
 

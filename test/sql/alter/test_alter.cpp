@@ -4,7 +4,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test ALTER TABLE RENAME COLUMN", "[alter][.]") {
+TEST_CASE("Test ALTER TABLE RENAME COLUMN", "[alter]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -19,6 +19,27 @@ TEST_CASE("Test ALTER TABLE RENAME COLUMN", "[alter][.]") {
 	REQUIRE(result->names[1] == "j");
 
 	// DROP TABLE IF EXISTS
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE IF EXISTS test"));
+}
+
+TEST_CASE("Test ALTER TABLE RENAME COLUMN and dependencies", "[alter]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// prepared statements
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(i INTEGER, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("PREPARE v AS SELECT * FROM test"));
+	// we don't allow altering of tables when there are dependencies
+	REQUIRE_FAIL(con.Query("ALTER TABLE test RENAME COLUMN i TO k"));
+	// deallocate the dependency
+	REQUIRE_NO_FAIL(con.Query("DEALLOCATE v"));
+	// now we can alter the table
+	REQUIRE_NO_FAIL(con.Query("ALTER TABLE test RENAME COLUMN i TO k"));
+	result = con.Query("SELECT * FROM test");
+	REQUIRE(result->names.size() == 2);
+	REQUIRE(result->names[0] == "k");
+	REQUIRE(result->names[1] == "j");
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE IF EXISTS test"));
 }
 

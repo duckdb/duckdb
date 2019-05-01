@@ -31,6 +31,9 @@ public:
 	bool HasParameter() const override {
 		return true;
 	}
+	bool IsFoldable() const override {
+		return false;
+	}
 
 	string ToString() const override {
 		return std::to_string(parameter_nr);

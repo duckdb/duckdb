@@ -41,6 +41,10 @@ public:
 		return nullptr;
 	}
 
+	static dependency_function_t GetDependencyFunction() {
+		return nullptr;
+	}
+
 	static bool HasSideEffects() {
 		return false;
 	}

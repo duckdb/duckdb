@@ -1,13 +1,21 @@
 #include "catalog/catalog_set.hpp"
 
+#include "catalog/catalog.hpp"
 #include "common/exception.hpp"
 #include "transaction/transaction_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, unique_ptr<CatalogEntry> value) {
-	lock_guard<mutex> lock(catalog_lock);
+CatalogSet::CatalogSet(Catalog &catalog) : catalog(catalog) {
+}
+
+bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, unique_ptr<CatalogEntry> value,
+                             unordered_set<CatalogEntry *> &dependencies) {
+	// lock the catalog for writing
+	lock_guard<mutex> write_lock(catalog.write_lock);
+	// lock this catalog set to disallow reading
+	lock_guard<mutex> read_lock(catalog_lock);
 
 	// first check if the entry exists in the unordered set
 	auto entry = data.find(name);
@@ -25,7 +33,7 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, uniqu
 	} else {
 		// if it does, we have to check version numbers
 		CatalogEntry &current = *entry->second;
-		if (current.timestamp >= TRANSACTION_ID_START && current.timestamp != transaction.transaction_id) {
+		if (HasConflict(transaction, current)) {
 			// current version has been written to by a currently active
 			// transaction
 			throw TransactionException("Catalog write-write conflict on create with \"%s\"", current.name.c_str());
@@ -40,9 +48,13 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, uniqu
 	// set the timestamp to the timestamp of the current transaction
 	// and point it at the dummy node
 	value->timestamp = transaction.transaction_id;
+	value->set = this;
+
+	// now add the dependency set of this object to the dependency manager
+	catalog.dependency_manager.AddObject(transaction, value.get(), dependencies);
+
 	value->child = move(data[name]);
 	value->child->parent = value.get();
-	value->set = this;
 	// push the old entry in the undo buffer for this transaction
 	transaction.PushCatalogEntry(value->child.get());
 	data[name] = move(value);
@@ -50,7 +62,9 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, uniqu
 }
 
 bool CatalogSet::AlterEntry(Transaction &transaction, const string &name, AlterInformation *alter_info) {
-	lock_guard<mutex> lock(catalog_lock);
+	// lock the catalog for writing
+	lock_guard<mutex> write_lock(catalog.write_lock);
+
 	// first check if the entry exists in the unordered set
 	auto entry = data.find(name);
 	if (entry == data.end()) {
@@ -59,17 +73,23 @@ bool CatalogSet::AlterEntry(Transaction &transaction, const string &name, AlterI
 	}
 	// if it does: we have to retrieve the entry and to check version numbers
 	CatalogEntry &current = *entry->second;
-
-	if (current.timestamp >= TRANSACTION_ID_START && current.timestamp != transaction.transaction_id) {
+	if (HasConflict(transaction, current)) {
 		// current version has been written to by a currently active
 		// transaction
 		throw TransactionException("Catalog write-write conflict on alter with \"%s\"", current.name.c_str());
 	}
 
+	// lock this catalog set to disallow reading
+	lock_guard<mutex> read_lock(catalog_lock);
+
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
 	// and point it to the updated table node
 	auto value = current.AlterEntry(alter_info);
+
+	// now transfer all dependencies from the old table to the new table
+	catalog.dependency_manager.AlterObject(transaction, data[name].get(), value.get());
+
 	value->timestamp = transaction.transaction_id;
 	value->child = move(data[name]);
 	value->child->parent = value.get();
@@ -82,34 +102,49 @@ bool CatalogSet::AlterEntry(Transaction &transaction, const string &name, AlterI
 	return true;
 }
 
-bool CatalogSet::DropEntry(Transaction &transaction, CatalogEntry &current, bool cascade) {
-	if (current.timestamp >= TRANSACTION_ID_START && current.timestamp != transaction.transaction_id) {
-		// current version has been written to by a currently active
-		// transaction
-		throw TransactionException("Catalog write-write conflict on drop with \"%s\"", current.name.c_str());
+bool CatalogSet::DropEntry(Transaction &transaction, const string &name, bool cascade) {
+	// lock the catalog for writing
+	lock_guard<mutex> write_lock(catalog.write_lock);
+	// we can only delete an entry that exists
+	auto entry = data.find(name);
+	if (entry == data.end()) {
+		return false;
 	}
-	// there is a current version that has been committed
-	if (current.deleted) {
-		// if the table was already deleted, it now does not exist anymore
+	if (HasConflict(transaction, *entry->second)) {
+		// current version has been written to by a currently active transaction
+		throw TransactionException("Catalog write-write conflict on drop with \"%s\"", name.c_str());
+	}
+	// there is a current version that has been committed by this transaction
+	if (entry->second->deleted) {
+		// if the entry was already deleted, it now does not exist anymore
 		// so we return that we could not find it
 		return false;
 	}
 
-	if (cascade) {
-		current.DropDependents(transaction);
-	} else {
-		if (current.HasDependents(transaction)) {
-			throw CatalogException("Cannot drop entry \"%s\" because there are entries that "
-			                       "depend on it. Use DROP...CASCADE to drop all dependents.",
-			                       current.name.c_str());
-		}
-	}
+	// lock this catalog for reading
+	// create the lock set for this delete operation
+	set_lock_map_t lock_set;
+	// now drop the entry
+	DropEntryInternal(transaction, *entry->second, cascade, lock_set);
 
-	auto value = make_unique<CatalogEntry>(CatalogType::DELETED_ENTRY, current.catalog, current.name);
+	return true;
+}
+
+void CatalogSet::DropEntryInternal(Transaction &transaction, CatalogEntry &current, bool cascade,
+                                   set_lock_map_t &lock_set) {
+	assert(data.find(current.name) != data.end());
+	// first check any dependencies of this object
+	current.catalog->dependency_manager.DropObject(transaction, &current, cascade, lock_set);
+
+	// add this catalog to the lock set, if it is not there yet
+	if (lock_set.find(this) == lock_set.end()) {
+		lock_set.insert(make_pair(this, make_unique<lock_guard<mutex>>(catalog_lock)));
+	}
 
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
 	// and point it at the dummy node
+	auto value = make_unique<CatalogEntry>(CatalogType::DELETED_ENTRY, current.catalog, current.name);
 	value->timestamp = transaction.transaction_id;
 	value->child = move(data[current.name]);
 	value->child->parent = value.get();
@@ -118,19 +153,13 @@ bool CatalogSet::DropEntry(Transaction &transaction, CatalogEntry &current, bool
 
 	// push the old entry in the undo buffer for this transaction
 	transaction.PushCatalogEntry(value->child.get());
+
 	data[current.name] = move(value);
-	return true;
 }
 
-bool CatalogSet::DropEntry(Transaction &transaction, const string &name, bool cascade) {
-	lock_guard<mutex> lock(catalog_lock);
-	// we can only delete a table that exists
-	auto entry = data.find(name);
-	if (entry == data.end()) {
-		return false;
-	}
-
-	return DropEntry(transaction, *entry->second, cascade);
+bool CatalogSet::HasConflict(Transaction &transaction, CatalogEntry &current) {
+	return (current.timestamp >= TRANSACTION_ID_START && current.timestamp != transaction.transaction_id) ||
+	       (current.timestamp < TRANSACTION_ID_START && current.timestamp > transaction.start_time);
 }
 
 CatalogEntry *CatalogSet::GetEntryForTransaction(Transaction &transaction, CatalogEntry *current) {
@@ -172,6 +201,10 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 
 	// i.e. we have to place (entry) as (entry->parent) again
 	auto &to_be_removed_node = entry->parent;
+	if (!to_be_removed_node->deleted) {
+		// delete the entry from the dependency manager as well
+		catalog.dependency_manager.EraseObject(to_be_removed_node);
+	}
 	if (to_be_removed_node->parent) {
 		// if the to be removed node has a parent, set the child pointer to the
 		// to be restored node
@@ -183,24 +216,4 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 		data[name] = move(to_be_removed_node->child);
 		entry->parent = nullptr;
 	}
-}
-
-void CatalogSet::DropAllEntries(Transaction &transaction) {
-	lock_guard<mutex> lock(catalog_lock);
-
-	for (auto &entry : data) {
-		DropEntry(transaction, *entry.second, true);
-	}
-}
-
-bool CatalogSet::IsEmpty(Transaction &transaction) {
-	lock_guard<mutex> lock(catalog_lock);
-
-	for (auto &entry : data) {
-		auto current = GetEntryForTransaction(transaction, entry.second.get());
-		if (!current->deleted) {
-			return false;
-		}
-	}
-	return true;
 }

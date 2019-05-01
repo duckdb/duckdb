@@ -69,11 +69,6 @@ public:
 	//! Gets the sequence with the given name
 	SequenceCatalogEntry *GetSequence(Transaction &transaction, const string &name);
 
-	//! Returns true if other objects depend on this object
-	virtual bool HasDependents(Transaction &transaction);
-	//! Function that drops all dependents (used for Cascade)
-	virtual void DropDependents(Transaction &transaction);
-
 	//! The catalog set holding the tables
 	CatalogSet tables;
 	//! The catalog set holding the indexes

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "common/unordered_set.hpp"
 #include "function/function.hpp"
 #include "parser/column_definition.hpp"
 #include "parser/constraint.hpp"
@@ -18,6 +19,7 @@
 #include <limits>
 
 namespace duckdb {
+class CatalogEntry;
 
 struct CreateTableInformation {
 	//! Schema name to insert to
@@ -30,6 +32,8 @@ struct CreateTableInformation {
 	vector<unique_ptr<Constraint>> constraints;
 	//! Bound default values
 	vector<unique_ptr<Expression>> bound_defaults;
+	//! Dependents of the table (in e.g. default values)
+	unordered_set<CatalogEntry *> dependencies;
 	//! Ignore if the entry already exists, instead of failing
 	bool if_not_exists = false;
 	bool temporary = false;
@@ -195,6 +199,8 @@ struct CreateScalarFunctionInformation {
 	get_return_type_function_t return_type;
 	//! The bind function (if any)
 	bind_scalar_function_t bind;
+	// The dependency function (if any)
+	dependency_function_t dependency;
 	//! Whether or not the function has side effects (e.g. sequence increments, random() functions, NOW()). Functions
 	//! with side-effects cannot be constant-folded.
 	bool has_side_effects;
@@ -291,8 +297,10 @@ struct DropSequenceInformation {
 	string name;
 	//! Whether or not to ignore errors on non-existing DROP SEQUENCE statements
 	bool if_exists;
+	//! Whether or not to drop all dependencies of the sequence as well
+	bool cascade;
 
-	DropSequenceInformation() : schema(DEFAULT_SCHEMA), name(string()), if_exists(false) {
+	DropSequenceInformation() : schema(DEFAULT_SCHEMA), name(string()), if_exists(false), cascade(false) {
 	}
 };
 

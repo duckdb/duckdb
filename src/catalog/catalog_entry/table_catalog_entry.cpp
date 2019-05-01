@@ -29,6 +29,9 @@ void TableCatalogEntry::Initialize(CreateTableInformation *info) {
 		bound_defaults.push_back(make_unique<BoundConstantExpression>(Value(GetInternalType(entry.type))));
 		columns.push_back(move(entry));
 	}
+	if (name_map.find("rowid") == name_map.end()) {
+		name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
+	}
 	assert(bound_defaults.size() == columns.size());
 	for (size_t i = 0; i < info->bound_defaults.size(); i++) {
 		auto &bound_default = info->bound_defaults[i];
@@ -144,10 +147,11 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(AlterInformation *info) {
 }
 
 ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
-	if (!ColumnExists(name)) {
+	auto entry = name_map.find(name);
+	if (entry == name_map.end() || entry->second == COLUMN_IDENTIFIER_ROW_ID) {
 		throw CatalogException("Column with name %s does not exist!", name.c_str());
 	}
-	return columns[name_map[name]];
+	return columns[entry->second];
 }
 
 ColumnStatistics &TableCatalogEntry::GetStatistics(column_t oid) {
@@ -166,7 +170,7 @@ vector<TypeId> TableCatalogEntry::GetTypes(const vector<column_t> &column_ids) {
 	vector<TypeId> result;
 	for (auto &index : column_ids) {
 		if (index == COLUMN_IDENTIFIER_ROW_ID) {
-			result.push_back(TypeId::POINTER);
+			result.push_back(TypeId::BIGINT);
 		} else {
 			result.push_back(GetInternalType(columns[index].type));
 		}
@@ -209,28 +213,4 @@ unique_ptr<CreateTableInformation> TableCatalogEntry::Deserialize(Deserializer &
 		info->constraints.push_back(move(constraint));
 	}
 	return info;
-}
-
-bool TableCatalogEntry::HasDependents(Transaction &transaction) {
-	bool found_table = false;
-
-	catalog->storage.GetDatabase().connection_manager.Scan([&](Connection *conn) {
-		auto &prep_catalog = conn->context.prepared_statements;
-		prep_catalog->Scan(transaction, [&](CatalogEntry *entry) {
-			assert(entry->type == CatalogType::PREPARED_STATEMENT);
-			auto prep_stmt = (PreparedStatementCatalogEntry *)entry;
-			// TODO add HasTable() call to prep_stmt or so
-			if (prep_stmt->tables.find(this) != prep_stmt->tables.end()) {
-				found_table = true;
-			}
-		});
-	});
-
-	if (found_table) {
-		return true;
-	}
-	return false;
-}
-
-void TableCatalogEntry::DropDependents(Transaction &transaction) {
 }
