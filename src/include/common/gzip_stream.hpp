@@ -31,8 +31,8 @@ private:
 	void initialize();
 	std::fstream input;
 	size_t data_start;
-	void *mz_stream_ptr;                                    // void* so we don't have to include the header
-	char *in_buff, *in_buff_start, *in_buff_end, *out_buff; // various buffers & pointers
+	void *mz_stream_ptr = nullptr;                                    // void* so we don't have to include the header
+	char *in_buff = nullptr, *in_buff_start, *in_buff_end, *out_buff = nullptr; // various buffers & pointers
 	bool is_initialized = false;
 	std::string filename;
 };
