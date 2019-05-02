@@ -17,6 +17,9 @@ if platform.architecture()[0] != '64bit':
 if sys.version_info < (3, 6):
     raise Exception('DuckDB requires at least Python 3.6')
 
+# make sure we are in the right directory
+os.chdir(os.path.dirname(os.path.realpath(__file__)))
+
 archive_ext = 'a'
 lib_prefix = 'lib'
 if os.name == 'nt':
