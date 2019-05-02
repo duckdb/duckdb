@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <math.h>
 
-namespace operators {
+namespace duckdb {
 
 struct Abs {
 	template <class T> static inline T Operation(T left) {
@@ -29,4 +29,4 @@ struct Round {
 	}
 };
 
-} // namespace operators
+} // namespace duckdb

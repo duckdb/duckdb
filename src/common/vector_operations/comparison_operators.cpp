@@ -60,25 +60,25 @@ template <class OP> static void templated_boolean_operation(Vector &left, Vector
 }
 
 void VectorOperations::Equals(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_operation<operators::Equals>(left, right, result);
+	templated_boolean_operation<duckdb::Equals>(left, right, result);
 }
 
 void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_operation<operators::NotEquals>(left, right, result);
+	templated_boolean_operation<duckdb::NotEquals>(left, right, result);
 }
 
 void VectorOperations::GreaterThanEquals(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_operation<operators::GreaterThanEquals>(left, right, result);
+	templated_boolean_operation<duckdb::GreaterThanEquals>(left, right, result);
 }
 
 void VectorOperations::LessThanEquals(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_operation<operators::LessThanEquals>(left, right, result);
+	templated_boolean_operation<duckdb::LessThanEquals>(left, right, result);
 }
 
 void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_operation<operators::GreaterThan>(left, right, result);
+	templated_boolean_operation<duckdb::GreaterThan>(left, right, result);
 }
 
 void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_operation<operators::LessThan>(left, right, result);
+	templated_boolean_operation<duckdb::LessThan>(left, right, result);
 }

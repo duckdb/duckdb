@@ -51,16 +51,16 @@ template <class OP, class NULLOP> void templated_boolean_nullmask(Vector &left, 
 }
 
 void VectorOperations::And(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_nullmask<operators::And, operators::AndMask>(left, right, result);
+	templated_boolean_nullmask<duckdb::And, duckdb::AndMask>(left, right, result);
 }
 
 void VectorOperations::Or(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_nullmask<operators::Or, operators::OrMask>(left, right, result);
+	templated_boolean_nullmask<duckdb::Or, duckdb::OrMask>(left, right, result);
 }
 
 void VectorOperations::Not(Vector &left, Vector &result) {
 	if (left.type != TypeId::BOOLEAN) {
 		throw InvalidTypeException(left.type, "NOT() needs a boolean input");
 	}
-	templated_unary_loop<int8_t, int8_t, operators::Not>(left, result);
+	templated_unary_loop<int8_t, int8_t, duckdb::Not>(left, result);
 }

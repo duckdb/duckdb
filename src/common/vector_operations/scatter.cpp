@@ -46,30 +46,30 @@ template <class OP> static void generic_scatter_loop(Vector &source, Vector &des
 
 void VectorOperations::Scatter::Set(Vector &source, Vector &dest) {
 	if (source.type == TypeId::VARCHAR) {
-		scatter_templated_loop<char *, operators::PickLeft>(source, dest);
+		scatter_templated_loop<char *, duckdb::PickLeft>(source, dest);
 	} else {
-		generic_scatter_loop<operators::PickLeft>(source, dest);
+		generic_scatter_loop<duckdb::PickLeft>(source, dest);
 	}
 }
 
 void VectorOperations::Scatter::SetFirst(Vector &source, Vector &dest) {
 	if (source.type == TypeId::VARCHAR) {
-		scatter_templated_loop<char *, operators::PickRight>(source, dest);
+		scatter_templated_loop<char *, duckdb::PickRight>(source, dest);
 	} else {
-		generic_scatter_loop<operators::PickRight>(source, dest);
+		generic_scatter_loop<duckdb::PickRight>(source, dest);
 	}
 }
 
 void VectorOperations::Scatter::Add(Vector &source, Vector &dest) {
-	generic_scatter_loop<operators::Add>(source, dest);
+	generic_scatter_loop<duckdb::Add>(source, dest);
 }
 
 void VectorOperations::Scatter::Max(Vector &source, Vector &dest) {
-	generic_scatter_loop<operators::Max>(source, dest);
+	generic_scatter_loop<duckdb::Max>(source, dest);
 }
 
 void VectorOperations::Scatter::Min(Vector &source, Vector &dest) {
-	generic_scatter_loop<operators::Min>(source, dest);
+	generic_scatter_loop<duckdb::Min>(source, dest);
 }
 
 void VectorOperations::Scatter::AddOne(Vector &source, Vector &dest) {

@@ -15,8 +15,7 @@ template <class T> size_t MergeJoinInner::Equality::Operation(ScalarMergeInfo &l
 	auto rdata = (T *)r.v.data;
 	size_t result_count = 0;
 	while (true) {
-		if (r.pos == r.count ||
-		    operators::LessThan::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
+		if (r.pos == r.count || duckdb::LessThan::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
 			// left side smaller: move left pointer forward
 			l.pos++;
 			if (l.pos >= l.count) {
@@ -26,11 +25,10 @@ template <class T> size_t MergeJoinInner::Equality::Operation(ScalarMergeInfo &l
 			// we might need to go back on the right-side after going
 			// forward on the left side because the new tuple might have
 			// matches with the right side
-			while (r.pos > 0 &&
-			       operators::Equals::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos - 1]])) {
+			while (r.pos > 0 && duckdb::Equals::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos - 1]])) {
 				r.pos--;
 			}
-		} else if (operators::GreaterThan::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
+		} else if (duckdb::GreaterThan::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
 			// right side smaller: move right pointer forward
 			r.pos++;
 		} else {
@@ -59,7 +57,7 @@ template <class T> size_t MergeJoinInner::LessThan::Operation(ScalarMergeInfo &l
 	auto rdata = (T *)r.v.data;
 	size_t result_count = 0;
 	while (true) {
-		if (l.pos < l.count && operators::LessThan::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
+		if (l.pos < l.count && duckdb::LessThan::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
 			// left side smaller: found match
 			l.result[result_count] = l.sel_vector[l.pos];
 			r.result[result_count] = r.sel_vector[r.pos];
@@ -93,7 +91,7 @@ template <class T> size_t MergeJoinInner::LessThanEquals::Operation(ScalarMergeI
 	size_t result_count = 0;
 	while (true) {
 		if (l.pos < l.count &&
-		    operators::LessThanEquals::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
+		    duckdb::LessThanEquals::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
 			// left side smaller: found match
 			l.result[result_count] = l.sel_vector[l.pos];
 			r.result[result_count] = r.sel_vector[r.pos];

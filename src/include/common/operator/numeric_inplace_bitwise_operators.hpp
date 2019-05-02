@@ -8,7 +8,7 @@
 
 #pragma once
 
-namespace operators {
+namespace duckdb {
 
 struct BitwiseXORInPlace {
 	template <class T> static inline void Operation(T &left, T right) {
@@ -16,4 +16,4 @@ struct BitwiseXORInPlace {
 	}
 };
 
-} // namespace operators
+} // namespace duckdb

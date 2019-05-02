@@ -5,7 +5,6 @@
 #include "common/value_operations/value_operations.hpp"
 
 using namespace duckdb;
-using namespace operators;
 using namespace std;
 
 uint64_t ValueOperations::Hash(const Value &op) {
