@@ -13,7 +13,6 @@
 #include "re2/re2.h"
 
 namespace duckdb {
-namespace function {
 
 void regexp_matches_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count,
                              BoundFunctionExpression &expr, Vector &result);
@@ -67,5 +66,4 @@ public:
 	}
 };
 
-} // namespace function
 } // namespace duckdb

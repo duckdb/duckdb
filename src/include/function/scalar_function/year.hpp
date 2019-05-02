@@ -12,7 +12,6 @@
 #include "function/function.hpp"
 
 namespace duckdb {
-namespace function {
 
 void year_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr,
                    Vector &result);
@@ -50,5 +49,4 @@ public:
 	}
 };
 
-} // namespace function
 } // namespace duckdb

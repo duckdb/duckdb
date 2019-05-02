@@ -9,7 +9,6 @@
 using namespace std;
 
 namespace duckdb {
-namespace function {
 
 void concat_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr,
                      Vector &result) {
@@ -59,5 +58,4 @@ SQLType concat_get_return_type(vector<SQLType> &arguments) {
 	return SQLType(SQLTypeId::VARCHAR);
 }
 
-} // namespace function
 } // namespace duckdb
