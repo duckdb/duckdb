@@ -9,10 +9,10 @@
 #pragma once
 
 #include "common/types/data_chunk.hpp"
+#include "execution/expression_executor.hpp"
 #include "function/function.hpp"
 
 namespace duckdb {
-namespace function {
 
 void round_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr,
                     Vector &result);
@@ -50,5 +50,4 @@ public:
 	}
 };
 
-} // namespace function
 } // namespace duckdb

@@ -8,7 +8,6 @@
 using namespace std;
 
 namespace duckdb {
-namespace function {
 
 void regexp_matches_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count,
                              BoundFunctionExpression &expr, Vector &result) {
@@ -83,5 +82,4 @@ unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionExpressio
 	return make_unique<RegexpMatchesBindData>(nullptr, "", "", false);
 }
 
-} // namespace function
 } // namespace duckdb

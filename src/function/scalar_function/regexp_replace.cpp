@@ -6,7 +6,6 @@
 using namespace std;
 
 namespace duckdb {
-namespace function {
 
 void regexp_replace_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count,
                              BoundFunctionExpression &expr, Vector &result) {
@@ -58,5 +57,4 @@ SQLType regexp_replace_get_return_type(vector<SQLType> &arguments) {
 	return SQLType(SQLTypeId::VARCHAR);
 }
 
-} // namespace function
 } // namespace duckdb

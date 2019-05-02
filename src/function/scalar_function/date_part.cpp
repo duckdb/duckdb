@@ -6,7 +6,6 @@
 using namespace std;
 
 namespace duckdb {
-namespace function {
 
 enum class SpecifierType {
 	YEAR,
@@ -150,5 +149,4 @@ SQLType date_part_get_return_type(vector<SQLType> &arguments) {
 	return SQLType(SQLTypeId::BIGINT);
 }
 
-} // namespace function
 } // namespace duckdb

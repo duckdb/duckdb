@@ -60,14 +60,14 @@ Value VectorOperations::Sum(Vector &left) {
 	if (VectorOperations::AllTrue(is_null)) {
 		result.is_null = true;
 	} else {
-		generic_fold_loop<operators::Add>(left, result);
+		generic_fold_loop<duckdb::Add>(left, result);
 	}
 	return result;
 }
 
 Value VectorOperations::Count(Vector &left) {
 	Value result = Value::Numeric(left.type, 0);
-	generic_fold_loop<operators::AddOne>(left, result);
+	generic_fold_loop<duckdb::AddOne>(left, result);
 	return result;
 }
 
@@ -77,7 +77,7 @@ Value VectorOperations::Max(Vector &left) {
 	}
 	Value minimum_value = Value::MinimumValue(left.type);
 	Value result = minimum_value;
-	generic_fold_loop<operators::Max>(left, result);
+	generic_fold_loop<duckdb::Max>(left, result);
 	result.is_null = result == minimum_value; // check if any tuples qualified
 	return result;
 }
@@ -88,7 +88,7 @@ Value VectorOperations::Min(Vector &left) {
 	}
 	Value maximum_value = Value::MaximumValue(left.type);
 	Value result = maximum_value;
-	generic_fold_loop<operators::Min>(left, result);
+	generic_fold_loop<duckdb::Min>(left, result);
 	result.is_null = result == maximum_value; // check if any tuples qualified
 	return result;
 }
@@ -146,6 +146,6 @@ Value VectorOperations::MaximumStringLength(Vector &left) {
 	if (left.count == 0) {
 		return result;
 	}
-	templated_unary_fold<const char *, uint64_t, operators::MaximumStringLength>(left, &result.value_.pointer);
+	templated_unary_fold<const char *, uint64_t, duckdb::MaximumStringLength>(left, &result.value_.pointer);
 	return result;
 }

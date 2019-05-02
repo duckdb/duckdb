@@ -22,25 +22,25 @@ void VectorOperations::AddInPlace(Vector &result, Vector &input) {
 	// the inplace loops take the result as the last parameter
 	switch (input.type) {
 	case TypeId::TINYINT:
-		templated_inplace_loop<int8_t, int8_t, operators::AddInPlace>(input, result);
+		templated_inplace_loop<int8_t, int8_t, duckdb::AddInPlace>(input, result);
 		break;
 	case TypeId::SMALLINT:
-		templated_inplace_loop<int16_t, int16_t, operators::AddInPlace>(input, result);
+		templated_inplace_loop<int16_t, int16_t, duckdb::AddInPlace>(input, result);
 		break;
 	case TypeId::INTEGER:
-		templated_inplace_loop<int32_t, int32_t, operators::AddInPlace>(input, result);
+		templated_inplace_loop<int32_t, int32_t, duckdb::AddInPlace>(input, result);
 		break;
 	case TypeId::BIGINT:
-		templated_inplace_loop<int64_t, int64_t, operators::AddInPlace>(input, result);
+		templated_inplace_loop<int64_t, int64_t, duckdb::AddInPlace>(input, result);
 		break;
 	case TypeId::FLOAT:
-		templated_inplace_loop<float, float, operators::AddInPlace>(input, result);
+		templated_inplace_loop<float, float, duckdb::AddInPlace>(input, result);
 		break;
 	case TypeId::DOUBLE:
-		templated_inplace_loop<double, double, operators::AddInPlace>(input, result);
+		templated_inplace_loop<double, double, duckdb::AddInPlace>(input, result);
 		break;
 	case TypeId::POINTER:
-		templated_inplace_loop<uint64_t, uint64_t, operators::AddInPlace>(input, result);
+		templated_inplace_loop<uint64_t, uint64_t, duckdb::AddInPlace>(input, result);
 		break;
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for addition");
@@ -88,19 +88,19 @@ void VectorOperations::ModuloInPlace(Vector &result, Vector &input) {
 	// the in-place loops take the result as the last parameter
 	switch (input.type) {
 	case TypeId::TINYINT:
-		templated_inplace_divmod_loop<int8_t, int8_t, operators::ModuloInPlace>(input, result);
+		templated_inplace_divmod_loop<int8_t, int8_t, duckdb::ModuloInPlace>(input, result);
 		break;
 	case TypeId::SMALLINT:
-		templated_inplace_divmod_loop<int16_t, int16_t, operators::ModuloInPlace>(input, result);
+		templated_inplace_divmod_loop<int16_t, int16_t, duckdb::ModuloInPlace>(input, result);
 		break;
 	case TypeId::INTEGER:
-		templated_inplace_divmod_loop<int32_t, int32_t, operators::ModuloInPlace>(input, result);
+		templated_inplace_divmod_loop<int32_t, int32_t, duckdb::ModuloInPlace>(input, result);
 		break;
 	case TypeId::BIGINT:
-		templated_inplace_divmod_loop<int64_t, int64_t, operators::ModuloInPlace>(input, result);
+		templated_inplace_divmod_loop<int64_t, int64_t, duckdb::ModuloInPlace>(input, result);
 		break;
 	case TypeId::POINTER:
-		templated_inplace_divmod_loop<uint64_t, uint64_t, operators::ModuloInPlace>(input, result);
+		templated_inplace_divmod_loop<uint64_t, uint64_t, duckdb::ModuloInPlace>(input, result);
 		break;
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for in-place modulo");

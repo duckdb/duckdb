@@ -10,7 +10,7 @@
 
 #include <cassert>
 
-namespace operators {
+namespace duckdb {
 
 struct AddInPlace {
 	template <class T> static inline void Operation(T &left, T right) {
@@ -44,4 +44,4 @@ struct ModuloInPlace {
 	}
 };
 
-} // namespace operators
+} // namespace duckdb

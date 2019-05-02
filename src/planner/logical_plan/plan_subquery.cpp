@@ -263,6 +263,8 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 static unique_ptr<Expression> PlanSubquery(Binder &binder, ClientContext &context, BoundSubqueryExpression &expr,
                                            unique_ptr<LogicalOperator> &root);
 
+namespace duckdb {
+
 class RecursiveSubqueryPlanner : public LogicalOperatorVisitor {
 public:
 	RecursiveSubqueryPlanner(Binder &binder, ClientContext &context) : binder(binder), context(context) {
@@ -287,6 +289,7 @@ private:
 	Binder &binder;
 	ClientContext &context;
 };
+} // namespace duckdb
 
 unique_ptr<Expression> PlanSubquery(Binder &binder, ClientContext &context, BoundSubqueryExpression &expr,
                                     unique_ptr<LogicalOperator> &root) {

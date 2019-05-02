@@ -38,19 +38,19 @@ template <class T> static void AddScalarFunction(Transaction &transaction, Catal
 }
 
 void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
-	AddTableFunction<function::PragmaTableInfo>(transaction, catalog);
-	AddTableFunction<function::SQLiteMaster>(transaction, catalog);
+	AddTableFunction<PragmaTableInfo>(transaction, catalog);
+	AddTableFunction<SQLiteMaster>(transaction, catalog);
 
-	AddScalarFunction<function::AbsFunction>(transaction, catalog);
-	AddScalarFunction<function::ConcatFunction>(transaction, catalog);
-	AddScalarFunction<function::DatePartFunction>(transaction, catalog);
-	AddScalarFunction<function::LengthFunction>(transaction, catalog);
-	AddScalarFunction<function::RoundFunction>(transaction, catalog);
-	AddScalarFunction<function::SubstringFunction>(transaction, catalog);
-	AddScalarFunction<function::YearFunction>(transaction, catalog);
-	AddScalarFunction<function::UpperFunction>(transaction, catalog);
-	AddScalarFunction<function::LowerFunction>(transaction, catalog);
-	AddScalarFunction<function::NextvalFunction>(transaction, catalog);
-	AddScalarFunction<function::RegexpMatchesFunction>(transaction, catalog);
-	AddScalarFunction<function::RegexpReplaceFunction>(transaction, catalog);
+	AddScalarFunction<AbsFunction>(transaction, catalog);
+	AddScalarFunction<ConcatFunction>(transaction, catalog);
+	AddScalarFunction<DatePartFunction>(transaction, catalog);
+	AddScalarFunction<LengthFunction>(transaction, catalog);
+	AddScalarFunction<RoundFunction>(transaction, catalog);
+	AddScalarFunction<SubstringFunction>(transaction, catalog);
+	AddScalarFunction<YearFunction>(transaction, catalog);
+	AddScalarFunction<UpperFunction>(transaction, catalog);
+	AddScalarFunction<LowerFunction>(transaction, catalog);
+	AddScalarFunction<NextvalFunction>(transaction, catalog);
+	AddScalarFunction<RegexpMatchesFunction>(transaction, catalog);
+	AddScalarFunction<RegexpReplaceFunction>(transaction, catalog);
 }

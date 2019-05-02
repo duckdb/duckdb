@@ -85,8 +85,8 @@ template <class LOOP, class OP> static void generic_gather_loop(Vector &source, 
 
 void VectorOperations::Gather::Set(Vector &source, Vector &dest, bool set_null) {
 	if (set_null) {
-		generic_gather_loop<GatherLoopSetNull, operators::PickLeft>(source, dest);
+		generic_gather_loop<GatherLoopSetNull, PickLeft>(source, dest);
 	} else {
-		generic_gather_loop<GatherLoopIgnoreNull, operators::PickLeft>(source, dest);
+		generic_gather_loop<GatherLoopIgnoreNull, PickLeft>(source, dest);
 	}
 }
