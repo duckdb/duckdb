@@ -53,8 +53,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, uint32_t depth) {
 	}
 	binding.table_index = index;
 	return BindResult(
-	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(col_type), binding, depth),
-	    col_type);
+	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(col_type), binding, depth), col_type);
 }
 
 void TableBinding::GenerateAllColumnExpressions(BindContext &context,

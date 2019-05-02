@@ -2,6 +2,7 @@
 
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "common/file_system.hpp"
+#include "common/gzip_stream.hpp"
 #include "main/client_context.hpp"
 #include "storage/data_table.hpp"
 
@@ -93,11 +94,22 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 		}
 		int64_t linenr = 0;
 		string line;
-		std::ifstream from_csv;
-		from_csv.open(info.file_path);
+
 		if (!FileExists(info.file_path)) {
 			throw Exception("File not found");
 		}
+
+		unique_ptr<istream> from_csv_stream;
+		if (StringUtil::EndsWith(StringUtil::Lower(info.file_path), ".gz")) {
+			from_csv_stream = make_unique<GzipStream>(info.file_path);
+		} else {
+			auto csv_local = make_unique<ifstream>();
+			csv_local->open(info.file_path);
+			from_csv_stream = move(csv_local);
+		}
+
+		istream &from_csv = *from_csv_stream;
+
 		if (info.header) {
 			// ignore the first line as a header line
 			getline(from_csv, line);
@@ -160,7 +172,6 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 			linenr++;
 		}
 		Flush(context, insert_chunk, nr_elements, total, set_to_default);
-		from_csv.close();
 	} else {
 		ofstream to_csv;
 		to_csv.open(info.file_path);
