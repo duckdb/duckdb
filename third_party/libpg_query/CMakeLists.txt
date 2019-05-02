@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 2.8.7)
 
 project(pg_query CXX C)
+CMAKE_POLICY(SET CMP0063 NEW)
 
 # this code imitates the Makefile in /third_party/libpg_query/
 file(GLOB_RECURSE pg_query_srcs ${CMAKE_CURRENT_SOURCE_DIR}/*.c)
