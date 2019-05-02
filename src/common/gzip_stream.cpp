@@ -4,8 +4,6 @@
 #include "common/file_system.hpp"
 #include "common/fstream_util.hpp"
 
-#include <cstdio>
-
 #define MINIZ_NO_ARCHIVE_APIS
 #define MINIZ_NO_STDIO
 #define MINIZ_NO_ZLIB_COMPATIBLE_NAMES
@@ -84,13 +82,14 @@ void GzipStreamBuf::initialize() {
 	if (is_initialized) {
 		return;
 	}
+	assert(BUFFER_SIZE >= 3); // found to work fine with 3
 	uint8_t gzip_hdr[10];
 	data_start = GZIP_HEADER_MINSIZE;
 
-	in_buff = new char[BUFSIZ];
+	in_buff = new char[BUFFER_SIZE];
 	in_buff_start = in_buff;
 	in_buff_end = in_buff;
-	out_buff = new char[BUFSIZ];
+	out_buff = new char[BUFFER_SIZE];
 
 	mz_stream_ptr = new mz_stream();
 	// TODO use custom alloc/free methods in miniz to throw exceptions on OOM
@@ -99,7 +98,7 @@ void GzipStreamBuf::initialize() {
 		throw Exception("File does not exist");
 	}
 
-	FstreamUtil::OpenFile(filename, input);
+	FstreamUtil::OpenFile(filename, input, ios::in | ios::binary);
 
 	input.read((char *)gzip_hdr, GZIP_HEADER_MINSIZE);
 	if (!input) {
@@ -147,13 +146,13 @@ streambuf::int_type GzipStreamBuf::underflow() {
 		char *out_buff_free_start = out_buff;
 		do {
 			assert(in_buff_start <= in_buff_end);
-			assert(in_buff_end <= in_buff_start + BUFSIZ);
+			assert(in_buff_end <= in_buff_start + BUFFER_SIZE);
 
 			// read more input if none available
 			if (in_buff_start == in_buff_end) {
 				// empty input buffer: refill from the start
 				in_buff_start = in_buff;
-				std::streamsize sz = input.rdbuf()->sgetn(in_buff, BUFSIZ);
+				std::streamsize sz = input.rdbuf()->sgetn(in_buff, BUFFER_SIZE);
 				if (sz == 0) {
 					break; // end of input
 				}
@@ -165,7 +164,7 @@ streambuf::int_type GzipStreamBuf::underflow() {
 			zstrm_p->next_in = (unsigned char *)in_buff_start;
 			zstrm_p->avail_in = in_buff_end - in_buff_start;
 			zstrm_p->next_out = (unsigned char *)out_buff_free_start;
-			zstrm_p->avail_out = (out_buff + BUFSIZ) - out_buff_free_start;
+			zstrm_p->avail_out = (out_buff + BUFFER_SIZE) - out_buff_free_start;
 			auto ret = mz_inflate(zstrm_p, MZ_NO_FLUSH);
 			if (ret != MZ_OK && ret != MZ_STREAM_END) {
 				throw Exception(mz_error(ret));
@@ -174,7 +173,7 @@ streambuf::int_type GzipStreamBuf::underflow() {
 			in_buff_start = (char *)zstrm_p->next_in;
 			in_buff_end = in_buff_start + zstrm_p->avail_in;
 			out_buff_free_start = (char *)zstrm_p->next_out;
-			assert(out_buff_free_start + zstrm_p->avail_out == out_buff + BUFSIZ);
+			assert(out_buff_free_start + zstrm_p->avail_out == out_buff + BUFFER_SIZE);
 			// if stream ended, deallocate inflator
 			if (ret == MZ_STREAM_END) {
 				mz_inflateEnd(zstrm_p);
@@ -194,9 +193,9 @@ streambuf::int_type GzipStreamBuf::underflow() {
 	assert(gptr() <= egptr());
 	assert(eback() == out_buff);
 	assert(gptr() >= out_buff);
-	assert(gptr() <= out_buff + BUFSIZ);
+	assert(gptr() <= out_buff + BUFFER_SIZE);
 	assert(egptr() >= out_buff);
-	assert(egptr() <= out_buff + BUFSIZ);
+	assert(egptr() <= out_buff + BUFFER_SIZE);
 	assert(gptr() <= egptr());
 
 	return this->gptr() == this->egptr() ? traits_type::eof() : traits_type::to_int_type(*this->gptr());
