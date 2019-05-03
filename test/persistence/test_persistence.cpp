@@ -14,13 +14,13 @@ TEST_CASE("Test transactional integrity when facing process aborts", "[persisten
 	// shared memory to keep track of insertions
 	size_t *count = (size_t *)mmap(NULL, sizeof(size_t), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, 0, 0);
 
-	string db_folder_parent = JoinPath(TESTING_DIRECTORY_NAME, "llstorage");
-	if (DirectoryExists(db_folder_parent)) {
-		RemoveDirectory(db_folder_parent);
+	string db_folder_parent = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "llstorage");
+	if (FileSystem::DirectoryExists(db_folder_parent)) {
+		FileSystem::RemoveDirectory(db_folder_parent);
 	}
-	CreateDirectory(db_folder_parent);
+	FileSystem::CreateDirectory(db_folder_parent);
 
-	string db_folder = JoinPath(db_folder_parent, "dbfolder");
+	string db_folder = FileSystem::JoinPath(db_folder_parent, "dbfolder");
 	{
 		DuckDB db(db_folder);
 		Connection con(db);

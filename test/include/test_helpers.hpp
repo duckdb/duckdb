@@ -21,6 +21,8 @@
 
 namespace duckdb {
 
+void DeleteDatabase(string path);
+
 #define REQUIRE_NO_FAIL(result) REQUIRE((result)->success)
 #define REQUIRE_FAIL(result) REQUIRE(!(result)->success)
 

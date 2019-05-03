@@ -95,7 +95,7 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 		int64_t linenr = 0;
 		string line;
 
-		if (!FileExists(info.file_path)) {
+		if (!FileSystem::FileExists(info.file_path)) {
 			throw Exception("File not found");
 		}
 

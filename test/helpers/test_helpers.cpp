@@ -1,9 +1,16 @@
 #include "common/value_operations/value_operations.hpp"
 #include "compare_result.hpp"
+#include "common/file_system.hpp"
 
 using namespace std;
 
 namespace duckdb {
+
+void DeleteDatabase(string path) {
+	if (FileSystem::DirectoryExists(path)) {
+		FileSystem::RemoveDirectory(path);
+	}
+}
 
 static bool ValuesAreEqual(Value result_value, Value value) {
 	if (result_value.is_null && value.is_null) {

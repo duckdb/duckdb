@@ -94,7 +94,7 @@ void GzipStreamBuf::initialize() {
 	mz_stream_ptr = new mz_stream();
 	// TODO use custom alloc/free methods in miniz to throw exceptions on OOM
 
-	if (!FileExists(filename)) {
+	if (!FileSystem::FileExists(filename)) {
 		throw Exception("File does not exist");
 	}
 
