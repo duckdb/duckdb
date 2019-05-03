@@ -11,10 +11,10 @@ using namespace std;
 #include <cstdio>
 #include <dirent.h>
 #include <fcntl.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <string.h>
 
 struct UnixFileHandle : public FileHandle {
 public:
@@ -176,7 +176,7 @@ int remove_directory_recursively(const char *path) {
 	if (d) {
 		struct dirent *p;
 		r = 0;
-		while (!r && (p=readdir(d))) {
+		while (!r && (p = readdir(d))) {
 			int r2 = -1;
 			char *buf;
 			size_t len;
@@ -196,7 +196,7 @@ int remove_directory_recursively(const char *path) {
 						r2 = unlink(buf);
 					}
 				}
-				delete [] buf;
+				delete[] buf;
 			}
 			r = r2;
 		}
@@ -403,7 +403,7 @@ static void delete_dir_special_snowflake_windows(string directory) {
 	}
 
 	do {
-		if (string(ffd.cFileName) ==  "." || string(ffd.cFileName) == "..") {
+		if (string(ffd.cFileName) == "." || string(ffd.cFileName) == "..") {
 			continue;
 		}
 		if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
@@ -507,8 +507,8 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 	return a + PathSeparator() + b;
 }
 
-Buffer::Buffer(void *internal_buffer, void *buffer, uint64_t size) : buffer(buffer), size(size), internal_buffer(internal_buffer) {
-
+Buffer::Buffer(void *internal_buffer, void *buffer, uint64_t size)
+    : buffer(buffer), size(size), internal_buffer(internal_buffer) {
 }
 
 Buffer::~Buffer() {
@@ -520,13 +520,13 @@ unique_ptr<Buffer> Buffer::AllocateAlignedBuffer(uint64_t bufsiz) {
 	// we add 4095 to ensure that we can align the buffer to 4096
 	void *internal_buffer = malloc(bufsiz + 4095);
 	// round to multiple of 4096
-	uint64_t num = (uint64_t) internal_buffer;
+	uint64_t num = (uint64_t)internal_buffer;
 	uint64_t remainder = num % 4096;
 	if (remainder != 0) {
 		num = num + 4096 - remainder;
 	}
 	assert(num % 4096 == 0);
-	assert(num + bufsiz <= ((uint64_t) internal_buffer + bufsiz + 4095));
-	assert(num >= (uint64_t) internal_buffer);
-	return unique_ptr<Buffer>(new Buffer(internal_buffer, (void*) num, bufsiz));
+	assert(num + bufsiz <= ((uint64_t)internal_buffer + bufsiz + 4095));
+	assert(num >= (uint64_t)internal_buffer);
+	return unique_ptr<Buffer>(new Buffer(internal_buffer, (void *)num, bufsiz));
 }

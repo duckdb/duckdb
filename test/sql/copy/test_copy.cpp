@@ -64,7 +64,8 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {" test", " test", " test"}));
 
 	//  Creating CSV from Query
-	result = con.Query("COPY (select a,b from test where a < 4000) to '" + FileSystem::JoinPath(csv_path, "test3.csv") + "';");
+	result = con.Query("COPY (select a,b from test where a < 4000) to '" + FileSystem::JoinPath(csv_path, "test3.csv") +
+	                   "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {4000}));
 	// load the same CSV back again
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test3(a INTEGER, b INTEGER);"));

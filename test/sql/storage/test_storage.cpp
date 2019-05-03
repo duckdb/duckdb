@@ -1,7 +1,7 @@
 #include "catch.hpp"
+#include "common/file_system.hpp"
 #include "dbgen.hpp"
 #include "test_helpers.hpp"
-#include "common/file_system.hpp"
 
 using namespace duckdb;
 using namespace std;

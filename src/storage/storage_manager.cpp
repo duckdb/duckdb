@@ -147,7 +147,8 @@ int StorageManager::LoadFromStorage() {
 
 			size_t chunk_count = 1;
 			while (true) {
-				auto chunk_name = FileSystem::JoinPath(table_directory_path, "chunk-" + to_string(chunk_count) + ".bin");
+				auto chunk_name =
+				    FileSystem::JoinPath(table_directory_path, "chunk-" + to_string(chunk_count) + ".bin");
 				if (!FileSystem::FileExists(chunk_name)) {
 					break;
 				}
@@ -291,7 +292,8 @@ void StorageManager::CreateCheckpoint(int iteration) {
 				if (chunk.size() == 0) {
 					break;
 				}
-				auto chunk_name = FileSystem::JoinPath(table_directory_path, "chunk-" + to_string(chunk_count) + ".bin");
+				auto chunk_name =
+				    FileSystem::JoinPath(table_directory_path, "chunk-" + to_string(chunk_count) + ".bin");
 				fstream chunk_file;
 				FstreamUtil::OpenFile(chunk_name, chunk_file, ios_base::binary | ios_base::out);
 

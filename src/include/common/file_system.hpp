@@ -16,48 +16,52 @@ namespace duckdb {
 
 struct FileHandle {
 public:
-	FileHandle(string path) : path(path) {}
-	FileHandle(const FileHandle&) = delete;
+	FileHandle(string path) : path(path) {
+	}
+	FileHandle(const FileHandle &) = delete;
 	virtual ~FileHandle() {
 	}
 
 	void Read(void *buffer, uint64_t nr_bytes, uint64_t location);
 	void Write(void *buffer, uint64_t nr_bytes, uint64_t location);
+
 protected:
 	virtual void Close() = 0;
+
 public:
 	string path;
 };
 
-enum class FileLockType : uint8_t {
-	NO_LOCK = 0,
-	READ_LOCK = 1,
-	WRITE_LOCK = 2
-};
+enum class FileLockType : uint8_t { NO_LOCK = 0, READ_LOCK = 1, WRITE_LOCK = 2 };
 
 class FileFlags {
 public:
 	//! Open file with read access
-	static constexpr uint8_t READ      = 1 << 0;
+	static constexpr uint8_t READ = 1 << 0;
 	//! Open file with read/write access
-	static constexpr uint8_t WRITE     = 1 << 1;
+	static constexpr uint8_t WRITE = 1 << 1;
 	//! Use direct IO when reading/writing to the file
 	static constexpr uint8_t DIRECT_IO = 1 << 2;
 	//! Create file if not exists, can only be used together with WRITE
-	static constexpr uint8_t CREATE    = 1 << 3;
+	static constexpr uint8_t CREATE = 1 << 3;
 };
 
 class Buffer {
 public:
-	//! Allocates a buffer of the specified size that is sector-aligned. bufsiz must be a multiple of 4096. The content in this buffer can be written to FileHandles that have been opened with DIRECT_IO on all operating systems, however, the entire buffer must be written to the file.
+	//! Allocates a buffer of the specified size that is sector-aligned. bufsiz must be a multiple of 4096. The content
+	//! in this buffer can be written to FileHandles that have been opened with DIRECT_IO on all operating systems,
+	//! however, the entire buffer must be written to the file.
 	static unique_ptr<Buffer> AllocateAlignedBuffer(uint64_t bufsiz);
 
 	~Buffer();
+
 private:
 	Buffer(void *internal_buffer, void *buffer, uint64_t size);
+
 public:
 	void *buffer;
 	uint64_t size;
+
 private:
 	void *internal_buffer;
 };
@@ -79,7 +83,8 @@ public:
 	static void RemoveDirectory(const string &directory);
 	//! List files in a directory, invoking the callback method for each one
 	static bool ListFiles(const string &directory, std::function<void(string)> callback);
-	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID properties
+	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
+	//! properties
 	static void MoveFile(const string &source, const string &target);
 	//! Check if a file exists
 	static bool FileExists(const string &filename);
