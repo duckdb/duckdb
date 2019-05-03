@@ -22,6 +22,10 @@ unique_ptr<CreateSequenceStatement> Transformer::TransformCreateSequence(Node *n
 		for_each_cell(cell, stmt->options->head) {
 			auto *def_elem = reinterpret_cast<DefElem *>(cell->data.ptr_value);
 			string opt_name = string(def_elem->defname);
+			if (def_elem->defaction == DEFELEM_UNSPEC) { // e.g. NO MINVALUE
+				continue;
+			}
+			assert(def_elem->arg);
 
 			if (opt_name == "increment") {
 				auto val = (postgres::Value *)def_elem->arg;

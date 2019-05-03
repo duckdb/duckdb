@@ -27,6 +27,7 @@ class Transformer {
 public:
 	//! Transforms a Postgres parse tree into a set of SQL Statements
 	bool TransformParseTree(postgres::List *tree, vector<unique_ptr<SQLStatement>> &statements);
+	string NodetypeToString(postgres::NodeTag type);
 
 private:
 	//! Transforms a Postgres statement into a single SQL statement
