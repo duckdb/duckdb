@@ -388,34 +388,34 @@ void FileSystem::CreateDirectory(const string &directory) {
 	}
 }
 
-static void delete_dir_special_snowflake_windows(const char *dirname) {
-	if (strlen(dirname) + 3 > MAX_PATH) {
+static void delete_dir_special_snowflake_windows(string directory) {
+	if (directory.size() + 3 > MAX_PATH) {
 		throw IOException("Pathname too long");
 	}
 	// create search pattern
 	TCHAR szDir[MAX_PATH];
-	snprintf(szDir, MAX_PATH, "%s\\*", dirname);
+	snprintf(szDir, MAX_PATH, "%s\\*", directory.c_str());
 
 	WIN32_FIND_DATA ffd;
 	HANDLE hFind = FindFirstFile(szDir, &ffd);
-	if (INVALID_HANDLE_VALUE == hFind) {
+	if (hFind == INVALID_HANDLE_VALUE) {
 		throw IOException("Could not find directory");
 	}
 
 	do {
-		if (strcmp(ffd.cFileName, ".") == 0 || strcmp(ffd.cFileName, "..") == 0) {
+		if (string(ffd.cFileName) ==  "." || string(ffd.cFileName) == "..") {
 			continue;
 		}
 		if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 			// recurse to zap directory contents
-			delete_dir_special_snowflake_windows(ffd.cFileName);
+			delete_dir_special_snowflake_windows(FileSystem::JoinPath(directory, ffd.cFileName));
 		} else {
-			if (strlen(ffd.cFileName) + strlen(dirname) + 1 > MAX_PATH) {
+			if (strlen(ffd.cFileName) + directory.size() + 1 > MAX_PATH) {
 				throw IOException("Pathname too long");
 			}
 			// create search pattern
 			TCHAR del_path[MAX_PATH];
-			snprintf(del_path, MAX_PATH, "%s\\%s", dirname, ffd.cFileName);
+			snprintf(del_path, MAX_PATH, "%s\\%s", directory.c_str(), ffd.cFileName);
 			if (!DeleteFileA(del_path)) {
 				throw IOException("Failed to delete directory entry");
 			}
@@ -428,7 +428,7 @@ static void delete_dir_special_snowflake_windows(const char *dirname) {
 	}
 	FindClose(hFind);
 
-	if (!RemoveDirectoryA(dirname)) {
+	if (!RemoveDirectoryA(directory.c_str())) {
 		throw IOException("Failed to delete directory");
 	}
 }
