@@ -1,8 +1,8 @@
 #include "common/file_system.hpp"
 
 #include "common/exception.hpp"
-#include "common/string_util.hpp"
 #include "common/helper.hpp"
+#include "common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -10,23 +10,26 @@ using namespace std;
 #ifndef _WIN32
 #include <cstdio>
 #include <dirent.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <fcntl.h>
 
 struct UnixFileHandle : public FileHandle {
 public:
-	UnixFileHandle(string path, int fd) : FileHandle(path), fd(fd){}
+	UnixFileHandle(string path, int fd) : FileHandle(path), fd(fd) {
+	}
 	virtual ~UnixFileHandle() {
 		Close();
 	}
+
 protected:
 	void Close() override {
 		if (fd != -1) {
 			close(fd);
 		}
 	};
+
 public:
 	int fd;
 };
@@ -44,7 +47,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	} else {
 		// need Read or Write
 		assert(flags & FileFlags::WRITE);
-		open_flags = O_RDWR  | O_CLOEXEC;
+		open_flags = O_RDWR | O_CLOEXEC;
 		if (flags & FileFlags::CREATE) {
 			open_flags |= O_CREAT;
 		}
@@ -59,7 +62,6 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	}
 	int fd = open(path, open_flags, 0666);
 	if (fd == -1) {
-		fprintf(stderr, "Cannot open file \"%s\": %s", path, strerror(errno));
 		throw IOException("Cannot open file \"%s\": %s", path, strerror(errno));
 	}
 #if defined(__DARWIN__) || defined(__APPLE__)
@@ -67,7 +69,6 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		// OSX requires fcntl for Direct IO
 		rc = fcntl(fd, F_NOCACHE, 1);
 		if (fd == -1) {
-			fprintf(stderr, "Could not enable direct IO for file \"%s\": %s", path, strerror(errno));
 			throw IOException("Could not enable direct IO for file \"%s\": %s", path, strerror(errno));
 		}
 	}
@@ -89,15 +90,16 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 }
 
 static void seek_in_file(FileHandle &handle, uint64_t location) {
-	int fd = ((UnixFileHandle&) handle).fd;
+	int fd = ((UnixFileHandle &)handle).fd;
 	off_t offset = lseek(fd, location, SEEK_SET);
-	if (offset == (off_t) -1) {
-		throw IOException("Could not seek to location %lld for file \"%s\": %s", location, handle.path.c_str(), strerror(errno));
+	if (offset == (off_t)-1) {
+		throw IOException("Could not seek to location %lld for file \"%s\": %s", location, handle.path.c_str(),
+		                  strerror(errno));
 	}
 }
 
 void FileSystem::Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location) {
-	int fd = ((UnixFileHandle&) handle).fd;
+	int fd = ((UnixFileHandle &)handle).fd;
 	// lseek to the location
 	seek_in_file(handle, location);
 	// now read from the location
@@ -112,7 +114,7 @@ void FileSystem::Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint6
 }
 
 void FileSystem::Write(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location) {
-	int fd = ((UnixFileHandle&) handle).fd;
+	int fd = ((UnixFileHandle &)handle).fd;
 	// lseek to the location
 	seek_in_file(handle, location);
 	// now write to the location
@@ -220,17 +222,110 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 #undef MoveFile
 #undef RemoveDirectory
 
+// Returns the last Win32 error, in string format. Returns an empty string if there is no error.
+std::string GetLastErrorAsString() {
+	// Get the error message, if any.
+	DWORD errorMessageID = ::GetLastError();
+	if (errorMessageID == 0)
+		return std::string(); // No error message has been recorded
 
-unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, FileFlags flags, FileLockType lock_type) {
-	throw NotImplementedException("OpenFile on Windows");
+	LPSTR messageBuffer = nullptr;
+	size_t size =
+	    FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+	                   NULL, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL);
+
+	std::string message(messageBuffer, size);
+
+	// Free the buffer.
+	LocalFree(messageBuffer);
+
+	return message;
+}
+
+struct WindowsFileHandle : public FileHandle {
+public:
+	WindowsFileHandle(string path, HANDLE fd) : FileHandle(path), fd(fd) {
+	}
+	virtual ~WindowsFileHandle() {
+		Close();
+	}
+
+protected:
+	void Close() override {
+		CloseHandle(fd);
+	};
+
+public:
+	HANDLE fd;
+};
+
+unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock_type) {
+	// cannot combine Read and Write flags
+	assert(!(flags & FileFlags::READ && flags & FileFlags::WRITE));
+	// cannot combine Read and DirectIO/CREATE flags
+	assert(!(flags & FileFlags::READ && flags & FileFlags::DIRECT_IO));
+	assert(!(flags & FileFlags::READ && flags & FileFlags::CREATE));
+	DWORD desired_access;
+	DWORD share_mode;
+	DWORD creation_disposition = OPEN_EXISTING;
+	DWORD flags_and_attributes = FILE_ATTRIBUTE_NORMAL;
+	if (flags & FileFlags::READ) {
+		desired_access = GENERIC_READ;
+		share_mode = FILE_SHARE_READ;
+
+	} else {
+		// need Read or Write
+		assert(flags & FileFlags::WRITE);
+		desired_access = GENERIC_READ | GENERIC_WRITE;
+		share_mode = 0;
+		if (flags & FileFlags::CREATE) {
+			creation_disposition = CREATE_NEW;
+		}
+		if (flags & FileFlags::DIRECT_IO) {
+			flags_and_attributes |= FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH;
+		}
+	}
+	HANDLE hFile =
+	    CreateFileA(path, desired_access, share_mode, NULL, creation_disposition, flags_and_attributes, NULL);
+	if (hFile == INVALID_HANDLE_VALUE) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Cannot open file \"%s\": %s", path, error.c_str());
+	}
+	return make_unique<WindowsFileHandle>(path, hFile);
+}
+
+static void seek_in_file(FileHandle &handle, uint64_t location) {
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	LARGE_INTEGER loc;
+	loc.QuadPart = location;
+	auto rc = SetFilePointerEx(hFile, loc, NULL, FILE_BEGIN);
+	if (rc == 0) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Could not seek to location %lld for file \"%s\": %s", location, handle.path.c_str(),
+		                  error.c_str());
+	}
 }
 
 void FileSystem::Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location) {
-	throw NotImplementedException("Read/Write on Windows");
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	seek_in_file(handle, location);
+
+	auto rc = ReadFile(hFile, buffer, nr_bytes, NULL, NULL);
+	if (rc == 0) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), error.c_str());
+	}
 }
 
 void FileSystem::Write(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location) {
-	throw NotImplementedException("Read/Write on Windows");
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	seek_in_file(handle, location);
+
+	auto rc = WriteFile(hFile, buffer, nr_bytes, NULL, NULL);
+	if (rc == 0) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), error.c_str());
+	}
 }
 
 bool FileSystem::DirectoryExists(const string &directory) {
@@ -302,7 +397,7 @@ void FileSystem::RemoveDirectory(const string &directory) {
 }
 
 void FileSystem::RemoveFile(const string &filename) {
-	throw NotImplementedException("Remove file on windows");
+	DeleteFileA(filename.c_str());
 }
 
 bool FileSystem::ListFiles(const string &directory, function<void(string)> callback) {

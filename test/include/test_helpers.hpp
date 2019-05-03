@@ -11,6 +11,7 @@
 #undef IN
 // this breaks file_system.cpp otherwise
 #undef CreateDirectory
+#undef RemoveDirectory
 #endif
 
 #include "common/string_util.hpp"

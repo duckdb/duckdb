@@ -66,11 +66,16 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 	REQUIRE(!FileSystem::FileExists(fname_in_dir2));
 }
 
+// note: the integer count is chosen as 512 so that we write 512*8=4096 bytes to the file
+// this is required for the Direct-IO as on Windows Direct-IO can only write multiples of sector sizes
+// sector sizes are typically one of [512/1024/2048/4096] bytes, hence a 4096 bytes write succeeds.
+#define INTEGER_COUNT 512
+
 TEST_CASE("Test file operations", "[file_system]") {
 	unique_ptr<FileHandle> handle, handle2;
-	int64_t test_data[10];
-	int64_t test_data2[10];
-	for(int i = 0; i < 10; i++) {
+	int64_t test_data[INTEGER_COUNT];
+	int64_t test_data2[INTEGER_COUNT];
+	for (int i = 0; i < INTEGER_COUNT; i++) {
 		test_data[i] = i;
 		test_data2[i] = 0;
 	}
@@ -82,17 +87,17 @@ TEST_CASE("Test file operations", "[file_system]") {
 	// open file for writing
 	REQUIRE_NOTHROW(handle = FileSystem::OpenFile(fname, FileFlags::WRITE | FileFlags::CREATE, FileLockType::NO_LOCK));
 	// write 10 integers
-	REQUIRE_NOTHROW(handle->Write((void*)test_data, sizeof(int64_t) * 10, 0));
+	REQUIRE_NOTHROW(handle->Write((void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
 	// close the file
 	handle.reset();
 
-	for(int i = 0; i < 10; i++) {
+	for (int i = 0; i < INTEGER_COUNT; i++) {
 		test_data[i] = 0;
 	}
 	// now open the file for reading
 	REQUIRE_NOTHROW(handle = FileSystem::OpenFile(fname, FileFlags::READ, FileLockType::NO_LOCK));
 	// read the 10 integers back
-	REQUIRE_NOTHROW(handle->Read((void*)test_data, sizeof(int64_t) * 10, 0));
+	REQUIRE_NOTHROW(handle->Read((void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
 	// check the values of the integers
 	for(int i = 0; i < 10; i++) {
 		REQUIRE(test_data[i] == i);
@@ -103,14 +108,14 @@ TEST_CASE("Test file operations", "[file_system]") {
 	// now test direct IO
 	REQUIRE_NOTHROW(handle = FileSystem::OpenFile(fname, FileFlags::WRITE | FileFlags::CREATE | FileFlags::DIRECT_IO, FileLockType::NO_LOCK));
 	// write 10 integers
-	REQUIRE_NOTHROW(handle->Write((void*)test_data, sizeof(int64_t) * 10, 0));
+	REQUIRE_NOTHROW(handle->Write((void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
+	handle.reset();
 	// now read the integers using a separate handle, they should be there already
 	REQUIRE_NOTHROW(handle2 = FileSystem::OpenFile(fname, FileFlags::READ, FileLockType::NO_LOCK));
-	REQUIRE_NOTHROW(handle2->Read((void*)test_data2, sizeof(int64_t) * 10, 0));
-	for(int i = 0; i < 10; i++) {
+	REQUIRE_NOTHROW(handle2->Read((void *)test_data2, sizeof(int64_t) * INTEGER_COUNT, 0));
+	for (int i = 0; i < INTEGER_COUNT; i++) {
 		REQUIRE(test_data2[i] == i);
 	}
-	handle.reset();
 	handle2.reset();
 	FileSystem::RemoveFile(fname);
 
