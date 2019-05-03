@@ -12,25 +12,14 @@ static void create_dummy_file(string fname) {
 	outfile.close();
 }
 
-static string random_string(size_t length) {
-	auto randchar = []() -> char {
-		const char charset[] = "0123456789"
-		                       "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-		                       "abcdefghijklmnopqrstuvwxyz";
-		const size_t max_index = (sizeof(charset) - 1);
-		return charset[rand() % max_index];
-	};
-	std::string str(length, 0);
-	std::generate_n(str.begin(), length, randchar);
-	return str;
-}
-
 TEST_CASE("Make sure file system operators work as advertised", "[file_system]") {
-	string dname = "TEST_DIR_" + random_string(10);
+	string dname = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "TEST_DIR");
 	string fname = "TEST_FILE";
 	string fname2 = "TEST_FILE_TWO";
 
-	REQUIRE(!FileSystem::DirectoryExists(dname));
+	if (FileSystem::DirectoryExists(dname)) {
+		FileSystem::RemoveDirectory(dname);
+	}
 
 	FileSystem::CreateDirectory(dname);
 	REQUIRE(FileSystem::DirectoryExists(dname));
