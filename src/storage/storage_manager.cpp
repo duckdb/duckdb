@@ -344,7 +344,7 @@ void StorageManager::CreateCheckpoint(int iteration) {
 		FileSystem::RemoveDirectory(other_storage_path);
 	}
 	if (FileSystem::FileExists(other_wal_path)) {
-		FileSystem::RemoveDirectory(other_wal_path);
+		FileSystem::RemoveFile(other_wal_path);
 	}
 	transaction->Rollback();
 }
