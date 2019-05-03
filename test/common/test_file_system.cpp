@@ -62,8 +62,11 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 
 TEST_CASE("Test file operations", "[file_system]") {
 	unique_ptr<FileHandle> handle, handle2;
-	int64_t test_data[INTEGER_COUNT];
-	int64_t test_data2[INTEGER_COUNT];
+	auto test_buffer1 = Buffer::AllocateAlignedBuffer(sizeof(uint64_t) * INTEGER_COUNT);
+	auto test_buffer2 = Buffer::AllocateAlignedBuffer(sizeof(uint64_t) * INTEGER_COUNT);
+
+	int64_t *test_data = (int64_t *) test_buffer1->buffer;
+	int64_t *test_data2 = (int64_t *) test_buffer2->buffer;
 	for (int i = 0; i < INTEGER_COUNT; i++) {
 		test_data[i] = i;
 		test_data2[i] = 0;

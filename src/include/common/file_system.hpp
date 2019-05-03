@@ -47,6 +47,21 @@ public:
 	static constexpr uint8_t CREATE    = 1 << 3;
 };
 
+class Buffer {
+public:
+	//! Allocates a buffer of the specified size that is sector-aligned. bufsiz must be a multiple of 4096. The content in this buffer can be written to FileHandles that have been opened with DIRECT_IO on all operating systems, however, the entire buffer must be written to the file.
+	static unique_ptr<Buffer> AllocateAlignedBuffer(uint64_t bufsiz);
+
+	~Buffer();
+private:
+	Buffer(void *internal_buffer, void *buffer, uint64_t size);
+public:
+	void *buffer;
+	uint64_t size;
+private:
+	void *internal_buffer;
+};
+
 class FileSystem {
 public:
 	static unique_ptr<FileHandle> OpenFile(const char *path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK);
