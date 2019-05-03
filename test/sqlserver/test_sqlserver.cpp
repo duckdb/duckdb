@@ -21,7 +21,8 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	REQUIRE_NO_FAIL(con.Query("	CREATE TABLE Sales.SalesTaxRate( SalesTaxRateID int NOT NULL, StateProvinceID int NOT "
 	                          "NULL, TaxType tinyint NOT NULL, TaxRate decimal(10,4) NOT NULL , Name string NOT NULL, "
 	                          "rowguid string , ModifiedDate datetime NOT NULL ); "));
-	REQUIRE_NO_FAIL(con.Query("COPY Sales.SalesTaxRate FROM 'test/sqlserver/data/SalesTaxRate.csv.gz' DELIMITER '\t';"));
+	REQUIRE_NO_FAIL(
+	    con.Query("COPY Sales.SalesTaxRate FROM 'test/sqlserver/data/SalesTaxRate.csv.gz' DELIMITER '\t';"));
 
 	REQUIRE_NO_FAIL(con.Query(
 	    "CREATE TABLE Sales.SalesPersonQuotaHistory( BusinessEntityID int NOT NULL, QuotaDate datetime NOT NULL, "
@@ -45,7 +46,8 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	    "NOT NULL, BirthDate date NOT NULL, MaritalStatus string NOT NULL, Gender string NOT NULL, HireDate date NOT "
 	    "NULL, SalariedFlag string NOT NULL , VacationHours smallint NOT NULL , SickLeaveHours smallint NOT NULL, "
 	    "CurrentFlag string NOT NULL , rowguid string , ModifiedDate datetime NOT NULL); "));
-	REQUIRE_NO_FAIL(con.Query("COPY HumanResources.Employee FROM 'test/sqlserver/data/Employee.csv.gz' DELIMITER '\t';"));
+	REQUIRE_NO_FAIL(
+	    con.Query("COPY HumanResources.Employee FROM 'test/sqlserver/data/Employee.csv.gz' DELIMITER '\t';"));
 
 	REQUIRE_NO_FAIL(con.Query(
 	    "CREATE TABLE HumanResources.EmployeePayHistory( BusinessEntityID int NOT NULL, RateChangeDate datetime NOT "
@@ -105,7 +107,8 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	REQUIRE_NO_FAIL(
 	    con.Query("CREATE TABLE Person.EmailAddress( BusinessEntityID int NOT NULL, EmailAddressID int NOT NULL, "
 	              "EmailAddress string, rowguid string , ModifiedDate datetime NOT NULL ); "));
-	REQUIRE_NO_FAIL(con.Query("COPY Person.EmailAddress FROM 'test/sqlserver/data/EmailAddress.csv.gz' DELIMITER '|';"));
+	REQUIRE_NO_FAIL(
+	    con.Query("COPY Person.EmailAddress FROM 'test/sqlserver/data/EmailAddress.csv.gz' DELIMITER '|';"));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE Person.PersonPhone( BusinessEntityID int NOT NULL, PhoneNumber string NOT "
 	                          "NULL, PhoneNumberTypeID int NOT NULL, ModifiedDate datetime NOT NULL ); "));
@@ -131,8 +134,8 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	REQUIRE_NO_FAIL(con.Query(" CREATE TABLE Production.ProductInventory( ProductID int NOT NULL, LocationID smallint "
 	                          "NOT NULL, Shelf string NOT NULL, Bin tinyint NOT NULL, Quantity smallint NOT NULL , "
 	                          "rowguid string , ModifiedDate datetime NOT NULL ); "));
-	REQUIRE_NO_FAIL(
-	    con.Query("	COPY Production.ProductInventory FROM 'test/sqlserver/data/ProductInventory.csv.gz' DELIMITER '\t';"));
+	REQUIRE_NO_FAIL(con.Query(
+	    "	COPY Production.ProductInventory FROM 'test/sqlserver/data/ProductInventory.csv.gz' DELIMITER '\t';"));
 
 	// views
 
