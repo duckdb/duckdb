@@ -10,6 +10,9 @@ if(POLICY CMP0048)
 endif()
 
 project(RE2 CXX)
+CMAKE_POLICY(SET CMP0063 NEW)
+set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+
 include(CTest)
 
 option(BUILD_SHARED_LIBS "build shared libraries" OFF)

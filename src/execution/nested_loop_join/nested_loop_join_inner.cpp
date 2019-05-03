@@ -91,23 +91,23 @@ size_t nested_loop_join(Vector &left, Vector &right, size_t &lpos, size_t &rpos,
 	assert(left.type == right.type);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		return nested_loop_join_operator<NLTYPE, operators::Equals>(left, right, lpos, rpos, lvector, rvector,
-		                                                            current_match_count);
+		return nested_loop_join_operator<NLTYPE, duckdb::Equals>(left, right, lpos, rpos, lvector, rvector,
+		                                                         current_match_count);
 	case ExpressionType::COMPARE_NOTEQUAL:
-		return nested_loop_join_operator<NLTYPE, operators::NotEquals>(left, right, lpos, rpos, lvector, rvector,
-		                                                               current_match_count);
+		return nested_loop_join_operator<NLTYPE, duckdb::NotEquals>(left, right, lpos, rpos, lvector, rvector,
+		                                                            current_match_count);
 	case ExpressionType::COMPARE_LESSTHAN:
-		return nested_loop_join_operator<NLTYPE, operators::LessThan>(left, right, lpos, rpos, lvector, rvector,
-		                                                              current_match_count);
+		return nested_loop_join_operator<NLTYPE, duckdb::LessThan>(left, right, lpos, rpos, lvector, rvector,
+		                                                           current_match_count);
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return nested_loop_join_operator<NLTYPE, operators::GreaterThan>(left, right, lpos, rpos, lvector, rvector,
-		                                                                 current_match_count);
+		return nested_loop_join_operator<NLTYPE, duckdb::GreaterThan>(left, right, lpos, rpos, lvector, rvector,
+		                                                              current_match_count);
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return nested_loop_join_operator<NLTYPE, operators::LessThanEquals>(left, right, lpos, rpos, lvector, rvector,
-		                                                                    current_match_count);
+		return nested_loop_join_operator<NLTYPE, duckdb::LessThanEquals>(left, right, lpos, rpos, lvector, rvector,
+		                                                                 current_match_count);
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return nested_loop_join_operator<NLTYPE, operators::GreaterThanEquals>(left, right, lpos, rpos, lvector,
-		                                                                       rvector, current_match_count);
+		return nested_loop_join_operator<NLTYPE, duckdb::GreaterThanEquals>(left, right, lpos, rpos, lvector, rvector,
+		                                                                    current_match_count);
 	default:
 		throw NotImplementedException("Unimplemented comparison type for join!");
 	}

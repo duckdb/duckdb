@@ -8,6 +8,8 @@
 using namespace duckdb;
 using namespace std;
 
+namespace duckdb {
+
 class DependencyExtractor : public LogicalOperatorVisitor {
 public:
 	DependencyExtractor(unordered_set<CatalogEntry *> &dependencies) : dependencies(dependencies) {
@@ -25,6 +27,7 @@ protected:
 private:
 	unordered_set<CatalogEntry *> &dependencies;
 };
+} // namespace duckdb
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> op) {
 	// first resolve column references

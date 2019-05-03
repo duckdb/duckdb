@@ -12,7 +12,6 @@
 using namespace std;
 
 namespace duckdb {
-namespace function {
 
 struct NextvalBindData : public FunctionData {
 	//! The client context for the function call
@@ -151,5 +150,4 @@ void nextval_dependency(BoundFunctionExpression &expr, unordered_set<CatalogEntr
 	}
 }
 
-} // namespace function
 } // namespace duckdb

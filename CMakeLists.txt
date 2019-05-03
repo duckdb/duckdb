@@ -12,7 +12,6 @@ SET(CMAKE_VERBOSE_MAKEFILE OFF)
 SET(CMAKE_POSITION_INDEPENDENT_CODE ON)
 SET(CMAKE_MACOSX_RPATH 1)
 
-
 IF(NOT MSVC)
 	SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG -Wall")
 
@@ -42,6 +41,7 @@ ENDIF()
 include_directories(src/include)
 include_directories(third_party/hyperloglog)
 include_directories(third_party/re2)
+include_directories(third_party/miniz)
 
 add_subdirectory(src)
 add_subdirectory(third_party)

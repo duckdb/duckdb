@@ -34,6 +34,8 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 #endif
 }
 
+namespace duckdb {
+
 class InClauseRewriter : public LogicalOperatorVisitor {
 public:
 	InClauseRewriter(Optimizer &optimizer) : optimizer(optimizer) {
@@ -57,6 +59,8 @@ public:
 
 	unique_ptr<Expression> VisitReplace(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 };
+
+} // namespace duckdb
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {
 	// first we perform expression rewrites using the ExpressionRewriter

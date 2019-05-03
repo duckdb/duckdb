@@ -88,7 +88,7 @@ template <class T, class OP> void templated_quicksort(T *data, sel_t *sel_vector
 template <class T> static void templated_quicksort(Vector &vector, sel_t *sel_vector, size_t count, sel_t result[]) {
 	auto data = (T *)vector.data;
 	// quicksort without nulls
-	templated_quicksort<T, operators::LessThanEquals>(data, sel_vector, count, result);
+	templated_quicksort<T, duckdb::LessThanEquals>(data, sel_vector, count, result);
 }
 
 void VectorOperations::Sort(Vector &vector, sel_t *sel_vector, size_t count, sel_t result[]) {

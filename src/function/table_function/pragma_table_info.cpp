@@ -9,7 +9,6 @@
 using namespace std;
 
 namespace duckdb {
-namespace function {
 
 struct PragmaTableFunctionData : public FunctionData {
 	PragmaTableFunctionData() : entry(nullptr), offset(0) {
@@ -79,5 +78,4 @@ void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &outp
 	data.offset = next;
 }
 
-} // namespace function
 } // namespace duckdb

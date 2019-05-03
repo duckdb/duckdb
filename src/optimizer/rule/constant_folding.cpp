@@ -8,6 +8,8 @@
 using namespace duckdb;
 using namespace std;
 
+namespace duckdb {
+
 //! The ConstantFoldingExpressionMatcher matches on any scalar expression (i.e. Expression::IsFoldable is true)
 class ConstantFoldingExpressionMatcher : public FoldableConstantMatcher {
 public:
@@ -19,6 +21,7 @@ public:
 		return FoldableConstantMatcher::Match(expr, bindings);
 	}
 };
+} // namespace duckdb
 
 ConstantFoldingRule::ConstantFoldingRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	auto op = make_unique<ConstantFoldingExpressionMatcher>();

@@ -12,9 +12,9 @@
 #include "common/types/hash.hpp"
 #include "common/types/null_value.hpp"
 
-namespace operators {
+namespace duckdb {
 
-struct Hash {
+struct HashOp {
 	template <class T> static inline uint64_t Operation(T input, bool is_null) {
 		if (is_null) {
 			return duckdb::Hash<T>(duckdb::NullValue<T>());
@@ -23,4 +23,4 @@ struct Hash {
 	}
 };
 
-} // namespace operators
+} // namespace duckdb

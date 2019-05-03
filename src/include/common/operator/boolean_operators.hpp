@@ -8,7 +8,7 @@
 
 #pragma once
 
-namespace operators {
+namespace duckdb {
 
 struct Not {
 	static inline bool Operation(bool left) {
@@ -76,4 +76,4 @@ struct OrMask {
 		return (left_null && (right_null || !right)) || (right_null && !left);
 	}
 };
-} // namespace operators
+} // namespace duckdb

@@ -10,7 +10,6 @@
 using namespace std;
 
 namespace duckdb {
-namespace function {
 
 struct SQLiteMasterData : public FunctionData {
 	SQLiteMasterData() : initialized(false), offset(0) {
@@ -113,5 +112,4 @@ void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, 
 	data.offset = next;
 }
 
-} // namespace function
 } // namespace duckdb

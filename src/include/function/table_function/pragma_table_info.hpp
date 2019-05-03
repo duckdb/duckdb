@@ -12,7 +12,6 @@
 #include "function/function.hpp"
 
 namespace duckdb {
-namespace function {
 
 FunctionData *pragma_table_info_init(ClientContext &);
 void pragma_table_info(ClientContext &, DataChunk &input, DataChunk &output, FunctionData *dataptr);
@@ -46,5 +45,4 @@ public:
 	}
 };
 
-} // namespace function
 } // namespace duckdb

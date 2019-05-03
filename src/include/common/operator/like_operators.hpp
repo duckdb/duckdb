@@ -10,7 +10,7 @@
 
 #include <cassert>
 
-namespace operators {
+namespace duckdb {
 
 struct Like {
 	static bool Operation(const char *left, const char *right, const char *escape = nullptr);
@@ -22,4 +22,4 @@ struct NotLike {
 	}
 };
 
-} // namespace operators
+} // namespace duckdb

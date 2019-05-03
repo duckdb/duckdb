@@ -64,11 +64,11 @@ static void result_cast_switch(Vector &source, Vector &result, SQLType source_ty
 		break;
 	case SQLTypeId::DATE:
 		assert(result.type == TypeId::INTEGER);
-		templated_cast_loop<SRC, int32_t, operators::CastToDate, true>(source, result);
+		templated_cast_loop<SRC, int32_t, duckdb::CastToDate, true>(source, result);
 		break;
 	case SQLTypeId::TIMESTAMP:
 		assert(result.type == TypeId::BIGINT);
-		templated_cast_loop<SRC, int64_t, operators::CastToTimestamp, true>(source, result);
+		templated_cast_loop<SRC, int64_t, duckdb::CastToTimestamp, true>(source, result);
 		break;
 	case SQLTypeId::VARCHAR: {
 		assert(result.type == TypeId::VARCHAR);
@@ -102,48 +102,48 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 	switch (source_type.id) {
 	case SQLTypeId::BOOLEAN:
 		assert(source.type == TypeId::BOOLEAN);
-		result_cast_switch<bool, operators::Cast, true>(source, result, source_type, target_type);
+		result_cast_switch<bool, duckdb::Cast, true>(source, result, source_type, target_type);
 		break;
 	case SQLTypeId::TINYINT:
 		assert(source.type == TypeId::TINYINT);
-		result_cast_switch<int8_t, operators::Cast, true>(source, result, source_type, target_type);
+		result_cast_switch<int8_t, duckdb::Cast, true>(source, result, source_type, target_type);
 		break;
 	case SQLTypeId::SMALLINT:
 		assert(source.type == TypeId::SMALLINT);
-		result_cast_switch<int16_t, operators::Cast, true>(source, result, source_type, target_type);
+		result_cast_switch<int16_t, duckdb::Cast, true>(source, result, source_type, target_type);
 		break;
 	case SQLTypeId::INTEGER:
 		assert(source.type == TypeId::INTEGER);
-		result_cast_switch<int32_t, operators::Cast, true>(source, result, source_type, target_type);
+		result_cast_switch<int32_t, duckdb::Cast, true>(source, result, source_type, target_type);
 		break;
 	case SQLTypeId::BIGINT:
 		assert(source.type == TypeId::BIGINT);
-		result_cast_switch<int64_t, operators::Cast, true>(source, result, source_type, target_type);
+		result_cast_switch<int64_t, duckdb::Cast, true>(source, result, source_type, target_type);
 		break;
 	case SQLTypeId::FLOAT:
 		assert(source.type == TypeId::FLOAT);
-		result_cast_switch<float, operators::Cast, true>(source, result, source_type, target_type);
+		result_cast_switch<float, duckdb::Cast, true>(source, result, source_type, target_type);
 		break;
 	case SQLTypeId::DECIMAL:
 	case SQLTypeId::DOUBLE:
 		assert(source.type == TypeId::DOUBLE);
-		result_cast_switch<double, operators::Cast, true>(source, result, source_type, target_type);
+		result_cast_switch<double, duckdb::Cast, true>(source, result, source_type, target_type);
 		break;
 	case SQLTypeId::POINTER:
 		assert(source.type == TypeId::POINTER);
-		result_cast_switch<uint64_t, operators::Cast, true>(source, result, source_type, target_type);
+		result_cast_switch<uint64_t, duckdb::Cast, true>(source, result, source_type, target_type);
 		break;
 	case SQLTypeId::DATE:
 		assert(source.type == TypeId::INTEGER);
-		result_cast_switch<int32_t, operators::CastFromDate, true>(source, result, source_type, target_type);
+		result_cast_switch<int32_t, duckdb::CastFromDate, true>(source, result, source_type, target_type);
 		break;
 	case SQLTypeId::TIMESTAMP:
 		assert(source.type == TypeId::BIGINT);
-		result_cast_switch<int64_t, operators::CastFromTimestamp, true>(source, result, source_type, target_type);
+		result_cast_switch<int64_t, duckdb::CastFromTimestamp, true>(source, result, source_type, target_type);
 		break;
 	case SQLTypeId::VARCHAR:
 		assert(source.type == TypeId::VARCHAR);
-		result_cast_switch<const char *, operators::Cast, true>(source, result, source_type, target_type);
+		result_cast_switch<const char *, duckdb::Cast, true>(source, result, source_type, target_type);
 		break;
 	case SQLTypeId::SQLNULL:
 		break;

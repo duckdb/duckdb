@@ -11,7 +11,7 @@ add_subdirectory(main)
 add_subdirectory(storage)
 add_subdirectory(transaction)
 
-set(DUCKDB_LINK_LIBS re2 pg_query hyperloglog Threads::Threads)
+set(DUCKDB_LINK_LIBS pg_query hyperloglog re2 miniz Threads::Threads)
 
 add_library(duckdb SHARED ${ALL_OBJECT_FILES})
 target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})

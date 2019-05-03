@@ -42,11 +42,11 @@ template <class T, class OP> static size_t merge_join_mark_gt(ScalarMergeInfo &l
 	return 0;
 }
 template <class T> size_t MergeJoinMark::GreaterThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
-	return merge_join_mark_gt<T, operators::GreaterThan>(l, r);
+	return merge_join_mark_gt<T, duckdb::GreaterThan>(l, r);
 }
 
 template <class T> size_t MergeJoinMark::GreaterThanEquals::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
-	return merge_join_mark_gt<T, operators::GreaterThanEquals>(l, r);
+	return merge_join_mark_gt<T, duckdb::GreaterThanEquals>(l, r);
 }
 
 template <class T, class OP> static size_t merge_join_mark_lt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
@@ -82,12 +82,12 @@ template <class T, class OP> static size_t merge_join_mark_lt(ScalarMergeInfo &l
 }
 
 template <class T> size_t MergeJoinMark::LessThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
-	return merge_join_mark_lt<T, operators::LessThan>(l, r);
+	return merge_join_mark_lt<T, duckdb::LessThan>(l, r);
 	throw NotImplementedException("Not implemented");
 }
 
 template <class T> size_t MergeJoinMark::LessThanEquals::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
-	return merge_join_mark_lt<T, operators::LessThanEquals>(l, r);
+	return merge_join_mark_lt<T, duckdb::LessThanEquals>(l, r);
 }
 
 INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinMark, Equality, ScalarMergeInfo, ChunkMergeInfo);

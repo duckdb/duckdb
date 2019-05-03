@@ -8,7 +8,6 @@
 using namespace std;
 
 namespace duckdb {
-namespace function {
 
 void year_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr,
                    Vector &result) {
@@ -44,5 +43,4 @@ SQLType year_get_return_type(vector<SQLType> &arguments) {
 	return SQLType(SQLTypeId::INTEGER);
 }
 
-} // namespace function
 } // namespace duckdb

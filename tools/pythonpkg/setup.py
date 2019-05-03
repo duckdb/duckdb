@@ -17,6 +17,9 @@ if platform.architecture()[0] != '64bit':
 if sys.version_info < (3, 6):
     raise Exception('DuckDB requires at least Python 3.6')
 
+# make sure we are in the right directory
+os.chdir(os.path.dirname(os.path.realpath(__file__)))
+
 archive_ext = 'a'
 lib_prefix = 'lib'
 if os.name == 'nt':
@@ -54,7 +57,7 @@ libduckdb = Extension('duckdb',
     sources=sources,
     extra_compile_args=['-std=c++11', '-Wall'],
     language='c++', # for linking c++ stdlib
-    extra_objects=['../../build/release_notest/src/%sduckdb_static.%s' % (lib_prefix, archive_ext), '../../build/release_notest/third_party/libpg_query/%spg_query.%s' % (lib_prefix, archive_ext), '../../build/release_notest/third_party/re2/%sre2.%s' % (lib_prefix, archive_ext)])
+    extra_objects=['../../build/release_notest/src/%sduckdb_static.%s' % (lib_prefix, archive_ext), '../../build/release_notest/third_party/libpg_query/%spg_query.%s' % (lib_prefix, archive_ext), '../../build/release_notest/third_party/re2/%sre2.%s' % (lib_prefix, archive_ext), '../../build/release_notest/third_party/miniz/%sminiz.%s' % (lib_prefix, archive_ext)])
 
 setup(
     name = "duckdb",

@@ -43,17 +43,17 @@ static void mark_join(Vector &left, Vector &right, bool found_match[], Expressio
 	assert(left.type == right.type);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		return mark_join_operator<operators::Equals>(left, right, found_match);
+		return mark_join_operator<duckdb::Equals>(left, right, found_match);
 	case ExpressionType::COMPARE_NOTEQUAL:
-		return mark_join_operator<operators::NotEquals>(left, right, found_match);
+		return mark_join_operator<duckdb::NotEquals>(left, right, found_match);
 	case ExpressionType::COMPARE_LESSTHAN:
-		return mark_join_operator<operators::LessThan>(left, right, found_match);
+		return mark_join_operator<duckdb::LessThan>(left, right, found_match);
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return mark_join_operator<operators::GreaterThan>(left, right, found_match);
+		return mark_join_operator<duckdb::GreaterThan>(left, right, found_match);
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return mark_join_operator<operators::LessThanEquals>(left, right, found_match);
+		return mark_join_operator<duckdb::LessThanEquals>(left, right, found_match);
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return mark_join_operator<operators::GreaterThanEquals>(left, right, found_match);
+		return mark_join_operator<duckdb::GreaterThanEquals>(left, right, found_match);
 	default:
 		throw NotImplementedException("Unimplemented comparison type for join!");
 	}

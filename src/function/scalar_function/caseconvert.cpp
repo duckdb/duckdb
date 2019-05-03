@@ -6,7 +6,6 @@
 using namespace std;
 
 namespace duckdb {
-namespace function {
 
 typedef void (*str_function)(const char *input, char *output);
 
@@ -90,5 +89,4 @@ SQLType caseconvert_get_return_type(vector<SQLType> &arguments) {
 	return arguments[0];
 }
 
-} // namespace function
 } // namespace duckdb

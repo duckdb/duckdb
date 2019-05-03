@@ -6,7 +6,6 @@
 using namespace std;
 
 namespace duckdb {
-namespace function {
 
 void substring_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr,
                         Vector &result) {
@@ -87,5 +86,4 @@ SQLType substring_get_return_type(vector<SQLType> &arguments) {
 	return SQLType(SQLTypeId::VARCHAR);
 }
 
-} // namespace function
 } // namespace duckdb

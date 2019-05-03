@@ -10,7 +10,7 @@
 using namespace duckdb;
 using namespace std;
 
-namespace operators {
+namespace duckdb {
 
 template <class SRC, class DST> static DST cast_with_overflow_check(SRC value) {
 	if (value < MinimumValue<DST>() || value > MaximumValue<DST>()) {
@@ -265,4 +265,4 @@ template <> timestamp_t CastToTimestamp::Operation(int64_t left) {
 	return (timestamp_t)left;
 }
 
-} // namespace operators
+} // namespace duckdb
