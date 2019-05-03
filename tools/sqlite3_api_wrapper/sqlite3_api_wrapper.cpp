@@ -43,11 +43,11 @@ int sqlite3_open(const char *filename, /* Database filename (UTF-8) */
 	}
 
 	if (duckdb_open(filename, &database_ptr) != DuckDBSuccess) {
-		fprintf(stderr, "Couldn't open the database file: %s", filename);
+		fprintf(stderr, "Couldn't open the database file: %s\n", filename);
 		exit(1);
 	}
 	if (duckdb_connect(database_ptr, &connection_ptr) != DuckDBSuccess) {
-		fprintf(stderr, "Couldn't connect to the database.");
+		fprintf(stderr, "Couldn't connect to the database.\n");
 		exit(1);
 	}
 

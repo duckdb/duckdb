@@ -10,7 +10,7 @@
 
 #include "common/helper.hpp"
 #include "storage/data_table.hpp"
-#include "storage/directory_block_manager.hpp"
+#include "storage/block_manager.hpp"
 #include "storage/meta_block_writer.hpp"
 #include "storage/write_ahead_log.hpp"
 

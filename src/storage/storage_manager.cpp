@@ -51,24 +51,24 @@ void StorageManager::Initialize() {
 void StorageManager::LoadDatabase() {
 	// first check if the database exists
 	string wal_path = path + ".wal";
-	block_manager = make_unique<DirectoryBlockManager>(path);
-	if (!DirectoryExists(path)) {
-		// have to create the directory
-		CreateDirectory(path);
-	} else {
-		// load from the main storage if it exists
-		LoadFromStorage();
-		// directory already exists
-		// verify that it is an existing database
-		if (FileExists(wal_path)) {
-			// replay the WAL
-			wal.Replay(wal_path);
-			// checkpoint the WAL
-			CreateCheckpoint();
-			// remove the WAL
-			RemoveFile(wal_path);
-		}
-	}
+	block_manager = make_unique<SingleFileBlockManager>(path);
+	// if (!DirectoryExists(path)) {
+	// 	// have to create the directory
+	// 	CreateDirectory(path);
+	// } else {
+	// 	// load from the main storage if it exists
+	// 	LoadFromStorage();
+	// 	// directory already exists
+	// 	// verify that it is an existing database
+	// 	if (FileExists(wal_path)) {
+	// 		// replay the WAL
+	// 		wal.Replay(wal_path);
+	// 		// checkpoint the WAL
+	// 		CreateCheckpoint();
+	// 		// remove the WAL
+	// 		RemoveFile(wal_path);
+	// 	}
+	// }
 	// initialize the WAL file
 	wal.Initialize(wal_path);
 }
