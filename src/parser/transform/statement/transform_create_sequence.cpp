@@ -23,8 +23,13 @@ unique_ptr<CreateSequenceStatement> Transformer::TransformCreateSequence(Node *n
 			auto *def_elem = reinterpret_cast<DefElem *>(cell->data.ptr_value);
 			string opt_name = string(def_elem->defname);
 
+			auto val = (postgres::Value *)def_elem->arg;
+			if (def_elem->defaction == DEFELEM_UNSPEC && !val) { // e.g. NO MINVALUE
+				continue;
+			}
+			assert(val);
+
 			if (opt_name == "increment") {
-				auto val = (postgres::Value *)def_elem->arg;
 				assert(val->type == T_Integer);
 				info.increment = val->val.ival;
 				if (info.increment == 0) {
@@ -38,25 +43,21 @@ unique_ptr<CreateSequenceStatement> Transformer::TransformCreateSequence(Node *n
 					info.max_value = numeric_limits<int64_t>::max();
 				}
 			} else if (opt_name == "minvalue") {
-				auto val = (postgres::Value *)def_elem->arg;
 				assert(val->type == T_Integer);
 				info.min_value = val->val.ival;
 				if (info.increment > 0) {
 					info.start_value = info.min_value;
 				}
 			} else if (opt_name == "maxvalue") {
-				auto val = (postgres::Value *)def_elem->arg;
 				assert(val->type == T_Integer);
 				info.max_value = val->val.ival;
 				if (info.increment < 0) {
 					info.start_value = info.max_value;
 				}
 			} else if (opt_name == "start") {
-				auto val = (postgres::Value *)def_elem->arg;
 				assert(val->type == T_Integer);
 				info.start_value = val->val.ival;
 			} else if (opt_name == "cycle") {
-				auto val = (postgres::Value *)def_elem->arg;
 				assert(val->type == T_Integer);
 				info.cycle = val->val.ival > 0;
 			} else {

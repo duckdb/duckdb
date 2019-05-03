@@ -64,7 +64,7 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(Node *stmt) {
 		return make_unique<ExplainStatement>(TransformStatement(explain_stmt->query));
 	}
 	default:
-		throw NotImplementedException("A_Expr not implemented!");
+		throw NotImplementedException(NodetypeToString(stmt->type));
 		// case T_Invalid:
 		// 	break;
 		// case T_IndexInfo:
