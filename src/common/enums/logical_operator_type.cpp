@@ -72,6 +72,7 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 	case LogicalOperatorType::EXECUTE:
 		return "EXECUTE";
 	case LogicalOperatorType::INVALID:
+	default:
 		return "INVALID";
 	}
 }

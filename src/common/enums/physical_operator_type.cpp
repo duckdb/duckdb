@@ -84,6 +84,7 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 	case PhysicalOperatorType::EXECUTE:
 		return "EXECUTE";
 	case PhysicalOperatorType::INVALID:
+	default:
 		return "INVALID";
 	}
 }

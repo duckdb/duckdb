@@ -2,6 +2,8 @@
 #include "common/value_operations/value_operations.hpp"
 #include "compare_result.hpp"
 
+#include <cmath>
+
 using namespace std;
 
 namespace duckdb {

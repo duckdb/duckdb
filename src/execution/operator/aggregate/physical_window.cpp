@@ -8,6 +8,8 @@
 #include "planner/expression/bound_reference_expression.hpp"
 #include "planner/expression/bound_window_expression.hpp"
 
+#include <cmath>
+
 using namespace duckdb;
 using namespace std;
 

@@ -3,6 +3,8 @@
 #include "common/types/constant_vector.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 
+#include <cmath>
+
 using namespace duckdb;
 using namespace std;
 
