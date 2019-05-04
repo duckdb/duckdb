@@ -490,6 +490,7 @@ string LogicalOperatorToString(LogicalOperatorType type);
 string PhysicalOperatorToString(PhysicalOperatorType type);
 string ExpressionTypeToString(ExpressionType type);
 string ExpressionTypeToOperator(ExpressionType type);
+string StatementTypeToString(StatementType type);
 
 ExternalFileFormat StringToExternalFileFormat(const string &str);
 

@@ -8,6 +8,7 @@
 #include "optimizer/optimizer.hpp"
 #include "parser/parser.hpp"
 #include "parser/statement/explain_statement.hpp"
+#include "parser/statement/prepare_statement.hpp"
 #include "planner/operator/logical_execute.hpp"
 #include "planner/planner.hpp"
 
@@ -206,6 +207,35 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 	return move(result);
 }
 
+static string CanExecuteStatementInReadOnlyMode(SQLStatement& stmt) {
+	switch(stmt.type) {
+	case StatementType::INSERT:
+	case StatementType::COPY:
+	case StatementType::DELETE:
+	case StatementType::UPDATE:
+	case StatementType::CREATE_INDEX:
+	case StatementType::CREATE_TABLE:
+	case StatementType::CREATE_VIEW:
+	case StatementType::CREATE_SCHEMA:
+	case StatementType::DROP_SCHEMA:
+	case StatementType::CREATE_SEQUENCE:
+	case StatementType::DROP_SEQUENCE:
+	case StatementType::DROP_VIEW:
+	case StatementType::DROP_TABLE:
+	case StatementType::DROP_INDEX:
+	case StatementType::ALTER:
+	case StatementType::TRANSACTION:
+		return StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!", StatementTypeToString(stmt.type).c_str());
+	case StatementType::PREPARE: {
+		// prepare statement: check the underlying statement type
+		auto &prepare = (PrepareStatement&) stmt;
+		return CanExecuteStatementInReadOnlyMode(*prepare.statement);
+	}
+	default:
+		return string();
+	}
+}
+
 unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_result) {
 	lock_guard<mutex> client_guard(context_lock);
 	if (is_invalidated) {
@@ -238,6 +268,13 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 	QueryResult *last_result = nullptr;
 	for (size_t i = 0; i < parser.statements.size(); i++) {
 		auto &statement = parser.statements[i];
+		if (db.read_only) {
+			// if the database is opened in read-only mode, check if we can execute this statement
+			string error = CanExecuteStatementInReadOnlyMode(*statement);
+			if (!error.empty()) {
+				return make_unique<MaterializedQueryResult>(error);
+			}
+		}
 		bool is_last_statement = i + 1 == parser.statements.size();
 		// check if we are on AutoCommit. In this case we should start a transaction.
 		if (transaction.IsAutoCommit()) {

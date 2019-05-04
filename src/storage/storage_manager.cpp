@@ -26,11 +26,15 @@ constexpr const char *TABLE_FILE = "tableinfo.duck";
 using namespace duckdb;
 using namespace std;
 
-StorageManager::StorageManager(DuckDB &database, string path) : path(path), database(database), wal(database) {
+StorageManager::StorageManager(DuckDB &database, string path, bool read_only) : path(path), database(database), wal(database), read_only(read_only) {
 }
 
 void StorageManager::Initialize() {
 	bool in_memory = path.empty() || path == ":memory:";
+
+	if (in_memory && read_only) {
+		throw CatalogException("Cannot launch in-memory database in read-only mode!");
+	}
 
 	// first initialize the base system catalogs
 	// these are never written to the WAL
@@ -57,6 +61,9 @@ void StorageManager::LoadDatabase() {
 	int iteration = 0;
 	// first check if the database exists
 	if (!FileSystem::DirectoryExists(path)) {
+		if (read_only) {
+			throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist", path.c_str());
+		}
 		// have to create the directory
 		FileSystem::CreateDirectory(path);
 	} else {
@@ -68,15 +75,21 @@ void StorageManager::LoadDatabase() {
 		if (FileSystem::FileExists(wal_path)) {
 			// replay the WAL
 			wal.Replay(wal_path);
-			// switch the iteration target to the other one
-			iteration = 1 - iteration;
-			// checkpoint the WAL
-			CreateCheckpoint(iteration);
+			if (!read_only) {
+				// checkpoint the WAL
+				// we only checkpoint if the database is opened in read-write mode
+				// switch the iteration target to the other one
+				iteration = 1 - iteration;
+				// create the checkpoint
+				CreateCheckpoint(iteration);
+			}
 		}
 	}
-	// initialize the WAL file
-	string wal_path = FileSystem::JoinPath(path, WAL_FILES[iteration]);
-	wal.Initialize(wal_path);
+	if (!read_only) {
+		// initialize the WAL file
+		string wal_path = FileSystem::JoinPath(path, WAL_FILES[iteration]);
+		wal.Initialize(wal_path);
+	}
 }
 
 int StorageManager::LoadFromStorage() {

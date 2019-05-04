@@ -20,14 +20,15 @@ namespace duckdb {
 class Connection;
 class DuckDB {
 public:
-	DuckDB(const char *path = nullptr);
-	DuckDB(const string &path) : DuckDB(path.c_str()) {
+	DuckDB(const char *path = nullptr, bool read_only = false);
+	DuckDB(const string &path, bool read_only = false) : DuckDB(path.c_str(), read_only) {
 	}
 
 	StorageManager storage;
 	Catalog catalog;
 	TransactionManager transaction_manager;
 	ConnectionManager connection_manager;
+	bool read_only;
 };
 
 } // namespace duckdb

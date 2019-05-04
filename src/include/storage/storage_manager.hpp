@@ -22,7 +22,7 @@ class TransactionManager;
 //! database on disk
 class StorageManager {
 public:
-	StorageManager(DuckDB &database, string path);
+	StorageManager(DuckDB &database, string path, bool read_only);
 	//! Initialize a database or load an existing database from the given path
 	void Initialize();
 	//! Get the WAL of the StorageManager, returns nullptr if in-memory
@@ -51,6 +51,8 @@ private:
 	DuckDB &database;
 	//! The WriteAheadLog of the storage manager
 	WriteAheadLog wal;
+	//! Whether or not the database is opened in read-only mode
+	bool read_only;
 };
 
 } // namespace duckdb
