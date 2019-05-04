@@ -18,17 +18,6 @@ public:
 	CreateSchemaStatement()
 	    : SQLStatement(StatementType::CREATE_SCHEMA), info(make_unique<CreateSchemaInformation>()){};
 
-	string ToString() const override {
-		return "CREATE SCHEMA";
-	}
-
-	bool Equals(const SQLStatement *other_) const override {
-		if (!SQLStatement::Equals(other_)) {
-			return false;
-		}
-		throw NotImplementedException("Equality not implemented!");
-	}
-
 	unique_ptr<CreateSchemaInformation> info;
 };
 

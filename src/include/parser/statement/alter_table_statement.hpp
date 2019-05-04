@@ -20,17 +20,6 @@ public:
 	AlterTableStatement(unique_ptr<AlterTableInformation> info)
 	    : SQLStatement(StatementType::ALTER), info(std::move(info)){};
 
-	string ToString() const override {
-		return "ALTER TABLE";
-	}
-
-	bool Equals(const SQLStatement *other_) const override {
-		if (!SQLStatement::Equals(other_)) {
-			return false;
-		}
-		throw NotImplementedException("Equality not implemented!");
-	}
-
 	unique_ptr<TableRef> table;
 	unique_ptr<AlterTableInformation> info;
 };

@@ -17,10 +17,6 @@ class CreateViewStatement : public SQLStatement {
 public:
 	CreateViewStatement() : SQLStatement(StatementType::CREATE_VIEW), info(make_unique<CreateViewInformation>()){};
 
-	string ToString() const override {
-		return "CREATE VIEW";
-	}
-
 	unique_ptr<CreateViewInformation> info;
 };
 

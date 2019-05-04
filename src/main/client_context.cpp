@@ -363,6 +363,7 @@ void ClientContext::Invalidate() {
 }
 
 string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> statement) {
+	assert(statement->type == StatementType::SELECT);
 	// aggressive query verification
 
 	// the purpose of this function is to test correctness of otherwise hard to test features:
@@ -388,8 +389,8 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 
 	// now perform checking on the expressions
 	auto &orig_expr_list = select_stmt->node->GetSelectList();
-	auto &de_expr_list = ((SelectStatement *)deserialized_stmt.get())->node->GetSelectList();
-	auto &cp_expr_list = ((SelectStatement *)copied_stmt.get())->node->GetSelectList();
+	auto &de_expr_list = deserialized_stmt->node->GetSelectList();
+	auto &cp_expr_list = copied_stmt->node->GetSelectList();
 	assert(orig_expr_list.size() == de_expr_list.size() && cp_expr_list.size() == de_expr_list.size());
 	for (size_t i = 0; i < orig_expr_list.size(); i++) {
 		// check that the expressions are equivalent

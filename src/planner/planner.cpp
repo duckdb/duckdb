@@ -151,11 +151,9 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	}
 	case StatementType::EXPLAIN: {
 		auto &stmt = *reinterpret_cast<ExplainStatement *>(statement.get());
-		auto parse_tree = stmt.stmt->ToString();
 		CreatePlan(move(stmt.stmt));
 		auto logical_plan_unopt = plan->ToString();
 		auto explain = make_unique<LogicalExplain>(move(plan));
-		explain->parse_tree = parse_tree;
 		explain->logical_plan_unopt = logical_plan_unopt;
 		names = {"explain_key", "explain_value"};
 		sql_types = {SQLType(SQLTypeId::VARCHAR), SQLType(SQLTypeId::VARCHAR)};

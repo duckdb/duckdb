@@ -21,15 +21,6 @@ public:
 	virtual ~SQLStatement() {
 	}
 
-	virtual bool Equals(const SQLStatement *other) const {
-		return other && type == other->type;
-	}
-
-	virtual string ToString() const = 0;
-	void Print() {
-		Printer::Print(ToString());
-	}
-
 	StatementType type;
 };
 } // namespace duckdb
