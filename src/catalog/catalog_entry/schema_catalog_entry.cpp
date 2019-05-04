@@ -43,14 +43,14 @@ void SchemaCatalogEntry::CreateView(Transaction &transaction, CreateViewInformat
 	}
 }
 
-void SchemaCatalogEntry::DropView(Transaction &transaction, DropViewInformation *info) {
-	auto existing_view = tables.GetEntry(transaction, info->view_name);
+void SchemaCatalogEntry::DropView(Transaction &transaction, DropInformation *info) {
+	auto existing_view = tables.GetEntry(transaction, info->name);
 	if (existing_view && existing_view->type != CatalogType::VIEW) {
-		throw CatalogException("Existing object %s is not a view", info->view_name.c_str());
+		throw CatalogException("Existing object %s is not a view", info->name.c_str());
 	}
-	if (!tables.DropEntry(transaction, info->view_name, false)) {
+	if (!tables.DropEntry(transaction, info->name, false)) {
 		if (!info->if_exists) {
-			throw CatalogException("View with name \"%s\" does not exist!", info->view_name.c_str());
+			throw CatalogException("View with name \"%s\" does not exist!", info->name.c_str());
 		}
 	}
 }
@@ -65,7 +65,7 @@ void SchemaCatalogEntry::CreateSequence(Transaction &transaction, CreateSequence
 	}
 }
 
-void SchemaCatalogEntry::DropSequence(Transaction &transaction, DropSequenceInformation *info) {
+void SchemaCatalogEntry::DropSequence(Transaction &transaction, DropInformation *info) {
 	if (!sequences.DropEntry(transaction, info->name, info->cascade)) {
 		if (!info->if_exists) {
 			throw CatalogException("Sequence with name \"%s\" does not exist!", info->name.c_str());
@@ -85,7 +85,7 @@ bool SchemaCatalogEntry::CreateIndex(Transaction &transaction, CreateIndexInform
 	return true;
 }
 
-void SchemaCatalogEntry::DropIndex(Transaction &transaction, DropIndexInformation *info) {
+void SchemaCatalogEntry::DropIndex(Transaction &transaction, DropInformation *info) {
 	if (!indexes.DropEntry(transaction, info->name, false)) {
 		if (!info->if_exists) {
 			throw CatalogException("Index with name \"%s\" does not exist!", info->name.c_str());
@@ -93,16 +93,16 @@ void SchemaCatalogEntry::DropIndex(Transaction &transaction, DropIndexInformatio
 	}
 }
 
-void SchemaCatalogEntry::DropTable(Transaction &transaction, DropTableInformation *info) {
-	auto old_table = tables.GetEntry(transaction, info->table);
+void SchemaCatalogEntry::DropTable(Transaction &transaction, DropInformation *info) {
+	auto old_table = tables.GetEntry(transaction, info->name);
 	if (info->if_exists && old_table) {
 		if (old_table->type != CatalogType::TABLE) {
-			throw CatalogException("Existing object %s is not a table", info->table.c_str());
+			throw CatalogException("Existing object %s is not a table", info->name.c_str());
 		}
 	}
-	if (!tables.DropEntry(transaction, info->table, info->cascade)) {
+	if (!tables.DropEntry(transaction, info->name, info->cascade)) {
 		if (!info->if_exists) {
-			throw CatalogException("Table with name \"%s\" does not exist!", info->table.c_str());
+			throw CatalogException("Table with name \"%s\" does not exist!", info->name.c_str());
 		}
 	}
 }
@@ -162,14 +162,6 @@ void SchemaCatalogEntry::CreateTableFunction(Transaction &transaction, CreateTab
 			if (!table_functions.CreateEntry(transaction, info->name, move(table_function), dependencies)) {
 				throw CatalogException("Error in recreating function in CREATE OR REPLACE");
 			}
-		}
-	}
-}
-
-void SchemaCatalogEntry::DropTableFunction(Transaction &transaction, DropTableFunctionInformation *info) {
-	if (!table_functions.DropEntry(transaction, info->name, info->cascade)) {
-		if (!info->if_exists) {
-			throw CatalogException("Table function with name \"%s\" does not exist!", info->name.c_str());
 		}
 	}
 }

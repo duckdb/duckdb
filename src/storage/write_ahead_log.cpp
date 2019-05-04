@@ -197,10 +197,11 @@ void WriteAheadLog::WriteDropTable(TableCatalogEntry *entry) {
 }
 
 bool ReplayDropTable(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	DropTableInformation info;
+	DropInformation info;
 
+	info.type = CatalogType::TABLE;
 	info.schema = source.Read<string>();
-	info.table = source.Read<string>();
+	info.name = source.Read<string>();
 
 	// try {
 	catalog.DropTable(transaction, &info);
@@ -260,9 +261,10 @@ void WriteAheadLog::WriteDropView(ViewCatalogEntry *entry) {
 }
 
 bool ReplayDropView(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	DropViewInformation info;
+	DropInformation info;
+	info.type = CatalogType::VIEW;
 	info.schema = source.Read<string>();
-	info.view_name = source.Read<string>();
+	info.name = source.Read<string>();
 	catalog.DropView(transaction, &info);
 	return true;
 }
@@ -278,9 +280,10 @@ void WriteAheadLog::WriteDropSchema(SchemaCatalogEntry *entry) {
 }
 
 bool ReplayDropSchema(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	DropSchemaInformation info;
+	DropInformation info;
 
-	info.schema = source.Read<string>();
+	info.type = CatalogType::SCHEMA;
+	info.name = source.Read<string>();
 
 	// try {
 	catalog.DropSchema(transaction, &info);

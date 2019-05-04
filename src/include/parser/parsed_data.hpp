@@ -16,6 +16,7 @@
 #include "parser/statement/select_statement.hpp"
 #include "planner/expression.hpp"
 #include "common/enums/index_type.hpp"
+#include "common/enums/catalog_type.hpp"
 
 #include <limits>
 
@@ -64,29 +65,20 @@ struct CreateViewInformation {
 	}
 };
 
-struct DropTableInformation {
-	//! Schema name to drop from
+struct DropInformation {
+	//! The catalog type to drop
+	CatalogType type;
+	//! Schema name to drop from, if any
 	string schema;
-	//! Table name to drop
-	string table;
+	//! Element name to drop
+	string name;
 	//! Ignore if the entry does not exist instead of failing
 	bool if_exists = false;
 	//! Cascade drop (drop all dependents instead of throwing an error if there
 	//! are any)
 	bool cascade = false;
 
-	DropTableInformation() : schema(DEFAULT_SCHEMA), if_exists(false), cascade(false) {
-	}
-};
-
-struct DropViewInformation {
-	//! Schema name to drop from
-	string schema;
-	//! Table name to drop
-	string view_name;
-	//! Ignore if the entry does not exist instead of failing
-	bool if_exists = false;
-	DropViewInformation() : schema(DEFAULT_SCHEMA), if_exists(false) {
+	DropInformation() : schema(DEFAULT_SCHEMA), if_exists(false), cascade(false) {
 	}
 };
 
@@ -134,19 +126,6 @@ struct CreateSchemaInformation {
 	}
 };
 
-struct DropSchemaInformation {
-	//! Schema name to drop
-	string schema;
-	//! Ignore if the entry does not exist instead of failing
-	bool if_exists = false;
-	//! Cascade drop (drop all dependents instead of throwing an error if there
-	//! are any)
-	bool cascade = false;
-
-	DropSchemaInformation() : if_exists(false), cascade(false) {
-	}
-};
-
 struct CreateTableFunctionInformation {
 	//! Schema name
 	string schema;
@@ -166,21 +145,6 @@ struct CreateTableFunctionInformation {
 	table_function_final_t final;
 
 	CreateTableFunctionInformation() : schema(DEFAULT_SCHEMA), or_replace(false) {
-	}
-};
-
-struct DropTableFunctionInformation {
-	//! Schema name to drop from
-	string schema;
-	//! Table function name to drop
-	string name;
-	//! Ignore if the entry does not exist instead of failing
-	bool if_exists = false;
-	//! Cascade drop (drop all dependents instead of throwing an error if there
-	//! are any)
-	bool cascade = false;
-
-	DropTableFunctionInformation() : schema(DEFAULT_SCHEMA), if_exists(false), cascade(false) {
 	}
 };
 
@@ -222,18 +186,6 @@ struct CreateIndexInformation {
 	bool if_not_exists = false;
 
 	CreateIndexInformation() : if_not_exists(false) {
-	}
-};
-
-struct DropIndexInformation {
-	//! Schema name
-	string schema;
-	//! Index function name to drop
-	string name;
-	//! Ignore if the entry does not exist instead of failing
-	bool if_exists = false;
-
-	DropIndexInformation() : schema(DEFAULT_SCHEMA), if_exists(false) {
 	}
 };
 
@@ -293,20 +245,6 @@ struct CreateSequenceInformation {
 	CreateSequenceInformation()
 	    : schema(DEFAULT_SCHEMA), name(string()), increment(1), min_value(1),
 	      max_value(std::numeric_limits<int64_t>::max()), start_value(1), cycle(false), temporary(false) {
-	}
-};
-
-struct DropSequenceInformation {
-	//! The schema of the sequence
-	string schema;
-	//! The name of the sequence to drop
-	string name;
-	//! Whether or not to ignore errors on non-existing DROP SEQUENCE statements
-	bool if_exists;
-	//! Whether or not to drop all dependencies of the sequence as well
-	bool cascade;
-
-	DropSequenceInformation() : schema(DEFAULT_SCHEMA), name(string()), if_exists(false), cascade(false) {
 	}
 };
 

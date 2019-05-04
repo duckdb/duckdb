@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/statement/drop_index_statement.hpp
+// parser/statement/drop_statement.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,12 +13,12 @@
 
 namespace duckdb {
 
-class DropIndexStatement : public SQLStatement {
+class DropStatement : public SQLStatement {
 public:
-	DropIndexStatement() : SQLStatement(StatementType::DROP_INDEX), info(make_unique<DropIndexInformation>()){};
+	DropStatement() : SQLStatement(StatementType::DROP), info(make_unique<DropInformation>()){};
 
 	string ToString() const override {
-		return "DROP Index";
+		return "DROP";
 	}
 
 	bool Equals(const SQLStatement *other_) const override {
@@ -27,7 +27,7 @@ public:
 		}
 		throw NotImplementedException("Equality not implemented!");
 	}
-	unique_ptr<DropIndexInformation> info;
+	unique_ptr<DropInformation> info;
 };
 
 } // namespace duckdb

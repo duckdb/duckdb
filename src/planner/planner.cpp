@@ -73,36 +73,32 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		context.db.catalog.CreateSchema(context.ActiveTransaction(), stmt.info.get());
 		break;
 	}
-	case StatementType::DROP_SCHEMA: {
-		auto &stmt = *((DropSchemaStatement *)statement.get());
-		context.db.catalog.DropSchema(context.ActiveTransaction(), stmt.info.get());
-		break;
-	}
 	case StatementType::CREATE_SEQUENCE: {
 		auto &stmt = *((CreateSequenceStatement *)statement.get());
 		context.db.catalog.CreateSequence(context.ActiveTransaction(), stmt.info.get());
 		break;
 	}
-	case StatementType::DROP_SEQUENCE: {
-		auto &stmt = *((DropSequenceStatement *)statement.get());
-		context.db.catalog.DropSequence(context.ActiveTransaction(), stmt.info.get());
-		break;
-	}
-	case StatementType::DROP_VIEW: {
-		auto &stmt = *((DropViewStatement *)statement.get());
-		context.db.catalog.DropView(context.ActiveTransaction(), stmt.info.get());
-		break;
-	}
-	case StatementType::DROP_TABLE: {
-		auto &stmt = *((DropTableStatement *)statement.get());
-		// TODO: create actual plan
-		context.db.catalog.DropTable(context.ActiveTransaction(), stmt.info.get());
-		break;
-	}
-	case StatementType::DROP_INDEX: {
-		auto &stmt = *((DropIndexStatement *)statement.get());
-		// TODO: create actual plan
-		context.db.catalog.DropIndex(context.ActiveTransaction(), stmt.info.get());
+	case StatementType::DROP: {
+		auto &stmt = *((DropStatement *)statement.get());
+		switch(stmt.info->type) {
+		case CatalogType::SEQUENCE:
+			context.db.catalog.DropSequence(context.ActiveTransaction(), stmt.info.get());
+			break;
+		case CatalogType::VIEW:
+			context.db.catalog.DropView(context.ActiveTransaction(), stmt.info.get());
+			break;
+		case CatalogType::TABLE:
+			context.db.catalog.DropTable(context.ActiveTransaction(), stmt.info.get());
+			break;
+		case CatalogType::INDEX:
+			context.db.catalog.DropIndex(context.ActiveTransaction(), stmt.info.get());
+			break;
+		case CatalogType::SCHEMA:
+			context.db.catalog.DropSchema(context.ActiveTransaction(), stmt.info.get());
+			break;
+		default:
+			throw NotImplementedException("Unimplemented catalog type for drop statement");
+		}
 		break;
 	}
 	case StatementType::ALTER: {

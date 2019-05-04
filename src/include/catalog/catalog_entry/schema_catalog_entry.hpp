@@ -37,19 +37,19 @@ public:
 	//! Creates a view with the given name in the schema
 	void CreateView(Transaction &transaction, CreateViewInformation *info);
 	//! Creates a view with the given name in the schema
-	void DropView(Transaction &transaction, DropViewInformation *info);
+	void DropView(Transaction &transaction, DropInformation *info);
 
 	//! Creates a sequence with the given name in the schema
 	void CreateSequence(Transaction &transaction, CreateSequenceInformation *info);
 	//! Creates a sequence with the given name in the schema
-	void DropSequence(Transaction &transaction, DropSequenceInformation *info);
+	void DropSequence(Transaction &transaction, DropInformation *info);
 
 	//! Creates an index with the given name in the schema
 	bool CreateIndex(Transaction &transaction, CreateIndexInformation *info);
 	//! Drops a index with the given name
-	void DropIndex(Transaction &transaction, DropIndexInformation *info);
+	void DropIndex(Transaction &transaction, DropInformation *info);
 	//! Drops a table with the given name
-	void DropTable(Transaction &transaction, DropTableInformation *info);
+	void DropTable(Transaction &transaction, DropInformation *info);
 
 	//! Alters a table
 	void AlterTable(Transaction &transaction, AlterTableInformation *info);
@@ -58,9 +58,6 @@ public:
 	TableFunctionCatalogEntry *GetTableFunction(Transaction &transaction, FunctionExpression *expression);
 	//! Create a table function within the given schema
 	void CreateTableFunction(Transaction &transaction, CreateTableFunctionInformation *info);
-	//! Drops a table function within the given schema
-	void DropTableFunction(Transaction &transaction, DropTableFunctionInformation *info);
-
 	//! Create a scalar function within the given schema
 	void CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInformation *info);
 

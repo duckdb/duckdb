@@ -21,10 +21,10 @@ void Catalog::CreateSchema(Transaction &transaction, CreateSchemaInformation *in
 	}
 }
 
-void Catalog::DropSchema(Transaction &transaction, DropSchemaInformation *info) {
-	if (!schemas.DropEntry(transaction, info->schema, info->cascade)) {
+void Catalog::DropSchema(Transaction &transaction, DropInformation *info) {
+	if (!schemas.DropEntry(transaction, info->name, info->cascade)) {
 		if (!info->if_exists) {
-			throw CatalogException("Schema with name \"%s\" does not exist!", info->schema.c_str());
+			throw CatalogException("Schema with name \"%s\" does not exist!", info->name.c_str());
 		}
 	}
 }
@@ -47,12 +47,12 @@ void Catalog::CreateView(Transaction &transaction, CreateViewInformation *info) 
 	schema->CreateView(transaction, info);
 }
 
-void Catalog::DropView(Transaction &transaction, DropViewInformation *info) {
+void Catalog::DropView(Transaction &transaction, DropInformation *info) {
 	auto schema = GetSchema(transaction, info->schema);
 	schema->DropView(transaction, info);
 }
 
-void Catalog::DropTable(Transaction &transaction, DropTableInformation *info) {
+void Catalog::DropTable(Transaction &transaction, DropInformation *info) {
 	auto schema = GetSchema(transaction, info->schema);
 	schema->DropTable(transaction, info);
 }
@@ -62,7 +62,7 @@ void Catalog::CreateSequence(Transaction &transaction, CreateSequenceInformation
 	schema->CreateSequence(transaction, info);
 }
 
-void Catalog::DropSequence(Transaction &transaction, DropSequenceInformation *info) {
+void Catalog::DropSequence(Transaction &transaction, DropInformation *info) {
 	auto schema = GetSchema(transaction, info->schema);
 	schema->DropSequence(transaction, info);
 }
@@ -112,7 +112,7 @@ ScalarFunctionCatalogEntry *Catalog::GetScalarFunction(Transaction &transaction,
 	return schema->GetScalarFunction(transaction, name);
 }
 
-void Catalog::DropIndex(Transaction &transaction, DropIndexInformation *info) {
+void Catalog::DropIndex(Transaction &transaction, DropInformation *info) {
 	auto schema = GetSchema(transaction, info->schema);
 	schema->DropIndex(transaction, info);
 }

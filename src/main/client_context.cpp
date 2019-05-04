@@ -217,12 +217,8 @@ static string CanExecuteStatementInReadOnlyMode(SQLStatement& stmt) {
 	case StatementType::CREATE_TABLE:
 	case StatementType::CREATE_VIEW:
 	case StatementType::CREATE_SCHEMA:
-	case StatementType::DROP_SCHEMA:
 	case StatementType::CREATE_SEQUENCE:
-	case StatementType::DROP_SEQUENCE:
-	case StatementType::DROP_VIEW:
-	case StatementType::DROP_TABLE:
-	case StatementType::DROP_INDEX:
+	case StatementType::DROP:
 	case StatementType::ALTER:
 	case StatementType::TRANSACTION:
 		return StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!", StatementTypeToString(stmt.type).c_str());
