@@ -1,15 +1,19 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// common/common.hpp
+// common/enums/order_type.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "common/constants.hpp"
-#include "common/helper.hpp"
-#include "common/types.hpp"
+namespace duckdb {
 
-#include <cstring>
+enum class OrderType : uint8_t {
+	INVALID = 0,
+	ASCENDING = 1,
+	DESCENDING = 2
+};
+
+}

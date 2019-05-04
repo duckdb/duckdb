@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/types/data_chunk.hpp"
+#include "common/enums/order_type.hpp"
 
 namespace duckdb {
 

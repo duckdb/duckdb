@@ -11,6 +11,7 @@
 #include "common/common.hpp"
 #include "common/exception.hpp"
 #include "common/printer.hpp"
+#include "common/enums/statement_type.hpp"
 
 namespace duckdb {
 //! SQLStatement is the base class of any type of SQL statement.

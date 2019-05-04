@@ -15,6 +15,7 @@
 #include "parser/constraint.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "planner/expression.hpp"
+#include "common/enums/index_type.hpp"
 
 #include <limits>
 
@@ -235,6 +236,11 @@ struct DropIndexInformation {
 	DropIndexInformation() : schema(DEFAULT_SCHEMA), if_exists(false) {
 	}
 };
+
+//===--------------------------------------------------------------------===//
+// External File Format Types
+//===--------------------------------------------------------------------===//
+enum class ExternalFileFormat : uint8_t { INVALID, CSV };
 
 struct CopyInformation {
 	//! The schema name to copy to/from

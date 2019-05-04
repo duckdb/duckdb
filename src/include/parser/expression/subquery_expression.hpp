@@ -10,6 +10,7 @@
 
 #include "parser/parsed_expression.hpp"
 #include "parser/query_node.hpp"
+#include "common/enums/subquery_type.hpp"
 
 namespace duckdb {
 

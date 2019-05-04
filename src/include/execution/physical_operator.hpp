@@ -10,6 +10,7 @@
 
 #include "catalog/catalog.hpp"
 #include "common/common.hpp"
+#include "common/enums/physical_operator_type.hpp"
 #include "common/types/data_chunk.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "planner/expression.hpp"

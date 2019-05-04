@@ -6,6 +6,7 @@
 #include "common/vector_operations/vector_operations.hpp"
 
 #include <map>
+#include <cmath>
 
 using namespace duckdb;
 using namespace std;

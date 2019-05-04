@@ -1,15 +1,20 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// common/common.hpp
+// common/enums/set_operation_type.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "common/constants.hpp"
-#include "common/helper.hpp"
-#include "common/types.hpp"
+namespace duckdb {
 
-#include <cstring>
+enum class SetOperationType : uint8_t {
+	NONE = 0,
+	UNION = 1,
+	EXCEPT = 2,
+	INTERSECT = 3
+};
+
+}

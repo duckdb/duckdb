@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "common/enums/expression_type.hpp"
 
 #include <algorithm>
 

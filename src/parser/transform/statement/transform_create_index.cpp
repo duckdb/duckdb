@@ -7,6 +7,18 @@ using namespace duckdb;
 using namespace postgres;
 using namespace std;
 
+static IndexType StringToIndexType(const string &str) {
+	string upper_str = StringUtil::Upper(str);
+	if (upper_str == "INVALID") {
+		return IndexType::INVALID;
+	} else if (upper_str == "BTREE") {
+		return IndexType::BTREE;
+	} else {
+		throw ConversionException(StringUtil::Format("No IndexType conversion from string '%s'", upper_str.c_str()));
+	}
+	return IndexType::INVALID;
+}
+
 unique_ptr<CreateIndexStatement> Transformer::TransformCreateIndex(Node *node) {
 	IndexStmt *stmt = reinterpret_cast<IndexStmt *>(node);
 	assert(stmt);

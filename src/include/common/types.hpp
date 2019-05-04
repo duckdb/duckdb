@@ -10,7 +10,6 @@
 
 #include "common/assert.hpp"
 #include "common/constants.hpp"
-#include "common/enums.hpp"
 
 #include <type_traits>
 

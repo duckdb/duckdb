@@ -10,6 +10,7 @@
 
 #include "planner/binder.hpp"
 #include "planner/bound_query_node.hpp"
+#include "common/enums/set_operation_type.hpp"
 
 namespace duckdb {
 

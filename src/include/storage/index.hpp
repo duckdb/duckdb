@@ -10,6 +10,7 @@
 
 #include "common/types/data_chunk.hpp"
 #include "common/types/tuple.hpp"
+#include "common/enums/index_type.hpp"
 #include "parser/parsed_expression.hpp"
 
 namespace duckdb {

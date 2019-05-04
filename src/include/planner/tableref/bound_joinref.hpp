@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "common/enums/join_type.hpp"
 #include "planner/bound_tableref.hpp"
 #include "planner/expression.hpp"
 

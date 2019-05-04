@@ -11,6 +11,7 @@
 #include "common/common.hpp"
 #include "common/serializer.hpp"
 #include "parser/parsed_expression.hpp"
+#include "common/enums/order_type.hpp"
 
 namespace duckdb {
 
