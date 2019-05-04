@@ -8,16 +8,16 @@
 
 #pragma once
 
-#include "parser/parsed_data.hpp"
+#include "parser/parsed_data/drop_info.hpp"
 #include "parser/sql_statement.hpp"
 
 namespace duckdb {
 
 class DropStatement : public SQLStatement {
 public:
-	DropStatement() : SQLStatement(StatementType::DROP), info(make_unique<DropInformation>()){};
+	DropStatement() : SQLStatement(StatementType::DROP), info(make_unique<DropInfo>()){};
 
-	unique_ptr<DropInformation> info;
+	unique_ptr<DropInfo> info;
 };
 
 } // namespace duckdb

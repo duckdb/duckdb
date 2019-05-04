@@ -9,7 +9,7 @@
 #pragma once
 
 #include "execution/physical_operator.hpp"
-#include "parser/parsed_data.hpp"
+#include "parser/parsed_data/create_index_info.hpp"
 
 namespace duckdb {
 
@@ -17,7 +17,7 @@ namespace duckdb {
 class PhysicalCreateIndex : public PhysicalOperator {
 public:
 	PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry &table, vector<column_t> column_ids,
-	                    vector<unique_ptr<Expression>> expressions, unique_ptr<CreateIndexInformation> info)
+	                    vector<unique_ptr<Expression>> expressions, unique_ptr<CreateIndexInfo> info)
 	    : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types), table(table), column_ids(column_ids),
 	      expressions(std::move(expressions)), info(std::move(info)) {
 	}
@@ -31,6 +31,6 @@ public:
 	//! Set of expressions to index by
 	vector<unique_ptr<Expression>> expressions;
 	// Info for index creation
-	unique_ptr<CreateIndexInformation> info;
+	unique_ptr<CreateIndexInfo> info;
 };
 } // namespace duckdb

@@ -15,14 +15,14 @@
 #include <mutex>
 
 namespace duckdb {
-struct CreateSchemaInformation;
-struct DropInformation;
-struct CreateTableInformation;
-struct AlterTableInformation;
-struct CreateTableFunctionInformation;
-struct CreateScalarFunctionInformation;
-struct CreateViewInformation;
-struct CreateSequenceInformation;
+struct CreateSchemaInfo;
+struct DropInfo;
+struct CreateTableInfo;
+struct AlterTableInfo;
+struct CreateTableFunctionInfo;
+struct CreateScalarFunctionInfo;
+struct CreateViewInfo;
+struct CreateSequenceInfo;
 
 class FunctionExpression;
 class SchemaCatalogEntry;
@@ -38,31 +38,31 @@ public:
 	Catalog(StorageManager &storage);
 
 	//! Creates a schema in the catalog.
-	void CreateSchema(Transaction &transaction, CreateSchemaInformation *info);
+	void CreateSchema(Transaction &transaction, CreateSchemaInfo *info);
 	//! Drops a schema in the catalog.
-	void DropSchema(Transaction &transaction, DropInformation *info);
+	void DropSchema(Transaction &transaction, DropInfo *info);
 
 	//! Creates a table in the catalog.
-	void CreateTable(Transaction &transaction, CreateTableInformation *info);
+	void CreateTable(Transaction &transaction, CreateTableInfo *info);
 	//! Drops a table from the catalog.
-	void DropTable(Transaction &transaction, DropInformation *info);
+	void DropTable(Transaction &transaction, DropInfo *info);
 
 	//! Alter an existing table in the catalog.
-	void AlterTable(Transaction &transaction, AlterTableInformation *info);
+	void AlterTable(Transaction &transaction, AlterTableInfo *info);
 	//! Create a table function in the catalog
-	void CreateTableFunction(Transaction &transaction, CreateTableFunctionInformation *info);
+	void CreateTableFunction(Transaction &transaction, CreateTableFunctionInfo *info);
 	//! Create a scalar function in the catalog
-	void CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInformation *info);
+	void CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInfo *info);
 
 	//! Creates a table in the catalog.
-	void CreateView(Transaction &transaction, CreateViewInformation *info);
+	void CreateView(Transaction &transaction, CreateViewInfo *info);
 	//! Drops a view in the catalog.
-	void DropView(Transaction &transaction, DropInformation *info);
+	void DropView(Transaction &transaction, DropInfo *info);
 
 	//! Creates a table in the catalog.
-	void CreateSequence(Transaction &transaction, CreateSequenceInformation *info);
+	void CreateSequence(Transaction &transaction, CreateSequenceInfo *info);
 	//! Drops a view in the catalog.
-	void DropSequence(Transaction &transaction, DropInformation *info);
+	void DropSequence(Transaction &transaction, DropInfo *info);
 
 	//! Returns a pointer to the schema of the specified name. Throws an
 	//! exception if it does not exist.
@@ -81,7 +81,7 @@ public:
 
 	ScalarFunctionCatalogEntry *GetScalarFunction(Transaction &transaction, const string &schema, const string &name);
 	//! Drops an index from the catalog.
-	void DropIndex(Transaction &transaction, DropInformation *info);
+	void DropIndex(Transaction &transaction, DropInfo *info);
 	//! Reference to the storage manager
 	StorageManager &storage;
 

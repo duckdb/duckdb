@@ -61,7 +61,7 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, uniqu
 	return true;
 }
 
-bool CatalogSet::AlterEntry(Transaction &transaction, const string &name, AlterInformation *alter_info) {
+bool CatalogSet::AlterEntry(Transaction &transaction, const string &name, AlterInfo *alter_info) {
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.write_lock);
 

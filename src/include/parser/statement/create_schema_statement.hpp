@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "parser/parsed_data.hpp"
+#include "parser/parsed_data/create_schema_info.hpp"
 #include "parser/sql_statement.hpp"
 
 namespace duckdb {
@@ -16,9 +16,9 @@ namespace duckdb {
 class CreateSchemaStatement : public SQLStatement {
 public:
 	CreateSchemaStatement()
-	    : SQLStatement(StatementType::CREATE_SCHEMA), info(make_unique<CreateSchemaInformation>()){};
+	    : SQLStatement(StatementType::CREATE_SCHEMA), info(make_unique<CreateSchemaInfo>()){};
 
-	unique_ptr<CreateSchemaInformation> info;
+	unique_ptr<CreateSchemaInfo> info;
 };
 
 } // namespace duckdb

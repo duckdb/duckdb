@@ -20,8 +20,8 @@ public:
 	BoundCopyStatement() : BoundSQLStatement(StatementType::COPY) {
 	}
 
-	//! The CopyInformation
-	unique_ptr<CopyInformation> info;
+	//! The CopyInfo
+	unique_ptr<CopyInfo> info;
 	//! The destination table (only for COPY from file -> database)
 	TableCatalogEntry *table;
 	// The bound SQL statement (only for COPY from database -> file)

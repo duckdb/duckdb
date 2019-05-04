@@ -1,4 +1,3 @@
-#include "parser/parsed_data.hpp"
 #include "parser/statement/deallocate_statement.hpp"
 #include "parser/statement/execute_statement.hpp"
 #include "parser/statement/prepare_statement.hpp"

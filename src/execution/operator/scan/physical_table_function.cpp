@@ -1,6 +1,8 @@
 #include "execution/operator/scan/physical_table_function.hpp"
 
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "catalog/catalog_entry/table_function_catalog_entry.hpp"
+
 #include "execution/expression_executor.hpp"
 #include "main/client_context.hpp"
 #include "planner/expression/bound_function_expression.hpp"

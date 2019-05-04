@@ -11,6 +11,9 @@
 #include "function/function.hpp"
 #include "main/client_context.hpp"
 #include "main/database.hpp"
+#include "parser/parsed_data/create_schema_info.hpp"
+#include "parser/parsed_data/create_table_info.hpp"
+#include "parser/parsed_data/create_view_info.hpp"
 #include "transaction/transaction_manager.hpp"
 
 constexpr const int64_t STORAGE_VERSION = 1;
@@ -41,7 +44,7 @@ void StorageManager::Initialize() {
 	auto transaction = database.transaction_manager.StartTransaction();
 
 	// create the default schema
-	CreateSchemaInformation info;
+	CreateSchemaInfo info;
 	info.schema = DEFAULT_SCHEMA;
 	database.catalog.CreateSchema(*transaction, &info);
 
@@ -123,7 +126,7 @@ int StorageManager::LoadFromStorage() {
 	string schema_name;
 	while (getline(schema_file, schema_name)) {
 		// create the schema in the catalog
-		CreateSchemaInformation info;
+		CreateSchemaInfo info;
 		info.schema = schema_name;
 		info.if_not_exists = true;
 		database.catalog.CreateSchema(context.ActiveTransaction(), &info);
@@ -145,7 +148,7 @@ int StorageManager::LoadFromStorage() {
 			FstreamUtil::OpenFile(table_meta_name, table_file, ios_base::binary | ios_base::in);
 			auto result = FstreamUtil::ReadBinary(table_file);
 
-			// deserialize the CreateTableInformation
+			// deserialize the CreateTableInfo
 			auto table_file_size = FstreamUtil::GetFileSize(table_file);
 			Deserializer source((uint8_t *)result.get(), table_file_size);
 			auto info = TableCatalogEntry::Deserialize(source);
@@ -189,7 +192,7 @@ int StorageManager::LoadFromStorage() {
 			fstream view_file;
 			FstreamUtil::OpenFile(view_file_path, view_file, ios_base::binary | ios_base::in);
 			auto result = FstreamUtil::ReadBinary(view_file);
-			// deserialize the CreateViewInformation
+			// deserialize the CreateViewInfo
 			auto view_file_size = FstreamUtil::GetFileSize(view_file);
 			Deserializer source((uint8_t *)result.get(), view_file_size);
 			auto info = ViewCatalogEntry::Deserialize(source);

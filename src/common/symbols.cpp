@@ -144,7 +144,7 @@ template class std::unique_ptr<Rule>;
 template class std::unique_ptr<LogicalFilter>;
 template class std::unique_ptr<LogicalJoin>;
 template class std::unique_ptr<LogicalComparisonJoin>;
-template class std::unique_ptr<CreateViewInformation>;
+template class std::unique_ptr<CreateViewInfo>;
 template class std::unique_ptr<FilterInfo>;
 template class std::unique_ptr<JoinOrderOptimizer::JoinNode>;
 template class std::unique_ptr<Relation>;

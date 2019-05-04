@@ -9,6 +9,10 @@
 #include "main/client_context.hpp"
 #include "main/connection.hpp"
 #include "main/database.hpp"
+#include "parser/parsed_data/drop_info.hpp"
+#include "parser/parsed_data/create_schema_info.hpp"
+#include "parser/parsed_data/create_table_info.hpp"
+#include "parser/parsed_data/create_view_info.hpp"
 #include "planner/binder.hpp"
 #include "transaction/transaction.hpp"
 #include "transaction/transaction_manager.hpp"
@@ -197,7 +201,7 @@ void WriteAheadLog::WriteDropTable(TableCatalogEntry *entry) {
 }
 
 bool ReplayDropTable(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	DropInformation info;
+	DropInfo info;
 
 	info.type = CatalogType::TABLE;
 	info.schema = source.Read<string>();
@@ -222,7 +226,7 @@ void WriteAheadLog::WriteCreateSchema(SchemaCatalogEntry *entry) {
 }
 
 bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	CreateSchemaInformation info;
+	CreateSchemaInfo info;
 	info.schema = source.Read<string>();
 
 	// try {
@@ -261,7 +265,7 @@ void WriteAheadLog::WriteDropView(ViewCatalogEntry *entry) {
 }
 
 bool ReplayDropView(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	DropInformation info;
+	DropInfo info;
 	info.type = CatalogType::VIEW;
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
@@ -280,7 +284,7 @@ void WriteAheadLog::WriteDropSchema(SchemaCatalogEntry *entry) {
 }
 
 bool ReplayDropSchema(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	DropInformation info;
+	DropInfo info;
 
 	info.type = CatalogType::SCHEMA;
 	info.name = source.Read<string>();

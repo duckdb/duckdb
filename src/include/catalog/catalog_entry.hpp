@@ -13,7 +13,7 @@
 #include "common/enums/catalog_type.hpp"
 
 namespace duckdb {
-struct AlterInformation;
+struct AlterInfo;
 class Catalog;
 class CatalogSet;
 class Transaction;
@@ -27,7 +27,7 @@ public:
 
 	virtual ~CatalogEntry();
 
-	virtual unique_ptr<CatalogEntry> AlterEntry(AlterInformation *info) {
+	virtual unique_ptr<CatalogEntry> AlterEntry(AlterInfo *info) {
 		throw CatalogException("Unsupported alter type for catalog entry!");
 	}
 

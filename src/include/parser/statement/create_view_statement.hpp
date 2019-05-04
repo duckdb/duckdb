@@ -8,16 +8,16 @@
 
 #pragma once
 
-#include "parser/parsed_data.hpp"
+#include "parser/parsed_data/create_view_info.hpp"
 #include "parser/sql_statement.hpp"
 
 namespace duckdb {
 
 class CreateViewStatement : public SQLStatement {
 public:
-	CreateViewStatement() : SQLStatement(StatementType::CREATE_VIEW), info(make_unique<CreateViewInformation>()){};
+	CreateViewStatement() : SQLStatement(StatementType::CREATE_VIEW), info(make_unique<CreateViewInfo>()){};
 
-	unique_ptr<CreateViewInformation> info;
+	unique_ptr<CreateViewInfo> info;
 };
 
 } // namespace duckdb

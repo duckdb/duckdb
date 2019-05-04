@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "parser/parsed_data.hpp"
+#include "parser/parsed_data/create_sequence_info.hpp"
 #include "parser/sql_statement.hpp"
 
 namespace duckdb {
@@ -16,9 +16,9 @@ namespace duckdb {
 class CreateSequenceStatement : public SQLStatement {
 public:
 	CreateSequenceStatement()
-	    : SQLStatement(StatementType::CREATE_SEQUENCE), info(make_unique<CreateSequenceInformation>()){};
+	    : SQLStatement(StatementType::CREATE_SEQUENCE), info(make_unique<CreateSequenceInfo>()){};
 
-	unique_ptr<CreateSequenceInformation> info;
+	unique_ptr<CreateSequenceInfo> info;
 };
 
 } // namespace duckdb

@@ -19,12 +19,12 @@ class Catalog;
 class Constraint;
 class SchemaCatalogEntry;
 
-struct CreateTableFunctionInformation;
+struct CreateTableFunctionInfo;
 
 //! A table function in the catalog
 class TableFunctionCatalogEntry : public CatalogEntry {
 public:
-	TableFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableFunctionInformation *info);
+	TableFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableFunctionInfo *info);
 
 	//! The schema the table belongs to
 	SchemaCatalogEntry *schema;
