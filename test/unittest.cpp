@@ -5,16 +5,22 @@ using namespace duckdb;
 
 int main(int argc, char *argv[]) {
 	// delete the testing directory if it exists
-	if (DirectoryExists(TESTING_DIRECTORY_NAME)) {
-		RemoveDirectory(TESTING_DIRECTORY_NAME);
+	try {
+		if (FileSystem::DirectoryExists(TESTING_DIRECTORY_NAME)) {
+			FileSystem::RemoveDirectory(TESTING_DIRECTORY_NAME);
+		}
+		// create the empty testing directory
+		FileSystem::CreateDirectory(TESTING_DIRECTORY_NAME);
+	} catch (Exception ex) {
+		fprintf(stderr, "Failed to create testing directory \"%s\": %s", TESTING_DIRECTORY_NAME,
+		        ex.GetMessage().c_str());
+		return 1;
 	}
-	// create the empty testing directory
-	CreateDirectory(TESTING_DIRECTORY_NAME);
 
 	int result = Catch::Session().run(argc, argv);
 
 	// delete the testing directory after running the tests
-	RemoveDirectory(TESTING_DIRECTORY_NAME);
+	FileSystem::RemoveDirectory(TESTING_DIRECTORY_NAME);
 
 	return result;
 }

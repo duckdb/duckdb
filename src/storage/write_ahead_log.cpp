@@ -357,5 +357,5 @@ void WriteAheadLog::Flush() {
 	Write<uint32_t>(0);
 	// flushes all changes made to the WAL to disk
 	fflush(wal_file);
-	FileSync(wal_file);
+	FileSystem::FileSync(wal_file);
 }
