@@ -153,7 +153,6 @@ string ExpressionTypeToString(ExpressionType type) {
 	case ExpressionType::BOUND_FUNCTION:
 		return "BOUND_FUNCTION";
 	case ExpressionType::INVALID:
-		assert(0);
 		return "INVALID";
 	}
 }

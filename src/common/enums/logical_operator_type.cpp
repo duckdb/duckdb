@@ -72,7 +72,6 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 	case LogicalOperatorType::EXECUTE:
 		return "EXECUTE";
 	case LogicalOperatorType::INVALID:
-		assert(0);
 		return "INVALID";
 	}
 }

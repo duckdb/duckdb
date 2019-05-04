@@ -23,7 +23,6 @@ string JoinTypeToString(JoinType type) {
 	case JoinType::MARK:
 		return "MARK";
 	case JoinType::INVALID:
-		assert(0);
 		return "INVALID";
 	}
 }

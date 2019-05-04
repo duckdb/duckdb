@@ -55,7 +55,6 @@ string StatementTypeToString(StatementType type) {
 	case StatementType::DROP_SEQUENCE:
 		return "DROP_SEQUENCE";
 	default:
-		assert(0);
 		return "INVALID";
 	}
 }
