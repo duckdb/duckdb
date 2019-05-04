@@ -20,7 +20,7 @@ public:
 	    : PhysicalOperator(PhysicalOperatorType::CREATE, op.types), schema(schema), info(move(info)) {
 	}
 
-	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	//! Schema to insert to
 	SchemaCatalogEntry *schema;

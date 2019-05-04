@@ -17,7 +17,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique
     : PhysicalAggregate(types, move(expressions), move(groups), type) {
 }
 
-void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalHashAggregateOperatorState *>(state_);
 	do {
 		if (children.size() > 0) {

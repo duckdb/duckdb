@@ -3,7 +3,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalChunkScan::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalChunkScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = (PhysicalChunkScanState *)state_;
 	assert(collection);
 	if (collection->count == 0) {

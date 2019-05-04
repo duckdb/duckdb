@@ -22,7 +22,7 @@ public:
 	      expressions(std::move(expressions)), info(std::move(info)) {
 	}
 
-	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	//! The table to create the index for
 	TableCatalogEntry &table;

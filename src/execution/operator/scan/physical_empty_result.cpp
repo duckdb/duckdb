@@ -3,6 +3,6 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalEmptyResult::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalEmptyResult::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	state->finished = true;
 }

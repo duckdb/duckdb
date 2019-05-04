@@ -10,7 +10,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalTableFunction::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalTableFunction::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = (PhysicalTableFunctionOperatorState *)state_;
 	if (!state->initialized) {
 		// run initialization code

@@ -11,7 +11,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	if (column_ids.size() == 0) {
 		throw NotImplementedException("CREATE INDEX does not refer to any columns in the base table!");
 	}

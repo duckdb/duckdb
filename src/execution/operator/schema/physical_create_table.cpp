@@ -10,7 +10,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalCreateTable::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalCreateTable::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	int64_t inserted_count = 0;
 	schema->CreateTable(context.ActiveTransaction(), info.get());
 	if (children.size() > 0) {

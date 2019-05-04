@@ -24,7 +24,7 @@ public:
 	    : PhysicalOperator(PhysicalOperatorType::COPY, op.types), table(nullptr), info(move(info)) {
 	}
 
-	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	//! The table to copy into (only for COPY FROM)
 	TableCatalogEntry *table;

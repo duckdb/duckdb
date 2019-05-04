@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalPruneColumns::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalPruneColumns::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOperatorState *>(state_);
 
 	children[0]->GetChunk(context, state->child_chunk, state->child_state.get());

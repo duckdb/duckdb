@@ -76,7 +76,7 @@ public:
 	}
 	//! Retrieves a chunk from this operator and stores it in the chunk
 	//! variable.
-	virtual void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) = 0;
+	virtual void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) = 0;
 
 	void GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state);
 

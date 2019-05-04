@@ -21,7 +21,7 @@ public:
 	    : PhysicalOperator(PhysicalOperatorType::FILTER, op.types), expressions(std::move(select_list)) {
 	}
 
-	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	string ExtraRenderInformation() const override;
 

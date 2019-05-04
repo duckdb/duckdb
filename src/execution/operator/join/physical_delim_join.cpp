@@ -26,7 +26,7 @@ PhysicalDelimJoin::PhysicalDelimJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 	join->children[0] = move(cached_chunk_scan);
 }
 
-void PhysicalDelimJoin::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalDelimJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalDelimJoinState *>(state_);
 	assert(distinct);
 	if (!state->join_state) {
@@ -42,7 +42,7 @@ void PhysicalDelimJoin::_GetChunk(ClientContext &context, DataChunk &chunk, Phys
 		auto distinct_state = distinct->GetOperatorState();
 		do {
 			delim_chunk.Reset();
-			distinct->_GetChunk(context, delim_chunk, distinct_state.get());
+			distinct->GetChunkInternal(context, delim_chunk, distinct_state.get());
 			delim_data.Append(delim_chunk);
 		} while (delim_chunk.size() != 0);
 		// create the state of the underlying join

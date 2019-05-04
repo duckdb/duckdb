@@ -83,7 +83,7 @@ static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bo
 	}
 }
 
-void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalNestedLoopJoinOperatorState *>(state_);
 
 	// first we fully materialize the right child, if we haven't done that yet

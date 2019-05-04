@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalProjection::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalProjection::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	assert(select_list.size() > 0);
 	assert(children.size() == 1);
 	// get the next chunk from the child

@@ -72,7 +72,7 @@ void PhysicalCopy::PushValue(string &line, DataChunk &insert_chunk, int64_t star
 	column++;
 }
 
-void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	int64_t nr_elements = 0;
 	int64_t total = 0;
 
