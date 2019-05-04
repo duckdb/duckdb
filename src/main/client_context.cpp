@@ -317,7 +317,11 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 			open_result = (StreamQueryResult *)current_result.get();
 		} else {
 			// finalize the query if it is not a stream result
-			FinalizeQuery(true);
+			string error = FinalizeQuery(true);
+			if (!error.empty()) {
+				// failure in committing transaction
+				return make_unique<MaterializedQueryResult>(error);
+			}
 		}
 		// now append the result to the list of results
 		if (!last_result) {
