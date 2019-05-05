@@ -1,6 +1,5 @@
 #include "optimizer/join_order_optimizer.hpp"
 
-#include "parser/expression/comparison_expression.hpp"
 #include "planner/expression/list.hpp"
 #include "planner/expression_iterator.hpp"
 #include "planner/operator/list.hpp"
@@ -512,7 +511,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				cond.comparison = condition->type;
 				if (invert) {
 					// reverse comparison expression if we reverse the order of the children
-					cond.comparison = ComparisonExpression::FlipComparisionExpression(cond.comparison);
+					cond.comparison = FlipComparisionExpression(cond.comparison);
 				}
 				join->conditions.push_back(move(cond));
 			}
@@ -575,7 +574,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				cond.comparison = comparison.type;
 				if (invert) {
 					// reverse comparison expression if we reverse the order of the children
-					cond.comparison = ComparisonExpression::FlipComparisionExpression(comparison.type);
+					cond.comparison = FlipComparisionExpression(comparison.type);
 				}
 				// now find the join to push it into
 				auto node = result_operator.get();

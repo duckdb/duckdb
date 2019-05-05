@@ -5,13 +5,23 @@
 #include "parser/expression/function_expression.hpp"
 #include "storage/storage_manager.hpp"
 
+#include "parser/parsed_data/alter_table_info.hpp"
+#include "parser/parsed_data/create_index_info.hpp"
+#include "parser/parsed_data/create_sequence_info.hpp"
+#include "parser/parsed_data/create_scalar_function_info.hpp"
+#include "parser/parsed_data/create_schema_info.hpp"
+#include "parser/parsed_data/create_table_function_info.hpp"
+#include "parser/parsed_data/create_table_info.hpp"
+#include "parser/parsed_data/create_view_info.hpp"
+#include "parser/parsed_data/drop_info.hpp"
+
 using namespace duckdb;
 using namespace std;
 
 Catalog::Catalog(StorageManager &storage) : storage(storage), schemas(*this), dependency_manager(*this) {
 }
 
-void Catalog::CreateSchema(Transaction &transaction, CreateSchemaInformation *info) {
+void Catalog::CreateSchema(Transaction &transaction, CreateSchemaInfo *info) {
 	unordered_set<CatalogEntry *> dependencies;
 	auto entry = make_unique_base<CatalogEntry, SchemaCatalogEntry>(this, info->schema);
 	if (!schemas.CreateEntry(transaction, info->schema, move(entry), dependencies)) {
@@ -21,10 +31,10 @@ void Catalog::CreateSchema(Transaction &transaction, CreateSchemaInformation *in
 	}
 }
 
-void Catalog::DropSchema(Transaction &transaction, DropSchemaInformation *info) {
-	if (!schemas.DropEntry(transaction, info->schema, info->cascade)) {
+void Catalog::DropSchema(Transaction &transaction, DropInfo *info) {
+	if (!schemas.DropEntry(transaction, info->name, info->cascade)) {
 		if (!info->if_exists) {
-			throw CatalogException("Schema with name \"%s\" does not exist!", info->schema.c_str());
+			throw CatalogException("Schema with name \"%s\" does not exist!", info->name.c_str());
 		}
 	}
 }
@@ -37,37 +47,37 @@ SchemaCatalogEntry *Catalog::GetSchema(Transaction &transaction, const string &s
 	return (SchemaCatalogEntry *)entry;
 }
 
-void Catalog::CreateTable(Transaction &transaction, CreateTableInformation *info) {
+void Catalog::CreateTable(Transaction &transaction, CreateTableInfo *info) {
 	auto schema = GetSchema(transaction, info->schema);
 	schema->CreateTable(transaction, info);
 }
 
-void Catalog::CreateView(Transaction &transaction, CreateViewInformation *info) {
+void Catalog::CreateView(Transaction &transaction, CreateViewInfo *info) {
 	auto schema = GetSchema(transaction, info->schema);
 	schema->CreateView(transaction, info);
 }
 
-void Catalog::DropView(Transaction &transaction, DropViewInformation *info) {
+void Catalog::DropView(Transaction &transaction, DropInfo *info) {
 	auto schema = GetSchema(transaction, info->schema);
 	schema->DropView(transaction, info);
 }
 
-void Catalog::DropTable(Transaction &transaction, DropTableInformation *info) {
+void Catalog::DropTable(Transaction &transaction, DropInfo *info) {
 	auto schema = GetSchema(transaction, info->schema);
 	schema->DropTable(transaction, info);
 }
 
-void Catalog::CreateSequence(Transaction &transaction, CreateSequenceInformation *info) {
+void Catalog::CreateSequence(Transaction &transaction, CreateSequenceInfo *info) {
 	auto schema = GetSchema(transaction, info->schema);
 	schema->CreateSequence(transaction, info);
 }
 
-void Catalog::DropSequence(Transaction &transaction, DropSequenceInformation *info) {
+void Catalog::DropSequence(Transaction &transaction, DropInfo *info) {
 	auto schema = GetSchema(transaction, info->schema);
 	schema->DropSequence(transaction, info);
 }
 
-void Catalog::AlterTable(Transaction &transaction, AlterTableInformation *info) {
+void Catalog::AlterTable(Transaction &transaction, AlterTableInfo *info) {
 	auto schema = GetSchema(transaction, info->schema);
 	schema->AlterTable(transaction, info);
 }
@@ -91,7 +101,7 @@ SequenceCatalogEntry *Catalog::GetSequence(Transaction &transaction, const strin
 	return schema->GetSequence(transaction, sequence);
 }
 
-void Catalog::CreateTableFunction(Transaction &transaction, CreateTableFunctionInformation *info) {
+void Catalog::CreateTableFunction(Transaction &transaction, CreateTableFunctionInfo *info) {
 	auto schema = GetSchema(transaction, info->schema);
 	schema->CreateTableFunction(transaction, info);
 }
@@ -101,7 +111,7 @@ TableFunctionCatalogEntry *Catalog::GetTableFunction(Transaction &transaction, F
 	return schema->GetTableFunction(transaction, expression);
 }
 
-void Catalog::CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInformation *info) {
+void Catalog::CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInfo *info) {
 	auto schema = GetSchema(transaction, info->schema);
 	schema->CreateScalarFunction(transaction, info);
 }
@@ -112,7 +122,7 @@ ScalarFunctionCatalogEntry *Catalog::GetScalarFunction(Transaction &transaction,
 	return schema->GetScalarFunction(transaction, name);
 }
 
-void Catalog::DropIndex(Transaction &transaction, DropIndexInformation *info) {
+void Catalog::DropIndex(Transaction &transaction, DropInfo *info) {
 	auto schema = GetSchema(transaction, info->schema);
 	schema->DropIndex(transaction, info);
 }

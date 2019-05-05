@@ -2,7 +2,6 @@
 
 #include "common/exception.hpp"
 #include "common/value_operations/value_operations.hpp"
-#include "parser/expression/comparison_expression.hpp"
 #include "planner/expression/bound_comparison_expression.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
 #include "planner/expression/bound_operator_expression.hpp"
@@ -57,7 +56,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 			outer_constant->value = inner_constant->value - outer_constant->value;
 			// in this case, we should also flip the comparison
 			// e.g. if we have [4 - x < 2] then we should have [x > 2]
-			comparison->type = ComparisonExpression::FlipComparisionExpression(comparison->type);
+			comparison->type = FlipComparisionExpression(comparison->type);
 		}
 	} else {
 		assert(arithmetic->type == ExpressionType::OPERATOR_MULTIPLY);
@@ -79,7 +78,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 		}
 		if (inner_constant->value < 0) {
 			// multiply by negative value, need to flip expression
-			comparison->type = ComparisonExpression::FlipComparisionExpression(comparison->type);
+			comparison->type = FlipComparisionExpression(comparison->type);
 		}
 		// else divide the RHS by the LHS
 		outer_constant->value = outer_constant->value / inner_constant->value;

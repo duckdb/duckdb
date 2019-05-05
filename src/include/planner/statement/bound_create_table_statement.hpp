@@ -20,7 +20,7 @@ public:
 	BoundCreateTableStatement() : BoundSQLStatement(StatementType::CREATE_TABLE) {
 	}
 
-	unique_ptr<CreateTableInformation> info;
+	unique_ptr<CreateTableInfo> info;
 	//! CREATE TABLE from QUERY
 	unique_ptr<BoundSelectStatement> query;
 	//! The schema to create the table in

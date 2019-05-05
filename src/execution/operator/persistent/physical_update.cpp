@@ -10,7 +10,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalUpdate::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	vector<TypeId> update_types;
 	for (auto &expr : expressions) {
 		update_types.push_back(expr->return_type);

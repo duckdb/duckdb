@@ -42,7 +42,7 @@ void PhysicalOperator::GetChunk(ClientContext &context, DataChunk &chunk, Physic
 	}
 
 	context.profiler.StartOperator(this);
-	_GetChunk(context, chunk, state);
+	GetChunkInternal(context, chunk, state);
 	context.profiler.EndOperator(chunk);
 
 	chunk.Verify();

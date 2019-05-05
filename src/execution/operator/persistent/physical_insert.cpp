@@ -10,7 +10,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	int64_t insert_count = 0;
 	if (children.size() > 0) {
 		// insert from SELECT statement

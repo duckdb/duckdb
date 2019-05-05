@@ -3,13 +3,14 @@
 #include "catalog/catalog.hpp"
 #include "function/scalar_function/list.hpp"
 #include "function/table_function/list.hpp"
-#include "parser/parsed_data.hpp"
+#include "parser/parsed_data/create_table_function_info.hpp"
+#include "parser/parsed_data/create_scalar_function_info.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 template <class T> static void AddTableFunction(Transaction &transaction, Catalog &catalog) {
-	CreateTableFunctionInformation info;
+	CreateTableFunctionInfo info;
 
 	info.schema = DEFAULT_SCHEMA;
 	info.name = T::GetName();
@@ -23,7 +24,7 @@ template <class T> static void AddTableFunction(Transaction &transaction, Catalo
 }
 
 template <class T> static void AddScalarFunction(Transaction &transaction, Catalog &catalog) {
-	CreateScalarFunctionInformation info;
+	CreateScalarFunctionInfo info;
 
 	info.schema = DEFAULT_SCHEMA;
 	info.name = T::GetName();

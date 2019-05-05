@@ -15,6 +15,7 @@
 #include "transaction/transaction_context.hpp"
 
 namespace duckdb {
+class Catalog;
 class DuckDB;
 
 //! The ClientContext holds information relevant to the current client session
@@ -61,6 +62,7 @@ public:
 
 	ExecutionContext execution_context;
 
+	Catalog &catalog;
 	//	unique_ptr<CatalogSet> temporary_tables;
 	unique_ptr<CatalogSet> prepared_statements;
 

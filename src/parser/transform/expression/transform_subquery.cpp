@@ -1,4 +1,3 @@
-#include "parser/expression/comparison_expression.hpp"
 #include "parser/expression/operator_expression.hpp"
 #include "parser/expression/subquery_expression.hpp"
 #include "parser/transformer.hpp"
@@ -49,7 +48,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(SubLink *root) {
 			// e.g. [= ALL()] is equivalent to [NOT(<> ANY())]
 			// first invert the comparison type
 			subquery_expr->comparison_type =
-			    ComparisonExpression::NegateComparisionExpression(subquery_expr->comparison_type);
+			    NegateComparisionExpression(subquery_expr->comparison_type);
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(subquery_expr));
 		}
 		break;

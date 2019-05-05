@@ -12,7 +12,7 @@ PhysicalUnion::PhysicalUnion(LogicalOperator &op, unique_ptr<PhysicalOperator> t
 }
 
 // first exhaust top, then exhaust bottom. state to remember which.
-void PhysicalUnion::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalUnion::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalUnionOperatorState *>(state_);
 	if (!state->top_done) {
 		children[0]->GetChunk(context, chunk, state->top_state.get());

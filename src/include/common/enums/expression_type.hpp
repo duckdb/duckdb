@@ -214,4 +214,9 @@ enum class ExpressionClass : uint8_t {
 string ExpressionTypeToString(ExpressionType type);
 string ExpressionTypeToOperator(ExpressionType type);
 
+//! Negate a comparison expression, turning e.g. = into !=, or < into >=
+ExpressionType NegateComparisionExpression(ExpressionType type);
+//! Flip a comparison expression, turning e.g. < into >, or = into =
+ExpressionType FlipComparisionExpression(ExpressionType type);
+
 }

@@ -9,17 +9,28 @@
 #pragma once
 
 #include "catalog/catalog_entry.hpp"
-#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "catalog/catalog_entry/sequence_catalog_entry.hpp"
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "catalog/catalog_set.hpp"
-#include "transaction/transaction.hpp"
 
 namespace duckdb {
 class FunctionExpression;
-class Catalog;
-class Constraint;
+
+class TableCatalogEntry;
+class TableFunctionCatalogEntry;
+class ScalarFunctionCatalogEntry;
+class SequenceCatalogEntry;
+
+struct AlterTableInfo;
+struct CreateIndexInfo;
+struct CreateTableFunctionInfo;
+struct CreateScalarFunctionInfo;
+struct CreateViewInfo;
+struct CreateTableInfo;
+struct CreateSequenceInfo;
+struct CreateTableFunctionInfo;
+struct CreateScalarFunctionInfo;
+struct DropInfo;
+
+class Transaction;
 
 //! A schema in the catalog
 class SchemaCatalogEntry : public CatalogEntry {
@@ -32,37 +43,34 @@ public:
 	CatalogEntry *GetTableOrView(Transaction &transaction, const string &table);
 
 	//! Creates a table with the given name in the schema
-	void CreateTable(Transaction &transaction, CreateTableInformation *info);
+	void CreateTable(Transaction &transaction, CreateTableInfo *info);
 
 	//! Creates a view with the given name in the schema
-	void CreateView(Transaction &transaction, CreateViewInformation *info);
+	void CreateView(Transaction &transaction, CreateViewInfo *info);
 	//! Creates a view with the given name in the schema
-	void DropView(Transaction &transaction, DropViewInformation *info);
+	void DropView(Transaction &transaction, DropInfo *info);
 
 	//! Creates a sequence with the given name in the schema
-	void CreateSequence(Transaction &transaction, CreateSequenceInformation *info);
+	void CreateSequence(Transaction &transaction, CreateSequenceInfo *info);
 	//! Creates a sequence with the given name in the schema
-	void DropSequence(Transaction &transaction, DropSequenceInformation *info);
+	void DropSequence(Transaction &transaction, DropInfo *info);
 
 	//! Creates an index with the given name in the schema
-	bool CreateIndex(Transaction &transaction, CreateIndexInformation *info);
+	bool CreateIndex(Transaction &transaction, CreateIndexInfo *info);
 	//! Drops a index with the given name
-	void DropIndex(Transaction &transaction, DropIndexInformation *info);
+	void DropIndex(Transaction &transaction, DropInfo *info);
 	//! Drops a table with the given name
-	void DropTable(Transaction &transaction, DropTableInformation *info);
+	void DropTable(Transaction &transaction, DropInfo *info);
 
 	//! Alters a table
-	void AlterTable(Transaction &transaction, AlterTableInformation *info);
+	void AlterTable(Transaction &transaction, AlterTableInfo *info);
 
 	//! Gets a table function matching the given function expression
 	TableFunctionCatalogEntry *GetTableFunction(Transaction &transaction, FunctionExpression *expression);
 	//! Create a table function within the given schema
-	void CreateTableFunction(Transaction &transaction, CreateTableFunctionInformation *info);
-	//! Drops a table function within the given schema
-	void DropTableFunction(Transaction &transaction, DropTableFunctionInformation *info);
-
+	void CreateTableFunction(Transaction &transaction, CreateTableFunctionInfo *info);
 	//! Create a scalar function within the given schema
-	void CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInformation *info);
+	void CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInfo *info);
 
 	//! Gets a scalar function with the given name
 	ScalarFunctionCatalogEntry *GetScalarFunction(Transaction &transaction, const string &name);

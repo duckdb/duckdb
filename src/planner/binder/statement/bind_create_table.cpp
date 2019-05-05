@@ -48,7 +48,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CreateTableStatement &stmt) {
 		}
 	}
 	// bind the schema
-	result->schema = context.db.catalog.GetSchema(context.ActiveTransaction(), stmt.info->schema);
+	result->schema = context.catalog.GetSchema(context.ActiveTransaction(), stmt.info->schema);
 	result->info = move(stmt.info);
 	return move(result);
 }

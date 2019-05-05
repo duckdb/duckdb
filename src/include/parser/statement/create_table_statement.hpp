@@ -9,27 +9,17 @@
 #pragma once
 
 #include "parser/column_definition.hpp"
-#include "parser/parsed_data.hpp"
+#include "parser/parsed_data/create_table_info.hpp"
 #include "parser/sql_statement.hpp"
+#include "parser/statement/select_statement.hpp"
 
 namespace duckdb {
 
 class CreateTableStatement : public SQLStatement {
 public:
-	CreateTableStatement() : SQLStatement(StatementType::CREATE_TABLE), info(make_unique<CreateTableInformation>()){};
+	CreateTableStatement() : SQLStatement(StatementType::CREATE_TABLE), info(make_unique<CreateTableInfo>()){};
 
-	string ToString() const override {
-		return "CREATE TABLE";
-	}
-
-	bool Equals(const SQLStatement *other_) const override {
-		if (!SQLStatement::Equals(other_)) {
-			return false;
-		}
-		throw NotImplementedException("Equality not implemented!");
-	}
-
-	unique_ptr<CreateTableInformation> info;
+	unique_ptr<CreateTableInfo> info;
 	//! CREATE TABLE from QUERY
 	unique_ptr<SelectStatement> query;
 };

@@ -5,6 +5,7 @@
 #include "planner/binder.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/query_node/bound_set_operation_node.hpp"
+#include "parser/query_node/select_node.hpp"
 
 using namespace duckdb;
 using namespace std;

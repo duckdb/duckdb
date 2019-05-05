@@ -10,29 +10,13 @@
 
 #include "common/common.hpp"
 #include "common/exception.hpp"
+#include "common/enums/catalog_type.hpp"
 
 namespace duckdb {
-struct AlterInformation;
+struct AlterInfo;
 class Catalog;
 class CatalogSet;
 class Transaction;
-
-//===--------------------------------------------------------------------===//
-// Catalog Types
-//===--------------------------------------------------------------------===//
-enum class CatalogType : uint8_t {
-	INVALID = 0,
-	TABLE = 1,
-	SCHEMA = 2,
-	TABLE_FUNCTION = 3,
-	SCALAR_FUNCTION = 4,
-	VIEW = 5,
-	INDEX = 6,
-	UPDATED_ENTRY = 10,
-	DELETED_ENTRY = 11,
-	PREPARED_STATEMENT = 12,
-	SEQUENCE = 13
-};
 
 //! Abstract base class of an entry in the catalog
 class CatalogEntry {
@@ -43,7 +27,7 @@ public:
 
 	virtual ~CatalogEntry();
 
-	virtual unique_ptr<CatalogEntry> AlterEntry(AlterInformation *info) {
+	virtual unique_ptr<CatalogEntry> AlterEntry(AlterInfo *info) {
 		throw CatalogException("Unsupported alter type for catalog entry!");
 	}
 

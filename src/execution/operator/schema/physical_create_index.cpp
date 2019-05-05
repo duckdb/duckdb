@@ -1,6 +1,8 @@
 #include "execution/operator/schema/physical_create_index.hpp"
 
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
+
 #include "execution/expression_executor.hpp"
 #include "execution/order_index.hpp"
 #include "main/client_context.hpp"
@@ -9,7 +11,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	if (column_ids.size() == 0) {
 		throw NotImplementedException("CREATE INDEX does not refer to any columns in the base table!");
 	}

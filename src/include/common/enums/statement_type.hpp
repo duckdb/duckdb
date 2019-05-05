@@ -31,6 +31,7 @@ enum class StatementType : uint8_t {
 	VARIABLE_SET, // variable set statement type
 	CREATE_FUNC,  // create func statement type
 	EXPLAIN,      // explain statement type
+	DROP,         // DROP statement type
 
 	// -----------------------------
 	// Create Types
@@ -40,15 +41,6 @@ enum class StatementType : uint8_t {
 	CREATE_INDEX,    // create index statement type
 	CREATE_VIEW,     // create view statement type
 	CREATE_SEQUENCE, // create sequence statement type
-
-	// -----------------------------
-	// Drop Types
-	// -----------------------------
-	DROP_TABLE,   // drop table statement type
-	DROP_SCHEMA,  // drop table statement type
-	DROP_INDEX,   // drop index statement type
-	DROP_VIEW,    // drop view statement type
-	DROP_SEQUENCE // drop sequence statement type
 };
 
 string StatementTypeToString(StatementType type);

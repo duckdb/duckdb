@@ -12,7 +12,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPrepare &o
 
 	// create the physical plan for the prepare statement.
 	auto entry = make_unique<PreparedStatementCatalogEntry>(op.name, op.statement_type);
-	entry->catalog = &context.db.catalog;
+	entry->catalog = &context.catalog;
 	entry->names = op.names;
 	entry->value_map = move(op.value_map);
 

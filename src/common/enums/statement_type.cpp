@@ -44,16 +44,8 @@ string StatementTypeToString(StatementType type) {
 		return "CREATE_VIEW";
 	case StatementType::CREATE_SEQUENCE:
 		return "CREATE_SEQUENCE";
-	case StatementType::DROP_TABLE:
-		return "DROP_TABLE";
-	case StatementType::DROP_SCHEMA:
-		return "DROP_SCHEMA";
-	case StatementType::DROP_INDEX:
-		return "DROP_INDEX";
-	case StatementType::DROP_VIEW:
-		return "DROP_VIEW";
-	case StatementType::DROP_SEQUENCE:
-		return "DROP_SEQUENCE";
+	case StatementType::DROP:
+		return "DROP";
 	default:
 		return "INVALID";
 	}

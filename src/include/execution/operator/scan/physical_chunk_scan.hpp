@@ -25,7 +25,7 @@ public:
 	//! Owned chunk collection, if any
 	unique_ptr<ChunkCollection> owned_collection;
 
-	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 

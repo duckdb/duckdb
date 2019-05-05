@@ -2,7 +2,7 @@
 
 #include "common/exception.hpp"
 #include "parser/constraints/list.hpp"
-#include "parser/parsed_data.hpp"
+#include "parser/parsed_data/create_table_function_info.hpp"
 #include "storage/storage_manager.hpp"
 
 #include <algorithm>
@@ -11,7 +11,7 @@ using namespace duckdb;
 using namespace std;
 
 TableFunctionCatalogEntry::TableFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
-                                                     CreateTableFunctionInformation *info)
+                                                     CreateTableFunctionInfo *info)
     : CatalogEntry(CatalogType::TABLE_FUNCTION, catalog, info->name), schema(schema) {
 	for (auto &entry : info->return_values) {
 		if (name_map.find(entry.name) != name_map.end()) {

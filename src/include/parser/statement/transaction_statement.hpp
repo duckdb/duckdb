@@ -21,17 +21,6 @@ class TransactionStatement : public SQLStatement {
 public:
 	TransactionStatement(TransactionType type) : SQLStatement(StatementType::TRANSACTION), type(type){};
 
-	string ToString() const override {
-		return "Transaction";
-	}
-
-	bool Equals(const SQLStatement *other_) const override {
-		if (!SQLStatement::Equals(other_)) {
-			return false;
-		}
-		throw NotImplementedException("Equality not implemented!");
-	}
-
 	TransactionType type;
 };
 } // namespace duckdb

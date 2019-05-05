@@ -6,7 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalIndexScan::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalIndexScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalIndexScanOperatorState *>(state_);
 	if (column_ids.size() == 0)
 		return;
