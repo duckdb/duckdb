@@ -29,7 +29,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 		auto &comp_join = (LogicalComparisonJoin &)join;
 		// turn the conditions into filters
 		for (size_t i = 0; i < comp_join.conditions.size(); i++) {
-			auto condition = LogicalComparisonJoin::CreateExpressionFromCondition(move(comp_join.conditions[i]));
+			auto condition = JoinCondition::CreateExpression(move(comp_join.conditions[i]));
 			if (AddFilter(move(condition)) == FilterResult::UNSATISFIABLE) {
 				// filter statically evaluates to false, strip tree
 				return make_unique<LogicalEmptyResult>(move(op));

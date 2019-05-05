@@ -15,83 +15,14 @@
 using namespace duckdb;
 using namespace std;
 
-JoinSide LogicalComparisonJoin::CombineJoinSide(JoinSide left, JoinSide right) {
-	if (left == JoinSide::NONE) {
-		return right;
-	}
-	if (right == JoinSide::NONE) {
-		return left;
-	}
-	if (left != right) {
-		return JoinSide::BOTH;
-	}
-	return left;
-}
-
-JoinSide LogicalComparisonJoin::GetJoinSide(size_t table_binding, unordered_set<size_t> &left_bindings,
-                                            unordered_set<size_t> &right_bindings) {
-	if (left_bindings.find(table_binding) != left_bindings.end()) {
-		// column references table on left side
-		assert(right_bindings.find(table_binding) == right_bindings.end());
-		return JoinSide::LEFT;
-	} else {
-		// column references table on right side
-		assert(right_bindings.find(table_binding) != right_bindings.end());
-		return JoinSide::RIGHT;
-	}
-}
-
-JoinSide LogicalComparisonJoin::GetJoinSide(Expression &expression, unordered_set<size_t> &left_bindings,
-                                            unordered_set<size_t> &right_bindings) {
-	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = (BoundColumnRefExpression &)expression;
-		if (colref.depth > 0) {
-			throw Exception("Non-inner join on correlated columns not supported");
-		}
-		return GetJoinSide(colref.binding.table_index, left_bindings, right_bindings);
-	}
-	assert(expression.type != ExpressionType::BOUND_REF);
-	if (expression.type == ExpressionType::SUBQUERY) {
-		assert(expression.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY);
-		auto &subquery = (BoundSubqueryExpression &)expression;
-		// correlated subquery, check the side of each of correlated columns in the subquery
-		JoinSide side = JoinSide::NONE;
-		for (auto &corr : subquery.binder->correlated_columns) {
-			if (corr.depth > 1) {
-				// correlated column has depth > 1
-				// it does not refer to any table in the current set of bindings
-				return JoinSide::BOTH;
-			}
-			auto correlated_side = GetJoinSide(corr.binding.table_index, left_bindings, right_bindings);
-			side = CombineJoinSide(side, correlated_side);
-		}
-		return side;
-	}
-	JoinSide join_side = JoinSide::NONE;
-	ExpressionIterator::EnumerateChildren(expression, [&](Expression &child) {
-		auto child_side = GetJoinSide(child, left_bindings, right_bindings);
-		join_side = CombineJoinSide(child_side, join_side);
-	});
-	return join_side;
-}
-
-JoinSide LogicalComparisonJoin::GetJoinSide(unordered_set<size_t> bindings, unordered_set<size_t> &left_bindings,
-                                            unordered_set<size_t> &right_bindings) {
-	JoinSide side = JoinSide::NONE;
-	for (auto binding : bindings) {
-		side = CombineJoinSide(side, GetJoinSide(binding, left_bindings, right_bindings));
-	}
-	return side;
-}
-
 //! Create a JoinCondition from a comparison
-bool LogicalComparisonJoin::CreateJoinCondition(Expression &expr, unordered_set<size_t> &left_bindings,
+static bool CreateJoinCondition(Expression &expr, unordered_set<size_t> &left_bindings,
                                                 unordered_set<size_t> &right_bindings,
                                                 vector<JoinCondition> &conditions) {
 	// comparison
 	auto &comparison = (BoundComparisonExpression &)expr;
-	auto left_side = LogicalComparisonJoin::GetJoinSide(*comparison.left, left_bindings, right_bindings);
-	auto right_side = LogicalComparisonJoin::GetJoinSide(*comparison.right, left_bindings, right_bindings);
+	auto left_side = JoinSide::GetJoinSide(*comparison.left, left_bindings, right_bindings);
+	auto right_side = JoinSide::GetJoinSide(*comparison.right, left_bindings, right_bindings);
 	if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
 		// join condition can be divided in a left/right side
 		JoinCondition condition;
@@ -111,10 +42,6 @@ bool LogicalComparisonJoin::CreateJoinCondition(Expression &expr, unordered_set<
 	return false;
 }
 
-unique_ptr<Expression> LogicalComparisonJoin::CreateExpressionFromCondition(JoinCondition cond) {
-	return make_unique<BoundComparisonExpression>(cond.comparison, move(cond.left), move(cond.right));
-}
-
 unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, unique_ptr<LogicalOperator> left_child,
                                                               unique_ptr<LogicalOperator> right_child,
                                                               unordered_set<size_t> &left_bindings,
@@ -125,7 +52,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 	// first check if we can create
 	for (size_t i = 0; i < expressions.size(); i++) {
 		auto &expr = expressions[i];
-		auto total_side = GetJoinSide(*expr, left_bindings, right_bindings);
+		auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
 		if (total_side != JoinSide::BOTH) {
 			// join condition does not reference both sides, add it as filter under the join
 			if (type == JoinType::LEFT && total_side == JoinSide::RIGHT) {
