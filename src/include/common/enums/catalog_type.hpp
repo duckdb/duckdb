@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "common/constants.hpp"
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
