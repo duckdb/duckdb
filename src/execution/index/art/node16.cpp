@@ -4,14 +4,15 @@
 using namespace duckdb;
 
 // TODO : In the future this can be performed using SIMD (#include <emmintrin.h>  x86 SSE intrinsics)
-// TODO : Use Binary Search instead of scanning all 16 elements
-Node *Node16::getChild(const uint8_t k) const {
+Node **Node16::getChild(const uint8_t k) {
 	for (uint32_t i = 0; i < count; ++i) {
 		if (key[i] == k) {
-			return child[i];
+			return &child[i];
 		}
 	}
-	return nullptr;
+	// This address is used to communicate that search failed
+	Node* nullNode=NULL;
+	return &nullNode;
 }
 
 void Node16::insert(Node16 *node, Node **nodeRef, uint8_t keyByte, Node *child) {

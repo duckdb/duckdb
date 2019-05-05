@@ -20,8 +20,8 @@ using namespace duckdb;
 class Key {
 public:
 
-    static constexpr uint32_t stackLen = 128;
-    uint32_t len = 0;
+    static constexpr uint32_t stackLen = 8;
+    uint32_t len = 8;
 
     uint8_t *data;
 

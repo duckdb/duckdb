@@ -51,22 +51,22 @@ Node *Node::minimum(Node *node) {
 	}
 }
 
-Node *Node::findChild(const uint8_t k, const Node *node) {
+Node **Node::findChild(const uint8_t k, Node *node) {
 	switch (node->type) {
 	case NodeType::N4: {
-		auto n = static_cast<const Node4 *>(node);
+		auto n = static_cast< Node4 *>(node);
 		return n->getChild(k);
 	}
 	case NodeType::N16: {
-		auto n = static_cast<const Node16 *>(node);
+		auto n = static_cast< Node16 *>(node);
 		return n->getChild(k);
 	}
 	case NodeType::N48: {
-		auto n = static_cast<const Node48 *>(node);
+		auto n = static_cast< Node48 *>(node);
 		return n->getChild(k);
 	}
 	case NodeType::N256: {
-		auto n = static_cast<const Node256 *>(node);
+		auto n = static_cast< Node256 *>(node);
 		return n->getChild(k);
 	}
 	}

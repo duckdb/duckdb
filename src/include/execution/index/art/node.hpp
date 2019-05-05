@@ -38,7 +38,7 @@ public:
 	//! Find the leaf with smallest element in the tree
 	static Node *minimum(Node *node);
 	//! Find the next child for the keyByte
-	static Node *findChild(const uint8_t k, const Node *node);
+	static Node **findChild(const uint8_t k, Node *node);
 	//! Compare the key with the prefix of the node, return the number matching bytes
 	static unsigned prefixMismatch(bool isLittleEndian, Node *node, Key &key, size_t depth, unsigned maxKeyLength, TypeId type);
 	//! Insert leaf into inner node

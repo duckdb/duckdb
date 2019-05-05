@@ -3,11 +3,13 @@
 
 using namespace duckdb;
 
-Node *Node48::getChild(const uint8_t k) const {
+Node **Node48::getChild(const uint8_t k) {
 	if (childIndex[k] == emptyMarker) {
-		return nullptr;
+		// This address is used to communicate that search failed
+		Node* nullNode=NULL;
+		return &nullNode;
 	} else {
-		return child[childIndex[k]];
+		return &child[childIndex[k]];
 	}
 }
 

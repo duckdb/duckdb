@@ -19,7 +19,7 @@ public:
 		memset(child, 0, sizeof(child));
 	}
 
-	Node *getChild(const uint8_t k) const;
+	Node **getChild(const uint8_t k);
 
 	//! Insert leaf into inner node
 	static void insert(Node256 *node, Node **nodeRef, uint8_t keyByte, Node *child);

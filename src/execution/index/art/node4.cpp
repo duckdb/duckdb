@@ -3,13 +3,15 @@
 
 using namespace duckdb;
 
-Node *Node4::getChild(const uint8_t k) const {
+Node **Node4::getChild(const uint8_t k)  {
 	for (uint32_t i = 0; i < count; ++i) {
 		if (key[i] == k) {
-			return child[i];
+			return &child[i];
 		}
 	}
-	return nullptr;
+	// This address is used to communicate that search failed
+	Node* nullNode=NULL;
+	return &nullNode;
 }
 
 void Node4::insert(Node4 *node, Node **nodeRef, uint8_t keyByte, Node *child) {

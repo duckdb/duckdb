@@ -60,11 +60,13 @@ public:
 	void Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) override;
 
 	//! Append entries to the index
-	void Append(ClientContext &context, DataChunk &entries, size_t row_identifier_start) override{};
+	void Append(ClientContext &context, DataChunk &entries, size_t row_identifier_start) override;
 	//! Update entries in the index
 	void Update(ClientContext &context, vector<column_t> &column_ids, DataChunk &update_data,
 	            Vector &row_identifiers) override{};
 
+	//! Lock used for updating the index
+	std::mutex lock;
 	//! Root of the tree
 	Node *tree;
 	//! The table

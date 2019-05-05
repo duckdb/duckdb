@@ -1,7 +1,10 @@
 #include "execution/index/art/art.hpp"
 #include "common/types/static_vector.hpp"
+#include "execution/expression_executor.hpp"
+#include <algorithm>
 
 using namespace duckdb;
+using namespace std;
 
 ART::ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, vector<TypeId> expression_types,
          vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> unbound_expressions)
@@ -35,7 +38,7 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, ve
 	}
 }
 
-// TODO: Suppport  FLOAT = float32_t DOUBLE =  float64_t ,VARCHAR = 9, char, representing a null-terminated UTF-8 string
+// TODO: Suppport  FLOAT = float32_t DOUBLE =  float64_t ,VARCHAR = achar, representing a null-terminated UTF-8 string
 void ART::Insert(DataChunk &input, Vector &row_ids) {
 	if (input.column_count > 1) {
 		throw NotImplementedException("We only support single dimensional indexes currently");
@@ -70,6 +73,25 @@ unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &trans
     result->expressions[0] = expression_type;
 	return move(result);
 }
+
+void ART::Append(ClientContext &context, DataChunk &appended_data, size_t row_identifier_start) {
+    lock_guard<mutex> l(lock);
+
+    // first resolve the expressions
+    ExpressionExecutor executor(appended_data);
+    executor.Execute(expressions, expression_result);
+
+    // create the row identifiers
+    StaticVector<uint64_t> row_identifiers;
+    auto row_ids = (uint64_t *)row_identifiers.data;
+    row_identifiers.count = appended_data.size();
+    for (size_t i = 0; i < row_identifiers.count; i++) {
+        row_ids[i] = row_identifier_start + i;
+    }
+
+    Insert(expression_result, row_identifiers);
+}
+
 
 void ART::insert(bool isLittleEndian,Node *node, Node **nodeRef, Key& key, unsigned depth, uintptr_t value, unsigned maxKeyLength,
                   TypeId type, uint64_t row_id) {
@@ -134,9 +156,9 @@ void ART::insert(bool isLittleEndian,Node *node, Node **nodeRef, Key& key, unsig
     }
 
     // Recurse
-    Node *child = Node::findChild(key[depth], node);
-    if (child) {
-        insert(isLittleEndian,child, &child, key, depth + 1, value, maxKeyLength, type, row_id);
+    Node **child = Node::findChild(key[depth], node);
+    if (*child) {
+        insert(isLittleEndian,*child, child, key, depth + 1, value, maxKeyLength, type, row_id);
         return;
     }
 
@@ -176,7 +198,7 @@ Node* ART::lookupRange(Node *node, Key& low_key, Key& high_key,unsigned keyLengt
             depth += node->prefixLength;
         }
 
-        node = Node::findChild(low_key[depth], node);
+//        node = Node::findChild(low_key[depth], node);
         depth++;
     }
 
@@ -195,7 +217,7 @@ Node *ART::lookup(Node *node, Key& key, unsigned keyLength, unsigned depth) {
 
             if (depth != keyLength) {
                 // Check leaf
-                auto leaf = static_cast<Leaf *>(Node::minimum(node));
+                auto leaf = static_cast<Leaf *>(node);
                 Key &leafKey = *new Key(is_little_endian,types[0], leaf->value);
 
 
@@ -211,12 +233,13 @@ Node *ART::lookup(Node *node, Key& key, unsigned keyLength, unsigned depth) {
                 for (unsigned pos = 0; pos < node->prefixLength; pos++)
                     if (key[depth + pos] != node->prefix[pos])
                         return NULL;
-            } else
+            } else{
                 skippedPrefix = true;
+            }
             depth += node->prefixLength;
         }
 
-        node = Node::findChild(key[depth], node);
+        node = *Node::findChild(key[depth], node);
         depth++;
     }
 
@@ -235,9 +258,9 @@ void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) 
 	do {
 		auto row_ids = (uint64_t *)result_identifiers.data;
 		assert(state->values[0].type == types[0]);
-		switch(state->expressions[0]){
-		    case :
-		}
+//		switch(state->expressions[0]){
+//		    case :
+//		}
 		switch (types[0]) {
 		case TypeId::BOOLEAN:
 			result_identifiers.count = templated_lookup<int8_t>(types[0], state->values[0].value_.boolean, row_ids);
