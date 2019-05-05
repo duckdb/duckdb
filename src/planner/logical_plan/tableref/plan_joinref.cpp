@@ -1,4 +1,3 @@
-#include "parser/expression/comparison_expression.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/expression/bound_comparison_expression.hpp"
 #include "planner/expression/bound_conjunction_expression.hpp"
@@ -102,7 +101,7 @@ bool LogicalComparisonJoin::CreateJoinCondition(Expression &expr, unordered_set<
 		if (left_side == JoinSide::RIGHT) {
 			// left = right, right = left, flip the comparison symbol and reverse sides
 			swap(left, right);
-			condition.comparison = ComparisonExpression::FlipComparisionExpression(expr.type);
+			condition.comparison = FlipComparisionExpression(expr.type);
 		}
 		condition.left = move(left);
 		condition.right = move(right);
@@ -165,7 +164,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 				// our join needs to compare explicit left and right sides. So we
 				// invert the condition to express NOT, this way we can still use
 				// equi-joins
-				not_expr.children[0]->type = ComparisonExpression::NegateComparisionExpression(child_type);
+				not_expr.children[0]->type = NegateComparisionExpression(child_type);
 				if (CreateJoinCondition(*not_expr.children[0], left_bindings, right_bindings, conditions)) {
 					// successfully created the join condition
 					continue;

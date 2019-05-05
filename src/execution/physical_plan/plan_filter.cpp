@@ -3,7 +3,6 @@
 #include "execution/order_index.hpp"
 #include "execution/physical_plan_generator.hpp"
 #include "optimizer/matcher/expression_matcher.hpp"
-#include "parser/expression/comparison_expression.hpp"
 #include "planner/expression/bound_comparison_expression.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
 #include "planner/operator/logical_filter.hpp"
@@ -65,7 +64,7 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, Logic
 				auto comparison_type = comparison->type;
 				if (comparison->right.get() == bindings[1]) {
 					// the expression is on the right side, we flip them around
-					comparison_type = ComparisonExpression::FlipComparisionExpression(comparison_type);
+					comparison_type = FlipComparisionExpression(comparison_type);
 				}
 				if (comparison_type == ExpressionType::COMPARE_EQUAL) {
 					// equality value
