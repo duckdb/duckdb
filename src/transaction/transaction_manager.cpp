@@ -173,7 +173,7 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) {
 
 void TransactionManager::AddCatalogSet(ClientContext &context, unique_ptr<CatalogSet> catalog_set) {
 	// remove the dependencies from all entries of the CatalogSet
-	context.db.catalog.dependency_manager.ClearDependencies(*catalog_set);
+	context.catalog.dependency_manager.ClearDependencies(*catalog_set);
 
 	lock_guard<mutex> lock(transaction_lock);
 

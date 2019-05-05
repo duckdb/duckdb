@@ -15,7 +15,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CopyStatement &stmt) {
 	} else {
 		assert(!stmt.info->table.empty());
 		// COPY to a table
-		result->table = context.db.catalog.GetTable(context.ActiveTransaction(), stmt.info->schema, stmt.info->table);
+		result->table = context.catalog.GetTable(context.ActiveTransaction(), stmt.info->schema, stmt.info->table);
 	}
 	result->info = move(stmt.info);
 	return move(result);

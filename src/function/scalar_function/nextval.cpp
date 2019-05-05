@@ -111,7 +111,7 @@ void nextval_function(ExpressionExecutor &exec, Vector inputs[], size_t input_co
 			string seqname = string(value);
 			parse_schema_and_sequence(seqname, schema, seq);
 			// fetch the sequence from the catalog
-			auto sequence = info.context.db.catalog.GetSequence(info.context.ActiveTransaction(), schema, seq);
+			auto sequence = info.context.catalog.GetSequence(info.context.ActiveTransaction(), schema, seq);
 			// finally get the next value from the sequence
 			result_data[i] = next_sequence_value(sequence);
 		});
@@ -138,7 +138,7 @@ unique_ptr<FunctionData> nextval_bind(BoundFunctionExpression &expr, ClientConte
 		Value seqname = ExpressionExecutor::EvaluateScalar(*expr.children[0]);
 		assert(seqname.type == TypeId::VARCHAR);
 		parse_schema_and_sequence(seqname.str_value, schema, seq);
-		sequence = context.db.catalog.GetSequence(context.ActiveTransaction(), schema, seq);
+		sequence = context.catalog.GetSequence(context.ActiveTransaction(), schema, seq);
 	}
 	return make_unique<NextvalBindData>(context, sequence);
 }

@@ -16,6 +16,8 @@
 #include "planner/binder.hpp"
 #include "transaction/transaction.hpp"
 #include "transaction/transaction_manager.hpp"
+#include "main/client_context.hpp"
+#include "storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -113,19 +115,19 @@ bool ReplayQuery(ClientContext &context, Deserializer &source);
 bool ReplayEntry(ClientContext &context, DuckDB &database, WALEntry entry, Deserializer &source) {
 	switch (entry.type) {
 	case WALEntry::DROP_TABLE:
-		return ReplayDropTable(context.ActiveTransaction(), database.catalog, source);
+		return ReplayDropTable(context.ActiveTransaction(), *database.catalog, source);
 	case WALEntry::CREATE_TABLE:
-		return ReplayCreateTable(context, database.catalog, source);
+		return ReplayCreateTable(context, *database.catalog, source);
 	case WALEntry::CREATE_VIEW:
-		return ReplayCreateView(context.ActiveTransaction(), database.catalog, source);
+		return ReplayCreateView(context.ActiveTransaction(), *database.catalog, source);
 	case WALEntry::DROP_VIEW:
-		return ReplayDropView(context.ActiveTransaction(), database.catalog, source);
+		return ReplayDropView(context.ActiveTransaction(), *database.catalog, source);
 	case WALEntry::DROP_SCHEMA:
-		return ReplayDropSchema(context.ActiveTransaction(), database.catalog, source);
+		return ReplayDropSchema(context.ActiveTransaction(), *database.catalog, source);
 	case WALEntry::CREATE_SCHEMA:
-		return ReplayCreateSchema(context.ActiveTransaction(), database.catalog, source);
+		return ReplayCreateSchema(context.ActiveTransaction(), *database.catalog, source);
 	case WALEntry::INSERT_TUPLE:
-		return ReplayInsert(context, database.catalog, source);
+		return ReplayInsert(context, *database.catalog, source);
 	case WALEntry::QUERY:
 		return ReplayQuery(context, source);
 	default:

@@ -276,7 +276,7 @@ for table in tables.keys():
 	source.write("""
 CBaseLoader<${ROW_TYPE}> *
 DuckDBLoaderFactory::Create${TABLENAME}Loader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "${TABLEINDB}" + suffix);
 	return new DuckDB${TABLENAME}Load(table, context);
 }

@@ -41,18 +41,18 @@ void StorageManager::Initialize() {
 
 	// first initialize the base system catalogs
 	// these are never written to the WAL
-	auto transaction = database.transaction_manager.StartTransaction();
+	auto transaction = database.transaction_manager->StartTransaction();
 
 	// create the default schema
 	CreateSchemaInfo info;
 	info.schema = DEFAULT_SCHEMA;
-	database.catalog.CreateSchema(*transaction, &info);
+	database.catalog->CreateSchema(*transaction, &info);
 
 	// initialize default functions
-	BuiltinFunctions::Initialize(*transaction, database.catalog);
+	BuiltinFunctions::Initialize(*transaction, *database.catalog);
 
 	// commit transactions
-	database.transaction_manager.CommitTransaction(transaction);
+	database.transaction_manager->CommitTransaction(transaction);
 
 	if (!in_memory) {
 		// create or load the database from disk, if not in-memory mode
@@ -129,7 +129,7 @@ int StorageManager::LoadFromStorage() {
 		CreateSchemaInfo info;
 		info.schema = schema_name;
 		info.if_not_exists = true;
-		database.catalog.CreateSchema(context.ActiveTransaction(), &info);
+		database.catalog->CreateSchema(context.ActiveTransaction(), &info);
 
 		// now read the list of the tables belonging to this schema
 		auto schema_directory_path = FileSystem::JoinPath(storage_path_base, schema_name);
@@ -153,10 +153,10 @@ int StorageManager::LoadFromStorage() {
 			Deserializer source((uint8_t *)result.get(), table_file_size);
 			auto info = TableCatalogEntry::Deserialize(source);
 			// create the table inside the catalog
-			database.catalog.CreateTable(context.ActiveTransaction(), info.get());
+			database.catalog->CreateTable(context.ActiveTransaction(), info.get());
 
 			// now load the actual data
-			auto *table = database.catalog.GetTable(context.ActiveTransaction(), info->schema, info->table);
+			auto *table = database.catalog->GetTable(context.ActiveTransaction(), info->schema, info->table);
 			auto types = table->GetTypes();
 			DataChunk chunk;
 			chunk.Initialize(types);
@@ -197,7 +197,7 @@ int StorageManager::LoadFromStorage() {
 			Deserializer source((uint8_t *)result.get(), view_file_size);
 			auto info = ViewCatalogEntry::Deserialize(source);
 			// create the table inside the catalog
-			database.catalog.CreateView(context.ActiveTransaction(), info.get());
+			database.catalog->CreateView(context.ActiveTransaction(), info.get());
 		}
 	}
 	context.transaction.Commit();
@@ -205,7 +205,7 @@ int StorageManager::LoadFromStorage() {
 }
 
 void StorageManager::CreateCheckpoint(int iteration) {
-	auto transaction = database.transaction_manager.StartTransaction();
+	auto transaction = database.transaction_manager->StartTransaction();
 
 	assert(iteration == 0 || iteration == 1);
 	auto storage_path_base = FileSystem::JoinPath(path, STORAGE_FILES[iteration]);
@@ -225,7 +225,7 @@ void StorageManager::CreateCheckpoint(int iteration) {
 
 	vector<SchemaCatalogEntry *> schemas;
 	// scan the schemas and write them to the schemas.csv file
-	database.catalog.schemas.Scan(*transaction, [&](CatalogEntry *entry) {
+	database.catalog->schemas.Scan(*transaction, [&](CatalogEntry *entry) {
 		schema_file << entry->name << '\n';
 		schemas.push_back((SchemaCatalogEntry *)entry);
 	});

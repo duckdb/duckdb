@@ -544,9 +544,9 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	for (size_t i = PART; i <= REGION; i++) {
 		auto tname = get_table_name(i);
 		if (!tname.empty()) {
-			append_info[i].table = db.catalog.GetTable(con.context.ActiveTransaction(), schema, tname + suffix);
+			append_info[i].table = db.catalog->GetTable(con.context->ActiveTransaction(), schema, tname + suffix);
 		}
-		append_info[i].context = &con.context;
+		append_info[i].context = con.context.get();
 	}
 
 	for (i = PART; i <= REGION; i++) {

@@ -57,7 +57,7 @@ void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, 
 	if (!data.initialized) {
 		// scan all the schemas
 		auto &transaction = context.ActiveTransaction();
-		context.db.catalog.schemas.Scan(transaction, [&](CatalogEntry *entry) {
+		context.catalog.schemas.Scan(transaction, [&](CatalogEntry *entry) {
 			auto schema = (SchemaCatalogEntry *)entry;
 			schema->tables.Scan(transaction, [&](CatalogEntry *entry) { data.entries.push_back(entry); });
 		});

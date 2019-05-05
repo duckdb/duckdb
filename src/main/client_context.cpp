@@ -11,13 +11,14 @@
 #include "parser/statement/prepare_statement.hpp"
 #include "planner/operator/logical_execute.hpp"
 #include "planner/planner.hpp"
+#include "transaction/transaction_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 ClientContext::ClientContext(DuckDB &database)
-    : db(database), transaction(database.transaction_manager), interrupted(false),
-      prepared_statements(make_unique<CatalogSet>(db.catalog)), open_result(nullptr) {
+    : db(database), transaction(*database.transaction_manager), interrupted(false), catalog(*database.catalog),
+      prepared_statements(make_unique<CatalogSet>(*db.catalog)), open_result(nullptr) {
 }
 
 void ClientContext::Cleanup() {
@@ -32,7 +33,7 @@ void ClientContext::Cleanup() {
 		}
 	}
 	assert(prepared_statements);
-	db.transaction_manager.AddCatalogSet(*this, move(prepared_statements));
+	db.transaction_manager->AddCatalogSet(*this, move(prepared_statements));
 	return CleanupInternal();
 }
 
@@ -276,7 +277,7 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 		if (transaction.IsAutoCommit()) {
 			transaction.BeginTransaction();
 		}
-		ActiveTransaction().active_query = db.transaction_manager.GetQueryNumber();
+		ActiveTransaction().active_query = db.transaction_manager->GetQueryNumber();
 		if (statement->type == StatementType::SELECT && query_verification_enabled) {
 			// query verification is enabled:
 			// create a copy of the statement and verify the original statement
