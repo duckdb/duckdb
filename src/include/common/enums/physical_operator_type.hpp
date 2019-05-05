@@ -76,4 +76,4 @@ enum class PhysicalOperatorType : uint8_t {
 
 string PhysicalOperatorToString(PhysicalOperatorType type);
 
-}
+} // namespace duckdb

@@ -9,8 +9,8 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/exception.hpp"
 #include "common/enums/catalog_type.hpp"
+#include "common/exception.hpp"
 
 namespace duckdb {
 struct AlterInfo;

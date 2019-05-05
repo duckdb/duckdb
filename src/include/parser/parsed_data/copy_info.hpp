@@ -45,4 +45,4 @@ struct CopyInfo {
 	}
 };
 
-}
+} // namespace duckdb

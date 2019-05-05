@@ -8,9 +8,9 @@
 
 #pragma once
 
+#include "common/enums/index_type.hpp"
 #include "common/types/data_chunk.hpp"
 #include "common/types/tuple.hpp"
-#include "common/enums/index_type.hpp"
 #include "storage/column_statistics.hpp"
 #include "storage/index.hpp"
 #include "storage/storage_chunk.hpp"

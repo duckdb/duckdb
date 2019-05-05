@@ -45,4 +45,4 @@ enum class StatementType : uint8_t {
 
 string StatementTypeToString(StatementType type);
 
-}
+} // namespace duckdb

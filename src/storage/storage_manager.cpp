@@ -29,7 +29,8 @@ constexpr const char *TABLE_FILE = "tableinfo.duck";
 using namespace duckdb;
 using namespace std;
 
-StorageManager::StorageManager(DuckDB &database, string path, bool read_only) : path(path), database(database), wal(database), read_only(read_only) {
+StorageManager::StorageManager(DuckDB &database, string path, bool read_only)
+    : path(path), database(database), wal(database), read_only(read_only) {
 }
 
 void StorageManager::Initialize() {
@@ -65,7 +66,8 @@ void StorageManager::LoadDatabase() {
 	// first check if the database exists
 	if (!FileSystem::DirectoryExists(path)) {
 		if (read_only) {
-			throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist", path.c_str());
+			throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist",
+			                       path.c_str());
 		}
 		// have to create the directory
 		FileSystem::CreateDirectory(path);

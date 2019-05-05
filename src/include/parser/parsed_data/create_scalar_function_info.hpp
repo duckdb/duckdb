@@ -39,4 +39,4 @@ struct CreateScalarFunctionInfo {
 	}
 };
 
-}
+} // namespace duckdb

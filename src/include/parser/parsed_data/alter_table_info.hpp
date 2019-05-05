@@ -46,4 +46,4 @@ struct RenameColumnInfo : public AlterTableInfo {
 	}
 };
 
-}
+} // namespace duckdb

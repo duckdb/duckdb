@@ -37,9 +37,8 @@ struct CreateTableInfo {
 
 	CreateTableInfo() : schema(DEFAULT_SCHEMA), if_not_exists(false), temporary(false) {
 	}
-	CreateTableInfo(string schema, string name)
-	    : schema(schema), table(name), if_not_exists(false), temporary(false) {
+	CreateTableInfo(string schema, string name) : schema(schema), table(name), if_not_exists(false), temporary(false) {
 	}
 };
 
-}
+} // namespace duckdb

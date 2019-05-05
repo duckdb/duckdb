@@ -1,7 +1,8 @@
 #include "main/connection.hpp"
+
 #include "main/client_context.hpp"
-#include "main/database.hpp"
 #include "main/connection_manager.hpp"
+#include "main/database.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -17,8 +17,7 @@ using namespace std;
 
 //! Create a JoinCondition from a comparison
 static bool CreateJoinCondition(Expression &expr, unordered_set<size_t> &left_bindings,
-                                                unordered_set<size_t> &right_bindings,
-                                                vector<JoinCondition> &conditions) {
+                                unordered_set<size_t> &right_bindings, vector<JoinCondition> &conditions) {
 	// comparison
 	auto &comparison = (BoundComparisonExpression &)expr;
 	auto left_side = JoinSide::GetJoinSide(*comparison.left, left_bindings, right_bindings);

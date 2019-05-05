@@ -5,7 +5,7 @@ using namespace std;
 namespace duckdb {
 
 string StatementTypeToString(StatementType type) {
-	switch(type) {
+	switch (type) {
 	case StatementType::SELECT:
 		return "SELECT";
 	case StatementType::INSERT:
@@ -51,4 +51,4 @@ string StatementTypeToString(StatementType type) {
 	}
 }
 
-}
+} // namespace duckdb

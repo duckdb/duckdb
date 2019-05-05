@@ -9,9 +9,9 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "common/enums/expression_type.hpp"
 #include "common/types/chunk_collection.hpp"
 #include "common/types/vector.hpp"
-#include "common/enums/expression_type.hpp"
 
 namespace duckdb {
 

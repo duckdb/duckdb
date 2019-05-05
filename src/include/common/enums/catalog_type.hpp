@@ -27,4 +27,4 @@ enum class CatalogType : uint8_t {
 	SEQUENCE = 13
 };
 
-}
+} // namespace duckdb

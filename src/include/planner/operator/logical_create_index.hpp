@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "planner/logical_operator.hpp"
 #include "parser/parsed_data/create_index_info.hpp"
+#include "planner/logical_operator.hpp"
 
 namespace duckdb {
 

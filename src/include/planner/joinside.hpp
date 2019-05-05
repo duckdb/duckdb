@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "planner/expression.hpp"
 #include "common/unordered_set.hpp"
+#include "planner/expression.hpp"
 
 namespace duckdb {
 
@@ -19,8 +19,10 @@ public:
 	JoinCondition() : null_values_are_equal(false) {
 	}
 
-	//! Turns the JoinCondition into an expression; note that this destroys the JoinCondition as the expression inherits the left/right expressions
+	//! Turns the JoinCondition into an expression; note that this destroys the JoinCondition as the expression inherits
+	//! the left/right expressions
 	static unique_ptr<Expression> CreateExpression(JoinCondition cond);
+
 public:
 	unique_ptr<Expression> left;
 	unique_ptr<Expression> right;
@@ -36,15 +38,18 @@ public:
 
 class JoinSide {
 public:
-	enum join_value : uint8_t {
-		NONE, LEFT, RIGHT, BOTH
-	};
+	enum join_value : uint8_t { NONE, LEFT, RIGHT, BOTH };
 
 	JoinSide() = default;
-	constexpr JoinSide(join_value val) : value(val) { }
+	constexpr JoinSide(join_value val) : value(val) {
+	}
 
-	bool operator==(JoinSide a) const { return value == a.value; }
-	bool operator!=(JoinSide a) const { return value != a.value; }
+	bool operator==(JoinSide a) const {
+		return value == a.value;
+	}
+	bool operator!=(JoinSide a) const {
+		return value != a.value;
+	}
 
 	static JoinSide CombineJoinSide(JoinSide left, JoinSide right);
 	static JoinSide GetJoinSide(size_t table_binding, unordered_set<size_t> &left_bindings,
@@ -53,8 +58,9 @@ public:
 	                            unordered_set<size_t> &right_bindings);
 	static JoinSide GetJoinSide(unordered_set<size_t> bindings, unordered_set<size_t> &left_bindings,
 	                            unordered_set<size_t> &right_bindings);
+
 private:
 	join_value value;
 };
 
-};
+}; // namespace duckdb

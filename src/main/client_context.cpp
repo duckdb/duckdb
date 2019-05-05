@@ -208,8 +208,8 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 	return move(result);
 }
 
-static string CanExecuteStatementInReadOnlyMode(SQLStatement& stmt) {
-	switch(stmt.type) {
+static string CanExecuteStatementInReadOnlyMode(SQLStatement &stmt) {
+	switch (stmt.type) {
 	case StatementType::INSERT:
 	case StatementType::COPY:
 	case StatementType::DELETE:
@@ -222,10 +222,11 @@ static string CanExecuteStatementInReadOnlyMode(SQLStatement& stmt) {
 	case StatementType::DROP:
 	case StatementType::ALTER:
 	case StatementType::TRANSACTION:
-		return StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!", StatementTypeToString(stmt.type).c_str());
+		return StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!",
+		                          StatementTypeToString(stmt.type).c_str());
 	case StatementType::PREPARE: {
 		// prepare statement: check the underlying statement type
-		auto &prepare = (PrepareStatement&) stmt;
+		auto &prepare = (PrepareStatement &)stmt;
 		return CanExecuteStatementInReadOnlyMode(*prepare.statement);
 	}
 	default:

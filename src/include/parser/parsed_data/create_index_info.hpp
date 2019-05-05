@@ -28,4 +28,4 @@ struct CreateIndexInfo {
 	}
 };
 
-}
+} // namespace duckdb

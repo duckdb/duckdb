@@ -28,4 +28,4 @@ string JoinTypeToString(JoinType type) {
 	}
 }
 
-}
+} // namespace duckdb

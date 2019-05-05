@@ -19,7 +19,8 @@ PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr
 	assert(join_type != JoinType::SINGLE);
 }
 
-void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk,
+                                               PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalBlockwiseNLJoinState *>(state_);
 
 	// first we fully materialize the right child, if we haven't done that yet

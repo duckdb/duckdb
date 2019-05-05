@@ -15,8 +15,7 @@ namespace duckdb {
 
 class CreateSequenceStatement : public SQLStatement {
 public:
-	CreateSequenceStatement()
-	    : SQLStatement(StatementType::CREATE_SEQUENCE), info(make_unique<CreateSequenceInfo>()){};
+	CreateSequenceStatement() : SQLStatement(StatementType::CREATE_SEQUENCE), info(make_unique<CreateSequenceInfo>()){};
 
 	unique_ptr<CreateSequenceInfo> info;
 };

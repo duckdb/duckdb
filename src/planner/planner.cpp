@@ -80,7 +80,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	}
 	case StatementType::DROP: {
 		auto &stmt = *((DropStatement *)statement.get());
-		switch(stmt.info->type) {
+		switch (stmt.info->type) {
 		case CatalogType::SEQUENCE:
 			context.catalog.DropSequence(context.ActiveTransaction(), stmt.info.get());
 			break;

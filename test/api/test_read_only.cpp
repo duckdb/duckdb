@@ -1,6 +1,6 @@
 #include "catch.hpp"
-#include "test_helpers.hpp"
 #include "common/file_system.hpp"
+#include "test_helpers.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -73,4 +73,3 @@ TEST_CASE("Test connection using a read only database", "[readonly]") {
 	// db2.reset();
 	DeleteDatabase(dbdir);
 }
-

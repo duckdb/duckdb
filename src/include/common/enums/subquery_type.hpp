@@ -23,4 +23,4 @@ enum class SubqueryType : uint8_t {
 	ANY = 4,        // x = ANY(SELECT...) OR x IN (SELECT...)
 };
 
-}
+} // namespace duckdb

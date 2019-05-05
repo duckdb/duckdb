@@ -40,4 +40,4 @@ struct CreateSequenceInfo {
 	}
 };
 
-}
+} // namespace duckdb

@@ -3,8 +3,8 @@
 #include "catalog/catalog.hpp"
 #include "function/scalar_function/list.hpp"
 #include "function/table_function/list.hpp"
-#include "parser/parsed_data/create_table_function_info.hpp"
 #include "parser/parsed_data/create_scalar_function_info.hpp"
+#include "parser/parsed_data/create_table_function_info.hpp"
 
 using namespace duckdb;
 using namespace std;

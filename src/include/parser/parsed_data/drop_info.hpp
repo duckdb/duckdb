@@ -30,4 +30,4 @@ struct DropInfo {
 	}
 };
 
-}
+} // namespace duckdb

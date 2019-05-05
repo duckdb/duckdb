@@ -22,4 +22,4 @@ struct CreateSchemaInfo {
 	}
 };
 
-}
+} // namespace duckdb

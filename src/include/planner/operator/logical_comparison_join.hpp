@@ -10,8 +10,8 @@
 
 #include "common/constants.hpp"
 #include "common/unordered_set.hpp"
-#include "planner/operator/logical_join.hpp"
 #include "planner/joinside.hpp"
+#include "planner/operator/logical_join.hpp"
 
 namespace duckdb {
 

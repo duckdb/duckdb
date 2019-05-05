@@ -10,9 +10,9 @@
 
 #pragma once
 
-#include "main/client_context.hpp"
 #include "benchmark.hpp"
 #include "duckdb.hpp"
+#include "main/client_context.hpp"
 
 namespace duckdb {
 

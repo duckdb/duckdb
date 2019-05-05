@@ -15,8 +15,7 @@ namespace duckdb {
 
 class CreateSchemaStatement : public SQLStatement {
 public:
-	CreateSchemaStatement()
-	    : SQLStatement(StatementType::CREATE_SCHEMA), info(make_unique<CreateSchemaInfo>()){};
+	CreateSchemaStatement() : SQLStatement(StatementType::CREATE_SCHEMA), info(make_unique<CreateSchemaInfo>()){};
 
 	unique_ptr<CreateSchemaInfo> info;
 };

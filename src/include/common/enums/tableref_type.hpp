@@ -24,4 +24,4 @@ enum class TableReferenceType : uint8_t {
 	TABLE_FUNCTION = 5 // table producing function
 };
 
-}
+} // namespace duckdb

@@ -8,9 +8,9 @@
 
 #pragma once
 
+#include "parser/parsed_data/copy_info.hpp"
 #include "parser/query_node.hpp"
 #include "parser/sql_statement.hpp"
-#include "parser/parsed_data/copy_info.hpp"
 
 #include <vector>
 

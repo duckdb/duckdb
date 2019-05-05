@@ -36,4 +36,4 @@ struct CreateTableFunctionInfo {
 	}
 };
 
-}
+} // namespace duckdb

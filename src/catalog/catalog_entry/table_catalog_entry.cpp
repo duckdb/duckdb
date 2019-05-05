@@ -8,11 +8,10 @@
 #include "main/connection.hpp"
 #include "main/database.hpp"
 #include "parser/constraints/list.hpp"
+#include "parser/parsed_data/alter_table_info.hpp"
+#include "parser/parsed_data/create_table_info.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
 #include "storage/storage_manager.hpp"
-#include "parser/parsed_data/create_table_info.hpp"
-#include "parser/parsed_data/alter_table_info.hpp"
-
 
 #include <algorithm>
 

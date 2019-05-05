@@ -31,4 +31,4 @@ enum class JoinType : uint8_t {
 
 string JoinTypeToString(JoinType type);
 
-}
+} // namespace duckdb

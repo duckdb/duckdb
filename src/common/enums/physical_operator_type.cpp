@@ -4,7 +4,6 @@ using namespace std;
 
 namespace duckdb {
 
-
 string PhysicalOperatorToString(PhysicalOperatorType type) {
 	switch (type) {
 	case PhysicalOperatorType::LEAF:
@@ -89,4 +88,4 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 	}
 }
 
-}
+} // namespace duckdb

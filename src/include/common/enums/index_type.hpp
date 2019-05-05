@@ -21,4 +21,4 @@ enum class IndexType {
 	BTREE = 2        // B+-Tree
 };
 
-}
+} // namespace duckdb

@@ -46,6 +46,7 @@ public:
 	//! Issues a query to the database and materializes the result (if necessary). Always returns a
 	//! MaterializedQueryResult.
 	unique_ptr<MaterializedQueryResult> Query(string query);
+
 public:
 	DuckDB &db;
 	unique_ptr<ClientContext> context;

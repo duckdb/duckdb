@@ -1,4 +1,5 @@
 #include "common/enums/expression_type.hpp"
+
 #include "common/exception.hpp"
 
 using namespace std;
@@ -252,4 +253,4 @@ ExpressionType FlipComparisionExpression(ExpressionType type) {
 	return flipped_type;
 }
 
-}
+} // namespace duckdb

@@ -31,4 +31,4 @@ struct CreateViewInfo {
 	}
 };
 
-}
+} // namespace duckdb

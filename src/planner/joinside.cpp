@@ -1,4 +1,5 @@
 #include "planner/joinside.hpp"
+
 #include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/expression/bound_comparison_expression.hpp"
 #include "planner/expression/bound_subquery_expression.hpp"
@@ -6,7 +7,6 @@
 
 using namespace duckdb;
 using namespace std;
-
 
 unique_ptr<Expression> JoinCondition::CreateExpression(JoinCondition cond) {
 	return make_unique<BoundComparisonExpression>(cond.comparison, move(cond.left), move(cond.right));
@@ -26,7 +26,7 @@ JoinSide JoinSide::CombineJoinSide(JoinSide left, JoinSide right) {
 }
 
 JoinSide JoinSide::GetJoinSide(size_t table_binding, unordered_set<size_t> &left_bindings,
-                                            unordered_set<size_t> &right_bindings) {
+                               unordered_set<size_t> &right_bindings) {
 	if (left_bindings.find(table_binding) != left_bindings.end()) {
 		// column references table on left side
 		assert(right_bindings.find(table_binding) == right_bindings.end());
@@ -39,7 +39,7 @@ JoinSide JoinSide::GetJoinSide(size_t table_binding, unordered_set<size_t> &left
 }
 
 JoinSide JoinSide::GetJoinSide(Expression &expression, unordered_set<size_t> &left_bindings,
-                                            unordered_set<size_t> &right_bindings) {
+                               unordered_set<size_t> &right_bindings) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)expression;
 		if (colref.depth > 0) {
@@ -73,7 +73,7 @@ JoinSide JoinSide::GetJoinSide(Expression &expression, unordered_set<size_t> &le
 }
 
 JoinSide JoinSide::GetJoinSide(unordered_set<size_t> bindings, unordered_set<size_t> &left_bindings,
-                                            unordered_set<size_t> &right_bindings) {
+                               unordered_set<size_t> &right_bindings) {
 	JoinSide side = JoinSide::NONE;
 	for (auto binding : bindings) {
 		side = CombineJoinSide(side, GetJoinSide(binding, left_bindings, right_bindings));

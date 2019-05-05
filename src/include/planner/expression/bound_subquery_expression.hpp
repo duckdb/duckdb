@@ -8,10 +8,10 @@
 
 #pragma once
 
+#include "common/enums/subquery_type.hpp"
 #include "planner/binder.hpp"
 #include "planner/bound_query_node.hpp"
 #include "planner/expression.hpp"
-#include "common/enums/subquery_type.hpp"
 
 namespace duckdb {
 

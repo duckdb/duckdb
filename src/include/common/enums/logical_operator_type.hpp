@@ -73,4 +73,4 @@ enum class LogicalOperatorType : uint8_t {
 
 string LogicalOperatorToString(LogicalOperatorType type);
 
-}
+} // namespace duckdb

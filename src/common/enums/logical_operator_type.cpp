@@ -77,4 +77,4 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 	}
 }
 
-}
+} // namespace duckdb

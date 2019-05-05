@@ -9,15 +9,14 @@
 #include "main/client_context.hpp"
 #include "main/connection.hpp"
 #include "main/database.hpp"
-#include "parser/parsed_data/drop_info.hpp"
 #include "parser/parsed_data/create_schema_info.hpp"
 #include "parser/parsed_data/create_table_info.hpp"
 #include "parser/parsed_data/create_view_info.hpp"
+#include "parser/parsed_data/drop_info.hpp"
 #include "planner/binder.hpp"
+#include "storage/data_table.hpp"
 #include "transaction/transaction.hpp"
 #include "transaction/transaction_manager.hpp"
-#include "main/client_context.hpp"
-#include "storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;
