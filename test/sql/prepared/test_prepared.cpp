@@ -229,7 +229,7 @@ TEST_CASE("PREPARE and DROPping tables", "[prepared]") {
 
 TEST_CASE("PREPARE and WAL", "[prepared][.]") {
 	unique_ptr<QueryResult> result;
-	auto prepare_database = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "prepare_test");
+	auto prepare_database = TestCreatePath("prepare_test");
 
 	// make sure the database does not exist
 	DeleteDatabase(prepare_database);

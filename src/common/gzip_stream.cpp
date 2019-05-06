@@ -94,10 +94,6 @@ void GzipStreamBuf::initialize() {
 	mz_stream_ptr = new mz_stream();
 	// TODO use custom alloc/free methods in miniz to throw exceptions on OOM
 
-	if (!FileSystem::FileExists(filename)) {
-		throw Exception("File does not exist");
-	}
-
 	FstreamUtil::OpenFile(filename, input, ios::in | ios::binary);
 
 	input.read((char *)gzip_hdr, GZIP_HEADER_MINSIZE);

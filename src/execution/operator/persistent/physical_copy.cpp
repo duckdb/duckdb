@@ -4,6 +4,8 @@
 #include "common/file_system.hpp"
 #include "common/gzip_stream.hpp"
 #include "main/client_context.hpp"
+#include "main/database.hpp"
+
 #include "storage/data_table.hpp"
 
 #include <algorithm>
@@ -95,7 +97,7 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 		int64_t linenr = 0;
 		string line;
 
-		if (!FileSystem::FileExists(info.file_path)) {
+		if (!context.db.file_system->FileExists(info.file_path)) {
 			throw Exception("File not found");
 		}
 

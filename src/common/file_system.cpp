@@ -18,7 +18,7 @@ using namespace std;
 
 struct UnixFileHandle : public FileHandle {
 public:
-	UnixFileHandle(string path, int fd) : FileHandle(path), fd(fd) {
+	UnixFileHandle(FileSystem& file_system, string path, int fd) : FileHandle(file_system, path), fd(fd) {
 	}
 	virtual ~UnixFileHandle() {
 		Close();
@@ -87,7 +87,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 			throw IOException("Could not set lock on file \"%s\": %s", path, strerror(errno));
 		}
 	}
-	return make_unique<UnixFileHandle>(path, fd);
+	return make_unique<UnixFileHandle>(*this, path, fd);
 }
 
 static void seek_in_file(FileHandle &handle, uint64_t location) {
@@ -495,11 +495,11 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 #endif
 
 void FileHandle::Read(void *buffer, uint64_t nr_bytes, uint64_t location) {
-	FileSystem::Read(*this, buffer, nr_bytes, location);
+	file_system.Read(*this, buffer, nr_bytes, location);
 }
 
 void FileHandle::Write(void *buffer, uint64_t nr_bytes, uint64_t location) {
-	FileSystem::Write(*this, buffer, nr_bytes, location);
+	file_system.Write(*this, buffer, nr_bytes, location);
 }
 
 string FileSystem::JoinPath(const string &a, const string &b) {

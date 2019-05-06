@@ -6,7 +6,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test connection using a read only database", "[readonly]") {
-	auto dbdir = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "read_only_test");
+	auto dbdir = TestCreatePath("read_only_test");
 	unique_ptr<DuckDB> db, db2;
 	unique_ptr<Connection> con;
 	// make sure the database does not exist
