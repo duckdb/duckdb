@@ -21,7 +21,11 @@ public:
 		memset(child, 0, sizeof(child));
 	}
 
+	//! Get Node4 Child
 	Node **getChild(const uint8_t k);
+	//! Insert Leaf to the Node4
 	static void insert(Node4 *node, Node **nodeRef, uint8_t keyByte, Node *child);
+	//! Delete Leaf from Node4
+	void erase(Node4* node,Node** nodeRef,Node** leafPlace);
 };
 } // namespace duckdb

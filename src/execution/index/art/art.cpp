@@ -66,6 +66,33 @@ void ART::Insert(DataChunk &input, Vector &row_ids) {
 	}
 }
 
+void ART::Delete(DataChunk &input, Vector &row_ids) {
+    if (input.column_count > 1) {
+        throw NotImplementedException("We only support single dimensional indexes currently");
+    }
+    this->tree;
+    assert(row_ids.type == TypeId::POINTER);
+    assert(input.size() == row_ids.count);
+    assert(types[0] == input.data[0].type);
+    switch (input.data[0].type) {
+        case TypeId::BOOLEAN:
+        case TypeId::TINYINT:
+            templated_delete<int8_t>(input, row_ids);
+            break;
+        case TypeId::SMALLINT:
+            templated_delete<int16_t>(input, row_ids);
+            break;
+        case TypeId::INTEGER:
+            templated_delete<int32_t>(input, row_ids);
+            break;
+        case TypeId::BIGINT:
+            templated_delete<int64_t>(input, row_ids);
+            break;
+        default:
+            throw InvalidTypeException(input.data[0].type, "Invalid type for index");
+    }
+}
+
 unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &transaction, vector<column_t> column_ids,
                                                               Value value, ExpressionType expression_type) {
 	auto result = make_unique<ARTIndexScanState>(column_ids);
@@ -92,6 +119,71 @@ void ART::Append(ClientContext &context, DataChunk &appended_data, size_t row_id
     Insert(expression_result, row_identifiers);
 }
 
+void ART::Delete(Vector &row_identifiers) {
+    lock_guard<mutex> l(lock);
+    Delete(row_identifiers);
+}
+
+bool ART::leafMatches(bool is_little_endian,Node* node,Key &key,unsigned keyLength,unsigned depth) {
+    if (depth!=keyLength) {
+        auto leaf = static_cast<Leaf *>(node);
+        Key &leafKey = *new Key(is_little_endian,types[0], leaf->value);
+        for (unsigned i=depth;i<keyLength;i++)
+            if (leafKey[i]!=key[i])
+                return false;
+    }
+    return true;
+}
+
+void ART::erase(bool isLittleEndian,Node* node,Node** nodeRef,Key& key,unsigned depth, unsigned maxKeyLength,
+                TypeId type, uint64_t row_id){
+    if (!node)
+        return;
+    // Delete a leaf from a tree
+    if (node->type == NodeType::NLeaf) {
+        // Make sure we have the right leaf
+        if (ART::leafMatches(isLittleEndian,node,key,maxKeyLength,depth))
+            *nodeRef=NULL;
+        return;
+    }
+
+    // Handle prefix
+    if (node->prefixLength) {
+        if (Node::prefixMismatch(isLittleEndian,node, key, depth, maxKeyLength, type)!=node->prefixLength)
+            return;
+        depth+=node->prefixLength;
+    }
+
+    Node* child= *Node::findChild(key[depth], node);
+    if (child->type == NodeType::NLeaf&&leafMatches(isLittleEndian,child,key,maxKeyLength,depth)) {
+        // Leaf found, delete it in inner node
+        switch (node->type) {
+            case NodeType::N4 :{
+                auto n = static_cast< Node4 *>(node);
+                n->erase(static_cast<Node4*>(node),nodeRef,&child);
+                break;
+            }
+            case NodeType::N16 :{
+                auto n = static_cast< Node16 *>(node);
+                n->erase(static_cast<Node16*>(node),nodeRef,&child);
+                break;
+            }
+            case NodeType::N48 :{
+                auto n = static_cast< Node48 *>(node);
+                n->erase(static_cast<Node48 *>(node),nodeRef,key[depth]);
+                break;
+            }
+            case NodeType::N256 :{
+                auto n = static_cast< Node256 *>(node);
+                n->erase(static_cast<Node256*>(node),nodeRef,key[depth]);
+                break;
+            }
+        }
+    } else {
+        //Recurse
+        erase(isLittleEndian,child,&child,key,maxKeyLength,depth+1,type,row_id);
+    }
+}
 
 void ART::insert(bool isLittleEndian,Node *node, Node **nodeRef, Key& key, unsigned depth, uintptr_t value, unsigned maxKeyLength,
                   TypeId type, uint64_t row_id) {
@@ -157,7 +249,7 @@ void ART::insert(bool isLittleEndian,Node *node, Node **nodeRef, Key& key, unsig
 
     // Recurse
     Node **child = Node::findChild(key[depth], node);
-    if (*child) {
+    if (child) {
         insert(isLittleEndian,*child, child, key, depth + 1, value, maxKeyLength, type, row_id);
         return;
     }
@@ -239,7 +331,11 @@ Node *ART::lookup(Node *node, Key& key, unsigned keyLength, unsigned depth) {
             depth += node->prefixLength;
         }
 
-        node = *Node::findChild(key[depth], node);
+        auto posNode = Node::findChild(key[depth], node);
+        if(posNode)
+            node = *posNode;
+        else
+            return NULL;
         depth++;
     }
 

@@ -36,8 +36,10 @@ class ART : public Index {
 public:
 	ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, vector<TypeId> expression_types,
 	    vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> unbound_expressions);
-	//! Insert data into the index, one element at a time
+	//! Insert data into the index
 	void Insert(DataChunk &data, Vector &row_ids);
+	//! Delete data from the index
+    void Delete(DataChunk &input, Vector &row_ids);
 	//! Print the index to the console
 	void Print(){
 
@@ -65,6 +67,8 @@ public:
 	void Update(ClientContext &context, vector<column_t> &column_ids, DataChunk &update_data,
 	            Vector &row_identifiers) override{};
 
+    //! Delete entries in the index
+    void Delete(Vector &row_identifiers) override;
 	//! Lock used for updating the index
 	std::mutex lock;
 	//! Root of the tree
@@ -82,9 +86,16 @@ public:
 	uint8_t maxPrefix;
 
 private:
-		//! Insert the leaf value into the tree
-		void insert(bool isLittleEndian,Node *node, Node **nodeRef, Key& key, unsigned depth, uintptr_t value, unsigned maxKeyLength,
-                TypeId type, uint64_t row_id);
+    //! Insert the leaf value into the tree
+    void insert(bool isLittleEndian,Node *node, Node **nodeRef, Key& key, unsigned depth, uintptr_t value, unsigned maxKeyLength,
+            TypeId type, uint64_t row_id);
+
+	void erase(bool isLittleEndian,Node* node,Node** nodeRef,Key& key,unsigned depth, unsigned maxKeyLength,
+			   TypeId type, uint64_t row_id);
+
+	//! Check if the key of the leaf is equal to the searched key
+    bool leafMatches(bool is_little_endian,Node* node,Key &key,unsigned keyLength,unsigned depth);
+
 
     Node* lookupRange(Node *node, Key& low_key, Key& high_key,unsigned keyLength, unsigned depth);
 
@@ -100,7 +111,15 @@ private:
 		}
 	}
 
-	// TODO: For now only lookup
+    template <class T> void templated_delete(DataChunk &input, Vector &row_ids) {
+        auto input_data = (T *)input.data[0].data;
+        auto row_identifiers = (uint64_t *)row_ids.data;
+        for (size_t i = 0; i < row_ids.count; i++) {
+            Key & key = *new Key(this->is_little_endian,input.data[0].type, input_data[i]);
+            erase(this->is_little_endian,tree, &tree, key, 0, 8, input.data[0].type, row_identifiers[i]);
+        }
+    }
+
 	template <class T> size_t templated_lookup(TypeId type, T data, uint64_t *result_ids) {
         Key& key= *new Key(this->is_little_endian, type, data);
         size_t result_count = 0;

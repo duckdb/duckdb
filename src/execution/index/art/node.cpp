@@ -73,6 +73,7 @@ Node **Node::findChild(const uint8_t k, Node *node) {
 	assert(false);
 }
 
+
 unsigned Node::prefixMismatch(bool isLittleEndian, Node *node, Key &key, size_t depth, unsigned maxKeyLength, TypeId type) {
 	size_t pos;
 	if (node->prefixLength > node->maxPrefixLength) {

@@ -61,7 +61,8 @@ public:
 	virtual void Update(ClientContext &context, vector<column_t> &column_ids, DataChunk &update_data,
 	                    Vector &row_identifiers) = 0;
 
-	// FIXME: what about delete?
+	//! Called when data inside the index is Deleted
+	virtual void Delete(Vector &row_identifiers) = 0;
 };
 
 } // namespace duckdb

@@ -20,9 +20,15 @@ public:
 		memset(key, 0, sizeof(key));
 		memset(child, 0, sizeof(child));
 	}
+
+	//! Get Node16 Child
 	Node **getChild(const uint8_t k);
 
-	//! Insert leaf into inner node
+	//! Insert node into Node16
 	void static insert(Node16 *node, Node **nodeRef, uint8_t keyByte, Node *child);
-};
+
+	//! Delete node from Node16
+	void erase(Node16* node,Node** nodeRef,Node** leafPlace);
+
+	};
 } // namespace duckdb

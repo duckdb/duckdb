@@ -1,7 +1,9 @@
+#include "execution/index/art/node4.hpp"
 #include "execution/index/art/node16.hpp"
 #include "execution/index/art/node48.hpp"
 
 using namespace duckdb;
+
 
 // TODO : In the future this can be performed using SIMD (#include <emmintrin.h>  x86 SSE intrinsics)
 Node **Node16::getChild(const uint8_t k) {
@@ -10,9 +12,7 @@ Node **Node16::getChild(const uint8_t k) {
 			return &child[i];
 		}
 	}
-	// This address is used to communicate that search failed
-	Node* nullNode=NULL;
-	return &nullNode;
+	return NULL;
 }
 
 void Node16::insert(Node16 *node, Node **nodeRef, uint8_t keyByte, Node *child) {
@@ -38,5 +38,25 @@ void Node16::insert(Node16 *node, Node **nodeRef, uint8_t keyByte, Node *child) 
 		newNode->count = node->count;
 		delete node;
 		return Node48::insert(newNode, nodeRef, keyByte, child);
+	}
+}
+
+void Node16::erase(Node16* node,Node** nodeRef,Node** leafPlace) {
+	// Delete leaf from inner node
+	unsigned pos=leafPlace-node->child;
+	memmove(node->key+pos,node->key+pos+1,node->count-pos-1);
+	memmove(node->child+pos,node->child+pos+1,(node->count-pos-1)*sizeof(uintptr_t));
+	node->count--;
+
+	if (node->count==3) {
+		// Shrink to Node4
+		Node4* newNode=new Node4();
+		newNode->count=node->count;
+		copyPrefix(node,newNode);
+		for (unsigned i=0;i<4;i++)
+			newNode->key[i]=node->key[i];
+		memcpy(newNode->child,node->child,sizeof(uintptr_t)*4);
+		*nodeRef=newNode;
+		delete node;
 	}
 }

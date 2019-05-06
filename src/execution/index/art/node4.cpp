@@ -9,9 +9,7 @@ Node **Node4::getChild(const uint8_t k)  {
 			return &child[i];
 		}
 	}
-	// This address is used to communicate that search failed
-	Node* nullNode=NULL;
-	return &nullNode;
+	return NULL;
 }
 
 void Node4::insert(Node4 *node, Node **nodeRef, uint8_t keyByte, Node *child) {
@@ -37,5 +35,36 @@ void Node4::insert(Node4 *node, Node **nodeRef, uint8_t keyByte, Node *child) {
 		memcpy(newNode->child, node->child, node->count * sizeof(uintptr_t));
 		delete node;
 		return Node16::insert(newNode, nodeRef, keyByte, child);
+	}
+}
+
+void Node4::erase(Node4* node,Node** nodeRef,Node** leafPlace) {
+	// Delete leaf from inner node
+	unsigned pos=leafPlace-node->child;
+	memmove(node->key+pos,node->key+pos+1,node->count-pos-1);
+	memmove(node->child+pos,node->child+pos+1,(node->count-pos-1)*sizeof(uintptr_t));
+	node->count--;
+
+	if (node->count==1) {
+		// Get rid of one-way node
+		Node* child=node->child[0];
+		if (child->type==NodeType::NLeaf) {
+			// Concantenate prefixes
+			unsigned l1=node->prefixLength;
+			if (l1<maxPrefixLength) {
+				node->prefix[l1]=node->key[0];
+				l1++;
+			}
+			if (l1<maxPrefixLength) {
+				unsigned l2=min(child->prefixLength,maxPrefixLength-l1);
+				memcpy(node->prefix+l1,child->prefix,l2);
+				l1+=l2;
+			}
+			// Store concantenated prefix
+			memcpy(child->prefix,node->prefix,min(l1,maxPrefixLength));
+			child->prefixLength+=node->prefixLength+1;
+		}
+		*nodeRef=child;
+		delete node;
 	}
 }

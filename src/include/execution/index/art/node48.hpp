@@ -21,7 +21,13 @@ public:
 		memset(child, 0, sizeof(child));
 	}
 
+	//! Get Node48 Child
 	Node **getChild(const uint8_t k);
+
+	//! Insert node in Node48
 	static void insert(Node48 *node, Node **nodeRef, uint8_t keyByte, Node *child);
+
+	//! Delete node From Node48
+	void erase(Node48* node,Node** nodeRef,uint8_t keyByte);
 };
 } // namespace duckdb

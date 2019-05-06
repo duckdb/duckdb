@@ -82,6 +82,13 @@ TEST_CASE("ART Index Int", "[art-int]") {
     result = con.Query("SELECT SUM(i) FROM integers WHERE i="+ to_string(1));
     REQUIRE(CHECK_COLUMN(result, 0, {Value(2)}));
 
+    // Now Doing Deletes
+    REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=15"));
+    // check the value again
+    result = con.Query("SELECT * FROM integers WHERE i=15");
+    REQUIRE(CHECK_COLUMN(result, 0, {}));
+
+
     REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
     REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 }

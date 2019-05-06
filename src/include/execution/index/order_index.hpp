@@ -62,6 +62,11 @@ public:
 	void Update(ClientContext &context, vector<column_t> &column_ids, DataChunk &update_data,
 	            Vector &row_identifiers) override;
 
+	//! TODO: Implement Delete for Order Index
+	void Delete(Vector &row_identifiers) override{
+		throw NotImplementedException("Delete is unimplemented for Order Index");
+	};
+
 	//! Lock used for updating the index
 	std::mutex lock;
 	//! The table

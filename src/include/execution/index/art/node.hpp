@@ -17,7 +17,7 @@ enum class NodeType : uint8_t { N4 = 0, N16 = 1, N48 = 2, N256 = 3, NLeaf = 4 };
 
 class Node {
 public:
-	//! length of the compressed path (prefix)
+    //! length of the compressed path (prefix)
 	uint32_t prefixLength;
 	//! number of non-null children
 	uint16_t count;

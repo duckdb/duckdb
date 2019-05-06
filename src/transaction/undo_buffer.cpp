@@ -9,6 +9,7 @@
 #include "storage/write_ahead_log.hpp"
 
 #include <unordered_map>
+#include <transaction/transaction.hpp>
 
 using namespace duckdb;
 using namespace std;
@@ -225,7 +226,34 @@ void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
 				info->table->cardinality++;
 			} else if (entry.type == UndoFlags::DELETE_TUPLE) {
 				// deletion?
+				// FIXME: put into Cleanup, not Commit
+				assert(info->chunk);
+				assert(info->tuple_data);
 				info->table->cardinality--;
+				if (info->table->indexes.size() > 0) {
+					Value ptr = Value::POINTER(info->chunk->start + info->prev.entry);
+					uint8_t *alternate_version_pointers[1];
+					size_t alternate_version_index[1];
+
+					alternate_version_pointers[0] = info->tuple_data;
+					alternate_version_index[0] = 0;
+
+					DataChunk result;
+					result.Initialize(info->table->types);
+
+					vector<column_t> column_ids;
+					for(size_t i = 0; i < info->table->types.size(); i++) {
+						column_ids.push_back(i);
+					}
+					Vector row_identifiers(ptr);
+
+					info->table->RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index, 1);
+					// FIXME: delete from index
+					int x = 5;
+//					for(auto &index : info->table->indexes) {
+//						index.Delete(row_identifiers);
+//					}
+				}
 			}
 
 			// push the tuple update to the WAL
