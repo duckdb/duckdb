@@ -58,7 +58,7 @@ TEST_CASE("ART Index Int", "[art-int]") {
     int32_t* keys=new int32_t[n];
     for (size_t i=0;i<n;i++)
         keys[i]=i+1;
-    std::random_shuffle(keys,keys+n);
+//    std::random_shuffle(keys,keys+n);
 
     for (size_t i = 0; i < n; i++) {
         REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(keys[i]) + ")"));
@@ -114,12 +114,13 @@ TEST_CASE("ART Index Int", "[art-int]") {
     REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
 
 
-    // Now Doing Deletes
-    REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=15"));
-    // check the value again
-    result = con.Query("SELECT * FROM integers WHERE i=15");
-    REQUIRE(CHECK_COLUMN(result, 0, {}));
-
+    // Now Deleting all elements
+    for (size_t i = 0; i < n; i++) {
+        REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=" + to_string(i) + ""));
+        // check the value does not exist
+        result = con.Query("SELECT * FROM integers WHERE i=" + to_string(i) + "");
+        REQUIRE(CHECK_COLUMN(result, 0, {}));
+    }
 
     REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
     REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));

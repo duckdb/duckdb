@@ -70,6 +70,7 @@ void ART::Delete(DataChunk &input, Vector &row_ids) {
     if (input.column_count > 1) {
         throw NotImplementedException("We only support single dimensional indexes currently");
     }
+    lock_guard<mutex> l(lock);
     this->tree;
     assert(row_ids.type == TypeId::POINTER);
     assert(input.size() == row_ids.count);
@@ -119,11 +120,6 @@ void ART::Append(ClientContext &context, DataChunk &appended_data, size_t row_id
     Insert(expression_result, row_identifiers);
 }
 
-void ART::Delete(Vector &row_identifiers) {
-    lock_guard<mutex> l(lock);
-    Delete(row_identifiers);
-}
-
 bool ART::leafMatches(bool is_little_endian,Node* node,Key &key,unsigned keyLength,unsigned depth) {
     if (depth!=keyLength) {
         auto leaf = static_cast<Leaf *>(node);
@@ -154,34 +150,40 @@ void ART::erase(bool isLittleEndian,Node* node,Node** nodeRef,Key& key,unsigned 
         depth+=node->prefixLength;
     }
 
-    Node* child= *Node::findChild(key[depth], node);
-    if (child->type == NodeType::NLeaf&&leafMatches(isLittleEndian,child,key,maxKeyLength,depth)) {
-        // Leaf found, delete it in inner node
-        switch (node->type) {
-            case NodeType::N4 :{
-                auto n = static_cast< Node4 *>(node);
-                n->erase(static_cast<Node4*>(node),nodeRef,&child);
-                break;
-            }
-            case NodeType::N16 :{
-                auto n = static_cast< Node16 *>(node);
-                n->erase(static_cast<Node16*>(node),nodeRef,&child);
-                break;
-            }
-            case NodeType::N48 :{
-                auto n = static_cast< Node48 *>(node);
-                n->erase(static_cast<Node48 *>(node),nodeRef,key[depth]);
-                break;
-            }
-            case NodeType::N256 :{
-                auto n = static_cast< Node256 *>(node);
-                n->erase(static_cast<Node256*>(node),nodeRef,key[depth]);
-                break;
+    Node **child = Node::findChild(key[depth], node);
+
+    if ((*child)->type == NodeType::NLeaf && leafMatches(isLittleEndian,*child,key,maxKeyLength,depth)) {
+        // Leaf found, remove entry
+        auto leaf = static_cast<Leaf *>(*child);
+        if (leaf->num_elements>1){
+            leaf->remove(leaf,row_id);
+            return;
+        }
+        else{
+            // Leaf only has one element, delete leaf
+            switch (node->type) {
+                case NodeType::N4 :
+                    Node4::erase(static_cast< Node4 *>(node),nodeRef,child);
+                    break;
+
+                case NodeType::N16 :
+                    Node16::erase(static_cast< Node16 *>(node),nodeRef,child);
+                    break;
+
+                case NodeType::N48 :
+                    Node48::erase(static_cast< Node48 *>(node),nodeRef,key[depth]);
+                    break;
+
+                case NodeType::N256 :
+                    Node256::erase(static_cast< Node256 *>(node),nodeRef,key[depth]);
+                    break;
+
             }
         }
+
     } else {
         //Recurse
-        erase(isLittleEndian,child,&child,key,maxKeyLength,depth+1,type,row_id);
+        erase(isLittleEndian,*child,child,key,depth+1,maxKeyLength,type,row_id);
     }
 }
 
@@ -343,6 +345,49 @@ Node *ART::lookup(Node *node, Key& key, unsigned keyLength, unsigned depth) {
 }
 
 
+void ART::Update(ClientContext &context, vector<column_t> &update_columns, DataChunk &update_data,
+                        Vector &row_identifiers) {
+    // first check if the columns we use here are updated
+    bool index_is_updated = false;
+    for (auto &column : update_columns) {
+        if (find(column_ids.begin(), column_ids.end(), column) != column_ids.end()) {
+            index_is_updated = true;
+            break;
+        }
+    }
+    if (!index_is_updated) {
+        // none of the indexed columns are updated
+        // we can ignore the update
+        return;
+    }
+    // otherwise we need to change the data inside the index
+    lock_guard<mutex> l(lock);
+
+    DataChunk temp_chunk;
+    temp_chunk.Initialize(table.types);
+    temp_chunk.data[0].count = update_data.size();
+    for (size_t i = 0; i < column_ids.size(); i++) {
+        if (column_ids[i] == COLUMN_IDENTIFIER_ROW_ID) {
+            continue;
+        }
+        bool found_column = false;
+        for (size_t j = 0; i < update_columns.size(); j++) {
+            if (column_ids[i] == update_columns[j]) {
+                temp_chunk.data[column_ids[i]].Reference(update_data.data[update_columns[j]]);
+                found_column = true;
+                break;
+            }
+        }
+        assert(found_column);
+    }
+
+    // now resolve the expressions on the temp_chunk
+    ExpressionExecutor executor(temp_chunk);
+    executor.Execute(expressions, expression_result);
+
+    // insert the expression result
+    Insert(expression_result, row_identifiers);
+}
 
 
 void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) {
@@ -354,9 +399,6 @@ void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) 
 	do {
 		auto row_ids = (uint64_t *)result_identifiers.data;
 		assert(state->values[0].type == types[0]);
-//		switch(state->expressions[0]){
-//		    case :
-//		}
 		switch (types[0]) {
 		case TypeId::BOOLEAN:
 			result_identifiers.count = templated_lookup<int8_t>(types[0], state->values[0].value_.boolean, row_ids);

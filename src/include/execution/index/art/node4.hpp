@@ -26,6 +26,6 @@ public:
 	//! Insert Leaf to the Node4
 	static void insert(Node4 *node, Node **nodeRef, uint8_t keyByte, Node *child);
 	//! Delete Leaf from Node4
-	void erase(Node4* node,Node** nodeRef,Node** leafPlace);
+	static void erase(Node4* node,Node** nodeRef,Node** leafPlace);
 };
 } // namespace duckdb

@@ -63,7 +63,7 @@ public:
 	            Vector &row_identifiers) override;
 
 	//! TODO: Implement Delete for Order Index
-	void Delete(Vector &row_identifiers) override{
+	void Delete(DataChunk &entries,Vector &row_identifiers) override{
 		throw NotImplementedException("Delete is unimplemented for Order Index");
 	};
 

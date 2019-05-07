@@ -105,7 +105,7 @@ void Node::insertLeaf(Node *node, Node **nodeRef, uint8_t key, Node *newNode) {
 		Node48::insert(static_cast<Node48 *>(node), nodeRef, key, newNode);
 		break;
 	case NodeType::N256:
-		Node256::insert(static_cast<Node256 *>(node), nodeRef, key, newNode);
+		Node256::insert(static_cast<Node256 *>(node), key, newNode);
 		break;
 	}
 }

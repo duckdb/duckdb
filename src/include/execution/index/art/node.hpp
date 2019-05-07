@@ -70,6 +70,20 @@ public:
 		leaf->row_id[leaf->num_elements] = row_id;
 		leaf->num_elements++;
 	}
+
+	//! TODO: Maybe shrink array dynamically?
+	static void remove(Leaf *leaf, uint64_t row_id) {
+		size_t entry_offset;
+		for (size_t i = 0; i < leaf->num_elements; i++) {
+			if (leaf->row_id[i] == row_id) {
+				entry_offset = i;
+				break;
+			}
+		}
+		leaf->num_elements--;
+		for (size_t j = entry_offset; j < leaf->num_elements; j++)
+			leaf->row_id[j] = leaf->row_id[j + 1];
+	}
 };
 
 } // namespace duckdb

@@ -32,7 +32,8 @@ void Node48::insert(Node48 *node, Node **nodeRef, uint8_t keyByte, Node *child) 
 		copyPrefix(node, newNode);
 		*nodeRef = newNode;
 		delete node;
-		return Node256::insert(newNode, nodeRef, keyByte, child);
+		Node256::insert(newNode, keyByte, child);
+		return;
 	}
 }
 

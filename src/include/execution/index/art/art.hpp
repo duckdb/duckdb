@@ -38,8 +38,6 @@ public:
 	    vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> unbound_expressions);
 	//! Insert data into the index
 	void Insert(DataChunk &data, Vector &row_ids);
-	//! Delete data from the index
-    void Delete(DataChunk &input, Vector &row_ids);
 	//! Print the index to the console
 	void Print(){
 
@@ -65,10 +63,10 @@ public:
 	void Append(ClientContext &context, DataChunk &entries, size_t row_identifier_start) override;
 	//! Update entries in the index
 	void Update(ClientContext &context, vector<column_t> &column_ids, DataChunk &update_data,
-	            Vector &row_identifiers) override{};
+	            Vector &row_identifiers) override;
 
     //! Delete entries in the index
-    void Delete(Vector &row_identifiers) override;
+    void Delete(DataChunk &entries,Vector &row_identifiers) override;
 	//! Lock used for updating the index
 	std::mutex lock;
 	//! Root of the tree

@@ -28,6 +28,6 @@ public:
 	static void insert(Node48 *node, Node **nodeRef, uint8_t keyByte, Node *child);
 
 	//! Delete node From Node48
-	void erase(Node48* node,Node** nodeRef,uint8_t keyByte);
+	static void erase(Node48* node,Node** nodeRef,uint8_t keyByte);
 };
 } // namespace duckdb

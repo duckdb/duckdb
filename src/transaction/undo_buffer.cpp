@@ -67,9 +67,9 @@ void UndoBuffer::Cleanup() {
                     Vector row_identifiers(ptr);
 
                     info->table->RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index, 1);
-//					for(auto &index : info->table->indexes) {
-//						index.Delete(result, row_identifiers);
-//					}
+					for(auto &index : info->table->indexes) {
+						index->Delete(result, row_identifiers);
+					}
                 }
 			}
 			if (info->chunk) {
@@ -310,8 +310,9 @@ void UndoBuffer::Rollback() {
 					Vector row_identifiers(ptr);
 
 					info->table->RetrieveBaseTableData(result, column_ids, regular_entries, 1, info->chunk, rowid);
-					// FIXME: delete from index
-					int x = 5;
+                    for(auto &index : info->table->indexes) {
+                        index->Delete(result, row_identifiers);
+                    }
 				}
 			}
 			if (info->chunk) {

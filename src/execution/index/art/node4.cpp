@@ -51,17 +51,17 @@ void Node4::erase(Node4* node,Node** nodeRef,Node** leafPlace) {
 		if (child->type==NodeType::NLeaf) {
 			// Concantenate prefixes
 			unsigned l1=node->prefixLength;
-			if (l1<maxPrefixLength) {
+			if (l1<node->maxPrefixLength) {
 				node->prefix[l1]=node->key[0];
 				l1++;
 			}
-			if (l1<maxPrefixLength) {
-				unsigned l2=min(child->prefixLength,maxPrefixLength-l1);
+			if (l1<node->maxPrefixLength) {
+				unsigned l2=min(child->prefixLength,node->maxPrefixLength-l1);
 				memcpy(node->prefix+l1,child->prefix,l2);
 				l1+=l2;
 			}
 			// Store concantenated prefix
-			memcpy(child->prefix,node->prefix,min(l1,maxPrefixLength));
+			memcpy(child->prefix,node->prefix,min(l1,node->maxPrefixLength));
 			child->prefixLength+=node->prefixLength+1;
 		}
 		*nodeRef=child;

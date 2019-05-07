@@ -23,9 +23,10 @@ public:
 	Node **getChild(const uint8_t k);
 
 	//! Insert node From Node256
-	static void insert(Node256 *node, Node **nodeRef, uint8_t keyByte, Node *child);
+	static void insert(Node256 *node, uint8_t keyByte, Node *child);
 
 	//! Delete node From Node256
-	void erase(Node256* node,Node** nodeRef,uint8_t keyByte);
+	static void erase(Node256* node,Node** nodeRef,uint8_t keyByte);
+
 };
 } // namespace duckdb
