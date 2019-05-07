@@ -248,7 +248,8 @@ struct VectorOperations {
 	template <typename T, class FUNC>
 	static void ExecType(Vector &vector, FUNC &&fun, size_t offset = 0, size_t limit = 0) {
 		auto data = (T *)vector.data;
-		VectorOperations::Exec(vector, [&](size_t i, size_t k) { fun(data[i], i, k); }, offset, limit);
+		VectorOperations::Exec(
+		    vector, [&](size_t i, size_t k) { fun(data[i], i, k); }, offset, limit);
 	}
 	template <class FUNC> static void BinaryExec(Vector &a, Vector &b, Vector &result, FUNC &&fun) {
 		// it might be the case that not everything has a selection vector
