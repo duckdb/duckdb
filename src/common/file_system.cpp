@@ -3,6 +3,7 @@
 #include "common/exception.hpp"
 #include "common/helper.hpp"
 #include "common/string_util.hpp"
+#include "common/checksum.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -518,26 +519,3 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 	return a + PathSeparator() + b;
 }
 
-Buffer::Buffer(void *internal_buffer, void *buffer, uint64_t size)
-    : buffer(buffer), size(size), internal_buffer(internal_buffer) {
-}
-
-Buffer::~Buffer() {
-	free(internal_buffer);
-}
-
-unique_ptr<Buffer> Buffer::AllocateAlignedBuffer(uint64_t bufsiz) {
-	assert(bufsiz % 4096 == 0);
-	// we add 4095 to ensure that we can align the buffer to 4096
-	void *internal_buffer = malloc(bufsiz + 4095);
-	// round to multiple of 4096
-	uint64_t num = (uint64_t)internal_buffer;
-	uint64_t remainder = num % 4096;
-	if (remainder != 0) {
-		num = num + 4096 - remainder;
-	}
-	assert(num % 4096 == 0);
-	assert(num + bufsiz <= ((uint64_t)internal_buffer + bufsiz + 4095));
-	assert(num >= (uint64_t)internal_buffer);
-	return unique_ptr<Buffer>(new Buffer(internal_buffer, (void *)num, bufsiz));
-}

@@ -11,13 +11,15 @@
 #include "common/common.hpp"
 #include "storage/block_manager.hpp"
 #include "storage/block.hpp"
+#include "common/file_system.hpp"
 
 namespace duckdb {
+class FileBuffer;
 
 //! SingleFileBlockManager is a implementation for a BlockManager which manages blocks in a single file
 class SingleFileBlockManager : public BlockManager {
 public:
-	SingleFileBlockManager(string path, bool read_only = false);
+	SingleFileBlockManager(string path, bool read_only, bool create_new);
 	//! Returns a pointer to the block of the given id
 	unique_ptr<Block> GetBlock(block_id_t id) override;
 	string GetBlockPath(block_id_t id);
@@ -31,7 +33,9 @@ private:
 	static constexpr int64_t HEADER_SIZE = 4096;
 	//! The path where the file is stored
 	string path;
-	//! The file descriptor
-	int fd;
+	//! The file handle
+	unique_ptr<FileHandle> handle;
+	//! The buffer used to read/write to the headers
+	unique_ptr<FileBuffer> header_buffer;
 };
 } // namespace duckdb

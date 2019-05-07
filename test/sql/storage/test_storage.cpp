@@ -6,6 +6,23 @@
 using namespace duckdb;
 using namespace std;
 
+TEST_CASE("Test empty startup", "[storage]") {
+	unique_ptr<QueryResult> result;
+	auto storage_database = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
+
+	// make sure the database does not exist
+	DeleteDatabase(storage_database);
+	{
+		// create a database and close it
+		DuckDB db(storage_database);
+	}
+	// reload the database
+	{
+		DuckDB db(storage_database);
+	}
+	DeleteDatabase(storage_database);
+}
+
 TEST_CASE("Test simple storage", "[storage]") {
 	unique_ptr<QueryResult> result;
 	auto storage_database = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "storage_test");

@@ -5,7 +5,7 @@ using namespace std;
 
 namespace duckdb {
 
-uint64_t Checksum(char *buffer, size_t size) {
+uint64_t Checksum(uint8_t *buffer, size_t size) {
 	uint64_t result = 5381;
 	uint64_t *ptr = (uint64_t *) buffer;
 	size_t i;

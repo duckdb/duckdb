@@ -49,4 +49,13 @@ uint64_t Hash(const char *val, size_t size) {
 	return hash;
 }
 
+uint64_t Hash(char *val, size_t size) {
+	return Hash((const char*) val, size);
+}
+
+uint64_t Hash(uint8_t *val, size_t size) {
+	return Hash((const char*) val, size);
+}
+
+
 } // namespace duckdb

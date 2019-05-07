@@ -16,6 +16,7 @@
 #include "parser/parsed_data/create_view_info.hpp"
 #include "transaction/transaction_manager.hpp"
 #include "common/types/chunk_collection.hpp"
+#include "storage/single_file_block_manager.hpp"
 
 #include <limits>
 
@@ -57,32 +58,41 @@ void StorageManager::Initialize() {
 }
 
 void StorageManager::LoadDatabase() {
-	// first check if the database exists
 	string wal_path = path + ".wal";
-	block_manager = make_unique<SingleFileBlockManager>(path);
-	// if (!DirectoryExists(path)) {
-	// 	// have to create the directory
-	// 	CreateDirectory(path);
-	// } else {
-	// 	// load from the main storage if it exists
-	// 	LoadFromStorage();
-	// 	// directory already exists
-	// 	// verify that it is an existing database
-	// 	if (FileExists(wal_path)) {
-	// 		// replay the WAL
-	// 		wal.Replay(wal_path);
-	// 		// checkpoint the WAL
-	// 		CreateCheckpoint();
-	// 		// remove the WAL
-	// 		RemoveFile(wal_path);
-	// 	}
-	// }
+	// first check if the database exists
+	if (!FileSystem::FileExists(path)) {
+		if (read_only) {
+			throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist",
+			                       path.c_str());
+		}
+		// check if the WAL exists
+		if (FileSystem::FileExists(wal_path)) {
+			// WAL file exists but database file does not
+			// remove the WAL
+			FileSystem::RemoveFile(wal_path);
+		}
+		// initialize the block manager while creating a new db file
+		block_manager = make_unique<SingleFileBlockManager>(path, read_only, true);
+	} else {
+		// initialize the block manager while loading the current db file
+		block_manager = make_unique<SingleFileBlockManager>(path, read_only, false);
+		// check if the WAL file exists
+		// if (FileSystem::FileExists(wal_path)) {
+		// 	// replay the WAL
+		// 	wal.Replay(wal_path);
+		// 	// checkpoint the WAL
+		// 	CreateCheckpoint();
+		// 	// remove the WAL
+		// 	FileSystem::RemoveFile(wal_path);
+		// }
+	}
+	// FIXME: check if temporary file exists and delete that if it does not
 	// initialize the WAL file
 	wal.Initialize(wal_path);
 }
 
 void StorageManager::CreateCheckpoint() {
-	auto transaction = database.transaction_manager.StartTransaction();
+	auto transaction = database.transaction_manager->StartTransaction();
 
     //! Set up the writers for the checkpoints
 	metadata_writer = make_unique<MetaBlockWriter>(*block_manager);
@@ -93,7 +103,7 @@ void StorageManager::CreateCheckpoint() {
 
 	vector<SchemaCatalogEntry *> schemas;
 	// we scan the schemas
-	database.catalog.schemas.Scan(*transaction,
+	database.catalog->schemas.Scan(*transaction,
 	                              [&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
 	// write the actual data into the database
 	// write the amount of schemas

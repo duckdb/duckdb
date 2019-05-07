@@ -51,5 +51,7 @@ template <> uint64_t Hash(double val);
 template <> uint64_t Hash(const char *val);
 template <> uint64_t Hash(char *val);
 uint64_t Hash(const char *val, size_t size);
+uint64_t Hash(char *val, size_t size);
+uint64_t Hash(uint8_t *val, size_t size);
 
 } // namespace duckdb

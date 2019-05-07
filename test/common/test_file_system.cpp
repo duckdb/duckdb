@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "common/file_buffer.hpp"
 #include "common/file_system.hpp"
 #include "common/fstream.hpp"
 #include "test_helpers.hpp"
@@ -62,11 +63,8 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 
 TEST_CASE("Test file operations", "[file_system]") {
 	unique_ptr<FileHandle> handle, handle2;
-	auto test_buffer1 = Buffer::AllocateAlignedBuffer(sizeof(uint64_t) * INTEGER_COUNT);
-	auto test_buffer2 = Buffer::AllocateAlignedBuffer(sizeof(uint64_t) * INTEGER_COUNT);
-
-	int64_t *test_data = (int64_t *)test_buffer1->buffer;
-	int64_t *test_data2 = (int64_t *)test_buffer2->buffer;
+	int64_t test_data[INTEGER_COUNT];
+	int64_t test_data2[INTEGER_COUNT];
 	for (int i = 0; i < INTEGER_COUNT; i++) {
 		test_data[i] = i;
 		test_data2[i] = 0;
@@ -124,6 +122,35 @@ TEST_CASE("Test file operations", "[file_system]") {
 
 	// we can get a read lock on a file
 	REQUIRE_NOTHROW(handle = FileSystem::OpenFile(fname, FileFlags::READ, FileLockType::READ_LOCK));
+	handle.reset();
+
+	FileSystem::RemoveFile(fname);
+}
+
+TEST_CASE("Test file buffers for reading/writing to file", "[file_system]") {
+	unique_ptr<FileHandle> handle;
+
+	auto fname = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "test_file");
+
+	// create the buffer and fill it with data
+	auto buf = FileBuffer::AllocateAlignedBuffer(4096);
+	int64_t *ptr = (int64_t*) buf->buffer;
+	for(size_t i = 0; i < 10; i++) {
+		ptr[i] = i;
+	}
+
+	// open file for writing
+	REQUIRE_NOTHROW(handle = FileSystem::OpenFile(fname, FileFlags::WRITE | FileFlags::CREATE | FileFlags::DIRECT_IO, FileLockType::WRITE_LOCK));
+	// write the buffer
+	REQUIRE_NOTHROW(buf->Write(*handle, 0));
+	// clear the buffer
+	buf->Clear();
+	// now read data back into the buffer
+	REQUIRE_NOTHROW(buf->Read(*handle, 0));
+	for(size_t i = 0; i < 10; i++) {
+		REQUIRE(ptr[i] == i);
+	}
+	// close the file
 	handle.reset();
 
 	FileSystem::RemoveFile(fname);
