@@ -17,10 +17,12 @@ class TransactionManager;
 class ConnectionManager;
 class FileSystem;
 
+enum AccessMode { UNDEFINED, READ_ONLY, READ_WRITE }; // TODO AUTOMATIC
+
 // this is optional and only used in tests at the moment
 struct DBConfig {
+	AccessMode access_mode = AccessMode::UNDEFINED;
 	unique_ptr<FileSystem> file_system;
-	// TODO add other things from below here?
 };
 
 //! The database object. This object holds the catalog and all the
@@ -28,8 +30,8 @@ struct DBConfig {
 class Connection;
 class DuckDB {
 public:
-	DuckDB(const char *path = nullptr, bool read_only = false, DBConfig *config = nullptr);
-	DuckDB(const string &path, bool read_only = false, DBConfig *config = nullptr);
+	DuckDB(const char *path = nullptr, DBConfig *config = nullptr);
+	DuckDB(const string &path, DBConfig *config = nullptr);
 
 	~DuckDB();
 
@@ -39,7 +41,7 @@ public:
 	unique_ptr<TransactionManager> transaction_manager;
 	unique_ptr<ConnectionManager> connection_manager;
 
-	bool read_only;
+	AccessMode access_mode = AccessMode::READ_WRITE;
 };
 
 } // namespace duckdb

@@ -266,7 +266,7 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 	QueryResult *last_result = nullptr;
 	for (size_t i = 0; i < parser.statements.size(); i++) {
 		auto &statement = parser.statements[i];
-		if (db.read_only) {
+		if (db.access_mode == AccessMode::READ_ONLY) {
 			// if the database is opened in read-only mode, check if we can execute this statement
 			string error = CanExecuteStatementInReadOnlyMode(*statement);
 			if (!error.empty()) {
