@@ -70,34 +70,37 @@ private:
 
 class FileSystem {
 public:
-	unique_ptr<FileHandle> OpenFile(const char *path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK);
+	virtual unique_ptr<FileHandle> OpenFile(const char *path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK);
 	unique_ptr<FileHandle> OpenFile(string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK) {
 		return OpenFile(path.c_str(), flags, lock);
 	}
-	void Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location);
-	void Write(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location);
+	virtual void Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location);
+	virtual void Write(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location);
 
 	//! Check if a directory exists
-	bool DirectoryExists(const string &directory);
+	virtual bool DirectoryExists(const string &directory);
 	//! Create a directory if it does not exist
-	void CreateDirectory(const string &directory);
+	virtual void CreateDirectory(const string &directory);
 	//! Recursively remove a directory and all files in it
-	void RemoveDirectory(const string &directory);
+	virtual void RemoveDirectory(const string &directory);
 	//! List files in a directory, invoking the callback method for each one
-	bool ListFiles(const string &directory, std::function<void(string)> callback);
+	virtual bool ListFiles(const string &directory, std::function<void(string)> callback);
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
-	void MoveFile(const string &source, const string &target);
+	virtual void MoveFile(const string &source, const string &target);
 	//! Check if a file exists
-	bool FileExists(const string &filename);
+	virtual bool FileExists(const string &filename);
 	//! Remove a file from disk
-	void RemoveFile(const string &filename);
+	virtual void RemoveFile(const string &filename);
 	//! Path separator for the current file system
-	string PathSeparator();
+	virtual string PathSeparator();
 	//! Join two paths together
-	string JoinPath(const string &a, const string &path);
+	virtual string JoinPath(const string &a, const string &path);
 	//! Sync a file descriptor to disk
-	void FileSync(FILE *file);
+	virtual void FileSync(FILE *file);
+
+	virtual ~FileSystem() {
+	}
 };
 
 } // namespace duckdb
