@@ -191,6 +191,8 @@ string Value::ToString(SQLType sql_type) const {
 		return to_string(value_.float_);
 	case SQLTypeId::DOUBLE:
 		return to_string(value_.double_);
+	case SQLTypeId::POINTER:
+		return to_string(value_.pointer);
 	case SQLTypeId::DATE:
 		return Date::ToString(value_.integer);
 	case SQLTypeId::TIMESTAMP:

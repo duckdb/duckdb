@@ -82,6 +82,38 @@ TEST_CASE("ART Index Int", "[art-int]") {
     result = con.Query("SELECT SUM(i) FROM integers WHERE i="+ to_string(1));
     REQUIRE(CHECK_COLUMN(result, 0, {Value(2)}));
 
+    // successful update
+    REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=14 WHERE i=13"));
+    result = con.Query("SELECT * FROM integers WHERE i=14");
+    REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
+
+    // rolled back update
+    REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+    // update the value
+    REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=14 WHERE i=12"));
+    // now there are three values with 14
+    result = con.Query("SELECT * FROM integers WHERE i=14");
+    REQUIRE(CHECK_COLUMN(result, 0, {14, 14, 14}));
+    // rollback the value
+    REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+    // after the rollback
+    result = con.Query("SELECT * FROM integers WHERE i=14");
+    REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
+
+    // roll back insert
+    REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+    // update the value
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (14)"));
+    // now there are three values with 14
+    result = con.Query("SELECT * FROM integers WHERE i=14");
+    REQUIRE(CHECK_COLUMN(result, 0, {14, 14, 14}));
+    // rollback the value
+    REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+    // after the rollback
+    result = con.Query("SELECT * FROM integers WHERE i=14");
+    REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
+
+
     // Now Doing Deletes
     REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=15"));
     // check the value again

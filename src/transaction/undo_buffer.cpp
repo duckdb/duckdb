@@ -45,6 +45,33 @@ void UndoBuffer::Cleanup() {
 		           entry.type == UndoFlags::UPDATE_TUPLE) {
 			// undo this entry
 			auto info = (VersionInformation *)entry.data.get();
+			if (entry.type == UndoFlags::DELETE_TUPLE || entry.type == UndoFlags::UPDATE_TUPLE) {
+                // FIXME: put into Cleanup, not Commit
+                assert(info->chunk);
+                assert(info->tuple_data);
+                if (info->table->indexes.size() > 0) {
+                    Value ptr = Value::POINTER(info->chunk->start + info->prev.entry);
+                    uint8_t *alternate_version_pointers[1];
+                    size_t alternate_version_index[1];
+
+                    alternate_version_pointers[0] = info->tuple_data;
+                    alternate_version_index[0] = 0;
+
+                    DataChunk result;
+                    result.Initialize(info->table->types);
+
+                    vector<column_t> column_ids;
+                    for(size_t i = 0; i < info->table->types.size(); i++) {
+                        column_ids.push_back(i);
+                    }
+                    Vector row_identifiers(ptr);
+
+                    info->table->RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index, 1);
+//					for(auto &index : info->table->indexes) {
+//						index.Delete(result, row_identifiers);
+//					}
+                }
+			}
 			if (info->chunk) {
 				// parent refers to a storage chunk
 				info->chunk->Cleanup(info);
@@ -225,35 +252,8 @@ void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
 				// insertion
 				info->table->cardinality++;
 			} else if (entry.type == UndoFlags::DELETE_TUPLE) {
-				// deletion?
-				// FIXME: put into Cleanup, not Commit
-				assert(info->chunk);
-				assert(info->tuple_data);
+				// deletion
 				info->table->cardinality--;
-				if (info->table->indexes.size() > 0) {
-					Value ptr = Value::POINTER(info->chunk->start + info->prev.entry);
-					uint8_t *alternate_version_pointers[1];
-					size_t alternate_version_index[1];
-
-					alternate_version_pointers[0] = info->tuple_data;
-					alternate_version_index[0] = 0;
-
-					DataChunk result;
-					result.Initialize(info->table->types);
-
-					vector<column_t> column_ids;
-					for(size_t i = 0; i < info->table->types.size(); i++) {
-						column_ids.push_back(i);
-					}
-					Vector row_identifiers(ptr);
-
-					info->table->RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index, 1);
-					// FIXME: delete from index
-					int x = 5;
-//					for(auto &index : info->table->indexes) {
-//						index.Delete(row_identifiers);
-//					}
-				}
 			}
 
 			// push the tuple update to the WAL
@@ -289,6 +289,31 @@ void UndoBuffer::Rollback() {
 		           entry.type == UndoFlags::UPDATE_TUPLE) {
 			// undo this entry
 			auto info = (VersionInformation *)entry.data.get();
+			if (entry.type == UndoFlags::UPDATE_TUPLE || entry.type == UndoFlags::INSERT_TUPLE) {
+				// update or insert rolled back
+				// delete base table entry from index
+				assert(info->chunk);
+				if (info->table->indexes.size() > 0) {
+					uint64_t rowid = info->chunk->start + info->prev.entry;
+					Value ptr = Value::POINTER(rowid);
+					sel_t regular_entries[STANDARD_VECTOR_SIZE];
+					regular_entries[0] = 0;
+
+
+					DataChunk result;
+					result.Initialize(info->table->types);
+
+					vector<column_t> column_ids;
+					for(size_t i = 0; i < info->table->types.size(); i++) {
+						column_ids.push_back(i);
+					}
+					Vector row_identifiers(ptr);
+
+					info->table->RetrieveBaseTableData(result, column_ids, regular_entries, 1, info->chunk, rowid);
+					// FIXME: delete from index
+					int x = 5;
+				}
+			}
 			if (info->chunk) {
 				// parent refers to a storage chunk
 				// have to move information back into chunk
