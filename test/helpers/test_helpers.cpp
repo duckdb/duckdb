@@ -8,7 +8,6 @@ using namespace std;
 
 #define TESTING_DIRECTORY_NAME "duckdb_unittest_tempdir"
 
-
 namespace duckdb {
 
 void TestDeleteDirectory(string path) {
@@ -27,7 +26,7 @@ void TestCreateDirectory(string path) {
 	fs.CreateDirectory(path);
 }
 
-static string TestCreatePath(string suffix) {
+string TestCreatePath(string suffix) {
 	FileSystem fs;
 	return fs.JoinPath(TESTING_DIRECTORY_NAME, suffix);
 }

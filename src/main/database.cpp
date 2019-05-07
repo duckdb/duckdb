@@ -1,10 +1,10 @@
 #include "main/database.hpp"
 
 #include "catalog/catalog.hpp"
+#include "common/file_system.hpp"
 #include "main/connection_manager.hpp"
 #include "storage/storage_manager.hpp"
 #include "transaction/transaction_manager.hpp"
-#include "common/file_system.hpp"
 
 using namespace duckdb;
 using namespace std;

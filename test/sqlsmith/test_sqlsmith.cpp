@@ -13,7 +13,6 @@ using namespace std;
 constexpr const char *QUERY_DIRECTORY = "test/sqlsmith/queries";
 static FileSystem fs;
 
-
 static void test_runner() {
 	auto file_name = Catch::getResultCapture().getCurrentTestName();
 	auto fname = fs.JoinPath(QUERY_DIRECTORY, file_name);
@@ -39,7 +38,7 @@ struct RegisterSQLSmithTests {
 		return;
 		// register a separate SQL Smith test for each file in the QUERY_DIRECTORY
 		fs.ListFiles(QUERY_DIRECTORY,
-		                      [&](const string &path) { REGISTER_TEST_CASE(test_runner, path, "[sqlsmith][.]"); });
+		             [&](const string &path) { REGISTER_TEST_CASE(test_runner, path, "[sqlsmith][.]"); });
 	}
 };
 RegisterSQLSmithTests register_sqlsmith_test;

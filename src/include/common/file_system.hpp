@@ -17,7 +17,7 @@ class FileSystem;
 
 struct FileHandle {
 public:
-	FileHandle(FileSystem& file_system, string path) :  file_system(file_system), path(path) {
+	FileHandle(FileSystem &file_system, string path) : file_system(file_system), path(path) {
 	}
 	FileHandle(const FileHandle &) = delete;
 	virtual ~FileHandle() {
@@ -30,9 +30,8 @@ protected:
 	virtual void Close() = 0;
 
 public:
-	FileSystem& file_system;
+	FileSystem &file_system;
 	string path;
-
 };
 
 enum class FileLockType : uint8_t { NO_LOCK = 0, READ_LOCK = 1, WRITE_LOCK = 2 };

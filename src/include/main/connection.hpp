@@ -17,7 +17,7 @@ namespace duckdb {
 class ClientContext;
 class DuckDB;
 
-typedef void (*warning_callback) (std::string);
+typedef void (*warning_callback)(std::string);
 
 //! A connection to a database. This represents a (client) connection that can
 //! be used to query the database.

@@ -18,7 +18,7 @@ using namespace std;
 
 struct UnixFileHandle : public FileHandle {
 public:
-	UnixFileHandle(FileSystem& file_system, string path, int fd) : FileHandle(file_system, path), fd(fd) {
+	UnixFileHandle(FileSystem &file_system, string path, int fd) : FileHandle(file_system, path), fd(fd) {
 	}
 	virtual ~UnixFileHandle() {
 		Close();

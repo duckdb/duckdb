@@ -18,14 +18,12 @@
 #include "compare_result.hpp"
 #include "duckdb.hpp"
 
-
 namespace duckdb {
 
 void DeleteDatabase(string path);
 void TestDeleteDirectory(string path);
 void TestCreateDirectory(string path);
 string TestCreatePath(string suffix);
-
 
 #define REQUIRE_NO_FAIL(result) REQUIRE((result)->success)
 #define REQUIRE_FAIL(result) REQUIRE(!(result)->success)

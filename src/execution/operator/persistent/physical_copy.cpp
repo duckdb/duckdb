@@ -5,7 +5,6 @@
 #include "common/gzip_stream.hpp"
 #include "main/client_context.hpp"
 #include "main/database.hpp"
-
 #include "storage/data_table.hpp"
 
 #include <algorithm>

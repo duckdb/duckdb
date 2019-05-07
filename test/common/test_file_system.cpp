@@ -12,7 +12,6 @@ static void create_dummy_file(string fname) {
 	outfile.close();
 }
 
-
 TEST_CASE("Make sure file system operators work as advertised", "[file_system]") {
 	FileSystem fs;
 	auto dname = TestCreatePath("TEST_DIR");
@@ -102,7 +101,7 @@ TEST_CASE("Test file operations", "[file_system]") {
 
 	// now test direct IO
 	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::WRITE | FileFlags::CREATE | FileFlags::DIRECT_IO,
-	                                              FileLockType::NO_LOCK));
+	                                     FileLockType::NO_LOCK));
 	// write 10 integers
 	REQUIRE_NOTHROW(handle->Write((void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
 	handle.reset();
@@ -121,8 +120,7 @@ TEST_CASE("Test file operations", "[file_system]") {
 	// lock already the only way to properly test these locks is to use multiple processes
 
 	// we can get a write lock to a file
-	REQUIRE_NOTHROW(handle =
-			fs.OpenFile(fname, FileFlags::WRITE | FileFlags::CREATE, FileLockType::WRITE_LOCK));
+	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::WRITE | FileFlags::CREATE, FileLockType::WRITE_LOCK));
 	handle.reset();
 
 	// we can get a read lock on a file
