@@ -53,6 +53,8 @@ SingleFileBlockManager::SingleFileBlockManager(string path, bool read_only, bool
 		header->meta_block = -1;
 		header->free_list = -1;
 		header_buffer->Write(*handle, HEADER_SIZE * 2);
+		// ensure that writing to disk is completed before returning
+		handle->Sync();
 	} else {
 		MainHeader header;
 		// otherwise, we check the metadata of the file

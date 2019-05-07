@@ -30,7 +30,6 @@ public:
 
 	void WriteHeader(int64_t version, block_id_t meta_block) override;
 private:
-	static constexpr int64_t HEADER_SIZE = 4096;
 	//! The path where the file is stored
 	string path;
 	//! The file handle

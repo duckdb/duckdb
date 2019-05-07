@@ -259,6 +259,11 @@ void FileSystem::FileSync(FILE *file) {
 	fsync(fileno(file));
 }
 
+void FileSystem::FileSync(FileHandle &handle) {
+	int fd = ((UnixFileHandle &)handle).fd;
+	fsync(fd);
+}
+
 void FileSystem::MoveFile(const string &source, const string &target) {
 	//! FIXME: rename does not guarantee atomicity or overwriting target file if it exists
 	if (rename(source.c_str(), target.c_str()) != 0) {
@@ -499,6 +504,13 @@ void FileSystem::FileSync(FILE *file) {
 	*/
 }
 
+void FileSystem::FileSync(FileHandle &handle) {
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	if (FlushFileBuffers(hFile) == 0) {
+		throw IOException("Could not flush file handle to disk!");
+	}
+}
+
 void FileSystem::MoveFile(const string &source, const string &target) {
 	if (!MoveFileA(source.c_str(), target.c_str())) {
 		throw IOException("Could not move file");
@@ -517,5 +529,9 @@ void FileHandle::Write(void *buffer, uint64_t nr_bytes, uint64_t location) {
 string FileSystem::JoinPath(const string &a, const string &b) {
 	// FIXME: sanitize paths
 	return a + PathSeparator() + b;
+}
+
+void FileHandle::Sync() {
+	FileSystem::FileSync(*this);
 }
 

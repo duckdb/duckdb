@@ -25,7 +25,7 @@ public:
 
 	void Read(void *buffer, uint64_t nr_bytes, uint64_t location);
 	void Write(void *buffer, uint64_t nr_bytes, uint64_t location);
-
+	void Sync();
 protected:
 	virtual void Close() = 0;
 
@@ -77,6 +77,8 @@ public:
 	static string JoinPath(const string &a, const string &path);
 	//! Sync a file descriptor to disk
 	static void FileSync(FILE *file);
+	//! Sync a file handle to disk
+	static void FileSync(FileHandle &handle);
 };
 
 } // namespace duckdb
