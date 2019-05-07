@@ -24,7 +24,7 @@ TEST_CASE("Test scalar SIMILAR TO statement", "[similar]") {
 	result = connection.Query("SELECT 'aaa' SIMILAR TO '%a'");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
 
-	result = connection.Query("SELECT 'aaa' SIMILAR TO '%b'");
+	result = connection.Query("SELECT 'aaa' SIMILAR TO '%b'");`
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(false)}));
 
 	result = connection.Query("SELECT 'aaa' SIMILAR TO 'b%'");
@@ -47,6 +47,19 @@ TEST_CASE("Test scalar SIMILAR TO statement", "[similar]") {
 
 	result = connection.Query("SELECT 'aaa' NOT SIMILAR TO '___'");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(false)}));
+
+	result = connection.Query("SELECT 'aaa' ~ 'aaa'");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
+    
+	result = connection.Query("SELECT 'aaa' ~ '^a'");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
+
+	result = connection.Query("SELECT 'aaa' ~ '(a|b)'");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
+    
+	result = connection.Query("SELECT 'aaa' ~ '^(a|b)'");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(false)}));
+
 }
 
 TEST_CASE("Test SIMILAR TO statement", "[similar]") {
@@ -59,12 +72,12 @@ TEST_CASE("Test SIMILAR TO statement", "[similar]") {
 	    connection.Query("INSERT INTO strings VALUES('aaa', 'a_a'), ('abab', 'ab%'), ('aaa', 'a_a'), ('aaa', '%b%');"));
 	result = connection.Query("");
 
-	result = con.Query("SELECT s FROM strings WHERE s SIMILAR TO 'ab%'");
+	result = connection.Query("SELECT s FROM strings WHERE s SIMILAR TO 'ab%'");
 	REQUIRE(CHECK_COLUMN(result, 0, {"abab"}));
 
-	result = con.Query("SELECT s FROM strings WHERE 'aba' SIMILAR TO p");
+	result = connection.Query("SELECT s FROM strings WHERE 'aba' SIMILAR TO p");
 	REQUIRE(CHECK_COLUMN(result, 0, {"abab", "aaa", "aaa"}));
 
-	result = con.Query("SELECT s FROM strings WHERE s SIMILAR TO p");
+	result = connection.Query("SELECT s FROM strings WHERE s SIMILAR TO p");
 	REQUIRE(CHECK_COLUMN(result, 0, {"abab", "aaa"}));
 }

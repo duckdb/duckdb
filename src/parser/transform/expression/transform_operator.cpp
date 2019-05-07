@@ -39,6 +39,10 @@ ExpressionType Transformer::OperatorToExpressionType(string &op) {
 		return ExpressionType::COMPARE_LIKE;
 	} else if (op == "!~~") {
 		return ExpressionType::COMPARE_NOTLIKE;
+	} else if (op == "~") {
+		return ExpressionType::COMPARE_SIMILAR;
+	} else if (op == "!~") {
+		return ExpressionType::COMPARE_NOTSIMILAR;
 	}
 	return ExpressionType::INVALID;
 }
@@ -107,6 +111,10 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(compare_between));
 		}
 	} break;
+    // rewrite SIMILAR TO into regexp_matches('asdf', '.*sd.*')
+    case AEXPR_SIMILAR: {
+
+    } break;
 	default: {
 		target_type = OperatorToExpressionType(name);
 		if (target_type == ExpressionType::INVALID) {
