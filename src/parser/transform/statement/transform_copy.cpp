@@ -9,6 +9,14 @@ using namespace duckdb;
 using namespace postgres;
 using namespace std;
 
+static ExternalFileFormat StringToExternalFileFormat(const string &str) {
+	auto upper = StringUtil::Upper(str);
+	if (upper == "CSV") {
+		return ExternalFileFormat::CSV;
+	}
+	throw ConversionException("No ExternalFileFormat for input '%s'", upper.c_str());
+}
+
 unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 	const string kDelimiterTok = "delimiter";
 	const string kFormatTok = "format";

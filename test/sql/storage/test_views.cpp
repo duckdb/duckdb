@@ -8,12 +8,10 @@ using namespace std;
 
 TEST_CASE("Create and drop a view over different runs", "[storage]") {
 	unique_ptr<QueryResult> result;
-	auto storage_database = JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
+	auto storage_database = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
 
 	// make sure the database does not exist
-	if (DirectoryExists(storage_database)) {
-		RemoveDirectory(storage_database);
-	}
+	DeleteDatabase(storage_database);
 	{
 		// create a database and insert values
 		DuckDB db(storage_database);
@@ -47,5 +45,5 @@ TEST_CASE("Create and drop a view over different runs", "[storage]") {
 		REQUIRE_NO_FAIL(con.Query("SELECT * FROM test.t"));
 		REQUIRE_FAIL(con.Query("SELECT * FROM test.v"));
 	}
-	RemoveDirectory(storage_database);
+	DeleteDatabase(storage_database);
 }

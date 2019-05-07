@@ -98,7 +98,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 	*ppStmt = pStmt;
 	if (duckdb_query(db->pCon, pStmt->zSql, &pStmt->result) != DuckDBSuccess) {
 		if (pStmt->result.error_message) {
-			db->last_error = pStmt->result.error_message;
+			db->last_error = string(pStmt->result.error_message);
 		}
 		return SQLITE_ERROR;
 	}

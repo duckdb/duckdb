@@ -10,6 +10,7 @@
 
 #include "catalog/catalog.hpp"
 #include "common/common.hpp"
+#include "common/enums/logical_operator_type.hpp"
 #include "planner/expression.hpp"
 #include "planner/logical_operator_visitor.hpp"
 

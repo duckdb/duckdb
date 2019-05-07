@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "common/enums/index_type.hpp"
 #include "common/types/data_chunk.hpp"
 #include "common/types/tuple.hpp"
 #include "parser/parsed_expression.hpp"

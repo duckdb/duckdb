@@ -10,11 +10,11 @@ using namespace duckdb;
 using namespace std;
 
 static string GetCSVPath() {
-	string csv_path = JoinPath(TESTING_DIRECTORY_NAME, "csv_files");
-	if (DirectoryExists(csv_path)) {
-		RemoveDirectory(csv_path);
+	string csv_path = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "csv_files");
+	if (FileSystem::DirectoryExists(csv_path)) {
+		FileSystem::RemoveDirectory(csv_path);
 	}
-	CreateDirectory(csv_path);
+	FileSystem::CreateDirectory(csv_path);
 	return csv_path;
 }
 
@@ -32,14 +32,14 @@ TEST_CASE("Test copy statement", "[copy]") {
 	auto csv_path = GetCSVPath();
 
 	// Generate CSV file With ; as delimiter and complex strings
-	ofstream from_csv_file(JoinPath(csv_path, "test.csv"));
+	ofstream from_csv_file(FileSystem::JoinPath(csv_path, "test.csv"));
 	for (int i = 0; i < 5000; i++)
 		from_csv_file << i << "," << i << ", test" << endl;
 	from_csv_file.close();
 
 	// Loading CSV into a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER,c VARCHAR(10));"));
-	result = con.Query("COPY test FROM '" + JoinPath(csv_path, "test.csv") + "';");
+	result = con.Query("COPY test FROM '" + FileSystem::JoinPath(csv_path, "test.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 
 	result = con.Query("SELECT COUNT(a), SUM(a) FROM test;");
@@ -52,11 +52,11 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {" test", " test", " test"}));
 
 	//  Creating CSV from table
-	result = con.Query("COPY test to '" + JoinPath(csv_path, "test2.csv") + "';");
+	result = con.Query("COPY test to '" + FileSystem::JoinPath(csv_path, "test2.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 	// load the same CSV back again
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2(a INTEGER, b INTEGER, c VARCHAR(10));"));
-	result = con.Query("COPY test2 FROM '" + JoinPath(csv_path, "test2.csv") + "';");
+	result = con.Query("COPY test2 FROM '" + FileSystem::JoinPath(csv_path, "test2.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 	result = con.Query("SELECT * FROM test2 ORDER BY 1 LIMIT 3 ");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
@@ -64,23 +64,24 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {" test", " test", " test"}));
 
 	//  Creating CSV from Query
-	result = con.Query("COPY (select a,b from test where a < 4000) to '" + JoinPath(csv_path, "test3.csv") + "';");
+	result = con.Query("COPY (select a,b from test where a < 4000) to '" + FileSystem::JoinPath(csv_path, "test3.csv") +
+	                   "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {4000}));
 	// load the same CSV back again
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test3(a INTEGER, b INTEGER);"));
-	result = con.Query("COPY test3 FROM '" + JoinPath(csv_path, "test3.csv") + "';");
+	result = con.Query("COPY test3 FROM '" + FileSystem::JoinPath(csv_path, "test3.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {4000}));
 	result = con.Query("SELECT * FROM test3 ORDER BY 1 LIMIT 3 ");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 1, 2}));
 
 	// Exporting selected columns from a table to a CSV.
-	result = con.Query("COPY test(a,c) to '" + JoinPath(csv_path, "test4.csv") + "';");
+	result = con.Query("COPY test(a,c) to '" + FileSystem::JoinPath(csv_path, "test4.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 
 	// Importing CSV to Selected Columns
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test4 (a INTEGER, b INTEGER,c VARCHAR(10));"));
-	result = con.Query("COPY test4(a,c) from '" + JoinPath(csv_path, "test4.csv") + "';");
+	result = con.Query("COPY test4(a,c) from '" + FileSystem::JoinPath(csv_path, "test4.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 	result = con.Query("SELECT * FROM test4 ORDER BY 1 LIMIT 3 ");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
@@ -88,7 +89,7 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {" test", " test", " test"}));
 
 	// use a different delimiter
-	auto pipe_csv = JoinPath(csv_path, "test_pipe.csv");
+	auto pipe_csv = FileSystem::JoinPath(csv_path, "test_pipe.csv");
 	ofstream from_csv_file_pipe(pipe_csv);
 	for (int i = 0; i < 10; i++)
 		from_csv_file_pipe << i << "|" << i << "|test" << endl;
@@ -99,7 +100,7 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
 	// test null
-	auto null_csv = JoinPath(csv_path, "null.csv");
+	auto null_csv = FileSystem::JoinPath(csv_path, "null.csv");
 	ofstream from_csv_file_null(null_csv);
 	for (int i = 0; i < 1; i++)
 		from_csv_file_null << i << "||test" << endl;
@@ -108,7 +109,7 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 	// test invalid UTF8
-	auto invalid_utf_csv = JoinPath(csv_path, "invalid_utf.csv");
+	auto invalid_utf_csv = FileSystem::JoinPath(csv_path, "invalid_utf.csv");
 	ofstream from_csv_file_utf(invalid_utf_csv);
 	for (int i = 0; i < 1; i++)
 		from_csv_file_utf << i << "42|42|\xe2\x82\x28" << endl;
@@ -122,7 +123,7 @@ TEST_CASE("Test copy into from on-time dataset", "[copy]") {
 	Connection con(db);
 
 	auto csv_path = GetCSVPath();
-	auto ontime_csv = JoinPath(csv_path, "ontime.csv");
+	auto ontime_csv = FileSystem::JoinPath(csv_path, "ontime.csv");
 	WriteCSV(ontime_csv, ontime_sample);
 
 	REQUIRE_NO_FAIL(con.Query(
@@ -172,7 +173,7 @@ TEST_CASE("Test copy from lineitem csv", "[copy]") {
 	Connection con(db);
 
 	auto csv_path = GetCSVPath();
-	auto lineitem_csv = JoinPath(csv_path, "lineitem.csv");
+	auto lineitem_csv = FileSystem::JoinPath(csv_path, "lineitem.csv");
 	WriteCSV(lineitem_csv, lineitem_sample);
 
 	REQUIRE_NO_FAIL(con.Query(
@@ -218,7 +219,7 @@ TEST_CASE("Test copy from web_page csv", "[copy]") {
 	Connection con(db);
 
 	auto csv_path = GetCSVPath();
-	auto webpage_csv = JoinPath(csv_path, "web_page.csv");
+	auto webpage_csv = FileSystem::JoinPath(csv_path, "web_page.csv");
 	WriteCSV(webpage_csv, web_page);
 
 	REQUIRE_NO_FAIL(con.Query(

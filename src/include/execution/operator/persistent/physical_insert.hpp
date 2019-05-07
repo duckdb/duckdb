@@ -21,7 +21,7 @@ public:
 	      insert_values(move(insert_values)), table(table) {
 	}
 
-	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	vector<int> column_index_map;
 	vector<vector<unique_ptr<Expression>>> insert_values;

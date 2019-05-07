@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "common/enums/order_type.hpp"
 #include "common/serializer.hpp"
 #include "parser/parsed_expression.hpp"
 

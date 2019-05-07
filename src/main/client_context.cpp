@@ -8,15 +8,17 @@
 #include "optimizer/optimizer.hpp"
 #include "parser/parser.hpp"
 #include "parser/statement/explain_statement.hpp"
+#include "parser/statement/prepare_statement.hpp"
 #include "planner/operator/logical_execute.hpp"
 #include "planner/planner.hpp"
+#include "transaction/transaction_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 ClientContext::ClientContext(DuckDB &database)
-    : db(database), transaction(database.transaction_manager), interrupted(false),
-      prepared_statements(make_unique<CatalogSet>(db.catalog)), open_result(nullptr) {
+    : db(database), transaction(*database.transaction_manager), interrupted(false), catalog(*database.catalog),
+      prepared_statements(make_unique<CatalogSet>(*db.catalog)), open_result(nullptr) {
 }
 
 void ClientContext::Cleanup() {
@@ -31,7 +33,7 @@ void ClientContext::Cleanup() {
 		}
 	}
 	assert(prepared_statements);
-	db.transaction_manager.AddCatalogSet(*this, move(prepared_statements));
+	db.transaction_manager->AddCatalogSet(*this, move(prepared_statements));
 	return CleanupInternal();
 }
 
@@ -206,6 +208,32 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 	return move(result);
 }
 
+static string CanExecuteStatementInReadOnlyMode(SQLStatement &stmt) {
+	switch (stmt.type) {
+	case StatementType::INSERT:
+	case StatementType::COPY:
+	case StatementType::DELETE:
+	case StatementType::UPDATE:
+	case StatementType::CREATE_INDEX:
+	case StatementType::CREATE_TABLE:
+	case StatementType::CREATE_VIEW:
+	case StatementType::CREATE_SCHEMA:
+	case StatementType::CREATE_SEQUENCE:
+	case StatementType::DROP:
+	case StatementType::ALTER:
+	case StatementType::TRANSACTION:
+		return StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!",
+		                          StatementTypeToString(stmt.type).c_str());
+	case StatementType::PREPARE: {
+		// prepare statement: check the underlying statement type
+		auto &prepare = (PrepareStatement &)stmt;
+		return CanExecuteStatementInReadOnlyMode(*prepare.statement);
+	}
+	default:
+		return string();
+	}
+}
+
 unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_result) {
 	lock_guard<mutex> client_guard(context_lock);
 	if (is_invalidated) {
@@ -238,12 +266,19 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 	QueryResult *last_result = nullptr;
 	for (size_t i = 0; i < parser.statements.size(); i++) {
 		auto &statement = parser.statements[i];
+		if (db.read_only) {
+			// if the database is opened in read-only mode, check if we can execute this statement
+			string error = CanExecuteStatementInReadOnlyMode(*statement);
+			if (!error.empty()) {
+				return make_unique<MaterializedQueryResult>(error);
+			}
+		}
 		bool is_last_statement = i + 1 == parser.statements.size();
 		// check if we are on AutoCommit. In this case we should start a transaction.
 		if (transaction.IsAutoCommit()) {
 			transaction.BeginTransaction();
 		}
-		ActiveTransaction().active_query = db.transaction_manager.GetQueryNumber();
+		ActiveTransaction().active_query = db.transaction_manager->GetQueryNumber();
 		if (statement->type == StatementType::SELECT && query_verification_enabled) {
 			// query verification is enabled:
 			// create a copy of the statement and verify the original statement
@@ -280,7 +315,11 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 			open_result = (StreamQueryResult *)current_result.get();
 		} else {
 			// finalize the query if it is not a stream result
-			FinalizeQuery(true);
+			string error = FinalizeQuery(true);
+			if (!error.empty()) {
+				// failure in committing transaction
+				return make_unique<MaterializedQueryResult>(error);
+			}
 		}
 		// now append the result to the list of results
 		if (!last_result) {
@@ -326,6 +365,7 @@ void ClientContext::Invalidate() {
 }
 
 string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> statement) {
+	assert(statement->type == StatementType::SELECT);
 	// aggressive query verification
 
 	// the purpose of this function is to test correctness of otherwise hard to test features:
@@ -351,8 +391,8 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 
 	// now perform checking on the expressions
 	auto &orig_expr_list = select_stmt->node->GetSelectList();
-	auto &de_expr_list = ((SelectStatement *)deserialized_stmt.get())->node->GetSelectList();
-	auto &cp_expr_list = ((SelectStatement *)copied_stmt.get())->node->GetSelectList();
+	auto &de_expr_list = deserialized_stmt->node->GetSelectList();
+	auto &cp_expr_list = copied_stmt->node->GetSelectList();
 	assert(orig_expr_list.size() == de_expr_list.size() && cp_expr_list.size() == de_expr_list.size());
 	for (size_t i = 0; i < orig_expr_list.size(); i++) {
 		// check that the expressions are equivalent

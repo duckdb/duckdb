@@ -3,7 +3,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalLimit::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalLimitOperatorState *>(state_);
 
 	size_t max_element = limit + offset;

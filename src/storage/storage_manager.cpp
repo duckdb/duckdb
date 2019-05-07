@@ -11,6 +11,9 @@
 #include "function/function.hpp"
 #include "main/client_context.hpp"
 #include "main/database.hpp"
+#include "parser/parsed_data/create_schema_info.hpp"
+#include "parser/parsed_data/create_table_info.hpp"
+#include "parser/parsed_data/create_view_info.hpp"
 #include "transaction/transaction_manager.hpp"
 #include "common/types/chunk_collection.hpp"
 
@@ -21,26 +24,31 @@ constexpr const int64_t STORAGE_VERSION = 1;
 using namespace duckdb;
 using namespace std;
 
-StorageManager::StorageManager(DuckDB &database, string path) : path(path), database(database), wal(database) {
+StorageManager::StorageManager(DuckDB &database, string path, bool read_only)
+    : path(path), database(database), wal(database), read_only(read_only) {
 }
 
 void StorageManager::Initialize() {
 	bool in_memory = path.empty() || path == ":memory:";
 
+	if (in_memory && read_only) {
+		throw CatalogException("Cannot launch in-memory database in read-only mode!");
+	}
+
 	// first initialize the base system catalogs
 	// these are never written to the WAL
-	auto transaction = database.transaction_manager.StartTransaction();
+	auto transaction = database.transaction_manager->StartTransaction();
 
 	// create the default schema
-	CreateSchemaInformation info;
+	CreateSchemaInfo info;
 	info.schema = DEFAULT_SCHEMA;
-	database.catalog.CreateSchema(*transaction, &info);
+	database.catalog->CreateSchema(*transaction, &info);
 
 	// initialize default functions
-	BuiltinFunctions::Initialize(*transaction, database.catalog);
+	BuiltinFunctions::Initialize(*transaction, *database.catalog);
 
 	// commit transactions
-	database.transaction_manager.CommitTransaction(transaction);
+	database.transaction_manager->CommitTransaction(transaction);
 
 	if (!in_memory) {
 		// create or load the database from disk, if not in-memory mode
@@ -307,6 +315,7 @@ void StorageManager::WriteColumnData(TableCatalogEntry *table, ChunkCollection &
 		}
 
 		break;
+
 	}
 }
 

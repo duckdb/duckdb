@@ -8,6 +8,8 @@
 #include "main/connection.hpp"
 #include "main/database.hpp"
 #include "parser/constraints/list.hpp"
+#include "parser/parsed_data/alter_table_info.hpp"
+#include "parser/parsed_data/create_table_info.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
 #include "storage/storage_manager.hpp"
 
@@ -16,7 +18,7 @@
 using namespace duckdb;
 using namespace std;
 
-void TableCatalogEntry::Initialize(CreateTableInformation *info) {
+void TableCatalogEntry::Initialize(CreateTableInfo *info) {
 	for (auto &entry : info->columns) {
 		if (ColumnExists(entry.name)) {
 			throw CatalogException("Column with name %s already exists!", entry.name.c_str());
@@ -42,7 +44,7 @@ void TableCatalogEntry::Initialize(CreateTableInformation *info) {
 	}
 }
 
-TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInformation *info)
+TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInfo *info)
     : CatalogEntry(CatalogType::TABLE, catalog, info->table), schema(schema) {
 	Initialize(info);
 	storage = make_shared<DataTable>(catalog->storage, schema->name, name, GetTypes());
@@ -94,7 +96,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 	}
 }
 
-TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInformation *info,
+TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInfo *info,
                                      shared_ptr<DataTable> storage)
     : CatalogEntry(CatalogType::TABLE, catalog, info->table), schema(schema), storage(storage) {
 	Initialize(info);
@@ -108,15 +110,15 @@ bool TableCatalogEntry::ColumnExists(const string &name) {
 	return name_map.find(name) != name_map.end();
 }
 
-unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(AlterInformation *info) {
+unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(AlterInfo *info) {
 	if (info->type != AlterType::ALTER_TABLE) {
 		throw CatalogException("Can only modify table with ALTER TABLE statement");
 	}
-	auto table_info = (AlterTableInformation *)info;
+	auto table_info = (AlterTableInfo *)info;
 	switch (table_info->alter_table_type) {
 	case AlterTableType::RENAME_COLUMN: {
-		auto rename_info = (RenameColumnInformation *)table_info;
-		CreateTableInformation create_info;
+		auto rename_info = (RenameColumnInfo *)table_info;
+		CreateTableInfo create_info;
 		create_info.schema = schema->name;
 		create_info.table = name;
 		bool found = false;
@@ -193,8 +195,8 @@ void TableCatalogEntry::Serialize(Serializer &serializer) {
 	}
 }
 
-unique_ptr<CreateTableInformation> TableCatalogEntry::Deserialize(Deserializer &source) {
-	auto info = make_unique<CreateTableInformation>();
+unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source) {
+	auto info = make_unique<CreateTableInfo>();
 
 	info->schema = source.Read<string>();
 	info->table = source.Read<string>();

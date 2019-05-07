@@ -6,10 +6,6 @@
 using namespace duckdb;
 using namespace std;
 
-string SelectStatement::ToString() const {
-	return "Select";
-}
-
 unique_ptr<SelectStatement> SelectStatement::Copy() {
 	auto result = make_unique<SelectStatement>();
 	for (auto &cte : cte_map) {
@@ -42,7 +38,7 @@ unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
 }
 
 bool SelectStatement::Equals(const SQLStatement *other_) const {
-	if (!SQLStatement::Equals(other_)) {
+	if (type != other_->type) {
 		return false;
 	}
 	auto other = (SelectStatement *)other_;

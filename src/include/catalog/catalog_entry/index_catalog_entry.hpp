@@ -9,7 +9,7 @@
 #pragma once
 
 #include "catalog/catalog_entry.hpp"
-#include "parser/parsed_data.hpp"
+#include "parser/parsed_data/create_index_info.hpp"
 
 namespace duckdb {
 
@@ -19,7 +19,7 @@ class SchemaCatalogEntry;
 class IndexCatalogEntry : public CatalogEntry {
 public:
 	//! Create a real TableCatalogEntry and initialize storage for it
-	IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInformation *info)
+	IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info)
 	    : CatalogEntry(CatalogType::INDEX, catalog, info->index_name), schema(schema) {
 		// FIXME: add more information for drop index support
 	}

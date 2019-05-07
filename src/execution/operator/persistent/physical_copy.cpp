@@ -72,7 +72,7 @@ void PhysicalCopy::PushValue(string &line, DataChunk &insert_chunk, int64_t star
 	column++;
 }
 
-void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	int64_t nr_elements = 0;
 	int64_t total = 0;
 
@@ -95,7 +95,7 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 		int64_t linenr = 0;
 		string line;
 
-		if (!FileExists(info.file_path)) {
+		if (!FileSystem::FileExists(info.file_path)) {
 			throw Exception("File not found");
 		}
 

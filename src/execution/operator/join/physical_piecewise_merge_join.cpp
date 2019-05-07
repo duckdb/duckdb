@@ -33,7 +33,8 @@ static void OrderVector(Vector &vector, MergeOrder &order) {
 	VectorOperations::Sort(vector, result_vector, order.count, order.order);
 }
 
-void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk,
+                                                  PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinOperatorState *>(state_);
 	assert(conditions.size() == 1);
 	if (!state->initialized) {

@@ -1,5 +1,6 @@
 #include "main/connection_manager.hpp"
 
+#include "main/client_context.hpp"
 #include "main/connection.hpp"
 
 using namespace duckdb;
@@ -8,7 +9,7 @@ using namespace std;
 ConnectionManager::~ConnectionManager() {
 	std::lock_guard<std::mutex> lock(connections_lock);
 	for (auto &conn : connections) {
-		conn->context.Invalidate();
+		conn->context->Invalidate();
 	}
 }
 

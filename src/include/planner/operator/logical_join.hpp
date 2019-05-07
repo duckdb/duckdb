@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "common/enums/join_type.hpp"
 #include "common/unordered_set.hpp"
 #include "planner/logical_operator.hpp"
 

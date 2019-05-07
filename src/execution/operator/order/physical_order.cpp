@@ -9,7 +9,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalOrder::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalOrder::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_);
 	ChunkCollection &big_data = state->sorted_data;
 	if (state->position == 0) {

@@ -1,6 +1,7 @@
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "parser/expression_map.hpp"
+#include "parser/query_node/select_node.hpp"
 #include "parser/query_node/set_operation_node.hpp"
 #include "planner/binder.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"

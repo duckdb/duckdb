@@ -1,7 +1,6 @@
 #include "optimizer/filter_combiner.hpp"
 
 #include "execution/expression_executor.hpp"
-#include "parser/expression/comparison_expression.hpp"
 #include "planner/expression/bound_comparison_expression.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
 #include "planner/operator/logical_empty_result.hpp"
@@ -162,8 +161,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 
 		// create the ExpressionValueInformation
 		ExpressionValueInformation info;
-		info.comparison_type =
-		    left_is_scalar ? ComparisonExpression::FlipComparisionExpression(comparison.type) : comparison.type;
+		info.comparison_type = left_is_scalar ? FlipComparisionExpression(comparison.type) : comparison.type;
 		info.constant = constant_value;
 
 		// get the current bucket of constant values

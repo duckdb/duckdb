@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "common/enums/subquery_type.hpp"
 #include "parser/parsed_expression.hpp"
 #include "parser/query_node.hpp"
 

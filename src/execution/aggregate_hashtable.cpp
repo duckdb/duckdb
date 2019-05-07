@@ -5,6 +5,7 @@
 #include "common/types/static_vector.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 
+#include <cmath>
 #include <map>
 
 using namespace duckdb;

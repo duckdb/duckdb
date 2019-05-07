@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "common/enums/set_operation_type.hpp"
 #include "planner/binder.hpp"
 #include "planner/bound_query_node.hpp"
 

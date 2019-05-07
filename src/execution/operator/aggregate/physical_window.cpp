@@ -8,6 +8,8 @@
 #include "planner/expression/bound_reference_expression.hpp"
 #include "planner/expression/bound_window_expression.hpp"
 
+#include <cmath>
+
 using namespace duckdb;
 using namespace std;
 
@@ -441,7 +443,7 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 	}
 }
 
-void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalWindow::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalWindowOperatorState *>(state_);
 	ChunkCollection &big_data = state->tuples;
 	ChunkCollection &window_results = state->window_results;

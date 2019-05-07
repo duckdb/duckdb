@@ -8,12 +8,10 @@ using namespace std;
 
 TEST_CASE("Shutdown with running transaction", "[storage]") {
 	unique_ptr<QueryResult> result;
-	auto storage_database = JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
+	auto storage_database = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
 
 	// make sure the database does not exist
-	if (DirectoryExists(storage_database)) {
-		RemoveDirectory(storage_database);
-	}
+	DeleteDatabase(storage_database);
 	{
 		// create a database and insert values
 		DuckDB db(storage_database);
@@ -33,17 +31,15 @@ TEST_CASE("Shutdown with running transaction", "[storage]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {11, 13}));
 		REQUIRE(CHECK_COLUMN(result, 1, {22, 22}));
 	}
-	RemoveDirectory(storage_database);
+	DeleteDatabase(storage_database);
 }
 
 TEST_CASE("UNIQUE INDEX after shutdown", "[storage]") {
 	unique_ptr<QueryResult> result;
-	auto storage_database = JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
+	auto storage_database = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
 
 	// make sure the database does not exist
-	if (DirectoryExists(storage_database)) {
-		RemoveDirectory(storage_database);
-	}
+	DeleteDatabase(storage_database);
 	{
 		// create a database and insert values
 		DuckDB db(storage_database);
@@ -62,5 +58,5 @@ TEST_CASE("UNIQUE INDEX after shutdown", "[storage]") {
 
 		REQUIRE_FAIL(con.Query("INSERT INTO test VALUES (11, 24)"));
 	}
-	RemoveDirectory(storage_database);
+	DeleteDatabase(storage_database);
 }

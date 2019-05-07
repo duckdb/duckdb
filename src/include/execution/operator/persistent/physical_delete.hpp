@@ -20,7 +20,7 @@ public:
 	      row_id_index(row_id_index) {
 	}
 
-	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	TableCatalogEntry &tableref;
 	DataTable &table;

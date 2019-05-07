@@ -3,18 +3,19 @@
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "common/exception.hpp"
 #include "common/serializer.hpp"
+#include "parser/parsed_data/create_view_info.hpp"
 
 #include <algorithm>
 
 using namespace duckdb;
 using namespace std;
 
-void ViewCatalogEntry::Initialize(CreateViewInformation *info) {
+void ViewCatalogEntry::Initialize(CreateViewInfo *info) {
 	query = move(info->query);
 	aliases = info->aliases;
 }
 
-ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateViewInformation *info)
+ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateViewInfo *info)
     : CatalogEntry(CatalogType::VIEW, catalog, info->view_name), schema(schema) {
 	Initialize(info);
 }
@@ -29,8 +30,8 @@ void ViewCatalogEntry::Serialize(Serializer &serializer) {
 	}
 }
 
-unique_ptr<CreateViewInformation> ViewCatalogEntry::Deserialize(Deserializer &source) {
-	auto info = make_unique<CreateViewInformation>();
+unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source) {
+	auto info = make_unique<CreateViewInfo>();
 	info->schema = source.Read<string>();
 	info->view_name = source.Read<string>();
 	info->query = QueryNode::Deserialize(source);

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "common/enums/order_type.hpp"
 #include "common/types/data_chunk.hpp"
 
 namespace duckdb {

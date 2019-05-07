@@ -2,9 +2,21 @@
 
 #include "catalog/catalog.hpp"
 #include "catalog/catalog_entry/index_catalog_entry.hpp"
+#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "catalog/catalog_entry/sequence_catalog_entry.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "catalog/catalog_entry/view_catalog_entry.hpp"
 #include "common/exception.hpp"
 #include "parser/expression/function_expression.hpp"
+#include "parser/parsed_data/alter_table_info.hpp"
+#include "parser/parsed_data/create_index_info.hpp"
+#include "parser/parsed_data/create_scalar_function_info.hpp"
+#include "parser/parsed_data/create_sequence_info.hpp"
+#include "parser/parsed_data/create_table_function_info.hpp"
+#include "parser/parsed_data/create_table_info.hpp"
+#include "parser/parsed_data/create_view_info.hpp"
+#include "parser/parsed_data/drop_info.hpp"
 
 #include <algorithm>
 
@@ -16,7 +28,7 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
       scalar_functions(*catalog), sequences(*catalog) {
 }
 
-void SchemaCatalogEntry::CreateTable(Transaction &transaction, CreateTableInformation *info) {
+void SchemaCatalogEntry::CreateTable(Transaction &transaction, CreateTableInfo *info) {
 	info->dependencies.insert(this);
 
 	auto table = make_unique_base<CatalogEntry, TableCatalogEntry>(catalog, this, info);
@@ -27,7 +39,7 @@ void SchemaCatalogEntry::CreateTable(Transaction &transaction, CreateTableInform
 	}
 }
 
-void SchemaCatalogEntry::CreateView(Transaction &transaction, CreateViewInformation *info) {
+void SchemaCatalogEntry::CreateView(Transaction &transaction, CreateViewInfo *info) {
 	auto view = make_unique_base<CatalogEntry, ViewCatalogEntry>(catalog, this, info);
 	auto old_view = tables.GetEntry(transaction, info->view_name);
 	if (info->replace && old_view) {
@@ -43,19 +55,19 @@ void SchemaCatalogEntry::CreateView(Transaction &transaction, CreateViewInformat
 	}
 }
 
-void SchemaCatalogEntry::DropView(Transaction &transaction, DropViewInformation *info) {
-	auto existing_view = tables.GetEntry(transaction, info->view_name);
+void SchemaCatalogEntry::DropView(Transaction &transaction, DropInfo *info) {
+	auto existing_view = tables.GetEntry(transaction, info->name);
 	if (existing_view && existing_view->type != CatalogType::VIEW) {
-		throw CatalogException("Existing object %s is not a view", info->view_name.c_str());
+		throw CatalogException("Existing object %s is not a view", info->name.c_str());
 	}
-	if (!tables.DropEntry(transaction, info->view_name, false)) {
+	if (!tables.DropEntry(transaction, info->name, false)) {
 		if (!info->if_exists) {
-			throw CatalogException("View with name \"%s\" does not exist!", info->view_name.c_str());
+			throw CatalogException("View with name \"%s\" does not exist!", info->name.c_str());
 		}
 	}
 }
 
-void SchemaCatalogEntry::CreateSequence(Transaction &transaction, CreateSequenceInformation *info) {
+void SchemaCatalogEntry::CreateSequence(Transaction &transaction, CreateSequenceInfo *info) {
 	auto sequence = make_unique_base<CatalogEntry, SequenceCatalogEntry>(catalog, this, info);
 	unordered_set<CatalogEntry *> dependencies{this};
 	if (!sequences.CreateEntry(transaction, info->name, move(sequence), dependencies)) {
@@ -65,7 +77,7 @@ void SchemaCatalogEntry::CreateSequence(Transaction &transaction, CreateSequence
 	}
 }
 
-void SchemaCatalogEntry::DropSequence(Transaction &transaction, DropSequenceInformation *info) {
+void SchemaCatalogEntry::DropSequence(Transaction &transaction, DropInfo *info) {
 	if (!sequences.DropEntry(transaction, info->name, info->cascade)) {
 		if (!info->if_exists) {
 			throw CatalogException("Sequence with name \"%s\" does not exist!", info->name.c_str());
@@ -73,7 +85,7 @@ void SchemaCatalogEntry::DropSequence(Transaction &transaction, DropSequenceInfo
 	}
 }
 
-bool SchemaCatalogEntry::CreateIndex(Transaction &transaction, CreateIndexInformation *info) {
+bool SchemaCatalogEntry::CreateIndex(Transaction &transaction, CreateIndexInfo *info) {
 	auto index = make_unique_base<CatalogEntry, IndexCatalogEntry>(catalog, this, info);
 	unordered_set<CatalogEntry *> dependencies{this};
 	if (!indexes.CreateEntry(transaction, info->index_name, move(index), dependencies)) {
@@ -85,7 +97,7 @@ bool SchemaCatalogEntry::CreateIndex(Transaction &transaction, CreateIndexInform
 	return true;
 }
 
-void SchemaCatalogEntry::DropIndex(Transaction &transaction, DropIndexInformation *info) {
+void SchemaCatalogEntry::DropIndex(Transaction &transaction, DropInfo *info) {
 	if (!indexes.DropEntry(transaction, info->name, false)) {
 		if (!info->if_exists) {
 			throw CatalogException("Index with name \"%s\" does not exist!", info->name.c_str());
@@ -93,21 +105,21 @@ void SchemaCatalogEntry::DropIndex(Transaction &transaction, DropIndexInformatio
 	}
 }
 
-void SchemaCatalogEntry::DropTable(Transaction &transaction, DropTableInformation *info) {
-	auto old_table = tables.GetEntry(transaction, info->table);
+void SchemaCatalogEntry::DropTable(Transaction &transaction, DropInfo *info) {
+	auto old_table = tables.GetEntry(transaction, info->name);
 	if (info->if_exists && old_table) {
 		if (old_table->type != CatalogType::TABLE) {
-			throw CatalogException("Existing object %s is not a table", info->table.c_str());
+			throw CatalogException("Existing object %s is not a table", info->name.c_str());
 		}
 	}
-	if (!tables.DropEntry(transaction, info->table, info->cascade)) {
+	if (!tables.DropEntry(transaction, info->name, info->cascade)) {
 		if (!info->if_exists) {
-			throw CatalogException("Table with name \"%s\" does not exist!", info->table.c_str());
+			throw CatalogException("Table with name \"%s\" does not exist!", info->name.c_str());
 		}
 	}
 }
 
-void SchemaCatalogEntry::AlterTable(Transaction &transaction, AlterTableInformation *info) {
+void SchemaCatalogEntry::AlterTable(Transaction &transaction, AlterTableInfo *info) {
 	if (!tables.AlterEntry(transaction, info->table, info)) {
 		throw CatalogException("Table with name \"%s\" does not exist!", info->table.c_str());
 	}
@@ -146,7 +158,7 @@ TableFunctionCatalogEntry *SchemaCatalogEntry::GetTableFunction(Transaction &tra
 	return function_entry;
 }
 
-void SchemaCatalogEntry::CreateTableFunction(Transaction &transaction, CreateTableFunctionInformation *info) {
+void SchemaCatalogEntry::CreateTableFunction(Transaction &transaction, CreateTableFunctionInfo *info) {
 	auto table_function = make_unique_base<CatalogEntry, TableFunctionCatalogEntry>(catalog, this, info);
 	unordered_set<CatalogEntry *> dependencies{this};
 	if (!table_functions.CreateEntry(transaction, info->name, move(table_function), dependencies)) {
@@ -166,15 +178,7 @@ void SchemaCatalogEntry::CreateTableFunction(Transaction &transaction, CreateTab
 	}
 }
 
-void SchemaCatalogEntry::DropTableFunction(Transaction &transaction, DropTableFunctionInformation *info) {
-	if (!table_functions.DropEntry(transaction, info->name, info->cascade)) {
-		if (!info->if_exists) {
-			throw CatalogException("Table function with name \"%s\" does not exist!", info->name.c_str());
-		}
-	}
-}
-
-void SchemaCatalogEntry::CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInformation *info) {
+void SchemaCatalogEntry::CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInfo *info) {
 	auto scalar_function = make_unique_base<CatalogEntry, ScalarFunctionCatalogEntry>(catalog, this, info);
 	unordered_set<CatalogEntry *> dependencies{this};
 

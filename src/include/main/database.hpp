@@ -8,26 +8,28 @@
 
 #pragma once
 
-#include "catalog/catalog.hpp"
-#include "main/connection_manager.hpp"
-#include "storage/storage_manager.hpp"
-#include "transaction/transaction_manager.hpp"
+#include "common/common.hpp"
 
 namespace duckdb {
+class StorageManager;
+class Catalog;
+class TransactionManager;
+class ConnectionManager;
 
 //! The database object. This object holds the catalog and all the
 //! database-specific meta information.
 class Connection;
 class DuckDB {
 public:
-	DuckDB(const char *path = nullptr);
-	DuckDB(const string &path) : DuckDB(path.c_str()) {
-	}
+	DuckDB(const char *path = nullptr, bool read_only = false);
+	DuckDB(const string &path, bool read_only = false);
+	~DuckDB();
 
-	StorageManager storage;
-	Catalog catalog;
-	TransactionManager transaction_manager;
-	ConnectionManager connection_manager;
+	unique_ptr<StorageManager> storage;
+	unique_ptr<Catalog> catalog;
+	unique_ptr<TransactionManager> transaction_manager;
+	unique_ptr<ConnectionManager> connection_manager;
+	bool read_only;
 };
 
 } // namespace duckdb

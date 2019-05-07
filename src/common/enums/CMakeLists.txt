@@ -1,0 +1,3 @@
+
+add_library(duckdb_common_enums OBJECT expression_type.cpp join_type.cpp logical_operator_type.cpp physical_operator_type.cpp statement_type.cpp)
+set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common_enums> PARENT_SCOPE)

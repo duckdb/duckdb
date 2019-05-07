@@ -229,12 +229,10 @@ TEST_CASE("PREPARE and DROPping tables", "[prepared]") {
 
 TEST_CASE("PREPARE and WAL", "[prepared][.]") {
 	unique_ptr<QueryResult> result;
-	auto prepare_database = JoinPath(TESTING_DIRECTORY_NAME, "prepare_test");
+	auto prepare_database = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "prepare_test");
 
 	// make sure the database does not exist
-	if (DirectoryExists(prepare_database)) {
-		RemoveDirectory(prepare_database);
-	}
+	DeleteDatabase(prepare_database);
 	{
 		// create a database and insert values
 		DuckDB db(prepare_database);
@@ -304,7 +302,7 @@ TEST_CASE("PREPARE and WAL", "[prepared][.]") {
 		result = con.Query("SELECT a FROM t");
 		REQUIRE(CHECK_COLUMN(result, 0, {43}));
 	}
-	RemoveDirectory(prepare_database);
+	DeleteDatabase(prepare_database);
 }
 
 TEST_CASE("PREPARE with NULL", "[prepared]") {

@@ -8,12 +8,14 @@
 
 #pragma once
 
-#include "main/client_context.hpp"
 #include "main/materialized_query_result.hpp"
 #include "main/query_result.hpp"
 #include "main/stream_query_result.hpp"
 
 namespace duckdb {
+
+class ClientContext;
+class DuckDB;
 
 //! A connection to a database. This represents a (client) connection that can
 //! be used to query the database.
@@ -45,8 +47,9 @@ public:
 	//! MaterializedQueryResult.
 	unique_ptr<MaterializedQueryResult> Query(string query);
 
+public:
 	DuckDB &db;
-	ClientContext context;
+	unique_ptr<ClientContext> context;
 };
 
 } // namespace duckdb

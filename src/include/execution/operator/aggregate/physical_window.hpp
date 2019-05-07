@@ -20,7 +20,7 @@ public:
 	PhysicalWindow(LogicalOperator &op, vector<unique_ptr<Expression>> select_list,
 	               PhysicalOperatorType type = PhysicalOperatorType::WINDOW);
 
-	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 

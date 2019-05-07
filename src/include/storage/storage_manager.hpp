@@ -35,7 +35,7 @@ constexpr const size_t CHUNK_THRESHOLD = 1024000; //! 1000 data chunks
 //! database on disk
 class StorageManager {
 public:
-	StorageManager(DuckDB &database, string path);
+	StorageManager(DuckDB &database, string path, bool read_only);
 	//! Initialize a database or load an existing database from the given path
 	void Initialize();
 	//! Get the WAL of the StorageManager, returns nullptr if in-memory
@@ -74,6 +74,8 @@ private:
 	unique_ptr<MetaBlockWriter> metadata_writer;
 	unique_ptr<MetaBlockWriter> tabledata_writer;
 
+	//! Whether or not the database is opened in read-only mode
+	bool read_only;
 };
 
 } // namespace duckdb

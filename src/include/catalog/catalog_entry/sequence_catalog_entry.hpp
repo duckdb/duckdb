@@ -9,7 +9,7 @@
 #pragma once
 
 #include "catalog/catalog_entry.hpp"
-#include "parser/parsed_data.hpp"
+#include "parser/parsed_data/create_sequence_info.hpp"
 
 #include <atomic>
 #include <mutex>
@@ -22,7 +22,7 @@ class SchemaCatalogEntry;
 class SequenceCatalogEntry : public CatalogEntry {
 public:
 	//! Create a real TableCatalogEntry and initialize storage for it
-	SequenceCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateSequenceInformation *info)
+	SequenceCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateSequenceInfo *info)
 	    : CatalogEntry(CatalogType::SEQUENCE, catalog, info->name), schema(schema), counter(info->start_value),
 	      increment(info->increment), min_value(info->min_value), max_value(info->max_value), cycle(info->cycle) {
 	}

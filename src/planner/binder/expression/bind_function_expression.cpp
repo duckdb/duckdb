@@ -19,8 +19,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, uint32
 	}
 	// all children bound successfully
 	// lookup the function in the catalog
-	auto func =
-	    context.db.catalog.GetScalarFunction(context.ActiveTransaction(), function.schema, function.function_name);
+	auto func = context.catalog.GetScalarFunction(context.ActiveTransaction(), function.schema, function.function_name);
 	// extract the children and types
 	vector<SQLType> types;
 	vector<unique_ptr<Expression>> children;

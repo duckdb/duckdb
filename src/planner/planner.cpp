@@ -65,50 +65,46 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 			throw Exception("More VIEW aliases than columns in query result");
 		}
 
-		context.db.catalog.CreateView(context.ActiveTransaction(), stmt.info.get());
+		context.catalog.CreateView(context.ActiveTransaction(), stmt.info.get());
 		break;
 	}
 	case StatementType::CREATE_SCHEMA: {
 		auto &stmt = *((CreateSchemaStatement *)statement.get());
-		context.db.catalog.CreateSchema(context.ActiveTransaction(), stmt.info.get());
-		break;
-	}
-	case StatementType::DROP_SCHEMA: {
-		auto &stmt = *((DropSchemaStatement *)statement.get());
-		context.db.catalog.DropSchema(context.ActiveTransaction(), stmt.info.get());
+		context.catalog.CreateSchema(context.ActiveTransaction(), stmt.info.get());
 		break;
 	}
 	case StatementType::CREATE_SEQUENCE: {
 		auto &stmt = *((CreateSequenceStatement *)statement.get());
-		context.db.catalog.CreateSequence(context.ActiveTransaction(), stmt.info.get());
+		context.catalog.CreateSequence(context.ActiveTransaction(), stmt.info.get());
 		break;
 	}
-	case StatementType::DROP_SEQUENCE: {
-		auto &stmt = *((DropSequenceStatement *)statement.get());
-		context.db.catalog.DropSequence(context.ActiveTransaction(), stmt.info.get());
-		break;
-	}
-	case StatementType::DROP_VIEW: {
-		auto &stmt = *((DropViewStatement *)statement.get());
-		context.db.catalog.DropView(context.ActiveTransaction(), stmt.info.get());
-		break;
-	}
-	case StatementType::DROP_TABLE: {
-		auto &stmt = *((DropTableStatement *)statement.get());
-		// TODO: create actual plan
-		context.db.catalog.DropTable(context.ActiveTransaction(), stmt.info.get());
-		break;
-	}
-	case StatementType::DROP_INDEX: {
-		auto &stmt = *((DropIndexStatement *)statement.get());
-		// TODO: create actual plan
-		context.db.catalog.DropIndex(context.ActiveTransaction(), stmt.info.get());
+	case StatementType::DROP: {
+		auto &stmt = *((DropStatement *)statement.get());
+		switch (stmt.info->type) {
+		case CatalogType::SEQUENCE:
+			context.catalog.DropSequence(context.ActiveTransaction(), stmt.info.get());
+			break;
+		case CatalogType::VIEW:
+			context.catalog.DropView(context.ActiveTransaction(), stmt.info.get());
+			break;
+		case CatalogType::TABLE:
+			context.catalog.DropTable(context.ActiveTransaction(), stmt.info.get());
+			break;
+		case CatalogType::INDEX:
+			context.catalog.DropIndex(context.ActiveTransaction(), stmt.info.get());
+			break;
+		case CatalogType::SCHEMA:
+			context.catalog.DropSchema(context.ActiveTransaction(), stmt.info.get());
+			break;
+		default:
+			throw NotImplementedException("Unimplemented catalog type for drop statement");
+		}
 		break;
 	}
 	case StatementType::ALTER: {
 		// TODO: create actual plan
 		auto &stmt = *((AlterTableStatement *)statement.get());
-		context.db.catalog.AlterTable(context.ActiveTransaction(), stmt.info.get());
+		context.catalog.AlterTable(context.ActiveTransaction(), stmt.info.get());
 		break;
 	}
 	case StatementType::TRANSACTION: {
@@ -155,11 +151,9 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	}
 	case StatementType::EXPLAIN: {
 		auto &stmt = *reinterpret_cast<ExplainStatement *>(statement.get());
-		auto parse_tree = stmt.stmt->ToString();
 		CreatePlan(move(stmt.stmt));
 		auto logical_plan_unopt = plan->ToString();
 		auto explain = make_unique<LogicalExplain>(move(plan));
-		explain->parse_tree = parse_tree;
 		explain->logical_plan_unopt = logical_plan_unopt;
 		names = {"explain_key", "explain_value"};
 		sql_types = {SQLType(SQLTypeId::VARCHAR), SQLType(SQLTypeId::VARCHAR)};
