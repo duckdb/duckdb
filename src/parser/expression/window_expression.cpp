@@ -58,7 +58,7 @@ bool WindowExpression::Equals(const BaseExpression *other_) const {
 	if (partitions.size() != other->partitions.size()) {
 		return false;
 	}
-	for (size_t i = 0; i < partitions.size(); i++) {
+	for (uint64_t i = 0; i < partitions.size(); i++) {
 		if (!partitions[i]->Equals(other->partitions[i].get())) {
 			return false;
 		}
@@ -67,7 +67,7 @@ bool WindowExpression::Equals(const BaseExpression *other_) const {
 	if (orders.size() != other->orders.size()) {
 		return false;
 	}
-	for (size_t i = 0; i < orders.size(); i++) {
+	for (uint64_t i = 0; i < orders.size(); i++) {
 		if (orders[i].type != other->orders[i].type) {
 			return false;
 		}
@@ -108,7 +108,6 @@ void WindowExpression::Serialize(Serializer &serializer) {
 	ParsedExpression::Serialize(serializer);
 	serializer.WriteOptional(child);
 	serializer.WriteList(partitions);
-	//	auto order_count = source.Read<uint32_t>();
 	serializer.Write<uint32_t>(orders.size());
 	for (auto &order : orders) {
 		serializer.Write<OrderType>(order.type);
@@ -129,7 +128,7 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	source.ReadList<ParsedExpression>(expr->partitions);
 
 	auto order_count = source.Read<uint32_t>();
-	for (size_t i = 0; i < order_count; i++) {
+	for (uint32_t i = 0; i < order_count; i++) {
 		auto order_type = source.Read<OrderType>();
 		auto expression = ParsedExpression::Deserialize(source);
 		expr->orders.push_back(OrderByNode(order_type, move(expression)));

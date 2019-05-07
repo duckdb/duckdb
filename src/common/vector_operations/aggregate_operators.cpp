@@ -98,7 +98,7 @@ bool VectorOperations::AnyTrue(Vector &left) {
 		throw InvalidTypeException(left.type, "AnyTrue can only be computed for boolean columns!");
 	}
 	bool result = false;
-	VectorOperations::ExecType<bool>(left, [&](bool value, size_t i, size_t k) {
+	VectorOperations::ExecType<bool>(left, [&](bool value, uint64_t i, uint64_t k) {
 		if (!left.nullmask[i]) {
 			result = result || value;
 		}
@@ -114,7 +114,7 @@ bool VectorOperations::AllTrue(Vector &left) {
 		return false;
 	}
 	bool result = true;
-	VectorOperations::ExecType<bool>(left, [&](bool value, size_t i, size_t k) {
+	VectorOperations::ExecType<bool>(left, [&](bool value, uint64_t i, uint64_t k) {
 		if (left.nullmask[i]) {
 			result = false;
 		} else {

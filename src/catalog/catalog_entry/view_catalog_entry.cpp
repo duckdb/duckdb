@@ -36,7 +36,7 @@ unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source) {
 	info->view_name = source.Read<string>();
 	info->query = QueryNode::Deserialize(source);
 	auto alias_count = source.Read<uint32_t>();
-	for (size_t i = 0; i < alias_count; i++) {
+	for (uint32_t i = 0; i < alias_count; i++) {
 		info->aliases.push_back(source.Read<string>());
 	}
 	return info;

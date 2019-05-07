@@ -7,7 +7,7 @@ using namespace std;
 
 namespace duckdb {
 
-void substring_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr,
+void substring_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_count, BoundFunctionExpression &expr,
                         Vector &result) {
 	assert(input_count == 3);
 	auto &input = inputs[0];
@@ -27,7 +27,7 @@ void substring_function(ExpressionExecutor &exec, Vector inputs[], size_t input_
 	auto length_data = (int *)length.data;
 
 	// bool has_stats = expr.function->children[0]->stats.has_stats;
-	size_t current_len = 0;
+	uint64_t current_len = 0;
 	unique_ptr<char[]> output;
 	// if (has_stats) {
 	// 	// stats available, pre-allocate the result chunk
@@ -37,10 +37,10 @@ void substring_function(ExpressionExecutor &exec, Vector inputs[], size_t input_
 
 	VectorOperations::TernaryExec(
 	    input, offset, length, result,
-	    [&](size_t input_index, size_t offset_index, size_t length_index, size_t result_index) {
+	    [&](uint64_t input_index, uint64_t offset_index, uint64_t length_index, uint64_t result_index) {
 		    auto input_string = input_data[input_index];
-		    size_t offset = offset_data[offset_index] - 1; // minus one because SQL starts counting at 1
-		    size_t length = length_data[length_index];
+		    uint64_t offset = offset_data[offset_index] - 1; // minus one because SQL starts counting at 1
+		    uint64_t length = length_data[length_index];
 
 		    if (input.nullmask[input_index]) {
 			    return;
@@ -50,16 +50,16 @@ void substring_function(ExpressionExecutor &exec, Vector inputs[], size_t input_
 			    throw Exception("SUBSTRING cannot handle negative offsets");
 		    }
 
-		    size_t required_len = strlen(input_string) + 1;
+		    uint64_t required_len = strlen(input_string) + 1;
 		    if (required_len > current_len) {
 			    current_len = required_len;
 			    output = unique_ptr<char[]>{new char[required_len]};
 		    }
 
 		    // UTF8 chars can use more than one byte
-		    size_t input_char_offset = 0;
-		    size_t input_byte_offset = 0;
-		    size_t output_byte_offset = 0;
+		    uint64_t input_char_offset = 0;
+		    uint64_t input_byte_offset = 0;
+		    uint64_t output_byte_offset = 0;
 
 		    while (input_string[input_byte_offset]) {
 			    char b = input_string[input_byte_offset++];

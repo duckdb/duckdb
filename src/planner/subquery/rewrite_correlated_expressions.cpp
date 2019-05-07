@@ -11,7 +11,7 @@ using namespace duckdb;
 using namespace std;
 
 RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(ColumnBinding base_binding,
-                                                           column_binding_map_t<size_t> &correlated_map)
+                                                           column_binding_map_t<uint64_t> &correlated_map)
     : base_binding(base_binding), correlated_map(correlated_map) {
 }
 
@@ -47,7 +47,7 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundSubqueryE
 }
 
 RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelatedRecursive(
-    BoundSubqueryExpression &parent, ColumnBinding base_binding, column_binding_map_t<size_t> &correlated_map)
+    BoundSubqueryExpression &parent, ColumnBinding base_binding, column_binding_map_t<uint64_t> &correlated_map)
     : parent(parent), base_binding(base_binding), correlated_map(correlated_map) {
 }
 
@@ -91,7 +91,7 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 	}
 }
 
-RewriteCountAggregates::RewriteCountAggregates(column_binding_map_t<size_t> &replacement_map)
+RewriteCountAggregates::RewriteCountAggregates(column_binding_map_t<uint64_t> &replacement_map)
     : replacement_map(replacement_map) {
 }
 

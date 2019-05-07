@@ -40,7 +40,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, uint32_t depth) {
 	// check if the entry already exists in the column list for the table
 	ColumnBinding binding;
 	binding.column_index = column_list.size();
-	for (size_t i = 0; i < column_list.size(); i++) {
+	for (uint64_t i = 0; i < column_list.size(); i++) {
 		auto &column = column_list[i];
 		if (column == colref.column_name) {
 			binding.column_index = i;
@@ -67,7 +67,7 @@ void TableBinding::GenerateAllColumnExpressions(BindContext &context,
 	}
 }
 
-SubqueryBinding::SubqueryBinding(const string &alias, SubqueryRef &ref, BoundQueryNode &subquery, size_t index)
+SubqueryBinding::SubqueryBinding(const string &alias, SubqueryRef &ref, BoundQueryNode &subquery, uint64_t index)
     : Binding(BindingType::SUBQUERY, alias, index), subquery(subquery) {
 	auto &select_list = subquery.GetSelectList();
 	if (ref.column_name_alias.size() > 0) {
@@ -111,7 +111,7 @@ void SubqueryBinding::GenerateAllColumnExpressions(BindContext &context,
 	}
 }
 
-TableFunctionBinding::TableFunctionBinding(const string &alias, TableFunctionCatalogEntry *function, size_t index)
+TableFunctionBinding::TableFunctionBinding(const string &alias, TableFunctionCatalogEntry *function, uint64_t index)
     : Binding(BindingType::TABLE_FUNCTION, alias, index), function(function) {
 }
 

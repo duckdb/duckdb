@@ -6,6 +6,8 @@
 #include "main/client_context.hpp"
 #include "main/database.hpp"
 
+#include <algorithm>
+
 using namespace std;
 
 namespace duckdb {
@@ -19,7 +21,7 @@ struct PragmaTableFunctionData : public FunctionData {
 	}
 
 	TableCatalogEntry *entry;
-	size_t offset;
+	uint64_t offset;
 };
 
 FunctionData *pragma_table_info_init(ClientContext &context) {
@@ -49,13 +51,13 @@ void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &outp
 	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	size_t next = min(data.offset + STANDARD_VECTOR_SIZE, data.entry->columns.size());
-	size_t output_count = next - data.offset;
-	for (size_t j = 0; j < output.column_count; j++) {
+	uint64_t next = min(data.offset + STANDARD_VECTOR_SIZE, (uint64_t)data.entry->columns.size());
+	uint64_t output_count = next - data.offset;
+	for (uint64_t j = 0; j < output.column_count; j++) {
 		output.data[j].count = output_count;
 	}
 
-	for (size_t i = data.offset; i < next; i++) {
+	for (uint64_t i = data.offset; i < next; i++) {
 		auto index = i - data.offset;
 		auto &column = data.entry->columns[i];
 		// return values:

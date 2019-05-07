@@ -32,7 +32,7 @@ public:
 	/**
 	 * Returns the size in bytes of the given file
 	 */
-	static size_t GetFileSize(fstream &);
+	static uint64_t GetFileSize(fstream &);
 
 	/**
 	 * Reads the given file as a binary

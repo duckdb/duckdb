@@ -53,7 +53,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	// create a mapping of (alias -> index) and a mapping of (Expression -> index) for the SELECT list
 	unordered_map<string, uint32_t> alias_map;
 	expression_map_t<uint32_t> projection_map;
-	for (size_t i = 0; i < statement.select_list.size(); i++) {
+	for (uint64_t i = 0; i < statement.select_list.size(); i++) {
 		auto &expr = statement.select_list[i];
 		if (!expr->alias.empty()) {
 			alias_map[expr->alias] = i;
@@ -62,7 +62,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	}
 
 	// we bind the ORDER BY before we bind any aggregations or window functions
-	for (size_t i = 0; i < statement.orders.size(); i++) {
+	for (uint64_t i = 0; i < statement.orders.size(); i++) {
 		OrderBinder order_binder(result->projection_index, statement, alias_map, projection_map);
 		auto bound_expr = order_binder.Bind(move(statement.orders[i].expression));
 		if (!bound_expr) {
@@ -83,7 +83,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 		// the statement has a GROUP BY clause, bind it
 		unbound_groups.resize(statement.groups.size());
 		GroupBinder group_binder(*this, context, statement, result->group_index, alias_map, info.alias_map);
-		for (size_t i = 0; i < statement.groups.size(); i++) {
+		for (uint64_t i = 0; i < statement.groups.size(); i++) {
 			// we keep a copy of the unbound expression;
 			// we keep the unbound copy around to check for group references in the SELECT and HAVING clause
 			// the reason we want the unbound copy is because we want to figure out whether an expression
@@ -117,7 +117,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 
 	// after that, we bind to the SELECT list
 	SelectBinder select_binder(*this, context, *result, info);
-	for (size_t i = 0; i < statement.select_list.size(); i++) {
+	for (uint64_t i = 0; i < statement.select_list.size(); i++) {
 		SQLType result_type;
 		select_binder.BindTableNames(*statement.select_list[i]);
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type);
@@ -137,7 +137,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	}
 
 	// resolve the types of the ORDER BY clause
-	for (size_t i = 0; i < result->orders.size(); i++) {
+	for (uint64_t i = 0; i < result->orders.size(); i++) {
 		assert(result->orders[i].expression->type == ExpressionType::BOUND_COLUMN_REF);
 		auto &order = (BoundColumnRefExpression &)*result->orders[i].expression;
 		assert(order.binding.column_index < statement.select_list.size());

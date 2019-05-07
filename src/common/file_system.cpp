@@ -105,7 +105,7 @@ void FileSystem::Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint6
 	seek_in_file(handle, location);
 	// now read from the location
 	errno = 0;
-	ssize_t bytes_read = read(fd, buffer, nr_bytes);
+	int64_t bytes_read = read(fd, buffer, nr_bytes);
 	if (bytes_read == -1) {
 		throw IOException("Could not read from file \"%s\": %s", handle.path.c_str(), strerror(errno));
 	}
@@ -120,7 +120,7 @@ void FileSystem::Write(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint
 	seek_in_file(handle, location);
 	// now write to the location
 	errno = 0;
-	ssize_t bytes_written = write(fd, buffer, nr_bytes);
+	int64_t bytes_written = write(fd, buffer, nr_bytes);
 	if (bytes_written == -1) {
 		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), strerror(errno));
 	}
@@ -170,7 +170,7 @@ void FileSystem::CreateDirectory(const string &directory) {
 
 int remove_directory_recursively(const char *path) {
 	DIR *d = opendir(path);
-	size_t path_len = strlen(path);
+	uint64_t path_len = strlen(path);
 	int r = -1;
 
 	if (d) {
@@ -179,7 +179,7 @@ int remove_directory_recursively(const char *path) {
 		while (!r && (p = readdir(d))) {
 			int r2 = -1;
 			char *buf;
-			size_t len;
+			uint64_t len;
 			/* Skip the names "." and ".." as we don't want to recurse on them. */
 			if (!strcmp(p->d_name, ".") || !strcmp(p->d_name, "..")) {
 				continue;
@@ -271,7 +271,7 @@ std::string GetLastErrorAsString() {
 		return std::string(); // No error message has been recorded
 
 	LPSTR messageBuffer = nullptr;
-	size_t size =
+	uint64_t size =
 	    FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 	                   NULL, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL);
 
@@ -285,7 +285,7 @@ std::string GetLastErrorAsString() {
 
 struct WindowsFileHandle : public FileHandle {
 public:
-	WindowsFileHandle(string path, HANDLE fd) : FileHandle(path), fd(fd) {
+	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd) : FileHandle(file_system, path), fd(fd) {
 	}
 	virtual ~WindowsFileHandle() {
 		Close();

@@ -8,7 +8,7 @@
 using namespace duckdb;
 using namespace std;
 
-GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode &node, size_t group_index,
+GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode &node, uint64_t group_index,
                          unordered_map<string, uint32_t> &alias_map, unordered_map<string, uint32_t> &group_alias_map)
     : ExpressionBinder(binder, context), node(node), alias_map(alias_map), group_alias_map(group_alias_map),
       group_index(group_index) {

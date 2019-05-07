@@ -13,7 +13,7 @@ using namespace std;
 
 FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<CorrelatedColumnInfo> &correlated)
     : binder(binder), correlated_columns(correlated) {
-	for (size_t i = 0; i < correlated_columns.size(); i++) {
+	for (uint64_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		correlated_map[col.binding] = i;
 		delim_types.push_back(col.type);
@@ -85,7 +85,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		rewriter.VisitOperator(*plan);
 		// now we add all the columns of the delim_scan to the projection list
 		auto proj = (LogicalProjection *)plan.get();
-		for (size_t i = 0; i < correlated_columns.size(); i++) {
+		for (uint64_t i = 0; i < correlated_columns.size(); i++) {
 			auto colref = make_unique<BoundColumnRefExpression>(
 			    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 			plan->expressions.push_back(move(colref));
@@ -104,7 +104,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
 		rewriter.VisitOperator(*plan);
 		// now we add all the columns of the delim_scan to the grouping operators AND the projection list
-		for (size_t i = 0; i < correlated_columns.size(); i++) {
+		for (uint64_t i = 0; i < correlated_columns.size(); i++) {
 			auto colref = make_unique<BoundColumnRefExpression>(
 			    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 			aggr.groups.push_back(move(colref));
@@ -116,7 +116,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			auto delim_scan = make_unique<LogicalDelimGet>(left_index, delim_types);
 			left_outer_join->children.push_back(move(delim_scan));
 			left_outer_join->children.push_back(move(plan));
-			for (size_t i = 0; i < correlated_columns.size(); i++) {
+			for (uint64_t i = 0; i < correlated_columns.size(); i++) {
 				JoinCondition cond;
 				cond.left =
 				    make_unique<BoundColumnRefExpression>(correlated_columns[i].type, ColumnBinding(left_index, i));
@@ -129,7 +129,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			}
 			// for any COUNT aggregate we replace references to the column with: CASE WHEN COUNT(*) IS NULL THEN 0
 			// ELSE COUNT(*) END
-			for (size_t i = 0; i < aggr.expressions.size(); i++) {
+			for (uint64_t i = 0; i < aggr.expressions.size(); i++) {
 				assert(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 				if (aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT ||
 				    aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT_STAR ||
@@ -173,7 +173,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		auto left_binding = this->base_binding;
 		plan->children[1] = PushDownDependentJoinInternal(move(plan->children[1]));
 		// add the correlated columns to the join conditions
-		for (size_t i = 0; i < correlated_columns.size(); i++) {
+		for (uint64_t i = 0; i < correlated_columns.size(); i++) {
 			JoinCondition cond;
 			cond.left = make_unique<BoundColumnRefExpression>(
 			    correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
@@ -239,7 +239,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			this->base_binding = left_binding;
 		}
 		// add the correlated columns to the join conditions
-		for (size_t i = 0; i < correlated_columns.size(); i++) {
+		for (uint64_t i = 0; i < correlated_columns.size(); i++) {
 			JoinCondition cond;
 			cond.left = make_unique<BoundColumnRefExpression>(
 			    correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
@@ -287,7 +287,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		for (auto &expr : window.expressions) {
 			assert(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 			auto &w = (BoundWindowExpression &)*expr;
-			for (size_t i = 0; i < correlated_columns.size(); i++) {
+			for (uint64_t i = 0; i < correlated_columns.size(); i++) {
 				w.partitions.push_back(make_unique<BoundColumnRefExpression>(
 				    correlated_columns[i].type,
 				    ColumnBinding(base_binding.table_index, base_binding.column_index + i)));

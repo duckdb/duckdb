@@ -38,7 +38,7 @@ public:
 		return new (ptr) T(std::forward<Args>(args)...);
 	}
 
-	char *allocate(size_t size) {
+	char *allocate(uint64_t size) {
 		if (chunk && chunk->current_position + size < chunk->maximum_size) {
 			auto ptr = chunk->data.get() + chunk->current_position;
 			chunk->current_position += size;
@@ -70,12 +70,12 @@ public:
 
 private:
 	struct AllocatorRegion {
-		AllocatorRegion(size_t size) : current_position(0), maximum_size(size) {
+		AllocatorRegion(uint64_t size) : current_position(0), maximum_size(size) {
 			data = unique_ptr<char[]>(new char[maximum_size]);
 		}
 		unique_ptr<char[]> data;
-		size_t current_position;
-		size_t maximum_size;
+		uint64_t current_position;
+		uint64_t maximum_size;
 		unique_ptr<AllocatorRegion> prev;
 	};
 	unique_ptr<AllocatorRegion> chunk;

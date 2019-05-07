@@ -163,7 +163,7 @@ int StorageManager::LoadFromStorage() {
 			DataChunk chunk;
 			chunk.Initialize(types);
 
-			size_t chunk_count = 1;
+			uint64_t chunk_count = 1;
 			while (true) {
 				auto chunk_name =
 				    database.file_system->JoinPath(table_directory_path, "chunk-" + to_string(chunk_count) + ".bin");
@@ -296,14 +296,14 @@ void StorageManager::CreateCheckpoint(int iteration) {
 			table->storage->InitializeScan(ss);
 
 			vector<column_t> column_ids;
-			for (size_t i = 0; i < table->columns.size(); i++) {
+			for (uint64_t i = 0; i < table->columns.size(); i++) {
 				column_ids.push_back(i);
 			}
 			DataChunk chunk;
 			auto types = table->GetTypes();
 			chunk.Initialize(types);
 
-			size_t chunk_count = 1;
+			uint64_t chunk_count = 1;
 			while (true) {
 				chunk.Reset();
 				table->storage->Scan(*transaction, chunk, column_ids, ss);

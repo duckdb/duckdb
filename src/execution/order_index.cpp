@@ -15,11 +15,11 @@ template <class T> struct SortChunk {
 	uint64_t row_id;
 };
 
-template <class T> static size_t templated_get_tuple_size() {
+template <class T> static uint64_t templated_get_tuple_size() {
 	return sizeof(SortChunk<T>);
 }
 
-static size_t GetTupleSize(TypeId type) {
+static uint64_t GetTupleSize(TypeId type) {
 	switch (type) {
 	case TypeId::TINYINT:
 		return templated_get_tuple_size<int8_t>();
@@ -38,7 +38,7 @@ static size_t GetTupleSize(TypeId type) {
 
 OrderIndex::OrderIndex(DataTable &table, vector<column_t> column_ids, vector<TypeId> types,
                        vector<TypeId> expression_types, vector<unique_ptr<Expression>> expressions,
-                       size_t initial_capacity)
+                       uint64_t initial_capacity)
     : Index(IndexType::ORDER_INDEX), table(table), column_ids(column_ids), types(types), expressions(move(expressions)),
       tuple_size(0), data(nullptr), count(0), capacity(0) {
 	// size of tuple is size of column id plus size of types
@@ -53,10 +53,11 @@ OrderIndex::OrderIndex(DataTable &table, vector<column_t> column_ids, vector<Typ
 	expression_result.Initialize(expression_types);
 }
 
-template <class T> static size_t binary_search(SortChunk<T> *array, T key, size_t lower, size_t upper, bool &found) {
+template <class T>
+static uint64_t binary_search(SortChunk<T> *array, T key, uint64_t lower, uint64_t upper, bool &found) {
 	found = false;
 	while (lower <= upper) {
-		size_t middle = (lower + upper) / 2;
+		uint64_t middle = (lower + upper) / 2;
 		auto middle_element = array[middle].value;
 
 		if (middle_element < key) {
@@ -71,10 +72,10 @@ template <class T> static size_t binary_search(SortChunk<T> *array, T key, size_
 	return upper;
 }
 
-template <class T> static size_t binary_search_lt(uint8_t *data, T key, size_t count) {
+template <class T> static uint64_t binary_search_lt(uint8_t *data, T key, uint64_t count) {
 	auto array = (SortChunk<T> *)data;
 	bool found = false;
-	size_t pos = binary_search(array, key, 0, count, found);
+	uint64_t pos = binary_search(array, key, 0, count, found);
 	if (found) {
 		while (pos > 0 && array[pos].value == key) {
 			pos--;
@@ -87,10 +88,10 @@ template <class T> static size_t binary_search_lt(uint8_t *data, T key, size_t c
 	}
 }
 
-template <class T> static size_t binary_search_gt(uint8_t *data, T key, size_t count) {
+template <class T> static uint64_t binary_search_gt(uint8_t *data, T key, uint64_t count) {
 	auto array = (SortChunk<T> *)data;
 	bool found = false;
-	size_t pos = binary_search(array, key, 0, count, found);
+	uint64_t pos = binary_search(array, key, 0, count, found);
 	while (pos > 0 && array[pos].value == key) {
 		pos++;
 	}
@@ -99,7 +100,7 @@ template <class T> static size_t binary_search_gt(uint8_t *data, T key, size_t c
 	return pos;
 }
 
-template <class T> int64_t binary_search_lte(uint8_t *data, T key, size_t count) {
+template <class T> int64_t binary_search_lte(uint8_t *data, T key, uint64_t count) {
 	auto array = (SortChunk<T> *)data;
 	bool found = false;
 	int pos = binary_search(array, key, 0, count, found);
@@ -108,7 +109,7 @@ template <class T> int64_t binary_search_lte(uint8_t *data, T key, size_t count)
 	return pos;
 }
 
-template <class T> int64_t binary_search_gte(uint8_t *data, T key, size_t count) {
+template <class T> int64_t binary_search_gte(uint8_t *data, T key, uint64_t count) {
 	auto array = (SortChunk<T> *)data;
 	bool found = false;
 	int pos = binary_search(array, key, 0, count, found);
@@ -122,7 +123,7 @@ template <class T> int64_t binary_search_gte(uint8_t *data, T key, size_t count)
 	return pos;
 }
 
-size_t OrderIndex::SearchLTE(Value value) {
+uint64_t OrderIndex::SearchLTE(Value value) {
 	assert(value.type == types[0]);
 	switch (types[0]) {
 	case TypeId::TINYINT:
@@ -142,7 +143,7 @@ size_t OrderIndex::SearchLTE(Value value) {
 	}
 }
 
-size_t OrderIndex::SearchGTE(Value value) {
+uint64_t OrderIndex::SearchGTE(Value value) {
 	assert(value.type == types[0]);
 	switch (types[0]) {
 	case TypeId::TINYINT:
@@ -162,7 +163,7 @@ size_t OrderIndex::SearchGTE(Value value) {
 	}
 }
 
-size_t OrderIndex::SearchLT(Value value) {
+uint64_t OrderIndex::SearchLT(Value value) {
 	assert(value.type == types[0]);
 	switch (types[0]) {
 	case TypeId::TINYINT:
@@ -182,7 +183,7 @@ size_t OrderIndex::SearchLT(Value value) {
 	}
 }
 
-size_t OrderIndex::SearchGT(Value value) {
+uint64_t OrderIndex::SearchGT(Value value) {
 	assert(value.type == types[0]);
 	switch (types[0]) {
 	case TypeId::TINYINT:
@@ -202,9 +203,9 @@ size_t OrderIndex::SearchGT(Value value) {
 	}
 }
 
-template <class T> static size_t templated_scan(size_t &from, size_t &to, uint8_t *data, int64_t *result_ids) {
+template <class T> static uint64_t templated_scan(uint64_t &from, uint64_t &to, uint8_t *data, int64_t *result_ids) {
 	auto array = (SortChunk<T> *)data;
-	size_t result_count = 0;
+	uint64_t result_count = 0;
 	for (; from < to; from++) {
 		result_ids[result_count++] = array[from].row_id;
 		if (result_count == STANDARD_VECTOR_SIZE) {
@@ -215,7 +216,7 @@ template <class T> static size_t templated_scan(size_t &from, size_t &to, uint8_
 	return result_count;
 }
 
-void OrderIndex::Scan(size_t &position_from, size_t &position_to, Value value, Vector &result_identifiers) {
+void OrderIndex::Scan(uint64_t &position_from, uint64_t &position_to, Value value, Vector &result_identifiers) {
 	assert(result_identifiers.type == TypeId::BIGINT);
 	auto row_ids = (int64_t *)result_identifiers.data;
 	// perform the templated scan to find the tuples to extract
@@ -303,7 +304,7 @@ template <class T> static void templated_insert(uint8_t *dataptr, DataChunk &inp
 	auto actual_data = (SortChunk<T> *)dataptr;
 	auto input_data = (T *)input.data[0].data;
 	auto row_identifiers = (int64_t *)row_ids.data;
-	for (size_t i = 0; i < row_ids.count; i++) {
+	for (uint64_t i = 0; i < row_ids.count; i++) {
 		actual_data[i].value = input_data[i];
 		actual_data[i].row_id = row_identifiers[i];
 	}
@@ -353,7 +354,7 @@ void OrderIndex::Insert(DataChunk &input, Vector &row_ids) {
 	count += row_ids.count;
 }
 
-template <class T> static void templated_sort(uint8_t *dataptr, size_t count) {
+template <class T> static void templated_sort(uint8_t *dataptr, uint64_t count) {
 	auto actual_data = (SortChunk<T> *)dataptr;
 	sort(actual_data, actual_data + count,
 	     [](const SortChunk<T> &a, const SortChunk<T> &b) -> bool { return a.value < b.value; });
@@ -381,7 +382,7 @@ void OrderIndex::Sort() {
 	}
 }
 
-void OrderIndex::Append(ClientContext &context, DataChunk &appended_data, size_t row_identifier_start) {
+void OrderIndex::Append(ClientContext &context, DataChunk &appended_data, uint64_t row_identifier_start) {
 	lock_guard<mutex> l(lock);
 
 	// first resolve the expressions
@@ -392,7 +393,7 @@ void OrderIndex::Append(ClientContext &context, DataChunk &appended_data, size_t
 	StaticVector<uint64_t> row_identifiers;
 	auto row_ids = (uint64_t *)row_identifiers.data;
 	row_identifiers.count = appended_data.size();
-	for (size_t i = 0; i < row_identifiers.count; i++) {
+	for (uint64_t i = 0; i < row_identifiers.count; i++) {
 		row_ids[i] = row_identifier_start + i;
 	}
 
@@ -426,12 +427,12 @@ void OrderIndex::Update(ClientContext &context, vector<column_t> &update_columns
 	DataChunk temp_chunk;
 	temp_chunk.Initialize(table.types);
 	temp_chunk.data[0].count = update_data.size();
-	for (size_t i = 0; i < column_ids.size(); i++) {
+	for (uint64_t i = 0; i < column_ids.size(); i++) {
 		if (column_ids[i] == COLUMN_IDENTIFIER_ROW_ID) {
 			continue;
 		}
 		bool found_column = false;
-		for (size_t j = 0; i < update_columns.size(); j++) {
+		for (uint64_t j = 0; i < update_columns.size(); j++) {
 			if (column_ids[i] == update_columns[j]) {
 				temp_chunk.data[column_ids[i]].Reference(update_data.data[update_columns[j]]);
 				found_column = true;
@@ -452,9 +453,9 @@ void OrderIndex::Update(ClientContext &context, vector<column_t> &update_columns
 	Sort();
 }
 
-template <class T> void templated_print(uint8_t *dataptr, size_t count) {
+template <class T> void templated_print(uint8_t *dataptr, uint64_t count) {
 	auto actual_data = (SortChunk<T> *)dataptr;
-	for (size_t i = 0; i < count; i++) {
+	for (uint64_t i = 0; i < count; i++) {
 		cout << "[" << actual_data[i].value << " - " << actual_data[i].row_id << "]"
 		     << "\n";
 	}

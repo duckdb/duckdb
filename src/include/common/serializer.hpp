@@ -21,7 +21,7 @@ class Serializer {
 	friend class Deserializer;
 
 private:
-	inline void PotentialResize(size_t new_element_size) {
+	inline void PotentialResize(uint64_t new_element_size) {
 		if (blob.size + new_element_size >= maximum_size) {
 			do {
 				maximum_size *= 2;
@@ -36,9 +36,9 @@ private:
 public:
 	//! Serializes to a buffer allocated by the serializer, will expand when
 	//! writing past the initial threshold
-	Serializer(size_t maximum_size = SERIALIZER_DEFAULT_SIZE);
+	Serializer(uint64_t maximum_size = SERIALIZER_DEFAULT_SIZE);
 	//! Serializes to a provided (owned) data pointer
-	Serializer(unique_ptr<uint8_t[]> data, size_t size);
+	Serializer(unique_ptr<uint8_t[]> data, uint64_t size);
 	//! Serializes to a provided non-owned data pointer, bounds on writing are
 	//! not checked
 	Serializer(uint8_t *data);
@@ -60,7 +60,7 @@ public:
 		}
 	}
 
-	void WriteData(uint8_t *dataptr, size_t data_size) {
+	void WriteData(uint8_t *dataptr, uint64_t data_size) {
 		PotentialResize(data_size);
 
 		memcpy(data + blob.size, dataptr, data_size);
@@ -69,7 +69,7 @@ public:
 
 	// Used for a manual write of data; simply reserves <size> bytes to write
 	// and returns a pointer to where to write them
-	uint8_t *ManualWrite(size_t size) {
+	uint8_t *ManualWrite(uint64_t size) {
 		PotentialResize(size);
 
 		auto dataptr = data + blob.size;
@@ -96,7 +96,7 @@ public:
 	}
 
 private:
-	size_t maximum_size;
+	uint64_t maximum_size;
 	uint8_t *data;
 
 	BinaryData blob;
@@ -108,7 +108,7 @@ class Deserializer {
 public:
 	Deserializer(Serializer &serializer) : Deserializer(serializer.data, serializer.blob.size) {
 	}
-	Deserializer(uint8_t *ptr, size_t data);
+	Deserializer(uint8_t *ptr, uint64_t data);
 
 	// Read an element of class T [sizeof(T)] from the stream. [CAN THROW:
 	// SerializationException]
@@ -123,7 +123,7 @@ public:
 
 	//! Returns <data_size> elements into a pointer. [CAN THROW:
 	//! SerializationException]
-	uint8_t *ReadData(size_t data_size) {
+	uint8_t *ReadData(uint64_t data_size) {
 		if (ptr + data_size > endptr) {
 			throw SerializationException("Failed to deserialize object");
 		}
@@ -134,7 +134,7 @@ public:
 
 	template <class T> void ReadList(vector<unique_ptr<T>> &list) {
 		auto select_count = Read<uint32_t>();
-		for (size_t i = 0; i < select_count; i++) {
+		for (uint32_t i = 0; i < select_count; i++) {
 			auto child = T::Deserialize(*this);
 			list.push_back(move(child));
 		}

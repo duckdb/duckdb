@@ -9,7 +9,7 @@ using namespace duckdb;
 
 static SQLType ConvertCTypeToCPP(duckdb_type type);
 static duckdb_type ConvertCPPTypeToC(SQLType type);
-static size_t GetCTypeSize(duckdb_type type);
+static uint64_t GetCTypeSize(duckdb_type type);
 
 struct DatabaseData {
 	DatabaseData() : database(nullptr) {
@@ -62,12 +62,12 @@ void duckdb_disconnect(duckdb_connection *connection) {
 	}
 }
 
-template <class T> void WriteData(duckdb_result *out, ChunkCollection &source, size_t col) {
-	size_t row = 0;
+template <class T> void WriteData(duckdb_result *out, ChunkCollection &source, uint64_t col) {
+	uint64_t row = 0;
 	T *target = (T *)out->columns[col].data;
 	for (auto &chunk : source.chunks) {
 		T *source = (T *)chunk->data[col].data;
-		for (size_t k = 0; k < chunk->data[col].count; k++) {
+		for (uint64_t k = 0; k < chunk->data[col].count; k++) {
 			target[row++] = source[k];
 		}
 	}
@@ -96,7 +96,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 	}
 	// zero initialize the columns (so we can cleanly delete it in case a malloc fails)
 	memset(out->columns, 0, sizeof(duckdb_column) * out->column_count);
-	for (size_t i = 0; i < out->column_count; i++) {
+	for (uint64_t i = 0; i < out->column_count; i++) {
 		out->columns[i].type = ConvertCPPTypeToC(result->sql_types[i]);
 		out->columns[i].name = strdup(result->names[i].c_str());
 		out->columns[i].nullmask = (bool *)malloc(sizeof(bool) * out->row_count);
@@ -111,12 +111,12 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 		}
 	}
 	// now write the data
-	for (size_t col = 0; col < out->column_count; col++) {
+	for (uint64_t col = 0; col < out->column_count; col++) {
 		// first set the nullmask
-		size_t row = 0;
+		uint64_t row = 0;
 		for (auto &chunk : result->collection.chunks) {
 			assert(!chunk->data[col].sel_vector);
-			for (size_t k = 0; k < chunk->data[col].count; k++) {
+			for (uint64_t k = 0; k < chunk->data[col].count; k++) {
 				out->columns[col].nullmask[row++] = chunk->data[col].nullmask[k];
 			}
 		}
@@ -145,11 +145,11 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 			WriteData<double>(out, result->collection, col);
 			break;
 		case SQLTypeId::VARCHAR: {
-			size_t row = 0;
+			uint64_t row = 0;
 			const char **target = (const char **)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
 				const char **source = (const char **)chunk->data[col].data;
-				for (size_t k = 0; k < chunk->data[col].count; k++) {
+				for (uint64_t k = 0; k < chunk->data[col].count; k++) {
 					if (!chunk->data[col].nullmask[k]) {
 						target[row] = strdup(source[k]);
 					}
@@ -159,11 +159,11 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 			break;
 		}
 		case SQLTypeId::DATE: {
-			size_t row = 0;
+			uint64_t row = 0;
 			duckdb_date *target = (duckdb_date *)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
 				date_t *source = (date_t *)chunk->data[col].data;
-				for (size_t k = 0; k < chunk->data[col].count; k++) {
+				for (uint64_t k = 0; k < chunk->data[col].count; k++) {
 					if (!chunk->data[col].nullmask[k]) {
 						int32_t year, month, day;
 						Date::Convert(source[k], year, month, day);
@@ -186,12 +186,12 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 	return DuckDBSuccess;
 }
 
-static void duckdb_destroy_column(duckdb_column column, size_t count) {
+static void duckdb_destroy_column(duckdb_column column, uint64_t count) {
 	if (column.data) {
 		if (column.type == DUCKDB_TYPE_VARCHAR) {
 			// varchar, delete individual strings
 			auto data = (char **)column.data;
-			for (size_t i = 0; i < count; i++) {
+			for (uint64_t i = 0; i < count; i++) {
 				if (data[i]) {
 					free(data[i]);
 				}
@@ -212,7 +212,7 @@ void duckdb_destroy_result(duckdb_result *result) {
 		free(result->error_message);
 	}
 	if (result->columns) {
-		for (size_t i = 0; i < result->column_count; i++) {
+		for (uint64_t i = 0; i < result->column_count; i++) {
 			duckdb_destroy_column(result->columns[i], result->row_count);
 		}
 		free(result->columns);
@@ -275,7 +275,7 @@ SQLType ConvertCTypeToCPP(duckdb_type type) {
 	}
 }
 
-size_t GetCTypeSize(duckdb_type type) {
+uint64_t GetCTypeSize(duckdb_type type) {
 	switch (type) {
 	case DUCKDB_TYPE_BOOLEAN:
 		return sizeof(bool);

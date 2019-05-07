@@ -26,7 +26,7 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, Logic
 		return nullptr;
 	}
 	// check all the indexes
-	for (size_t j = 0; j < storage.indexes.size(); j++) {
+	for (uint64_t j = 0; j < storage.indexes.size(); j++) {
 		Value low_value, high_value, equal_value;
 		int low_index = -1, high_index = -1, equal_index = -1;
 		auto &index = storage.indexes[j];
@@ -37,7 +37,7 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, Logic
 		auto expr = filter.expressions[0].get();
 		auto low_comparison_type = expr->type;
 		auto high_comparison_type = expr->type;
-		for (size_t i = 0; i < filter.expressions.size(); i++) {
+		for (uint64_t i = 0; i < filter.expressions.size(); i++) {
 			expr = filter.expressions[i].get();
 			// create a matcher for a comparison with a constant
 			ComparisonExpressionMatcher matcher;

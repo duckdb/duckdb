@@ -16,14 +16,14 @@ namespace duckdb {
 //! LogicalChunkGet represents a scan operation from a ChunkCollection
 class LogicalChunkGet : public LogicalOperator {
 public:
-	LogicalChunkGet(size_t table_index, vector<TypeId> types, unique_ptr<ChunkCollection> collection)
+	LogicalChunkGet(uint64_t table_index, vector<TypeId> types, unique_ptr<ChunkCollection> collection)
 	    : LogicalOperator(LogicalOperatorType::CHUNK_GET), table_index(table_index), collection(move(collection)) {
 		assert(types.size() > 0);
 		chunk_types = types;
 	}
 
 	//! The table index in the current bind context
-	size_t table_index;
+	uint64_t table_index;
 	//! The types of the chunk
 	vector<TypeId> chunk_types;
 	//! The chunk collection to scan
