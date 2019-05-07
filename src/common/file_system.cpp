@@ -332,7 +332,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		auto error = GetLastErrorAsString();
 		throw IOException("Cannot open file \"%s\": %s", path, error.c_str());
 	}
-	return make_unique<WindowsFileHandle>(path, hFile);
+	return make_unique<WindowsFileHandle>(*this, path, hFile);
 }
 
 static void seek_in_file(FileHandle &handle, uint64_t location) {
@@ -351,7 +351,7 @@ void FileSystem::Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint6
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	seek_in_file(handle, location);
 
-	auto rc = ReadFile(hFile, buffer, nr_bytes, NULL, NULL);
+	auto rc = ReadFile(hFile, buffer, (DWORD) nr_bytes, NULL, NULL);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
 		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), error.c_str());
@@ -362,7 +362,7 @@ void FileSystem::Write(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	seek_in_file(handle, location);
 
-	auto rc = WriteFile(hFile, buffer, nr_bytes, NULL, NULL);
+	auto rc = WriteFile(hFile, buffer, (DWORD) nr_bytes, NULL, NULL);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
 		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), error.c_str());
@@ -408,7 +408,8 @@ static void delete_dir_special_snowflake_windows(string directory) {
 		}
 		if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 			// recurse to zap directory contents
-			delete_dir_special_snowflake_windows(FileSystem::JoinPath(directory, ffd.cFileName));
+			FileSystem fs;
+			delete_dir_special_snowflake_windows(fs.JoinPath(directory, ffd.cFileName));
 		} else {
 			if (strlen(ffd.cFileName) + directory.size() + 1 > MAX_PATH) {
 				throw IOException("Pathname too long");
