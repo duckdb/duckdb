@@ -26,11 +26,13 @@ inline uint64_t murmurhash32(uint32_t x) {
 	return (uint64_t)x;
 }
 
-// 64-bit hash function, XOR together two calls to 32-bit
-inline uint64_t murmurhash64(uint32_t *vals) {
-	auto left = murmurhash32(vals[0]);
-	auto right = murmurhash32(vals[1]);
-	return left ^ right;
+inline uint64_t murmurhash64(uint64_t x) {
+    x ^= x >> 30;
+    x *= UINT64_C(0xbf58476d1ce4e5b9);
+    x ^= x >> 27;
+    x *= UINT64_C(0x94d049bb133111eb);
+    x ^= x >> 31;
+    return x;
 }
 
 template <class T> uint64_t Hash(T value) {
@@ -44,8 +46,10 @@ inline uint64_t CombineHash(uint64_t left, uint64_t right) {
 
 template <> uint64_t Hash(uint64_t val);
 template <> uint64_t Hash(int64_t val);
+template <> uint64_t Hash(float val);
 template <> uint64_t Hash(double val);
 template <> uint64_t Hash(const char *val);
 template <> uint64_t Hash(char *val);
+uint64_t Hash(const char *val, size_t size);
 
 } // namespace duckdb
