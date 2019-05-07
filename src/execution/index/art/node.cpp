@@ -6,12 +6,9 @@
 
 using namespace duckdb;
 
-
-
 unsigned Node::min(unsigned a, unsigned b) {
 	return (a < b) ? a : b;
 }
-
 
 void Node::copyPrefix(Node *src, Node *dst) {
 	dst->prefixLength = src->prefixLength;
@@ -48,33 +45,37 @@ Node *Node::minimum(Node *node) {
 			pos++;
 		return minimum(n->child[pos]);
 	}
+	default:
+		assert(0);
+		break;
 	}
 }
 
 Node **Node::findChild(const uint8_t k, Node *node) {
 	switch (node->type) {
 	case NodeType::N4: {
-		auto n = static_cast< Node4 *>(node);
+		auto n = static_cast<Node4 *>(node);
 		return n->getChild(k);
 	}
 	case NodeType::N16: {
-		auto n = static_cast< Node16 *>(node);
+		auto n = static_cast<Node16 *>(node);
 		return n->getChild(k);
 	}
 	case NodeType::N48: {
-		auto n = static_cast< Node48 *>(node);
+		auto n = static_cast<Node48 *>(node);
 		return n->getChild(k);
 	}
 	case NodeType::N256: {
-		auto n = static_cast< Node256 *>(node);
+		auto n = static_cast<Node256 *>(node);
 		return n->getChild(k);
 	}
+	default:
+		assert(0);
 	}
-	assert(false);
 }
 
-
-unsigned Node::prefixMismatch(bool isLittleEndian, Node *node, Key &key, size_t depth, unsigned maxKeyLength, TypeId type) {
+unsigned Node::prefixMismatch(bool isLittleEndian, Node *node, Key &key, size_t depth, unsigned maxKeyLength,
+                              TypeId type) {
 	size_t pos;
 	if (node->prefixLength > node->maxPrefixLength) {
 		for (pos = 0; pos < node->maxPrefixLength; pos++)
@@ -107,7 +108,7 @@ void Node::insertLeaf(Node *node, Node **nodeRef, uint8_t key, Node *newNode) {
 	case NodeType::N256:
 		Node256::insert(static_cast<Node256 *>(node), key, newNode);
 		break;
+	default:
+		assert(0);
 	}
 }
-
-

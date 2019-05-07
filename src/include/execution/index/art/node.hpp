@@ -17,7 +17,7 @@ enum class NodeType : uint8_t { N4 = 0, N16 = 1, N48 = 2, N256 = 3, NLeaf = 4 };
 
 class Node {
 public:
-    //! length of the compressed path (prefix)
+	//! length of the compressed path (prefix)
 	uint32_t prefixLength;
 	//! number of non-null children
 	uint16_t count;
@@ -26,11 +26,11 @@ public:
 	//! compressed path (prefix)
 	uint8_t *prefix;
 
-    uint8_t  maxPrefixLength;
+	uint8_t maxPrefixLength;
 
 	static const uint8_t emptyMarker = 48;
 	Node(NodeType type, unsigned maxPrefixLength) : prefixLength(0), count(0), type(type) {
-		this->prefix = (uint8_t*) malloc(maxPrefixLength * sizeof(uint8_t));
+		this->prefix = (uint8_t *)malloc(maxPrefixLength * sizeof(uint8_t));
 		this->maxPrefixLength = maxPrefixLength;
 	}
 	//! Copies the prefix from the source to the destination node
@@ -40,12 +40,12 @@ public:
 	//! Find the next child for the keyByte
 	static Node **findChild(const uint8_t k, Node *node);
 	//! Compare the key with the prefix of the node, return the number matching bytes
-	static unsigned prefixMismatch(bool isLittleEndian, Node *node, Key &key, size_t depth, unsigned maxKeyLength, TypeId type);
+	static unsigned prefixMismatch(bool isLittleEndian, Node *node, Key &key, size_t depth, unsigned maxKeyLength,
+	                               TypeId type);
 	//! Insert leaf into inner node
 	static void insertLeaf(Node *node, Node **nodeRef, uint8_t key, Node *newNode);
 	//! Compare two elements and return the smaller
 	static unsigned min(unsigned a, unsigned b);
-
 };
 
 class Leaf : public Node {
@@ -54,17 +54,17 @@ public:
 	uint64_t capacity;
 	uint64_t num_elements;
 	uint64_t *row_id;
-	Leaf(uint64_t value, uint64_t row_id) : Node(NodeType::NLeaf,this->maxPrefixLength) {
+	Leaf(uint64_t value, uint64_t row_id, uint8_t maxPrefixLength) : Node(NodeType::NLeaf, maxPrefixLength) {
 		this->value = value;
 		this->capacity = 1;
-		this->row_id = (uint64_t*) malloc(this->capacity * sizeof(uint64_t));
+		this->row_id = (uint64_t *)malloc(this->capacity * sizeof(uint64_t));
 		this->row_id[0] = row_id;
-		this->num_elements =1;
+		this->num_elements = 1;
 	}
-	static void insert(Leaf *leaf, uint64_t row_id){
+	static void insert(Leaf *leaf, uint64_t row_id) {
 		// Grow array
-		if (leaf->num_elements == leaf->capacity ){
-			leaf->capacity  *= 2;
+		if (leaf->num_elements == leaf->capacity) {
+			leaf->capacity *= 2;
 			leaf->row_id = (uint64_t *)realloc(leaf->row_id, leaf->capacity * sizeof(uint64_t));
 		}
 		leaf->row_id[leaf->num_elements] = row_id;
@@ -73,7 +73,7 @@ public:
 
 	//! TODO: Maybe shrink array dynamically?
 	static void remove(Leaf *leaf, uint64_t row_id) {
-		size_t entry_offset;
+		size_t entry_offset = -1;
 		for (size_t i = 0; i < leaf->num_elements; i++) {
 			if (leaf->row_id[i] == row_id) {
 				entry_offset = i;

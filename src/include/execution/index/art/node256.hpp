@@ -15,7 +15,7 @@ class Node256 : public Node {
 public:
 	Node *child[256];
 
-	Node256() : Node(NodeType::N256,this->maxPrefixLength) {
+	Node256(uint8_t maxPrefixLength) : Node(NodeType::N256, maxPrefixLength) {
 		memset(child, 0, sizeof(child));
 	}
 
@@ -26,7 +26,6 @@ public:
 	static void insert(Node256 *node, uint8_t keyByte, Node *child);
 
 	//! Delete node From Node256
-	static void erase(Node256* node,Node** nodeRef,uint8_t keyByte);
-
+	static void erase(Node256 *node, Node **nodeRef, uint8_t keyByte);
 };
 } // namespace duckdb

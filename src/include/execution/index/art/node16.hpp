@@ -16,7 +16,7 @@ public:
 	uint8_t key[16];
 	Node *child[16];
 
-	Node16() : Node(NodeType::N16,this->maxPrefixLength) {
+	Node16(uint8_t maxPrefixLength) : Node(NodeType::N16, maxPrefixLength) {
 		memset(key, 0, sizeof(key));
 		memset(child, 0, sizeof(child));
 	}
@@ -28,7 +28,6 @@ public:
 	void static insert(Node16 *node, Node **nodeRef, uint8_t keyByte, Node *child);
 
 	//! Delete node from Node16
-	static void erase(Node16* node,Node** nodeRef,Node** leafPlace);
-
-	};
+	static void erase(Node16 *node, Node **nodeRef, Node **leafPlace);
+};
 } // namespace duckdb

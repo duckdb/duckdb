@@ -55,7 +55,7 @@ public:
 	unique_ptr<IndexScanState> InitializeScanTwoPredicates(Transaction &transaction, vector<column_t> column_ids,
 	                                                       Value low_value, ExpressionType low_expression_type,
 	                                                       Value high_value,
-	                                                       ExpressionType high_expression_type) override{};
+	                                                       ExpressionType high_expression_type) override;
 	//! Perform a lookup on the index
 	void Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) override;
 
@@ -65,8 +65,8 @@ public:
 	void Update(ClientContext &context, vector<column_t> &column_ids, DataChunk &update_data,
 	            Vector &row_identifiers) override;
 
-    //! Delete entries in the index
-    void Delete(DataChunk &entries,Vector &row_identifiers) override;
+	//! Delete entries in the index
+	void Delete(DataChunk &entries, Vector &row_identifiers) override;
 	//! Lock used for updating the index
 	std::mutex lock;
 	//! Root of the tree
@@ -84,46 +84,44 @@ public:
 	uint8_t maxPrefix;
 
 private:
-    //! Insert the leaf value into the tree
-    void insert(bool isLittleEndian,Node *node, Node **nodeRef, Key& key, unsigned depth, uintptr_t value, unsigned maxKeyLength,
-            TypeId type, uint64_t row_id);
+	//! Insert the leaf value into the tree
+	void insert(bool isLittleEndian, Node *node, Node **nodeRef, Key &key, unsigned depth, uintptr_t value,
+	            unsigned maxKeyLength, TypeId type, uint64_t row_id);
 
-	void erase(bool isLittleEndian,Node* node,Node** nodeRef,Key& key,unsigned depth, unsigned maxKeyLength,
-			   TypeId type, uint64_t row_id);
+	void erase(bool isLittleEndian, Node *node, Node **nodeRef, Key &key, unsigned depth, unsigned maxKeyLength,
+	           TypeId type, uint64_t row_id);
 
 	//! Check if the key of the leaf is equal to the searched key
-    bool leafMatches(bool is_little_endian,Node* node,Key &key,unsigned keyLength,unsigned depth);
+	bool leafMatches(bool is_little_endian, Node *node, Key &key, unsigned keyLength, unsigned depth);
 
+	//! Find the node with a matching key, optimistic version
+	Node *lookup(Node *node, Key &key, unsigned keyLength, unsigned depth);
 
-    Node* lookupRange(Node *node, Key& low_key, Key& high_key,unsigned keyLength, unsigned depth);
-
-    //! Find the node with a matching key, optimistic version
-    Node* lookup(Node *node, Key& key, unsigned keyLength, unsigned depth);
-
-    template <class T> void templated_insert(DataChunk &input, Vector &row_ids) {
+	template <class T> void templated_insert(DataChunk &input, Vector &row_ids) {
 		auto input_data = (T *)input.data[0].data;
 		auto row_identifiers = (uint64_t *)row_ids.data;
 		for (size_t i = 0; i < row_ids.count; i++) {
-			Key & key = *new Key(this->is_little_endian,input.data[0].type, input_data[i]);
-			insert(this->is_little_endian,tree, &tree, key, 0, input_data[i], 8, input.data[0].type, row_identifiers[i]);
+			Key &key = *new Key(this->is_little_endian, input.data[0].type, input_data[i]);
+			insert(this->is_little_endian, tree, &tree, key, 0, input_data[i], 8, input.data[0].type,
+			       row_identifiers[i]);
 		}
 	}
 
-    template <class T> void templated_delete(DataChunk &input, Vector &row_ids) {
-        auto input_data = (T *)input.data[0].data;
-        auto row_identifiers = (uint64_t *)row_ids.data;
-        for (size_t i = 0; i < row_ids.count; i++) {
-            Key & key = *new Key(this->is_little_endian,input.data[0].type, input_data[i]);
-            erase(this->is_little_endian,tree, &tree, key, 0, 8, input.data[0].type, row_identifiers[i]);
-        }
-    }
+	template <class T> void templated_delete(DataChunk &input, Vector &row_ids) {
+		auto input_data = (T *)input.data[0].data;
+		auto row_identifiers = (uint64_t *)row_ids.data;
+		for (size_t i = 0; i < row_ids.count; i++) {
+			Key &key = *new Key(this->is_little_endian, input.data[0].type, input_data[i]);
+			erase(this->is_little_endian, tree, &tree, key, 0, 8, input.data[0].type, row_identifiers[i]);
+		}
+	}
 
 	template <class T> size_t templated_lookup(TypeId type, T data, uint64_t *result_ids) {
-        Key& key= *new Key(this->is_little_endian, type, data);
-        size_t result_count = 0;
+		Key &key = *new Key(this->is_little_endian, type, data);
+		size_t result_count = 0;
 		auto leaf = static_cast<Leaf *>(lookup(tree, key, this->maxPrefix, 0));
 		if (leaf) {
-			for (size_t i = 0; i < leaf->num_elements; i ++){
+			for (size_t i = 0; i < leaf->num_elements; i++) {
 				result_ids[result_count++] = leaf->row_id[i];
 			}
 		}
@@ -131,14 +129,6 @@ private:
 	}
 
 	DataChunk expression_result;
-	//! Get the start/end position in the index for a Less Than Equal Operator
-	size_t SearchLTE(Value value);
-	//! Get the start/end position in the index for a Greater Than Equal Operator
-	size_t SearchGTE(Value value);
-	//! Get the start/end position in the index for a Less Than Operator
-	size_t SearchLT(Value value);
-	//! Get the start/end position in the index for a Greater Than Operator
-	size_t SearchGT(Value value);
 	//! Scan the index starting from the position, updating the position.
 	//! Returns the amount of tuples scanned.
 	void Scan(size_t &position_from, size_t &position_to, Value value, Vector &result_identifiers){};

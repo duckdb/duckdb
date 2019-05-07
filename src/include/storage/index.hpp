@@ -62,7 +62,7 @@ public:
 	                    Vector &row_identifiers) = 0;
 
 	//! Called when data inside the index is Deleted
-	virtual void Delete(DataChunk &entries,Vector &row_identifiers) = 0;
+	virtual void Delete(DataChunk &entries, Vector &row_identifiers) = 0;
 };
 
 } // namespace duckdb
