@@ -284,12 +284,14 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *
 }
 
 static string DrawPadded(string text, char padding_character = ' ') {
-	int remaining_width = REMAINING_RENDER_WIDTH;
+	int32_t remaining_width = REMAINING_RENDER_WIDTH;
 	if (text.size() > (uint64_t)remaining_width) {
 		text = text.substr(0, remaining_width);
 	}
-	int right_padding = (remaining_width - text.size()) / 2;
-	int left_padding = remaining_width - text.size() - right_padding;
+	assert(text.size() < numeric_limits<int32_t>::max());
+
+	int32_t right_padding = (remaining_width - (int32_t)text.size()) / 2;
+	int32_t left_padding = remaining_width - (int32_t)text.size() - right_padding;
 	return "|" + string(left_padding, padding_character) + text + string(right_padding, padding_character) + "|";
 }
 
@@ -358,14 +360,14 @@ static void GetRenderHeight(QueryProfiler::TreeNode &node, vector<int> &render_h
 }
 
 string QueryProfiler::RenderTree(QueryProfiler::TreeNode &node) {
-	vector<int> render_heights;
+	vector<int32_t> render_heights;
 	// compute the height of each level
-	int depth = GetDepth(node);
+	auto depth = GetDepth(node);
 
 	// compute the render height
 	render_heights.resize(depth);
 	GetRenderHeight(node, render_heights);
-	int total_height = 0;
+	int32_t total_height = 0;
 	for (auto height : render_heights) {
 		total_height += height;
 	}

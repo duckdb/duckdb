@@ -158,7 +158,7 @@ void WriteAheadLog::WriteEntry(wal_type_t type, Serializer &serializer) {
 	auto blob = serializer.GetData();
 
 	Write<wal_type_t>(type);
-	Write<uint32_t>(blob.size);
+	Write<uint32_t>((uint32_t)blob.size);
 	WriteData(blob.data.get(), blob.size);
 }
 

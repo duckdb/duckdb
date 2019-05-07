@@ -18,7 +18,8 @@ static void ReplaceSetOpBindings(LogicalSetOperation &setop, Expression &expr, u
 		assert(colref.binding.column_index < setop.column_count);
 		assert(colref.depth == 0);
 		// replace the reference to the set operation with a reference to the child subquery
-		colref.binding.table_index = child_index;
+		assert(child_index < numeric_limits<uint32_t>::max());
+		colref.binding.table_index = (uint32_t)child_index;
 	}
 	ExpressionIterator::EnumerateChildren(expr,
 	                                      [&](Expression &child) { ReplaceSetOpBindings(setop, child, child_index); });

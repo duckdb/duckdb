@@ -9,7 +9,8 @@ void ParsedConstraint::Serialize(Serializer &serializer) {
 	Constraint::Serialize(serializer);
 	serializer.Write<int>((int)ctype);
 	serializer.Write<uint64_t>(index);
-	serializer.Write<uint32_t>(columns.size());
+	assert(columns.size().size() < numeric_limits<uint32_t>::max());
+	serializer.Write<uint32_t>((uint32_t)columns.size());
 	for (auto &column : columns) {
 		serializer.WriteString(column);
 	}

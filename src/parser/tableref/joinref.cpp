@@ -32,8 +32,8 @@ void JoinRef::Serialize(Serializer &serializer) {
 	right->Serialize(serializer);
 	condition->Serialize(serializer);
 	serializer.Write<JoinType>(type);
-
-	serializer.Write<uint32_t>(hidden_columns.size());
+	assert(hidden_columns.size() < numeric_limits<uint32_t>::max());
+	serializer.Write<uint32_t>((uint32_t)hidden_columns.size());
 	for (auto &hidden_column : hidden_columns) {
 		serializer.WriteString(hidden_column);
 	}

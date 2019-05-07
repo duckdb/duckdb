@@ -351,7 +351,7 @@ void FileSystem::Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint6
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	seek_in_file(handle, location);
 
-	auto rc = ReadFile(hFile, buffer, (DWORD) nr_bytes, NULL, NULL);
+	auto rc = ReadFile(hFile, buffer, (DWORD)nr_bytes, NULL, NULL);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
 		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), error.c_str());
@@ -362,7 +362,7 @@ void FileSystem::Write(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	seek_in_file(handle, location);
 
-	auto rc = WriteFile(hFile, buffer, (DWORD) nr_bytes, NULL, NULL);
+	auto rc = WriteFile(hFile, buffer, (DWORD)nr_bytes, NULL, NULL);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
 		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), error.c_str());

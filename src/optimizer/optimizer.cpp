@@ -160,7 +160,9 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	// create the JOIN condition
 	JoinCondition cond;
 	cond.left = move(expr.children[0]);
-	cond.right = make_unique<BoundColumnRefExpression>(in_type, ColumnBinding(subquery_index, 0));
+	assert(subquery_index < numeric_limits<uint32_t>::max());
+
+	cond.right = make_unique<BoundColumnRefExpression>(in_type, ColumnBinding((uint32_t)subquery_index, 0));
 	cond.comparison = ExpressionType::COMPARE_EQUAL;
 	join->conditions.push_back(move(cond));
 	root = move(join);

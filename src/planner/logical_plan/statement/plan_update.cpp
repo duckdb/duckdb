@@ -28,13 +28,15 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundUpdateStatemen
 	auto &table = get.table;
 	vector<unique_ptr<Expression>> projection_expressions;
 	for (uint64_t i = 0; i < stmt.expressions.size(); i++) {
+		assert(i < numeric_limits<uint32_t>::max());
 		if (stmt.expressions[i]->type != ExpressionType::VALUE_DEFAULT) {
 			// plan subqueries inside the expression
 			PlanSubqueries(&stmt.expressions[i], &root);
 			// move the expression into the LogicalProjection
 			auto expression = move(stmt.expressions[i]);
 			stmt.expressions[i] = make_unique<BoundColumnRefExpression>(
-			    expression->return_type, ColumnBinding(stmt.proj_index, projection_expressions.size()));
+			    expression->return_type,
+			    ColumnBinding((uint32_t)stmt.proj_index, (uint32_t)projection_expressions.size()));
 			projection_expressions.push_back(move(expression));
 		}
 	}
