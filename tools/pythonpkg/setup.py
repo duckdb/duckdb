@@ -4,18 +4,16 @@
 import os
 import numpy
 import sys
-from setuptools import setup, Extension
-from setuptools.command.install import install
-from setuptools.command.sdist import sdist
 import subprocess
 import platform
-import distutils.spawn
 import shutil
 
+import distutils.spawn
+from setuptools import setup, Extension
+from setuptools.command.sdist import sdist
+from distutils.command.build_ext import build_ext
+
 # some paranoia to start with
-cmake_bin = distutils.spawn.find_executable('cmake')
-if (cmake_bin is None):
-    raise Exception('DuckDB needs cmake to build from source')
 
 if platform.architecture()[0] != '64bit':
     raise Exception('DuckDB only supports 64 bit at this point')
@@ -34,8 +32,12 @@ if not os.path.exists(dd_prefix):
     dd_prefix = '../../' # this is a build from within the tools/pythonpkg directory
 
 # wrapper that builds the main DuckDB library first
-class CustomInstallCommand(install):
+class CustomBuiltExtCommand(build_ext):
     def run(self):
+        cmake_bin = distutils.spawn.find_executable('cmake')
+        if (cmake_bin is None):
+            raise Exception('DuckDB needs cmake to build from source')
+
         wd = os.getcwd()
         os.chdir(dd_prefix)
         if not os.path.exists('build/release_notest'):
@@ -55,7 +57,7 @@ class CustomInstallCommand(install):
         os.chdir(wd)
         if not os.path.isfile('%s/build/release_notest/src/%sduckdb_static.%s' % (dd_prefix, lib_prefix, archive_ext)):
             raise Exception('Library build failed :/') 
-        install.run(self)
+        build_ext.run(self)
 
 # create a distributable directory structure
 class CustomSdistCommand(sdist):
@@ -85,7 +87,7 @@ libduckdb = Extension('duckdb',
 
 setup(
     name = "duckdb",
-    version = '0.0.2',
+    version = '0.0.3',
     description = 'DuckDB embedded database',
     keywords = 'DuckDB Database SQL OLAP',
     url="https://github.com/cwida/duckdb",
@@ -97,13 +99,12 @@ setup(
     setup_requires=['pytest-runner'],
     tests_require=['pytest'],
     classifiers = [
-        'Programming Language :: Python :: 3.7',
         'Topic :: Database :: Database Engines/Servers',
         'Intended Audience :: Developers',
         'Development Status :: 3 - Alpha'
     ],
     cmdclass={
-       'install': CustomInstallCommand,
+       'build_ext': CustomBuiltExtCommand,
        'sdist': CustomSdistCommand
     },
     ext_modules = [libduckdb],

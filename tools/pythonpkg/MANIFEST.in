@@ -1,2 +1,2 @@
-recursive-include src/duckdb CMakeLists.txt *.c *.h *.hpp *.cpp
+recursive-include src/duckdb CMakeLists.txt *.c *.h *.hpp *.cpp *.cc
 include *.h
