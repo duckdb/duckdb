@@ -21,14 +21,9 @@ public:
 	//! Allocates a buffer of the specified size that is sector-aligned. bufsiz must be a multiple of FILE_BUFFER_BLOCK_SIZE. The content
 	//! in this buffer can be written to FileHandles that have been opened with DIRECT_IO on all operating systems,
 	//! however, the entire buffer must be written to the file. Note that the returned size is 8 bytes less than the allocation size to account for the checksum.
-	static unique_ptr<FileBuffer> AllocateAlignedBuffer(uint64_t bufsiz);
-
+	FileBuffer(uint64_t bufsiz);
 	~FileBuffer();
 
-private:
-	FileBuffer(uint8_t *to_be_freed_buffer, uint8_t *buffer, uint64_t size);
-
-public:
 	//! The buffer that users can write to
 	uint8_t *buffer;
 	//! The size of the portion that users can write to, this is equivalent to internal_size - FILE_BUFFER_HEADER_SIZE
@@ -43,7 +38,7 @@ public:
 private:
 	//! The pointer to the internal buffer that will be read or written, including the buffer header
 	uint8_t *internal_buffer;
-	//! The aligned size as passed to AllocateAlignedBuffer. This is the size that is read or written to disk.
+	//! The aligned size as passed to the constructor. This is the size that is read or written to disk.
 	uint64_t internal_size;
 
 	//! The buffer that was actually malloc'd, i.e. the pointer that must be freed when the FileBuffer is destroyed

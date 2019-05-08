@@ -7,23 +7,14 @@
 using namespace duckdb;
 using namespace std;
 
-FileBuffer::FileBuffer(uint8_t *mbuf, uint8_t *buf, uint64_t sz)
-    : internal_size(sz), malloced_buffer(mbuf) {
-	checksum_ptr = (uint64_t*) buf;
-	internal_buffer = buf;
-	buffer = internal_buffer + FILE_BUFFER_HEADER_SIZE;
-	size = internal_size - FILE_BUFFER_HEADER_SIZE;
-}
-
-FileBuffer::~FileBuffer() {
-	free(malloced_buffer);
-}
-
-unique_ptr<FileBuffer> FileBuffer::AllocateAlignedBuffer(uint64_t bufsiz) {
+FileBuffer::FileBuffer(uint64_t bufsiz) {
 	assert(bufsiz % FILE_BUFFER_BLOCK_SIZE == 0);
 	assert(bufsiz >= FILE_BUFFER_BLOCK_SIZE);
 	// we add (FILE_BUFFER_BLOCK_SIZE - 1) to ensure that we can align the buffer to FILE_BUFFER_BLOCK_SIZE
-	uint8_t *malloced_buffer = (uint8_t*) malloc(bufsiz + (FILE_BUFFER_BLOCK_SIZE - 1));
+	malloced_buffer = (uint8_t*) malloc(bufsiz + (FILE_BUFFER_BLOCK_SIZE - 1));
+	if (!malloced_buffer) {
+		throw std::bad_alloc();
+	}
 	// round to multiple of FILE_BUFFER_BLOCK_SIZE
 	uint64_t num = (uint64_t)malloced_buffer;
 	uint64_t remainder = num % FILE_BUFFER_BLOCK_SIZE;
@@ -34,8 +25,15 @@ unique_ptr<FileBuffer> FileBuffer::AllocateAlignedBuffer(uint64_t bufsiz) {
 	assert(num + bufsiz <= ((uint64_t)malloced_buffer + bufsiz + (FILE_BUFFER_BLOCK_SIZE - 1)));
 	assert(num >= (uint64_t)malloced_buffer);
 	// construct the FileBuffer object
-	// not using make_unique because of private constructor
-	return unique_ptr<FileBuffer>(new FileBuffer(malloced_buffer, (uint8_t*) num, bufsiz));
+	checksum_ptr = (uint64_t*) num;
+	internal_buffer = (uint8_t*) num;
+	internal_size = bufsiz;
+	buffer = internal_buffer + FILE_BUFFER_HEADER_SIZE;
+	size = internal_size - FILE_BUFFER_HEADER_SIZE;
+}
+
+FileBuffer::~FileBuffer() {
+	free(malloced_buffer);
 }
 
 void FileBuffer::Read(FileHandle &handle, uint64_t location) {

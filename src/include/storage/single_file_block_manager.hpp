@@ -18,23 +18,35 @@ class FileBuffer;
 
 //! SingleFileBlockManager is a implementation for a BlockManager which manages blocks in a single file
 class SingleFileBlockManager : public BlockManager {
+	//! The location in the file where the block writing starts
+	static constexpr uint64_t BLOCK_START = HEADER_SIZE * 3;
 public:
 	SingleFileBlockManager(string path, bool read_only, bool create_new);
-	//! Returns a pointer to the block of the given id
-	unique_ptr<Block> GetBlock(block_id_t id) override;
-	string GetBlockPath(block_id_t id);
+
 	//! Creates a new Block and returns a pointer
 	unique_ptr<Block> CreateBlock() override;
+	//! Return the next free block id
+	block_id_t GetFreeBlockId() override;
 	//! Flushes the given block to disk, in this case we use the path and stores this block on its file.
-	void Flush(unique_ptr<Block> &block) override;
-
-	void WriteHeader(int64_t version, block_id_t meta_block) override;
+	void Flush(Block &block) override;
+	//! Write the header to disk, this is the final step of the checkpointing process
+	void WriteHeader(DatabaseHeader header) override;
 private:
+	void Initialize(DatabaseHeader &header);
+private:
+	//! The active DatabaseHeader, either 0 (h1) or 1 (h2)
+	int8_t active_header;
 	//! The path where the file is stored
 	string path;
 	//! The file handle
 	unique_ptr<FileHandle> handle;
 	//! The buffer used to read/write to the headers
-	unique_ptr<FileBuffer> header_buffer;
+	FileBuffer header_buffer;
+	//! The list of free blocks that can be written to currently
+	vector<block_id_t> free_list;
+	//! The current maximum block id, this id will be given away first after the free_list runs out
+	block_id_t max_block;
+	//! The current header iteration count
+	uint64_t iteration_count;
 };
 } // namespace duckdb

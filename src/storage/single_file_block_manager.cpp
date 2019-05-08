@@ -1,7 +1,6 @@
 #include "storage/single_file_block_manager.hpp"
 
 #include "common/exception.hpp"
-#include "storage/storage_info.hpp"
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -11,7 +10,7 @@ using namespace std;
 
 
 SingleFileBlockManager::SingleFileBlockManager(string path, bool read_only, bool create_new) :
-	path(path) {
+	path(path), header_buffer(HEADER_SIZE) {
 
 	uint8_t flags;
 	FileLockType lock;
@@ -28,73 +27,102 @@ SingleFileBlockManager::SingleFileBlockManager(string path, bool read_only, bool
 	}
 	// open the RDBMS handle
 	handle = FileSystem::OpenFile(path, flags, lock);
-	// create a temporary buffer for reads/writes
-	header_buffer = FileBuffer::AllocateAlignedBuffer(HEADER_SIZE);
 	if (create_new) {
 		// if we create a new file, we fill the metadata of the file
 		// first fill in the new header
-		header_buffer->Clear();
-		MainHeader *main_header = (MainHeader*) header_buffer->buffer;
+		header_buffer.Clear();
+		MainHeader *main_header = (MainHeader*) header_buffer.buffer;
 		main_header->version_number = VERSION_NUMBER;
 		// now write the header to the file
-		header_buffer->Write(*handle, 0);
-		header_buffer->Clear();
+		header_buffer.Write(*handle, 0);
+		header_buffer.Clear();
 
 		// write the database headers
 		// we initialize meta_block and free_list to -1 because the database file does not contain any actual content yet
-		DatabaseHeader *header = (DatabaseHeader*) header_buffer->buffer;
+		DatabaseHeader *header = (DatabaseHeader*) header_buffer.buffer;
 		// header 1
 		header->iteration = 0;
 		header->meta_block = -1;
 		header->free_list = -1;
-		header_buffer->Write(*handle, HEADER_SIZE);
+		header->block_count = 0;
+		header_buffer.Write(*handle, HEADER_SIZE);
 		// header 2
 		header->iteration = 1;
-		header->meta_block = -1;
-		header->free_list = -1;
-		header_buffer->Write(*handle, HEADER_SIZE * 2);
+		header_buffer.Write(*handle, HEADER_SIZE * 2);
 		// ensure that writing to disk is completed before returning
 		handle->Sync();
+		// we start with h2 as active_header, this way our initial write will be in h1
+		active_header = 1;
+		max_block = 0;
 	} else {
 		MainHeader header;
 		// otherwise, we check the metadata of the file
-		header_buffer->Read(*handle, 0);
-		header = *((MainHeader*) header_buffer->buffer);
+		header_buffer.Read(*handle, 0);
+		header = *((MainHeader*) header_buffer.buffer);
 		// check the version number
 		if (header.version_number != VERSION_NUMBER) {
 			throw IOException("Trying to read a database file with version number %lld, but we can only read version %lld", header.version_number, VERSION_NUMBER);
 		}
 		// read the database headers from disk
 		DatabaseHeader h1, h2;
-		header_buffer->Read(*handle, HEADER_SIZE);
-		h1 = *((DatabaseHeader*) header_buffer->buffer);
-		header_buffer->Read(*handle, HEADER_SIZE * 2);
-		h2 = *((DatabaseHeader*) header_buffer->buffer);
+		header_buffer.Read(*handle, HEADER_SIZE);
+		h1 = *((DatabaseHeader*) header_buffer.buffer);
+		header_buffer.Read(*handle, HEADER_SIZE * 2);
+		h2 = *((DatabaseHeader*) header_buffer.buffer);
 		// check the header with the highest iteration count
 		if (h1.iteration > h2.iteration) {
-			// FIXME: use h1
+			// h1 is active header
+			active_header = 0;
+			Initialize(h1);
 		} else {
-			// FIXME: use h2
+			// h2 is active header
+			active_header = 1;
+			Initialize(h2);
 		}
 	}
 }
 
-unique_ptr<Block> SingleFileBlockManager::GetBlock(block_id_t id) {
-	return nullptr;
+void SingleFileBlockManager::Initialize(DatabaseHeader &header) {
+	if (header.free_list >= 0) {
+		// FIXME: load free_list
+		// FIXME: add blocks > block_count to free list
+		// FIXME: initialize meta block pointer somewhere
+	}
+	iteration_count = header.iteration;
+	max_block = header.block_count;
 }
 
-string SingleFileBlockManager::GetBlockPath(block_id_t id) {
-	return "";
+block_id_t SingleFileBlockManager::GetFreeBlockId() {
+	if (free_list.size() > 0) {
+		// free list is non empty
+		// take an entry from the free list
+		block_id_t block = free_list.back();
+		// erase the entry from the free list again
+		free_list.pop_back();
+		return block;
+	}
+	return max_block++;
 }
 
 unique_ptr<Block> SingleFileBlockManager::CreateBlock() {
-	return nullptr;
+	return make_unique<Block>(GetFreeBlockId());
 }
 
-void SingleFileBlockManager::Flush(unique_ptr<Block> &block) {
-
+void SingleFileBlockManager::Flush(Block &block) {
+	block.Write(*handle, BLOCK_START + block.id * BLOCK_SIZE);
 }
 
-void SingleFileBlockManager::WriteHeader(int64_t version, block_id_t meta_block) {
-
+void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
+	// set the iteration count
+	header.iteration = iteration_count++;
+	// set the header inside the buffer
+	header_buffer.Clear();
+	*((DatabaseHeader*) header_buffer.buffer) = header;
+	// now write the header to the file, active_header determines whether we write to h1 or h2
+	// note that if active_header is h1 we write to h2, and vice versa
+	header_buffer.Write(*handle, active_header == 1 ? HEADER_SIZE : HEADER_SIZE * 2);
+	// switch active header to the other header
+	active_header = 1 - active_header;
+	//! Ensure the header write ends up on disk
+	handle->Sync();
 }
