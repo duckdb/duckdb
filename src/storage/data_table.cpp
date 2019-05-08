@@ -460,7 +460,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 			lock = chunk->GetSharedLock();
 			current_chunk = chunk;
 		}
-		assert(row_id >= chunk->start && row_id < chunk->start + chunk->count);
+		assert((uint64_t)row_id >= chunk->start && (uint64_t)row_id < chunk->start + chunk->count);
 		auto index = row_id - chunk->start;
 		bool retrieve_base_version = true;
 

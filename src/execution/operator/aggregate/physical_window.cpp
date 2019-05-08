@@ -239,7 +239,7 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection
 	if (bounds.window_start < (int64_t)bounds.partition_start) {
 		bounds.window_start = bounds.partition_start;
 	}
-	if (bounds.window_end > bounds.partition_end) {
+	if ((uint64_t)bounds.window_end > bounds.partition_end) {
 		bounds.window_end = bounds.partition_end;
 	}
 
@@ -391,7 +391,7 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 
 				assert((n_large * (n_size + 1) + (n_param - n_large) * n_size) == n_total);
 
-				if (row_idx < i_small) {
+				if (row_idx < (uint64_t)i_small) {
 					res = Value::Numeric(wexpr->return_type, 1 + row_idx / (n_size + 1));
 				} else {
 					res = Value::Numeric(wexpr->return_type, 1 + n_large + (row_idx - i_small) / n_size);
@@ -411,7 +411,7 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 				def_val = leadlag_default_collection.GetValue(0, wexpr->default_expr->IsScalar() ? 0 : row_idx);
 			}
 			if (wexpr->type == ExpressionType::WINDOW_LEAD) {
-				int64_t lead_idx = (int64_t)row_idx + 1;
+				auto lead_idx = row_idx + 1;
 				if (lead_idx < bounds.partition_end) {
 					res = payload_collection.GetValue(0, lead_idx);
 				} else {
@@ -419,7 +419,7 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 				}
 			} else {
 				int64_t lag_idx = (int64_t)row_idx - offset;
-				if (lag_idx >= 0 && lag_idx >= bounds.partition_start) {
+				if (lag_idx >= 0 && (uint64_t)lag_idx >= bounds.partition_start) {
 					res = payload_collection.GetValue(0, lag_idx);
 				} else {
 					res = def_val;

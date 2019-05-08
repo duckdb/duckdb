@@ -109,7 +109,7 @@ void FileSystem::Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint6
 	if (bytes_read == -1) {
 		throw IOException("Could not read from file \"%s\": %s", handle.path.c_str(), strerror(errno));
 	}
-	if (bytes_read != nr_bytes) {
+	if ((uint64_t)bytes_read != nr_bytes) {
 		throw IOException("Could not read sufficient bytes from file \"%s\"", handle.path.c_str());
 	}
 }
@@ -124,7 +124,7 @@ void FileSystem::Write(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint
 	if (bytes_written == -1) {
 		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), strerror(errno));
 	}
-	if (bytes_written != nr_bytes) {
+	if ((uint64_t)bytes_written != nr_bytes) {
 		throw IOException("Could not write sufficient bytes from file \"%s\"", handle.path.c_str());
 	}
 }
