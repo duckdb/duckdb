@@ -24,7 +24,8 @@ void ViewCatalogEntry::Serialize(Serializer &serializer) {
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
 	query->Serialize(serializer);
-	serializer.Write<uint32_t>(aliases.size());
+	assert(aliases.size() <= numeric_limits<uint32_t>::max());
+	serializer.Write<uint32_t>((uint32_t)aliases.size());
 	for (auto s : aliases) {
 		serializer.WriteString(s);
 	}
@@ -36,7 +37,7 @@ unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source) {
 	info->view_name = source.Read<string>();
 	info->query = QueryNode::Deserialize(source);
 	auto alias_count = source.Read<uint32_t>();
-	for (size_t i = 0; i < alias_count; i++) {
+	for (uint32_t i = 0; i < alias_count; i++) {
 		info->aliases.push_back(source.Read<string>());
 	}
 	return info;

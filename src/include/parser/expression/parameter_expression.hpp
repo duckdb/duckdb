@@ -15,7 +15,7 @@ class ParameterExpression : public ParsedExpression {
 public:
 	ParameterExpression();
 
-	size_t parameter_nr;
+	uint64_t parameter_nr;
 
 public:
 	bool IsScalar() const override {

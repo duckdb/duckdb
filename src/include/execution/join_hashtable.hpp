@@ -71,7 +71,7 @@ public:
 		void ScanKeyMatches(DataChunk &keys);
 		template <bool MATCH> void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
-		size_t ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
+		uint64_t ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
 		void ResolvePredicates(DataChunk &keys, Vector &comparison_result);
 	};
@@ -79,12 +79,12 @@ public:
 private:
 	//! Nodes store the actual data of the tuples inside the HT as a linked list
 	struct Node {
-		size_t count;
-		size_t capacity;
+		uint64_t count;
+		uint64_t capacity;
 		unique_ptr<uint8_t[]> data;
 		unique_ptr<Node> prev;
 
-		Node(size_t tuple_size, size_t capacity) : count(0), capacity(capacity) {
+		Node(uint64_t tuple_size, uint64_t capacity) : count(0), capacity(capacity) {
 			data = unique_ptr<uint8_t[]>(new uint8_t[tuple_size * capacity]);
 			memset(data.get(), 0, tuple_size * capacity);
 		}
@@ -102,10 +102,10 @@ private:
 
 public:
 	JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type,
-	              size_t initial_capacity = 32768, bool parallel = false);
+	              uint64_t initial_capacity = 32768, bool parallel = false);
 	//! Resize the HT to the specified size. Must be larger than the current
 	//! size.
-	void Resize(size_t size);
+	void Resize(uint64_t size);
 	//! Add the given data to the HT
 	void Build(DataChunk &keys, DataChunk &input);
 	//! Probe the HT with the given input chunk, resulting in the given result
@@ -114,7 +114,7 @@ public:
 	//! The stringheap of the JoinHashTable
 	StringHeap string_heap;
 
-	size_t size() {
+	uint64_t size() {
 		return count;
 	}
 
@@ -133,15 +133,15 @@ public:
 	//! The comparison predicates
 	vector<ExpressionType> predicates;
 	//! Size of condition keys
-	size_t equality_size;
+	uint64_t equality_size;
 	//! Size of condition keys
-	size_t condition_size;
+	uint64_t condition_size;
 	//! Size of build tuple
-	size_t build_size;
+	uint64_t build_size;
 	//! The size of an entry as stored in the HashTable
-	size_t entry_size;
+	uint64_t entry_size;
 	//! The total tuple size
-	size_t tuple_size;
+	uint64_t tuple_size;
 	//! The join type of the HT
 	JoinType join_type;
 	//! Whether or not any of the key elements contain NULL
@@ -167,9 +167,9 @@ private:
 	void InsertHashes(Vector &hashes, uint8_t *key_locations[]);
 	//! The capacity of the HT. This can be increased using
 	//! JoinHashTable::Resize
-	size_t capacity;
+	uint64_t capacity;
 	//! The amount of entries stored in the HT currently
-	size_t count;
+	uint64_t count;
 	//! The data of the HT
 	unique_ptr<Node> head;
 	//! The hash map of the HT

@@ -13,11 +13,11 @@ void LogicalAggregate::ResolveTypes() {
 	}
 }
 
-size_t LogicalAggregate::ExpressionCount() {
+uint64_t LogicalAggregate::ExpressionCount() {
 	return expressions.size() + groups.size();
 }
 
-Expression *LogicalAggregate::GetExpression(size_t index) {
+Expression *LogicalAggregate::GetExpression(uint64_t index) {
 	if (index < expressions.size()) {
 		return LogicalOperator::GetExpression(index);
 	} else {
@@ -28,7 +28,7 @@ Expression *LogicalAggregate::GetExpression(size_t index) {
 }
 
 void LogicalAggregate::ReplaceExpression(
-    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index) {
+    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, uint64_t index) {
 	if (index < expressions.size()) {
 		LogicalOperator::ReplaceExpression(callback, index);
 	} else {
@@ -42,7 +42,7 @@ string LogicalAggregate::ParamsToString() const {
 	string result = LogicalOperator::ParamsToString();
 	if (groups.size() > 0) {
 		result += "[";
-		for (size_t i = 0; i < groups.size(); i++) {
+		for (uint64_t i = 0; i < groups.size(); i++) {
 			auto &child = groups[i];
 			result += child->GetName();
 			if (i < groups.size() - 1) {

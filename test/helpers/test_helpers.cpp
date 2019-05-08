@@ -6,12 +6,29 @@
 
 using namespace std;
 
+#define TESTING_DIRECTORY_NAME "duckdb_unittest_tempdir"
+
 namespace duckdb {
 
-void DeleteDatabase(string path) {
-	if (FileSystem::DirectoryExists(path)) {
-		FileSystem::RemoveDirectory(path);
+void TestDeleteDirectory(string path) {
+	FileSystem fs;
+	if (fs.DirectoryExists(path)) {
+		fs.RemoveDirectory(path);
 	}
+}
+
+void DeleteDatabase(string path) {
+	TestDeleteDirectory(path);
+}
+
+void TestCreateDirectory(string path) {
+	FileSystem fs;
+	fs.CreateDirectory(path);
+}
+
+string TestCreatePath(string suffix) {
+	FileSystem fs;
+	return fs.JoinPath(TESTING_DIRECTORY_NAME, suffix);
 }
 
 static bool ValuesAreEqual(Value result_value, Value value) {

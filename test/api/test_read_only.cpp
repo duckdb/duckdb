@@ -6,16 +6,19 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test connection using a read only database", "[readonly]") {
-	auto dbdir = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "read_only_test");
+	auto dbdir = TestCreatePath("read_only_test");
 	unique_ptr<DuckDB> db, db2;
 	unique_ptr<Connection> con;
 	// make sure the database does not exist
 	DeleteDatabase(dbdir);
 
+	DBConfig readonly_config;
+	readonly_config.access_mode = AccessMode::READ_ONLY;
+
 	// cannot create read-only memory database
-	REQUIRE_THROWS(db = make_unique<DuckDB>(nullptr, true));
+	REQUIRE_THROWS(db = make_unique<DuckDB>(nullptr, &readonly_config));
 	// cannot create a read-only database in a new directory
-	REQUIRE_THROWS(db = make_unique<DuckDB>(dbdir, true));
+	REQUIRE_THROWS(db = make_unique<DuckDB>(dbdir, &readonly_config));
 
 	// create the database file and initialize it with data
 	db = make_unique<DuckDB>(dbdir);
@@ -26,7 +29,7 @@ TEST_CASE("Test connection using a read only database", "[readonly]") {
 	db.reset();
 
 	// now connect in read-only mode
-	REQUIRE_NOTHROW(db = make_unique<DuckDB>(dbdir, true));
+	REQUIRE_NOTHROW(db = make_unique<DuckDB>(dbdir, &readonly_config));
 	con = make_unique<Connection>(*db);
 
 	// we can query the database

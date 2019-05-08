@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-void abs_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr,
+void abs_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_count, BoundFunctionExpression &expr,
                   Vector &result);
 bool abs_matches_arguments(vector<SQLType> &arguments);
 SQLType abs_get_return_type(vector<SQLType> &arguments);

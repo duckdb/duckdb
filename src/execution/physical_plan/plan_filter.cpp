@@ -26,9 +26,9 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, Logic
 		return nullptr;
 	}
 	// check all the indexes
-	for (size_t j = 0; j < storage.indexes.size(); j++) {
+	for (uint64_t j = 0; j < storage.indexes.size(); j++) {
 		Value low_value, high_value, equal_value;
-		int low_index = -1, high_index = -1, equal_index = -1;
+		int32_t low_index = -1, high_index = -1, equal_index = -1;
 		auto &index = storage.indexes[j];
 		// FIXME: assume every index is order index currently
 		assert(index->type == IndexType::ORDER_INDEX);
@@ -37,7 +37,9 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, Logic
 		auto expr = filter.expressions[0].get();
 		auto low_comparison_type = expr->type;
 		auto high_comparison_type = expr->type;
-		for (size_t i = 0; i < filter.expressions.size(); i++) {
+		for (uint64_t i = 0; i < filter.expressions.size(); i++) {
+			assert(i <= numeric_limits<int32_t>::max());
+
 			expr = filter.expressions[i].get();
 			// create a matcher for a comparison with a constant
 			ComparisonExpressionMatcher matcher;
@@ -69,18 +71,18 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, Logic
 				if (comparison_type == ExpressionType::COMPARE_EQUAL) {
 					// equality value
 					// equality overrides any other bounds so we just break here
-					equal_index = i;
+					equal_index = (int32_t)i;
 					equal_value = constant_value;
 					break;
 				} else if (comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
 				           comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
 					// greater than means this is a lower bound
-					low_index = i;
+					low_index = (int32_t)i;
 					low_value = constant_value;
 					low_comparison_type = comparison_type;
 				} else {
 					// smaller than means this is an upper bound
-					high_index = i;
+					high_index = (int32_t)i;
 					high_value = constant_value;
 					high_comparison_type = comparison_type;
 				}

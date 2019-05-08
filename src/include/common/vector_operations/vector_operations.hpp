@@ -163,7 +163,7 @@ struct VectorOperations {
 		//! dest[i] = dest[i]
 		static void SetFirst(Vector &source, Vector &dest);
 		// dest[i] = dest[i] + source
-		static void Add(int64_t source, void **dest, size_t length);
+		static void Add(int64_t source, void **dest, uint64_t length);
 	};
 	// make sure dest.count is set for gather methods!
 	struct Gather {
@@ -179,7 +179,7 @@ struct VectorOperations {
 	static void Sort(Vector &vector, sel_t result[]);
 	// Sort the vector, setting the given selection vector to a sorted state
 	// while ignoring NULL values.
-	static void Sort(Vector &vector, sel_t *result_vector, size_t count, sel_t result[]);
+	static void Sort(Vector &vector, sel_t *result_vector, uint64_t count, sel_t result[]);
 	//===--------------------------------------------------------------------===//
 	// Hash functions
 	//===--------------------------------------------------------------------===//
@@ -200,12 +200,12 @@ struct VectorOperations {
 	// Cast the data from the source type to the target type
 	static void Cast(Vector &source, Vector &result);
 	// Copy the data of <source> to the target location
-	static void Copy(Vector &source, void *target, size_t offset = 0, size_t element_count = 0);
+	static void Copy(Vector &source, void *target, uint64_t offset = 0, uint64_t element_count = 0);
 	// Copy the data of <source> to the target vector
-	static void Copy(Vector &source, Vector &target, size_t offset = 0);
+	static void Copy(Vector &source, Vector &target, uint64_t offset = 0);
 	// Copy the data of <source> to the target location, setting null values to
 	// NullValue<T>. Used to store data without separate NULL mask.
-	static void CopyToStorage(Vector &source, void *target, size_t offset = 0, size_t element_count = 0);
+	static void CopyToStorage(Vector &source, void *target, uint64_t offset = 0, uint64_t element_count = 0);
 	// Appends the data of <source> to the target vector, setting the nullmask
 	// for any NullValue<T> of source. Used to go back from storage to a
 	// nullmask.
@@ -216,8 +216,8 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Exec
 	//===--------------------------------------------------------------------===//
-	template <class T> static void Exec(sel_t *sel_vector, size_t count, T &&fun, size_t offset = 0) {
-		size_t i = offset;
+	template <class T> static void Exec(sel_t *sel_vector, uint64_t count, T &&fun, uint64_t offset = 0) {
+		uint64_t i = offset;
 		if (sel_vector) {
 			//#pragma GCC ivdep
 			for (; i < count; i++) {
@@ -232,7 +232,7 @@ struct VectorOperations {
 	}
 	//! Exec over the set of indexes, calls the callback function with (i) =
 	//! index, dependent on selection vector and (k) = count
-	template <class T> static void Exec(const Vector &vector, T &&fun, size_t offset = 0, size_t count = 0) {
+	template <class T> static void Exec(const Vector &vector, T &&fun, uint64_t offset = 0, uint64_t count = 0) {
 		if (count == 0) {
 			count = vector.count;
 		} else {
@@ -246,9 +246,9 @@ struct VectorOperations {
 	//! is equivalent to calling ::Exec() and performing data[i] for
 	//! every entry
 	template <typename T, class FUNC>
-	static void ExecType(Vector &vector, FUNC &&fun, size_t offset = 0, size_t limit = 0) {
+	static void ExecType(Vector &vector, FUNC &&fun, uint64_t offset = 0, uint64_t limit = 0) {
 		auto data = (T *)vector.data;
-		VectorOperations::Exec(vector, [&](size_t i, size_t k) { fun(data[i], i, k); }, offset, limit);
+		VectorOperations::Exec(vector, [&](uint64_t i, uint64_t k) { fun(data[i], i, k); }, offset, limit);
 	}
 	template <class FUNC> static void BinaryExec(Vector &a, Vector &b, Vector &result, FUNC &&fun) {
 		// it might be the case that not everything has a selection vector
@@ -268,13 +268,13 @@ struct VectorOperations {
 		// now check for constants
 		// we handle constants by multiplying the index access by 0 to avoid 2^3
 		// branches in the code
-		size_t a_mul = a.IsConstant() ? 0 : 1;
-		size_t b_mul = b.IsConstant() ? 0 : 1;
+		uint64_t a_mul = a.IsConstant() ? 0 : 1;
+		uint64_t b_mul = b.IsConstant() ? 0 : 1;
 
 		assert(a.IsConstant() || a.count == result.count);
 		assert(b.IsConstant() || b.count == result.count);
 
-		VectorOperations::Exec(result, [&](size_t i, size_t k) { fun(a_mul * i, b_mul * i, i); });
+		VectorOperations::Exec(result, [&](uint64_t i, uint64_t k) { fun(a_mul * i, b_mul * i, i); });
 	}
 	template <class FUNC> static void TernaryExec(Vector &a, Vector &b, Vector &c, Vector &result, FUNC &&fun) {
 		// it might be the case that not everything has a selection vector
@@ -297,15 +297,15 @@ struct VectorOperations {
 		// now check for constants
 		// we handle constants by multiplying the index access by 0 to avoid 2^3
 		// branches in the code
-		size_t a_mul = a.IsConstant() ? 0 : 1;
-		size_t b_mul = b.IsConstant() ? 0 : 1;
-		size_t c_mul = c.IsConstant() ? 0 : 1;
+		uint64_t a_mul = a.IsConstant() ? 0 : 1;
+		uint64_t b_mul = b.IsConstant() ? 0 : 1;
+		uint64_t c_mul = c.IsConstant() ? 0 : 1;
 
 		assert(a.IsConstant() || a.count == result.count);
 		assert(b.IsConstant() || b.count == result.count);
 		assert(c.IsConstant() || c.count == result.count);
 
-		VectorOperations::Exec(result, [&](size_t i, size_t k) { fun(a_mul * i, b_mul * i, c_mul * i, i); });
+		VectorOperations::Exec(result, [&](uint64_t i, uint64_t k) { fun(a_mul * i, b_mul * i, c_mul * i, i); });
 	}
 };
 } // namespace duckdb

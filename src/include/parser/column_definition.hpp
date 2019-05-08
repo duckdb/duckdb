@@ -26,7 +26,7 @@ public:
 	//! The name of the entry
 	string name;
 	//! The index of the column in the table
-	size_t oid;
+	uint64_t oid;
 	//! The type of the column
 	SQLType type;
 	//! The default value of the column (if any)

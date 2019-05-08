@@ -7,9 +7,9 @@
 using namespace duckdb;
 using namespace std;
 
-constexpr size_t TREE_RENDER_WIDTH = 20;
-constexpr size_t REMAINING_RENDER_WIDTH = TREE_RENDER_WIDTH - 2;
-constexpr size_t MAX_EXTRA_LINES = 10;
+constexpr uint64_t TREE_RENDER_WIDTH = 20;
+constexpr uint64_t REMAINING_RENDER_WIDTH = TREE_RENDER_WIDTH - 2;
+constexpr uint64_t MAX_EXTRA_LINES = 10;
 
 void QueryProfiler::StartQuery(string query) {
 	if (!enabled)
@@ -180,7 +180,7 @@ static string ToJSONRecursive(QueryProfiler::TreeNode &node) {
 	result += "\"cardinality\":" + to_string(node.info.elements) + ",\n";
 	result += "\"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
 	result += "\"children\": [";
-	for (size_t i = 0; i < node.children.size(); i++) {
+	for (uint64_t i = 0; i < node.children.size(); i++) {
 		result += ToJSONRecursive(*node.children[i]);
 		if (i + 1 < node.children.size()) {
 			result += ",\n";
@@ -234,7 +234,7 @@ static bool is_padding(char l) {
 }
 
 static string remove_padding(string l) {
-	size_t start = 0, end = l.size();
+	uint64_t start = 0, end = l.size();
 	while (start < l.size() && is_padding(l[start])) {
 		start++;
 	}
@@ -244,7 +244,7 @@ static string remove_padding(string l) {
 	return l.substr(start, end - start);
 }
 
-unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *root, size_t depth) {
+unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *root, uint64_t depth) {
 	auto node = make_unique<QueryProfiler::TreeNode>();
 	node->name = PhysicalOperatorToString(root->type);
 	node->extra_info = root->ExtraRenderInformation();
@@ -252,13 +252,13 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *
 		auto splits = StringUtil::Split(node->extra_info, '\n');
 		for (auto &split : splits) {
 			string str = remove_padding(split);
-			constexpr size_t max_segment_size = REMAINING_RENDER_WIDTH - 2;
-			size_t location = 0;
+			constexpr uint64_t max_segment_size = REMAINING_RENDER_WIDTH - 2;
+			uint64_t location = 0;
 			while (location < str.size() && node->split_extra_info.size() < MAX_EXTRA_LINES) {
 				bool has_to_split = (str.size() - location) > max_segment_size;
 				if (has_to_split) {
 					// look for a split character
-					size_t i;
+					uint64_t i;
 					for (i = 8; i < max_segment_size; i++) {
 						if (!is_non_split_char(str[location + i])) {
 							// split here
@@ -284,24 +284,26 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *
 }
 
 static string DrawPadded(string text, char padding_character = ' ') {
-	int remaining_width = REMAINING_RENDER_WIDTH;
-	if (text.size() > (size_t)remaining_width) {
+	int32_t remaining_width = REMAINING_RENDER_WIDTH;
+	if (text.size() > (uint64_t)remaining_width) {
 		text = text.substr(0, remaining_width);
 	}
-	int right_padding = (remaining_width - text.size()) / 2;
-	int left_padding = remaining_width - text.size() - right_padding;
+	assert(text.size() <= numeric_limits<int32_t>::max());
+
+	int32_t right_padding = (remaining_width - (int32_t)text.size()) / 2;
+	int32_t left_padding = remaining_width - (int32_t)text.size() - right_padding;
 	return "|" + string(left_padding, padding_character) + text + string(right_padding, padding_character) + "|";
 }
 
-size_t QueryProfiler::RenderTreeRecursive(QueryProfiler::TreeNode &node, vector<string> &render,
-                                          vector<int> &render_heights, size_t base_render_x, size_t start_depth,
-                                          int depth) {
+uint64_t QueryProfiler::RenderTreeRecursive(QueryProfiler::TreeNode &node, vector<string> &render,
+                                            vector<int> &render_heights, uint64_t base_render_x, uint64_t start_depth,
+                                            int depth) {
 	int render_height = render_heights[depth];
-	size_t width = base_render_x;
+	uint64_t width = base_render_x;
 	// render this node
 	// first add any padding to render at this location
-	size_t start_position = width * TREE_RENDER_WIDTH;
-	for (size_t i = 0; i < render_height; i++) {
+	uint64_t start_position = width * TREE_RENDER_WIDTH;
+	for (uint64_t i = 0; i < render_height; i++) {
 		if (render[start_depth + i].size() > start_position) {
 			// something has already been rendered here!
 			throw Exception("Tree rendering error, overlapping nodes!");
@@ -319,8 +321,8 @@ size_t QueryProfiler::RenderTreeRecursive(QueryProfiler::TreeNode &node, vector<
 	string name = node.name;
 	render[start_depth + 1] += DrawPadded(name);
 	// draw extra information
-	for (size_t i = 2; i < render_height - 3; i++) {
-		size_t split_index = i - 2;
+	for (uint64_t i = 2; i < render_height - 3; i++) {
+		uint64_t split_index = i - 2;
 		string string = split_index < node.split_extra_info.size() ? node.split_extra_info[split_index] : "";
 		render[start_depth + i] += DrawPadded(string);
 	}
@@ -342,8 +344,8 @@ size_t QueryProfiler::RenderTreeRecursive(QueryProfiler::TreeNode &node, vector<
 	return width;
 }
 
-size_t QueryProfiler::GetDepth(QueryProfiler::TreeNode &node) {
-	size_t depth = 0;
+uint64_t QueryProfiler::GetDepth(QueryProfiler::TreeNode &node) {
+	uint64_t depth = 0;
 	for (auto &child : node.children) {
 		depth = max(depth, GetDepth(*child));
 	}
@@ -358,14 +360,14 @@ static void GetRenderHeight(QueryProfiler::TreeNode &node, vector<int> &render_h
 }
 
 string QueryProfiler::RenderTree(QueryProfiler::TreeNode &node) {
-	vector<int> render_heights;
+	vector<int32_t> render_heights;
 	// compute the height of each level
-	int depth = GetDepth(node);
+	auto depth = GetDepth(node);
 
 	// compute the render height
 	render_heights.resize(depth);
 	GetRenderHeight(node, render_heights);
-	int total_height = 0;
+	int32_t total_height = 0;
 	for (auto height : render_heights) {
 		total_height += height;
 	}

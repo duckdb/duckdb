@@ -16,7 +16,7 @@ template <bool INVERSE> void is_null_loop(Vector &input, Vector &result) {
 	}
 	auto result_data = (bool *)result.data;
 	result.nullmask.reset();
-	VectorOperations::Exec(input.sel_vector, input.count, [&](size_t i, size_t k) {
+	VectorOperations::Exec(input.sel_vector, input.count, [&](uint64_t i, uint64_t k) {
 		result_data[i] = INVERSE ? !input.nullmask[i] : input.nullmask[i];
 	});
 	result.sel_vector = input.sel_vector;

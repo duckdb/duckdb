@@ -10,6 +10,8 @@
 
 #include "miniz.h"
 
+#include <limits>
+
 using namespace std;
 using namespace duckdb;
 
@@ -56,8 +58,8 @@ using namespace duckdb;
 
  */
 
-static size_t consume_string(fstream &input) {
-	size_t size = 1; // terminator
+static uint64_t consume_string(fstream &input) {
+	uint64_t size = 1; // terminator
 	while (input.get() != '\0') {
 		size++;
 	}
@@ -93,10 +95,6 @@ void GzipStreamBuf::initialize() {
 
 	mz_stream_ptr = new mz_stream();
 	// TODO use custom alloc/free methods in miniz to throw exceptions on OOM
-
-	if (!FileSystem::FileExists(filename)) {
-		throw Exception("File does not exist");
-	}
 
 	FstreamUtil::OpenFile(filename, input, ios::in | ios::binary);
 
@@ -162,9 +160,11 @@ streambuf::int_type GzipStreamBuf::underflow() {
 			// actually decompress
 			assert(zstrm_p);
 			zstrm_p->next_in = (unsigned char *)in_buff_start;
-			zstrm_p->avail_in = in_buff_end - in_buff_start;
+			assert(in_buff_end - in_buff_start < numeric_limits<int32_t>::max());
+			zstrm_p->avail_in = (uint32_t)(in_buff_end - in_buff_start);
 			zstrm_p->next_out = (unsigned char *)out_buff_free_start;
-			zstrm_p->avail_out = (out_buff + BUFFER_SIZE) - out_buff_free_start;
+			assert((out_buff + BUFFER_SIZE) - out_buff_free_start < numeric_limits<int32_t>::max());
+			zstrm_p->avail_out = (uint32_t)((out_buff + BUFFER_SIZE) - out_buff_free_start);
 			auto ret = mz_inflate(zstrm_p, MZ_NO_FLUSH);
 			if (ret != MZ_OK && ret != MZ_STREAM_END) {
 				throw Exception(mz_error(ret));

@@ -34,7 +34,7 @@ public:
 	vector<string> names;
 
 private:
-	vector<size_t> select_list_oid;
+	vector<uint64_t> select_list_oid;
 	vector<bool> set_to_default;
 
 	void PushValue(string &line, DataChunk &insert_chunk, int64_t start, int64_t end, int64_t &column, int64_t linenr);

@@ -169,18 +169,18 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 	default:
 		assert(node.type == QueryNodeType::SELECT_NODE);
 		auto &bound_select = (BoundSelectNode &)node;
-		for (size_t i = 0; i < bound_select.select_list.size(); i++) {
+		for (uint64_t i = 0; i < bound_select.select_list.size(); i++) {
 			EnumerateExpression(bound_select.select_list[i], callback);
 		}
 		EnumerateExpression(bound_select.where_clause, callback);
-		for (size_t i = 0; i < bound_select.groups.size(); i++) {
+		for (uint64_t i = 0; i < bound_select.groups.size(); i++) {
 			EnumerateExpression(bound_select.groups[i], callback);
 		}
 		EnumerateExpression(bound_select.having, callback);
-		for (size_t i = 0; i < bound_select.aggregates.size(); i++) {
+		for (uint64_t i = 0; i < bound_select.aggregates.size(); i++) {
 			EnumerateExpression(bound_select.aggregates[i], callback);
 		}
-		for (size_t i = 0; i < bound_select.windows.size(); i++) {
+		for (uint64_t i = 0; i < bound_select.windows.size(); i++) {
 			EnumerateExpression(bound_select.windows[i], callback);
 		}
 		if (bound_select.from_table) {
@@ -188,7 +188,7 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 		}
 		break;
 	}
-	for (size_t i = 0; i < node.orders.size(); i++) {
+	for (uint64_t i = 0; i < node.orders.size(); i++) {
 		EnumerateExpression(node.orders[i].expression, callback);
 	}
 }

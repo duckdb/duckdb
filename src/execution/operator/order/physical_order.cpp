@@ -24,7 +24,7 @@ void PhysicalOrder::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 		vector<TypeId> sort_types;
 		vector<Expression *> order_expressions;
 		vector<OrderType> order_types;
-		for (size_t i = 0; i < orders.size(); i++) {
+		for (uint64_t i = 0; i < orders.size(); i++) {
 			auto &expr = orders[i].expression;
 			sort_types.push_back(expr->return_type);
 			order_expressions.push_back(expr.get());
@@ -32,7 +32,7 @@ void PhysicalOrder::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 		}
 
 		ChunkCollection sort_collection;
-		for (size_t i = 0; i < big_data.chunks.size(); i++) {
+		for (uint64_t i = 0; i < big_data.chunks.size(); i++) {
 			DataChunk sort_chunk;
 			sort_chunk.Initialize(sort_types);
 

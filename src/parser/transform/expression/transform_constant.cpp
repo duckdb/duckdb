@@ -8,7 +8,8 @@ using namespace std;
 unique_ptr<ParsedExpression> Transformer::TransformValue(postgres::Value val) {
 	switch (val.type) {
 	case T_Integer:
-		return make_unique<ConstantExpression>(SQLType(SQLTypeId::INTEGER), Value::INTEGER(val.val.ival));
+		assert(val.val.ival <= numeric_limits<int32_t>::max());
+		return make_unique<ConstantExpression>(SQLType(SQLTypeId::INTEGER), Value::INTEGER((int32_t)val.val.ival));
 	case T_BitString: // FIXME: this should actually convert to BLOB
 	case T_String:
 		return make_unique<ConstantExpression>(SQLType(SQLTypeId::VARCHAR), Value(string(val.val.str)));

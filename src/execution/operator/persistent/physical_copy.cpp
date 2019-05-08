@@ -4,6 +4,7 @@
 #include "common/file_system.hpp"
 #include "common/gzip_stream.hpp"
 #include "main/client_context.hpp"
+#include "main/database.hpp"
 #include "storage/data_table.hpp"
 
 #include <algorithm>
@@ -12,7 +13,7 @@
 using namespace duckdb;
 using namespace std;
 
-static bool end_of_field(string &line, size_t i, char delimiter) {
+static bool end_of_field(string &line, uint64_t i, char delimiter) {
 	return i + 1 >= line.size() || line[i] == delimiter;
 }
 
@@ -31,7 +32,7 @@ void PhysicalCopy::Flush(ClientContext &context, DataChunk &chunk, int64_t &nr_e
 	}
 	if (set_to_default.size() > 0) {
 		assert(set_to_default.size() == chunk.column_count);
-		for (size_t i = 0; i < set_to_default.size(); i++) {
+		for (uint64_t i = 0; i < set_to_default.size(); i++) {
 			if (set_to_default[i]) {
 				chunk.data[i].count = nr_elements;
 				chunk.data[i].nullmask.set();
@@ -48,7 +49,7 @@ void PhysicalCopy::PushValue(string &line, DataChunk &insert_chunk, int64_t star
                              int64_t linenr) {
 	assert(end >= start);
 	int64_t expected_column_count = info->select_list.size() > 0 ? info->select_list.size() : insert_chunk.column_count;
-	size_t length = end - start;
+	uint64_t length = end - start;
 	if (column == expected_column_count && length == 0) {
 		// skip a single trailing delimiter
 		column++;
@@ -65,8 +66,8 @@ void PhysicalCopy::PushValue(string &line, DataChunk &insert_chunk, int64_t star
 		result = Value(line.substr(start, length));
 	}
 	// insert the value into the column
-	size_t column_entry = info->select_list.size() > 0 ? select_list_oid[column] : column;
-	size_t entry = insert_chunk.data[column_entry].count++;
+	uint64_t column_entry = info->select_list.size() > 0 ? select_list_oid[column] : column;
+	uint64_t entry = insert_chunk.data[column_entry].count++;
 	insert_chunk.data[column_entry].SetValue(entry, result);
 	// move to the next column
 	column++;
@@ -86,7 +87,7 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 		// handle the select list (if any)
 		if (info.select_list.size() > 0) {
 			set_to_default.resize(types.size(), true);
-			for (size_t i = 0; i < info.select_list.size(); i++) {
+			for (uint64_t i = 0; i < info.select_list.size(); i++) {
 				auto &column = table->GetColumn(info.select_list[i]);
 				select_list_oid.push_back(column.oid);
 				set_to_default[column.oid] = false;
@@ -95,7 +96,7 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 		int64_t linenr = 0;
 		string line;
 
-		if (!FileSystem::FileExists(info.file_path)) {
+		if (!context.db.file_system->FileExists(info.file_path)) {
 			throw Exception("File not found");
 		}
 
@@ -117,11 +118,11 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 		}
 		while (getline(from_csv, line)) {
 			bool in_quotes = false;
-			size_t start = 0;
+			uint64_t start = 0;
 			int64_t column = 0;
 			int64_t expected_column_count =
 			    info.select_list.size() > 0 ? info.select_list.size() : insert_chunk.column_count;
-			for (size_t i = 0; i < line.size(); i++) {
+			for (uint64_t i = 0; i < line.size(); i++) {
 				// handle quoting
 				if (line[i] == info.quote) {
 					if (!in_quotes) {
@@ -177,7 +178,7 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 		to_csv.open(info.file_path);
 		if (info.header) {
 			// write the header line
-			for (size_t i = 0; i < names.size(); i++) {
+			for (uint64_t i = 0; i < names.size(); i++) {
 				if (i != 0) {
 					to_csv << info.delimiter;
 				}
@@ -190,8 +191,8 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 			if (state->child_chunk.size() == 0) {
 				break;
 			}
-			for (size_t i = 0; i < state->child_chunk.size(); i++) {
-				for (size_t col = 0; col < state->child_chunk.column_count; col++) {
+			for (uint64_t i = 0; i < state->child_chunk.size(); i++) {
+				for (uint64_t col = 0; col < state->child_chunk.column_count; col++) {
 					if (col != 0) {
 						to_csv << info.delimiter;
 					}

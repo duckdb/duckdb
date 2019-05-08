@@ -17,6 +17,8 @@ namespace duckdb {
 class ClientContext;
 class DuckDB;
 
+typedef void (*warning_callback)(std::string);
+
 //! A connection to a database. This represents a (client) connection that can
 //! be used to query the database.
 class Connection {
@@ -35,6 +37,8 @@ public:
 	//! Disable query profiling
 	void DisableProfiling();
 
+	void SetWarningCallback(warning_callback);
+
 	//! Enable aggressive verification/testing of queries, should only be used in testing
 	void EnableQueryVerification();
 
@@ -50,6 +54,7 @@ public:
 public:
 	DuckDB &db;
 	unique_ptr<ClientContext> context;
+	warning_callback warning_cb;
 };
 
 } // namespace duckdb

@@ -52,7 +52,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			auto statement = make_unique<SelectNode>();
 			statement->from_table = move(ref);
 			if (stmt->attlist) {
-				for (size_t i = 0; i < info.select_list.size(); i++)
+				for (uint64_t i = 0; i < info.select_list.size(); i++)
 					statement->select_list.push_back(make_unique<ColumnRefExpression>(info.select_list[i]));
 			} else {
 				statement->select_list.push_back(make_unique<StarExpression>());
@@ -72,7 +72,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			if (def_elem->defname == kDelimiterTok) {
 				// delimiter
 				auto *delimiter_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
-				size_t delim_len = strlen(delimiter_val->val.str);
+				uint64_t delim_len = strlen(delimiter_val->val.str);
 				info.delimiter = '\0';
 				char *delim_cstr = delimiter_val->val.str;
 				if (delim_len == 1) {

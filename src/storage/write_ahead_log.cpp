@@ -145,7 +145,7 @@ template <class T> void WriteAheadLog::Write(T val) {
 	}
 }
 
-void WriteAheadLog::WriteData(uint8_t *dataptr, size_t data_size) {
+void WriteAheadLog::WriteData(uint8_t *dataptr, uint64_t data_size) {
 	if (data_size == 0) {
 		return;
 	}
@@ -158,7 +158,7 @@ void WriteAheadLog::WriteEntry(wal_type_t type, Serializer &serializer) {
 	auto blob = serializer.GetData();
 
 	Write<wal_type_t>(type);
-	Write<uint32_t>(blob.size);
+	Write<uint32_t>((uint32_t)blob.size);
 	WriteData(blob.data.get(), blob.size);
 }
 
@@ -365,5 +365,5 @@ void WriteAheadLog::Flush() {
 	Write<uint32_t>(0);
 	// flushes all changes made to the WAL to disk
 	fflush(wal_file);
-	FileSystem::FileSync(wal_file);
+	database.file_system->FileSync(wal_file);
 }

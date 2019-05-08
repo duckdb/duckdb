@@ -15,7 +15,7 @@ SET(CMAKE_MACOSX_RPATH 1)
 IF(NOT MSVC)
 	SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG -Wall")
 
-	SET(CXX_EXTRA_DEBUG "-fsanitize=address -Wunused-variable -Wunused-const-variable")
+	SET(CXX_EXTRA_DEBUG "-fsanitize=address -Wunused-variable -Wunused-const-variable -Wnarrowing")
 
 	IF("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 8.0)
 		SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_EXTRA_DEBUG}")

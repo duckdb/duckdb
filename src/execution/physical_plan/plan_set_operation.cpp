@@ -27,11 +27,12 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 		auto &types = left->GetTypes();
 		vector<JoinCondition> conditions;
 		// create equality condition for all columns
-		for (size_t i = 0; i < types.size(); i++) {
+		for (uint64_t i = 0; i < types.size(); i++) {
 			JoinCondition cond;
 			cond.comparison = ExpressionType::COMPARE_EQUAL;
-			cond.left = make_unique<BoundReferenceExpression>(types[i], i);
-			cond.right = make_unique<BoundReferenceExpression>(types[i], i);
+			assert(i <= numeric_limits<uint32_t>::max());
+			cond.left = make_unique<BoundReferenceExpression>(types[i], (uint32_t)i);
+			cond.right = make_unique<BoundReferenceExpression>(types[i], (uint32_t)i);
 			cond.null_values_are_equal = true;
 			conditions.push_back(move(cond));
 		}

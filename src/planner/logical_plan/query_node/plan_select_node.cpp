@@ -25,7 +25,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSelectNode &st
 	if (statement.aggregates.size() > 0 || statement.groups.size() > 0) {
 		if (statement.groups.size() > 0) {
 			// visit the groups
-			for (size_t i = 0; i < statement.groups.size(); i++) {
+			for (uint64_t i = 0; i < statement.groups.size(); i++) {
 				auto &group = statement.groups[i];
 				PlanSubqueries(&group, &root);
 			}

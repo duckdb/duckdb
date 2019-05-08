@@ -18,7 +18,7 @@ bool BoundFunctionExpression::IsFoldable() const {
 
 string BoundFunctionExpression::ToString() const {
 	string str = bound_function->name + "(";
-	for (size_t i = 0; i < children.size(); i++) {
+	for (uint64_t i = 0; i < children.size(); i++) {
 		if (i > 0) {
 			str += ", ";
 		}
@@ -44,7 +44,7 @@ bool BoundFunctionExpression::Equals(const BaseExpression *other_) const {
 	if (children.size() != other->children.size()) {
 		return false;
 	}
-	for (size_t i = 0; i < children.size(); i++) {
+	for (uint64_t i = 0; i < children.size(); i++) {
 		if (!Expression::Equals(children[i].get(), other->children[i].get())) {
 			return false;
 		}

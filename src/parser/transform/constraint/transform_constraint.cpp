@@ -24,7 +24,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(postgres::ListCell *cell
 }
 
 unique_ptr<Constraint> Transformer::TransformConstraint(postgres::ListCell *cell, ColumnDefinition &column,
-                                                        size_t index) {
+                                                        uint64_t index) {
 	auto constraint = reinterpret_cast<postgres::Constraint *>(cell->data.ptr_value);
 	assert(constraint);
 	switch (constraint->contype) {
