@@ -9,11 +9,11 @@ TEST_CASE("Test scalar SIMILAR TO statement", "[similar]") {
 	DuckDB database(nullptr);
 	Connection connection(database);
 
-	result = connection.Query("SELECT 'aaa' SIMILAR TO 'aaa'");
+	result = connection.Query("SELECT 'aaa' SIMILAR TO 'bbb'");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
 
-	result = connection.Query("SELECT 'aaa' SIMILAR TO 'bbb'");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(false)}));
+	result = connection.Query("SELECT 'aaa' SIMILAR TO 'aaa'");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
 
 	result = connection.Query("SELECT 'aaa' SIMILAR TO '%'");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
@@ -24,7 +24,7 @@ TEST_CASE("Test scalar SIMILAR TO statement", "[similar]") {
 	result = connection.Query("SELECT 'aaa' SIMILAR TO '%a'");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
 
-	result = connection.Query("SELECT 'aaa' SIMILAR TO '%b'");`
+	result = connection.Query("SELECT 'aaa' SIMILAR TO '%b'");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(false)}));
 
 	result = connection.Query("SELECT 'aaa' SIMILAR TO 'b%'");
@@ -50,16 +50,15 @@ TEST_CASE("Test scalar SIMILAR TO statement", "[similar]") {
 
 	result = connection.Query("SELECT 'aaa' ~ 'aaa'");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
-    
+
 	result = connection.Query("SELECT 'aaa' ~ '^a'");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
 
 	result = connection.Query("SELECT 'aaa' ~ '(a|b)'");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
-    
+
 	result = connection.Query("SELECT 'aaa' ~ '^(a|b)'");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(false)}));
-
 }
 
 TEST_CASE("Test SIMILAR TO statement", "[similar]") {

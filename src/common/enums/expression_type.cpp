@@ -44,7 +44,7 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "LIKE";
 	case ExpressionType::COMPARE_NOTLIKE:
 		return "NOTLIKE";
-    case ExpressionType::COMPARE_SIMILAR:
+	case ExpressionType::COMPARE_SIMILAR:
 		return "SIMILAR";
 	case ExpressionType::COMPARE_NOTSIMILAR:
 		return "NOTSIMILAR";
