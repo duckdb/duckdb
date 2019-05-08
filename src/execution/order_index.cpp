@@ -103,7 +103,9 @@ template <class T> static uint64_t binary_search_gt(uint8_t *data, T key, uint64
 template <class T> int64_t binary_search_lte(uint8_t *data, T key, uint64_t count) {
 	auto array = (SortChunk<T> *)data;
 	bool found = false;
-	auto pos = binary_search(array, key, 0, count, found);
+	auto pos_orig = binary_search(array, key, 0, count, found);
+	assert(pos_orig <= numeric_limits<int32_t>::max());
+	int32_t pos = (int32_t) pos_orig;
 	while (array[pos].value <= key && pos < count)
 		pos++;
 	return pos;
@@ -112,7 +114,9 @@ template <class T> int64_t binary_search_lte(uint8_t *data, T key, uint64_t coun
 template <class T> int64_t binary_search_gte(uint8_t *data, T key, uint64_t count) {
 	auto array = (SortChunk<T> *)data;
 	bool found = false;
-	auto pos = binary_search(array, key, 0, count, found);
+	auto pos_orig = binary_search(array, key, 0, count, found);
+	assert(pos_orig <= numeric_limits<uint32_t>::max());
+	int32_t pos = (int32_t) pos_orig;
 	if (found) {
 		while (pos >= 0 && array[pos].value == key)
 			pos--;
