@@ -3,3 +3,5 @@ duckdb.egg-info
 build
 .eggs
 .pytest_cache
+src/duckdb
+/src/
