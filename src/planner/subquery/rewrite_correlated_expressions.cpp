@@ -29,11 +29,8 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRef
 	assert(expr.depth == 1);
 	auto entry = correlated_map.find(expr.binding);
 	assert(entry != correlated_map.end());
-	assert(base_binding.table_index < numeric_limits<uint32_t>::max());
-	assert(base_binding.column_index + entry->second < numeric_limits<uint32_t>::max());
 
-	expr.binding =
-	    ColumnBinding((uint32_t)base_binding.table_index, (uint32_t)(base_binding.column_index + entry->second));
+	expr.binding = ColumnBinding((uint64_t)base_binding.table_index, base_binding.column_index + entry->second);
 	expr.depth = 0;
 	return nullptr;
 }
@@ -61,11 +58,7 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 	for (auto &corr : expr.binder->correlated_columns) {
 		auto entry = correlated_map.find(corr.binding);
 		if (entry != correlated_map.end()) {
-			assert(base_binding.table_index < numeric_limits<uint32_t>::max());
-			assert(base_binding.column_index + entry->second < numeric_limits<uint32_t>::max());
-
-			corr.binding = ColumnBinding((uint32_t)base_binding.table_index,
-			                             (uint32_t)(base_binding.column_index + entry->second));
+			corr.binding = ColumnBinding((uint64_t)base_binding.table_index, base_binding.column_index + entry->second);
 		}
 	}
 	// now rewrite any correlated BoundColumnRef expressions inside the subquery
@@ -88,11 +81,8 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 			// we found the column in the correlated map!
 			// update the binding and reduce the depth by 1
 
-			assert(base_binding.table_index < numeric_limits<uint32_t>::max());
-			assert(base_binding.column_index + entry->second < numeric_limits<uint32_t>::max());
-
-			bound_colref.binding = ColumnBinding((uint32_t)base_binding.table_index,
-			                                     (uint32_t)(base_binding.column_index + entry->second));
+			bound_colref.binding =
+			    ColumnBinding((uint64_t)base_binding.table_index, base_binding.column_index + entry->second);
 			bound_colref.depth--;
 		}
 	} else if (child.type == ExpressionType::SUBQUERY) {

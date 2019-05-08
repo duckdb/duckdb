@@ -106,7 +106,7 @@ void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator
 		auto &positions = aggregate_to_projections.second;
 
 		for (auto index_ptr : positions) {
-			assert(aggregate_index < numeric_limits<uint32_t>::max());
+			assert(aggregate_index <= numeric_limits<uint32_t>::max());
 			*index_ptr = (uint32_t)aggregate_index;
 		}
 

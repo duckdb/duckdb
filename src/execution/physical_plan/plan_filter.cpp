@@ -38,7 +38,7 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, Logic
 		auto low_comparison_type = expr->type;
 		auto high_comparison_type = expr->type;
 		for (uint64_t i = 0; i < filter.expressions.size(); i++) {
-			assert(i < numeric_limits<int32_t>::max());
+			assert(i <= numeric_limits<int32_t>::max());
 
 			expr = filter.expressions[i].get();
 			// create a matcher for a comparison with a constant

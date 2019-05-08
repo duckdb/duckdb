@@ -71,7 +71,8 @@ BindResult GroupBinder::BindConstant(ConstantExpression &constant) {
 	}
 	// INTEGER constant: we use the integer as an index into the select list (e.g. GROUP BY 1)
 	auto index = constant.value.GetNumericValue();
-	return BindSelectRef(index - 1);
+	assert(index - 1 <= numeric_limits<uint32_t>::max());
+	return BindSelectRef((uint32_t)(index - 1));
 }
 
 BindResult GroupBinder::BindColumnRef(ColumnRefExpression &colref) {

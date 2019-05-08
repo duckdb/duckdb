@@ -18,9 +18,11 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 		// insertion statement specifies column list
 
 		// create a mapping of (list index) -> (column index)
-		unordered_map<string, int> column_name_map;
+		unordered_map<string, uint32_t> column_name_map;
 		for (uint64_t i = 0; i < stmt.columns.size(); i++) {
-			column_name_map[stmt.columns[i]] = i;
+			assert(i <= numeric_limits<uint32_t>::max());
+
+			column_name_map[stmt.columns[i]] = (uint32_t)i;
 			auto entry = table->name_map.find(stmt.columns[i]);
 			if (entry == table->name_map.end()) {
 				throw BinderException("Column %s not found in table %s", stmt.columns[i].c_str(), table->name.c_str());
@@ -29,7 +31,8 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 				throw BinderException("Cannot explicitly insert values into rowid column");
 			}
 			result->expected_types.push_back(table->columns[entry->second].type);
-			named_column_map.push_back(entry->second);
+			assert(entry->second <= numeric_limits<uint32_t>::max());
+			named_column_map.push_back((uint32_t)entry->second);
 		}
 		for (uint64_t i = 0; i < result->table->columns.size(); i++) {
 			auto &col = result->table->columns[i];

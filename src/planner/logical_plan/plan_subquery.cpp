@@ -141,8 +141,9 @@ static void CreateDelimJoinConditions(LogicalDelimJoin &delim_join, vector<Corre
 		auto &col = correlated_columns[i];
 		JoinCondition cond;
 		cond.left = make_unique<BoundColumnRefExpression>(col.name, col.type, col.binding);
+		assert(base_binding.column_index + i <= numeric_limits<uint32_t>::max());
 		cond.right = make_unique<BoundColumnRefExpression>(
-		    col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+		    col.name, col.type, ColumnBinding(base_binding.table_index, (uint32_t)(base_binding.column_index + i)));
 		cond.comparison = ExpressionType::COMPARE_EQUAL;
 		cond.null_values_are_equal = true;
 		delim_join.conditions.push_back(move(cond));

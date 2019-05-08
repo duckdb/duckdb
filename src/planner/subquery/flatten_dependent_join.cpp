@@ -86,12 +86,19 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// now we add all the columns of the delim_scan to the projection list
 		auto proj = (LogicalProjection *)plan.get();
 		for (uint64_t i = 0; i < correlated_columns.size(); i++) {
+			assert(base_binding.column_index + i <= numeric_limits<uint32_t>::max());
+
 			auto colref = make_unique<BoundColumnRefExpression>(
-			    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+			    correlated_columns[i].type,
+			    ColumnBinding(base_binding.table_index, (uint32_t)(base_binding.column_index + i)));
 			plan->expressions.push_back(move(colref));
 		}
-		base_binding.table_index = proj->table_index;
-		this->delim_offset = base_binding.column_index = plan->expressions.size() - correlated_columns.size();
+		assert(proj->table_index <= numeric_limits<uint32_t>::max());
+		assert(plan->expressions.size() - correlated_columns.size() <= numeric_limits<uint32_t>::max());
+
+		base_binding.table_index = (uint32_t)proj->table_index;
+		this->delim_offset = base_binding.column_index =
+		    (uint32_t)(plan->expressions.size() - correlated_columns.size());
 		this->data_offset = 0;
 		return plan;
 	}
@@ -105,8 +112,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		rewriter.VisitOperator(*plan);
 		// now we add all the columns of the delim_scan to the grouping operators AND the projection list
 		for (uint64_t i = 0; i < correlated_columns.size(); i++) {
+			assert(base_binding.column_index + i <= numeric_limits<uint32_t>::max());
+
 			auto colref = make_unique<BoundColumnRefExpression>(
-			    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+			    correlated_columns[i].type,
+			    ColumnBinding(base_binding.table_index, (uint32_t)(base_binding.column_index + i)));
 			aggr.groups.push_back(move(colref));
 		}
 		if (aggr.groups.size() == correlated_columns.size()) {
@@ -139,14 +149,19 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				}
 			}
 			// now we update the delim_index
-			base_binding.table_index = left_index;
+			assert(left_index <= numeric_limits<uint32_t>::max());
+
+			base_binding.table_index = (uint32_t)left_index;
 			this->delim_offset = base_binding.column_index = 0;
 			this->data_offset = 0;
 			return move(left_outer_join);
 		} else {
 			// update the delim_index
-			base_binding.table_index = aggr.group_index;
-			this->delim_offset = base_binding.column_index = aggr.groups.size() - correlated_columns.size();
+			assert(aggr.group_index <= numeric_limits<uint32_t>::max());
+			assert(aggr.groups.size() - correlated_columns.size() <= numeric_limits<uint32_t>::max());
+
+			base_binding.table_index = (uint32_t)aggr.group_index;
+			this->delim_offset = base_binding.column_index = (uint32_t)(aggr.groups.size() - correlated_columns.size());
 			this->data_offset = aggr.groups.size();
 			return plan;
 		}
@@ -175,10 +190,15 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// add the correlated columns to the join conditions
 		for (uint64_t i = 0; i < correlated_columns.size(); i++) {
 			JoinCondition cond;
+			assert(left_binding.column_index + i <= numeric_limits<uint32_t>::max());
+			assert(base_binding.column_index + i <= numeric_limits<uint32_t>::max());
+
 			cond.left = make_unique<BoundColumnRefExpression>(
-			    correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
+			    correlated_columns[i].type,
+			    ColumnBinding(left_binding.table_index, (uint32_t)(left_binding.column_index + i)));
 			cond.right = make_unique<BoundColumnRefExpression>(
-			    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+			    correlated_columns[i].type,
+			    ColumnBinding(base_binding.table_index, (uint32_t)(base_binding.column_index + i)));
 			cond.comparison = ExpressionType::COMPARE_EQUAL;
 			cond.null_values_are_equal = true;
 			join->conditions.push_back(move(cond));
@@ -241,10 +261,15 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// add the correlated columns to the join conditions
 		for (uint64_t i = 0; i < correlated_columns.size(); i++) {
 			JoinCondition cond;
+			assert(left_binding.column_index + i <= numeric_limits<uint32_t>::max());
+			assert(right_binding.column_index + i <= numeric_limits<uint32_t>::max());
+
 			cond.left = make_unique<BoundColumnRefExpression>(
-			    correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
+			    correlated_columns[i].type,
+			    ColumnBinding(left_binding.table_index, (uint32_t)(left_binding.column_index + i)));
 			cond.right = make_unique<BoundColumnRefExpression>(
-			    correlated_columns[i].type, ColumnBinding(right_binding.table_index, right_binding.column_index + i));
+			    correlated_columns[i].type,
+			    ColumnBinding(right_binding.table_index, (uint32_t)(right_binding.column_index + i)));
 			cond.comparison = ExpressionType::COMPARE_EQUAL;
 			cond.null_values_are_equal = true;
 			join.conditions.push_back(move(cond));
@@ -273,8 +298,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// subquery node: push into children
 		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
 		// to get the correlated columns we have to refer to the subquery now
-		base_binding.table_index = subquery.table_index;
-		base_binding.column_index = subquery.column_count;
+		assert(subquery.table_index <= numeric_limits<uint32_t>::max());
+		assert(subquery.column_count <= numeric_limits<uint32_t>::max());
+
+		base_binding.table_index = (uint32_t)subquery.table_index;
+		base_binding.column_index = (uint32_t)subquery.column_count;
 		// we have to add the correlated columns to the projection set of the subquery
 		subquery.column_count += correlated_columns.size();
 		return plan;
@@ -288,9 +316,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			assert(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 			auto &w = (BoundWindowExpression &)*expr;
 			for (uint64_t i = 0; i < correlated_columns.size(); i++) {
+				assert(base_binding.column_index + i <= numeric_limits<uint32_t>::max());
+
 				w.partitions.push_back(make_unique<BoundColumnRefExpression>(
 				    correlated_columns[i].type,
-				    ColumnBinding(base_binding.table_index, base_binding.column_index + i)));
+				    ColumnBinding(base_binding.table_index, (uint32_t)(base_binding.column_index + i))));
 			}
 		}
 		return plan;
@@ -303,8 +333,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
 		plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
 		// we have to refer to the setop index now
-		base_binding.table_index = setop.table_index;
-		base_binding.column_index = setop.column_count;
+		assert(setop.table_index <= numeric_limits<uint32_t>::max());
+		assert(setop.column_count <= numeric_limits<uint32_t>::max());
+
+		base_binding.table_index = (uint32_t)setop.table_index;
+		base_binding.column_index = (uint32_t)setop.column_count;
 		setop.column_count += correlated_columns.size();
 		return plan;
 	}

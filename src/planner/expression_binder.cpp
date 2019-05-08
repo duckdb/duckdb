@@ -71,8 +71,8 @@ bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr)
 	bool success = false;
 	while (active_binders.size() > 0) {
 		auto &next_binder = active_binders.back();
-		assert(depth < numeric_limits<uint32_t>::max());
-		auto bind_result = next_binder->Bind(&expr, depth);
+		assert(depth <= numeric_limits<uint32_t>::max());
+		auto bind_result = next_binder->Bind(&expr, (uint32_t)depth);
 		if (bind_result.empty()) {
 			success = true;
 			break;

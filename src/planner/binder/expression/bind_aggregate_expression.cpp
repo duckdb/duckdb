@@ -113,12 +113,8 @@ BindResult SelectBinder::BindAggregate(AggregateExpression &aggr, uint32_t depth
 	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(result_type), aggr.type, move(child));
 	// now create a column reference referring to this aggregate
 
-	assert(node.aggregate_index < numeric_limits<uint32_t>::max());
-	assert(node.aggregates.size() < numeric_limits<uint32_t>::max());
-
 	auto colref = make_unique<BoundColumnRefExpression>(
-	    aggr_name, aggregate->return_type,
-	    ColumnBinding((uint32_t)node.aggregate_index, (uint32_t)node.aggregates.size()), depth);
+	    aggr_name, aggregate->return_type, ColumnBinding(node.aggregate_index, node.aggregates.size()), depth);
 	// move the aggregate expression into the set of bound aggregates
 	node.aggregates.push_back(move(aggregate));
 	return BindResult(move(colref), result_type);

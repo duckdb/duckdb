@@ -288,7 +288,7 @@ static string DrawPadded(string text, char padding_character = ' ') {
 	if (text.size() > (uint64_t)remaining_width) {
 		text = text.substr(0, remaining_width);
 	}
-	assert(text.size() < numeric_limits<int32_t>::max());
+	assert(text.size() <= numeric_limits<int32_t>::max());
 
 	int32_t right_padding = (remaining_width - (int32_t)text.size()) / 2;
 	int32_t left_padding = remaining_width - (int32_t)text.size() - right_padding;

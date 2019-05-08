@@ -82,7 +82,7 @@ public:
 	}
 
 	template <class T> void WriteList(vector<unique_ptr<T>> &list) {
-		assert(list.size() < std::numeric_limits<uint32_t>::max());
+		assert(list.size() <= std::numeric_limits<uint32_t>::max());
 		Write<uint32_t>((uint32_t)list.size());
 		for (auto &child : list) {
 			child->Serialize(*this);

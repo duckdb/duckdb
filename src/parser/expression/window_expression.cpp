@@ -108,8 +108,8 @@ void WindowExpression::Serialize(Serializer &serializer) {
 	ParsedExpression::Serialize(serializer);
 	serializer.WriteOptional(child);
 	serializer.WriteList(partitions);
-	assert(orders.size() < numeric_limits<uint32_t>::max());
-	serializer.Write<uint32_t>(orders.size());
+	assert(orders.size() <= numeric_limits<uint32_t>::max());
+	serializer.Write<uint32_t>((uint32_t)orders.size());
 	for (auto &order : orders) {
 		serializer.Write<OrderType>(order.type);
 		order.expression->Serialize(serializer);

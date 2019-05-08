@@ -86,7 +86,7 @@ unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Exp
 	unique_ptr<Expression> new_root;
 	for (uint64_t i = 0; i < gathered_expressions[0].size(); i++) {
 		auto entry = gathered_expressions[0][i];
-		assert(i < numeric_limits<uint32_t>::max());
+		assert(i <= numeric_limits<uint32_t>::max());
 
 		matches[0] = (uint32_t)i;
 		bool occurs_in_all_expressions = true;
@@ -96,7 +96,7 @@ unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Exp
 				auto other_entry = gathered_expressions[j][k];
 				if (Expression::Equals(entry, other_entry)) {
 					// match found
-					assert(k < numeric_limits<uint32_t>::max());
+					assert(k <= numeric_limits<uint32_t>::max());
 					matches[j] = (uint32_t)k;
 					break;
 				}

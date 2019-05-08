@@ -83,7 +83,7 @@ string StringUtil::Prefix(const string &str, const string &prefix) {
 		return ("");
 
 	std::ostringstream os;
-	for (int i = 0, cnt = lines.size(); i < cnt; i++) {
+	for (uint64_t i = 0, cnt = lines.size(); i < cnt; i++) {
 		if (i > 0)
 			os << std::endl;
 		os << prefix << lines[i];
