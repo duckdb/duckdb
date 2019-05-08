@@ -10,7 +10,6 @@ using namespace duckdb;
 using namespace std;
 
 DuckDB::DuckDB(const char *path, DBConfig *config) {
-
 	if (config && config->access_mode != AccessMode::UNDEFINED) {
 		access_mode = config->access_mode;
 	}

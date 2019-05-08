@@ -27,7 +27,7 @@ class ReadOnlyFileSystem : public FileSystem {
 	void RemoveFile(const string &filename) override {
 		throw Exception("RO file system");
 	}
-	virtual void FileSync(FILE *file) override {
+	void FileSync(FILE *file) override {
 		throw Exception("RO file system");
 	}
 };
