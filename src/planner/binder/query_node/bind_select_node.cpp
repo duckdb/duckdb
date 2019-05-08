@@ -51,8 +51,8 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	}
 
 	// create a mapping of (alias -> index) and a mapping of (Expression -> index) for the SELECT list
-	unordered_map<string, uint64_t> alias_map;
-	expression_map_t<uint64_t> projection_map;
+	unordered_map<string, uint32_t> alias_map;
+	expression_map_t<uint32_t> projection_map;
 	for (uint64_t i = 0; i < statement.select_list.size(); i++) {
 		auto &expr = statement.select_list[i];
 		if (!expr->alias.empty()) {
