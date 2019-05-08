@@ -50,7 +50,7 @@ virtual string BenchmarkInfo() {
 }
 FINISH_BENCHMARK(PointQueryWithoutIndex)
 
-DUCKDB_BENCHMARK(PointQueryWithIndex, "[micro]")
+DUCKDB_BENCHMARK(PointQueryWithIndexBaseline, "[micro]")
 virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.Query("CREATE TABLE integers(i INTEGER, j INTEGER);");
 	Appender appender(state->db, DEFAULT_SCHEMA, "integers");
@@ -62,7 +62,7 @@ virtual void Load(DuckDBBenchmarkState *state) {
 		appender.EndRow();
 	}
 	appender.Commit();
-	state->conn.Query("CREATE INDEX i_index ON integers(i)");
+	state->conn.Query("CREATE INDEX i_index ON integers using order_index(i)");
 }
 
 virtual string GetQuery() {
@@ -87,6 +87,48 @@ virtual string VerifyResult(QueryResult *result) {
 }
 
 virtual string BenchmarkInfo() {
-	return StringUtil::Format("Runs the following query: \"" + GetQuery() + "\" with an index");
+	return StringUtil::Format("Runs the following query: \"" + GetQuery() + "\" with an order index as baseline");
 }
-FINISH_BENCHMARK(PointQueryWithIndex)
+FINISH_BENCHMARK(PointQueryWithIndexBaseline)
+
+
+DUCKDB_BENCHMARK(PointQueryWithIndexART, "[micro]")
+	virtual void Load(DuckDBBenchmarkState *state) {
+		state->conn.Query("CREATE TABLE integers(i INTEGER, j INTEGER);");
+		Appender appender(state->db, DEFAULT_SCHEMA, "integers");
+		// insert the elements into the database
+		for (size_t i = 0; i < POINT_QUERY_ROW_COUNT; i++) {
+			appender.BeginRow();
+			appender.AppendInteger(i);
+			appender.AppendInteger(i + 2);
+			appender.EndRow();
+		}
+		appender.Commit();
+		state->conn.Query("CREATE INDEX i_index ON integers using art(i)");
+	}
+
+	virtual string GetQuery() {
+		return "SELECT j FROM integers WHERE i=" + to_string(POINT_QUERY_ENTRY);
+	}
+
+	virtual string VerifyResult(QueryResult *result) {
+		if (!result->success) {
+			return result->error;
+		}
+		auto &materialized = (MaterializedQueryResult &)*result;
+		if (materialized.collection.count != 1) {
+			return "Incorrect amount of rows in result";
+		}
+		if (materialized.names.size() != 1) {
+			return "Incorrect amount of columns";
+		}
+		if (materialized.GetValue<int32_t>(0, 0) != POINT_QUERY_ENTRY + 2) {
+			return "Incorrect result returned, expected " + to_string(POINT_QUERY_ENTRY + 2);
+		}
+		return string();
+	}
+
+	virtual string BenchmarkInfo() {
+		return StringUtil::Format("Runs the following query: \"" + GetQuery() + "\" with an ART index");
+	}
+FINISH_BENCHMARK(PointQueryWithIndexART)

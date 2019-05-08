@@ -121,8 +121,6 @@ private:
 	//! Gets next node for range queries
 	bool iteratorNext(Iterator& iter);
 
-    //! Gets previous node for range queries
-    bool iteratorPrev(Iterator& iter);
 
 	template <class T> void templated_insert(DataChunk &input, Vector &row_ids) {
 		auto input_data = (T *)input.data[0].data;
@@ -176,15 +174,23 @@ private:
         Iterator it;
         Key &key = *new Key(this->is_little_endian, type, data);
         size_t result_count = 0;
-        bool found=ART::bound(tree,key,8,it,8,inclusive,is_little_endian);
+		Leaf* minimum = static_cast<Leaf *>(Node::minimum(tree));
+        // early out min value higher than upper bound query
+        if (minimum->value > data)
+            return result_count;
+		Key &min_key = *new Key(this->is_little_endian, type, minimum->value);
+        bool found=ART::bound(tree,min_key,8,it,8,true,is_little_endian);
         if (found) {
-            bool hasPrev;
+            bool hasNext;
             do {
                 for (size_t i = 0; i < it.node->num_elements; i++) {
                     result_ids[result_count++] = it.node->row_id[i];
                 }
-                hasPrev=ART::iteratorPrev(it);
-            } while (hasPrev);
+				if(it.node->value == data)
+					break;
+				hasNext=ART::iteratorNext(it);
+				if(!inclusive && it.node->value == data)
+					break;            } while (hasNext);
         }
         return result_count;
     }
@@ -195,18 +201,18 @@ private:
 		size_t result_count = 0;
 		bool found=ART::bound(tree,key,8,it,8,left_inclusive,is_little_endian);
 		if (found) {
-			bool hasPrev;
+			bool hasNext;
 			do {
 				for (size_t i = 0; i < it.node->num_elements; i++) {
 					result_ids[result_count++] = it.node->row_id[i];
 				}
 				if(it.node->value == right_query)
 					break;
-				hasPrev=ART::iteratorNext(it);
+				hasNext=ART::iteratorNext(it);
 				if(!right_inclusive && it.node->value == right_query)
 					break;
 
-			} while (hasPrev);
+			} while (hasNext);
 		}
 		return result_count;
 	}

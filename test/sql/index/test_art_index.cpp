@@ -58,223 +58,121 @@ using namespace std;
 //	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 //}
 
-TEST_CASE("ART Index BigInt", "[art-bigint]") {
+
+TEST_CASE("ART Integer Types", "[art-int]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 
 	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i BIGINT)"));
-	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
 
-	size_t n = 10000;
-	int64_t *keys = new int64_t[n];
-	for (size_t i = 0; i < n; i++)
-		keys[i] = i + 1;
-	std::random_shuffle(keys, keys + n);
+    string int_types[4] = {"tinyint", "smallint", "integer", "bigint"};
+    int32_t n_sizes[4] = {100,1000,10000,100000};
+    for (int idx = 3; idx < 4; idx ++ ){
+        REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i "+int_types[idx]+")"));
+        REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
 
-	for (size_t i = 0; i < n; i++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(keys[i]) + ")"));
-		result = con.Query("SELECT i FROM integers WHERE i=" + to_string(keys[i]));
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(keys[i])}));
-	}
-	// Checking non-existing values
-	result = con.Query("SELECT i FROM integers WHERE i=" + to_string(-1));
-	REQUIRE(CHECK_COLUMN(result, 0, {}));
-	result = con.Query("SELECT i FROM integers WHERE i=" + to_string(10001));
-	REQUIRE(CHECK_COLUMN(result, 0, {}));
+        int32_t n = n_sizes[idx];
+        int32_t *keys = new int32_t[n];
+        for (int32_t i = 0; i < n; i++)
+            keys[i] = i + 1;
+        std::random_shuffle(keys, keys + n);
 
-	// Checking if all elements are still there
-	for (size_t i = 0; i < n; i++) {
-		result = con.Query("SELECT i FROM integers WHERE i=" + to_string(keys[i]));
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(keys[i])}));
-	}
+        for (int32_t i = 0; i < n; i++) {
+            REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(keys[i]) + ")"));
+            result = con.Query("SELECT i FROM integers WHERE i=" + to_string(keys[i]));
+            REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
+        }
+        //! Checking non-existing values
+        result = con.Query("SELECT i FROM integers WHERE i=" + to_string(-1));
+        REQUIRE(CHECK_COLUMN(result, 0, {}));
+        result = con.Query("SELECT i FROM integers WHERE i=" + to_string(n_sizes[idx]+1));
+        REQUIRE(CHECK_COLUMN(result, 0, {}));
 
-	// Checking Duplicates
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(1) + ")"));
-	result = con.Query("SELECT SUM(i) FROM integers WHERE i=" + to_string(1));
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(2)}));
+        //! Checking if all elements are still there
+        for (size_t i = 0; i < n; i++) {
+            result = con.Query("SELECT i FROM integers WHERE i=" + to_string(keys[i]));
+            REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
+        }
 
-	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
-	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
-}
+        //! Checking Multiple Range Queries
+        int32_t up_range_result = n_sizes[idx]*2 -1;
+        result = con.Query("SELECT sum(i) FROM integers WHERE i >=" + to_string(n_sizes[idx]-1));
+        REQUIRE(CHECK_COLUMN(result, 0, {Value(up_range_result)}));
 
-TEST_CASE("ART Index Int", "[art-int]") {
-	unique_ptr<QueryResult> result;
-	DuckDB db(nullptr);
+        result = con.Query("SELECT sum(i) FROM integers WHERE i >"+to_string(n_sizes[idx]-2));
+        REQUIRE(CHECK_COLUMN(result, 0, {Value(up_range_result)}));
 
-	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
-	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+        result = con.Query("SELECT sum(i) FROM integers WHERE i >2 AND i <5");
+        REQUIRE(CHECK_COLUMN(result, 0, {Value(7)}));
 
-	size_t n = 1000;
-	int32_t *keys = new int32_t[n];
-	for (size_t i = 0; i < n; i++)
-		keys[i] = i + 1;
-	std::random_shuffle(keys, keys + n);
+        result = con.Query("SELECT sum(i) FROM integers WHERE i >=2 AND i <5");
+        REQUIRE(CHECK_COLUMN(result, 0, {Value(9)}));
 
-	for (size_t i = 0; i < n; i++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(keys[i]) + ")"));
-		result = con.Query("SELECT i FROM integers WHERE i=" + to_string(keys[i]));
-		REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
-	}
-	// Checking non-existing values
-	result = con.Query("SELECT i FROM integers WHERE i=" + to_string(-1));
-	REQUIRE(CHECK_COLUMN(result, 0, {}));
-	result = con.Query("SELECT i FROM integers WHERE i=" + to_string(10001));
-	REQUIRE(CHECK_COLUMN(result, 0, {}));
+        result = con.Query("SELECT sum(i) FROM integers WHERE i >2 AND i <=5");
+        REQUIRE(CHECK_COLUMN(result, 0, {Value(12)}));
 
-	// Checking if all elements are still there
-	for (size_t i = 0; i < n; i++) {
-		result = con.Query("SELECT i FROM integers WHERE i=" + to_string(keys[i]));
-		REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
-	}
-	result = con.Query("SELECT sum(i) FROM integers WHERE i >=999");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(1999)}));
+        result = con.Query("SELECT sum(i) FROM integers WHERE i >=2 AND i <=5");
+        REQUIRE(CHECK_COLUMN(result, 0, {Value(14)}));
+        result = con.Query("SELECT sum(i) FROM integers WHERE i <=2");
+        REQUIRE(CHECK_COLUMN(result, 0, {Value(3)}));
 
-	result = con.Query("SELECT sum(i) FROM integers WHERE i >998");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(1999)}));
+        result = con.Query("SELECT sum(i) FROM integers WHERE i <0");
+        REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 
-	result = con.Query("SELECT sum(i) FROM integers WHERE i >2 AND i <5");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(7)}));
+        result = con.Query("SELECT sum(i) FROM integers WHERE i >10000000");
+        REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 
-	result = con.Query("SELECT sum(i) FROM integers WHERE i >=2 AND i <5");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(9)}));
+        //! Checking Duplicates
+        REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(1) + ")"));
+        result = con.Query("SELECT SUM(i) FROM integers WHERE i=" + to_string(1));
+        REQUIRE(CHECK_COLUMN(result, 0, {Value(2)}));
 
-	result = con.Query("SELECT sum(i) FROM integers WHERE i >2 AND i <=5");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(12)}));
+//        //! Successful update
+//        REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=14 WHERE i=13"));
+//        result = con.Query("SELECT * FROM integers WHERE i=14");
+//        REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
+//
+//        //!Testing rollbacks and commits
+//        // rolled back update
+//        REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+//        // update the value
+//        REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=14 WHERE i=12"));
+//        // now there are three values with 14
+//        result = con.Query("SELECT * FROM integers WHERE i=14");
+//        REQUIRE(CHECK_COLUMN(result, 0, {14, 14, 14}));
+//        // rollback the value
+//        REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+//        // after the rollback
+//        result = con.Query("SELECT * FROM integers WHERE i=14");
+//        REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
+//        // roll back insert
+//        REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+//        // update the value
+//        REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (14)"));
+//        // now there are three values with 14
+//        result = con.Query("SELECT * FROM integers WHERE i=14");
+//        REQUIRE(CHECK_COLUMN(result, 0, {14, 14, 14}));
+//        // rollback the value
+//        REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+//        // after the rollback
+//        result = con.Query("SELECT * FROM integers WHERE i=14");
+//        REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
 
-	result = con.Query("SELECT sum(i) FROM integers WHERE i >=2 AND i <=5");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(14)}));
-//	result = con.Query("SELECT sum(i) FROM integers WHERE i <=2");
-//	REQUIRE(CHECK_COLUMN(result, 0, {Value(3)}));
-	// Checking Duplicates
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(1) + ")"));
-	result = con.Query("SELECT SUM(i) FROM integers WHERE i=" + to_string(1));
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(2)}));
+        //!Testing deletes
+        // Delete non-existing element
+        REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=0"));
+        // Now Deleting all elements
+        for (int32_t i = 0; i < n; i++) {
+            REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=" + to_string(i)));
+            // check the value does not exist
+            result = con.Query("SELECT * FROM integers WHERE i=" + to_string(i));
+            REQUIRE(CHECK_COLUMN(result, 0, {}));
+        }
+        // Delete from empty tree
+        REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=0"));
 
-	// successful update
-	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=14 WHERE i=13"));
-	result = con.Query("SELECT * FROM integers WHERE i=14");
-	REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
+        REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
+        REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+    }
 
-	// rolled back update
-	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-	// update the value
-	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=14 WHERE i=12"));
-	// now there are three values with 14
-	result = con.Query("SELECT * FROM integers WHERE i=14");
-	REQUIRE(CHECK_COLUMN(result, 0, {14, 14, 14}));
-	// rollback the value
-	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
-	// after the rollback
-	result = con.Query("SELECT * FROM integers WHERE i=14");
-	REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
-
-	// roll back insert
-	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-	// update the value
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (14)"));
-	// now there are three values with 14
-	result = con.Query("SELECT * FROM integers WHERE i=14");
-	REQUIRE(CHECK_COLUMN(result, 0, {14, 14, 14}));
-	// rollback the value
-	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
-	// after the rollback
-	result = con.Query("SELECT * FROM integers WHERE i=14");
-	REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
-
-	// Delete non-existing element
-	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=0"));
-	// Now Deleting all elements
-	for (size_t i = 0; i < n; i++) {
-		REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=" + to_string(i) + ""));
-		// check the value does not exist
-		result = con.Query("SELECT * FROM integers WHERE i=" + to_string(i) + "");
-		REQUIRE(CHECK_COLUMN(result, 0, {}));
-	}
-	// Delete from empty tree
-	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=0"));
-
-	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
-	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
-}
-
-TEST_CASE("ART Index SmallInt", "[art-smallint]") {
-	unique_ptr<QueryResult> result;
-	DuckDB db(nullptr);
-
-	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i SMALLINT)"));
-	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
-
-	size_t n = 1000;
-	int16_t *keys = new int16_t[n];
-	for (size_t i = 0; i < n; i++)
-		keys[i] = i + 1;
-	std::random_shuffle(keys, keys + n);
-
-	for (size_t i = 0; i < n; i++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(keys[i]) + ")"));
-		result = con.Query("SELECT i FROM integers WHERE i=" + to_string(keys[i]));
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::SMALLINT(keys[i])}));
-	}
-	//    // Checking non-existing values
-	result = con.Query("SELECT i FROM integers WHERE i=" + to_string(-1));
-	REQUIRE(CHECK_COLUMN(result, 0, {}));
-	result = con.Query("SELECT i FROM integers WHERE i=" + to_string(10001));
-	REQUIRE(CHECK_COLUMN(result, 0, {}));
-
-	// Checking if all elements are still there
-	for (size_t i = 0; i < n; i++) {
-		result = con.Query("SELECT i FROM integers WHERE i=" + to_string(keys[i]));
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::SMALLINT(keys[i])}));
-	}
-
-	// Checking Duplicates
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(1) + ")"));
-	result = con.Query("SELECT SUM(i) FROM integers WHERE i=" + to_string(1));
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::SMALLINT(2)}));
-
-	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
-	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
-}
-
-TEST_CASE("ART Index TinyInt", "[art-tinyint]") {
-	unique_ptr<QueryResult> result;
-	DuckDB db(nullptr);
-
-	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i TINYINT)"));
-	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
-
-	size_t n = 100;
-	int8_t *keys = new int8_t[n];
-	for (size_t i = 0; i < n; i++)
-		keys[i] = i + 1;
-	std::random_shuffle(keys, keys + n);
-
-	for (size_t i = 0; i < n; i++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(keys[i]) + ")"));
-		result = con.Query("SELECT i FROM integers WHERE i=" + to_string(keys[i]));
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::TINYINT(keys[i])}));
-	}
-	//    // Checking non-existing values
-	result = con.Query("SELECT i FROM integers WHERE i=" + to_string(-1));
-	REQUIRE(CHECK_COLUMN(result, 0, {}));
-	result = con.Query("SELECT i FROM integers WHERE i=" + to_string(10001));
-	REQUIRE(CHECK_COLUMN(result, 0, {}));
-
-	// Checking if all elements are still there
-	for (size_t i = 0; i < n; i++) {
-		result = con.Query("SELECT i FROM integers WHERE i=" + to_string(keys[i]));
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::TINYINT(keys[i])}));
-	}
-
-	// Checking Duplicates
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(1) + ")"));
-	result = con.Query("SELECT SUM(i) FROM integers WHERE i=" + to_string(1));
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::TINYINT(2)}));
-
-	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
-	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 }
