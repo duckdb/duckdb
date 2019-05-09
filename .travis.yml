@@ -49,6 +49,15 @@ matrix:
             python -m twine upload --skip-existing wheelhouse/*.whl
           fi
 
+    - os: osx
+      name: Xcode 9.1
+      osx_image: xcode9.1
+
+    - os: osx
+      name: Xcode 6.4
+      osx_image: xcode9.1
+
+
     - os: windows
       name: Python Package
       language: cpp
