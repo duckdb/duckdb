@@ -13,9 +13,9 @@ int duckdb_connection_init(duckdb_Connection *self, PyObject *args, PyObject *kw
 
 	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O&|", kwlist,
 #if PY_MAJOR_VERSION >= 3
-			PyUnicode_FSConverter,
+	                                 PyUnicode_FSConverter,
 #endif
-			&database_obj)) {
+	                                 &database_obj)) {
 		return -1;
 	}
 

@@ -5,3 +5,4 @@ build
 .pytest_cache
 src/duckdb
 /src/
+/duckdb_tarball/

@@ -6,7 +6,6 @@
 
 #include <iostream>
 
-
 using namespace duckdb;
 using namespace std;
 

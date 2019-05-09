@@ -4,7 +4,7 @@ dist: trusty
 
 env:
   global:
-    - CIBW_BUILD='cp36-* cp37-*'
+    - CIBW_BUILD='cp37-*'
     - CIBW_SKIP='*-manylinux1_i686'
     - CIBW_TEST_REQUIRES='pytest'
     - CIBW_BEFORE_BUILD='pip install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3" && pip install cmake'

@@ -8,9 +8,10 @@
 
 #pragma once
 
+#include "common/constants.hpp"
+#include "common/enums/expression_type.hpp"
+#include "common/types.hpp"
 #include "common/unordered_map.hpp"
-#include "parser/column_definition.hpp"
-#include "parser/statement/select_statement.hpp"
 #include "parser/tokens.hpp"
 
 namespace postgres {
@@ -20,6 +21,9 @@ namespace postgres {
 } // namespace postgres
 
 namespace duckdb {
+
+class ColumnDefinition;
+struct OrderByNode;
 
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation

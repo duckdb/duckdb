@@ -18,7 +18,7 @@ using namespace std;
 
 // somehow sometimes this is missing
 #ifndef O_CLOEXEC
-# define O_CLOEXEC 0
+#define O_CLOEXEC 0
 #endif
 
 struct UnixFileHandle : public FileHandle {

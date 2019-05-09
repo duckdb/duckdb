@@ -17,15 +17,11 @@ Opens a connection to the DuckDB database file *database*. You can use\n\
 \":memory:\" to open a database connection to a database that resides in\n\
 RAM instead of on disk.");
 
-
 static PyMethodDef module_methods[] = {
     {"connect", (PyCFunction)(void (*)(void))module_connect, METH_VARARGS | METH_KEYWORDS, module_connect_doc},
     {NULL, NULL}};
 
-
-
 #if PY_MAJOR_VERSION >= 3
-
 
 static struct PyModuleDef _duckdbmodule = {
     PyModuleDef_HEAD_INIT, "duckdb", NULL, -1, module_methods, NULL, NULL, NULL, NULL};
@@ -34,16 +30,16 @@ PyMODINIT_FUNC PyInit_duckdb(void)
 
 #else // Python 2
 extern "C" {
-	void initduckdb(void)
+void initduckdb(void)
 
 #endif
-	{
+{
 	PyObject *module, *dict;
 
 #if PY_MAJOR_VERSION >= 3
-    module = PyModule_Create(&_duckdbmodule);
+	module = PyModule_Create(&_duckdbmodule);
 #else
-    module = Py_InitModule("duckdb", module_methods);
+	module = Py_InitModule("duckdb", module_methods);
 #endif
 
 	if (!module || (duckdb_cursor_setup_types() < 0) || (duckdb_connection_setup_types() < 0)) {
@@ -74,6 +70,6 @@ error:
 #if PY_MAJOR_VERSION >= 3
 	return module;
 #else
-	} // extern "C"
+} // extern "C"
 #endif
 }

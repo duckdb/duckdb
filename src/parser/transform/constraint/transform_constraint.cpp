@@ -1,3 +1,4 @@
+#include "parser/column_definition.hpp"
 #include "parser/constraint.hpp"
 #include "parser/constraints/list.hpp"
 #include "parser/transformer.hpp"

@@ -72,9 +72,9 @@ PyObject *duckdb_cursor_execute(duckdb_Cursor *self, PyObject *args) {
 
 	if (!PyArg_ParseTuple(args, "O&|",
 #if PY_MAJOR_VERSION >= 3
-			PyUnicode_FSConverter,
+	                      PyUnicode_FSConverter,
 #endif
-			&operation)) {
+	                      &operation)) {
 		return NULL;
 	}
 

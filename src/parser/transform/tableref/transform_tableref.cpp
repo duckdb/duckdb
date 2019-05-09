@@ -1,3 +1,5 @@
+#include "common/exception.hpp"
+#include "parser/tableref.hpp"
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
