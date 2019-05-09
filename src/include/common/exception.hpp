@@ -18,7 +18,7 @@
 #include <execinfo.h>
 #endif
 #include <errno.h>
-#include <iostream>
+#include <iosfwd>
 #include <memory>
 #include <signal.h>
 #include <stdarg.h>

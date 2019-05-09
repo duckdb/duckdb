@@ -6,6 +6,7 @@
 #include "parser/expression/constant_expression.hpp"
 
 #include <algorithm>
+#include <iostream>
 
 using namespace duckdb;
 using namespace std;

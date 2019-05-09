@@ -4,6 +4,9 @@
 #include "common/printer.hpp"
 #include "execution/physical_operator.hpp"
 
+#include <iostream>
+
+
 using namespace duckdb;
 using namespace std;
 
