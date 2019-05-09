@@ -9,7 +9,7 @@ using namespace duckdb;
 using namespace std;
 
 
-SingleFileBlockManager::SingleFileBlockManager(string path, bool read_only, bool create_new) :
+SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool read_only, bool create_new) :
 	path(path), header_buffer(HEADER_SIZE) {
 
 	uint8_t flags;
@@ -26,7 +26,7 @@ SingleFileBlockManager::SingleFileBlockManager(string path, bool read_only, bool
 		}
 	}
 	// open the RDBMS handle
-	handle = FileSystem::OpenFile(path, flags, lock);
+	handle = fs.OpenFile(path, flags, lock);
 	if (create_new) {
 		// if we create a new file, we fill the metadata of the file
 		// first fill in the new header

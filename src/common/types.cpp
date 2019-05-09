@@ -34,7 +34,7 @@ string TypeIdToString(TypeId type) {
 	}
 }
 
-size_t GetTypeIdSize(TypeId type) {
+uint64_t GetTypeIdSize(TypeId type) {
 	switch (type) {
 	case TypeId::BOOLEAN:
 		return sizeof(bool);

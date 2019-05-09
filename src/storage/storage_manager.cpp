@@ -55,33 +55,33 @@ void StorageManager::Initialize() {
 void StorageManager::LoadDatabase() {
 	string wal_path = path + ".wal";
 	// first check if the database exists
-	if (!FileSystem::FileExists(path)) {
+	if (!database.file_system->DirectoryExists(path)) {
 		if (read_only) {
 			throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist",
 			                       path.c_str());
 		}
 		// check if the WAL exists
-		if (FileSystem::FileExists(wal_path)) {
+		if (database.file_system->FileExists(wal_path)) {
 			// WAL file exists but database file does not
 			// remove the WAL
-			FileSystem::RemoveFile(wal_path);
+			database.file_system->RemoveFile(wal_path);
 		}
 		// initialize the block manager while creating a new db file
-		block_manager = make_unique<SingleFileBlockManager>(path, read_only, true);
+		block_manager = make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, true);
 	} else {
 		// initialize the block manager while loading the current db file
-		block_manager = make_unique<SingleFileBlockManager>(path, read_only, false);
+		block_manager = make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, false);
 		//! Load from storage
 		LoadFromStorage();
 		// check if the WAL file exists
-		if (FileSystem::FileExists(wal_path)) {
+		if (database.file_system->FileExists(wal_path)) {
 			// replay the WAL
 			wal.Replay(wal_path);
 			CheckpointManager checkpointer(*this);
 			// checkpoint the database
 			checkpointer.CreateCheckpoint();
 			// remove the WAL
-			FileSystem::RemoveFile(wal_path);
+			database.file_system->RemoveFile(wal_path);
 		}
 	}
 	// FIXME: check if temporary file exists and delete that if it does

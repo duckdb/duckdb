@@ -21,7 +21,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, uint32_t d
 	subquery_binder->CTE_bindings = binder.CTE_bindings;
 	auto bound_node = subquery_binder->Bind(*expr.subquery);
 	// check the correlated columns of the subquery for correlated columns with depth > 1
-	for (size_t i = 0; i < subquery_binder->correlated_columns.size(); i++) {
+	for (uint64_t i = 0; i < subquery_binder->correlated_columns.size(); i++) {
 		CorrelatedColumnInfo corr = subquery_binder->correlated_columns[i];
 		if (corr.depth > 1) {
 			// depth > 1, the column references the query ABOVE the current one

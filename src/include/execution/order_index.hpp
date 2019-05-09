@@ -20,8 +20,8 @@ namespace duckdb {
 
 struct OrderIndexScanState : public IndexScanState {
 	Value value;
-	size_t current_index;
-	size_t final_index;
+	uint64_t current_index;
+	uint64_t final_index;
 
 	OrderIndexScanState(vector<column_t> column_ids) : IndexScanState(column_ids) {
 	}
@@ -31,7 +31,7 @@ struct OrderIndexScanState : public IndexScanState {
 class OrderIndex : public Index {
 public:
 	OrderIndex(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, vector<TypeId> expression_types,
-	           vector<unique_ptr<Expression>> expressions, size_t initial_capacity);
+	           vector<unique_ptr<Expression>> expressions, uint64_t initial_capacity);
 
 	//! Appends data into the index, but does not perform the sort yet! This can
 	//! be done separately by calling the OrderIndex::Sort() method
@@ -56,7 +56,7 @@ public:
 	void Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) override;
 
 	// Append entries to the index
-	void Append(ClientContext &context, DataChunk &entries, size_t row_identifier_start) override;
+	void Append(ClientContext &context, DataChunk &entries, uint64_t row_identifier_start) override;
 	// Update entries in the index
 	void Update(ClientContext &context, vector<column_t> &column_ids, DataChunk &update_data,
 	            Vector &row_identifiers) override;
@@ -72,28 +72,28 @@ public:
 	//! The expressions to evaluate
 	vector<unique_ptr<Expression>> expressions;
 	//! The size of one tuple
-	size_t tuple_size;
+	uint64_t tuple_size;
 	//! The big sorted list
 	unique_ptr<uint8_t[]> data;
 	//! The amount of entries in the index
-	size_t count;
+	uint64_t count;
 	//! The capacity of the index
-	size_t capacity;
+	uint64_t capacity;
 
 private:
 	DataChunk expression_result;
 
 	//! Get the start/end position in the index for a Less Than Equal Operator
-	size_t SearchLTE(Value value);
+	uint64_t SearchLTE(Value value);
 	//! Get the start/end position in the index for a Greater Than Equal Operator
-	size_t SearchGTE(Value value);
+	uint64_t SearchGTE(Value value);
 	//! Get the start/end position in the index for a Less Than Operator
-	size_t SearchLT(Value value);
+	uint64_t SearchLT(Value value);
 	//! Get the start/end position in the index for a Greater Than Operator
-	size_t SearchGT(Value value);
+	uint64_t SearchGT(Value value);
 	//! Scan the index starting from the position, updating the position.
 	//! Returns the amount of tuples scanned.
-	void Scan(size_t &position_from, size_t &position_to, Value value, Vector &result_identifiers);
+	void Scan(uint64_t &position_from, uint64_t &position_to, Value value, Vector &result_identifiers);
 };
 
 } // namespace duckdb

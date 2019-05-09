@@ -57,7 +57,10 @@ int32_t SelectBinder::TryBindGroup(ParsedExpression &expr, uint32_t depth) {
 
 BindResult SelectBinder::BindGroup(ParsedExpression &expr, uint32_t depth, int32_t group_index) {
 	auto &group = node.groups[group_index];
+	assert(node.group_index <= numeric_limits<uint32_t>::max());
+
 	return BindResult(make_unique<BoundColumnRefExpression>(expr.GetName(), group->return_type,
-	                                                        ColumnBinding(node.group_index, group_index), depth),
+	                                                        ColumnBinding((uint32_t)node.group_index, group_index),
+	                                                        depth),
 	                  info.group_types[group_index]);
 }

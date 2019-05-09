@@ -9,7 +9,7 @@ using namespace std;
 
 namespace duckdb {
 
-void regexp_matches_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count,
+void regexp_matches_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_count,
                              BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 2);
 	auto &strings = inputs[0];
@@ -31,7 +31,7 @@ void regexp_matches_function(ExpressionExecutor &exec, Vector inputs[], size_t i
 	options.set_log_errors(false);
 
 	VectorOperations::BinaryExec(strings, patterns, result,
-	                             [&](size_t strings_index, size_t patterns_index, size_t result_index) {
+	                             [&](uint64_t strings_index, uint64_t patterns_index, uint64_t result_index) {
 		                             if (result.nullmask[result_index]) {
 			                             return;
 		                             }

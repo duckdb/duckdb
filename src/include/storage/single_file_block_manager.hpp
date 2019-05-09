@@ -21,7 +21,7 @@ class SingleFileBlockManager : public BlockManager {
 	//! The location in the file where the block writing starts
 	static constexpr uint64_t BLOCK_START = HEADER_SIZE * 3;
 public:
-	SingleFileBlockManager(string path, bool read_only, bool create_new);
+	SingleFileBlockManager(FileSystem &fs, string path, bool read_only, bool create_new);
 
 	//! Creates a new Block and returns a pointer
 	unique_ptr<Block> CreateBlock() override;

@@ -40,7 +40,7 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 * Strongly prefer the use of `unique_ptr` over `shared_ptr`, only use `shared_ptr` if you **absolutely** have to
 * Do **not** import namespaces in headers (e.g. `using std`), only in source files
 * When overriding a virtual method, avoid repeating virtual and always use override or final
-* Use [u]int(8|16|32|64)_t instead of int, long, uint etc.
+* Use [u]int(8|16|32|64)_t instead of int, long, uint etc. In particular, use `uint64_t` instead of `size_t`
 * Prefer using references over pointers
 * Use C++11 for loops when possible: for (const auto& item : items) {...}
 

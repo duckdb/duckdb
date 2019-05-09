@@ -73,7 +73,7 @@ template <> int32_t Cast::Operation(int64_t left) {
 	return cast_with_overflow_check<int64_t, int32_t>(left);
 }
 template <> int32_t Cast::Operation(uint64_t left) {
-	return cast_from_uint64_overflow_check<uint64_t>(left);
+	return (int32_t)cast_from_uint64_overflow_check<uint64_t>(left);
 }
 template <> int32_t Cast::Operation(double left) {
 	return cast_with_overflow_check<double, int32_t>(left);

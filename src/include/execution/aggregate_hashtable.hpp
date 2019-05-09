@@ -26,13 +26,13 @@ namespace duckdb {
 */
 class SuperLargeHashTable {
 public:
-	SuperLargeHashTable(size_t initial_capacity, vector<TypeId> group_types, vector<TypeId> payload_types,
+	SuperLargeHashTable(uint64_t initial_capacity, vector<TypeId> group_types, vector<TypeId> payload_types,
 	                    vector<ExpressionType> aggregate_types, bool parallel = false);
 	~SuperLargeHashTable();
 
 	//! Resize the HT to the specified size. Must be larger than the current
 	//! size.
-	void Resize(size_t size);
+	void Resize(uint64_t size);
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
 	//! computed but instead just assigned.
@@ -40,7 +40,7 @@ public:
 	//! Scan the HT starting from the scan_position until the result and group
 	//! chunks are filled. scan_position will be updated by this function.
 	//! Returns the amount of elements found.
-	size_t Scan(size_t &scan_position, DataChunk &group, DataChunk &result);
+	uint64_t Scan(uint64_t &scan_position, DataChunk &group, DataChunk &result);
 
 	//! Fetch the aggregates for specific groups from the HT and place them in the result
 	void FetchAggregates(DataChunk &groups, DataChunk &result);
@@ -61,18 +61,18 @@ private:
 	//! The types of the payload columns stored in the hashtable
 	vector<TypeId> payload_types;
 	//! The size of the payload (aggregations) in bytes
-	size_t payload_width;
+	uint64_t payload_width;
 	//! The total tuple size
-	size_t tuple_size;
+	uint64_t tuple_size;
 	//! The capacity of the HT. This can be increased using
 	//! SuperLargeHashTable::Resize
-	size_t capacity;
+	uint64_t capacity;
 	//! The amount of entries stored in the HT currently
-	size_t entries;
+	uint64_t entries;
 	//! The data of the HT
 	uint8_t *data;
 	//! The maximum size of the chain
-	size_t max_chain;
+	uint64_t max_chain;
 	//! Whether or not the HT has to support parallel insertion operations
 	bool parallel = false;
 	//! The empty payload data

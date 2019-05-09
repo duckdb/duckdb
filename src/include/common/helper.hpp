@@ -15,7 +15,7 @@
 #include <sstream>
 
 #ifdef _MSC_VER
-#define ssize_t int64_t
+#define suint64_t int64_t
 #endif
 
 namespace duckdb {

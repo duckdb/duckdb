@@ -21,7 +21,7 @@ void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 
 		// now generate the selection vector
 		chunk.sel_vector = state->child_chunk.sel_vector;
-		for (size_t i = 0; i < chunk.column_count; i++) {
+		for (uint64_t i = 0; i < chunk.column_count; i++) {
 			// create a reference to the vector of the child chunk
 			chunk.data[i].Reference(state->child_chunk.data[i]);
 		}

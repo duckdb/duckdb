@@ -7,6 +7,8 @@
 #include "main/client_context.hpp"
 #include "main/database.hpp"
 
+#include <algorithm>
+
 using namespace std;
 
 namespace duckdb {
@@ -21,7 +23,7 @@ struct SQLiteMasterData : public FunctionData {
 
 	bool initialized;
 	vector<CatalogEntry *> entries;
-	size_t offset;
+	uint64_t offset;
 };
 
 FunctionData *sqlite_master_init(ClientContext &context) {
@@ -37,7 +39,7 @@ string GenerateQuery(CatalogEntry *entry) {
 		auto table = (TableCatalogEntry *)entry;
 		ss << "CREATE TABLE " << table->name << "(";
 
-		for (size_t i = 0; i < table->columns.size(); i++) {
+		for (uint64_t i = 0; i < table->columns.size(); i++) {
 			auto &column = table->columns[i];
 			ss << column.name << " " << SQLTypeToString(column.type);
 			if (i + 1 < table->columns.size()) {
@@ -68,15 +70,15 @@ void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, 
 		// finished returning values
 		return;
 	}
-	size_t next = min(data.offset + STANDARD_VECTOR_SIZE, data.entries.size());
+	uint64_t next = min(data.offset + STANDARD_VECTOR_SIZE, (uint64_t)data.entries.size());
 
-	size_t output_count = next - data.offset;
-	for (size_t j = 0; j < output.column_count; j++) {
+	uint64_t output_count = next - data.offset;
+	for (uint64_t j = 0; j < output.column_count; j++) {
 		output.data[j].count = output_count;
 	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	for (size_t i = data.offset; i < next; i++) {
+	for (uint64_t i = data.offset; i < next; i++) {
 		auto index = i - data.offset;
 		auto &entry = data.entries[i];
 

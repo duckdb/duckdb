@@ -27,7 +27,8 @@ unique_ptr<TableRef> SubqueryRef::Copy() {
 void SubqueryRef::Serialize(Serializer &serializer) {
 	TableRef::Serialize(serializer);
 	subquery->Serialize(serializer);
-	serializer.Write<int>(column_name_alias.size());
+	assert(column_name_alias.size() <= numeric_limits<uint32_t>::max());
+	serializer.Write<uint32_t>((uint32_t)column_name_alias.size());
 	for (auto &alias : column_name_alias) {
 		serializer.WriteString(alias);
 	}
@@ -39,8 +40,8 @@ unique_ptr<TableRef> SubqueryRef::Deserialize(Deserializer &source) {
 		return nullptr;
 	}
 	auto result = make_unique<SubqueryRef>(move(subquery));
-	size_t column_count = source.Read<int>();
-	for (size_t i = 0; i < column_count; i++) {
+	uint64_t column_count = source.Read<uint32_t>();
+	for (uint64_t i = 0; i < column_count; i++) {
 		result->column_name_alias.push_back(source.Read<string>());
 	}
 	return move(result);

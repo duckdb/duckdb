@@ -104,7 +104,7 @@ void Vector::Destroy() {
 	nullmask.reset();
 }
 
-void Vector::SetValue(size_t index_, Value val) {
+void Vector::SetValue(uint64_t index_, Value val) {
 	if (index_ >= count) {
 		throw OutOfRangeException("SetValue() out of range!");
 	}
@@ -112,7 +112,7 @@ void Vector::SetValue(size_t index_, Value val) {
 
 	// set the NULL bit in the null mask
 	SetNull(index_, newVal.is_null);
-	size_t index = sel_vector ? sel_vector[index_] : index_;
+	uint64_t index = sel_vector ? sel_vector[index_] : index_;
 	switch (type) {
 	case TypeId::BOOLEAN:
 		((int8_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.boolean;
@@ -151,7 +151,7 @@ void Vector::SetValue(size_t index_, Value val) {
 	}
 }
 
-void Vector::SetStringValue(size_t index, const char *value) {
+void Vector::SetStringValue(uint64_t index, const char *value) {
 	if (type != TypeId::VARCHAR) {
 		throw InvalidTypeException(type, "Can only set string value of VARCHAR vectors!");
 	}
@@ -163,14 +163,14 @@ void Vector::SetStringValue(size_t index, const char *value) {
 	}
 }
 
-Value Vector::GetValue(size_t index) const {
+Value Vector::GetValue(uint64_t index) const {
 	if (index >= count) {
 		throw OutOfRangeException("GetValue() out of range");
 	}
 	if (ValueIsNull(index)) {
 		return Value(type);
 	}
-	size_t entry = sel_vector ? sel_vector[index] : index;
+	uint64_t entry = sel_vector ? sel_vector[index] : index;
 	switch (type) {
 	case TypeId::BOOLEAN:
 		return Value::BOOLEAN(((int8_t *)data)[entry]);
@@ -231,7 +231,7 @@ void Vector::Flatten() {
 	other.Move(*this);
 }
 
-void Vector::Copy(Vector &other, size_t offset) {
+void Vector::Copy(Vector &other, uint64_t offset) {
 	if (other.type != type) {
 		throw TypeMismatchException(type, other.type,
 		                            "Copying to vector of different type not "
@@ -248,7 +248,7 @@ void Vector::Copy(Vector &other, size_t offset) {
 		auto source = (const char **)data;
 		auto target = (const char **)other.data;
 		VectorOperations::Exec(*this,
-		                       [&](size_t i, size_t k) {
+		                       [&](uint64_t i, uint64_t k) {
 			                       if (nullmask[i]) {
 				                       other.nullmask[k - offset] = true;
 				                       target[k - offset] = nullptr;
@@ -284,15 +284,15 @@ void Vector::Append(Vector &other) {
 	if (count + other.count > STANDARD_VECTOR_SIZE) {
 		throw OutOfRangeException("Cannot append to vector: vector is full!");
 	}
-	size_t old_count = count;
+	uint64_t old_count = count;
 	count += other.count;
 	// merge NULL mask
-	VectorOperations::Exec(other, [&](size_t i, size_t k) { nullmask[old_count + k] = other.nullmask[i]; });
+	VectorOperations::Exec(other, [&](uint64_t i, uint64_t k) { nullmask[old_count + k] = other.nullmask[i]; });
 	if (!TypeIsConstantSize(type)) {
 		assert(type == TypeId::VARCHAR);
 		auto source = (const char **)other.data;
 		auto target = (const char **)data;
-		VectorOperations::Exec(other, [&](size_t i, size_t k) {
+		VectorOperations::Exec(other, [&](uint64_t i, uint64_t k) {
 			if (other.nullmask[i]) {
 				target[old_count + k] = nullptr;
 			} else {
@@ -304,11 +304,11 @@ void Vector::Append(Vector &other) {
 	}
 }
 
-size_t Vector::NotNullSelVector(const Vector &vector, sel_t *not_null_vector, sel_t *&result_assignment,
-                                sel_t *null_vector) {
+uint64_t Vector::NotNullSelVector(const Vector &vector, sel_t *not_null_vector, sel_t *&result_assignment,
+                                  sel_t *null_vector) {
 	if (vector.nullmask.any()) {
-		size_t result_count = 0, null_count = 0;
-		VectorOperations::Exec(vector.sel_vector, vector.count, [&](size_t i, size_t k) {
+		uint64_t result_count = 0, null_count = 0;
+		VectorOperations::Exec(vector.sel_vector, vector.count, [&](uint64_t i, uint64_t k) {
 			if (!vector.nullmask[i]) {
 				not_null_vector[result_count++] = i;
 			} else if (null_vector) {
@@ -325,7 +325,7 @@ size_t Vector::NotNullSelVector(const Vector &vector, sel_t *not_null_vector, se
 
 string Vector::ToString() const {
 	string retval = TypeIdToString(type) + ": " + to_string(count) + " = [ ";
-	for (size_t i = 0; i < count; i++) {
+	for (uint64_t i = 0; i < count; i++) {
 		retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
 	}
 	retval += "]";
@@ -341,10 +341,10 @@ void Vector::Verify() {
 	if (type == TypeId::VARCHAR) {
 		// we just touch all the strings and let the sanitizer figure out if any
 		// of them are deallocated/corrupt
-		VectorOperations::ExecType<const char *>(*this, [&](const char *string, size_t i, size_t k) {
+		VectorOperations::ExecType<const char *>(*this, [&](const char *string, uint64_t i, uint64_t k) {
 			if (!nullmask[i]) {
 				assert(string);
-				assert(strlen(string) != (size_t)-1);
+				assert(strlen(string) != (uint64_t)-1);
 				assert(Value::IsUTF8String(string));
 			}
 		});

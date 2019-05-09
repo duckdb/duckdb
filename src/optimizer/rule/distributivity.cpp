@@ -84,17 +84,20 @@ unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Exp
 	matches.resize(gathered_expressions.size());
 
 	unique_ptr<Expression> new_root;
-	for (size_t i = 0; i < gathered_expressions[0].size(); i++) {
+	for (uint64_t i = 0; i < gathered_expressions[0].size(); i++) {
 		auto entry = gathered_expressions[0][i];
-		matches[0] = i;
+		assert(i <= numeric_limits<uint32_t>::max());
+
+		matches[0] = (uint32_t)i;
 		bool occurs_in_all_expressions = true;
-		for (size_t j = 1; j < gathered_expressions.size(); j++) {
+		for (uint64_t j = 1; j < gathered_expressions.size(); j++) {
 			matches[j] = -1;
-			for (size_t k = 0; k < gathered_expressions[j].size(); k++) {
+			for (uint64_t k = 0; k < gathered_expressions[j].size(); k++) {
 				auto other_entry = gathered_expressions[j][k];
 				if (Expression::Equals(entry, other_entry)) {
 					// match found
-					matches[j] = k;
+					assert(k <= numeric_limits<uint32_t>::max());
+					matches[j] = (uint32_t)k;
 					break;
 				}
 			}
@@ -114,7 +117,7 @@ unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Exp
 			// now we need to remove each matched entry from its parents.
 			// for all nodes, set the ExpressionType to INVALID
 			// we do the actual pruning later
-			for (size_t m = 0; m < matches.size(); m++) {
+			for (uint64_t m = 0; m < matches.size(); m++) {
 				auto entry = gathered_expressions[m][matches[m]];
 				entry->type = ExpressionType::INVALID;
 			}

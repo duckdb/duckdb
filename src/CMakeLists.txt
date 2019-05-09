@@ -1,5 +1,10 @@
 add_definitions(-DDUCKDB)
 
+IF(NOT MSVC)
+	SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wextra -Wno-unused-parameter -Wnarrowing")
+ENDIF()
+
+
 add_subdirectory(optimizer)
 add_subdirectory(planner)
 add_subdirectory(parser)

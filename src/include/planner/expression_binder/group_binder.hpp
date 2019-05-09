@@ -19,7 +19,7 @@ class ColumnRefExpression;
 //! The GROUP binder is responsible for binding expressions in the GROUP BY clause
 class GroupBinder : public ExpressionBinder {
 public:
-	GroupBinder(Binder &binder, ClientContext &context, SelectNode &node, size_t group_index,
+	GroupBinder(Binder &binder, ClientContext &context, SelectNode &node, uint64_t group_index,
 	            unordered_map<string, uint32_t> &alias_map, unordered_map<string, uint32_t> &group_alias_map);
 
 	//! The unbound root expression
@@ -39,7 +39,7 @@ protected:
 	unordered_map<string, uint32_t> &group_alias_map;
 	unordered_set<uint32_t> used_aliases;
 
-	size_t group_index;
+	uint64_t group_index;
 };
 
 } // namespace duckdb

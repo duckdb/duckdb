@@ -150,7 +150,8 @@ bool Date::IsValidDay(int32_t year, int32_t month, int32_t day) {
 }
 
 date_t Date::EpochToDate(int64_t epoch) {
-	return (epoch / SECONDS_PER_DAY) + EPOCH_DATE;
+	assert((epoch / SECONDS_PER_DAY) + EPOCH_DATE <= numeric_limits<int32_t>::max());
+	return (date_t)((epoch / SECONDS_PER_DAY) + EPOCH_DATE);
 }
 
 int64_t Date::Epoch(date_t date) {

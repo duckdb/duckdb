@@ -30,7 +30,7 @@ void RemoveFile(const string &fpath) {
 
 struct UnixFileHandle : public FileHandle {
 public:
-	UnixFileHandle(string path, int fd) : FileHandle(path), fd(fd) {
+	UnixFileHandle(FileSystem &file_system, string path, int fd) : FileHandle(file_system, path), fd(fd) {
 	}
 	virtual ~UnixFileHandle() {
 		Close();
@@ -99,7 +99,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 			throw IOException("Could not set lock on file \"%s\": %s", path, strerror(errno));
 		}
 	}
-	return make_unique<UnixFileHandle>(path, fd);
+	return make_unique<UnixFileHandle>(*this, path, fd);
 }
 
 static void seek_in_file(FileHandle &handle, uint64_t location) {
@@ -117,11 +117,11 @@ void FileSystem::Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint6
 	seek_in_file(handle, location);
 	// now read from the location
 	errno = 0;
-	ssize_t bytes_read = read(fd, buffer, nr_bytes);
+	int64_t bytes_read = read(fd, buffer, nr_bytes);
 	if (bytes_read == -1) {
 		throw IOException("Could not read from file \"%s\": %s", handle.path.c_str(), strerror(errno));
 	}
-	if (bytes_read != nr_bytes) {
+	if ((uint64_t)bytes_read != nr_bytes) {
 		throw IOException("Could not read sufficient bytes from file \"%s\"", handle.path.c_str());
 	}
 }
@@ -132,11 +132,11 @@ void FileSystem::Write(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint
 	seek_in_file(handle, location);
 	// now write to the location
 	errno = 0;
-	ssize_t bytes_written = write(fd, buffer, nr_bytes);
+	int64_t bytes_written = write(fd, buffer, nr_bytes);
 	if (bytes_written == -1) {
 		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), strerror(errno));
 	}
-	if (bytes_written != nr_bytes) {
+	if ((uint64_t)bytes_written != nr_bytes) {
 		throw IOException("Could not write sufficient bytes from file \"%s\"", handle.path.c_str());
 	}
 }
@@ -182,7 +182,7 @@ void FileSystem::CreateDirectory(const string &directory) {
 
 int remove_directory_recursively(const char *path) {
 	DIR *d = opendir(path);
-	size_t path_len = strlen(path);
+	uint64_t path_len = strlen(path);
 	int r = -1;
 
 	if (d) {
@@ -191,7 +191,7 @@ int remove_directory_recursively(const char *path) {
 		while (!r && (p = readdir(d))) {
 			int r2 = -1;
 			char *buf;
-			size_t len;
+			uint64_t len;
 			/* Skip the names "." and ".." as we don't want to recurse on them. */
 			if (!strcmp(p->d_name, ".") || !strcmp(p->d_name, "..")) {
 				continue;
@@ -288,7 +288,7 @@ std::string GetLastErrorAsString() {
 		return std::string(); // No error message has been recorded
 
 	LPSTR messageBuffer = nullptr;
-	size_t size =
+	uint64_t size =
 	    FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 	                   NULL, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL);
 
@@ -302,7 +302,7 @@ std::string GetLastErrorAsString() {
 
 struct WindowsFileHandle : public FileHandle {
 public:
-	WindowsFileHandle(string path, HANDLE fd) : FileHandle(path), fd(fd) {
+	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd) : FileHandle(file_system, path), fd(fd) {
 	}
 	virtual ~WindowsFileHandle() {
 		Close();
@@ -349,7 +349,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		auto error = GetLastErrorAsString();
 		throw IOException("Cannot open file \"%s\": %s", path, error.c_str());
 	}
-	return make_unique<WindowsFileHandle>(path, hFile);
+	return make_unique<WindowsFileHandle>(*this, path, hFile);
 }
 
 static void seek_in_file(FileHandle &handle, uint64_t location) {
@@ -368,7 +368,7 @@ void FileSystem::Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint6
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	seek_in_file(handle, location);
 
-	auto rc = ReadFile(hFile, buffer, nr_bytes, NULL, NULL);
+	auto rc = ReadFile(hFile, buffer, (DWORD)nr_bytes, NULL, NULL);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
 		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), error.c_str());
@@ -379,7 +379,7 @@ void FileSystem::Write(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	seek_in_file(handle, location);
 
-	auto rc = WriteFile(hFile, buffer, nr_bytes, NULL, NULL);
+	auto rc = WriteFile(hFile, buffer, (DWORD)nr_bytes, NULL, NULL);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
 		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), error.c_str());
@@ -425,7 +425,8 @@ static void delete_dir_special_snowflake_windows(string directory) {
 		}
 		if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 			// recurse to zap directory contents
-			delete_dir_special_snowflake_windows(FileSystem::JoinPath(directory, ffd.cFileName));
+			FileSystem fs;
+			delete_dir_special_snowflake_windows(fs.JoinPath(directory, ffd.cFileName));
 		} else {
 			if (strlen(ffd.cFileName) + directory.size() + 1 > MAX_PATH) {
 				throw IOException("Pathname too long");
@@ -519,11 +520,11 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 #endif
 
 void FileHandle::Read(void *buffer, uint64_t nr_bytes, uint64_t location) {
-	FileSystem::Read(*this, buffer, nr_bytes, location);
+	file_system.Read(*this, buffer, nr_bytes, location);
 }
 
 void FileHandle::Write(void *buffer, uint64_t nr_bytes, uint64_t location) {
-	FileSystem::Write(*this, buffer, nr_bytes, location);
+	file_system.Write(*this, buffer, nr_bytes, location);
 }
 
 string FileSystem::JoinPath(const string &a, const string &b) {
@@ -532,6 +533,6 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 }
 
 void FileHandle::Sync() {
-	FileSystem::FileSync(*this);
+	file_system.FileSync(*this);
 }
 

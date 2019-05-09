@@ -14,10 +14,11 @@ void templated_cast_loop(Vector &source, Vector &result) {
 	auto ldata = (SRC_TYPE *)source.data;
 	auto result_data = (DST_TYPE *)result.data;
 	if (!IGNORE_NULL || !result.nullmask.any()) {
-		VectorOperations::Exec(
-		    source, [&](size_t i, size_t k) { result_data[i] = OP::template Operation<SRC_TYPE, DST_TYPE>(ldata[i]); });
+		VectorOperations::Exec(source, [&](uint64_t i, uint64_t k) {
+			result_data[i] = OP::template Operation<SRC_TYPE, DST_TYPE>(ldata[i]);
+		});
 	} else {
-		VectorOperations::Exec(source, [&](size_t i, size_t k) {
+		VectorOperations::Exec(source, [&](uint64_t i, uint64_t k) {
 			if (!result.nullmask[i]) {
 				result_data[i] = OP::template Operation<SRC_TYPE, DST_TYPE>(ldata[i]);
 			}
@@ -76,7 +77,7 @@ static void result_cast_switch(Vector &source, Vector &result, SQLType source_ty
 		// we have to place the resulting strings in the string heap
 		auto ldata = (SRC *)source.data;
 		auto result_data = (const char **)result.data;
-		VectorOperations::Exec(source, [&](size_t i, size_t k) {
+		VectorOperations::Exec(source, [&](uint64_t i, uint64_t k) {
 			if (source.nullmask[i]) {
 				result_data[i] = nullptr;
 			} else {

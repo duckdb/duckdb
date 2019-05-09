@@ -67,11 +67,12 @@ bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr)
 	// make a copy of the set of binders, so we can restore it later
 	auto binders = active_binders;
 	active_binders.pop_back();
-	size_t depth = 1;
+	uint64_t depth = 1;
 	bool success = false;
 	while (active_binders.size() > 0) {
 		auto &next_binder = active_binders.back();
-		auto bind_result = next_binder->Bind(&expr, depth);
+		assert(depth <= numeric_limits<uint32_t>::max());
+		auto bind_result = next_binder->Bind(&expr, (uint32_t)depth);
 		if (bind_result.empty()) {
 			success = true;
 			break;

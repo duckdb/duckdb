@@ -73,6 +73,7 @@ void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry
 void CheckpointManager::WriteTable(Transaction &transaction, TableCatalogEntry *table) {
 	// write the table meta data
 	// FIXME: use TableCatalogEntry::Serialize here!
+
 	// Serializer serializer;
 	// //! and serialize the table information
 	// table->Serialize(serializer);
@@ -80,6 +81,7 @@ void CheckpointManager::WriteTable(Transaction &transaction, TableCatalogEntry *
 	//! write the seralized size and data
 	// metadata_writer->Write<uint32_t>(serialized_data.size);
 	// metadata_writer->Write((const char *)serialized_data.data.get(), serialized_data.size);
+
 	metadata_writer->WriteString(table->schema->name);
 	metadata_writer->WriteString(table->name);
 	metadata_writer->Write<uint32_t>(table->columns.size());

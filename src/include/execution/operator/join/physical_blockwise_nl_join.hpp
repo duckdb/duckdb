@@ -42,8 +42,8 @@ public:
 	//! Whether or not a tuple on the RHS has found a match, only used for FULL OUTER joins
 	unique_ptr<bool[]> rhs_found_match;
 	ChunkCollection right_chunks;
-	size_t left_position;
-	size_t right_position;
+	uint64_t left_position;
+	uint64_t right_position;
 	bool fill_in_rhs;
 	bool checked_found_match;
 };

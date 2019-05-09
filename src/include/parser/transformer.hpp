@@ -111,7 +111,7 @@ private:
 	//===--------------------------------------------------------------------===//
 	unique_ptr<Constraint> TransformConstraint(postgres::ListCell *cell);
 
-	unique_ptr<Constraint> TransformConstraint(postgres::ListCell *cell, ColumnDefinition &column, size_t index);
+	unique_ptr<Constraint> TransformConstraint(postgres::ListCell *cell, ColumnDefinition &column, uint64_t index);
 
 	//===--------------------------------------------------------------------===//
 	// Helpers

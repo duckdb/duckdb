@@ -34,7 +34,7 @@ public:
 	PhysicalOrderOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
 	}
 
-	size_t position;
+	uint64_t position;
 	ChunkCollection sorted_data;
 	unique_ptr<uint64_t[]> sorted_vector;
 };
