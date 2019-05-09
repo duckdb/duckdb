@@ -22,7 +22,23 @@ matrix:
       python: 3.7
 
       script:
-        - pip install cibuildwheel==0.10.1
+        - pip install cibuildwheel==0.10.2
+        - cd tools/pythonpkg
+        - python setup.py sdist
+        - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        - cibuildwheel --output-dir wheelhouse duckdb_tarball
+        - |
+          if [[ $TRAVIS_TAG ]]; then
+            pip install twine
+            python -m twine upload --skip-existing wheelhouse/*.whl
+          fi
+
+  - os: osx
+      name: Python Package
+      language: generic
+
+      script:
+        - pip install cibuildwheel==0.10.2
         - cd tools/pythonpkg
         - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
