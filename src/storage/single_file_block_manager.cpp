@@ -85,9 +85,9 @@ SingleFileBlockManager::SingleFileBlockManager(string path, bool read_only, bool
 void SingleFileBlockManager::Initialize(DatabaseHeader &header) {
 	if (header.free_list >= 0) {
 		// FIXME: load free_list
-		// FIXME: add blocks > block_count to free list
 		// FIXME: initialize meta block pointer somewhere
 	}
+	meta_block = header.meta_block;
 	iteration_count = header.iteration;
 	max_block = header.block_count;
 }
@@ -104,17 +104,29 @@ block_id_t SingleFileBlockManager::GetFreeBlockId() {
 	return max_block++;
 }
 
+block_id_t SingleFileBlockManager::GetMetaBlock() {
+	return meta_block;
+}
+
 unique_ptr<Block> SingleFileBlockManager::CreateBlock() {
 	return make_unique<Block>(GetFreeBlockId());
 }
 
-void SingleFileBlockManager::Flush(Block &block) {
+void SingleFileBlockManager::Read(Block &block) {
+	assert(block.id >= 0);
+	block.Read(*handle, BLOCK_START + block.id * BLOCK_SIZE);
+}
+
+void SingleFileBlockManager::Write(Block &block) {
+	assert(block.id >= 0);
 	block.Write(*handle, BLOCK_START + block.id * BLOCK_SIZE);
 }
 
 void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	// set the iteration count
-	header.iteration = iteration_count++;
+	header.iteration = ++iteration_count;
+	header.free_list = -1;
+	header.block_count = max_block;
 	// set the header inside the buffer
 	header_buffer.Clear();
 	*((DatabaseHeader*) header_buffer.buffer) = header;

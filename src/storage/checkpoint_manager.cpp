@@ -23,6 +23,9 @@ CheckpointManager::CheckpointManager(StorageManager &manager) :
 }
 
 void CheckpointManager::CreateCheckpoint() {
+	// assert that the checkpoint manager hasn't been used before
+	assert(!metadata_writer);
+
 	auto transaction = database.transaction_manager->StartTransaction();
 
     //! Set up the writers for the checkpoints
@@ -54,6 +57,7 @@ void CheckpointManager::CreateCheckpoint() {
 
 void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry *schema) {
 	// write the name of the schema
+	// FIXME: use SchemaCatalogEntry::Serialize here!
 	metadata_writer->WriteString(schema->name);
 	// then, we fetch the tables information
 	vector<TableCatalogEntry *> tables;
@@ -63,17 +67,26 @@ void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry
 	for (auto &table : tables) {
 		WriteTable(transaction, table);
 	}
+	// FIXME: free list?
 }
 
 void CheckpointManager::WriteTable(Transaction &transaction, TableCatalogEntry *table) {
 	// write the table meta data
-	Serializer serializer;
-	//! and serialize the table information
-	table->Serialize(serializer);
-	auto serialized_data = serializer.GetData();
+	// FIXME: use TableCatalogEntry::Serialize here!
+	// Serializer serializer;
+	// //! and serialize the table information
+	// table->Serialize(serializer);
+	// auto serialized_data = serializer.GetData();
 	//! write the seralized size and data
-	metadata_writer->Write<uint32_t>(serialized_data.size);
-	metadata_writer->Write((const char *)serialized_data.data.get(), serialized_data.size);
+	// metadata_writer->Write<uint32_t>(serialized_data.size);
+	// metadata_writer->Write((const char *)serialized_data.data.get(), serialized_data.size);
+	metadata_writer->WriteString(table->schema->name);
+	metadata_writer->WriteString(table->name);
+	metadata_writer->Write<uint32_t>(table->columns.size());
+	for (auto &column : table->columns) {
+		metadata_writer->WriteString(column.name);
+		metadata_writer->Write<uint8_t>((uint8_t)column.type.id);
+	}
 	//! write the blockId for the table info
 	metadata_writer->Write(tabledata_writer->block->id);
 	//! and the offset to where the info starts
@@ -86,8 +99,18 @@ void CheckpointManager::WriteTableData(Transaction &transaction, TableCatalogEnt
 	// when writing table data we write columns to individual blocks
 	// we scan the underlying table structure and write to the blocks
 	// then flush the blocks to disk when they are full
+
+	// initialize scan structures to prepare for the scan
 	ScanStructure ss;
 	table->storage->InitializeScan(ss);
+	vector<column_t> column_ids;
+	for (auto &column : table->columns) {
+		column_ids.push_back(column.oid);
+	}
+    //! get all types of the table and initialize the chunk
+	auto types = table->GetTypes();
+	DataChunk chunk;
+	chunk.Initialize(types);
 
 	// the intermediate buffers that we write our data to
 	vector<unique_ptr<Block>> blocks;
@@ -99,20 +122,14 @@ void CheckpointManager::WriteTableData(Transaction &transaction, TableCatalogEnt
 	data_pointers.resize(table->columns.size());
 	// we want to fetch all the column ids from the scan
 	// so make a list of all column ids of the table
-	vector<column_t> column_ids;
-	for (auto &column : table->columns) {
+	for (size_t i = 0; i < table->columns.size(); i++) {
 		// for each column, create a block that serves as the buffer for that blocks data
 		blocks.push_back(make_unique<Block>(-1));
 		// initialize offsets, tuple counts and row number sizes
 		offsets.push_back(DATA_BLOCK_HEADER_SIZE);
 		tuple_counts.push_back(0);
 		row_numbers.push_back(0);
-		column_ids.push_back(column.oid);
 	}
-    //! get all types of the table and initialize the chunk
-	auto types = table->GetTypes();
-	DataChunk chunk;
-	chunk.Initialize(types);
 	while (true) {
 		chunk.Reset();
 		// now scan the table to construct the blocks
@@ -170,7 +187,7 @@ void CheckpointManager::WriteTableData(Transaction &transaction, TableCatalogEnt
 			data_pointer.offset = 0;
 			data_pointers[i].push_back(data_pointer);
 			// write the block
-			block_manager.Flush(*blocks[i]);
+			block_manager.Write(*blocks[i]);
 		}
 	}
 	// finally write the table storage information

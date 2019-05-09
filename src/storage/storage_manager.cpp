@@ -1,6 +1,7 @@
 #include "storage/storage_manager.hpp"
 #include "storage/checkpoint_manager.hpp"
 #include "storage/single_file_block_manager.hpp"
+#include "storage/meta_block_reader.hpp"
 
 #include "catalog/catalog.hpp"
 #include "common/file_system.hpp"
@@ -9,6 +10,9 @@
 #include "function/function.hpp"
 #include "parser/parsed_data/create_schema_info.hpp"
 #include "transaction/transaction_manager.hpp"
+
+#include "parser/parsed_data/create_schema_info.hpp"
+#include "parser/parsed_data/create_table_info.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -68,7 +72,7 @@ void StorageManager::LoadDatabase() {
 		// initialize the block manager while loading the current db file
 		block_manager = make_unique<SingleFileBlockManager>(path, read_only, false);
 		//! Load from storage
-		//LoadCheckpoint();
+		LoadFromStorage();
 		// check if the WAL file exists
 		if (FileSystem::FileExists(wal_path)) {
 			// replay the WAL
@@ -83,4 +87,50 @@ void StorageManager::LoadDatabase() {
 	// FIXME: check if temporary file exists and delete that if it does
 	// initialize the WAL file
 	wal.Initialize(wal_path);
+}
+
+void StorageManager::LoadFromStorage() {
+	block_id_t meta_block = block_manager->GetMetaBlock();
+	if (meta_block < 0) {
+		// storage is empty
+		return;
+	}
+
+	auto transaction = database.transaction_manager->StartTransaction();
+
+	// create the MetaBlockReader to read from the storage
+	MetaBlockReader reader(*block_manager, meta_block);
+	uint32_t schema_count = reader.Read<uint32_t>();
+	for(uint32_t i = 0; i < schema_count; i++) {
+		ReadSchema(*transaction, reader);
+	}
+	database.transaction_manager->CommitTransaction(transaction);
+}
+
+void StorageManager::ReadSchema(Transaction &transaction, MetaBlockReader &reader) {
+	// read the schema and create it in the catalog
+	CreateSchemaInfo info;
+	info.schema = reader.ReadString();
+	info.if_not_exists = true;
+	database.catalog->CreateSchema(transaction, &info);
+
+	// read the table count and recreate the tables
+	uint32_t table_count = reader.Read<uint32_t>();
+	for(uint32_t i = 0; i < table_count; i++) {
+		ReadTable(transaction, reader);
+	}
+}
+
+void StorageManager::ReadTable(Transaction &transaction, MetaBlockReader &reader) {
+	CreateTableInfo info;
+	info.schema = reader.ReadString();
+	info.table = reader.ReadString();
+	uint32_t column_count = reader.Read<uint32_t>();
+	for(uint32_t i = 0; i < column_count; i++) {
+		string name = reader.ReadString();
+		SQLType type = SQLType((SQLTypeId) reader.Read<uint8_t>());
+		info.columns.push_back(ColumnDefinition(name, type));
+	}
+	database.catalog->CreateTable(transaction, &info);
+	// FIXME: load table data
 }

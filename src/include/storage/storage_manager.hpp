@@ -17,6 +17,7 @@ class BlockManager;
 class Catalog;
 class ChunkCollection;
 class DuckDB;
+class MetaBlockReader;
 class TransactionManager;
 class TableCatalogEntry;
 
@@ -46,6 +47,9 @@ private:
 	void LoadDatabase();
 	//! Load the initial database from the main storage (without WAL). Returns which alternate storage to write to.
 	void LoadFromStorage();
+
+	void ReadSchema(Transaction &transaction, MetaBlockReader &reader);
+	void ReadTable(Transaction &transaction, MetaBlockReader &reader);
 
 	//! The path of the database
 	string path;

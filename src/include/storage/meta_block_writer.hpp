@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-//! This struct is responsible for organizing the writing of the data within a block
+//! This struct is responsible for writing metadata to disk
 class MetaBlockWriter {
 public:
 	MetaBlockWriter(BlockManager &manager);

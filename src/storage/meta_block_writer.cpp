@@ -14,7 +14,7 @@ MetaBlockWriter::~MetaBlockWriter() {
 
 void MetaBlockWriter::Flush() {
 	if (offset > sizeof(block_id_t)) {
-		manager.Flush(*block);
+		manager.Write(*block);
 		offset = sizeof(block_id_t);
 	}
 }

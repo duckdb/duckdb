@@ -23,8 +23,12 @@ public:
 	virtual unique_ptr<Block> CreateBlock() = 0;
 	//! Return the next free block id
 	virtual block_id_t GetFreeBlockId() = 0;
-	//! Flushes the block to disk
-	virtual void Flush(Block &block) = 0;
+	//! Get the first meta block id
+	virtual block_id_t GetMetaBlock() = 0;
+	//! Read the content of the block from disk
+	virtual void Read(Block &block) = 0;
+	//! Writes the block to disk
+	virtual void Write(Block &block) = 0;
 	//! Write the header; should be the final step of a checkpoint
 	virtual void WriteHeader(DatabaseHeader header) = 0;
 };

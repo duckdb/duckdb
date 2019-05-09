@@ -27,15 +27,19 @@ public:
 	unique_ptr<Block> CreateBlock() override;
 	//! Return the next free block id
 	block_id_t GetFreeBlockId() override;
-	//! Flushes the given block to disk, in this case we use the path and stores this block on its file.
-	void Flush(Block &block) override;
+	//! Return the meta block id
+	block_id_t GetMetaBlock() override;
+	//! Read the content of the block from disk
+	void Read(Block &block) override;
+	//! Write the given block to disk
+	void Write(Block &block) override;
 	//! Write the header to disk, this is the final step of the checkpointing process
 	void WriteHeader(DatabaseHeader header) override;
 private:
 	void Initialize(DatabaseHeader &header);
 private:
 	//! The active DatabaseHeader, either 0 (h1) or 1 (h2)
-	int8_t active_header;
+	uint8_t active_header;
 	//! The path where the file is stored
 	string path;
 	//! The file handle
@@ -44,6 +48,8 @@ private:
 	FileBuffer header_buffer;
 	//! The list of free blocks that can be written to currently
 	vector<block_id_t> free_list;
+	//! The current meta block id
+	block_id_t meta_block;
 	//! The current maximum block id, this id will be given away first after the free_list runs out
 	block_id_t max_block;
 	//! The current header iteration count
