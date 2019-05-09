@@ -6,6 +6,9 @@
 
 #include <sys/mman.h>
 #include <unistd.h>
+#include <signal.h>
+
+
 
 using namespace duckdb;
 using namespace std;

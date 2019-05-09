@@ -12,7 +12,6 @@
 
 #include <limits>
 #include <memory>
-#include <sstream>
 
 namespace duckdb {
 
