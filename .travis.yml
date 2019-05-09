@@ -23,12 +23,9 @@ matrix:
       language: python
       python: 3.7
 
-      before_script:
-        - cd tools/pythonpkg
-
       script:
         - pip install cibuildwheel==0.10.1
-        - cibuildwheel --output-dir wheelhouse
+        - cibuildwheel --output-dir wheelhouse tools/pythonpkg
         - |
           if [[ $TRAVIS_TAG ]]; then
             pip install twine
