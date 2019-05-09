@@ -75,8 +75,6 @@ public:
 	vector<column_t> column_ids;
 	//! Types of the column identifiers
 	vector<TypeId> types;
-	//! The expressions to evaluate
-	vector<unique_ptr<Expression>> expressions;
 	//! The size of one tuple
 	uint64_t tuple_size;
 	//! The big sorted list

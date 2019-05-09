@@ -158,7 +158,6 @@ void ART::erase(bool isLittleEndian, Node *node, Node **nodeRef, Key &key, unsig
 	}
 
 	Node **child = Node::findChild(key[depth], node);
-
 	if ((*child)->type == NodeType::NLeaf && leafMatches(isLittleEndian, *child, key, maxKeyLength, depth)) {
 		// Leaf found, remove entry
 		auto leaf = static_cast<Leaf *>(*child);
@@ -631,52 +630,64 @@ void ART::SearchCloseRange(StaticVector<int64_t> *result_identifiers,ARTIndexSca
 	}
 }
 
+//FIXME: Returning one tuple per time so deletes in different chunks do not break.
 void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) {
 	auto state = (ARTIndexScanState *)ss;
-	if (state->checked)
-		return;
-	// scan the index
-	StaticVector<int64_t> result_identifiers;
-	do {
-		assert(state->values[0].type == types[0]);
+    // scan the index
+	if (!state->checked){
+        assert(state->values[0].type == types[0]);
 
-		//single predicate
-		if (state->values[1].is_null){
+        //single predicate
+        if (state->values[1].is_null){
 
-			switch(state->expressions[0]){
-				case ExpressionType::COMPARE_EQUAL:
-					SearchEqual(&result_identifiers,state);
-					break;
-				case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-					SearchGreater(&result_identifiers,state,true);
-					break;
-				case ExpressionType::COMPARE_GREATERTHAN:
-					SearchGreater(&result_identifiers,state,false);
-					break;
-				case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-					SearchLess(&result_identifiers,state,true);
-					break;
-				case ExpressionType::COMPARE_LESSTHAN:
-					SearchLess(&result_identifiers,state,false);
-					break;
-				default:
-					throw NotImplementedException("Operation not implemented");
-					break;
-			}
-		}
-		//two predicates
-		else{
-			assert(state->values[1].type == types[0]);
-			bool left_inclusive = state->expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
-			bool right_inclusive = state->expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
-			SearchCloseRange(&result_identifiers,state,left_inclusive,right_inclusive);
-		}
+            switch(state->expressions[0]){
+                case ExpressionType::COMPARE_EQUAL:
+                    SearchEqual(&state->result_identifiers,state);
+                    break;
+                case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+                    SearchGreater(&state->result_identifiers,state,true);
+                    break;
+                case ExpressionType::COMPARE_GREATERTHAN:
+                    SearchGreater(&state->result_identifiers,state,false);
+                    break;
+                case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+                    SearchLess(&state->result_identifiers,state,true);
+                    break;
+                case ExpressionType::COMPARE_LESSTHAN:
+                    SearchLess(&state->result_identifiers,state,false);
+                    break;
+                default:
+                    throw NotImplementedException("Operation not implemented");
+                    break;
+            }
+        }
+            //two predicates
+        else{
+            assert(state->values[1].type == types[0]);
+            bool left_inclusive = state->expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
+            bool right_inclusive = state->expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
+            SearchCloseRange(&state->result_identifiers,state,left_inclusive,right_inclusive);
+        }
+        state->checked = true;
+    }
 
+    // scan the index
+    if (state->current_tuple == state->result_identifiers.count)
+        return;
+    StaticVector<int64_t> result_identifiers_per_tuple;
+    auto row_id = (int64_t *)result_identifiers_per_tuple.data;
+    auto cur_row_id = (int64_t *)state->result_identifiers.data;
 
-		if (result_identifiers.count == 0) {
-			return;
-		}
-		state->checked = true;
-		table.Fetch(transaction, result, state->column_ids, result_identifiers);
-	} while (result_identifiers.count == 0);
+    row_id[0] = cur_row_id[state->current_tuple++];
+    result_identifiers_per_tuple.count++;
+//	do {
+//
+//
+//
+//		if (result_identifiers.count == 0) {
+//			return;
+//		}
+    table.Fetch(transaction, result, state->column_ids, result_identifiers_per_tuple);
+//        break;
+//	} while (result_identifiers_per_tuple.count == 0);
 }

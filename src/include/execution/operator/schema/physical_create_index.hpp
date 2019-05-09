@@ -26,7 +26,7 @@ public:
 	                    vector<unique_ptr<Expression>> expressions, unique_ptr<CreateIndexInfo> info,
 	                    vector<unique_ptr<Expression>> unbinded_expressions)
 	    : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types), table(table), column_ids(column_ids),
-	      expressions(std::move(expressions)), info(std::move(info)), unbound_expressions(move(unbinded_expressions)) {
+	      expressions(move(expressions)), info(std::move(info)), unbound_expressions(move(unbinded_expressions)) {
 	}
 
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;

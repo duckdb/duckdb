@@ -28,8 +28,9 @@ struct ARTIndexScanState : public IndexScanState {
 	Value values[2];
 	ExpressionType expressions[2];
 	bool checked;
-
-	ARTIndexScanState(vector<column_t> column_ids) : IndexScanState(column_ids) {
+    StaticVector<int64_t> result_identifiers;
+    uint64_t current_tuple = 0;
+    ARTIndexScanState(vector<column_t> column_ids) : IndexScanState(column_ids) {
 	}
 };
 
@@ -157,7 +158,7 @@ private:
 		Iterator it;
 		Key &key = *new Key(this->is_little_endian, type, data,sizeof(data));
 		size_t result_count = 0;
-		bool found=ART::bound(tree,key,8,it,8,inclusive,is_little_endian);
+		bool found=ART::bound(tree,key,sizeof(data),it,sizeof(data),inclusive,is_little_endian);
 		if (found) {
 			bool hasNext;
 			do {
@@ -178,7 +179,7 @@ private:
         if (minimum->value > (uint64_t) data)
             return result_count;
 		Key &min_key = *new Key(this->is_little_endian, type, minimum->value,sizeof(data));
-        bool found=ART::bound(tree,min_key,8,it,8,true,is_little_endian);
+        bool found=ART::bound(tree,min_key,sizeof(data),it,sizeof(data),true,is_little_endian);
         if (found) {
             bool hasNext;
             do {
@@ -199,7 +200,7 @@ private:
 		Iterator it;
 		Key &key = *new Key(this->is_little_endian, type, left_query,sizeof(left_query));
 		size_t result_count = 0;
-		bool found=ART::bound(tree,key,8,it,8,left_inclusive,is_little_endian);
+		bool found=ART::bound(tree,key,sizeof(left_query),it,sizeof(left_query),left_inclusive,is_little_endian);
 		if (found) {
 			bool hasNext;
 			do {

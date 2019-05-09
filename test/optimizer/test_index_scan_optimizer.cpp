@@ -10,23 +10,27 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test Index Scan Optimizer", "[index-optimizer]") {
+TEST_CASE("Test Index Scan Optimizer for Integers", "[index-optimizer-int]") {
 	ExpressionHelper helper;
 	auto &con = helper.con;
+    string int_types[4] = {"tinyint", "smallint", "integer", "bigint"};
 
-	con.Query("BEGIN TRANSACTION");
-	con.Query("CREATE TABLE integers(i TINYINT)");
-	con.Query("CREATE INDEX i_index ON integers using order_index(i)");
+    for (int idx = 0; idx < 4; idx ++ ) {
+        REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i "+int_types[idx]+")"));
+        //! Checking Order Index
+        con.Query("CREATE INDEX i_index ON integers using order_index(i)");
+        // Checking if Optimizer is using index in simple case
+        auto tree = helper.ParseLogicalTree("SELECT i FROM integers where i > 10");
+        IndexScan index_scan;
+        auto plan = index_scan.Optimize(move(tree));
+        REQUIRE(plan->children[0]->type == LogicalOperatorType::INDEX_SCAN);
+        con.Query("DROP INDEX i_index");
 
-	// Checking if Optimizer is using index in simple case
-	auto tree = helper.ParseLogicalTree("SELECT i FROM integers where i > 10");
-	IndexScan index_scan;
-	auto plan = index_scan.Optimize(move(tree));
-	REQUIRE(plan->children[0]->type == LogicalOperatorType::INDEX_SCAN);
-    con.Query("DROP INDEX i_index");
-    con.Query("CREATE INDEX i_index ON integers using art(i)");
-    // Checking if Optimizer is using index in simple case
-    tree = helper.ParseLogicalTree("SELECT i FROM integers where i = 10");
-    plan = index_scan.Optimize(move(tree));
-    REQUIRE(plan->children[0]->type == LogicalOperatorType::INDEX_SCAN);
+        //! Checking ART
+        con.Query("CREATE INDEX i_index ON integers using art(i)");
+        // Checking if Optimizer is using index in simple case
+        tree = helper.ParseLogicalTree("SELECT i FROM integers where i = 10");
+        plan = index_scan.Optimize(move(tree));
+        REQUIRE(plan->children[0]->type == LogicalOperatorType::INDEX_SCAN);
+    }
 }

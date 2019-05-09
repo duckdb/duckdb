@@ -69,7 +69,7 @@ TEST_CASE("ART Integer Types", "[art-int]") {
 
     string int_types[4] = {"tinyint", "smallint", "integer", "bigint"};
     int32_t n_sizes[4] = {100,1000,10000,100000};
-    for (int idx = 2; idx < 3; idx ++ ){
+    for (int idx = 0; idx < 4; idx ++ ){
         REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i "+int_types[idx]+")"));
         REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 
@@ -130,35 +130,35 @@ TEST_CASE("ART Integer Types", "[art-int]") {
         REQUIRE(CHECK_COLUMN(result, 0, {Value(2)}));
 
 //        //! Successful update
-//        REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=14 WHERE i=13"));
-//        result = con.Query("SELECT * FROM integers WHERE i=14");
-//        REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
+        REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=14 WHERE i=13"));
+        result = con.Query("SELECT * FROM integers WHERE i=14");
+        REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
 //
 //        //!Testing rollbacks and commits
 //        // rolled back update
-//        REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+        REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 //        // update the value
-//        REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=14 WHERE i=12"));
+        REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=14 WHERE i=12"));
 //        // now there are three values with 14
-//        result = con.Query("SELECT * FROM integers WHERE i=14");
-//        REQUIRE(CHECK_COLUMN(result, 0, {14, 14, 14}));
+        result = con.Query("SELECT * FROM integers WHERE i=14");
+        REQUIRE(CHECK_COLUMN(result, 0, {14, 14, 14}));
 //        // rollback the value
-//        REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+        REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
 //        // after the rollback
-//        result = con.Query("SELECT * FROM integers WHERE i=14");
-//        REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
+        result = con.Query("SELECT * FROM integers WHERE i=14");
+        REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
 //        // roll back insert
-//        REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+        REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 //        // update the value
-//        REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (14)"));
+        REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (14)"));
 //        // now there are three values with 14
-//        result = con.Query("SELECT * FROM integers WHERE i=14");
-//        REQUIRE(CHECK_COLUMN(result, 0, {14, 14, 14}));
+        result = con.Query("SELECT * FROM integers WHERE i=14");
+        REQUIRE(CHECK_COLUMN(result, 0, {14, 14, 14}));
 //        // rollback the value
-//        REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+        REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
 //        // after the rollback
-//        result = con.Query("SELECT * FROM integers WHERE i=14");
-//        REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
+        result = con.Query("SELECT * FROM integers WHERE i=14");
+        REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
 
         //!Testing deletes
         // Delete non-existing element
