@@ -27,7 +27,8 @@ matrix:
         - pip install cibuildwheel==0.10.1
         - cd tools/pythonpkg
         - python setup.py sdist
-        - cibuildwheel --output-dir wheelhouse dist/duckdb-*.tar.gz
+        - tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - |
           if [[ $TRAVIS_TAG ]]; then
             pip install twine
