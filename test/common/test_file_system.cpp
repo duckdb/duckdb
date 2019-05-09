@@ -129,9 +129,10 @@ TEST_CASE("Test file operations", "[file_system]") {
 }
 
 TEST_CASE("Test file buffers for reading/writing to file", "[file_system]") {
+	FileSystem fs;
 	unique_ptr<FileHandle> handle;
 
-	auto fname = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "test_file");
+	auto fname = TestCreatePath("test_file");
 
 	// create the buffer and fill it with data
 	auto buf = make_unique<FileBuffer>(4096);
@@ -141,7 +142,7 @@ TEST_CASE("Test file buffers for reading/writing to file", "[file_system]") {
 	}
 
 	// open file for writing
-	REQUIRE_NOTHROW(handle = FileSystem::OpenFile(fname, FileFlags::WRITE | FileFlags::CREATE | FileFlags::DIRECT_IO, FileLockType::WRITE_LOCK));
+	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::WRITE | FileFlags::CREATE | FileFlags::DIRECT_IO, FileLockType::WRITE_LOCK));
 	// write the buffer
 	REQUIRE_NOTHROW(buf->Write(*handle, 0));
 	// clear the buffer
@@ -154,5 +155,5 @@ TEST_CASE("Test file buffers for reading/writing to file", "[file_system]") {
 	// close the file
 	handle.reset();
 
-	FileSystem::RemoveFile(fname);
+	fs.RemoveFile(fname);
 }
