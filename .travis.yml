@@ -33,7 +33,7 @@ matrix:
             python -m twine upload --skip-existing wheelhouse/*.whl
           fi
 
-  - os: osx
+    - os: osx
       name: Python Package
       language: generic
 
