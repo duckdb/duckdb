@@ -82,7 +82,7 @@ unsigned Node::prefixMismatch(bool isLittleEndian, Node *node, Key &key, size_t 
 			if (key[depth + pos] != node->prefix[pos])
 				return pos;
 		auto leaf = static_cast<Leaf *>(minimum(node));
-		Key &minKey = *new Key(isLittleEndian, type, leaf->value);
+		Key &minKey = *new Key(isLittleEndian, type, leaf->value,maxKeyLength);
 		for (; pos < node->prefixLength; pos++)
 			if (key[depth + pos] != minKey[depth + pos])
 				return pos;

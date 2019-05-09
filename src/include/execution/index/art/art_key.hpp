@@ -19,14 +19,16 @@ using KeyLen = uint8_t;
 using namespace duckdb;
 class Key {
 public:
-	static constexpr uint32_t stackLen = 8;
-	uint32_t len = 8;
+	uint8_t stackLen;
+	uint8_t len;
 
 	uint8_t *data;
 
-	uint8_t stackKey[stackLen];
+	uint8_t *stackKey;
 
-	Key(bool isLittleEndian, TypeId type, uintptr_t k) {
+	Key(bool isLittleEndian, TypeId type, uintptr_t k, uint8_t maxKeyLength) {
+		stackLen = maxKeyLength;
+		stackKey = (uint8_t *)malloc(stackLen * sizeof(uint8_t));
 		convert_to_binary_comparable(isLittleEndian, type, k);
 	}
 
@@ -73,11 +75,11 @@ public:
 };
 
 inline uint8_t &Key::operator[](std::size_t i) {
-	assert(i < len);
+	assert(i <= len);
 	return data[i];
 }
 
 inline const uint8_t &Key::operator[](std::size_t i) const {
-	assert(i < len);
+	assert(i <= len);
 	return data[i];
 }

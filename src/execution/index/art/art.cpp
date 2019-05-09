@@ -130,7 +130,7 @@ void ART::Append(ClientContext &context, DataChunk &appended_data, uint64_t row_
 bool ART::leafMatches(bool is_little_endian, Node *node, Key &key, unsigned keyLength, unsigned depth) {
 	if (depth != keyLength) {
 		auto leaf = static_cast<Leaf *>(node);
-		Key &leafKey = *new Key(is_little_endian, types[0], leaf->value);
+		Key &leafKey = *new Key(is_little_endian, types[0], leaf->value,keyLength);
 		for (unsigned i = depth; i < keyLength; i++)
 			if (leafKey[i] != key[i])
 				return false;
@@ -205,7 +205,7 @@ void ART::insert(bool isLittleEndian, Node *node, Node **nodeRef, Key &key, unsi
 	if (node->type == NodeType::NLeaf) {
 		// Replace leaf with Node4 and store both leaves in it
 		auto leaf = static_cast<Leaf *>(node);
-		Key &existingKey = *new Key(isLittleEndian, type, leaf->value);
+		Key &existingKey = *new Key(isLittleEndian, type, leaf->value,maxKeyLength);
 		unsigned newPrefixLength = 0;
 		// Leaf node is already there, update row_id vector
 		if (depth + newPrefixLength == maxKeyLength) {
@@ -248,7 +248,7 @@ void ART::insert(bool isLittleEndian, Node *node, Node **nodeRef, Key &key, unsi
 			} else {
 				node->prefixLength -= (mismatchPos + 1);
 				auto leaf = static_cast<Leaf *>(Node::minimum(node));
-				Key &minKey = *new Key(isLittleEndian, type, leaf->value);
+				Key &minKey = *new Key(isLittleEndian, type, leaf->value,maxKeyLength);
 				Node4::insert(newNode, nodeRef, minKey[depth + mismatchPos], node);
 				memmove(node->prefix, &minKey[depth + mismatchPos + 1],
 				        Node::min(node->prefixLength, node->maxPrefixLength));
@@ -282,7 +282,7 @@ Node *ART::lookup(Node *node, Key &key, unsigned keyLength, unsigned depth) {
 			if (depth != keyLength) {
 				// Check leaf
 				auto leaf = static_cast<Leaf *>(node);
-				Key &leafKey = *new Key(is_little_endian, types[0], leaf->value);
+				Key &leafKey = *new Key(is_little_endian, types[0], leaf->value,keyLength);
 
 				for (unsigned i = (skippedPrefix ? 0 : depth); i < keyLength; i++)
 					if (leafKey[i] != key[i])
@@ -403,7 +403,7 @@ bool ART::bound(Node* n,Key &key,unsigned keyLength,Iterator& iterator,unsigned 
 					return iteratorNext(iterator);
 			}
 
-			Key &leafKey = *new Key(isLittleEndian, types[0], leaf->value);
+			Key &leafKey = *new Key(isLittleEndian, types[0], leaf->value,maxKeyLength);
 			for (unsigned i=depth; i<keyLength; i++)
 				if (leafKey[i]!=key[i]) {
 					if (leafKey[i]<key[i]) {

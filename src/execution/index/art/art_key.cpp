@@ -83,24 +83,23 @@ void Key::convert_to_binary_comparable(bool isLittleEndian, TypeId type, uintptr
 	data = stackKey;
 	switch (type) {
 	case TypeId::BOOLEAN:
-		//            len = 1;
+		len = 1;
 		if (isLittleEndian) {
 			reinterpret_cast<uint8_t *>(stackKey)[0] = BSWAP8(tid);
 		} else {
 			reinterpret_cast<uint8_t *>(stackKey)[0] = tid;
 		}
 	case TypeId::TINYINT:
-		//            len = 1;
+		len = 1;
 		if (isLittleEndian) {
 			reinterpret_cast<uint8_t *>(stackKey)[0] = BSWAP8(tid);
-
 		} else {
 			reinterpret_cast<uint8_t *>(stackKey)[0] = tid;
 		}
 		stackKey[0] = flipSign(stackKey[0]);
 		break;
 	case TypeId::SMALLINT:
-		//            len = 2;
+		len = 2;
 		if (isLittleEndian) {
 			reinterpret_cast<uint16_t *>(stackKey)[0] = BSWAP16(tid);
 		} else {
@@ -109,7 +108,7 @@ void Key::convert_to_binary_comparable(bool isLittleEndian, TypeId type, uintptr
 		stackKey[0] = flipSign(stackKey[0]);
 		break;
 	case TypeId::INTEGER:
-		//            len = 4;
+		len = 4;
 		if (isLittleEndian) {
 			reinterpret_cast<uint32_t *>(stackKey)[0] = BSWAP32(tid);
 		} else {
@@ -118,7 +117,7 @@ void Key::convert_to_binary_comparable(bool isLittleEndian, TypeId type, uintptr
 		stackKey[0] = flipSign(stackKey[0]);
 		break;
 	case TypeId::BIGINT:
-		//            len = 8;
+		            len = 8;
 		if (isLittleEndian) {
 			reinterpret_cast<uint64_t *>(stackKey)[0] = BSWAP64(tid);
 		} else {

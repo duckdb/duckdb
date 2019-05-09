@@ -69,9 +69,9 @@ TEST_CASE("ART Integer Types", "[art-int]") {
 
     string int_types[4] = {"tinyint", "smallint", "integer", "bigint"};
     int32_t n_sizes[4] = {100,1000,10000,100000};
-    for (int idx = 1; idx < 4; idx ++ ){
+    for (int idx = 2; idx < 3; idx ++ ){
         REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i "+int_types[idx]+")"));
-        REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+        REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 
         int32_t n = n_sizes[idx];
         int32_t *keys = new int32_t[n];
@@ -165,9 +165,9 @@ TEST_CASE("ART Integer Types", "[art-int]") {
         REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=0"));
         // Now Deleting all elements
         for (int32_t i = 0; i < n; i++) {
-            REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=" + to_string(i)));
+            REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=" + to_string(keys[i])));
             // check the value does not exist
-            result = con.Query("SELECT * FROM integers WHERE i=" + to_string(i));
+            result = con.Query("SELECT * FROM integers WHERE i=" + to_string(keys[i]));
             REQUIRE(CHECK_COLUMN(result, 0, {}));
         }
         // Delete from empty tree

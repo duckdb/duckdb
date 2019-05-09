@@ -98,6 +98,9 @@ void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &ch
 	case IndexType::ORDER_INDEX:
 		createOrderIndex(&ss, &intermediate, &result_types, &result);
 		break;
+	default:
+		assert(0);
+		break;
 	}
 
 	chunk.data[0].count = 1;

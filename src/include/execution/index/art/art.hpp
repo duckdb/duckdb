@@ -126,8 +126,8 @@ private:
 		auto input_data = (T *)input.data[0].data;
 		auto row_identifiers = (int64_t *)row_ids.data;
 		for (size_t i = 0; i < row_ids.count; i++) {
-			Key &key = *new Key(this->is_little_endian, input.data[0].type, input_data[i]);
-			insert(this->is_little_endian, tree, &tree, key, 0, input_data[i], 8, input.data[0].type,
+			Key &key = *new Key(this->is_little_endian, input.data[0].type, input_data[i],sizeof(input_data[i]));
+			insert(this->is_little_endian, tree, &tree, key, 0, input_data[i], sizeof(input_data[i]), input.data[0].type,
 			       row_identifiers[i]);
 		}
 	}
@@ -136,13 +136,13 @@ private:
 		auto input_data = (T *)input.data[0].data;
 		auto row_identifiers = (int64_t *)row_ids.data;
 		for (size_t i = 0; i < row_ids.count; i++) {
-			Key &key = *new Key(this->is_little_endian, input.data[0].type, input_data[i]);
-			erase(this->is_little_endian, tree, &tree, key, 0, 8, input.data[0].type, row_identifiers[i]);
+			Key &key = *new Key(this->is_little_endian, input.data[0].type, input_data[i],sizeof(input_data[i]));
+			erase(this->is_little_endian, tree, &tree, key, 0, sizeof(input_data[i]), input.data[0].type, row_identifiers[i]);
 		}
 	}
 
 	template <class T> size_t templated_lookup(TypeId type, T data, int64_t *result_ids) {
-		Key &key = *new Key(this->is_little_endian, type, data);
+		Key &key = *new Key(this->is_little_endian, type, data,sizeof(data));
 		size_t result_count = 0;
 		auto leaf = static_cast<Leaf *>(lookup(tree, key, this->maxPrefix, 0));
 		if (leaf) {
@@ -155,7 +155,7 @@ private:
 
 	template <class T> size_t templated_greater_scan(TypeId type, T data, int64_t *result_ids,bool inclusive) {
 		Iterator it;
-		Key &key = *new Key(this->is_little_endian, type, data);
+		Key &key = *new Key(this->is_little_endian, type, data,sizeof(data));
 		size_t result_count = 0;
 		bool found=ART::bound(tree,key,8,it,8,inclusive,is_little_endian);
 		if (found) {
@@ -172,13 +172,12 @@ private:
 
     template <class T> size_t templated_less_scan(TypeId type, T data, int64_t *result_ids,bool inclusive) {
         Iterator it;
-        Key &key = *new Key(this->is_little_endian, type, data);
         size_t result_count = 0;
 		Leaf* minimum = static_cast<Leaf *>(Node::minimum(tree));
         // early out min value higher than upper bound query
-        if (minimum->value > data)
+        if (minimum->value > (uint64_t) data)
             return result_count;
-		Key &min_key = *new Key(this->is_little_endian, type, minimum->value);
+		Key &min_key = *new Key(this->is_little_endian, type, minimum->value,sizeof(data));
         bool found=ART::bound(tree,min_key,8,it,8,true,is_little_endian);
         if (found) {
             bool hasNext;
@@ -186,18 +185,19 @@ private:
                 for (size_t i = 0; i < it.node->num_elements; i++) {
                     result_ids[result_count++] = it.node->row_id[i];
                 }
-				if(it.node->value == data)
+				if(it.node->value == (uint64_t)data)
 					break;
 				hasNext=ART::iteratorNext(it);
-				if(!inclusive && it.node->value == data)
-					break;            } while (hasNext);
+				if(!inclusive && it.node->value == (uint64_t)data)
+					break;
+            } while (hasNext);
         }
         return result_count;
     }
 
 	template <class T> size_t templated_close_range(TypeId type, T left_query,T right_query, int64_t *result_ids,bool left_inclusive, bool right_inclusive) {
 		Iterator it;
-		Key &key = *new Key(this->is_little_endian, type, left_query);
+		Key &key = *new Key(this->is_little_endian, type, left_query,sizeof(left_query));
 		size_t result_count = 0;
 		bool found=ART::bound(tree,key,8,it,8,left_inclusive,is_little_endian);
 		if (found) {
@@ -206,10 +206,10 @@ private:
 				for (size_t i = 0; i < it.node->num_elements; i++) {
 					result_ids[result_count++] = it.node->row_id[i];
 				}
-				if(it.node->value == right_query)
+				if(it.node->value == (uint64_t )right_query)
 					break;
 				hasNext=ART::iteratorNext(it);
-				if(!right_inclusive && it.node->value == right_query)
+				if(!right_inclusive && it.node->value == (uint64_t)right_query)
 					break;
 
 			} while (hasNext);

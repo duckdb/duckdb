@@ -15,11 +15,18 @@ TEST_CASE("Test Index Scan Optimizer", "[index-optimizer]") {
 	auto &con = helper.con;
 
 	con.Query("BEGIN TRANSACTION");
-	con.Query("CREATE TABLE integers(i INTEGER)");
-	con.Query("CREATE INDEX i_index ON integers using ORDER_INDEX(i)");
+	con.Query("CREATE TABLE integers(i TINYINT)");
+	con.Query("CREATE INDEX i_index ON integers using order_index(i)");
+
 	// Checking if Optimizer is using index in simple case
 	auto tree = helper.ParseLogicalTree("SELECT i FROM integers where i > 10");
 	IndexScan index_scan;
 	auto plan = index_scan.Optimize(move(tree));
 	REQUIRE(plan->children[0]->type == LogicalOperatorType::INDEX_SCAN);
+    con.Query("DROP INDEX i_index");
+    con.Query("CREATE INDEX i_index ON integers using art(i)");
+    // Checking if Optimizer is using index in simple case
+    tree = helper.ParseLogicalTree("SELECT i FROM integers where i = 10");
+    plan = index_scan.Optimize(move(tree));
+    REQUIRE(plan->children[0]->type == LogicalOperatorType::INDEX_SCAN);
 }
