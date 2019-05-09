@@ -12,4 +12,5 @@
 #include "common/helper.hpp"
 #include "common/types.hpp"
 
+#include <string>
 #include <cstring>
