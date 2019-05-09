@@ -13,6 +13,9 @@
 #include "planner/planner.hpp"
 #include "transaction/transaction_manager.hpp"
 
+#include "common/buffered_serializer.hpp"
+#include "common/buffered_deserializer.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -380,9 +383,9 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	auto copied_stmt = select_stmt->Copy();
 	auto unoptimized_stmt = select_stmt->Copy();
 
-	Serializer serializer;
+	BufferedSerializer serializer;
 	select_stmt->Serialize(serializer);
-	Deserializer source(serializer);
+	BufferedDeserializer source(serializer);
 	auto deserialized_stmt = SelectStatement::Deserialize(source);
 	// all the statements should be equal
 	assert(copied_stmt->Equals(statement.get()));

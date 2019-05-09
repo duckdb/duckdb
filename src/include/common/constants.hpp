@@ -22,11 +22,6 @@ using std::unique_ptr;
 using data_ptr = unique_ptr<char[]>;
 using std::vector;
 
-struct BinaryData {
-	unique_ptr<uint8_t[]> data;
-	uint64_t size;
-};
-
 // NOTE: there is a copy of this in the Postgres' parser grammar (gram.y)
 #define DEFAULT_SCHEMA "main"
 
