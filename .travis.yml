@@ -49,5 +49,25 @@ matrix:
             python -m twine upload --skip-existing wheelhouse/*.whl
           fi
 
+    - os: windows
+      name: Python Package
+      language: cpp
+
+      before_install:
+        - choco install python --version 3.7.3
+        - c:/python37/python.exe -m pip install --upgrade pip
+        - c:/python37/python.exe -m pip install "cibuildwheel==0.10.2"
+
+      script:
+        - cd tools/pythonpkg
+        - c:/python37/python.exe setup.py sdist
+        - c:/python37/python.exe -m pytest tests
+        - c:/python37/python.exe -m cibuildwheel --platform windows --output-dir wheelhouse duckdb_tarball
+        - |
+          if [[ $TRAVIS_TAG ]]; then
+            c:/python37/python.exe -m pip install twine
+            c:/python37/python.exe -m twine upload --skip-existing wheelhouse/*.whl
+          fi
+
 before_install:
   - eval "${MATRIX_EVAL}"
