@@ -15,7 +15,7 @@ Appender::Appender(DuckDB &database, string schema_name, string table_name)
 	context.transaction.BeginTransaction();
 
 	try {
-		table_entry = db.catalog.GetTable(context.transaction.ActiveTransaction(), schema_name, table_name);
+		table_entry = db.catalog->GetTable(context.transaction.ActiveTransaction(), schema_name, table_name);
 	} catch (...) {
 		if (context.transaction.IsAutoCommit()) {
 			context.transaction.Rollback();

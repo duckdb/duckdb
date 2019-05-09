@@ -18,7 +18,7 @@ ExpressionExecutor::ExpressionExecutor(DataChunk &child_chunk) : chunk(&child_ch
 void ExpressionExecutor::Execute(vector<unique_ptr<Expression>> &expressions, DataChunk &result) {
 	assert(expressions.size() == result.column_count);
 	assert(expressions.size() > 0);
-	for (size_t i = 0; i < expressions.size(); i++) {
+	for (uint64_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(*expressions[i], result.data[i]);
 		result.heap.MergeHeap(result.data[i].string_heap);
 	}
@@ -29,7 +29,7 @@ void ExpressionExecutor::Execute(vector<unique_ptr<Expression>> &expressions, Da
 void ExpressionExecutor::Execute(vector<Expression *> &expressions, DataChunk &result) {
 	assert(expressions.size() == result.column_count);
 	assert(expressions.size() > 0);
-	for (size_t i = 0; i < expressions.size(); i++) {
+	for (uint64_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(*expressions[i], result.data[i]);
 		result.heap.MergeHeap(result.data[i].string_heap);
 	}
@@ -41,7 +41,7 @@ void ExpressionExecutor::Merge(std::vector<std::unique_ptr<Expression>> &express
 	assert(expressions.size() > 0);
 
 	ExecuteExpression(*expressions[0], result);
-	for (size_t i = 1; i < expressions.size(); i++) {
+	for (uint64_t i = 1; i < expressions.size(); i++) {
 		MergeExpression(*expressions[i], result);
 	}
 }
@@ -81,7 +81,7 @@ void ExpressionExecutor::MergeExpression(Expression &expr, Vector &result) {
 }
 
 Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
-	assert(expr.IsScalar());
+	assert(expr.IsFoldable());
 	// use an ExpressionExecutor to execute the expression
 	ExpressionExecutor executor;
 	Vector result(expr.return_type, true, false);

@@ -11,7 +11,7 @@
 #include "common/constants.hpp"
 #include "common/exception.hpp"
 
-namespace operators {
+namespace duckdb {
 
 struct Cast {
 	template <class SRC, class DST> static inline DST Operation(SRC left) {
@@ -113,4 +113,4 @@ template <> duckdb::string CastFromTimestamp::Operation(duckdb::timestamp_t left
 template <> duckdb::timestamp_t CastToTimestamp::Operation(const char *left);
 template <> duckdb::timestamp_t CastToTimestamp::Operation(int64_t left);
 
-} // namespace operators
+} // namespace duckdb

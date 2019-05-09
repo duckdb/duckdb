@@ -65,40 +65,46 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 			throw Exception("More VIEW aliases than columns in query result");
 		}
 
-		context.db.catalog.CreateView(context.ActiveTransaction(), stmt.info.get());
+		context.catalog.CreateView(context.ActiveTransaction(), stmt.info.get());
 		break;
 	}
 	case StatementType::CREATE_SCHEMA: {
 		auto &stmt = *((CreateSchemaStatement *)statement.get());
-		context.db.catalog.CreateSchema(context.ActiveTransaction(), stmt.info.get());
+		context.catalog.CreateSchema(context.ActiveTransaction(), stmt.info.get());
 		break;
 	}
-	case StatementType::DROP_SCHEMA: {
-		auto &stmt = *((DropSchemaStatement *)statement.get());
-		context.db.catalog.DropSchema(context.ActiveTransaction(), stmt.info.get());
+	case StatementType::CREATE_SEQUENCE: {
+		auto &stmt = *((CreateSequenceStatement *)statement.get());
+		context.catalog.CreateSequence(context.ActiveTransaction(), stmt.info.get());
 		break;
 	}
-	case StatementType::DROP_VIEW: {
-		auto &stmt = *((DropViewStatement *)statement.get());
-		context.db.catalog.DropView(context.ActiveTransaction(), stmt.info.get());
-		break;
-	}
-	case StatementType::DROP_TABLE: {
-		auto &stmt = *((DropTableStatement *)statement.get());
-		// TODO: create actual plan
-		context.db.catalog.DropTable(context.ActiveTransaction(), stmt.info.get());
-		break;
-	}
-	case StatementType::DROP_INDEX: {
-		auto &stmt = *((DropIndexStatement *)statement.get());
-		// TODO: create actual plan
-		context.db.catalog.DropIndex(context.ActiveTransaction(), stmt.info.get());
+	case StatementType::DROP: {
+		auto &stmt = *((DropStatement *)statement.get());
+		switch (stmt.info->type) {
+		case CatalogType::SEQUENCE:
+			context.catalog.DropSequence(context.ActiveTransaction(), stmt.info.get());
+			break;
+		case CatalogType::VIEW:
+			context.catalog.DropView(context.ActiveTransaction(), stmt.info.get());
+			break;
+		case CatalogType::TABLE:
+			context.catalog.DropTable(context.ActiveTransaction(), stmt.info.get());
+			break;
+		case CatalogType::INDEX:
+			context.catalog.DropIndex(context.ActiveTransaction(), stmt.info.get());
+			break;
+		case CatalogType::SCHEMA:
+			context.catalog.DropSchema(context.ActiveTransaction(), stmt.info.get());
+			break;
+		default:
+			throw NotImplementedException("Unimplemented catalog type for drop statement");
+		}
 		break;
 	}
 	case StatementType::ALTER: {
 		// TODO: create actual plan
 		auto &stmt = *((AlterTableStatement *)statement.get());
-		context.db.catalog.AlterTable(context.ActiveTransaction(), stmt.info.get());
+		context.catalog.AlterTable(context.ActiveTransaction(), stmt.info.get());
 		break;
 	}
 	case StatementType::TRANSACTION: {
@@ -145,11 +151,9 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	}
 	case StatementType::EXPLAIN: {
 		auto &stmt = *reinterpret_cast<ExplainStatement *>(statement.get());
-		auto parse_tree = stmt.stmt->ToString();
 		CreatePlan(move(stmt.stmt));
 		auto logical_plan_unopt = plan->ToString();
 		auto explain = make_unique<LogicalExplain>(move(plan));
-		explain->parse_tree = parse_tree;
 		explain->logical_plan_unopt = logical_plan_unopt;
 		names = {"explain_key", "explain_value"};
 		sql_types = {SQLType(SQLTypeId::VARCHAR), SQLType(SQLTypeId::VARCHAR)};
@@ -163,7 +167,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		vector<BoundParameterExpression *> bound_parameters;
 		CreatePlan(*stmt.statement, &bound_parameters);
 		// set up a map of parameter number -> value entries
-		unordered_map<size_t, PreparedValueEntry> value_map;
+		unordered_map<uint64_t, PreparedValueEntry> value_map;
 		for (auto &expr : bound_parameters) {
 			// check if the type of the parameter could be resolved
 			if (expr->return_type == TypeId::INVALID) {
@@ -221,9 +225,9 @@ void Planner::VerifyQuery(BoundSQLStatement &statement) {
 	}
 
 	// double loop to verify that (in)equality of hashes
-	for (size_t i = 0; i < expr_list.size(); i++) {
+	for (uint64_t i = 0; i < expr_list.size(); i++) {
 		auto outer_hash = expr_list[i]->Hash();
-		for (size_t j = 0; j < expr_list.size(); j++) {
+		for (uint64_t j = 0; j < expr_list.size(); j++) {
 			auto inner_hash = expr_list[j]->Hash();
 			if (outer_hash != inner_hash) {
 				// if hashes are not equivalent the expressions should not be equivalent

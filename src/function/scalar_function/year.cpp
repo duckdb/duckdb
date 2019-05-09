@@ -8,9 +8,9 @@
 using namespace std;
 
 namespace duckdb {
-namespace function {
 
-void year_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result) {
+void year_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_count, BoundFunctionExpression &expr,
+                   Vector &result) {
 	assert(input_count == 1);
 	auto &input = inputs[0];
 	assert(input.type == TypeId::INTEGER || input.type == TypeId::BIGINT);
@@ -23,10 +23,10 @@ void year_function(Vector inputs[], size_t input_count, BoundFunctionExpression 
 	switch (input.type) {
 	case TypeId::INTEGER:
 		VectorOperations::ExecType<date_t>(
-		    input, [&](date_t date, size_t i, size_t k) { result_data[i] = Date::ExtractYear(date); });
+		    input, [&](date_t date, uint64_t i, uint64_t k) { result_data[i] = Date::ExtractYear(date); });
 		break;
 	case TypeId::BIGINT:
-		VectorOperations::ExecType<timestamp_t>(input, [&](timestamp_t timestamp, size_t i, size_t k) {
+		VectorOperations::ExecType<timestamp_t>(input, [&](timestamp_t timestamp, uint64_t i, uint64_t k) {
 			result_data[i] = Date::ExtractYear(Timestamp::GetDate(timestamp));
 		});
 		break;
@@ -43,5 +43,4 @@ SQLType year_get_return_type(vector<SQLType> &arguments) {
 	return SQLType(SQLTypeId::INTEGER);
 }
 
-} // namespace function
 } // namespace duckdb

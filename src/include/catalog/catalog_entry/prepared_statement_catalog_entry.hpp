@@ -32,7 +32,7 @@ public:
 	}
 
 	unique_ptr<PhysicalOperator> plan;
-	unordered_map<size_t, PreparedValueEntry> value_map;
+	unordered_map<uint64_t, PreparedValueEntry> value_map;
 	unordered_set<TableCatalogEntry *> tables;
 
 	vector<string> names;

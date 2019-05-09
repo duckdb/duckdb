@@ -6,7 +6,6 @@
 using namespace std;
 
 namespace duckdb {
-namespace function {
 
 enum class SpecifierType {
 	YEAR,
@@ -115,7 +114,8 @@ static int64_t extract_element(SpecifierType type, date_t element) {
 	}
 }
 
-void date_part_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result) {
+void date_part_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_count, BoundFunctionExpression &expr,
+                        Vector &result) {
 	result.Initialize(TypeId::BIGINT);
 	result.nullmask = inputs[1].nullmask;
 	result.count = inputs[1].count;
@@ -128,13 +128,13 @@ void date_part_function(Vector inputs[], size_t input_count, BoundFunctionExpres
 	if (inputs[0].IsConstant()) {
 		// constant specifier
 		auto specifier_type = GetSpecifierType(((const char **)inputs[0].data)[0]);
-		VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, size_t i, size_t k) {
+		VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, uint64_t i, uint64_t k) {
 			result_data[i] = extract_element(specifier_type, element);
 		});
 	} else {
 		// not constant specifier
 		auto specifiers = ((const char **)inputs[0].data);
-		VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, size_t i, size_t k) {
+		VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, uint64_t i, uint64_t k) {
 			result_data[i] = extract_element(GetSpecifierType(specifiers[i]), element);
 		});
 	}
@@ -149,5 +149,4 @@ SQLType date_part_get_return_type(vector<SQLType> &arguments) {
 	return SQLType(SQLTypeId::BIGINT);
 }
 
-} // namespace function
 } // namespace duckdb

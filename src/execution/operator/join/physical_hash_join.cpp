@@ -15,7 +15,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 	children.push_back(move(right));
 }
 
-void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalHashJoinOperatorState *>(state_);
 	if (!state->initialized) {
 		// build the HT
@@ -35,7 +35,7 @@ void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk, Physi
 			// resolve the join keys for the right chunk
 			state->join_keys.Reset();
 			ExpressionExecutor executor(right_chunk);
-			for (size_t i = 0; i < conditions.size(); i++) {
+			for (uint64_t i = 0; i < conditions.size(); i++) {
 				executor.ExecuteExpression(*conditions[i].right, state->join_keys.data[i]);
 			}
 			// build the HT
@@ -75,7 +75,7 @@ void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk, Physi
 				// anti join with empty hash table, NOP join
 				// return the input
 				assert(chunk.column_count == state->child_chunk.column_count);
-				for (size_t i = 0; i < chunk.column_count; i++) {
+				for (uint64_t i = 0; i < chunk.column_count; i++) {
 					chunk.data[i].Reference(state->child_chunk.data[i]);
 				}
 				return;
@@ -87,7 +87,7 @@ void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk, Physi
 				assert(result_vector.type == TypeId::BOOLEAN);
 				result_vector.count = state->child_chunk.size();
 				// for every data vector, we just reference the child chunk
-				for (size_t i = 0; i < state->child_chunk.column_count; i++) {
+				for (uint64_t i = 0; i < state->child_chunk.column_count; i++) {
 					chunk.data[i].Reference(state->child_chunk.data[i]);
 				}
 				// for the MARK vector:
@@ -96,7 +96,7 @@ void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk, Physi
 				// has NULL for every input entry
 				if (!hash_table->has_null) {
 					auto bool_result = (bool *)result_vector.data;
-					for (size_t i = 0; i < result_vector.count; i++) {
+					for (uint64_t i = 0; i < result_vector.count; i++) {
 						bool_result[i] = false;
 					}
 				} else {
@@ -108,7 +108,7 @@ void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk, Physi
 		// resolve the join keys for the left chunk
 		state->join_keys.Reset();
 		ExpressionExecutor executor(state->child_chunk);
-		for (size_t i = 0; i < conditions.size(); i++) {
+		for (uint64_t i = 0; i < conditions.size(); i++) {
 			executor.ExecuteExpression(*conditions[i].left, state->join_keys.data[i]);
 		}
 		// perform the actual probe

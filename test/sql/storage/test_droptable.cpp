@@ -8,12 +8,10 @@ using namespace std;
 
 TEST_CASE("Create and drop a schema+table over different runs", "[storage]") {
 	unique_ptr<QueryResult> result;
-	auto storage_database = JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
+	auto storage_database = TestCreatePath("storage_test");
 
 	// make sure the database does not exist
-	if (DirectoryExists(storage_database)) {
-		RemoveDirectory(storage_database);
-	}
+	DeleteDatabase(storage_database);
 	{
 		// create a database and insert values
 		DuckDB db(storage_database);
@@ -35,5 +33,5 @@ TEST_CASE("Create and drop a schema+table over different runs", "[storage]") {
 		REQUIRE_NO_FAIL(con.Query("DROP TABLE test.test"));
 		REQUIRE_NO_FAIL(con.Query("DROP SCHEMA test"));
 	}
-	RemoveDirectory(storage_database);
+	DeleteDatabase(storage_database);
 }

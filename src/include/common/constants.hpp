@@ -24,7 +24,7 @@ using std::vector;
 
 struct BinaryData {
 	unique_ptr<uint8_t[]> data;
-	size_t size;
+	uint64_t size;
 };
 
 // NOTE: there is a copy of this in the Postgres' parser grammar (gram.y)
@@ -47,7 +47,7 @@ typedef uint16_t sel_t;
 typedef uint64_t transaction_t;
 
 //! Type used for column identifiers
-typedef size_t column_t;
+typedef uint64_t column_t;
 //! Special value used to signify the ROW ID of
 extern column_t COLUMN_IDENTIFIER_ROW_ID;
 

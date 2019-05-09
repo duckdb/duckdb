@@ -23,9 +23,7 @@ public:
 	SelectStatement() : SQLStatement(StatementType::SELECT) {
 	}
 
-	string ToString() const override;
-
-	bool Equals(const SQLStatement *other) const override;
+	bool Equals(const SQLStatement *other) const;
 
 	//! CTEs
 	unordered_map<string, unique_ptr<QueryNode>> cte_map;

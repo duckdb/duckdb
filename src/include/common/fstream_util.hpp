@@ -21,7 +21,8 @@ public:
 	/**
 	 * Opens a file for the given name and returns it (default mode : ios_base::in | ios_base::out)
 	 */
-	static void OpenFile(const string &, fstream &, ios_base::openmode mode = ios_base::in | ios_base::out);
+	static void OpenFile(const string &, fstream &,
+	                     ios_base::openmode mode = ios_base::in | ios_base::out | ios::binary);
 
 	/**
 	 * Closes the given file or throws an exception otherwise
@@ -31,7 +32,7 @@ public:
 	/**
 	 * Returns the size in bytes of the given file
 	 */
-	static size_t GetFileSize(fstream &);
+	static uint64_t GetFileSize(fstream &);
 
 	/**
 	 * Reads the given file as a binary

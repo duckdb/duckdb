@@ -3,10 +3,10 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalLimit::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalLimitOperatorState *>(state_);
 
-	size_t max_element = limit + offset;
+	uint64_t max_element = limit + offset;
 	if (state->current_offset >= max_element) {
 		return;
 	}
@@ -22,9 +22,9 @@ void PhysicalLimit::_GetChunk(ClientContext &context, DataChunk &chunk, Physical
 		if (state->current_offset + state->child_chunk.size() >= offset) {
 			// however we will reach it in this chunk
 			// we have to copy part of the chunk with an offset
-			size_t start_position = offset - state->current_offset;
-			size_t chunk_count = min(limit, state->child_chunk.size() - start_position);
-			for (size_t i = 0; i < chunk.column_count; i++) {
+			uint64_t start_position = offset - state->current_offset;
+			uint64_t chunk_count = min(limit, state->child_chunk.size() - start_position);
+			for (uint64_t i = 0; i < chunk.column_count; i++) {
 				chunk.data[i].Reference(state->child_chunk.data[i]);
 				chunk.data[i].data = chunk.data[i].data + GetTypeIdSize(chunk.data[i].type) * start_position;
 				chunk.data[i].count = chunk_count;
@@ -33,7 +33,7 @@ void PhysicalLimit::_GetChunk(ClientContext &context, DataChunk &chunk, Physical
 		}
 	} else {
 		// have to copy either the entire chunk or part of it
-		size_t chunk_count;
+		uint64_t chunk_count;
 		if (state->current_offset + state->child_chunk.size() >= max_element) {
 			// have to limit the count of the chunk
 			chunk_count = max_element - state->current_offset;
@@ -42,7 +42,7 @@ void PhysicalLimit::_GetChunk(ClientContext &context, DataChunk &chunk, Physical
 			chunk_count = state->child_chunk.size();
 		}
 		// instead of copying we just change the pointer in the current chunk
-		for (size_t i = 0; i < chunk.column_count; i++) {
+		for (uint64_t i = 0; i < chunk.column_count; i++) {
 			chunk.data[i].Reference(state->child_chunk.data[i]);
 			chunk.data[i].count = chunk_count;
 		}

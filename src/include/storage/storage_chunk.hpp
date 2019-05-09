@@ -42,14 +42,14 @@ class StorageChunk {
 	friend class StorageLock;
 
 public:
-	StorageChunk(DataTable &table, size_t start);
+	StorageChunk(DataTable &table, uint64_t start);
 
 	DataTable &table;
 	bool deleted[STORAGE_CHUNK_SIZE] = {0};
 	VersionInformation *version_pointers[STORAGE_CHUNK_SIZE] = {nullptr};
 	vector<char *> columns;
-	size_t count;
-	size_t start;
+	uint64_t count;
+	uint64_t start;
 
 	// Cleanup the version information of a tuple
 	void Cleanup(VersionInformation *info);
@@ -67,7 +67,7 @@ public:
 private:
 	unique_ptr<char[]> owned_data;
 	std::mutex exclusive_lock;
-	std::atomic<size_t> read_count;
+	std::atomic<uint64_t> read_count;
 
 	//! Release an exclusive lock on the chunk
 	void ReleaseExclusiveLock();

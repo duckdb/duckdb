@@ -28,6 +28,7 @@ class Transformer {
 public:
 	//! Transforms a Postgres parse tree into a set of SQL Statements
 	bool TransformParseTree(postgres::List *tree, vector<unique_ptr<SQLStatement>> &statements);
+	string NodetypeToString(postgres::NodeTag type);
 
 private:
 	//! Transforms a Postgres statement into a single SQL statement
@@ -47,6 +48,8 @@ private:
 	unique_ptr<CreateTableStatement> TransformCreateTableAs(postgres::Node *node);
 	//! Transform a Postgres node into a CreateSchemaStatement
 	unique_ptr<CreateSchemaStatement> TransformCreateSchema(postgres::Node *node);
+	//! Transform a Postgres T_CreateSeqStmt node into a CreateSequenceStatement
+	unique_ptr<CreateSequenceStatement> TransformCreateSequence(postgres::Node *node);
 	//! Transform a Postgres T_ViewStmt node into a CreateViewStatement
 	unique_ptr<CreateViewStatement> TransformCreateView(postgres::Node *node);
 	//! Transform a Postgres T_DropStmt node into a Drop[Table,Schema]Statement
@@ -55,14 +58,6 @@ private:
 	unique_ptr<InsertStatement> TransformInsert(postgres::Node *node);
 	//! Transform a Postgres T_IndexStmt node into CreateIndexStatement
 	unique_ptr<CreateIndexStatement> TransformCreateIndex(postgres::Node *node);
-	//! Transform a Postgres DropStmt node into a DropTableStatement
-	unique_ptr<DropTableStatement> TransformDropTable(postgres::DropStmt *stmt);
-	//! Transform a Postgres DropStmt node into a DropIndexStatement
-	unique_ptr<DropIndexStatement> TransformDropIndex(postgres::DropStmt *stmt);
-	//! Transform a Postgres DropStmt node into a DropSchemaStatement
-	unique_ptr<DropSchemaStatement> TransformDropSchema(postgres::DropStmt *stmt);
-	//! Transform a Postgres DropStmt node into a DropViewStatement
-	unique_ptr<DropViewStatement> TransformDropView(postgres::DropStmt *stmt);
 	//! Transform a Postgres T_CopyStmt node into a CopyStatement
 	unique_ptr<CopyStatement> TransformCopy(postgres::Node *node);
 	//! Transform a Postgres T_TransactionStmt node into a TransactionStatement
@@ -117,7 +112,7 @@ private:
 	//===--------------------------------------------------------------------===//
 	unique_ptr<Constraint> TransformConstraint(postgres::ListCell *cell);
 
-	unique_ptr<Constraint> TransformConstraint(postgres::ListCell *cell, ColumnDefinition column, size_t index);
+	unique_ptr<Constraint> TransformConstraint(postgres::ListCell *cell, ColumnDefinition &column, uint64_t index);
 
 	//===--------------------------------------------------------------------===//
 	// Helpers

@@ -20,22 +20,22 @@ void VectorOperations::Abs(Vector &input, Vector &result) {
 	UNARY_TYPE_CHECK(input, result);
 	switch (input.type) {
 	case TypeId::TINYINT:
-		templated_unary_loop<int8_t, int8_t, operators::Abs>(input, result);
+		templated_unary_loop<int8_t, int8_t, duckdb::Abs>(input, result);
 		break;
 	case TypeId::SMALLINT:
-		templated_unary_loop<int16_t, int16_t, operators::Abs>(input, result);
+		templated_unary_loop<int16_t, int16_t, duckdb::Abs>(input, result);
 		break;
 	case TypeId::INTEGER:
-		templated_unary_loop<int32_t, int32_t, operators::Abs>(input, result);
+		templated_unary_loop<int32_t, int32_t, duckdb::Abs>(input, result);
 		break;
 	case TypeId::BIGINT:
-		templated_unary_loop<int64_t, int64_t, operators::Abs>(input, result);
+		templated_unary_loop<int64_t, int64_t, duckdb::Abs>(input, result);
 		break;
 	case TypeId::FLOAT:
-		templated_unary_loop<float, float, operators::Abs>(input, result);
+		templated_unary_loop<float, float, duckdb::Abs>(input, result);
 		break;
 	case TypeId::DOUBLE:
-		templated_unary_loop<double, double, operators::Abs>(input, result);
+		templated_unary_loop<double, double, duckdb::Abs>(input, result);
 		break;
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for abs");
@@ -60,11 +60,11 @@ void VectorOperations::Round(Vector &input, Vector &precision, Vector &result) {
 		break;
 	case TypeId::FLOAT:
 		precision.Cast(TypeId::TINYINT);
-		templated_binary_loop<float, int8_t, float, operators::Round>(input, precision, result);
+		templated_binary_loop<float, int8_t, float, duckdb::Round>(input, precision, result);
 		break;
 	case TypeId::DOUBLE:
 		precision.Cast(TypeId::TINYINT);
-		templated_binary_loop<double, int8_t, double, operators::Round>(input, precision, result);
+		templated_binary_loop<double, int8_t, double, duckdb::Round>(input, precision, result);
 		break;
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for round");

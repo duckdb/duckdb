@@ -13,7 +13,7 @@
 using namespace duckdb;
 using namespace std;
 
-ExpressionHelper::ExpressionHelper() : db(nullptr), con(db), rewriter(con.context) {
+ExpressionHelper::ExpressionHelper() : db(nullptr), con(db), rewriter(*con.context) {
 	con.Query("BEGIN TRANSACTION");
 }
 
@@ -46,12 +46,12 @@ string ExpressionHelper::AddColumns(string columns) {
 unique_ptr<Expression> ExpressionHelper::ParseExpression(string expression) {
 	string query = "SELECT " + expression + from_clause;
 
-	Parser parser(con.context);
+	Parser parser(*con.context);
 	parser.ParseQuery(query.c_str());
 	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT) {
 		return nullptr;
 	}
-	Binder binder(con.context);
+	Binder binder(*con.context);
 	auto bound_statement = binder.Bind(*parser.statements[0]);
 
 	auto &select_list =
@@ -60,12 +60,12 @@ unique_ptr<Expression> ExpressionHelper::ParseExpression(string expression) {
 }
 
 unique_ptr<LogicalOperator> ExpressionHelper::ParseLogicalTree(string query) {
-	Parser parser(con.context);
+	Parser parser(*con.context);
 	parser.ParseQuery(query.c_str());
 	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT) {
 		return nullptr;
 	}
-	Planner planner(con.context);
+	Planner planner(*con.context);
 	planner.CreatePlan(move(parser.statements[0]));
 	return move(planner.plan);
 }

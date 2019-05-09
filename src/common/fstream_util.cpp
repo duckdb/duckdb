@@ -18,13 +18,13 @@ void FstreamUtil::CloseFile(fstream &file) {
 	}
 }
 
-size_t FstreamUtil::GetFileSize(fstream &file) {
+uint64_t FstreamUtil::GetFileSize(fstream &file) {
 	file.seekg(0, ios::end);
 	return file.tellg();
 }
 
 data_ptr FstreamUtil::ReadBinary(fstream &file) {
-	size_t file_size = GetFileSize(file);
+	uint64_t file_size = GetFileSize(file);
 	file.seekg(0, ios::beg);
 	auto result = data_ptr(new char[file_size]);
 	file.read(result.get(), file_size);

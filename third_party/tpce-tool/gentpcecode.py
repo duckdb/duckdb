@@ -22,8 +22,10 @@ for fp in [header, source]:
 header.write("""
 #include "catalog/catalog.hpp"
 #include "main/client_context.hpp"
+#include "main/connection.hpp"
 #include "main/database.hpp"
 #include "storage/data_table.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 
 #include "main/BaseLoader.h"
 #include "main/BaseLoaderFactory.h"
@@ -194,21 +196,27 @@ with open('include/main/TableRows.h', 'r') as f:
 			is_single_char = False
 			if 'TIdent' in line or 'INT64' in line or 'TTrade' in line:
 				tpe = "TypeId::BIGINT"
+				sqltpe = "BIGINT"
 			elif 'double' in line or 'float' in line:
 				tpe = "TypeId::DECIMAL"
+				sqltpe = "DECIMAL"
 			elif 'int' in line:
 				tpe = "TypeId::INTEGER"
+				sqltpe = "INTEGER"
 			elif 'CDateTime' in line:
 				tpe = "TypeId::TIMESTAMP"
+				sqltpe = "TIMESTAMP"
 			elif 'bool' in line:
 				tpe = 'TypeId::BOOLEAN'
+				sqltpe = "BOOLEAN"
 			elif 'char' in line:
 				if '[' not in splits[1]:
 					is_single_char = True
 				tpe = "TypeId::VARCHAR"
+				sqltpe = "VARCHAR"
 			else:
 				continue
-			tables[current_table].append([name, tpe, is_single_char])
+			tables[current_table].append([name, tpe, is_single_char, sqltpe])
 
 def get_tablename(name):
 	name = name.title().replace(' ', '')
@@ -220,7 +228,7 @@ for table in tables.keys():
 	source.write("""
 class DuckDB${TABLENAME}Load : public DuckDBBaseLoader<${ROW_TYPE}> {
 public:
-	DuckDB${TABLENAME}Load(TableCatalogEntry *table, ClientContext *context) : 
+	DuckDB${TABLENAME}Load(TableCatalogEntry *table, ClientContext *context) :
 		DuckDBBaseLoader(table, context) {
 
 	}
@@ -257,7 +265,7 @@ public:
 		source.write("\t\tappend_%s(chunk, index, column, next_record.%s);" % (funcname, name))
 		if i != len(collist) - 1:
 			source.write("\n")
-	source.write("""	
+	source.write("""
 	}
 
 };
@@ -268,53 +276,51 @@ for table in tables.keys():
 	source.write("""
 CBaseLoader<${ROW_TYPE}> *
 DuckDBLoaderFactory::Create${TABLENAME}Loader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "${TABLEINDB}" + suffix);
 	return new DuckDB${TABLENAME}Load(table, context);
 }
 """.replace("${TABLENAME}", get_tablename(table)).replace("${ROW_TYPE}", table.upper().replace(' ', '_') + '_ROW').replace("${TABLEINDB}", table.replace(' ', '_')))
 
 source.write("\n")
-#static vector < ColumnDefinition> RegionColumns() {
-#return vector < ColumnDefinition> {
-#ColumnDefinition("r_regionkey", TypeId::INTEGER, false),
-#ColumnDefinition("r_name", TypeId::VARCHAR, false),
-#ColumnDefinition("r_comment", TypeId::VARCHAR, false) };
-#}
+
+# static string RegionSchema(string schema, string suffix) {
+# 	return "CREATE TABLE " + schema + ".region" + suffix + " ("
+# 		"r_regionkey INT NOT NULL,"
+# 		"r_name VARCHAR(25) NOT NULL,"
+# 		"r_comment VARCHAR(152) NOT NULL);";
+# }
 
 
 for table in tables.keys():
-	str = 'static vector<ColumnDefinition> ' + table.title().replace(' ', '') + 'Columns() {\n'
-	str += '	return vector<ColumnDefinition>{\n'
+	tname = table.replace(' ', '_')
+	str = 'static string ' + table.title().replace(' ', '') + 'Schema(string schema, string suffix) {\n'
+	str += '\treturn "CREATE TABLE " + schema + ".%s" + suffix + " ("\n' % (tname,)
 	columns = tables[table]
 	for i in range(len(columns)):
 		column = columns[i]
-		str += '	    ColumnDefinition("'
-		str += column[0] + '", ' + column[1] + ')'
+		str += '\t    "' + column[0] + " " + column[3]
 		if i == len(columns) - 1:
-			str += "};"
+			str += ')";'
 		else:
-			str += ","
+			str += ',"'
 		str += "\n"
 	str += "}\n\n"
 	source.write(str)
 
-#CreateTableInformation region(schema, "region" + suffix, RegionColumns());
 
-func = 'void CreateTPCESchema(duckdb::DuckDB &db, duckdb::Transaction &transaction, std::string &schema, std::string &suffix)'
+func = 'void CreateTPCESchema(duckdb::DuckDB &db, duckdb::Connection &con, std::string &schema, std::string &suffix)'
 header.write(func + ';\n\n')
 source.write(func + ' {\n')
 
-for table in tables.keys():
-	tname = table.replace(' ', '_')
-	source.write('\tCreateTableInformation %s(schema, "%s" + suffix, %sColumns());\n' %
-		(tname, tname, table.title().replace(' ', '')))
 
-#db.catalog.CreateTable(transaction, &region);
+# con.Query(RegionSchema(schema, suffix));
 
 for table in tables.keys():
 	tname = table.replace(' ', '_')
-	source.write('\tdb.catalog.CreateTable(transaction, &%s);\n' % (tname,))
+	source.write('\tcon.Query(%sSchema(schema, suffix));\n' %
+		(table.title().replace(' ', '')))
+
 
 source.write('}\n\n')
 

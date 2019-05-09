@@ -29,11 +29,11 @@ struct FlattenDependentJoins {
 
 	Binder &binder;
 	ColumnBinding base_binding;
-	size_t delim_offset;
-	size_t data_offset;
+	uint64_t delim_offset;
+	uint64_t data_offset;
 	unordered_map<LogicalOperator *, bool> has_correlated_expressions;
-	column_binding_map_t<size_t> correlated_map;
-	column_binding_map_t<size_t> replacement_map;
+	column_binding_map_t<uint64_t> correlated_map;
+	column_binding_map_t<uint64_t> replacement_map;
 	const vector<CorrelatedColumnInfo> &correlated_columns;
 	vector<TypeId> delim_types;
 

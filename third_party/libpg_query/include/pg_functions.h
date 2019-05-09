@@ -1,7 +1,6 @@
 #ifndef PG_COMPAT_H
 #define PG_COMPAT_H
 
-//#include <stdint.h>
 #include <stdlib.h>
 
 #ifdef __cplusplus

@@ -12,6 +12,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	if (!op.table) {
 		return make_unique<PhysicalDummyScan>(op.types);
 	} else {
+		dependencies.insert(op.table);
 		return make_unique<PhysicalTableScan>(op, *op.table, *op.table->storage, op.column_ids);
 	}
 }

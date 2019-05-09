@@ -77,7 +77,7 @@ public:
 	void Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) override;
 
 	//! Append entries to the index
-	void Append(ClientContext &context, DataChunk &entries, size_t row_identifier_start) override;
+	void Append(ClientContext &context, DataChunk &entries, uint64_t row_identifier_start) override;
 	//! Update entries in the index
 	void Update(ClientContext &context, vector<column_t> &column_ids, DataChunk &update_data,
 	            Vector &row_identifiers) override;
@@ -124,7 +124,7 @@ private:
 
 	template <class T> void templated_insert(DataChunk &input, Vector &row_ids) {
 		auto input_data = (T *)input.data[0].data;
-		auto row_identifiers = (uint64_t *)row_ids.data;
+		auto row_identifiers = (int64_t *)row_ids.data;
 		for (size_t i = 0; i < row_ids.count; i++) {
 			Key &key = *new Key(this->is_little_endian, input.data[0].type, input_data[i]);
 			insert(this->is_little_endian, tree, &tree, key, 0, input_data[i], 8, input.data[0].type,
@@ -134,14 +134,14 @@ private:
 
 	template <class T> void templated_delete(DataChunk &input, Vector &row_ids) {
 		auto input_data = (T *)input.data[0].data;
-		auto row_identifiers = (uint64_t *)row_ids.data;
+		auto row_identifiers = (int64_t *)row_ids.data;
 		for (size_t i = 0; i < row_ids.count; i++) {
 			Key &key = *new Key(this->is_little_endian, input.data[0].type, input_data[i]);
 			erase(this->is_little_endian, tree, &tree, key, 0, 8, input.data[0].type, row_identifiers[i]);
 		}
 	}
 
-	template <class T> size_t templated_lookup(TypeId type, T data, uint64_t *result_ids) {
+	template <class T> size_t templated_lookup(TypeId type, T data, int64_t *result_ids) {
 		Key &key = *new Key(this->is_little_endian, type, data);
 		size_t result_count = 0;
 		auto leaf = static_cast<Leaf *>(lookup(tree, key, this->maxPrefix, 0));
@@ -153,7 +153,7 @@ private:
 		return result_count;
 	}
 
-	template <class T> size_t templated_greater_scan(TypeId type, T data, uint64_t *result_ids,bool inclusive) {
+	template <class T> size_t templated_greater_scan(TypeId type, T data, int64_t *result_ids,bool inclusive) {
 		Iterator it;
 		Key &key = *new Key(this->is_little_endian, type, data);
 		size_t result_count = 0;
@@ -170,7 +170,7 @@ private:
 		return result_count;
 	}
 
-    template <class T> size_t templated_less_scan(TypeId type, T data, uint64_t *result_ids,bool inclusive) {
+    template <class T> size_t templated_less_scan(TypeId type, T data, int64_t *result_ids,bool inclusive) {
         Iterator it;
         Key &key = *new Key(this->is_little_endian, type, data);
         size_t result_count = 0;
@@ -195,7 +195,7 @@ private:
         return result_count;
     }
 
-	template <class T> size_t templated_close_range(TypeId type, T left_query,T right_query, uint64_t *result_ids,bool left_inclusive, bool right_inclusive) {
+	template <class T> size_t templated_close_range(TypeId type, T left_query,T right_query, int64_t *result_ids,bool left_inclusive, bool right_inclusive) {
 		Iterator it;
 		Key &key = *new Key(this->is_little_endian, type, left_query);
 		size_t result_count = 0;
@@ -219,10 +219,10 @@ private:
 
 	DataChunk expression_result;
 
-    void SearchEqual(StaticVector<uint64_t> *result_identifiers,ARTIndexScanState * state);
-	void SearchGreater(StaticVector<uint64_t> *result_identifiers,ARTIndexScanState * state, bool inclusive);
-    void SearchLess(StaticVector<uint64_t> *result_identifiers,ARTIndexScanState * state, bool inclusive);
-	void SearchCloseRange(StaticVector<uint64_t> *result_identifiers,ARTIndexScanState * state, bool left_inclusive,bool right_inclusive);
+    void SearchEqual(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state);
+	void SearchGreater(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state, bool inclusive);
+    void SearchLess(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state, bool inclusive);
+	void SearchCloseRange(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state, bool left_inclusive,bool right_inclusive);
 
 	};
 

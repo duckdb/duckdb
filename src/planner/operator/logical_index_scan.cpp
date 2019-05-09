@@ -5,10 +5,10 @@
 using namespace duckdb;
 using namespace std;
 
-void LogicalIndexScan::ResolveTypes() {
-	if (column_ids.size() == 0) {
-		types = {TypeId::INTEGER};
-	} else {
-		types = tableref.GetTypes(column_ids);
-	}
-}
+//void LogicalIndexScan::ResolveTypes() {
+//	if (column_ids.size() == 0) {
+//		types = {TypeId::INTEGER};
+//	} else {
+//		types = tableref.GetTypes(column_ids);
+//	}
+//}

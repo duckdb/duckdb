@@ -1,7 +1,6 @@
 #include "execution/operator/filter/physical_filter.hpp"
 #include "execution/physical_plan_generator.hpp"
 #include "optimizer/matcher/expression_matcher.hpp"
-#include "parser/expression/comparison_expression.hpp"
 #include "planner/expression/bound_comparison_expression.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
 #include "planner/operator/logical_filter.hpp"

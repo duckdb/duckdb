@@ -1,5 +1,7 @@
 #include "planner/table_binding_resolver.hpp"
 
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "planner/operator/list.hpp"
 
 using namespace duckdb;
@@ -16,7 +18,8 @@ void TableBindingResolver::PushBinding(BoundTable binding) {
 }
 
 void TableBindingResolver::AppendTables(vector<BoundTable> &right_tables) {
-	size_t offset = bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
+	uint64_t offset =
+	    bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
 	for (auto table : right_tables) {
 		table.column_offset += offset;
 		bound_tables.push_back(table);
@@ -219,7 +222,7 @@ void TableBindingResolver::Visit(LogicalGet &op) {
 	if (!op.table) {
 		// DUMMY get
 		// create a dummy table with a single column
-		binding.table_index = (size_t)-1;
+		binding.table_index = (uint64_t)-1;
 		binding.column_count = 1;
 	} else {
 		binding.table_index = op.table_index;

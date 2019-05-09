@@ -24,9 +24,9 @@ template <class OP> void templated_like(Vector &left, Vector &right, Vector &res
 }
 
 void VectorOperations::Like(Vector &left, Vector &right, Vector &result) {
-	templated_like<operators::Like>(left, right, result);
+	templated_like<duckdb::Like>(left, right, result);
 }
 
 void VectorOperations::NotLike(Vector &left, Vector &right, Vector &result) {
-	templated_like<operators::NotLike>(left, right, result);
+	templated_like<duckdb::NotLike>(left, right, result);
 }

@@ -8,28 +8,16 @@
 
 #pragma once
 
-#include "parser/parsed_data.hpp"
+#include "parser/parsed_data/create_schema_info.hpp"
 #include "parser/sql_statement.hpp"
 
 namespace duckdb {
 
 class CreateSchemaStatement : public SQLStatement {
 public:
-	CreateSchemaStatement()
-	    : SQLStatement(StatementType::CREATE_SCHEMA), info(make_unique<CreateSchemaInformation>()){};
+	CreateSchemaStatement() : SQLStatement(StatementType::CREATE_SCHEMA), info(make_unique<CreateSchemaInfo>()){};
 
-	string ToString() const override {
-		return "CREATE SCHEMA";
-	}
-
-	bool Equals(const SQLStatement *other_) const override {
-		if (!SQLStatement::Equals(other_)) {
-			return false;
-		}
-		throw NotImplementedException("Equality not implemented!");
-	}
-
-	unique_ptr<CreateSchemaInformation> info;
+	unique_ptr<CreateSchemaInfo> info;
 };
 
 } // namespace duckdb

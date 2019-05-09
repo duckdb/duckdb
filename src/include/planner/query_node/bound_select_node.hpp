@@ -31,20 +31,20 @@ public:
 	unique_ptr<Expression> having;
 
 	//! The amount of columns in the final result
-	size_t column_count;
+	uint64_t column_count;
 
 	//! Index used by the LogicalProjection
-	size_t projection_index;
+	uint64_t projection_index;
 
 	//! Group index used by the LogicalAggregate (only used if HasAggregation is true)
-	size_t group_index;
+	uint64_t group_index;
 	//! Aggregate index used by the LogicalAggregate (only used if HasAggregation is true)
-	size_t aggregate_index;
+	uint64_t aggregate_index;
 	//! Aggregate functions to compute (only used if HasAggregation is true)
 	vector<unique_ptr<Expression>> aggregates;
 
 	//! Window index used by the LogicalWindow (only used if HasWindow is true)
-	size_t window_index;
+	uint64_t window_index;
 	//! Window functions to compute (only used if HasWindow is true)
 	vector<unique_ptr<Expression>> windows;
 

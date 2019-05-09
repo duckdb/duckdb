@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "common/enums.hpp"
+#include "common/enums/logical_operator_type.hpp"
 
 namespace duckdb {
 

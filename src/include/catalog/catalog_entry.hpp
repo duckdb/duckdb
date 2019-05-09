@@ -9,11 +9,11 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "common/enums/catalog_type.hpp"
 #include "common/exception.hpp"
 
 namespace duckdb {
-
-struct AlterInformation;
+struct AlterInfo;
 class Catalog;
 class CatalogSet;
 class Transaction;
@@ -25,18 +25,9 @@ public:
 	    : type(type), catalog(catalog), set(nullptr), name(name), deleted(false), parent(nullptr) {
 	}
 
-	virtual ~CatalogEntry() {
-	}
+	virtual ~CatalogEntry();
 
-	//! Returns true if other objects depend on this object
-	virtual bool HasDependents(Transaction &transaction) {
-		return false;
-	}
-	//! Function that drops all dependents (used for Cascade)
-	virtual void DropDependents(Transaction &transaction) {
-	}
-
-	virtual unique_ptr<CatalogEntry> AlterEntry(AlterInformation *info) {
+	virtual unique_ptr<CatalogEntry> AlterEntry(AlterInfo *info) {
 		throw CatalogException("Unsupported alter type for catalog entry!");
 	}
 

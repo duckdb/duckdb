@@ -29,9 +29,9 @@ public:
 	string ToString() override;
 
 	//! Gets the (index) value of the (column index) column
-	Value GetValue(size_t column, size_t index);
+	Value GetValue(uint64_t column, uint64_t index);
 
-	template <class T> T GetValue(size_t column, size_t index) {
+	template <class T> T GetValue(uint64_t column, uint64_t index) {
 		auto value = GetValue(column, index);
 		return (T)value.GetNumericValue();
 	}

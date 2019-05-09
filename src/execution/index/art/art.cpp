@@ -41,7 +41,7 @@ void ART::Insert(DataChunk &input, Vector &row_ids) {
 	if (input.column_count > 1) {
 		throw NotImplementedException("We only support single dimensional indexes currently");
 	}
-	assert(row_ids.type == TypeId::POINTER);
+	assert(row_ids.type == TypeId::BIGINT);
 	assert(input.size() == row_ids.count);
 	assert(types[0] == input.data[0].type);
 	switch (input.data[0].type) {
@@ -68,7 +68,7 @@ void ART::Delete(DataChunk &input, Vector &row_ids) {
 		throw NotImplementedException("We only support single dimensional indexes currently");
 	}
 	lock_guard<mutex> l(lock);
-	assert(row_ids.type == TypeId::POINTER);
+	assert(row_ids.type == TypeId::BIGINT);
 	assert(input.size() == row_ids.count);
 	assert(types[0] == input.data[0].type);
 	switch (input.data[0].type) {
@@ -109,7 +109,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 	return move(result);
 }
 
-void ART::Append(ClientContext &context, DataChunk &appended_data, size_t row_identifier_start) {
+void ART::Append(ClientContext &context, DataChunk &appended_data, uint64_t row_identifier_start) {
 	lock_guard<mutex> l(lock);
 
 	// first resolve the expressions
@@ -117,8 +117,8 @@ void ART::Append(ClientContext &context, DataChunk &appended_data, size_t row_id
 	executor.Execute(expressions, expression_result);
 
 	// create the row identifiers
-	StaticVector<uint64_t> row_identifiers;
-	auto row_ids = (uint64_t *)row_identifiers.data;
+	StaticVector<int64_t> row_identifiers;
+	auto row_ids = (int64_t *)row_identifiers.data;
 	row_identifiers.count = appended_data.size();
 	for (size_t i = 0; i < row_identifiers.count; i++) {
 		row_ids[i] = row_identifier_start + i;
@@ -531,8 +531,8 @@ void ART::Update(ClientContext &context, vector<column_t> &update_columns, DataC
 	Insert(expression_result, row_identifiers);
 }
 
-void ART::SearchEqual(StaticVector<uint64_t> *result_identifiers,ARTIndexScanState * state){
-	auto row_ids = (uint64_t *)result_identifiers->data;
+void ART::SearchEqual(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state){
+	auto row_ids = (int64_t *)result_identifiers->data;
 	switch (types[0]) {
 		case TypeId::BOOLEAN:
 			result_identifiers->count = templated_lookup<int8_t>(types[0], state->values[0].value_.boolean, row_ids);
@@ -556,8 +556,8 @@ void ART::SearchEqual(StaticVector<uint64_t> *result_identifiers,ARTIndexScanSta
 	}
 }
 
-void ART::SearchGreater(StaticVector<uint64_t> *result_identifiers,ARTIndexScanState * state, bool inclusive){
-	auto row_ids = (uint64_t *)result_identifiers->data;
+void ART::SearchGreater(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state, bool inclusive){
+	auto row_ids = (int64_t *)result_identifiers->data;
 	switch (types[0]) {
 		case TypeId::BOOLEAN:
 			result_identifiers->count = templated_greater_scan<int8_t>(types[0], state->values[0].value_.boolean, row_ids,inclusive);
@@ -581,8 +581,8 @@ void ART::SearchGreater(StaticVector<uint64_t> *result_identifiers,ARTIndexScanS
 	}
 }
 
-void ART::SearchLess(StaticVector<uint64_t> *result_identifiers,ARTIndexScanState * state, bool inclusive){
-	auto row_ids = (uint64_t *)result_identifiers->data;
+void ART::SearchLess(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state, bool inclusive){
+	auto row_ids = (int64_t *)result_identifiers->data;
 	switch (types[0]) {
 		case TypeId::BOOLEAN:
 			result_identifiers->count = templated_less_scan<int8_t>(types[0], state->values[0].value_.boolean, row_ids,inclusive);
@@ -606,8 +606,8 @@ void ART::SearchLess(StaticVector<uint64_t> *result_identifiers,ARTIndexScanStat
 	}
 }
 
-void ART::SearchCloseRange(StaticVector<uint64_t> *result_identifiers,ARTIndexScanState * state, bool left_inclusive,bool right_inclusive){
-	auto row_ids = (uint64_t *)result_identifiers->data;
+void ART::SearchCloseRange(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state, bool left_inclusive,bool right_inclusive){
+	auto row_ids = (int64_t *)result_identifiers->data;
 	switch (types[0]) {
 		case TypeId::BOOLEAN:
 			result_identifiers->count = templated_close_range<int8_t>(types[0], state->values[0].value_.boolean,state->values[1].value_.boolean, row_ids,left_inclusive,right_inclusive);
@@ -636,7 +636,7 @@ void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) 
 	if (state->checked)
 		return;
 	// scan the index
-	StaticVector<uint64_t> result_identifiers;
+	StaticVector<int64_t> result_identifiers;
 	do {
 		assert(state->values[0].type == types[0]);
 

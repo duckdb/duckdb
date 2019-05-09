@@ -17,28 +17,28 @@ void VectorOperations::Hash(Vector &input, Vector &result) {
 	switch (input.type) {
 	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
-		templated_unary_loop_process_null<int8_t, uint64_t, operators::Hash>(input, result);
+		templated_unary_loop_process_null<int8_t, uint64_t, duckdb::HashOp>(input, result);
 		break;
 	case TypeId::SMALLINT:
-		templated_unary_loop_process_null<int16_t, uint64_t, operators::Hash>(input, result);
+		templated_unary_loop_process_null<int16_t, uint64_t, duckdb::HashOp>(input, result);
 		break;
 	case TypeId::INTEGER:
-		templated_unary_loop_process_null<int32_t, uint64_t, operators::Hash>(input, result);
+		templated_unary_loop_process_null<int32_t, uint64_t, duckdb::HashOp>(input, result);
 		break;
 	case TypeId::BIGINT:
-		templated_unary_loop_process_null<int64_t, uint64_t, operators::Hash>(input, result);
+		templated_unary_loop_process_null<int64_t, uint64_t, duckdb::HashOp>(input, result);
 		break;
 	case TypeId::POINTER:
-		templated_unary_loop_process_null<uint64_t, uint64_t, operators::Hash>(input, result);
+		templated_unary_loop_process_null<uint64_t, uint64_t, duckdb::HashOp>(input, result);
 		break;
 	case TypeId::FLOAT:
-		templated_unary_loop_process_null<float, uint64_t, operators::Hash>(input, result);
+		templated_unary_loop_process_null<float, uint64_t, duckdb::HashOp>(input, result);
 		break;
 	case TypeId::DOUBLE:
-		templated_unary_loop_process_null<double, uint64_t, operators::Hash>(input, result);
+		templated_unary_loop_process_null<double, uint64_t, duckdb::HashOp>(input, result);
 		break;
 	case TypeId::VARCHAR:
-		templated_unary_loop_process_null<const char *, uint64_t, operators::Hash>(input, result);
+		templated_unary_loop_process_null<const char *, uint64_t, duckdb::HashOp>(input, result);
 		break;
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for hash");

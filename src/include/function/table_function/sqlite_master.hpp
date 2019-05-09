@@ -12,10 +12,9 @@
 #include "function/function.hpp"
 
 namespace duckdb {
-namespace function {
 
-TableFunctionData *sqlite_master_init(ClientContext &);
-void sqlite_master(ClientContext &, DataChunk &input, DataChunk &output, TableFunctionData *dataptr);
+FunctionData *sqlite_master_init(ClientContext &);
+void sqlite_master(ClientContext &, DataChunk &input, DataChunk &output, FunctionData *dataptr);
 
 class SQLiteMaster {
 public:
@@ -47,5 +46,4 @@ public:
 	}
 };
 
-} // namespace function
 } // namespace duckdb

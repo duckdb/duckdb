@@ -14,6 +14,7 @@ add_subdirectory(optimizer)
 
 IF (NOT WIN32)
   add_subdirectory(sqlserver)
+  add_subdirectory(sakila)
   add_subdirectory(sqlite)
   add_subdirectory(sqlsmith)
   add_subdirectory(tpce)

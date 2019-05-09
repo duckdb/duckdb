@@ -11,10 +11,11 @@ using namespace duckdb;
 using namespace std;
 
 constexpr const char *QUERY_DIRECTORY = "test/sqlsmith/queries";
+static FileSystem fs;
 
 static void test_runner() {
 	auto file_name = Catch::getResultCapture().getCurrentTestName();
-	auto fname = JoinPath(QUERY_DIRECTORY, file_name);
+	auto fname = fs.JoinPath(QUERY_DIRECTORY, file_name);
 
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -36,7 +37,8 @@ struct RegisterSQLSmithTests {
 	RegisterSQLSmithTests() {
 		return;
 		// register a separate SQL Smith test for each file in the QUERY_DIRECTORY
-		ListFiles(QUERY_DIRECTORY, [&](const string &path) { REGISTER_TEST_CASE(test_runner, path, "[sqlsmith][.]"); });
+		fs.ListFiles(QUERY_DIRECTORY,
+		             [&](const string &path) { REGISTER_TEST_CASE(test_runner, path, "[sqlsmith][.]"); });
 	}
 };
 RegisterSQLSmithTests register_sqlsmith_test;

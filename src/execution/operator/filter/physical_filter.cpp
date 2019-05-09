@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalFilter::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOperatorState *>(state_);
 	do {
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
@@ -21,7 +21,7 @@ void PhysicalFilter::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 
 		// now generate the selection vector
 		chunk.sel_vector = state->child_chunk.sel_vector;
-		for (size_t i = 0; i < chunk.column_count; i++) {
+		for (uint64_t i = 0; i < chunk.column_count; i++) {
 			// create a reference to the vector of the child chunk
 			chunk.data[i].Reference(state->child_chunk.data[i]);
 		}

@@ -847,625 +847,592 @@ public:
 
 CBaseLoader<SECTOR_ROW> *
 DuckDBLoaderFactory::CreateSectorLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "sector" + suffix);
 	return new DuckDBSectorLoad(table, context);
 }
 
 CBaseLoader<LAST_TRADE_ROW> *
 DuckDBLoaderFactory::CreateLastTradeLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "last_trade" + suffix);
 	return new DuckDBLastTradeLoad(table, context);
 }
 
 CBaseLoader<FINANCIAL_ROW> *
 DuckDBLoaderFactory::CreateFinancialLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "financial" + suffix);
 	return new DuckDBFinancialLoad(table, context);
 }
 
 CBaseLoader<TRADE_ROW> *
 DuckDBLoaderFactory::CreateTradeLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "trade" + suffix);
 	return new DuckDBTradeLoad(table, context);
 }
 
 CBaseLoader<SETTLEMENT_ROW> *
 DuckDBLoaderFactory::CreateSettlementLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "settlement" + suffix);
 	return new DuckDBSettlementLoad(table, context);
 }
 
 CBaseLoader<COMMISSION_RATE_ROW> *
 DuckDBLoaderFactory::CreateCommissionRateLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "commission_rate" + suffix);
 	return new DuckDBCommissionRateLoad(table, context);
 }
 
 CBaseLoader<CUSTOMER_ACCOUNT_ROW> *
 DuckDBLoaderFactory::CreateCustomerAccountLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "customer_account" + suffix);
 	return new DuckDBCustomerAccountLoad(table, context);
 }
 
 CBaseLoader<CASH_TRANSACTION_ROW> *
 DuckDBLoaderFactory::CreateCashTransactionLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "cash_transaction" + suffix);
 	return new DuckDBCashTransactionLoad(table, context);
 }
 
 CBaseLoader<TAX_RATE_ROW> *
 DuckDBLoaderFactory::CreateTaxRateLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "tax_rate" + suffix);
 	return new DuckDBTaxRateLoad(table, context);
 }
 
 CBaseLoader<CUSTOMER_TAXRATE_ROW> *
 DuckDBLoaderFactory::CreateCustomerTaxrateLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "customer_taxrate" + suffix);
 	return new DuckDBCustomerTaxrateLoad(table, context);
 }
 
 CBaseLoader<NEWS_XREF_ROW> *
 DuckDBLoaderFactory::CreateNewsXRefLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "news_xref" + suffix);
 	return new DuckDBNewsXRefLoad(table, context);
 }
 
 CBaseLoader<CHARGE_ROW> *
 DuckDBLoaderFactory::CreateChargeLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "charge" + suffix);
 	return new DuckDBChargeLoad(table, context);
 }
 
 CBaseLoader<TRADE_TYPE_ROW> *
 DuckDBLoaderFactory::CreateTradeTypeLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "trade_type" + suffix);
 	return new DuckDBTradeTypeLoad(table, context);
 }
 
 CBaseLoader<HOLDING_ROW> *
 DuckDBLoaderFactory::CreateHoldingLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "holding" + suffix);
 	return new DuckDBHoldingLoad(table, context);
 }
 
 CBaseLoader<DAILY_MARKET_ROW> *
 DuckDBLoaderFactory::CreateDailyMarketLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "daily_market" + suffix);
 	return new DuckDBDailyMarketLoad(table, context);
 }
 
 CBaseLoader<EXCHANGE_ROW> *
 DuckDBLoaderFactory::CreateExchangeLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "exchange" + suffix);
 	return new DuckDBExchangeLoad(table, context);
 }
 
 CBaseLoader<COMPANY_ROW> *
 DuckDBLoaderFactory::CreateCompanyLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "company" + suffix);
 	return new DuckDBCompanyLoad(table, context);
 }
 
 CBaseLoader<COMPANY_COMPETITOR_ROW> *
 DuckDBLoaderFactory::CreateCompanyCompetitorLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "company_competitor" + suffix);
 	return new DuckDBCompanyCompetitorLoad(table, context);
 }
 
 CBaseLoader<ACCOUNT_PERMISSION_ROW> *
 DuckDBLoaderFactory::CreateAccountPermissionLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "account_permission" + suffix);
 	return new DuckDBAccountPermissionLoad(table, context);
 }
 
 CBaseLoader<BROKER_ROW> *
 DuckDBLoaderFactory::CreateBrokerLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "broker" + suffix);
 	return new DuckDBBrokerLoad(table, context);
 }
 
 CBaseLoader<TRADE_HISTORY_ROW> *
 DuckDBLoaderFactory::CreateTradeHistoryLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "trade_history" + suffix);
 	return new DuckDBTradeHistoryLoad(table, context);
 }
 
 CBaseLoader<WATCH_ITEM_ROW> *
 DuckDBLoaderFactory::CreateWatchItemLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "watch_item" + suffix);
 	return new DuckDBWatchItemLoad(table, context);
 }
 
 CBaseLoader<HOLDING_HISTORY_ROW> *
 DuckDBLoaderFactory::CreateHoldingHistoryLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "holding_history" + suffix);
 	return new DuckDBHoldingHistoryLoad(table, context);
 }
 
 CBaseLoader<ADDRESS_ROW> *
 DuckDBLoaderFactory::CreateAddressLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "address" + suffix);
 	return new DuckDBAddressLoad(table, context);
 }
 
 CBaseLoader<NEWS_ITEM_ROW> *
 DuckDBLoaderFactory::CreateNewsItemLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "news_item" + suffix);
 	return new DuckDBNewsItemLoad(table, context);
 }
 
 CBaseLoader<WATCH_LIST_ROW> *
 DuckDBLoaderFactory::CreateWatchListLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "watch_list" + suffix);
 	return new DuckDBWatchListLoad(table, context);
 }
 
 CBaseLoader<CUSTOMER_ROW> *
 DuckDBLoaderFactory::CreateCustomerLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "customer" + suffix);
 	return new DuckDBCustomerLoad(table, context);
 }
 
 CBaseLoader<HOLDING_SUMMARY_ROW> *
 DuckDBLoaderFactory::CreateHoldingSummaryLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "holding_summary" + suffix);
 	return new DuckDBHoldingSummaryLoad(table, context);
 }
 
 CBaseLoader<STATUS_TYPE_ROW> *
 DuckDBLoaderFactory::CreateStatusTypeLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "status_type" + suffix);
 	return new DuckDBStatusTypeLoad(table, context);
 }
 
 CBaseLoader<INDUSTRY_ROW> *
 DuckDBLoaderFactory::CreateIndustryLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "industry" + suffix);
 	return new DuckDBIndustryLoad(table, context);
 }
 
 CBaseLoader<ZIP_CODE_ROW> *
 DuckDBLoaderFactory::CreateZipCodeLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "zip_code" + suffix);
 	return new DuckDBZipCodeLoad(table, context);
 }
 
 CBaseLoader<TRADE_REQUEST_ROW> *
 DuckDBLoaderFactory::CreateTradeRequestLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "trade_request" + suffix);
 	return new DuckDBTradeRequestLoad(table, context);
 }
 
 CBaseLoader<SECURITY_ROW> *
 DuckDBLoaderFactory::CreateSecurityLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
 	                                          schema, "security" + suffix);
 	return new DuckDBSecurityLoad(table, context);
 }
 
-static vector<ColumnDefinition> SectorColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("sc_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("sc_name", SQLType(SQLTypeId::VARCHAR))};
+static string SectorSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".sector" + suffix + " ("
+	    "sc_id VARCHAR,"
+	    "sc_name VARCHAR)";
 }
 
-static vector<ColumnDefinition> LastTradeColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("lt_s_symb", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("lt_dts", SQLType(SQLTypeId::TIMESTAMP)),
-	    ColumnDefinition("lt_price", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("lt_open_price", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("lt_vol", SQLType(SQLTypeId::BIGINT))};
+static string LastTradeSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".last_trade" + suffix + " ("
+	    "lt_s_symb VARCHAR,"
+	    "lt_dts TIMESTAMP,"
+	    "lt_price DECIMAL,"
+	    "lt_open_price DECIMAL,"
+	    "lt_vol BIGINT)";
 }
 
-static vector<ColumnDefinition> FinancialColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("fi_co_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("fi_year", SQLType(SQLTypeId::INTEGER)),
-	    ColumnDefinition("fi_qtr", SQLType(SQLTypeId::INTEGER)),
-	    ColumnDefinition("fi_qtr_start_date", SQLType(SQLTypeId::TIMESTAMP)),
-	    ColumnDefinition("fi_revenue", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("fi_net_earn", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("fi_basic_eps", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("fi_dilut_eps", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("fi_margin", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("fi_inventory", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("fi_assets", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("fi_liability", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("fi_out_basic", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("fi_out_dilut", SQLType(SQLTypeId::BIGINT))};
+static string FinancialSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".financial" + suffix + " ("
+	    "fi_co_id BIGINT,"
+	    "fi_year INTEGER,"
+	    "fi_qtr INTEGER,"
+	    "fi_qtr_start_date TIMESTAMP,"
+	    "fi_revenue DECIMAL,"
+	    "fi_net_earn DECIMAL,"
+	    "fi_basic_eps DECIMAL,"
+	    "fi_dilut_eps DECIMAL,"
+	    "fi_margin DECIMAL,"
+	    "fi_inventory DECIMAL,"
+	    "fi_assets DECIMAL,"
+	    "fi_liability DECIMAL,"
+	    "fi_out_basic BIGINT,"
+	    "fi_out_dilut BIGINT)";
 }
 
-static vector<ColumnDefinition> TradeColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("t_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("t_dts", SQLType(SQLTypeId::TIMESTAMP)),
-	    ColumnDefinition("t_st_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("t_tt_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("t_is_cash", SQLType(SQLTypeId::BOOLEAN)),
-	    ColumnDefinition("t_s_symb", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("t_qty", SQLType(SQLTypeId::INTEGER)),
-	    ColumnDefinition("t_bid_price", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("t_ca_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("t_exec_name", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("t_trade_price", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("t_chrg", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("t_comm", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("t_tax", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("t_lifo", SQLType(SQLTypeId::BOOLEAN))};
+static string TradeSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".trade" + suffix + " ("
+	    "t_id BIGINT,"
+	    "t_dts TIMESTAMP,"
+	    "t_st_id VARCHAR,"
+	    "t_tt_id VARCHAR,"
+	    "t_is_cash BOOLEAN,"
+	    "t_s_symb VARCHAR,"
+	    "t_qty INTEGER,"
+	    "t_bid_price DECIMAL,"
+	    "t_ca_id BIGINT,"
+	    "t_exec_name VARCHAR,"
+	    "t_trade_price DECIMAL,"
+	    "t_chrg DECIMAL,"
+	    "t_comm DECIMAL,"
+	    "t_tax DECIMAL,"
+	    "t_lifo BOOLEAN)";
 }
 
-static vector<ColumnDefinition> SettlementColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("se_t_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("se_cash_type", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("se_cash_due_date", SQLType(SQLTypeId::TIMESTAMP)),
-	    ColumnDefinition("se_amt", SQLType(SQLTypeId::DECIMAL))};
+static string SettlementSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".settlement" + suffix + " ("
+	    "se_t_id BIGINT,"
+	    "se_cash_type VARCHAR,"
+	    "se_cash_due_date TIMESTAMP,"
+	    "se_amt DECIMAL)";
 }
 
-static vector<ColumnDefinition> CommissionRateColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("cr_c_tier", SQLType(SQLTypeId::INTEGER)),
-	    ColumnDefinition("cr_tt_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("cr_ex_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("cr_from_qty", SQLType(SQLTypeId::INTEGER)),
-	    ColumnDefinition("cr_to_qty", SQLType(SQLTypeId::INTEGER)),
-	    ColumnDefinition("cr_rate", SQLType(SQLTypeId::DECIMAL))};
+static string CommissionRateSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".commission_rate" + suffix + " ("
+	    "cr_c_tier INTEGER,"
+	    "cr_tt_id VARCHAR,"
+	    "cr_ex_id VARCHAR,"
+	    "cr_from_qty INTEGER,"
+	    "cr_to_qty INTEGER,"
+	    "cr_rate DECIMAL)";
 }
 
-static vector<ColumnDefinition> CustomerAccountColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("ca_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("ca_b_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("ca_c_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("ca_name", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("ca_tax_st", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("ca_bal", SQLType(SQLTypeId::DECIMAL))};
+static string CustomerAccountSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".customer_account" + suffix + " ("
+	    "ca_id BIGINT,"
+	    "ca_b_id BIGINT,"
+	    "ca_c_id BIGINT,"
+	    "ca_name VARCHAR,"
+	    "ca_tax_st VARCHAR,"
+	    "ca_bal DECIMAL)";
 }
 
-static vector<ColumnDefinition> CashTransactionColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("ct_t_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("ct_dts", SQLType(SQLTypeId::TIMESTAMP)),
-	    ColumnDefinition("ct_amt", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("ct_name", SQLType(SQLTypeId::VARCHAR))};
+static string CashTransactionSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".cash_transaction" + suffix + " ("
+	    "ct_t_id BIGINT,"
+	    "ct_dts TIMESTAMP,"
+	    "ct_amt DECIMAL,"
+	    "ct_name VARCHAR)";
 }
 
-static vector<ColumnDefinition> TaxRateColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("tx_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("tx_name", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("tx_rate", SQLType(SQLTypeId::DECIMAL))};
+static string TaxRateSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".tax_rate" + suffix + " ("
+	    "tx_id VARCHAR,"
+	    "tx_name VARCHAR,"
+	    "tx_rate DECIMAL)";
 }
 
-static vector<ColumnDefinition> CustomerTaxrateColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("cx_tx_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("cx_c_id", SQLType(SQLTypeId::BIGINT))};
+static string CustomerTaxrateSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".customer_taxrate" + suffix + " ("
+	    "cx_tx_id VARCHAR,"
+	    "cx_c_id BIGINT)";
 }
 
-static vector<ColumnDefinition> NewsXrefColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("nx_ni_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("nx_co_id", SQLType(SQLTypeId::BIGINT))};
+static string NewsXrefSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".news_xref" + suffix + " ("
+	    "nx_ni_id BIGINT,"
+	    "nx_co_id BIGINT)";
 }
 
-static vector<ColumnDefinition> ChargeColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("ch_tt_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("ch_c_tier", SQLType(SQLTypeId::INTEGER)),
-	    ColumnDefinition("ch_chrg", SQLType(SQLTypeId::DECIMAL))};
+static string ChargeSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".charge" + suffix + " ("
+	    "ch_tt_id VARCHAR,"
+	    "ch_c_tier INTEGER,"
+	    "ch_chrg DECIMAL)";
 }
 
-static vector<ColumnDefinition> TradeTypeColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("tt_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("tt_name", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("tt_is_sell", SQLType(SQLTypeId::BOOLEAN)),
-	    ColumnDefinition("tt_is_mrkt", SQLType(SQLTypeId::BOOLEAN))};
+static string TradeTypeSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".trade_type" + suffix + " ("
+	    "tt_id VARCHAR,"
+	    "tt_name VARCHAR,"
+	    "tt_is_sell BOOLEAN,"
+	    "tt_is_mrkt BOOLEAN)";
 }
 
-static vector<ColumnDefinition> HoldingColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("h_t_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("h_ca_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("h_s_symb", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("h_dts", SQLType(SQLTypeId::TIMESTAMP)),
-	    ColumnDefinition("h_price", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("h_qty", SQLType(SQLTypeId::INTEGER))};
+static string HoldingSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".holding" + suffix + " ("
+	    "h_t_id BIGINT,"
+	    "h_ca_id BIGINT,"
+	    "h_s_symb VARCHAR,"
+	    "h_dts TIMESTAMP,"
+	    "h_price DECIMAL,"
+	    "h_qty INTEGER)";
 }
 
-static vector<ColumnDefinition> DailyMarketColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("dm_date", SQLType(SQLTypeId::TIMESTAMP)),
-	    ColumnDefinition("dm_s_symb", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("dm_close", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("dm_high", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("dm_low", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("dm_vol", SQLType(SQLTypeId::BIGINT))};
+static string DailyMarketSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".daily_market" + suffix + " ("
+	    "dm_date TIMESTAMP,"
+	    "dm_s_symb VARCHAR,"
+	    "dm_close DECIMAL,"
+	    "dm_high DECIMAL,"
+	    "dm_low DECIMAL,"
+	    "dm_vol BIGINT)";
 }
 
-static vector<ColumnDefinition> ExchangeColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("ex_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("ex_name", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("ex_num_symb", SQLType(SQLTypeId::INTEGER)),
-	    ColumnDefinition("ex_open", SQLType(SQLTypeId::INTEGER)),
-	    ColumnDefinition("ex_close", SQLType(SQLTypeId::INTEGER)),
-	    ColumnDefinition("ex_desc", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("ex_ad_id", SQLType(SQLTypeId::BIGINT))};
+static string ExchangeSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".exchange" + suffix + " ("
+	    "ex_id VARCHAR,"
+	    "ex_name VARCHAR,"
+	    "ex_num_symb INTEGER,"
+	    "ex_open INTEGER,"
+	    "ex_close INTEGER,"
+	    "ex_desc VARCHAR,"
+	    "ex_ad_id BIGINT)";
 }
 
-static vector<ColumnDefinition> CompanyColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("co_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("co_st_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("co_name", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("co_in_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("co_sp_rate", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("co_ceo", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("co_ad_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("co_desc", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("co_open_date", SQLType(SQLTypeId::TIMESTAMP))};
+static string CompanySchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".company" + suffix + " ("
+	    "co_id BIGINT,"
+	    "co_st_id VARCHAR,"
+	    "co_name VARCHAR,"
+	    "co_in_id VARCHAR,"
+	    "co_sp_rate VARCHAR,"
+	    "co_ceo VARCHAR,"
+	    "co_ad_id BIGINT,"
+	    "co_desc VARCHAR,"
+	    "co_open_date TIMESTAMP)";
 }
 
-static vector<ColumnDefinition> CompanyCompetitorColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("cp_co_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("cp_comp_co_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("cp_in_id", SQLType(SQLTypeId::VARCHAR))};
+static string CompanyCompetitorSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".company_competitor" + suffix + " ("
+	    "cp_co_id BIGINT,"
+	    "cp_comp_co_id BIGINT,"
+	    "cp_in_id VARCHAR)";
 }
 
-static vector<ColumnDefinition> AccountPermissionColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("ap_ca_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("ap_acl", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("ap_tax_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("ap_l_name", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("ap_f_name", SQLType(SQLTypeId::VARCHAR))};
+static string AccountPermissionSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".account_permission" + suffix + " ("
+	    "ap_ca_id BIGINT,"
+	    "ap_acl VARCHAR,"
+	    "ap_tax_id VARCHAR,"
+	    "ap_l_name VARCHAR,"
+	    "ap_f_name VARCHAR)";
 }
 
-static vector<ColumnDefinition> BrokerColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("b_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("b_st_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("b_name", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("b_num_trades", SQLType(SQLTypeId::INTEGER)),
-	    ColumnDefinition("b_comm_total", SQLType(SQLTypeId::DECIMAL))};
+static string BrokerSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".broker" + suffix + " ("
+	    "b_id BIGINT,"
+	    "b_st_id VARCHAR,"
+	    "b_name VARCHAR,"
+	    "b_num_trades INTEGER,"
+	    "b_comm_total DECIMAL)";
 }
 
-static vector<ColumnDefinition> TradeHistoryColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("th_t_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("th_dts", SQLType(SQLTypeId::TIMESTAMP)),
-	    ColumnDefinition("th_st_id", SQLType(SQLTypeId::VARCHAR))};
+static string TradeHistorySchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".trade_history" + suffix + " ("
+	    "th_t_id BIGINT,"
+	    "th_dts TIMESTAMP,"
+	    "th_st_id VARCHAR)";
 }
 
-static vector<ColumnDefinition> WatchItemColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("wi_wl_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("wi_s_symb", SQLType(SQLTypeId::VARCHAR))};
+static string WatchItemSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".watch_item" + suffix + " ("
+	    "wi_wl_id BIGINT,"
+	    "wi_s_symb VARCHAR)";
 }
 
-static vector<ColumnDefinition> HoldingHistoryColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("hh_h_t_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("hh_t_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("hh_before_qty", SQLType(SQLTypeId::INTEGER)),
-	    ColumnDefinition("hh_after_qty", SQLType(SQLTypeId::INTEGER))};
+static string HoldingHistorySchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".holding_history" + suffix + " ("
+	    "hh_h_t_id BIGINT,"
+	    "hh_t_id BIGINT,"
+	    "hh_before_qty INTEGER,"
+	    "hh_after_qty INTEGER)";
 }
 
-static vector<ColumnDefinition> AddressColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("ad_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("ad_line1", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("ad_line2", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("ad_zc_code", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("ad_ctry", SQLType(SQLTypeId::VARCHAR))};
+static string AddressSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".address" + suffix + " ("
+	    "ad_id BIGINT,"
+	    "ad_line1 VARCHAR,"
+	    "ad_line2 VARCHAR,"
+	    "ad_zc_code VARCHAR,"
+	    "ad_ctry VARCHAR)";
 }
 
-static vector<ColumnDefinition> NewsItemColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("ni_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("ni_headline", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("ni_summary", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("ni_item", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("ni_dts", SQLType(SQLTypeId::TIMESTAMP)),
-	    ColumnDefinition("ni_source", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("ni_author", SQLType(SQLTypeId::VARCHAR))};
+static string NewsItemSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".news_item" + suffix + " ("
+	    "ni_id BIGINT,"
+	    "ni_headline VARCHAR,"
+	    "ni_summary VARCHAR,"
+	    "ni_item VARCHAR,"
+	    "ni_dts TIMESTAMP,"
+	    "ni_source VARCHAR,"
+	    "ni_author VARCHAR)";
 }
 
-static vector<ColumnDefinition> WatchListColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("wl_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("wl_c_id", SQLType(SQLTypeId::BIGINT))};
+static string WatchListSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".watch_list" + suffix + " ("
+	    "wl_id BIGINT,"
+	    "wl_c_id BIGINT)";
 }
 
-static vector<ColumnDefinition> CustomerColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("c_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("c_tax_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_st_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_l_name", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_f_name", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_m_name", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_gndr", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_tier", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_dob", SQLType(SQLTypeId::TIMESTAMP)),
-	    ColumnDefinition("c_ad_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("c_ctry_1", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_area_1", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_local_1", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_ext_1", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_ctry_2", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_area_2", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_local_2", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_ext_2", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_ctry_3", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_area_3", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_local_3", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_ext_3", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_email_1", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("c_email_2", SQLType(SQLTypeId::VARCHAR))};
+static string CustomerSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".customer" + suffix + " ("
+	    "c_id BIGINT,"
+	    "c_tax_id VARCHAR,"
+	    "c_st_id VARCHAR,"
+	    "c_l_name VARCHAR,"
+	    "c_f_name VARCHAR,"
+	    "c_m_name VARCHAR,"
+	    "c_gndr VARCHAR,"
+	    "c_tier VARCHAR,"
+	    "c_dob TIMESTAMP,"
+	    "c_ad_id BIGINT,"
+	    "c_ctry_1 VARCHAR,"
+	    "c_area_1 VARCHAR,"
+	    "c_local_1 VARCHAR,"
+	    "c_ext_1 VARCHAR,"
+	    "c_ctry_2 VARCHAR,"
+	    "c_area_2 VARCHAR,"
+	    "c_local_2 VARCHAR,"
+	    "c_ext_2 VARCHAR,"
+	    "c_ctry_3 VARCHAR,"
+	    "c_area_3 VARCHAR,"
+	    "c_local_3 VARCHAR,"
+	    "c_ext_3 VARCHAR,"
+	    "c_email_1 VARCHAR,"
+	    "c_email_2 VARCHAR)";
 }
 
-static vector<ColumnDefinition> HoldingSummaryColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("hs_ca_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("hs_s_symb", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("hs_qty", SQLType(SQLTypeId::INTEGER))};
+static string HoldingSummarySchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".holding_summary" + suffix + " ("
+	    "hs_ca_id BIGINT,"
+	    "hs_s_symb VARCHAR,"
+	    "hs_qty INTEGER)";
 }
 
-static vector<ColumnDefinition> StatusTypeColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("st_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("st_name", SQLType(SQLTypeId::VARCHAR))};
+static string StatusTypeSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".status_type" + suffix + " ("
+	    "st_id VARCHAR,"
+	    "st_name VARCHAR)";
 }
 
-static vector<ColumnDefinition> IndustryColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("in_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("in_name", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("in_sc_id", SQLType(SQLTypeId::VARCHAR))};
+static string IndustrySchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".industry" + suffix + " ("
+	    "in_id VARCHAR,"
+	    "in_name VARCHAR,"
+	    "in_sc_id VARCHAR)";
 }
 
-static vector<ColumnDefinition> ZipCodeColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("zc_code", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("zc_town", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("zc_div", SQLType(SQLTypeId::VARCHAR))};
+static string ZipCodeSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".zip_code" + suffix + " ("
+	    "zc_code VARCHAR,"
+	    "zc_town VARCHAR,"
+	    "zc_div VARCHAR)";
 }
 
-static vector<ColumnDefinition> TradeRequestColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("tr_t_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("tr_tt_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("tr_s_symb", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("tr_qty", SQLType(SQLTypeId::INTEGER)),
-	    ColumnDefinition("tr_bid_price", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("tr_b_id", SQLType(SQLTypeId::BIGINT))};
+static string TradeRequestSchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".trade_request" + suffix + " ("
+	    "tr_t_id BIGINT,"
+	    "tr_tt_id VARCHAR,"
+	    "tr_s_symb VARCHAR,"
+	    "tr_qty INTEGER,"
+	    "tr_bid_price DECIMAL,"
+	    "tr_b_id BIGINT)";
 }
 
-static vector<ColumnDefinition> SecurityColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("s_symb", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("s_issue", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("s_st_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("s_name", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("s_ex_id", SQLType(SQLTypeId::VARCHAR)),
-	    ColumnDefinition("s_co_id", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("s_num_out", SQLType(SQLTypeId::BIGINT)),
-	    ColumnDefinition("s_start_date", SQLType(SQLTypeId::TIMESTAMP)),
-	    ColumnDefinition("s_exch_date", SQLType(SQLTypeId::TIMESTAMP)),
-	    ColumnDefinition("s_pe", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("s_52wk_high", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("s_52wk_high_date", SQLType(SQLTypeId::TIMESTAMP)),
-	    ColumnDefinition("s_52wk_low", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("s_52wk_low_date", SQLType(SQLTypeId::TIMESTAMP)),
-	    ColumnDefinition("s_dividend", SQLType(SQLTypeId::DECIMAL)),
-	    ColumnDefinition("s_yield", SQLType(SQLTypeId::DECIMAL))};
+static string SecuritySchema(string schema, string suffix) {
+	return "CREATE TABLE " + schema + ".security" + suffix + " ("
+	    "s_symb VARCHAR,"
+	    "s_issue VARCHAR,"
+	    "s_st_id VARCHAR,"
+	    "s_name VARCHAR,"
+	    "s_ex_id VARCHAR,"
+	    "s_co_id BIGINT,"
+	    "s_num_out BIGINT,"
+	    "s_start_date TIMESTAMP,"
+	    "s_exch_date TIMESTAMP,"
+	    "s_pe DECIMAL,"
+	    "s_52wk_high DECIMAL,"
+	    "s_52wk_high_date TIMESTAMP,"
+	    "s_52wk_low DECIMAL,"
+	    "s_52wk_low_date TIMESTAMP,"
+	    "s_dividend DECIMAL,"
+	    "s_yield DECIMAL)";
 }
 
-void CreateTPCESchema(duckdb::DuckDB &db, duckdb::Transaction &transaction, std::string &schema, std::string &suffix) {
-	CreateTableInformation sector(schema, "sector" + suffix, SectorColumns());
-	CreateTableInformation last_trade(schema, "last_trade" + suffix, LastTradeColumns());
-	CreateTableInformation financial(schema, "financial" + suffix, FinancialColumns());
-	CreateTableInformation trade(schema, "trade" + suffix, TradeColumns());
-	CreateTableInformation settlement(schema, "settlement" + suffix, SettlementColumns());
-	CreateTableInformation commission_rate(schema, "commission_rate" + suffix, CommissionRateColumns());
-	CreateTableInformation customer_account(schema, "customer_account" + suffix, CustomerAccountColumns());
-	CreateTableInformation cash_transaction(schema, "cash_transaction" + suffix, CashTransactionColumns());
-	CreateTableInformation tax_rate(schema, "tax_rate" + suffix, TaxRateColumns());
-	CreateTableInformation customer_taxrate(schema, "customer_taxrate" + suffix, CustomerTaxrateColumns());
-	CreateTableInformation news_xref(schema, "news_xref" + suffix, NewsXrefColumns());
-	CreateTableInformation charge(schema, "charge" + suffix, ChargeColumns());
-	CreateTableInformation trade_type(schema, "trade_type" + suffix, TradeTypeColumns());
-	CreateTableInformation holding(schema, "holding" + suffix, HoldingColumns());
-	CreateTableInformation daily_market(schema, "daily_market" + suffix, DailyMarketColumns());
-	CreateTableInformation exchange(schema, "exchange" + suffix, ExchangeColumns());
-	CreateTableInformation company(schema, "company" + suffix, CompanyColumns());
-	CreateTableInformation company_competitor(schema, "company_competitor" + suffix, CompanyCompetitorColumns());
-	CreateTableInformation account_permission(schema, "account_permission" + suffix, AccountPermissionColumns());
-	CreateTableInformation broker(schema, "broker" + suffix, BrokerColumns());
-	CreateTableInformation trade_history(schema, "trade_history" + suffix, TradeHistoryColumns());
-	CreateTableInformation watch_item(schema, "watch_item" + suffix, WatchItemColumns());
-	CreateTableInformation holding_history(schema, "holding_history" + suffix, HoldingHistoryColumns());
-	CreateTableInformation address(schema, "address" + suffix, AddressColumns());
-	CreateTableInformation news_item(schema, "news_item" + suffix, NewsItemColumns());
-	CreateTableInformation watch_list(schema, "watch_list" + suffix, WatchListColumns());
-	CreateTableInformation customer(schema, "customer" + suffix, CustomerColumns());
-	CreateTableInformation holding_summary(schema, "holding_summary" + suffix, HoldingSummaryColumns());
-	CreateTableInformation status_type(schema, "status_type" + suffix, StatusTypeColumns());
-	CreateTableInformation industry(schema, "industry" + suffix, IndustryColumns());
-	CreateTableInformation zip_code(schema, "zip_code" + suffix, ZipCodeColumns());
-	CreateTableInformation trade_request(schema, "trade_request" + suffix, TradeRequestColumns());
-	CreateTableInformation security(schema, "security" + suffix, SecurityColumns());
-	db.catalog.CreateTable(transaction, &sector);
-	db.catalog.CreateTable(transaction, &last_trade);
-	db.catalog.CreateTable(transaction, &financial);
-	db.catalog.CreateTable(transaction, &trade);
-	db.catalog.CreateTable(transaction, &settlement);
-	db.catalog.CreateTable(transaction, &commission_rate);
-	db.catalog.CreateTable(transaction, &customer_account);
-	db.catalog.CreateTable(transaction, &cash_transaction);
-	db.catalog.CreateTable(transaction, &tax_rate);
-	db.catalog.CreateTable(transaction, &customer_taxrate);
-	db.catalog.CreateTable(transaction, &news_xref);
-	db.catalog.CreateTable(transaction, &charge);
-	db.catalog.CreateTable(transaction, &trade_type);
-	db.catalog.CreateTable(transaction, &holding);
-	db.catalog.CreateTable(transaction, &daily_market);
-	db.catalog.CreateTable(transaction, &exchange);
-	db.catalog.CreateTable(transaction, &company);
-	db.catalog.CreateTable(transaction, &company_competitor);
-	db.catalog.CreateTable(transaction, &account_permission);
-	db.catalog.CreateTable(transaction, &broker);
-	db.catalog.CreateTable(transaction, &trade_history);
-	db.catalog.CreateTable(transaction, &watch_item);
-	db.catalog.CreateTable(transaction, &holding_history);
-	db.catalog.CreateTable(transaction, &address);
-	db.catalog.CreateTable(transaction, &news_item);
-	db.catalog.CreateTable(transaction, &watch_list);
-	db.catalog.CreateTable(transaction, &customer);
-	db.catalog.CreateTable(transaction, &holding_summary);
-	db.catalog.CreateTable(transaction, &status_type);
-	db.catalog.CreateTable(transaction, &industry);
-	db.catalog.CreateTable(transaction, &zip_code);
-	db.catalog.CreateTable(transaction, &trade_request);
-	db.catalog.CreateTable(transaction, &security);
+void CreateTPCESchema(duckdb::DuckDB &db, duckdb::Connection &con, std::string &schema, std::string &suffix) {
+	con.Query(SectorSchema(schema, suffix));
+	con.Query(LastTradeSchema(schema, suffix));
+	con.Query(FinancialSchema(schema, suffix));
+	con.Query(TradeSchema(schema, suffix));
+	con.Query(SettlementSchema(schema, suffix));
+	con.Query(CommissionRateSchema(schema, suffix));
+	con.Query(CustomerAccountSchema(schema, suffix));
+	con.Query(CashTransactionSchema(schema, suffix));
+	con.Query(TaxRateSchema(schema, suffix));
+	con.Query(CustomerTaxrateSchema(schema, suffix));
+	con.Query(NewsXrefSchema(schema, suffix));
+	con.Query(ChargeSchema(schema, suffix));
+	con.Query(TradeTypeSchema(schema, suffix));
+	con.Query(HoldingSchema(schema, suffix));
+	con.Query(DailyMarketSchema(schema, suffix));
+	con.Query(ExchangeSchema(schema, suffix));
+	con.Query(CompanySchema(schema, suffix));
+	con.Query(CompanyCompetitorSchema(schema, suffix));
+	con.Query(AccountPermissionSchema(schema, suffix));
+	con.Query(BrokerSchema(schema, suffix));
+	con.Query(TradeHistorySchema(schema, suffix));
+	con.Query(WatchItemSchema(schema, suffix));
+	con.Query(HoldingHistorySchema(schema, suffix));
+	con.Query(AddressSchema(schema, suffix));
+	con.Query(NewsItemSchema(schema, suffix));
+	con.Query(WatchListSchema(schema, suffix));
+	con.Query(CustomerSchema(schema, suffix));
+	con.Query(HoldingSummarySchema(schema, suffix));
+	con.Query(StatusTypeSchema(schema, suffix));
+	con.Query(IndustrySchema(schema, suffix));
+	con.Query(ZipCodeSchema(schema, suffix));
+	con.Query(TradeRequestSchema(schema, suffix));
+	con.Query(SecuritySchema(schema, suffix));
 }
 
 } /* namespace TPCE */

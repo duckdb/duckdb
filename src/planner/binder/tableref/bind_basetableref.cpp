@@ -1,3 +1,4 @@
+#include "catalog/catalog_entry/view_catalog_entry.hpp"
 #include "main/client_context.hpp"
 #include "main/database.hpp"
 #include "parser/tableref/basetableref.hpp"
@@ -20,13 +21,12 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &expr) {
 	}
 	// not a CTE
 	// extract a table or view from the catalog
-	auto table_or_view =
-	    context.db.catalog.GetTableOrView(context.ActiveTransaction(), expr.schema_name, expr.table_name);
+	auto table_or_view = context.catalog.GetTableOrView(context.ActiveTransaction(), expr.schema_name, expr.table_name);
 	switch (table_or_view->type) {
 	case CatalogType::TABLE: {
 		// base table: create the BoundBaseTableRef node
 		auto table = (TableCatalogEntry *)table_or_view;
-		size_t table_index = GenerateTableIndex();
+		uint64_t table_index = GenerateTableIndex();
 		auto result = make_unique<BoundBaseTableRef>(table, table_index);
 		bind_context.AddBaseTable(result.get(), expr.alias.empty() ? expr.table_name : expr.alias);
 		return move(result);
@@ -41,7 +41,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &expr) {
 		auto &select_list = subquery.subquery->GetSelectList();
 		if (view_catalog_entry->aliases.size() > 0) {
 			subquery.column_name_alias.resize(select_list.size());
-			for (size_t col_idx = 0; col_idx < select_list.size(); col_idx++) {
+			for (uint64_t col_idx = 0; col_idx < select_list.size(); col_idx++) {
 				if (col_idx < view_catalog_entry->aliases.size()) {
 					subquery.column_name_alias[col_idx] = view_catalog_entry->aliases[col_idx];
 				} else {

@@ -41,5 +41,5 @@ template <class OP> static void templated_inplace_bitwise_operation(Vector &resu
 //===--------------------------------------------------------------------===//
 // left ^= right
 void VectorOperations::BitwiseXORInPlace(Vector &result, Vector &input) {
-	templated_inplace_bitwise_operation<operators::BitwiseXORInPlace>(result, input);
+	templated_inplace_bitwise_operation<duckdb::BitwiseXORInPlace>(result, input);
 }

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "parser/parsed_data/create_index_info.hpp"
 #include "planner/logical_operator.hpp"
 
 namespace duckdb {
@@ -15,7 +16,7 @@ namespace duckdb {
 class LogicalCreateIndex : public LogicalOperator {
 public:
 	LogicalCreateIndex(TableCatalogEntry &table, vector<column_t> column_ids,
-	                   vector<unique_ptr<Expression>> expressions, unique_ptr<CreateIndexInformation> info)
+	                   vector<unique_ptr<Expression>> expressions, unique_ptr<CreateIndexInfo> info)
 	    : LogicalOperator(LogicalOperatorType::CREATE_INDEX), table(table), column_ids(column_ids),
 	      info(std::move(info)) {
 		this->unbound_expressions.push_back(expressions[0]->Copy());
@@ -26,8 +27,8 @@ public:
 	TableCatalogEntry &table;
 	//! Column IDs needed for index creation
 	vector<column_t> column_ids;
-	//! Info for index creation
-	unique_ptr<CreateIndexInformation> info;
+    // Info for index creation
+    unique_ptr<CreateIndexInfo> info;
 	//! Unbound expressions to be used in the optimizer
 	vector<unique_ptr<Expression>> unbound_expressions;
 

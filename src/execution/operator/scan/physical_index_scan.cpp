@@ -1,11 +1,12 @@
 #include "execution/operator/scan/physical_index_scan.hpp"
 
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-void PhysicalIndexScan::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalIndexScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalIndexScanOperatorState *>(state_);
 	if (column_ids.size() == 0)
 		return;

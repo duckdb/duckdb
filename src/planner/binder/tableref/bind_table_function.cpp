@@ -10,12 +10,12 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(TableFunction &ref) {
-	size_t bind_index = GenerateTableIndex();
+	uint64_t bind_index = GenerateTableIndex();
 
 	assert(ref.function->type == ExpressionType::FUNCTION);
 	auto function_definition = (FunctionExpression *)ref.function.get();
 	// parse the parameters of the function
-	auto function = context.db.catalog.GetTableFunction(context.ActiveTransaction(), function_definition);
+	auto function = context.catalog.GetTableFunction(context.ActiveTransaction(), function_definition);
 	auto result = make_unique<BoundTableFunction>(function, bind_index);
 	for (auto &child : function_definition->children) {
 		ConstantBinder binder(*this, context, "TABLE FUNCTION parameter");

@@ -38,7 +38,7 @@ public:
 	/**
 	 * Repeat a string multiple times
 	 */
-	static string Repeat(const string &str, const std::size_t n);
+	static string Repeat(const string &str, const std::uint64_t n);
 
 	/**
 	 * Split the input string based on newline char
@@ -120,7 +120,7 @@ public:
 		if (from.empty())
 			return source;
 		;
-		size_t start_pos = 0;
+		uint64_t start_pos = 0;
 		while ((start_pos = source.find(from, start_pos)) != string::npos) {
 			source.replace(start_pos, from.length(), to);
 			start_pos += to.length(); // In case 'to' contains 'from', like

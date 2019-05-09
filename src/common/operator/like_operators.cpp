@@ -1,6 +1,6 @@
 #include "common/operator/like_operators.hpp"
 
-namespace operators {
+namespace duckdb {
 
 bool Like::Operation(const char *s, const char *pattern, const char *escape) {
 	const char *t, *p;
@@ -44,4 +44,4 @@ bool Like::Operation(const char *s, const char *pattern, const char *escape) {
 	return *t == 0 && *p == 0;
 }
 
-} // namespace operators
+} // namespace duckdb

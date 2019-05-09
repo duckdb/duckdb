@@ -7,6 +7,7 @@
 #include "optimizer/filter_pushdown.hpp"
 #include "optimizer/index_scan.hpp"
 #include "optimizer/join_order_optimizer.hpp"
+#include "optimizer/regex_range_filter.hpp"
 #include "optimizer/rule/list.hpp"
 #include "planner/binder.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
@@ -34,6 +35,8 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 #endif
 }
 
+namespace duckdb {
+
 class InClauseRewriter : public LogicalOperatorVisitor {
 public:
 	InClauseRewriter(Optimizer &optimizer) : optimizer(optimizer) {
@@ -58,6 +61,8 @@ public:
 	unique_ptr<Expression> VisitReplace(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 };
 
+} // namespace duckdb
+
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees
@@ -75,6 +80,11 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	context.profiler.StartPhase("index_scan");
 	IndexScan index_scan;
 	plan = index_scan.Optimize(move(plan));
+	context.profiler.EndPhase();
+
+	context.profiler.StartPhase("regex_range");
+	RegexRangeFilter regex_opt;
+	plan = regex_opt.Rewrite(move(plan));
 	context.profiler.EndPhase();
 
 	// then we perform the join ordering optimization
@@ -106,7 +116,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	if (expr.type != ExpressionType::COMPARE_IN) {
 		return nullptr;
 	}
-	if (expr.children[0]->IsScalar()) {
+	if (expr.children[0]->IsFoldable()) {
 		// LHS is scalar: we can flatten the entire list
 		return nullptr;
 	}
@@ -118,9 +128,9 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	auto in_type = expr.children[0]->return_type;
 	// IN clause with many children: try to generate a mark join that replaces this IN expression
 	// we can only do this if the expressions in the expression list are scalar
-	for (size_t i = 1; i < expr.children.size(); i++) {
+	for (uint64_t i = 1; i < expr.children.size(); i++) {
 		assert(expr.children[i]->return_type == in_type);
-		if (!expr.children[i]->IsScalar()) {
+		if (!expr.children[i]->IsFoldable()) {
 			// non-scalar expression
 			return nullptr;
 		}
@@ -132,10 +142,10 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	auto collection = make_unique<ChunkCollection>();
 	DataChunk chunk;
 	chunk.Initialize(types);
-	for (size_t i = 1; i < expr.children.size(); i++) {
+	for (uint64_t i = 1; i < expr.children.size(); i++) {
 		// reoslve this expression to a constant
 		auto value = ExpressionExecutor::EvaluateScalar(*expr.children[i]);
-		size_t index = chunk.data[0].count++;
+		uint64_t index = chunk.data[0].count++;
 		chunk.data[0].SetValue(index, value);
 		if (chunk.data[0].count == STANDARD_VECTOR_SIZE || i + 1 == expr.children.size()) {
 			// chunk full: append to chunk collection
@@ -157,6 +167,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	// create the JOIN condition
 	JoinCondition cond;
 	cond.left = move(expr.children[0]);
+
 	cond.right = make_unique<BoundColumnRefExpression>(in_type, ColumnBinding(subquery_index, 0));
 	cond.comparison = ExpressionType::COMPARE_EQUAL;
 	join->conditions.push_back(move(cond));

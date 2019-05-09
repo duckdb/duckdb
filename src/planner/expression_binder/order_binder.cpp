@@ -8,12 +8,12 @@
 using namespace duckdb;
 using namespace std;
 
-OrderBinder::OrderBinder(size_t projection_index, SelectNode &node, unordered_map<string, uint32_t> &alias_map,
+OrderBinder::OrderBinder(uint64_t projection_index, SelectNode &node, unordered_map<string, uint32_t> &alias_map,
                          expression_map_t<uint32_t> &projection_map)
     : projection_index(projection_index), node(node), alias_map(alias_map), projection_map(projection_map) {
 }
 
-unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &expr, size_t index) {
+unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &expr, uint64_t index) {
 	return make_unique<BoundColumnRefExpression>(expr.GetName(), TypeId::INVALID,
 	                                             ColumnBinding(projection_index, index));
 }
@@ -38,7 +38,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		}
 		// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
 		auto index = constant.value.GetNumericValue();
-		if (index < 1 || index > node.select_list.size()) {
+		if (index < 1 || (uint64_t)index > node.select_list.size()) {
 			throw BinderException("ORDER term out of range - should be between 1 and %d", (int)node.select_list.size());
 		}
 		return CreateProjectionReference(*expr, index - 1);

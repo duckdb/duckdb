@@ -17,9 +17,6 @@ class ComparisonExpression : public ParsedExpression {
 public:
 	ComparisonExpression(ExpressionType type, unique_ptr<ParsedExpression> left, unique_ptr<ParsedExpression> right);
 
-	static ExpressionType NegateComparisionExpression(ExpressionType type);
-	static ExpressionType FlipComparisionExpression(ExpressionType type);
-
 	unique_ptr<ParsedExpression> left;
 	unique_ptr<ParsedExpression> right;
 

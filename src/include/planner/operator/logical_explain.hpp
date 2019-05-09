@@ -19,7 +19,6 @@ public:
 	}
 
 	string physical_plan;
-	string parse_tree;
 	string logical_plan_unopt;
 	string logical_plan_opt;
 

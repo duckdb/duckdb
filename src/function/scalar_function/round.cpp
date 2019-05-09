@@ -6,9 +6,9 @@
 using namespace std;
 
 namespace duckdb {
-namespace function {
 
-void round_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result) {
+void round_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_count, BoundFunctionExpression &expr,
+                    Vector &result) {
 	result.Initialize(inputs[0].type);
 	VectorOperations::Round(inputs[0], inputs[1], result);
 }
@@ -43,5 +43,4 @@ SQLType round_get_return_type(vector<SQLType> &arguments) {
 	return arguments[0];
 }
 
-} // namespace function
 } // namespace duckdb

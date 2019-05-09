@@ -14,7 +14,7 @@ using namespace std;
 using Filter = FilterPushdown::Filter;
 
 static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> expr,
-                                                    unordered_set<size_t> &right_bindings) {
+                                                    unordered_set<uint64_t> &right_bindings) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = (BoundColumnRefExpression &)*expr;
 		if (right_bindings.find(bound_colref.binding.table_index) != right_bindings.end()) {
@@ -30,7 +30,7 @@ static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> expr,
 	return expr;
 }
 
-static bool FilterRemovesNull(ExpressionRewriter &rewriter, Expression *expr, unordered_set<size_t> &right_bindings) {
+static bool FilterRemovesNull(ExpressionRewriter &rewriter, Expression *expr, unordered_set<uint64_t> &right_bindings) {
 	// make a copy of the expression
 	auto copy = expr->Copy();
 	// replace all BoundColumnRef expressions frmo the RHS with NULL constants in the copied expression
@@ -44,7 +44,7 @@ static bool FilterRemovesNull(ExpressionRewriter &rewriter, Expression *expr, un
 
 	if (filter->expressions[0]->type != ExpressionType::VALUE_CONSTANT) {
 		// could not flatten the result
-		assert(!filter->expressions[0]->IsScalar());
+		assert(!filter->expressions[0]->IsFoldable());
 		return false;
 	}
 	// we flattened the result into a scalar, check if it is FALSE or NULL
@@ -56,8 +56,8 @@ static bool FilterRemovesNull(ExpressionRewriter &rewriter, Expression *expr, un
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalOperator> op,
-                                                             unordered_set<size_t> &left_bindings,
-                                                             unordered_set<size_t> &right_bindings) {
+                                                             unordered_set<uint64_t> &left_bindings,
+                                                             unordered_set<uint64_t> &right_bindings) {
 	auto &join = (LogicalJoin &)*op;
 	assert(join.type == JoinType::LEFT);
 	assert(op->type != LogicalOperatorType::DELIM_JOIN);
@@ -74,8 +74,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 		}
 	}
 	// now check the set of filters
-	for (size_t i = 0; i < filters.size(); i++) {
-		auto side = LogicalComparisonJoin::GetJoinSide(filters[i]->bindings, left_bindings, right_bindings);
+	for (uint64_t i = 0; i < filters.size(); i++) {
+		auto side = JoinSide::GetJoinSide(filters[i]->bindings, left_bindings, right_bindings);
 		if (side == JoinSide::LEFT) {
 			// bindings match left side
 			// we can push the filter into the left side
@@ -112,7 +112,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 	// this happens if, e.g. a join condition is (i=a) and there is a filter (i=500), we can then push the filter
 	// (a=500) into the RHS
 	filter_combiner.GenerateFilters([&](unique_ptr<Expression> filter) {
-		if (LogicalComparisonJoin::GetJoinSide(*filter, left_bindings, right_bindings) == JoinSide::RIGHT) {
+		if (JoinSide::GetJoinSide(*filter, left_bindings, right_bindings) == JoinSide::RIGHT) {
 			right_pushdown.AddFilter(move(filter));
 		}
 	});

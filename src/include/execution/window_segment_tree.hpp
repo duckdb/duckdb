@@ -20,24 +20,24 @@ public:
 	    : aggregate(Value()), n_aggregated(0), window_type(window_type), payload_type(payload_type), input_ref(input) {
 		ConstructTree();
 	}
-	Value Compute(size_t start, size_t end);
+	Value Compute(uint64_t start, uint64_t end);
 
 private:
 	void ConstructTree();
-	void WindowSegmentValue(size_t l_idx, size_t begin, size_t end);
+	void WindowSegmentValue(uint64_t l_idx, uint64_t begin, uint64_t end);
 	void AggregateInit();
 	Value AggegateFinal();
 
 	Value aggregate;
-	size_t n_aggregated; // for sum
+	uint64_t n_aggregated; // for sum
 	ExpressionType window_type;
 	TypeId payload_type;
 	unique_ptr<char[]> levels_flat_native;
-	vector<size_t> levels_flat_start;
+	vector<uint64_t> levels_flat_start;
 
 	ChunkCollection *input_ref;
 
-	static constexpr size_t TREE_FANOUT = 64; // this should cleanly divide STANDARD_VECTOR_SIZE
+	static constexpr uint64_t TREE_FANOUT = 64; // this should cleanly divide STANDARD_VECTOR_SIZE
 };
 
 } // namespace duckdb

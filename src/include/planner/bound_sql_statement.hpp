@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "common/enums/statement_type.hpp"
 
 namespace duckdb {
 //! Bound equivalent of SQLStatement

@@ -19,7 +19,7 @@ public:
 	PhysicalDelimJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> original_join,
 	                  vector<PhysicalOperator *> delim_scans);
 
-	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 	string ExtraRenderInformation() const override;
 

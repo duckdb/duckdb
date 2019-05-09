@@ -9,9 +9,9 @@
 using namespace std;
 
 namespace duckdb {
-namespace function {
 
-void concat_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result) {
+void concat_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_count, BoundFunctionExpression &expr,
+                     Vector &result) {
 	assert(input_count == 2);
 	auto &input1 = inputs[0];
 	auto &input2 = inputs[1];
@@ -26,18 +26,18 @@ void concat_function(Vector inputs[], size_t input_count, BoundFunctionExpressio
 	auto input2_data = (const char **)input2.data;
 
 	// bool has_stats = expr.function->children[0]->stats.has_stats && expr.function->children[1]->stats.has_stats;
-	size_t current_len = 0;
+	uint64_t current_len = 0;
 	unique_ptr<char[]> output;
 
 	VectorOperations::BinaryExec(input1, input2, result,
-	                             [&](size_t input1_index, size_t input2_index, size_t result_index) {
+	                             [&](uint64_t input1_index, uint64_t input2_index, uint64_t result_index) {
 		                             if (result.nullmask[result_index]) {
 			                             return;
 		                             }
 		                             auto input1 = input1_data[input1_index];
 		                             auto input2 = input2_data[input2_index];
-		                             size_t len1 = strlen(input1), len2 = strlen(input2);
-		                             size_t required_len = len1 + len2 + 1;
+		                             uint64_t len1 = strlen(input1), len2 = strlen(input2);
+		                             uint64_t required_len = len1 + len2 + 1;
 		                             if (required_len > current_len) {
 			                             current_len = required_len;
 			                             output = unique_ptr<char[]>{new char[required_len]};
@@ -58,5 +58,4 @@ SQLType concat_get_return_type(vector<SQLType> &arguments) {
 	return SQLType(SQLTypeId::VARCHAR);
 }
 
-} // namespace function
 } // namespace duckdb

@@ -21,7 +21,7 @@ public:
 	    : PhysicalProjection(op.types, move(select_list)) {
 	}
 
-	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	string ExtraRenderInformation() const override;
 
 	vector<unique_ptr<Expression>> select_list;

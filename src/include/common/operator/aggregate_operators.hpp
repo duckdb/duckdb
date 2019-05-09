@@ -12,7 +12,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace operators {
+namespace duckdb {
 
 struct Min {
 	template <class T> static inline T Operation(T left, T right) {
@@ -32,4 +32,4 @@ struct MaximumStringLength {
 	}
 };
 
-} // namespace operators
+} // namespace duckdb

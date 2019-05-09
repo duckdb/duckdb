@@ -84,15 +84,15 @@ template <class OP, bool IGNORE_NULL> static Value templated_binary_operation(co
 // Numeric Operations
 //===--------------------------------------------------------------------===//
 Value ValueOperations::Add(const Value &left, const Value &right) {
-	return templated_binary_operation<operators::Add, false>(left, right);
+	return templated_binary_operation<duckdb::Add, false>(left, right);
 }
 
 Value ValueOperations::Subtract(const Value &left, const Value &right) {
-	return templated_binary_operation<operators::Subtract, false>(left, right);
+	return templated_binary_operation<duckdb::Subtract, false>(left, right);
 }
 
 Value ValueOperations::Multiply(const Value &left, const Value &right) {
-	return templated_binary_operation<operators::Multiply, false>(left, right);
+	return templated_binary_operation<duckdb::Multiply, false>(left, right);
 }
 
 Value ValueOperations::Modulo(const Value &left, const Value &right) {
@@ -140,14 +140,14 @@ Value ValueOperations::Divide(const Value &left, const Value &right) {
 		result.is_null = true;
 		return result;
 	} else {
-		return templated_binary_operation<operators::Divide, false>(left, right);
+		return templated_binary_operation<duckdb::Divide, false>(left, right);
 	}
 }
 
 Value ValueOperations::Min(const Value &left, const Value &right) {
-	return templated_binary_operation<operators::Min, true>(left, right);
+	return templated_binary_operation<duckdb::Min, true>(left, right);
 }
 
 Value ValueOperations::Max(const Value &left, const Value &right) {
-	return templated_binary_operation<operators::Max, true>(left, right);
+	return templated_binary_operation<duckdb::Max, true>(left, right);
 }

@@ -1,7 +1,10 @@
 #include "transaction/transaction_manager.hpp"
 
+#include "catalog/catalog_set.hpp"
 #include "common/exception.hpp"
 #include "common/helper.hpp"
+#include "main/client_context.hpp"
+#include "main/database.hpp"
 #include "storage/storage_manager.hpp"
 #include "transaction/transaction.hpp"
 
@@ -76,11 +79,11 @@ void TransactionManager::RollbackTransaction(Transaction *transaction) {
 
 void TransactionManager::RemoveTransaction(Transaction *transaction) {
 	// remove the transaction from the list of active transactions
-	size_t t_index = active_transactions.size();
+	uint64_t t_index = active_transactions.size();
 	// check for the lowest and highest start time in the list of transactions
 	transaction_t lowest_start_time = TRANSACTION_ID_START;
 	transaction_t lowest_active_query = MAXIMUM_QUERY_ID;
-	for (size_t i = 0; i < active_transactions.size(); i++) {
+	for (uint64_t i = 0; i < active_transactions.size(); i++) {
 		if (active_transactions[i].get() == transaction) {
 			t_index = i;
 		} else {
@@ -88,6 +91,7 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) {
 			lowest_active_query = std::min(lowest_active_query, active_transactions[i]->active_query);
 		}
 	}
+	transaction_t lowest_stored_query = lowest_start_time;
 	assert(t_index != active_transactions.size());
 	auto current_transaction = move(active_transactions[t_index]);
 	if (transaction->commit_id != 0) {
@@ -103,9 +107,10 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) {
 	// remove the transaction from the set of currently active transactions
 	active_transactions.erase(active_transactions.begin() + t_index);
 	// traverse the recently_committed transactions to see if we can remove any
-	size_t i = 0;
+	uint64_t i = 0;
 	for (; i < recently_committed_transactions.size(); i++) {
 		assert(recently_committed_transactions[i]);
+		lowest_stored_query = std::min(recently_committed_transactions[i]->start_time, lowest_stored_query);
 		if (recently_committed_transactions[i]->commit_id < lowest_start_time) {
 			// changes made BEFORE this transaction are no longer relevant
 			// we can cleanup the undo buffer
@@ -151,4 +156,30 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) {
 		// we garbage collected transactions: remove them from the list
 		old_transactions.erase(old_transactions.begin(), old_transactions.begin() + i);
 	}
+	// check if we can free the memory of any old catalog sets
+	for (i = 0; i < old_catalog_sets.size(); i++) {
+		assert(old_catalog_sets[i].highest_active_query > 0);
+		if (old_catalog_sets[i].highest_active_query >= lowest_stored_query) {
+			// there is still a query running that could be using
+			// this catalog sets' data
+			break;
+		}
+	}
+	if (i > 0) {
+		// we garbage collected catalog sets: remove them from the list
+		old_catalog_sets.erase(old_catalog_sets.begin(), old_catalog_sets.begin() + i);
+	}
+}
+
+void TransactionManager::AddCatalogSet(ClientContext &context, unique_ptr<CatalogSet> catalog_set) {
+	// remove the dependencies from all entries of the CatalogSet
+	context.catalog.dependency_manager.ClearDependencies(*catalog_set);
+
+	lock_guard<mutex> lock(transaction_lock);
+
+	StoredCatalogSet set;
+	set.stored_set = move(catalog_set);
+	set.highest_active_query = current_start_timestamp;
+
+	old_catalog_sets.push_back(move(set));
 }

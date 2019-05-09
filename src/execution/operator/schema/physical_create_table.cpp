@@ -1,6 +1,7 @@
 #include "execution/operator/schema/physical_create_table.hpp"
 
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "execution/expression_executor.hpp"
 #include "main/client_context.hpp"
 #include "storage/data_table.hpp"
@@ -8,7 +9,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalCreateTable::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalCreateTable::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	int64_t inserted_count = 0;
 	schema->CreateTable(context.ActiveTransaction(), info.get());
 	if (children.size() > 0) {

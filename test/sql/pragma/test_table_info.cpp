@@ -9,7 +9,7 @@ TEST_CASE("Test table_info pragma", "[pragma]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER DEFAULT 1+3, j INTEGER)"));
 
 	// PRAGMA table_info(table) returns information on the table
 	REQUIRE_NO_FAIL(result = con.Query("PRAGMA table_info('integers');"));
@@ -22,7 +22,7 @@ TEST_CASE("Test table_info pragma", "[pragma]") {
 	// NOT NULL
 	REQUIRE(CHECK_COLUMN(result, 3, {false, false}));
 	// DEFAULT VALUE
-	REQUIRE(CHECK_COLUMN(result, 4, {false, false}));
+	REQUIRE(CHECK_COLUMN(result, 4, {"1 + 3", "NULL"}));
 	// PRIMARY KEY
 	REQUIRE(CHECK_COLUMN(result, 5, {false, false}));
 

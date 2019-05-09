@@ -14,7 +14,7 @@
 using namespace duckdb;
 using namespace std;
 
-uint8_t *UndoBuffer::CreateEntry(UndoFlags type, size_t len) {
+uint8_t *UndoBuffer::CreateEntry(UndoFlags type, uint64_t len) {
 	UndoEntry entry;
 	entry.type = type;
 	entry.length = len;
@@ -39,6 +39,10 @@ void UndoBuffer::Cleanup() {
 			// destroy the backed up entry: it is no longer required
 			assert(catalog_entry->parent);
 			if (catalog_entry->parent->type != CatalogType::UPDATED_ENTRY) {
+				if (!catalog_entry->parent->child->deleted) {
+					// delete the entry from the dependency manager, if it is not deleted yet
+					catalog_entry->catalog->dependency_manager.EraseObject(catalog_entry->parent->child.get());
+				}
 				catalog_entry->parent->child = move(catalog_entry->child);
 			}
 		} else if (entry.type == UndoFlags::INSERT_TUPLE || entry.type == UndoFlags::DELETE_TUPLE ||
@@ -50,9 +54,9 @@ void UndoBuffer::Cleanup() {
 				assert(info->chunk);
 				assert(info->tuple_data);
 				if (info->table->indexes.size() > 0) {
-					Value ptr = Value::POINTER(info->chunk->start + info->prev.entry);
+					Value ptr = Value::BIGINT(info->chunk->start + info->prev.entry);
 					uint8_t *alternate_version_pointers[1];
-					size_t alternate_version_index[1];
+					uint64_t alternate_version_index[1];
 
 					alternate_version_pointers[0] = info->tuple_data;
 					alternate_version_index[0] = 0;
@@ -207,10 +211,10 @@ static void WriteTuple(WriteAheadLog *log, VersionInformation *entry,
 	if (entry->chunk) {
 		auto id = entry->prev.entry;
 		// append the tuple to the current chunk
-		size_t current_offset = chunk->size();
-		for (size_t i = 0; i < chunk->column_count; i++) {
+		uint64_t current_offset = chunk->size();
+		for (uint64_t i = 0; i < chunk->column_count; i++) {
 			auto type = chunk->data[i].type;
-			size_t value_size = GetTypeIdSize(type);
+			uint64_t value_size = GetTypeIdSize(type);
 			void *storage_pointer = storage->columns[i] + value_size * id;
 			memcpy(chunk->data[i].data + value_size * current_offset, storage_pointer, value_size);
 			chunk->data[i].count++;
@@ -219,10 +223,10 @@ static void WriteTuple(WriteAheadLog *log, VersionInformation *entry,
 		assert(entry->prev.pointer->tuple_data);
 		auto tuple_data = entry->prev.pointer->tuple_data;
 		// append the tuple to the current chunk
-		size_t current_offset = chunk->size();
-		for (size_t i = 0; i < chunk->column_count; i++) {
+		uint64_t current_offset = chunk->size();
+		for (uint64_t i = 0; i < chunk->column_count; i++) {
 			auto type = chunk->data[i].type;
-			size_t value_size = GetTypeIdSize(type);
+			uint64_t value_size = GetTypeIdSize(type);
 			memcpy(chunk->data[i].data + value_size * current_offset, tuple_data, value_size);
 			tuple_data += value_size;
 			chunk->data[i].count++;
@@ -279,7 +283,7 @@ void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
 }
 
 void UndoBuffer::Rollback() {
-	for (size_t i = entries.size(); i > 0; i--) {
+	for (uint64_t i = entries.size(); i > 0; i--) {
 		auto &entry = entries[i - 1];
 		if (entry.type == UndoFlags::CATALOG_ENTRY) {
 			// undo this catalog entry
@@ -296,7 +300,7 @@ void UndoBuffer::Rollback() {
 				assert(info->chunk);
 				if (info->table->indexes.size() > 0) {
 					uint64_t rowid = info->chunk->start + info->prev.entry;
-					Value ptr = Value::POINTER(rowid);
+					Value ptr = Value::BIGINT(rowid);
 					sel_t regular_entries[STANDARD_VECTOR_SIZE];
 					regular_entries[0] = 0;
 

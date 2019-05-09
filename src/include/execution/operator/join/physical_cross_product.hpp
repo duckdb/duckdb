@@ -17,7 +17,7 @@ class PhysicalCrossProduct : public PhysicalOperator {
 public:
 	PhysicalCrossProduct(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right);
 
-	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
@@ -29,8 +29,8 @@ public:
 		assert(left && right);
 	}
 
-	size_t left_position;
-	size_t right_position;
+	uint64_t left_position;
+	uint64_t right_position;
 	ChunkCollection right_data;
 };
 } // namespace duckdb

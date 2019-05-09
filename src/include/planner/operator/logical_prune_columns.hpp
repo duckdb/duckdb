@@ -16,11 +16,11 @@ namespace duckdb {
 //! children
 class LogicalPruneColumns : public LogicalOperator {
 public:
-	LogicalPruneColumns(size_t column_limit)
+	LogicalPruneColumns(uint64_t column_limit)
 	    : LogicalOperator(LogicalOperatorType::PRUNE_COLUMNS), column_limit(column_limit) {
 	}
 
-	size_t column_limit;
+	uint64_t column_limit;
 
 protected:
 	void ResolveTypes() override;
