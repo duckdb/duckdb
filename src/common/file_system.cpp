@@ -16,6 +16,11 @@ using namespace std;
 #include <sys/types.h>
 #include <unistd.h>
 
+// somehow sometimes this is missing
+#ifndef O_CLOEXEC
+# define O_CLOEXEC 0
+#endif
+
 struct UnixFileHandle : public FileHandle {
 public:
 	UnixFileHandle(FileSystem &file_system, string path, int fd) : FileHandle(file_system, path), fd(fd) {
