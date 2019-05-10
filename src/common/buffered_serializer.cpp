@@ -12,7 +12,7 @@ BufferedSerializer::BufferedSerializer(unique_ptr<uint8_t[]> data, uint64_t size
 	blob.data = move(data);
 }
 
-void BufferedSerializer::Write(const uint8_t *buffer, uint64_t write_size) {
+void BufferedSerializer::WriteData(const uint8_t *buffer, uint64_t write_size) {
 	if (blob.size + write_size >= maximum_size) {
 		do {
 			maximum_size *= 2;

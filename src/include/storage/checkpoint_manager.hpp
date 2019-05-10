@@ -14,12 +14,15 @@
 #include "storage/meta_block_writer.hpp"
 
 namespace duckdb {
+class ClientContext;
+class MetaBlockReader;
 class SchemaCatalogEntry;
 class TableCatalogEntry;
 
 struct DataPointer {
 	double min;
 	double max;
+	uint64_t tuple_count;
 	block_id_t block_id;
 	uint32_t offset;
 };
@@ -34,14 +37,17 @@ public:
 	//! Checkpoint the current state of the WAL and flush it to the main storage. This should be called BEFORE any
 	//! connction is available because right now the checkpointing cannot be done online. (TODO)
 	void CreateCheckpoint();
+	//! Load from a stored checkpoint
+	void LoadFromStorage();
 private:
 	void WriteSchema(Transaction &transaction, SchemaCatalogEntry *schema);
 	void WriteTable(Transaction &transaction, TableCatalogEntry *table);
 	void WriteTableData(Transaction &transaction, TableCatalogEntry *table);
-	void WriteColumnData(TableCatalogEntry *table, ChunkCollection& collection, int32_t index, vector<DataPointer>& column_pointers);
+
+	void ReadSchema(ClientContext &context, MetaBlockReader &reader);
+	void ReadTable(ClientContext &context, MetaBlockReader &reader);
+	void ReadTableData(ClientContext &context, TableCatalogEntry &table, MetaBlockReader &reader);
 private:
-	//! The storage manager of the checkpoint manager
-	StorageManager &manager;
 	//! The block manager to write the checkpoint to
 	BlockManager &block_manager;
 	//! The database this storagemanager belongs to

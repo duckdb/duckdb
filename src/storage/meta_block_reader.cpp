@@ -8,7 +8,7 @@ MetaBlockReader::MetaBlockReader(BlockManager &manager, block_id_t block_id) :
 	ReadNewBlock(block_id);
 }
 
-void MetaBlockReader::Read(char *buffer, uint64_t read_size) {
+void MetaBlockReader::ReadData(uint8_t *buffer, uint64_t read_size) {
 	while (offset + read_size > block->size) {
 		// cannot read entire entry from block
 		// first read what we can from this block

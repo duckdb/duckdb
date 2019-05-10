@@ -30,7 +30,7 @@ public:
 	// //! not checked
 	// BufferedSerializer(uint8_t *data);
 
-	void Write(const uint8_t *buffer, uint64_t write_size) override;
+	void WriteData(const uint8_t *buffer, uint64_t write_size) override;
 
 	//! Retrieves the data after the writing has been completed
 	BinaryData GetData() {

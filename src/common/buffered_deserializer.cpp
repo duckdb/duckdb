@@ -11,7 +11,7 @@ BufferedDeserializer::BufferedDeserializer(BufferedSerializer &serializer) :
 	BufferedDeserializer(serializer.data, serializer.maximum_size) {
 }
 
-void BufferedDeserializer::Read(uint8_t *buffer, uint64_t read_size) {
+void BufferedDeserializer::ReadData(uint8_t *buffer, uint64_t read_size) {
 	if (ptr + read_size > endptr) {
 		throw SerializationException("Failed to deserialize: not enough data in buffer to fulfill read request");
 	}

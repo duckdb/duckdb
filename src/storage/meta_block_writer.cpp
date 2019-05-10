@@ -19,16 +19,15 @@ void MetaBlockWriter::Flush() {
 	}
 }
 
-void MetaBlockWriter::Write(const char *data, uint64_t data_size) {
-	while (offset + data_size > block->size) {
+void MetaBlockWriter::WriteData(const uint8_t *buffer, uint64_t write_size) {
+	while (offset + write_size > block->size) {
 		// we need to make a new block
 		// first copy what we can
 		int64_t copy_amount = block->size - offset;
 		if (copy_amount > 0) {
-			assert(copy_amount < data_size);
-			memcpy(block->buffer + offset, data, copy_amount);
-			data += copy_amount;
-			data_size -= copy_amount;
+			memcpy(block->buffer + offset, buffer, copy_amount);
+			buffer += copy_amount;
+			write_size -= copy_amount;
 		}
 		// now we need to get a new block id
 		block_id_t new_block_id = manager.GetFreeBlockId();
@@ -39,6 +38,6 @@ void MetaBlockWriter::Write(const char *data, uint64_t data_size) {
 		// now update the block id of the lbock
 		block->id = new_block_id;
 	}
-	memcpy(block->buffer + offset, data, data_size);
-	offset += data_size;
+	memcpy(block->buffer + offset, buffer, write_size);
+	offset += write_size;
 }

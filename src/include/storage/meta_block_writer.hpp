@@ -9,13 +9,14 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "common/serializer.hpp"
 #include "storage/block.hpp"
 #include "storage/block_manager.hpp"
 
 namespace duckdb {
 
 //! This struct is responsible for writing metadata to disk
-class MetaBlockWriter {
+class MetaBlockWriter : public Serializer {
 public:
 	MetaBlockWriter(BlockManager &manager);
 	~MetaBlockWriter();
@@ -26,16 +27,7 @@ public:
 public:
 	void Flush();
 
-	void Write(const char *data, uint64_t data_size);
-
-	template <class T> void Write(T element) {
-		Write((const char *)&element, sizeof(T));
-	}
-
-	void WriteString(string &str) {
-		Write<uint32_t>(str.size());
-		Write(str.c_str(), str.size());
-	}
+	void WriteData(const uint8_t *buffer, uint64_t write_size) override;
 };
 
 } // namespace duckdb

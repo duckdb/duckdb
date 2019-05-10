@@ -18,16 +18,16 @@ class Serializer {
 public:
 	virtual ~Serializer(){}
 
-	virtual void Write(const uint8_t *buffer, uint64_t write_size) = 0;
+	virtual void WriteData(const uint8_t *buffer, uint64_t write_size) = 0;
 
 	template <class T> void Write(T element) {
-		Write((const uint8_t*) &element, sizeof(T));
+		WriteData((const uint8_t*) &element, sizeof(T));
 	}
 
 	void WriteString(const string &val) {
 		Write<uint32_t>((uint32_t)val.size());
 		if (val.size() > 0) {
-			Write((const uint8_t*) val.c_str(), val.size());
+			WriteData((const uint8_t*) val.c_str(), val.size());
 		}
 	}
 
@@ -54,11 +54,11 @@ public:
 	virtual ~Deserializer(){}
 
 	//! Reads [read_size] bytes into the buffer
-	virtual void Read(uint8_t *buffer, uint64_t read_size) = 0;
+	virtual void ReadData(uint8_t *buffer, uint64_t read_size) = 0;
 
 	template <class T> T Read() {
 		T value;
-		Read((uint8_t*) &value, sizeof(T));
+		ReadData((uint8_t*) &value, sizeof(T));
 		return value;
 	}
 

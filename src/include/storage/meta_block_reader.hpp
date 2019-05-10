@@ -9,12 +9,13 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "common/serializer.hpp"
 #include "storage/block.hpp"
 #include "storage/block_manager.hpp"
 
 namespace duckdb {
 //! This struct is responsible for reading meta data from disk
-class MetaBlockReader {
+class MetaBlockReader : public Deserializer {
 public:
 	MetaBlockReader(BlockManager &manager, block_id_t block);
 
@@ -24,21 +25,7 @@ public:
 	block_id_t next_block;
 public:
 	//! Read content of size read_size into the buffer
-	void Read(char *buffer, uint64_t read_size);
-
-	template <class T> T Read() {
-		T element;
-		Read((char *)&element, sizeof(T));
-		return element;
-	}
-
-	string ReadString() {
-		uint32_t size = Read<uint32_t>();
-		char buffer[size + 1];
-		buffer[size] = '\0';
-		Read(buffer, size);
-		return string(buffer, size);
-	}
+	void ReadData(uint8_t *buffer, uint64_t read_size) override;
 private:
 	void ReadNewBlock(block_id_t id);
 };

@@ -42,7 +42,7 @@ public:
 	vector<unique_ptr<Expression>> bound_defaults;
 	//! A map of column name to column index
 	unordered_map<string, column_t> name_map;
-
+public:
 	unique_ptr<CatalogEntry> AlterEntry(AlterInfo *info) override;
 	//! Returns whether or not a column with the given name exists
 	bool ColumnExists(const string &name);
