@@ -63,7 +63,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
 		auto left_expr = TransformExpression(root->lexpr);
 		ExpressionType operator_type;
 		// this looks very odd, but seems to be the way to find out its NOT IN
-		if (name == "<q>") {
+		if (name == "<>") {
 			// NOT IN
 			operator_type = ExpressionType::COMPARE_NOT_IN;
 		} else {
@@ -112,32 +112,6 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(compare_between));
 		}
 	} break;
-    // rewrite SIMILAR TO into regexp_matches('asdf', '.*sd.*')
-    case AEXPR_OP: {
-		auto left_expr = TransformExpression(root->lexpr);
-		auto right_expr = TransformExpression(root->rexpr);
-
-        vector<unique_ptr<ParsedExpression>> children;
-        children.push_back(move(left_expr));
-        children.push_back(move(right_expr));
-
-        bool invert_similar = false;
-		if (name == "!~") {
-			// NOT SIMILAR TO
-			invert_similar = true;
-		}
-
-        const auto schema = DEFAULT_SCHEMA;
-		const auto regex_function = RegexpMatchesFunction::GetName();
-		const auto lowercase_name = StringUtil::Lower(regex_function);
-		auto result = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children);
-
-        if (invert_similar) {
-			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(result));
-		} else {
-			return move(result);
-		}
-	} break;
 	// rewrite SIMILAR TO into regexp_matches('asdf', '.*sd.*')
 	case AEXPR_SIMILAR: {
 		auto left_expr = TransformExpression(root->lexpr);
@@ -175,7 +149,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
 		} else {
 			return move(result);
 		}
-	}
+	} break;
 	default: {
 		target_type = OperatorToExpressionType(name);
 		if (target_type == ExpressionType::INVALID) {
@@ -204,6 +178,29 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
 		children.push_back(move(left_expr));
 		children.push_back(move(right_expr));
 		return make_unique<FunctionExpression>("concat", children);
+	}
+
+	// rewrite SIMILAR TO into regexp_matches('asdf', '.*sd.*')
+	if (target_type == ExpressionType::COMPARE_SIMILAR || target_type == ExpressionType::COMPARE_NOTSIMILAR) {
+		bool invert_similar = false;
+		if (name == "!~") {
+			// NOT SIMILAR TO
+			invert_similar = true;
+		}
+		vector<unique_ptr<ParsedExpression>> children;
+		children.push_back(move(left_expr));
+		children.push_back(move(right_expr));
+
+		const auto schema = DEFAULT_SCHEMA;
+		const auto regex_function = RegexpMatchesFunction::GetName();
+		const auto lowercase_name = StringUtil::Lower(regex_function);
+		auto result = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children);
+
+		if (invert_similar) {
+			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(result));
+		} else {
+			return move(result);
+		}
 	}
 
 	unique_ptr<ParsedExpression> result = nullptr;

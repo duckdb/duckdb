@@ -51,7 +51,7 @@ TEST_CASE("Test scalar SIMILAR TO statement", "[similar]") {
 	result = connection.Query("SELECT 'aaa' ~ 'aaa'");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
 
-    result = connection.Query("SELECT 'aaa' !~ 'bbb'");
+	result = connection.Query("SELECT 'aaa' !~ 'bbb'");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
 
 	result = connection.Query("SELECT 'aaa' ~ '^a'");
@@ -70,20 +70,22 @@ TEST_CASE("Test SIMILAR TO statement with expressions", "[similar]") {
 	Connection connection(database);
 
 	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE strings (s STRING, p STRING);"));
-	REQUIRE_NO_FAIL(
-	    connection.Query("INSERT INTO strings VALUES('aaa', 'a[a-z]a'), ('abab', 'ab.*'), ('aaa', 'a[a-z]a'), ('aaa', '.*b.*');"));
+	REQUIRE_NO_FAIL(connection.Query(
+	    "INSERT INTO strings VALUES('aaa', 'a[a-z]a'), ('abab', 'ab.*'), ('aaa', 'a[a-z]a'), ('aaa', '.*b.*');"));
 	result = connection.Query("");
 
 	result = connection.Query("SELECT s FROM strings WHERE s SIMILAR TO 'ab.*'");
 	REQUIRE(CHECK_COLUMN(result, 0, {"abab"}));
 
 	result = connection.Query("SELECT s FROM strings WHERE 'aba' SIMILAR TO p");
-	REQUIRE(CHECK_COLUMN(result, 0, {"abab", "aaa", "aaa"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {"aaa", "abab", "aaa", "aaa"}));
 
 	result = connection.Query("SELECT s FROM strings WHERE s SIMILAR TO p");
-	REQUIRE(CHECK_COLUMN(result, 0, {"abab", "aaa"}));
-}
+	REQUIRE(CHECK_COLUMN(result, 0, {"aaa", "abab", "aaa"}));
 
+	result = connection.Query("SELECT s FROM strings WHERE s NOT SIMILAR TO p");
+	REQUIRE(CHECK_COLUMN(result, 0, {"aaa"}));
+}
 
 TEST_CASE("Test SIMILAR TO statement exceptions", "[similar]") {
 	unique_ptr<QueryResult> result;
@@ -91,10 +93,9 @@ TEST_CASE("Test SIMILAR TO statement exceptions", "[similar]") {
 	Connection connection(database);
 
 	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE strings (s STRING, p STRING);"));
-	REQUIRE_NO_FAIL(
-	    connection.Query("INSERT INTO strings VALUES('aaa', 'a[a-z]a'), ('abab', 'ab.*'), ('aaa', 'a[a-z]a'), ('aaa', '.*b.*');"));
+	REQUIRE_NO_FAIL(connection.Query(
+	    "INSERT INTO strings VALUES('aaa', 'a[a-z]a'), ('abab', 'ab.*'), ('aaa', 'a[a-z]a'), ('aaa', '.*b.*');"));
 	result = connection.Query("");
 
-	REQUIRE_FAIL(connection.Query("SELECT s FROM strings WHERE s SIMILAR TO 'ab.*\n'"));
-	REQUIRE_FAIL(connection.Query("SELECT s FROM strings WHERE s SIMILAR TO 'ab.*\n'"));
+	REQUIRE_FAIL(connection.Query("SELECT s FROM strings WHERE s SIMILAR TO 'ab.*\%' {escape '\'}"));
 }
