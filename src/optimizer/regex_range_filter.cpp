@@ -34,7 +34,6 @@ unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator
 			if (!info.range_success) {
 				continue;
 			}
-
 			auto filter_left = make_unique<BoundComparisonExpression>(
 			    ExpressionType::COMPARE_GREATERTHANOREQUALTO, func.children[0]->Copy(),
 			    make_unique<BoundConstantExpression>(Value(info.range_min)));
