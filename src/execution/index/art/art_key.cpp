@@ -72,6 +72,7 @@ void Key::convert_to_binary_comparable(bool isLittleEndian, TypeId type, uintptr
 		} else {
 			data[0] = tid;
 		}
+		break;
 	case TypeId::TINYINT:
 		len = 1;
 		if (isLittleEndian) {
