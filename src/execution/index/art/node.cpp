@@ -47,7 +47,7 @@ Node *Node::minimum(Node *node) {
 	}
 	default:
 		assert(0);
-		break;
+		return nullptr;
 	}
 }
 
@@ -71,6 +71,7 @@ Node **Node::findChild(const uint8_t k, Node *node) {
 	}
 	default:
 		assert(0);
+		return nullptr;
 	}
 }
 
