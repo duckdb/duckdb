@@ -14,8 +14,241 @@ env:
 matrix:
   include:
 
+    - os: osx
+      name: Xcode 6.4
+      osx_image: xcode9.1
+
+    - os: osx
+      name: Xcode 9.4
+      osx_image: xcode9.1
+
+    - os: osx
+      name: Xcode 10.2
+      osx_image: xcode10.1
+
+
+    - os: linux
+      name: GCC 4.9
+      addons:
+         apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-4.9 binutils-2.26
+      env:
+         - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
+
+    - os: linux
+      name: GCC 7
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-7 binutils-2.26
+      env:
+        - MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
+
+
+    - os: linux
+      dist: xenial
+      name: GCC 8
+
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-8
+      env:
+        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
+
+    - os: linux
+      dist: xenial
+      name: All Unit Tests
+
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-8
+      env:
+        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
+      script:
+        - make opt
+        - build/release/test/unittest "*"
+
+    - os: linux
+      dist: xenial
+      name: Code Coverage
+
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-8
+      env:
+        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
+
+      before_install: pip install --user cpp-coveralls
+
+      script: 
+        - mkdir -p build/coverage
+        - (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+        - build/coverage/test/unittest
+
+      after_success:
+        - coveralls -b build/coverage --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --gcov-options '\-lp'
+
+    - os: linux
+      name: Clang 3.9
+      addons:
+        apt:
+          sources:
+            - llvm-toolchain-trusty-3.9
+          packages:
+            - clang-3.9 binutils-2.26
+      env:
+        - MATRIX_EVAL="CC=clang-3.9 && CXX=clang++-3.9"
+
+    - os: linux
+      name: Clang 6
+      dist: xenial
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - clang-6.0
+      env:
+        - MATRIX_EVAL="CC=clang-6.0 && CXX=clang++-6.0"
+
+
+    - os: windows
+      name: VS 2017
+
+      language: c
+
+      script:
+        - cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_GENERATOR_PLATFORM=x64
+        - cmake --build . --target unittest
+        - test/Debug/unittest.exe
+
+
     - os: linux
       name: Python Package
+
+      dist: xenial
+      language: python
+      python: 3.7
+
+      before_script:
+        - pip3 install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3"
+        - cd tools/pythonpkg
+
+      script:
+        - python3 setup.py install
+        - python3 -m pytest tests
+
+
+    - os: osx
+      name: Python Package
+      osx_image: xcode10.1
+
+      language: c
+      #python: 3.7
+
+      before_script:
+        - pip3 install --user "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
+        - cd tools/pythonpkg
+
+      script:
+        - python3 setup.py install
+        - python3 -m pytest tests
+
+
+    - os: windows
+      name: Python Package
+
+      language: cpp
+
+      before_install: 
+        - choco install python --version 3.7.3
+        - c:/python37/python.exe -m pip install --upgrade pip
+        - c:/python37/python.exe -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
+
+      script:
+        - cd tools/pythonpkg
+        - c:/python37/python.exe setup.py install
+        - c:/python37/python.exe -m pytest tests
+
+
+    - os: linux
+      name: R Package
+
+      dist: xenial
+      language: r
+      r: devel
+
+      before_install:
+        - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
+        - cd tools/rpkg
+
+      install:
+        -  R CMD INSTALL .
+
+      before_script:
+        - cd tests
+
+      script:
+        - R -f testthat.R
+
+
+    - os: osx
+      osx_image: xcode10.1
+      name: R Package
+
+      language: r
+      #gr: devel
+
+      before_install:
+        - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
+        - cd tools/rpkg
+
+      install:
+        -  R CMD INSTALL .
+
+      before_script:
+        - cd tests
+
+      script:
+        - R -f testthat.R
+
+
+    - os: windows
+      name: R Package
+
+      language: cpp
+
+      before_script:
+        - choco install r.project -y --version 3.5.3
+        - wget "https://github.com/hannesmuehleisen/choco-rtools/raw/master/rtools.3.5.0.nupkg"
+        - choco install rtools -s rtools.3.5.0.nupkg -f -y
+
+      script:
+        - export "PATH=/c/Rtools/bin:$PATH"
+        - cd tools/rpkg
+        - C:/Program\ Files/R/R-3.5.3/bin/R.exe -f dependencies.R
+        - C:/Program\ Files/R/R-3.5.3/bin/R.exe CMD INSTALL --no-multiarch .
+        - cd tests
+        - C:/Program\ Files/R/R-3.5.3/bin/R.exe -f testthat.R
+
+
+
+    - os: linux
+      name: Python Package Wheel
 
       dist: xenial
       language: python
@@ -34,7 +267,7 @@ matrix:
           fi
 
     - os: osx
-      name: Python Package
+      name: Python Package Wheel
       language: generic
 
       script:
@@ -49,17 +282,9 @@ matrix:
             python -m twine upload --skip-existing wheelhouse/*.whl
           fi
 
-    - os: osx
-      name: Xcode 9.1
-      osx_image: xcode9.1
-
-    - os: osx
-      name: Xcode 6.4
-      osx_image: xcode9.1
-
 
     - os: windows
-      name: Python Package
+      name: Python Package Wheel
       language: cpp
 
       before_install:
