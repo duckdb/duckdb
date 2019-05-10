@@ -227,6 +227,7 @@ void ART::insert(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned
 		}
         unique_ptr<Node> newNode = make_unique<Node4>(node->maxPrefixLength);
         newNode->prefixLength = newPrefixLength;
+        memcpy(newNode->prefix.get(), &key[depth], Node::min(newPrefixLength, node->maxPrefixLength));
 		Node4::insert(newNode, existingKey[depth + newPrefixLength], node);
 		unique_ptr<Node> leaf_node = move(make_unique<Leaf>(value, row_id, maxKeyLength));
 		Node4::insert(newNode, key[depth + newPrefixLength], leaf_node);
@@ -287,7 +288,7 @@ Node * ART::lookup(unique_ptr<Node>& node, Key &key, unsigned keyLength, unsigne
 
 			if (depth != keyLength) {
 				// Check leaf
-				auto leaf = static_cast<Leaf *>(node.get());
+				auto leaf = static_cast<Leaf *>(node_val);
 				Key &leafKey = *new Key(is_little_endian, types[0], leaf->value,keyLength);
 
 				for (unsigned i = (skippedPrefix ? 0 : depth); i < keyLength; i++)
@@ -308,10 +309,8 @@ Node * ART::lookup(unique_ptr<Node>& node, Key &key, unsigned keyLength, unsigne
 			depth += node_val->prefixLength;
 		}
 
-		auto posNode = Node::findChild(key[depth], node_val);
-		if (posNode)
-			node_val = posNode;
-		else
+		node_val = Node::findChild(key[depth], node_val);
+		if (!node_val)
 			return NULL;
 		depth++;
 	}
@@ -689,14 +688,5 @@ void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) 
 
     row_id[0] = cur_row_id[state->current_tuple++];
     result_identifiers_per_tuple.count++;
-//	do {
-//
-//
-//
-//		if (result_identifiers.count == 0) {
-//			return;
-//		}
     table.Fetch(transaction, result, state->column_ids, result_identifiers_per_tuple);
-//        break;
-//	} while (result_identifiers_per_tuple.count == 0);
 }

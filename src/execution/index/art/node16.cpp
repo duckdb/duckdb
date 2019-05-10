@@ -18,15 +18,9 @@ void Node16::insert(unique_ptr<Node>& node, uint8_t keyByte, unique_ptr<Node>& c
     Node16 *n = static_cast<Node16 *>(node.get());
 
 if (n->count < 16) {
-		// Insert element
-		unsigned pos;
-		for (pos = 0; (pos < n->count) && (n->key[pos] < keyByte); pos++)
-			;
-        //FIXME: Don'' use memmove anymore
-		memmove(n->key + pos + 1, n->key + pos, n->count - pos);
-		memmove(n->child + pos + 1, n->child + pos, (n->count - pos) * sizeof(uintptr_t));
-        n->key[pos] = keyByte;
-        n->child[pos] = move(child);
+
+        n->key[n->count] = keyByte;
+        n->child[n->count] = move(child);
         n->count++;
 	} else {
 		// Grow to Node48

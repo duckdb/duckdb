@@ -80,22 +80,34 @@ Node *Node::findChild(const uint8_t k, Node *node) {
 		case NodeType::N4: {
 			auto n = static_cast<Node4 *>(node);
 			auto child = n->getChild(k);
-			return child->get();
+			if (child)
+				return child->get();
+			else
+				return nullptr;
 		}
 		case NodeType::N16: {
 			auto n = static_cast<Node16 *>(node);
             auto child = n->getChild(k);
-            return child->get();
+			if (child)
+				return child->get();
+			else
+				return nullptr;
 		}
 		case NodeType::N48: {
 			auto n = static_cast<Node48 *>(node);
             auto child = n->getChild(k);
-            return child->get();
+			if (child)
+				return child->get();
+			else
+				return nullptr;
 		}
 		case NodeType::N256: {
 			auto n = static_cast<Node256 *>(node);
             auto child = n->getChild(k);
-            return child->get();
+			if (child)
+            	return child->get();
+			else
+				return nullptr;
 		}
 		default:
 			assert(0);
