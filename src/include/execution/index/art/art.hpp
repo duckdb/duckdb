@@ -54,6 +54,7 @@ class ART : public Index {
 public:
 	ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, vector<TypeId> expression_types,
 	    vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> unbound_expressions);
+	~ART();
 	//! Insert data into the index
 	void Insert(DataChunk &data, Vector &row_ids);
 	//! Print the index to the console

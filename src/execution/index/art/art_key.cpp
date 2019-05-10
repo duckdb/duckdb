@@ -21,45 +21,28 @@ KeyLen Key::getKeyLen() const {
 
 Key::Key(Key &&key) {
 	len = key.len;
-//	if (len > stackLen) {
-		data = move(key.data);
-//	} else {
-//		memcpy(stackKey.get(), key.stackKey.get(), key.len);
-//		data = move(stackKey);
-//	}
+	data = move(key.data);
+
 }
 
 void Key::set(const char bytes[], const uint64_t length) {
-//	if (length <= stackLen) {
-//		memcpy(stackKey.get(), bytes, length);
-//		data = move(stackKey);
-//	} else {
 		data = unique_ptr<uint8_t[]>(new uint8_t[length]);
 		memcpy(data.get(), bytes, length);
-//	}
 	len = length;
 }
 
 void Key::operator=(const char key[]) {
 	len = strlen(key);
-//	if (len <= stackLen) {
-//		memcpy(stackKey.get(), key, len);
-//		data = move(stackKey);
-//	} else {
+
 		data = unique_ptr<uint8_t[]>(new uint8_t[len]);
 		memcpy(data.get(), key, len);
-//	}
 }
 
 void Key::setKeyLen(KeyLen newLen) {
 	if (len == newLen)
 		return;
 	len = newLen;
-//	if (len > stackLen) {
 		data = unique_ptr<uint8_t[]>(new uint8_t[len]);
-//	} else {
-//		data = move(stackKey);
-//	}
 }
 
 void Key::convert_to_binary_comparable(bool isLittleEndian, TypeId type, uintptr_t tid) {

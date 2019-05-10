@@ -37,6 +37,11 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, ve
 	}
 }
 
+ART::~ART() {
+
+
+}
+
 void ART::Insert(DataChunk &input, Vector &row_ids) {
 	if (input.column_count > 1) {
 		throw NotImplementedException("We only support single dimensional indexes currently");
