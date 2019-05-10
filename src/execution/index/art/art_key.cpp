@@ -37,7 +37,7 @@ inline Key::Key(Key &&key) {
 	}
 }
 
-inline void Key::set(const char bytes[], const std::size_t length) {
+inline void Key::set(const char bytes[], const uint64_t length) {
 	if (len > stackLen) {
 		delete[] data;
 	}

@@ -121,7 +121,7 @@ void ART::Append(ClientContext &context, DataChunk &appended_data, uint64_t row_
 	StaticVector<int64_t> row_identifiers;
 	auto row_ids = (int64_t *)row_identifiers.data;
 	row_identifiers.count = appended_data.size();
-	for (size_t i = 0; i < row_identifiers.count; i++) {
+	for (uint64_t i = 0; i < row_identifiers.count; i++) {
 		row_ids[i] = row_identifier_start + i;
 	}
 
@@ -508,12 +508,12 @@ void ART::Update(ClientContext &context, vector<column_t> &update_columns, DataC
 	DataChunk temp_chunk;
 	temp_chunk.Initialize(table.types);
 	temp_chunk.data[0].count = update_data.size();
-	for (size_t i = 0; i < column_ids.size(); i++) {
+	for (uint64_t i = 0; i < column_ids.size(); i++) {
 		if (column_ids[i] == COLUMN_IDENTIFIER_ROW_ID) {
 			continue;
 		}
 		bool found_column = false;
-		for (size_t j = 0; i < update_columns.size(); j++) {
+		for (uint64_t j = 0; i < update_columns.size(); j++) {
 			if (column_ids[i] == update_columns[j]) {
 				temp_chunk.data[column_ids[i]].Reference(update_data.data[update_columns[j]]);
 				found_column = true;

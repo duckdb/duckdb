@@ -126,7 +126,7 @@ private:
 	template <class T> void templated_insert(DataChunk &input, Vector &row_ids) {
 		auto input_data = (T *)input.data[0].data;
 		auto row_identifiers = (int64_t *)row_ids.data;
-		for (size_t i = 0; i < row_ids.count; i++) {
+		for (uint64_t i = 0; i < row_ids.count; i++) {
 			Key &key = *new Key(this->is_little_endian, input.data[0].type, input_data[i],sizeof(input_data[i]));
 			insert(this->is_little_endian, tree, &tree, key, 0, input_data[i], sizeof(input_data[i]), input.data[0].type,
 			       row_identifiers[i]);
@@ -136,33 +136,33 @@ private:
 	template <class T> void templated_delete(DataChunk &input, Vector &row_ids) {
 		auto input_data = (T *)input.data[0].data;
 		auto row_identifiers = (int64_t *)row_ids.data;
-		for (size_t i = 0; i < row_ids.count; i++) {
+		for (uint64_t i = 0; i < row_ids.count; i++) {
 			Key &key = *new Key(this->is_little_endian, input.data[0].type, input_data[i],sizeof(input_data[i]));
 			erase(this->is_little_endian, tree, &tree, key, 0, sizeof(input_data[i]), input.data[0].type, row_identifiers[i]);
 		}
 	}
 
-	template <class T> size_t templated_lookup(TypeId type, T data, int64_t *result_ids) {
+	template <class T> uint64_t templated_lookup(TypeId type, T data, int64_t *result_ids) {
 		Key &key = *new Key(this->is_little_endian, type, data,sizeof(data));
-		size_t result_count = 0;
+		uint64_t result_count = 0;
 		auto leaf = static_cast<Leaf *>(lookup(tree, key, this->maxPrefix, 0));
 		if (leaf) {
-			for (size_t i = 0; i < leaf->num_elements; i++) {
+			for (uint64_t i = 0; i < leaf->num_elements; i++) {
 				result_ids[result_count++] = leaf->row_id[i];
 			}
 		}
 		return result_count;
 	}
 
-	template <class T> size_t templated_greater_scan(TypeId type, T data, int64_t *result_ids,bool inclusive) {
+	template <class T> uint64_t templated_greater_scan(TypeId type, T data, int64_t *result_ids,bool inclusive) {
 		Iterator it;
 		Key &key = *new Key(this->is_little_endian, type, data,sizeof(data));
-		size_t result_count = 0;
+		uint64_t result_count = 0;
 		bool found=ART::bound(tree,key,sizeof(data),it,sizeof(data),inclusive,is_little_endian);
 		if (found) {
 			bool hasNext;
 			do {
-				for (size_t i = 0; i < it.node->num_elements; i++) {
+				for (uint64_t i = 0; i < it.node->num_elements; i++) {
 					result_ids[result_count++] = it.node->row_id[i];
 				}
 				hasNext=ART::iteratorNext(it);
@@ -171,9 +171,9 @@ private:
 		return result_count;
 	}
 
-    template <class T> size_t templated_less_scan(TypeId type, T data, int64_t *result_ids,bool inclusive) {
+    template <class T> uint64_t templated_less_scan(TypeId type, T data, int64_t *result_ids,bool inclusive) {
         Iterator it;
-        size_t result_count = 0;
+		uint64_t result_count = 0;
 		Leaf* minimum = static_cast<Leaf *>(Node::minimum(tree));
         // early out min value higher than upper bound query
         if (minimum->value > (uint64_t) data)
@@ -183,7 +183,7 @@ private:
         if (found) {
             bool hasNext;
             do {
-                for (size_t i = 0; i < it.node->num_elements; i++) {
+                for (uint64_t i = 0; i < it.node->num_elements; i++) {
                     result_ids[result_count++] = it.node->row_id[i];
                 }
 				if(it.node->value == (uint64_t)data)
@@ -196,15 +196,15 @@ private:
         return result_count;
     }
 
-	template <class T> size_t templated_close_range(TypeId type, T left_query,T right_query, int64_t *result_ids,bool left_inclusive, bool right_inclusive) {
+	template <class T> uint64_t templated_close_range(TypeId type, T left_query,T right_query, int64_t *result_ids,bool left_inclusive, bool right_inclusive) {
 		Iterator it;
 		Key &key = *new Key(this->is_little_endian, type, left_query,sizeof(left_query));
-		size_t result_count = 0;
+		uint64_t result_count = 0;
 		bool found=ART::bound(tree,key,sizeof(left_query),it,sizeof(left_query),left_inclusive,is_little_endian);
 		if (found) {
 			bool hasNext;
 			do {
-				for (size_t i = 0; i < it.node->num_elements; i++) {
+				for (uint64_t i = 0; i < it.node->num_elements; i++) {
 					result_ids[result_count++] = it.node->row_id[i];
 				}
 				if(it.node->value == (uint64_t )right_query)

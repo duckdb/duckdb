@@ -47,7 +47,7 @@ public:
 
 	Key(Key &&key);
 
-	void set(const char bytes[], const std::size_t length);
+	void set(const char bytes[], const uint64_t length);
 
 	void operator=(const char key[]);
 

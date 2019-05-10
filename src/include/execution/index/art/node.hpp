@@ -40,7 +40,7 @@ public:
 	//! Find the next child for the keyByte
 	static Node **findChild(const uint8_t k, Node *node);
 	//! Compare the key with the prefix of the node, return the number matching bytes
-	static unsigned prefixMismatch(bool isLittleEndian, Node *node, Key &key, size_t depth, unsigned maxKeyLength,
+	static unsigned prefixMismatch(bool isLittleEndian, Node *node, Key &key, uint64_t depth, unsigned maxKeyLength,
 	                               TypeId type);
 	//! Insert leaf into inner node
 	static void insertLeaf(Node *node, Node **nodeRef, uint8_t key, Node *newNode);
@@ -73,15 +73,15 @@ public:
 
 	//! TODO: Maybe shrink array dynamically?
 	static void remove(Leaf *leaf, uint64_t row_id) {
-		size_t entry_offset = -1;
-		for (size_t i = 0; i < leaf->num_elements; i++) {
+		uint64_t entry_offset = -1;
+		for (uint64_t i = 0; i < leaf->num_elements; i++) {
 			if (leaf->row_id[i] == row_id) {
 				entry_offset = i;
 				break;
 			}
 		}
 		leaf->num_elements--;
-		for (size_t j = entry_offset; j < leaf->num_elements; j++)
+		for (uint64_t j = entry_offset; j < leaf->num_elements; j++)
 			leaf->row_id[j] = leaf->row_id[j + 1];
 	}
 };
