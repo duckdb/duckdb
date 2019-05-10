@@ -89,7 +89,7 @@ public:
 	//! Lock used for updating the index
 	std::mutex lock;
 	//! Root of the tree
-	Node *tree;
+	unique_ptr<Node> tree;
 	//! The table
 	DataTable &table;
 	//! Column identifiers to extract from the base table
@@ -104,7 +104,7 @@ public:
 
 private:
 	//! Insert the leaf value into the tree
-	void insert(bool isLittleEndian, Node *node, Node **nodeRef, Key &key, unsigned depth, uintptr_t value,
+	void insert(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned depth, uintptr_t value,
 	            unsigned maxKeyLength, TypeId type, uint64_t row_id);
 
 	//! Erase element from leaf (if leaf has more than one value) or eliminate the leaf itself
@@ -115,7 +115,7 @@ private:
 	bool leafMatches(bool is_little_endian, Node *node, Key &key, unsigned keyLength, unsigned depth);
 
 	//! Find the node with a matching key, optimistic version
-	Node *lookup(Node *node, Key &key, unsigned keyLength, unsigned depth);
+	Node * lookup(unique_ptr<Node>& node, Key &key, unsigned keyLength, unsigned depth);
 
 	//! Find the iterator position for bound queries
 	bool bound(Node* n,Key &key,unsigned keyLength,Iterator& iterator,unsigned maxKeyLength,bool inclusive, bool isLittleEndian);
@@ -129,18 +129,18 @@ private:
 		auto row_identifiers = (int64_t *)row_ids.data;
 		for (uint64_t i = 0; i < row_ids.count; i++) {
 			Key &key = *new Key(this->is_little_endian, input.data[0].type, input_data[i],sizeof(input_data[i]));
-			insert(this->is_little_endian, tree, &tree, key, 0, input_data[i], sizeof(input_data[i]), input.data[0].type,
+			insert(this->is_little_endian, tree, key, 0, input_data[i], sizeof(input_data[i]), input.data[0].type,
 			       row_identifiers[i]);
 		}
 	}
 
 	template <class T> void templated_delete(DataChunk &input, Vector &row_ids) {
-		auto input_data = (T *)input.data[0].data;
-		auto row_identifiers = (int64_t *)row_ids.data;
-		for (uint64_t i = 0; i < row_ids.count; i++) {
-			Key &key = *new Key(this->is_little_endian, input.data[0].type, input_data[i],sizeof(input_data[i]));
-			erase(this->is_little_endian, tree, &tree, key, 0, sizeof(input_data[i]), input.data[0].type, row_identifiers[i]);
-		}
+//		auto input_data = (T *)input.data[0].data;
+//		auto row_identifiers = (int64_t *)row_ids.data;
+//		for (uint64_t i = 0; i < row_ids.count; i++) {
+//			Key &key = *new Key(this->is_little_endian, input.data[0].type, input_data[i],sizeof(input_data[i]));
+//			erase(this->is_little_endian, tree.get(), &tree, key, 0, sizeof(input_data[i]), input.data[0].type, row_identifiers[i]);
+//		}
 	}
 
 	template <class T> uint64_t templated_lookup(TypeId type, T data, int64_t *result_ids) {
@@ -159,41 +159,41 @@ private:
 		Iterator it;
 		Key &key = *new Key(this->is_little_endian, type, data,sizeof(data));
 		uint64_t result_count = 0;
-		bool found=ART::bound(tree,key,sizeof(data),it,sizeof(data),inclusive,is_little_endian);
-		if (found) {
-			bool hasNext;
-			do {
-				for (uint64_t i = 0; i < it.node->num_elements; i++) {
-					result_ids[result_count++] = it.node->row_id[i];
-				}
-				hasNext=ART::iteratorNext(it);
-			} while (hasNext);
-		}
+//		bool found=ART::bound(tree,key,sizeof(data),it,sizeof(data),inclusive,is_little_endian);
+//		if (found) {
+//			bool hasNext;
+//			do {
+//				for (uint64_t i = 0; i < it.node->num_elements; i++) {
+//					result_ids[result_count++] = it.node->row_id[i];
+//				}
+//				hasNext=ART::iteratorNext(it);
+//			} while (hasNext);
+//		}
 		return result_count;
 	}
 
     template <class T> uint64_t templated_less_scan(TypeId type, T data, int64_t *result_ids,bool inclusive) {
         Iterator it;
 		uint64_t result_count = 0;
-		Leaf* minimum = static_cast<Leaf *>(Node::minimum(tree));
-        // early out min value higher than upper bound query
-        if (minimum->value > (uint64_t) data)
-            return result_count;
-		Key &min_key = *new Key(this->is_little_endian, type, minimum->value,sizeof(data));
-        bool found=ART::bound(tree,min_key,sizeof(data),it,sizeof(data),true,is_little_endian);
-        if (found) {
-            bool hasNext;
-            do {
-                for (uint64_t i = 0; i < it.node->num_elements; i++) {
-                    result_ids[result_count++] = it.node->row_id[i];
-                }
-				if(it.node->value == (uint64_t)data)
-					break;
-				hasNext=ART::iteratorNext(it);
-				if(!inclusive && it.node->value == (uint64_t)data)
-					break;
-            } while (hasNext);
-        }
+//		Leaf* minimum = static_cast<Leaf *>(Node::minimum(tree));
+//        // early out min value higher than upper bound query
+//        if (minimum->value > (uint64_t) data)
+//            return result_count;
+//		Key &min_key = *new Key(this->is_little_endian, type, minimum->value,sizeof(data));
+//        bool found=ART::bound(tree,min_key,sizeof(data),it,sizeof(data),true,is_little_endian);
+//        if (found) {
+//            bool hasNext;
+//            do {
+//                for (uint64_t i = 0; i < it.node->num_elements; i++) {
+//                    result_ids[result_count++] = it.node->row_id[i];
+//                }
+//				if(it.node->value == (uint64_t)data)
+//					break;
+//				hasNext=ART::iteratorNext(it);
+//				if(!inclusive && it.node->value == (uint64_t)data)
+//					break;
+//            } while (hasNext);
+//        }
         return result_count;
     }
 
@@ -201,21 +201,21 @@ private:
 		Iterator it;
 		Key &key = *new Key(this->is_little_endian, type, left_query,sizeof(left_query));
 		uint64_t result_count = 0;
-		bool found=ART::bound(tree,key,sizeof(left_query),it,sizeof(left_query),left_inclusive,is_little_endian);
-		if (found) {
-			bool hasNext;
-			do {
-				for (uint64_t i = 0; i < it.node->num_elements; i++) {
-					result_ids[result_count++] = it.node->row_id[i];
-				}
-				if(it.node->value == (uint64_t )right_query)
-					break;
-				hasNext=ART::iteratorNext(it);
-				if(!right_inclusive && it.node->value == (uint64_t)right_query)
-					break;
-
-			} while (hasNext);
-		}
+//		bool found=ART::bound(tree,key,sizeof(left_query),it,sizeof(left_query),left_inclusive,is_little_endian);
+//		if (found) {
+//			bool hasNext;
+//			do {
+//				for (uint64_t i = 0; i < it.node->num_elements; i++) {
+//					result_ids[result_count++] = it.node->row_id[i];
+//				}
+//				if(it.node->value == (uint64_t )right_query)
+//					break;
+//				hasNext=ART::iteratorNext(it);
+//				if(!right_inclusive && it.node->value == (uint64_t)right_query)
+//					break;
+//
+//			} while (hasNext);
+//		}
 		return result_count;
 	}
 

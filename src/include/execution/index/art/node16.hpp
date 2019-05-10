@@ -14,7 +14,7 @@ namespace duckdb {
 class Node16 : public Node {
 public:
 	uint8_t key[16];
-	Node *child[16];
+	unique_ptr<Node> child[16];
 
 	Node16(uint8_t maxPrefixLength) : Node(NodeType::N16, maxPrefixLength) {
 		memset(key, 0, sizeof(key));
@@ -22,10 +22,10 @@ public:
 	}
 
 	//! Get Node16 Child
-	Node **getChild(const uint8_t k);
+    unique_ptr<Node>* getChild(const uint8_t k);
 
 	//! Insert node into Node16
-	void static insert(Node16 *node, Node **nodeRef, uint8_t keyByte, Node *child);
+	void static insert(unique_ptr<Node>& node, uint8_t keyByte, unique_ptr<Node>& child);
 
 	//! Delete node from Node16
 	static void erase(Node16 *node, Node **nodeRef, Node **leafPlace);

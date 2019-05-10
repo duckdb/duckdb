@@ -33,19 +33,20 @@ public:
 		this->prefix = unique_ptr<uint8_t[]>(new uint8_t[maxPrefixLength]);
 		this->maxPrefixLength = maxPrefixLength;
 	}
-	virtual ~Node() {
-	}
+
 	//! Copies the prefix from the source to the destination node
 	static void copyPrefix(Node *src, Node *dst);
 	//! Find the leaf with smallest element in the tree
 	static Node *minimum(Node *node);
 	//! Find the next child for the keyByte
-	static Node **findChild(const uint8_t k, Node *node);
+	static unique_ptr<Node>* findChild(const uint8_t k, unique_ptr<Node>& node);
+
+    static Node *findChild(const uint8_t k, Node *node);
 	//! Compare the key with the prefix of the node, return the number matching bytes
 	static unsigned prefixMismatch(bool isLittleEndian, Node *node, Key &key, uint64_t depth, unsigned maxKeyLength,
 	                               TypeId type);
 	//! Insert leaf into inner node
-	static void insertLeaf(Node *node, Node **nodeRef, uint8_t key, Node *newNode);
+	static void insertLeaf(unique_ptr<Node>& node, uint8_t key,unique_ptr<Node>&  newNode);
 	//! Compare two elements and return the smaller
 	static unsigned min(unsigned a, unsigned b);
 };
