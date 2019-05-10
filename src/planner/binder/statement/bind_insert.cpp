@@ -18,9 +18,11 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 		// insertion statement specifies column list
 
 		// create a mapping of (list index) -> (column index)
-		unordered_map<string, int> column_name_map;
-		for (size_t i = 0; i < stmt.columns.size(); i++) {
-			column_name_map[stmt.columns[i]] = i;
+		unordered_map<string, uint32_t> column_name_map;
+		for (uint64_t i = 0; i < stmt.columns.size(); i++) {
+			assert(i <= numeric_limits<uint32_t>::max());
+
+			column_name_map[stmt.columns[i]] = (uint32_t)i;
 			auto entry = table->name_map.find(stmt.columns[i]);
 			if (entry == table->name_map.end()) {
 				throw BinderException("Column %s not found in table %s", stmt.columns[i].c_str(), table->name.c_str());
@@ -29,9 +31,10 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 				throw BinderException("Cannot explicitly insert values into rowid column");
 			}
 			result->expected_types.push_back(table->columns[entry->second].type);
-			named_column_map.push_back(entry->second);
+			assert(entry->second <= numeric_limits<uint32_t>::max());
+			named_column_map.push_back((uint32_t)entry->second);
 		}
-		for (size_t i = 0; i < result->table->columns.size(); i++) {
+		for (uint64_t i = 0; i < result->table->columns.size(); i++) {
 			auto &col = result->table->columns[i];
 			auto entry = column_name_map.find(col.name);
 			if (entry == column_name_map.end()) {
@@ -43,12 +46,12 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			}
 		}
 	} else {
-		for (size_t i = 0; i < result->table->columns.size(); i++) {
+		for (uint64_t i = 0; i < result->table->columns.size(); i++) {
 			result->expected_types.push_back(table->columns[i].type);
 		}
 	}
 
-	size_t expected_columns = stmt.columns.size() == 0 ? result->table->columns.size() : stmt.columns.size();
+	uint64_t expected_columns = stmt.columns.size() == 0 ? result->table->columns.size() : stmt.columns.size();
 	if (stmt.select_statement) {
 		result->select_statement =
 		    unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*stmt.select_statement));
@@ -74,8 +77,8 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			}
 			vector<unique_ptr<Expression>> list;
 
-			for (size_t col_idx = 0; col_idx < expression_list.size(); col_idx++) {
-				size_t table_col_idx = stmt.columns.size() == 0 ? col_idx : named_column_map[col_idx];
+			for (uint64_t col_idx = 0; col_idx < expression_list.size(); col_idx++) {
+				uint64_t table_col_idx = stmt.columns.size() == 0 ? col_idx : named_column_map[col_idx];
 				assert(table_col_idx < table->columns.size());
 				binder.target_type = table->columns[table_col_idx].type;
 				auto bound_expr = binder.Bind(expression_list[col_idx]);

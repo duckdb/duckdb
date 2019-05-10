@@ -37,7 +37,7 @@ bool StringUtil::EndsWith(const string &str, const string &suffix) {
 	return std::equal(suffix.rbegin(), suffix.rend(), str.rbegin());
 }
 
-string StringUtil::Repeat(const string &str, const std::size_t n) {
+string StringUtil::Repeat(const string &str, const std::uint64_t n) {
 	std::ostringstream os;
 	if (n == 0 || str.empty()) {
 		return (os.str());
@@ -83,7 +83,7 @@ string StringUtil::Prefix(const string &str, const string &prefix) {
 		return ("");
 
 	std::ostringstream os;
-	for (int i = 0, cnt = lines.size(); i < cnt; i++) {
+	for (uint64_t i = 0, cnt = lines.size(); i < cnt; i++) {
 		if (i > 0)
 			os << std::endl;
 		os << prefix << lines[i];
@@ -173,11 +173,11 @@ string StringUtil::VFormat(const string fmt_str, va_list args) {
 vector<string> StringUtil::Split(const string &input, const string &split) {
 	vector<string> splits;
 
-	size_t last = 0;
-	size_t input_len = input.size();
-	size_t split_len = split.size();
+	uint64_t last = 0;
+	uint64_t input_len = input.size();
+	uint64_t split_len = split.size();
 	while (last <= input_len) {
-		size_t next = input.find(split, last);
+		uint64_t next = input.find(split, last);
 		if (next == string::npos) {
 			next = input_len;
 		}

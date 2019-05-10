@@ -17,7 +17,7 @@ namespace duckdb {
 //! Represents a cross product
 class BoundSubqueryRef : public BoundTableRef {
 public:
-	BoundSubqueryRef(unique_ptr<Binder> binder, unique_ptr<BoundQueryNode> subquery, size_t bind_index)
+	BoundSubqueryRef(unique_ptr<Binder> binder, unique_ptr<BoundQueryNode> subquery, uint64_t bind_index)
 	    : BoundTableRef(TableReferenceType::SUBQUERY), binder(move(binder)), subquery(move(subquery)),
 	      bind_index(bind_index) {
 	}
@@ -27,6 +27,6 @@ public:
 	//! The bound subquery node
 	unique_ptr<BoundQueryNode> subquery;
 	//! The index in the bind context
-	size_t bind_index;
+	uint64_t bind_index;
 };
 } // namespace duckdb

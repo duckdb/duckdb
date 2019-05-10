@@ -32,8 +32,8 @@ void JoinRef::Serialize(Serializer &serializer) {
 	right->Serialize(serializer);
 	condition->Serialize(serializer);
 	serializer.Write<JoinType>(type);
-
-	serializer.Write<uint32_t>(hidden_columns.size());
+	assert(hidden_columns.size() <= numeric_limits<uint32_t>::max());
+	serializer.Write<uint32_t>((uint32_t)hidden_columns.size());
 	for (auto &hidden_column : hidden_columns) {
 		serializer.WriteString(hidden_column);
 	}
@@ -47,7 +47,7 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &source) {
 	result->condition = ParsedExpression::Deserialize(source);
 	result->type = source.Read<JoinType>();
 	auto count = source.Read<uint32_t>();
-	for (size_t i = 0; i < count; i++) {
+	for (uint32_t i = 0; i < count; i++) {
 		result->hidden_columns.insert(source.Read<string>());
 	}
 	return move(result);

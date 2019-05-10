@@ -7,6 +7,8 @@
 #include "common/exception.hpp"
 #include "common/file_system.hpp"
 #include "common/fstream_util.hpp"
+#include "common/buffered_serializer.hpp"
+#include "common/buffered_deserializer.hpp"
 #include "common/serializer.hpp"
 #include "function/function.hpp"
 #include "main/client_context.hpp"
@@ -64,20 +66,20 @@ void StorageManager::Initialize() {
 void StorageManager::LoadDatabase() {
 	int iteration = 0;
 	// first check if the database exists
-	if (!FileSystem::DirectoryExists(path)) {
+	if (!database.file_system->DirectoryExists(path)) {
 		if (read_only) {
 			throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist",
 			                       path.c_str());
 		}
 		// have to create the directory
-		FileSystem::CreateDirectory(path);
+		database.file_system->CreateDirectory(path);
 	} else {
 		// load from the main storage if it exists
 		iteration = LoadFromStorage();
 		// directory already exists
 		// verify that it is an existing database
-		string wal_path = FileSystem::JoinPath(path, WAL_FILES[iteration]);
-		if (FileSystem::FileExists(wal_path)) {
+		string wal_path = database.file_system->JoinPath(path, WAL_FILES[iteration]);
+		if (database.file_system->FileExists(wal_path)) {
 			// replay the WAL
 			wal.Replay(wal_path);
 			if (!read_only) {
@@ -92,7 +94,7 @@ void StorageManager::LoadDatabase() {
 	}
 	if (!read_only) {
 		// initialize the WAL file
-		string wal_path = FileSystem::JoinPath(path, WAL_FILES[iteration]);
+		string wal_path = database.file_system->JoinPath(path, WAL_FILES[iteration]);
 		wal.Initialize(wal_path);
 	}
 }
@@ -100,9 +102,9 @@ void StorageManager::LoadDatabase() {
 int StorageManager::LoadFromStorage() {
 	ClientContext context(database);
 
-	auto meta_info_path = FileSystem::JoinPath(path, DATABASE_INFO_FILE);
+	auto meta_info_path = database.file_system->JoinPath(path, DATABASE_INFO_FILE);
 	// read the meta information, if there is any
-	if (!FileSystem::FileExists(meta_info_path)) {
+	if (!database.file_system->FileExists(meta_info_path)) {
 		// no meta file to read: skip the loading
 		return 0;
 	}
@@ -118,8 +120,8 @@ int StorageManager::LoadFromStorage() {
 	meta_info >> iteration;
 
 	// now we can start by actually reading the files
-	auto storage_path_base = FileSystem::JoinPath(path, STORAGE_FILES[iteration]);
-	auto schema_path = FileSystem::JoinPath(storage_path_base, SCHEMA_FILE);
+	auto storage_path_base = database.file_system->JoinPath(path, STORAGE_FILES[iteration]);
+	auto schema_path = database.file_system->JoinPath(storage_path_base, SCHEMA_FILE);
 
 	// read the list of schemas
 	fstream schema_file;
@@ -134,8 +136,8 @@ int StorageManager::LoadFromStorage() {
 		database.catalog->CreateSchema(context.ActiveTransaction(), &info);
 
 		// now read the list of the tables belonging to this schema
-		auto schema_directory_path = FileSystem::JoinPath(storage_path_base, schema_name);
-		auto table_list_path = FileSystem::JoinPath(schema_directory_path, TABLE_LIST_FILE);
+		auto schema_directory_path = database.file_system->JoinPath(storage_path_base, schema_name);
+		auto table_list_path = database.file_system->JoinPath(schema_directory_path, TABLE_LIST_FILE);
 
 		// read the list of tables
 		fstream table_list_file;
@@ -143,8 +145,8 @@ int StorageManager::LoadFromStorage() {
 		string table_name;
 		while (getline(table_list_file, table_name)) {
 			// get the information of the table
-			auto table_directory_path = FileSystem::JoinPath(schema_directory_path, table_name);
-			auto table_meta_name = FileSystem::JoinPath(table_directory_path, TABLE_FILE);
+			auto table_directory_path = database.file_system->JoinPath(schema_directory_path, table_name);
+			auto table_meta_name = database.file_system->JoinPath(table_directory_path, TABLE_FILE);
 
 			fstream table_file;
 			FstreamUtil::OpenFile(table_meta_name, table_file, ios_base::binary | ios_base::in);
@@ -152,7 +154,7 @@ int StorageManager::LoadFromStorage() {
 
 			// deserialize the CreateTableInfo
 			auto table_file_size = FstreamUtil::GetFileSize(table_file);
-			Deserializer source((uint8_t *)result.get(), table_file_size);
+			BufferedDeserializer source((uint8_t *)result.get(), table_file_size);
 			auto info = TableCatalogEntry::Deserialize(source);
 			// create the table inside the catalog
 			database.catalog->CreateTable(context.ActiveTransaction(), info.get());
@@ -163,11 +165,11 @@ int StorageManager::LoadFromStorage() {
 			DataChunk chunk;
 			chunk.Initialize(types);
 
-			size_t chunk_count = 1;
+			uint64_t chunk_count = 1;
 			while (true) {
 				auto chunk_name =
-				    FileSystem::JoinPath(table_directory_path, "chunk-" + to_string(chunk_count) + ".bin");
-				if (!FileSystem::FileExists(chunk_name)) {
+				    database.file_system->JoinPath(table_directory_path, "chunk-" + to_string(chunk_count) + ".bin");
+				if (!database.file_system->FileExists(chunk_name)) {
 					break;
 				}
 
@@ -177,7 +179,7 @@ int StorageManager::LoadFromStorage() {
 				// deserialize the chunk
 				DataChunk insert_chunk;
 				auto chunk_file_size = FstreamUtil::GetFileSize(chunk_file);
-				Deserializer source((uint8_t *)result.get(), chunk_file_size);
+				BufferedDeserializer source((uint8_t *)result.get(), chunk_file_size);
 				insert_chunk.Deserialize(source);
 				// insert the chunk into the table
 				table->storage->Append(*table, context, insert_chunk);
@@ -185,18 +187,18 @@ int StorageManager::LoadFromStorage() {
 			}
 		}
 
-		auto view_list_path = FileSystem::JoinPath(schema_directory_path, VIEW_LIST_FILE);
+		auto view_list_path = database.file_system->JoinPath(schema_directory_path, VIEW_LIST_FILE);
 		fstream view_list_file;
 		FstreamUtil::OpenFile(view_list_path, view_list_file, ios_base::in);
 		string view_name;
 		while (getline(view_list_file, view_name)) {
-			auto view_file_path = FileSystem::JoinPath(schema_directory_path, view_name + ".view");
+			auto view_file_path = database.file_system->JoinPath(schema_directory_path, view_name + ".view");
 			fstream view_file;
 			FstreamUtil::OpenFile(view_file_path, view_file, ios_base::binary | ios_base::in);
 			auto result = FstreamUtil::ReadBinary(view_file);
 			// deserialize the CreateViewInfo
 			auto view_file_size = FstreamUtil::GetFileSize(view_file);
-			Deserializer source((uint8_t *)result.get(), view_file_size);
+			BufferedDeserializer source((uint8_t *)result.get(), view_file_size);
 			auto info = ViewCatalogEntry::Deserialize(source);
 			// create the table inside the catalog
 			database.catalog->CreateView(context.ActiveTransaction(), info.get());
@@ -210,17 +212,17 @@ void StorageManager::CreateCheckpoint(int iteration) {
 	auto transaction = database.transaction_manager->StartTransaction();
 
 	assert(iteration == 0 || iteration == 1);
-	auto storage_path_base = FileSystem::JoinPath(path, STORAGE_FILES[iteration]);
-	if (FileSystem::DirectoryExists(storage_path_base)) {
+	auto storage_path_base = database.file_system->JoinPath(path, STORAGE_FILES[iteration]);
+	if (database.file_system->DirectoryExists(storage_path_base)) {
 		// have a leftover directory
 		// remove it
-		FileSystem::RemoveDirectory(storage_path_base);
+		database.file_system->RemoveDirectory(storage_path_base);
 	}
 	// create the directory
-	FileSystem::CreateDirectory(storage_path_base);
+	database.file_system->CreateDirectory(storage_path_base);
 
 	// first we have to access the schemas
-	auto schema_path = FileSystem::JoinPath(storage_path_base, SCHEMA_FILE);
+	auto schema_path = database.file_system->JoinPath(storage_path_base, SCHEMA_FILE);
 
 	fstream schema_file;
 	FstreamUtil::OpenFile(schema_path, schema_file, ios_base::out);
@@ -236,16 +238,16 @@ void StorageManager::CreateCheckpoint(int iteration) {
 	// now for each schema create a directory
 	for (auto &schema : schemas) {
 		// FIXME: schemas can have unicode, do something for file systems, maybe hash?
-		auto schema_directory_path = FileSystem::JoinPath(storage_path_base, schema->name);
-		assert(!FileSystem::DirectoryExists(schema_directory_path));
+		auto schema_directory_path = database.file_system->JoinPath(storage_path_base, schema->name);
+		assert(!database.file_system->DirectoryExists(schema_directory_path));
 		// create the directory
-		FileSystem::CreateDirectory(schema_directory_path);
+		database.file_system->CreateDirectory(schema_directory_path);
 		// create the file holding the list of tables for the schema
-		auto table_list_path = FileSystem::JoinPath(schema_directory_path, TABLE_LIST_FILE);
+		auto table_list_path = database.file_system->JoinPath(schema_directory_path, TABLE_LIST_FILE);
 		fstream table_list_file;
 		FstreamUtil::OpenFile(table_list_path, table_list_file, ios_base::out);
 
-		auto view_list_path = FileSystem::JoinPath(schema_directory_path, VIEW_LIST_FILE);
+		auto view_list_path = database.file_system->JoinPath(schema_directory_path, VIEW_LIST_FILE);
 		fstream view_list_file;
 		FstreamUtil::OpenFile(view_list_path, view_list_file, ios_base::out);
 
@@ -274,17 +276,17 @@ void StorageManager::CreateCheckpoint(int iteration) {
 		for (auto &table : tables) {
 			// first create a directory for the table information
 			// FIXME: same problem as schemas, unicode and file systems may not agree
-			auto table_directory_path = FileSystem::JoinPath(schema_directory_path, table->name);
-			assert(!FileSystem::DirectoryExists(table_directory_path));
+			auto table_directory_path = database.file_system->JoinPath(schema_directory_path, table->name);
+			assert(!database.file_system->DirectoryExists(table_directory_path));
 			// create the directory
-			FileSystem::CreateDirectory(table_directory_path);
+			database.file_system->CreateDirectory(table_directory_path);
 
-			auto table_meta_name = FileSystem::JoinPath(table_directory_path, TABLE_FILE);
+			auto table_meta_name = database.file_system->JoinPath(table_directory_path, TABLE_FILE);
 			fstream table_file;
 			FstreamUtil::OpenFile(table_meta_name, table_file, ios_base::binary | ios_base::out);
 
 			// serialize the table information to a file
-			Serializer serializer;
+			BufferedSerializer serializer;
 			table->Serialize(serializer);
 			auto data = serializer.GetData();
 			table_file.write((char *)data.data.get(), data.size);
@@ -296,14 +298,14 @@ void StorageManager::CreateCheckpoint(int iteration) {
 			table->storage->InitializeScan(ss);
 
 			vector<column_t> column_ids;
-			for (size_t i = 0; i < table->columns.size(); i++) {
+			for (uint64_t i = 0; i < table->columns.size(); i++) {
 				column_ids.push_back(i);
 			}
 			DataChunk chunk;
 			auto types = table->GetTypes();
 			chunk.Initialize(types);
 
-			size_t chunk_count = 1;
+			uint64_t chunk_count = 1;
 			while (true) {
 				chunk.Reset();
 				table->storage->Scan(*transaction, chunk, column_ids, ss);
@@ -311,11 +313,11 @@ void StorageManager::CreateCheckpoint(int iteration) {
 					break;
 				}
 				auto chunk_name =
-				    FileSystem::JoinPath(table_directory_path, "chunk-" + to_string(chunk_count) + ".bin");
+				    database.file_system->JoinPath(table_directory_path, "chunk-" + to_string(chunk_count) + ".bin");
 				fstream chunk_file;
 				FstreamUtil::OpenFile(chunk_name, chunk_file, ios_base::binary | ios_base::out);
 
-				Serializer serializer;
+				BufferedSerializer serializer;
 				chunk.Serialize(serializer);
 				auto data = serializer.GetData();
 				chunk_file.write((char *)data.data.get(), data.size);
@@ -327,13 +329,13 @@ void StorageManager::CreateCheckpoint(int iteration) {
 
 		// now for each view, write the query node and aliases to a file
 		for (auto &view : views) {
-			auto view_file_path = FileSystem::JoinPath(schema_directory_path, view->name + ".view");
-			assert(!FileSystem::FileExists(view_file_path));
+			auto view_file_path = database.file_system->JoinPath(schema_directory_path, view->name + ".view");
+			assert(!database.file_system->FileExists(view_file_path));
 			fstream view_file;
 			FstreamUtil::OpenFile(view_file_path, view_file, ios_base::binary | ios_base::out);
 
 			// serialize the view information to a file
-			Serializer serializer;
+			BufferedSerializer serializer;
 			view->Serialize(serializer);
 			auto data = serializer.GetData();
 			view_file.write((char *)data.data.get(), data.size);
@@ -342,7 +344,7 @@ void StorageManager::CreateCheckpoint(int iteration) {
 	}
 	// all the writes have been flushed and the entire database has been written
 	// now we create the temporary meta information file
-	auto meta_path = FileSystem::JoinPath(path, DATABASE_TEMP_INFO_FILE);
+	auto meta_path = database.file_system->JoinPath(path, DATABASE_TEMP_INFO_FILE);
 	fstream meta_file;
 	FstreamUtil::OpenFile(meta_path, meta_file, ios_base::out);
 
@@ -353,18 +355,18 @@ void StorageManager::CreateCheckpoint(int iteration) {
 
 	// now we move the meta information file over the old meta information file
 	// this signifies a "completion" of the checkpoint
-	auto permanent_meta_path = FileSystem::JoinPath(path, DATABASE_INFO_FILE);
-	FileSystem::MoveFile(meta_path, permanent_meta_path);
+	auto permanent_meta_path = database.file_system->JoinPath(path, DATABASE_INFO_FILE);
+	database.file_system->MoveFile(meta_path, permanent_meta_path);
 
 	// we are now done writing
 	// we can delete the directory for the other iteration because we do not need it anymore for consistency
-	auto other_storage_path = FileSystem::JoinPath(path, STORAGE_FILES[1 - iteration]);
-	auto other_wal_path = FileSystem::JoinPath(path, WAL_FILES[1 - iteration]);
-	if (FileSystem::DirectoryExists(other_storage_path)) {
-		FileSystem::RemoveDirectory(other_storage_path);
+	auto other_storage_path = database.file_system->JoinPath(path, STORAGE_FILES[1 - iteration]);
+	auto other_wal_path = database.file_system->JoinPath(path, WAL_FILES[1 - iteration]);
+	if (database.file_system->DirectoryExists(other_storage_path)) {
+		database.file_system->RemoveDirectory(other_storage_path);
 	}
-	if (FileSystem::FileExists(other_wal_path)) {
-		FileSystem::RemoveFile(other_wal_path);
+	if (database.file_system->FileExists(other_wal_path)) {
+		database.file_system->RemoveFile(other_wal_path);
 	}
 	transaction->Rollback();
 }

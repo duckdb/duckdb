@@ -180,7 +180,7 @@ public:
 
 		/// allocate string which will be filled with the demangled function
 		/// name
-		size_t func_name_size = 1024;
+		size_t func_name_size = 1024; // exception from size_t ban
 		unique_ptr<char> func_name(new char[func_name_size]);
 
 		/// iterate over the returned symbol lines. skip the first, it is the
@@ -272,7 +272,7 @@ public:
 	                                               "for the destination type " +
 	                                               TypeIdToString(newType)) {
 	}
-	ValueOutOfRangeException(const TypeId varType, const size_t length)
+	ValueOutOfRangeException(const TypeId varType, const uint64_t length)
 	    : Exception(ExceptionType::OUT_OF_RANGE, "The value is too long to fit into type " + TypeIdToString(varType) +
 	                                                 "(" + std::to_string(length) + ")"){};
 };

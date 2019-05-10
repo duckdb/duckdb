@@ -35,7 +35,7 @@ void TableCatalogEntry::Initialize(CreateTableInfo *info) {
 		name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
 	}
 	assert(bound_defaults.size() == columns.size());
-	for (size_t i = 0; i < info->bound_defaults.size(); i++) {
+	for (uint64_t i = 0; i < info->bound_defaults.size(); i++) {
 		auto &bound_default = info->bound_defaults[i];
 		if (bound_default) {
 			// explicit default: use the users' expression
@@ -56,8 +56,8 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 			// have to resolve columns
 			auto c = (ParsedConstraint *)constraint.get();
 			vector<TypeId> types;
-			vector<size_t> keys;
-			if (c->index != (size_t)-1) {
+			vector<uint64_t> keys;
+			if (c->index != (uint64_t)-1) {
 				// column referenced by key is given by index
 				types.push_back(GetInternalType(columns[c->index].type));
 				keys.push_back(c->index);
@@ -122,7 +122,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(AlterInfo *info) {
 		create_info.schema = schema->name;
 		create_info.table = name;
 		bool found = false;
-		for (size_t i = 0; i < columns.size(); i++) {
+		for (uint64_t i = 0; i < columns.size(); i++) {
 			ColumnDefinition copy(columns[i].name, columns[i].type);
 			copy.oid = columns[i].oid;
 			copy.default_value = columns[i].default_value ? columns[i].default_value->Copy() : nullptr;
@@ -138,7 +138,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(AlterInfo *info) {
 			throw CatalogException("Table does not have a column with name \"%s\"", rename_info->name.c_str());
 		}
 		create_info.constraints.resize(constraints.size());
-		for (size_t i = 0; i < constraints.size(); i++) {
+		for (uint64_t i = 0; i < constraints.size(); i++) {
 			create_info.constraints[i] = constraints[i]->Copy();
 		}
 		return make_unique<TableCatalogEntry>(catalog, schema, &create_info, storage);
@@ -183,13 +183,13 @@ vector<TypeId> TableCatalogEntry::GetTypes(const vector<column_t> &column_ids) {
 void TableCatalogEntry::Serialize(Serializer &serializer) {
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
-	serializer.Write<uint32_t>(columns.size());
+	serializer.Write<uint32_t>((uint32_t)columns.size());
 	for (auto &column : columns) {
 		serializer.WriteString(column.name);
 		column.type.Serialize(serializer);
 		serializer.WriteOptional(column.default_value);
 	}
-	serializer.Write<uint32_t>(constraints.size());
+	serializer.Write<uint32_t>((uint32_t)constraints.size());
 	for (auto &constraint : constraints) {
 		constraint->Serialize(serializer);
 	}
@@ -202,7 +202,7 @@ unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source)
 	info->table = source.Read<string>();
 	auto column_count = source.Read<uint32_t>();
 
-	for (size_t i = 0; i < column_count; i++) {
+	for (uint32_t i = 0; i < column_count; i++) {
 		auto column_name = source.Read<string>();
 		auto column_type = SQLType::Deserialize(source);
 		auto default_value = source.ReadOptional<ParsedExpression>();
@@ -210,7 +210,7 @@ unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source)
 	}
 	auto constraint_count = source.Read<uint32_t>();
 
-	for (size_t i = 0; i < constraint_count; i++) {
+	for (uint32_t i = 0; i < constraint_count; i++) {
 		auto constraint = Constraint::Deserialize(source);
 		info->constraints.push_back(move(constraint));
 	}

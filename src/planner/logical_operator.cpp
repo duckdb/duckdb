@@ -9,7 +9,7 @@ string LogicalOperator::ParamsToString() const {
 	string result = "";
 	if (expressions.size() > 0) {
 		result += "[";
-		for (size_t i = 0; i < expressions.size(); i++) {
+		for (uint64_t i = 0; i < expressions.size(); i++) {
 			auto &child = expressions[i];
 			result += child->GetName();
 			if (i < expressions.size() - 1) {
@@ -36,11 +36,11 @@ void LogicalOperator::ResolveOperatorTypes() {
 	ResolveTypes();
 }
 
-string LogicalOperator::ToString(size_t depth) const {
+string LogicalOperator::ToString(uint64_t depth) const {
 	string result = LogicalOperatorToString(type);
 	result += ParamsToString();
 	if (children.size() > 0) {
-		for (size_t i = 0; i < children.size(); i++) {
+		for (uint64_t i = 0; i < children.size(); i++) {
 			result += "\n" + string(depth * 4, ' ');
 			auto &child = children[i];
 			result += child->ToString(depth + 1);
@@ -50,17 +50,17 @@ string LogicalOperator::ToString(size_t depth) const {
 	return result;
 }
 
-size_t LogicalOperator::ExpressionCount() {
+uint64_t LogicalOperator::ExpressionCount() {
 	return expressions.size();
 }
 
-Expression *LogicalOperator::GetExpression(size_t index) {
+Expression *LogicalOperator::GetExpression(uint64_t index) {
 	assert(index < expressions.size());
 	return expressions[index].get();
 }
 
 void LogicalOperator::ReplaceExpression(
-    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index) {
+    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, uint64_t index) {
 	assert(index < expressions.size());
 	expressions[index] = callback(move(expressions[index]));
 }

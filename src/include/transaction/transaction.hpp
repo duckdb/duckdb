@@ -25,7 +25,7 @@ struct VersionInformation {
 	DataTable *table;
 	StorageChunk *chunk;
 	union {
-		size_t entry;
+		uint64_t entry;
 		VersionInformation *pointer;
 	} prev;
 	VersionInformation *next;
@@ -45,9 +45,10 @@ public:
 
 	void PushCatalogEntry(CatalogEntry *entry);
 	//! Create deleted entries in the undo buffer
-	void PushDeletedEntries(size_t offset, size_t count, StorageChunk *storage, VersionInformation *version_pointers[]);
+	void PushDeletedEntries(uint64_t offset, uint64_t count, StorageChunk *storage,
+	                        VersionInformation *version_pointers[]);
 	//! Push an old tuple version in the undo buffer
-	void PushTuple(UndoFlags flag, size_t offset, StorageChunk *storage);
+	void PushTuple(UndoFlags flag, uint64_t offset, StorageChunk *storage);
 	//! Push a query into the undo buffer, this will be written to the WAL for
 	//! redo purposes
 
@@ -77,7 +78,7 @@ public:
 	transaction_t active_query;
 
 private:
-	uint8_t *PushTuple(UndoFlags flag, size_t data_size);
+	uint8_t *PushTuple(UndoFlags flag, uint64_t data_size);
 
 	//! The undo buffer is used to store old versions of rows that are updated
 	//! or deleted

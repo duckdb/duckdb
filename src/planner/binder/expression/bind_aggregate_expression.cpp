@@ -112,6 +112,7 @@ BindResult SelectBinder::BindAggregate(AggregateExpression &aggr, uint32_t depth
 	// create the aggregate
 	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(result_type), aggr.type, move(child));
 	// now create a column reference referring to this aggregate
+
 	auto colref = make_unique<BoundColumnRefExpression>(
 	    aggr_name, aggregate->return_type, ColumnBinding(node.aggregate_index, node.aggregates.size()), depth);
 	// move the aggregate expression into the set of bound aggregates

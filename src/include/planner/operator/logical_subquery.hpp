@@ -19,12 +19,12 @@ namespace duckdb {
 //! into the actual subquery).
 class LogicalSubquery : public LogicalOperator {
 public:
-	LogicalSubquery(unique_ptr<LogicalOperator> child, size_t table_index);
+	LogicalSubquery(unique_ptr<LogicalOperator> child, uint64_t table_index);
 
 	//! The table index of the subquery
-	size_t table_index;
+	uint64_t table_index;
 	//! The total amount of columns of the subquery
-	size_t column_count;
+	uint64_t column_count;
 	//! The tables that are bound underneath the subquery
 	vector<BoundTable> bound_tables;
 

@@ -22,13 +22,13 @@ class Transaction;
 
 struct UniqueIndexNode {
 	Tuple tuple;
-	size_t row_identifier;
+	uint64_t row_identifier;
 
 	UniqueIndexNode *parent;
 	unique_ptr<UniqueIndexNode> left;
 	unique_ptr<UniqueIndexNode> right;
 
-	UniqueIndexNode(Tuple tuple, size_t row_identifier)
+	UniqueIndexNode(Tuple tuple, uint64_t row_identifier)
 	    : tuple(std::move(tuple)), row_identifier(row_identifier), parent(nullptr) {
 	}
 };
@@ -42,13 +42,13 @@ class UniqueIndex {
 	struct UniqueIndexAddedEntries {
 		UniqueIndex &index;
 		UniqueIndexNode *nodes[STANDARD_VECTOR_SIZE];
-		size_t count;
+		uint64_t count;
 		unique_ptr<UniqueIndexAddedEntries> next;
 
 		UniqueIndexAddedEntries(UniqueIndex &index) : index(index), count(0) {
 		}
 		~UniqueIndexAddedEntries() {
-			for (size_t j = count; j > 0; j--) {
+			for (uint64_t j = count; j > 0; j--) {
 				if (nodes[j - 1]) {
 					index.RemoveEntry(nodes[j - 1]);
 				}
@@ -66,19 +66,19 @@ class UniqueIndex {
 	};
 
 public:
-	UniqueIndex(DataTable &table, vector<TypeId> types, vector<size_t> keys, bool allow_nulls);
+	UniqueIndex(DataTable &table, vector<TypeId> types, vector<uint64_t> keys, bool allow_nulls);
 
 	static void Append(Transaction &transaction, vector<unique_ptr<UniqueIndex>> &indexes, DataChunk &chunk,
-	                   size_t row_identifier_start);
+	                   uint64_t row_identifier_start);
 
 	static void Update(Transaction &transaction, StorageChunk *storage, vector<unique_ptr<UniqueIndex>> &indexes,
 	                   vector<column_t> &column_ids, DataChunk &update_chunk, Vector &row_identifiers);
 
 private:
 	void AddEntries(Transaction &transaction, UniqueIndexAddedEntries &nodes, Tuple tuples[], bool has_null[],
-	                Vector &row_identifiers, unordered_set<size_t> &ignored_identifiers);
-	UniqueIndexNode *AddEntry(Transaction &transaction, Tuple tuple, size_t row_identifier,
-	                          unordered_set<size_t> &ignored_identifiers);
+	                Vector &row_identifiers, unordered_set<uint64_t> &ignored_identifiers);
+	UniqueIndexNode *AddEntry(Transaction &transaction, Tuple tuple, uint64_t row_identifier,
+	                          unordered_set<uint64_t> &ignored_identifiers);
 	void RemoveEntry(UniqueIndexNode *entry);
 
 	//! The tuple serializer
@@ -91,7 +91,7 @@ private:
 	//! Types of the UniqueIndex
 	vector<TypeId> types;
 	//! The set of keys that must be collectively unique
-	vector<size_t> keys;
+	vector<uint64_t> keys;
 	//! Lock on the index
 	std::mutex index_lock;
 	//! Whether or not NULL values are allowed by the constraint (false for

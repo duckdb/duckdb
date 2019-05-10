@@ -8,7 +8,7 @@ using namespace std;
 
 TEST_CASE("Test simple storage", "[storage]") {
 	unique_ptr<QueryResult> result;
-	auto storage_database = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
+	auto storage_database = TestCreatePath("storage_test");
 
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);
@@ -41,7 +41,7 @@ TEST_CASE("Test simple storage", "[storage]") {
 
 TEST_CASE("Test storing NULLs and strings", "[storage]") {
 	unique_ptr<QueryResult> result;
-	auto storage_database = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
+	auto storage_database = TestCreatePath("storage_test");
 
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);
@@ -75,7 +75,7 @@ TEST_CASE("Test storing NULLs and strings", "[storage]") {
 
 TEST_CASE("Test updates with storage", "[storage]") {
 	unique_ptr<QueryResult> result;
-	auto storage_database = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
+	auto storage_database = TestCreatePath("storage_test");
 
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);
@@ -114,7 +114,7 @@ TEST_CASE("Test updates with storage", "[storage]") {
 TEST_CASE("Test storing TPC-H", "[storage][.]") {
 	unique_ptr<QueryResult> result;
 	double sf = 0.1;
-	auto storage_database = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "storage_tpch");
+	auto storage_database = TestCreatePath("storage_tpch");
 
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);

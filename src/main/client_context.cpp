@@ -13,6 +13,9 @@
 #include "planner/planner.hpp"
 #include "transaction/transaction_manager.hpp"
 
+#include "common/buffered_serializer.hpp"
+#include "common/buffered_deserializer.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -264,9 +267,9 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 	// iterate over them and execute them one by one
 	unique_ptr<QueryResult> result, current_result;
 	QueryResult *last_result = nullptr;
-	for (size_t i = 0; i < parser.statements.size(); i++) {
+	for (uint64_t i = 0; i < parser.statements.size(); i++) {
 		auto &statement = parser.statements[i];
-		if (db.read_only) {
+		if (db.access_mode == AccessMode::READ_ONLY) {
 			// if the database is opened in read-only mode, check if we can execute this statement
 			string error = CanExecuteStatementInReadOnlyMode(*statement);
 			if (!error.empty()) {
@@ -380,9 +383,9 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	auto copied_stmt = select_stmt->Copy();
 	auto unoptimized_stmt = select_stmt->Copy();
 
-	Serializer serializer;
+	BufferedSerializer serializer;
 	select_stmt->Serialize(serializer);
-	Deserializer source(serializer);
+	BufferedDeserializer source(serializer);
 	auto deserialized_stmt = SelectStatement::Deserialize(source);
 	// all the statements should be equal
 	assert(copied_stmt->Equals(statement.get()));
@@ -394,7 +397,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	auto &de_expr_list = deserialized_stmt->node->GetSelectList();
 	auto &cp_expr_list = copied_stmt->node->GetSelectList();
 	assert(orig_expr_list.size() == de_expr_list.size() && cp_expr_list.size() == de_expr_list.size());
-	for (size_t i = 0; i < orig_expr_list.size(); i++) {
+	for (uint64_t i = 0; i < orig_expr_list.size(); i++) {
 		// check that the expressions are equivalent
 		assert(orig_expr_list[i]->Equals(de_expr_list[i].get()));
 		assert(orig_expr_list[i]->Equals(cp_expr_list[i].get()));
@@ -404,9 +407,9 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		assert(orig_expr_list[i]->Hash() == cp_expr_list[i]->Hash());
 	}
 	// now perform additional checking within the expressions
-	for (size_t outer_idx = 0; outer_idx < orig_expr_list.size(); outer_idx++) {
+	for (uint64_t outer_idx = 0; outer_idx < orig_expr_list.size(); outer_idx++) {
 		auto hash = orig_expr_list[outer_idx]->Hash();
-		for (size_t inner_idx = 0; inner_idx < orig_expr_list.size(); inner_idx++) {
+		for (uint64_t inner_idx = 0; inner_idx < orig_expr_list.size(); inner_idx++) {
 			auto hash2 = orig_expr_list[inner_idx]->Hash();
 			if (hash != hash2) {
 				// if the hashes are not equivalent, the expressions should not be equivalent

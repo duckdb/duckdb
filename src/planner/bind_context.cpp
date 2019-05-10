@@ -66,10 +66,10 @@ void BindContext::AddBaseTable(BoundBaseTableRef *bound, const string &alias) {
 	AddBinding(alias, make_unique<TableBinding>(alias, bound));
 }
 
-void BindContext::AddSubquery(size_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {
+void BindContext::AddSubquery(uint64_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {
 	AddBinding(alias, make_unique<SubqueryBinding>(alias, ref, subquery, index));
 }
 
-void BindContext::AddTableFunction(size_t index, const string &alias, TableFunctionCatalogEntry *function_entry) {
+void BindContext::AddTableFunction(uint64_t index, const string &alias, TableFunctionCatalogEntry *function_entry) {
 	AddBinding(alias, make_unique<TableFunctionBinding>(alias, function_entry, index));
 }

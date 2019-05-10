@@ -8,7 +8,7 @@ using namespace std;
 
 TEST_CASE("Test serialization of CHECK constraint", "[storage]") {
 	unique_ptr<QueryResult> result;
-	auto storage_database = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
+	auto storage_database = TestCreatePath("storage_test");
 
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);

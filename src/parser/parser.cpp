@@ -52,7 +52,7 @@ bool Parser::ParsePragma(string &query) {
 	auto query_cstr = query.c_str();
 
 	// skip any spaces
-	size_t pos = 0;
+	uint64_t pos = 0;
 	while (isspace(query_cstr[pos]))
 		pos++;
 
@@ -71,7 +71,7 @@ bool Parser::ParsePragma(string &query) {
 	while (isspace(query_cstr[pos]))
 		pos++;
 	// now look for the keyword
-	size_t keyword_start = pos;
+	uint64_t keyword_start = pos;
 	while (query_cstr[pos] && query_cstr[pos] != ';' && query_cstr[pos] != '=' && query_cstr[pos] != '(' &&
 	       !isspace(query_cstr[pos]))
 		pos++;

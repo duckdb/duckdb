@@ -8,7 +8,7 @@
 using namespace duckdb;
 using namespace std;
 
-GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode &node, size_t group_index,
+GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode &node, uint64_t group_index,
                          unordered_map<string, uint32_t> &alias_map, unordered_map<string, uint32_t> &group_alias_map)
     : ExpressionBinder(binder, context), node(node), alias_map(alias_map), group_alias_map(group_alias_map),
       group_index(group_index) {
@@ -71,7 +71,8 @@ BindResult GroupBinder::BindConstant(ConstantExpression &constant) {
 	}
 	// INTEGER constant: we use the integer as an index into the select list (e.g. GROUP BY 1)
 	auto index = constant.value.GetNumericValue();
-	return BindSelectRef(index - 1);
+	assert(index - 1 <= numeric_limits<uint32_t>::max());
+	return BindSelectRef((uint32_t)(index - 1));
 }
 
 BindResult GroupBinder::BindColumnRef(ColumnRefExpression &colref) {

@@ -15,7 +15,7 @@ unsigned char test_txt_gz[] = {0x1f, 0x8b, 0x08, 0x08, 0x9a, 0x57, 0xc8, 0x5c, 0
 unsigned int test_txt_gz_len = 42;
 
 TEST_CASE("Test basic stream read from GZIP files", "[gzip_stream]") {
-	string gzip_file_path = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "test.txt.gz");
+	string gzip_file_path = TestCreatePath("test.txt.gz");
 
 	ofstream ofp(gzip_file_path, ios::out | ios::binary);
 	ofp.write((const char *)test_txt_gz, test_txt_gz_len);
@@ -37,7 +37,7 @@ TEST_CASE("Test basic stream read from GZIP files", "[gzip_stream]") {
 }
 
 TEST_CASE("Test COPY with GZIP files", "[gzip_stream]") {
-	string gzip_file_path = FileSystem::JoinPath(TESTING_DIRECTORY_NAME, "lineitem1k.tbl.gz");
+	string gzip_file_path = TestCreatePath("lineitem1k.tbl.gz");
 
 	ofstream ofp(gzip_file_path, ios::out | ios::binary);
 	ofp.write((const char *)lineitem_tbl_small_gz, lineitem_tbl_small_gz_len);

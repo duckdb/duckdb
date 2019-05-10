@@ -1,5 +1,6 @@
 #include "catch.hpp"
-#include "common/serializer.hpp"
+#include "common/buffered_deserializer.hpp"
+#include "common/buffered_serializer.hpp"
 #include "common/types/data_chunk.hpp"
 #include "common/value_operations/value_operations.hpp"
 #include "expression_helper.hpp"
@@ -8,7 +9,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Basic serializer test", "[serializer]") {
-	Serializer serializer(4);
+	BufferedSerializer serializer(4);
 	serializer.Write<sel_t>(33);
 	serializer.Write<uint64_t>(42);
 	auto data = serializer.GetData();
@@ -33,11 +34,11 @@ TEST_CASE("Data Chunk serialization", "[serializer]") {
 	chunk.data[1].SetValue(0, c);
 	chunk.data[1].SetValue(1, d);
 
-	Serializer serializer;
+	BufferedSerializer serializer;
 	chunk.Serialize(serializer);
 
 	auto data = serializer.GetData();
-	Deserializer source(data.data.get(), data.size);
+	BufferedDeserializer source(data.data.get(), data.size);
 
 	DataChunk other_chunk;
 	REQUIRE_NOTHROW(other_chunk.Deserialize(source));
@@ -62,7 +63,7 @@ TEST_CASE("Value serialization", "[serializer]") {
 	Value h = Value();
 	Value i = Value("hello world");
 
-	Serializer serializer(4);
+	BufferedSerializer serializer(4);
 	a.Serialize(serializer);
 	b.Serialize(serializer);
 	c.Serialize(serializer);
@@ -74,7 +75,7 @@ TEST_CASE("Value serialization", "[serializer]") {
 	i.Serialize(serializer);
 
 	auto data = serializer.GetData();
-	Deserializer source(data.data.get(), data.size);
+	BufferedDeserializer source(data.data.get(), data.size);
 
 	Value a1, b1, c1, d1, e1, f1, g1, h1, i1, j1;
 
@@ -110,11 +111,11 @@ TEST_CASE("Expression serializer", "[serializer]") {
 		auto expression = helper.ParseExpression("a + 2");
 		REQUIRE(expression.get());
 
-		Serializer serializer;
+		BufferedSerializer serializer;
 		expression->Serialize(serializer);
 
 		auto data = serializer.GetData();
-		Deserializer source(data.data.get(), data.size);
+		BufferedDeserializer source(data.data.get(), data.size);
 		unique_ptr<Expression> deserialized_expression;
 		REQUIRE_NOTHROW(deserialized_expression = Expression::Deserialize(source));
 		REQUIRE(deserialized_expression.get());
@@ -127,11 +128,11 @@ TEST_CASE("Expression serializer", "[serializer]") {
 		                                         "a >= 5 ELSE a >= 7 END");
 		REQUIRE(expression.get());
 
-		Serializer serializer;
+		BufferedSerializer serializer;
 		expression->Serialize(serializer);
 
 		auto data = serializer.GetData();
-		Deserializer source(data.data.get(), data.size);
+		BufferedDeserializer source(data.data.get(), data.size);
 		unique_ptr<Expression> deserialized_expression;
 		REQUIRE_NOTHROW(deserialized_expression = Expression::Deserialize(source));
 		REQUIRE(deserialized_expression.get());
@@ -144,11 +145,11 @@ TEST_CASE("Expression serializer", "[serializer]") {
 		                                         "WHEN NOT 0 THEN 33 ELSE 22 END)");
 		REQUIRE(expression.get());
 
-		Serializer serializer;
+		BufferedSerializer serializer;
 		expression->Serialize(serializer);
 
 		auto data = serializer.GetData();
-		Deserializer source(data.data.get(), data.size);
+		BufferedDeserializer source(data.data.get(), data.size);
 		unique_ptr<Expression> deserialized_expression;
 		REQUIRE_NOTHROW(deserialized_expression = Expression::Deserialize(source));
 		REQUIRE(deserialized_expression.get());
@@ -164,12 +165,12 @@ TEST_CASE("Expression serializer", "[serializer]") {
 		REQUIRE(expression.get());
 		REQUIRE(expression2.get());
 
-		Serializer serializer;
+		BufferedSerializer serializer;
 		expression->Serialize(serializer);
 		expression2->Serialize(serializer);
 
 		auto data = serializer.GetData();
-		Deserializer source(data.data.get(), data.size);
+		BufferedDeserializer source(data.data.get(), data.size);
 		unique_ptr<Expression> deserialized, deserialized2;
 		REQUIRE_NOTHROW(deserialized = Expression::Deserialize(source));
 		REQUIRE_NOTHROW(deserialized2 = Expression::Deserialize(source));

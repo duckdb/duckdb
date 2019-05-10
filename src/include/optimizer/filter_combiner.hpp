@@ -41,16 +41,16 @@ private:
 	FilterResult AddFilter(Expression *expr);
 
 	Expression *GetNode(Expression *expr);
-	size_t GetEquivalenceSet(Expression *expr);
+	uint64_t GetEquivalenceSet(Expression *expr);
 	FilterResult AddConstantComparison(vector<ExpressionValueInformation> &info_list, ExpressionValueInformation info);
 
 	vector<unique_ptr<Expression>> remaining_filters;
 
 	expression_map_t<unique_ptr<Expression>> stored_expressions;
-	unordered_map<Expression *, size_t> equivalence_set_map;
-	unordered_map<size_t, vector<ExpressionValueInformation>> constant_values;
-	unordered_map<size_t, vector<Expression *>> equivalence_map;
-	size_t set_index = 0;
+	unordered_map<Expression *, uint64_t> equivalence_set_map;
+	unordered_map<uint64_t, vector<ExpressionValueInformation>> constant_values;
+	unordered_map<uint64_t, vector<Expression *>> equivalence_map;
+	uint64_t set_index = 0;
 };
 
 } // namespace duckdb

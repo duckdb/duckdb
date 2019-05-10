@@ -24,7 +24,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(UpdateStatement &stmt) {
 		result->condition = binder.Bind(stmt.condition);
 	}
 	assert(stmt.columns.size() == stmt.expressions.size());
-	for (size_t i = 0; i < stmt.columns.size(); i++) {
+	for (uint64_t i = 0; i < stmt.columns.size(); i++) {
 		auto &colname = stmt.columns[i];
 		auto &expr = stmt.expressions[i];
 		if (!table->ColumnExists(colname)) {

@@ -7,7 +7,7 @@ using namespace std;
 
 namespace duckdb {
 
-void abs_function(ExpressionExecutor &exec, Vector inputs[], size_t input_count, BoundFunctionExpression &expr,
+void abs_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_count, BoundFunctionExpression &expr,
                   Vector &result) {
 	result.Initialize(inputs[0].type);
 	VectorOperations::Abs(inputs[0], result);
