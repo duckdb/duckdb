@@ -24,7 +24,7 @@ matrix:
 
     - os: osx
       name: Xcode 10.2
-      osx_image: xcode10.1
+      osx_image: xcode10.2
 
 
     - os: linux
@@ -269,6 +269,7 @@ matrix:
     - os: osx
       name: Python Package Wheel
       language: generic
+      osx_image: xcode10.2
 
       script:
         - pip install cibuildwheel==0.10.2
