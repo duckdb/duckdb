@@ -68,7 +68,7 @@ TEST_CASE("ART Integer Types", "[art-int]") {
 	Connection con(db);
 
     string int_types[4] = {"tinyint", "smallint", "integer", "bigint"};
-    int32_t n_sizes[4] = {100,1000,10000,100000};
+    int32_t n_sizes[4] = {100, 1000, 1000, 1000};
     for (int idx = 0; idx < 4; idx ++ ){
         REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i "+int_types[idx]+")"));
         REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
@@ -81,7 +81,7 @@ TEST_CASE("ART Integer Types", "[art-int]") {
 
         for (int32_t i = 0; i < n; i++) {
             REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(keys[i]) + ")"));
-            result = con.Query("SELECT i FROM integers WHERE i=" + to_string(keys[i]));
+            result = con.Query("SELECT i FROM integers WHERE i=CAST(" + to_string(keys[i]) + " AS " + int_types[idx] + ")");
             REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
         }
         //! Checking non-existing values
@@ -92,7 +92,7 @@ TEST_CASE("ART Integer Types", "[art-int]") {
 
         //! Checking if all elements are still there
         for (size_t i = 0; i < n; i++) {
-            result = con.Query("SELECT i FROM integers WHERE i=" + to_string(keys[i]));
+            result = con.Query("SELECT i FROM integers WHERE i=CAST(" + to_string(keys[i]) + " AS " + int_types[idx] + ")");
             REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
         }
 
@@ -165,9 +165,9 @@ TEST_CASE("ART Integer Types", "[art-int]") {
         REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=0"));
         // Now Deleting all elements
         for (int32_t i = 0; i < n; i++) {
-            REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=" + to_string(keys[i])));
+            REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=CAST(" + to_string(keys[i]) + " AS " + int_types[idx] + ")"));
             // check the value does not exist
-            result = con.Query("SELECT * FROM integers WHERE i=" + to_string(keys[i]));
+            result = con.Query("SELECT * FROM integers WHERE i=CAST(" + to_string(keys[i]) + " AS " + int_types[idx] + ")");
             REQUIRE(CHECK_COLUMN(result, 0, {}));
         }
         // Delete from empty tree

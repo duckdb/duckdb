@@ -112,6 +112,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 void ART::Append(ClientContext &context, DataChunk &appended_data, uint64_t row_identifier_start) {
 	lock_guard<mutex> l(lock);
 
+	expression_result.Reset();
 	// first resolve the expressions
 	ExpressionExecutor executor(appended_data);
 	executor.Execute(expressions, expression_result);
@@ -522,6 +523,7 @@ void ART::Update(ClientContext &context, vector<column_t> &update_columns, DataC
 		assert(found_column);
 	}
 
+	expression_result.Reset();
 	// now resolve the expressions on the temp_chunk
 	ExpressionExecutor executor(temp_chunk);
 	executor.Execute(expressions, expression_result);
