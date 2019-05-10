@@ -19,16 +19,18 @@ using KeyLen = uint8_t;
 using namespace duckdb;
 class Key {
 public:
-	uint8_t stackLen;
+//	uint8_t stackLen;
 	uint8_t len;
 
-	uint8_t *data;
-
-	uint8_t *stackKey;
+    unique_ptr<uint8_t[]> data;
+//    uint8_t stackKey[maxKeyLength];
+//	unique_ptr<uint8_t[]> stackKey;
 
 	Key(bool isLittleEndian, TypeId type, uintptr_t k, uint8_t maxKeyLength) {
-		stackLen = maxKeyLength;
-		stackKey = (uint8_t *)malloc(stackLen * sizeof(uint8_t));
+//		stackLen = maxKeyLength;
+//		stackKey = unique_ptr<uint8_t[]>(new uint8_t[stackLen]);
+		len = maxKeyLength;
+		data = unique_ptr<uint8_t[]>(new uint8_t[maxKeyLength]);
 		convert_to_binary_comparable(isLittleEndian, type, k);
 	}
 
@@ -40,8 +42,6 @@ public:
 
 	Key() {
 	}
-
-	~Key();
 
 	Key(const Key &key) = delete;
 
@@ -55,14 +55,14 @@ public:
 		if (k.getKeyLen() != getKeyLen()) {
 			return false;
 		}
-		return std::memcmp(&k[0], data, getKeyLen()) == 0;
+		return std::memcmp(&k[0], data.get(), getKeyLen()) == 0;
 	}
 
 	bool operator!=(const Key &k) const {
 		if (k.getKeyLen() != getKeyLen()) {
 			return true;
 		}
-		return !(std::memcmp(&k[0], data, getKeyLen()) == 0);
+		return !(std::memcmp(&k[0], data.get(), getKeyLen()) == 0);
 	}
 
 	uint8_t &operator[](std::size_t i);

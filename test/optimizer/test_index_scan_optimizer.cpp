@@ -13,7 +13,7 @@ using namespace std;
 TEST_CASE("Test Index Scan Optimizer for Integers", "[index-optimizer-int]") {
 	ExpressionHelper helper;
 	auto &con = helper.con;
-    string int_types[1] = {"integers"}; // {"tinyint", "smallint", "integer", "bigint"};
+    string int_types[1] = {"integer"}; // {"tinyint", "smallint", "integer", "bigint"};
 
     for (int idx = 0; idx < 1; idx ++ ) {
         REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i "+int_types[idx]+")"));

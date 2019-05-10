@@ -222,7 +222,7 @@ void ART::insert(bool isLittleEndian, Node *node, Node **nodeRef, Key &key, unsi
 		}
 		Node4 *newNode = new Node4(node->maxPrefixLength);
 		newNode->prefixLength = newPrefixLength;
-		memcpy(newNode->prefix, &key[depth], Node::min(newPrefixLength, node->maxPrefixLength));
+		memcpy(newNode->prefix.get(), &key[depth], Node::min(newPrefixLength, node->maxPrefixLength));
 		*nodeRef = newNode;
 
 		Node4::insert(newNode, nodeRef, existingKey[depth + newPrefixLength], node);
@@ -238,19 +238,19 @@ void ART::insert(bool isLittleEndian, Node *node, Node **nodeRef, Key &key, unsi
 			Node4 *newNode = new Node4(node->maxPrefixLength);
 			*nodeRef = newNode;
 			newNode->prefixLength = mismatchPos;
-			memcpy(newNode->prefix, node->prefix, Node::min(mismatchPos, node->maxPrefixLength));
+			memcpy(newNode->prefix.get(), node->prefix.get(), Node::min(mismatchPos, node->maxPrefixLength));
 			// Break up prefix
 			if (node->prefixLength < node->maxPrefixLength) {
 				Node4::insert(newNode, nodeRef, node->prefix[mismatchPos], node);
 				node->prefixLength -= (mismatchPos + 1);
-				memmove(node->prefix, node->prefix + mismatchPos + 1,
+				memmove(node->prefix.get(), node->prefix.get() + mismatchPos + 1,
 				        Node::min(node->prefixLength, node->maxPrefixLength));
 			} else {
 				node->prefixLength -= (mismatchPos + 1);
 				auto leaf = static_cast<Leaf *>(Node::minimum(node));
 				Key &minKey = *new Key(isLittleEndian, type, leaf->value,maxKeyLength);
 				Node4::insert(newNode, nodeRef, minKey[depth + mismatchPos], node);
-				memmove(node->prefix, &minKey[depth + mismatchPos + 1],
+				memmove(node->prefix.get(), &minKey[depth + mismatchPos + 1],
 				        Node::min(node->prefixLength, node->maxPrefixLength));
 			}
 			Node4::insert(newNode, nodeRef, key[depth + mismatchPos], new Leaf(value, row_id, node->maxPrefixLength));

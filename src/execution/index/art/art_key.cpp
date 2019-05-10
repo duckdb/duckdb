@@ -15,115 +15,98 @@
 	            (((uint64_t)(x)&0x00000000ff000000ull) << 8) | (((uint64_t)(x)&0x0000000000ff0000ull) << 24) |         \
 	            (((uint64_t)(x)&0x000000000000ff00ull) << 40) | (((uint64_t)(x)&0x00000000000000ffull) << 56)))
 
-inline KeyLen Key::getKeyLen() const {
+KeyLen Key::getKeyLen() const {
 	return len;
 }
 
-inline Key::~Key() {
-	if (len > stackLen) {
-		delete[] data;
-		data = nullptr;
-	}
-}
-
-inline Key::Key(Key &&key) {
+Key::Key(Key &&key) {
 	len = key.len;
-	if (len > stackLen) {
-		data = key.data;
-		key.data = nullptr;
-	} else {
-		memcpy(stackKey, key.stackKey, key.len);
-		data = stackKey;
-	}
+//	if (len > stackLen) {
+		data = move(key.data);
+//	} else {
+//		memcpy(stackKey.get(), key.stackKey.get(), key.len);
+//		data = move(stackKey);
+//	}
 }
 
-inline void Key::set(const char bytes[], const uint64_t length) {
-	if (len > stackLen) {
-		delete[] data;
-	}
-	if (length <= stackLen) {
-		memcpy(stackKey, bytes, length);
-		data = stackKey;
-	} else {
-		data = new uint8_t[length];
-		memcpy(data, bytes, length);
-	}
+void Key::set(const char bytes[], const uint64_t length) {
+//	if (length <= stackLen) {
+//		memcpy(stackKey.get(), bytes, length);
+//		data = move(stackKey);
+//	} else {
+		data = unique_ptr<uint8_t[]>(new uint8_t[length]);
+		memcpy(data.get(), bytes, length);
+//	}
 	len = length;
 }
 
-inline void Key::operator=(const char key[]) {
-	if (len > stackLen) {
-		delete[] data;
-	}
+void Key::operator=(const char key[]) {
 	len = strlen(key);
-	if (len <= stackLen) {
-		memcpy(stackKey, key, len);
-		data = stackKey;
-	} else {
-		data = new uint8_t[len];
-		memcpy(data, key, len);
-	}
+//	if (len <= stackLen) {
+//		memcpy(stackKey.get(), key, len);
+//		data = move(stackKey);
+//	} else {
+		data = unique_ptr<uint8_t[]>(new uint8_t[len]);
+		memcpy(data.get(), key, len);
+//	}
 }
 
-inline void Key::setKeyLen(KeyLen newLen) {
+void Key::setKeyLen(KeyLen newLen) {
 	if (len == newLen)
 		return;
-	if (len > stackLen) {
-		delete[] data;
-	}
 	len = newLen;
-	if (len > stackLen) {
-		data = new uint8_t[len];
-	} else {
-		data = stackKey;
-	}
+//	if (len > stackLen) {
+		data = unique_ptr<uint8_t[]>(new uint8_t[len]);
+//	} else {
+//		data = move(stackKey);
+//	}
 }
 
 void Key::convert_to_binary_comparable(bool isLittleEndian, TypeId type, uintptr_t tid) {
-	data = stackKey;
+//	data = move(stackKey);
 	switch (type) {
 	case TypeId::BOOLEAN:
 		len = 1;
 		if (isLittleEndian) {
-			reinterpret_cast<uint8_t *>(stackKey)[0] = BSWAP8(tid);
+			data[0] = BSWAP8(tid);
 		} else {
-			reinterpret_cast<uint8_t *>(stackKey)[0] = tid;
+			data[0] = tid;
 		}
 	case TypeId::TINYINT:
 		len = 1;
 		if (isLittleEndian) {
-			reinterpret_cast<uint8_t *>(stackKey)[0] = BSWAP8(tid);
+			data[0] = BSWAP8(tid);
 		} else {
-			reinterpret_cast<uint8_t *>(stackKey)[0] = tid;
+			data[0] = tid;
 		}
-		stackKey[0] = flipSign(stackKey[0]);
+		data[0] = flipSign(data[0]);
 		break;
 	case TypeId::SMALLINT:
 		len = 2;
 		if (isLittleEndian) {
-			reinterpret_cast<uint16_t *>(stackKey)[0] = BSWAP16(tid);
+			reinterpret_cast<uint16_t *>(data.get())[0] = BSWAP16(tid);
 		} else {
-			reinterpret_cast<uint16_t *>(stackKey)[0] = tid;
+			reinterpret_cast<uint16_t *>(data.get())[0] = tid;
 		}
-		stackKey[0] = flipSign(stackKey[0]);
+		data[0] = flipSign(data[0]);
 		break;
 	case TypeId::INTEGER:
 		len = 4;
 		if (isLittleEndian) {
-			reinterpret_cast<uint32_t *>(stackKey)[0] = BSWAP32(tid);
+			reinterpret_cast<uint32_t *>(data.get())[0] = BSWAP32(tid);
 		} else {
-			reinterpret_cast<uint32_t *>(stackKey)[0] = tid;
+			reinterpret_cast<uint32_t *>(data.get())[0] = tid;
 		}
-		stackKey[0] = flipSign(stackKey[0]);
+		data[0] = flipSign(data[0]);
 		break;
 	case TypeId::BIGINT:
 		            len = 8;
 		if (isLittleEndian) {
-			reinterpret_cast<uint64_t *>(stackKey)[0] = BSWAP64(tid);
+			reinterpret_cast<uint64_t *>(data.get())[0] = BSWAP64(tid);
 		} else {
-			reinterpret_cast<uint64_t *>(stackKey)[0] = tid;
+			reinterpret_cast<uint64_t *>(data.get())[0] = tid;
 		}
-		stackKey[0] = flipSign(stackKey[0]);
+		data[0] = flipSign(data[0]);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for ART index");

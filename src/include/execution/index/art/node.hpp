@@ -24,14 +24,16 @@ public:
 	//! node type
 	NodeType type;
 	//! compressed path (prefix)
-	uint8_t *prefix;
+	unique_ptr<uint8_t[]> prefix;
 
 	uint8_t maxPrefixLength;
 
 	static const uint8_t emptyMarker = 48;
 	Node(NodeType type, unsigned maxPrefixLength) : prefixLength(0), count(0), type(type) {
-		this->prefix = (uint8_t *)malloc(maxPrefixLength * sizeof(uint8_t));
+		this->prefix = unique_ptr<uint8_t[]>(new uint8_t[maxPrefixLength]);
 		this->maxPrefixLength = maxPrefixLength;
+	}
+	virtual ~Node() {
 	}
 	//! Copies the prefix from the source to the destination node
 	static void copyPrefix(Node *src, Node *dst);
@@ -53,19 +55,21 @@ public:
 	uint64_t value;
 	uint64_t capacity;
 	uint64_t num_elements;
-	uint64_t *row_id;
+	unique_ptr<uint64_t[]> row_id;
 	Leaf(uint64_t value, uint64_t row_id, uint8_t maxPrefixLength) : Node(NodeType::NLeaf, maxPrefixLength) {
 		this->value = value;
 		this->capacity = 1;
-		this->row_id = (uint64_t *)malloc(this->capacity * sizeof(uint64_t));
+		this->row_id = unique_ptr<uint64_t[]>(new uint64_t[this->capacity]);
 		this->row_id[0] = row_id;
 		this->num_elements = 1;
 	}
 	static void insert(Leaf *leaf, uint64_t row_id) {
 		// Grow array
 		if (leaf->num_elements == leaf->capacity) {
+			auto new_row_id = unique_ptr<uint64_t[]>(new uint64_t[leaf->capacity * 2]);
+			memcpy(new_row_id.get(), leaf->row_id.get(), leaf->capacity * sizeof(uint64_t));
 			leaf->capacity *= 2;
-			leaf->row_id = (uint64_t *)realloc(leaf->row_id, leaf->capacity * sizeof(uint64_t));
+			leaf->row_id = move(new_row_id);
 		}
 		leaf->row_id[leaf->num_elements] = row_id;
 		leaf->num_elements++;

@@ -38,7 +38,7 @@ TEST_CASE("Test index creation statements with multiple connections", "[art-inde
 
 	// con2 should see the updated state
 //	result = con2.Query("SELECT j FROM integers WHERE i=4");
-	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+//	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 
 	// now we commit con
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));

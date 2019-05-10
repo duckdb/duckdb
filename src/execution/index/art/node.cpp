@@ -12,7 +12,7 @@ unsigned Node::min(unsigned a, unsigned b) {
 
 void Node::copyPrefix(Node *src, Node *dst) {
 	dst->prefixLength = src->prefixLength;
-	memcpy(dst->prefix, src->prefix, min(src->prefixLength, src->maxPrefixLength));
+	memcpy(dst->prefix.get(), src->prefix.get(), min(src->prefixLength, src->maxPrefixLength));
 }
 
 Node *Node::minimum(Node *node) {
