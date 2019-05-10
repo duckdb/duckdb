@@ -38,7 +38,7 @@ FileBuffer::~FileBuffer() {
 
 void FileBuffer::Read(FileHandle &handle, uint64_t location) {
 	// read the buffer from disk
-	handle.Read(internal_buffer, size, location);
+	handle.Read(internal_buffer, internal_size, location);
 	// compute the checksum
 	uint64_t stored_checksum = *checksum_ptr;
 	uint64_t computed_checksum = Checksum(buffer, size);

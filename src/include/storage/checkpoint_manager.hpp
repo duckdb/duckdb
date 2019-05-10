@@ -40,13 +40,22 @@ public:
 	//! Load from a stored checkpoint
 	void LoadFromStorage();
 private:
-	void WriteSchema(Transaction &transaction, SchemaCatalogEntry *schema);
-	void WriteTable(Transaction &transaction, TableCatalogEntry *table);
-	void WriteTableData(Transaction &transaction, TableCatalogEntry *table);
+	void WriteSchema(Transaction &transaction, SchemaCatalogEntry &schema);
+	void WriteTable(Transaction &transaction, TableCatalogEntry &table);
+	void WriteTableData(Transaction &transaction, TableCatalogEntry &table);
+
+	void WriteColumnData(DataChunk &chunk, uint64_t column_index);
+	void WriteDataPointers();
+
+	void FlushBlock(uint64_t column_index);
 
 	void ReadSchema(ClientContext &context, MetaBlockReader &reader);
 	void ReadTable(ClientContext &context, MetaBlockReader &reader);
 	void ReadTableData(ClientContext &context, TableCatalogEntry &table, MetaBlockReader &reader);
+
+	void ReadBlock(uint64_t col, uint64_t block_nr);
+	void ReadString(Vector &vector, uint64_t col);
+	void ReadDataPointers(uint64_t column_count, MetaBlockReader &reader);
 private:
 	//! The block manager to write the checkpoint to
 	BlockManager &block_manager;
@@ -57,6 +66,14 @@ private:
 	unique_ptr<MetaBlockWriter> metadata_writer;
 	//! The table data writer is responsible for writing the DataPointers used by the table chunks
 	unique_ptr<MetaBlockWriter> tabledata_writer;
+private:
+	vector<unique_ptr<Block>> blocks;
+	vector<uint64_t> offsets;
+	vector<uint64_t> tuple_counts;
+	vector<uint64_t> row_numbers;
+	vector<uint64_t> indexes;
+
+	vector<vector<DataPointer>> data_pointers;
 };
 
 }

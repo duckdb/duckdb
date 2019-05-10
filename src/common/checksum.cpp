@@ -13,8 +13,10 @@ uint64_t Checksum(uint8_t *buffer, size_t size) {
 	for(i = 0; i < size / 8; i++) {
 		result ^= Hash(ptr[i]);
 	}
-	// the remaining 0-7 bytes we hash using a string hash
-	result ^= Hash(buffer + i * 8, size - i * 8);
+	if (size - i * 8 > 0) {
+		// the remaining 0-7 bytes we hash using a string hash
+		result ^= Hash(buffer + i * 8, size - i * 8);
+	}
 	return result;
 }
 

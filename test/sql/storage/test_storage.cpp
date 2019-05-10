@@ -33,15 +33,19 @@ TEST_CASE("Test simple storage", "[storage]") {
 		DuckDB db(storage_database);
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21), (NULL, NULL)"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2 (a INTEGER);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (13), (12), (11)"));
 	}
 	// reload the database from disk
 	{
 		DuckDB db(storage_database);
 		Connection con(db);
 		result = con.Query("SELECT * FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 11, 12, 13}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value(), 22, 21, 22}));
+		result = con.Query("SELECT * FROM test2 ORDER BY a");
 		REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
-		REQUIRE(CHECK_COLUMN(result, 1, {22, 21, 22}));
 	}
 	// reload the database from disk, we do this again because checkpointing at startup causes this to follow a
 	// different code path
@@ -49,8 +53,10 @@ TEST_CASE("Test simple storage", "[storage]") {
 		DuckDB db(storage_database);
 		Connection con(db);
 		result = con.Query("SELECT * FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 11, 12, 13}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value(), 22, 21, 22}));
+		result = con.Query("SELECT * FROM test2 ORDER BY a");
 		REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
-		REQUIRE(CHECK_COLUMN(result, 1, {22, 21, 22}));
 	}
 	DeleteDatabase(storage_database);
 }
