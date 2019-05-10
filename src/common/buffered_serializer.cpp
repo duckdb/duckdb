@@ -7,7 +7,8 @@ BufferedSerializer::BufferedSerializer(uint64_t maximum_size)
     : BufferedSerializer(unique_ptr<uint8_t[]>(new uint8_t[maximum_size]), maximum_size) {
 }
 
-BufferedSerializer::BufferedSerializer(unique_ptr<uint8_t[]> data, uint64_t size) : maximum_size(size), data(data.get()) {
+BufferedSerializer::BufferedSerializer(unique_ptr<uint8_t[]> data, uint64_t size)
+    : maximum_size(size), data(data.get()) {
 	blob.size = 0;
 	blob.data = move(data);
 }

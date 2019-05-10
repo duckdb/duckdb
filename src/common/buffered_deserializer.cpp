@@ -3,12 +3,11 @@
 using namespace duckdb;
 using namespace std;
 
-BufferedDeserializer::BufferedDeserializer(uint8_t *ptr, uint64_t data_size) :
-	ptr(ptr), endptr(ptr + data_size) {
+BufferedDeserializer::BufferedDeserializer(uint8_t *ptr, uint64_t data_size) : ptr(ptr), endptr(ptr + data_size) {
 }
 
-BufferedDeserializer::BufferedDeserializer(BufferedSerializer &serializer) :
-	BufferedDeserializer(serializer.data, serializer.maximum_size) {
+BufferedDeserializer::BufferedDeserializer(BufferedSerializer &serializer)
+    : BufferedDeserializer(serializer.data, serializer.maximum_size) {
 }
 
 void BufferedDeserializer::Read(uint8_t *buffer, uint64_t read_size) {

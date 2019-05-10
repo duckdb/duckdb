@@ -36,6 +36,7 @@ public:
 	BinaryData GetData() {
 		return std::move(blob);
 	}
+
 public:
 	uint64_t maximum_size;
 	uint8_t *data;
@@ -43,5 +44,4 @@ public:
 	BinaryData blob;
 };
 
-}
-
+} // namespace duckdb

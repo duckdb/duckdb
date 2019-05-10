@@ -1,5 +1,7 @@
 #include "main/client_context.hpp"
 
+#include "common/buffered_deserializer.hpp"
+#include "common/buffered_serializer.hpp"
 #include "execution/physical_plan_generator.hpp"
 #include "main/database.hpp"
 #include "main/materialized_query_result.hpp"
@@ -12,9 +14,6 @@
 #include "planner/operator/logical_execute.hpp"
 #include "planner/planner.hpp"
 #include "transaction/transaction_manager.hpp"
-
-#include "common/buffered_serializer.hpp"
-#include "common/buffered_deserializer.hpp"
 
 using namespace duckdb;
 using namespace std;

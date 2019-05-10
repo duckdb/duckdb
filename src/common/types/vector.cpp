@@ -247,10 +247,9 @@ void Vector::Copy(Vector &other, uint64_t offset) {
 		other.count = count - offset;
 		auto source = (const char **)data;
 		auto target = (const char **)other.data;
-<<<<<<< HEAD
 		VectorOperations::Exec(
 		    *this,
-		    [&](size_t i, size_t k) {
+		    [&](uint64_t i, uint64_t k) {
 			    if (nullmask[i]) {
 				    other.nullmask[k - offset] = true;
 				    target[k - offset] = nullptr;
@@ -259,18 +258,6 @@ void Vector::Copy(Vector &other, uint64_t offset) {
 			    }
 		    },
 		    offset);
-=======
-		VectorOperations::Exec(*this,
-		                       [&](uint64_t i, uint64_t k) {
-			                       if (nullmask[i]) {
-				                       other.nullmask[k - offset] = true;
-				                       target[k - offset] = nullptr;
-			                       } else {
-				                       target[k - offset] = other.string_heap.AddString(source[i]);
-			                       }
-		                       },
-		                       offset);
->>>>>>> 7bc348eb96c3fc5c237b583f46ff8d7ad258522c
 	} else {
 		VectorOperations::Copy(*this, other, offset);
 	}
