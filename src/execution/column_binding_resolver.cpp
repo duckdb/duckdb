@@ -15,7 +15,8 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	uint32_t index = (uint32_t)-1;
 	for (auto &binding : bound_tables) {
 		if (binding.table_index == expr.binding.table_index) {
-			index = binding.column_offset + expr.binding.column_index;
+			assert(binding.column_offset + expr.binding.column_index <= std::numeric_limits<uint32_t>::max());
+			index = (uint32_t)(binding.column_offset + expr.binding.column_index);
 			assert(expr.binding.column_index < binding.column_count);
 			break;
 		}

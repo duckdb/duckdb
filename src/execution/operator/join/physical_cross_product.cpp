@@ -12,7 +12,7 @@ PhysicalCrossProduct::PhysicalCrossProduct(LogicalOperator &op, unique_ptr<Physi
 	children.push_back(move(right));
 }
 
-void PhysicalCrossProduct::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalCrossProduct::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalCrossProductOperatorState *>(state_);
 	// first we fully materialize the right child, if we haven't done that yet
 	if (state->right_data.column_count() == 0) {
@@ -45,12 +45,12 @@ void PhysicalCrossProduct::_GetChunk(ClientContext &context, DataChunk &chunk, P
 	auto &right_chunk = *state->right_data.chunks[state->right_position];
 	// now match the current row of the left relation with the current chunk
 	// from the right relation
-	for (size_t i = 0; i < left_chunk.column_count; i++) {
+	for (uint64_t i = 0; i < left_chunk.column_count; i++) {
 		// first duplicate the values of the left side
 		chunk.data[i].count = right_chunk.size();
 		VectorOperations::Set(chunk.data[i], left_chunk.data[i].GetValue(state->left_position));
 	}
-	for (size_t i = 0; i < right_chunk.column_count; i++) {
+	for (uint64_t i = 0; i < right_chunk.column_count; i++) {
 		// now create a reference to the vectors of the right chunk
 		chunk.data[left_chunk.column_count + i].Reference(right_chunk.data[i]);
 	}

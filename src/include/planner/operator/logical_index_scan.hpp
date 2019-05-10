@@ -9,7 +9,7 @@
 #pragma once
 
 #include "planner/logical_operator.hpp"
-
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include <storage/index.hpp>
 
 namespace duckdb {
@@ -50,7 +50,14 @@ public:
 	size_t table_index;
 
 protected:
-	void ResolveTypes() override;
+    void ResolveTypes() {
+        if (column_ids.size() == 0) {
+            types = {TypeId::INTEGER};
+        } else {
+            types = tableref.GetTypes(column_ids);
+        }
+    }
+
 };
 
 } // namespace duckdb

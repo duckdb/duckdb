@@ -17,16 +17,17 @@ namespace duckdb {
 //! will be transformed to a proper PRIMARY KEY or UNIQUE constraint
 class ParsedConstraint : public Constraint {
 public:
-	ParsedConstraint(ConstraintType type, size_t index) : Constraint(ConstraintType::DUMMY), ctype(type), index(index) {
+	ParsedConstraint(ConstraintType type, uint64_t index)
+	    : Constraint(ConstraintType::DUMMY), ctype(type), index(index) {
 	}
 	ParsedConstraint(ConstraintType type, vector<string> columns)
-	    : Constraint(ConstraintType::DUMMY), ctype(type), index((size_t)-1), columns(columns) {
+	    : Constraint(ConstraintType::DUMMY), ctype(type), index((uint64_t)-1), columns(columns) {
 	}
 	virtual ~ParsedConstraint() {
 	}
 
 	ConstraintType ctype;
-	size_t index;
+	uint64_t index;
 	vector<string> columns;
 
 public:

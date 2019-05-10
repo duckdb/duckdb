@@ -10,7 +10,7 @@
 
 #include <cstring>
 
-namespace operators {
+namespace duckdb {
 
 //===--------------------------------------------------------------------===//
 // Comparison Operations
@@ -63,4 +63,4 @@ struct LessThanEquals {
 template <> inline bool LessThanEquals::Operation(const char *left, const char *right) {
 	return strcmp(left, right) <= 0;
 }
-} // namespace operators
+} // namespace duckdb

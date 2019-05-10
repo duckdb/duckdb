@@ -6,10 +6,6 @@
 using namespace duckdb;
 using namespace std;
 
-string SelectStatement::ToString() const {
-	return "Select";
-}
-
 unique_ptr<SelectStatement> SelectStatement::Copy() {
 	auto result = make_unique<SelectStatement>();
 	for (auto &cte : cte_map) {
@@ -21,7 +17,8 @@ unique_ptr<SelectStatement> SelectStatement::Copy() {
 
 void SelectStatement::Serialize(Serializer &serializer) {
 	// with clauses
-	serializer.Write<uint32_t>(cte_map.size());
+	assert(cte_map.size() <= numeric_limits<uint32_t>::max());
+	serializer.Write<uint32_t>((uint32_t)cte_map.size());
 	for (auto &cte : cte_map) {
 		serializer.WriteString(cte.first);
 		cte.second->Serialize(serializer);
@@ -32,7 +29,7 @@ void SelectStatement::Serialize(Serializer &serializer) {
 unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
 	auto result = make_unique<SelectStatement>();
 	auto cte_count = source.Read<uint32_t>();
-	for (size_t i = 0; i < cte_count; i++) {
+	for (uint32_t i = 0; i < cte_count; i++) {
 		auto name = source.Read<string>();
 		auto statement = QueryNode::Deserialize(source);
 		result->cte_map[name] = move(statement);
@@ -42,7 +39,7 @@ unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
 }
 
 bool SelectStatement::Equals(const SQLStatement *other_) const {
-	if (!SQLStatement::Equals(other_)) {
+	if (type != other_->type) {
 		return false;
 	}
 	auto other = (SelectStatement *)other_;

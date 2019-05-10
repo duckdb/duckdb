@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "common/enums/statement_type.hpp"
 #include "common/exception.hpp"
 #include "common/printer.hpp"
 
@@ -18,15 +19,6 @@ class SQLStatement {
 public:
 	SQLStatement(StatementType type) : type(type){};
 	virtual ~SQLStatement() {
-	}
-
-	virtual bool Equals(const SQLStatement *other) const {
-		return other && type == other->type;
-	}
-
-	virtual string ToString() const = 0;
-	void Print() {
-		Printer::Print(ToString());
 	}
 
 	StatementType type;

@@ -8,8 +8,8 @@ using namespace std;
 template <class T, class OP> static void mark_join_templated(Vector &left, Vector &right, bool found_match[]) {
 	auto ldata = (T *)left.data;
 	auto rdata = (T *)right.data;
-	VectorOperations::Exec(left, [&](size_t left_position, size_t k) {
-		VectorOperations::Exec(right, [&](size_t right_position, size_t k) {
+	VectorOperations::Exec(left, [&](uint64_t left_position, uint64_t k) {
+		VectorOperations::Exec(right, [&](uint64_t right_position, uint64_t k) {
 			if (OP::Operation(ldata[left_position], rdata[right_position])) {
 				found_match[left_position] = true;
 			}
@@ -43,17 +43,17 @@ static void mark_join(Vector &left, Vector &right, bool found_match[], Expressio
 	assert(left.type == right.type);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		return mark_join_operator<operators::Equals>(left, right, found_match);
+		return mark_join_operator<duckdb::Equals>(left, right, found_match);
 	case ExpressionType::COMPARE_NOTEQUAL:
-		return mark_join_operator<operators::NotEquals>(left, right, found_match);
+		return mark_join_operator<duckdb::NotEquals>(left, right, found_match);
 	case ExpressionType::COMPARE_LESSTHAN:
-		return mark_join_operator<operators::LessThan>(left, right, found_match);
+		return mark_join_operator<duckdb::LessThan>(left, right, found_match);
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return mark_join_operator<operators::GreaterThan>(left, right, found_match);
+		return mark_join_operator<duckdb::GreaterThan>(left, right, found_match);
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return mark_join_operator<operators::LessThanEquals>(left, right, found_match);
+		return mark_join_operator<duckdb::LessThanEquals>(left, right, found_match);
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return mark_join_operator<operators::GreaterThanEquals>(left, right, found_match);
+		return mark_join_operator<duckdb::GreaterThanEquals>(left, right, found_match);
 	default:
 		throw NotImplementedException("Unimplemented comparison type for join!");
 	}
@@ -63,9 +63,9 @@ void NestedLoopJoinMark::Perform(DataChunk &left, ChunkCollection &right, bool f
                                  vector<JoinCondition> &conditions) {
 	// initialize a new temporary selection vector for the left chunk
 	// loop over all chunks in the RHS
-	for (size_t chunk_idx = 0; chunk_idx < right.chunks.size(); chunk_idx++) {
+	for (uint64_t chunk_idx = 0; chunk_idx < right.chunks.size(); chunk_idx++) {
 		DataChunk &right_chunk = *right.chunks[chunk_idx];
-		for (size_t i = 0; i < conditions.size(); i++) {
+		for (uint64_t i = 0; i < conditions.size(); i++) {
 			mark_join(left.data[i], right_chunk.data[i], found_match, conditions[i].comparison);
 		}
 	}

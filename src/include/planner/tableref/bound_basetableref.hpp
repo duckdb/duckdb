@@ -16,7 +16,7 @@ class TableCatalogEntry;
 //! Represents a TableReference to a base table in the schema
 class BoundBaseTableRef : public BoundTableRef {
 public:
-	BoundBaseTableRef(TableCatalogEntry *table, size_t bind_index)
+	BoundBaseTableRef(TableCatalogEntry *table, uint64_t bind_index)
 	    : BoundTableRef(TableReferenceType::BASE_TABLE), table(table), bind_index(bind_index) {
 	}
 
@@ -25,6 +25,6 @@ public:
 	//! The set of columns bound to this base table reference
 	vector<string> bound_columns;
 	//! The index in the bind context
-	size_t bind_index;
+	uint64_t bind_index;
 };
 } // namespace duckdb

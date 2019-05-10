@@ -10,27 +10,26 @@
 
 #include "common/common.hpp"
 #include "common/types/value.hpp"
+#include "parser/parsed_expression.hpp"
 
 namespace duckdb {
 
 //! A column of a table.
 class ColumnDefinition {
 public:
-	ColumnDefinition(string name, SQLType type) : name(name), type(type), has_default(false) {
+	ColumnDefinition(string name, SQLType type) : name(name), type(type) {
 	}
-	ColumnDefinition(string name, SQLType type, Value default_value)
-	    : name(name), type(type), has_default(true), default_value(default_value) {
+	ColumnDefinition(string name, SQLType type, unique_ptr<ParsedExpression> default_value)
+	    : name(name), type(type), default_value(move(default_value)) {
 	}
 
 	//! The name of the entry
 	string name;
 	//! The index of the column in the table
-	size_t oid;
+	uint64_t oid;
 	//! The type of the column
 	SQLType type;
-	//! Whether or not the column has a default value
-	bool has_default;
 	//! The default value of the column (if any)
-	Value default_value;
+	unique_ptr<ParsedExpression> default_value;
 };
 } // namespace duckdb

@@ -7,7 +7,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalDelete::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalDelete::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	int64_t deleted_count = 0;
 	while (true) {
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());

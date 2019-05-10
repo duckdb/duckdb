@@ -14,9 +14,9 @@
 namespace duckdb {
 
 struct BoundTable {
-	size_t table_index;
-	size_t column_count;
-	size_t column_offset;
+	uint64_t table_index;
+	uint64_t column_count;
+	uint64_t column_offset;
 };
 
 //! The TableBindingResolver scans a logical tree and constructs TableBindings

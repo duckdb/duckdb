@@ -15,8 +15,8 @@
 namespace duckdb {
 
 struct ExpressionHashFunction {
-	size_t operator()(const BaseExpression *const &expr) const {
-		return (size_t)expr->Hash();
+	uint64_t operator()(const BaseExpression *const &expr) const {
+		return (uint64_t)expr->Hash();
 	}
 };
 

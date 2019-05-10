@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "common/enums/subquery_type.hpp"
 #include "planner/binder.hpp"
 #include "planner/bound_query_node.hpp"
 #include "planner/expression.hpp"
@@ -43,6 +44,9 @@ public:
 		return true;
 	}
 	bool IsScalar() const override {
+		return false;
+	}
+	bool IsFoldable() const override {
 		return false;
 	}
 

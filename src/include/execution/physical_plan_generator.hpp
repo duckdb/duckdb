@@ -63,5 +63,7 @@ protected:
 
 private:
 	ClientContext &context;
+
+	unordered_set<CatalogEntry *> dependencies;
 };
 } // namespace duckdb

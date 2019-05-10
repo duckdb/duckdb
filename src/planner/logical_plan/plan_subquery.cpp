@@ -127,7 +127,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 static unique_ptr<LogicalDelimJoin> CreateDuplicateEliminatedJoin(vector<CorrelatedColumnInfo> &correlated_columns,
                                                                   JoinType join_type) {
 	auto delim_join = make_unique<LogicalDelimJoin>(join_type);
-	for (size_t i = 0; i < correlated_columns.size(); i++) {
+	for (uint64_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		delim_join->duplicate_eliminated_columns.push_back(
 		    make_unique<BoundColumnRefExpression>(col.type, col.binding));
@@ -137,12 +137,13 @@ static unique_ptr<LogicalDelimJoin> CreateDuplicateEliminatedJoin(vector<Correla
 
 static void CreateDelimJoinConditions(LogicalDelimJoin &delim_join, vector<CorrelatedColumnInfo> &correlated_columns,
                                       ColumnBinding base_binding) {
-	for (size_t i = 0; i < correlated_columns.size(); i++) {
+	for (uint64_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		JoinCondition cond;
 		cond.left = make_unique<BoundColumnRefExpression>(col.name, col.type, col.binding);
+		assert(base_binding.column_index + i <= numeric_limits<uint32_t>::max());
 		cond.right = make_unique<BoundColumnRefExpression>(
-		    col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+		    col.name, col.type, ColumnBinding(base_binding.table_index, (uint32_t)(base_binding.column_index + i)));
 		cond.comparison = ExpressionType::COMPARE_EQUAL;
 		cond.null_values_are_equal = true;
 		delim_join.conditions.push_back(move(cond));
@@ -263,6 +264,8 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 static unique_ptr<Expression> PlanSubquery(Binder &binder, ClientContext &context, BoundSubqueryExpression &expr,
                                            unique_ptr<LogicalOperator> &root);
 
+namespace duckdb {
+
 class RecursiveSubqueryPlanner : public LogicalOperatorVisitor {
 public:
 	RecursiveSubqueryPlanner(Binder &binder, ClientContext &context) : binder(binder), context(context) {
@@ -272,7 +275,7 @@ public:
 			root = move(op.children[0]);
 			VisitOperatorExpressions(op);
 			op.children[0] = move(root);
-			for (size_t i = 0; i < op.children.size(); i++) {
+			for (uint64_t i = 0; i < op.children.size(); i++) {
 				VisitOperator(*op.children[i]);
 			}
 		}
@@ -287,6 +290,7 @@ private:
 	Binder &binder;
 	ClientContext &context;
 };
+} // namespace duckdb
 
 unique_ptr<Expression> PlanSubquery(Binder &binder, ClientContext &context, BoundSubqueryExpression &expr,
                                     unique_ptr<LogicalOperator> &root) {

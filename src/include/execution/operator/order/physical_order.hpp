@@ -22,7 +22,7 @@ public:
 	    : PhysicalOperator(PhysicalOperatorType::ORDER_BY, op.types), orders(move(orders)) {
 	}
 
-	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
@@ -34,7 +34,7 @@ public:
 	PhysicalOrderOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
 	}
 
-	size_t position;
+	uint64_t position;
 	ChunkCollection sorted_data;
 	unique_ptr<uint64_t[]> sorted_vector;
 };

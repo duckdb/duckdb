@@ -8,12 +8,10 @@ using namespace std;
 
 TEST_CASE("Test simple storage", "[storage]") {
 	unique_ptr<QueryResult> result;
-	auto storage_database = JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
+	auto storage_database = TestCreatePath("storage_test");
 
 	// make sure the database does not exist
-	if (DirectoryExists(storage_database)) {
-		RemoveDirectory(storage_database);
-	}
+	DeleteDatabase(storage_database);
 	{
 		// create a database and insert values
 		DuckDB db(storage_database);
@@ -38,17 +36,15 @@ TEST_CASE("Test simple storage", "[storage]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
 		REQUIRE(CHECK_COLUMN(result, 1, {22, 21, 22}));
 	}
-	RemoveDirectory(storage_database);
+	DeleteDatabase(storage_database);
 }
 
 TEST_CASE("Test storing NULLs and strings", "[storage]") {
 	unique_ptr<QueryResult> result;
-	auto storage_database = JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
+	auto storage_database = TestCreatePath("storage_test");
 
 	// make sure the database does not exist
-	if (DirectoryExists(storage_database)) {
-		RemoveDirectory(storage_database);
-	}
+	DeleteDatabase(storage_database);
 	{
 		// create a database and insert values
 		DuckDB db(storage_database);
@@ -74,17 +70,15 @@ TEST_CASE("Test storing NULLs and strings", "[storage]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 12, 13}));
 		REQUIRE(CHECK_COLUMN(result, 1, {"hello", Value(), "abcdefgh"}));
 	}
-	RemoveDirectory(storage_database);
+	DeleteDatabase(storage_database);
 }
 
 TEST_CASE("Test updates with storage", "[storage]") {
 	unique_ptr<QueryResult> result;
-	auto storage_database = JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
+	auto storage_database = TestCreatePath("storage_test");
 
 	// make sure the database does not exist
-	if (DirectoryExists(storage_database)) {
-		RemoveDirectory(storage_database);
-	}
+	DeleteDatabase(storage_database);
 	{
 		// create a database and insert values
 		DuckDB db(storage_database);
@@ -114,18 +108,16 @@ TEST_CASE("Test updates with storage", "[storage]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {11, 13}));
 		REQUIRE(CHECK_COLUMN(result, 1, {1022, 22}));
 	}
-	RemoveDirectory(storage_database);
+	DeleteDatabase(storage_database);
 }
 
 TEST_CASE("Test storing TPC-H", "[storage][.]") {
 	unique_ptr<QueryResult> result;
 	double sf = 0.1;
-	auto storage_database = JoinPath(TESTING_DIRECTORY_NAME, "storage_tpch");
+	auto storage_database = TestCreatePath("storage_tpch");
 
 	// make sure the database does not exist
-	if (DirectoryExists(storage_database)) {
-		RemoveDirectory(storage_database);
-	}
+	DeleteDatabase(storage_database);
 	{
 		// create a database and insert TPC-H tables
 		DuckDB db(storage_database);
@@ -198,5 +190,5 @@ TEST_CASE("Test storing TPC-H", "[storage][.]") {
 		result = con.Query("SELECT COUNT(*) FROM region");
 		REQUIRE(CHECK_COLUMN(result, 0, {5}));
 	}
-	RemoveDirectory(storage_database);
+	DeleteDatabase(storage_database);
 }

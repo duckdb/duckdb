@@ -1,17 +1,17 @@
+#include "execution/index/art/node4.hpp"
 #include "execution/index/art/node16.hpp"
 #include "execution/index/art/node48.hpp"
 
 using namespace duckdb;
 
 // TODO : In the future this can be performed using SIMD (#include <emmintrin.h>  x86 SSE intrinsics)
-// TODO : Use Binary Search instead of scanning all 16 elements
-Node *Node16::getChild(const uint8_t k) const {
+Node **Node16::getChild(const uint8_t k) {
 	for (uint32_t i = 0; i < count; ++i) {
 		if (key[i] == k) {
-			return child[i];
+			return &child[i];
 		}
 	}
-	return nullptr;
+	return NULL;
 }
 
 void Node16::insert(Node16 *node, Node **nodeRef, uint8_t keyByte, Node *child) {
@@ -28,14 +28,34 @@ void Node16::insert(Node16 *node, Node **nodeRef, uint8_t keyByte, Node *child) 
 		node->count++;
 	} else {
 		// Grow to Node48
-		Node48 *newNode = new Node48();
+		Node48 *newNode = new Node48(node->maxPrefixLength);
 		*nodeRef = newNode;
 		memcpy(newNode->child, node->child, node->count * sizeof(uintptr_t));
 		for (unsigned i = 0; i < node->count; i++)
-			newNode->childIndex[flipSign(node->key[i])] = i;
+			newNode->childIndex[node->key[i]] = i;
 		copyPrefix(node, newNode);
 		newNode->count = node->count;
 		delete node;
 		return Node48::insert(newNode, nodeRef, keyByte, child);
+	}
+}
+
+void Node16::erase(Node16 *node, Node **nodeRef, Node **leafPlace) {
+	// Delete leaf from inner node
+	unsigned pos = leafPlace - node->child;
+	memmove(node->key + pos, node->key + pos + 1, node->count - pos - 1);
+	memmove(node->child + pos, node->child + pos + 1, (node->count - pos - 1) * sizeof(uintptr_t));
+	node->count--;
+
+	if (node->count == 3) {
+		// Shrink to Node4
+		Node4 *newNode = new Node4(node->maxPrefixLength);
+		newNode->count = node->count;
+		copyPrefix(node, newNode);
+		for (unsigned i = 0; i < 4; i++)
+			newNode->key[i] = node->key[i];
+		memcpy(newNode->child, node->child, sizeof(uintptr_t) * 4);
+		*nodeRef = newNode;
+		delete node;
 	}
 }

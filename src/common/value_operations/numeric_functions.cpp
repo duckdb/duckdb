@@ -4,7 +4,6 @@
 #include "common/value_operations/value_operations.hpp"
 
 using namespace duckdb;
-using namespace operators;
 using namespace std;
 
 Value ValueOperations::Abs(const Value &op) {

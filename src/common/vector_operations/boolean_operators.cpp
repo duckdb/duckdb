@@ -28,7 +28,7 @@ template <class OP, class NULLOP> void templated_boolean_nullmask(Vector &left, 
 	if (left.IsConstant()) {
 		bool left_null = left.nullmask[0];
 		bool constant = ldata[0];
-		VectorOperations::Exec(right, [&](size_t i, size_t k) {
+		VectorOperations::Exec(right, [&](uint64_t i, uint64_t k) {
 			result_data[i] = OP::Operation(constant, rdata[i]);
 			result.nullmask[i] = NULLOP::Operation(constant, rdata[i], left_null, right.nullmask[i]);
 		});
@@ -39,7 +39,7 @@ template <class OP, class NULLOP> void templated_boolean_nullmask(Vector &left, 
 		templated_boolean_nullmask<OP, NULLOP>(right, left, result);
 	} else if (left.count == right.count) {
 		assert(left.sel_vector == right.sel_vector);
-		VectorOperations::Exec(left, [&](size_t i, size_t k) {
+		VectorOperations::Exec(left, [&](uint64_t i, uint64_t k) {
 			result_data[i] = OP::Operation(ldata[i], rdata[i]);
 			result.nullmask[i] = NULLOP::Operation(ldata[i], rdata[i], left.nullmask[i], right.nullmask[i]);
 		});
@@ -51,16 +51,16 @@ template <class OP, class NULLOP> void templated_boolean_nullmask(Vector &left, 
 }
 
 void VectorOperations::And(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_nullmask<operators::And, operators::AndMask>(left, right, result);
+	templated_boolean_nullmask<duckdb::And, duckdb::AndMask>(left, right, result);
 }
 
 void VectorOperations::Or(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_nullmask<operators::Or, operators::OrMask>(left, right, result);
+	templated_boolean_nullmask<duckdb::Or, duckdb::OrMask>(left, right, result);
 }
 
 void VectorOperations::Not(Vector &left, Vector &result) {
 	if (left.type != TypeId::BOOLEAN) {
 		throw InvalidTypeException(left.type, "NOT() needs a boolean input");
 	}
-	templated_unary_loop<int8_t, int8_t, operators::Not>(left, result);
+	templated_unary_loop<int8_t, int8_t, duckdb::Not>(left, result);
 }

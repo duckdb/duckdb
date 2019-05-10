@@ -73,7 +73,7 @@ unique_ptr<LogicalOperator> IndexScan::TransformFilterToIndexScan(unique_ptr<Log
 				auto comparison_type = comparison->type;
 				if (comparison->right.get() == index->expressions[0].get()) {
 					// the expression is on the right side, we flip them around
-					comparison_type = ComparisonExpression::FlipComparisionExpression(comparison_type);
+					comparison_type = FlipComparisionExpression(comparison_type);
 				}
 				if (comparison_type == ExpressionType::COMPARE_EQUAL) {
 					// equality value

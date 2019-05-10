@@ -39,33 +39,33 @@ template <class OP> static void templated_binary_bitwise_operation(Vector &left,
 // Bitwise XOR
 //===--------------------------------------------------------------------===//
 void VectorOperations::BitwiseXOR(Vector &left, Vector &right, Vector &result) {
-	templated_binary_bitwise_operation<operators::BitwiseXOR>(left, right, result);
+	templated_binary_bitwise_operation<duckdb::BitwiseXOR>(left, right, result);
 }
 
 //===--------------------------------------------------------------------===//
 // Bitwise AND
 //===--------------------------------------------------------------------===//
 void VectorOperations::BitwiseAND(Vector &left, Vector &right, Vector &result) {
-	templated_binary_bitwise_operation<operators::BitwiseAND>(left, right, result);
+	templated_binary_bitwise_operation<duckdb::BitwiseAND>(left, right, result);
 }
 
 //===--------------------------------------------------------------------===//
 // Bitwise OR
 //===--------------------------------------------------------------------===//
 void VectorOperations::BitwiseOR(Vector &left, Vector &right, Vector &result) {
-	templated_binary_bitwise_operation<operators::BitwiseOR>(left, right, result);
+	templated_binary_bitwise_operation<duckdb::BitwiseOR>(left, right, result);
 }
 
 //===--------------------------------------------------------------------===//
 // Bitwise Shift Left
 //===--------------------------------------------------------------------===//
 void VectorOperations::BitwiseShiftLeft(Vector &left, Vector &right, Vector &result) {
-	templated_binary_bitwise_operation<operators::BitwiseShiftLeft>(left, right, result);
+	templated_binary_bitwise_operation<duckdb::BitwiseShiftLeft>(left, right, result);
 }
 
 //===--------------------------------------------------------------------===//
 // Bitwise Shift Right
 //===--------------------------------------------------------------------===//
 void VectorOperations::BitwiseShiftRight(Vector &left, Vector &right, Vector &result) {
-	templated_binary_bitwise_operation<operators::BitwiseShiftRight>(left, right, result);
+	templated_binary_bitwise_operation<duckdb::BitwiseShiftRight>(left, right, result);
 }

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "common/enums/set_operation_type.hpp"
 #include "planner/binder.hpp"
 #include "planner/bound_query_node.hpp"
 
@@ -27,7 +28,7 @@ public:
 	unique_ptr<BoundQueryNode> right;
 
 	//! Index used by the set operation
-	size_t setop_index;
+	uint64_t setop_index;
 	//! The binder used by the left side of the set operation
 	unique_ptr<Binder> left_binder;
 	//! The binder used by the right side of the set operation

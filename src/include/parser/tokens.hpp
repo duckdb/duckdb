@@ -22,10 +22,7 @@ class CreateSchemaStatement;
 class CreateTableStatement;
 class CreateViewStatement;
 class DeleteStatement;
-class DropSchemaStatement;
-class DropTableStatement;
-class DropIndexStatement;
-class DropViewStatement;
+class DropStatement;
 class InsertStatement;
 class SelectStatement;
 class TransactionStatement;
@@ -33,6 +30,7 @@ class UpdateStatement;
 class PrepareStatement;
 class ExecuteStatement;
 class DeallocateStatement;
+class CreateSequenceStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node

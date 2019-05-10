@@ -20,7 +20,7 @@ public:
 	PhysicalPiecewiseMergeJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
 	                           unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type);
 
-	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
@@ -36,9 +36,9 @@ public:
 	}
 
 	bool initialized;
-	size_t left_position;
-	size_t right_position;
-	size_t right_chunk_index;
+	uint64_t left_position;
+	uint64_t right_position;
+	uint64_t right_chunk_index;
 	DataChunk left_chunk;
 	DataChunk join_keys;
 	MergeOrder left_orders;

@@ -10,6 +10,7 @@
 
 #include "catalog/catalog.hpp"
 #include "common/common.hpp"
+#include "common/enums/physical_operator_type.hpp"
 #include "common/types/data_chunk.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "planner/expression.hpp"
@@ -59,7 +60,7 @@ public:
 		return type;
 	}
 
-	string ToString(size_t depth = 0) const;
+	string ToString(uint64_t depth = 0) const;
 	void Print();
 
 	//! Return a vector of the types that will be returned by this operator
@@ -75,7 +76,7 @@ public:
 	}
 	//! Retrieves a chunk from this operator and stores it in the chunk
 	//! variable.
-	virtual void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) = 0;
+	virtual void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) = 0;
 
 	void GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state);
 

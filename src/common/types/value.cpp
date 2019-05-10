@@ -132,11 +132,14 @@ Value Value::Numeric(TypeId type, int64_t value) {
 	val.is_null = false;
 	switch (type) {
 	case TypeId::TINYINT:
-		return Value::TINYINT(value);
+		assert(value <= std::numeric_limits<int8_t>::max());
+		return Value::TINYINT((int8_t)value);
 	case TypeId::SMALLINT:
-		return Value::SMALLINT(value);
+		assert(value <= std::numeric_limits<int16_t>::max());
+		return Value::SMALLINT((int16_t)value);
 	case TypeId::INTEGER:
-		return Value::INTEGER(value);
+		assert(value <= std::numeric_limits<int32_t>::max());
+		return Value::INTEGER((int32_t)value);
 	case TypeId::BIGINT:
 		return Value::BIGINT(value);
 	case TypeId::FLOAT:
@@ -191,6 +194,8 @@ string Value::ToString(SQLType sql_type) const {
 		return to_string(value_.float_);
 	case SQLTypeId::DOUBLE:
 		return to_string(value_.double_);
+	case SQLTypeId::POINTER:
+		return to_string(value_.pointer);
 	case SQLTypeId::DATE:
 		return Date::ToString(value_.integer);
 	case SQLTypeId::TIMESTAMP:

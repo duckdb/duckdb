@@ -11,15 +11,19 @@
 #undef IN
 // this breaks file_system.cpp otherwise
 #undef CreateDirectory
+#undef RemoveDirectory
 #endif
 
 #include "common/string_util.hpp"
 #include "compare_result.hpp"
 #include "duckdb.hpp"
 
-#define TESTING_DIRECTORY_NAME "duckdb_unittest_tempdir"
-
 namespace duckdb {
+
+void DeleteDatabase(string path);
+void TestDeleteDirectory(string path);
+void TestCreateDirectory(string path);
+string TestCreatePath(string suffix);
 
 #define REQUIRE_NO_FAIL(result) REQUIRE((result)->success)
 #define REQUIRE_FAIL(result) REQUIRE(!(result)->success)

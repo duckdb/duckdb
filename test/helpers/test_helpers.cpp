@@ -1,9 +1,35 @@
+#include "common/file_system.hpp"
 #include "common/value_operations/value_operations.hpp"
 #include "compare_result.hpp"
 
+#include <cmath>
+
 using namespace std;
 
+#define TESTING_DIRECTORY_NAME "duckdb_unittest_tempdir"
+
 namespace duckdb {
+
+void TestDeleteDirectory(string path) {
+	FileSystem fs;
+	if (fs.DirectoryExists(path)) {
+		fs.RemoveDirectory(path);
+	}
+}
+
+void DeleteDatabase(string path) {
+	TestDeleteDirectory(path);
+}
+
+void TestCreateDirectory(string path) {
+	FileSystem fs;
+	fs.CreateDirectory(path);
+}
+
+string TestCreatePath(string suffix) {
+	FileSystem fs;
+	return fs.JoinPath(TESTING_DIRECTORY_NAME, suffix);
+}
 
 static bool ValuesAreEqual(Value result_value, Value value) {
 	if (result_value.is_null && value.is_null) {

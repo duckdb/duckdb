@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalPruneColumns::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalPruneColumns::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOperatorState *>(state_);
 
 	children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
@@ -13,7 +13,7 @@ void PhysicalPruneColumns::_GetChunk(ClientContext &context, DataChunk &chunk, P
 		return;
 	}
 	assert(column_limit <= state->child_chunk.column_count);
-	for (size_t i = 0; i < column_limit; i++) {
+	for (uint64_t i = 0; i < column_limit; i++) {
 		chunk.data[i].Reference(state->child_chunk.data[i]);
 	}
 	chunk.sel_vector = state->child_chunk.sel_vector;

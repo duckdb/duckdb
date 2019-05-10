@@ -41,7 +41,7 @@ unique_ptr<CreateTableStatement> Transformer::TransformCreateTable(Node *node) {
 					}
 				}
 			}
-			info.columns.push_back(centry);
+			info.columns.push_back(move(centry));
 			break;
 		}
 		case T_Constraint: {

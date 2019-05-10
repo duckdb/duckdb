@@ -9,7 +9,7 @@
 #pragma once
 
 #include "parser/column_definition.hpp"
-#include "parser/parsed_data.hpp"
+#include "parser/parsed_data/alter_table_info.hpp"
 #include "parser/sql_statement.hpp"
 #include "parser/tableref.hpp"
 
@@ -17,22 +17,10 @@ namespace duckdb {
 
 class AlterTableStatement : public SQLStatement {
 public:
-	AlterTableStatement(unique_ptr<AlterTableInformation> info)
-	    : SQLStatement(StatementType::ALTER), info(std::move(info)){};
-
-	string ToString() const override {
-		return "ALTER TABLE";
-	}
-
-	bool Equals(const SQLStatement *other_) const override {
-		if (!SQLStatement::Equals(other_)) {
-			return false;
-		}
-		throw NotImplementedException("Equality not implemented!");
-	}
+	AlterTableStatement(unique_ptr<AlterTableInfo> info) : SQLStatement(StatementType::ALTER), info(std::move(info)){};
 
 	unique_ptr<TableRef> table;
-	unique_ptr<AlterTableInformation> info;
+	unique_ptr<AlterTableInfo> info;
 };
 
 } // namespace duckdb

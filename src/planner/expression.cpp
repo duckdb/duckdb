@@ -33,6 +33,16 @@ bool Expression::IsScalar() const {
 	return is_scalar;
 }
 
+bool Expression::IsFoldable() const {
+	bool is_foldable = true;
+	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) {
+		if (!child.IsFoldable()) {
+			is_foldable = false;
+		}
+	});
+	return is_foldable;
+}
+
 bool Expression::HasParameter() const {
 	bool has_parameter = false;
 	ExpressionIterator::EnumerateChildren(*this,

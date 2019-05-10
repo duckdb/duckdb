@@ -10,8 +10,8 @@ using namespace std;
 using Filter = FilterPushdown::Filter;
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<LogicalOperator> op,
-                                                              unordered_set<size_t> &left_bindings,
-                                                              unordered_set<size_t> &right_bindings) {
+                                                              unordered_set<uint64_t> &left_bindings,
+                                                              unordered_set<uint64_t> &right_bindings) {
 	auto &join = (LogicalJoin &)*op;
 	assert(join.type == JoinType::INNER);
 	assert(op->type != LogicalOperatorType::DELIM_JOIN);
@@ -28,8 +28,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 		assert(op->type == LogicalOperatorType::COMPARISON_JOIN);
 		auto &comp_join = (LogicalComparisonJoin &)join;
 		// turn the conditions into filters
-		for (size_t i = 0; i < comp_join.conditions.size(); i++) {
-			auto condition = LogicalComparisonJoin::CreateExpressionFromCondition(move(comp_join.conditions[i]));
+		for (uint64_t i = 0; i < comp_join.conditions.size(); i++) {
+			auto condition = JoinCondition::CreateExpression(move(comp_join.conditions[i]));
 			if (AddFilter(move(condition)) == FilterResult::UNSATISFIABLE) {
 				// filter statically evaluates to false, strip tree
 				return make_unique<LogicalEmptyResult>(move(op));

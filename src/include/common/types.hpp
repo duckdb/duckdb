@@ -10,7 +10,6 @@
 
 #include "common/assert.hpp"
 #include "common/constants.hpp"
-#include "common/enums.hpp"
 
 #include <type_traits>
 
@@ -127,7 +126,7 @@ template <class T> bool IsValidType() {
 
 string TypeIdToString(TypeId type);
 string TypeIdToString(TypeId type);
-size_t GetTypeIdSize(TypeId type);
+uint64_t GetTypeIdSize(TypeId type);
 bool TypeIsConstantSize(TypeId type);
 bool TypeIsIntegral(TypeId type);
 bool TypeIsNumeric(TypeId type);

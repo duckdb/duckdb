@@ -35,6 +35,7 @@ DuckDB is implemented in C++ 11, should compile with GCC and clang, uses CMake t
 * Optimizer: DuckDB's optimizer draws inspiration from the papers "Dynamic programming strikes back" by Guido Moerkotte and Thomas Neumman as well as "Unnesting Arbitrary Queries" by Thomas Neumann and Alfons Kemper.
 * Concurrency control: Our MVCC implementation is inspired by the paper "Fast Serializable Multi-Version Concurrency Control for Main-Memory Database Systems" by Thomas Neumann, Tobias Mühlbauer and Alfons Kemper.
 * Storage: DuckDB uses DataBlocks for persistent storage as described in the paper "Data Blocks: Hybrid OLTP and OLAP on Compressed Storage using both Vectorization and Compilation" by Harald Lang, Tobias Mühlbauer, Florian Funke, Peter Boncz, Thomas Neumann and Alfons Kemper
+* Regular Expression: DuckDB uses Google's [RE2](https://github.com/google/re2) regular expression engine.
 
 ## Other pages
 * [Continuous Benchmarking (CB™)](http://www.duckdb.org/benchmarking/), runs TPC-H, TPC-DS and some microbenchmarks on every commit

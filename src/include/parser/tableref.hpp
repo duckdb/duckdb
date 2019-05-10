@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "common/enums/tableref_type.hpp"
 
 namespace duckdb {
 class Deserializer;

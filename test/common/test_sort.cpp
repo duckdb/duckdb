@@ -18,7 +18,7 @@ template <class T> bool IsSorted(Vector &v) {
 		} else if (left_null) {
 			continue;
 		} else {
-			if (!operators::LessThanEquals::Operation<T>(data[lindex], data[rindex])) {
+			if (!LessThanEquals::Operation<T>(data[lindex], data[rindex])) {
 				return false;
 			}
 		}

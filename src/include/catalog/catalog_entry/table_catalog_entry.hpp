@@ -13,20 +13,21 @@
 #include "common/unordered_map.hpp"
 #include "parser/column_definition.hpp"
 #include "parser/constraint.hpp"
-#include "parser/parsed_data.hpp"
+#include "planner/expression.hpp"
 
 namespace duckdb {
 
 class ColumnStatistics;
 class DataTable;
 class SchemaCatalogEntry;
+struct CreateTableInfo;
 
 //! A table catalog entry
 class TableCatalogEntry : public CatalogEntry {
 public:
 	//! Create a real TableCatalogEntry and initialize storage for it
-	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInformation *info);
-	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInformation *info,
+	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInfo *info);
+	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInfo *info,
 	                  std::shared_ptr<DataTable> storage);
 
 	//! The schema the table belongs to
@@ -37,10 +38,12 @@ public:
 	vector<ColumnDefinition> columns;
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<Constraint>> constraints;
+	//! Bound default values
+	vector<unique_ptr<Expression>> bound_defaults;
 	//! A map of column name to column index
 	unordered_map<string, column_t> name_map;
 
-	unique_ptr<CatalogEntry> AlterEntry(AlterInformation *info);
+	unique_ptr<CatalogEntry> AlterEntry(AlterInfo *info) override;
 	//! Returns whether or not a column with the given name exists
 	bool ColumnExists(const string &name);
 	//! Returns the statistics of the oid-th column. Throws an exception if the
@@ -57,14 +60,9 @@ public:
 	//! Serialize the meta information of the TableCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateTableInfo
-	static unique_ptr<CreateTableInformation> Deserialize(Deserializer &source);
-
-	//! Returns true if other objects depend on this object
-	virtual bool HasDependents(Transaction &transaction);
-	//! Function that drops all dependents (used for Cascade)
-	virtual void DropDependents(Transaction &transaction);
+	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &source);
 
 private:
-	void Initialize(CreateTableInformation *info);
+	void Initialize(CreateTableInfo *info);
 };
 } // namespace duckdb

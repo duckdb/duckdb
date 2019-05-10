@@ -1,25 +1,32 @@
 #include "function/table_function/sqlite_master.hpp"
 
 #include "catalog/catalog.hpp"
+#include "catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "common/exception.hpp"
 #include "main/client_context.hpp"
 #include "main/database.hpp"
 
+#include <algorithm>
+
 using namespace std;
 
 namespace duckdb {
-namespace function {
 
-struct SQLiteMasterData : public TableFunctionData {
+struct SQLiteMasterData : public FunctionData {
 	SQLiteMasterData() : initialized(false), offset(0) {
+	}
+
+	unique_ptr<FunctionData> Copy() override {
+		throw NotImplementedException("Copy not required for table-producing function");
 	}
 
 	bool initialized;
 	vector<CatalogEntry *> entries;
-	size_t offset;
+	uint64_t offset;
 };
 
-TableFunctionData *sqlite_master_init(ClientContext &context) {
+FunctionData *sqlite_master_init(ClientContext &context) {
 	// initialize the function data structure
 	return new SQLiteMasterData();
 }
@@ -32,7 +39,7 @@ string GenerateQuery(CatalogEntry *entry) {
 		auto table = (TableCatalogEntry *)entry;
 		ss << "CREATE TABLE " << table->name << "(";
 
-		for (size_t i = 0; i < table->columns.size(); i++) {
+		for (uint64_t i = 0; i < table->columns.size(); i++) {
 			auto &column = table->columns[i];
 			ss << column.name << " " << SQLTypeToString(column.type);
 			if (i + 1 < table->columns.size()) {
@@ -47,12 +54,12 @@ string GenerateQuery(CatalogEntry *entry) {
 	}
 }
 
-void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, TableFunctionData *dataptr) {
+void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, FunctionData *dataptr) {
 	auto &data = *((SQLiteMasterData *)dataptr);
 	if (!data.initialized) {
 		// scan all the schemas
 		auto &transaction = context.ActiveTransaction();
-		context.db.catalog.schemas.Scan(transaction, [&](CatalogEntry *entry) {
+		context.catalog.schemas.Scan(transaction, [&](CatalogEntry *entry) {
 			auto schema = (SchemaCatalogEntry *)entry;
 			schema->tables.Scan(transaction, [&](CatalogEntry *entry) { data.entries.push_back(entry); });
 		});
@@ -63,15 +70,15 @@ void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, 
 		// finished returning values
 		return;
 	}
-	size_t next = min(data.offset + STANDARD_VECTOR_SIZE, data.entries.size());
+	uint64_t next = min(data.offset + STANDARD_VECTOR_SIZE, (uint64_t)data.entries.size());
 
-	size_t output_count = next - data.offset;
-	for (size_t j = 0; j < output.column_count; j++) {
+	uint64_t output_count = next - data.offset;
+	for (uint64_t j = 0; j < output.column_count; j++) {
 		output.data[j].count = output_count;
 	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	for (size_t i = data.offset; i < next; i++) {
+	for (uint64_t i = data.offset; i < next; i++) {
 		auto index = i - data.offset;
 		auto &entry = data.entries[i];
 
@@ -107,5 +114,4 @@ void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, 
 	data.offset = next;
 }
 
-} // namespace function
 } // namespace duckdb

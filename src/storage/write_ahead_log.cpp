@@ -2,12 +2,19 @@
 
 #include "catalog/catalog.hpp"
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "catalog/catalog_entry/view_catalog_entry.hpp"
 #include "common/file_system.hpp"
 #include "common/serializer.hpp"
 #include "main/client_context.hpp"
 #include "main/connection.hpp"
 #include "main/database.hpp"
+#include "parser/parsed_data/create_schema_info.hpp"
+#include "parser/parsed_data/create_table_info.hpp"
+#include "parser/parsed_data/create_view_info.hpp"
+#include "parser/parsed_data/drop_info.hpp"
 #include "planner/binder.hpp"
+#include "storage/data_table.hpp"
 #include "transaction/transaction.hpp"
 #include "transaction/transaction_manager.hpp"
 
@@ -107,19 +114,19 @@ bool ReplayQuery(ClientContext &context, Deserializer &source);
 bool ReplayEntry(ClientContext &context, DuckDB &database, WALEntry entry, Deserializer &source) {
 	switch (entry.type) {
 	case WALEntry::DROP_TABLE:
-		return ReplayDropTable(context.ActiveTransaction(), database.catalog, source);
+		return ReplayDropTable(context.ActiveTransaction(), *database.catalog, source);
 	case WALEntry::CREATE_TABLE:
-		return ReplayCreateTable(context, database.catalog, source);
+		return ReplayCreateTable(context, *database.catalog, source);
 	case WALEntry::CREATE_VIEW:
-		return ReplayCreateView(context.ActiveTransaction(), database.catalog, source);
+		return ReplayCreateView(context.ActiveTransaction(), *database.catalog, source);
 	case WALEntry::DROP_VIEW:
-		return ReplayDropView(context.ActiveTransaction(), database.catalog, source);
+		return ReplayDropView(context.ActiveTransaction(), *database.catalog, source);
 	case WALEntry::DROP_SCHEMA:
-		return ReplayDropSchema(context.ActiveTransaction(), database.catalog, source);
+		return ReplayDropSchema(context.ActiveTransaction(), *database.catalog, source);
 	case WALEntry::CREATE_SCHEMA:
-		return ReplayCreateSchema(context.ActiveTransaction(), database.catalog, source);
+		return ReplayCreateSchema(context.ActiveTransaction(), *database.catalog, source);
 	case WALEntry::INSERT_TUPLE:
-		return ReplayInsert(context, database.catalog, source);
+		return ReplayInsert(context, *database.catalog, source);
 	case WALEntry::QUERY:
 		return ReplayQuery(context, source);
 	default:
@@ -138,7 +145,7 @@ template <class T> void WriteAheadLog::Write(T val) {
 	}
 }
 
-void WriteAheadLog::WriteData(uint8_t *dataptr, size_t data_size) {
+void WriteAheadLog::WriteData(uint8_t *dataptr, uint64_t data_size) {
 	if (data_size == 0) {
 		return;
 	}
@@ -151,7 +158,7 @@ void WriteAheadLog::WriteEntry(wal_type_t type, Serializer &serializer) {
 	auto blob = serializer.GetData();
 
 	Write<wal_type_t>(type);
-	Write<uint32_t>(blob.size);
+	Write<uint32_t>((uint32_t)blob.size);
 	WriteData(blob.data.get(), blob.size);
 }
 
@@ -195,10 +202,11 @@ void WriteAheadLog::WriteDropTable(TableCatalogEntry *entry) {
 }
 
 bool ReplayDropTable(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	DropTableInformation info;
+	DropInfo info;
 
+	info.type = CatalogType::TABLE;
 	info.schema = source.Read<string>();
-	info.table = source.Read<string>();
+	info.name = source.Read<string>();
 
 	// try {
 	catalog.DropTable(transaction, &info);
@@ -219,7 +227,7 @@ void WriteAheadLog::WriteCreateSchema(SchemaCatalogEntry *entry) {
 }
 
 bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	CreateSchemaInformation info;
+	CreateSchemaInfo info;
 	info.schema = source.Read<string>();
 
 	// try {
@@ -258,9 +266,10 @@ void WriteAheadLog::WriteDropView(ViewCatalogEntry *entry) {
 }
 
 bool ReplayDropView(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	DropViewInformation info;
+	DropInfo info;
+	info.type = CatalogType::VIEW;
 	info.schema = source.Read<string>();
-	info.view_name = source.Read<string>();
+	info.name = source.Read<string>();
 	catalog.DropView(transaction, &info);
 	return true;
 }
@@ -276,9 +285,10 @@ void WriteAheadLog::WriteDropSchema(SchemaCatalogEntry *entry) {
 }
 
 bool ReplayDropSchema(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	DropSchemaInformation info;
+	DropInfo info;
 
-	info.schema = source.Read<string>();
+	info.type = CatalogType::SCHEMA;
+	info.name = source.Read<string>();
 
 	// try {
 	catalog.DropSchema(transaction, &info);
@@ -355,5 +365,5 @@ void WriteAheadLog::Flush() {
 	Write<uint32_t>(0);
 	// flushes all changes made to the WAL to disk
 	fflush(wal_file);
-	FileSync(wal_file);
+	database.file_system->FileSync(wal_file);
 }

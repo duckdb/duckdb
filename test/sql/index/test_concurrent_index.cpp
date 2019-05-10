@@ -2,6 +2,7 @@
 #include "main/appender.hpp"
 #include "test_helpers.hpp"
 
+#include <atomic>
 #include <thread>
 #include <vector>
 

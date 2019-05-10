@@ -8,12 +8,10 @@ using namespace std;
 
 TEST_CASE("Test storage of alter table", "[storage]") {
 	unique_ptr<QueryResult> result;
-	auto storage_database = JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
+	auto storage_database = TestCreatePath("storage_test");
 
 	// make sure the database does not exist
-	if (DirectoryExists(storage_database)) {
-		RemoveDirectory(storage_database);
-	}
+	DeleteDatabase(storage_database);
 	{
 		// create a database and insert values
 		DuckDB db(storage_database);
@@ -29,5 +27,5 @@ TEST_CASE("Test storage of alter table", "[storage]") {
 		result = con.Query("SELECT k FROM test ORDER BY k");
 		REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
 	}
-	RemoveDirectory(storage_database);
+	DeleteDatabase(storage_database);
 }

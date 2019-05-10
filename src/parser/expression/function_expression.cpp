@@ -22,7 +22,7 @@ FunctionExpression::FunctionExpression(string function_name, vector<unique_ptr<P
 
 string FunctionExpression::ToString() const {
 	string result = function_name + "(";
-	for (size_t i = 0; i < children.size(); i++) {
+	for (uint64_t i = 0; i < children.size(); i++) {
 		result += children[i]->ToString() + (i + 1 == children.size() ? ")" : ",");
 	}
 	return result;
@@ -39,7 +39,7 @@ bool FunctionExpression::Equals(const BaseExpression *other_) const {
 	if (other->children.size() != children.size()) {
 		return false;
 	}
-	for (size_t i = 0; i < children.size(); i++) {
+	for (uint64_t i = 0; i < children.size(); i++) {
 		if (!children[i]->Equals(other->children[i].get())) {
 			return false;
 		}

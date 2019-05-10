@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "function/function.hpp"
 #include "planner/expression.hpp"
 
 namespace duckdb {
@@ -22,8 +23,11 @@ public:
 	ScalarFunctionCatalogEntry *bound_function;
 	//! List of arguments to the function
 	vector<unique_ptr<Expression>> children;
+	//! The bound function data (if any)
+	unique_ptr<FunctionData> bind_info;
 
 public:
+	bool IsFoldable() const override;
 	string ToString() const override;
 
 	uint64_t Hash() const override;

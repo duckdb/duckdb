@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "parser/parsed_data.hpp"
+#include "parser/parsed_data/create_index_info.hpp"
 #include "planner/bound_sql_statement.hpp"
 #include "planner/bound_tableref.hpp"
 #include "planner/statement/bound_select_statement.hpp"
@@ -26,7 +26,7 @@ public:
 	//! Set of expressions to index by
 	vector<unique_ptr<Expression>> expressions;
 	// Info for index creation
-	unique_ptr<CreateIndexInformation> info;
+	unique_ptr<CreateIndexInfo> info;
 
 public:
 	vector<string> GetNames() override {

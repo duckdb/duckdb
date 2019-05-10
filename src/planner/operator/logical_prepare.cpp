@@ -6,6 +6,8 @@
 using namespace duckdb;
 using namespace std;
 
+namespace duckdb {
+
 class PrepareTableVisitor : public LogicalOperatorVisitor {
 public:
 	PrepareTableVisitor(unordered_set<TableCatalogEntry *> &table_list) : table_list(table_list) {
@@ -42,6 +44,7 @@ protected:
 private:
 	unordered_set<TableCatalogEntry *> &table_list;
 };
+} // namespace duckdb
 
 void LogicalPrepare::GetTableBindings(unordered_set<TableCatalogEntry *> &result_list) {
 	PrepareTableVisitor ptv(result_list);

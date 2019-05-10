@@ -16,12 +16,18 @@ public:
 	uint8_t childIndex[256];
 	Node *child[48];
 
-	Node48() : Node(NodeType::N48) {
+	Node48(uint8_t maxPrefixLength) : Node(NodeType::N48, maxPrefixLength) {
 		memset(childIndex, 48, sizeof(childIndex));
 		memset(child, 0, sizeof(child));
 	}
 
-	Node *getChild(const uint8_t k) const;
+	//! Get Node48 Child
+	Node **getChild(const uint8_t k);
+
+	//! Insert node in Node48
 	static void insert(Node48 *node, Node **nodeRef, uint8_t keyByte, Node *child);
+
+	//! Delete node From Node48
+	static void erase(Node48 *node, Node **nodeRef, uint8_t keyByte);
 };
 } // namespace duckdb

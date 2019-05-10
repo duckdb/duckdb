@@ -15,6 +15,8 @@
 #include "parser/parsed_expression.hpp"
 #include "storage/data_table.hpp"
 #include "storage/index.hpp"
+#include "common/types/static_vector.hpp"
+#include "art_key.hpp"
 #include "node.hpp"
 #include "node4.hpp"
 #include "node16.hpp"
@@ -23,21 +25,36 @@
 
 namespace duckdb {
 struct ARTIndexScanState : public IndexScanState {
-	Value value_left;
-	Value value_right;
+	Value values[2];
+	ExpressionType expressions[2];
 	bool checked;
-	ExpressionType expression_type_left;
-	ExpressionType expression_type_right;
-
-	ARTIndexScanState(vector<column_t> column_ids) : IndexScanState(column_ids) {
+    StaticVector<int64_t> result_identifiers;
+    uint64_t current_tuple = 0;
+    ARTIndexScanState(vector<column_t> column_ids) : IndexScanState(column_ids) {
 	}
 };
+
+struct IteratorEntry {
+	Node *node;
+	int pos;
+};
+
+struct Iterator {
+	//! The current Leaf Node, valid if depth>0
+    Leaf *node;
+//	uint64_t value;
+	//! The current depth
+	uint32_t depth;
+	//! Stack, actually the size is determined at runtime
+	IteratorEntry stack[9];
+};
+
 
 class ART : public Index {
 public:
 	ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, vector<TypeId> expression_types,
 	    vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> unbound_expressions);
-	//! Insert data into the index, one element at a time
+	//! Insert data into the index
 	void Insert(DataChunk &data, Vector &row_ids);
 	//! Print the index to the console
 	void Print(){
@@ -56,16 +73,20 @@ public:
 	unique_ptr<IndexScanState> InitializeScanTwoPredicates(Transaction &transaction, vector<column_t> column_ids,
 	                                                       Value low_value, ExpressionType low_expression_type,
 	                                                       Value high_value,
-	                                                       ExpressionType high_expression_type) override{};
+	                                                       ExpressionType high_expression_type) override;
 	//! Perform a lookup on the index
 	void Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) override;
 
 	//! Append entries to the index
-	void Append(ClientContext &context, DataChunk &entries, size_t row_identifier_start) override{};
+	void Append(ClientContext &context, DataChunk &entries, uint64_t row_identifier_start) override;
 	//! Update entries in the index
 	void Update(ClientContext &context, vector<column_t> &column_ids, DataChunk &update_data,
-	            Vector &row_identifiers) override{};
+	            Vector &row_identifiers) override;
 
+	//! Delete entries in the index
+	void Delete(DataChunk &entries, Vector &row_identifiers) override;
+	//! Lock used for updating the index
+	std::mutex lock;
 	//! Root of the tree
 	Node *tree;
 	//! The table
@@ -76,43 +97,134 @@ public:
 	vector<TypeId> types;
 	//! True if machine is little endian
 	bool is_little_endian;
+	//! The maximum prefix length for compressed paths stored in the
+	//! header, if the path is longer it is loaded from the database on demand
+	uint8_t maxPrefix;
 
 private:
+	//! Insert the leaf value into the tree
+	void insert(bool isLittleEndian, Node *node, Node **nodeRef, Key &key, unsigned depth, uintptr_t value,
+	            unsigned maxKeyLength, TypeId type, uint64_t row_id);
+
+	//! Erase element from leaf (if leaf has more than one value) or eliminate the leaf itself
+	void erase(bool isLittleEndian, Node *node, Node **nodeRef, Key &key, unsigned depth, unsigned maxKeyLength,
+	           TypeId type, uint64_t row_id);
+
+	//! Check if the key of the leaf is equal to the searched key
+	bool leafMatches(bool is_little_endian, Node *node, Key &key, unsigned keyLength, unsigned depth);
+
+	//! Find the node with a matching key, optimistic version
+	Node *lookup(Node *node, Key &key, unsigned keyLength, unsigned depth);
+
+	//! Find the iterator position for bound queries
+	bool bound(Node* n,Key &key,unsigned keyLength,Iterator& iterator,unsigned maxKeyLength,bool inclusive, bool isLittleEndian);
+
+	//! Gets next node for range queries
+	bool iteratorNext(Iterator& iter);
+
+
 	template <class T> void templated_insert(DataChunk &input, Vector &row_ids) {
 		auto input_data = (T *)input.data[0].data;
-		auto row_identifiers = (uint64_t *)row_ids.data;
+		auto row_identifiers = (int64_t *)row_ids.data;
 		for (size_t i = 0; i < row_ids.count; i++) {
-			uint8_t minKey[maxPrefixLength];
-			Node::convert_to_binary_comparable(input.data[0].type, input_data[i], minKey);
-			Node::insert(tree, &tree, minKey, 0, input_data[i], 8, input.data[0].type, row_identifiers[i]);
+			Key &key = *new Key(this->is_little_endian, input.data[0].type, input_data[i],sizeof(input_data[i]));
+			insert(this->is_little_endian, tree, &tree, key, 0, input_data[i], sizeof(input_data[i]), input.data[0].type,
+			       row_identifiers[i]);
 		}
 	}
 
-	// TODO: For now only lookup
-	template <class T> size_t templated_lookup(TypeId type, T key, uint64_t *result_ids) {
-		uint8_t minKey[maxPrefixLength];
-		Node::convert_to_binary_comparable(type, key, minKey);
-
-		auto leaf = static_cast<Leaf *>(tree->lookup(tree, minKey, 8, 0, 8, type));
-		if (leaf) {
-			result_ids[0] = leaf->row_id;
-			return 1;
+	template <class T> void templated_delete(DataChunk &input, Vector &row_ids) {
+		auto input_data = (T *)input.data[0].data;
+		auto row_identifiers = (int64_t *)row_ids.data;
+		for (size_t i = 0; i < row_ids.count; i++) {
+			Key &key = *new Key(this->is_little_endian, input.data[0].type, input_data[i],sizeof(input_data[i]));
+			erase(this->is_little_endian, tree, &tree, key, 0, sizeof(input_data[i]), input.data[0].type, row_identifiers[i]);
 		}
-		return 0;
+	}
+
+	template <class T> size_t templated_lookup(TypeId type, T data, int64_t *result_ids) {
+		Key &key = *new Key(this->is_little_endian, type, data,sizeof(data));
+		size_t result_count = 0;
+		auto leaf = static_cast<Leaf *>(lookup(tree, key, this->maxPrefix, 0));
+		if (leaf) {
+			for (size_t i = 0; i < leaf->num_elements; i++) {
+				result_ids[result_count++] = leaf->row_id[i];
+			}
+		}
+		return result_count;
+	}
+
+	template <class T> size_t templated_greater_scan(TypeId type, T data, int64_t *result_ids,bool inclusive) {
+		Iterator it;
+		Key &key = *new Key(this->is_little_endian, type, data,sizeof(data));
+		size_t result_count = 0;
+		bool found=ART::bound(tree,key,sizeof(data),it,sizeof(data),inclusive,is_little_endian);
+		if (found) {
+			bool hasNext;
+			do {
+				for (size_t i = 0; i < it.node->num_elements; i++) {
+					result_ids[result_count++] = it.node->row_id[i];
+				}
+				hasNext=ART::iteratorNext(it);
+			} while (hasNext);
+		}
+		return result_count;
+	}
+
+    template <class T> size_t templated_less_scan(TypeId type, T data, int64_t *result_ids,bool inclusive) {
+        Iterator it;
+        size_t result_count = 0;
+		Leaf* minimum = static_cast<Leaf *>(Node::minimum(tree));
+        // early out min value higher than upper bound query
+        if (minimum->value > (uint64_t) data)
+            return result_count;
+		Key &min_key = *new Key(this->is_little_endian, type, minimum->value,sizeof(data));
+        bool found=ART::bound(tree,min_key,sizeof(data),it,sizeof(data),true,is_little_endian);
+        if (found) {
+            bool hasNext;
+            do {
+                for (size_t i = 0; i < it.node->num_elements; i++) {
+                    result_ids[result_count++] = it.node->row_id[i];
+                }
+				if(it.node->value == (uint64_t)data)
+					break;
+				hasNext=ART::iteratorNext(it);
+				if(!inclusive && it.node->value == (uint64_t)data)
+					break;
+            } while (hasNext);
+        }
+        return result_count;
+    }
+
+	template <class T> size_t templated_close_range(TypeId type, T left_query,T right_query, int64_t *result_ids,bool left_inclusive, bool right_inclusive) {
+		Iterator it;
+		Key &key = *new Key(this->is_little_endian, type, left_query,sizeof(left_query));
+		size_t result_count = 0;
+		bool found=ART::bound(tree,key,sizeof(left_query),it,sizeof(left_query),left_inclusive,is_little_endian);
+		if (found) {
+			bool hasNext;
+			do {
+				for (size_t i = 0; i < it.node->num_elements; i++) {
+					result_ids[result_count++] = it.node->row_id[i];
+				}
+				if(it.node->value == (uint64_t )right_query)
+					break;
+				hasNext=ART::iteratorNext(it);
+				if(!right_inclusive && it.node->value == (uint64_t)right_query)
+					break;
+
+			} while (hasNext);
+		}
+		return result_count;
 	}
 
 	DataChunk expression_result;
-	//! Get the start/end position in the index for a Less Than Equal Operator
-	size_t SearchLTE(Value value);
-	//! Get the start/end position in the index for a Greater Than Equal Operator
-	size_t SearchGTE(Value value);
-	//! Get the start/end position in the index for a Less Than Operator
-	size_t SearchLT(Value value);
-	//! Get the start/end position in the index for a Greater Than Operator
-	size_t SearchGT(Value value);
-	//! Scan the index starting from the position, updating the position.
-	//! Returns the amount of tuples scanned.
-	void Scan(size_t &position_from, size_t &position_to, Value value, Vector &result_identifiers){};
-};
+
+    void SearchEqual(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state);
+	void SearchGreater(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state, bool inclusive);
+    void SearchLess(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state, bool inclusive);
+	void SearchCloseRange(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state, bool left_inclusive,bool right_inclusive);
+
+	};
 
 } // namespace duckdb

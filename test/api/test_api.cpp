@@ -118,8 +118,8 @@ TEST_CASE("Test parallel usage of single client", "[api][.]") {
 		threads[i] = thread(parallel_query, conn.get(), correct, i);
 	}
 	for (size_t i = 0; i < 20; i++) {
-		REQUIRE(correct[i]);
 		threads[i].join();
+		REQUIRE(correct[i]);
 	}
 }
 

@@ -11,9 +11,14 @@ BoundFunctionExpression::BoundFunctionExpression(TypeId return_type, ScalarFunct
       bound_function(bound_function) {
 }
 
+bool BoundFunctionExpression::IsFoldable() const {
+	// functions with side effects cannot be folded: they have to be executed once for every row
+	return bound_function->has_side_effects ? false : Expression::IsFoldable();
+}
+
 string BoundFunctionExpression::ToString() const {
 	string str = bound_function->name + "(";
-	for (size_t i = 0; i < children.size(); i++) {
+	for (uint64_t i = 0; i < children.size(); i++) {
 		if (i > 0) {
 			str += ", ";
 		}
@@ -39,7 +44,7 @@ bool BoundFunctionExpression::Equals(const BaseExpression *other_) const {
 	if (children.size() != other->children.size()) {
 		return false;
 	}
-	for (size_t i = 0; i < children.size(); i++) {
+	for (uint64_t i = 0; i < children.size(); i++) {
 		if (!Expression::Equals(children[i].get(), other->children[i].get())) {
 			return false;
 		}
@@ -52,6 +57,7 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() {
 	for (auto &child : children) {
 		copy->children.push_back(child->Copy());
 	}
+	copy->bind_info = bind_info ? bind_info->Copy() : nullptr;
 	copy->CopyProperties(*this);
 	return move(copy);
 }

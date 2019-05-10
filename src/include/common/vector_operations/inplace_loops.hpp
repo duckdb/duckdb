@@ -25,16 +25,16 @@ inline void INPLACE_TYPE_CHECK(Vector &left, Vector &result) {
 }
 
 template <class LEFT_TYPE, class RESULT_TYPE, class OP>
-static inline void inplace_loop_function_constant(LEFT_TYPE ldata, RESULT_TYPE *__restrict result_data, size_t count,
+static inline void inplace_loop_function_constant(LEFT_TYPE ldata, RESULT_TYPE *__restrict result_data, uint64_t count,
                                                   sel_t *__restrict sel_vector) {
-	VectorOperations::Exec(sel_vector, count, [&](size_t i, size_t k) { OP::Operation(result_data[i], ldata); });
+	VectorOperations::Exec(sel_vector, count, [&](uint64_t i, uint64_t k) { OP::Operation(result_data[i], ldata); });
 }
 
 template <class LEFT_TYPE, class RESULT_TYPE, class OP>
 static inline void inplace_loop_function_array(LEFT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data,
-                                               size_t count, sel_t *__restrict sel_vector) {
+                                               uint64_t count, sel_t *__restrict sel_vector) {
 	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
-	VectorOperations::Exec(sel_vector, count, [&](size_t i, size_t k) { OP::Operation(result_data[i], ldata[i]); });
+	VectorOperations::Exec(sel_vector, count, [&](uint64_t i, uint64_t k) { OP::Operation(result_data[i], ldata[i]); });
 }
 
 template <class LEFT_TYPE, class RESULT_TYPE, class OP> void templated_inplace_loop(Vector &input, Vector &result) {

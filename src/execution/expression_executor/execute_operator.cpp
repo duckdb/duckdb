@@ -27,7 +27,7 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, Vector &result) 
 		// in rhs is a list of constants
 		// for every child, OR the result of the comparision with the left
 		// to get the overall result.
-		for (size_t child = 1; child < expr.children.size(); child++) {
+		for (uint64_t child = 1; child < expr.children.size(); child++) {
 			Vector comp_res(TypeId::BOOLEAN, true, false);
 
 			Vector vector_to_check;

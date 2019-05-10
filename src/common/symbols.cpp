@@ -44,10 +44,7 @@ template class std::unique_ptr<CreateSchemaStatement>;
 template class std::unique_ptr<CreateTableStatement>;
 template class std::unique_ptr<CreateViewStatement>;
 template class std::unique_ptr<DeleteStatement>;
-template class std::unique_ptr<DropSchemaStatement>;
-template class std::unique_ptr<DropTableStatement>;
-template class std::unique_ptr<DropIndexStatement>;
-template class std::unique_ptr<DropViewStatement>;
+template class std::unique_ptr<DropStatement>;
 template class std::unique_ptr<InsertStatement>;
 template class std::unique_ptr<SelectStatement>;
 template class std::unique_ptr<TransactionStatement>;
@@ -147,7 +144,7 @@ template class std::unique_ptr<Rule>;
 template class std::unique_ptr<LogicalFilter>;
 template class std::unique_ptr<LogicalJoin>;
 template class std::unique_ptr<LogicalComparisonJoin>;
-template class std::unique_ptr<CreateViewInformation>;
+template class std::unique_ptr<CreateViewInfo>;
 template class std::unique_ptr<FilterInfo>;
 template class std::unique_ptr<JoinOrderOptimizer::JoinNode>;
 template class std::unique_ptr<Relation>;
@@ -170,7 +167,7 @@ INSTANTIATE_VECTOR(std::vector<ColumnDefinition>);
 template class std::vector<ExpressionType>;
 INSTANTIATE_VECTOR(std::vector<JoinCondition>);
 INSTANTIATE_VECTOR(std::vector<OrderByNode>);
-template class std::vector<size_t>;
+template class std::vector<uint64_t>;
 INSTANTIATE_VECTOR(std::vector<ExpressionStatistics>);
 template class std::vector<string>;
 INSTANTIATE_VECTOR(std::vector<Expression *>)
@@ -189,7 +186,7 @@ INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Rule>>);
 template class std::vector<std::vector<Expression *>>;
 template class std::vector<SQLType>;
 
-template struct std::atomic<size_t>;
+template struct std::atomic<uint64_t>;
 template class std::bitset<STANDARD_VECTOR_SIZE>;
 template class std::bitset<STORAGE_CHUNK_SIZE>;
 template class std::unordered_map<PhysicalOperator *, QueryProfiler::TreeNode *>;
@@ -197,11 +194,11 @@ template class std::stack<PhysicalOperator *>;
 
 // template class std::unordered_map<string,
 // std::unique_ptr<CatalogEntry>>;
-template class std::unordered_map<string, size_t>;
+template class std::unordered_map<string, uint64_t>;
 template class std::unordered_map<string, std::vector<string>>;
-template class std::unordered_map<string, std::pair<size_t, Expression *>>;
+template class std::unordered_map<string, std::pair<uint64_t, Expression *>>;
 // template class std::unordered_map<string, TableBinding>;
 template class std::unordered_map<string, SelectStatement *>;
-template class std::unordered_map<size_t, size_t>;
+template class std::unordered_map<uint64_t, uint64_t>;
 
 #endif

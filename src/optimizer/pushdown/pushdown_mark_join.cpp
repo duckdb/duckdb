@@ -8,8 +8,8 @@ using namespace std;
 using Filter = FilterPushdown::Filter;
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalOperator> op,
-                                                             unordered_set<size_t> &left_bindings,
-                                                             unordered_set<size_t> &right_bindings) {
+                                                             unordered_set<uint64_t> &left_bindings,
+                                                             unordered_set<uint64_t> &right_bindings) {
 	auto &join = (LogicalJoin &)*op;
 	auto &comp_join = (LogicalComparisonJoin &)*op;
 	assert(join.type == JoinType::MARK);
@@ -18,8 +18,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
 	bool found_mark_reference = false;
 	// now check the set of filters
-	for (size_t i = 0; i < filters.size(); i++) {
-		auto side = LogicalComparisonJoin::GetJoinSide(filters[i]->bindings, left_bindings, right_bindings);
+	for (uint64_t i = 0; i < filters.size(); i++) {
+		auto side = JoinSide::GetJoinSide(filters[i]->bindings, left_bindings, right_bindings);
 		if (side == JoinSide::LEFT) {
 			// bindings match left side: push into left
 			left_pushdown.filters.push_back(move(filters[i]));

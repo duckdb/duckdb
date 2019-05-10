@@ -1,13 +1,14 @@
+#include "execution/index/art/node16.hpp"
 #include "execution/index/art/node48.hpp"
 #include "execution/index/art/node256.hpp"
 
 using namespace duckdb;
 
-Node *Node48::getChild(const uint8_t k) const {
+Node **Node48::getChild(const uint8_t k) {
 	if (childIndex[k] == emptyMarker) {
-		return nullptr;
+		return NULL;
 	} else {
-		return child[childIndex[k]];
+		return &child[childIndex[k]];
 	}
 }
 
@@ -24,7 +25,7 @@ void Node48::insert(Node48 *node, Node **nodeRef, uint8_t keyByte, Node *child) 
 		node->count++;
 	} else {
 		// Grow to Node256
-		Node256 *newNode = new Node256();
+		Node256 *newNode = new Node256(node->maxPrefixLength);
 		for (unsigned i = 0; i < 256; i++)
 			if (node->childIndex[i] != 48)
 				newNode->child[i] = node->child[node->childIndex[i]];
@@ -32,6 +33,29 @@ void Node48::insert(Node48 *node, Node **nodeRef, uint8_t keyByte, Node *child) 
 		copyPrefix(node, newNode);
 		*nodeRef = newNode;
 		delete node;
-		return Node256::insert(newNode, nodeRef, keyByte, child);
+		Node256::insert(newNode, keyByte, child);
+		return;
+	}
+}
+
+void Node48::erase(Node48 *node, Node **nodeRef, uint8_t keyByte) {
+	// Delete leaf from inner node
+	node->child[node->childIndex[keyByte]] = NULL;
+	node->childIndex[keyByte] = emptyMarker;
+	node->count--;
+
+	if (node->count == 12) {
+		// Shrink to Node16
+		Node16 *newNode = new Node16(node->maxPrefixLength);
+		*nodeRef = newNode;
+		copyPrefix(node, newNode);
+		for (unsigned b = 0; b < 256; b++) {
+			if (node->childIndex[b] != emptyMarker) {
+				newNode->key[newNode->count] = b;
+				newNode->child[newNode->count] = node->child[node->childIndex[b]];
+				newNode->count++;
+			}
+		}
+		delete node;
 	}
 }

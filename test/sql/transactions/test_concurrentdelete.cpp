@@ -2,6 +2,7 @@
 #include "common/value_operations/value_operations.hpp"
 #include "test_helpers.hpp"
 
+#include <atomic>
 #include <random>
 #include <thread>
 

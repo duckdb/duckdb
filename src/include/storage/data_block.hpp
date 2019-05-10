@@ -16,15 +16,15 @@ public:
 
 //! Stores the header of each data block
 struct BlockHeader {
-	size_t block_id;
-	size_t amount_of_tuples;
+	uint64_t block_id;
+	uint64_t amount_of_tuples;
 };
 
 //! The Block stored in a data block
 struct Block {
 	BlockHeader *header;
-	size_t block_size;  // Block size in Bytes
-	size_t offsets[10]; // The offset of each column data TODO: define number of columns based on chunck info
+	uint64_t block_size;  // Block size in Bytes
+	uint64_t offsets[10]; // The offset of each column data TODO: define number of columns based on chunck info
 	char *data;
 };
 } // namespace duckdb

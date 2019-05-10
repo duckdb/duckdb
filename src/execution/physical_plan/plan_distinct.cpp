@@ -11,8 +11,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinct(unique_ptr<Ph
 	// create a PhysicalHashAggregate that groups by the input columns
 	auto &types = child->GetTypes();
 	vector<unique_ptr<Expression>> groups, expressions;
-	for (size_t i = 0; i < types.size(); i++) {
-		groups.push_back(make_unique<BoundReferenceExpression>(types[i], i));
+	for (uint64_t i = 0; i < types.size(); i++) {
+		assert(i <= numeric_limits<uint32_t>::max());
+		groups.push_back(make_unique<BoundReferenceExpression>(types[i], (uint32_t)i));
 	}
 	auto groupby =
 	    make_unique<PhysicalHashAggregate>(types, move(expressions), move(groups), PhysicalOperatorType::DISTINCT);
