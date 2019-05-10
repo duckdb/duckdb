@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
+#include <cstring>
 
 namespace duckdb {
 
@@ -34,7 +35,7 @@ template <class T> inline bool IsNullValue(T value) {
 }
 
 template <> inline bool IsNullValue(const char *value) {
-	return strcmp(value, NullValue<const char *>()) == 0;
+	return std::strcmp(value, NullValue<const char *>()) == 0;
 }
 
 template <> inline bool IsNullValue(char *value) {

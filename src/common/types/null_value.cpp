@@ -1,6 +1,7 @@
 #include "common/types/null_value.hpp"
 
 #include "common/exception.hpp"
+#include <cstring>
 
 using namespace std;
 
