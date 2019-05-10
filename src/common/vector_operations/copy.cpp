@@ -14,13 +14,8 @@ using namespace std;
 template <class T>
 static void copy_function(T *__restrict source, T *__restrict target, uint64_t offset, uint64_t count,
                           sel_t *__restrict sel_vector) {
-<<<<<<< HEAD
-	VectorOperations::Exec(
-	    sel_vector, count + offset, [&](size_t i, size_t k) { target[k - offset] = source[i]; }, offset);
-=======
 	VectorOperations::Exec(
 	    sel_vector, count + offset, [&](uint64_t i, uint64_t k) { target[k - offset] = source[i]; }, offset);
->>>>>>> 7bc348eb96c3fc5c237b583f46ff8d7ad258522c
 }
 
 template <class T>
@@ -28,18 +23,6 @@ static void copy_function_set_null(T *__restrict source, T *__restrict target, u
                                    sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 	if (nullmask.any()) {
 		// null values, have to check the NULL values in the mask
-<<<<<<< HEAD
-		VectorOperations::Exec(
-		    sel_vector, count + offset,
-		    [&](size_t i, size_t k) {
-			    if (nullmask[i]) {
-				    target[k - offset] = NullValue<T>();
-			    } else {
-				    target[k - offset] = source[i];
-			    }
-		    },
-		    offset);
-=======
 		VectorOperations::Exec(
 		    sel_vector, count + offset,
 		    [&](uint64_t i, uint64_t k) {
@@ -50,7 +33,6 @@ static void copy_function_set_null(T *__restrict source, T *__restrict target, u
 			    }
 		    },
 		    offset);
->>>>>>> 7bc348eb96c3fc5c237b583f46ff8d7ad258522c
 	} else {
 		// no NULL values, use normal copy
 		copy_function(source, target, offset, count, sel_vector);
@@ -127,12 +109,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, uint64_t offset) {
 	}
 	assert(offset <= source.count);
 	target.count = source.count - offset;
-<<<<<<< HEAD
-	VectorOperations::Exec(
-	    source, [&](size_t i, size_t k) { target.nullmask[k - offset] = source.nullmask[i]; }, offset);
-=======
 	VectorOperations::Exec(
 	    source, [&](uint64_t i, uint64_t k) { target.nullmask[k - offset] = source.nullmask[i]; }, offset);
->>>>>>> 7bc348eb96c3fc5c237b583f46ff8d7ad258522c
 	VectorOperations::Copy(source, target.data, offset, target.count);
 }
