@@ -1,10 +1,9 @@
 #include "common/buffered_serializer.hpp"
+
 #include <cstring>
 
 using namespace duckdb;
 using namespace std;
-
-
 
 BufferedSerializer::BufferedSerializer(uint64_t maximum_size)
     : BufferedSerializer(unique_ptr<uint8_t[]>(new uint8_t[maximum_size]), maximum_size) {

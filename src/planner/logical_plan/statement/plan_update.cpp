@@ -34,13 +34,13 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundUpdateStatemen
 			// move the expression into the LogicalProjection
 			auto expression = move(stmt.expressions[i]);
 			stmt.expressions[i] = make_unique<BoundColumnRefExpression>(
-			    expression->return_type, ColumnBinding(stmt.proj_index, projection_expressions.size()));
+			    expression->return_type, ColumnBinding(stmt.proj_index, (uint64_t)projection_expressions.size()));
 			projection_expressions.push_back(move(expression));
 		}
 	}
 	// add the row id column to the projection list
 	projection_expressions.push_back(make_unique<BoundColumnRefExpression>(
-	    TypeId::BIGINT, ColumnBinding(get.table_index, get.column_ids.size() - 1)));
+	    TypeId::BIGINT, ColumnBinding(get.table_index, (uint64_t)get.column_ids.size() - 1)));
 	// now create the projection
 	auto proj = make_unique<LogicalProjection>(stmt.proj_index, move(projection_expressions));
 	proj->AddChild(move(root));
