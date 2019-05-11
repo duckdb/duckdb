@@ -12,6 +12,27 @@ unique_ptr<Node>* Node4::getChild(const uint8_t k) {
 	return nullptr;
 }
 
+unique_ptr<Node>* Node4::getChild(const uint8_t k, int& pos) {
+	for (pos = 0; pos < count; ++pos) {
+		if (key[pos] == k) {
+			return &child[pos];
+		}
+	}
+	return nullptr;
+}
+
+unique_ptr<Node>* Node4::getMin() {
+	auto result = &child[0];
+	if (count > 1){
+		for (uint32_t i = 1; i < count; ++i) {
+			if (key[i] < key[i-1]) {
+				result = &child[i];
+			}
+		}
+	}
+	return result;
+}
+
 void Node4::insert(unique_ptr<Node>& node, uint8_t keyByte, unique_ptr<Node>& child) {
     Node4 *n = static_cast<Node4 *>(node.get());
 
@@ -35,33 +56,3 @@ void Node4::insert(unique_ptr<Node>& node, uint8_t keyByte, unique_ptr<Node>& ch
 	}
 }
 
-void Node4::erase(Node4 *node, Node **nodeRef, Node **leafPlace) {
-	// Delete leaf from inner node
-//	unsigned pos = leafPlace - node->child;
-//	memmove(node->key + pos, node->key + pos + 1, node->count - pos - 1);
-//	memmove(node->child + pos, node->child + pos + 1, (node->count - pos - 1) * sizeof(uintptr_t));
-//	node->count--;
-//
-//	if (node->count == 1) {
-//		// Get rid of one-way node
-//		Node *child = node->child[0];
-//		if (child->type == NodeType::NLeaf) {
-//			// Concantenate prefixes
-//			unsigned l1 = node->prefixLength;
-//			if (l1 < node->maxPrefixLength) {
-//				node->prefix[l1] = node->key[0];
-//				l1++;
-//			}
-//			if (l1 < node->maxPrefixLength) {
-//				unsigned l2 = min(child->prefixLength, node->maxPrefixLength - l1);
-//				memcpy(node->prefix.get() + l1, child->prefix.get(), l2);
-//				l1 += l2;
-//			}
-//			// Store concantenated prefix
-//			memcpy(child->prefix.get(), node->prefix.get(), min(l1, node->maxPrefixLength));
-//			child->prefixLength += node->prefixLength + 1;
-//		}
-//		*nodeRef = child;
-//		delete node;
-//	}
-}

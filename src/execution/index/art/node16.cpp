@@ -14,6 +14,28 @@ unique_ptr<Node>* Node16::getChild(const uint8_t k) {
 	return nullptr;
 }
 
+unique_ptr<Node>* Node16::getChild(const uint8_t k, int& pos) {
+    for (pos = 0; pos < count; ++pos) {
+        if (key[pos] == k) {
+            return &child[pos];
+        }
+    }
+    return nullptr;
+}
+
+
+unique_ptr<Node>* Node16::getMin() {
+    auto result = &child[0];
+    if (count > 1){
+        for (uint32_t i = 1; i < count; ++i) {
+            if (key[i] < key[i-1]) {
+                result = &child[i];
+            }
+        }
+    }
+    return result;
+}
+
 void Node16::insert(unique_ptr<Node>& node, uint8_t keyByte, unique_ptr<Node>& child){
     Node16 *n = static_cast<Node16 *>(node.get());
 
@@ -36,22 +58,15 @@ if (n->count < 16) {
 	}
 }
 
-void Node16::erase(Node16 *node, Node **nodeRef, Node **leafPlace) {
-	// Delete leaf from inner node
-//	unsigned pos = leafPlace - node->child;
-//	memmove(node->key + pos, node->key + pos + 1, node->count - pos - 1);
-//	memmove(node->child + pos, node->child + pos + 1, (node->count - pos - 1) * sizeof(uintptr_t));
-//	node->count--;
-//
-//	if (node->count == 3) {
-//		// Shrink to Node4
-//		Node4 *newNode = new Node4(node->maxPrefixLength);
-//		newNode->count = node->count;
-//		copyPrefix(node, newNode);
-//		for (unsigned i = 0; i < 4; i++)
-//			newNode->key[i] = node->key[i];
-//		memcpy(newNode->child, node->child, sizeof(uintptr_t) * 4);
-//		*nodeRef = newNode;
-//		delete node;
-//	}
+void Node16::shrink (unique_ptr<Node>& node){
+    Node16 *n = static_cast<Node16 *>(node.get());
+    auto newNode = make_unique<Node4>(node->maxPrefixLength);
+    for (unsigned i = 0; i < 16; i++)
+        if (n->key[i] != 16){
+            newNode->key[newNode->count] = n->key[i];
+            newNode->child[newNode->count] = move(n->child[n->key[i]]);
+            newNode->count++;
+        }
+    copyPrefix(n, newNode.get());
+    node = move(newNode);
 }

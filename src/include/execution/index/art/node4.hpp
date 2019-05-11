@@ -23,9 +23,11 @@ public:
 
 	//! Get Node4 Child
 	unique_ptr<Node>* getChild(const uint8_t k);
+    unique_ptr<Node>* getChild(const uint8_t k, int& pos);
+
+	//! Get min value in node
+	unique_ptr<Node>* getMin();
 	//! Insert Leaf to the Node4
 	static void insert(unique_ptr<Node>& node, uint8_t keyByte, unique_ptr<Node>& child);
-	//! Delete Leaf from Node4
-	static void erase(Node4 *node, Node **nodeRef, Node **leafPlace);
 };
 } // namespace duckdb

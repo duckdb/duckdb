@@ -23,11 +23,15 @@ public:
 
 	//! Get Node16 Child
     unique_ptr<Node>* getChild(const uint8_t k);
+	unique_ptr<Node>* getChild(const uint8_t k, int& pos);
+
+	//! Get min value
+	unique_ptr<Node>* getMin();
 
 	//! Insert node into Node16
 	void static insert(unique_ptr<Node>& node, uint8_t keyByte, unique_ptr<Node>& child);
 
-	//! Delete node from Node16
-	static void erase(Node16 *node, Node **nodeRef, Node **leafPlace);
+	//! Shrink to node 4
+	static void shrink (unique_ptr<Node>& node);
 };
 } // namespace duckdb

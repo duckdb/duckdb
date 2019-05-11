@@ -144,60 +144,74 @@ bool ART::leafMatches(bool is_little_endian, Node *node, Key &key, unsigned keyL
 	return true;
 }
 
-void ART::erase(bool isLittleEndian, Node *node, Node **nodeRef, Key &key, unsigned depth, unsigned maxKeyLength,
+void ART::erase(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned depth, unsigned maxKeyLength,
                 TypeId type, uint64_t row_id) {
-//	if (!node)
-//		return;
-//	// Delete a leaf from a tree
-//	if (node->type == NodeType::NLeaf) {
-//		// Make sure we have the right leaf
-//		if (ART::leafMatches(isLittleEndian, node, key, maxKeyLength, depth))
-//			*nodeRef = NULL;
-//		return;
-//	}
-//
-//	// Handle prefix
-//	if (node->prefixLength) {
-//		if (Node::prefixMismatch(isLittleEndian, node, key, depth, maxKeyLength, type) != node->prefixLength)
-//			return;
-//		depth += node->prefixLength;
-//	}
-//
-//	Node **child = Node::findChild(key[depth], node);
-//	if ((*child)->type == NodeType::NLeaf && leafMatches(isLittleEndian, *child, key, maxKeyLength, depth)) {
-//		// Leaf found, remove entry
-//		auto leaf = static_cast<Leaf *>(*child);
-//		if (leaf->num_elements > 1) {
-//			leaf->remove(leaf, row_id);
-//			return;
-//		} else {
-//			// Leaf only has one element, delete leaf
-//			switch (node->type) {
-//			case NodeType::N4:
-//				Node4::erase(static_cast<Node4 *>(node), nodeRef, child);
-//				break;
-//
-//			case NodeType::N16:
-//				Node16::erase(static_cast<Node16 *>(node), nodeRef, child);
-//				break;
-//
-//			case NodeType::N48:
-//				Node48::erase(static_cast<Node48 *>(node), nodeRef, key[depth]);
-//				break;
-//
-//			case NodeType::N256:
-//				Node256::erase(static_cast<Node256 *>(node), nodeRef, key[depth]);
-//				break;
-//			default:
-//				assert(0);
-//				break;
-//			}
-//		}
-//
-//	} else {
-//		// Recurse
-//		erase(isLittleEndian, *child, child, key, depth + 1, maxKeyLength, type, row_id);
-//	}
+	if (!node)
+		return;
+	// Delete a leaf from a tree
+	if (node->type == NodeType::NLeaf) {
+		// Make sure we have the right leaf
+		if (ART::leafMatches(isLittleEndian, node.get(), key, maxKeyLength, depth))
+            node.reset();
+		return;
+	}
+
+	// Handle prefix
+	if (node->prefixLength) {
+		if (Node::prefixMismatch(isLittleEndian, node.get(), key, depth, maxKeyLength, type) != node->prefixLength)
+			return;
+		depth += node->prefixLength;
+	}
+    int pos = 0;
+	auto child = Node::findChild(key[depth], node,pos);
+
+    unique_ptr<Node>& child_ref= *child;
+	if (child_ref->type == NodeType::NLeaf && leafMatches(isLittleEndian, child_ref.get(), key, maxKeyLength, depth)) {
+		// Leaf found, remove entry
+		auto leaf = static_cast<Leaf *>(child_ref.get());
+		if (leaf->num_elements > 1) {
+			leaf->remove(leaf, row_id);
+			return;
+		}
+		// Leaf only has one element, delete leaf, decrement node counter and maybe shrink node
+		else {
+            child_ref.reset();
+            node->count--;
+			switch (node->type) {
+                case NodeType::N4:{
+					if (node->count == 0)
+						node.reset();
+					break;
+				}
+                case NodeType::N16:{
+                    auto node_cast = static_cast<Node16 *>(node.get());
+                    node_cast->key[pos] = 16;
+                    if (node->count == 3)
+                        Node16::shrink(node);
+                    break;
+                }
+                case NodeType::N48:{
+                    auto node_cast = static_cast<Node48 *>(node.get());
+                    node_cast->childIndex[pos] = 48;
+                    if (node->count == 12)
+                        Node48::shrink(node);
+                    break;
+                }
+                case NodeType::N256:{
+                    if (node->count == 37)
+                        Node256::shrink(node);
+                        break;
+                }
+                default:
+                    assert(0);
+                    break;
+			}
+		}
+
+	} else {
+		// Recurse
+		erase(isLittleEndian, *child, key, depth + 1, maxKeyLength, type, row_id);
+	}
 }
 
 void ART::insert(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned depth, uintptr_t value,
@@ -319,177 +333,131 @@ Node * ART::lookup(unique_ptr<Node>& node, Key &key, unsigned keyLength, unsigne
 }
 
 bool ART::iteratorNext(Iterator& iter) {
-//    // Skip leaf
-//    if ((iter.depth)&&((iter.stack[iter.depth-1].node)->type == NodeType::NLeaf))
-//        iter.depth--;
-//
-//    // Look for next leaf
-//    while (iter.depth) {
-//        Node* node=iter.stack[iter.depth-1].node;
-//
-//        // Leaf found
-//        if (node->type == NodeType::NLeaf) {
-//			auto leaf = static_cast<Leaf *>(node);
-//            iter.node=leaf;
-//            return true;
-//        }
-//
-//        // Find next node
-//        Node* next=nullptr;
-//        switch (node->type) {
-//            case NodeType::N4: {
-//                Node4* n=static_cast<Node4*>(node);
-//                if (iter.stack[iter.depth-1].pos<node->count)
-//                    next=n->child[iter.stack[iter.depth-1].pos++];
-//                break;
-//            }
-//            case NodeType::N16: {
-//                Node16* n=static_cast<Node16*>(node);
-//                if (iter.stack[iter.depth-1].pos<node->count)
-//                    next=n->child[iter.stack[iter.depth-1].pos++];
-//                break;
-//            }
-//            case NodeType::N48: {
-//                Node48* n=static_cast<Node48*>(node);
-//                unsigned depth=iter.depth-1;
-//                for (;iter.stack[depth].pos<256;iter.stack[depth].pos++)
-//                    if (n->childIndex[iter.stack[depth].pos]!=48) {
-//                        next=n->child[n->childIndex[iter.stack[depth].pos++]];
-//                        break;
-//                    }
-//                break;
-//            }
-//            case NodeType::N256: {
-//                Node256* n=static_cast<Node256*>(node);
-//                unsigned depth=iter.depth-1;
-//                for (;iter.stack[depth].pos<256;iter.stack[depth].pos++)
-//                    if (n->child[iter.stack[depth].pos]) {
-//                        next=n->child[iter.stack[depth].pos++];
-//                        break;
-//                    }
-//                break;
-//            }
-//			default:
-//				assert(0);
-//				break;
-//        }
-//
-//        if (next) {
-//            iter.stack[iter.depth].pos=0;
-//            iter.stack[iter.depth].node=next;
-//            iter.depth++;
-//        } else
-//            iter.depth--;
-//    }
+    // Skip leaf
+    if ((iter.depth)&&((iter.stack[iter.depth-1].node)->type == NodeType::NLeaf))
+        iter.depth--;
 
-    return false;
+    // Look for next leaf
+    while (iter.depth) {
+        Node* node=iter.stack[iter.depth-1].node;
+
+        // Leaf found
+        if (node->type == NodeType::NLeaf) {
+			auto leaf = static_cast<Leaf *>(node);
+            iter.node=leaf;
+            return true;
+        }
+
+        // Find next node
+        Node* next=nullptr;
+        switch (node->type) {
+            case NodeType::N4: {
+                Node4* n=static_cast<Node4*>(node);
+                if (iter.stack[iter.depth-1].pos<node->count)
+                    next=n->child[iter.stack[iter.depth-1].pos++].get();
+                break;
+            }
+            case NodeType::N16: {
+                Node16* n=static_cast<Node16*>(node);
+                if (iter.stack[iter.depth-1].pos<node->count)
+                    next=n->child[iter.stack[iter.depth-1].pos++].get();
+                break;
+            }
+            case NodeType::N48: {
+                Node48* n=static_cast<Node48*>(node);
+                unsigned depth=iter.depth-1;
+                for (;iter.stack[depth].pos<256;iter.stack[depth].pos++)
+                    if (n->childIndex[iter.stack[depth].pos]!=48) {
+                        next=n->child[n->childIndex[iter.stack[depth].pos++]].get();
+                        break;
+                    }
+                break;
+            }
+            case NodeType::N256: {
+                Node256* n=static_cast<Node256*>(node);
+                unsigned depth=iter.depth-1;
+                for (;iter.stack[depth].pos<256;iter.stack[depth].pos++)
+                    if (n->child[iter.stack[depth].pos]) {
+                        next=n->child[iter.stack[depth].pos++].get();
+                        break;
+                    }
+                break;
+            }
+			default:
+				assert(0);
+				break;
+        }
+
+        if (next) {
+            iter.stack[iter.depth].pos=0;
+            iter.stack[iter.depth].node=next;
+            iter.depth++;
+        } else
+            iter.depth--;
+    }
 }
 
 
-bool ART::bound(Node* n,Key &key,unsigned keyLength,Iterator& iterator,unsigned maxKeyLength,bool inclusive, bool isLittleEndian) {
-//	iterator.depth=0;
-//
-//	if (!n)
-//		return false;
-//
-//	unsigned depth=0;
-//	while (true) {
-//		iterator.stack[iterator.depth].node=n;
-//		int& pos=iterator.stack[iterator.depth].pos;
-//		iterator.depth++;
-//
-//		if (n->type == NodeType::NLeaf) {
-//            auto leaf = static_cast<Leaf *>(n);
-//			iterator.node=leaf;
-//			if (depth==keyLength) {
-//				// Equal
-//				if (inclusive)
-//					return true; else
-//					return iteratorNext(iterator);
-//			}
-//
-//			Key &leafKey = *new Key(isLittleEndian, types[0], leaf->value,maxKeyLength);
-//			for (unsigned i=depth; i<keyLength; i++)
-//				if (leafKey[i]!=key[i]) {
-//					if (leafKey[i]<key[i]) {
-//						// Less
-//						iterator.depth--;
-//						return iteratorNext(iterator);
-//					}
-//					// Greater
-//					return true;
-//				}
-//
-//			// Equal
-//			if (inclusive)
-//				return true; else
-//				return iteratorNext(iterator);
-//		}
-//		unsigned mismatchPos = Node::prefixMismatch(isLittleEndian, n, key, depth, maxKeyLength, types[0]);
-//
-//		if (mismatchPos!=n->prefixLength) {
-//			if (n->prefix[mismatchPos]<key[depth+mismatchPos]) {
-//				// Less
-//				iterator.depth--;
-//				return iteratorNext(iterator);
-//			}
-//			// Greater
-//			pos=0;
-//			return iteratorNext(iterator);
-//		}
-//		depth+=n->prefixLength;
-//		uint8_t keyByte=key[depth];
-//
-//		Node* next=nullptr;
-//		switch (n->type) {
-//			case NodeType::N4: {
-//				Node4* node=static_cast<Node4*>(n);
-//				for (pos=0;pos<node->count;pos++)
-//					if (node->key[pos]==keyByte) {
-//						next=node->child[pos];
-//						break;
-//					} else if (node->key[pos]>keyByte)
-//						break;
-//				break;
-//			}
-//			case NodeType::N16: {
-//				Node16* node=static_cast<Node16*>(n);
-//				for (pos=0;pos<node->count;pos++)
-//					if (node->key[pos]==keyByte) {
-//						next=node->child[pos];
-//						break;
-//					} else if (node->key[pos]>keyByte)
-//						break;
-//				break;
-//			}
-//			case NodeType::N48: {
-//				Node48* node=static_cast<Node48*>(n);
-//				pos=keyByte;
-//				if (node->childIndex[keyByte]!=48) {
-//					next=node->child[node->childIndex[keyByte]];
-//					break;
-//				}
-//				break;
-//			}
-//			case NodeType::N256: {
-//				Node256* node=static_cast<Node256*>(n);
-//				pos=keyByte;
-//				next=node->child[keyByte];
-//				break;
-//			}
-//			default:
-//				assert(0);
-//				break;
-//		}
-//
-//		if (!next)
-//			return iteratorNext(iterator);
-//
-//		pos++;
-//		n=next;
-//		depth++;
-//	}
-return false;
+bool ART::bound(unique_ptr<Node>& n,Key &key,unsigned keyLength,Iterator& iterator,unsigned maxKeyLength,bool inclusive, bool isLittleEndian) {
+	iterator.depth=0;
+    auto node = n.get();
+	if (!node)
+		return false;
+
+	unsigned depth=0;
+	while (true) {
+		iterator.stack[iterator.depth].node=node;
+		int& pos=iterator.stack[iterator.depth].pos;
+		iterator.depth++;
+
+		if (node->type == NodeType::NLeaf) {
+            auto leaf = static_cast<Leaf *>(node);
+			iterator.node=leaf;
+			if (depth==keyLength) {
+				// Equal
+				if (inclusive)
+					return true; else
+					return iteratorNext(iterator);
+			}
+
+			Key &leafKey = *new Key(isLittleEndian, types[0], leaf->value,maxKeyLength);
+			for (unsigned i=depth; i<keyLength; i++)
+				if (leafKey[i]!=key[i]) {
+					if (leafKey[i]<key[i]) {
+						// Less
+						iterator.depth--;
+						return iteratorNext(iterator);
+					}
+					// Greater
+					return true;
+				}
+
+			// Equal
+			if (inclusive)
+				return true; else
+				return iteratorNext(iterator);
+		}
+		unsigned mismatchPos = Node::prefixMismatch(isLittleEndian, node, key, depth, maxKeyLength, types[0]);
+
+		if (mismatchPos!=node->prefixLength) {
+			if (node->prefix[mismatchPos]<key[depth+mismatchPos]) {
+				// Less
+				iterator.depth--;
+				return iteratorNext(iterator);
+			}
+			// Greater
+			pos=0;
+			return iteratorNext(iterator);
+		}
+		depth+=node->prefixLength;
+		Node* next = Node::findChild(key[depth], node,pos);
+		if (!next)
+			return iteratorNext(iterator);
+
+		pos++;
+		node=next;
+		depth++;
+	}
 }
 
 
