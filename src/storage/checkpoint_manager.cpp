@@ -9,9 +9,11 @@
 #include "catalog/catalog.hpp"
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "catalog/catalog_entry/view_catalog_entry.hpp"
 
 #include "parser/parsed_data/create_schema_info.hpp"
 #include "parser/parsed_data/create_table_info.hpp"
+#include "parser/parsed_data/create_view_info.hpp"
 
 #include "main/client_context.hpp"
 #include "main/database.hpp"
@@ -85,13 +87,27 @@ void CheckpointManager::LoadFromStorage() {
 void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry &schema) {
 	// write the schema data
 	schema.Serialize(*metadata_writer);
-	// then, we fetch the tables information
+	// then, we fetch the tables/views information
 	vector<TableCatalogEntry *> tables;
-	schema.tables.Scan(transaction, [&](CatalogEntry *entry) { tables.push_back((TableCatalogEntry *)entry); });
-	// and store the amount of tables in the meta_block
+	vector<ViewCatalogEntry *> views;
+	schema.tables.Scan(transaction, [&](CatalogEntry *entry) {
+		if (entry->type == CatalogType::TABLE) {
+			tables.push_back((TableCatalogEntry*) entry);
+		} else if (entry->type == CatalogType::VIEW) {
+			views.push_back((ViewCatalogEntry*) entry);
+		} else {
+			throw NotImplementedException("Catalog type for entries");
+		}
+	});
+	// store the amount of tables in the meta_block
 	metadata_writer->Write<uint32_t>(tables.size());
 	for (auto &table : tables) {
 		WriteTable(transaction, *table);
+	}
+	// now write the views
+	metadata_writer->Write<uint32_t>(views.size());
+	for (auto &view : views) {
+		WriteView(transaction, *view);
 	}
 	// FIXME: free list?
 }
@@ -108,6 +124,23 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	for(uint32_t i = 0; i < table_count; i++) {
 		ReadTable(context, reader);
 	}
+	uint32_t view_count = reader.Read<uint32_t>();
+	for(uint32_t i = 0; i < view_count; i++) {
+		ReadView(context, reader);
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Views
+//===--------------------------------------------------------------------===//
+void CheckpointManager::WriteView(Transaction &transaction, ViewCatalogEntry &view) {
+	view.Serialize(*metadata_writer);
+}
+
+void CheckpointManager::ReadView(ClientContext &context, MetaBlockReader &reader) {
+	auto info = ViewCatalogEntry::Deserialize(reader);
+
+	database.catalog->CreateView(context.ActiveTransaction(), info.get());
 }
 
 //===--------------------------------------------------------------------===//

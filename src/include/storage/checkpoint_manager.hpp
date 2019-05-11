@@ -18,6 +18,7 @@ class ClientContext;
 class MetaBlockReader;
 class SchemaCatalogEntry;
 class TableCatalogEntry;
+class ViewCatalogEntry;
 
 struct DataPointer {
 	double min;
@@ -42,6 +43,7 @@ public:
 private:
 	void WriteSchema(Transaction &transaction, SchemaCatalogEntry &schema);
 	void WriteTable(Transaction &transaction, TableCatalogEntry &table);
+	void WriteView(Transaction &transaction, ViewCatalogEntry &table);
 	void WriteTableData(Transaction &transaction, TableCatalogEntry &table);
 
 	void WriteColumnData(DataChunk &chunk, uint64_t column_index);
@@ -51,6 +53,7 @@ private:
 
 	void ReadSchema(ClientContext &context, MetaBlockReader &reader);
 	void ReadTable(ClientContext &context, MetaBlockReader &reader);
+	void ReadView(ClientContext &context, MetaBlockReader &reader);
 	void ReadTableData(ClientContext &context, TableCatalogEntry &table, MetaBlockReader &reader);
 
 	void ReadBlock(uint64_t col, uint64_t block_nr);
