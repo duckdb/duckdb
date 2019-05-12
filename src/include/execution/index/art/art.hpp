@@ -166,7 +166,7 @@ private:
 					result_ids[result_count++] = it.node->row_id[i];
 				}
 				hasNext=ART::iteratorNext(it);
-			} while (hasNext && it.node->value >= data);
+			} while (hasNext && it.node->value >= (uint64_t) data);
 		}
 		return result_count;
 	}
@@ -175,11 +175,13 @@ private:
         Iterator it;
 		uint64_t result_count = 0;
         auto min_value = Node::minimum(tree)->get();
-		Leaf* minimum = static_cast<Leaf *>(min_value);
+        Key &key = *new Key(this->is_little_endian, type, data,sizeof(data));
+        Leaf* minimum = static_cast<Leaf *>(min_value);
+        Key &min_key = *new Key(this->is_little_endian, type, minimum->value,sizeof(data));
+
         // early out min value higher than upper bound query
-        if (minimum->value > (uint64_t) data)
+        if (min_key > key)
             return result_count;
-		Key &min_key = *new Key(this->is_little_endian, type, minimum->value,sizeof(data));
         bool found=ART::bound(tree,min_key,sizeof(data),it,sizeof(data),true,is_little_endian);
         if (found) {
             bool hasNext;

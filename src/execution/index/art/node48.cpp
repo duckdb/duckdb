@@ -60,7 +60,6 @@ void Node48::insert(unique_ptr<Node>& node, uint8_t keyByte, unique_ptr<Node>& c
 void Node48::shrink (unique_ptr<Node>& node){
 	Node48 *n = static_cast<Node48 *>(node.get());
 	auto newNode = make_unique<Node16>(node->maxPrefixLength);
-	int count = 0;
 	copyPrefix(n, newNode.get());
 	for (unsigned i = 0; i < 256; i++)
 		if (n->childIndex[i] != emptyMarker){

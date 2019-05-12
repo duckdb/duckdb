@@ -23,10 +23,12 @@ unique_ptr<Node>* Node4::getChild(const uint8_t k, int& pos) {
 
 unique_ptr<Node>* Node4::getMin() {
 	auto result = &child[0];
+	auto res_key = key[0];
 	if (count > 1){
 		for (uint32_t i = 1; i < count; ++i) {
-			if (key[i] < key[i-1]) {
+			if (key[i] < res_key) {
 				result = &child[i];
+                res_key = key[i];
 			}
 		}
 	}

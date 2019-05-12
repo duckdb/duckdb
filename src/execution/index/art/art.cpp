@@ -217,7 +217,7 @@ void ART::erase(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned 
 void ART::insert(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned depth, uintptr_t value,
                  unsigned maxKeyLength, TypeId type, uint64_t row_id) {
 	if (node == NULL) {
-		node = move(make_unique<Leaf>(value, row_id, maxKeyLength));
+		node = make_unique<Leaf>(value, row_id, maxKeyLength);
 		return;
 	}
 
@@ -243,7 +243,7 @@ void ART::insert(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned
         newNode->prefixLength = newPrefixLength;
         memcpy(newNode->prefix.get(), &key[depth], Node::min(newPrefixLength, node->maxPrefixLength));
 		Node4::insert(newNode, existingKey[depth + newPrefixLength], node);
-		unique_ptr<Node> leaf_node = move(make_unique<Leaf>(value, row_id, maxKeyLength));
+		unique_ptr<Node> leaf_node = make_unique<Leaf>(value, row_id, maxKeyLength);
 		Node4::insert(newNode, key[depth + newPrefixLength], leaf_node);
 		node = move(newNode);
 		return;
@@ -259,10 +259,11 @@ void ART::insert(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned
 			memcpy(newNode->prefix.get(), node->prefix.get(), Node::min(mismatchPos, node->maxPrefixLength));
 			// Break up prefix
 			if (node->prefixLength < node->maxPrefixLength) {
+                auto node_ptr = node.get();
 				Node4::insert(newNode, node->prefix[mismatchPos], node);
-				node->prefixLength -= (mismatchPos + 1);
-				memmove(node->prefix.get(), node->prefix.get() + mismatchPos + 1,
-				        Node::min(node->prefixLength, node->maxPrefixLength));
+                node_ptr->prefixLength -= (mismatchPos + 1);
+                memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatchPos + 1,
+                        Node::min(node_ptr->prefixLength, node_ptr->maxPrefixLength));
 			} else {
 				node->prefixLength -= (mismatchPos + 1);
 				auto leaf = static_cast<Leaf *>(Node::minimum(node.get()));
@@ -271,9 +272,10 @@ void ART::insert(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned
 				memmove(node->prefix.get(), &minKey[depth + mismatchPos + 1],
 				        Node::min(node->prefixLength, node->maxPrefixLength));
 			}
-			unique_ptr<Node> leaf_node = move(make_unique<Leaf>(value, row_id, maxKeyLength));
+			unique_ptr<Node> leaf_node = make_unique<Leaf>(value, row_id, maxKeyLength);
 
 			Node4::insert(newNode, key[depth + mismatchPos], leaf_node);
+            node = move(newNode);
 			return;
 		}
 		depth += node->prefixLength;
@@ -395,6 +397,7 @@ bool ART::iteratorNext(Iterator& iter) {
         } else
             iter.depth--;
     }
+    return false;
 }
 
 

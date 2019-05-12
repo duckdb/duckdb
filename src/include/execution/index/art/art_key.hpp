@@ -64,6 +64,16 @@ public:
 
 	const uint8_t &operator[](std::size_t i) const;
 
+
+	bool operator>(const Key &k) const {
+		for (int i = 0; i < len; i ++){
+			if (data[i] > k.data[i])
+				return true;
+			else if (data[i] < k.data[i])
+				return false;
+		}
+		return false;
+	}
 	KeyLen getKeyLen() const;
 
 	void setKeyLen(KeyLen len);
