@@ -81,7 +81,7 @@ sources = ['connection.cpp', 'cursor.cpp', 'module.cpp']
 libduckdb = Extension('duckdb',
     include_dirs=includes,
     sources=sources,
-    extra_compile_args=['-std=c++11', '-Wall'],
+    extra_compile_args=['-std=c++11', '-Wall','-stdlib=libc++'],
     language='c++', # for linking c++ stdlib
     extra_objects=['%s/build/release_notest/src/%sduckdb_static.%s' % (dd_prefix, lib_prefix, archive_ext), '%s/build/release_notest/third_party/libpg_query/%spg_query.%s' % (dd_prefix, lib_prefix, archive_ext), '%s/build/release_notest/third_party/re2/%sre2.%s' % (dd_prefix, lib_prefix, archive_ext), '%s/build/release_notest/third_party/miniz/%sminiz.%s' % (dd_prefix, lib_prefix, archive_ext)])
 
