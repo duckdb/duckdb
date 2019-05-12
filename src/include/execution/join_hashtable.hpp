@@ -164,7 +164,7 @@ public:
 private:
 	//! Insert the given set of locations into the HT with the given set of
 	//! hashes. Caller should hold lock in parallel HT.
-	void InsertHashes(Vector &hashes, uint8_t *key_locations[]);
+	void InsertHashes(Vector &hashes, data_t key_locations[]);
 	//! The capacity of the HT. This can be increased using
 	//! JoinHashTable::Resize
 	uint64_t capacity;
@@ -173,7 +173,7 @@ private:
 	//! The data of the HT
 	unique_ptr<Node> head;
 	//! The hash map of the HT
-	unique_ptr<uint8_t *[]> hashed_pointers;
+	unique_ptr<data_t[]> hashed_pointers;
 	//! Whether or not the HT has to support parallel build
 	bool parallel = false;
 	//! Mutex used for parallelism

@@ -37,7 +37,7 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			ExpressionExecutor executor(chunk);
 			if (column_index_map.size() > 0) {
 				// columns specified by the user, use column_index_map
-				for (uint64_t i = 0; i < table->columns.size(); i++) {
+				for (index_t i = 0; i < table->columns.size(); i++) {
 					if (column_index_map[i] < 0) {
 						// insert default value
 						executor.ExecuteExpression(*table->bound_defaults[i], insert_chunk.data[i]);
@@ -50,7 +50,7 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 				}
 			} else {
 				// no columns specified, just append directly
-				for (uint64_t i = 0; i < insert_chunk.column_count; i++) {
+				for (index_t i = 0; i < insert_chunk.column_count; i++) {
 					assert(insert_chunk.data[i].type == chunk.data[i].type);
 					insert_chunk.data[i].Reference(chunk.data[i]);
 				}
@@ -72,7 +72,7 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		for (auto &list : insert_values) {
 			if (column_index_map.size() > 0) {
 				// columns specified by the user, use column_index_map
-				for (uint64_t i = 0; i < table->columns.size(); i++) {
+				for (index_t i = 0; i < table->columns.size(); i++) {
 					if (column_index_map[i] < 0) {
 						// insert default value
 						executor.ExecuteExpression(*table->bound_defaults[i], temp_chunk.data[i]);
@@ -88,7 +88,7 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 				}
 			} else {
 				// no columns specified
-				for (uint64_t i = 0; i < list.size(); i++) {
+				for (index_t i = 0; i < list.size(); i++) {
 					// execute the expressions to get the values
 					auto &expr = list[i];
 					if (expr->type == ExpressionType::VALUE_DEFAULT) {

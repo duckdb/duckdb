@@ -19,7 +19,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 
 		// create a mapping of (list index) -> (column index)
 		unordered_map<string, uint32_t> column_name_map;
-		for (uint64_t i = 0; i < stmt.columns.size(); i++) {
+		for (index_t i = 0; i < stmt.columns.size(); i++) {
 			assert(i <= numeric_limits<uint32_t>::max());
 
 			column_name_map[stmt.columns[i]] = (uint32_t)i;
@@ -34,7 +34,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			assert(entry->second <= numeric_limits<uint32_t>::max());
 			named_column_map.push_back((uint32_t)entry->second);
 		}
-		for (uint64_t i = 0; i < result->table->columns.size(); i++) {
+		for (index_t i = 0; i < result->table->columns.size(); i++) {
 			auto &col = result->table->columns[i];
 			auto entry = column_name_map.find(col.name);
 			if (entry == column_name_map.end()) {
@@ -46,7 +46,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			}
 		}
 	} else {
-		for (uint64_t i = 0; i < result->table->columns.size(); i++) {
+		for (index_t i = 0; i < result->table->columns.size(); i++) {
 			result->expected_types.push_back(table->columns[i].type);
 		}
 	}
@@ -77,7 +77,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			}
 			vector<unique_ptr<Expression>> list;
 
-			for (uint64_t col_idx = 0; col_idx < expression_list.size(); col_idx++) {
+			for (index_t col_idx = 0; col_idx < expression_list.size(); col_idx++) {
 				uint64_t table_col_idx = stmt.columns.size() == 0 ? col_idx : named_column_map[col_idx];
 				assert(table_col_idx < table->columns.size());
 				binder.target_type = table->columns[table_col_idx].type;

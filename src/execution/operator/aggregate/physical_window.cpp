@@ -21,7 +21,7 @@ PhysicalWindow::PhysicalWindow(LogicalOperator &op, vector<unique_ptr<Expression
 
 static bool EqualsSubset(vector<Value> &a, vector<Value> &b, uint64_t start, uint64_t end) {
 	assert(start <= end);
-	for (uint64_t i = start; i < end; i++) {
+	for (index_t i = start; i < end; i++) {
 		if (a[i] != b[i]) {
 			return false;
 		}
@@ -37,7 +37,7 @@ static uint64_t BinarySearchRightmost(ChunkCollection &input, vector<Value> row,
 	while (l < r) {
 		uint64_t m = floor((l + r) / 2);
 		bool less_than_equals = true;
-		for (uint64_t i = 0; i < comp_cols; i++) {
+		for (index_t i = 0; i < comp_cols; i++) {
 			if (input.GetRow(m)[i] > row[i]) {
 				less_than_equals = false;
 				break;
@@ -56,7 +56,7 @@ static void MaterializeExpression(ClientContext &context, Expression *expr, Chun
                                   ChunkCollection &output, bool scalar = false) {
 	ChunkCollection boundary_start_collection;
 	vector<TypeId> types = {expr->return_type};
-	for (uint64_t i = 0; i < input.chunks.size(); i++) {
+	for (index_t i = 0; i < input.chunks.size(); i++) {
 		DataChunk chunk;
 		chunk.Initialize(types);
 		ExpressionExecutor executor(*input.chunks[i]);
@@ -78,14 +78,14 @@ static void SortCollectionForWindow(ClientContext &context, BoundWindowExpressio
 	vector<OrderType> orders;
 
 	// we sort by both 1) partition by expression list and 2) order by expressions
-	for (uint64_t prt_idx = 0; prt_idx < wexpr->partitions.size(); prt_idx++) {
+	for (index_t prt_idx = 0; prt_idx < wexpr->partitions.size(); prt_idx++) {
 		auto &pexpr = wexpr->partitions[prt_idx];
 		sort_types.push_back(pexpr->return_type);
 		exprs.push_back(pexpr.get());
 		orders.push_back(OrderType::ASCENDING);
 	}
 
-	for (uint64_t ord_idx = 0; ord_idx < wexpr->orders.size(); ord_idx++) {
+	for (index_t ord_idx = 0; ord_idx < wexpr->orders.size(); ord_idx++) {
 		auto &oexpr = wexpr->orders[ord_idx].expression;
 		sort_types.push_back(oexpr->return_type);
 		exprs.push_back(oexpr.get());
@@ -95,7 +95,7 @@ static void SortCollectionForWindow(ClientContext &context, BoundWindowExpressio
 	assert(sort_types.size() > 0);
 
 	// create a chunkcollection for the results of the expressions in the window definitions
-	for (uint64_t i = 0; i < input.chunks.size(); i++) {
+	for (index_t i = 0; i < input.chunks.size(); i++) {
 		DataChunk sort_chunk;
 		sort_chunk.Initialize(sort_types);
 
@@ -315,7 +315,7 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 	}
 
 	// this is the main loop, go through all sorted rows and compute window function result
-	for (uint64_t row_idx = 0; row_idx < input.count; row_idx++) {
+	for (index_t row_idx = 0; row_idx < input.count; row_idx++) {
 		// special case, OVER (), aggregate over everything
 		UpdateWindowBoundaries(wexpr, sort_collection, input.count, row_idx, boundary_start_collection,
 		                       boundary_end_collection, bounds);
@@ -461,14 +461,14 @@ void PhysicalWindow::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		}
 
 		vector<TypeId> window_types;
-		for (uint64_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
+		for (index_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
 			window_types.push_back(select_list[expr_idx]->return_type);
 		}
 
-		for (uint64_t i = 0; i < big_data.chunks.size(); i++) {
+		for (index_t i = 0; i < big_data.chunks.size(); i++) {
 			DataChunk window_chunk;
 			window_chunk.Initialize(window_types);
-			for (uint64_t col_idx = 0; col_idx < window_chunk.column_count; col_idx++) {
+			for (index_t col_idx = 0; col_idx < window_chunk.column_count; col_idx++) {
 				window_chunk.data[col_idx].count = big_data.chunks[i]->size();
 				VectorOperations::Set(window_chunk.data[col_idx], Value());
 			}
@@ -479,7 +479,7 @@ void PhysicalWindow::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		assert(window_results.column_count() == select_list.size());
 		uint64_t window_output_idx = 0;
 		// we can have multiple window functions
-		for (uint64_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
+		for (index_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
 			assert(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 			// sort by partition and order clause in window def
 			auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
@@ -496,10 +496,10 @@ void PhysicalWindow::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 	auto &wind_ch = window_results.GetChunk(state->position);
 
 	uint64_t out_idx = 0;
-	for (uint64_t col_idx = 0; col_idx < proj_ch.column_count; col_idx++) {
+	for (index_t col_idx = 0; col_idx < proj_ch.column_count; col_idx++) {
 		chunk.data[out_idx++].Reference(proj_ch.data[col_idx]);
 	}
-	for (uint64_t col_idx = 0; col_idx < wind_ch.column_count; col_idx++) {
+	for (index_t col_idx = 0; col_idx < wind_ch.column_count; col_idx++) {
 		chunk.data[out_idx++].Reference(wind_ch.data[col_idx]);
 	}
 	state->position += STANDARD_VECTOR_SIZE;

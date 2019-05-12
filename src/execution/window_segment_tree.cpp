@@ -108,7 +108,7 @@ void WindowSegmentTree::ConstructTree() {
 	uint64_t level_size;
 	while ((level_size = (level_current == 0 ? input_ref->count
 	                                         : levels_flat_offset - levels_flat_start[level_current - 1])) > 1) {
-		for (uint64_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
+		for (index_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
 			AggregateInit();
 			WindowSegmentValue(level_current, pos, min(level_size, pos + TREE_FANOUT));
 
@@ -129,7 +129,7 @@ void WindowSegmentTree::ConstructTree() {
 Value WindowSegmentTree::Compute(uint64_t begin, uint64_t end) {
 	assert(input_ref);
 	AggregateInit();
-	for (uint64_t l_idx = 0; l_idx < levels_flat_start.size() + 1; l_idx++) {
+	for (index_t l_idx = 0; l_idx < levels_flat_start.size() + 1; l_idx++) {
 		uint64_t parent_begin = begin / TREE_FANOUT;
 		uint64_t parent_end = end / TREE_FANOUT;
 		if (parent_begin == parent_end) {

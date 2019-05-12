@@ -17,7 +17,7 @@ static sel_t templated_quicksort_initial(T *data, sel_t *sel_vector, sel_t resul
 	sel_t low = 0, high = count - 1;
 	if (sel_vector) {
 		// now insert elements
-		for (uint64_t i = 1; i < count; i++) {
+		for (index_t i = 1; i < count; i++) {
 			if (OP::Operation(data[sel_vector[i]], data[pivot])) {
 				result[low++] = sel_vector[i];
 			} else {
@@ -28,7 +28,7 @@ static sel_t templated_quicksort_initial(T *data, sel_t *sel_vector, sel_t resul
 		result[low] = sel_vector[pivot];
 	} else {
 		// now insert elements
-		for (uint64_t i = 1; i < count; i++) {
+		for (index_t i = 1; i < count; i++) {
 			if (OP::Operation(data[i], data[pivot])) {
 				result[low++] = i;
 			} else {
@@ -140,7 +140,7 @@ void VectorOperations::Sort(Vector &vector, sel_t result[]) {
 	} else {
 		// first fill in the NULL values
 		uint64_t null_count = vector.count - count;
-		for (uint64_t i = 0; i < null_count; i++) {
+		for (index_t i = 0; i < null_count; i++) {
 			result[i] = null_sel_vector[i];
 		}
 		// now sort the remainder

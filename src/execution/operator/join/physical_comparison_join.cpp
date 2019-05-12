@@ -10,7 +10,7 @@ PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOper
 	// we reorder conditions so the ones with COMPARE_EQUAL occur first
 	uint64_t equal_position = 0;
 	uint64_t other_position = conditions_.size() - 1;
-	for (uint64_t i = 0; i < conditions_.size(); i++) {
+	for (index_t i = 0; i < conditions_.size(); i++) {
 		if (conditions_[i].comparison == ExpressionType::COMPARE_EQUAL) {
 			// COMPARE_EQUAL, move to the start
 			conditions[equal_position++] = std::move(conditions_[i]);

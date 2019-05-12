@@ -58,7 +58,7 @@ bool WindowExpression::Equals(const BaseExpression *other_) const {
 	if (partitions.size() != other->partitions.size()) {
 		return false;
 	}
-	for (uint64_t i = 0; i < partitions.size(); i++) {
+	for (index_t i = 0; i < partitions.size(); i++) {
 		if (!partitions[i]->Equals(other->partitions[i].get())) {
 			return false;
 		}
@@ -67,7 +67,7 @@ bool WindowExpression::Equals(const BaseExpression *other_) const {
 	if (orders.size() != other->orders.size()) {
 		return false;
 	}
-	for (uint64_t i = 0; i < orders.size(); i++) {
+	for (index_t i = 0; i < orders.size(); i++) {
 		if (orders[i].type != other->orders[i].type) {
 			return false;
 		}

@@ -42,7 +42,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, uint32_t depth) {
 	assert(column_list.size() <= numeric_limits<uint32_t>::max());
 
 	binding.column_index = (uint32_t)column_list.size();
-	for (uint64_t i = 0; i < column_list.size(); i++) {
+	for (index_t i = 0; i < column_list.size(); i++) {
 		auto &column = column_list[i];
 		if (column == colref.column_name) {
 			assert(i <= numeric_limits<uint32_t>::max());

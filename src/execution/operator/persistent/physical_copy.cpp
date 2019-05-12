@@ -32,7 +32,7 @@ void PhysicalCopy::Flush(ClientContext &context, DataChunk &chunk, int64_t &nr_e
 	}
 	if (set_to_default.size() > 0) {
 		assert(set_to_default.size() == chunk.column_count);
-		for (uint64_t i = 0; i < set_to_default.size(); i++) {
+		for (index_t i = 0; i < set_to_default.size(); i++) {
 			if (set_to_default[i]) {
 				chunk.data[i].count = nr_elements;
 				chunk.data[i].nullmask.set();
@@ -87,7 +87,7 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 		// handle the select list (if any)
 		if (info.select_list.size() > 0) {
 			set_to_default.resize(types.size(), true);
-			for (uint64_t i = 0; i < info.select_list.size(); i++) {
+			for (index_t i = 0; i < info.select_list.size(); i++) {
 				auto &column = table->GetColumn(info.select_list[i]);
 				select_list_oid.push_back(column.oid);
 				set_to_default[column.oid] = false;
@@ -122,7 +122,7 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 			int64_t column = 0;
 			int64_t expected_column_count =
 			    info.select_list.size() > 0 ? info.select_list.size() : insert_chunk.column_count;
-			for (uint64_t i = 0; i < line.size(); i++) {
+			for (index_t i = 0; i < line.size(); i++) {
 				// handle quoting
 				if (line[i] == info.quote) {
 					if (!in_quotes) {
@@ -178,7 +178,7 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 		to_csv.open(info.file_path);
 		if (info.header) {
 			// write the header line
-			for (uint64_t i = 0; i < names.size(); i++) {
+			for (index_t i = 0; i < names.size(); i++) {
 				if (i != 0) {
 					to_csv << info.delimiter;
 				}
@@ -191,8 +191,8 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 			if (state->child_chunk.size() == 0) {
 				break;
 			}
-			for (uint64_t i = 0; i < state->child_chunk.size(); i++) {
-				for (uint64_t col = 0; col < state->child_chunk.column_count; col++) {
+			for (index_t i = 0; i < state->child_chunk.size(); i++) {
+				for (index_t col = 0; col < state->child_chunk.column_count; col++) {
 					if (col != 0) {
 						to_csv << info.delimiter;
 					}

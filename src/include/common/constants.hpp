@@ -28,6 +28,12 @@ using std::vector;
 #define STANDARD_VECTOR_SIZE 1024
 #define STORAGE_CHUNK_SIZE 10240
 
+typedef uint64_t index_t;
+const index_t INVALID_INDEX = (index_t)-1;
+
+typedef uint8_t *data_t;
+typedef const uint8_t *data_t_const;
+
 //! Type used to represent dates
 typedef int32_t date_t;
 //! Type used to represent time
@@ -39,10 +45,10 @@ typedef uint16_t sel_t;
 //! Type used for transaction timestamps
 //! FIXME: this should be a 128-bit integer
 //! With 64-bit, the database only supports up to 2^32 transactions
-typedef uint64_t transaction_t;
+typedef index_t transaction_t;
 
 //! Type used for column identifiers
-typedef uint64_t column_t;
+typedef index_t column_t;
 //! Special value used to signify the ROW ID of
 extern column_t COLUMN_IDENTIFIER_ROW_ID;
 

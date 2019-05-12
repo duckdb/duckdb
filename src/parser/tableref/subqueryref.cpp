@@ -41,7 +41,7 @@ unique_ptr<TableRef> SubqueryRef::Deserialize(Deserializer &source) {
 	}
 	auto result = make_unique<SubqueryRef>(move(subquery));
 	uint64_t column_count = source.Read<uint32_t>();
-	for (uint64_t i = 0; i < column_count; i++) {
+	for (index_t i = 0; i < column_count; i++) {
 		result->column_name_alias.push_back(source.Read<string>());
 	}
 	return move(result);

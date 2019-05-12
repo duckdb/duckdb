@@ -22,7 +22,7 @@ static void GatherAliases(QueryNode &node, unordered_map<string, uint32_t> &alia
 		assert(node.type == QueryNodeType::SELECT_NODE);
 		auto &select = (SelectNode &)node;
 		// fill the alias lists
-		for (uint64_t i = 0; i < select.select_list.size(); i++) {
+		for (index_t i = 0; i < select.select_list.size(); i++) {
 			assert(i <= numeric_limits<uint32_t>::max());
 
 			auto &expr = select.select_list[i];
@@ -81,7 +81,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 		expression_map_t<uint32_t> expression_map;
 		GatherAliases(statement, alias_map, expression_map);
 		// now we perform the actual resolution of the ORDER BY expressions
-		for (uint64_t i = 0; i < statement.orders.size(); i++) {
+		for (index_t i = 0; i < statement.orders.size(); i++) {
 			auto &order = statement.orders[i].expression;
 			if (order->type == ExpressionType::VALUE_CONSTANT) {
 				// ORDER BY a constant
@@ -142,14 +142,14 @@ unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 	}
 
 	// figure out the types of the setop result by picking the max of both
-	for (uint64_t i = 0; i < result->left->types.size(); i++) {
+	for (index_t i = 0; i < result->left->types.size(); i++) {
 		auto result_type = MaxSQLType(result->left->types[i], result->right->types[i]);
 		result->types.push_back(result_type);
 	}
 
 	// if there are ORDER BY entries we create the BoundColumnRefExpressions
 	assert(order_references.size() == statement.orders.size());
-	for (uint64_t i = 0; i < statement.orders.size(); i++) {
+	for (index_t i = 0; i < statement.orders.size(); i++) {
 		auto entry = order_references[i];
 		if (entry >= result->types.size()) {
 			throw BinderException("ORDER term out of range - should be between 1 and %d", (int)result->types.size());

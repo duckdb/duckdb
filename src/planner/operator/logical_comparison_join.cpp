@@ -11,7 +11,7 @@ string LogicalComparisonJoin::ParamsToString() const {
 	string result = "";
 	if (conditions.size() > 0) {
 		result += "[";
-		for (uint64_t i = 0; i < conditions.size(); i++) {
+		for (index_t i = 0; i < conditions.size(); i++) {
 			auto &cond = conditions[i];
 			result += ExpressionTypeToString(cond.comparison) + "(" + cond.left->GetName() + ", " +
 			          cond.right->GetName() + ")";

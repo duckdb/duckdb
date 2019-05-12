@@ -47,7 +47,7 @@ struct RefineNestedLoopJoin {
 		auto ldata = (T *)left.data;
 		auto rdata = (T *)right.data;
 		uint64_t result_count = 0;
-		for (uint64_t i = 0; i < current_match_count; i++) {
+		for (index_t i = 0; i < current_match_count; i++) {
 			// null values should be filtered out before
 			assert(!left.nullmask[lvector[i]] && !right.nullmask[rvector[i]]);
 			if (OP::Operation(ldata[lvector[i]], rdata[rvector[i]])) {
@@ -124,7 +124,7 @@ uint64_t NestedLoopJoinInner::Perform(uint64_t &lpos, uint64_t &rpos, DataChunk 
 	uint64_t match_count = nested_loop_join<InitialNestedLoopJoin>(
 	    left_conditions.data[0], right_conditions.data[0], lpos, rpos, lvector, rvector, 0, conditions[0].comparison);
 	// now resolve the rest of the conditions
-	for (uint64_t i = 1; i < conditions.size(); i++) {
+	for (index_t i = 1; i < conditions.size(); i++) {
 		// check if we have run out of tuples to compare
 		if (match_count == 0) {
 			return 0;

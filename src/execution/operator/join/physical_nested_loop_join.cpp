@@ -28,7 +28,7 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<P
 static bool RemoveNullValues(DataChunk &chunk) {
 	// OR all nullmasks together
 	nullmask_t nullmask = chunk.data[0].nullmask;
-	for (uint64_t i = 1; i < chunk.column_count; i++) {
+	for (index_t i = 1; i < chunk.column_count; i++) {
 		nullmask |= chunk.data[i].nullmask;
 	}
 	// now create a selection vector
@@ -45,7 +45,7 @@ static bool RemoveNullValues(DataChunk &chunk) {
 		assert(sizeof(not_null_vector) == sizeof(chunk.owned_sel_vector));
 		memcpy(chunk.owned_sel_vector, not_null_vector, sizeof(not_null_vector));
 		chunk.sel_vector = chunk.owned_sel_vector;
-		for (uint64_t i = 0; i < chunk.column_count; i++) {
+		for (index_t i = 0; i < chunk.column_count; i++) {
 			chunk.data[i].sel_vector = chunk.sel_vector;
 			chunk.data[i].count = not_null_entries;
 		}
@@ -61,7 +61,7 @@ static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bo
 	assert(left.column_count == result.column_count);
 	// create the selection vector from the matches that were found
 	uint64_t result_count = 0;
-	for (uint64_t i = 0; i < left.size(); i++) {
+	for (index_t i = 0; i < left.size(); i++) {
 		if (found_match[i] == MATCH) {
 			// part of the result
 			result.owned_sel_vector[result_count++] = i;
@@ -73,7 +73,7 @@ static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bo
 		// project them using the result selection vector
 		result.sel_vector = result.owned_sel_vector;
 		// reference the columns of the left side from the result
-		for (uint64_t i = 0; i < left.column_count; i++) {
+		for (index_t i = 0; i < left.column_count; i++) {
 			result.data[i].Reference(left.data[i]);
 			result.data[i].sel_vector = result.sel_vector;
 			result.data[i].count = result_count;
@@ -120,7 +120,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			}
 		} else {
 			// disqualify tuples from the RHS that have NULL values
-			for (uint64_t i = 0; i < state->right_chunks.chunks.size(); i++) {
+			for (index_t i = 0; i < state->right_chunks.chunks.size(); i++) {
 				state->has_null = state->has_null || RemoveNullValues(*state->right_chunks.chunks[i]);
 			}
 			// initialize the chunks for the join conditions
@@ -234,14 +234,14 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			// we have matching tuples!
 			// construct the result
 			// create a reference to the chunk on the left side using the lvector
-			for (uint64_t i = 0; i < state->child_chunk.column_count; i++) {
+			for (index_t i = 0; i < state->child_chunk.column_count; i++) {
 				chunk.data[i].Reference(state->child_chunk.data[i]);
 				chunk.data[i].count = match_count;
 				chunk.data[i].sel_vector = lvector;
 				chunk.data[i].Flatten();
 			}
 			// now create a reference to the chunk on the right side using the rvector
-			for (uint64_t i = 0; i < right_data.column_count; i++) {
+			for (index_t i = 0; i < right_data.column_count; i++) {
 				uint64_t chunk_entry = state->child_chunk.column_count + i;
 				chunk.data[chunk_entry].Reference(right_data.data[i]);
 				chunk.data[chunk_entry].count = match_count;

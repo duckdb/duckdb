@@ -14,7 +14,7 @@ string PhysicalOperator::ToString(uint64_t depth) const {
 	}
 	string result = PhysicalOperatorToString(type) + extra_info;
 	if (children.size() > 0) {
-		for (uint64_t i = 0; i < children.size(); i++) {
+		for (index_t i = 0; i < children.size(); i++) {
 			result += "\n" + string(depth * 4, ' ');
 			auto &child = children[i];
 			result += child->ToString(depth + 1);

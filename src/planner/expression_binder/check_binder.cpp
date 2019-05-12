@@ -31,7 +31,7 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 		throw BinderException("Cannot reference table %s from within check constraint for table %s!",
 		                      colref.table_name.c_str(), table.c_str());
 	}
-	for (uint64_t i = 0; i < columns.size(); i++) {
+	for (index_t i = 0; i < columns.size(); i++) {
 		assert(i <= numeric_limits<uint32_t>::max());
 
 		if (colref.column_name == columns[i].name) {

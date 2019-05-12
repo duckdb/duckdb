@@ -41,7 +41,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &expr) {
 		auto &select_list = subquery.subquery->GetSelectList();
 		if (view_catalog_entry->aliases.size() > 0) {
 			subquery.column_name_alias.resize(select_list.size());
-			for (uint64_t col_idx = 0; col_idx < select_list.size(); col_idx++) {
+			for (index_t col_idx = 0; col_idx < select_list.size(); col_idx++) {
 				if (col_idx < view_catalog_entry->aliases.size()) {
 					subquery.column_name_alias[col_idx] = view_catalog_entry->aliases[col_idx];
 				} else {

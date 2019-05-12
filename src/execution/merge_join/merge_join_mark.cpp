@@ -14,7 +14,7 @@ template <class T, class OP> static uint64_t merge_join_mark_gt(ScalarMergeInfo 
 	assert(l.sel_vector);
 	auto ldata = (T *)l.v.data;
 	l.pos = l.count;
-	for (uint64_t chunk_idx = 0; chunk_idx < r.order_info.size(); chunk_idx++) {
+	for (index_t chunk_idx = 0; chunk_idx < r.order_info.size(); chunk_idx++) {
 		// we only care about the SMALLEST value in each of the RHS
 		// because we want to figure out if they are greater than [or equal] to ANY value
 		// get the smallest value from the RHS
@@ -53,7 +53,7 @@ template <class T, class OP> static uint64_t merge_join_mark_lt(ScalarMergeInfo 
 	assert(l.sel_vector);
 	auto ldata = (T *)l.v.data;
 	l.pos = 0;
-	for (uint64_t chunk_idx = 0; chunk_idx < r.order_info.size(); chunk_idx++) {
+	for (index_t chunk_idx = 0; chunk_idx < r.order_info.size(); chunk_idx++) {
 		// we only care about the BIGGEST value in each of the RHS
 		// because we want to figure out if they are less than [or equal] to ANY value
 		// get the biggest value from the RHS

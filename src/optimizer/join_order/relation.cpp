@@ -9,7 +9,7 @@ using RelationTreeNode = RelationSetManager::RelationTreeNode;
 
 string RelationSet::ToString() {
 	string result = "[";
-	for (uint64_t i = 0; i < count; i++) {
+	for (index_t i = 0; i < count; i++) {
 		result += std::to_string(relations[i]);
 		if (i != count - 1) {
 			result += ", ";
@@ -28,7 +28,7 @@ bool RelationSet::IsSubset(RelationSet *super, RelationSet *sub) {
 		return false;
 	}
 	uint64_t j = 0;
-	for (uint64_t i = 0; i < super->count; i++) {
+	for (index_t i = 0; i < super->count; i++) {
 		if (sub->relations[j] == super->relations[i]) {
 			j++;
 			if (j == sub->count) {
@@ -42,7 +42,7 @@ bool RelationSet::IsSubset(RelationSet *super, RelationSet *sub) {
 RelationSet *RelationSetManager::GetRelation(unique_ptr<uint64_t[]> relations, uint64_t count) {
 	// now look it up in the tree
 	RelationTreeNode *info = &root;
-	for (uint64_t i = 0; i < count; i++) {
+	for (index_t i = 0; i < count; i++) {
 		auto entry = info->children.find(relations[i]);
 		if (entry == info->children.end()) {
 			// node not found, create it

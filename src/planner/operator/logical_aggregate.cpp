@@ -42,7 +42,7 @@ string LogicalAggregate::ParamsToString() const {
 	string result = LogicalOperator::ParamsToString();
 	if (groups.size() > 0) {
 		result += "[";
-		for (uint64_t i = 0; i < groups.size(); i++) {
+		for (index_t i = 0; i < groups.size(); i++) {
 			auto &child = groups[i];
 			result += child->GetName();
 			if (i < groups.size() - 1) {

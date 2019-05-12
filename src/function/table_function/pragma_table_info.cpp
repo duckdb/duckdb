@@ -53,11 +53,11 @@ void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &outp
 	// either fill up the chunk or return all the remaining columns
 	uint64_t next = min(data.offset + STANDARD_VECTOR_SIZE, (uint64_t)data.entry->columns.size());
 	uint64_t output_count = next - data.offset;
-	for (uint64_t j = 0; j < output.column_count; j++) {
+	for (index_t j = 0; j < output.column_count; j++) {
 		output.data[j].count = output_count;
 	}
 
-	for (uint64_t i = data.offset; i < next; i++) {
+	for (index_t i = data.offset; i < next; i++) {
 		auto index = i - data.offset;
 		auto &column = data.entry->columns[i];
 		// return values:

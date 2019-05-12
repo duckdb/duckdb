@@ -11,7 +11,7 @@ using QueryEdge = QueryGraph::QueryEdge;
 static string QueryEdgeToString(const QueryEdge *info, vector<uint64_t> prefix) {
 	string result = "";
 	string source = "[";
-	for (uint64_t i = 0; i < prefix.size(); i++) {
+	for (index_t i = 0; i < prefix.size(); i++) {
 		source += to_string(prefix[i]) + (i < prefix.size() - 1 ? ", " : "");
 	}
 	source += "]";
@@ -34,7 +34,7 @@ QueryEdge *QueryGraph::GetQueryEdge(RelationSet *left) {
 	assert(left && left->count > 0);
 	// find the EdgeInfo corresponding to the left set
 	QueryEdge *info = &root;
-	for (uint64_t i = 0; i < left->count; i++) {
+	for (index_t i = 0; i < left->count; i++) {
 		auto entry = info->children.find(left->relations[i]);
 		if (entry == info->children.end()) {
 			// node not found, create it
@@ -52,7 +52,7 @@ void QueryGraph::CreateEdge(RelationSet *left, RelationSet *right, FilterInfo *f
 	// find the EdgeInfo corresponding to the left set
 	auto info = GetQueryEdge(left);
 	// now insert the edge to the right relation, if it does not exist
-	for (uint64_t i = 0; i < info->neighbors.size(); i++) {
+	for (index_t i = 0; i < info->neighbors.size(); i++) {
 		if (info->neighbors[i]->neighbor == right) {
 			if (filter_info) {
 				// neighbor already exists just add the filter, if we have any
@@ -71,9 +71,9 @@ void QueryGraph::CreateEdge(RelationSet *left, RelationSet *right, FilterInfo *f
 }
 
 void QueryGraph::EnumerateNeighbors(RelationSet *node, function<bool(NeighborInfo *)> callback) {
-	for (uint64_t j = 0; j < node->count; j++) {
+	for (index_t j = 0; j < node->count; j++) {
 		QueryEdge *info = &root;
-		for (uint64_t i = j; i < node->count; i++) {
+		for (index_t i = j; i < node->count; i++) {
 			auto entry = info->children.find(node->relations[i]);
 			if (entry == info->children.end()) {
 				// node not found

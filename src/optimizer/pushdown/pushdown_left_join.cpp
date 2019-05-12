@@ -74,7 +74,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 		}
 	}
 	// now check the set of filters
-	for (uint64_t i = 0; i < filters.size(); i++) {
+	for (index_t i = 0; i < filters.size(); i++) {
 		auto side = JoinSide::GetJoinSide(filters[i]->bindings, left_bindings, right_bindings);
 		if (side == JoinSide::LEFT) {
 			// bindings match left side

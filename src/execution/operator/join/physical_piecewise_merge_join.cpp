@@ -59,13 +59,13 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 		}
 		// now order all the chunks
 		state->right_orders.resize(state->right_chunks.chunks.size());
-		for (uint64_t i = 0; i < state->right_chunks.chunks.size(); i++) {
+		for (index_t i = 0; i < state->right_chunks.chunks.size(); i++) {
 			auto &chunk_to_order = *state->right_chunks.chunks[i];
 			// create a new selection vector
 			// resolve the join keys for the right chunk
 			state->join_keys.Reset();
 			ExpressionExecutor executor(chunk_to_order);
-			for (uint64_t k = 0; k < conditions.size(); k++) {
+			for (index_t k = 0; k < conditions.size(); k++) {
 				// resolve the join key
 				executor.ExecuteExpression(*conditions[k].right, state->join_keys.data[k]);
 				OrderVector(state->join_keys.data[k], state->right_orders[i]);
@@ -95,7 +95,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 			// resolve the join keys for the left chunk
 			state->join_keys.Reset();
 			ExpressionExecutor executor(state->child_chunk);
-			for (uint64_t k = 0; k < conditions.size(); k++) {
+			for (index_t k = 0; k < conditions.size(); k++) {
 				executor.ExecuteExpression(*conditions[k].left, state->join_keys.data[k]);
 				// sort by join key
 				OrderVector(state->join_keys.data[k], state->left_orders);
@@ -156,14 +156,14 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 				state->left_position = 0;
 				state->right_position = 0;
 			} else {
-				for (uint64_t i = 0; i < state->child_chunk.column_count; i++) {
+				for (index_t i = 0; i < state->child_chunk.column_count; i++) {
 					chunk.data[i].Reference(state->child_chunk.data[i]);
 					chunk.data[i].count = result_count;
 					chunk.data[i].sel_vector = left_info.result;
 					chunk.data[i].Flatten();
 				}
 				// now create a reference to the chunk on the right side
-				for (uint64_t i = 0; i < right_chunk.column_count; i++) {
+				for (index_t i = 0; i < right_chunk.column_count; i++) {
 					uint64_t chunk_entry = state->child_chunk.column_count + i;
 					chunk.data[chunk_entry].Reference(right_chunk.data[i]);
 					chunk.data[chunk_entry].count = result_count;

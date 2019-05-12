@@ -127,7 +127,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 static unique_ptr<LogicalDelimJoin> CreateDuplicateEliminatedJoin(vector<CorrelatedColumnInfo> &correlated_columns,
                                                                   JoinType join_type) {
 	auto delim_join = make_unique<LogicalDelimJoin>(join_type);
-	for (uint64_t i = 0; i < correlated_columns.size(); i++) {
+	for (index_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		delim_join->duplicate_eliminated_columns.push_back(
 		    make_unique<BoundColumnRefExpression>(col.type, col.binding));
@@ -137,7 +137,7 @@ static unique_ptr<LogicalDelimJoin> CreateDuplicateEliminatedJoin(vector<Correla
 
 static void CreateDelimJoinConditions(LogicalDelimJoin &delim_join, vector<CorrelatedColumnInfo> &correlated_columns,
                                       ColumnBinding base_binding) {
-	for (uint64_t i = 0; i < correlated_columns.size(); i++) {
+	for (index_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		JoinCondition cond;
 		cond.left = make_unique<BoundColumnRefExpression>(col.name, col.type, col.binding);
@@ -275,7 +275,7 @@ public:
 			root = move(op.children[0]);
 			VisitOperatorExpressions(op);
 			op.children[0] = move(root);
-			for (uint64_t i = 0; i < op.children.size(); i++) {
+			for (index_t i = 0; i < op.children.size(); i++) {
 				VisitOperator(*op.children[i]);
 			}
 		}

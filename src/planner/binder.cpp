@@ -160,7 +160,7 @@ void Binder::MoveCorrelatedExpressions(Binder &other) {
 }
 
 void Binder::MergeCorrelatedColumns(vector<CorrelatedColumnInfo> &other) {
-	for (uint64_t i = 0; i < other.size(); i++) {
+	for (index_t i = 0; i < other.size(); i++) {
 		AddCorrelatedColumn(other[i]);
 	}
 }

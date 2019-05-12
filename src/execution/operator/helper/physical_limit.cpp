@@ -24,7 +24,7 @@ void PhysicalLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 			// we have to copy part of the chunk with an offset
 			uint64_t start_position = offset - state->current_offset;
 			uint64_t chunk_count = min(limit, state->child_chunk.size() - start_position);
-			for (uint64_t i = 0; i < chunk.column_count; i++) {
+			for (index_t i = 0; i < chunk.column_count; i++) {
 				chunk.data[i].Reference(state->child_chunk.data[i]);
 				chunk.data[i].data = chunk.data[i].data + GetTypeIdSize(chunk.data[i].type) * start_position;
 				chunk.data[i].count = chunk_count;
@@ -42,7 +42,7 @@ void PhysicalLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 			chunk_count = state->child_chunk.size();
 		}
 		// instead of copying we just change the pointer in the current chunk
-		for (uint64_t i = 0; i < chunk.column_count; i++) {
+		for (index_t i = 0; i < chunk.column_count; i++) {
 			chunk.data[i].Reference(state->child_chunk.data[i]);
 			chunk.data[i].count = chunk_count;
 		}

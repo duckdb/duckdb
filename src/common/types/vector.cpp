@@ -325,7 +325,7 @@ uint64_t Vector::NotNullSelVector(const Vector &vector, sel_t *not_null_vector, 
 
 string Vector::ToString() const {
 	string retval = TypeIdToString(type) + ": " + to_string(count) + " = [ ";
-	for (uint64_t i = 0; i < count; i++) {
+	for (index_t i = 0; i < count; i++) {
 		retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
 	}
 	retval += "]";
@@ -344,7 +344,7 @@ void Vector::Verify() {
 		VectorOperations::ExecType<const char *>(*this, [&](const char *string, uint64_t i, uint64_t k) {
 			if (!nullmask[i]) {
 				assert(string);
-				assert(strlen(string) != (uint64_t)-1);
+				assert(strlen(string) != (size_t)-1);
 				assert(Value::IsUTF8String(string));
 			}
 		});

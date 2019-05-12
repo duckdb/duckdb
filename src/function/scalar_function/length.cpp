@@ -25,7 +25,7 @@ void length_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_c
 			return;
 		}
 		int64_t length = 0;
-		for (uint64_t str_idx = 0; input_data[i][str_idx]; str_idx++) {
+		for (index_t str_idx = 0; input_data[i][str_idx]; str_idx++) {
 			length += (input_data[i][str_idx] & 0xC0) != 0x80;
 		}
 		result_data[i] = length;

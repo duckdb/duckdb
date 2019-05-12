@@ -48,7 +48,7 @@ class UniqueIndex {
 		UniqueIndexAddedEntries(UniqueIndex &index) : index(index), count(0) {
 		}
 		~UniqueIndexAddedEntries() {
-			for (uint64_t j = count; j > 0; j--) {
+			for (index_t j = count; j > 0; j--) {
 				if (nodes[j - 1]) {
 					index.RemoveEntry(nodes[j - 1]);
 				}

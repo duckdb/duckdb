@@ -28,7 +28,7 @@ enum class UndoFlags : uint8_t {
 
 struct UndoEntry {
 	UndoFlags type;
-	uint64_t length;
+	index_t length;
 	unique_ptr<uint8_t[]> data;
 };
 
@@ -42,7 +42,7 @@ public:
 
 	//! Reserve space for an entry of the specified type and length in the undo
 	//! buffer
-	uint8_t *CreateEntry(UndoFlags type, uint64_t len);
+	data_t CreateEntry(UndoFlags type, index_t len);
 
 	//! Cleanup the undo buffer
 	void Cleanup();

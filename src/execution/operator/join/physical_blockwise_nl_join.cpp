@@ -64,14 +64,14 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 			return;
 		}
 		// fill in the data from the chunk
-		for (uint64_t i = 0; i < state->child_chunk.column_count; i++) {
+		for (index_t i = 0; i < state->child_chunk.column_count; i++) {
 			chunk.data[i].Reference(state->child_chunk.data[i]);
 		}
 		if (type == JoinType::LEFT || type == JoinType::OUTER) {
 			// LEFT OUTER or FULL OUTER join with empty RHS
 			// fill any columns from the RHS with NULLs
 			chunk.sel_vector = chunk.data[0].sel_vector;
-			for (uint64_t i = state->child_chunk.column_count; i < chunk.column_count; i++) {
+			for (index_t i = state->child_chunk.column_count; i < chunk.column_count; i++) {
 				chunk.data[i].count = chunk.size();
 				chunk.data[i].sel_vector = chunk.sel_vector;
 				VectorOperations::Set(chunk.data[i], Value());
@@ -96,7 +96,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 			if (!state->checked_found_match && state->lhs_found_match) {
 				// LEFT OUTER JOIN or FULL OUTER JOIN, first check if we need to create extra results because of
 				// non-matching tuples
-				for (uint64_t i = 0; i < state->child_chunk.size(); i++) {
+				for (index_t i = 0; i < state->child_chunk.size(); i++) {
 					if (!state->lhs_found_match[i]) {
 						chunk.owned_sel_vector[result_count++] = i;
 					}
@@ -105,13 +105,13 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 					// have to create the chunk, set the selection vector and count
 					chunk.sel_vector = chunk.owned_sel_vector;
 					// for the LHS, reference the child_chunk and set the sel_vector and count
-					for (uint64_t i = 0; i < state->child_chunk.column_count; i++) {
+					for (index_t i = 0; i < state->child_chunk.column_count; i++) {
 						chunk.data[i].Reference(state->child_chunk.data[i]);
 						chunk.data[i].sel_vector = chunk.sel_vector;
 						chunk.data[i].count = result_count;
 					}
 					// for the RHS, set the mask to NULL and set the sel_vector and count
-					for (uint64_t i = state->child_chunk.column_count; i < chunk.column_count; i++) {
+					for (index_t i = state->child_chunk.column_count; i < chunk.column_count; i++) {
 						chunk.data[i].nullmask.set();
 						chunk.data[i].sel_vector = chunk.sel_vector;
 						chunk.data[i].count = result_count;
@@ -140,17 +140,17 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 		}
 		auto &lchunk = state->child_chunk;
 		auto &rchunk = *state->right_chunks.chunks[state->right_position];
-		for (uint64_t i = 0; i < chunk.column_count; i++) {
+		for (index_t i = 0; i < chunk.column_count; i++) {
 			assert(!chunk.data[i].sel_vector);
 			chunk.data[i].count = rchunk.size();
 		}
 		// fill in the current element of the LHS into the chunk
 		assert(chunk.column_count == lchunk.column_count + rchunk.column_count);
-		for (uint64_t i = 0; i < lchunk.column_count; i++) {
+		for (index_t i = 0; i < lchunk.column_count; i++) {
 			VectorOperations::Set(chunk.data[i], lchunk.data[i].GetValue(state->left_position));
 		}
 		// for the RHS we just reference the entire vector
-		for (uint64_t i = 0; i < rchunk.column_count; i++) {
+		for (index_t i = 0; i < rchunk.column_count; i++) {
 			chunk.data[lchunk.column_count + i].Reference(rchunk.data[i]);
 		}
 		// now perform the computation
@@ -175,7 +175,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 		if (result_count > 0) {
 			// had a result! set the selection vector of the child elements
 			chunk.sel_vector = chunk.owned_sel_vector;
-			for (uint64_t i = 0; i < chunk.column_count; i++) {
+			for (index_t i = 0; i < chunk.column_count; i++) {
 				chunk.data[i].sel_vector = chunk.sel_vector;
 				chunk.data[i].count = result_count;
 			}

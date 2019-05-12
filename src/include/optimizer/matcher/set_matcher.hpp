@@ -35,7 +35,7 @@ public:
 		}
 		// try to find a match for the current matcher (m_idx)
 		uint64_t previous_binding_count = bindings.size();
-		for (uint64_t e_idx = 0; e_idx < entries.size(); e_idx++) {
+		for (index_t e_idx = 0; e_idx < entries.size(); e_idx++) {
 			// first check if this entry has already been matched
 			if (excluded_entries.find(e_idx) != excluded_entries.end()) {
 				// it has been matched: skip this entry
@@ -71,7 +71,7 @@ public:
 				return false;
 			}
 			// now entries have to match in order
-			for (uint64_t i = 0; i < matchers.size(); i++) {
+			for (index_t i = 0; i < matchers.size(); i++) {
 				if (!matchers[i]->Match(entries[i], bindings)) {
 					return false;
 				}

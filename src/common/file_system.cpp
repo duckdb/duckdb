@@ -114,7 +114,7 @@ void FileSystem::Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint6
 	if (bytes_read == -1) {
 		throw IOException("Could not read from file \"%s\": %s", handle.path.c_str(), strerror(errno));
 	}
-	if ((uint64_t)bytes_read != nr_bytes) {
+	if ((index_t)bytes_read != nr_bytes) {
 		throw IOException("Could not read sufficient bytes from file \"%s\"", handle.path.c_str());
 	}
 }
@@ -129,7 +129,7 @@ void FileSystem::Write(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint
 	if (bytes_written == -1) {
 		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), strerror(errno));
 	}
-	if ((uint64_t)bytes_written != nr_bytes) {
+	if ((index_t)bytes_written != nr_bytes) {
 		throw IOException("Could not write sufficient bytes from file \"%s\"", handle.path.c_str());
 	}
 }
@@ -500,11 +500,11 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 }
 #endif
 
-void FileHandle::Read(void *buffer, uint64_t nr_bytes, uint64_t location) {
+void FileHandle::Read(void *buffer, index_t nr_bytes, index_t location) {
 	file_system.Read(*this, buffer, nr_bytes, location);
 }
 
-void FileHandle::Write(void *buffer, uint64_t nr_bytes, uint64_t location) {
+void FileHandle::Write(void *buffer, index_t nr_bytes, index_t location) {
 	file_system.Write(*this, buffer, nr_bytes, location);
 }
 
@@ -513,7 +513,7 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 	return a + PathSeparator() + b;
 }
 
-Buffer::Buffer(void *internal_buffer, void *buffer, uint64_t size)
+Buffer::Buffer(void *internal_buffer, data_t buffer, index_t size)
     : buffer(buffer), size(size), internal_buffer(internal_buffer) {
 }
 
@@ -521,18 +521,18 @@ Buffer::~Buffer() {
 	free(internal_buffer);
 }
 
-unique_ptr<Buffer> Buffer::AllocateAlignedBuffer(uint64_t bufsiz) {
+unique_ptr<Buffer> Buffer::AllocateAlignedBuffer(index_t bufsiz) {
 	assert(bufsiz % 4096 == 0);
 	// we add 4095 to ensure that we can align the buffer to 4096
-	void *internal_buffer = malloc(bufsiz + 4095);
+	data_t internal_buffer = (data_t)malloc(bufsiz + 4095);
 	// round to multiple of 4096
-	uint64_t num = (uint64_t)internal_buffer;
-	uint64_t remainder = num % 4096;
+	index_t num = (index_t)internal_buffer;
+	index_t remainder = num % 4096;
 	if (remainder != 0) {
 		num = num + 4096 - remainder;
 	}
 	assert(num % 4096 == 0);
-	assert(num + bufsiz <= ((uint64_t)internal_buffer + bufsiz + 4095));
-	assert(num >= (uint64_t)internal_buffer);
-	return unique_ptr<Buffer>(new Buffer(internal_buffer, (void *)num, bufsiz));
+	assert(num + bufsiz <= ((index_t)internal_buffer + bufsiz + 4095));
+	assert(num >= (index_t)internal_buffer);
+	return unique_ptr<Buffer>(new Buffer(internal_buffer, (data_t)num, bufsiz));
 }

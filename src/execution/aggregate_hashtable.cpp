@@ -38,13 +38,13 @@ SuperLargeHashTable::SuperLargeHashTable(uint64_t initial_capacity, vector<TypeI
 	// [GROUPS] is the groups
 	// [PAYLOAD] is the payload (i.e. the aggregates)
 	// [COUNT] is an 8-byte count for each element
-	for (uint64_t i = 0; i < payload_types.size(); i++) {
+	for (index_t i = 0; i < payload_types.size(); i++) {
 		payload_width += GetAggrPayloadSize(aggregate_types[i], payload_types[i]);
 	}
 	empty_payload_data = unique_ptr<uint8_t[]>(new uint8_t[payload_width]);
 	// initialize the aggregates to the NULL value
 	auto pointer = empty_payload_data.get();
-	for (uint64_t i = 0; i < payload_types.size(); i++) {
+	for (index_t i = 0; i < payload_types.size(); i++) {
 		// counts are zero initialized, all other aggregates NULL
 		// initialized
 		switch (aggregate_types[i]) {
@@ -67,7 +67,7 @@ SuperLargeHashTable::SuperLargeHashTable(uint64_t initial_capacity, vector<TypeI
 	distinct_hashes.resize(aggregate_types.size());
 
 	// create additional hash tables for distinct aggrs
-	for (uint64_t i = 0; i < aggregate_types.size(); i++) {
+	for (index_t i = 0; i < aggregate_types.size(); i++) {
 		switch (aggregate_types[i]) {
 		case ExpressionType::AGGREGATE_COUNT_DISTINCT:
 		case ExpressionType::AGGREGATE_SUM_DISTINCT: {
@@ -105,10 +105,10 @@ void SuperLargeHashTable::Resize(uint64_t size) {
 		groups.Initialize(group_types, false);
 
 		Vector addresses(TypeId::POINTER, true, false);
-		auto data_pointers = (uint8_t **)addresses.data;
+		auto data_pointers = (data_t *)addresses.data;
 
-		uint8_t *ptr = data;
-		uint8_t *end = data + capacity * tuple_size;
+		data_t ptr = data;
+		data_t end = data + capacity * tuple_size;
 
 		assert(new_table->tuple_size == this->tuple_size);
 
@@ -128,7 +128,7 @@ void SuperLargeHashTable::Resize(uint64_t size) {
 			}
 			addresses.count = entry;
 			// fetch the group columns
-			for (uint64_t i = 0; i < groups.column_count; i++) {
+			for (index_t i = 0; i < groups.column_count; i++) {
 				auto &column = groups.data[i];
 				column.count = entry;
 				VectorOperations::Gather::Set(addresses, column);
@@ -147,7 +147,7 @@ void SuperLargeHashTable::Resize(uint64_t size) {
 			assert(addresses.sel_vector == new_addresses.sel_vector);
 
 			VectorOperations::Exec(addresses, [&](uint64_t i, uint64_t k) {
-				memcpy(((uint8_t **)new_addresses.data)[i], data_pointers[i], payload_width);
+				memcpy(((data_t *)new_addresses.data)[i], data_pointers[i], payload_width);
 			});
 		}
 
@@ -161,7 +161,7 @@ void SuperLargeHashTable::Resize(uint64_t size) {
 	} else {
 		data = new uint8_t[size * tuple_size];
 		owned_data = unique_ptr<uint8_t[]>(data);
-		for (uint64_t i = 0; i < size; i++) {
+		for (index_t i = 0; i < size; i++) {
 			data[i * tuple_size] = EMPTY_CELL;
 		}
 
@@ -184,7 +184,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	Vector one(Value::BIGINT(1));
 	uint64_t payload_idx = 0;
 
-	for (uint64_t aggr_idx = 0; aggr_idx < aggregate_types.size(); aggr_idx++) {
+	for (index_t aggr_idx = 0; aggr_idx < aggregate_types.size(); aggr_idx++) {
 		assert(payload.column_count > payload_idx);
 
 		// for any entries for which a group was found, update the aggregate
@@ -221,7 +221,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			probe_types.push_back(payload_types[aggr_idx]);
 			DataChunk probe_chunk;
 			probe_chunk.Initialize(probe_types, false);
-			for (uint64_t group_idx = 0; group_idx < group_types.size(); group_idx++) {
+			for (index_t group_idx = 0; group_idx < group_types.size(); group_idx++) {
 				probe_chunk.data[group_idx].Reference(groups.data[group_idx]);
 			}
 			probe_chunk.data[group_types.size()].Reference(payload.data[payload_idx]);
@@ -239,7 +239,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			// a selection vector
 			sel_t distinct_sel_vector[STANDARD_VECTOR_SIZE];
 			uint64_t match_count = 0;
-			for (uint64_t probe_idx = 0; probe_idx < probe_result.count; probe_idx++) {
+			for (index_t probe_idx = 0; probe_idx < probe_result.count; probe_idx++) {
 				uint64_t sel_idx = payload.sel_vector ? payload.sel_vector[probe_idx] : probe_idx;
 				if (probe_result.data[sel_idx]) {
 					distinct_sel_vector[match_count++] = sel_idx;
@@ -284,7 +284,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 				// Layout of payload for STDDEV_SAMP: count(uint64_t), mean
 				// (double), dsquared(double)
 
-				auto base_ptr = ((uint8_t **)addresses.data)[i];
+				auto base_ptr = ((data_t *)addresses.data)[i];
 				auto count_ptr = (uint64_t *)base_ptr;
 				auto mean_ptr = (double *)(base_ptr + sizeof(uint64_t));
 				auto dsquared_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
@@ -318,7 +318,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) {
 	groups.Verify();
 	assert(groups.column_count == group_types.size());
-	for (uint64_t i = 0; i < result.column_count; i++) {
+	for (index_t i = 0; i < result.column_count; i++) {
 		result.data[i].count = groups.size();
 		result.data[i].sel_vector = groups.data[0].sel_vector;
 		assert(result.data[i].type == payload_types[i]);
@@ -333,7 +333,7 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 	StaticVector<bool> new_group_dummy;
 	FindOrCreateGroups(groups, addresses, new_group_dummy);
 	// now fetch the aggregates
-	for (uint64_t aggr_idx = 0; aggr_idx < aggregate_types.size(); aggr_idx++) {
+	for (index_t aggr_idx = 0; aggr_idx < aggregate_types.size(); aggr_idx++) {
 		assert(result.column_count > aggr_idx);
 		assert(aggregate_types[aggr_idx] == ExpressionType::AGGREGATE_COUNT_STAR ||
 		       aggregate_types[aggr_idx] == ExpressionType::AGGREGATE_COUNT);
@@ -365,7 +365,7 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 	assert(addresses.sel_vector == groups.sel_vector);
 	assert(addresses.type == TypeId::POINTER);
 	// list of addresses for the tuples
-	auto data_pointers = (uint8_t **)addresses.data;
+	auto data_pointers = (data_t *)addresses.data;
 	// now compute the entry in the table based on the hash using a modulo
 	// multiply the position by the tuple size and add the base address
 	VectorOperations::ExecType<uint64_t>(addresses, [&](uint64_t element, uint64_t i, uint64_t k) {
@@ -380,14 +380,14 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 	auto group_width = group_serializer.TupleSize();
 
 	auto group_data = unique_ptr<uint8_t[]>{new uint8_t[STANDARD_VECTOR_SIZE * group_width]};
-	uint8_t *group_elements[STANDARD_VECTOR_SIZE];
-	for (uint64_t i = 0; i < groups.size(); i++) {
+	data_t group_elements[STANDARD_VECTOR_SIZE];
+	for (index_t i = 0; i < groups.size(); i++) {
 		group_elements[i] = &(group_data.get()[i * group_width]);
 	}
 	group_serializer.Serialize(groups, group_elements);
 
 	// now we actually access the base table
-	for (uint64_t i = 0; i < addresses.count; i++) {
+	for (index_t i = 0; i < addresses.count; i++) {
 		// place this tuple in the hash table
 		uint64_t index = addresses.sel_vector ? addresses.sel_vector[i] : i;
 		auto entry = data_pointers[index];
@@ -428,14 +428,14 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 }
 
 uint64_t SuperLargeHashTable::Scan(uint64_t &scan_position, DataChunk &groups, DataChunk &result) {
-	uint8_t *ptr;
-	uint8_t *start = data + scan_position;
-	uint8_t *end = data + capacity * tuple_size;
+	data_t ptr;
+	data_t start = data + scan_position;
+	data_t end = data + capacity * tuple_size;
 	if (start >= end)
 		return 0;
 
 	Vector addresses(TypeId::POINTER, true, false);
-	auto data_pointers = (uint8_t **)addresses.data;
+	auto data_pointers = (data_t *)addresses.data;
 
 	// scan the table for full cells starting from the scan position
 	uint64_t entry = 0;
@@ -450,21 +450,21 @@ uint64_t SuperLargeHashTable::Scan(uint64_t &scan_position, DataChunk &groups, D
 	}
 	addresses.count = entry;
 	// fetch the group columns
-	for (uint64_t i = 0; i < groups.column_count; i++) {
+	for (index_t i = 0; i < groups.column_count; i++) {
 		auto &column = groups.data[i];
 		column.count = entry;
 		VectorOperations::Gather::Set(addresses, column);
 		VectorOperations::AddInPlace(addresses, GetTypeIdSize(column.type));
 	}
 
-	for (uint64_t i = 0; i < aggregate_types.size(); i++) {
+	for (index_t i = 0; i < aggregate_types.size(); i++) {
 		auto &target = result.data[i];
 		target.count = entry;
 		switch (aggregate_types[i]) {
 		case ExpressionType::AGGREGATE_STDDEV_SAMP: {
 			// compute finalization of streaming stddev of sample
 			VectorOperations::Exec(addresses, [&](uint64_t i, uint64_t k) {
-				auto base_ptr = ((uint8_t **)addresses.data)[i];
+				auto base_ptr = ((data_t *)addresses.data)[i];
 				auto count_ptr = (uint64_t *)base_ptr;
 				auto dsquared_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
 

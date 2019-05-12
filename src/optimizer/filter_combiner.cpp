@@ -44,7 +44,7 @@ uint64_t FilterCombiner::GetEquivalenceSet(Expression *expr) {
 
 FilterResult FilterCombiner::AddConstantComparison(vector<ExpressionValueInformation> &info_list,
                                                    ExpressionValueInformation info) {
-	for (uint64_t i = 0; i < info_list.size(); i++) {
+	for (index_t i = 0; i < info_list.size(); i++) {
 		auto comparison = CompareValueInformation(info_list[i], info);
 		switch (comparison) {
 		case ValueComparisonResult::PRUNE_LEFT:
@@ -91,14 +91,14 @@ void FilterCombiner::GenerateFilters(std::function<void(unique_ptr<Expression> f
 		auto &entries = entry.second;
 		auto &constant_list = constant_values.find(equivalence_set)->second;
 		// for each entry generate an equality expression comparing to each other
-		for (uint64_t i = 0; i < entries.size(); i++) {
-			for (uint64_t k = i + 1; k < entries.size(); k++) {
+		for (index_t i = 0; i < entries.size(); i++) {
+			for (index_t k = i + 1; k < entries.size(); k++) {
 				auto comparison = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL,
 				                                                         entries[i]->Copy(), entries[k]->Copy());
 				callback(move(comparison));
 			}
 			// for each entry also create a comparison with each constant
-			for (uint64_t k = 0; k < constant_list.size(); k++) {
+			for (index_t k = 0; k < constant_list.size(); k++) {
 				auto info = constant_list[k];
 				auto constant = make_unique<BoundConstantExpression>(info.constant);
 				auto comparison =
@@ -191,7 +191,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 
 		auto &left_bucket = equivalence_map.find(left_equivalence_set)->second;
 		auto &right_bucket = equivalence_map.find(right_equivalence_set)->second;
-		for (uint64_t i = 0; i < right_bucket.size(); i++) {
+		for (index_t i = 0; i < right_bucket.size(); i++) {
 			// rewrite the equivalence set mapping for this node
 			equivalence_set_map[right_bucket[i]] = left_equivalence_set;
 			// add the node to the left bucket
@@ -202,7 +202,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 		assert(constant_values.find(right_equivalence_set) != constant_values.end());
 		auto &left_constant_bucket = constant_values.find(left_equivalence_set)->second;
 		auto &right_constant_bucket = constant_values.find(right_equivalence_set)->second;
-		for (uint64_t i = 0; i < right_constant_bucket.size(); i++) {
+		for (index_t i = 0; i < right_constant_bucket.size(); i++) {
 			if (AddConstantComparison(left_constant_bucket, right_constant_bucket[i]) == FilterResult::UNSATISFIABLE) {
 				return FilterResult::UNSATISFIABLE;
 			}

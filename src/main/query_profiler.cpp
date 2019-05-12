@@ -182,7 +182,7 @@ static string ToJSONRecursive(QueryProfiler::TreeNode &node) {
 	result += "\"cardinality\":" + to_string(node.info.elements) + ",\n";
 	result += "\"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
 	result += "\"children\": [";
-	for (uint64_t i = 0; i < node.children.size(); i++) {
+	for (index_t i = 0; i < node.children.size(); i++) {
 		result += ToJSONRecursive(*node.children[i]);
 		if (i + 1 < node.children.size()) {
 			result += ",\n";
@@ -305,7 +305,7 @@ uint64_t QueryProfiler::RenderTreeRecursive(QueryProfiler::TreeNode &node, vecto
 	// render this node
 	// first add any padding to render at this location
 	uint64_t start_position = width * TREE_RENDER_WIDTH;
-	for (uint64_t i = 0; i < (uint64_t)render_height; i++) {
+	for (index_t i = 0; i < (uint64_t)render_height; i++) {
 		if (render[start_depth + i].size() > start_position) {
 			// something has already been rendered here!
 			throw Exception("Tree rendering error, overlapping nodes!");
@@ -323,7 +323,7 @@ uint64_t QueryProfiler::RenderTreeRecursive(QueryProfiler::TreeNode &node, vecto
 	string name = node.name;
 	render[start_depth + 1] += DrawPadded(name);
 	// draw extra information
-	for (uint64_t i = 2; i < (uint64_t)render_height - 3; i++) {
+	for (index_t i = 2; i < (uint64_t)render_height - 3; i++) {
 		uint64_t split_index = i - 2;
 		string string = split_index < node.split_extra_info.size() ? node.split_extra_info[split_index] : "";
 		render[start_depth + i] += DrawPadded(string);

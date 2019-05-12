@@ -83,7 +83,7 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) {
 	// check for the lowest and highest start time in the list of transactions
 	transaction_t lowest_start_time = TRANSACTION_ID_START;
 	transaction_t lowest_active_query = MAXIMUM_QUERY_ID;
-	for (uint64_t i = 0; i < active_transactions.size(); i++) {
+	for (index_t i = 0; i < active_transactions.size(); i++) {
 		if (active_transactions[i].get() == transaction) {
 			t_index = i;
 		} else {

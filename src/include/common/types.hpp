@@ -19,8 +19,8 @@ class Serializer;
 class Deserializer;
 
 struct blob_t {
-	char *data;
-	uint64_t size;
+	data_t data;
+	index_t size;
 };
 
 //===--------------------------------------------------------------------===//

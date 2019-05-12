@@ -14,9 +14,9 @@ void Transaction::PushCatalogEntry(CatalogEntry *entry) {
 	*blob = entry;
 }
 
-void Transaction::PushDeletedEntries(uint64_t offset, uint64_t count, StorageChunk *storage,
+void Transaction::PushDeletedEntries(index_t offset, index_t count, StorageChunk *storage,
                                      VersionInformation *version_pointers[]) {
-	for (uint64_t i = 0; i < count; i++) {
+	for (index_t i = 0; i < count; i++) {
 		auto ptr = PushTuple(UndoFlags::INSERT_TUPLE, 0);
 		auto meta = (VersionInformation *)ptr;
 		meta->table = &storage->table;
@@ -29,7 +29,7 @@ void Transaction::PushDeletedEntries(uint64_t offset, uint64_t count, StorageChu
 	}
 }
 
-void Transaction::PushTuple(UndoFlags flags, uint64_t offset, StorageChunk *storage) {
+void Transaction::PushTuple(UndoFlags flags, index_t offset, StorageChunk *storage) {
 	// push the tuple into the undo buffer
 	auto ptr = PushTuple(flags, storage->table.tuple_size);
 
@@ -59,7 +59,7 @@ void Transaction::PushQuery(string query) {
 	strcpy(blob, query.c_str());
 }
 
-uint8_t *Transaction::PushTuple(UndoFlags flags, uint64_t data_size) {
+data_t Transaction::PushTuple(UndoFlags flags, index_t data_size) {
 	return undo_buffer.CreateEntry(flags, sizeof(VersionInformation) + data_size);
 }
 

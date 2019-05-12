@@ -225,9 +225,9 @@ void Planner::VerifyQuery(BoundSQLStatement &statement) {
 	}
 
 	// double loop to verify that (in)equality of hashes
-	for (uint64_t i = 0; i < expr_list.size(); i++) {
+	for (index_t i = 0; i < expr_list.size(); i++) {
 		auto outer_hash = expr_list[i]->Hash();
-		for (uint64_t j = 0; j < expr_list.size(); j++) {
+		for (index_t j = 0; j < expr_list.size(); j++) {
 			auto inner_hash = expr_list[j]->Hash();
 			if (outer_hash != inner_hash) {
 				// if hashes are not equivalent the expressions should not be equivalent

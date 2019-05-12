@@ -22,7 +22,7 @@ void LogicalFilter::ResolveTypes() {
 // be true
 bool LogicalFilter::SplitPredicates(vector<unique_ptr<Expression>> &expressions) {
 	bool found_conjunction = false;
-	for (uint64_t i = 0; i < expressions.size(); i++) {
+	for (index_t i = 0; i < expressions.size(); i++) {
 		if (expressions[i]->type == ExpressionType::CONJUNCTION_AND) {
 			auto &conjunction = (BoundConjunctionExpression &)*expressions[i];
 			found_conjunction = true;

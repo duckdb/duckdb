@@ -53,16 +53,16 @@ public:
 	//! Allocates a buffer of the specified size that is sector-aligned. bufsiz must be a multiple of 4096. The content
 	//! in this buffer can be written to FileHandles that have been opened with DIRECT_IO on all operating systems,
 	//! however, the entire buffer must be written to the file.
-	static unique_ptr<Buffer> AllocateAlignedBuffer(uint64_t bufsiz);
+	static unique_ptr<Buffer> AllocateAlignedBuffer(index_t bufsiz);
 
 	~Buffer();
 
 private:
-	Buffer(void *internal_buffer, void *buffer, uint64_t size);
+	Buffer(void *internal_buffer, data_t buffer, index_t size);
 
 public:
-	void *buffer;
-	uint64_t size;
+	data_t buffer;
+	index_t size;
 
 private:
 	void *internal_buffer;
@@ -74,8 +74,8 @@ public:
 	unique_ptr<FileHandle> OpenFile(string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK) {
 		return OpenFile(path.c_str(), flags, lock);
 	}
-	virtual void Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location);
-	virtual void Write(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location);
+	virtual void Read(FileHandle &handle, void *buffer, index_t nr_bytes, index_t location);
+	virtual void Write(FileHandle &handle, void *buffer, index_t nr_bytes, index_t location);
 
 	//! Check if a directory exists
 	virtual bool DirectoryExists(const string &directory);

@@ -146,7 +146,7 @@ template <class T> void WriteAheadLog::Write(T val) {
 	}
 }
 
-void WriteAheadLog::WriteData(uint8_t *dataptr, uint64_t data_size) {
+void WriteAheadLog::WriteData(data_t dataptr, index_t data_size) {
 	if (data_size == 0) {
 		return;
 	}

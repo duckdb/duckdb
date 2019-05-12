@@ -186,7 +186,7 @@ void UniqueIndex::AddEntries(Transaction &transaction, UniqueIndexAddedEntries &
 	assert(row_identifiers.type == TypeId::BIGINT);
 
 	auto identifiers = (int64_t *)row_identifiers.data;
-	for (uint64_t i = 0; i < row_identifiers.count; i++) {
+	for (index_t i = 0; i < row_identifiers.count; i++) {
 		auto row_identifier = row_identifiers.sel_vector ? identifiers[row_identifiers.sel_vector[i]] : identifiers[i];
 		UniqueIndexNode *entry = nullptr;
 		if (has_null[i]) {
@@ -235,7 +235,7 @@ void UniqueIndex::Append(Transaction &transaction, vector<unique_ptr<UniqueIndex
 	// we keep this set so we can remove them from the index again in case of a constraint violation
 	unique_ptr<UniqueIndexAddedEntries> chain;
 	// insert the entries in each of the unique indexes
-	for (uint64_t current_index = 0; current_index < indexes.size(); current_index++) {
+	for (index_t current_index = 0; current_index < indexes.size(); current_index++) {
 		auto &index = *indexes[current_index];
 		auto added_nodes = make_unique<UniqueIndexAddedEntries>(index);
 
@@ -289,14 +289,14 @@ void UniqueIndex::Update(Transaction &transaction, StorageChunk *storage, vector
 	// we keep a set of nodes we added to the different indexes
 	// we keep this set so we can remove them from the index again in case of a constraint violation
 	unique_ptr<UniqueIndexAddedEntries> chain;
-	for (uint64_t current_index = 0; current_index < indexes.size(); current_index++) {
+	for (index_t current_index = 0; current_index < indexes.size(); current_index++) {
 		auto &index = *indexes[current_index];
 		auto added_nodes = make_unique<UniqueIndexAddedEntries>(index);
 
 		// first check if the updated columns affect the index
 		bool index_affected = false;
 		vector<column_t> affected_columns;
-		for (uint64_t i = 0; i < index.keys.size(); i++) {
+		for (index_t i = 0; i < index.keys.size(); i++) {
 			auto column = index.keys[i];
 			auto entry = find(updated_columns.begin(), updated_columns.end(), column);
 			if (entry != updated_columns.end()) {
@@ -321,7 +321,7 @@ void UniqueIndex::Update(Transaction &transaction, StorageChunk *storage, vector
 		bool has_null[STANDARD_VECTOR_SIZE];
 
 		nullmask_t nulls;
-		for (uint64_t i = 0; i < index.keys.size(); i++) {
+		for (index_t i = 0; i < index.keys.size(); i++) {
 			if (affected_columns[i] != (column_t)-1) {
 				nulls |= update_chunk.data[affected_columns[i]].nullmask;
 			}
@@ -336,7 +336,7 @@ void UniqueIndex::Update(Transaction &transaction, StorageChunk *storage, vector
 
 		// check if there are duplicates in the tuples themselves
 		TupleSet set;
-		for (uint64_t i = 0; i < update_chunk.size(); i++) {
+		for (index_t i = 0; i < update_chunk.size(); i++) {
 			TupleReference ref(&tuples[i], index.serializer);
 			auto entry = set.find(ref);
 			if (entry != set.end()) {

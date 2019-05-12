@@ -21,7 +21,7 @@ public:
 	HyperLogLog(const HyperLogLog &) = delete;
 
 	//! Adds an element of the specified size to the HyperLogLog counter
-	void Add(uint8_t *element, uint64_t size);
+	void Add(data_t element, uint64_t size);
 	//! Return the count of this HyperLogLog counter
 	uint64_t Count();
 	//! Merge this HyperLogLog counter with another counter to create a new one

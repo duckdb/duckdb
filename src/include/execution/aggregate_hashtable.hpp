@@ -70,7 +70,7 @@ private:
 	//! The amount of entries stored in the HT currently
 	uint64_t entries;
 	//! The data of the HT
-	uint8_t *data;
+	data_t data;
 	//! The maximum size of the chain
 	uint64_t max_chain;
 	//! Whether or not the HT has to support parallel insertion operations

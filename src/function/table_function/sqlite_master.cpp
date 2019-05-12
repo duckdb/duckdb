@@ -39,7 +39,7 @@ string GenerateQuery(CatalogEntry *entry) {
 		auto table = (TableCatalogEntry *)entry;
 		ss << "CREATE TABLE " << table->name << "(";
 
-		for (uint64_t i = 0; i < table->columns.size(); i++) {
+		for (index_t i = 0; i < table->columns.size(); i++) {
 			auto &column = table->columns[i];
 			ss << column.name << " " << SQLTypeToString(column.type);
 			if (i + 1 < table->columns.size()) {
@@ -73,12 +73,12 @@ void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, 
 	uint64_t next = min(data.offset + STANDARD_VECTOR_SIZE, (uint64_t)data.entries.size());
 
 	uint64_t output_count = next - data.offset;
-	for (uint64_t j = 0; j < output.column_count; j++) {
+	for (index_t j = 0; j < output.column_count; j++) {
 		output.data[j].count = output_count;
 	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	for (uint64_t i = data.offset; i < next; i++) {
+	for (index_t i = data.offset; i < next; i++) {
 		auto index = i - data.offset;
 		auto &entry = data.entries[i];
 
