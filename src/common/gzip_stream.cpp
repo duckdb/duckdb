@@ -88,10 +88,10 @@ void GzipStreamBuf::initialize() {
 	uint8_t gzip_hdr[10];
 	data_start = GZIP_HEADER_MINSIZE;
 
-	in_buff = new char[BUFFER_SIZE];
+	in_buff = new uint8_t[BUFFER_SIZE];
 	in_buff_start = in_buff;
 	in_buff_end = in_buff;
-	out_buff = new char[BUFFER_SIZE];
+	out_buff = new uint8_t[BUFFER_SIZE];
 
 	mz_stream_ptr = new mz_stream();
 	// TODO use custom alloc/free methods in miniz to throw exceptions on OOM
@@ -124,7 +124,7 @@ void GzipStreamBuf::initialize() {
 		throw Exception("Failed to initialize miniz");
 	}
 	// initialize eback, gptr, egptr
-	setg(out_buff, out_buff, out_buff);
+	setg((char *)out_buff, (char *)out_buff, (char *)out_buff);
 	is_initialized = true;
 }
 
@@ -141,7 +141,7 @@ streambuf::int_type GzipStreamBuf::underflow() {
 
 	if (gptr() == egptr()) {
 		// pointers for free region in output buffer
-		char *out_buff_free_start = out_buff;
+		auto out_buff_free_start = out_buff;
 		do {
 			assert(in_buff_start <= in_buff_end);
 			assert(in_buff_end <= in_buff_start + BUFFER_SIZE);
@@ -150,7 +150,7 @@ streambuf::int_type GzipStreamBuf::underflow() {
 			if (in_buff_start == in_buff_end) {
 				// empty input buffer: refill from the start
 				in_buff_start = in_buff;
-				std::streamsize sz = input.rdbuf()->sgetn(in_buff, BUFFER_SIZE);
+				std::streamsize sz = input.rdbuf()->sgetn((char *)in_buff, BUFFER_SIZE);
 				if (sz == 0) {
 					break; // end of input
 				}
@@ -159,10 +159,10 @@ streambuf::int_type GzipStreamBuf::underflow() {
 
 			// actually decompress
 			assert(zstrm_p);
-			zstrm_p->next_in = (unsigned char *)in_buff_start;
+			zstrm_p->next_in = (data_t)in_buff_start;
 			assert(in_buff_end - in_buff_start < numeric_limits<int32_t>::max());
 			zstrm_p->avail_in = (uint32_t)(in_buff_end - in_buff_start);
-			zstrm_p->next_out = (unsigned char *)out_buff_free_start;
+			zstrm_p->next_out = (data_t)out_buff_free_start;
 			assert((out_buff + BUFFER_SIZE) - out_buff_free_start < numeric_limits<int32_t>::max());
 			zstrm_p->avail_out = (uint32_t)((out_buff + BUFFER_SIZE) - out_buff_free_start);
 			auto ret = mz_inflate(zstrm_p, MZ_NO_FLUSH);
@@ -170,9 +170,9 @@ streambuf::int_type GzipStreamBuf::underflow() {
 				throw Exception(mz_error(ret));
 			}
 			// update pointers following inflate()
-			in_buff_start = (char *)zstrm_p->next_in;
+			in_buff_start = (data_t)zstrm_p->next_in;
 			in_buff_end = in_buff_start + zstrm_p->avail_in;
-			out_buff_free_start = (char *)zstrm_p->next_out;
+			out_buff_free_start = (data_t)zstrm_p->next_out;
 			assert(out_buff_free_start + zstrm_p->avail_out == out_buff + BUFFER_SIZE);
 			// if stream ended, deallocate inflator
 			if (ret == MZ_STREAM_END) {
@@ -185,17 +185,17 @@ streambuf::int_type GzipStreamBuf::underflow() {
 		// 2 exit conditions:
 		// - end of input: there might or might not be output available
 		// - out_buff_free_start != out_buff: output available
-		setg(out_buff, out_buff, out_buff_free_start);
+		setg((char *)out_buff, (char *)out_buff, (char *)out_buff_free_start);
 	}
 
 	// ensure all those pointers point at something sane
 	assert(out_buff);
 	assert(gptr() <= egptr());
-	assert(eback() == out_buff);
-	assert(gptr() >= out_buff);
-	assert(gptr() <= out_buff + BUFFER_SIZE);
-	assert(egptr() >= out_buff);
-	assert(egptr() <= out_buff + BUFFER_SIZE);
+	assert(eback() == (char *)out_buff);
+	assert(gptr() >= (char *)out_buff);
+	assert(gptr() <= (char *)out_buff + BUFFER_SIZE);
+	assert(egptr() >= (char *)out_buff);
+	assert(egptr() <= (char *)out_buff + BUFFER_SIZE);
 	assert(gptr() <= egptr());
 
 	return this->gptr() == this->egptr() ? traits_type::eof() : traits_type::to_int_type(*this->gptr());

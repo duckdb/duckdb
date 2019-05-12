@@ -38,20 +38,20 @@ public:
 	//! Serialize a DataChunk to a set of memory locations
 	void Serialize(DataChunk &chunk, data_t targets[]);
 	//! Serializes a tuple from a set of columns to a single memory location
-	void Serialize(vector<char *> &columns, index_t offset, data_t target);
+	void Serialize(vector<data_t> &columns, index_t offset, data_t target);
 	//! Deserialize a DataChunk from a set of memory locations
 	void Deserialize(Vector &source, DataChunk &chunk);
 
 	//! Deserialize a tuple from a single memory location to a set of columns
-	void Deserialize(vector<char *> &columns, index_t offset, data_t target);
+	void Deserialize(vector<data_t> &columns, index_t offset, data_t target);
 	//! Serializes a set of tuples (specified by the indices vector) to a set of
 	//! memory location. Targets[] should have enough spaces to hold
 	//! indices.count tuples
-	void Serialize(vector<char *> &columns, Vector &indices, data_t targets[]);
+	void Serialize(vector<data_t> &columns, Vector &indices, data_t targets[]);
 	//! Serializes a set of tuples with updates. The base tuples are specified
 	//! by the index vector, the updated values are specified by update_chunk.
 	//! affected_columns signifies
-	void SerializeUpdate(vector<char *> &column_data, vector<column_t> &affected_columns, DataChunk &update_chunk,
+	void SerializeUpdate(vector<data_t> &column_data, vector<column_t> &affected_columns, DataChunk &update_chunk,
 	                     Vector &index_vector, index_t index_offset, Tuple targets[]);
 
 	//! Returns the constant per-tuple size (only if the size is constant)

@@ -20,13 +20,13 @@ void DataChunk::Initialize(vector<TypeId> &types, bool zero_data) {
 		size += GetTypeIdSize(type) * STANDARD_VECTOR_SIZE;
 	}
 	if (size > 0) {
-		owned_data = unique_ptr<char[]>(new char[size]);
+		owned_data = unique_ptr<uint8_t[]>(new uint8_t[size]);
 		if (zero_data) {
 			memset(owned_data.get(), 0, size);
 		}
 	}
 
-	char *ptr = owned_data.get();
+	auto ptr = owned_data.get();
 	data = unique_ptr<Vector[]>(new Vector[types.size()]);
 	for (index_t i = 0; i < types.size(); i++) {
 		data[i].type = types[i];
@@ -39,7 +39,7 @@ void DataChunk::Initialize(vector<TypeId> &types, bool zero_data) {
 }
 
 void DataChunk::Reset() {
-	char *ptr = owned_data.get();
+	auto ptr = owned_data.get();
 	for (index_t i = 0; i < column_count; i++) {
 		data[i].data = ptr;
 		data[i].count = 0;
@@ -181,7 +181,7 @@ void DataChunk::Serialize(Serializer &serializer) {
 			assert(type == TypeId::VARCHAR);
 			// strings are inlined into the blob
 			// we use null-padding to store them
-			const char **strings = (const char **)data[i].data;
+			auto strings = (const char **)data[i].data;
 			for (index_t j = 0; j < size(); j++) {
 				auto source = strings[j] ? strings[j] : NullValue<const char *>();
 				serializer.WriteString(source);
@@ -207,11 +207,11 @@ void DataChunk::Deserialize(Deserializer &source) {
 			auto column_size = GetTypeIdSize(type) * rows;
 			auto ptr = unique_ptr<uint8_t[]>(new uint8_t[column_size]);
 			source.Read(ptr.get(), column_size);
-			Vector v(data[i].type, (char *)ptr.get());
+			Vector v(data[i].type, ptr.get());
 			v.count = rows;
 			VectorOperations::AppendFromStorage(v, data[i]);
 		} else {
-			const char **strings = (const char **)data[i].data;
+			auto strings = (const char **)data[i].data;
 			for (index_t j = 0; j < rows; j++) {
 				// read the strings
 				auto str = source.Read<string>();
@@ -236,7 +236,7 @@ void DataChunk::MoveStringsToHeap(StringHeap &heap) {
 			// move strings of this chunk to the specified heap
 			auto source_strings = (const char **)data[c].data;
 			if (!data[c].owned_data) {
-				data[c].owned_data = unique_ptr<char[]>(new char[STANDARD_VECTOR_SIZE * sizeof(char *)]);
+				data[c].owned_data = unique_ptr<uint8_t[]>(new uint8_t[STANDARD_VECTOR_SIZE * sizeof(data_t)]);
 				data[c].data = data[c].owned_data.get();
 			}
 			auto target_strings = (const char **)data[c].data;

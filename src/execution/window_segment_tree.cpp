@@ -99,7 +99,7 @@ void WindowSegmentTree::ConstructTree() {
 		level_nodes = (uint64_t)ceil((double)level_nodes / TREE_FANOUT);
 		internal_nodes += level_nodes;
 	} while (level_nodes > 1);
-	levels_flat_native = unique_ptr<char[]>(new char[internal_nodes * GetTypeIdSize(payload_type)]);
+	levels_flat_native = unique_ptr<uint8_t[]>(new uint8_t[internal_nodes * GetTypeIdSize(payload_type)]);
 	levels_flat_start.push_back(0);
 
 	uint64_t levels_flat_offset = 0;

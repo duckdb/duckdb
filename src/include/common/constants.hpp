@@ -28,9 +28,11 @@ using std::vector;
 #define STANDARD_VECTOR_SIZE 1024
 #define STORAGE_CHUNK_SIZE 10240
 
+//! a saner size_t for loop indices etc
 typedef uint64_t index_t;
 const index_t INVALID_INDEX = (index_t)-1;
 
+//! data pointers
 typedef uint8_t *data_t;
 typedef const uint8_t *data_t_const;
 

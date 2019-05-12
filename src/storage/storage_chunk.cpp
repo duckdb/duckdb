@@ -14,8 +14,8 @@ StorageChunk::StorageChunk(DataTable &_table, uint64_t start) : table(_table), c
 	for (auto &type : table.types) {
 		tuple_size += GetTypeIdSize(type);
 	}
-	owned_data = unique_ptr<char[]>(new char[tuple_size * STORAGE_CHUNK_SIZE]);
-	char *dataptr = owned_data.get();
+	owned_data = unique_ptr<uint8_t[]>(new uint8_t[tuple_size * STORAGE_CHUNK_SIZE]);
+	data_t dataptr = owned_data.get();
 	for (index_t i = 0; i < table.types.size(); i++) {
 		columns[i] = dataptr;
 		dataptr += GetTypeIdSize(table.types[i]) * STORAGE_CHUNK_SIZE;

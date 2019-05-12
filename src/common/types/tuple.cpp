@@ -70,7 +70,7 @@ void TupleSerializer::Deserialize(Vector &source, DataChunk &chunk) {
 	}
 }
 
-void TupleSerializer::Serialize(vector<char *> &column_data, index_t offset, data_t target) {
+void TupleSerializer::Serialize(vector<data_t> &column_data, index_t offset, data_t target) {
 	for (index_t i = 0; i < columns.size(); i++) {
 		auto source = column_data[columns[i]] + type_sizes[i] * offset;
 		memcpy(target, source, type_sizes[i]);
@@ -78,7 +78,7 @@ void TupleSerializer::Serialize(vector<char *> &column_data, index_t offset, dat
 	}
 }
 
-void TupleSerializer::Deserialize(vector<char *> &column_data, index_t offset, data_t target) {
+void TupleSerializer::Deserialize(vector<data_t> &column_data, index_t offset, data_t target) {
 	for (index_t i = 0; i < columns.size(); i++) {
 		auto source = column_data[columns[i]] + type_sizes[i] * offset;
 		memcpy(source, target, type_sizes[i]);
@@ -86,7 +86,7 @@ void TupleSerializer::Deserialize(vector<char *> &column_data, index_t offset, d
 	}
 }
 
-void TupleSerializer::Serialize(vector<char *> &column_data, Vector &index_vector, data_t targets[]) {
+void TupleSerializer::Serialize(vector<data_t> &column_data, Vector &index_vector, data_t targets[]) {
 	auto indices = (index_t *)index_vector.data;
 	index_t offset = 0;
 	for (index_t i = 0; i < columns.size(); i++) {
@@ -99,7 +99,7 @@ void TupleSerializer::Serialize(vector<char *> &column_data, Vector &index_vecto
 	}
 }
 
-void TupleSerializer::SerializeUpdate(vector<char *> &column_data, vector<column_t> &affected_columns,
+void TupleSerializer::SerializeUpdate(vector<data_t> &column_data, vector<column_t> &affected_columns,
                                       DataChunk &update_chunk, Vector &index_vector, index_t index_offset,
                                       Tuple targets[]) {
 	auto indices = (index_t *)index_vector.data;

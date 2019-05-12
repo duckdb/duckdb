@@ -150,7 +150,7 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 		                               last_chunk->version_pointers + last_chunk->count);
 		// now insert the elements into the vector
 		for (index_t i = 0; i < chunk.column_count; i++) {
-			char *target =
+			data_t target =
 			    last_chunk->columns[i] + last_chunk->count * GetTypeIdSize(GetInternalType(table.columns[i].type));
 			VectorOperations::CopyToStorage(chunk.data[i], target, 0, current_count);
 		}
@@ -175,7 +175,7 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 		transaction.PushDeletedEntries(0, remainder, new_chunk_pointer, new_chunk_pointer->version_pointers);
 		// now insert the elements into the vector
 		for (index_t i = 0; i < chunk.column_count; i++) {
-			char *target = new_chunk_pointer->columns[i];
+			data_t target = new_chunk_pointer->columns[i];
 			VectorOperations::CopyToStorage(chunk.data[i], target, current_count, remainder);
 		}
 		new_chunk_pointer->count = remainder;
@@ -352,7 +352,8 @@ void DataTable::RetrieveBaseTableData(DataChunk &result, const vector<column_t> 
 		} else {
 			// normal column
 			// grab the data from the source using a selection vector
-			char *dataptr = current_chunk->columns[column_ids[j]] + GetTypeIdSize(result.data[j].type) * current_offset;
+			data_t dataptr =
+			    current_chunk->columns[column_ids[j]] + GetTypeIdSize(result.data[j].type) * current_offset;
 			Vector source(result.data[j].type, dataptr);
 			source.sel_vector = regular_entries;
 			source.count = regular_count;
