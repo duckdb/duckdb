@@ -7,6 +7,8 @@
 #include "common/exception.hpp"
 #include "common/file_system.hpp"
 #include "common/fstream_util.hpp"
+#include "common/buffered_serializer.hpp"
+#include "common/buffered_deserializer.hpp"
 #include "common/serializer.hpp"
 #include "function/function.hpp"
 #include "main/client_context.hpp"
@@ -152,7 +154,7 @@ int StorageManager::LoadFromStorage() {
 
 			// deserialize the CreateTableInfo
 			auto table_file_size = FstreamUtil::GetFileSize(table_file);
-			Deserializer source((uint8_t *)result.get(), table_file_size);
+			BufferedDeserializer source((uint8_t *)result.get(), table_file_size);
 			auto info = TableCatalogEntry::Deserialize(source);
 			// create the table inside the catalog
 			database.catalog->CreateTable(context.ActiveTransaction(), info.get());
@@ -177,7 +179,7 @@ int StorageManager::LoadFromStorage() {
 				// deserialize the chunk
 				DataChunk insert_chunk;
 				auto chunk_file_size = FstreamUtil::GetFileSize(chunk_file);
-				Deserializer source((uint8_t *)result.get(), chunk_file_size);
+				BufferedDeserializer source((uint8_t *)result.get(), chunk_file_size);
 				insert_chunk.Deserialize(source);
 				// insert the chunk into the table
 				table->storage->Append(*table, context, insert_chunk);
@@ -196,7 +198,7 @@ int StorageManager::LoadFromStorage() {
 			auto result = FstreamUtil::ReadBinary(view_file);
 			// deserialize the CreateViewInfo
 			auto view_file_size = FstreamUtil::GetFileSize(view_file);
-			Deserializer source((uint8_t *)result.get(), view_file_size);
+			BufferedDeserializer source((uint8_t *)result.get(), view_file_size);
 			auto info = ViewCatalogEntry::Deserialize(source);
 			// create the table inside the catalog
 			database.catalog->CreateView(context.ActiveTransaction(), info.get());
@@ -284,7 +286,7 @@ void StorageManager::CreateCheckpoint(int iteration) {
 			FstreamUtil::OpenFile(table_meta_name, table_file, ios_base::binary | ios_base::out);
 
 			// serialize the table information to a file
-			Serializer serializer;
+			BufferedSerializer serializer;
 			table->Serialize(serializer);
 			auto data = serializer.GetData();
 			table_file.write((char *)data.data.get(), data.size);
@@ -315,7 +317,7 @@ void StorageManager::CreateCheckpoint(int iteration) {
 				fstream chunk_file;
 				FstreamUtil::OpenFile(chunk_name, chunk_file, ios_base::binary | ios_base::out);
 
-				Serializer serializer;
+				BufferedSerializer serializer;
 				chunk.Serialize(serializer);
 				auto data = serializer.GetData();
 				chunk_file.write((char *)data.data.get(), data.size);
@@ -333,7 +335,7 @@ void StorageManager::CreateCheckpoint(int iteration) {
 			FstreamUtil::OpenFile(view_file_path, view_file, ios_base::binary | ios_base::out);
 
 			// serialize the view information to a file
-			Serializer serializer;
+			BufferedSerializer serializer;
 			view->Serialize(serializer);
 			auto data = serializer.GetData();
 			view_file.write((char *)data.data.get(), data.size);

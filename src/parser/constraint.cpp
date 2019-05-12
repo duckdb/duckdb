@@ -1,7 +1,8 @@
 #include "parser/constraint.hpp"
 
 #include "common/printer.hpp"
-#include "common/serializer.hpp"
+#include "common/buffered_serializer.hpp"
+#include "common/buffered_deserializer.hpp"
 #include "parser/constraints/list.hpp"
 
 using namespace duckdb;
@@ -10,9 +11,9 @@ using namespace std;
 // FIXME: this is quite dirty, just copy by first serializing and then
 // deserializing
 unique_ptr<Constraint> Constraint::Copy() {
-	Serializer serializer;
+	BufferedSerializer serializer;
 	Serialize(serializer);
-	Deserializer source(serializer);
+	BufferedDeserializer source(serializer);
 	return Constraint::Deserialize(source);
 }
 

@@ -5,7 +5,8 @@
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "catalog/catalog_entry/view_catalog_entry.hpp"
 #include "common/file_system.hpp"
-#include "common/serializer.hpp"
+#include "common/buffered_serializer.hpp"
+#include "common/buffered_deserializer.hpp"
 #include "main/client_context.hpp"
 #include "main/connection.hpp"
 #include "main/database.hpp"
@@ -57,7 +58,7 @@ void WriteAheadLog::Replay(string &path) {
 			bool failed = false;
 			context.transaction.BeginTransaction();
 			for (auto &stored_entry : stored_entries) {
-				Deserializer deserializer(stored_entry.data.get(), stored_entry.entry.size);
+				BufferedDeserializer deserializer(stored_entry.data.get(), stored_entry.entry.size);
 
 				if (!ReplayEntry(context, database, stored_entry.entry, deserializer)) {
 					// failed to replay entry in log
@@ -154,7 +155,7 @@ void WriteAheadLog::WriteData(uint8_t *dataptr, uint64_t data_size) {
 	}
 }
 
-void WriteAheadLog::WriteEntry(wal_type_t type, Serializer &serializer) {
+void WriteAheadLog::WriteEntry(wal_type_t type, BufferedSerializer &serializer) {
 	auto blob = serializer.GetData();
 
 	Write<wal_type_t>(type);
@@ -169,7 +170,7 @@ void WriteAheadLog::WriteEntry(wal_type_t type, Serializer &serializer) {
 // CREATE TABLE
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateTable(TableCatalogEntry *entry) {
-	Serializer serializer;
+	BufferedSerializer serializer;
 	entry->Serialize(serializer);
 
 	WriteEntry(WALEntry::CREATE_TABLE, serializer);
@@ -194,7 +195,7 @@ bool ReplayCreateTable(ClientContext &context, Catalog &catalog, Deserializer &s
 // DROP TABLE
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteDropTable(TableCatalogEntry *entry) {
-	Serializer serializer;
+	BufferedSerializer serializer;
 	serializer.WriteString(entry->schema->name);
 	serializer.WriteString(entry->name);
 
@@ -220,7 +221,7 @@ bool ReplayDropTable(Transaction &transaction, Catalog &catalog, Deserializer &s
 // CREATE SCHEMA
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateSchema(SchemaCatalogEntry *entry) {
-	Serializer serializer;
+	BufferedSerializer serializer;
 	serializer.WriteString(entry->name);
 
 	WriteEntry(WALEntry::CREATE_SCHEMA, serializer);
@@ -242,7 +243,7 @@ bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog, Deserializer
 // VIEWS
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateView(ViewCatalogEntry *entry) {
-	Serializer serializer;
+	BufferedSerializer serializer;
 	entry->Serialize(serializer);
 	WriteEntry(WALEntry::CREATE_VIEW, serializer);
 }
@@ -258,7 +259,7 @@ bool ReplayCreateView(Transaction &transaction, Catalog &catalog, Deserializer &
 }
 
 void WriteAheadLog::WriteDropView(ViewCatalogEntry *entry) {
-	Serializer serializer;
+	BufferedSerializer serializer;
 	serializer.WriteString(entry->schema->name);
 	serializer.WriteString(entry->name);
 
@@ -278,7 +279,7 @@ bool ReplayDropView(Transaction &transaction, Catalog &catalog, Deserializer &so
 // DROP SCHEMA
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteDropSchema(SchemaCatalogEntry *entry) {
-	Serializer serializer;
+	BufferedSerializer serializer;
 	serializer.WriteString(entry->name);
 
 	WriteEntry(WALEntry::DROP_SCHEMA, serializer);
@@ -310,7 +311,7 @@ void WriteAheadLog::WriteInsert(string &schema, string &table, DataChunk &chunk)
 		throw NotImplementedException("Cannot insert into WAL from chunk with SEL vector");
 	}
 
-	Serializer serializer;
+	BufferedSerializer serializer;
 	serializer.WriteString(schema);
 	serializer.WriteString(table);
 	chunk.Serialize(serializer);
@@ -342,7 +343,7 @@ bool ReplayInsert(ClientContext &context, Catalog &catalog, Deserializer &source
 // QUERY
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteQuery(string &query) {
-	Serializer serializer;
+	BufferedSerializer serializer;
 	serializer.WriteString(query);
 
 	WriteEntry(WALEntry::QUERY, serializer);
