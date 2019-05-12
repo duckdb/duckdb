@@ -6,7 +6,7 @@ using namespace std;
 void PhysicalLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalLimitOperatorState *>(state_);
 
-	uint64_t max_element = limit + offset;
+	index_t max_element = limit + offset;
 	if (state->current_offset >= max_element) {
 		return;
 	}
@@ -22,8 +22,8 @@ void PhysicalLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 		if (state->current_offset + state->child_chunk.size() >= offset) {
 			// however we will reach it in this chunk
 			// we have to copy part of the chunk with an offset
-			uint64_t start_position = offset - state->current_offset;
-			uint64_t chunk_count = min(limit, state->child_chunk.size() - start_position);
+			index_t start_position = offset - state->current_offset;
+			count_t chunk_count = min(limit, state->child_chunk.size() - start_position);
 			for (index_t i = 0; i < chunk.column_count; i++) {
 				chunk.data[i].Reference(state->child_chunk.data[i]);
 				chunk.data[i].data = chunk.data[i].data + GetTypeIdSize(chunk.data[i].type) * start_position;
@@ -33,7 +33,7 @@ void PhysicalLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 		}
 	} else {
 		// have to copy either the entire chunk or part of it
-		uint64_t chunk_count;
+		count_t chunk_count;
 		if (state->current_offset + state->child_chunk.size() >= max_element) {
 			// have to limit the count of the chunk
 			chunk_count = max_element - state->current_offset;

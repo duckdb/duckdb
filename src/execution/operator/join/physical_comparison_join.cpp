@@ -8,8 +8,8 @@ PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOper
     : PhysicalJoin(op, type, join_type) {
 	conditions.resize(conditions_.size());
 	// we reorder conditions so the ones with COMPARE_EQUAL occur first
-	uint64_t equal_position = 0;
-	uint64_t other_position = conditions_.size() - 1;
+	index_t equal_position = 0;
+	index_t other_position = conditions_.size() - 1;
 	for (index_t i = 0; i < conditions_.size(); i++) {
 		if (conditions_[i].comparison == ExpressionType::COMPARE_EQUAL) {
 			// COMPARE_EQUAL, move to the start

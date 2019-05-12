@@ -43,7 +43,7 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 						executor.ExecuteExpression(*table->bound_defaults[i], insert_chunk.data[i]);
 					} else {
 						// get value from child chunk
-						assert((uint64_t)column_index_map[i] < chunk.column_count);
+						assert((index_t)column_index_map[i] < chunk.column_count);
 						assert(insert_chunk.data[i].type == chunk.data[column_index_map[i]].type);
 						insert_chunk.data[i].Reference(chunk.data[column_index_map[i]]);
 					}

@@ -17,7 +17,7 @@ namespace duckdb {
 
 struct MergeOrder {
 	sel_t order[STANDARD_VECTOR_SIZE];
-	uint64_t count;
+	count_t count;
 };
 
 enum MergeInfoType : uint8_t { SCALAR_MERGE_INFO = 1, CHUNK_MERGE_INFO = 2 };
@@ -31,12 +31,12 @@ struct MergeInfo {
 
 struct ScalarMergeInfo : public MergeInfo {
 	Vector &v;
-	uint64_t count;
+	count_t count;
 	sel_t *sel_vector;
-	uint64_t &pos;
+	index_t &pos;
 	sel_t result[STANDARD_VECTOR_SIZE];
 
-	ScalarMergeInfo(Vector &v, uint64_t count, sel_t *sel_vector, uint64_t &pos)
+	ScalarMergeInfo(Vector &v, count_t count, sel_t *sel_vector, index_t &pos)
 	    : MergeInfo(MergeInfoType::SCALAR_MERGE_INFO, v.type), v(v), count(count), sel_vector(sel_vector), pos(pos) {
 	}
 };

@@ -95,7 +95,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	return make_unique<UnixFileHandle>(*this, path, fd);
 }
 
-static void seek_in_file(FileHandle &handle, uint64_t location) {
+static void seek_in_file(FileHandle &handle, index_t location) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	off_t offset = lseek(fd, location, SEEK_SET);
 	if (offset == (off_t)-1) {
@@ -104,7 +104,7 @@ static void seek_in_file(FileHandle &handle, uint64_t location) {
 	}
 }
 
-void FileSystem::Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location) {
+void FileSystem::Read(FileHandle &handle, void *buffer, count_t nr_bytes, index_t location) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	// lseek to the location
 	seek_in_file(handle, location);
@@ -119,7 +119,7 @@ void FileSystem::Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint6
 	}
 }
 
-void FileSystem::Write(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location) {
+void FileSystem::Write(FileHandle &handle, void *buffer, count_t nr_bytes, index_t location) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	// lseek to the location
 	seek_in_file(handle, location);
@@ -175,7 +175,7 @@ void FileSystem::CreateDirectory(const string &directory) {
 
 int remove_directory_recursively(const char *path) {
 	DIR *d = opendir(path);
-	uint64_t path_len = strlen(path);
+	count_t path_len = (count_t)strlen(path);
 	int r = -1;
 
 	if (d) {
@@ -184,12 +184,12 @@ int remove_directory_recursively(const char *path) {
 		while (!r && (p = readdir(d))) {
 			int r2 = -1;
 			char *buf;
-			uint64_t len;
+			count_t len;
 			/* Skip the names "." and ".." as we don't want to recurse on them. */
 			if (!strcmp(p->d_name, ".") || !strcmp(p->d_name, "..")) {
 				continue;
 			}
-			len = path_len + strlen(p->d_name) + 2;
+			len = path_len + (count_t)strlen(p->d_name) + 2;
 			buf = new char[len];
 			if (buf) {
 				struct stat statbuf;
@@ -513,7 +513,7 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 	return a + PathSeparator() + b;
 }
 
-Buffer::Buffer(void *internal_buffer, data_t buffer, index_t size)
+Buffer::Buffer(void *internal_buffer, data_t buffer, count_t size)
     : buffer(buffer), size(size), internal_buffer(internal_buffer) {
 }
 
@@ -521,13 +521,13 @@ Buffer::~Buffer() {
 	free(internal_buffer);
 }
 
-unique_ptr<Buffer> Buffer::AllocateAlignedBuffer(index_t bufsiz) {
+unique_ptr<Buffer> Buffer::AllocateAlignedBuffer(count_t bufsiz) {
 	assert(bufsiz % 4096 == 0);
 	// we add 4095 to ensure that we can align the buffer to 4096
 	data_t internal_buffer = (data_t)malloc(bufsiz + 4095);
 	// round to multiple of 4096
-	index_t num = (index_t)internal_buffer;
-	index_t remainder = num % 4096;
+	count_t num = (index_t)internal_buffer;
+	count_t remainder = num % 4096;
 	if (remainder != 0) {
 		num = num + 4096 - remainder;
 	}

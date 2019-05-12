@@ -23,8 +23,8 @@ public:
 	virtual ~FileHandle() {
 	}
 
-	void Read(void *buffer, uint64_t nr_bytes, uint64_t location);
-	void Write(void *buffer, uint64_t nr_bytes, uint64_t location);
+	void Read(void *buffer, count_t nr_bytes, index_t location);
+	void Write(void *buffer, count_t nr_bytes, index_t location);
 
 protected:
 	virtual void Close() = 0;
@@ -53,16 +53,16 @@ public:
 	//! Allocates a buffer of the specified size that is sector-aligned. bufsiz must be a multiple of 4096. The content
 	//! in this buffer can be written to FileHandles that have been opened with DIRECT_IO on all operating systems,
 	//! however, the entire buffer must be written to the file.
-	static unique_ptr<Buffer> AllocateAlignedBuffer(index_t bufsiz);
+	static unique_ptr<Buffer> AllocateAlignedBuffer(count_t bufsiz);
 
 	~Buffer();
 
 private:
-	Buffer(void *internal_buffer, data_t buffer, index_t size);
+	Buffer(void *internal_buffer, data_t buffer, count_t size);
 
 public:
 	data_t buffer;
-	index_t size;
+	count_t size;
 
 private:
 	void *internal_buffer;

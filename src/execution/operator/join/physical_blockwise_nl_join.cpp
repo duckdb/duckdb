@@ -86,7 +86,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 	// this creates a new "alignment" between the tuples, exhausting all possible O(n^2) combinations
 	// while allowing us to use vectorized execution for every step
 	StaticVector<bool> result;
-	uint64_t result_count = 0;
+	count_t result_count = 0;
 	do {
 		if (state->fill_in_rhs) {
 			throw NotImplementedException("FIXME: full outer join");
@@ -158,7 +158,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 		executor.ExecuteExpression(*condition, result);
 
 		// create the result
-		VectorOperations::ExecType<bool>(result, [&](bool match, uint64_t i, uint64_t k) {
+		VectorOperations::ExecType<bool>(result, [&](bool match, index_t i, index_t k) {
 			if (match && !result.nullmask[i]) {
 				// found a match!
 				// set the match flags

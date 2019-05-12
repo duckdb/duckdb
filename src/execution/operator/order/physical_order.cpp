@@ -44,7 +44,7 @@ void PhysicalOrder::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 		assert(sort_collection.count == big_data.count);
 
 		// now perform the actual sort
-		state->sorted_vector = unique_ptr<uint64_t[]>(new uint64_t[sort_collection.count]);
+		state->sorted_vector = unique_ptr<index_t[]>(new index_t[sort_collection.count]);
 		sort_collection.Sort(order_types, state->sorted_vector.get());
 	}
 

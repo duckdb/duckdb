@@ -148,7 +148,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 		// perform the merge join
 		switch (type) {
 		case JoinType::INNER: {
-			uint64_t result_count = MergeJoinInner::Perform(left_info, right, conditions[0].comparison);
+			count_t result_count = MergeJoinInner::Perform(left_info, right, conditions[0].comparison);
 			if (result_count == 0) {
 				// exhausted this chunk on the right side
 				// move to the next
@@ -164,7 +164,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 				}
 				// now create a reference to the chunk on the right side
 				for (index_t i = 0; i < right_chunk.column_count; i++) {
-					uint64_t chunk_entry = state->child_chunk.column_count + i;
+					index_t chunk_entry = state->child_chunk.column_count + i;
 					chunk.data[chunk_entry].Reference(right_chunk.data[i]);
 					chunk.data[chunk_entry].count = result_count;
 					chunk.data[chunk_entry].sel_vector = right.result;

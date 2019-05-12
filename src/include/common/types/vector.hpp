@@ -52,7 +52,7 @@ public:
 	//! The type of the elements stored in the vector.
 	TypeId type;
 	//! The amount of elements in the vector.
-	index_t count;
+	count_t count;
 	//! A pointer to the data.
 	data_t data;
 	//! The selection vector of the vector.

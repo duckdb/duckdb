@@ -33,8 +33,8 @@ static bool RemoveNullValues(DataChunk &chunk) {
 	}
 	// now create a selection vector
 	sel_t not_null_vector[STANDARD_VECTOR_SIZE];
-	uint64_t not_null_entries = 0;
-	VectorOperations::Exec(chunk.data[0], [&](uint64_t i, uint64_t k) {
+	count_t not_null_entries = 0;
+	VectorOperations::Exec(chunk.data[0], [&](index_t i, index_t k) {
 		if (!nullmask[i]) {
 			not_null_vector[not_null_entries++] = i;
 		}
@@ -60,7 +60,7 @@ template <bool MATCH>
 static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
 	assert(left.column_count == result.column_count);
 	// create the selection vector from the matches that were found
-	uint64_t result_count = 0;
+	count_t result_count = 0;
 	for (index_t i = 0; i < left.size(); i++) {
 		if (found_match[i] == MATCH) {
 			// part of the result
@@ -223,7 +223,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 		switch (type) {
 		case JoinType::INNER: {
 			sel_t lvector[STANDARD_VECTOR_SIZE], rvector[STANDARD_VECTOR_SIZE];
-			uint64_t match_count =
+			count_t match_count =
 			    NestedLoopJoinInner::Perform(state->left_tuple, state->right_tuple, state->left_join_condition,
 			                                 right_chunk, lvector, rvector, conditions);
 			// we have finished resolving the join conditions
@@ -242,7 +242,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			}
 			// now create a reference to the chunk on the right side using the rvector
 			for (index_t i = 0; i < right_data.column_count; i++) {
-				uint64_t chunk_entry = state->child_chunk.column_count + i;
+				index_t chunk_entry = state->child_chunk.column_count + i;
 				chunk.data[chunk_entry].Reference(right_data.data[i]);
 				chunk.data[chunk_entry].count = match_count;
 				chunk.data[chunk_entry].sel_vector = rvector;

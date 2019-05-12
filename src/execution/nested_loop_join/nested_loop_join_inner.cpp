@@ -6,18 +6,18 @@ using namespace std;
 
 struct InitialNestedLoopJoin {
 	template <class T, class OP>
-	static uint64_t Operation(Vector &left, Vector &right, uint64_t &lpos, uint64_t &rpos, sel_t lvector[],
-	                          sel_t rvector[], uint64_t current_match_count) {
+	static count_t Operation(Vector &left, Vector &right, index_t &lpos, index_t &rpos, sel_t lvector[],
+	                         sel_t rvector[], count_t current_match_count) {
 		// initialize phase of nested loop join
 		// fill lvector and rvector with matches from the base vectors
 		auto ldata = (T *)left.data;
 		auto rdata = (T *)right.data;
-		uint64_t result_count = 0;
+		count_t result_count = 0;
 		for (; rpos < right.count; rpos++) {
-			uint64_t right_position = right.sel_vector ? right.sel_vector[rpos] : rpos;
+			index_t right_position = right.sel_vector ? right.sel_vector[rpos] : rpos;
 			assert(!right.nullmask[right_position]);
 			for (; lpos < left.count; lpos++) {
-				uint64_t left_position = left.sel_vector ? left.sel_vector[lpos] : lpos;
+				index_t left_position = left.sel_vector ? left.sel_vector[lpos] : lpos;
 				assert(!left.nullmask[left_position]);
 				if (OP::Operation(ldata[left_position], rdata[right_position])) {
 					// emit tuple
@@ -38,15 +38,15 @@ struct InitialNestedLoopJoin {
 
 struct RefineNestedLoopJoin {
 	template <class T, class OP>
-	static uint64_t Operation(Vector &left, Vector &right, uint64_t &lpos, uint64_t &rpos, sel_t lvector[],
-	                          sel_t rvector[], uint64_t current_match_count) {
+	static count_t Operation(Vector &left, Vector &right, index_t &lpos, index_t &rpos, sel_t lvector[],
+	                         sel_t rvector[], count_t current_match_count) {
 		// refine phase of the nested loop join
 		// refine lvector and rvector based on matches of subsequent conditions (in case there are multiple conditions
 		// in the join)
 		assert(current_match_count > 0);
 		auto ldata = (T *)left.data;
 		auto rdata = (T *)right.data;
-		uint64_t result_count = 0;
+		count_t result_count = 0;
 		for (index_t i = 0; i < current_match_count; i++) {
 			// null values should be filtered out before
 			assert(!left.nullmask[lvector[i]] && !right.nullmask[rvector[i]]);
@@ -61,8 +61,8 @@ struct RefineNestedLoopJoin {
 };
 
 template <class NLTYPE, class OP>
-static uint64_t nested_loop_join_operator(Vector &left, Vector &right, uint64_t &lpos, uint64_t &rpos, sel_t lvector[],
-                                          sel_t rvector[], uint64_t current_match_count) {
+static count_t nested_loop_join_operator(Vector &left, Vector &right, index_t &lpos, index_t &rpos, sel_t lvector[],
+                                         sel_t rvector[], count_t current_match_count) {
 	switch (left.type) {
 	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
@@ -86,8 +86,8 @@ static uint64_t nested_loop_join_operator(Vector &left, Vector &right, uint64_t 
 }
 
 template <class NLTYPE>
-uint64_t nested_loop_join(Vector &left, Vector &right, uint64_t &lpos, uint64_t &rpos, sel_t lvector[], sel_t rvector[],
-                          uint64_t current_match_count, ExpressionType comparison_type) {
+count_t nested_loop_join(Vector &left, Vector &right, index_t &lpos, index_t &rpos, sel_t lvector[], sel_t rvector[],
+                         count_t current_match_count, ExpressionType comparison_type) {
 	assert(left.type == right.type);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
@@ -113,15 +113,15 @@ uint64_t nested_loop_join(Vector &left, Vector &right, uint64_t &lpos, uint64_t 
 	}
 }
 
-uint64_t NestedLoopJoinInner::Perform(uint64_t &lpos, uint64_t &rpos, DataChunk &left_conditions,
-                                      DataChunk &right_conditions, sel_t lvector[], sel_t rvector[],
-                                      vector<JoinCondition> &conditions) {
+count_t NestedLoopJoinInner::Perform(index_t &lpos, index_t &rpos, DataChunk &left_conditions,
+                                     DataChunk &right_conditions, sel_t lvector[], sel_t rvector[],
+                                     vector<JoinCondition> &conditions) {
 	if (lpos >= left_conditions.size() || rpos >= right_conditions.size()) {
 		return 0;
 	}
 	// for the first condition, lvector and rvector are not set yet
 	// we initialize them using the InitialNestedLoopJoin
-	uint64_t match_count = nested_loop_join<InitialNestedLoopJoin>(
+	count_t match_count = nested_loop_join<InitialNestedLoopJoin>(
 	    left_conditions.data[0], right_conditions.data[0], lpos, rpos, lvector, rvector, 0, conditions[0].comparison);
 	// now resolve the rest of the conditions
 	for (index_t i = 1; i < conditions.size(); i++) {

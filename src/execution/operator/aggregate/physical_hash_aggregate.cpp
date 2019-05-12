@@ -59,7 +59,7 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 
 	state->group_chunk.Reset();
 	state->aggregate_chunk.Reset();
-	uint64_t elements_found = state->ht->Scan(state->ht_scan_position, state->group_chunk, state->aggregate_chunk);
+	count_t elements_found = state->ht->Scan(state->ht_scan_position, state->group_chunk, state->aggregate_chunk);
 
 	// special case hack to sort out aggregating from empty intermediates
 	// for aggregations without groups
@@ -87,7 +87,7 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 	}
 	// we finished the child chunk
 	// actually compute the final projection list now
-	uint64_t chunk_index = 0;
+	index_t chunk_index = 0;
 	if (state->group_chunk.column_count + state->aggregate_chunk.column_count == chunk.column_count) {
 		for (index_t col_idx = 0; col_idx < state->group_chunk.column_count; col_idx++) {
 			chunk.data[chunk_index++].Reference(state->group_chunk.data[col_idx]);

@@ -56,8 +56,8 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 			// have to resolve columns
 			auto c = (ParsedConstraint *)constraint.get();
 			vector<TypeId> types;
-			vector<uint64_t> keys;
-			if (c->index != (uint64_t)-1) {
+			vector<index_t> keys;
+			if (c->index != INVALID_INDEX) {
 				// column referenced by key is given by index
 				types.push_back(GetInternalType(columns[c->index].type));
 				keys.push_back(c->index);

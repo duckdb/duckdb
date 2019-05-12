@@ -30,6 +30,9 @@ using std::vector;
 
 //! a saner size_t for loop indices etc
 typedef uint64_t index_t;
+//! a saner siz_t for amounts of things, mostly for readability
+typedef uint64_t count_t;
+
 const index_t INVALID_INDEX = (index_t)-1;
 
 //! data pointers
