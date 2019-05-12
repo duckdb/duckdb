@@ -26,13 +26,13 @@ Expression *FilterCombiner::GetNode(Expression *expr) {
 	return pointer_copy;
 }
 
-uint64_t FilterCombiner::GetEquivalenceSet(Expression *expr) {
+index_t FilterCombiner::GetEquivalenceSet(Expression *expr) {
 	assert(stored_expressions.find(expr) != stored_expressions.end());
 	assert(stored_expressions.find(expr)->second.get() == expr);
 
 	auto entry = equivalence_set_map.find(expr);
 	if (entry == equivalence_set_map.end()) {
-		uint64_t index = set_index++;
+		index_t index = set_index++;
 		equivalence_set_map[expr] = index;
 		equivalence_map[index].push_back(expr);
 		constant_values.insert(make_pair(index, vector<ExpressionValueInformation>()));
@@ -155,7 +155,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 	if (left_is_scalar || right_is_scalar) {
 		// comparison with scalar
 		auto node = GetNode(left_is_scalar ? comparison.right.get() : comparison.left.get());
-		uint64_t equivalence_set = GetEquivalenceSet(node);
+		index_t equivalence_set = GetEquivalenceSet(node);
 		auto scalar = left_is_scalar ? comparison.left.get() : comparison.right.get();
 		auto constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
 

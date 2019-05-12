@@ -11,7 +11,7 @@ using namespace std;
 using ScanStructure = JoinHashTable::ScanStructure;
 
 JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type,
-                             uint64_t initial_capacity, bool parallel)
+                             count_t initial_capacity, bool parallel)
     : build_serializer(build_types), build_types(build_types), equality_size(0), condition_size(0), build_size(0),
       entry_size(0), tuple_size(0), join_type(type), has_null(false), capacity(0), count(0), parallel(parallel) {
 	for (auto &condition : conditions) {
@@ -62,7 +62,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, data_t key_locations[]) {
 	VectorOperations::ModuloInPlace(hashes, capacity);
 
 	auto pointers = hashed_pointers.get();
-	auto indices = (uint64_t *)hashes.data;
+	auto indices = (index_t *)hashes.data;
 	// now fill in the entries
 	for (index_t i = 0; i < hashes.count; i++) {
 		auto index = indices[i];
@@ -76,7 +76,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, data_t key_locations[]) {
 	}
 }
 
-void JoinHashTable::Resize(uint64_t size) {
+void JoinHashTable::Resize(count_t size) {
 	if (size <= capacity) {
 		throw Exception("Cannot downsize a hash table!");
 	}
@@ -151,9 +151,9 @@ void JoinHashTable::Hash(DataChunk &keys, Vector &hashes) {
 	}
 }
 
-static uint64_t CreateNotNullSelVector(DataChunk &keys, sel_t *not_null_sel_vector) {
+static count_t CreateNotNullSelVector(DataChunk &keys, sel_t *not_null_sel_vector) {
 	sel_t *sel_vector = keys.data[0].sel_vector;
-	uint64_t result_count = keys.size();
+	count_t result_count = keys.size();
 	// first we loop over all the columns and figure out where the
 	for (index_t i = 0; i < keys.column_count; i++) {
 		keys.data[i].sel_vector = sel_vector;
@@ -261,8 +261,8 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		// if any columns are <<not>> supposed to have NULL values are equal:
 		// first create a selection vector of the non-null values in the keys
 		// because in a join, any NULL value can never find a matching tuple
-		uint64_t initial_keys_size = keys.size();
-		uint64_t not_null_count;
+		count_t initial_keys_size = keys.size();
+		count_t not_null_count;
 		not_null_count = CreateNotNullSelVector(keys, not_null_sel_vector);
 		if (not_null_count != initial_keys_size) {
 			// the hashtable contains null values in the keys!
@@ -357,7 +357,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 		memset(ss->found_match, 0, sizeof(ss->found_match));
 	case JoinType::INNER: {
 		// create the selection vector linking to only non-empty entries
-		uint64_t count = 0;
+		count_t count = 0;
 		for (index_t i = 0; i < ss->pointers.count; i++) {
 			if (ptrs[i]) {
 				ss->sel_vector[count++] = i;
@@ -430,7 +430,7 @@ void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result) {
 		VectorOperations::Gather::Set(current_pointers, ht_data, false);
 
 		// set the selection vector
-		uint64_t old_count = keys.data[i].count;
+		count_t old_count = keys.data[i].count;
 		assert(!keys.data[i].sel_vector);
 		keys.data[i].sel_vector = ht_data.sel_vector;
 		keys.data[i].count = ht_data.count;
@@ -465,8 +465,8 @@ void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result) {
 		// now based on the result recreate the selection vector for the next
 		// step so we can skip unnecessary comparisons in the next phase
 		if (i != ht.predicates.size() - 1) {
-			uint64_t new_count = 0;
-			VectorOperations::ExecType<bool>(final_result, [&](bool match, uint64_t index, uint64_t k) {
+			count_t new_count = 0;
+			VectorOperations::ExecType<bool>(final_result, [&](bool match, index_t index, index_t k) {
 				if (match) {
 					temporary_selection_vector[new_count++] = index;
 				}
@@ -481,9 +481,9 @@ void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result) {
 	final_result.count = old_count;
 }
 
-uint64_t ScanStructure::ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
+count_t ScanStructure::ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	StaticVector<bool> comparison_result;
-	uint64_t result_count = 0;
+	count_t result_count = 0;
 	do {
 		auto build_pointers = (data_t *)build_pointer_vector.data;
 
@@ -493,7 +493,7 @@ uint64_t ScanStructure::ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChun
 		auto ptrs = (data_t *)pointers.data;
 		// after doing all the comparisons we loop to find all the actual matches
 		result_count = 0;
-		VectorOperations::ExecType<bool>(comparison_result, [&](bool match, uint64_t index, uint64_t k) {
+		VectorOperations::ExecType<bool>(comparison_result, [&](bool match, index_t index, index_t k) {
 			if (match) {
 				found_match[index] = true;
 				result.owned_sel_vector[result_count] = index;
@@ -503,8 +503,8 @@ uint64_t ScanStructure::ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChun
 		});
 
 		// finally we chase the pointers for the next iteration
-		uint64_t new_count = 0;
-		VectorOperations::Exec(pointers, [&](uint64_t index, uint64_t k) {
+		count_t new_count = 0;
+		VectorOperations::Exec(pointers, [&](index_t index, index_t k) {
 			auto prev_pointer = (data_t *)(ptrs[index] + ht.build_size);
 			ptrs[index] = *prev_pointer;
 			if (ptrs[index]) {
@@ -525,7 +525,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		return;
 	}
 
-	uint64_t result_count = ScanInnerJoin(keys, left, result);
+	count_t result_count = ScanInnerJoin(keys, left, result);
 	if (result_count > 0) {
 		// matches were found
 		// construct the result
@@ -562,8 +562,8 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 
 		// after doing all the comparisons we loop to find all the matches
 		auto ptrs = (data_t *)pointers.data;
-		uint64_t new_count = 0;
-		VectorOperations::ExecType<bool>(comparison_result, [&](bool match, uint64_t index, uint64_t k) {
+		count_t new_count = 0;
+		VectorOperations::ExecType<bool>(comparison_result, [&](bool match, index_t index, index_t k) {
 			if (match) {
 				// found a match, set the entry to true
 				// after this we no longer need to check this entry
@@ -587,7 +587,7 @@ template <bool MATCH> void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, Da
 	assert(left.column_count == result.column_count);
 	assert(keys.size() == left.size());
 	// create the selection vector from the matches that were found
-	uint64_t result_count = 0;
+	count_t result_count = 0;
 	for (index_t i = 0; i < keys.size(); i++) {
 		if (found_match[i] == MATCH) {
 			// part of the result
@@ -723,7 +723,7 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 		// no entries left from the normal join
 		// fill in the result of the remaining left tuples
 		// together with NULL values on the right-hand side
-		uint64_t remaining_count = 0;
+		count_t remaining_count = 0;
 		for (index_t i = 0; i < left.size(); i++) {
 			if (!found_match[i]) {
 				result.owned_sel_vector[remaining_count++] = i;
@@ -733,7 +733,7 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 			// have remaining tuples
 			// first set the left side
 			result.sel_vector = result.owned_sel_vector;
-			uint64_t i = 0;
+			index_t i = 0;
 			for (; i < left.column_count; i++) {
 				result.data[i].Reference(left.data[i]);
 				result.data[i].sel_vector = result.sel_vector;
@@ -758,7 +758,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &
 	StaticVector<bool> comparison_result;
 
 	auto build_pointers = (data_t *)build_pointer_vector.data;
-	uint64_t result_count = 0;
+	count_t result_count = 0;
 	sel_t result_sel_vector[STANDARD_VECTOR_SIZE];
 	while (pointers.count > 0) {
 		// resolve the predicates for all the pointers
@@ -766,7 +766,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &
 
 		auto ptrs = (data_t *)pointers.data;
 		// after doing all the comparisons we loop to find all the actual matches
-		VectorOperations::ExecType<bool>(comparison_result, [&](bool match, uint64_t index, uint64_t k) {
+		VectorOperations::ExecType<bool>(comparison_result, [&](bool match, index_t index, index_t k) {
 			if (match) {
 				// found a match for this index
 				// set the build_pointers to this position
@@ -778,8 +778,8 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &
 		});
 
 		// finally we chase the pointers for the next iteration
-		uint64_t new_count = 0;
-		VectorOperations::Exec(pointers, [&](uint64_t index, uint64_t k) {
+		count_t new_count = 0;
+		VectorOperations::Exec(pointers, [&](index_t index, index_t k) {
 			auto prev_pointer = (data_t *)(ptrs[index] + ht.build_size);
 			ptrs[index] = *prev_pointer;
 			if (ptrs[index] && !found_match[index]) {

@@ -11,7 +11,7 @@ using namespace std;
 
 using Filter = FilterPushdown::Filter;
 
-static void ReplaceSetOpBindings(LogicalSetOperation &setop, Expression &expr, uint64_t child_index) {
+static void ReplaceSetOpBindings(LogicalSetOperation &setop, Expression &expr, index_t child_index) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)expr;
 		assert(colref.binding.table_index == setop.table_index);
@@ -40,8 +40,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	}
 	assert(op->children[0]->type == LogicalOperatorType::SUBQUERY &&
 	       op->children[1]->type == LogicalOperatorType::SUBQUERY);
-	uint64_t left_index = ((LogicalSubquery &)*op->children[0]).table_index;
-	uint64_t right_index = ((LogicalSubquery &)*op->children[1]).table_index;
+	index_t left_index = ((LogicalSubquery &)*op->children[0]).table_index;
+	index_t right_index = ((LogicalSubquery &)*op->children[1]).table_index;
 
 	// pushdown into set operation, we can duplicate the condition and pushdown the expressions into both sides
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);

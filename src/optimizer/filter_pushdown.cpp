@@ -46,7 +46,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 	assert(op->type == LogicalOperatorType::COMPARISON_JOIN || op->type == LogicalOperatorType::ANY_JOIN ||
 	       op->type == LogicalOperatorType::DELIM_JOIN);
 	auto &join = (LogicalJoin &)*op;
-	unordered_set<uint64_t> left_bindings, right_bindings;
+	unordered_set<index_t> left_bindings, right_bindings;
 	LogicalJoin::GetTableReferences(*op->children[0], left_bindings);
 	LogicalJoin::GetTableReferences(*op->children[1], right_bindings);
 

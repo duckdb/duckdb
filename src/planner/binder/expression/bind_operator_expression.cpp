@@ -160,7 +160,7 @@ static SQLType ResolveOperatorType(OperatorExpression &op, vector<BoundExpressio
 	}
 }
 
-BindResult ExpressionBinder::BindExpression(OperatorExpression &op, uint32_t depth) {
+BindResult ExpressionBinder::BindExpression(OperatorExpression &op, count_t depth) {
 	// bind the children of the operator expression
 	string error;
 	for (index_t i = 0; i < op.children.size(); i++) {

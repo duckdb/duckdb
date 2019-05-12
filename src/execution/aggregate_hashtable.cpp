@@ -11,7 +11,7 @@
 using namespace duckdb;
 using namespace std;
 
-static uint64_t GetAggrPayloadSize(ExpressionType expr_type, TypeId return_type) {
+static count_t GetAggrPayloadSize(ExpressionType expr_type, TypeId return_type) {
 	switch (expr_type) {
 	case ExpressionType::AGGREGATE_COUNT:
 	case ExpressionType::AGGREGATE_COUNT_DISTINCT:
@@ -26,7 +26,7 @@ static uint64_t GetAggrPayloadSize(ExpressionType expr_type, TypeId return_type)
 	}
 }
 
-SuperLargeHashTable::SuperLargeHashTable(uint64_t initial_capacity, vector<TypeId> group_types,
+SuperLargeHashTable::SuperLargeHashTable(count_t initial_capacity, vector<TypeId> group_types,
                                          vector<TypeId> payload_types, vector<ExpressionType> aggregate_types,
                                          bool parallel)
     : group_serializer(group_types), aggregate_types(aggregate_types), group_types(group_types),
@@ -93,7 +93,7 @@ SuperLargeHashTable::SuperLargeHashTable(uint64_t initial_capacity, vector<TypeI
 SuperLargeHashTable::~SuperLargeHashTable() {
 }
 
-void SuperLargeHashTable::Resize(uint64_t size) {
+void SuperLargeHashTable::Resize(count_t size) {
 	if (size <= capacity) {
 		throw Exception("Cannot downsize a hash table!");
 	}
@@ -116,7 +116,7 @@ void SuperLargeHashTable::Resize(uint64_t size) {
 			groups.Reset();
 
 			// scan the table for full cells starting from the scan position
-			uint64_t entry = 0;
+			index_t entry = 0;
 			for (; ptr < end && entry < STANDARD_VECTOR_SIZE; ptr += tuple_size) {
 				if (*ptr == FULL_CELL) {
 					// found entry
@@ -146,7 +146,7 @@ void SuperLargeHashTable::Resize(uint64_t size) {
 			assert(addresses.count == new_addresses.count);
 			assert(addresses.sel_vector == new_addresses.sel_vector);
 
-			VectorOperations::Exec(addresses, [&](uint64_t i, uint64_t k) {
+			VectorOperations::Exec(addresses, [&](index_t i, index_t k) {
 				memcpy(((data_t *)new_addresses.data)[i], data_pointers[i], payload_width);
 			});
 		}
@@ -182,7 +182,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	// now every cell has an entry
 	// update the aggregates
 	Vector one(Value::BIGINT(1));
-	uint64_t payload_idx = 0;
+	index_t payload_idx = 0;
 
 	for (index_t aggr_idx = 0; aggr_idx < aggregate_types.size(); aggr_idx++) {
 		assert(payload.column_count > payload_idx);
@@ -238,9 +238,9 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			// now fix up the payload and addresses accordingly by creating
 			// a selection vector
 			sel_t distinct_sel_vector[STANDARD_VECTOR_SIZE];
-			uint64_t match_count = 0;
+			count_t match_count = 0;
 			for (index_t probe_idx = 0; probe_idx < probe_result.count; probe_idx++) {
-				uint64_t sel_idx = payload.sel_vector ? payload.sel_vector[probe_idx] : probe_idx;
+				index_t sel_idx = payload.sel_vector ? payload.sel_vector[probe_idx] : probe_idx;
 				if (probe_result.data[sel_idx]) {
 					distinct_sel_vector[match_count++] = sel_idx;
 				}
@@ -277,7 +277,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 				payload_double.Reference(payload.data[payload_idx]);
 			}
 
-			VectorOperations::Exec(addresses, [&](uint64_t i, uint64_t k) {
+			VectorOperations::Exec(addresses, [&](index_t i, index_t k) {
 				if (payload_double.nullmask[i]) {
 					return;
 				}
@@ -368,7 +368,7 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 	auto data_pointers = (data_t *)addresses.data;
 	// now compute the entry in the table based on the hash using a modulo
 	// multiply the position by the tuple size and add the base address
-	VectorOperations::ExecType<uint64_t>(addresses, [&](uint64_t element, uint64_t i, uint64_t k) {
+	VectorOperations::ExecType<uint64_t>(addresses, [&](uint64_t element, index_t i, index_t k) {
 		data_pointers[i] = data + ((element % capacity) * tuple_size);
 	});
 
@@ -389,11 +389,11 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 	// now we actually access the base table
 	for (index_t i = 0; i < addresses.count; i++) {
 		// place this tuple in the hash table
-		uint64_t index = addresses.sel_vector ? addresses.sel_vector[i] : i;
+		index_t index = addresses.sel_vector ? addresses.sel_vector[i] : i;
 		auto entry = data_pointers[index];
 		assert(entry >= data && entry < data + capacity * tuple_size);
 
-		uint64_t chain = 0;
+		index_t chain = 0;
 		do {
 			// check if the group is the actual group for this tuple or if it is
 			// empty otherwise we have to do linear probing
@@ -427,7 +427,7 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 	}
 }
 
-uint64_t SuperLargeHashTable::Scan(uint64_t &scan_position, DataChunk &groups, DataChunk &result) {
+index_t SuperLargeHashTable::Scan(index_t &scan_position, DataChunk &groups, DataChunk &result) {
 	data_t ptr;
 	data_t start = data + scan_position;
 	data_t end = data + capacity * tuple_size;
@@ -438,7 +438,7 @@ uint64_t SuperLargeHashTable::Scan(uint64_t &scan_position, DataChunk &groups, D
 	auto data_pointers = (data_t *)addresses.data;
 
 	// scan the table for full cells starting from the scan position
-	uint64_t entry = 0;
+	index_t entry = 0;
 	for (ptr = start; ptr < end && entry < STANDARD_VECTOR_SIZE; ptr += tuple_size) {
 		if (*ptr == FULL_CELL) {
 			// found entry

@@ -23,7 +23,7 @@ struct SQLiteMasterData : public FunctionData {
 
 	bool initialized;
 	vector<CatalogEntry *> entries;
-	uint64_t offset;
+	index_t offset;
 };
 
 FunctionData *sqlite_master_init(ClientContext &context) {
@@ -70,9 +70,9 @@ void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, 
 		// finished returning values
 		return;
 	}
-	uint64_t next = min(data.offset + STANDARD_VECTOR_SIZE, (uint64_t)data.entries.size());
+	index_t next = min(data.offset + STANDARD_VECTOR_SIZE, (index_t)data.entries.size());
 
-	uint64_t output_count = next - data.offset;
+	count_t output_count = next - data.offset;
 	for (index_t j = 0; j < output.column_count; j++) {
 		output.data[j].count = output_count;
 	}

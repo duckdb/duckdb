@@ -15,11 +15,11 @@ namespace duckdb {
 //! A BoundReferenceExpression represents a physical index into a DataChunk
 class BoundReferenceExpression : public Expression {
 public:
-	BoundReferenceExpression(string alias, TypeId type, uint32_t index);
-	BoundReferenceExpression(TypeId type, uint32_t index);
+	BoundReferenceExpression(string alias, TypeId type, index_t index);
+	BoundReferenceExpression(TypeId type, index_t index);
 
 	//! Index used to access data in the chunks
-	uint32_t index;
+	index_t index;
 
 public:
 	bool IsScalar() const override {

@@ -18,6 +18,9 @@
 extern "C" {
 #endif
 
+typedef uint64_t index_t;
+typedef uint64_t count_t;
+
 typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_INVALID = 0,
 	// bool
@@ -56,8 +59,8 @@ typedef struct {
 } duckdb_column;
 
 typedef struct {
-	uint32_t column_count;
-	uint64_t row_count;
+	count_t column_count;
+	count_t row_count;
 	duckdb_column *columns;
 	char *error_message;
 } duckdb_result;
@@ -99,11 +102,11 @@ void duckdb_destroy_result(duckdb_result *result);
 // value is returned.
 
 //! Converts the specified value to an int64_t. Returns 0 on failure or NULL.
-int32_t duckdb_value_int32(duckdb_result *result, uint32_t col, uint64_t row);
+int32_t duckdb_value_int32(duckdb_result *result, index_t col, index_t row);
 //! Converts the specified value to an int64_t. Returns 0 on failure or NULL.
-int64_t duckdb_value_int64(duckdb_result *result, uint32_t col, uint64_t row);
+int64_t duckdb_value_int64(duckdb_result *result, index_t col, index_t row);
 //! Converts the specified value to a string. Returns nullptr on failure or NULL. The result must be freed with free.
-char *duckdb_value_varchar(duckdb_result *result, uint32_t col, uint64_t row);
+char *duckdb_value_varchar(duckdb_result *result, index_t col, index_t row);
 
 // UNSAFE fetch functions
 // These functions fetch a value from specific row from a specific column WITHOUT CASTING.
@@ -115,11 +118,11 @@ char *duckdb_value_varchar(duckdb_result *result, uint32_t col, uint64_t row);
 // columns where the result will be nullptr
 
 //! Fetch a value from a DUCKDB_TYPE_INTEGER column [UNSAFE!]
-int32_t duckdb_value_int32_unsafe(duckdb_result *result, uint32_t col, uint64_t row);
+int32_t duckdb_value_int32_unsafe(duckdb_result *result, index_t col, index_t row);
 //! Fetch a value from a DUCKDB_TYPE_BIGINT column [UNSAFE!]
-int64_t duckdb_value_int64_unsafe(duckdb_result *result, uint32_t col, uint64_t row);
+int64_t duckdb_value_int64_unsafe(duckdb_result *result, index_t col, index_t row);
 //! Fetch a value from a DUCKDB_TYPE_VARCHAR column. The string IS NOT malloc'd! Do not free the return value. [UNSAFE!]
-const char *duckdb_value_varchar_unsafe(duckdb_result *result, uint32_t col, uint64_t row);
+const char *duckdb_value_varchar_unsafe(duckdb_result *result, index_t col, index_t row);
 
 #ifdef __cplusplus
 };

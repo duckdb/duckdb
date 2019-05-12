@@ -7,7 +7,7 @@ using namespace std;
 
 namespace duckdb {
 
-void length_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_count, BoundFunctionExpression &expr,
+void length_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
                      Vector &result) {
 	assert(input_count == 1);
 	auto &input = inputs[0];
@@ -20,7 +20,7 @@ void length_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_c
 
 	auto result_data = (int64_t *)result.data;
 	auto input_data = (const char **)input.data;
-	VectorOperations::Exec(input, [&](uint64_t i, uint64_t k) {
+	VectorOperations::Exec(input, [&](index_t i, index_t k) {
 		if (input.nullmask[i]) {
 			return;
 		}

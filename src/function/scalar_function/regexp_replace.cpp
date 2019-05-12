@@ -7,7 +7,7 @@ using namespace std;
 
 namespace duckdb {
 
-void regexp_replace_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_count,
+void regexp_replace_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count,
                              BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 3);
 	auto &strings = inputs[0];
@@ -32,7 +32,7 @@ void regexp_replace_function(ExpressionExecutor &exec, Vector inputs[], uint64_t
 
 	VectorOperations::TernaryExec(
 	    strings, patterns, replaces, result,
-	    [&](uint64_t strings_index, uint64_t patterns_index, uint64_t replaces_index, uint64_t result_index) {
+	    [&](index_t strings_index, index_t patterns_index, index_t replaces_index, index_t result_index) {
 		    if (result.nullmask[strings_index]) {
 			    return;
 		    }

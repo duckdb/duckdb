@@ -21,7 +21,7 @@ public:
 	vector<ColumnDefinition> &columns;
 
 protected:
-	BindResult BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression = false) override;
+	BindResult BindExpression(ParsedExpression &expr, count_t depth, bool root_expression = false) override;
 
 	BindResult BindCheckColumn(ColumnRefExpression &expr);
 };

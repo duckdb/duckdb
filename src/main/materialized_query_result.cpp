@@ -14,7 +14,7 @@ MaterializedQueryResult::MaterializedQueryResult(string error)
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, error) {
 }
 
-Value MaterializedQueryResult::GetValue(uint64_t column, uint64_t index) {
+Value MaterializedQueryResult::GetValue(index_t column, index_t index) {
 	auto &data = collection.GetChunk(index).data[column];
 	auto offset_in_chunk = index % STANDARD_VECTOR_SIZE;
 	return data.GetValue(offset_in_chunk);

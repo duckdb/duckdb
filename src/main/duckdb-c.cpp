@@ -9,7 +9,7 @@ using namespace duckdb;
 
 static SQLType ConvertCTypeToCPP(duckdb_type type);
 static duckdb_type ConvertCPPTypeToC(SQLType type);
-static uint64_t GetCTypeSize(duckdb_type type);
+static count_t GetCTypeSize(duckdb_type type);
 
 struct DatabaseData {
 	DatabaseData() : database(nullptr) {
@@ -62,8 +62,8 @@ void duckdb_disconnect(duckdb_connection *connection) {
 	}
 }
 
-template <class T> void WriteData(duckdb_result *out, ChunkCollection &source, uint64_t col) {
-	uint64_t row = 0;
+template <class T> void WriteData(duckdb_result *out, ChunkCollection &source, index_t col) {
+	index_t row = 0;
 	T *target = (T *)out->columns[col].data;
 	for (auto &chunk : source.chunks) {
 		T *source = (T *)chunk->data[col].data;
@@ -114,7 +114,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 	// now write the data
 	for (index_t col = 0; col < out->column_count; col++) {
 		// first set the nullmask
-		uint64_t row = 0;
+		index_t row = 0;
 		for (auto &chunk : result->collection.chunks) {
 			assert(!chunk->data[col].sel_vector);
 			for (index_t k = 0; k < chunk->data[col].count; k++) {
@@ -146,7 +146,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 			WriteData<double>(out, result->collection, col);
 			break;
 		case SQLTypeId::VARCHAR: {
-			uint64_t row = 0;
+			index_t row = 0;
 			const char **target = (const char **)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
 				const char **source = (const char **)chunk->data[col].data;
@@ -160,7 +160,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 			break;
 		}
 		case SQLTypeId::DATE: {
-			uint64_t row = 0;
+			index_t row = 0;
 			duckdb_date *target = (duckdb_date *)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
 				date_t *source = (date_t *)chunk->data[col].data;
@@ -187,7 +187,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 	return DuckDBSuccess;
 }
 
-static void duckdb_destroy_column(duckdb_column column, uint64_t count) {
+static void duckdb_destroy_column(duckdb_column column, count_t count) {
 	if (column.data) {
 		if (column.type == DUCKDB_TYPE_VARCHAR) {
 			// varchar, delete individual strings
@@ -276,7 +276,7 @@ SQLType ConvertCTypeToCPP(duckdb_type type) {
 	}
 }
 
-uint64_t GetCTypeSize(duckdb_type type) {
+count_t GetCTypeSize(duckdb_type type) {
 	switch (type) {
 	case DUCKDB_TYPE_BOOLEAN:
 		return sizeof(bool);
@@ -303,12 +303,12 @@ uint64_t GetCTypeSize(duckdb_type type) {
 	}
 }
 
-template <class T> T UnsafeFetch(duckdb_result *result, uint32_t col, uint64_t row) {
+template <class T> T UnsafeFetch(duckdb_result *result, index_t col, index_t row) {
 	assert(row < result->row_count);
 	return ((T *)result->columns[col].data)[row];
 }
 
-static Value GetCValue(duckdb_result *result, uint32_t col, uint64_t row) {
+static Value GetCValue(duckdb_result *result, index_t col, index_t row) {
 	if (col >= result->column_count) {
 		return Value();
 	}
@@ -347,7 +347,7 @@ static Value GetCValue(duckdb_result *result, uint32_t col, uint64_t row) {
 	}
 }
 
-int32_t duckdb_value_int32(duckdb_result *result, uint32_t col, uint64_t row) {
+int32_t duckdb_value_int32(duckdb_result *result, index_t col, index_t row) {
 	Value val = GetCValue(result, col, row);
 	if (val.is_null) {
 		return 0;
@@ -356,7 +356,7 @@ int32_t duckdb_value_int32(duckdb_result *result, uint32_t col, uint64_t row) {
 	}
 }
 
-int64_t duckdb_value_int64(duckdb_result *result, uint32_t col, uint64_t row) {
+int64_t duckdb_value_int64(duckdb_result *result, index_t col, index_t row) {
 	Value val = GetCValue(result, col, row);
 	if (val.is_null) {
 		return 0;
@@ -365,24 +365,24 @@ int64_t duckdb_value_int64(duckdb_result *result, uint32_t col, uint64_t row) {
 	}
 }
 
-char *duckdb_value_varchar(duckdb_result *result, uint32_t col, uint64_t row) {
+char *duckdb_value_varchar(duckdb_result *result, index_t col, index_t row) {
 	Value val = GetCValue(result, col, row);
 	return strdup(val.ToString(ConvertCTypeToCPP(result->columns[col].type)).c_str());
 }
 
-int32_t duckdb_value_int32_unsafe(duckdb_result *result, uint32_t col, uint64_t row) {
+int32_t duckdb_value_int32_unsafe(duckdb_result *result, index_t col, index_t row) {
 	assert(col < result->column_count);
 	assert(result->columns[col].type == DUCKDB_TYPE_INTEGER);
 	return UnsafeFetch<int32_t>(result, col, row);
 }
 
-int64_t duckdb_value_int64_unsafe(duckdb_result *result, uint32_t col, uint64_t row) {
+int64_t duckdb_value_int64_unsafe(duckdb_result *result, index_t col, index_t row) {
 	assert(col < result->column_count);
 	assert(result->columns[col].type == DUCKDB_TYPE_BIGINT);
 	return UnsafeFetch<int64_t>(result, col, row);
 }
 
-const char *duckdb_value_varchar_unsafe(duckdb_result *result, uint32_t col, uint64_t row) {
+const char *duckdb_value_varchar_unsafe(duckdb_result *result, index_t col, index_t row) {
 	assert(col < result->column_count);
 	assert(result->columns[col].type == DUCKDB_TYPE_VARCHAR);
 	return UnsafeFetch<const char *>(result, col, row);

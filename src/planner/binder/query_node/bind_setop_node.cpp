@@ -10,8 +10,8 @@
 using namespace duckdb;
 using namespace std;
 
-static void GatherAliases(QueryNode &node, unordered_map<string, uint32_t> &aliases,
-                          expression_map_t<uint32_t> &expressions) {
+static void GatherAliases(QueryNode &node, unordered_map<string, index_t> &aliases,
+                          expression_map_t<index_t> &expressions) {
 	if (node.type == QueryNodeType::SET_OPERATION_NODE) {
 		// setop, recurse
 		auto &setop = (SetOperationNode &)node;
@@ -23,8 +23,6 @@ static void GatherAliases(QueryNode &node, unordered_map<string, uint32_t> &alia
 		auto &select = (SelectNode &)node;
 		// fill the alias lists
 		for (index_t i = 0; i < select.select_list.size(); i++) {
-			assert(i <= numeric_limits<uint32_t>::max());
-
 			auto &expr = select.select_list[i];
 			auto name = expr->GetName();
 			// first check if the alias is already in there
@@ -36,11 +34,11 @@ static void GatherAliases(QueryNode &node, unordered_map<string, uint32_t> &alia
 					// there is a conflict
 					// we place "-1" in the aliases map at this location
 					// "-1" signifies that there is an ambiguous reference
-					aliases[name] = (uint32_t)-1;
+					aliases[name] = INVALID_INDEX;
 				}
 			} else {
 				// the alias is not in there yet, just assign it
-				aliases[name] = (uint32_t)i;
+				aliases[name] = i;
 			}
 			// now check if the node is already in the set of expressions
 			auto expr_entry = expressions.find(expr.get());
@@ -48,11 +46,11 @@ static void GatherAliases(QueryNode &node, unordered_map<string, uint32_t> &alia
 				// the node is in there
 				// repeat the same as with the alias: if there is an ambiguity we insert "-1"
 				if (expr_entry->second != i) {
-					expressions[expr.get()] = (uint32_t)-1;
+					expressions[expr.get()] = INVALID_INDEX;
 				}
 			} else {
 				// not in there yet, just place it in there
-				expressions[expr.get()] = (uint32_t)i;
+				expressions[expr.get()] = i;
 			}
 		}
 	}
@@ -69,7 +67,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 
 	result->setop_index = GenerateTableIndex();
 
-	vector<uint64_t> order_references;
+	vector<index_t> order_references;
 	if (statement.orders.size() > 0) {
 		// handle the ORDER BY
 		// NOTE: we handle the ORDER BY in SET OPERATIONS before binding the children
@@ -77,8 +75,8 @@ unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 
 		// we recursively visit the children of this node to extract aliases and expressions that can be referenced in
 		// the ORDER BY
-		unordered_map<string, uint32_t> alias_map;
-		expression_map_t<uint32_t> expression_map;
+		unordered_map<string, index_t> alias_map;
+		expression_map_t<index_t> expression_map;
 		GatherAliases(statement, alias_map, expression_map);
 		// now we perform the actual resolution of the ORDER BY expressions
 		for (index_t i = 0; i < statement.orders.size(); i++) {
@@ -99,7 +97,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 					auto entry = alias_map.find(colref.column_name);
 					if (entry != alias_map.end()) {
 						// found a matching entry
-						if (entry->second == (uint32_t)-1) {
+						if (entry->second == INVALID_INDEX) {
 							// ambiguous reference
 							throw BinderException("Ambiguous alias reference \"%s\"", colref.column_name.c_str());
 						} else {
@@ -116,7 +114,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 				throw BinderException("Could not ORDER BY column: add the expression/function to every SELECT, or move "
 				                      "the UNION into a FROM clause.");
 			}
-			if (expr_ref->second == (uint32_t)-1) {
+			if (expr_ref->second == INVALID_INDEX) {
 				throw BinderException("Ambiguous reference to column");
 			}
 			order_references.push_back(expr_ref->second);

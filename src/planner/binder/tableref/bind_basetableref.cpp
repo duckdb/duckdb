@@ -26,7 +26,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &expr) {
 	case CatalogType::TABLE: {
 		// base table: create the BoundBaseTableRef node
 		auto table = (TableCatalogEntry *)table_or_view;
-		uint64_t table_index = GenerateTableIndex();
+		auto table_index = GenerateTableIndex();
 		auto result = make_unique<BoundBaseTableRef>(table, table_index);
 		bind_context.AddBaseTable(result.get(), expr.alias.empty() ? expr.table_name : expr.alias);
 		return move(result);

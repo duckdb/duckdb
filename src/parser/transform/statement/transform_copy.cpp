@@ -72,7 +72,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			if (def_elem->defname == kDelimiterTok) {
 				// delimiter
 				auto *delimiter_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
-				uint64_t delim_len = strlen(delimiter_val->val.str);
+				count_t delim_len = strlen(delimiter_val->val.str);
 				info.delimiter = '\0';
 				char *delim_cstr = delimiter_val->val.str;
 				if (delim_len == 1) {

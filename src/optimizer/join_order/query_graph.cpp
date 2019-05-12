@@ -8,7 +8,7 @@ using namespace std;
 
 using QueryEdge = QueryGraph::QueryEdge;
 
-static string QueryEdgeToString(const QueryEdge *info, vector<uint64_t> prefix) {
+static string QueryEdgeToString(const QueryEdge *info, vector<index_t> prefix) {
 	string result = "";
 	string source = "[";
 	for (index_t i = 0; i < prefix.size(); i++) {
@@ -19,7 +19,7 @@ static string QueryEdgeToString(const QueryEdge *info, vector<uint64_t> prefix) 
 		result += StringUtil::Format("%s -> %s\n", source.c_str(), entry->neighbor->ToString().c_str());
 	}
 	for (auto &entry : info->children) {
-		vector<uint64_t> new_prefix = prefix;
+		vector<index_t> new_prefix = prefix;
 		new_prefix.push_back(entry.first);
 		result += QueryEdgeToString(entry.second.get(), new_prefix);
 	}
@@ -91,12 +91,12 @@ void QueryGraph::EnumerateNeighbors(RelationSet *node, function<bool(NeighborInf
 }
 
 //! Returns true if a RelationSet is banned by the list of exclusion_set, false otherwise
-static bool RelationSetIsExcluded(RelationSet *node, unordered_set<uint64_t> &exclusion_set) {
+static bool RelationSetIsExcluded(RelationSet *node, unordered_set<index_t> &exclusion_set) {
 	return exclusion_set.find(node->relations[0]) != exclusion_set.end();
 }
 
-vector<uint64_t> QueryGraph::GetNeighbors(RelationSet *node, unordered_set<uint64_t> &exclusion_set) {
-	unordered_set<uint64_t> result;
+vector<index_t> QueryGraph::GetNeighbors(RelationSet *node, unordered_set<index_t> &exclusion_set) {
+	unordered_set<index_t> result;
 	EnumerateNeighbors(node, [&](NeighborInfo *info) -> bool {
 		if (!RelationSetIsExcluded(info->neighbor, exclusion_set)) {
 			// add the smallest node of the neighbor to the set
@@ -104,7 +104,7 @@ vector<uint64_t> QueryGraph::GetNeighbors(RelationSet *node, unordered_set<uint6
 		}
 		return false;
 	});
-	vector<uint64_t> neighbors;
+	vector<index_t> neighbors;
 	neighbors.insert(neighbors.end(), result.begin(), result.end());
 	return neighbors;
 }

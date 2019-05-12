@@ -6,7 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-string PhysicalOperator::ToString(uint64_t depth) const {
+string PhysicalOperator::ToString(count_t depth) const {
 	string extra_info = StringUtil::Replace(ExtraRenderInformation(), "\n", " ");
 	StringUtil::RTrim(extra_info);
 	if (!extra_info.empty()) {

@@ -20,7 +20,7 @@ template <class T> static bool Disjoint(unordered_set<T> &a, unordered_set<T> &b
 }
 
 //! Extract the set of relations referred to inside an expression
-bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<uint64_t> &bindings) {
+bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<index_t> &bindings) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)expression;
 		assert(colref.depth == 0);
@@ -119,7 +119,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// enumerate all base relations obtained from this join and add them to the relation mapping
 		// also, we have to resolve the join conditions for the joins here
 		// get the left and right bindings
-		unordered_set<uint64_t> bindings;
+		unordered_set<index_t> bindings;
 		LogicalJoin::GetTableReferences(*op, bindings);
 		// now create the relation that refers to all these bindings
 		auto relation = make_unique<Relation>(&input_op, parent);
@@ -174,7 +174,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 }
 
 //! Update the exclusion set with all entries in the subgraph
-static void UpdateExclusionSet(RelationSet *node, unordered_set<uint64_t> &exclusion_set) {
+static void UpdateExclusionSet(RelationSet *node, unordered_set<index_t> &exclusion_set) {
 	for (index_t i = 0; i < node->count; i++) {
 		exclusion_set.insert(node->relations[i]);
 	}
@@ -192,7 +192,7 @@ static unique_ptr<JoinNode> CreateJoinTree(RelationSet *set, NeighborInfo *info,
 	// the expected cardinality is the max of the child cardinalities
 	// FIXME: we should obviously use better cardinality estimation here
 	// but for now we just assume foreign key joins only
-	uint64_t expected_cardinality;
+	count_t expected_cardinality;
 	if (info->filters.size() == 0) {
 		// cross product
 		expected_cardinality = left->cardinality * right->cardinality;
@@ -201,7 +201,7 @@ static unique_ptr<JoinNode> CreateJoinTree(RelationSet *set, NeighborInfo *info,
 		expected_cardinality = std::max(left->cardinality, right->cardinality);
 	}
 	// cost is expected_cardinality plus the cost of the previous plans
-	uint64_t cost = expected_cardinality;
+	count_t cost = expected_cardinality;
 	return make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
 }
 
@@ -237,7 +237,7 @@ bool JoinOrderOptimizer::TryEmitPair(RelationSet *left, RelationSet *right, Neig
 
 bool JoinOrderOptimizer::EmitCSG(RelationSet *node) {
 	// create the exclusion set as everything inside the subgraph AND anything with members BELOW it
-	unordered_set<uint64_t> exclusion_set;
+	unordered_set<index_t> exclusion_set;
 	for (index_t i = 0; i < node->relations[0]; i++) {
 		exclusion_set.insert(i);
 	}
@@ -267,7 +267,7 @@ bool JoinOrderOptimizer::EmitCSG(RelationSet *node) {
 }
 
 bool JoinOrderOptimizer::EnumerateCmpRecursive(RelationSet *left, RelationSet *right,
-                                               unordered_set<uint64_t> exclusion_set) {
+                                               unordered_set<index_t> exclusion_set) {
 	// get the neighbors of the second relation under the exclusion set
 	auto neighbors = query_graph.GetNeighbors(right, exclusion_set);
 	if (neighbors.size() == 0) {
@@ -292,7 +292,7 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(RelationSet *left, RelationSet *r
 	// recursively enumerate the sets
 	for (index_t i = 0; i < neighbors.size(); i++) {
 		// updated the set of excluded entries with this neighbor
-		unordered_set<uint64_t> new_exclusion_set = exclusion_set;
+		unordered_set<index_t> new_exclusion_set = exclusion_set;
 		new_exclusion_set.insert(neighbors[i]);
 		if (!EnumerateCmpRecursive(left, union_sets[i], new_exclusion_set)) {
 			return false;
@@ -301,7 +301,7 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(RelationSet *left, RelationSet *r
 	return true;
 }
 
-bool JoinOrderOptimizer::EnumerateCSGRecursive(RelationSet *node, unordered_set<uint64_t> &exclusion_set) {
+bool JoinOrderOptimizer::EnumerateCSGRecursive(RelationSet *node, unordered_set<index_t> &exclusion_set) {
 	// find neighbors of S under the exlusion set
 	auto neighbors = query_graph.GetNeighbors(node, exclusion_set);
 	if (neighbors.size() == 0) {
@@ -324,7 +324,7 @@ bool JoinOrderOptimizer::EnumerateCSGRecursive(RelationSet *node, unordered_set<
 	// recursively enumerate the sets
 	for (index_t i = 0; i < neighbors.size(); i++) {
 		// updated the set of excluded entries with this neighbor
-		unordered_set<uint64_t> new_exclusion_set = exclusion_set;
+		unordered_set<index_t> new_exclusion_set = exclusion_set;
 		new_exclusion_set.insert(neighbors[i]);
 		if (!EnumerateCSGRecursive(union_sets[i], new_exclusion_set)) {
 			return false;
@@ -344,7 +344,7 @@ bool JoinOrderOptimizer::SolveJoinOrderExactly() {
 			return false;
 		}
 		// initialize the set of exclusion_set as all the nodes with a number below this
-		unordered_set<uint64_t> exclusion_set;
+		unordered_set<index_t> exclusion_set;
 		for (index_t j = 0; j < i - 1; j++) {
 			exclusion_set.insert(j);
 		}
@@ -368,7 +368,7 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 		// now in every step of the algorithm, we greedily pick the join between the to-be-joined relations that has the
 		// smallest cost. This is O(r^2) per step, and every step will reduce the total amount of relations to-be-joined
 		// by 1, so the total cost is O(r^3) in the amount of relations
-		uint64_t best_left = 0, best_right = 0;
+		index_t best_left = 0, best_right = 0;
 		JoinNode *best_connection = nullptr;
 		for (index_t i = 0; i < T.size(); i++) {
 			auto left = T[i];
@@ -392,7 +392,7 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 			// could not find a connection, but we were not done with finding a completed plan
 			// we have to add a cross product; we add it between the two smallest relations
 			JoinNode *smallest_plans[2] = {nullptr};
-			uint64_t smallest_index[2];
+			index_t smallest_index[2];
 			for (index_t i = 0; i < T.size(); i++) {
 				// get the plan for this relation
 				auto current_plan = plans[T[i]].get();
@@ -672,7 +672,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		auto filter_info = info.get();
 		filter_infos.push_back(move(info));
 		// first extract the relation set for the entire filter
-		unordered_set<uint64_t> bindings;
+		unordered_set<index_t> bindings;
 		ExtractBindings(*filter, bindings);
 		filter_info->set = set_manager.GetRelation(bindings);
 		filter_info->filter_index = i;
@@ -680,7 +680,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 			auto comparison = (BoundComparisonExpression *)filter.get();
 			// extract the bindings that are required for the left and right side of the comparison
-			unordered_set<uint64_t> left_bindings, right_bindings;
+			unordered_set<index_t> left_bindings, right_bindings;
 			ExtractBindings(*comparison->left, left_bindings);
 			ExtractBindings(*comparison->right, right_bindings);
 			if (left_bindings.size() > 0 && right_bindings.size() > 0) {
@@ -724,7 +724,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	SolveJoinOrder();
 	// now the optimal join path should have been found
 	// get it from the node
-	unordered_set<uint64_t> bindings;
+	unordered_set<index_t> bindings;
 	for (index_t i = 0; i < relations.size(); i++) {
 		bindings.insert(i);
 	}

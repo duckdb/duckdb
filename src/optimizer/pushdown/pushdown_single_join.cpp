@@ -7,8 +7,8 @@ using namespace std;
 using Filter = FilterPushdown::Filter;
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSingleJoin(unique_ptr<LogicalOperator> op,
-                                                               unordered_set<uint64_t> &left_bindings,
-                                                               unordered_set<uint64_t> &right_bindings) {
+                                                               unordered_set<index_t> &left_bindings,
+                                                               unordered_set<index_t> &right_bindings) {
 	auto &join = (LogicalJoin &)*op;
 	assert(join.type == JoinType::SINGLE);
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);

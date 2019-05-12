@@ -54,7 +54,7 @@ static unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression> &expr) 
 	return move(((BoundExpression &)*expr).expr);
 }
 
-BindResult SelectBinder::BindWindow(WindowExpression &window, uint32_t depth) {
+BindResult SelectBinder::BindWindow(WindowExpression &window, count_t depth) {
 	if (inside_window) {
 		return BindResult("window function calls cannot be nested");
 	}
@@ -103,8 +103,8 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, uint32_t depth) {
 	result->end = window.end;
 
 	// create a BoundColumnRef that references this entry
-	auto colref = make_unique<BoundColumnRefExpression>(
-	    window.GetName(), result->return_type, ColumnBinding(node.window_index, (uint64_t)node.windows.size()), depth);
+	auto colref = make_unique<BoundColumnRefExpression>(window.GetName(), result->return_type,
+	                                                    ColumnBinding(node.window_index, node.windows.size()), depth);
 	// move the WINDOW expression into the set of bound windows
 	node.windows.push_back(move(result));
 	return BindResult(move(colref), sql_type);

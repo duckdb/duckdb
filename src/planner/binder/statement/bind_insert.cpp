@@ -13,16 +13,15 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 	auto table = context.catalog.GetTable(context.ActiveTransaction(), stmt.schema, stmt.table);
 	result->table = table;
 
-	vector<uint32_t> named_column_map;
+	vector<index_t> named_column_map;
 	if (stmt.columns.size() > 0) {
 		// insertion statement specifies column list
 
 		// create a mapping of (list index) -> (column index)
-		unordered_map<string, uint32_t> column_name_map;
+		unordered_map<string, index_t> column_name_map;
 		for (index_t i = 0; i < stmt.columns.size(); i++) {
-			assert(i <= numeric_limits<uint32_t>::max());
 
-			column_name_map[stmt.columns[i]] = (uint32_t)i;
+			column_name_map[stmt.columns[i]] = i;
 			auto entry = table->name_map.find(stmt.columns[i]);
 			if (entry == table->name_map.end()) {
 				throw BinderException("Column %s not found in table %s", stmt.columns[i].c_str(), table->name.c_str());
@@ -31,8 +30,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 				throw BinderException("Cannot explicitly insert values into rowid column");
 			}
 			result->expected_types.push_back(table->columns[entry->second].type);
-			assert(entry->second <= numeric_limits<uint32_t>::max());
-			named_column_map.push_back((uint32_t)entry->second);
+			named_column_map.push_back(entry->second);
 		}
 		for (index_t i = 0; i < result->table->columns.size(); i++) {
 			auto &col = result->table->columns[i];
@@ -51,7 +49,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 		}
 	}
 
-	uint64_t expected_columns = stmt.columns.size() == 0 ? result->table->columns.size() : stmt.columns.size();
+	count_t expected_columns = stmt.columns.size() == 0 ? result->table->columns.size() : stmt.columns.size();
 	if (stmt.select_statement) {
 		result->select_statement =
 		    unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*stmt.select_statement));
@@ -78,7 +76,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			vector<unique_ptr<Expression>> list;
 
 			for (index_t col_idx = 0; col_idx < expression_list.size(); col_idx++) {
-				uint64_t table_col_idx = stmt.columns.size() == 0 ? col_idx : named_column_map[col_idx];
+				index_t table_col_idx = stmt.columns.size() == 0 ? col_idx : named_column_map[col_idx];
 				assert(table_col_idx < table->columns.size());
 				binder.target_type = table->columns[table_col_idx].type;
 				auto bound_expr = binder.Bind(expression_list[col_idx]);

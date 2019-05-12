@@ -41,7 +41,7 @@ Value WindowSegmentTree::AggegateFinal() {
 	return aggregate;
 }
 
-void WindowSegmentTree::WindowSegmentValue(uint64_t l_idx, uint64_t begin, uint64_t end) {
+void WindowSegmentTree::WindowSegmentValue(index_t l_idx, index_t begin, index_t end) {
 	assert(begin <= end);
 	if (begin == end) {
 		return;
@@ -50,7 +50,7 @@ void WindowSegmentTree::WindowSegmentValue(uint64_t l_idx, uint64_t begin, uint6
 	if (l_idx == 0) {
 		auto &vec = input_ref->GetChunk(begin).data[0];
 		v.Reference(vec);
-		uint64_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
+		index_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
 		v.data = v.data + GetTypeIdSize(v.type) * start_in_vector;
 		v.count = end - begin;
 		v.nullmask <<= start_in_vector;
@@ -93,19 +93,19 @@ void WindowSegmentTree::ConstructTree() {
 	assert(input_ref->column_count() == 1);
 
 	// compute space required to store internal nodes of segment tree
-	uint64_t internal_nodes = 0;
-	uint64_t level_nodes = input_ref->count;
+	count_t internal_nodes = 0;
+	count_t level_nodes = input_ref->count;
 	do {
-		level_nodes = (uint64_t)ceil((double)level_nodes / TREE_FANOUT);
+		level_nodes = (count_t)ceil((double)level_nodes / TREE_FANOUT);
 		internal_nodes += level_nodes;
 	} while (level_nodes > 1);
 	levels_flat_native = unique_ptr<uint8_t[]>(new uint8_t[internal_nodes * GetTypeIdSize(payload_type)]);
 	levels_flat_start.push_back(0);
 
-	uint64_t levels_flat_offset = 0;
-	uint64_t level_current = 0;
+	index_t levels_flat_offset = 0;
+	index_t level_current = 0;
 	// level 0 is data itself
-	uint64_t level_size;
+	count_t level_size;
 	while ((level_size = (level_current == 0 ? input_ref->count
 	                                         : levels_flat_offset - levels_flat_start[level_current - 1])) > 1) {
 		for (index_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
@@ -115,7 +115,7 @@ void WindowSegmentTree::ConstructTree() {
 			ConstantVector res_vec(AggegateFinal());
 			assert(res_vec.type == payload_type);
 			ConstantVector ptr_vec(Value::POINTER(
-			    (uint64_t)(levels_flat_native.get() + (levels_flat_offset * GetTypeIdSize(payload_type)))));
+			    (index_t)(levels_flat_native.get() + (levels_flat_offset * GetTypeIdSize(payload_type)))));
 			VectorOperations::Scatter::Set(res_vec, ptr_vec);
 
 			levels_flat_offset++;
@@ -126,22 +126,22 @@ void WindowSegmentTree::ConstructTree() {
 	}
 }
 
-Value WindowSegmentTree::Compute(uint64_t begin, uint64_t end) {
+Value WindowSegmentTree::Compute(index_t begin, index_t end) {
 	assert(input_ref);
 	AggregateInit();
 	for (index_t l_idx = 0; l_idx < levels_flat_start.size() + 1; l_idx++) {
-		uint64_t parent_begin = begin / TREE_FANOUT;
-		uint64_t parent_end = end / TREE_FANOUT;
+		index_t parent_begin = begin / TREE_FANOUT;
+		index_t parent_end = end / TREE_FANOUT;
 		if (parent_begin == parent_end) {
 			WindowSegmentValue(l_idx, begin, end);
 			return AggegateFinal();
 		}
-		uint64_t group_begin = parent_begin * TREE_FANOUT;
+		index_t group_begin = parent_begin * TREE_FANOUT;
 		if (begin != group_begin) {
 			WindowSegmentValue(l_idx, begin, group_begin + TREE_FANOUT);
 			parent_begin++;
 		}
-		uint64_t group_end = parent_end * TREE_FANOUT;
+		index_t group_end = parent_end * TREE_FANOUT;
 		if (end != group_end) {
 			WindowSegmentValue(l_idx, group_end, end);
 		}

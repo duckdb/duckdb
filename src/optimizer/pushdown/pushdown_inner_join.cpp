@@ -10,8 +10,8 @@ using namespace std;
 using Filter = FilterPushdown::Filter;
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<LogicalOperator> op,
-                                                              unordered_set<uint64_t> &left_bindings,
-                                                              unordered_set<uint64_t> &right_bindings) {
+                                                              unordered_set<index_t> &left_bindings,
+                                                              unordered_set<index_t> &right_bindings) {
 	auto &join = (LogicalJoin &)*op;
 	assert(join.type == JoinType::INNER);
 	assert(op->type != LogicalOperatorType::DELIM_JOIN);

@@ -22,7 +22,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(ExecuteStatement &stmt) {
 		throw BinderException("Parameter/argument count mismatch");
 	}
 	// bind the values
-	uint64_t param_idx = 1;
+	index_t param_idx = 1;
 	for (auto &expr : stmt.values) {
 		auto it = result->prep->value_map.find(param_idx);
 		if (it == result->prep->value_map.end()) {

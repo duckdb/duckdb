@@ -114,7 +114,7 @@ static int64_t extract_element(SpecifierType type, date_t element) {
 	}
 }
 
-void date_part_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_count, BoundFunctionExpression &expr,
+void date_part_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
                         Vector &result) {
 	result.Initialize(TypeId::BIGINT);
 	result.nullmask = inputs[1].nullmask;
@@ -128,13 +128,13 @@ void date_part_function(ExpressionExecutor &exec, Vector inputs[], uint64_t inpu
 	if (inputs[0].IsConstant()) {
 		// constant specifier
 		auto specifier_type = GetSpecifierType(((const char **)inputs[0].data)[0]);
-		VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, uint64_t i, uint64_t k) {
+		VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, index_t i, index_t k) {
 			result_data[i] = extract_element(specifier_type, element);
 		});
 	} else {
 		// not constant specifier
 		auto specifiers = ((const char **)inputs[0].data);
-		VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, uint64_t i, uint64_t k) {
+		VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, index_t i, index_t k) {
 			result_data[i] = extract_element(GetSpecifierType(specifiers[i]), element);
 		});
 	}
