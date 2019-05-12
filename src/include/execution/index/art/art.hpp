@@ -127,8 +127,8 @@ private:
 		auto input_data = (T *)input.data[0].data;
 		auto row_identifiers = (int64_t *)row_ids.data;
 		for (uint64_t i = 0; i < row_ids.count; i++) {
-			Key &key = *new Key(this->is_little_endian, input.data[0].type, input_data[i],sizeof(input_data[i]));
-			insert(this->is_little_endian, tree, key, 0, input_data[i], sizeof(input_data[i]), input.data[0].type,
+			auto key = make_unique<Key>(this->is_little_endian, input.data[0].type, input_data[i],sizeof(input_data[i]));
+			insert(this->is_little_endian, tree, *key, 0, input_data[i], sizeof(input_data[i]), input.data[0].type,
 			       row_identifiers[i]);
 		}
 	}
@@ -137,15 +137,15 @@ private:
 		auto input_data = (T *)input.data[0].data;
 		auto row_identifiers = (int64_t *)row_ids.data;
 		for (uint64_t i = 0; i < row_ids.count; i++) {
-			Key &key = *new Key(this->is_little_endian, input.data[0].type, input_data[i],sizeof(input_data[i]));
-			erase(this->is_little_endian, tree, key, 0, sizeof(input_data[i]), input.data[0].type, row_identifiers[i]);
+            auto key = make_unique<Key>(this->is_little_endian, input.data[0].type, input_data[i],sizeof(input_data[i]));
+            erase(this->is_little_endian, tree, *key, 0, sizeof(input_data[i]), input.data[0].type, row_identifiers[i]);
 		}
 	}
 
 	template <class T> uint64_t templated_lookup(TypeId type, T data, int64_t *result_ids) {
-		Key &key = *new Key(this->is_little_endian, type, data,sizeof(data));
-		uint64_t result_count = 0;
-		auto leaf = static_cast<Leaf *>(lookup(tree, key, this->maxPrefix, 0));
+        auto key = make_unique<Key>(this->is_little_endian, type, data,sizeof(data));
+        uint64_t result_count = 0;
+		auto leaf = static_cast<Leaf *>(lookup(tree, *key, this->maxPrefix, 0));
 		if (leaf) {
 			for (uint64_t i = 0; i < leaf->num_elements; i++) {
 				result_ids[result_count++] = leaf->row_id[i];
@@ -156,9 +156,10 @@ private:
 
 	template <class T> uint64_t templated_greater_scan(TypeId type, T data, int64_t *result_ids,bool inclusive) {
 		Iterator it;
-		Key &key = *new Key(this->is_little_endian, type, data,sizeof(data));
-		uint64_t result_count = 0;
-		bool found=ART::bound(tree,key,sizeof(data),it,sizeof(data),inclusive,is_little_endian);
+        auto key = make_unique<Key>(this->is_little_endian, type, data,sizeof(data));
+
+        uint64_t result_count = 0;
+		bool found=ART::bound(tree,*key,sizeof(data),it,sizeof(data),inclusive,is_little_endian);
 		if (found) {
 			bool hasNext;
 			do {
@@ -175,14 +176,14 @@ private:
         Iterator it;
 		uint64_t result_count = 0;
         auto min_value = Node::minimum(tree)->get();
-        Key &key = *new Key(this->is_little_endian, type, data,sizeof(data));
+        auto key = make_unique<Key>(this->is_little_endian, type, data,sizeof(data));
         Leaf* minimum = static_cast<Leaf *>(min_value);
-        Key &min_key = *new Key(this->is_little_endian, type, minimum->value,sizeof(data));
+        auto min_key = make_unique<Key>(this->is_little_endian, type, minimum->value,sizeof(data));
 
         // early out min value higher than upper bound query
-        if (min_key > key)
+        if (*min_key > *key)
             return result_count;
-        bool found=ART::bound(tree,min_key,sizeof(data),it,sizeof(data),true,is_little_endian);
+        bool found=ART::bound(tree,*min_key,sizeof(data),it,sizeof(data),true,is_little_endian);
         if (found) {
             bool hasNext;
             do {
@@ -201,9 +202,9 @@ private:
 
 	template <class T> uint64_t templated_close_range(TypeId type, T left_query,T right_query, int64_t *result_ids,bool left_inclusive, bool right_inclusive) {
 		Iterator it;
-		Key &key = *new Key(this->is_little_endian, type, left_query,sizeof(left_query));
+        auto key = make_unique<Key>(this->is_little_endian, type, left_query,sizeof(left_query));
 		uint64_t result_count = 0;
-		bool found=ART::bound(tree,key,sizeof(left_query),it,sizeof(left_query),left_inclusive,is_little_endian);
+		bool found=ART::bound(tree,*key,sizeof(left_query),it,sizeof(left_query),left_inclusive,is_little_endian);
 		if (found) {
 			bool hasNext;
 			do {

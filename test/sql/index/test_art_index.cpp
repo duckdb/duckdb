@@ -18,7 +18,7 @@ TEST_CASE("Test index creation statements with multiple connections", "[art-inde
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)"));
     REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 3)"));
-	for (size_t i = 0; i < 3000; i++) {
+	for (int i = 0; i < 3000; i++) {
         int key = i+10;
 		REQUIRE_NO_FAIL(
 				con.Query("INSERT INTO integers VALUES (" + to_string(i + 10) + ", " + to_string(i + 12) + ")"));
@@ -92,7 +92,7 @@ TEST_CASE("ART Integer Types", "[art-int]") {
         REQUIRE(CHECK_COLUMN(result, 0, {}));
 
         //! Checking if all elements are still there
-        for (size_t i = 0; i < n; i++) {
+        for (int i = 0; i < n; i++) {
             result = con.Query("SELECT i FROM integers WHERE i=CAST(" + to_string(keys[i]) + " AS " + int_types[idx] + ")");
             REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
         }

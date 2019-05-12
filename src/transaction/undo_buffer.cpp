@@ -51,9 +51,9 @@ void UndoBuffer::Cleanup() {
 			auto info = (VersionInformation *)entry.data.get();
 			if (entry.type == UndoFlags::DELETE_TUPLE || entry.type == UndoFlags::UPDATE_TUPLE) {
 				// FIXME: put into Cleanup, not Commit
-				assert(info->chunk);
-				assert(info->tuple_data);
 				if (info->table->indexes.size() > 0) {
+					assert(info->chunk);
+					assert(info->tuple_data);
 					Value ptr = Value::BIGINT(info->chunk->start + info->prev.entry);
 					uint8_t *alternate_version_pointers[1];
 					uint64_t alternate_version_index[1];
