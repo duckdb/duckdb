@@ -5,7 +5,7 @@ using namespace std;
 
 template <> string Deserializer::Read() {
 	uint32_t size = Read<uint32_t>();
-	uint8_t buffer[size];
-	Read(buffer, size);
-	return string((char *)buffer, size);
+	auto buffer = unique_ptr<data_t[]>(new data_t[size]);
+	Read(buffer.get(), size);
+	return string((char *)buffer.get(), size);
 }
