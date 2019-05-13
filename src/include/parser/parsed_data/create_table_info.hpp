@@ -11,6 +11,7 @@
 #include "common/common.hpp"
 #include "common/unordered_set.hpp"
 #include "parser/column_definition.hpp"
+#include "parser/constraint.hpp"
 
 namespace duckdb {
 struct CreateTableInfo {
