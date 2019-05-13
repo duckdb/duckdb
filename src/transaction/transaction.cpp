@@ -59,7 +59,7 @@ void Transaction::PushQuery(string query) {
 	strcpy(blob, query.c_str());
 }
 
-data_t Transaction::PushTuple(UndoFlags flags, index_t data_size) {
+data_ptr_t Transaction::PushTuple(UndoFlags flags, index_t data_size) {
 	return undo_buffer.CreateEntry(flags, sizeof(VersionInformation) + data_size);
 }
 

@@ -15,14 +15,14 @@ namespace duckdb {
 
 class BufferedDeserializer : public Deserializer {
 public:
-	BufferedDeserializer(data_t ptr, index_t data_size);
+	BufferedDeserializer(data_ptr_t ptr, index_t data_size);
 	BufferedDeserializer(BufferedSerializer &serializer);
 
-	void Read(data_t buffer, index_t read_size) override;
+	void Read(data_ptr_t buffer, index_t read_size) override;
 
 public:
-	data_t ptr;
-	data_t endptr;
+	data_ptr_t ptr;
+	data_ptr_t endptr;
 };
 
 } // namespace duckdb

@@ -44,9 +44,9 @@ template <> inline bool IsNullValue(char *value) {
 }
 
 //! Compares a specific memory region against the types NULL value
-bool IsNullValue(data_t ptr, TypeId type);
+bool IsNullValue(data_ptr_t ptr, TypeId type);
 
 //! Writes NullValue<T> value of a specific type to a memory address
-void SetNullValue(data_t ptr, TypeId type);
+void SetNullValue(data_ptr_t ptr, TypeId type);
 
 } // namespace duckdb

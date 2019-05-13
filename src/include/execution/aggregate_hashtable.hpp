@@ -70,13 +70,13 @@ private:
 	//! The amount of entries stored in the HT currently
 	count_t entries;
 	//! The data of the HT
-	data_t data;
+	data_ptr_t data;
 	//! The maximum size of the chain
 	count_t max_chain;
 	//! Whether or not the HT has to support parallel insertion operations
 	bool parallel = false;
 	//! The empty payload data
-	unique_ptr<uint8_t[]> empty_payload_data;
+	unique_ptr<data_t[]> empty_payload_data;
 
 	vector<unique_ptr<SuperLargeHashTable>> distinct_hashes;
 
@@ -90,7 +90,7 @@ private:
 	SuperLargeHashTable(const SuperLargeHashTable &) = delete;
 
 	//! unique_ptr to indicate the ownership
-	unique_ptr<uint8_t[]> owned_data;
+	unique_ptr<data_t[]> owned_data;
 };
 
 } // namespace duckdb

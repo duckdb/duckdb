@@ -20,7 +20,7 @@ void DataChunk::Initialize(vector<TypeId> &types, bool zero_data) {
 		size += GetTypeIdSize(type) * STANDARD_VECTOR_SIZE;
 	}
 	if (size > 0) {
-		owned_data = unique_ptr<uint8_t[]>(new uint8_t[size]);
+		owned_data = unique_ptr<data_t[]>(new data_t[size]);
 		if (zero_data) {
 			memset(owned_data.get(), 0, size);
 		}
@@ -173,7 +173,7 @@ void DataChunk::Serialize(Serializer &serializer) {
 		auto type = data[i].type;
 		if (TypeIsConstantSize(type)) {
 			index_t write_size = GetTypeIdSize(type) * size();
-			auto ptr = unique_ptr<uint8_t[]>(new uint8_t[write_size]);
+			auto ptr = unique_ptr<data_t[]>(new data_t[write_size]);
 			// constant size type: simple memcpy
 			VectorOperations::CopyToStorage(data[i], ptr.get());
 			serializer.Write(ptr.get(), write_size);
@@ -205,7 +205,7 @@ void DataChunk::Deserialize(Deserializer &source) {
 		if (TypeIsConstantSize(type)) {
 			// constant size type: simple memcpy
 			auto column_size = GetTypeIdSize(type) * rows;
-			auto ptr = unique_ptr<uint8_t[]>(new uint8_t[column_size]);
+			auto ptr = unique_ptr<data_t[]>(new data_t[column_size]);
 			source.Read(ptr.get(), column_size);
 			Vector v(data[i].type, ptr.get());
 			v.count = rows;
@@ -236,7 +236,7 @@ void DataChunk::MoveStringsToHeap(StringHeap &heap) {
 			// move strings of this chunk to the specified heap
 			auto source_strings = (const char **)data[c].data;
 			if (!data[c].owned_data) {
-				data[c].owned_data = unique_ptr<uint8_t[]>(new uint8_t[STANDARD_VECTOR_SIZE * sizeof(data_t)]);
+				data[c].owned_data = unique_ptr<data_t[]>(new data_t[STANDARD_VECTOR_SIZE * sizeof(data_ptr_t)]);
 				data[c].data = data[c].owned_data.get();
 			}
 			auto target_strings = (const char **)data[c].data;

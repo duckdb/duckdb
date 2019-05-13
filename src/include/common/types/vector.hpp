@@ -54,7 +54,7 @@ public:
 	//! The amount of elements in the vector.
 	count_t count;
 	//! A pointer to the data.
-	data_t data;
+	data_ptr_t data;
 	//! The selection vector of the vector.
 	sel_t *sel_vector;
 	//! The null mask of the vector, if the Vector has any NULL values
@@ -64,7 +64,7 @@ public:
 	//! Create a vector of size one holding the passed on value
 	Vector(Value value);
 	//! Create a non-owning vector that references the specified data
-	Vector(TypeId type, data_t dataptr);
+	Vector(TypeId type, data_ptr_t dataptr);
 	//! Create an owning vector that holds at most STANDARD_VECTOR_SIZE entries.
 	/*!
 	    Create a new vector
@@ -146,6 +146,6 @@ public:
 
 protected:
 	//! If the vector owns data, this is the unique_ptr holds the actual data.
-	unique_ptr<uint8_t[]> owned_data;
+	unique_ptr<data_t[]> owned_data;
 };
 } // namespace duckdb

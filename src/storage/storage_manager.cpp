@@ -154,7 +154,7 @@ int StorageManager::LoadFromStorage() {
 
 			// deserialize the CreateTableInfo
 			auto table_file_size = FstreamUtil::GetFileSize(table_file);
-			BufferedDeserializer source((data_t)result.get(), table_file_size);
+			BufferedDeserializer source((data_ptr_t)result.get(), table_file_size);
 			auto info = TableCatalogEntry::Deserialize(source);
 			// create the table inside the catalog
 			database.catalog->CreateTable(context.ActiveTransaction(), info.get());
@@ -179,7 +179,7 @@ int StorageManager::LoadFromStorage() {
 				// deserialize the chunk
 				DataChunk insert_chunk;
 				auto chunk_file_size = FstreamUtil::GetFileSize(chunk_file);
-				BufferedDeserializer source((data_t)result.get(), chunk_file_size);
+				BufferedDeserializer source((data_ptr_t)result.get(), chunk_file_size);
 				insert_chunk.Deserialize(source);
 				// insert the chunk into the table
 				table->storage->Append(*table, context, insert_chunk);
@@ -198,7 +198,7 @@ int StorageManager::LoadFromStorage() {
 			auto result = FstreamUtil::ReadBinary(view_file);
 			// deserialize the CreateViewInfo
 			auto view_file_size = FstreamUtil::GetFileSize(view_file);
-			BufferedDeserializer source((data_t)result.get(), view_file_size);
+			BufferedDeserializer source((data_ptr_t)result.get(), view_file_size);
 			auto info = ViewCatalogEntry::Deserialize(source);
 			// create the table inside the catalog
 			database.catalog->CreateView(context.ActiveTransaction(), info.get());

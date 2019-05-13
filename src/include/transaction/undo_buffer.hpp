@@ -29,7 +29,7 @@ enum class UndoFlags : uint8_t {
 struct UndoEntry {
 	UndoFlags type;
 	index_t length;
-	unique_ptr<uint8_t[]> data;
+	unique_ptr<data_t[]> data;
 };
 
 //! The undo buffer of a transaction is used to hold previous versions of tuples
@@ -42,7 +42,7 @@ public:
 
 	//! Reserve space for an entry of the specified type and length in the undo
 	//! buffer
-	data_t CreateEntry(UndoFlags type, index_t len);
+	data_ptr_t CreateEntry(UndoFlags type, index_t len);
 
 	//! Cleanup the undo buffer
 	void Cleanup();

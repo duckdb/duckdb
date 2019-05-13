@@ -47,7 +47,7 @@ public:
 	DataTable &table;
 	bool deleted[STORAGE_CHUNK_SIZE] = {0};
 	VersionInformation *version_pointers[STORAGE_CHUNK_SIZE] = {nullptr};
-	vector<data_t> columns;
+	vector<data_ptr_t> columns;
 	index_t count;
 	index_t start;
 
@@ -65,7 +65,7 @@ public:
 	StringHeap string_heap;
 
 private:
-	unique_ptr<uint8_t[]> owned_data;
+	unique_ptr<data_t[]> owned_data;
 	std::mutex exclusive_lock;
 	std::atomic<index_t> read_count;
 

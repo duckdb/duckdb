@@ -150,7 +150,7 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 		                               last_chunk->version_pointers + last_chunk->count);
 		// now insert the elements into the vector
 		for (index_t i = 0; i < chunk.column_count; i++) {
-			data_t target =
+			data_ptr_t target =
 			    last_chunk->columns[i] + last_chunk->count * GetTypeIdSize(GetInternalType(table.columns[i].type));
 			VectorOperations::CopyToStorage(chunk.data[i], target, 0, current_count);
 		}
@@ -175,7 +175,7 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 		transaction.PushDeletedEntries(0, remainder, new_chunk_pointer, new_chunk_pointer->version_pointers);
 		// now insert the elements into the vector
 		for (index_t i = 0; i < chunk.column_count; i++) {
-			data_t target = new_chunk_pointer->columns[i];
+			data_ptr_t target = new_chunk_pointer->columns[i];
 			VectorOperations::CopyToStorage(chunk.data[i], target, current_count, remainder);
 		}
 		new_chunk_pointer->count = remainder;
@@ -305,7 +305,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 }
 
 void DataTable::RetrieveVersionedData(DataChunk &result, const vector<column_t> &column_ids,
-                                      data_t alternate_version_pointers[], index_t alternate_version_index[],
+                                      data_ptr_t alternate_version_pointers[], index_t alternate_version_index[],
                                       index_t alternate_version_count) {
 	if (alternate_version_count == 0) {
 		return;
@@ -352,7 +352,7 @@ void DataTable::RetrieveBaseTableData(DataChunk &result, const vector<column_t> 
 		} else {
 			// normal column
 			// grab the data from the source using a selection vector
-			data_t dataptr =
+			data_ptr_t dataptr =
 			    current_chunk->columns[column_ids[j]] + GetTypeIdSize(result.data[j].type) * current_offset;
 			Vector source(result.data[j].type, dataptr);
 			source.sel_vector = regular_entries;
@@ -385,7 +385,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<c
 
 		if (regular_count < end) {
 			// first chase the version pointers, if there are any
-			data_t alternate_version_pointers[STANDARD_VECTOR_SIZE];
+			data_ptr_t alternate_version_pointers[STANDARD_VECTOR_SIZE];
 			index_t alternate_version_index[STANDARD_VECTOR_SIZE];
 			index_t alternate_version_count = 0;
 
@@ -477,7 +477,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 			} else {
 				retrieve_base_version = false;
 
-				data_t alternate_version_pointer;
+				data_ptr_t alternate_version_pointer;
 				index_t alternate_version_index;
 
 				// follow the version pointers
@@ -530,7 +530,7 @@ void DataTable::CreateIndexScan(ScanStructure &structure, vector<column_t> &colu
 			structure.locks.push_back(current_chunk->GetSharedLock());
 		}
 
-		data_t alternate_version_pointers[STANDARD_VECTOR_SIZE];
+		data_ptr_t alternate_version_pointers[STANDARD_VECTOR_SIZE];
 		index_t alternate_version_index[STANDARD_VECTOR_SIZE];
 		index_t alternate_version_count = 0;
 

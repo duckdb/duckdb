@@ -57,7 +57,7 @@ UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple, in
 					conflict = false;
 				} else {
 					// first serialize to tuple
-					auto tuple_data = unique_ptr<uint8_t[]>{new uint8_t[chunk->table.serializer.TupleSize()]};
+					auto tuple_data = unique_ptr<data_t[]>{new data_t[chunk->table.serializer.TupleSize()]};
 
 					chunk->table.serializer.Serialize(chunk->columns, offset, tuple_data.get());
 					// now compare them

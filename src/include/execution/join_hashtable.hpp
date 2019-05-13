@@ -81,11 +81,11 @@ private:
 	struct Node {
 		count_t count;
 		count_t capacity;
-		unique_ptr<uint8_t[]> data;
+		unique_ptr<data_t[]> data;
 		unique_ptr<Node> prev;
 
 		Node(count_t tuple_size, count_t capacity) : count(0), capacity(capacity) {
-			data = unique_ptr<uint8_t[]>(new uint8_t[tuple_size * capacity]);
+			data = unique_ptr<data_t[]>(new data_t[tuple_size * capacity]);
 			memset(data.get(), 0, tuple_size * capacity);
 		}
 		~Node() {
@@ -164,7 +164,7 @@ public:
 private:
 	//! Insert the given set of locations into the HT with the given set of
 	//! hashes. Caller should hold lock in parallel HT.
-	void InsertHashes(Vector &hashes, data_t key_locations[]);
+	void InsertHashes(Vector &hashes, data_ptr_t key_locations[]);
 	//! The capacity of the HT. This can be increased using
 	//! JoinHashTable::Resize
 	count_t capacity;
@@ -173,7 +173,7 @@ private:
 	//! The data of the HT
 	unique_ptr<Node> head;
 	//! The hash map of the HT
-	unique_ptr<data_t[]> hashed_pointers;
+	unique_ptr<data_ptr_t[]> hashed_pointers;
 	//! Whether or not the HT has to support parallel build
 	bool parallel = false;
 	//! Mutex used for parallelism

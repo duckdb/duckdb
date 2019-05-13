@@ -105,7 +105,7 @@ private:
 	//! UndoBuffer and stores them inside the result chunk; used for scanning of
 	//! versioned tuples
 	void RetrieveVersionedData(DataChunk &result, const vector<column_t> &column_ids,
-	                           data_t alternate_version_pointers[], index_t alternate_version_index[],
+	                           data_ptr_t alternate_version_pointers[], index_t alternate_version_index[],
 	                           index_t alternate_version_count);
 	//! Retrieves data from the base table for use in scans
 	void RetrieveBaseTableData(DataChunk &result, const vector<column_t> &column_ids, sel_t regular_entries[],

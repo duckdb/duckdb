@@ -34,7 +34,7 @@ private:
 	std::fstream input;
 	index_t data_start = 0;
 	void *mz_stream_ptr = nullptr; // void* so we don't have to include the header
-	data_t in_buff = nullptr, in_buff_start, in_buff_end, out_buff = nullptr; // various buffers & pointers
+	data_ptr_t in_buff = nullptr, in_buff_start, in_buff_end, out_buff = nullptr; // various buffers & pointers
 	bool is_initialized = false;
 	std::string filename;
 	const index_t BUFFER_SIZE = 1024;

@@ -36,8 +36,9 @@ typedef uint64_t count_t;
 const index_t INVALID_INDEX = (index_t)-1;
 
 //! data pointers
-typedef uint8_t *data_t;
-typedef const uint8_t *data_t_const;
+typedef uint8_t data_t;
+typedef data_t *data_ptr_t;
+typedef const data_t *const_data_ptr_t;
 
 //! Type used to represent dates
 typedef int32_t date_t;

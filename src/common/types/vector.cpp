@@ -19,7 +19,7 @@ Vector::Vector(TypeId type, bool create_data, bool zero_data)
 	}
 }
 
-Vector::Vector(TypeId type, data_t dataptr) : type(type), count(0), data(dataptr), sel_vector(nullptr) {
+Vector::Vector(TypeId type, data_ptr_t dataptr) : type(type), count(0), data(dataptr), sel_vector(nullptr) {
 	if (dataptr && type == TypeId::INVALID) {
 		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
 	}
@@ -46,32 +46,32 @@ void Vector::Reference(Value &value) {
 	}
 	switch (value.type) {
 	case TypeId::BOOLEAN:
-		data = (data_t)&value.value_.boolean;
+		data = (data_ptr_t)&value.value_.boolean;
 		break;
 	case TypeId::TINYINT:
-		data = (data_t)&value.value_.tinyint;
+		data = (data_ptr_t)&value.value_.tinyint;
 		break;
 	case TypeId::SMALLINT:
-		data = (data_t)&value.value_.smallint;
+		data = (data_ptr_t)&value.value_.smallint;
 		break;
 	case TypeId::INTEGER:
-		data = (data_t)&value.value_.integer;
+		data = (data_ptr_t)&value.value_.integer;
 		break;
 	case TypeId::BIGINT:
-		data = (data_t)&value.value_.bigint;
+		data = (data_ptr_t)&value.value_.bigint;
 		break;
 	case TypeId::FLOAT:
-		data = (data_t)&value.value_.float_;
+		data = (data_ptr_t)&value.value_.float_;
 		break;
 	case TypeId::DOUBLE:
-		data = (data_t)&value.value_.double_;
+		data = (data_ptr_t)&value.value_.double_;
 		break;
 	case TypeId::POINTER:
-		data = (data_t)&value.value_.pointer;
+		data = (data_ptr_t)&value.value_.pointer;
 		break;
 	case TypeId::VARCHAR: {
 		// make size-1 array of char vector
-		owned_data = unique_ptr<uint8_t[]>(new uint8_t[sizeof(data_t)]);
+		owned_data = unique_ptr<data_t[]>(new data_t[sizeof(data_ptr_t)]);
 		data = owned_data.get();
 		// reference the string value of the Value
 		auto strings = (const char **)data;
@@ -88,7 +88,7 @@ void Vector::Initialize(TypeId new_type, bool zero_data) {
 		type = new_type;
 	}
 	string_heap.Destroy();
-	owned_data = unique_ptr<uint8_t[]>(new uint8_t[STANDARD_VECTOR_SIZE * GetTypeIdSize(type)]);
+	owned_data = unique_ptr<data_t[]>(new data_t[STANDARD_VECTOR_SIZE * GetTypeIdSize(type)]);
 	data = owned_data.get();
 	if (zero_data) {
 		memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));

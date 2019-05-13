@@ -74,7 +74,7 @@ public:
 	//! The size of one tuple
 	count_t tuple_size;
 	//! The big sorted list
-	unique_ptr<uint8_t[]> data;
+	unique_ptr<data_t[]> data;
 	//! The amount of entries in the index
 	count_t count;
 	//! The capacity of the index

@@ -17,7 +17,7 @@ HyperLogLog::~HyperLogLog() {
 	hll_destroy((robj *)hll);
 }
 
-void HyperLogLog::Add(data_t element, index_t size) {
+void HyperLogLog::Add(data_ptr_t element, index_t size) {
 	if (hll_add((robj *)hll, element, size) == C_ERR) {
 		throw Exception("Could not add to HLL?");
 	}

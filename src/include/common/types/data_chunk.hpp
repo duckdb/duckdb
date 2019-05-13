@@ -125,6 +125,6 @@ public:
 private:
 	//! The data owned by this DataChunk. This data is typically referenced by
 	//! the member vectors.
-	unique_ptr<uint8_t[]> owned_data;
+	unique_ptr<data_t[]> owned_data;
 };
 } // namespace duckdb

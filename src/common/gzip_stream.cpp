@@ -88,10 +88,10 @@ void GzipStreamBuf::initialize() {
 	uint8_t gzip_hdr[10];
 	data_start = GZIP_HEADER_MINSIZE;
 
-	in_buff = new uint8_t[BUFFER_SIZE];
+	in_buff = new data_t[BUFFER_SIZE];
 	in_buff_start = in_buff;
 	in_buff_end = in_buff;
-	out_buff = new uint8_t[BUFFER_SIZE];
+	out_buff = new data_t[BUFFER_SIZE];
 
 	mz_stream_ptr = new mz_stream();
 	// TODO use custom alloc/free methods in miniz to throw exceptions on OOM
@@ -159,10 +159,10 @@ streambuf::int_type GzipStreamBuf::underflow() {
 
 			// actually decompress
 			assert(zstrm_p);
-			zstrm_p->next_in = (data_t)in_buff_start;
+			zstrm_p->next_in = (data_ptr_t)in_buff_start;
 			assert(in_buff_end - in_buff_start < numeric_limits<int32_t>::max());
 			zstrm_p->avail_in = (uint32_t)(in_buff_end - in_buff_start);
-			zstrm_p->next_out = (data_t)out_buff_free_start;
+			zstrm_p->next_out = (data_ptr_t)out_buff_free_start;
 			assert((out_buff + BUFFER_SIZE) - out_buff_free_start < numeric_limits<int32_t>::max());
 			zstrm_p->avail_out = (uint32_t)((out_buff + BUFFER_SIZE) - out_buff_free_start);
 			auto ret = mz_inflate(zstrm_p, MZ_NO_FLUSH);
@@ -170,9 +170,9 @@ streambuf::int_type GzipStreamBuf::underflow() {
 				throw Exception(mz_error(ret));
 			}
 			// update pointers following inflate()
-			in_buff_start = (data_t)zstrm_p->next_in;
+			in_buff_start = (data_ptr_t)zstrm_p->next_in;
 			in_buff_end = in_buff_start + zstrm_p->avail_in;
-			out_buff_free_start = (data_t)zstrm_p->next_out;
+			out_buff_free_start = (data_ptr_t)zstrm_p->next_out;
 			assert(out_buff_free_start + zstrm_p->avail_out == out_buff + BUFFER_SIZE);
 			// if stream ended, deallocate inflator
 			if (ret == MZ_STREAM_END) {

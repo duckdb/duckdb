@@ -50,7 +50,7 @@ struct WALEntry {
 
 struct WALEntryData {
 	WALEntry entry;
-	unique_ptr<uint8_t[]> data;
+	unique_ptr<data_t[]> data;
 };
 
 //! The WriteAheadLog (WAL) is a log that is used to provide durability. Prior
@@ -88,7 +88,7 @@ public:
 
 private:
 	template <class T> void Write(T val);
-	void WriteData(data_t dataptr, index_t data_size);
+	void WriteData(data_ptr_t dataptr, index_t data_size);
 
 	void WriteEntry(wal_type_t type, BufferedSerializer &serializer);
 

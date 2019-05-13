@@ -30,7 +30,7 @@ struct VersionInformation {
 	} prev;
 	VersionInformation *next;
 	transaction_t version_number;
-	data_t tuple_data;
+	data_ptr_t tuple_data;
 };
 
 //! The transaction object holds information about a currently running or past
@@ -78,7 +78,7 @@ public:
 	transaction_t active_query;
 
 private:
-	data_t PushTuple(UndoFlags flag, index_t data_size);
+	data_ptr_t PushTuple(UndoFlags flag, index_t data_size);
 
 	//! The undo buffer is used to store old versions of rows that are updated
 	//! or deleted

@@ -32,7 +32,7 @@ private:
 	index_t n_aggregated; // for sum
 	ExpressionType window_type;
 	TypeId payload_type;
-	unique_ptr<uint8_t[]> levels_flat_native;
+	unique_ptr<data_t[]> levels_flat_native;
 	vector<index_t> levels_flat_start;
 
 	ChunkCollection *input_ref;

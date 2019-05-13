@@ -513,7 +513,7 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 	return a + PathSeparator() + b;
 }
 
-Buffer::Buffer(void *internal_buffer, data_t buffer, count_t size)
+Buffer::Buffer(void *internal_buffer, data_ptr_t buffer, count_t size)
     : buffer(buffer), size(size), internal_buffer(internal_buffer) {
 }
 
@@ -524,7 +524,7 @@ Buffer::~Buffer() {
 unique_ptr<Buffer> Buffer::AllocateAlignedBuffer(count_t bufsiz) {
 	assert(bufsiz % 4096 == 0);
 	// we add 4095 to ensure that we can align the buffer to 4096
-	data_t internal_buffer = (data_t)malloc(bufsiz + 4095);
+	data_ptr_t internal_buffer = (data_ptr_t)malloc(bufsiz + 4095);
 	// round to multiple of 4096
 	count_t num = (index_t)internal_buffer;
 	count_t remainder = num % 4096;
@@ -534,5 +534,5 @@ unique_ptr<Buffer> Buffer::AllocateAlignedBuffer(count_t bufsiz) {
 	assert(num % 4096 == 0);
 	assert(num + bufsiz <= ((index_t)internal_buffer + bufsiz + 4095));
 	assert(num >= (index_t)internal_buffer);
-	return unique_ptr<Buffer>(new Buffer(internal_buffer, (data_t)num, bufsiz));
+	return unique_ptr<Buffer>(new Buffer(internal_buffer, (data_ptr_t)num, bufsiz));
 }

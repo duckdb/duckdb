@@ -54,7 +54,7 @@ JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> b
 	Resize(initial_capacity);
 }
 
-void JoinHashTable::InsertHashes(Vector &hashes, data_t key_locations[]) {
+void JoinHashTable::InsertHashes(Vector &hashes, data_ptr_t key_locations[]) {
 	assert(hashes.type == TypeId::POINTER);
 	hashes.Flatten();
 
@@ -68,7 +68,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, data_t key_locations[]) {
 		auto index = indices[i];
 		// set prev in current key to the value (NOTE: this will be nullptr if
 		// there is none)
-		auto prev_pointer = (data_t *)(key_locations[i] + tuple_size);
+		auto prev_pointer = (data_ptr_t *)(key_locations[i] + tuple_size);
 		*prev_pointer = pointers[index];
 
 		// set pointer to current tuple
@@ -82,8 +82,8 @@ void JoinHashTable::Resize(count_t size) {
 	}
 	capacity = size;
 
-	hashed_pointers = unique_ptr<data_t[]>(new data_t[capacity]);
-	memset(hashed_pointers.get(), 0, capacity * sizeof(data_t));
+	hashed_pointers = unique_ptr<data_ptr_t[]>(new data_ptr_t[capacity]);
+	memset(hashed_pointers.get(), 0, capacity * sizeof(data_ptr_t));
 
 	if (count > 0) {
 		// we have entries, need to rehash the pointers
@@ -94,10 +94,10 @@ void JoinHashTable::Resize(count_t size) {
 		auto node = head.get();
 		while (node) {
 			// scan all the entries in this node
-			auto entry_pointer = (data_t)node->data.get() + tuple_size;
+			auto entry_pointer = (data_ptr_t)node->data.get() + tuple_size;
 			for (index_t i = 0; i < node->count; i++) {
 				// reset chain pointer
-				auto prev_pointer = (data_t *)entry_pointer;
+				auto prev_pointer = (data_ptr_t *)entry_pointer;
 				*prev_pointer = nullptr;
 				// move to next entry
 				entry_pointer += entry_size;
@@ -110,8 +110,8 @@ void JoinHashTable::Resize(count_t size) {
 		keys.Initialize(equality_types);
 
 		Vector entry_pointers(TypeId::POINTER, true, true);
-		auto deserialize_locations = (data_t *)entry_pointers.data;
-		data_t key_locations[STANDARD_VECTOR_SIZE];
+		auto deserialize_locations = (data_ptr_t *)entry_pointers.data;
+		data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 
 		node = head.get();
 		while (node) {
@@ -282,8 +282,8 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	}
 
 	// get the locations of where to serialize the keys and payload columns
-	data_t key_locations[STANDARD_VECTOR_SIZE];
-	data_t tuple_locations[STANDARD_VECTOR_SIZE];
+	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
+	data_ptr_t tuple_locations[STANDARD_VECTOR_SIZE];
 	auto node = make_unique<Node>(entry_size, keys.size());
 	auto dataptr = node->data.get();
 	for (index_t i = 0; i < keys.size(); i++) {
@@ -339,7 +339,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	VectorOperations::ModuloInPlace(hashes, capacity);
 
 	// now create the initial pointers from the hashes
-	auto ptrs = (data_t *)ss->pointers.data;
+	auto ptrs = (data_ptr_t *)ss->pointers.data;
 	auto indices = (uint64_t *)hashes.data;
 	for (index_t i = 0; i < hashes.count; i++) {
 		auto index = indices[i];
@@ -485,12 +485,12 @@ count_t ScanStructure::ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk
 	StaticVector<bool> comparison_result;
 	count_t result_count = 0;
 	do {
-		auto build_pointers = (data_t *)build_pointer_vector.data;
+		auto build_pointers = (data_ptr_t *)build_pointer_vector.data;
 
 		// resolve the predicates for all the pointers
 		ResolvePredicates(keys, comparison_result);
 
-		auto ptrs = (data_t *)pointers.data;
+		auto ptrs = (data_ptr_t *)pointers.data;
 		// after doing all the comparisons we loop to find all the actual matches
 		result_count = 0;
 		VectorOperations::ExecType<bool>(comparison_result, [&](bool match, index_t index, index_t k) {
@@ -505,7 +505,7 @@ count_t ScanStructure::ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk
 		// finally we chase the pointers for the next iteration
 		count_t new_count = 0;
 		VectorOperations::Exec(pointers, [&](index_t index, index_t k) {
-			auto prev_pointer = (data_t *)(ptrs[index] + ht.build_size);
+			auto prev_pointer = (data_ptr_t *)(ptrs[index] + ht.build_size);
 			ptrs[index] = *prev_pointer;
 			if (ptrs[index]) {
 				// if there is a next pointer, we keep this entry
@@ -561,7 +561,7 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 		ResolvePredicates(keys, comparison_result);
 
 		// after doing all the comparisons we loop to find all the matches
-		auto ptrs = (data_t *)pointers.data;
+		auto ptrs = (data_ptr_t *)pointers.data;
 		count_t new_count = 0;
 		VectorOperations::ExecType<bool>(comparison_result, [&](bool match, index_t index, index_t k) {
 			if (match) {
@@ -571,7 +571,7 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 			} else {
 				// did not find a match, keep on looking for this entry
 				// first check if there is a next entry
-				auto prev_pointer = (data_t *)(ptrs[index] + ht.build_size);
+				auto prev_pointer = (data_ptr_t *)(ptrs[index] + ht.build_size);
 				ptrs[index] = *prev_pointer;
 				if (ptrs[index]) {
 					// if there is a next pointer, we keep this entry
@@ -757,14 +757,14 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &
 	// (2) we return NULL for that data if there is no match
 	StaticVector<bool> comparison_result;
 
-	auto build_pointers = (data_t *)build_pointer_vector.data;
+	auto build_pointers = (data_ptr_t *)build_pointer_vector.data;
 	count_t result_count = 0;
 	sel_t result_sel_vector[STANDARD_VECTOR_SIZE];
 	while (pointers.count > 0) {
 		// resolve the predicates for all the pointers
 		ResolvePredicates(keys, comparison_result);
 
-		auto ptrs = (data_t *)pointers.data;
+		auto ptrs = (data_ptr_t *)pointers.data;
 		// after doing all the comparisons we loop to find all the actual matches
 		VectorOperations::ExecType<bool>(comparison_result, [&](bool match, index_t index, index_t k) {
 			if (match) {
@@ -780,7 +780,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &
 		// finally we chase the pointers for the next iteration
 		count_t new_count = 0;
 		VectorOperations::Exec(pointers, [&](index_t index, index_t k) {
-			auto prev_pointer = (data_t *)(ptrs[index] + ht.build_size);
+			auto prev_pointer = (data_ptr_t *)(ptrs[index] + ht.build_size);
 			ptrs[index] = *prev_pointer;
 			if (ptrs[index] && !found_match[index]) {
 				// if there is a next pointer, and we have not found a match yet, we keep this entry

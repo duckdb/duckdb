@@ -19,7 +19,7 @@ class Serializer;
 class Deserializer;
 
 struct blob_t {
-	data_t data;
+	data_ptr_t data;
 	index_t size;
 };
 

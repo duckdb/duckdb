@@ -82,7 +82,7 @@ void WriteAheadLog::Replay(string &path) {
 			// store the WAL entry for replay after we encounter a flush
 			WALEntryData data;
 			data.entry = entry;
-			data.data = unique_ptr<uint8_t[]>(new uint8_t[entry.size]);
+			data.data = unique_ptr<data_t[]>(new data_t[entry.size]);
 			// read the data
 			if (fread(data.data.get(), entry.size, 1, wal_file) != 1) {
 				// could not read the data for this entry, stop replaying the
@@ -146,7 +146,7 @@ template <class T> void WriteAheadLog::Write(T val) {
 	}
 }
 
-void WriteAheadLog::WriteData(data_t dataptr, index_t data_size) {
+void WriteAheadLog::WriteData(data_ptr_t dataptr, index_t data_size) {
 	if (data_size == 0) {
 		return;
 	}

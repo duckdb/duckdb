@@ -49,7 +49,7 @@ OrderIndex::OrderIndex(DataTable &table, vector<column_t> column_ids, vector<Typ
 		initial_capacity = STANDARD_VECTOR_SIZE;
 	}
 	capacity = initial_capacity;
-	data = unique_ptr<uint8_t[]>(new uint8_t[capacity * tuple_size]);
+	data = unique_ptr<data_t[]>(new data_t[capacity * tuple_size]);
 
 	expression_result.Initialize(expression_types);
 }
@@ -72,7 +72,7 @@ template <class T> static index_t binary_search(SortChunk<T> *array, T key, inde
 	return upper;
 }
 
-template <class T> static index_t binary_search_lt(data_t data, T key, index_t count) {
+template <class T> static index_t binary_search_lt(data_ptr_t data, T key, index_t count) {
 	auto array = (SortChunk<T> *)data;
 	bool found = false;
 	index_t pos = binary_search(array, key, 0, count, found);
@@ -88,7 +88,7 @@ template <class T> static index_t binary_search_lt(data_t data, T key, index_t c
 	}
 }
 
-template <class T> static index_t binary_search_gt(data_t data, T key, index_t count) {
+template <class T> static index_t binary_search_gt(data_ptr_t data, T key, index_t count) {
 	auto array = (SortChunk<T> *)data;
 	bool found = false;
 	index_t pos = binary_search(array, key, 0, count, found);
@@ -100,7 +100,7 @@ template <class T> static index_t binary_search_gt(data_t data, T key, index_t c
 	return pos;
 }
 
-template <class T> int64_t binary_search_lte(data_t data, T key, index_t count) {
+template <class T> int64_t binary_search_lte(data_ptr_t data, T key, index_t count) {
 	auto array = (SortChunk<T> *)data;
 	bool found = false;
 	auto pos_orig = binary_search(array, key, 0, count, found);
@@ -111,7 +111,7 @@ template <class T> int64_t binary_search_lte(data_t data, T key, index_t count) 
 	return pos;
 }
 
-template <class T> int64_t binary_search_gte(data_t data, T key, index_t count) {
+template <class T> int64_t binary_search_gte(data_ptr_t data, T key, index_t count) {
 	auto array = (SortChunk<T> *)data;
 	bool found = false;
 	auto pos_orig = binary_search(array, key, 0, count, found);
@@ -207,7 +207,7 @@ index_t OrderIndex::SearchGT(Value value) {
 	}
 }
 
-template <class T> static index_t templated_scan(index_t &from, index_t &to, data_t data, int64_t *result_ids) {
+template <class T> static index_t templated_scan(index_t &from, index_t &to, data_ptr_t data, int64_t *result_ids) {
 	auto array = (SortChunk<T> *)data;
 	index_t result_count = 0;
 	for (; from < to; from++) {
@@ -304,7 +304,7 @@ void OrderIndex::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &r
 	} while (result_identifiers.count == 0);
 }
 
-template <class T> static void templated_insert(data_t dataptr, DataChunk &input, Vector &row_ids) {
+template <class T> static void templated_insert(data_ptr_t dataptr, DataChunk &input, Vector &row_ids) {
 	auto actual_data = (SortChunk<T> *)dataptr;
 	auto input_data = (T *)input.data[0].data;
 	auto row_identifiers = (int64_t *)row_ids.data;
@@ -314,7 +314,7 @@ template <class T> static void templated_insert(data_t dataptr, DataChunk &input
 	}
 }
 
-static void insert_data(data_t dataptr, DataChunk &input, Vector &row_ids) {
+static void insert_data(data_ptr_t dataptr, DataChunk &input, Vector &row_ids) {
 	switch (input.data[0].type) {
 	case TypeId::TINYINT:
 		templated_insert<int8_t>(dataptr, input, row_ids);
@@ -347,7 +347,7 @@ void OrderIndex::Insert(DataChunk &input, Vector &row_ids) {
 	if (count + row_ids.count >= capacity) {
 		// have to allocate new structure to make room for new entries
 		capacity *= 2;
-		auto new_data = unique_ptr<uint8_t[]>(new uint8_t[capacity * tuple_size]);
+		auto new_data = unique_ptr<data_t[]>(new data_t[capacity * tuple_size]);
 		// copy the old data
 		memcpy(new_data.get(), data.get(), count * tuple_size);
 		data = move(new_data);
@@ -358,7 +358,7 @@ void OrderIndex::Insert(DataChunk &input, Vector &row_ids) {
 	count += row_ids.count;
 }
 
-template <class T> static void templated_sort(data_t dataptr, index_t count) {
+template <class T> static void templated_sort(data_ptr_t dataptr, index_t count) {
 	auto actual_data = (SortChunk<T> *)dataptr;
 	sort(actual_data, actual_data + count,
 	     [](const SortChunk<T> &a, const SortChunk<T> &b) -> bool { return a.value < b.value; });
@@ -457,7 +457,7 @@ void OrderIndex::Update(ClientContext &context, vector<column_t> &update_columns
 	Sort();
 }
 
-template <class T> void templated_print(data_t dataptr, index_t count) {
+template <class T> void templated_print(data_ptr_t dataptr, index_t count) {
 	auto actual_data = (SortChunk<T> *)dataptr;
 	for (index_t i = 0; i < count; i++) {
 		cout << "[" << actual_data[i].value << " - " << actual_data[i].row_id << "]"

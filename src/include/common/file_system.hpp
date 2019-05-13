@@ -58,10 +58,10 @@ public:
 	~Buffer();
 
 private:
-	Buffer(void *internal_buffer, data_t buffer, count_t size);
+	Buffer(void *internal_buffer, data_ptr_t buffer, count_t size);
 
 public:
-	data_t buffer;
+	data_ptr_t buffer;
 	count_t size;
 
 private:

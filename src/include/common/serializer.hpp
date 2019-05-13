@@ -19,17 +19,17 @@ public:
 	virtual ~Serializer() {
 	}
 
-	virtual void Write(data_t_const buffer, index_t write_size) = 0;
+	virtual void Write(const_data_ptr_t buffer, index_t write_size) = 0;
 
 	template <class T> void Write(T element) {
-		Write((data_t_const)&element, sizeof(T));
+		Write((const_data_ptr_t)&element, sizeof(T));
 	}
 
 	void WriteString(const string &val) {
 		assert(val.size() <= std::numeric_limits<uint32_t>::max());
 		Write<uint32_t>((uint32_t)val.size());
 		if (val.size() > 0) {
-			Write((data_t_const)val.c_str(), val.size());
+			Write((const_data_ptr_t)val.c_str(), val.size());
 		}
 	}
 
@@ -57,11 +57,11 @@ public:
 	}
 
 	//! Reads [read_size] bytes into the buffer
-	virtual void Read(data_t buffer, index_t read_size) = 0;
+	virtual void Read(data_ptr_t buffer, index_t read_size) = 0;
 
 	template <class T> T Read() {
 		T value;
-		Read((data_t)&value, sizeof(T));
+		Read((data_ptr_t)&value, sizeof(T));
 		return value;
 	}
 

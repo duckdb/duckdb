@@ -13,12 +13,12 @@
 using namespace duckdb;
 using namespace std;
 
-data_t UndoBuffer::CreateEntry(UndoFlags type, index_t len) {
+data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, index_t len) {
 	UndoEntry entry;
 	entry.type = type;
 	entry.length = len;
-	auto dataptr = new uint8_t[len];
-	entry.data = unique_ptr<uint8_t[]>(dataptr);
+	auto dataptr = new data_t[len];
+	entry.data = unique_ptr<data_t[]>(dataptr);
 	entries.push_back(move(entry));
 	return dataptr;
 }
