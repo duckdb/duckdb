@@ -198,11 +198,11 @@ void ART::erase(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned 
                         Node48::shrink(node);
                     break;
                 }
-                case NodeType::N256:{
-                    if (node->count == 37)
+                case NodeType::N256:
+                    if (node->count == 37) {
                         Node256::shrink(node);
-                        break;
-                }
+                    }
+                    break;
                 default:
                     assert(0);
                     break;

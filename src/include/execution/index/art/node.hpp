@@ -33,6 +33,7 @@ public:
 		this->prefix = unique_ptr<uint8_t[]>(new uint8_t[maxPrefixLength]);
 		this->maxPrefixLength = maxPrefixLength;
 	}
+	virtual ~Node(){}
 
 	//! Copies the prefix from the source to the destination node
 	static void copyPrefix(Node *src, Node *dst);
@@ -60,14 +61,17 @@ public:
 	uint64_t capacity;
 	uint64_t num_elements;
 	unique_ptr<uint64_t[]> row_id;
-	Leaf(uint64_t value, uint64_t row_id, uint8_t maxPrefixLength) : Node(NodeType::NLeaf, maxPrefixLength) {
+
+    Leaf(uint64_t value, uint64_t row_id, uint8_t maxPrefixLength) : Node(NodeType::NLeaf, maxPrefixLength) {
+        this->prefix = unique_ptr<uint8_t[]>(new uint8_t[0]);
 		this->value = value;
 		this->capacity = 1;
 		this->row_id = unique_ptr<uint64_t[]>(new uint64_t[this->capacity]);
 		this->row_id[0] = row_id;
 		this->num_elements = 1;
 	}
-	static void insert(Leaf *leaf, uint64_t row_id) {
+
+    static void insert(Leaf *leaf, uint64_t row_id) {
 		// Grow array
 		if (leaf->num_elements == leaf->capacity) {
 			auto new_row_id = unique_ptr<uint64_t[]>(new uint64_t[leaf->capacity * 2]);

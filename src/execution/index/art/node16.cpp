@@ -49,9 +49,10 @@ if (n->count < 16) {
 	} else {
 		// Grow to Node48
         auto newNode = make_unique<Node48>(node->maxPrefixLength);
-        memcpy(newNode->child, n->child, node->count * sizeof(uintptr_t));
-		for (unsigned i = 0; i < node->count; i++)
-			newNode->childIndex[n->key[i]] = i;
+		for (unsigned i = 0; i < node->count; i++) {
+            newNode->childIndex[n->key[i]] = i;
+            newNode->child[i] = move(n->child[i]);
+        }
 		copyPrefix(n, newNode.get());
 		newNode->count = node->count;
 		node = move(newNode);

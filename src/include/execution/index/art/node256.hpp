@@ -15,7 +15,7 @@ class Node256 : public Node {
 public:
     unique_ptr<Node> child[256];
 	Node256(uint8_t maxPrefixLength) : Node(NodeType::N256, maxPrefixLength) {
-		memset(child, 0, sizeof(child));
+//		memset(child, 0, sizeof(child));
 	}
 
 	//! Get Node256 Child
