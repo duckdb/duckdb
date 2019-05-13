@@ -75,13 +75,17 @@ void StorageManager::LoadDatabase() {
 		if (database.file_system->FileExists(wal_path)) {
 			// replay the WAL
 			wal.Replay(wal_path);
-			// checkpoint the database
-			checkpointer.CreateCheckpoint();
-			// remove the WAL
-			database.file_system->RemoveFile(wal_path);
+			if (!read_only) {
+				// checkpoint the database
+				checkpointer.CreateCheckpoint();
+				// remove the WAL
+				database.file_system->RemoveFile(wal_path);
+			}
 		}
 	}
 	// FIXME: check if temporary file exists and delete that if it does
 	// initialize the WAL file
-	wal.Initialize(wal_path);
+	if (!read_only) {
+		wal.Initialize(wal_path);
+	}
 }
