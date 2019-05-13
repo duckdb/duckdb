@@ -25,13 +25,14 @@
 
 namespace duckdb {
 struct ARTIndexScanState : public IndexScanState {
+    ARTIndexScanState(vector<column_t> column_ids) : IndexScanState(column_ids), checked(false) {
+    }
+
 	Value values[2];
 	ExpressionType expressions[2];
 	bool checked;
     StaticVector<int64_t> result_identifiers;
     uint64_t current_tuple = 0;
-    ARTIndexScanState(vector<column_t> column_ids) : IndexScanState(column_ids) {
-	}
 };
 
 struct IteratorEntry {

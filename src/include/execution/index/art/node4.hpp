@@ -18,7 +18,6 @@ public:
 
 	Node4(uint8_t maxPrefixLength) : Node(NodeType::N4, maxPrefixLength) {
 		memset(key, 0, sizeof(key));
-		memset(child, 0, sizeof(child));
 	}
 
 	//! Get Node4 Child

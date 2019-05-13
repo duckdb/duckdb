@@ -17,8 +17,9 @@ public:
     unique_ptr<Node> child[48];
 
 	Node48(uint8_t maxPrefixLength) : Node(NodeType::N48, maxPrefixLength) {
-		memset(childIndex, 48, sizeof(childIndex));
-		memset(child, 0, sizeof(child));
+	    for(uint64_t i = 0; i < 256; i++) {
+	        childIndex[i] = 48;
+	    }
 	}
 
 	//! Get Node48 Child
