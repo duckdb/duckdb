@@ -40,25 +40,6 @@ public:
 
 	Key(const Key &key) = delete;
 
-	Key(Key &&key);
-
-	void set(const char bytes[], const uint64_t length);
-
-	void operator=(const char key[]);
-
-	bool operator==(const Key &k) const {
-		if (k.getKeyLen() != getKeyLen()) {
-			return false;
-		}
-		return std::memcmp(&k[0], data.get(), getKeyLen()) == 0;
-	}
-
-	bool operator!=(const Key &k) const {
-		if (k.getKeyLen() != getKeyLen()) {
-			return true;
-		}
-		return !(std::memcmp(&k[0], data.get(), getKeyLen()) == 0);
-	}
 
 	uint8_t &operator[](std::size_t i);
 
@@ -74,9 +55,6 @@ public:
 		}
 		return false;
 	}
-	KeyLen getKeyLen() const;
-
-	void setKeyLen(KeyLen len);
 };
 
 inline uint8_t &Key::operator[](std::size_t i) {

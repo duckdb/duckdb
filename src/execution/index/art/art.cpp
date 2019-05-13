@@ -19,7 +19,6 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, ve
 		is_little_endian = false;
 	}
 	switch (types[0]) {
-	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
 		maxPrefix = 1;
 		break;
@@ -50,7 +49,6 @@ void ART::Insert(DataChunk &input, Vector &row_ids) {
 	assert(input.size() == row_ids.count);
 	assert(types[0] == input.data[0].type);
 	switch (input.data[0].type) {
-	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
 		templated_insert<int8_t>(input, row_ids);
 		break;
@@ -77,7 +75,6 @@ void ART::Delete(DataChunk &input, Vector &row_ids) {
 	assert(input.size() == row_ids.count);
 	assert(types[0] == input.data[0].type);
 	switch (input.data[0].type) {
-	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
 		templated_delete<int8_t>(input, row_ids);
 		break;
@@ -163,8 +160,8 @@ void ART::erase(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned 
 			return;
 		depth += node->prefixLength;
 	}
-    int pos = 0;
-	auto child = Node::findChild(key[depth], node,pos);
+    int pos = Node::findKeyPos(key[depth], &(*node));
+	auto child = Node::findChild(key[depth], node);
 
     unique_ptr<Node>& child_ref= *child;
 	if (child_ref->type == NodeType::NLeaf && leafMatches(isLittleEndian, child_ref.get(), key, maxKeyLength, depth)) {
@@ -176,32 +173,23 @@ void ART::erase(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned 
 		}
 		// Leaf only has one element, delete leaf, decrement node counter and maybe shrink node
 		else {
-            child_ref.reset();
-            node->count--;
 			switch (node->type) {
                 case NodeType::N4:{
-					if (node->count == 0)
-						node.reset();
+					Node4::erase(node,pos);
 					break;
 				}
                 case NodeType::N16:{
-                    auto node_cast = static_cast<Node16 *>(node.get());
-                    node_cast->key[pos] = 16;
-                    if (node->count == 3)
-                        Node16::shrink(node);
+                    Node16::erase(node,pos);
                     break;
                 }
                 case NodeType::N48:{
-                    auto node_cast = static_cast<Node48 *>(node.get());
-                    node_cast->childIndex[pos] = 48;
-                    if (node->count == 12)
-                        Node48::shrink(node);
+
+                        Node48::erase(node,pos);
                     break;
                 }
                 case NodeType::N256:
-                    if (node->count == 37) {
-                        Node256::shrink(node);
-                    }
+                        Node256::erase(node,pos);
+
                     break;
                 default:
                     assert(0);
@@ -268,13 +256,7 @@ void ART::insert(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned
                 memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatchPos + 1,
                         Node::min(node_ptr->prefixLength, node_ptr->maxPrefixLength));
 			} else {
-				node->prefixLength -= (mismatchPos + 1);
-				auto leaf = static_cast<Leaf *>(Node::minimum(node.get()));
-				auto auxKey = make_unique<Key>(isLittleEndian, type, leaf->value,maxKeyLength);
-				Key &minKey = *auxKey;
-				Node4::insert(newNode, minKey[depth + mismatchPos], node);
-				memmove(node->prefix.get(), &minKey[depth + mismatchPos + 1],
-				        Node::min(node->prefixLength, node->maxPrefixLength));
+                throw NotImplementedException("PrefixLength > MaxPrefixLength");
 			}
 			unique_ptr<Node> leaf_node = make_unique<Leaf>(value, row_id, maxKeyLength);
 
@@ -408,7 +390,7 @@ bool ART::iteratorNext(Iterator& iter) {
 bool ART::bound(unique_ptr<Node>& n,Key &key,unsigned keyLength,Iterator& iterator,unsigned maxKeyLength,bool inclusive, bool isLittleEndian) {
 	iterator.depth=0;
     auto node = n.get();
-	if (!node)
+	if (!n)
 		return false;
 
 	unsigned depth=0;
@@ -457,8 +439,10 @@ bool ART::bound(unique_ptr<Node>& n,Key &key,unsigned keyLength,Iterator& iterat
 			return iteratorNext(iterator);
 		}
 		depth+=node->prefixLength;
-		Node* next = Node::findChild(key[depth], node,pos);
-		if (!next)
+        auto next = Node::findChild(key[depth], node);
+        pos = Node::findKeyPos(key[depth], node);
+
+        if (!next)
 			return iteratorNext(iterator);
 
 		pos++;
@@ -566,9 +550,6 @@ void ART::SearchGreater(StaticVector<int64_t> *result_identifiers,ARTIndexScanSt
 void ART::SearchLess(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state, bool inclusive){
 	auto row_ids = (int64_t *)result_identifiers->data;
 	switch (types[0]) {
-		case TypeId::BOOLEAN:
-			result_identifiers->count = templated_less_scan<int8_t>(types[0], state->values[0].value_.boolean, row_ids,inclusive);
-			break;
 		case TypeId::TINYINT:
 			result_identifiers->count = templated_less_scan<int8_t>(types[0], state->values[0].value_.tinyint, row_ids,inclusive);
 			break;
@@ -591,9 +572,6 @@ void ART::SearchLess(StaticVector<int64_t> *result_identifiers,ARTIndexScanState
 void ART::SearchCloseRange(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state, bool left_inclusive,bool right_inclusive){
 	auto row_ids = (int64_t *)result_identifiers->data;
 	switch (types[0]) {
-		case TypeId::BOOLEAN:
-			result_identifiers->count = templated_close_range<int8_t>(types[0], state->values[0].value_.boolean,state->values[1].value_.boolean, row_ids,left_inclusive,right_inclusive);
-			break;
 		case TypeId::TINYINT:
 			result_identifiers->count = templated_close_range<int8_t>(types[0], state->values[0].value_.tinyint,state->values[1].value_.tinyint, row_ids,left_inclusive,right_inclusive);
 			break;

@@ -39,12 +39,10 @@ public:
 	static void copyPrefix(Node *src, Node *dst);
 	//! Find the leaf with smallest element in the tree
 	static unique_ptr<Node>* minimum(unique_ptr<Node>& node);
-    static Node * minimum(Node *node);
 	//! Find the next child for the keyByte
 	static unique_ptr<Node>* findChild(const uint8_t k, unique_ptr<Node>& node);
-	static unique_ptr<Node>* findChild(const uint8_t k, unique_ptr<Node>& node, int& pos);
+    static int findKeyPos(const uint8_t k, Node* node);
     static Node *findChild(const uint8_t k, Node *node);
-    static Node *findChild(const uint8_t k, Node *node, int& pos);
 
 	//! Compare the key with the prefix of the node, return the number matching bytes
 	static unsigned prefixMismatch(bool isLittleEndian, Node *node, Key &key, uint64_t depth, unsigned maxKeyLength,

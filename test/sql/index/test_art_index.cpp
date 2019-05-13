@@ -180,3 +180,95 @@ TEST_CASE("ART Integer Types", "[art-int]") {
     }
 
 }
+
+TEST_CASE("ART  Node 4", "[art-4]") {
+    unique_ptr<QueryResult> result;
+    DuckDB db(nullptr);
+
+    Connection con(db);
+
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
+    int n = 4;
+    auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
+    for (int32_t i = 0; i < n; i++)
+        keys[i] = i + 1;
+
+    for (int32_t i = 0; i < n; i++) {
+        REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(keys[i]) + ")"));
+    }
+
+    for (int32_t i = 0; i < n; i++) {
+        result = con.Query("SELECT i FROM integers WHERE i=" + to_string(keys[i]));
+        REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
+    }
+    REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
+    result = con.Query("SELECT sum(i) FROM integers WHERE i <=2");
+    REQUIRE(CHECK_COLUMN(result, 0, {Value(3)}));
+    // Now Deleting all elements
+    for (int32_t i = 0; i < n; i++) {
+        REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=" + to_string(keys[i])));
+    }
+    REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
+    REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+}
+
+TEST_CASE("ART  Node 16", "[art-16]") {
+    unique_ptr<QueryResult> result;
+    DuckDB db(nullptr);
+
+    Connection con(db);
+
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
+    int n = 6;
+    auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
+    for (int32_t i = 0; i < n; i++)
+        keys[i] = i + 1;
+
+    for (int32_t i = 0; i < n; i++) {
+        REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(keys[i]) + ")"));
+    }
+    REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
+    for (int32_t i = 0; i < n; i++) {
+        result = con.Query("SELECT i FROM integers WHERE i=" + to_string(keys[i]));
+        REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
+    }
+    result = con.Query("SELECT sum(i) FROM integers WHERE i <=2");
+    REQUIRE(CHECK_COLUMN(result, 0, {Value(3)}));
+    // Now Deleting all elements
+    for (int32_t i = 0; i < n; i++) {
+        REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=" + to_string(keys[i])));
+    }
+    REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
+    REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+}
+
+TEST_CASE("ART Node 48", "[art-48]") {
+    unique_ptr<QueryResult> result;
+    DuckDB db(nullptr);
+
+    Connection con(db);
+
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
+    int n = 20;
+    auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
+    for (int32_t i = 0; i < n; i++)
+        keys[i] = i + 1;
+
+    for (int32_t i = 0; i < n; i++) {
+        REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(keys[i]) + ")"));
+    }
+    REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
+    for (int32_t i = 0; i < n; i++) {
+        result = con.Query("SELECT i FROM integers WHERE i=" + to_string(keys[i]));
+        REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
+    }
+    result = con.Query("SELECT sum(i) FROM integers WHERE i <=2");
+    REQUIRE(CHECK_COLUMN(result, 0, {Value(3)}));
+    // Now Deleting all elements
+    for (int32_t i = 0; i < n; i++) {
+        REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=" + to_string(keys[i])));
+    }
+    REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
+    REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+}
+

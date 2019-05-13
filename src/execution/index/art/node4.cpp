@@ -12,27 +12,18 @@ unique_ptr<Node>* Node4::getChild(const uint8_t k) {
 	return nullptr;
 }
 
-unique_ptr<Node>* Node4::getChild(const uint8_t k, int& pos) {
+int Node4::getPos(const uint8_t k){
+    int pos;
 	for (pos = 0; pos < count; ++pos) {
 		if (key[pos] == k) {
-			return &child[pos];
+			return pos;
 		}
 	}
-	return nullptr;
+	return -1;
 }
 
 unique_ptr<Node>* Node4::getMin() {
-	auto result = &child[0];
-	auto res_key = key[0];
-	if (count > 1){
-		for (uint32_t i = 1; i < count; ++i) {
-			if (key[i] < res_key) {
-				result = &child[i];
-                res_key = key[i];
-			}
-		}
-	}
-	return result;
+	return &child[0];
 }
 
 void Node4::insert(unique_ptr<Node>& node, uint8_t keyByte, unique_ptr<Node>& child) {
@@ -41,8 +32,16 @@ void Node4::insert(unique_ptr<Node>& node, uint8_t keyByte, unique_ptr<Node>& ch
     // Insert leaf into inner node
 	if (node->count < 4) {
 		// Insert element
-        n->key[n->count] = keyByte;
-        n->child[n->count] = move(child);
+        unsigned pos;
+        for (pos=0;(pos<node->count)&&(n->key[pos]<keyByte);pos++);
+        if (n->child[pos] != nullptr){
+            for(int i = n->count;i>pos;i--){
+                n->key[i] = n->key[i-1];
+                n->child[i] = move(n->child[i-1]);
+            }
+        }
+        n->key[pos] = keyByte;
+        n->child[pos] = move(child);
         n->count++;
 	} else {
 		// Grow to Node16
@@ -58,3 +57,42 @@ void Node4::insert(unique_ptr<Node>& node, uint8_t keyByte, unique_ptr<Node>& ch
 	}
 }
 
+void Node4::erase(unique_ptr<Node>& node,int pos){
+    Node4 *n = static_cast<Node4 *>(node.get());
+
+    if (n->count == 4){
+        n->child[3].release();
+        n->count--;
+    }
+    else{
+        for (;pos<n->count;pos++){
+            n->key[pos] = n->key[pos+1];
+            n->child[pos] = move(n->child[pos+1]);
+        }
+        n->count--;
+    }
+    // This is a one way node
+    if (n->count ==1){
+        auto childref = n->child[0].get();
+        if(childref->type == NodeType::NLeaf){
+            // Concantenate prefixes
+            int l1=childref->prefixLength;
+            if (l1<n->maxPrefixLength) {
+                n->prefix[l1]=n->key[0];
+                l1++;
+            }
+            if (l1<n->maxPrefixLength) {
+                int l2=min(childref->prefixLength,n->maxPrefixLength-l1);
+                for (int i = 0; i < l2; i ++){
+                    n->prefix[l1+i] = childref->prefix[l2];
+                }
+                l1+=l2;
+            }
+            for (int i = 0; i < l1; i ++){
+                childref->prefix[i] =  n->prefix[i];
+            }
+
+        }
+        node = move(n->child[0]);
+    }
+}

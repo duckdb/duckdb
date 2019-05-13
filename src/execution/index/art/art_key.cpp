@@ -15,47 +15,9 @@
 	            (((uint64_t)(x)&0x00000000ff000000ull) << 8) | (((uint64_t)(x)&0x0000000000ff0000ull) << 24) |         \
 	            (((uint64_t)(x)&0x000000000000ff00ull) << 40) | (((uint64_t)(x)&0x00000000000000ffull) << 56)))
 
-KeyLen Key::getKeyLen() const {
-	return len;
-}
-
-Key::Key(Key &&key) {
-	len = key.len;
-	data = move(key.data);
-
-}
-
-void Key::set(const char bytes[], const uint64_t length) {
-		data = unique_ptr<uint8_t[]>(new uint8_t[length]);
-		memcpy(data.get(), bytes, length);
-	len = length;
-}
-
-void Key::operator=(const char key[]) {
-	len = strlen(key);
-
-		data = unique_ptr<uint8_t[]>(new uint8_t[len]);
-		memcpy(data.get(), key, len);
-}
-
-void Key::setKeyLen(KeyLen newLen) {
-	if (len == newLen)
-		return;
-	len = newLen;
-		data = unique_ptr<uint8_t[]>(new uint8_t[len]);
-}
 
 void Key::convert_to_binary_comparable(bool isLittleEndian, TypeId type, uintptr_t tid) {
-//	data = move(stackKey);
 	switch (type) {
-	case TypeId::BOOLEAN:
-		len = 1;
-		if (isLittleEndian) {
-			data[0] = BSWAP8(tid);
-		} else {
-			data[0] = tid;
-		}
-		break;
 	case TypeId::TINYINT:
 		len = 1;
 		if (isLittleEndian) {
