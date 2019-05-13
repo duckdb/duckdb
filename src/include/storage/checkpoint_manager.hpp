@@ -17,6 +17,7 @@ namespace duckdb {
 class ClientContext;
 class MetaBlockReader;
 class SchemaCatalogEntry;
+class SequenceCatalogEntry;
 class TableCatalogEntry;
 class ViewCatalogEntry;
 
@@ -44,6 +45,7 @@ private:
 	void WriteSchema(Transaction &transaction, SchemaCatalogEntry &schema);
 	void WriteTable(Transaction &transaction, TableCatalogEntry &table);
 	void WriteView(Transaction &transaction, ViewCatalogEntry &table);
+	void WriteSequence(Transaction &transaction, SequenceCatalogEntry &table);
 	void WriteTableData(Transaction &transaction, TableCatalogEntry &table);
 
 	void WriteColumnData(DataChunk &chunk, uint64_t column_index);
@@ -54,6 +56,7 @@ private:
 	void ReadSchema(ClientContext &context, MetaBlockReader &reader);
 	void ReadTable(ClientContext &context, MetaBlockReader &reader);
 	void ReadView(ClientContext &context, MetaBlockReader &reader);
+	void ReadSequence(ClientContext &context, MetaBlockReader &reader);
 	void ReadTableData(ClientContext &context, TableCatalogEntry &table, MetaBlockReader &reader);
 
 	void ReadBlock(uint64_t col, uint64_t block_nr);

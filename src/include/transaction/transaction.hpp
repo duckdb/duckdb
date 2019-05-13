@@ -9,9 +9,12 @@
 #pragma once
 
 #include "common/types/data_chunk.hpp"
+#include "common/unordered_map.hpp"
 #include "transaction/undo_buffer.hpp"
+#include "catalog/catalog_entry/sequence_catalog_entry.hpp"
 
 namespace duckdb {
+class SequenceCatalogEntry;
 
 extern transaction_t TRANSACTION_ID_START;
 extern transaction_t MAXIMUM_QUERY_ID;
@@ -43,6 +46,20 @@ public:
 	      active_query(MAXIMUM_QUERY_ID) {
 	}
 
+	//! The start timestamp of this transaction
+	transaction_t start_time;
+	//! The transaction id of this transaction
+	transaction_t transaction_id;
+	//! The commit id of this transaction, if it has successfully been committed
+	transaction_t commit_id;
+	//! Highest active query when the transaction finished, used for cleaning up
+	transaction_t highest_active_query;
+	//! The current active query for the transaction. Set to MAXIMUM_QUERY_ID if
+	//! no query is active.
+	transaction_t active_query;
+	//! Map of all sequences that were used during the transaction and the value they had in this transaction
+	unordered_map<SequenceCatalogEntry*, SequenceValue> sequence_usage;
+public:
 	void PushCatalogEntry(CatalogEntry *entry);
 	//! Create deleted entries in the undo buffer
 	void PushDeletedEntries(uint64_t offset, uint64_t count, StorageChunk *storage,
@@ -64,18 +81,6 @@ public:
 	void Cleanup() {
 		undo_buffer.Cleanup();
 	}
-
-	//! The start timestamp of this transaction
-	transaction_t start_time;
-	//! The transaction id of this transaction
-	transaction_t transaction_id;
-	//! The commit id of this transaction, if it has successfully been committed
-	transaction_t commit_id;
-	//! Highest active query when the transaction finished, used for cleaning up
-	transaction_t highest_active_query;
-	//! The current active query for the transaction. Set to MAXIMUM_QUERY_ID if
-	//! no query is active.
-	transaction_t active_query;
 
 private:
 	uint8_t *PushTuple(UndoFlags flag, uint64_t data_size);

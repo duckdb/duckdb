@@ -51,12 +51,12 @@ static void parse_schema_and_sequence(string input, string &schema, string &name
 	}
 }
 
-static int64_t next_sequence_value(SequenceCatalogEntry *seq) {
+static int64_t next_sequence_value(Transaction &transaction, SequenceCatalogEntry *seq) {
+	lock_guard<mutex> seqlock(seq->lock);
 	int64_t result;
 	if (seq->cycle) {
-		lock_guard<mutex> seqlock(seq->lock);
-		result = seq->counter += seq->increment;
-		result -= seq->increment;
+		result = seq->counter;
+		seq->counter += seq->increment;;
 		if (result < seq->min_value) {
 			result = seq->max_value;
 			seq->counter = seq->max_value + seq->increment;
@@ -64,10 +64,9 @@ static int64_t next_sequence_value(SequenceCatalogEntry *seq) {
 			result = seq->min_value;
 			seq->counter = seq->min_value + seq->increment;
 		}
-
 	} else {
-		result = seq->counter += seq->increment;
-		result -= seq->increment;
+		result = seq->counter;
+		seq->counter += seq->increment;
 		if (result < seq->min_value) {
 			throw SequenceException("nextval: reached minimum value of sequence \"%s\" (%lld)", seq->name.c_str(),
 			                        seq->min_value);
@@ -77,6 +76,8 @@ static int64_t next_sequence_value(SequenceCatalogEntry *seq) {
 			                        seq->max_value);
 		}
 	}
+	seq->usage_count++;
+	transaction.sequence_usage.insert(make_pair(seq, SequenceValue(seq->usage_count, seq->counter)));
 	return result;
 }
 
@@ -93,13 +94,14 @@ void nextval_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_
 		result.count = inputs[0].count;
 		result.sel_vector = inputs[0].sel_vector;
 	}
+	Transaction &transaction = info.context.ActiveTransaction();
 	if (info.sequence) {
 		// sequence to use is hard coded
 		// increment the sequence
 		int64_t *result_data = (int64_t *)result.data;
 		VectorOperations::Exec(result, [&](uint64_t i, uint64_t k) {
 			// get the next value from the sequence
-			result_data[i] = next_sequence_value(info.sequence);
+			result_data[i] = next_sequence_value(transaction, info.sequence);
 		});
 	} else {
 		// sequence to use comes from the input
@@ -113,7 +115,7 @@ void nextval_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_
 			// fetch the sequence from the catalog
 			auto sequence = info.context.catalog.GetSequence(info.context.ActiveTransaction(), schema, seq);
 			// finally get the next value from the sequence
-			result_data[i] = next_sequence_value(sequence);
+			result_data[i] = next_sequence_value(transaction, sequence);
 		});
 	}
 }

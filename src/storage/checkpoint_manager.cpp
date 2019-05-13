@@ -8,6 +8,7 @@
 
 #include "catalog/catalog.hpp"
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "catalog/catalog_entry/view_catalog_entry.hpp"
 
@@ -109,6 +110,15 @@ void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry
 	for (auto &view : views) {
 		WriteView(transaction, *view);
 	}
+	// now write the sequences
+	vector<SequenceCatalogEntry *> sequences;
+	schema.sequences.Scan(transaction, [&](CatalogEntry *entry) {
+		sequences.push_back((SequenceCatalogEntry*) entry);
+	});
+	metadata_writer->Write<uint32_t>(sequences.size());
+	for (auto &seq : sequences) {
+		WriteSequence(transaction, *seq);
+	}
 	// FIXME: free list?
 }
 
@@ -128,6 +138,10 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	for(uint32_t i = 0; i < view_count; i++) {
 		ReadView(context, reader);
 	}
+	uint32_t seq_count = reader.Read<uint32_t>();
+	for(uint32_t i = 0; i < seq_count; i++) {
+		ReadSequence(context, reader);
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -141,6 +155,19 @@ void CheckpointManager::ReadView(ClientContext &context, MetaBlockReader &reader
 	auto info = ViewCatalogEntry::Deserialize(reader);
 
 	database.catalog->CreateView(context.ActiveTransaction(), info.get());
+}
+
+//===--------------------------------------------------------------------===//
+// Sequences
+//===--------------------------------------------------------------------===//
+void CheckpointManager::WriteSequence(Transaction &transaction, SequenceCatalogEntry &seq) {
+	seq.Serialize(*metadata_writer);
+}
+
+void CheckpointManager::ReadSequence(ClientContext &context, MetaBlockReader &reader) {
+	auto info = SequenceCatalogEntry::Deserialize(reader);
+
+	database.catalog->CreateSequence(context.ActiveTransaction(), info.get());
 }
 
 //===--------------------------------------------------------------------===//

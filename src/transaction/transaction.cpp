@@ -4,6 +4,7 @@
 #include "common/exception.hpp"
 #include "parser/column_definition.hpp"
 #include "storage/data_table.hpp"
+#include "storage/write_ahead_log.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -65,5 +66,15 @@ uint8_t *Transaction::PushTuple(UndoFlags flags, uint64_t data_size) {
 
 void Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) {
 	this->commit_id = commit_id;
+	// commit the undo buffer
 	undo_buffer.Commit(log, commit_id);
+	if (log) {
+		// commit any sequences that were used to the WAL
+		for(auto &entry : sequence_usage) {
+			log->WriteSequenceValue(entry.first, entry.second);
+		}
+		// flush the WAL
+		log->Flush();
+	}
+
 }
