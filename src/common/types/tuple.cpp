@@ -137,7 +137,8 @@ void TupleSerializer::SerializeUpdate(vector<data_ptr_t> &column_data, vector<co
 	}
 }
 
-static void SerializeValue(data_ptr_t target_data, Vector &col, index_t index, index_t result_index, index_t type_size) {
+static void SerializeValue(data_ptr_t target_data, Vector &col, index_t index, index_t result_index,
+                           index_t type_size) {
 	if (col.nullmask[index]) {
 		SetNullValue(target_data, col.type);
 	} else {

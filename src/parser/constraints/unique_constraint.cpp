@@ -1,6 +1,5 @@
-#include "parser/constraints/parsed_constraint.hpp"
-
 #include "common/serializer.hpp"
+#include "parser/constraints/parsed_constraint.hpp"
 
 using namespace std;
 using namespace duckdb;
@@ -10,7 +9,7 @@ string UniqueConstraint::ToString() const override {
 }
 
 unique_ptr<Constraint> UniqueConstraint::Copy() {
-	if (index == (uint64_t) -1) {
+	if (index == (uint64_t)-1) {
 		return make_unique<UniqueConstraint>(columns, is_primary_key);
 	} else {
 		assert(columns.size() == 0);

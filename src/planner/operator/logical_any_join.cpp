@@ -21,7 +21,7 @@ Expression *LogicalAnyJoin::GetExpression(index_t index) {
 }
 
 void LogicalAnyJoin::ReplaceExpression(
-    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, uint64_t index) {
+    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, index_t index) {
 	assert(index == 0);
 	condition = callback(move(condition));
 }
