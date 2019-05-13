@@ -53,3 +53,17 @@ TEST_CASE("Test DISTINCT and ORDER BY", "[distinct]") {
 	// SELECT clause" but SQLite succeeds for now we fail because it gives unintuitive results
 	REQUIRE_FAIL(con.Query("SELECT DISTINCT i%2 FROM integers ORDER BY i"));
 }
+
+TEST_CASE("Test DISTINCT ON", "[distinct]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	con.Query("CREATE TABLE integers(i INTEGER, j INTEGER);");
+	con.Query("INSERT INTO integers VALUES (2, 4), (4, 6), (2, 7)");
+
+	result = con.Query("SELECT DISTINCT ON (i) i, j FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2, 7}));
+}
