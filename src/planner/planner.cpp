@@ -104,7 +104,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::ALTER: {
 		// TODO: create actual plan
 		auto &stmt = *((AlterTableStatement *)statement.get());
-		context.catalog.AlterTable(context.ActiveTransaction(), stmt.info.get());
+		context.catalog.AlterTable(context, stmt.info.get());
 		break;
 	}
 	case StatementType::TRANSACTION: {

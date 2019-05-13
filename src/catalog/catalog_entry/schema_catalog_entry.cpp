@@ -14,9 +14,9 @@
 #include "parser/parsed_data/create_scalar_function_info.hpp"
 #include "parser/parsed_data/create_sequence_info.hpp"
 #include "parser/parsed_data/create_table_function_info.hpp"
-#include "parser/parsed_data/create_table_info.hpp"
 #include "parser/parsed_data/create_view_info.hpp"
 #include "parser/parsed_data/drop_info.hpp"
+#include "planner/parsed_data/bound_create_table_info.hpp"
 
 #include <algorithm>
 
@@ -28,13 +28,13 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
       scalar_functions(*catalog), sequences(*catalog) {
 }
 
-void SchemaCatalogEntry::CreateTable(Transaction &transaction, CreateTableInfo *info) {
+void SchemaCatalogEntry::CreateTable(Transaction &transaction, BoundCreateTableInfo *info) {
 	info->dependencies.insert(this);
 
 	auto table = make_unique_base<CatalogEntry, TableCatalogEntry>(catalog, this, info);
-	if (!tables.CreateEntry(transaction, info->table, move(table), info->dependencies)) {
-		if (!info->if_not_exists) {
-			throw CatalogException("Table or view with name \"%s\" already exists!", info->table.c_str());
+	if (!tables.CreateEntry(transaction, info->base->table, move(table), info->dependencies)) {
+		if (!info->base->if_not_exists) {
+			throw CatalogException("Table or view with name \"%s\" already exists!", info->base->table.c_str());
 		}
 	}
 }
@@ -119,8 +119,8 @@ void SchemaCatalogEntry::DropTable(Transaction &transaction, DropInfo *info) {
 	}
 }
 
-void SchemaCatalogEntry::AlterTable(Transaction &transaction, AlterTableInfo *info) {
-	if (!tables.AlterEntry(transaction, info->table, info)) {
+void SchemaCatalogEntry::AlterTable(ClientContext &context, AlterTableInfo *info) {
+	if (!tables.AlterEntry(context, info->table, info)) {
 		throw CatalogException("Table with name \"%s\" does not exist!", info->table.c_str());
 	}
 }

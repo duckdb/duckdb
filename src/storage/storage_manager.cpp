@@ -16,7 +16,9 @@
 #include "parser/parsed_data/create_schema_info.hpp"
 #include "parser/parsed_data/create_table_info.hpp"
 #include "parser/parsed_data/create_view_info.hpp"
+#include "planner/parsed_data/bound_create_table_info.hpp"
 #include "transaction/transaction_manager.hpp"
+#include "planner/binder.hpp"
 
 constexpr const int64_t STORAGE_VERSION = 1;
 constexpr const char *DATABASE_INFO_FILE = "meta.info";
@@ -156,11 +158,13 @@ int StorageManager::LoadFromStorage() {
 			auto table_file_size = FstreamUtil::GetFileSize(table_file);
 			BufferedDeserializer source((data_ptr_t)result.get(), table_file_size);
 			auto info = TableCatalogEntry::Deserialize(source);
+			Binder binder(context);
+			auto bound_info = binder.BindCreateTableInfo(move(info));
 			// create the table inside the catalog
-			database.catalog->CreateTable(context.ActiveTransaction(), info.get());
+			database.catalog->CreateTable(context.ActiveTransaction(), bound_info.get());
 
 			// now load the actual data
-			auto *table = database.catalog->GetTable(context.ActiveTransaction(), info->schema, info->table);
+			auto *table = database.catalog->GetTable(context.ActiveTransaction(), bound_info->base->schema, bound_info->base->table);
 			auto types = table->GetTypes();
 			DataChunk chunk;
 			chunk.Initialize(types);
