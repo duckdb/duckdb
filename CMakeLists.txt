@@ -20,7 +20,7 @@ ENDIF()
 IF(NOT MSVC)
 	SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG -Wall ${M32_FLAG}")
 
-	SET(CXX_EXTRA_DEBUG "-fsanitize=address -Wunused-variable -Wunused-const-variable -Werror=vla")
+	SET(CXX_EXTRA_DEBUG "-fsanitize=address -Wunused-variable -Wunused-const-variable -Werror=vla -Wnarrowing -Wextra")
 
 	IF("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 8.0)
 		SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_EXTRA_DEBUG}")
@@ -29,6 +29,8 @@ IF(NOT MSVC)
 	ELSE()
 	    message(WARNING "Please use a recent compiler for debug builds")
 	ENDIF()
+ELSE()
+	SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /wd4244") # equivalent to -Wnarrowing
 ENDIF()
 
 
