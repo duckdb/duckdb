@@ -10,9 +10,9 @@ using namespace duckdb;
 using namespace std;
 
 template <class T>
-void generate_sequence_function(T *__restrict result_data, T value, T increment, uint64_t count,
+void generate_sequence_function(T *__restrict result_data, T value, T increment, count_t count,
                                 sel_t *__restrict sel_vector) {
-	VectorOperations::Exec(sel_vector, count, [&](uint64_t i, uint64_t k) {
+	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
 		result_data[i] = value;
 		value += increment;
 	});

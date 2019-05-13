@@ -20,11 +20,12 @@ class ScalarFunctionCatalogEntry;
 class SequenceCatalogEntry;
 
 struct AlterTableInfo;
+class ClientContext;
 struct CreateIndexInfo;
 struct CreateTableFunctionInfo;
 struct CreateScalarFunctionInfo;
 struct CreateViewInfo;
-struct CreateTableInfo;
+struct BoundCreateTableInfo;
 struct CreateSequenceInfo;
 struct CreateSchemaInfo;
 struct CreateTableFunctionInfo;
@@ -55,7 +56,7 @@ public:
 	CatalogEntry *GetTableOrView(Transaction &transaction, const string &table);
 
 	//! Creates a table with the given name in the schema
-	void CreateTable(Transaction &transaction, CreateTableInfo *info);
+	void CreateTable(Transaction &transaction, BoundCreateTableInfo *info);
 
 	//! Creates a view with the given name in the schema
 	void CreateView(Transaction &transaction, CreateViewInfo *info);
@@ -75,7 +76,7 @@ public:
 	void DropTable(Transaction &transaction, DropInfo *info);
 
 	//! Alters a table
-	void AlterTable(Transaction &transaction, AlterTableInfo *info);
+	void AlterTable(ClientContext &context, AlterTableInfo *info);
 
 	//! Gets a table function matching the given function expression
 	TableFunctionCatalogEntry *GetTableFunction(Transaction &transaction, FunctionExpression *expression);

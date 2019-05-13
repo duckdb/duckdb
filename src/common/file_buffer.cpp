@@ -11,7 +11,7 @@ FileBuffer::FileBuffer(uint64_t bufsiz) {
 	assert(bufsiz % FILE_BUFFER_BLOCK_SIZE == 0);
 	assert(bufsiz >= FILE_BUFFER_BLOCK_SIZE);
 	// we add (FILE_BUFFER_BLOCK_SIZE - 1) to ensure that we can align the buffer to FILE_BUFFER_BLOCK_SIZE
-	malloced_buffer = (uint8_t*) malloc(bufsiz + (FILE_BUFFER_BLOCK_SIZE - 1));
+	malloced_buffer = (data_ptr_t) malloc(bufsiz + (FILE_BUFFER_BLOCK_SIZE - 1));
 	if (!malloced_buffer) {
 		throw std::bad_alloc();
 	}
@@ -25,8 +25,7 @@ FileBuffer::FileBuffer(uint64_t bufsiz) {
 	assert(num + bufsiz <= ((uint64_t)malloced_buffer + bufsiz + (FILE_BUFFER_BLOCK_SIZE - 1)));
 	assert(num >= (uint64_t)malloced_buffer);
 	// construct the FileBuffer object
-	checksum_ptr = (uint64_t*) num;
-	internal_buffer = (uint8_t*) num;
+	internal_buffer = (data_ptr_t) num;
 	internal_size = bufsiz;
 	buffer = internal_buffer + FILE_BUFFER_HEADER_SIZE;
 	size = internal_size - FILE_BUFFER_HEADER_SIZE;
@@ -40,7 +39,7 @@ void FileBuffer::Read(FileHandle &handle, uint64_t location) {
 	// read the buffer from disk
 	handle.Read(internal_buffer, internal_size, location);
 	// compute the checksum
-	uint64_t stored_checksum = *checksum_ptr;
+	uint64_t stored_checksum = *((uint64_t*)internal_buffer);
 	uint64_t computed_checksum = Checksum(buffer, size);
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
@@ -51,7 +50,7 @@ void FileBuffer::Read(FileHandle &handle, uint64_t location) {
 void FileBuffer::Write(FileHandle &handle, uint64_t location) {
 	// compute the checksum and write it to the start of the buffer
 	uint64_t checksum = Checksum(buffer, size);
-	*checksum_ptr = checksum;
+	*((uint64_t*)internal_buffer) = checksum;
 	// now write the buffer
 	handle.Write(internal_buffer, internal_size, location);
 }

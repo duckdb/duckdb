@@ -6,14 +6,14 @@
 using namespace duckdb;
 using namespace std;
 
-template <class T> uint64_t MergeJoinInner::Equality::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
+template <class T> count_t MergeJoinInner::Equality::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
 	if (l.pos >= l.count) {
 		return 0;
 	}
 	assert(l.sel_vector && r.sel_vector);
 	auto ldata = (T *)l.v.data;
 	auto rdata = (T *)r.v.data;
-	uint64_t result_count = 0;
+	count_t result_count = 0;
 	while (true) {
 		if (r.pos == r.count || duckdb::LessThan::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
 			// left side smaller: move left pointer forward
@@ -48,14 +48,14 @@ template <class T> uint64_t MergeJoinInner::Equality::Operation(ScalarMergeInfo 
 	return result_count;
 }
 
-template <class T> uint64_t MergeJoinInner::LessThan::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
+template <class T> count_t MergeJoinInner::LessThan::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
 	if (r.pos >= r.count) {
 		return 0;
 	}
 	assert(l.sel_vector && r.sel_vector);
 	auto ldata = (T *)l.v.data;
 	auto rdata = (T *)r.v.data;
-	uint64_t result_count = 0;
+	count_t result_count = 0;
 	while (true) {
 		if (l.pos < l.count && duckdb::LessThan::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
 			// left side smaller: found match
@@ -81,14 +81,14 @@ template <class T> uint64_t MergeJoinInner::LessThan::Operation(ScalarMergeInfo 
 	return result_count;
 }
 
-template <class T> uint64_t MergeJoinInner::LessThanEquals::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
+template <class T> count_t MergeJoinInner::LessThanEquals::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
 	if (r.pos >= r.count) {
 		return 0;
 	}
 	assert(l.sel_vector && r.sel_vector);
 	auto ldata = (T *)l.v.data;
 	auto rdata = (T *)r.v.data;
-	uint64_t result_count = 0;
+	count_t result_count = 0;
 	while (true) {
 		if (l.pos < l.count &&
 		    duckdb::LessThanEquals::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {

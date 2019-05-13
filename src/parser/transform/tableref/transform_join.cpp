@@ -1,3 +1,4 @@
+#include "common/exception.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/comparison_expression.hpp"
 #include "parser/expression/conjunction_expression.hpp"
@@ -48,7 +49,9 @@ unique_ptr<TableRef> Transformer::TransformJoin(JoinExpr *root) {
 		result->type = JoinType::SEMI;
 		break;
 	}
-	default: { throw NotImplementedException("Join type %d not supported yet...\n", root->jointype); }
+	default: {
+		throw NotImplementedException("Join type %d not supported yet...\n", root->jointype);
+	}
 	}
 
 	// Check the type of left arg and right arg before transform

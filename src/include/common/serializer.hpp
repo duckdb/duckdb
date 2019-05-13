@@ -16,18 +16,20 @@ namespace duckdb {
 //! The Serialize class is a base class that can be used to serializing objects into a binary buffer
 class Serializer {
 public:
-	virtual ~Serializer(){}
+	virtual ~Serializer() {
+	}
 
-	virtual void WriteData(const uint8_t *buffer, uint64_t write_size) = 0;
+	virtual void WriteData(const_data_ptr_t buffer, index_t write_size) = 0;
 
 	template <class T> void Write(T element) {
-		WriteData((const uint8_t*) &element, sizeof(T));
+		WriteData((const_data_ptr_t)&element, sizeof(T));
 	}
 
 	void WriteString(const string &val) {
+		assert(val.size() <= std::numeric_limits<uint32_t>::max());
 		Write<uint32_t>((uint32_t)val.size());
 		if (val.size() > 0) {
-			WriteData((const uint8_t*) val.c_str(), val.size());
+			WriteData((const_data_ptr_t)val.c_str(), val.size());
 		}
 	}
 
@@ -51,14 +53,15 @@ public:
 //! object
 class Deserializer {
 public:
-	virtual ~Deserializer(){}
+	virtual ~Deserializer() {
+	}
 
 	//! Reads [read_size] bytes into the buffer
-	virtual void ReadData(uint8_t *buffer, uint64_t read_size) = 0;
+	virtual void ReadData(data_ptr_t buffer, index_t read_size) = 0;
 
 	template <class T> T Read() {
 		T value;
-		ReadData((uint8_t*) &value, sizeof(T));
+		ReadData((data_ptr_t)&value, sizeof(T));
 		return value;
 	}
 

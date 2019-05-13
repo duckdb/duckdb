@@ -25,7 +25,7 @@ public:
 	~FileBuffer();
 
 	//! The buffer that users can write to
-	uint8_t *buffer;
+	data_ptr_t buffer;
 	//! The size of the portion that users can write to, this is equivalent to internal_size - FILE_BUFFER_HEADER_SIZE
 	uint64_t size;
 
@@ -37,14 +37,12 @@ public:
 	void Clear();
 private:
 	//! The pointer to the internal buffer that will be read or written, including the buffer header
-	uint8_t *internal_buffer;
+	data_ptr_t internal_buffer;
 	//! The aligned size as passed to the constructor. This is the size that is read or written to disk.
 	uint64_t internal_size;
 
 	//! The buffer that was actually malloc'd, i.e. the pointer that must be freed when the FileBuffer is destroyed
-	uint8_t *malloced_buffer;
-	//! A convenience pointer that points to the checksum of the FileBuffer
-	uint64_t *checksum_ptr;
+	data_ptr_t malloced_buffer;
 };
 
 }

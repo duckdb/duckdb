@@ -15,13 +15,13 @@ static void RewriteSubqueryExpressionBindings(Filter &filter, Expression &expr, 
 		assert(colref.depth == 0);
 
 		// rewrite the binding by looking into the bound_tables list of the subquery
-		uint64_t column_index = colref.binding.column_index;
-		for (uint64_t i = 0; i < subquery.bound_tables.size(); i++) {
+		index_t column_index = colref.binding.column_index;
+		for (index_t i = 0; i < subquery.bound_tables.size(); i++) {
 			auto &table = subquery.bound_tables[i];
 			if (column_index < table.column_count) {
 				// the binding belongs to this table, update the column binding
-				colref.binding.table_index = (uint32_t)table.table_index;
-				colref.binding.column_index = (uint32_t)column_index;
+				colref.binding.table_index = table.table_index;
+				colref.binding.column_index = column_index;
 				filter.bindings.insert(table.table_index);
 				return;
 			}
@@ -40,7 +40,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSubquery(unique_ptr<LogicalO
 	// push filter through logical subquery
 	// all the BoundColumnRefExpressions in the filter should refer to the LogicalSubquery
 	// we need to rewrite them to refer to the underlying bound tables instead
-	for (uint64_t i = 0; i < filters.size(); i++) {
+	for (index_t i = 0; i < filters.size(); i++) {
 		auto &f = *filters[i];
 		assert(f.bindings.size() <= 1);
 		f.bindings.clear();

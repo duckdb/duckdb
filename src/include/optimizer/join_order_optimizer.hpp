@@ -26,8 +26,8 @@ public:
 	struct JoinNode {
 		RelationSet *set;
 		NeighborInfo *info;
-		uint64_t cardinality;
-		uint64_t cost;
+		count_t cardinality;
+		count_t cost;
 		JoinNode *left;
 		JoinNode *right;
 
@@ -43,12 +43,12 @@ public:
 		}
 
 		//! Create a leaf node in the join tree
-		JoinNode(RelationSet *set, uint64_t cardinality)
+		JoinNode(RelationSet *set, count_t cardinality)
 		    : set(set), info(nullptr), cardinality(cardinality), cost(cardinality), left(nullptr), right(nullptr) {
 		}
 		//! Create an intermediate node in the join tree
-		JoinNode(RelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, uint64_t cardinality,
-		         uint64_t cost)
+		JoinNode(RelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, count_t cardinality,
+		         count_t cost)
 		    : set(set), info(info), cardinality(cardinality), cost(cost), left(left), right(right) {
 		}
 	};
@@ -59,11 +59,11 @@ public:
 
 private:
 	//! The total amount of join pairs that have been considered
-	uint64_t pairs = 0;
+	count_t pairs = 0;
 	//! Set of all relations considered in the join optimizer
 	vector<unique_ptr<Relation>> relations;
 	//! A mapping of base table index -> index into relations array (relation number)
-	unordered_map<uint64_t, uint64_t> relation_mapping;
+	unordered_map<index_t, index_t> relation_mapping;
 	//! A structure holding all the created RelationSet objects
 	RelationSetManager set_manager;
 	//! The set of edges used in the join optimizer
@@ -80,7 +80,7 @@ private:
 	expression_map_t<vector<FilterInfo *>> equivalence_sets;
 
 	//! Extract the bindings referred to by an Expression
-	bool ExtractBindings(Expression &expression, unordered_set<uint64_t> &bindings);
+	bool ExtractBindings(Expression &expression, unordered_set<index_t> &bindings);
 	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be
 	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
 	bool ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
@@ -92,11 +92,11 @@ private:
 	//! cancelling the dynamic programming step.
 	bool TryEmitPair(RelationSet *left, RelationSet *right, NeighborInfo *info);
 
-	bool EnumerateCmpRecursive(RelationSet *left, RelationSet *right, unordered_set<uint64_t> exclusion_set);
+	bool EnumerateCmpRecursive(RelationSet *left, RelationSet *right, unordered_set<index_t> exclusion_set);
 	//! Emit a relation set node
 	bool EmitCSG(RelationSet *node);
 	//! Enumerate the possible connected subgraphs that can be joined together in the join graph
-	bool EnumerateCSGRecursive(RelationSet *node, unordered_set<uint64_t> &exclusion_set);
+	bool EnumerateCSGRecursive(RelationSet *node, unordered_set<index_t> &exclusion_set);
 	//! Rewrite a logical query plan given the join plan
 	unique_ptr<LogicalOperator> RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode *node);
 	//! Generate cross product edges inside the side

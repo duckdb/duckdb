@@ -24,9 +24,10 @@ public:
 	virtual ~FileHandle() {
 	}
 
-	void Read(void *buffer, uint64_t nr_bytes, uint64_t location);
-	void Write(void *buffer, uint64_t nr_bytes, uint64_t location);
+	void Read(void *buffer, count_t nr_bytes, index_t location);
+	void Write(void *buffer, count_t nr_bytes, index_t location);
 	void Sync();
+
 protected:
 	virtual void Close() = 0;
 
@@ -55,8 +56,8 @@ public:
 	unique_ptr<FileHandle> OpenFile(string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK) {
 		return OpenFile(path.c_str(), flags, lock);
 	}
-	virtual void Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location);
-	virtual void Write(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location);
+	virtual void Read(FileHandle &handle, void *buffer, index_t nr_bytes, index_t location);
+	virtual void Write(FileHandle &handle, void *buffer, index_t nr_bytes, index_t location);
 
 	//! Check if a directory exists
 	virtual bool DirectoryExists(const string &directory);

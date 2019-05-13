@@ -16,10 +16,10 @@ SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNo
     : ExpressionBinder(binder, context), inside_window(false), node(node), info(info) {
 }
 
-BindResult SelectBinder::BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression) {
+BindResult SelectBinder::BindExpression(ParsedExpression &expr, count_t depth, bool root_expression) {
 	// check if the expression binds to one of the groups
 	auto group_index = TryBindGroup(expr, depth);
-	if (group_index >= 0) {
+	if (group_index != INVALID_INDEX) {
 		return BindGroup(expr, depth, group_index);
 	}
 	switch (expr.expression_class) {
@@ -34,7 +34,7 @@ BindResult SelectBinder::BindExpression(ParsedExpression &expr, uint32_t depth, 
 	}
 }
 
-int32_t SelectBinder::TryBindGroup(ParsedExpression &expr, uint32_t depth) {
+index_t SelectBinder::TryBindGroup(ParsedExpression &expr, count_t depth) {
 	// first check the group alias map, if expr is a ColumnRefExpression
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto &colref = (ColumnRefExpression &)expr;
@@ -52,15 +52,13 @@ int32_t SelectBinder::TryBindGroup(ParsedExpression &expr, uint32_t depth) {
 	if (entry != info.map.end()) {
 		return entry->second;
 	}
-	return -1;
+	return INVALID_INDEX;
 }
 
-BindResult SelectBinder::BindGroup(ParsedExpression &expr, uint32_t depth, int32_t group_index) {
+BindResult SelectBinder::BindGroup(ParsedExpression &expr, count_t depth, index_t group_index) {
 	auto &group = node.groups[group_index];
-	assert(node.group_index <= numeric_limits<uint32_t>::max());
 
 	return BindResult(make_unique<BoundColumnRefExpression>(expr.GetName(), group->return_type,
-	                                                        ColumnBinding((uint32_t)node.group_index, group_index),
-	                                                        depth),
+	                                                        ColumnBinding(node.group_index, group_index), depth),
 	                  info.group_types[group_index]);
 }

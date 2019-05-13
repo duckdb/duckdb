@@ -18,7 +18,7 @@ namespace duckdb {
 template <class T> class StaticVector : public Vector {
 public:
 	StaticVector() {
-		owned_data = unique_ptr<char[]>(new char[sizeof(T) * STANDARD_VECTOR_SIZE]);
+		owned_data = unique_ptr<data_t[]>(new data_t[sizeof(T) * STANDARD_VECTOR_SIZE]);
 		data = owned_data.get();
 		if (std::is_same<T, bool>::value) {
 			type = TypeId::BOOLEAN;

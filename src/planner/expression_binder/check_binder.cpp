@@ -11,7 +11,7 @@ CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table, v
 	target_type = SQLType(SQLTypeId::INTEGER);
 }
 
-BindResult CheckBinder::BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression) {
+BindResult CheckBinder::BindExpression(ParsedExpression &expr, count_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::AGGREGATE:
 		return BindResult("aggregate functions are not allowed in check constraints");
@@ -31,11 +31,10 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 		throw BinderException("Cannot reference table %s from within check constraint for table %s!",
 		                      colref.table_name.c_str(), table.c_str());
 	}
-	for (uint64_t i = 0; i < columns.size(); i++) {
-		assert(i <= numeric_limits<uint32_t>::max());
+	for (index_t i = 0; i < columns.size(); i++) {
 
 		if (colref.column_name == columns[i].name) {
-			return BindResult(make_unique<BoundReferenceExpression>(GetInternalType(columns[i].type), (uint32_t)i),
+			return BindResult(make_unique<BoundReferenceExpression>(GetInternalType(columns[i].type), i),
 			                  columns[i].type);
 		}
 	}

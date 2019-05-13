@@ -13,10 +13,10 @@
 
 namespace duckdb {
 
-uint64_t nested_loop_join(ExpressionType op, Vector &left, Vector &right, uint64_t &lpos, uint64_t &rpos,
-                          sel_t lvector[], sel_t rvector[]);
-uint64_t nested_loop_comparison(ExpressionType op, Vector &left, Vector &right, sel_t lvector[], sel_t rvector[],
-                                uint64_t count);
+count_t nested_loop_join(ExpressionType op, Vector &left, Vector &right, index_t &lpos, index_t &rpos, sel_t lvector[],
+                         sel_t rvector[]);
+count_t nested_loop_comparison(ExpressionType op, Vector &left, Vector &right, sel_t lvector[], sel_t rvector[],
+                               count_t count);
 
 //! PhysicalNestedLoopJoin represents a nested loop join between two tables
 class PhysicalNestedLoopJoin : public PhysicalComparisonJoin {
@@ -39,14 +39,14 @@ public:
 		assert(left && right);
 	}
 
-	uint64_t right_chunk;
+	index_t right_chunk;
 	DataChunk left_join_condition;
 	ChunkCollection right_data;
 	ChunkCollection right_chunks;
 	//! Whether or not the RHS of the nested loop join has NULL values
 	bool has_null;
 
-	uint64_t left_tuple;
-	uint64_t right_tuple;
+	index_t left_tuple;
+	index_t right_tuple;
 };
 } // namespace duckdb

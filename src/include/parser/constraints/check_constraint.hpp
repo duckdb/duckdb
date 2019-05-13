@@ -24,9 +24,9 @@ public:
 	unique_ptr<ParsedExpression> expression;
 
 public:
-	string ToString() const override {
-		return "CHECK(" + expression->ToString() + ")";
-	}
+	string ToString() const override;
+
+	unique_ptr<Constraint> Copy() override;
 
 	//! Serialize to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;

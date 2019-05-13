@@ -44,8 +44,8 @@ bool QueryResult::Equals(QueryResult &other) {
 			return false;
 		}
 		assert(lchunk->column_count == rchunk->column_count);
-		for (uint64_t col = 0; col < rchunk->column_count; col++) {
-			for (uint64_t row = 0; row < rchunk->size(); row++) {
+		for (index_t col = 0; col < rchunk->column_count; col++) {
+			for (index_t row = 0; row < rchunk->size(); row++) {
 				auto lvalue = lchunk->data[col].GetValue(row);
 				auto rvalue = rchunk->data[col].GetValue(row);
 				if (lvalue != rvalue) {

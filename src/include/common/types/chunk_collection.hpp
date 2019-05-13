@@ -27,14 +27,14 @@ public:
 	}
 
 	//! The total amount of elements in the collection
-	uint64_t count;
+	count_t count;
 	//! The set of data chunks in the collection
 	vector<unique_ptr<DataChunk>> chunks;
 	//! The types of the ChunkCollection
 	vector<TypeId> types;
 
 	//! The amount of columns in the ChunkCollection
-	uint64_t column_count() {
+	count_t column_count() {
 		return types.size();
 	}
 
@@ -42,11 +42,11 @@ public:
 	void Append(DataChunk &new_chunk);
 
 	//! Gets the value of the column at the specified index
-	Value GetValue(uint64_t column, uint64_t index);
+	Value GetValue(index_t column, index_t index);
 	//! Sets the value of the column at the specified index
-	void SetValue(uint64_t column, uint64_t index, Value value);
+	void SetValue(index_t column, index_t index, Value value);
 
-	vector<Value> GetRow(uint64_t index);
+	vector<Value> GetRow(index_t index);
 
 	string ToString() const {
 		return chunks.size() == 0 ? "ChunkCollection [ 0 ]"
@@ -55,22 +55,22 @@ public:
 	void Print();
 
 	//! Gets a reference to the chunk at the given index
-	DataChunk &GetChunk(uint64_t index) {
+	DataChunk &GetChunk(index_t index) {
 		return *chunks[LocateChunk(index)];
 	}
 
-	void Sort(vector<OrderType> &desc, uint64_t result[]);
+	void Sort(vector<OrderType> &desc, index_t result[]);
 	//! Reorders the rows in the collection according to the given indices. NB: order is changed!
-	void Reorder(uint64_t order[]);
+	void Reorder(index_t order[]);
 
-	void MaterializeSortedChunk(DataChunk &target, uint64_t order[], uint64_t start_offset);
+	void MaterializeSortedChunk(DataChunk &target, index_t order[], index_t start_offset);
 
 	//! Returns true if the ChunkCollections are equivalent
 	bool Equals(ChunkCollection &other);
 
 	//! Locates the chunk that belongs to the specific index
-	uint64_t LocateChunk(uint64_t index) {
-		uint64_t result = index / STANDARD_VECTOR_SIZE;
+	index_t LocateChunk(index_t index) {
+		index_t result = index / STANDARD_VECTOR_SIZE;
 		assert(result < chunks.size());
 		return result;
 	}

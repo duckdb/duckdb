@@ -9,7 +9,7 @@ using namespace std;
 
 namespace duckdb {
 
-void regexp_matches_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_count,
+void regexp_matches_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count,
                              BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 2);
 	auto &strings = inputs[0];
@@ -31,7 +31,7 @@ void regexp_matches_function(ExpressionExecutor &exec, Vector inputs[], uint64_t
 	options.set_log_errors(false);
 
 	VectorOperations::BinaryExec(strings, patterns, result,
-	                             [&](uint64_t strings_index, uint64_t patterns_index, uint64_t result_index) {
+	                             [&](index_t strings_index, index_t patterns_index, index_t result_index) {
 		                             if (result.nullmask[result_index]) {
 			                             return;
 		                             }
@@ -75,6 +75,11 @@ unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionExpressio
 
 			string range_min, range_max;
 			auto range_success = re->PossibleMatchRange(&range_min, &range_max, 1000);
+			// range_min and range_max might produce non-valid UTF8 strings, e.g. in the case of 'a.*'
+			// in this case we don't push a range filter
+			if (range_success && (!Value::IsUTF8String(range_min.c_str()) || !Value::IsUTF8String(range_max.c_str()))) {
+				range_success = false;
+			}
 
 			return make_unique<RegexpMatchesBindData>(move(re), range_min, range_max, range_success);
 		}

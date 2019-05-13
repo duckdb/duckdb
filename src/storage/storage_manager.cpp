@@ -9,6 +9,7 @@
 #include "function/function.hpp"
 #include "parser/parsed_data/create_schema_info.hpp"
 #include "transaction/transaction_manager.hpp"
+#include "planner/binder.hpp"
 
 using namespace duckdb;
 using namespace std;

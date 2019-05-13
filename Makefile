@@ -4,19 +4,24 @@ all: release
 opt: release
 unit: unittest
 
+GENERATOR=
+ifeq ($(GEN),ninja)
+	GENERATOR=-G "Ninja"
+endif
+
 clean:
 	rm -rf build
 
 debug:
 	mkdir -p build/debug && \
 	cd build/debug && \
-	cmake -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake $(GENERATOR) -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build .
 
 release:
 	mkdir -p build/release && \
 	cd build/release && \
-	cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake $(GENERATOR) -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build .
 
 unittest: debug

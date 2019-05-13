@@ -19,18 +19,18 @@ class SelectNode;
 //! The ORDER binder is responsible for binding an expression within the ORDER BY clause of a SQL statement
 class OrderBinder {
 public:
-	OrderBinder(uint64_t projection_index, SelectNode &node, unordered_map<string, uint32_t> &alias_map,
-	            expression_map_t<uint32_t> &projection_map);
+	OrderBinder(index_t projection_index, SelectNode &node, unordered_map<string, index_t> &alias_map,
+	            expression_map_t<index_t> &projection_map);
 
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> expr);
 
 private:
-	unique_ptr<Expression> CreateProjectionReference(ParsedExpression &expr, uint64_t index);
+	unique_ptr<Expression> CreateProjectionReference(ParsedExpression &expr, index_t index);
 
-	uint64_t projection_index;
+	index_t projection_index;
 	SelectNode &node;
-	unordered_map<string, uint32_t> &alias_map;
-	expression_map_t<uint32_t> &projection_map;
+	unordered_map<string, index_t> &alias_map;
+	expression_map_t<index_t> &projection_map;
 };
 
 } // namespace duckdb

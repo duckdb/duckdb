@@ -37,7 +37,7 @@ bool StringUtil::EndsWith(const string &str, const string &suffix) {
 	return std::equal(suffix.rbegin(), suffix.rend(), str.rbegin());
 }
 
-string StringUtil::Repeat(const string &str, const std::uint64_t n) {
+string StringUtil::Repeat(const string &str, count_t n) {
 	std::ostringstream os;
 	if (n == 0 || str.empty()) {
 		return (os.str());
@@ -70,7 +70,7 @@ string StringUtil::Join(const vector<string> &input, const string &separator) {
 	}
 
 	// Append the remaining input components, after the first
-	for (uint32_t i = 1; i < input.size(); i++) {
+	for (index_t i = 1; i < input.size(); i++) {
 		result += separator + input[i];
 	}
 
@@ -83,7 +83,7 @@ string StringUtil::Prefix(const string &str, const string &prefix) {
 		return ("");
 
 	std::ostringstream os;
-	for (uint64_t i = 0, cnt = lines.size(); i < cnt; i++) {
+	for (index_t i = 0, cnt = lines.size(); i < cnt; i++) {
 		if (i > 0)
 			os << std::endl;
 		os << prefix << lines[i];
@@ -173,11 +173,11 @@ string StringUtil::VFormat(const string fmt_str, va_list args) {
 vector<string> StringUtil::Split(const string &input, const string &split) {
 	vector<string> splits;
 
-	uint64_t last = 0;
-	uint64_t input_len = input.size();
-	uint64_t split_len = split.size();
+	count_t last = 0;
+	count_t input_len = input.size();
+	count_t split_len = split.size();
 	while (last <= input_len) {
-		uint64_t next = input.find(split, last);
+		index_t next = input.find(split, last);
 		if (next == string::npos) {
 			next = input_len;
 		}

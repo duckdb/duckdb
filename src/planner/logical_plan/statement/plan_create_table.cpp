@@ -9,19 +9,9 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundCreateTableSta
 	unique_ptr<LogicalOperator> root;
 	if (stmt.query) {
 		// create table from query
-		auto sql_types = stmt.query->node->types;
-		auto names = stmt.query->node->names;
 		root = CreatePlan(*stmt.query);
-
-		// generate the table info from the query
-		root->ResolveOperatorTypes();
-		auto &types = root->types;
-		assert(names.size() == types.size());
-		for (uint64_t i = 0; i < names.size(); i++) {
-			stmt.info->columns.push_back(ColumnDefinition(names[i], sql_types[i]));
-		}
 	}
-	if (stmt.info->temporary) {
+	if (stmt.info->base->temporary) {
 		throw NotImplementedException("TEMPORARY tables are not yet supported");
 	}
 	// create the logical operator

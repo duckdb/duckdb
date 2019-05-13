@@ -16,6 +16,7 @@ namespace duckdb {
 struct AlterInfo;
 class Catalog;
 class CatalogSet;
+class ClientContext;
 class Transaction;
 
 //! Abstract base class of an entry in the catalog
@@ -27,7 +28,7 @@ public:
 
 	virtual ~CatalogEntry();
 
-	virtual unique_ptr<CatalogEntry> AlterEntry(AlterInfo *info) {
+	virtual unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) {
 		throw CatalogException("Unsupported alter type for catalog entry!");
 	}
 

@@ -10,18 +10,18 @@ string LogicalAnyJoin::ParamsToString() const {
 	return "[" + condition->ToString() + "]";
 }
 
-uint64_t LogicalAnyJoin::ExpressionCount() {
+count_t LogicalAnyJoin::ExpressionCount() {
 	assert(expressions.size() == 0);
 	return 1;
 }
 
-Expression *LogicalAnyJoin::GetExpression(uint64_t index) {
+Expression *LogicalAnyJoin::GetExpression(index_t index) {
 	assert(index == 0);
 	return condition.get();
 }
 
 void LogicalAnyJoin::ReplaceExpression(
-    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, uint64_t index) {
+    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, index_t index) {
 	assert(index == 0);
 	condition = callback(move(condition));
 }

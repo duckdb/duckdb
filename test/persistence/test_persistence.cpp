@@ -4,6 +4,7 @@
 #include "main/appender.hpp"
 #include "test_helpers.hpp"
 
+#include <signal.h>
 #include <sys/mman.h>
 #include <unistd.h>
 

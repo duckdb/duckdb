@@ -28,7 +28,7 @@ class Appender {
 	//! Internal chunk used for appends
 	DataChunk chunk;
 	//! The current column to append to
-	uint32_t column = 0;
+	index_t column = 0;
 
 public:
 	Appender(DuckDB &db, string schema_name, string table_name);
@@ -67,7 +67,7 @@ public:
 	//! Rollback any changes made by the appender The appender cannot be used after this point.
 	void Rollback();
 
-	uint32_t CurrentColumn() {
+	index_t CurrentColumn() {
 		return column;
 	}
 

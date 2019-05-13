@@ -33,7 +33,7 @@ struct VersionInformation;
 
 struct ScanStructure {
 	StorageChunk *chunk;
-	uint64_t offset;
+	index_t offset;
 	VersionInformation *version_chain;
 	vector<unique_ptr<StorageLock>> locks;
 };
@@ -82,11 +82,11 @@ public:
 
 	//! The amount of elements in the table. Note that this number signifies the amount of COMMITTED entries in the
 	//! table. It can be inaccurate inside of transactions. More work is needed to properly support that.
-	std::atomic<uint64_t> cardinality;
+	std::atomic<index_t> cardinality;
 	//! Total per-tuple size of the table
-	uint64_t tuple_size;
+	index_t tuple_size;
 	//! Accumulative per-tuple size
-	vector<uint64_t> accumulative_tuple_size;
+	vector<index_t> accumulative_tuple_size;
 
 	// schema of the table
 	string schema;
@@ -100,7 +100,7 @@ public:
 	//! A reference to the base storage manager
 	StorageManager &storage;
 
-	StorageChunk *GetChunk(uint64_t row_number);
+	StorageChunk *GetChunk(index_t row_number);
 
 	//! Unique indexes
 	vector<unique_ptr<UniqueIndex>> unique_indexes;
@@ -116,11 +116,11 @@ private:
 	//! UndoBuffer and stores them inside the result chunk; used for scanning of
 	//! versioned tuples
 	void RetrieveVersionedData(DataChunk &result, const vector<column_t> &column_ids,
-	                           uint8_t *alternate_version_pointers[], uint64_t alternate_version_index[],
-	                           uint64_t alternate_version_count);
+	                           data_ptr_t alternate_version_pointers[], index_t alternate_version_index[],
+	                           index_t alternate_version_count);
 	//! Retrieves data from the base table for use in scans
 	void RetrieveBaseTableData(DataChunk &result, const vector<column_t> &column_ids, sel_t regular_entries[],
-	                           uint64_t regular_count, StorageChunk *current_chunk, uint64_t current_offset = 0);
+	                           index_t regular_count, StorageChunk *current_chunk, index_t current_offset = 0);
 
 	//! Verify whether or not a new chunk violates any constraints
 	void VerifyConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &new_chunk);

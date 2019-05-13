@@ -20,7 +20,7 @@ bool TableBinding::HasMatchingBinding(const string &column_name) {
 	return bound->table->ColumnExists(column_name);
 }
 
-BindResult TableBinding::Bind(ColumnRefExpression &colref, uint32_t depth) {
+BindResult TableBinding::Bind(ColumnRefExpression &colref, count_t depth) {
 	auto entry = bound->table->name_map.find(colref.column_name);
 	if (entry == bound->table->name_map.end()) {
 		return BindResult(StringUtil::Format("Table \"%s\" does not have a column named \"%s\"",
@@ -39,14 +39,12 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, uint32_t depth) {
 	auto &column_list = bound->bound_columns;
 	// check if the entry already exists in the column list for the table
 	ColumnBinding binding;
-	assert(column_list.size() <= numeric_limits<uint32_t>::max());
 
-	binding.column_index = (uint32_t)column_list.size();
-	for (uint64_t i = 0; i < column_list.size(); i++) {
+	binding.column_index = column_list.size();
+	for (index_t i = 0; i < column_list.size(); i++) {
 		auto &column = column_list[i];
 		if (column == colref.column_name) {
-			assert(i <= numeric_limits<uint32_t>::max());
-			binding.column_index = (uint32_t)i;
+			binding.column_index = i;
 			break;
 		}
 	}
@@ -54,8 +52,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, uint32_t depth) {
 		// column binding not found: add it to the list of bindings
 		column_list.push_back(colref.column_name);
 	}
-	assert(index <= numeric_limits<uint32_t>::max());
-	binding.table_index = (uint32_t)index;
+	binding.table_index = index;
 	return BindResult(
 	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(col_type), binding, depth), col_type);
 }
@@ -71,7 +68,7 @@ void TableBinding::GenerateAllColumnExpressions(BindContext &context,
 	}
 }
 
-SubqueryBinding::SubqueryBinding(const string &alias, SubqueryRef &ref, BoundQueryNode &subquery, uint64_t index)
+SubqueryBinding::SubqueryBinding(const string &alias, SubqueryRef &ref, BoundQueryNode &subquery, index_t index)
     : Binding(BindingType::SUBQUERY, alias, index), subquery(subquery) {
 	auto &select_list = subquery.GetSelectList();
 	if (ref.column_name_alias.size() > 0) {
@@ -93,18 +90,16 @@ bool SubqueryBinding::HasMatchingBinding(const string &column_name) {
 	return entry != name_map.end();
 }
 
-BindResult SubqueryBinding::Bind(ColumnRefExpression &colref, uint32_t depth) {
+BindResult SubqueryBinding::Bind(ColumnRefExpression &colref, count_t depth) {
 	auto column_entry = name_map.find(colref.column_name);
 	if (column_entry == name_map.end()) {
 		return BindResult(StringUtil::Format("Subquery \"%s\" does not have a column named \"%s\"", alias.c_str(),
 		                                     colref.column_name.c_str()));
 	}
 	ColumnBinding binding;
-	assert(index <= numeric_limits<uint32_t>::max());
-	assert(column_entry->second <= numeric_limits<uint32_t>::max());
 
-	binding.table_index = (uint32_t)index;
-	binding.column_index = (uint32_t)column_entry->second;
+	binding.table_index = index;
+	binding.column_index = column_entry->second;
 	assert(column_entry->second < subquery.types.size());
 	SQLType sql_type = subquery.types[column_entry->second];
 	return BindResult(
@@ -118,7 +113,7 @@ void SubqueryBinding::GenerateAllColumnExpressions(BindContext &context,
 	}
 }
 
-TableFunctionBinding::TableFunctionBinding(const string &alias, TableFunctionCatalogEntry *function, uint64_t index)
+TableFunctionBinding::TableFunctionBinding(const string &alias, TableFunctionCatalogEntry *function, index_t index)
     : Binding(BindingType::TABLE_FUNCTION, alias, index), function(function) {
 }
 
@@ -126,18 +121,15 @@ bool TableFunctionBinding::HasMatchingBinding(const string &column_name) {
 	return function->ColumnExists(column_name);
 }
 
-BindResult TableFunctionBinding::Bind(ColumnRefExpression &colref, uint32_t depth) {
+BindResult TableFunctionBinding::Bind(ColumnRefExpression &colref, count_t depth) {
 	auto column_entry = function->name_map.find(colref.column_name);
 	if (column_entry == function->name_map.end()) {
 		return BindResult(StringUtil::Format("Table Function \"%s\" does not have a column named \"%s\"", alias.c_str(),
 		                                     colref.column_name.c_str()));
 	}
 	ColumnBinding binding;
-	assert(index <= numeric_limits<uint32_t>::max());
-	assert(column_entry->second <= numeric_limits<uint32_t>::max());
-
-	binding.table_index = (uint32_t)index;
-	binding.column_index = (uint32_t)column_entry->second;
+	binding.table_index = index;
+	binding.column_index = column_entry->second;
 	SQLType sql_type = function->return_values[column_entry->second].type;
 	return BindResult(
 	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(sql_type), binding, depth), sql_type);

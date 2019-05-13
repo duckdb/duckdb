@@ -8,10 +8,10 @@
 using namespace duckdb;
 using namespace std;
 
-BindResult ExpressionBinder::BindExpression(FunctionExpression &function, uint32_t depth) {
+BindResult ExpressionBinder::BindExpression(FunctionExpression &function, count_t depth) {
 	// bind the children of the function expression
 	string error;
-	for (uint64_t i = 0; i < function.children.size(); i++) {
+	for (index_t i = 0; i < function.children.size(); i++) {
 		BindChild(function.children[i], depth, error);
 	}
 	if (!error.empty()) {
@@ -23,7 +23,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, uint32
 	// extract the children and types
 	vector<SQLType> types;
 	vector<unique_ptr<Expression>> children;
-	for (uint64_t i = 0; i < function.children.size(); i++) {
+	for (index_t i = 0; i < function.children.size(); i++) {
 		auto &child = (BoundExpression &)*function.children[i];
 		types.push_back(child.sql_type);
 		children.push_back(move(child.expr));
@@ -32,7 +32,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, uint32
 	if (!func->matches(types)) {
 		// types do not match up, throw exception
 		string type_str;
-		for (uint64_t i = 0; i < types.size(); i++) {
+		for (index_t i = 0; i < types.size(); i++) {
 			if (i > 0) {
 				type_str += ", ";
 			}

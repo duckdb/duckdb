@@ -8,6 +8,8 @@
 
 #include "common/constants.hpp"
 
+#pragma once
+
 namespace duckdb {
 class EncodedBlock;
 class DataChunk;

@@ -14,17 +14,17 @@ namespace duckdb {
 
 class NotNullConstraint : public Constraint {
 public:
-	NotNullConstraint(uint64_t index) : Constraint(ConstraintType::NOT_NULL), index(index){};
+	NotNullConstraint(index_t index) : Constraint(ConstraintType::NOT_NULL), index(index){};
 	virtual ~NotNullConstraint() {
 	}
 
 	//! Column index this constraint pertains to
-	uint64_t index;
+	index_t index;
 
 public:
-	string ToString() const override {
-		return "NOT NULL Constraint";
-	}
+	string ToString() const override;
+
+	unique_ptr<Constraint> Copy() override;
 
 	//! Serialize to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;

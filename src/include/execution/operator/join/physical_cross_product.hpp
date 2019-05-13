@@ -29,8 +29,8 @@ public:
 		assert(left && right);
 	}
 
-	uint64_t left_position;
-	uint64_t right_position;
+	index_t left_position;
+	index_t right_position;
 	ChunkCollection right_data;
 };
 } // namespace duckdb

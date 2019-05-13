@@ -18,7 +18,7 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 		return false;
 	}
 	// SELECT
-	for (uint64_t i = 0; i < select_list.size(); i++) {
+	for (index_t i = 0; i < select_list.size(); i++) {
 		if (!select_list[i]->Equals(other->select_list[i].get())) {
 			return false;
 		}
@@ -39,7 +39,7 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 		return false;
 	}
 	// GROUP BY
-	for (uint64_t i = 0; i < groups.size(); i++) {
+	for (index_t i = 0; i < groups.size(); i++) {
 		if (!groups[i]->Equals(other->groups[i].get())) {
 			return false;
 		}

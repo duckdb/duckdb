@@ -14,7 +14,7 @@ using namespace std;
 
 unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator> op) {
 
-	for (uint64_t child_idx = 0; child_idx < op->children.size(); child_idx++) {
+	for (index_t child_idx = 0; child_idx < op->children.size(); child_idx++) {
 		op->children[child_idx] = Rewrite(move(op->children[child_idx]));
 	}
 
@@ -34,7 +34,6 @@ unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator
 			if (!info.range_success) {
 				continue;
 			}
-
 			auto filter_left = make_unique<BoundComparisonExpression>(
 			    ExpressionType::COMPARE_GREATERTHANOREQUALTO, func.children[0]->Copy(),
 			    make_unique<BoundConstantExpression>(Value(info.range_min)));

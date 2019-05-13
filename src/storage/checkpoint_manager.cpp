@@ -16,6 +16,9 @@
 #include "parser/parsed_data/create_table_info.hpp"
 #include "parser/parsed_data/create_view_info.hpp"
 
+#include "planner/binder.hpp"
+#include "planner/parsed_data/bound_create_table_info.hpp"
+
 #include "main/client_context.hpp"
 #include "main/database.hpp"
 
@@ -187,8 +190,11 @@ void CheckpointManager::WriteTable(Transaction &transaction, TableCatalogEntry &
 void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reader) {
 	// deserilize the table meta data
 	auto info = TableCatalogEntry::Deserialize(reader);
+	// bind the info
+	Binder binder(context);
+	auto bound_info = binder.BindCreateTableInfo(move(info));
 	// create the table in the schema
-	database.catalog->CreateTable(context.ActiveTransaction(), info.get());
+	database.catalog->CreateTable(context.ActiveTransaction(), bound_info.get());
 	// now load the table data
 	auto block_id = reader.Read<block_id_t>();
 	auto offset = reader.Read<uint64_t>();
@@ -196,7 +202,7 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 	MetaBlockReader table_data_reader(block_manager, block_id);
 	table_data_reader.offset = offset;
 	// fetch the table from the catalog for writing
-	auto table = database.catalog->GetTable(context.ActiveTransaction(), info->schema, info->table);
+	auto table = database.catalog->GetTable(context.ActiveTransaction(), bound_info->base->schema, bound_info->base->table);
 	ReadTableData(context, *table, table_data_reader);
 }
 
@@ -385,7 +391,7 @@ void CheckpointManager::ReadTableData(ClientContext &context, TableCatalogEntry 
 						ReadBlock(col, indexes[col] + 1);
 						tuples_left = data_pointers[col][indexes[col]].tuple_count - tuple_counts[col];
 					}
-					Vector storage_vector(types[col], (char*) blocks[col]->buffer + offsets[col]);
+					Vector storage_vector(types[col], blocks[col]->buffer + offsets[col]);
 					storage_vector.count = std::min((uint64_t) STANDARD_VECTOR_SIZE, tuples_left);
 					VectorOperations::AppendFromStorage(storage_vector, insert_chunk.data[col]);
 
