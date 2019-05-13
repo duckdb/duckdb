@@ -37,7 +37,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 			return nullptr;
 		}
 		// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
-		auto index = (uint64_t)constant.value.GetNumericValue();
+		auto index = (index_t)constant.value.GetNumericValue();
 		if (index < 1 || index > node.select_list.size()) {
 			throw BinderException("ORDER term out of range - should be between 1 and %lld",
 			                      (count_t)node.select_list.size());

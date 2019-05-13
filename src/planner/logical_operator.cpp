@@ -36,7 +36,7 @@ void LogicalOperator::ResolveOperatorTypes() {
 	ResolveTypes();
 }
 
-string LogicalOperator::ToString(uint64_t depth) const {
+string LogicalOperator::ToString(count_t depth) const {
 	string result = LogicalOperatorToString(type);
 	result += ParamsToString();
 	if (children.size() > 0) {
@@ -50,17 +50,17 @@ string LogicalOperator::ToString(uint64_t depth) const {
 	return result;
 }
 
-uint64_t LogicalOperator::ExpressionCount() {
+count_t LogicalOperator::ExpressionCount() {
 	return expressions.size();
 }
 
-Expression *LogicalOperator::GetExpression(uint64_t index) {
+Expression *LogicalOperator::GetExpression(index_t index) {
 	assert(index < expressions.size());
 	return expressions[index].get();
 }
 
 void LogicalOperator::ReplaceExpression(
-    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, uint64_t index) {
+    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, index_t index) {
 	assert(index < expressions.size());
 	expressions[index] = callback(move(expressions[index]));
 }

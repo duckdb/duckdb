@@ -25,25 +25,25 @@ string LogicalComparisonJoin::ParamsToString() const {
 	return result;
 }
 
-uint64_t LogicalComparisonJoin::ExpressionCount() {
+count_t LogicalComparisonJoin::ExpressionCount() {
 	assert(expressions.size() == 0);
 	return conditions.size() * 2;
 }
 
-Expression *LogicalComparisonJoin::GetExpression(uint64_t index) {
+Expression *LogicalComparisonJoin::GetExpression(index_t index) {
 	assert(expressions.size() == 0);
 	assert(index < conditions.size() * 2);
-	uint64_t condition = index / 2;
+	auto condition = index / 2;
 	bool left = index % 2 == 0 ? true : false;
 	assert(condition < conditions.size());
 	return left ? conditions[condition].left.get() : conditions[condition].right.get();
 }
 
 void LogicalComparisonJoin::ReplaceExpression(
-    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, uint64_t index) {
+    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, index_t index) {
 	assert(expressions.size() == 0);
 	assert(index < conditions.size() * 2);
-	uint64_t condition = index / 2;
+	auto condition = index / 2;
 	bool left = index % 2 == 0 ? true : false;
 	assert(condition < conditions.size());
 	if (left) {

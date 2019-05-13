@@ -16,8 +16,8 @@ using namespace duckdb;
 using namespace std;
 
 //! Create a JoinCondition from a comparison
-static bool CreateJoinCondition(Expression &expr, unordered_set<uint64_t> &left_bindings,
-                                unordered_set<uint64_t> &right_bindings, vector<JoinCondition> &conditions) {
+static bool CreateJoinCondition(Expression &expr, unordered_set<index_t> &left_bindings,
+                                unordered_set<index_t> &right_bindings, vector<JoinCondition> &conditions) {
 	// comparison
 	auto &comparison = (BoundComparisonExpression &)expr;
 	auto left_side = JoinSide::GetJoinSide(*comparison.left, left_bindings, right_bindings);
@@ -43,8 +43,8 @@ static bool CreateJoinCondition(Expression &expr, unordered_set<uint64_t> &left_
 
 unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, unique_ptr<LogicalOperator> left_child,
                                                               unique_ptr<LogicalOperator> right_child,
-                                                              unordered_set<uint64_t> &left_bindings,
-                                                              unordered_set<uint64_t> &right_bindings,
+                                                              unordered_set<index_t> &left_bindings,
+                                                              unordered_set<index_t> &right_bindings,
                                                               vector<unique_ptr<Expression>> &expressions) {
 	vector<JoinCondition> conditions;
 	vector<unique_ptr<Expression>> arbitrary_expressions;
@@ -169,7 +169,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundJoinRef &ref) 
 	LogicalFilter::SplitPredicates(expressions);
 
 	// find the table bindings on the LHS and RHS of the join
-	unordered_set<uint64_t> left_bindings, right_bindings;
+	unordered_set<index_t> left_bindings, right_bindings;
 	LogicalJoin::GetTableReferences(*left, left_bindings);
 	LogicalJoin::GetTableReferences(*right, right_bindings);
 	// now create the join operator from the set of join conditions

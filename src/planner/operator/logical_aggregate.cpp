@@ -13,11 +13,11 @@ void LogicalAggregate::ResolveTypes() {
 	}
 }
 
-uint64_t LogicalAggregate::ExpressionCount() {
+count_t LogicalAggregate::ExpressionCount() {
 	return expressions.size() + groups.size();
 }
 
-Expression *LogicalAggregate::GetExpression(uint64_t index) {
+Expression *LogicalAggregate::GetExpression(index_t index) {
 	if (index < expressions.size()) {
 		return LogicalOperator::GetExpression(index);
 	} else {
@@ -28,7 +28,7 @@ Expression *LogicalAggregate::GetExpression(uint64_t index) {
 }
 
 void LogicalAggregate::ReplaceExpression(
-    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, uint64_t index) {
+    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, index_t index) {
 	if (index < expressions.size()) {
 		LogicalOperator::ReplaceExpression(callback, index);
 	} else {

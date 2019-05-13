@@ -138,7 +138,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	for (index_t i = 1; i < expr.children.size(); i++) {
 		// reoslve this expression to a constant
 		auto value = ExpressionExecutor::EvaluateScalar(*expr.children[i]);
-		uint64_t index = chunk.data[0].count++;
+		index_t index = chunk.data[0].count++;
 		chunk.data[0].SetValue(index, value);
 		if (chunk.data[0].count == STANDARD_VECTOR_SIZE || i + 1 == expr.children.size()) {
 			// chunk full: append to chunk collection

@@ -10,13 +10,13 @@
 using namespace duckdb;
 using namespace std;
 
-UniqueIndex::UniqueIndex(DataTable &table, vector<TypeId> types, vector<uint64_t> keys, bool allow_nulls)
+UniqueIndex::UniqueIndex(DataTable &table, vector<TypeId> types, vector<index_t> keys, bool allow_nulls)
     : serializer(types, keys), comparer(serializer, table.serializer), table(table), types(types), keys(keys),
       allow_nulls(allow_nulls) {
 }
 
-UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple, uint64_t row_identifier,
-                                       unordered_set<uint64_t> &ignored_identifiers) {
+UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple, index_t row_identifier,
+                                       unordered_set<index_t> &ignored_identifiers) {
 	auto new_node = make_unique<UniqueIndexNode>(move(tuple), row_identifier);
 	if (!root) {
 		// no root, make this entry the root
@@ -179,7 +179,7 @@ void UniqueIndex::RemoveEntry(UniqueIndexNode *entry) {
 }
 
 void UniqueIndex::AddEntries(Transaction &transaction, UniqueIndexAddedEntries &nodes, Tuple tuples[], bool has_null[],
-                             Vector &row_identifiers, unordered_set<uint64_t> &ignored_identifiers) {
+                             Vector &row_identifiers, unordered_set<index_t> &ignored_identifiers) {
 
 	lock_guard<mutex> guard(index_lock);
 
@@ -208,10 +208,10 @@ void UniqueIndex::AddEntries(Transaction &transaction, UniqueIndexAddedEntries &
 	}
 }
 
-static bool boolean_array_from_nullmask(sel_t *sel_vector, uint64_t count, nullmask_t &mask, bool array[],
+static bool boolean_array_from_nullmask(sel_t *sel_vector, count_t count, nullmask_t &mask, bool array[],
                                         bool allow_nulls) {
 	bool success = true;
-	VectorOperations::Exec(sel_vector, count, [&](uint64_t i, uint64_t k) {
+	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
 		array[k] = mask[i];
 		if (array[k] && !allow_nulls) {
 			success = false;
@@ -222,14 +222,14 @@ static bool boolean_array_from_nullmask(sel_t *sel_vector, uint64_t count, nullm
 }
 
 void UniqueIndex::Append(Transaction &transaction, vector<unique_ptr<UniqueIndex>> &indexes, DataChunk &chunk,
-                         uint64_t row_identifier_start) {
+                         index_t row_identifier_start) {
 	if (indexes.size() == 0) {
 		return;
 	}
 
 	// the row numbers that are ignored for conflicts
 	// this is left empty because we ignore nothing in the append
-	unordered_set<uint64_t> dummy;
+	unordered_set<index_t> dummy;
 
 	// we keep a set of nodes we added to the different indexes
 	// we keep this set so we can remove them from the index again in case of a constraint violation
@@ -281,10 +281,10 @@ void UniqueIndex::Update(Transaction &transaction, StorageChunk *storage, vector
 		return;
 	}
 
-	unordered_set<uint64_t> ignored_entries;
+	unordered_set<index_t> ignored_entries;
 
-	VectorOperations::ExecType<uint64_t>(
-	    row_identifiers, [&](uint64_t &entry, uint64_t i, uint64_t k) { ignored_entries.insert(entry); });
+	VectorOperations::ExecType<index_t>(row_identifiers,
+	                                    [&](index_t &entry, index_t i, index_t k) { ignored_entries.insert(entry); });
 
 	// we keep a set of nodes we added to the different indexes
 	// we keep this set so we can remove them from the index again in case of a constraint violation

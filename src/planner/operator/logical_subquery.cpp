@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-LogicalSubquery::LogicalSubquery(unique_ptr<LogicalOperator> child, uint64_t table_index)
+LogicalSubquery::LogicalSubquery(unique_ptr<LogicalOperator> child, index_t table_index)
     : LogicalOperator(LogicalOperatorType::SUBQUERY), table_index(table_index) {
 	assert(child);
 
