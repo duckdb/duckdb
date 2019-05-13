@@ -20,8 +20,8 @@ static void RewriteSubqueryExpressionBindings(Filter &filter, Expression &expr, 
 			auto &table = subquery.bound_tables[i];
 			if (column_index < table.column_count) {
 				// the binding belongs to this table, update the column binding
-				colref.binding.table_index = (uint32_t)table.table_index;
-				colref.binding.column_index = (uint32_t)column_index;
+				colref.binding.table_index = table.table_index;
+				colref.binding.column_index = column_index;
 				filter.bindings.insert(table.table_index);
 				return;
 			}

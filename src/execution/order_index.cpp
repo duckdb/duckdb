@@ -115,8 +115,8 @@ template <class T> int64_t binary_search_gte(data_t data, T key, index_t count) 
 	auto array = (SortChunk<T> *)data;
 	bool found = false;
 	auto pos_orig = binary_search(array, key, 0, count, found);
-	assert(pos_orig <= numeric_limits<uint32_t>::max());
-	int32_t pos = (int32_t)pos_orig;
+	assert(pos_orig <= numeric_limits<int64_t>::max());
+	int64_t pos = (int64_t)pos_orig;
 	if (found) {
 		while (pos >= 0 && array[pos].value == key)
 			pos--;

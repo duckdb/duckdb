@@ -27,7 +27,7 @@ unique_ptr<Constraint> ParsedConstraint::Deserialize(Deserializer &source) {
 	} else {
 		// column list parsed constraint
 		vector<string> columns;
-		for (uint32_t i = 0; i < column_count; i++) {
+		for (index_t i = 0; i < column_count; i++) {
 			auto column_name = source.Read<string>();
 			columns.push_back(column_name);
 		}

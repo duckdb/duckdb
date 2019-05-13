@@ -129,7 +129,7 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	source.ReadList<ParsedExpression>(expr->partitions);
 
 	auto order_count = source.Read<uint32_t>();
-	for (uint32_t i = 0; i < order_count; i++) {
+	for (index_t i = 0; i < order_count; i++) {
 		auto order_type = source.Read<OrderType>();
 		auto expression = ParsedExpression::Deserialize(source);
 		expr->orders.push_back(OrderByNode(order_type, move(expression)));

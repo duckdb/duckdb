@@ -34,7 +34,7 @@ struct Binding {
 	}
 
 	virtual bool HasMatchingBinding(const string &column_name) = 0;
-	virtual BindResult Bind(ColumnRefExpression &colref, uint32_t depth) = 0;
+	virtual BindResult Bind(ColumnRefExpression &colref, count_t depth) = 0;
 	virtual void GenerateAllColumnExpressions(BindContext &context,
 	                                          vector<unique_ptr<ParsedExpression>> &select_list) = 0;
 
@@ -48,7 +48,7 @@ struct TableBinding : public Binding {
 	TableBinding(const string &alias, BoundBaseTableRef *bound);
 
 	bool HasMatchingBinding(const string &column_name) override;
-	BindResult Bind(ColumnRefExpression &colref, uint32_t depth) override;
+	BindResult Bind(ColumnRefExpression &colref, count_t depth) override;
 	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
 
 	BoundBaseTableRef *bound;
@@ -59,7 +59,7 @@ struct SubqueryBinding : public Binding {
 	SubqueryBinding(const string &alias, SubqueryRef &ref, BoundQueryNode &subquery, uint64_t index);
 
 	bool HasMatchingBinding(const string &column_name) override;
-	BindResult Bind(ColumnRefExpression &colref, uint32_t depth) override;
+	BindResult Bind(ColumnRefExpression &colref, count_t depth) override;
 	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
 
 	BoundQueryNode &subquery;
@@ -74,7 +74,7 @@ struct TableFunctionBinding : public Binding {
 	TableFunctionBinding(const string &alias, TableFunctionCatalogEntry *function, uint64_t index);
 
 	bool HasMatchingBinding(const string &column_name) override;
-	BindResult Bind(ColumnRefExpression &colref, uint32_t depth) override;
+	BindResult Bind(ColumnRefExpression &colref, count_t depth) override;
 	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
 
 	TableFunctionCatalogEntry *function;

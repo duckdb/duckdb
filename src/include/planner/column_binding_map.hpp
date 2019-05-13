@@ -16,7 +16,7 @@ namespace duckdb {
 
 struct ColumnBindingHashFunction {
 	uint64_t operator()(const ColumnBinding &a) const {
-		return CombineHash(Hash<uint32_t>(a.table_index), Hash<uint32_t>(a.column_index));
+		return CombineHash(Hash<index_t>(a.table_index), Hash<index_t>(a.column_index));
 	}
 };
 

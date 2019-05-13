@@ -70,7 +70,7 @@ string StringUtil::Join(const vector<string> &input, const string &separator) {
 	}
 
 	// Append the remaining input components, after the first
-	for (uint32_t i = 1; i < input.size(); i++) {
+	for (index_t i = 1; i < input.size(); i++) {
 		result += separator + input[i];
 	}
 

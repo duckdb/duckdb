@@ -28,7 +28,7 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 	return result;
 }
 
-BindResult BindContext::BindColumn(ColumnRefExpression &colref, uint32_t depth) {
+BindResult BindContext::BindColumn(ColumnRefExpression &colref, count_t depth) {
 	if (colref.table_name.empty()) {
 		return BindResult(StringUtil::Format("Could not bind alias \"%s\"!", colref.column_name.c_str()));
 	}
@@ -66,10 +66,10 @@ void BindContext::AddBaseTable(BoundBaseTableRef *bound, const string &alias) {
 	AddBinding(alias, make_unique<TableBinding>(alias, bound));
 }
 
-void BindContext::AddSubquery(uint64_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {
+void BindContext::AddSubquery(index_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {
 	AddBinding(alias, make_unique<SubqueryBinding>(alias, ref, subquery, index));
 }
 
-void BindContext::AddTableFunction(uint64_t index, const string &alias, TableFunctionCatalogEntry *function_entry) {
+void BindContext::AddTableFunction(index_t index, const string &alias, TableFunctionCatalogEntry *function_entry) {
 	AddBinding(alias, make_unique<TableFunctionBinding>(alias, function_entry, index));
 }

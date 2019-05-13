@@ -37,7 +37,7 @@ protected:
 	SelectNode &node;
 	unordered_map<string, index_t> &alias_map;
 	unordered_map<string, index_t> &group_alias_map;
-	unordered_set<uint32_t> used_aliases;
+	unordered_set<index_t> used_aliases;
 
 	index_t group_index;
 };

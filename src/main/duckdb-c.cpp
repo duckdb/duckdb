@@ -88,8 +88,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 	}
 	// copy the data
 	// first write the meta data
-	assert(result->types.size() <= std::numeric_limits<uint32_t>::max());
-	out->column_count = (uint32_t)result->types.size();
+	out->column_count = result->types.size();
 	out->row_count = result->collection.count;
 	out->columns = (duckdb_column *)malloc(sizeof(duckdb_column) * out->column_count);
 	if (!out->columns) {
