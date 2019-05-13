@@ -9,16 +9,14 @@
 #pragma once
 
 #include "parser/parsed_data/create_table_info.hpp"
-#include "planner/expression.hpp"
 #include "planner/bound_constraint.hpp"
+#include "planner/expression.hpp"
 
 namespace duckdb {
 class CatalogEntry;
 
 struct BoundCreateTableInfo {
-	BoundCreateTableInfo(unique_ptr<CreateTableInfo> base) :
-		base(move(base)) {
-
+	BoundCreateTableInfo(unique_ptr<CreateTableInfo> base) : base(move(base)) {
 	}
 	//! The map of column names -> column index, used during binding
 	unordered_map<string, column_t> name_map;

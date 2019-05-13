@@ -21,12 +21,14 @@ public:
 	    : Constraint(type), index((uint64_t)-1), columns(columns), is_primary_key(is_primary_key) {
 	}
 
-	//! The index of the column for which this constraint holds. Only used when the constraint relates to a single column, equal to (uint64_t) -1 if not used
+	//! The index of the column for which this constraint holds. Only used when the constraint relates to a single
+	//! column, equal to (uint64_t) -1 if not used
 	uint64_t index;
 	//! The set of columns for which this constraint holds by name. Only used when the index field is not used.
 	vector<string> columns;
 	//! Whether or not this is a PRIMARY KEY constraint, or a UNIQUE constraint.
 	bool is_primary_key;
+
 public:
 	string ToString() const override;
 
