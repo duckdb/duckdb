@@ -1,3 +1,4 @@
+#include "common/exception.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/star_expression.hpp"
 #include "parser/transformer.hpp"

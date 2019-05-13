@@ -9,7 +9,7 @@ using namespace std;
 
 namespace duckdb {
 
-void year_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_count, BoundFunctionExpression &expr,
+void year_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
                    Vector &result) {
 	assert(input_count == 1);
 	auto &input = inputs[0];
@@ -23,10 +23,10 @@ void year_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_cou
 	switch (input.type) {
 	case TypeId::INTEGER:
 		VectorOperations::ExecType<date_t>(
-		    input, [&](date_t date, uint64_t i, uint64_t k) { result_data[i] = Date::ExtractYear(date); });
+		    input, [&](date_t date, index_t i, index_t k) { result_data[i] = Date::ExtractYear(date); });
 		break;
 	case TypeId::BIGINT:
-		VectorOperations::ExecType<timestamp_t>(input, [&](timestamp_t timestamp, uint64_t i, uint64_t k) {
+		VectorOperations::ExecType<timestamp_t>(input, [&](timestamp_t timestamp, index_t i, index_t k) {
 			result_data[i] = Date::ExtractYear(Timestamp::GetDate(timestamp));
 		});
 		break;

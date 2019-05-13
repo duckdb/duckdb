@@ -2,28 +2,29 @@ language: cpp
 script: make unit
 dist: trusty
 
+env:
+  global:
+    - CIBW_BUILD='cp37-*'
+    - CIBW_SKIP='*-manylinux1_i686'
+    - CIBW_TEST_REQUIRES='pytest'
+    - CIBW_BEFORE_BUILD='pip install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3" && pip install cmake'
+    - CIBW_TEST_COMMAND='python -m pytest {project}/tests'
+    - TWINE_USERNAME=hfmuehleisen
+
 matrix:
   include:
 
-    # - os: osx
-    #   name: Xcode 7.3
-    #   osx_image: xcode7.3
-
-    # - os: osx
-    #   osx_image: xcode8.3
-
-    # - os: osx
-    #   name: Xcode 9.3
-    #   osx_image: xcode9.3
-
-
-    # - os: osx
-    #   osx_image: xcode9.4
-
+    - os: osx
+      name: Xcode 6.4
+      osx_image: xcode9.1
 
     - os: osx
-      name: Xcode 10.1
-      osx_image: xcode10.1
+      name: Xcode 9.4
+      osx_image: xcode9.1
+
+    - os: osx
+      name: Xcode 10.2
+      osx_image: xcode10.2
 
 
     - os: linux
@@ -36,28 +37,6 @@ matrix:
             - g++-4.9 binutils-2.26
       env:
          - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
-
-    # - os: linux
-    #   name: GCC 5
-    #   addons:
-    #     apt:
-    #       sources:
-    #         - ubuntu-toolchain-r-test
-    #       packages:
-    #         - g++-5 binutils-2.26
-    #   env:
-    #      - MATRIX_EVAL="CC=gcc-5 && CXX=g++-5"
-
-    # - os: linux
-    #   name: GCC 6
-    #   addons:
-    #     apt:
-    #       sources:
-    #         - ubuntu-toolchain-r-test
-    #       packages:
-    #         - g++-6 binutils-2.26
-    #   env:
-    #     - MATRIX_EVAL="CC=gcc-6 && CXX=g++-6"
 
     - os: linux
       name: GCC 7
@@ -133,27 +112,6 @@ matrix:
             - clang-3.9 binutils-2.26
       env:
         - MATRIX_EVAL="CC=clang-3.9 && CXX=clang++-3.9"
-
-    # - os: linux
-    #   addons:
-    #     apt:
-    #       sources:
-    #         - llvm-toolchain-trusty-4.0
-    #       packages:
-    #         - clang-4.0 binutils-2.26
-
-    #   env:
-    #     - MATRIX_EVAL="CC=clang-4.0 && CXX=clang++-4.0"
-
-    # - os: linux
-    #   addons:
-    #     apt:
-    #       sources:
-    #         - llvm-toolchain-trusty-5.0
-    #       packages:
-    #         - clang-5.0 binutils-2.26
-    #   env:
-    #     - MATRIX_EVAL="CC=clang-5.0 && CXX=clang++-5.0"
 
     - os: linux
       name: Clang 6
@@ -287,6 +245,65 @@ matrix:
         - cd tests
         - C:/Program\ Files/R/R-3.5.3/bin/R.exe -f testthat.R
 
+
+
+    - os: linux
+      name: Python Package Wheel
+
+      dist: xenial
+      language: python
+      python: 3.7
+
+      script:
+        - pip install cibuildwheel==0.10.2
+        - cd tools/pythonpkg
+        - python setup.py sdist
+        - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        - cibuildwheel --output-dir wheelhouse duckdb_tarball
+        - |
+          if [[ $TRAVIS_TAG ]]; then
+            pip install twine
+            python -m twine upload --skip-existing wheelhouse/*.whl
+          fi
+
+    - os: osx
+      name: Python Package Wheel
+      language: generic
+      osx_image: xcode10.2
+
+      script:
+        - pip install cibuildwheel==0.10.2
+        - cd tools/pythonpkg
+        - python setup.py sdist
+        - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        - cibuildwheel --output-dir wheelhouse duckdb_tarball
+        - |
+          if [[ $TRAVIS_TAG ]]; then
+            pip install twine
+            python -m twine upload --skip-existing wheelhouse/*.whl
+          fi
+
+
+    - os: windows
+      name: Python Package Wheel
+      language: cpp
+
+      before_install:
+        - choco install python3 --version 3.7.3 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python37"
+        - choco install python3 --version 3.7.3 --sidebyside -y --force --params "/InstallDir:C:\Python37-x64"
+        - C:/Python37-x64/python.exe -m pip install --upgrade pip
+        - C:/Python37-x64/python.exe -m pip install "cibuildwheel==0.10.2"
+
+      script:
+        - cd tools/pythonpkg
+        - C:/Python37-x64/python.exe  setup.py sdist
+        - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        - C:/Python37-x64/python.exe -m cibuildwheel --platform windows --output-dir wheelhouse duckdb_tarball
+        - |
+          if [[ $TRAVIS_TAG ]]; then
+            C:/Python37-x64/python.exe -m pip install twine
+            C:/Python37-x64/python.exe -m twine upload --skip-existing wheelhouse/*.whl
+          fi
 
 before_install:
   - eval "${MATRIX_EVAL}"

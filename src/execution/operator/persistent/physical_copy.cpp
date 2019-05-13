@@ -13,7 +13,7 @@
 using namespace duckdb;
 using namespace std;
 
-static bool end_of_field(string &line, uint64_t i, char delimiter) {
+static bool end_of_field(string &line, index_t i, char delimiter) {
 	return i + 1 >= line.size() || line[i] == delimiter;
 }
 
@@ -25,14 +25,14 @@ static void WriteQuotedString(ofstream &to_csv, string str, char delimiter, char
 	}
 }
 
-void PhysicalCopy::Flush(ClientContext &context, DataChunk &chunk, int64_t &nr_elements, int64_t &total,
+void PhysicalCopy::Flush(ClientContext &context, DataChunk &chunk, count_t &nr_elements, count_t &total,
                          vector<bool> &set_to_default) {
 	if (nr_elements == 0) {
 		return;
 	}
 	if (set_to_default.size() > 0) {
 		assert(set_to_default.size() == chunk.column_count);
-		for (uint64_t i = 0; i < set_to_default.size(); i++) {
+		for (index_t i = 0; i < set_to_default.size(); i++) {
 			if (set_to_default[i]) {
 				chunk.data[i].count = nr_elements;
 				chunk.data[i].nullmask.set();
@@ -45,11 +45,11 @@ void PhysicalCopy::Flush(ClientContext &context, DataChunk &chunk, int64_t &nr_e
 	nr_elements = 0;
 }
 
-void PhysicalCopy::PushValue(string &line, DataChunk &insert_chunk, int64_t start, int64_t end, int64_t &column,
-                             int64_t linenr) {
+void PhysicalCopy::PushValue(string &line, DataChunk &insert_chunk, index_t start, index_t end, index_t &column,
+                             index_t linenr) {
 	assert(end >= start);
-	int64_t expected_column_count = info->select_list.size() > 0 ? info->select_list.size() : insert_chunk.column_count;
-	uint64_t length = end - start;
+	count_t expected_column_count = info->select_list.size() > 0 ? info->select_list.size() : insert_chunk.column_count;
+	count_t length = end - start;
 	if (column == expected_column_count && length == 0) {
 		// skip a single trailing delimiter
 		column++;
@@ -66,16 +66,16 @@ void PhysicalCopy::PushValue(string &line, DataChunk &insert_chunk, int64_t star
 		result = Value(line.substr(start, length));
 	}
 	// insert the value into the column
-	uint64_t column_entry = info->select_list.size() > 0 ? select_list_oid[column] : column;
-	uint64_t entry = insert_chunk.data[column_entry].count++;
+	index_t column_entry = info->select_list.size() > 0 ? select_list_oid[column] : column;
+	index_t entry = insert_chunk.data[column_entry].count++;
 	insert_chunk.data[column_entry].SetValue(entry, result);
 	// move to the next column
 	column++;
 }
 
 void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
-	int64_t nr_elements = 0;
-	int64_t total = 0;
+	count_t nr_elements = 0;
+	count_t total = 0;
 
 	auto &info = *this->info;
 
@@ -87,13 +87,13 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 		// handle the select list (if any)
 		if (info.select_list.size() > 0) {
 			set_to_default.resize(types.size(), true);
-			for (uint64_t i = 0; i < info.select_list.size(); i++) {
+			for (index_t i = 0; i < info.select_list.size(); i++) {
 				auto &column = table->GetColumn(info.select_list[i]);
 				select_list_oid.push_back(column.oid);
 				set_to_default[column.oid] = false;
 			}
 		}
-		int64_t linenr = 0;
+		index_t linenr = 0;
 		string line;
 
 		if (!context.db.file_system->FileExists(info.file_path)) {
@@ -118,11 +118,11 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 		}
 		while (getline(from_csv, line)) {
 			bool in_quotes = false;
-			uint64_t start = 0;
-			int64_t column = 0;
-			int64_t expected_column_count =
+			index_t start = 0;
+			index_t column = 0;
+			count_t expected_column_count =
 			    info.select_list.size() > 0 ? info.select_list.size() : insert_chunk.column_count;
-			for (uint64_t i = 0; i < line.size(); i++) {
+			for (index_t i = 0; i < line.size(); i++) {
 				// handle quoting
 				if (line[i] == info.quote) {
 					if (!in_quotes) {
@@ -178,7 +178,7 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 		to_csv.open(info.file_path);
 		if (info.header) {
 			// write the header line
-			for (uint64_t i = 0; i < names.size(); i++) {
+			for (index_t i = 0; i < names.size(); i++) {
 				if (i != 0) {
 					to_csv << info.delimiter;
 				}
@@ -191,8 +191,8 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 			if (state->child_chunk.size() == 0) {
 				break;
 			}
-			for (uint64_t i = 0; i < state->child_chunk.size(); i++) {
-				for (uint64_t col = 0; col < state->child_chunk.column_count; col++) {
+			for (index_t i = 0; i < state->child_chunk.size(); i++) {
+				for (index_t col = 0; col < state->child_chunk.column_count; col++) {
 					if (col != 0) {
 						to_csv << info.delimiter;
 					}

@@ -19,7 +19,7 @@ string BoundOperatorExpression::ToString() const {
 	}
 	// if there is no operator we render it as a function
 	auto result = ExpressionTypeToString(type) + "(";
-	for (uint64_t i = 0; i < children.size(); i++) {
+	for (index_t i = 0; i < children.size(); i++) {
 		result += children[i]->GetName();
 		if (i + 1 < children.size()) {
 			result += ", ";
@@ -38,7 +38,7 @@ bool BoundOperatorExpression::Equals(const BaseExpression *other_) const {
 	if (children.size() != other->children.size()) {
 		return false;
 	}
-	for (uint64_t i = 0; i < children.size(); i++) {
+	for (index_t i = 0; i < children.size(); i++) {
 		if (!Expression::Equals(children[i].get(), other->children[i].get())) {
 			return false;
 		}

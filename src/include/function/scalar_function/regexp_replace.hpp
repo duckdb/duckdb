@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-void regexp_replace_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_count,
+void regexp_replace_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count,
                              BoundFunctionExpression &expr, Vector &result);
 bool regexp_replace_matches_arguments(vector<SQLType> &arguments);
 SQLType regexp_replace_get_return_type(vector<SQLType> &arguments);

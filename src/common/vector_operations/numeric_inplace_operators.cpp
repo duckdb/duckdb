@@ -62,14 +62,14 @@ void templated_inplace_divmod_loop(Vector &input, Vector &result) {
 			result.nullmask.set();
 		} else {
 			VectorOperations::Exec(result.sel_vector, result.count,
-			                       [&](uint64_t i, uint64_t k) { OP::Operation(result_data[i], rdata[0]); });
+			                       [&](index_t i, index_t k) { OP::Operation(result_data[i], rdata[0]); });
 		}
 	} else {
 		// OR nullmasks together
 		result.nullmask = input.nullmask | result.nullmask;
 		assert(result.sel_vector == input.sel_vector);
 		ASSERT_RESTRICT(rdata, rdata + result.count, result_data, result_data + result.count);
-		VectorOperations::Exec(result.sel_vector, result.count, [&](uint64_t i, uint64_t k) {
+		VectorOperations::Exec(result.sel_vector, result.count, [&](index_t i, index_t k) {
 			if (rdata[i] == 0) {
 				result.nullmask[i] = true;
 			} else {

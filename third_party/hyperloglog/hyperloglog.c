@@ -969,6 +969,13 @@ void hllRawRegHisto(uint8_t *registers, int* reghisto) {
     }
 }
 
+// somehow this is missing on some platforms
+#ifndef INFINITY
+// from math.h
+#define INFINITY 1e50f
+#endif
+
+
 /* Helper function sigma as defined in
  * "New cardinality estimation algorithms for HyperLogLog sketches"
  * Otmar Ertl, arXiv:1702.01284 */

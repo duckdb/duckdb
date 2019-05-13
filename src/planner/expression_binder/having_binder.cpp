@@ -14,10 +14,10 @@ HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNo
 	target_type = SQLType(SQLTypeId::BOOLEAN);
 }
 
-BindResult HavingBinder::BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression) {
+BindResult HavingBinder::BindExpression(ParsedExpression &expr, count_t depth, bool root_expression) {
 	// check if the expression binds to one of the groups
 	auto group_index = TryBindGroup(expr, depth);
-	if (group_index >= 0) {
+	if (group_index != INVALID_INDEX) {
 		return BindGroup(expr, depth, group_index);
 	}
 	switch (expr.expression_class) {

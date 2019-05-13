@@ -15,12 +15,12 @@
 namespace duckdb {
 
 template <class LEFT_TYPE, class RESULT_TYPE, class OP>
-static inline void fold_loop_function(LEFT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result, uint64_t count,
+static inline void fold_loop_function(LEFT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result, count_t count,
                                       sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 	ASSERT_RESTRICT(ldata, ldata + count, result, result + 1);
 	if (nullmask.any()) {
 		// skip null values in the operation
-		VectorOperations::Exec(sel_vector, count, [&](uint64_t i, uint64_t k) {
+		VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
 			if (!nullmask[i]) {
 				*result = OP::Operation(ldata[i], *result);
 			}
@@ -28,7 +28,7 @@ static inline void fold_loop_function(LEFT_TYPE *__restrict ldata, RESULT_TYPE *
 	} else {
 		// quick path: no NULL values
 		VectorOperations::Exec(sel_vector, count,
-		                       [&](uint64_t i, uint64_t k) { *result = OP::Operation(ldata[i], *result); });
+		                       [&](index_t i, index_t k) { *result = OP::Operation(ldata[i], *result); });
 	}
 }
 

@@ -29,30 +29,30 @@ inline void BINARY_TYPE_CHECK(Vector &left, Vector &right, Vector &result) {
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
 static inline void binary_loop_function_left_constant(LEFT_TYPE ldata, RIGHT_TYPE *__restrict rdata,
-                                                      RESULT_TYPE *__restrict result_data, uint64_t count,
+                                                      RESULT_TYPE *__restrict result_data, count_t count,
                                                       sel_t *__restrict sel_vector) {
 	ASSERT_RESTRICT(rdata, rdata + count, result_data, result_data + count);
 	VectorOperations::Exec(sel_vector, count,
-	                       [&](uint64_t i, uint64_t k) { result_data[i] = OP::Operation(ldata, rdata[i]); });
+	                       [&](index_t i, index_t k) { result_data[i] = OP::Operation(ldata, rdata[i]); });
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
 static inline void binary_loop_function_right_constant(LEFT_TYPE *__restrict ldata, RIGHT_TYPE rdata,
-                                                       RESULT_TYPE *__restrict result_data, uint64_t count,
+                                                       RESULT_TYPE *__restrict result_data, count_t count,
                                                        sel_t *__restrict sel_vector) {
 	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 	VectorOperations::Exec(sel_vector, count,
-	                       [&](uint64_t i, uint64_t k) { result_data[i] = OP::Operation(ldata[i], rdata); });
+	                       [&](index_t i, index_t k) { result_data[i] = OP::Operation(ldata[i], rdata); });
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
 static inline void binary_loop_function_array(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
-                                              RESULT_TYPE *__restrict result_data, uint64_t count,
+                                              RESULT_TYPE *__restrict result_data, count_t count,
                                               sel_t *__restrict sel_vector) {
 	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 	ASSERT_RESTRICT(rdata, rdata + count, result_data, result_data + count);
 	VectorOperations::Exec(sel_vector, count,
-	                       [&](uint64_t i, uint64_t k) { result_data[i] = OP::Operation(ldata[i], rdata[i]); });
+	                       [&](index_t i, index_t k) { result_data[i] = OP::Operation(ldata[i], rdata[i]); });
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL = false>
@@ -71,7 +71,7 @@ void templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 			LEFT_TYPE constant = ldata[0];
 			result.nullmask = right.nullmask;
 			if (IGNORE_NULL && result.nullmask.any()) {
-				VectorOperations::Exec(right.sel_vector, right.count, [&](uint64_t i, uint64_t k) {
+				VectorOperations::Exec(right.sel_vector, right.count, [&](index_t i, index_t k) {
 					if (!result.nullmask[i]) {
 						result_data[i] = OP::Operation(constant, rdata[i]);
 					}
@@ -93,7 +93,7 @@ void templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 			RIGHT_TYPE constant = rdata[0];
 			result.nullmask = left.nullmask;
 			if (IGNORE_NULL && result.nullmask.any()) {
-				VectorOperations::Exec(left.sel_vector, left.count, [&](uint64_t i, uint64_t k) {
+				VectorOperations::Exec(left.sel_vector, left.count, [&](index_t i, index_t k) {
 					if (!result.nullmask[i]) {
 						result_data[i] = OP::Operation(ldata[i], constant);
 					}
@@ -111,7 +111,7 @@ void templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 		result.nullmask = left.nullmask | right.nullmask;
 		assert(left.sel_vector == right.sel_vector);
 		if (IGNORE_NULL && result.nullmask.any()) {
-			VectorOperations::Exec(left.sel_vector, left.count, [&](uint64_t i, uint64_t k) {
+			VectorOperations::Exec(left.sel_vector, left.count, [&](index_t i, index_t k) {
 				if (!result.nullmask[i]) {
 					result_data[i] = OP::Operation(ldata[i], rdata[i]);
 				}

@@ -11,7 +11,7 @@
 #include "common/common.hpp"
 #include "common/exception.hpp"
 
-#include <iostream>
+#include <iosfwd>
 #include <memory.h>
 
 namespace duckdb {

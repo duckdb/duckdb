@@ -28,7 +28,7 @@ public:
 	//! The expressions to update by
 	vector<unique_ptr<Expression>> expressions;
 	//! The projection index
-	uint64_t proj_index;
+	index_t proj_index;
 
 public:
 	vector<string> GetNames() override {

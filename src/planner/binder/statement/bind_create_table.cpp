@@ -15,7 +15,7 @@ using namespace std;
 void Binder::BindConstraints(string table, vector<ColumnDefinition> &columns,
                              vector<unique_ptr<Constraint>> &constraints) {
 	CheckBinder binder(*this, context, table, columns);
-	for (uint64_t i = 0; i < constraints.size(); i++) {
+	for (index_t i = 0; i < constraints.size(); i++) {
 		auto &cond = constraints[i];
 		if (cond->type == ConstraintType::CHECK) {
 			auto &check = (CheckConstraint &)*cond;
@@ -34,7 +34,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CreateTableStatement &stmt) {
 		// bind any constraints
 		BindConstraints(stmt.info->table, stmt.info->columns, stmt.info->constraints);
 		// bind the default values
-		for (uint64_t i = 0; i < stmt.info->columns.size(); i++) {
+		for (index_t i = 0; i < stmt.info->columns.size(); i++) {
 			unique_ptr<Expression> bound_default;
 			if (stmt.info->columns[i].default_value) {
 				// we bind a copy of the DEFAULT value because binding is destructive

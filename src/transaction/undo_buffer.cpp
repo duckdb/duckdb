@@ -13,12 +13,12 @@
 using namespace duckdb;
 using namespace std;
 
-uint8_t *UndoBuffer::CreateEntry(UndoFlags type, uint64_t len) {
+data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, index_t len) {
 	UndoEntry entry;
 	entry.type = type;
 	entry.length = len;
-	auto dataptr = new uint8_t[len];
-	entry.data = unique_ptr<uint8_t[]>(dataptr);
+	auto dataptr = new data_t[len];
+	entry.data = unique_ptr<data_t[]>(dataptr);
 	entries.push_back(move(entry));
 	return dataptr;
 }
@@ -182,10 +182,10 @@ static void WriteTuple(WriteAheadLog *log, VersionInformation *entry,
 	if (entry->chunk) {
 		auto id = entry->prev.entry;
 		// append the tuple to the current chunk
-		uint64_t current_offset = chunk->size();
-		for (uint64_t i = 0; i < chunk->column_count; i++) {
+		index_t current_offset = chunk->size();
+		for (index_t i = 0; i < chunk->column_count; i++) {
 			auto type = chunk->data[i].type;
-			uint64_t value_size = GetTypeIdSize(type);
+			index_t value_size = GetTypeIdSize(type);
 			void *storage_pointer = storage->columns[i] + value_size * id;
 			memcpy(chunk->data[i].data + value_size * current_offset, storage_pointer, value_size);
 			chunk->data[i].count++;
@@ -194,10 +194,10 @@ static void WriteTuple(WriteAheadLog *log, VersionInformation *entry,
 		assert(entry->prev.pointer->tuple_data);
 		auto tuple_data = entry->prev.pointer->tuple_data;
 		// append the tuple to the current chunk
-		uint64_t current_offset = chunk->size();
-		for (uint64_t i = 0; i < chunk->column_count; i++) {
+		index_t current_offset = chunk->size();
+		for (index_t i = 0; i < chunk->column_count; i++) {
 			auto type = chunk->data[i].type;
-			uint64_t value_size = GetTypeIdSize(type);
+			index_t value_size = GetTypeIdSize(type);
 			memcpy(chunk->data[i].data + value_size * current_offset, tuple_data, value_size);
 			tuple_data += value_size;
 			chunk->data[i].count++;
@@ -254,7 +254,7 @@ void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
 }
 
 void UndoBuffer::Rollback() {
-	for (uint64_t i = entries.size(); i > 0; i--) {
+	for (index_t i = entries.size(); i > 0; i--) {
 		auto &entry = entries[i - 1];
 		if (entry.type == UndoFlags::CATALOG_ENTRY) {
 			// undo this catalog entry

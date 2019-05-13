@@ -20,8 +20,8 @@ class WindowExpression;
 class BoundSelectNode;
 
 struct BoundGroupInformation {
-	expression_map_t<uint32_t> map;
-	unordered_map<string, uint32_t> alias_map;
+	expression_map_t<index_t> map;
+	unordered_map<string, index_t> alias_map;
 	vector<SQLType> group_types;
 };
 
@@ -31,7 +31,7 @@ public:
 	SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info);
 
 protected:
-	BindResult BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression = false) override;
+	BindResult BindExpression(ParsedExpression &expr, count_t depth, bool root_expression = false) override;
 
 	bool inside_window;
 
@@ -39,11 +39,11 @@ protected:
 	BoundGroupInformation &info;
 
 protected:
-	BindResult BindAggregate(AggregateExpression &expr, uint32_t depth);
-	BindResult BindWindow(WindowExpression &expr, uint32_t depth);
+	BindResult BindAggregate(AggregateExpression &expr, count_t depth);
+	BindResult BindWindow(WindowExpression &expr, count_t depth);
 
-	int32_t TryBindGroup(ParsedExpression &expr, uint32_t depth);
-	BindResult BindGroup(ParsedExpression &expr, uint32_t depth, int32_t group_index);
+	index_t TryBindGroup(ParsedExpression &expr, count_t depth);
+	BindResult BindGroup(ParsedExpression &expr, count_t depth, index_t group_index);
 };
 
 } // namespace duckdb

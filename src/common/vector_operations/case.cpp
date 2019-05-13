@@ -16,7 +16,7 @@ template <class T, class OP> static void case_loop(Vector &check, Vector &res_tr
 	auto res = (T *)result.data;
 	VectorOperations::TernaryExec(
 	    check, res_true, res_false, result,
-	    [&](uint64_t check_index, uint64_t true_index, uint64_t false_index, uint64_t i) {
+	    [&](index_t check_index, index_t true_index, index_t false_index, index_t i) {
 		    bool branch = (cond[check_index] && !check.nullmask[check_index]);
 		    result.nullmask[i] = branch ? res_true.nullmask[true_index] : res_false.nullmask[false_index];
 		    res[i] = OP::Operation(result, branch, true_data[true_index], false_data[false_index], i);
@@ -27,14 +27,14 @@ template <class T, class OP> static void case_loop(Vector &check, Vector &res_tr
 // Case statement (if, else, then)
 //===--------------------------------------------------------------------===//
 struct RegularCase {
-	template <class T> static inline T Operation(Vector &result, bool condition, T left, T right, uint64_t i) {
+	template <class T> static inline T Operation(Vector &result, bool condition, T left, T right, index_t i) {
 		return condition ? left : right;
 	}
 };
 
 struct StringCase {
 	static inline const char *Operation(Vector &result, bool condition, const char *left, const char *right,
-	                                    uint64_t i) {
+	                                    index_t i) {
 		if (!result.nullmask[i]) {
 			return condition ? result.string_heap.AddString(left) : result.string_heap.AddString(right);
 		} else {

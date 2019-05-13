@@ -75,7 +75,7 @@ void VectorOperations::Scatter::Min(Vector &source, Vector &dest) {
 void VectorOperations::Scatter::AddOne(Vector &source, Vector &dest) {
 	assert(dest.type == TypeId::POINTER);
 	auto destinations = (int64_t **)dest.data;
-	VectorOperations::Exec(source, [&](uint64_t i, uint64_t k) {
+	VectorOperations::Exec(source, [&](index_t i, index_t k) {
 		if (!source.nullmask[i]) {
 			(*destinations[i])++;
 		}

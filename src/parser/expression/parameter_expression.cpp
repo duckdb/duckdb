@@ -22,11 +22,11 @@ unique_ptr<ParsedExpression> ParameterExpression::Copy() const {
 
 void ParameterExpression::Serialize(Serializer &serializer) {
 	ParsedExpression::Serialize(serializer);
-	serializer.Write<uint64_t>(parameter_nr);
+	serializer.Write<index_t>(parameter_nr);
 }
 
 unique_ptr<ParsedExpression> ParameterExpression::Deserialize(ExpressionType type, Deserializer &source) {
 	auto expression = make_unique<ParameterExpression>();
-	expression->parameter_nr = source.Read<uint64_t>();
+	expression->parameter_nr = source.Read<index_t>();
 	return move(expression);
 }

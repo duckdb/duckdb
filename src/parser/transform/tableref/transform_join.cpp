@@ -1,3 +1,4 @@
+#include "common/exception.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/comparison_expression.hpp"
 #include "parser/expression/conjunction_expression.hpp"
