@@ -25,7 +25,7 @@ void LogicalJoin::ResolveTypes() {
 	types.insert(types.end(), children[1]->types.begin(), children[1]->types.end());
 }
 
-void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<uint64_t> &bindings) {
+void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<index_t> &bindings) {
 	TableBindingResolver resolver;
 	resolver.VisitOperator(op);
 	for (auto &table : resolver.bound_tables) {
@@ -33,7 +33,7 @@ void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<uint64_t
 	}
 }
 
-void LogicalJoin::GetExpressionBindings(Expression &expr, unordered_set<uint64_t> &bindings) {
+void LogicalJoin::GetExpressionBindings(Expression &expr, unordered_set<index_t> &bindings) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)expr;
 		assert(colref.depth == 0);
