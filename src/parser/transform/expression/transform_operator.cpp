@@ -1,3 +1,4 @@
+#include "function/scalar_function/regexp_matches.hpp"
 #include "parser/expression/case_expression.hpp"
 #include "parser/expression/comparison_expression.hpp"
 #include "parser/expression/conjunction_expression.hpp"
@@ -39,6 +40,10 @@ ExpressionType Transformer::OperatorToExpressionType(string &op) {
 		return ExpressionType::COMPARE_LIKE;
 	} else if (op == "!~~") {
 		return ExpressionType::COMPARE_NOTLIKE;
+	} else if (op == "~") {
+		return ExpressionType::COMPARE_SIMILAR;
+	} else if (op == "!~") {
+		return ExpressionType::COMPARE_NOTSIMILAR;
 	}
 	return ExpressionType::INVALID;
 }
@@ -107,15 +112,51 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(compare_between));
 		}
 	} break;
+	// rewrite SIMILAR TO into regexp_matches('asdf', '.*sd.*')
+	case AEXPR_SIMILAR: {
+		auto left_expr = TransformExpression(root->lexpr);
+		auto right_expr = TransformExpression(root->rexpr);
+
+		vector<unique_ptr<ParsedExpression>> children;
+		children.push_back(move(left_expr));
+
+		auto &similar_func = reinterpret_cast<FunctionExpression &>(*right_expr);
+		assert(similar_func.function_name == "similar_escape");
+		assert(similar_func.children.size() == 2);
+		if (similar_func.children[1]->type != ExpressionType::VALUE_CONSTANT) {
+			throw NotImplementedException("Custom escape in SIMILAR TO");
+		}
+		auto &constant = (ConstantExpression &)*similar_func.children[1];
+		if (!constant.value.is_null) {
+			throw NotImplementedException("Custom escape in SIMILAR TO");
+		}
+		// take the child of the similar_func
+		children.push_back(move(similar_func.children[0]));
+
+		// this looks very odd, but seems to be the way to find out its NOT IN
+		bool invert_similar = false;
+		if (name == "!~") {
+			// NOT SIMILAR TO
+			invert_similar = true;
+		}
+		const auto schema = DEFAULT_SCHEMA;
+		const auto regex_function = RegexpMatchesFunction::GetName();
+		const auto lowercase_name = StringUtil::Lower(regex_function);
+		auto result = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children);
+
+		if (invert_similar) {
+			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(result));
+		} else {
+			return move(result);
+		}
+	} break;
 	default: {
 		target_type = OperatorToExpressionType(name);
 		if (target_type == ExpressionType::INVALID) {
 			throw NotImplementedException("A_Expr transform not implemented %s.", name.c_str());
 		}
 	}
-	}
-
-	// continuing default case
+	} // continuing default case
 	auto left_expr = TransformExpression(root->lexpr);
 	auto right_expr = TransformExpression(root->rexpr);
 	if (!left_expr) {
@@ -137,6 +178,29 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
 		children.push_back(move(left_expr));
 		children.push_back(move(right_expr));
 		return make_unique<FunctionExpression>("concat", children);
+	}
+
+	// rewrite SIMILAR TO into regexp_matches('asdf', '.*sd.*')
+	if (target_type == ExpressionType::COMPARE_SIMILAR || target_type == ExpressionType::COMPARE_NOTSIMILAR) {
+		bool invert_similar = false;
+		if (name == "!~") {
+			// NOT SIMILAR TO
+			invert_similar = true;
+		}
+		vector<unique_ptr<ParsedExpression>> children;
+		children.push_back(move(left_expr));
+		children.push_back(move(right_expr));
+
+		const auto schema = DEFAULT_SCHEMA;
+		const auto regex_function = RegexpMatchesFunction::GetName();
+		const auto lowercase_name = StringUtil::Lower(regex_function);
+		auto result = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children);
+
+		if (invert_similar) {
+			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(result));
+		} else {
+			return move(result);
+		}
 	}
 
 	unique_ptr<ParsedExpression> result = nullptr;

@@ -67,16 +67,20 @@ enum class ExpressionType : uint8_t {
 	COMPARE_LIKE = 31,
 	// NOT LIKE operator (left NOT LIKE right). Both children must be string.
 	COMPARE_NOTLIKE = 32,
+	// SIMILAR TO operator (left SIMILAR TO right). Both children must be string.
+	COMPARE_SIMILAR = 33,
+	// NOT SIMILAR TO operator (left NOT SIMILAR TO right). Both children must be string.
+	COMPARE_NOTSIMILAR = 34,
 	// IN operator [left IN (right1, right2, ...)]
-	COMPARE_IN = 33,
+	COMPARE_IN = 35,
 	// NOT IN operator [left NOT IN (right1, right2, ...)]
-	COMPARE_NOT_IN = 34,
+	COMPARE_NOT_IN = 36,
 	// IS DISTINCT FROM operator
-	COMPARE_DISTINCT_FROM = 35,
+	COMPARE_DISTINCT_FROM = 37,
 	// compare final boundary
 
-	COMPARE_BETWEEN = 36,
-	COMPARE_NOT_BETWEEN = 37,
+	COMPARE_BETWEEN = 38,
+	COMPARE_NOT_BETWEEN = 39,
 	COMPARE_BOUNDARY_END = COMPARE_NOT_BETWEEN,
 
 	// -----------------------------
