@@ -28,7 +28,7 @@ template <class OP, class NULLOP> void templated_boolean_nullmask(Vector &left, 
 	if (left.IsConstant()) {
 		bool left_null = left.nullmask[0];
 		bool constant = ldata[0];
-		VectorOperations::Exec(right, [&](uint64_t i, uint64_t k) {
+		VectorOperations::Exec(right, [&](index_t i, index_t k) {
 			result_data[i] = OP::Operation(constant, rdata[i]);
 			result.nullmask[i] = NULLOP::Operation(constant, rdata[i], left_null, right.nullmask[i]);
 		});
@@ -39,7 +39,7 @@ template <class OP, class NULLOP> void templated_boolean_nullmask(Vector &left, 
 		templated_boolean_nullmask<OP, NULLOP>(right, left, result);
 	} else if (left.count == right.count) {
 		assert(left.sel_vector == right.sel_vector);
-		VectorOperations::Exec(left, [&](uint64_t i, uint64_t k) {
+		VectorOperations::Exec(left, [&](index_t i, index_t k) {
 			result_data[i] = OP::Operation(ldata[i], rdata[i]);
 			result.nullmask[i] = NULLOP::Operation(ldata[i], rdata[i], left.nullmask[i], right.nullmask[i]);
 		});

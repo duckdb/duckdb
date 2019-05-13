@@ -88,7 +88,7 @@ public:
 
 private:
 	template <class T> void Write(T val);
-	void WriteData(uint8_t *dataptr, uint64_t data_size);
+	void WriteData(data_t dataptr, index_t data_size);
 
 	void WriteEntry(wal_type_t type, BufferedSerializer &serializer);
 

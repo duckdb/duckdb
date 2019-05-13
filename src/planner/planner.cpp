@@ -167,7 +167,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		vector<BoundParameterExpression *> bound_parameters;
 		CreatePlan(*stmt.statement, &bound_parameters);
 		// set up a map of parameter number -> value entries
-		unordered_map<uint64_t, PreparedValueEntry> value_map;
+		unordered_map<index_t, PreparedValueEntry> value_map;
 		for (auto &expr : bound_parameters) {
 			// check if the type of the parameter could be resolved
 			if (expr->return_type == TypeId::INVALID) {
@@ -225,9 +225,9 @@ void Planner::VerifyQuery(BoundSQLStatement &statement) {
 	}
 
 	// double loop to verify that (in)equality of hashes
-	for (uint64_t i = 0; i < expr_list.size(); i++) {
+	for (index_t i = 0; i < expr_list.size(); i++) {
 		auto outer_hash = expr_list[i]->Hash();
-		for (uint64_t j = 0; j < expr_list.size(); j++) {
+		for (index_t j = 0; j < expr_list.size(); j++) {
 			auto inner_hash = expr_list[j]->Hash();
 			if (outer_hash != inner_hash) {
 				// if hashes are not equivalent the expressions should not be equivalent

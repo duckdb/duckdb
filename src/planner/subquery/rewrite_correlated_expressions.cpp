@@ -11,7 +11,7 @@ using namespace duckdb;
 using namespace std;
 
 RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(ColumnBinding base_binding,
-                                                           column_binding_map_t<uint64_t> &correlated_map)
+                                                           column_binding_map_t<index_t> &correlated_map)
     : base_binding(base_binding), correlated_map(correlated_map) {
 }
 
@@ -30,7 +30,7 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRef
 	auto entry = correlated_map.find(expr.binding);
 	assert(entry != correlated_map.end());
 
-	expr.binding = ColumnBinding((uint64_t)base_binding.table_index, base_binding.column_index + entry->second);
+	expr.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
 	expr.depth = 0;
 	return nullptr;
 }
@@ -48,7 +48,7 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundSubqueryE
 }
 
 RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelatedRecursive(
-    BoundSubqueryExpression &parent, ColumnBinding base_binding, column_binding_map_t<uint64_t> &correlated_map)
+    BoundSubqueryExpression &parent, ColumnBinding base_binding, column_binding_map_t<index_t> &correlated_map)
     : parent(parent), base_binding(base_binding), correlated_map(correlated_map) {
 }
 
@@ -58,7 +58,7 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 	for (auto &corr : expr.binder->correlated_columns) {
 		auto entry = correlated_map.find(corr.binding);
 		if (entry != correlated_map.end()) {
-			corr.binding = ColumnBinding((uint64_t)base_binding.table_index, base_binding.column_index + entry->second);
+			corr.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
 		}
 	}
 	// now rewrite any correlated BoundColumnRef expressions inside the subquery
@@ -81,8 +81,7 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 			// we found the column in the correlated map!
 			// update the binding and reduce the depth by 1
 
-			bound_colref.binding =
-			    ColumnBinding((uint64_t)base_binding.table_index, base_binding.column_index + entry->second);
+			bound_colref.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
 			bound_colref.depth--;
 		}
 	} else if (child.type == ExpressionType::SUBQUERY) {
@@ -94,7 +93,7 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 	}
 }
 
-RewriteCountAggregates::RewriteCountAggregates(column_binding_map_t<uint64_t> &replacement_map)
+RewriteCountAggregates::RewriteCountAggregates(column_binding_map_t<index_t> &replacement_map)
     : replacement_map(replacement_map) {
 }
 

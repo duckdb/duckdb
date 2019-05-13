@@ -19,7 +19,7 @@ void LogicalOperatorVisitor::VisitOperatorChildren(LogicalOperator &op) {
 }
 
 void LogicalOperatorVisitor::VisitOperatorExpressions(LogicalOperator &op) {
-	for (uint64_t i = 0, child_count = op.ExpressionCount(); i < child_count; i++) {
+	for (index_t i = 0, child_count = op.ExpressionCount(); i < child_count; i++) {
 		op.ReplaceExpression(
 		    [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
 			    VisitExpression(&child);

@@ -26,13 +26,13 @@ namespace duckdb {
 */
 class SuperLargeHashTable {
 public:
-	SuperLargeHashTable(uint64_t initial_capacity, vector<TypeId> group_types, vector<TypeId> payload_types,
+	SuperLargeHashTable(count_t initial_capacity, vector<TypeId> group_types, vector<TypeId> payload_types,
 	                    vector<ExpressionType> aggregate_types, bool parallel = false);
 	~SuperLargeHashTable();
 
 	//! Resize the HT to the specified size. Must be larger than the current
 	//! size.
-	void Resize(uint64_t size);
+	void Resize(count_t size);
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
 	//! computed but instead just assigned.
@@ -40,7 +40,7 @@ public:
 	//! Scan the HT starting from the scan_position until the result and group
 	//! chunks are filled. scan_position will be updated by this function.
 	//! Returns the amount of elements found.
-	uint64_t Scan(uint64_t &scan_position, DataChunk &group, DataChunk &result);
+	index_t Scan(index_t &scan_position, DataChunk &group, DataChunk &result);
 
 	//! Fetch the aggregates for specific groups from the HT and place them in the result
 	void FetchAggregates(DataChunk &groups, DataChunk &result);
@@ -61,18 +61,18 @@ private:
 	//! The types of the payload columns stored in the hashtable
 	vector<TypeId> payload_types;
 	//! The size of the payload (aggregations) in bytes
-	uint64_t payload_width;
+	count_t payload_width;
 	//! The total tuple size
-	uint64_t tuple_size;
+	count_t tuple_size;
 	//! The capacity of the HT. This can be increased using
 	//! SuperLargeHashTable::Resize
-	uint64_t capacity;
+	count_t capacity;
 	//! The amount of entries stored in the HT currently
-	uint64_t entries;
+	count_t entries;
 	//! The data of the HT
-	uint8_t *data;
+	data_t data;
 	//! The maximum size of the chain
-	uint64_t max_chain;
+	count_t max_chain;
 	//! Whether or not the HT has to support parallel insertion operations
 	bool parallel = false;
 	//! The empty payload data

@@ -13,18 +13,12 @@
 namespace duckdb {
 
 struct ColumnBinding {
-	uint32_t table_index;
-	uint32_t column_index;
+	index_t table_index;
+	index_t column_index;
 
-	ColumnBinding() : table_index((uint32_t)-1), column_index((uint32_t)-1) {
+	ColumnBinding() : table_index(INVALID_INDEX), column_index(INVALID_INDEX) {
 	}
-	ColumnBinding(uint32_t table, uint32_t column) : table_index(table), column_index(column) {
-	}
-
-	// these constructors are only there to check assertions
-	ColumnBinding(uint64_t table, uint64_t column) : ColumnBinding((uint32_t)table, (uint32_t)column) {
-		assert(table <= std::numeric_limits<uint32_t>::max());
-		assert(column <= std::numeric_limits<uint32_t>::max());
+	ColumnBinding(index_t table, index_t column) : table_index(table), column_index(column) {
 	}
 
 	bool operator==(const ColumnBinding &rhs) const {

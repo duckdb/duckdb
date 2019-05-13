@@ -1,3 +1,2 @@
-
-add_library(duckdb_optimizer_rules OBJECT arithmetic_simplification.cpp case_simplification.cpp comparison_simplification.cpp conjunction_simplification.cpp constant_folding.cpp distributivity.cpp move_constants.cpp)
+add_library_unity(duckdb_optimizer_rules OBJECT arithmetic_simplification.cpp case_simplification.cpp comparison_simplification.cpp conjunction_simplification.cpp constant_folding.cpp distributivity.cpp move_constants.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer_rules> PARENT_SCOPE)

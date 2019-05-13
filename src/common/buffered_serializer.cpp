@@ -1,18 +1,21 @@
 #include "common/buffered_serializer.hpp"
 
+#include <cstring>
+
 using namespace duckdb;
 using namespace std;
 
-BufferedSerializer::BufferedSerializer(uint64_t maximum_size)
+BufferedSerializer::BufferedSerializer(index_t maximum_size)
     : BufferedSerializer(unique_ptr<uint8_t[]>(new uint8_t[maximum_size]), maximum_size) {
 }
 
-BufferedSerializer::BufferedSerializer(unique_ptr<uint8_t[]> data, uint64_t size) : maximum_size(size), data(data.get()) {
+BufferedSerializer::BufferedSerializer(unique_ptr<uint8_t[]> data, count_t size)
+    : maximum_size(size), data(data.get()) {
 	blob.size = 0;
 	blob.data = move(data);
 }
 
-void BufferedSerializer::Write(const uint8_t *buffer, uint64_t write_size) {
+void BufferedSerializer::Write(data_t_const buffer, index_t write_size) {
 	if (blob.size + write_size >= maximum_size) {
 		do {
 			maximum_size *= 2;

@@ -8,22 +8,22 @@
 using namespace duckdb;
 using namespace std;
 
-StorageChunk::StorageChunk(DataTable &_table, uint64_t start) : table(_table), count(0), start(start), read_count(0) {
+StorageChunk::StorageChunk(DataTable &_table, index_t start) : table(_table), count(0), start(start), read_count(0) {
 	columns.resize(table.types.size());
-	uint64_t tuple_size = 0;
+	count_t tuple_size = 0;
 	for (auto &type : table.types) {
 		tuple_size += GetTypeIdSize(type);
 	}
-	owned_data = unique_ptr<char[]>(new char[tuple_size * STORAGE_CHUNK_SIZE]);
-	char *dataptr = owned_data.get();
-	for (uint64_t i = 0; i < table.types.size(); i++) {
+	owned_data = unique_ptr<uint8_t[]>(new uint8_t[tuple_size * STORAGE_CHUNK_SIZE]);
+	data_t dataptr = owned_data.get();
+	for (index_t i = 0; i < table.types.size(); i++) {
 		columns[i] = dataptr;
 		dataptr += GetTypeIdSize(table.types[i]) * STORAGE_CHUNK_SIZE;
 	}
 }
 
 void StorageChunk::Cleanup(VersionInformation *info) {
-	uint64_t entry = info->prev.entry;
+	index_t entry = info->prev.entry;
 	version_pointers[entry] = info->next;
 	if (version_pointers[entry]) {
 		version_pointers[entry]->prev.entry = entry;
@@ -32,7 +32,7 @@ void StorageChunk::Cleanup(VersionInformation *info) {
 }
 
 void StorageChunk::Undo(VersionInformation *info) {
-	uint64_t entry = info->prev.entry;
+	index_t entry = info->prev.entry;
 	assert(version_pointers[entry] == info);
 	if (!info->tuple_data) {
 		deleted[entry] = true;

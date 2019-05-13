@@ -5,13 +5,13 @@
 using namespace duckdb;
 using namespace std;
 
-BoundColumnRefExpression::BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, uint32_t depth)
+BoundColumnRefExpression::BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, count_t depth)
     : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, type), binding(binding),
       depth(depth) {
 	this->alias = alias;
 }
 
-BoundColumnRefExpression::BoundColumnRefExpression(TypeId type, ColumnBinding binding, uint32_t depth)
+BoundColumnRefExpression::BoundColumnRefExpression(TypeId type, ColumnBinding binding, count_t depth)
     : BoundColumnRefExpression(string(), type, binding, depth) {
 }
 
@@ -21,9 +21,9 @@ unique_ptr<Expression> BoundColumnRefExpression::Copy() {
 
 uint64_t BoundColumnRefExpression::Hash() const {
 	auto result = Expression::Hash();
-	result = CombineHash(result, duckdb::Hash<uint32_t>(binding.column_index));
-	result = CombineHash(result, duckdb::Hash<uint32_t>(binding.table_index));
-	return CombineHash(result, duckdb::Hash<uint32_t>(depth));
+	result = CombineHash(result, duckdb::Hash<uint64_t>(binding.column_index));
+	result = CombineHash(result, duckdb::Hash<uint64_t>(binding.table_index));
+	return CombineHash(result, duckdb::Hash<uint64_t>(depth));
 }
 
 bool BoundColumnRefExpression::Equals(const BaseExpression *other_) const {

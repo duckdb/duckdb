@@ -35,7 +35,7 @@ ExpressionBinder::~ExpressionBinder() {
 	}
 }
 
-BindResult ExpressionBinder::BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression) {
+BindResult ExpressionBinder::BindExpression(ParsedExpression &expr, count_t depth, bool root_expression) {
 	switch (expr.expression_class) {
 	case ExpressionClass::CASE:
 		return BindExpression((CaseExpression &)expr, depth);
@@ -67,12 +67,11 @@ bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr)
 	// make a copy of the set of binders, so we can restore it later
 	auto binders = active_binders;
 	active_binders.pop_back();
-	uint64_t depth = 1;
+	count_t depth = 1;
 	bool success = false;
 	while (active_binders.size() > 0) {
 		auto &next_binder = active_binders.back();
-		assert(depth <= numeric_limits<uint32_t>::max());
-		auto bind_result = next_binder->Bind(&expr, (uint32_t)depth);
+		auto bind_result = next_binder->Bind(&expr, depth);
 		if (bind_result.empty()) {
 			success = true;
 			break;
@@ -84,7 +83,7 @@ bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr)
 	return success;
 }
 
-void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, uint32_t depth, string &error) {
+void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, count_t depth, string &error) {
 	if (expr.get()) {
 		string bind_error = Bind(&expr, depth);
 		if (error.empty()) {
@@ -137,7 +136,7 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	return result;
 }
 
-string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, uint32_t depth, bool root_expression) {
+string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, count_t depth, bool root_expression) {
 	// bind the node, but only if it has not been bound yet
 	auto &expression = **expr;
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {

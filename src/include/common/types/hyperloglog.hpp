@@ -21,13 +21,13 @@ public:
 	HyperLogLog(const HyperLogLog &) = delete;
 
 	//! Adds an element of the specified size to the HyperLogLog counter
-	void Add(uint8_t *element, uint64_t size);
+	void Add(data_t element, count_t size);
 	//! Return the count of this HyperLogLog counter
-	uint64_t Count();
+	count_t Count();
 	//! Merge this HyperLogLog counter with another counter to create a new one
 	unique_ptr<HyperLogLog> Merge(HyperLogLog &other);
 	//! Merge a set of HyperLogLogs to create one big one
-	static unique_ptr<HyperLogLog> Merge(HyperLogLog logs[], uint64_t count);
+	static unique_ptr<HyperLogLog> Merge(HyperLogLog logs[], count_t count);
 
 private:
 	HyperLogLog(void *hll);

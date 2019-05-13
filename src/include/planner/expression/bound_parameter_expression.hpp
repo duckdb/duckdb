@@ -15,13 +15,13 @@ namespace duckdb {
 
 class BoundParameterExpression : public Expression {
 public:
-	BoundParameterExpression(uint64_t parameter_nr)
+	BoundParameterExpression(index_t parameter_nr)
 	    : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, TypeId::INVALID),
 	      sql_type(SQLType(SQLTypeId::INVALID)), parameter_nr(parameter_nr), value(nullptr) {
 	}
 
 	SQLType sql_type;
-	uint64_t parameter_nr;
+	index_t parameter_nr;
 	Value *value;
 
 public:

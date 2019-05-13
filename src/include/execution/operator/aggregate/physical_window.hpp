@@ -34,7 +34,7 @@ public:
 	PhysicalWindowOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
 	}
 
-	uint64_t position;
+	index_t position;
 	ChunkCollection tuples;
 	ChunkCollection window_results;
 };

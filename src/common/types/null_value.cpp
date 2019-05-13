@@ -2,18 +2,20 @@
 
 #include "common/exception.hpp"
 
+#include <cstring>
+
 using namespace std;
 
 namespace duckdb {
 
-bool IsNullValue(uint8_t *ptr, TypeId type) {
+bool IsNullValue(data_t ptr, TypeId type) {
 	uint8_t data[100];
 	SetNullValue(data, type);
 	return memcmp(ptr, data, GetTypeIdSize(type)) == 0;
 }
 
 //! Writes NullValue<T> value of a specific type to a memory address
-void SetNullValue(uint8_t *ptr, TypeId type) {
+void SetNullValue(data_t ptr, TypeId type) {
 	switch (type) {
 	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:

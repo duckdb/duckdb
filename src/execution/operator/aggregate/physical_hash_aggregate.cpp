@@ -33,7 +33,7 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 		DataChunk &group_chunk = state->group_chunk;
 		DataChunk &payload_chunk = state->payload_chunk;
 		executor.Execute(groups, group_chunk);
-		for (uint64_t i = 0; i < aggregates.size(); i++) {
+		for (index_t i = 0; i < aggregates.size(); i++) {
 			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
 			if (aggr.child) {
 				executor.ExecuteExpression(*aggr.child, payload_chunk.data[i]);
@@ -59,14 +59,14 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 
 	state->group_chunk.Reset();
 	state->aggregate_chunk.Reset();
-	uint64_t elements_found = state->ht->Scan(state->ht_scan_position, state->group_chunk, state->aggregate_chunk);
+	count_t elements_found = state->ht->Scan(state->ht_scan_position, state->group_chunk, state->aggregate_chunk);
 
 	// special case hack to sort out aggregating from empty intermediates
 	// for aggregations without groups
 	if (elements_found == 0 && state->tuples_scanned == 0 && is_implicit_aggr) {
 		assert(state->aggregate_chunk.column_count == aggregates.size());
 		// for each column in the aggregates, seit either to NULL or 0
-		for (uint64_t i = 0; i < state->aggregate_chunk.column_count; i++) {
+		for (index_t i = 0; i < state->aggregate_chunk.column_count; i++) {
 			state->aggregate_chunk.data[i].count = 1;
 			switch (aggregates[i]->type) {
 			case ExpressionType::AGGREGATE_COUNT_STAR:
@@ -87,16 +87,16 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 	}
 	// we finished the child chunk
 	// actually compute the final projection list now
-	uint64_t chunk_index = 0;
+	index_t chunk_index = 0;
 	if (state->group_chunk.column_count + state->aggregate_chunk.column_count == chunk.column_count) {
-		for (uint64_t col_idx = 0; col_idx < state->group_chunk.column_count; col_idx++) {
+		for (index_t col_idx = 0; col_idx < state->group_chunk.column_count; col_idx++) {
 			chunk.data[chunk_index++].Reference(state->group_chunk.data[col_idx]);
 		}
 	} else {
 		assert(state->aggregate_chunk.column_count == chunk.column_count);
 	}
 
-	for (uint64_t col_idx = 0; col_idx < state->aggregate_chunk.column_count; col_idx++) {
+	for (index_t col_idx = 0; col_idx < state->aggregate_chunk.column_count; col_idx++) {
 		chunk.data[chunk_index++].Reference(state->aggregate_chunk.data[col_idx]);
 	}
 }

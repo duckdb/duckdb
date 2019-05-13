@@ -126,7 +126,7 @@ template <class T, class OP> void templated_divmod_loop(Vector &left, Vector &ri
 			// computation
 			T constant = ldata[0];
 			result.nullmask = right.nullmask;
-			VectorOperations::Exec(right, [&](uint64_t i, uint64_t k) {
+			VectorOperations::Exec(right, [&](index_t i, index_t k) {
 				if (rdata[i] == 0) {
 					result.nullmask[i] = true;
 				} else {
@@ -155,7 +155,7 @@ template <class T, class OP> void templated_divmod_loop(Vector &left, Vector &ri
 		// OR nullmasks together
 		result.nullmask = left.nullmask | right.nullmask;
 		assert(left.sel_vector == right.sel_vector);
-		VectorOperations::Exec(left, [&](uint64_t i, uint64_t k) {
+		VectorOperations::Exec(left, [&](index_t i, index_t k) {
 			if (rdata[i] == 0) {
 				result.nullmask[i] = true;
 			} else {

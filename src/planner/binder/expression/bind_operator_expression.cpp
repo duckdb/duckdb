@@ -15,11 +15,11 @@ static SQLType ResolveNotType(OperatorExpression &op, vector<BoundExpression *> 
 static SQLType ResolveInType(OperatorExpression &op, vector<BoundExpression *> &children) {
 	// get the maximum type from the children
 	SQLType max_type = children[0]->sql_type;
-	for (uint64_t i = 1; i < children.size(); i++) {
+	for (index_t i = 1; i < children.size(); i++) {
 		max_type = MaxSQLType(max_type, children[i]->sql_type);
 	}
 	// cast all children to the same type
-	for (uint64_t i = 0; i < children.size(); i++) {
+	for (index_t i = 0; i < children.size(); i++) {
 		children[i]->expr = AddCastToType(move(children[i]->expr), children[i]->sql_type, max_type);
 	}
 	// (NOT) IN always returns a boolean
@@ -160,10 +160,10 @@ static SQLType ResolveOperatorType(OperatorExpression &op, vector<BoundExpressio
 	}
 }
 
-BindResult ExpressionBinder::BindExpression(OperatorExpression &op, uint32_t depth) {
+BindResult ExpressionBinder::BindExpression(OperatorExpression &op, count_t depth) {
 	// bind the children of the operator expression
 	string error;
-	for (uint64_t i = 0; i < op.children.size(); i++) {
+	for (index_t i = 0; i < op.children.size(); i++) {
 		BindChild(op.children[i], depth, error);
 	}
 	if (!error.empty()) {
@@ -171,7 +171,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, uint32_t dep
 	}
 	// all children bound successfully, extract them
 	vector<BoundExpression *> children;
-	for (uint64_t i = 0; i < op.children.size(); i++) {
+	for (index_t i = 0; i < op.children.size(); i++) {
 		assert(op.children[i]->expression_class == ExpressionClass::BOUND_EXPRESSION);
 		children.push_back((BoundExpression *)op.children[i].get());
 	}

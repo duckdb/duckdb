@@ -10,7 +10,7 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(TableFunction &ref) {
-	uint64_t bind_index = GenerateTableIndex();
+	auto bind_index = GenerateTableIndex();
 
 	assert(ref.function->type == ExpressionType::FUNCTION);
 	auto function_definition = (FunctionExpression *)ref.function.get();

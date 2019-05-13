@@ -28,7 +28,7 @@ bool QueryNode::Equals(const QueryNode *other) const {
 	if (orders.size() != other->orders.size()) {
 		return false;
 	}
-	for (uint64_t i = 0; i < orders.size(); i++) {
+	for (index_t i = 0; i < orders.size(); i++) {
 		if (orders[i].type != other->orders[i].type ||
 		    !orders[i].expression->Equals(other->orders[i].expression.get())) {
 			return false;
@@ -53,8 +53,8 @@ void QueryNode::Serialize(Serializer &serializer) {
 	serializer.Write<bool>(select_distinct);
 	serializer.WriteOptional(limit);
 	serializer.WriteOptional(offset);
-	serializer.Write<int64_t>(orders.size());
-	for (uint64_t i = 0; i < orders.size(); i++) {
+	serializer.Write<count_t>(orders.size());
+	for (index_t i = 0; i < orders.size(); i++) {
 		serializer.Write<OrderType>(orders[i].type);
 		orders[i].expression->Serialize(serializer);
 	}
@@ -66,9 +66,9 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &source) {
 	auto select_distinct = source.Read<bool>();
 	auto limit = source.ReadOptional<ParsedExpression>();
 	auto offset = source.ReadOptional<ParsedExpression>();
-	uint64_t order_count = source.Read<int64_t>();
+	count_t order_count = source.Read<count_t>();
 	vector<OrderByNode> orders;
-	for (uint64_t i = 0; i < order_count; i++) {
+	for (index_t i = 0; i < order_count; i++) {
 		OrderByNode node;
 		node.type = source.Read<OrderType>();
 		node.expression = ParsedExpression::Deserialize(source);

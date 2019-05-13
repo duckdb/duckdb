@@ -48,26 +48,26 @@ public:
 	void ResolveOperatorTypes();
 
 	virtual string ParamsToString() const;
-	virtual string ToString(uint64_t depth = 0) const;
+	virtual string ToString(count_t depth = 0) const;
 	void Print();
 
 	void AddChild(unique_ptr<LogicalOperator> child) {
 		children.push_back(move(child));
 	}
 
-	virtual uint64_t EstimateCardinality() {
+	virtual count_t EstimateCardinality() {
 		// simple estimator, just take the max of the children
-		uint64_t max_cardinality = 0;
+		count_t max_cardinality = 0;
 		for (auto &child : children) {
 			max_cardinality = std::max(child->EstimateCardinality(), max_cardinality);
 		}
 		return max_cardinality;
 	}
 
-	virtual uint64_t ExpressionCount();
-	virtual Expression *GetExpression(uint64_t index);
+	virtual count_t ExpressionCount();
+	virtual Expression *GetExpression(index_t index);
 	virtual void ReplaceExpression(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
-	                               uint64_t index);
+	                               index_t index);
 
 protected:
 	//! Resolve types for this specific operator

@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "common/constants.hpp"
+
 #include <fstream>
 #include <sstream>
 
@@ -30,12 +32,12 @@ public:
 private:
 	void initialize();
 	std::fstream input;
-	uint64_t data_start = 0;
+	index_t data_start = 0;
 	void *mz_stream_ptr = nullptr; // void* so we don't have to include the header
-	char *in_buff = nullptr, *in_buff_start, *in_buff_end, *out_buff = nullptr; // various buffers & pointers
+	data_t in_buff = nullptr, in_buff_start, in_buff_end, out_buff = nullptr; // various buffers & pointers
 	bool is_initialized = false;
 	std::string filename;
-	const uint64_t BUFFER_SIZE = 1024;
+	const index_t BUFFER_SIZE = 1024;
 };
 
 class GzipStream : public std::istream {

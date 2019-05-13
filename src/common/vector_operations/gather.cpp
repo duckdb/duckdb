@@ -16,7 +16,7 @@ struct GatherLoopSetNull {
 		auto source = (T **)src.data;
 		auto ldata = (T *)result.data;
 		if (result.sel_vector) {
-			VectorOperations::Exec(src, [&](uint64_t i, uint64_t k) {
+			VectorOperations::Exec(src, [&](index_t i, index_t k) {
 				if (IsNullValue<T>(source[i][0])) {
 					result.nullmask.set(result.sel_vector[k]);
 				} else {
@@ -24,7 +24,7 @@ struct GatherLoopSetNull {
 				}
 			});
 		} else {
-			VectorOperations::Exec(src, [&](uint64_t i, uint64_t k) {
+			VectorOperations::Exec(src, [&](index_t i, index_t k) {
 				if (IsNullValue<T>(source[i][0])) {
 					result.nullmask.set(k);
 				} else {
@@ -40,12 +40,12 @@ struct GatherLoopIgnoreNull {
 		auto source = (T **)src.data;
 		auto ldata = (T *)result.data;
 		if (result.sel_vector) {
-			VectorOperations::Exec(src, [&](uint64_t i, uint64_t k) {
+			VectorOperations::Exec(src, [&](index_t i, index_t k) {
 				ldata[result.sel_vector[k]] = OP::Operation(source[i][0], ldata[i]);
 			});
 		} else {
 			VectorOperations::Exec(src,
-			                       [&](uint64_t i, uint64_t k) { ldata[k] = OP::Operation(source[i][0], ldata[i]); });
+			                       [&](index_t i, index_t k) { ldata[k] = OP::Operation(source[i][0], ldata[i]); });
 		}
 	}
 };

@@ -16,6 +16,11 @@ using namespace std;
 #include <sys/types.h>
 #include <unistd.h>
 
+// somehow sometimes this is missing
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 0
+#endif
+
 struct UnixFileHandle : public FileHandle {
 public:
 	UnixFileHandle(FileSystem &file_system, string path, int fd) : FileHandle(file_system, path), fd(fd) {
@@ -90,7 +95,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	return make_unique<UnixFileHandle>(*this, path, fd);
 }
 
-static void seek_in_file(FileHandle &handle, uint64_t location) {
+static void seek_in_file(FileHandle &handle, index_t location) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	off_t offset = lseek(fd, location, SEEK_SET);
 	if (offset == (off_t)-1) {
@@ -99,7 +104,7 @@ static void seek_in_file(FileHandle &handle, uint64_t location) {
 	}
 }
 
-void FileSystem::Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location) {
+void FileSystem::Read(FileHandle &handle, void *buffer, count_t nr_bytes, index_t location) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	// lseek to the location
 	seek_in_file(handle, location);
@@ -109,12 +114,12 @@ void FileSystem::Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint6
 	if (bytes_read == -1) {
 		throw IOException("Could not read from file \"%s\": %s", handle.path.c_str(), strerror(errno));
 	}
-	if ((uint64_t)bytes_read != nr_bytes) {
+	if ((index_t)bytes_read != nr_bytes) {
 		throw IOException("Could not read sufficient bytes from file \"%s\"", handle.path.c_str());
 	}
 }
 
-void FileSystem::Write(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location) {
+void FileSystem::Write(FileHandle &handle, void *buffer, count_t nr_bytes, index_t location) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	// lseek to the location
 	seek_in_file(handle, location);
@@ -124,7 +129,7 @@ void FileSystem::Write(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint
 	if (bytes_written == -1) {
 		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), strerror(errno));
 	}
-	if ((uint64_t)bytes_written != nr_bytes) {
+	if ((index_t)bytes_written != nr_bytes) {
 		throw IOException("Could not write sufficient bytes from file \"%s\"", handle.path.c_str());
 	}
 }
@@ -170,7 +175,7 @@ void FileSystem::CreateDirectory(const string &directory) {
 
 int remove_directory_recursively(const char *path) {
 	DIR *d = opendir(path);
-	uint64_t path_len = strlen(path);
+	count_t path_len = (count_t)strlen(path);
 	int r = -1;
 
 	if (d) {
@@ -179,12 +184,12 @@ int remove_directory_recursively(const char *path) {
 		while (!r && (p = readdir(d))) {
 			int r2 = -1;
 			char *buf;
-			uint64_t len;
+			count_t len;
 			/* Skip the names "." and ".." as we don't want to recurse on them. */
 			if (!strcmp(p->d_name, ".") || !strcmp(p->d_name, "..")) {
 				continue;
 			}
-			len = path_len + strlen(p->d_name) + 2;
+			len = path_len + (count_t)strlen(p->d_name) + 2;
 			buf = new char[len];
 			if (buf) {
 				struct stat statbuf;
@@ -271,7 +276,7 @@ std::string GetLastErrorAsString() {
 		return std::string(); // No error message has been recorded
 
 	LPSTR messageBuffer = nullptr;
-	uint64_t size =
+	count_t size =
 	    FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 	                   NULL, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL);
 
@@ -335,7 +340,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	return make_unique<WindowsFileHandle>(*this, path, hFile);
 }
 
-static void seek_in_file(FileHandle &handle, uint64_t location) {
+static void seek_in_file(FileHandle &handle, index_t location) {
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	LARGE_INTEGER loc;
 	loc.QuadPart = location;
@@ -347,7 +352,7 @@ static void seek_in_file(FileHandle &handle, uint64_t location) {
 	}
 }
 
-void FileSystem::Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location) {
+void FileSystem::Read(FileHandle &handle, void *buffer, count_t nr_bytes, index_t location) {
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	seek_in_file(handle, location);
 
@@ -358,7 +363,7 @@ void FileSystem::Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint6
 	}
 }
 
-void FileSystem::Write(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location) {
+void FileSystem::Write(FileHandle &handle, void *buffer, count_t nr_bytes, index_t location) {
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	seek_in_file(handle, location);
 
@@ -495,11 +500,11 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 }
 #endif
 
-void FileHandle::Read(void *buffer, uint64_t nr_bytes, uint64_t location) {
+void FileHandle::Read(void *buffer, index_t nr_bytes, index_t location) {
 	file_system.Read(*this, buffer, nr_bytes, location);
 }
 
-void FileHandle::Write(void *buffer, uint64_t nr_bytes, uint64_t location) {
+void FileHandle::Write(void *buffer, index_t nr_bytes, index_t location) {
 	file_system.Write(*this, buffer, nr_bytes, location);
 }
 
@@ -508,7 +513,7 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 	return a + PathSeparator() + b;
 }
 
-Buffer::Buffer(void *internal_buffer, void *buffer, uint64_t size)
+Buffer::Buffer(void *internal_buffer, data_t buffer, count_t size)
     : buffer(buffer), size(size), internal_buffer(internal_buffer) {
 }
 
@@ -516,18 +521,18 @@ Buffer::~Buffer() {
 	free(internal_buffer);
 }
 
-unique_ptr<Buffer> Buffer::AllocateAlignedBuffer(uint64_t bufsiz) {
+unique_ptr<Buffer> Buffer::AllocateAlignedBuffer(count_t bufsiz) {
 	assert(bufsiz % 4096 == 0);
 	// we add 4095 to ensure that we can align the buffer to 4096
-	void *internal_buffer = malloc(bufsiz + 4095);
+	data_t internal_buffer = (data_t)malloc(bufsiz + 4095);
 	// round to multiple of 4096
-	uint64_t num = (uint64_t)internal_buffer;
-	uint64_t remainder = num % 4096;
+	count_t num = (index_t)internal_buffer;
+	count_t remainder = num % 4096;
 	if (remainder != 0) {
 		num = num + 4096 - remainder;
 	}
 	assert(num % 4096 == 0);
-	assert(num + bufsiz <= ((uint64_t)internal_buffer + bufsiz + 4095));
-	assert(num >= (uint64_t)internal_buffer);
-	return unique_ptr<Buffer>(new Buffer(internal_buffer, (void *)num, bufsiz));
+	assert(num + bufsiz <= ((index_t)internal_buffer + bufsiz + 4095));
+	assert(num >= (index_t)internal_buffer);
+	return unique_ptr<Buffer>(new Buffer(internal_buffer, (data_t)num, bufsiz));
 }

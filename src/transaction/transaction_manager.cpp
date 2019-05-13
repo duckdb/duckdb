@@ -79,11 +79,11 @@ void TransactionManager::RollbackTransaction(Transaction *transaction) {
 
 void TransactionManager::RemoveTransaction(Transaction *transaction) {
 	// remove the transaction from the list of active transactions
-	uint64_t t_index = active_transactions.size();
+	index_t t_index = active_transactions.size();
 	// check for the lowest and highest start time in the list of transactions
 	transaction_t lowest_start_time = TRANSACTION_ID_START;
 	transaction_t lowest_active_query = MAXIMUM_QUERY_ID;
-	for (uint64_t i = 0; i < active_transactions.size(); i++) {
+	for (index_t i = 0; i < active_transactions.size(); i++) {
 		if (active_transactions[i].get() == transaction) {
 			t_index = i;
 		} else {
@@ -107,7 +107,7 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) {
 	// remove the transaction from the set of currently active transactions
 	active_transactions.erase(active_transactions.begin() + t_index);
 	// traverse the recently_committed transactions to see if we can remove any
-	uint64_t i = 0;
+	index_t i = 0;
 	for (; i < recently_committed_transactions.size(); i++) {
 		assert(recently_committed_transactions[i]);
 		lowest_stored_query = std::min(recently_committed_transactions[i]->start_time, lowest_stored_query);
