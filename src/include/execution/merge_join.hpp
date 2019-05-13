@@ -55,54 +55,54 @@ struct ChunkMergeInfo : public MergeInfo {
 
 struct MergeJoinInner {
 	struct Equality {
-		template <class T> static uint64_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r);
+		template <class T> static count_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r);
 	};
 	struct LessThan {
-		template <class T> static uint64_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r);
+		template <class T> static count_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r);
 	};
 	struct LessThanEquals {
-		template <class T> static uint64_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r);
+		template <class T> static count_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r);
 	};
 	struct GreaterThan {
-		template <class T> static uint64_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
+		template <class T> static count_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
 			return LessThan::Operation<T>(r, l);
 		}
 	};
 	struct GreaterThanEquals {
-		template <class T> static uint64_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
+		template <class T> static count_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
 			return LessThanEquals::Operation<T>(r, l);
 		}
 	};
 
-	static uint64_t Perform(MergeInfo &l, MergeInfo &r, ExpressionType comparison_type);
+	static count_t Perform(MergeInfo &l, MergeInfo &r, ExpressionType comparison_type);
 };
 
 struct MergeJoinMark {
 	struct Equality {
-		template <class T> static uint64_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
+		template <class T> static count_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
 	};
 	struct LessThan {
-		template <class T> static uint64_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
+		template <class T> static count_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
 	};
 	struct LessThanEquals {
-		template <class T> static uint64_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
+		template <class T> static count_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
 	};
 	struct GreaterThan {
-		template <class T> static uint64_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
+		template <class T> static count_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
 	};
 	struct GreaterThanEquals {
-		template <class T> static uint64_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
+		template <class T> static count_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
 	};
 
-	static uint64_t Perform(MergeInfo &l, MergeInfo &r, ExpressionType comparison);
+	static count_t Perform(MergeInfo &l, MergeInfo &r, ExpressionType comparison);
 };
 
 #define INSTANTIATE_MERGEJOIN_TEMPLATES(MJCLASS, OPNAME, L, R)                                                         \
-	template uint64_t MJCLASS::OPNAME::Operation<int8_t>(L & l, R & r);                                                \
-	template uint64_t MJCLASS::OPNAME::Operation<int16_t>(L & l, R & r);                                               \
-	template uint64_t MJCLASS::OPNAME::Operation<int32_t>(L & l, R & r);                                               \
-	template uint64_t MJCLASS::OPNAME::Operation<int64_t>(L & l, R & r);                                               \
-	template uint64_t MJCLASS::OPNAME::Operation<double>(L & l, R & r);                                                \
-	template uint64_t MJCLASS::OPNAME::Operation<const char *>(L & l, R & r);
+	template count_t MJCLASS::OPNAME::Operation<int8_t>(L & l, R & r);                                                 \
+	template count_t MJCLASS::OPNAME::Operation<int16_t>(L & l, R & r);                                                \
+	template count_t MJCLASS::OPNAME::Operation<int32_t>(L & l, R & r);                                                \
+	template count_t MJCLASS::OPNAME::Operation<int64_t>(L & l, R & r);                                                \
+	template count_t MJCLASS::OPNAME::Operation<double>(L & l, R & r);                                                 \
+	template count_t MJCLASS::OPNAME::Operation<const char *>(L & l, R & r);
 
 } // namespace duckdb

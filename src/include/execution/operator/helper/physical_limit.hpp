@@ -15,12 +15,12 @@ namespace duckdb {
 //! PhyisicalLimit represents the LIMIT operator
 class PhysicalLimit : public PhysicalOperator {
 public:
-	PhysicalLimit(LogicalOperator &op, uint64_t limit, uint64_t offset)
+	PhysicalLimit(LogicalOperator &op, count_t limit, index_t offset)
 	    : PhysicalOperator(PhysicalOperatorType::LIMIT, op.types), limit(limit), offset(offset) {
 	}
 
-	uint64_t limit;
-	uint64_t offset;
+	count_t limit;
+	index_t offset;
 
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
@@ -29,10 +29,10 @@ public:
 
 class PhysicalLimitOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalLimitOperatorState(PhysicalOperator *child, uint64_t current_offset = 0)
+	PhysicalLimitOperatorState(PhysicalOperator *child, index_t current_offset = 0)
 	    : PhysicalOperatorState(child), current_offset(current_offset) {
 	}
 
-	uint64_t current_offset;
+	index_t current_offset;
 };
 } // namespace duckdb

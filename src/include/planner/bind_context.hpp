@@ -41,9 +41,9 @@ public:
 	//! Adds a base table with the given alias to the BindContext.
 	void AddBaseTable(BoundBaseTableRef *bound, const string &alias);
 	//! Adds a subquery with a given alias to the BindContext.
-	void AddSubquery(uint64_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery);
+	void AddSubquery(index_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery);
 	//! Adds a table function with a given alias to the BindContext
-	void AddTableFunction(uint64_t index, const string &alias, TableFunctionCatalogEntry *function_entry);
+	void AddTableFunction(index_t index, const string &alias, TableFunctionCatalogEntry *function_entry);
 
 	unordered_set<string> hidden_columns;
 

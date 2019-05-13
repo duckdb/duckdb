@@ -37,7 +37,7 @@ public:
 		vector<string> split_extra_info;
 		TimingInformation info;
 		vector<unique_ptr<TreeNode>> children;
-		uint64_t depth = 0;
+		count_t depth = 0;
 	};
 
 private:

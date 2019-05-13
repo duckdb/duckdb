@@ -14,12 +14,12 @@ namespace duckdb {
 
 class NotNullConstraint : public Constraint {
 public:
-	NotNullConstraint(uint64_t index) : Constraint(ConstraintType::NOT_NULL), index(index){};
+	NotNullConstraint(index_t index) : Constraint(ConstraintType::NOT_NULL), index(index){};
 	virtual ~NotNullConstraint() {
 	}
 
 	//! Column index this constraint pertains to
-	uint64_t index;
+	index_t index;
 
 public:
 	string ToString() const override {

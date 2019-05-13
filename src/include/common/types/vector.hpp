@@ -86,20 +86,20 @@ public:
 	void Destroy();
 
 	//! Returns the [index] element of the Vector as a Value.
-	Value GetValue(uint64_t index) const;
+	Value GetValue(index_t index) const;
 	//! Sets the [index] element of the Vector to the specified Value
-	void SetValue(uint64_t index, Value val);
+	void SetValue(index_t index, Value val);
 	//! Returns whether or not the value at the specified position is NULL
-	inline bool ValueIsNull(uint64_t index) const {
+	inline bool ValueIsNull(index_t index) const {
 		return nullmask[sel_vector ? sel_vector[index] : index];
 	}
 	//! Sets the value at the specified index to NULL
-	inline void SetNull(uint64_t index, bool null) {
+	inline void SetNull(index_t index, bool null) {
 		nullmask[sel_vector ? sel_vector[index] : index] = null;
 	}
 	//! Sets the value of the vector at the specified index to the specified
 	//! string. Can only be used for VARCHAR vectors
-	void SetStringValue(uint64_t index, const char *value);
+	void SetStringValue(index_t index, const char *value);
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
@@ -110,8 +110,8 @@ public:
 	void Append(Vector &other);
 	//! Copies the data from this vector to another vector.
 	void Copy(Vector &other,
-	          uint64_t offset = 0); //! Moves the data from this vector to the
-	                                //! other vector. Effectively,
+	          index_t offset = 0); //! Moves the data from this vector to the
+	                               //! other vector. Effectively,
 	//! "other" will become equivalent to this vector, and this vector will be
 	//! turned into an empty vector.
 	void Move(Vector &other);
@@ -124,8 +124,8 @@ public:
 	//! given null mask. Returns the amount of not-null values.
 	//! result_assignment will be set to either result_vector (if there are null
 	//! values) or to nullptr (if there are no null values)
-	static uint64_t NotNullSelVector(const Vector &vector, sel_t *not_null_vector, sel_t *&result_assignment,
-	                                 sel_t *null_vector = nullptr);
+	static index_t NotNullSelVector(const Vector &vector, sel_t *not_null_vector, sel_t *&result_assignment,
+	                                sel_t *null_vector = nullptr);
 
 	//! Converts this Vector to a printable string representation
 	string ToString() const;

@@ -18,16 +18,16 @@ class LogicalGet : public LogicalOperator {
 public:
 	LogicalGet() : LogicalOperator(LogicalOperatorType::GET), table(nullptr) {
 	}
-	LogicalGet(TableCatalogEntry *table, uint64_t table_index, vector<column_t> column_ids)
+	LogicalGet(TableCatalogEntry *table, index_t table_index, vector<column_t> column_ids)
 	    : LogicalOperator(LogicalOperatorType::GET), table(table), table_index(table_index), column_ids(column_ids) {
 	}
 
-	uint64_t EstimateCardinality() override;
+	count_t EstimateCardinality() override;
 
 	//! The base table to retrieve data from
 	TableCatalogEntry *table;
 	//! The table index in the current bind context
-	uint64_t table_index;
+	index_t table_index;
 	//! Bound column IDs
 	vector<column_t> column_ids;
 

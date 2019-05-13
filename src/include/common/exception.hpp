@@ -188,7 +188,7 @@ public:
 	                                               "for the destination type " +
 	                                               TypeIdToString(newType)) {
 	}
-	ValueOutOfRangeException(const TypeId varType, const uint64_t length)
+	ValueOutOfRangeException(const TypeId varType, const count_t length)
 	    : Exception(ExceptionType::OUT_OF_RANGE, "The value is too long to fit into type " + TypeIdToString(varType) +
 	                                                 "(" + std::to_string(length) + ")"){};
 };

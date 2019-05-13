@@ -16,10 +16,10 @@ namespace duckdb {
 //! operator.
 class LogicalWindow : public LogicalOperator {
 public:
-	LogicalWindow(uint64_t window_index) : LogicalOperator(LogicalOperatorType::WINDOW), window_index(window_index) {
+	LogicalWindow(index_t window_index) : LogicalOperator(LogicalOperatorType::WINDOW), window_index(window_index) {
 	}
 
-	uint64_t window_index;
+	index_t window_index;
 
 protected:
 	void ResolveTypes() override;

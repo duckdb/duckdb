@@ -13,7 +13,7 @@
 using namespace duckdb;
 using namespace std;
 
-static bool end_of_field(string &line, uint64_t i, char delimiter) {
+static bool end_of_field(string &line, index_t i, char delimiter) {
 	return i + 1 >= line.size() || line[i] == delimiter;
 }
 
@@ -25,7 +25,7 @@ static void WriteQuotedString(ofstream &to_csv, string str, char delimiter, char
 	}
 }
 
-void PhysicalCopy::Flush(ClientContext &context, DataChunk &chunk, int64_t &nr_elements, int64_t &total,
+void PhysicalCopy::Flush(ClientContext &context, DataChunk &chunk, count_t &nr_elements, count_t &total,
                          vector<bool> &set_to_default) {
 	if (nr_elements == 0) {
 		return;
@@ -45,11 +45,11 @@ void PhysicalCopy::Flush(ClientContext &context, DataChunk &chunk, int64_t &nr_e
 	nr_elements = 0;
 }
 
-void PhysicalCopy::PushValue(string &line, DataChunk &insert_chunk, int64_t start, int64_t end, int64_t &column,
-                             int64_t linenr) {
+void PhysicalCopy::PushValue(string &line, DataChunk &insert_chunk, index_t start, index_t end, index_t &column,
+                             index_t linenr) {
 	assert(end >= start);
-	int64_t expected_column_count = info->select_list.size() > 0 ? info->select_list.size() : insert_chunk.column_count;
-	uint64_t length = end - start;
+	count_t expected_column_count = info->select_list.size() > 0 ? info->select_list.size() : insert_chunk.column_count;
+	count_t length = end - start;
 	if (column == expected_column_count && length == 0) {
 		// skip a single trailing delimiter
 		column++;
@@ -66,16 +66,16 @@ void PhysicalCopy::PushValue(string &line, DataChunk &insert_chunk, int64_t star
 		result = Value(line.substr(start, length));
 	}
 	// insert the value into the column
-	uint64_t column_entry = info->select_list.size() > 0 ? select_list_oid[column] : column;
-	uint64_t entry = insert_chunk.data[column_entry].count++;
+	index_t column_entry = info->select_list.size() > 0 ? select_list_oid[column] : column;
+	index_t entry = insert_chunk.data[column_entry].count++;
 	insert_chunk.data[column_entry].SetValue(entry, result);
 	// move to the next column
 	column++;
 }
 
 void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
-	int64_t nr_elements = 0;
-	int64_t total = 0;
+	count_t nr_elements = 0;
+	count_t total = 0;
 
 	auto &info = *this->info;
 
@@ -93,7 +93,7 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 				set_to_default[column.oid] = false;
 			}
 		}
-		int64_t linenr = 0;
+		index_t linenr = 0;
 		string line;
 
 		if (!context.db.file_system->FileExists(info.file_path)) {
@@ -118,9 +118,9 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 		}
 		while (getline(from_csv, line)) {
 			bool in_quotes = false;
-			uint64_t start = 0;
-			int64_t column = 0;
-			int64_t expected_column_count =
+			index_t start = 0;
+			index_t column = 0;
+			count_t expected_column_count =
 			    info.select_list.size() > 0 ? info.select_list.size() : insert_chunk.column_count;
 			for (index_t i = 0; i < line.size(); i++) {
 				// handle quoting

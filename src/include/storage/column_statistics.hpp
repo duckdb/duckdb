@@ -40,7 +40,7 @@ public:
 	//! The maximum value of the column [numeric only]
 	Value max;
 	//! The maximum string length of a character column [VARCHAR only]
-	uint64_t maximum_string_length;
+	count_t maximum_string_length;
 
 private:
 	//! The lock used to update the statistics of the column

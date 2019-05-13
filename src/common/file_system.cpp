@@ -276,7 +276,7 @@ std::string GetLastErrorAsString() {
 		return std::string(); // No error message has been recorded
 
 	LPSTR messageBuffer = nullptr;
-	uint64_t size =
+	count_t size =
 	    FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 	                   NULL, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL);
 
@@ -340,7 +340,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	return make_unique<WindowsFileHandle>(*this, path, hFile);
 }
 
-static void seek_in_file(FileHandle &handle, uint64_t location) {
+static void seek_in_file(FileHandle &handle, index_t location) {
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	LARGE_INTEGER loc;
 	loc.QuadPart = location;
@@ -352,7 +352,7 @@ static void seek_in_file(FileHandle &handle, uint64_t location) {
 	}
 }
 
-void FileSystem::Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location) {
+void FileSystem::Read(FileHandle &handle, void *buffer, count_t nr_bytes, index_t location) {
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	seek_in_file(handle, location);
 
@@ -363,7 +363,7 @@ void FileSystem::Read(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint6
 	}
 }
 
-void FileSystem::Write(FileHandle &handle, void *buffer, uint64_t nr_bytes, uint64_t location) {
+void FileSystem::Write(FileHandle &handle, void *buffer, count_t nr_bytes, index_t location) {
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	seek_in_file(handle, location);
 

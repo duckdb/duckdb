@@ -42,7 +42,7 @@ class StorageChunk {
 	friend class StorageLock;
 
 public:
-	StorageChunk(DataTable &table, uint64_t start);
+	StorageChunk(DataTable &table, index_t start);
 
 	DataTable &table;
 	bool deleted[STORAGE_CHUNK_SIZE] = {0};
