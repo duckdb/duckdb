@@ -75,7 +75,7 @@ TEST_CASE("ART Integer Types", "[art-int]") {
         REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 
         int32_t n = n_sizes[idx];
-        int32_t *keys = new int32_t[n];
+        int32_t keys[n];
         for (int32_t i = 0; i < n; i++)
             keys[i] = i + 1;
         std::random_shuffle(keys, keys + n);
