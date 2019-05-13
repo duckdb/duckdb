@@ -2,6 +2,7 @@
 
 #include "catalog/catalog_entry/list.hpp"
 #include "common/exception.hpp"
+#include "main/client_context.hpp"
 #include "parser/expression/function_expression.hpp"
 #include "parser/parsed_data/alter_table_info.hpp"
 #include "parser/parsed_data/create_index_info.hpp"
@@ -9,9 +10,9 @@
 #include "parser/parsed_data/create_schema_info.hpp"
 #include "parser/parsed_data/create_sequence_info.hpp"
 #include "parser/parsed_data/create_table_function_info.hpp"
-#include "parser/parsed_data/create_table_info.hpp"
 #include "parser/parsed_data/create_view_info.hpp"
 #include "parser/parsed_data/drop_info.hpp"
+#include "planner/parsed_data/bound_create_table_info.hpp"
 #include "storage/storage_manager.hpp"
 
 using namespace duckdb;
@@ -46,8 +47,8 @@ SchemaCatalogEntry *Catalog::GetSchema(Transaction &transaction, const string &s
 	return (SchemaCatalogEntry *)entry;
 }
 
-void Catalog::CreateTable(Transaction &transaction, CreateTableInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
+void Catalog::CreateTable(Transaction &transaction, BoundCreateTableInfo *info) {
+	auto schema = GetSchema(transaction, info->base->schema);
 	schema->CreateTable(transaction, info);
 }
 
@@ -76,9 +77,9 @@ void Catalog::DropSequence(Transaction &transaction, DropInfo *info) {
 	schema->DropSequence(transaction, info);
 }
 
-void Catalog::AlterTable(Transaction &transaction, AlterTableInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
-	schema->AlterTable(transaction, info);
+void Catalog::AlterTable(ClientContext &context, AlterTableInfo *info) {
+	auto schema = GetSchema(context.ActiveTransaction(), info->schema);
+	schema->AlterTable(context, info);
 }
 
 TableCatalogEntry *Catalog::GetTable(Transaction &transaction, const string &schema_name, const string &table_name) {

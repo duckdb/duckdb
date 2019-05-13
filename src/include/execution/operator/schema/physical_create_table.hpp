@@ -9,14 +9,14 @@
 #pragma once
 
 #include "execution/physical_operator.hpp"
-#include "parser/parsed_data/create_table_info.hpp"
+#include "planner/parsed_data/bound_create_table_info.hpp"
 
 namespace duckdb {
 
 //! Physically CREATE TABLE statement
 class PhysicalCreateTable : public PhysicalOperator {
 public:
-	PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<CreateTableInfo> info)
+	PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info)
 	    : PhysicalOperator(PhysicalOperatorType::CREATE, op.types), schema(schema), info(move(info)) {
 	}
 
@@ -25,6 +25,6 @@ public:
 	//! Schema to insert to
 	SchemaCatalogEntry *schema;
 	//! Table name to create
-	unique_ptr<CreateTableInfo> info;
+	unique_ptr<BoundCreateTableInfo> info;
 };
 } // namespace duckdb

@@ -73,7 +73,7 @@ template class std::unique_ptr<WindowExpression>;
 template class std::unique_ptr<Constraint>;
 template class std::unique_ptr<NotNullConstraint>;
 template class std::unique_ptr<CheckConstraint>;
-template class std::unique_ptr<ParsedConstraint>;
+template class std::unique_ptr<UniqueConstraint>;
 // template class std::unique_ptr<TableRef>;
 template class std::unique_ptr<BaseTableRef>;
 template class std::unique_ptr<CrossProductRef>;

@@ -15,14 +15,14 @@ namespace duckdb {
 class UniqueConstraint : public Constraint {
 public:
 	UniqueConstraint(uint64_t index, bool is_primary_key)
-	    : Constraint(type), index(index), is_primary_key(is_primary_key) {
+	    : Constraint(ConstraintType::UNIQUE), index(index), is_primary_key(is_primary_key) {
 	}
 	UniqueConstraint(vector<string> columns, bool is_primary_key)
-	    : Constraint(type), index((uint64_t)-1), columns(columns), is_primary_key(is_primary_key) {
+	    : Constraint(ConstraintType::UNIQUE), index(INVALID_INDEX), columns(columns), is_primary_key(is_primary_key) {
 	}
 
 	//! The index of the column for which this constraint holds. Only used when the constraint relates to a single
-	//! column, equal to (uint64_t) -1 if not used
+	//! column, equal to INVALID_INDEX if not used
 	uint64_t index;
 	//! The set of columns for which this constraint holds by name. Only used when the index field is not used.
 	vector<string> columns;

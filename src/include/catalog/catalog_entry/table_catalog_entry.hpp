@@ -13,6 +13,7 @@
 #include "common/unordered_map.hpp"
 #include "parser/column_definition.hpp"
 #include "parser/constraint.hpp"
+#include "planner/bound_constraint.hpp"
 #include "planner/expression.hpp"
 
 namespace duckdb {
@@ -21,14 +22,13 @@ class ColumnStatistics;
 class DataTable;
 class SchemaCatalogEntry;
 struct CreateTableInfo;
+struct BoundCreateTableInfo;
 
 //! A table catalog entry
 class TableCatalogEntry : public CatalogEntry {
 public:
 	//! Create a real TableCatalogEntry and initialize storage for it
-	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInfo *info);
-	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInfo *info,
-	                  std::shared_ptr<DataTable> storage);
+	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info, std::shared_ptr<DataTable> inherited_storage = nullptr);
 
 	//! The schema the table belongs to
 	SchemaCatalogEntry *schema;
@@ -38,12 +38,14 @@ public:
 	vector<ColumnDefinition> columns;
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<Constraint>> constraints;
+	//! A list of constraints that are part of this table
+	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	//! Bound default values
 	vector<unique_ptr<Expression>> bound_defaults;
 	//! A map of column name to column index
 	unordered_map<string, column_t> name_map;
-
-	unique_ptr<CatalogEntry> AlterEntry(AlterInfo *info) override;
+public:
+	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
 	//! Returns whether or not a column with the given name exists
 	bool ColumnExists(const string &name);
 	//! Returns the statistics of the oid-th column. Throws an exception if the
@@ -61,8 +63,5 @@ public:
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateTableInfo
 	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &source);
-
-private:
-	void Initialize(CreateTableInfo *info);
 };
 } // namespace duckdb

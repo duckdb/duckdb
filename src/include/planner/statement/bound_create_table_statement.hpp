@@ -9,6 +9,7 @@
 #pragma once
 
 #include "planner/bound_sql_statement.hpp"
+#include "planner/parsed_data/bound_create_table_info.hpp"
 #include "planner/statement/bound_select_statement.hpp"
 
 namespace duckdb {
@@ -20,7 +21,7 @@ public:
 	BoundCreateTableStatement() : BoundSQLStatement(StatementType::CREATE_TABLE) {
 	}
 
-	unique_ptr<CreateTableInfo> info;
+	unique_ptr<BoundCreateTableInfo> info;
 	//! CREATE TABLE from QUERY
 	unique_ptr<BoundSelectStatement> query;
 	//! The schema to create the table in

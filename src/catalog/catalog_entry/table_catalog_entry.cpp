@@ -9,100 +9,42 @@
 #include "main/database.hpp"
 #include "parser/constraints/list.hpp"
 #include "parser/parsed_data/alter_table_info.hpp"
-#include "parser/parsed_data/create_table_info.hpp"
+#include "planner/constraints/bound_unique_constraint.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
+#include "planner/parsed_data/bound_create_table_info.hpp"
 #include "storage/storage_manager.hpp"
+#include "planner/binder.hpp"
 
 #include <algorithm>
 
 using namespace duckdb;
 using namespace std;
 
-void TableCatalogEntry::Initialize(CreateTableInfo *info) {
-	for (auto &entry : info->columns) {
-		if (ColumnExists(entry.name)) {
-			throw CatalogException("Column with name %s already exists!", entry.name.c_str());
-		}
-
-		column_t oid = columns.size();
-		name_map[entry.name] = oid;
-		entry.oid = oid;
-		// default to using NULL value as default
-		bound_defaults.push_back(make_unique<BoundConstantExpression>(Value(GetInternalType(entry.type))));
-		columns.push_back(move(entry));
-	}
+TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info, std::shared_ptr<DataTable> inherited_storage)
+    : CatalogEntry(CatalogType::TABLE, catalog, info->base->table), schema(schema), storage(inherited_storage), columns(move(info->base->columns)),
+	constraints(move(info->base->constraints)), bound_constraints(move(info->bound_constraints)), bound_defaults(move(info->bound_defaults)),
+	name_map(info->name_map) {
+	// add the "rowid" alias, if there is no rowid column specified in the table
 	if (name_map.find("rowid") == name_map.end()) {
 		name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
 	}
-	assert(bound_defaults.size() == columns.size());
-	for (index_t i = 0; i < info->bound_defaults.size(); i++) {
-		auto &bound_default = info->bound_defaults[i];
-		if (bound_default) {
-			// explicit default: use the users' expression
-			bound_defaults[i] = move(bound_default);
-		}
-	}
-}
-
-TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInfo *info)
-    : CatalogEntry(CatalogType::TABLE, catalog, info->table), schema(schema) {
-	Initialize(info);
-	storage = make_shared<DataTable>(catalog->storage, schema->name, name, GetTypes());
-	// resolve the constraints
-	// we have to parse the DUMMY constraints and initialize the indices
-	bool has_primary_key = false;
-	for (auto &constraint : info->constraints) {
-		if (constraint->type == ConstraintType::DUMMY) {
-			// have to resolve columns
-			auto c = (ParsedConstraint *)constraint.get();
-			vector<TypeId> types;
-			vector<index_t> keys;
-			if (c->index != INVALID_INDEX) {
-				// column referenced by key is given by index
-				types.push_back(GetInternalType(columns[c->index].type));
-				keys.push_back(c->index);
-			} else {
-				// have to resolve names
-				for (auto &keyname : c->columns) {
-					auto entry = name_map.find(keyname);
-					if (entry == name_map.end()) {
-						throw ParserException("column \"%s\" named in key does not exist", keyname.c_str());
-					}
-					if (find(keys.begin(), keys.end(), entry->second) != keys.end()) {
-						throw ParserException("column \"%s\" appears twice in "
-						                      "primary key constraint",
-						                      keyname.c_str());
-					}
-					types.push_back(GetInternalType(columns[entry->second].type));
-					keys.push_back(entry->second);
+	if (!storage) {
+		// create the physical storage
+		storage = make_shared<DataTable>(catalog->storage, schema->name, name, GetTypes());
+		// create the unique indexes for the UNIQUE and PRIMARY KEY constraints
+		for(auto &constraint : bound_constraints) {
+			if (constraint->type == ConstraintType::UNIQUE) {
+				vector<TypeId> types;
+				auto &unique = (BoundUniqueConstraint&) *constraint;
+				// fetch the types from the columns
+				for(auto key : unique.keys) {
+					assert(key < columns.size());
+					types.push_back(GetInternalType(columns[key].type));
 				}
+				// initialize the index with the parsed data
+				storage->unique_indexes.push_back(make_unique<UniqueIndex>(*storage, types, unique.keys, !unique.is_primary_key));
 			}
-
-			bool allow_null = true;
-			if (c->ctype == ConstraintType::PRIMARY_KEY) {
-				if (has_primary_key) {
-					throw ParserException("table \"%s\" has more than one primary key", name.c_str());
-				}
-				has_primary_key = true;
-				// PRIMARY KEY constraints do not allow NULLs
-				allow_null = false;
-			} else {
-				assert(c->ctype == ConstraintType::UNIQUE);
-			}
-			// initialize the index with the parsed data
-			storage->unique_indexes.push_back(make_unique<UniqueIndex>(*storage, types, keys, allow_null));
 		}
-		constraints.push_back(move(constraint));
-	}
-}
-
-TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInfo *info,
-                                     shared_ptr<DataTable> storage)
-    : CatalogEntry(CatalogType::TABLE, catalog, info->table), schema(schema), storage(storage) {
-	Initialize(info);
-	for (auto &constraint : info->constraints) {
-		assert(constraint->type != ConstraintType::DUMMY);
-		constraints.push_back(move(constraint));
 	}
 }
 
@@ -110,7 +52,7 @@ bool TableCatalogEntry::ColumnExists(const string &name) {
 	return name_map.find(name) != name_map.end();
 }
 
-unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(AlterInfo *info) {
+unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
 	if (info->type != AlterType::ALTER_TABLE) {
 		throw CatalogException("Can only modify table with ALTER TABLE statement");
 	}
@@ -118,30 +60,30 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(AlterInfo *info) {
 	switch (table_info->alter_table_type) {
 	case AlterTableType::RENAME_COLUMN: {
 		auto rename_info = (RenameColumnInfo *)table_info;
-		CreateTableInfo create_info;
-		create_info.schema = schema->name;
-		create_info.table = name;
+		auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 		bool found = false;
 		for (index_t i = 0; i < columns.size(); i++) {
 			ColumnDefinition copy(columns[i].name, columns[i].type);
 			copy.oid = columns[i].oid;
 			copy.default_value = columns[i].default_value ? columns[i].default_value->Copy() : nullptr;
 
-			create_info.columns.push_back(move(copy));
+			create_info->columns.push_back(move(copy));
 			if (rename_info->name == columns[i].name) {
 				assert(!found);
-				create_info.columns[i].name = rename_info->new_name;
+				create_info->columns[i].name = rename_info->new_name;
 				found = true;
 			}
 		}
 		if (!found) {
 			throw CatalogException("Table does not have a column with name \"%s\"", rename_info->name.c_str());
 		}
-		create_info.constraints.resize(constraints.size());
+		create_info->constraints.resize(constraints.size());
 		for (index_t i = 0; i < constraints.size(); i++) {
-			create_info.constraints[i] = constraints[i]->Copy();
+			create_info->constraints[i] = constraints[i]->Copy();
 		}
-		return make_unique<TableCatalogEntry>(catalog, schema, &create_info, storage);
+		Binder binder(context);
+		auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+		return make_unique<TableCatalogEntry>(catalog, schema, bound_create_info.get(), storage);
 	}
 	default:
 		throw CatalogException("Unrecognized alter table type!");
