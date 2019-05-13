@@ -20,7 +20,7 @@ ENDIF()
 IF(NOT MSVC)
 	SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG -Wall ${M32_FLAG}")
 
-	SET(CXX_EXTRA_DEBUG "-fsanitize=address -Wunused-variable -Wunused-const-variable -Werror=vla -Wnarrowing -Wextra")
+	SET(CXX_EXTRA_DEBUG "-fsanitize=address -Wunused-variable -Wunused-const-variable -Werror=vla -Wnarrowing")
 
 	IF("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 8.0)
 		SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_EXTRA_DEBUG}")
