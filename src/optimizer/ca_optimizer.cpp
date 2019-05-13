@@ -100,14 +100,13 @@ void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator
 	}
 
 	// indices to aggregates start after indices to groups.
-	uint64_t aggregate_index = 0;
+	index_t aggregate_index = 0;
 
 	for (auto &aggregate_to_projections : aggregate_to_projection_map) {
 		auto &positions = aggregate_to_projections.second;
 
 		for (auto index_ptr : positions) {
-			assert(aggregate_index <= numeric_limits<uint32_t>::max());
-			*index_ptr = (uint32_t)aggregate_index;
+			*index_ptr = aggregate_index;
 		}
 
 		Expression *aggregate_expression = aggregate_to_projections.first;

@@ -25,8 +25,8 @@ JoinSide JoinSide::CombineJoinSide(JoinSide left, JoinSide right) {
 	return left;
 }
 
-JoinSide JoinSide::GetJoinSide(uint64_t table_binding, unordered_set<uint64_t> &left_bindings,
-                               unordered_set<uint64_t> &right_bindings) {
+JoinSide JoinSide::GetJoinSide(index_t table_binding, unordered_set<index_t> &left_bindings,
+                               unordered_set<index_t> &right_bindings) {
 	if (left_bindings.find(table_binding) != left_bindings.end()) {
 		// column references table on left side
 		assert(right_bindings.find(table_binding) == right_bindings.end());
@@ -38,8 +38,8 @@ JoinSide JoinSide::GetJoinSide(uint64_t table_binding, unordered_set<uint64_t> &
 	}
 }
 
-JoinSide JoinSide::GetJoinSide(Expression &expression, unordered_set<uint64_t> &left_bindings,
-                               unordered_set<uint64_t> &right_bindings) {
+JoinSide JoinSide::GetJoinSide(Expression &expression, unordered_set<index_t> &left_bindings,
+                               unordered_set<index_t> &right_bindings) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)expression;
 		if (colref.depth > 0) {
@@ -72,8 +72,8 @@ JoinSide JoinSide::GetJoinSide(Expression &expression, unordered_set<uint64_t> &
 	return join_side;
 }
 
-JoinSide JoinSide::GetJoinSide(unordered_set<uint64_t> bindings, unordered_set<uint64_t> &left_bindings,
-                               unordered_set<uint64_t> &right_bindings) {
+JoinSide JoinSide::GetJoinSide(unordered_set<index_t> bindings, unordered_set<index_t> &left_bindings,
+                               unordered_set<index_t> &right_bindings) {
 	JoinSide side = JoinSide::NONE;
 	for (auto binding : bindings) {
 		side = CombineJoinSide(side, GetJoinSide(binding, left_bindings, right_bindings));

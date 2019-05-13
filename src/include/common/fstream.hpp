@@ -9,7 +9,7 @@
 #pragma once
 
 #include <fstream>
-#include <iostream>
+#include <iosfwd>
 
 namespace duckdb {
 using std::endl;

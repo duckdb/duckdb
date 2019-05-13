@@ -128,7 +128,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	auto in_type = expr.children[0]->return_type;
 	// IN clause with many children: try to generate a mark join that replaces this IN expression
 	// we can only do this if the expressions in the expression list are scalar
-	for (uint64_t i = 1; i < expr.children.size(); i++) {
+	for (index_t i = 1; i < expr.children.size(); i++) {
 		assert(expr.children[i]->return_type == in_type);
 		if (!expr.children[i]->IsFoldable()) {
 			// non-scalar expression
@@ -142,10 +142,10 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	auto collection = make_unique<ChunkCollection>();
 	DataChunk chunk;
 	chunk.Initialize(types);
-	for (uint64_t i = 1; i < expr.children.size(); i++) {
+	for (index_t i = 1; i < expr.children.size(); i++) {
 		// reoslve this expression to a constant
 		auto value = ExpressionExecutor::EvaluateScalar(*expr.children[i]);
-		uint64_t index = chunk.data[0].count++;
+		index_t index = chunk.data[0].count++;
 		chunk.data[0].SetValue(index, value);
 		if (chunk.data[0].count == STANDARD_VECTOR_SIZE || i + 1 == expr.children.size()) {
 			// chunk full: append to chunk collection

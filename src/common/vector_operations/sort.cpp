@@ -11,13 +11,13 @@ using namespace duckdb;
 using namespace std;
 
 template <class T, class OP>
-static sel_t templated_quicksort_initial(T *data, sel_t *sel_vector, sel_t result[], uint64_t count) {
+static sel_t templated_quicksort_initial(T *data, sel_t *sel_vector, sel_t result[], count_t count) {
 	// select pivot
 	sel_t pivot = 0;
 	sel_t low = 0, high = count - 1;
 	if (sel_vector) {
 		// now insert elements
-		for (uint64_t i = 1; i < count; i++) {
+		for (index_t i = 1; i < count; i++) {
 			if (OP::Operation(data[sel_vector[i]], data[pivot])) {
 				result[low++] = sel_vector[i];
 			} else {
@@ -28,7 +28,7 @@ static sel_t templated_quicksort_initial(T *data, sel_t *sel_vector, sel_t resul
 		result[low] = sel_vector[pivot];
 	} else {
 		// now insert elements
-		for (uint64_t i = 1; i < count; i++) {
+		for (index_t i = 1; i < count; i++) {
 			if (OP::Operation(data[i], data[pivot])) {
 				result[low++] = i;
 			} else {
@@ -85,13 +85,13 @@ template <class T, class OP> void templated_quicksort(T *data, sel_t *sel_vector
 	templated_quicksort_inplace<T, OP>(data, result, part + 1, count - 1);
 }
 
-template <class T> static void templated_quicksort(Vector &vector, sel_t *sel_vector, uint64_t count, sel_t result[]) {
+template <class T> static void templated_quicksort(Vector &vector, sel_t *sel_vector, count_t count, sel_t result[]) {
 	auto data = (T *)vector.data;
 	// quicksort without nulls
 	templated_quicksort<T, duckdb::LessThanEquals>(data, sel_vector, count, result);
 }
 
-void VectorOperations::Sort(Vector &vector, sel_t *sel_vector, uint64_t count, sel_t result[]) {
+void VectorOperations::Sort(Vector &vector, sel_t *sel_vector, count_t count, sel_t result[]) {
 	if (count == 0) {
 		return;
 	}
@@ -132,15 +132,15 @@ void VectorOperations::Sort(Vector &vector, sel_t result[]) {
 	// first we extract NULL values
 	sel_t not_null_sel_vector[STANDARD_VECTOR_SIZE], null_sel_vector[STANDARD_VECTOR_SIZE];
 	sel_t *sel_vector;
-	uint64_t count = Vector::NotNullSelVector(vector, not_null_sel_vector, sel_vector, null_sel_vector);
+	count_t count = Vector::NotNullSelVector(vector, not_null_sel_vector, sel_vector, null_sel_vector);
 	if (count == vector.count) {
 		// no NULL values
 		// we don't need to use the selection vector at all
 		VectorOperations::Sort(vector, nullptr, vector.count, result);
 	} else {
 		// first fill in the NULL values
-		uint64_t null_count = vector.count - count;
-		for (uint64_t i = 0; i < null_count; i++) {
+		count_t null_count = vector.count - count;
+		for (index_t i = 0; i < null_count; i++) {
 			result[i] = null_sel_vector[i];
 		}
 		// now sort the remainder

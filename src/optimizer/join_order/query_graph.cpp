@@ -8,10 +8,10 @@ using namespace std;
 
 using QueryEdge = QueryGraph::QueryEdge;
 
-static string QueryEdgeToString(const QueryEdge *info, vector<uint64_t> prefix) {
+static string QueryEdgeToString(const QueryEdge *info, vector<index_t> prefix) {
 	string result = "";
 	string source = "[";
-	for (uint64_t i = 0; i < prefix.size(); i++) {
+	for (index_t i = 0; i < prefix.size(); i++) {
 		source += to_string(prefix[i]) + (i < prefix.size() - 1 ? ", " : "");
 	}
 	source += "]";
@@ -19,7 +19,7 @@ static string QueryEdgeToString(const QueryEdge *info, vector<uint64_t> prefix) 
 		result += StringUtil::Format("%s -> %s\n", source.c_str(), entry->neighbor->ToString().c_str());
 	}
 	for (auto &entry : info->children) {
-		vector<uint64_t> new_prefix = prefix;
+		vector<index_t> new_prefix = prefix;
 		new_prefix.push_back(entry.first);
 		result += QueryEdgeToString(entry.second.get(), new_prefix);
 	}
@@ -34,7 +34,7 @@ QueryEdge *QueryGraph::GetQueryEdge(RelationSet *left) {
 	assert(left && left->count > 0);
 	// find the EdgeInfo corresponding to the left set
 	QueryEdge *info = &root;
-	for (uint64_t i = 0; i < left->count; i++) {
+	for (index_t i = 0; i < left->count; i++) {
 		auto entry = info->children.find(left->relations[i]);
 		if (entry == info->children.end()) {
 			// node not found, create it
@@ -52,7 +52,7 @@ void QueryGraph::CreateEdge(RelationSet *left, RelationSet *right, FilterInfo *f
 	// find the EdgeInfo corresponding to the left set
 	auto info = GetQueryEdge(left);
 	// now insert the edge to the right relation, if it does not exist
-	for (uint64_t i = 0; i < info->neighbors.size(); i++) {
+	for (index_t i = 0; i < info->neighbors.size(); i++) {
 		if (info->neighbors[i]->neighbor == right) {
 			if (filter_info) {
 				// neighbor already exists just add the filter, if we have any
@@ -71,9 +71,9 @@ void QueryGraph::CreateEdge(RelationSet *left, RelationSet *right, FilterInfo *f
 }
 
 void QueryGraph::EnumerateNeighbors(RelationSet *node, function<bool(NeighborInfo *)> callback) {
-	for (uint64_t j = 0; j < node->count; j++) {
+	for (index_t j = 0; j < node->count; j++) {
 		QueryEdge *info = &root;
-		for (uint64_t i = j; i < node->count; i++) {
+		for (index_t i = j; i < node->count; i++) {
 			auto entry = info->children.find(node->relations[i]);
 			if (entry == info->children.end()) {
 				// node not found
@@ -91,12 +91,12 @@ void QueryGraph::EnumerateNeighbors(RelationSet *node, function<bool(NeighborInf
 }
 
 //! Returns true if a RelationSet is banned by the list of exclusion_set, false otherwise
-static bool RelationSetIsExcluded(RelationSet *node, unordered_set<uint64_t> &exclusion_set) {
+static bool RelationSetIsExcluded(RelationSet *node, unordered_set<index_t> &exclusion_set) {
 	return exclusion_set.find(node->relations[0]) != exclusion_set.end();
 }
 
-vector<uint64_t> QueryGraph::GetNeighbors(RelationSet *node, unordered_set<uint64_t> &exclusion_set) {
-	unordered_set<uint64_t> result;
+vector<index_t> QueryGraph::GetNeighbors(RelationSet *node, unordered_set<index_t> &exclusion_set) {
+	unordered_set<index_t> result;
 	EnumerateNeighbors(node, [&](NeighborInfo *info) -> bool {
 		if (!RelationSetIsExcluded(info->neighbor, exclusion_set)) {
 			// add the smallest node of the neighbor to the set
@@ -104,7 +104,7 @@ vector<uint64_t> QueryGraph::GetNeighbors(RelationSet *node, unordered_set<uint6
 		}
 		return false;
 	});
-	vector<uint64_t> neighbors;
+	vector<index_t> neighbors;
 	neighbors.insert(neighbors.end(), result.begin(), result.end());
 	return neighbors;
 }

@@ -17,7 +17,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundCreateTableSta
 		root->ResolveOperatorTypes();
 		auto &types = root->types;
 		assert(names.size() == types.size());
-		for (uint64_t i = 0; i < names.size(); i++) {
+		for (index_t i = 0; i < names.size(); i++) {
 			stmt.info->columns.push_back(ColumnDefinition(names[i], sql_types[i]));
 		}
 	}

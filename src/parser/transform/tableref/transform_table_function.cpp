@@ -1,3 +1,4 @@
+#include "common/exception.hpp"
 #include "parser/tableref/table_function.hpp"
 #include "parser/transformer.hpp"
 

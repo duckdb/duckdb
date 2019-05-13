@@ -14,7 +14,7 @@
 namespace duckdb {
 
 struct TableStatistics {
-	uint64_t estimated_cardinality;
+	count_t estimated_cardinality;
 };
 
 } // namespace duckdb

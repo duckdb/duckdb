@@ -2,6 +2,8 @@
 #include "common/file_system.hpp"
 #include "test_helpers.hpp"
 
+#include <iostream>
+
 using namespace duckdb;
 using namespace std;
 

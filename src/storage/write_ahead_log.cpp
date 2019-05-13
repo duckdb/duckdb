@@ -4,9 +4,9 @@
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "catalog/catalog_entry/view_catalog_entry.hpp"
-#include "common/file_system.hpp"
-#include "common/buffered_serializer.hpp"
 #include "common/buffered_deserializer.hpp"
+#include "common/buffered_serializer.hpp"
+#include "common/file_system.hpp"
 #include "main/client_context.hpp"
 #include "main/connection.hpp"
 #include "main/database.hpp"
@@ -82,7 +82,7 @@ void WriteAheadLog::Replay(string &path) {
 			// store the WAL entry for replay after we encounter a flush
 			WALEntryData data;
 			data.entry = entry;
-			data.data = unique_ptr<uint8_t[]>(new uint8_t[entry.size]);
+			data.data = unique_ptr<data_t[]>(new data_t[entry.size]);
 			// read the data
 			if (fread(data.data.get(), entry.size, 1, wal_file) != 1) {
 				// could not read the data for this entry, stop replaying the
@@ -146,7 +146,7 @@ template <class T> void WriteAheadLog::Write(T val) {
 	}
 }
 
-void WriteAheadLog::WriteData(uint8_t *dataptr, uint64_t data_size) {
+void WriteAheadLog::WriteData(data_ptr_t dataptr, index_t data_size) {
 	if (data_size == 0) {
 		return;
 	}

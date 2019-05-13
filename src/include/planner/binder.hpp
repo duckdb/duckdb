@@ -23,7 +23,7 @@ struct CorrelatedColumnInfo {
 	ColumnBinding binding;
 	TypeId type;
 	string name;
-	uint64_t depth;
+	count_t depth;
 
 	CorrelatedColumnInfo(BoundColumnRefExpression &expr)
 	    : binding(expr.binding), type(expr.return_type), name(expr.GetName()), depth(expr.depth) {
@@ -77,7 +77,7 @@ public:
 	unordered_map<string, QueryNode *> CTE_bindings;
 
 	//! Generates an unused index for a table
-	uint64_t GenerateTableIndex();
+	index_t GenerateTableIndex();
 
 	BindContext bind_context;
 
@@ -104,7 +104,7 @@ private:
 
 	vector<ExpressionBinder *> active_binders;
 
-	uint64_t bound_tables;
+	count_t bound_tables;
 };
 
 } // namespace duckdb

@@ -35,6 +35,6 @@ public:
 	}
 
 	//! The current position in the scan
-	uint64_t chunk_index;
+	index_t chunk_index;
 };
 } // namespace duckdb

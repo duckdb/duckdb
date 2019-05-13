@@ -28,11 +28,11 @@ struct NextvalBindData : public FunctionData {
 };
 
 static void parse_schema_and_sequence(string input, string &schema, string &name) {
-	uint64_t start = 0;
+	index_t start = 0;
 	for (const char *istr = input.c_str(); *istr; istr++) {
 		if (*istr == '.') {
 			// separator
-			uint64_t len = istr - input.c_str();
+			count_t len = istr - input.c_str();
 			if (len == 0) {
 				throw ParserException("invalid name syntax");
 			}
@@ -80,7 +80,7 @@ static int64_t next_sequence_value(SequenceCatalogEntry *seq) {
 	return result;
 }
 
-void nextval_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_count, BoundFunctionExpression &expr,
+void nextval_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
                       Vector &result) {
 	auto &info = (NextvalBindData &)*expr.bind_info;
 	assert(input_count == 1 && inputs[0].type == TypeId::VARCHAR);
@@ -97,7 +97,7 @@ void nextval_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_
 		// sequence to use is hard coded
 		// increment the sequence
 		int64_t *result_data = (int64_t *)result.data;
-		VectorOperations::Exec(result, [&](uint64_t i, uint64_t k) {
+		VectorOperations::Exec(result, [&](index_t i, index_t k) {
 			// get the next value from the sequence
 			result_data[i] = next_sequence_value(info.sequence);
 		});
@@ -105,7 +105,7 @@ void nextval_function(ExpressionExecutor &exec, Vector inputs[], uint64_t input_
 		// sequence to use comes from the input
 		assert(result.count == inputs[0].count && result.sel_vector == inputs[0].sel_vector);
 		int64_t *result_data = (int64_t *)result.data;
-		VectorOperations::ExecType<const char *>(inputs[0], [&](const char *value, uint64_t i, uint64_t k) {
+		VectorOperations::ExecType<const char *>(inputs[0], [&](const char *value, index_t i, index_t k) {
 			// first get the sequence schema/name
 			string schema, seq;
 			string seqname = string(value);

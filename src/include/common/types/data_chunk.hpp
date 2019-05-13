@@ -36,7 +36,7 @@ namespace duckdb {
 class DataChunk {
 public:
 	//! The amount of vectors that are part of this DataChunk.
-	uint64_t column_count;
+	count_t column_count;
 	//! The vectors owned by the DataChunk.
 	unique_ptr<Vector[]> data;
 	//! The (optional) selection vector of the DataChunk. Each of the member
@@ -49,7 +49,7 @@ public:
 	//! FUNCTION ONLY!
 	void Verify();
 
-	uint64_t size() {
+	count_t size() {
 		if (column_count == 0) {
 			return 0;
 		}
@@ -74,14 +74,14 @@ public:
 
 	//! Merges the vector new_vector with an existing selection vector (i.e.
 	//! result[i] = current_vector[new_vector[i]];)
-	static void MergeSelVector(sel_t *current_vector, sel_t *new_vector, sel_t *result, uint64_t new_count);
+	static void MergeSelVector(sel_t *current_vector, sel_t *new_vector, sel_t *result, count_t new_count);
 
 	//! Filters elements from the vector based on a boolean vector. [True] is
 	//! included, [False] and [NULL] excluded.
 	void SetSelectionVector(Vector &matches);
 
 	//! Copies the data from this vector to another vector.
-	void Copy(DataChunk &other, uint64_t offset = 0);
+	void Copy(DataChunk &other, index_t offset = 0);
 
 	//! Removes the selection vector from the chunk
 	void Flatten();
@@ -110,7 +110,7 @@ public:
 	string ToString() const;
 	void Print();
 
-	Vector &GetVector(uint64_t index) {
+	Vector &GetVector(index_t index) {
 		assert(index < column_count);
 		return data[index];
 	}
@@ -125,6 +125,6 @@ public:
 private:
 	//! The data owned by this DataChunk. This data is typically referenced by
 	//! the member vectors.
-	unique_ptr<char[]> owned_data;
+	unique_ptr<data_t[]> owned_data;
 };
 } // namespace duckdb

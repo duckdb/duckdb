@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-template <class MJ, class L_ARG, class R_ARG> static uint64_t merge_join(L_ARG &l, R_ARG &r) {
+template <class MJ, class L_ARG, class R_ARG> static count_t merge_join(L_ARG &l, R_ARG &r) {
 	switch (l.type) {
 	case TypeId::TINYINT:
 		return MJ::template Operation<int8_t>(l, r);
@@ -25,7 +25,7 @@ template <class MJ, class L_ARG, class R_ARG> static uint64_t merge_join(L_ARG &
 }
 
 template <class T, class L_ARG, class R_ARG>
-static uint64_t perform_merge_join(L_ARG &l, R_ARG &r, ExpressionType comparison_type) {
+static count_t perform_merge_join(L_ARG &l, R_ARG &r, ExpressionType comparison_type) {
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 		return merge_join<typename T::Equality, L_ARG, R_ARG>(l, r);
@@ -42,7 +42,7 @@ static uint64_t perform_merge_join(L_ARG &l, R_ARG &r, ExpressionType comparison
 	}
 }
 
-uint64_t MergeJoinInner::Perform(MergeInfo &l, MergeInfo &r, ExpressionType comparison_type) {
+count_t MergeJoinInner::Perform(MergeInfo &l, MergeInfo &r, ExpressionType comparison_type) {
 	assert(l.info_type == MergeInfoType::SCALAR_MERGE_INFO && r.info_type == MergeInfoType::SCALAR_MERGE_INFO);
 	auto &left = (ScalarMergeInfo &)l;
 	auto &right = (ScalarMergeInfo &)r;
@@ -53,7 +53,7 @@ uint64_t MergeJoinInner::Perform(MergeInfo &l, MergeInfo &r, ExpressionType comp
 	return perform_merge_join<MergeJoinInner, ScalarMergeInfo, ScalarMergeInfo>(left, right, comparison_type);
 }
 
-uint64_t MergeJoinMark::Perform(MergeInfo &l, MergeInfo &r, ExpressionType comparison_type) {
+count_t MergeJoinMark::Perform(MergeInfo &l, MergeInfo &r, ExpressionType comparison_type) {
 	assert(l.info_type == MergeInfoType::SCALAR_MERGE_INFO && r.info_type == MergeInfoType::CHUNK_MERGE_INFO);
 	auto &left = (ScalarMergeInfo &)l;
 	auto &right = (ChunkMergeInfo &)r;

@@ -10,16 +10,16 @@ using namespace std;
 TupleSerializer::TupleSerializer() : base_size(0), has_variable_columns(false) {
 }
 
-TupleSerializer::TupleSerializer(const vector<TypeId> &types_, vector<uint64_t> columns_) : TupleSerializer() {
+TupleSerializer::TupleSerializer(const vector<TypeId> &types_, vector<index_t> columns_) : TupleSerializer() {
 	Initialize(types_, columns_);
 }
 
-void TupleSerializer::Initialize(const vector<TypeId> &types_, vector<uint64_t> columns_) {
+void TupleSerializer::Initialize(const vector<TypeId> &types_, vector<index_t> columns_) {
 	types = types_;
 
 	if (columns_.size() == 0) {
 		// if _columns is not supplied we use all columns
-		for (uint64_t i = 0; i < types.size(); i++) {
+		for (index_t i = 0; i < types.size(); i++) {
 			columns.push_back(i);
 		}
 	} else {
@@ -29,7 +29,7 @@ void TupleSerializer::Initialize(const vector<TypeId> &types_, vector<uint64_t> 
 	assert(types.size() == columns.size());
 	is_variable.resize(columns.size());
 	type_sizes.resize(columns.size());
-	for (uint64_t i = 0; i < columns.size(); i++) {
+	for (index_t i = 0; i < columns.size(); i++) {
 		auto type = types[i];
 		type_sizes[i] = GetTypeIdSize(type);
 		if (TypeIsConstantSize(type)) {
@@ -47,50 +47,50 @@ void TupleSerializer::Serialize(DataChunk &chunk, Tuple targets[]) {
 	// initialize the tuples
 	// first compute the sizes, if there are variable length columns
 	// if there are none, we can just use the base size
-	uint8_t *target_locations[STANDARD_VECTOR_SIZE];
-	for (uint64_t i = 0; i < chunk.size(); i++) {
+	data_ptr_t target_locations[STANDARD_VECTOR_SIZE];
+	for (index_t i = 0; i < chunk.size(); i++) {
 		targets[i].size = base_size;
-		targets[i].data = unique_ptr<uint8_t[]>(new uint8_t[targets[i].size]);
+		targets[i].data = unique_ptr<data_t[]>(new data_t[targets[i].size]);
 		target_locations[i] = targets[i].data.get();
 	}
 	// now serialize to the targets
 	Serialize(chunk, target_locations);
 }
 
-void TupleSerializer::Serialize(DataChunk &chunk, uint8_t *targets[]) {
-	uint64_t offset = 0;
-	for (uint64_t i = 0; i < columns.size(); i++) {
+void TupleSerializer::Serialize(DataChunk &chunk, data_ptr_t targets[]) {
+	index_t offset = 0;
+	for (index_t i = 0; i < columns.size(); i++) {
 		SerializeColumn(chunk, targets, i, offset);
 	}
 }
 
 void TupleSerializer::Deserialize(Vector &source, DataChunk &chunk) {
-	for (uint64_t i = 0; i < columns.size(); i++) {
+	for (index_t i = 0; i < columns.size(); i++) {
 		DeserializeColumn(source, i, chunk.data[columns[i]]);
 	}
 }
 
-void TupleSerializer::Serialize(vector<char *> &column_data, uint64_t offset, uint8_t *target) {
-	for (uint64_t i = 0; i < columns.size(); i++) {
+void TupleSerializer::Serialize(vector<data_ptr_t> &column_data, index_t offset, data_ptr_t target) {
+	for (index_t i = 0; i < columns.size(); i++) {
 		auto source = column_data[columns[i]] + type_sizes[i] * offset;
 		memcpy(target, source, type_sizes[i]);
 		target += type_sizes[i];
 	}
 }
 
-void TupleSerializer::Deserialize(vector<char *> &column_data, uint64_t offset, uint8_t *target) {
-	for (uint64_t i = 0; i < columns.size(); i++) {
+void TupleSerializer::Deserialize(vector<data_ptr_t> &column_data, index_t offset, data_ptr_t target) {
+	for (index_t i = 0; i < columns.size(); i++) {
 		auto source = column_data[columns[i]] + type_sizes[i] * offset;
 		memcpy(source, target, type_sizes[i]);
 		target += type_sizes[i];
 	}
 }
 
-void TupleSerializer::Serialize(vector<char *> &column_data, Vector &index_vector, uint8_t *targets[]) {
-	auto indices = (uint64_t *)index_vector.data;
-	uint64_t offset = 0;
-	for (uint64_t i = 0; i < columns.size(); i++) {
-		for (uint64_t j = 0; j < index_vector.count; j++) {
+void TupleSerializer::Serialize(vector<data_ptr_t> &column_data, Vector &index_vector, data_ptr_t targets[]) {
+	auto indices = (index_t *)index_vector.data;
+	index_t offset = 0;
+	for (index_t i = 0; i < columns.size(); i++) {
+		for (index_t j = 0; j < index_vector.count; j++) {
 			auto index = index_vector.sel_vector ? indices[index_vector.sel_vector[j]] : indices[j];
 			auto source = column_data[columns[i]] + type_sizes[i] * index;
 			memcpy(targets[j] + offset, source, type_sizes[i]);
@@ -99,26 +99,26 @@ void TupleSerializer::Serialize(vector<char *> &column_data, Vector &index_vecto
 	}
 }
 
-void TupleSerializer::SerializeUpdate(vector<char *> &column_data, vector<column_t> &affected_columns,
-                                      DataChunk &update_chunk, Vector &index_vector, uint64_t index_offset,
+void TupleSerializer::SerializeUpdate(vector<data_ptr_t> &column_data, vector<column_t> &affected_columns,
+                                      DataChunk &update_chunk, Vector &index_vector, index_t index_offset,
                                       Tuple targets[]) {
-	auto indices = (uint64_t *)index_vector.data;
+	auto indices = (index_t *)index_vector.data;
 	assert(index_vector.count == update_chunk.size());
 
 	// first initialize the tuples
-	for (uint64_t i = 0; i < index_vector.count; i++) {
+	for (index_t i = 0; i < index_vector.count; i++) {
 		targets[i].size = base_size;
-		targets[i].data = unique_ptr<uint8_t[]>(new uint8_t[targets[i].size]);
+		targets[i].data = unique_ptr<data_t[]>(new data_t[targets[i].size]);
 	}
 
 	// now copy the data to the tuples
-	uint64_t offset = 0;
-	for (uint64_t i = 0; i < columns.size(); i++) {
+	index_t offset = 0;
+	for (index_t i = 0; i < columns.size(); i++) {
 		auto column = columns[i];
 		auto update_column = affected_columns[i];
 		if (update_column == (column_t)-1) {
 			// fetch from base column
-			for (uint64_t j = 0; j < index_vector.count; j++) {
+			for (index_t j = 0; j < index_vector.count; j++) {
 				auto index =
 				    (index_vector.sel_vector ? indices[index_vector.sel_vector[j]] : indices[j]) - index_offset;
 				auto source = column_data[column] + type_sizes[i] * index;
@@ -127,7 +127,7 @@ void TupleSerializer::SerializeUpdate(vector<char *> &column_data, vector<column
 		} else {
 			// fetch from update column
 			auto baseptr = update_chunk.data[update_column].data;
-			for (uint64_t j = 0; j < index_vector.count; j++) {
+			for (index_t j = 0; j < index_vector.count; j++) {
 				auto index = update_chunk.sel_vector ? update_chunk.sel_vector[j] : j;
 				auto source = baseptr + type_sizes[i] * index;
 				memcpy(targets[j].data.get() + offset, source, type_sizes[i]);
@@ -137,8 +137,7 @@ void TupleSerializer::SerializeUpdate(vector<char *> &column_data, vector<column
 	}
 }
 
-static void SerializeValue(uint8_t *target_data, Vector &col, uint64_t index, uint64_t result_index,
-                           uint64_t type_size) {
+static void SerializeValue(data_ptr_t target_data, Vector &col, index_t index, index_t result_index, index_t type_size) {
 	if (col.nullmask[index]) {
 		SetNullValue(target_data, col.type);
 	} else {
@@ -146,18 +145,18 @@ static void SerializeValue(uint8_t *target_data, Vector &col, uint64_t index, ui
 	}
 }
 
-void TupleSerializer::SerializeColumn(DataChunk &chunk, uint8_t *targets[], uint64_t column_index, uint64_t &offset) {
+void TupleSerializer::SerializeColumn(DataChunk &chunk, data_ptr_t targets[], index_t column_index, index_t &offset) {
 	const auto column = columns[column_index];
 	const auto type_size = type_sizes[column_index];
 	assert(types[column_index] == chunk.data[column].type);
-	VectorOperations::Exec(chunk.data[column], [&](uint64_t i, uint64_t k) {
+	VectorOperations::Exec(chunk.data[column], [&](index_t i, index_t k) {
 		auto target_data = targets[k] + offset;
 		SerializeValue(target_data, chunk.data[column], i, k, type_size);
 	});
 	offset += type_size;
 }
 
-void TupleSerializer::DeserializeColumn(Vector &source, uint64_t column_index, Vector &target) {
+void TupleSerializer::DeserializeColumn(Vector &source, index_t column_index, Vector &target) {
 	const auto type_size = type_sizes[column_index];
 	assert(types[column_index] == target.type);
 	target.count = source.count;
@@ -170,13 +169,13 @@ int TupleSerializer::Compare(Tuple &a, Tuple &b) {
 	return Compare(a.data.get(), b.data.get());
 }
 
-int TupleSerializer::Compare(const uint8_t *a, const uint8_t *b) {
+int TupleSerializer::Compare(const_data_ptr_t a, const_data_ptr_t b) {
 	if (!has_variable_columns) {
 		// we can just do a memcmp
 		return memcmp(a, b, base_size);
 	} else {
 		int cmp = 0;
-		for (uint64_t i = 0; i < columns.size(); i++) {
+		for (index_t i = 0; i < columns.size(); i++) {
 			auto type_size = type_sizes[i];
 			if (is_variable[i]) {
 				auto left = *((const char **)a);
@@ -201,13 +200,13 @@ TupleComparer::TupleComparer(TupleSerializer &left, TupleSerializer &right) : le
 	left_offsets.resize(left.columns.size());
 	right_offsets.resize(left.columns.size());
 
-	uint64_t left_offset = 0;
-	for (uint64_t i = 0; i < left.columns.size(); i++) {
+	index_t left_offset = 0;
+	for (index_t i = 0; i < left.columns.size(); i++) {
 		left_offsets[i] = left_offset;
-		right_offsets[i] = (uint64_t)-1;
+		right_offsets[i] = INVALID_INDEX;
 
-		uint64_t right_offset = 0;
-		for (uint64_t j = 0; j < right.columns.size(); j++) {
+		index_t right_offset = 0;
+		for (index_t j = 0; j < right.columns.size(); j++) {
 			if (left.columns[i] == right.columns[j]) {
 				assert(left.types[i] == right.types[j]);
 
@@ -219,13 +218,13 @@ TupleComparer::TupleComparer(TupleSerializer &left, TupleSerializer &right) : le
 		}
 		// assert that we found the column
 		left_offset += left.type_sizes[i];
-		assert(right_offsets[i] != (uint64_t)-1);
+		assert(right_offsets[i] != INVALID_INDEX);
 	}
 }
 
-int TupleComparer::Compare(const uint8_t *left_data, const uint8_t *right_data) {
+int TupleComparer::Compare(const_data_ptr_t left_data, const_data_ptr_t right_data) {
 	int cmp;
-	for (uint64_t i = 0; i < left_offsets.size(); i++) {
+	for (index_t i = 0; i < left_offsets.size(); i++) {
 		auto left_element = left_data + left_offsets[i];
 		auto right_element = right_data + right_offsets[i];
 

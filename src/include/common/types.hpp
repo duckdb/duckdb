@@ -19,8 +19,8 @@ class Serializer;
 class Deserializer;
 
 struct blob_t {
-	char *data;
-	uint64_t size;
+	data_ptr_t data;
+	index_t size;
 };
 
 //===--------------------------------------------------------------------===//
@@ -126,7 +126,7 @@ template <class T> bool IsValidType() {
 
 string TypeIdToString(TypeId type);
 string TypeIdToString(TypeId type);
-uint64_t GetTypeIdSize(TypeId type);
+count_t GetTypeIdSize(TypeId type);
 bool TypeIsConstantSize(TypeId type);
 bool TypeIsIntegral(TypeId type);
 bool TypeIsNumeric(TypeId type);

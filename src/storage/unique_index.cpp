@@ -10,13 +10,13 @@
 using namespace duckdb;
 using namespace std;
 
-UniqueIndex::UniqueIndex(DataTable &table, vector<TypeId> types, vector<uint64_t> keys, bool allow_nulls)
+UniqueIndex::UniqueIndex(DataTable &table, vector<TypeId> types, vector<index_t> keys, bool allow_nulls)
     : serializer(types, keys), comparer(serializer, table.serializer), table(table), types(types), keys(keys),
       allow_nulls(allow_nulls) {
 }
 
-UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple, uint64_t row_identifier,
-                                       unordered_set<uint64_t> &ignored_identifiers) {
+UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple, index_t row_identifier,
+                                       unordered_set<index_t> &ignored_identifiers) {
 	auto new_node = make_unique<UniqueIndexNode>(move(tuple), row_identifier);
 	if (!root) {
 		// no root, make this entry the root
@@ -57,7 +57,7 @@ UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple, ui
 					conflict = false;
 				} else {
 					// first serialize to tuple
-					auto tuple_data = unique_ptr<uint8_t[]>{new uint8_t[chunk->table.serializer.TupleSize()]};
+					auto tuple_data = unique_ptr<data_t[]>{new data_t[chunk->table.serializer.TupleSize()]};
 
 					chunk->table.serializer.Serialize(chunk->columns, offset, tuple_data.get());
 					// now compare them
@@ -179,14 +179,14 @@ void UniqueIndex::RemoveEntry(UniqueIndexNode *entry) {
 }
 
 void UniqueIndex::AddEntries(Transaction &transaction, UniqueIndexAddedEntries &nodes, Tuple tuples[], bool has_null[],
-                             Vector &row_identifiers, unordered_set<uint64_t> &ignored_identifiers) {
+                             Vector &row_identifiers, unordered_set<index_t> &ignored_identifiers) {
 
 	lock_guard<mutex> guard(index_lock);
 
 	assert(row_identifiers.type == TypeId::BIGINT);
 
 	auto identifiers = (int64_t *)row_identifiers.data;
-	for (uint64_t i = 0; i < row_identifiers.count; i++) {
+	for (index_t i = 0; i < row_identifiers.count; i++) {
 		auto row_identifier = row_identifiers.sel_vector ? identifiers[row_identifiers.sel_vector[i]] : identifiers[i];
 		UniqueIndexNode *entry = nullptr;
 		if (has_null[i]) {
@@ -208,10 +208,10 @@ void UniqueIndex::AddEntries(Transaction &transaction, UniqueIndexAddedEntries &
 	}
 }
 
-static bool boolean_array_from_nullmask(sel_t *sel_vector, uint64_t count, nullmask_t &mask, bool array[],
+static bool boolean_array_from_nullmask(sel_t *sel_vector, count_t count, nullmask_t &mask, bool array[],
                                         bool allow_nulls) {
 	bool success = true;
-	VectorOperations::Exec(sel_vector, count, [&](uint64_t i, uint64_t k) {
+	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
 		array[k] = mask[i];
 		if (array[k] && !allow_nulls) {
 			success = false;
@@ -222,20 +222,20 @@ static bool boolean_array_from_nullmask(sel_t *sel_vector, uint64_t count, nullm
 }
 
 void UniqueIndex::Append(Transaction &transaction, vector<unique_ptr<UniqueIndex>> &indexes, DataChunk &chunk,
-                         uint64_t row_identifier_start) {
+                         index_t row_identifier_start) {
 	if (indexes.size() == 0) {
 		return;
 	}
 
 	// the row numbers that are ignored for conflicts
 	// this is left empty because we ignore nothing in the append
-	unordered_set<uint64_t> dummy;
+	unordered_set<index_t> dummy;
 
 	// we keep a set of nodes we added to the different indexes
 	// we keep this set so we can remove them from the index again in case of a constraint violation
 	unique_ptr<UniqueIndexAddedEntries> chain;
 	// insert the entries in each of the unique indexes
-	for (uint64_t current_index = 0; current_index < indexes.size(); current_index++) {
+	for (index_t current_index = 0; current_index < indexes.size(); current_index++) {
 		auto &index = *indexes[current_index];
 		auto added_nodes = make_unique<UniqueIndexAddedEntries>(index);
 
@@ -281,22 +281,22 @@ void UniqueIndex::Update(Transaction &transaction, StorageChunk *storage, vector
 		return;
 	}
 
-	unordered_set<uint64_t> ignored_entries;
+	unordered_set<index_t> ignored_entries;
 
-	VectorOperations::ExecType<uint64_t>(
-	    row_identifiers, [&](uint64_t &entry, uint64_t i, uint64_t k) { ignored_entries.insert(entry); });
+	VectorOperations::ExecType<index_t>(row_identifiers,
+	                                    [&](index_t &entry, index_t i, index_t k) { ignored_entries.insert(entry); });
 
 	// we keep a set of nodes we added to the different indexes
 	// we keep this set so we can remove them from the index again in case of a constraint violation
 	unique_ptr<UniqueIndexAddedEntries> chain;
-	for (uint64_t current_index = 0; current_index < indexes.size(); current_index++) {
+	for (index_t current_index = 0; current_index < indexes.size(); current_index++) {
 		auto &index = *indexes[current_index];
 		auto added_nodes = make_unique<UniqueIndexAddedEntries>(index);
 
 		// first check if the updated columns affect the index
 		bool index_affected = false;
 		vector<column_t> affected_columns;
-		for (uint64_t i = 0; i < index.keys.size(); i++) {
+		for (index_t i = 0; i < index.keys.size(); i++) {
 			auto column = index.keys[i];
 			auto entry = find(updated_columns.begin(), updated_columns.end(), column);
 			if (entry != updated_columns.end()) {
@@ -321,7 +321,7 @@ void UniqueIndex::Update(Transaction &transaction, StorageChunk *storage, vector
 		bool has_null[STANDARD_VECTOR_SIZE];
 
 		nullmask_t nulls;
-		for (uint64_t i = 0; i < index.keys.size(); i++) {
+		for (index_t i = 0; i < index.keys.size(); i++) {
 			if (affected_columns[i] != (column_t)-1) {
 				nulls |= update_chunk.data[affected_columns[i]].nullmask;
 			}
@@ -336,7 +336,7 @@ void UniqueIndex::Update(Transaction &transaction, StorageChunk *storage, vector
 
 		// check if there are duplicates in the tuples themselves
 		TupleSet set;
-		for (uint64_t i = 0; i < update_chunk.size(); i++) {
+		for (index_t i = 0; i < update_chunk.size(); i++) {
 			TupleReference ref(&tuples[i], index.serializer);
 			auto entry = set.find(ref);
 			if (entry != set.end()) {

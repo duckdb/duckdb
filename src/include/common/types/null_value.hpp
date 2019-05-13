@@ -10,6 +10,8 @@
 
 #include "common/common.hpp"
 
+#include <cstring>
+
 namespace duckdb {
 
 //! This is no longer used in regular vectors, however, hash tables use this
@@ -34,7 +36,7 @@ template <class T> inline bool IsNullValue(T value) {
 }
 
 template <> inline bool IsNullValue(const char *value) {
-	return strcmp(value, NullValue<const char *>()) == 0;
+	return std::strcmp(value, NullValue<const char *>()) == 0;
 }
 
 template <> inline bool IsNullValue(char *value) {
@@ -42,9 +44,9 @@ template <> inline bool IsNullValue(char *value) {
 }
 
 //! Compares a specific memory region against the types NULL value
-bool IsNullValue(uint8_t *ptr, TypeId type);
+bool IsNullValue(data_ptr_t ptr, TypeId type);
 
 //! Writes NullValue<T> value of a specific type to a memory address
-void SetNullValue(uint8_t *ptr, TypeId type);
+void SetNullValue(data_ptr_t ptr, TypeId type);
 
 } // namespace duckdb

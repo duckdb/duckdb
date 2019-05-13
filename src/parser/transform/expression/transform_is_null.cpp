@@ -1,3 +1,4 @@
+#include "common/exception.hpp"
 #include "parser/expression/operator_expression.hpp"
 #include "parser/transformer.hpp"
 

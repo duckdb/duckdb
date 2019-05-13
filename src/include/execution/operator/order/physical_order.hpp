@@ -34,8 +34,8 @@ public:
 	PhysicalOrderOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
 	}
 
-	uint64_t position;
+	index_t position;
 	ChunkCollection sorted_data;
-	unique_ptr<uint64_t[]> sorted_vector;
+	unique_ptr<index_t[]> sorted_vector;
 };
 } // namespace duckdb

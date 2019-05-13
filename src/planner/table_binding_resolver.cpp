@@ -18,7 +18,7 @@ void TableBindingResolver::PushBinding(BoundTable binding) {
 }
 
 void TableBindingResolver::AppendTables(vector<BoundTable> &right_tables) {
-	uint64_t offset =
+	index_t offset =
 	    bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
 	for (auto table : right_tables) {
 		table.column_offset += offset;
@@ -222,7 +222,7 @@ void TableBindingResolver::Visit(LogicalGet &op) {
 	if (!op.table) {
 		// DUMMY get
 		// create a dummy table with a single column
-		binding.table_index = (uint64_t)-1;
+		binding.table_index = INVALID_INDEX;
 		binding.column_count = 1;
 	} else {
 		binding.table_index = op.table_index;

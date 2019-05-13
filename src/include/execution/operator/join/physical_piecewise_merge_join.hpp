@@ -36,9 +36,9 @@ public:
 	}
 
 	bool initialized;
-	uint64_t left_position;
-	uint64_t right_position;
-	uint64_t right_chunk_index;
+	index_t left_position;
+	index_t right_position;
+	index_t right_chunk_index;
 	DataChunk left_chunk;
 	DataChunk join_keys;
 	MergeOrder left_orders;

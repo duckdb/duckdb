@@ -31,7 +31,7 @@ public:
 	string GetMatchingBinding(const string &column_name);
 	//! Binds a column expression to the base table. Returns the bound expression
 	//! or throws an exception if the column could not be bound.
-	BindResult BindColumn(ColumnRefExpression &colref, uint32_t depth);
+	BindResult BindColumn(ColumnRefExpression &colref, count_t depth);
 
 	//! Generate column expressions for all columns that are present in the
 	//! referenced tables. This is used to resolve the * expression in a
@@ -41,9 +41,9 @@ public:
 	//! Adds a base table with the given alias to the BindContext.
 	void AddBaseTable(BoundBaseTableRef *bound, const string &alias);
 	//! Adds a subquery with a given alias to the BindContext.
-	void AddSubquery(uint64_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery);
+	void AddSubquery(index_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery);
 	//! Adds a table function with a given alias to the BindContext
-	void AddTableFunction(uint64_t index, const string &alias, TableFunctionCatalogEntry *function_entry);
+	void AddTableFunction(index_t index, const string &alias, TableFunctionCatalogEntry *function_entry);
 
 	unordered_set<string> hidden_columns;
 

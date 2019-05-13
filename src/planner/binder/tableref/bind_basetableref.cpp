@@ -26,7 +26,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &expr) {
 	case CatalogType::TABLE: {
 		// base table: create the BoundBaseTableRef node
 		auto table = (TableCatalogEntry *)table_or_view;
-		uint64_t table_index = GenerateTableIndex();
+		auto table_index = GenerateTableIndex();
 		auto result = make_unique<BoundBaseTableRef>(table, table_index);
 		bind_context.AddBaseTable(result.get(), expr.alias.empty() ? expr.table_name : expr.alias);
 		return move(result);
@@ -41,7 +41,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &expr) {
 		auto &select_list = subquery.subquery->GetSelectList();
 		if (view_catalog_entry->aliases.size() > 0) {
 			subquery.column_name_alias.resize(select_list.size());
-			for (uint64_t col_idx = 0; col_idx < select_list.size(); col_idx++) {
+			for (index_t col_idx = 0; col_idx < select_list.size(); col_idx++) {
 				if (col_idx < view_catalog_entry->aliases.size()) {
 					subquery.column_name_alias[col_idx] = view_catalog_entry->aliases[col_idx];
 				} else {
