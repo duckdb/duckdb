@@ -48,7 +48,7 @@ header_bottom+= "//===----------------------------------------------------------
 script_dir =  os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 script_dir = os.path.join(script_dir,'src/include')
 
-def format_directory(directory, sort_includes=True):
+def format_directory(directory, sort_includes=False):
 	directory_printed = False
 	files = os.listdir(directory)
 	for f in files:

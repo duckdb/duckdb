@@ -26,6 +26,7 @@ class LogicalDistinct;
 class LogicalEmptyResult;
 class LogicalFilter;
 class LogicalGet;
+class LogicalIndexScan;
 class LogicalJoin;
 class LogicalLimit;
 class LogicalOrder;

@@ -25,6 +25,7 @@ enum class LogicalOperatorType : uint8_t {
 	ORDER_BY,
 	COPY,
 	DISTINCT,
+	INDEX_SCAN,
 	// -----------------------------
 	// Data sources
 	// -----------------------------

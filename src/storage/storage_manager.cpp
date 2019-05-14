@@ -164,7 +164,8 @@ int StorageManager::LoadFromStorage() {
 			database.catalog->CreateTable(context.ActiveTransaction(), bound_info.get());
 
 			// now load the actual data
-			auto *table = database.catalog->GetTable(context.ActiveTransaction(), bound_info->base->schema, bound_info->base->table);
+			auto *table = database.catalog->GetTable(context.ActiveTransaction(), bound_info->base->schema,
+			                                         bound_info->base->table);
 			auto types = table->GetTypes();
 			DataChunk chunk;
 			chunk.Initialize(types);

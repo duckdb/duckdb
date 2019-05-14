@@ -69,7 +69,7 @@ typedef uint8_t uint8;
 #define STATIC_IF_INLINE static inline
 
 #define AMTYPE_INDEX 'i'
-#define DEFAULT_INDEX_TYPE "btree"
+#define DEFAULT_INDEX_TYPE "art"
 #define INTERVAL_MASK(b) (1 << (b))
 
 #ifdef _MSC_VER
