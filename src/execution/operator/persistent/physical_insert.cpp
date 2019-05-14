@@ -35,6 +35,7 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		for (auto &chunkptr : collection.chunks) {
 			auto &chunk = *chunkptr;
 			ExpressionExecutor executor(chunk);
+			insert_chunk.Reset();
 			if (column_index_map.size() > 0) {
 				// columns specified by the user, use column_index_map
 				for (index_t i = 0; i < table->columns.size(); i++) {
