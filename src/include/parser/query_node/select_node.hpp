@@ -29,6 +29,8 @@ public:
 	unique_ptr<ParsedExpression> where_clause;
 	//! list of groups
 	vector<unique_ptr<ParsedExpression>> groups;
+	//! list of distinct on targets
+	vector<unique_ptr<ParsedExpression>> distinct_on_targets;
 	//! HAVING clause
 	unique_ptr<ParsedExpression> having;
 

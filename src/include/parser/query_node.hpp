@@ -41,6 +41,8 @@ public:
 	QueryNodeType type;
 	//! DISTINCT or not
 	bool select_distinct = false;
+	//! DISTINCT ON or not
+	bool has_distinct_on = false;
 	//! List of order nodes
 	vector<OrderByNode> orders;
 	//! LIMIT count
