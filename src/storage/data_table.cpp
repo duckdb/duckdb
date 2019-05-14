@@ -196,7 +196,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 
 	// get an exclusive lock on the chunk
 	auto lock = chunk->GetExclusiveLock();
-
+	// no constraints are violated
 	// now delete the entries
 	VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
 		auto id = ids[i] - chunk->start;

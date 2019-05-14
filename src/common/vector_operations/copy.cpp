@@ -14,8 +14,8 @@ using namespace std;
 template <class T>
 static void copy_function(T *__restrict source, T *__restrict target, index_t offset, count_t count,
                           sel_t *__restrict sel_vector) {
-	VectorOperations::Exec(
-	    sel_vector, count + offset, [&](index_t i, index_t k) { target[k - offset] = source[i]; }, offset);
+	VectorOperations::Exec(sel_vector, count + offset, [&](index_t i, index_t k) { target[k - offset] = source[i]; },
+	                       offset);
 }
 
 template <class T>
@@ -23,16 +23,15 @@ static void copy_function_set_null(T *__restrict source, T *__restrict target, i
                                    sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 	if (nullmask.any()) {
 		// null values, have to check the NULL values in the mask
-		VectorOperations::Exec(
-		    sel_vector, count + offset,
-		    [&](index_t i, index_t k) {
-			    if (nullmask[i]) {
-				    target[k - offset] = NullValue<T>();
-			    } else {
-				    target[k - offset] = source[i];
-			    }
-		    },
-		    offset);
+		VectorOperations::Exec(sel_vector, count + offset,
+		                       [&](index_t i, index_t k) {
+			                       if (nullmask[i]) {
+				                       target[k - offset] = NullValue<T>();
+			                       } else {
+				                       target[k - offset] = source[i];
+			                       }
+		                       },
+		                       offset);
 	} else {
 		// no NULL values, use normal copy
 		copy_function(source, target, offset, count, sel_vector);
@@ -109,7 +108,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, index_t offset) {
 	}
 	assert(offset <= source.count);
 	target.count = source.count - offset;
-	VectorOperations::Exec(
-	    source, [&](index_t i, index_t k) { target.nullmask[k - offset] = source.nullmask[i]; }, offset);
+	VectorOperations::Exec(source, [&](index_t i, index_t k) { target.nullmask[k - offset] = source.nullmask[i]; },
+	                       offset);
 	VectorOperations::Copy(source, target.data, offset, target.count);
 }

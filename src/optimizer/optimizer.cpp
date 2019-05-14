@@ -5,6 +5,7 @@
 #include "optimizer/ca_optimizer.hpp"
 #include "optimizer/cse_optimizer.hpp"
 #include "optimizer/filter_pushdown.hpp"
+#include "optimizer/index_scan.hpp"
 #include "optimizer/join_order_optimizer.hpp"
 #include "optimizer/regex_range_filter.hpp"
 #include "optimizer/rule/list.hpp"
@@ -73,6 +74,12 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	context.profiler.StartPhase("filter_pushdown");
 	FilterPushdown filter_pushdown(*this);
 	plan = filter_pushdown.Rewrite(move(plan));
+	context.profiler.EndPhase();
+
+	// check if filters match with existing indexes, if true transforms filters to index scans
+	context.profiler.StartPhase("index_scan");
+	IndexScan index_scan;
+	plan = index_scan.Optimize(move(plan));
 	context.profiler.EndPhase();
 
 	context.profiler.StartPhase("regex_range");

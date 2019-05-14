@@ -122,6 +122,7 @@ private:
 	void RetrieveBaseTableData(DataChunk &result, const vector<column_t> &column_ids, sel_t regular_entries[],
 	                           index_t regular_count, StorageChunk *current_chunk, index_t current_offset = 0);
 
+private:
 	//! Verify whether or not a new chunk violates any constraints
 	void VerifyConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &new_chunk);
 	//! The stored data of the table
