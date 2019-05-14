@@ -17,8 +17,8 @@ namespace duckdb {
 class LogicalAggregate : public LogicalOperator {
 public:
 	LogicalAggregate(index_t group_index, index_t aggregate_index, vector<unique_ptr<Expression>> select_list)
-	    : LogicalOperator(LogicalOperatorType::AGGREGATE_AND_GROUP_BY, std::move(select_list)),
-	      group_index(group_index), aggregate_index(aggregate_index) {
+	    : LogicalOperator(LogicalOperatorType::AGGREGATE_AND_GROUP_BY, move(select_list)), group_index(group_index),
+	      aggregate_index(aggregate_index) {
 	}
 
 	//! The table index for the groups of the LogicalAggregate

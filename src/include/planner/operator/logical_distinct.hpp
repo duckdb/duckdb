@@ -17,10 +17,20 @@ class LogicalDistinct : public LogicalOperator {
 public:
 	LogicalDistinct() : LogicalOperator(LogicalOperatorType::DISTINCT) {
 	}
+	LogicalDistinct(vector<unique_ptr<Expression>> targets)
+	    : LogicalOperator(LogicalOperatorType::DISTINCT, move(targets)) {
+	}
+	//! The set of distinct targets (optional).
+	vector<unique_ptr<Expression>> distinct_targets;
+
+	count_t ExpressionCount() override;
+	Expression *GetExpression(index_t index) override;
+	void ReplaceExpression(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
+	                       index_t index) override;
+
+	string ParamsToString() const override;
 
 protected:
-	void ResolveTypes() override {
-		types = children[0]->types;
-	}
+	void ResolveTypes() override;
 };
 } // namespace duckdb
