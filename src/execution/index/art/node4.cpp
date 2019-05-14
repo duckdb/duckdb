@@ -62,7 +62,7 @@ void Node4::erase(unique_ptr<Node> &node, int pos) {
 	Node4 *n = static_cast<Node4 *>(node.get());
 
 	if (n->count == 4) {
-		n->child[3].release();
+		n->child[3].reset();
 		n->count--;
 	} else {
 		for (; pos < n->count; pos++) {

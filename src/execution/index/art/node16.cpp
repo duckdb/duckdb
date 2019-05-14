@@ -64,7 +64,7 @@ void Node16::erase(unique_ptr<Node> &node, int pos) {
 	Node16 *n = static_cast<Node16 *>(node.get());
 	if (node->count > 3) {
 		if (n->count == 16) {
-			n->child[15].release();
+			n->child[15].reset();
 			n->count--;
 		} else {
 			for (; pos < n->count; pos++) {
