@@ -32,7 +32,7 @@ class OrderIndex : public Index {
 public:
 	OrderIndex(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, vector<TypeId> expression_types,
 	           vector<unique_ptr<Expression>> expressions, count_t initial_capacity,
-               vector<unique_ptr<Expression>> unbound_expressions);
+	           vector<unique_ptr<Expression>> unbound_expressions);
 
 	//! Appends data into the index, but does not perform the sort yet! This can
 	//! be done separately by calling the OrderIndex::Sort() method

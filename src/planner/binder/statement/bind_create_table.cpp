@@ -67,8 +67,8 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 					}
 					if (find(keys.begin(), keys.end(), entry->second) != keys.end()) {
 						throw ParserException("column \"%s\" appears twice in "
-												"primary key constraint",
-												keyname.c_str());
+						                      "primary key constraint",
+						                      keyname.c_str());
 					}
 					keys.push_back(entry->second);
 				}

@@ -21,18 +21,18 @@ public:
 	}
 
 	//! Get Node16 Child
-    unique_ptr<Node>* getChild(const uint8_t k);
+	unique_ptr<Node> *getChild(const uint8_t k);
 
-    //! Get position of a byte, returns -1 if not exists
-    int getPos(const uint8_t k);
+	//! Get position of a byte, returns -1 if not exists
+	int getPos(const uint8_t k);
 
 	//! Get min value
-	unique_ptr<Node>* getMin();
+	unique_ptr<Node> *getMin();
 
 	//! Insert node into Node16
-	void static insert(unique_ptr<Node>& node, uint8_t keyByte, unique_ptr<Node>& child);
+	void static insert(unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child);
 
 	//! Shrink to node 4
-    static void erase(unique_ptr<Node>& node,int pos);
+	static void erase(unique_ptr<Node> &node, int pos);
 };
 } // namespace duckdb

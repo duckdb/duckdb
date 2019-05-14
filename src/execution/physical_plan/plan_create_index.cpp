@@ -10,5 +10,5 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	assert(op.children.size() == 0);
 	dependencies.insert(&op.table);
 	return make_unique<PhysicalCreateIndex>(op, op.table, op.column_ids, move(op.expressions), move(op.info),
-                                            move(op.unbound_expressions));
+	                                        move(op.unbound_expressions));
 }

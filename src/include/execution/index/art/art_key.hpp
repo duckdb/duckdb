@@ -21,7 +21,7 @@ class Key {
 public:
 	uint8_t len;
 
-    unique_ptr<uint8_t[]> data;
+	unique_ptr<uint8_t[]> data;
 
 	Key(bool isLittleEndian, TypeId type, uintptr_t k, uint8_t maxKeyLength) {
 		len = maxKeyLength;
@@ -40,14 +40,12 @@ public:
 
 	Key(const Key &key) = delete;
 
-
 	uint8_t &operator[](std::size_t i);
 
 	const uint8_t &operator[](std::size_t i) const;
 
-
 	bool operator>(const Key &k) const {
-		for (int i = 0; i < len; i ++){
+		for (int i = 0; i < len; i++) {
 			if (data[i] > k.data[i])
 				return true;
 			else if (data[i] < k.data[i])

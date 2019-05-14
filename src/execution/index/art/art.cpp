@@ -37,8 +37,6 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, ve
 }
 
 ART::~ART() {
-
-
 }
 
 void ART::Insert(DataChunk &input, Vector &row_ids) {
@@ -133,8 +131,8 @@ void ART::Append(ClientContext &context, DataChunk &appended_data, uint64_t row_
 bool ART::leafMatches(bool is_little_endian, Node *node, Key &key, unsigned keyLength, unsigned depth) {
 	if (depth != keyLength) {
 		auto leaf = static_cast<Leaf *>(node);
-		auto leafKey = make_unique<Key>(is_little_endian, types[0], leaf->value,keyLength);
-		Key & key_ref =*leafKey;
+		auto leafKey = make_unique<Key>(is_little_endian, types[0], leaf->value, keyLength);
+		Key &key_ref = *leafKey;
 		for (unsigned i = depth; i < keyLength; i++)
 			if (key_ref[i] != key[i])
 				return false;
@@ -142,7 +140,7 @@ bool ART::leafMatches(bool is_little_endian, Node *node, Key &key, unsigned keyL
 	return true;
 }
 
-void ART::erase(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned depth, unsigned maxKeyLength,
+void ART::erase(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned depth, unsigned maxKeyLength,
                 TypeId type, uint64_t row_id) {
 	if (!node)
 		return;
@@ -150,7 +148,7 @@ void ART::erase(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned 
 	if (node->type == NodeType::NLeaf) {
 		// Make sure we have the right leaf
 		if (ART::leafMatches(isLittleEndian, node.get(), key, maxKeyLength, depth))
-            node.reset();
+			node.reset();
 		return;
 	}
 
@@ -160,10 +158,10 @@ void ART::erase(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned 
 			return;
 		depth += node->prefixLength;
 	}
-    int pos = Node::findKeyPos(key[depth], &(*node));
+	int pos = Node::findKeyPos(key[depth], &(*node));
 	auto child = Node::findChild(key[depth], node);
 
-    unique_ptr<Node>& child_ref= *child;
+	unique_ptr<Node> &child_ref = *child;
 	if (child_ref->type == NodeType::NLeaf && leafMatches(isLittleEndian, child_ref.get(), key, maxKeyLength, depth)) {
 		// Leaf found, remove entry
 		auto leaf = static_cast<Leaf *>(child_ref.get());
@@ -174,26 +172,26 @@ void ART::erase(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned 
 		// Leaf only has one element, delete leaf, decrement node counter and maybe shrink node
 		else {
 			switch (node->type) {
-                case NodeType::N4:{
-					Node4::erase(node,pos);
-					break;
-				}
-                case NodeType::N16:{
-                    Node16::erase(node,pos);
-                    break;
-                }
-                case NodeType::N48:{
+			case NodeType::N4: {
+				Node4::erase(node, pos);
+				break;
+			}
+			case NodeType::N16: {
+				Node16::erase(node, pos);
+				break;
+			}
+			case NodeType::N48: {
 
-                        Node48::erase(node,pos);
-                    break;
-                }
-                case NodeType::N256:
-                        Node256::erase(node,pos);
+				Node48::erase(node, pos);
+				break;
+			}
+			case NodeType::N256:
+				Node256::erase(node, pos);
 
-                    break;
-                default:
-                    assert(0);
-                    break;
+				break;
+			default:
+				assert(0);
+				break;
 			}
 		}
 
@@ -203,7 +201,7 @@ void ART::erase(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned 
 	}
 }
 
-void ART::insert(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned depth, uintptr_t value,
+void ART::insert(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t value,
                  unsigned maxKeyLength, TypeId type, uint64_t row_id) {
 	if (node == NULL) {
 		node = make_unique<Leaf>(value, row_id, maxKeyLength);
@@ -213,7 +211,7 @@ void ART::insert(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned
 	if (node->type == NodeType::NLeaf) {
 		// Replace leaf with Node4 and store both leaves in it
 		auto leaf = static_cast<Leaf *>(node.get());
-		auto auxKey = make_unique<Key>(isLittleEndian, type, leaf->value,maxKeyLength);
+		auto auxKey = make_unique<Key>(isLittleEndian, type, leaf->value, maxKeyLength);
 
 		Key &existingKey = *auxKey;
 		unsigned newPrefixLength = 0;
@@ -230,9 +228,9 @@ void ART::insert(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned
 				return;
 			}
 		}
-        unique_ptr<Node> newNode = make_unique<Node4>(node->maxPrefixLength);
-        newNode->prefixLength = newPrefixLength;
-        memcpy(newNode->prefix.get(), &key[depth], Node::min(newPrefixLength, node->maxPrefixLength));
+		unique_ptr<Node> newNode = make_unique<Node4>(node->maxPrefixLength);
+		newNode->prefixLength = newPrefixLength;
+		memcpy(newNode->prefix.get(), &key[depth], Node::min(newPrefixLength, node->maxPrefixLength));
 		Node4::insert(newNode, existingKey[depth + newPrefixLength], node);
 		unique_ptr<Node> leaf_node = make_unique<Leaf>(value, row_id, maxKeyLength);
 		Node4::insert(newNode, key[depth + newPrefixLength], leaf_node);
@@ -250,18 +248,18 @@ void ART::insert(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned
 			memcpy(newNode->prefix.get(), node->prefix.get(), Node::min(mismatchPos, node->maxPrefixLength));
 			// Break up prefix
 			if (node->prefixLength < node->maxPrefixLength) {
-                auto node_ptr = node.get();
+				auto node_ptr = node.get();
 				Node4::insert(newNode, node->prefix[mismatchPos], node);
-                node_ptr->prefixLength -= (mismatchPos + 1);
-                memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatchPos + 1,
-                        Node::min(node_ptr->prefixLength, node_ptr->maxPrefixLength));
+				node_ptr->prefixLength -= (mismatchPos + 1);
+				memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatchPos + 1,
+				        Node::min(node_ptr->prefixLength, node_ptr->maxPrefixLength));
 			} else {
-                throw NotImplementedException("PrefixLength > MaxPrefixLength");
+				throw NotImplementedException("PrefixLength > MaxPrefixLength");
 			}
 			unique_ptr<Node> leaf_node = make_unique<Leaf>(value, row_id, maxKeyLength);
 
 			Node4::insert(newNode, key[depth + mismatchPos], leaf_node);
-            node = move(newNode);
+			node = move(newNode);
 			return;
 		}
 		depth += node->prefixLength;
@@ -278,7 +276,7 @@ void ART::insert(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned
 	Node::insertLeaf(node, key[depth], newNode);
 }
 
-Node * ART::lookup(unique_ptr<Node>& node, Key &key, unsigned keyLength, unsigned depth) {
+Node *ART::lookup(unique_ptr<Node> &node, Key &key, unsigned keyLength, unsigned depth) {
 
 	bool skippedPrefix = false; // Did we optimistically skip some prefix without checking it?
 	auto node_val = node.get();
@@ -291,7 +289,7 @@ Node * ART::lookup(unique_ptr<Node>& node, Key &key, unsigned keyLength, unsigne
 			if (depth != keyLength) {
 				// Check leaf
 				auto leaf = static_cast<Leaf *>(node_val);
-				auto auxKey = make_unique<Key>(is_little_endian, types[0], leaf->value,keyLength);
+				auto auxKey = make_unique<Key>(is_little_endian, types[0], leaf->value, keyLength);
 				Key &leafKey = *auxKey;
 				for (unsigned i = (skippedPrefix ? 0 : depth); i < keyLength; i++)
 					if (leafKey[i] != key[i])
@@ -320,99 +318,100 @@ Node * ART::lookup(unique_ptr<Node>& node, Key &key, unsigned keyLength, unsigne
 	return NULL;
 }
 
-bool ART::iteratorNext(Iterator& iter) {
-    // Skip leaf
-    if ((iter.depth)&&((iter.stack[iter.depth-1].node)->type == NodeType::NLeaf))
-        iter.depth--;
+bool ART::iteratorNext(Iterator &iter) {
+	// Skip leaf
+	if ((iter.depth) && ((iter.stack[iter.depth - 1].node)->type == NodeType::NLeaf))
+		iter.depth--;
 
-    // Look for next leaf
-    while (iter.depth) {
-        Node* node=iter.stack[iter.depth-1].node;
+	// Look for next leaf
+	while (iter.depth) {
+		Node *node = iter.stack[iter.depth - 1].node;
 
-        // Leaf found
-        if (node->type == NodeType::NLeaf) {
+		// Leaf found
+		if (node->type == NodeType::NLeaf) {
 			auto leaf = static_cast<Leaf *>(node);
-            iter.node=leaf;
-            return true;
-        }
+			iter.node = leaf;
+			return true;
+		}
 
-        // Find next node
-        Node* next=nullptr;
-        switch (node->type) {
-            case NodeType::N4: {
-                Node4* n=static_cast<Node4*>(node);
-                if (iter.stack[iter.depth-1].pos<node->count)
-                    next=n->child[iter.stack[iter.depth-1].pos++].get();
-                break;
-            }
-            case NodeType::N16: {
-                Node16* n=static_cast<Node16*>(node);
-                if (iter.stack[iter.depth-1].pos<node->count)
-                    next=n->child[iter.stack[iter.depth-1].pos++].get();
-                break;
-            }
-            case NodeType::N48: {
-                Node48* n=static_cast<Node48*>(node);
-                unsigned depth=iter.depth-1;
-                for (;iter.stack[depth].pos<256;iter.stack[depth].pos++)
-                    if (n->childIndex[iter.stack[depth].pos]!=48) {
-                        next=n->child[n->childIndex[iter.stack[depth].pos++]].get();
-                        break;
-                    }
-                break;
-            }
-            case NodeType::N256: {
-                Node256* n=static_cast<Node256*>(node);
-                unsigned depth=iter.depth-1;
-                for (;iter.stack[depth].pos<256;iter.stack[depth].pos++)
-                    if (n->child[iter.stack[depth].pos]) {
-                        next=n->child[iter.stack[depth].pos++].get();
-                        break;
-                    }
-                break;
-            }
-			default:
-				assert(0);
-				break;
-        }
+		// Find next node
+		Node *next = nullptr;
+		switch (node->type) {
+		case NodeType::N4: {
+			Node4 *n = static_cast<Node4 *>(node);
+			if (iter.stack[iter.depth - 1].pos < node->count)
+				next = n->child[iter.stack[iter.depth - 1].pos++].get();
+			break;
+		}
+		case NodeType::N16: {
+			Node16 *n = static_cast<Node16 *>(node);
+			if (iter.stack[iter.depth - 1].pos < node->count)
+				next = n->child[iter.stack[iter.depth - 1].pos++].get();
+			break;
+		}
+		case NodeType::N48: {
+			Node48 *n = static_cast<Node48 *>(node);
+			unsigned depth = iter.depth - 1;
+			for (; iter.stack[depth].pos < 256; iter.stack[depth].pos++)
+				if (n->childIndex[iter.stack[depth].pos] != 48) {
+					next = n->child[n->childIndex[iter.stack[depth].pos++]].get();
+					break;
+				}
+			break;
+		}
+		case NodeType::N256: {
+			Node256 *n = static_cast<Node256 *>(node);
+			unsigned depth = iter.depth - 1;
+			for (; iter.stack[depth].pos < 256; iter.stack[depth].pos++)
+				if (n->child[iter.stack[depth].pos]) {
+					next = n->child[iter.stack[depth].pos++].get();
+					break;
+				}
+			break;
+		}
+		default:
+			assert(0);
+			break;
+		}
 
-        if (next) {
-            iter.stack[iter.depth].pos=0;
-            iter.stack[iter.depth].node=next;
-            iter.depth++;
-        } else
-            iter.depth--;
-    }
-    return false;
+		if (next) {
+			iter.stack[iter.depth].pos = 0;
+			iter.stack[iter.depth].node = next;
+			iter.depth++;
+		} else
+			iter.depth--;
+	}
+	return false;
 }
 
-
-bool ART::bound(unique_ptr<Node>& n,Key &key,unsigned keyLength,Iterator& iterator,unsigned maxKeyLength,bool inclusive, bool isLittleEndian) {
-	iterator.depth=0;
-    auto node = n.get();
+bool ART::bound(unique_ptr<Node> &n, Key &key, unsigned keyLength, Iterator &iterator, unsigned maxKeyLength,
+                bool inclusive, bool isLittleEndian) {
+	iterator.depth = 0;
 	if (!n)
 		return false;
+	Node *node = n.get();
 
-	unsigned depth=0;
+	unsigned depth = 0;
 	while (true) {
-		iterator.stack[iterator.depth].node=node;
-		int& pos=iterator.stack[iterator.depth].pos;
+		iterator.stack[iterator.depth].node = node;
+		int &pos = iterator.stack[iterator.depth].pos;
 		iterator.depth++;
 
 		if (node->type == NodeType::NLeaf) {
-            auto leaf = static_cast<Leaf *>(node);
-			iterator.node=leaf;
-			if (depth==keyLength) {
+			auto leaf = static_cast<Leaf *>(node);
+			iterator.node = leaf;
+			if (depth == keyLength) {
 				// Equal
 				if (inclusive)
-					return true; else
+					return true;
+				else
 					return iteratorNext(iterator);
 			}
-			auto auxKey = make_unique<Key>(isLittleEndian, types[0], leaf->value,maxKeyLength);
+			auto auxKey = make_unique<Key>(isLittleEndian, types[0], leaf->value, maxKeyLength);
 			Key &leafKey = *auxKey;
-			for (unsigned i=depth; i<keyLength; i++)
-				if (leafKey[i]!=key[i]) {
-					if (leafKey[i]<key[i]) {
+			for (unsigned i = depth; i < keyLength; i++)
+				if (leafKey[i] != key[i]) {
+					if (leafKey[i] < key[i]) {
 						// Less
 						iterator.depth--;
 						return iteratorNext(iterator);
@@ -423,34 +422,34 @@ bool ART::bound(unique_ptr<Node>& n,Key &key,unsigned keyLength,Iterator& iterat
 
 			// Equal
 			if (inclusive)
-				return true; else
+				return true;
+			else
 				return iteratorNext(iterator);
 		}
 		unsigned mismatchPos = Node::prefixMismatch(isLittleEndian, node, key, depth, maxKeyLength, types[0]);
 
-		if (mismatchPos!=node->prefixLength) {
-			if (node->prefix[mismatchPos]<key[depth+mismatchPos]) {
+		if (mismatchPos != node->prefixLength) {
+			if (node->prefix[mismatchPos] < key[depth + mismatchPos]) {
 				// Less
 				iterator.depth--;
 				return iteratorNext(iterator);
 			}
 			// Greater
-			pos=0;
+			pos = 0;
 			return iteratorNext(iterator);
 		}
-		depth+=node->prefixLength;
-        auto next = Node::findChild(key[depth], node);
-        pos = Node::findKeyPos(key[depth], node);
+		depth += node->prefixLength;
+		Node *next = Node::findChild(key[depth], node);
+		pos = Node::findKeyPos(key[depth], node);
 
-        if (!next)
+		if (!next)
 			return iteratorNext(iterator);
 
 		pos++;
-		node=next;
+		node = next;
 		depth++;
 	}
 }
-
 
 void ART::Update(ClientContext &context, vector<column_t> &update_columns, DataChunk &update_data,
                  Vector &row_identifiers) {
@@ -497,149 +496,151 @@ void ART::Update(ClientContext &context, vector<column_t> &update_columns, DataC
 	Insert(expression_result, row_identifiers);
 }
 
-void ART::SearchEqual(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state){
+void ART::SearchEqual(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state) {
 	auto row_ids = (int64_t *)result_identifiers->data;
 	switch (types[0]) {
-		case TypeId::BOOLEAN:
-			result_identifiers->count = templated_lookup<int8_t>(types[0], state->values[0].value_.boolean, row_ids);
-			break;
-		case TypeId::TINYINT:
-			result_identifiers->count = templated_lookup<int8_t>(types[0], state->values[0].value_.tinyint, row_ids);
-			break;
-		case TypeId::SMALLINT:
-			result_identifiers->count =
-					templated_lookup<int16_t>(types[0], state->values[0].value_.smallint, row_ids);
-			break;
-		case TypeId::INTEGER:
-			result_identifiers->count =
-					templated_lookup<int32_t>(types[0], state->values[0].value_.integer, row_ids);
-			break;
-		case TypeId::BIGINT:
-			result_identifiers->count = templated_lookup<int64_t>(types[0], state->values[0].value_.bigint, row_ids);
-			break;
-		default:
-			throw InvalidTypeException(types[0], "Invalid type for index");
+	case TypeId::TINYINT:
+		result_identifiers->count = templated_lookup<int8_t>(types[0], state->values[0].value_.tinyint, row_ids);
+		break;
+	case TypeId::SMALLINT:
+		result_identifiers->count = templated_lookup<int16_t>(types[0], state->values[0].value_.smallint, row_ids);
+		break;
+	case TypeId::INTEGER:
+		result_identifiers->count = templated_lookup<int32_t>(types[0], state->values[0].value_.integer, row_ids);
+		break;
+	case TypeId::BIGINT:
+		result_identifiers->count = templated_lookup<int64_t>(types[0], state->values[0].value_.bigint, row_ids);
+		break;
+	default:
+		throw InvalidTypeException(types[0], "Invalid type for index");
 	}
 }
 
-void ART::SearchGreater(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state, bool inclusive){
+void ART::SearchGreater(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool inclusive) {
 	auto row_ids = (int64_t *)result_identifiers->data;
 	switch (types[0]) {
-		case TypeId::BOOLEAN:
-			result_identifiers->count = templated_greater_scan<int8_t>(types[0], state->values[0].value_.boolean, row_ids,inclusive);
-			break;
-		case TypeId::TINYINT:
-			result_identifiers->count = templated_greater_scan<int8_t>(types[0], state->values[0].value_.tinyint, row_ids,inclusive);
-			break;
-		case TypeId::SMALLINT:
-			result_identifiers->count =
-					templated_greater_scan<int16_t>(types[0], state->values[0].value_.smallint, row_ids,inclusive);
-			break;
-		case TypeId::INTEGER:
-			result_identifiers->count =
-					templated_greater_scan<int32_t>(types[0], state->values[0].value_.integer, row_ids,inclusive);
-			break;
-		case TypeId::BIGINT:
-			result_identifiers->count = templated_greater_scan<int64_t>(types[0], state->values[0].value_.bigint, row_ids,inclusive);
-			break;
-		default:
-			throw InvalidTypeException(types[0], "Invalid type for index");
+	case TypeId::TINYINT:
+		result_identifiers->count =
+		    templated_greater_scan<int8_t>(types[0], state->values[0].value_.tinyint, row_ids, inclusive);
+		break;
+	case TypeId::SMALLINT:
+		result_identifiers->count =
+		    templated_greater_scan<int16_t>(types[0], state->values[0].value_.smallint, row_ids, inclusive);
+		break;
+	case TypeId::INTEGER:
+		result_identifiers->count =
+		    templated_greater_scan<int32_t>(types[0], state->values[0].value_.integer, row_ids, inclusive);
+		break;
+	case TypeId::BIGINT:
+		result_identifiers->count =
+		    templated_greater_scan<int64_t>(types[0], state->values[0].value_.bigint, row_ids, inclusive);
+		break;
+	default:
+		throw InvalidTypeException(types[0], "Invalid type for index");
 	}
 }
 
-void ART::SearchLess(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state, bool inclusive){
+void ART::SearchLess(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool inclusive) {
 	auto row_ids = (int64_t *)result_identifiers->data;
 	switch (types[0]) {
-		case TypeId::TINYINT:
-			result_identifiers->count = templated_less_scan<int8_t>(types[0], state->values[0].value_.tinyint, row_ids,inclusive);
-			break;
-		case TypeId::SMALLINT:
-			result_identifiers->count =
-					templated_less_scan<int16_t>(types[0], state->values[0].value_.smallint, row_ids,inclusive);
-			break;
-		case TypeId::INTEGER:
-			result_identifiers->count =
-					templated_less_scan<int32_t>(types[0], state->values[0].value_.integer, row_ids,inclusive);
-			break;
-		case TypeId::BIGINT:
-			result_identifiers->count = templated_less_scan<int64_t>(types[0], state->values[0].value_.bigint, row_ids,inclusive);
-			break;
-		default:
-			throw InvalidTypeException(types[0], "Invalid type for index");
+	case TypeId::TINYINT:
+		result_identifiers->count =
+		    templated_less_scan<int8_t>(types[0], state->values[0].value_.tinyint, row_ids, inclusive);
+		break;
+	case TypeId::SMALLINT:
+		result_identifiers->count =
+		    templated_less_scan<int16_t>(types[0], state->values[0].value_.smallint, row_ids, inclusive);
+		break;
+	case TypeId::INTEGER:
+		result_identifiers->count =
+		    templated_less_scan<int32_t>(types[0], state->values[0].value_.integer, row_ids, inclusive);
+		break;
+	case TypeId::BIGINT:
+		result_identifiers->count =
+		    templated_less_scan<int64_t>(types[0], state->values[0].value_.bigint, row_ids, inclusive);
+		break;
+	default:
+		throw InvalidTypeException(types[0], "Invalid type for index");
 	}
 }
 
-void ART::SearchCloseRange(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state, bool left_inclusive,bool right_inclusive){
+void ART::SearchCloseRange(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool left_inclusive,
+                           bool right_inclusive) {
 	auto row_ids = (int64_t *)result_identifiers->data;
 	switch (types[0]) {
-		case TypeId::TINYINT:
-			result_identifiers->count = templated_close_range<int8_t>(types[0], state->values[0].value_.tinyint,state->values[1].value_.tinyint, row_ids,left_inclusive,right_inclusive);
-			break;
-		case TypeId::SMALLINT:
-			result_identifiers->count =
-					templated_close_range<int16_t>(types[0], state->values[0].value_.smallint,state->values[1].value_.smallint, row_ids,left_inclusive,right_inclusive);
-			break;
-		case TypeId::INTEGER:
-			result_identifiers->count =
-					templated_close_range<int32_t>(types[0], state->values[0].value_.integer,state->values[1].value_.integer, row_ids,left_inclusive,right_inclusive);
-			break;
-		case TypeId::BIGINT:
-			result_identifiers->count = templated_close_range<int64_t>(types[0], state->values[0].value_.bigint,state->values[1].value_.bigint, row_ids,left_inclusive,right_inclusive);
-			break;
-		default:
-			throw InvalidTypeException(types[0], "Invalid type for index");
+	case TypeId::TINYINT:
+		result_identifiers->count =
+		    templated_close_range<int8_t>(types[0], state->values[0].value_.tinyint, state->values[1].value_.tinyint,
+		                                  row_ids, left_inclusive, right_inclusive);
+		break;
+	case TypeId::SMALLINT:
+		result_identifiers->count =
+		    templated_close_range<int16_t>(types[0], state->values[0].value_.smallint, state->values[1].value_.smallint,
+		                                   row_ids, left_inclusive, right_inclusive);
+		break;
+	case TypeId::INTEGER:
+		result_identifiers->count =
+		    templated_close_range<int32_t>(types[0], state->values[0].value_.integer, state->values[1].value_.integer,
+		                                   row_ids, left_inclusive, right_inclusive);
+		break;
+	case TypeId::BIGINT:
+		result_identifiers->count =
+		    templated_close_range<int64_t>(types[0], state->values[0].value_.bigint, state->values[1].value_.bigint,
+		                                   row_ids, left_inclusive, right_inclusive);
+		break;
+	default:
+		throw InvalidTypeException(types[0], "Invalid type for index");
 	}
 }
 
-//FIXME: Returning one tuple per time so deletes in different chunks do not break.
+// FIXME: Returning one tuple per time so deletes in different chunks do not break.
 void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) {
 	auto state = (ARTIndexScanState *)ss;
-    // scan the index
-	if (!state->checked){
-        assert(state->values[0].type == types[0]);
+	// scan the index
+	if (!state->checked) {
+		assert(state->values[0].type == types[0]);
 
-        //single predicate
-        if (state->values[1].is_null){
+		// single predicate
+		if (state->values[1].is_null) {
+			switch (state->expressions[0]) {
+			case ExpressionType::COMPARE_EQUAL:
+				SearchEqual(&state->result_identifiers, state);
+				break;
+			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+				SearchGreater(&state->result_identifiers, state, true);
+				break;
+			case ExpressionType::COMPARE_GREATERTHAN:
+				SearchGreater(&state->result_identifiers, state, false);
+				break;
+			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+				SearchLess(&state->result_identifiers, state, true);
+				break;
+			case ExpressionType::COMPARE_LESSTHAN:
+				SearchLess(&state->result_identifiers, state, false);
+				break;
+			default:
+				throw NotImplementedException("Operation not implemented");
+				break;
+			}
+		}
+		// two predicates
+		else {
+			assert(state->values[1].type == types[0]);
+			bool left_inclusive = state->expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
+			bool right_inclusive = state->expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
+			SearchCloseRange(&state->result_identifiers, state, left_inclusive, right_inclusive);
+		}
+		state->checked = true;
+	}
 
-            switch(state->expressions[0]){
-                case ExpressionType::COMPARE_EQUAL:
-                    SearchEqual(&state->result_identifiers,state);
-                    break;
-                case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-                    SearchGreater(&state->result_identifiers,state,true);
-                    break;
-                case ExpressionType::COMPARE_GREATERTHAN:
-                    SearchGreater(&state->result_identifiers,state,false);
-                    break;
-                case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-                    SearchLess(&state->result_identifiers,state,true);
-                    break;
-                case ExpressionType::COMPARE_LESSTHAN:
-                    SearchLess(&state->result_identifiers,state,false);
-                    break;
-                default:
-                    throw NotImplementedException("Operation not implemented");
-                    break;
-            }
-        }
-            //two predicates
-        else{
-            assert(state->values[1].type == types[0]);
-            bool left_inclusive = state->expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
-            bool right_inclusive = state->expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
-            SearchCloseRange(&state->result_identifiers,state,left_inclusive,right_inclusive);
-        }
-        state->checked = true;
-    }
+	// scan the index
+	if (state->current_tuple == state->result_identifiers.count)
+		return;
+	StaticVector<int64_t> result_identifiers_per_tuple;
+	auto row_id = (int64_t *)result_identifiers_per_tuple.data;
+	auto cur_row_id = (int64_t *)state->result_identifiers.data;
 
-    // scan the index
-    if (state->current_tuple == state->result_identifiers.count)
-        return;
-    StaticVector<int64_t> result_identifiers_per_tuple;
-    auto row_id = (int64_t *)result_identifiers_per_tuple.data;
-    auto cur_row_id = (int64_t *)state->result_identifiers.data;
-
-    row_id[0] = cur_row_id[state->current_tuple++];
-    result_identifiers_per_tuple.count++;
-    table.Fetch(transaction, result, state->column_ids, result_identifiers_per_tuple);
+	row_id[0] = cur_row_id[state->current_tuple++];
+	result_identifiers_per_tuple.count++;
+	table.Fetch(transaction, result, state->column_ids, result_identifiers_per_tuple);
 }

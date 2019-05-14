@@ -18,7 +18,7 @@ namespace duckdb {
 enum class IndexType {
 	INVALID = 0,     // invalid index type
 	ORDER_INDEX = 1, // Order Index
-	ART = 2        // ART-Tree
+	ART = 2          // ART-Tree
 };
 
 } // namespace duckdb

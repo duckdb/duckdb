@@ -37,8 +37,8 @@ public:
 	vector<column_t> column_ids;
 	//! Set of expressions to index by
 	vector<unique_ptr<Expression>> expressions;
-    //! Info for index creation
-    unique_ptr<CreateIndexInfo> info;
+	//! Info for index creation
+	unique_ptr<CreateIndexInfo> info;
 	//! Unbinded expressions to be used in the optimizer
 	vector<unique_ptr<Expression>> unbound_expressions;
 

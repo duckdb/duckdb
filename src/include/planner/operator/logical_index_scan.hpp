@@ -50,14 +50,13 @@ public:
 	size_t table_index;
 
 protected:
-    void ResolveTypes() {
-        if (column_ids.size() == 0) {
-            types = {TypeId::INTEGER};
-        } else {
-            types = tableref.GetTypes(column_ids);
-        }
-    }
-
+	void ResolveTypes() {
+		if (column_ids.size() == 0) {
+			types = {TypeId::INTEGER};
+		} else {
+			types = tableref.GetTypes(column_ids);
+		}
+	}
 };
 
 } // namespace duckdb

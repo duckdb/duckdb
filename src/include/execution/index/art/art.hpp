@@ -25,14 +25,14 @@
 
 namespace duckdb {
 struct ARTIndexScanState : public IndexScanState {
-    ARTIndexScanState(vector<column_t> column_ids) : IndexScanState(column_ids), checked(false) {
-    }
+	ARTIndexScanState(vector<column_t> column_ids) : IndexScanState(column_ids), checked(false) {
+	}
 
 	Value values[2];
 	ExpressionType expressions[2];
 	bool checked;
-    StaticVector<int64_t> result_identifiers;
-    uint64_t current_tuple = 0;
+	StaticVector<int64_t> result_identifiers;
+	uint64_t current_tuple = 0;
 };
 
 struct IteratorEntry {
@@ -42,13 +42,12 @@ struct IteratorEntry {
 
 struct Iterator {
 	//! The current Leaf Node, valid if depth>0
-    Leaf *node;
+	Leaf *node;
 	//! The current depth
 	uint32_t depth;
 	//! Stack, actually the size is determined at runtime
 	IteratorEntry stack[9];
 };
-
 
 class ART : public Index {
 public:
@@ -104,31 +103,32 @@ public:
 
 private:
 	//! Insert the leaf value into the tree
-	void insert(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned depth, uintptr_t value,
+	void insert(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t value,
 	            unsigned maxKeyLength, TypeId type, uint64_t row_id);
 
 	//! Erase element from leaf (if leaf has more than one value) or eliminate the leaf itself
-	void erase(bool isLittleEndian, unique_ptr<Node>& node, Key &key, unsigned depth, unsigned maxKeyLength,
-               TypeId type, uint64_t row_id);
+	void erase(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned depth, unsigned maxKeyLength,
+	           TypeId type, uint64_t row_id);
 
 	//! Check if the key of the leaf is equal to the searched key
 	bool leafMatches(bool is_little_endian, Node *node, Key &key, unsigned keyLength, unsigned depth);
 
 	//! Find the node with a matching key, optimistic version
-	Node * lookup(unique_ptr<Node>& node, Key &key, unsigned keyLength, unsigned depth);
+	Node *lookup(unique_ptr<Node> &node, Key &key, unsigned keyLength, unsigned depth);
 
 	//! Find the iterator position for bound queries
-	bool bound(unique_ptr<Node>& node,Key &key,unsigned keyLength,Iterator& iterator,unsigned maxKeyLength,bool inclusive, bool isLittleEndian);
+	bool bound(unique_ptr<Node> &node, Key &key, unsigned keyLength, Iterator &iterator, unsigned maxKeyLength,
+	           bool inclusive, bool isLittleEndian);
 
 	//! Gets next node for range queries
-	bool iteratorNext(Iterator& iter);
-
+	bool iteratorNext(Iterator &iter);
 
 	template <class T> void templated_insert(DataChunk &input, Vector &row_ids) {
 		auto input_data = (T *)input.data[0].data;
 		auto row_identifiers = (int64_t *)row_ids.data;
 		for (uint64_t i = 0; i < row_ids.count; i++) {
-			auto key = make_unique<Key>(this->is_little_endian, input.data[0].type, input_data[i],sizeof(input_data[i]));
+			auto key =
+			    make_unique<Key>(this->is_little_endian, input.data[0].type, input_data[i], sizeof(input_data[i]));
 			insert(this->is_little_endian, tree, *key, 0, input_data[i], sizeof(input_data[i]), input.data[0].type,
 			       row_identifiers[i]);
 		}
@@ -138,14 +138,15 @@ private:
 		auto input_data = (T *)input.data[0].data;
 		auto row_identifiers = (int64_t *)row_ids.data;
 		for (uint64_t i = 0; i < row_ids.count; i++) {
-            auto key = make_unique<Key>(this->is_little_endian, input.data[0].type, input_data[i],sizeof(input_data[i]));
-            erase(this->is_little_endian, tree, *key, 0, sizeof(input_data[i]), input.data[0].type, row_identifiers[i]);
+			auto key =
+			    make_unique<Key>(this->is_little_endian, input.data[0].type, input_data[i], sizeof(input_data[i]));
+			erase(this->is_little_endian, tree, *key, 0, sizeof(input_data[i]), input.data[0].type, row_identifiers[i]);
 		}
 	}
 
 	template <class T> uint64_t templated_lookup(TypeId type, T data, int64_t *result_ids) {
-        auto key = make_unique<Key>(this->is_little_endian, type, data,sizeof(data));
-        uint64_t result_count = 0;
+		auto key = make_unique<Key>(this->is_little_endian, type, data, sizeof(data));
+		uint64_t result_count = 0;
 		auto leaf = static_cast<Leaf *>(lookup(tree, *key, this->maxPrefix, 0));
 		if (leaf) {
 			for (uint64_t i = 0; i < leaf->num_elements; i++) {
@@ -155,67 +156,70 @@ private:
 		return result_count;
 	}
 
-	template <class T> uint64_t templated_greater_scan(TypeId type, T data, int64_t *result_ids,bool inclusive) {
+	template <class T> uint64_t templated_greater_scan(TypeId type, T data, int64_t *result_ids, bool inclusive) {
 		Iterator it;
-        auto key = make_unique<Key>(this->is_little_endian, type, data,sizeof(data));
+		auto key = make_unique<Key>(this->is_little_endian, type, data, sizeof(data));
 
-        uint64_t result_count = 0;
-		bool found=ART::bound(tree,*key,sizeof(data),it,sizeof(data),inclusive,is_little_endian);
+		uint64_t result_count = 0;
+		bool found = ART::bound(tree, *key, sizeof(data), it, sizeof(data), inclusive, is_little_endian);
 		if (found) {
 			bool hasNext;
 			do {
 				for (uint64_t i = 0; i < it.node->num_elements; i++) {
 					result_ids[result_count++] = it.node->row_id[i];
 				}
-				hasNext=ART::iteratorNext(it);
-			} while (hasNext && it.node->value >= (uint64_t) data);
+				hasNext = ART::iteratorNext(it);
+			} while (hasNext && it.node->value >= (uint64_t)data);
 		}
 		return result_count;
 	}
 
-    template <class T> uint64_t templated_less_scan(TypeId type, T data, int64_t *result_ids,bool inclusive) {
-        Iterator it;
-		uint64_t result_count = 0;
-        auto min_value = Node::minimum(tree)->get();
-        auto key = make_unique<Key>(this->is_little_endian, type, data,sizeof(data));
-        Leaf* minimum = static_cast<Leaf *>(min_value);
-        auto min_key = make_unique<Key>(this->is_little_endian, type, minimum->value,sizeof(data));
-
-        // early out min value higher than upper bound query
-        if (*min_key > *key)
-            return result_count;
-        bool found=ART::bound(tree,*min_key,sizeof(data),it,sizeof(data),true,is_little_endian);
-        if (found) {
-            bool hasNext;
-            do {
-                for (uint64_t i = 0; i < it.node->num_elements; i++) {
-                    result_ids[result_count++] = it.node->row_id[i];
-                }
-				if(it.node->value == (uint64_t)data)
-					break;
-				hasNext=ART::iteratorNext(it);
-				if(!inclusive && it.node->value == (uint64_t)data)
-					break;
-            } while (hasNext);
-        }
-        return result_count;
-    }
-
-	template <class T> uint64_t templated_close_range(TypeId type, T left_query,T right_query, int64_t *result_ids,bool left_inclusive, bool right_inclusive) {
+	template <class T> uint64_t templated_less_scan(TypeId type, T data, int64_t *result_ids, bool inclusive) {
 		Iterator it;
-        auto key = make_unique<Key>(this->is_little_endian, type, left_query,sizeof(left_query));
 		uint64_t result_count = 0;
-		bool found=ART::bound(tree,*key,sizeof(left_query),it,sizeof(left_query),left_inclusive,is_little_endian);
+		auto min_value = Node::minimum(tree)->get();
+		auto key = make_unique<Key>(this->is_little_endian, type, data, sizeof(data));
+		Leaf *minimum = static_cast<Leaf *>(min_value);
+		auto min_key = make_unique<Key>(this->is_little_endian, type, minimum->value, sizeof(data));
+
+		// early out min value higher than upper bound query
+		if (*min_key > *key)
+			return result_count;
+		bool found = ART::bound(tree, *min_key, sizeof(data), it, sizeof(data), true, is_little_endian);
 		if (found) {
 			bool hasNext;
 			do {
 				for (uint64_t i = 0; i < it.node->num_elements; i++) {
 					result_ids[result_count++] = it.node->row_id[i];
 				}
-				if(it.node->value == (uint64_t )right_query)
+				if (it.node->value == (uint64_t)data)
 					break;
-				hasNext=ART::iteratorNext(it);
-				if(!right_inclusive && it.node->value == (uint64_t)right_query)
+				hasNext = ART::iteratorNext(it);
+				if (!inclusive && it.node->value == (uint64_t)data)
+					break;
+			} while (hasNext);
+		}
+		return result_count;
+	}
+
+	template <class T>
+	uint64_t templated_close_range(TypeId type, T left_query, T right_query, int64_t *result_ids, bool left_inclusive,
+	                               bool right_inclusive) {
+		Iterator it;
+		auto key = make_unique<Key>(this->is_little_endian, type, left_query, sizeof(left_query));
+		uint64_t result_count = 0;
+		bool found =
+		    ART::bound(tree, *key, sizeof(left_query), it, sizeof(left_query), left_inclusive, is_little_endian);
+		if (found) {
+			bool hasNext;
+			do {
+				for (uint64_t i = 0; i < it.node->num_elements; i++) {
+					result_ids[result_count++] = it.node->row_id[i];
+				}
+				if (it.node->value == (uint64_t)right_query)
+					break;
+				hasNext = ART::iteratorNext(it);
+				if (!right_inclusive && it.node->value == (uint64_t)right_query)
 					break;
 
 			} while (hasNext);
@@ -225,11 +229,11 @@ private:
 
 	DataChunk expression_result;
 
-    void SearchEqual(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state);
-	void SearchGreater(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state, bool inclusive);
-    void SearchLess(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state, bool inclusive);
-	void SearchCloseRange(StaticVector<int64_t> *result_identifiers,ARTIndexScanState * state, bool left_inclusive,bool right_inclusive);
-
-	};
+	void SearchEqual(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state);
+	void SearchGreater(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool inclusive);
+	void SearchLess(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool inclusive);
+	void SearchCloseRange(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool left_inclusive,
+	                      bool right_inclusive);
+};
 
 } // namespace duckdb

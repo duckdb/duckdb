@@ -33,22 +33,23 @@ public:
 		this->prefix = unique_ptr<uint8_t[]>(new uint8_t[maxPrefixLength]);
 		this->maxPrefixLength = maxPrefixLength;
 	}
-	virtual ~Node(){}
+	virtual ~Node() {
+	}
 
 	//! Copies the prefix from the source to the destination node
 	static void copyPrefix(Node *src, Node *dst);
 	//! Find the leaf with smallest element in the tree
-	static unique_ptr<Node>* minimum(unique_ptr<Node>& node);
+	static unique_ptr<Node> *minimum(unique_ptr<Node> &node);
 	//! Find the next child for the keyByte
-	static unique_ptr<Node>* findChild(const uint8_t k, unique_ptr<Node>& node);
-    static int findKeyPos(const uint8_t k, Node* node);
-    static Node *findChild(const uint8_t k, Node *node);
+	static unique_ptr<Node> *findChild(const uint8_t k, unique_ptr<Node> &node);
+	static int findKeyPos(const uint8_t k, Node *node);
+	static Node *findChild(const uint8_t k, Node *node);
 
 	//! Compare the key with the prefix of the node, return the number matching bytes
 	static unsigned prefixMismatch(bool isLittleEndian, Node *node, Key &key, uint64_t depth, unsigned maxKeyLength,
 	                               TypeId type);
 	//! Insert leaf into inner node
-	static void insertLeaf(unique_ptr<Node>& node, uint8_t key,unique_ptr<Node>&  newNode);
+	static void insertLeaf(unique_ptr<Node> &node, uint8_t key, unique_ptr<Node> &newNode);
 	//! Compare two elements and return the smaller
 	static unsigned min(unsigned a, unsigned b);
 };
@@ -60,8 +61,7 @@ public:
 	uint64_t num_elements;
 	unique_ptr<uint64_t[]> row_id;
 
-    Leaf(uint64_t value, uint64_t row_id, uint8_t maxPrefixLength) : Node(NodeType::NLeaf, maxPrefixLength) {
-        this->prefix = unique_ptr<uint8_t[]>(new uint8_t[0]);
+	Leaf(uint64_t value, uint64_t row_id, uint8_t maxPrefixLength) : Node(NodeType::NLeaf, maxPrefixLength) {
 		this->value = value;
 		this->capacity = 1;
 		this->row_id = unique_ptr<uint64_t[]>(new uint64_t[this->capacity]);
@@ -69,7 +69,7 @@ public:
 		this->num_elements = 1;
 	}
 
-    static void insert(Leaf *leaf, uint64_t row_id) {
+	static void insert(Leaf *leaf, uint64_t row_id) {
 		// Grow array
 		if (leaf->num_elements == leaf->capacity) {
 			auto new_row_id = unique_ptr<uint64_t[]>(new uint64_t[leaf->capacity * 2]);

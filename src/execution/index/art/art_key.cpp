@@ -15,7 +15,6 @@
 	            (((uint64_t)(x)&0x00000000ff000000ull) << 8) | (((uint64_t)(x)&0x0000000000ff0000ull) << 24) |         \
 	            (((uint64_t)(x)&0x000000000000ff00ull) << 40) | (((uint64_t)(x)&0x00000000000000ffull) << 56)))
 
-
 void Key::convert_to_binary_comparable(bool isLittleEndian, TypeId type, uintptr_t tid) {
 	switch (type) {
 	case TypeId::TINYINT:
@@ -46,7 +45,7 @@ void Key::convert_to_binary_comparable(bool isLittleEndian, TypeId type, uintptr
 		data[0] = flipSign(data[0]);
 		break;
 	case TypeId::BIGINT:
-		            len = 8;
+		len = 8;
 		if (isLittleEndian) {
 			reinterpret_cast<uint64_t *>(data.get())[0] = BSWAP64(tid);
 		} else {

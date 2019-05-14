@@ -20,10 +20,12 @@
 using namespace duckdb;
 using namespace std;
 
-TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info, std::shared_ptr<DataTable> inherited_storage)
-    : CatalogEntry(CatalogType::TABLE, catalog, info->base->table), schema(schema), storage(inherited_storage), columns(move(info->base->columns)),
-	constraints(move(info->base->constraints)), bound_constraints(move(info->bound_constraints)), bound_defaults(move(info->bound_defaults)),
-	name_map(info->name_map) {
+TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
+                                     std::shared_ptr<DataTable> inherited_storage)
+    : CatalogEntry(CatalogType::TABLE, catalog, info->base->table), schema(schema), storage(inherited_storage),
+      columns(move(info->base->columns)), constraints(move(info->base->constraints)),
+      bound_constraints(move(info->bound_constraints)), bound_defaults(move(info->bound_defaults)),
+      name_map(info->name_map) {
 	// add the "rowid" alias, if there is no rowid column specified in the table
 	if (name_map.find("rowid") == name_map.end()) {
 		name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
@@ -32,17 +34,18 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 		// create the physical storage
 		storage = make_shared<DataTable>(catalog->storage, schema->name, name, GetTypes());
 		// create the unique indexes for the UNIQUE and PRIMARY KEY constraints
-		for(auto &constraint : bound_constraints) {
+		for (auto &constraint : bound_constraints) {
 			if (constraint->type == ConstraintType::UNIQUE) {
 				vector<TypeId> types;
-				auto &unique = (BoundUniqueConstraint&) *constraint;
+				auto &unique = (BoundUniqueConstraint &)*constraint;
 				// fetch the types from the columns
-				for(auto key : unique.keys) {
+				for (auto key : unique.keys) {
 					assert(key < columns.size());
 					types.push_back(GetInternalType(columns[key].type));
 				}
 				// initialize the index with the parsed data
-				storage->unique_indexes.push_back(make_unique<UniqueIndex>(*storage, types, unique.keys, !unique.is_primary_key));
+				storage->unique_indexes.push_back(
+				    make_unique<UniqueIndex>(*storage, types, unique.keys, !unique.is_primary_key));
 			}
 		}
 	}

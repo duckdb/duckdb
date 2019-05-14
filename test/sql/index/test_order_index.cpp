@@ -6,8 +6,6 @@
 using namespace duckdb;
 using namespace std;
 
-
-
 TEST_CASE("Index creation on an expression", "[orderidx-index]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
