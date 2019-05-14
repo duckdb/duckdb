@@ -345,7 +345,7 @@ void CheckpointManager::FlushBlock(uint64_t column_index) {
 void CheckpointManager::ReadTableData(ClientContext &context, TableCatalogEntry &table, MetaBlockReader &reader) {
 	assert(blocks.size() == 0 && offsets.size() == 0 && tuple_counts.size() == 0 && indexes.size() == 0 && data_pointers.size() == 0);
 
-	uint64_t column_count = table.columns.size();
+	count_t column_count = table.columns.size();
 	assert(column_count > 0);
 
 	// load the data pointers for the table
@@ -360,7 +360,7 @@ void CheckpointManager::ReadTableData(ClientContext &context, TableCatalogEntry 
 	offsets.resize(column_count);
 	tuple_counts.resize(column_count);
 	indexes.resize(column_count);
-	for(uint64_t col = 0; col < column_count; col++) {
+	for(index_t col = 0; col < column_count; col++) {
 		ReadBlock(col, 0);
 	}
 
@@ -376,11 +376,11 @@ void CheckpointManager::ReadTableData(ClientContext &context, TableCatalogEntry 
 	while(true) {
 		// construct a DataChunk by loading tuples from each of the columns
 		insert_chunk.Reset();
-		for(uint64_t col = 0; col < column_count; col++) {
+		for(index_t col = 0; col < column_count; col++) {
 			TypeId type = insert_chunk.data[col].type;
 			if (TypeIsConstantSize(type)) {
 				while(insert_chunk.data[col].count < STANDARD_VECTOR_SIZE) {
-					uint64_t tuples_left = data_pointers[col][indexes[col]].tuple_count - tuple_counts[col];
+					count_t tuples_left = data_pointers[col][indexes[col]].tuple_count - tuple_counts[col];
 					if (tuples_left == 0) {
 						// no tuples left in this block
 						// move to next block
@@ -392,7 +392,7 @@ void CheckpointManager::ReadTableData(ClientContext &context, TableCatalogEntry 
 						tuples_left = data_pointers[col][indexes[col]].tuple_count - tuple_counts[col];
 					}
 					Vector storage_vector(types[col], blocks[col]->buffer + offsets[col]);
-					storage_vector.count = std::min((uint64_t) STANDARD_VECTOR_SIZE, tuples_left);
+					storage_vector.count = std::min((count_t) STANDARD_VECTOR_SIZE, tuples_left);
 					VectorOperations::AppendFromStorage(storage_vector, insert_chunk.data[col]);
 
 					tuple_counts[col] += storage_vector.count;
