@@ -8,6 +8,7 @@ using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinct(unique_ptr<PhysicalOperator> child) {
 	assert(child);
+	// TODO: check whether the distinct has the ON clause in this case we group by the the given target
 	// create a PhysicalHashAggregate that groups by the input columns
 	auto &types = child->GetTypes();
 	vector<unique_ptr<Expression>> groups, expressions;

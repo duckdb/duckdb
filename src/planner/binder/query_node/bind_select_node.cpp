@@ -4,6 +4,7 @@
 #include "parser/query_node/select_node.hpp"
 #include "parser/tableref/joinref.hpp"
 #include "planner/binder.hpp"
+#include "planner/expression_binder/distinct_binder.hpp"
 #include "planner/expression_binder/group_binder.hpp"
 #include "planner/expression_binder/having_binder.hpp"
 #include "planner/expression_binder/order_binder.hpp"
@@ -59,6 +60,19 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 			alias_map[expr->alias] = i;
 		}
 		projection_map[expr.get()] = i;
+	}
+
+	// we bind the DISTINCT ON before we bind any order, aggregations or window functions
+	for (index_t i = 0; i < statement.distinct_on_targets.size(); i++) {
+		DistinctBinder distinct_binder(result->projection_index, statement, alias_map, projection_map);
+		auto bound_expr = distinct_binder.Bind(move(statement.distinct_on_targets[i]));
+		if (!bound_expr) {
+			// DISTINCT ON non-integer constant
+			// remove the expression from the  DISTINCT ON list
+			continue;
+		}
+		assert(bound_expr->type == ExpressionType::BOUND_COLUMN_REF);
+		result->target_distincts.push_back(move(bound_expr));
 	}
 
 	// we bind the ORDER BY before we bind any aggregations or window functions

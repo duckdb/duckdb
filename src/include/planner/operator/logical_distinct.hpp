@@ -31,6 +31,8 @@ public:
 	string ParamsToString() const override;
 
 protected:
-	void ResolveTypes() override;
+	void ResolveTypes() override {
+		types = children[0]->types;
+	}
 };
 } // namespace duckdb

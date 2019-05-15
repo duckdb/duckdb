@@ -66,4 +66,14 @@ TEST_CASE("Test DISTINCT ON", "[distinct]") {
 	result = con.Query("SELECT DISTINCT ON (i) i, j FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {4, 7}));
+
+	result = con.Query("SELECT DISTINCT ON (1) i, j FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4, 7}));
+
+	result = con.Query("SELECT DISTINCT ON (2) i, j FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 4, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4, 6, 7}));
+
+	REQUIRE_FAIL(con.Query("SELECT DISTINCT ON (2) i FROM integers"));
 }

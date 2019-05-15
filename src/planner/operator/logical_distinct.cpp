@@ -6,15 +6,15 @@ using namespace std;
 using namespace duckdb;
 using namespace std;
 
-void LogicalDistinct::ResolveTypes() {
-	for (auto &expr : distinct_targets) {
-		types.push_back(expr->return_type);
-	}
-	// get the chunk types from the projection list
-	for (auto &expr : expressions) {
-		types.push_back(expr->return_type);
-	}
-}
+/*void LogicalDistinct::ResolveTypes() {
+    for (auto &expr : distinct_targets) {
+        types.push_back(expr->return_type);
+    }
+    // get the chunk types from the projection list
+    for (auto &expr : expressions) {
+        types.push_back(expr->return_type);
+    }
+}*/
 
 count_t LogicalDistinct::ExpressionCount() {
 	return expressions.size() + distinct_targets.size();
