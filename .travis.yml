@@ -272,7 +272,6 @@ matrix:
       osx_image: xcode10.2
 
       script:
-        - export CPATH=/Library/Developer/CommandLineTools/usr/include/c++/v1
         - pip install cibuildwheel==0.10.2
         - cd tools/pythonpkg
         - python setup.py sdist
