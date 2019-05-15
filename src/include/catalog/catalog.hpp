@@ -17,7 +17,7 @@
 namespace duckdb {
 struct CreateSchemaInfo;
 struct DropInfo;
-struct CreateTableInfo;
+struct BoundCreateTableInfo;
 struct AlterTableInfo;
 struct CreateTableFunctionInfo;
 struct CreateScalarFunctionInfo;
@@ -43,12 +43,12 @@ public:
 	void DropSchema(Transaction &transaction, DropInfo *info);
 
 	//! Creates a table in the catalog.
-	void CreateTable(Transaction &transaction, CreateTableInfo *info);
+	void CreateTable(Transaction &transaction, BoundCreateTableInfo *info);
 	//! Drops a table from the catalog.
 	void DropTable(Transaction &transaction, DropInfo *info);
 
 	//! Alter an existing table in the catalog.
-	void AlterTable(Transaction &transaction, AlterTableInfo *info);
+	void AlterTable(ClientContext &context, AlterTableInfo *info);
 	//! Create a table function in the catalog
 	void CreateTableFunction(Transaction &transaction, CreateTableFunctionInfo *info);
 	//! Create a scalar function in the catalog

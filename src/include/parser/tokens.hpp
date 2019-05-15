@@ -66,7 +66,7 @@ class Constraint;
 
 class NotNullConstraint;
 class CheckConstraint;
-class ParsedConstraint;
+class UniqueConstraint;
 
 //===--------------------------------------------------------------------===//
 // TableRefs

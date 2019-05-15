@@ -14,6 +14,7 @@
 #include "parser/parsed_data/create_table_info.hpp"
 #include "parser/parsed_data/create_view_info.hpp"
 #include "parser/parsed_data/drop_info.hpp"
+#include "planner/parsed_data/bound_create_table_info.hpp"
 #include "planner/binder.hpp"
 #include "storage/data_table.hpp"
 #include "transaction/transaction.hpp"
@@ -184,10 +185,10 @@ bool ReplayCreateTable(ClientContext &context, Catalog &catalog, Deserializer &s
 
 	// bind the constraints to the table again
 	Binder binder(context);
-	binder.BindConstraints(info->table, info->columns, info->constraints);
+	auto bound_info = binder.BindCreateTableInfo(move(info));
 
 	// try {
-	catalog.CreateTable(context.ActiveTransaction(), info.get());
+	catalog.CreateTable(context.ActiveTransaction(), bound_info.get());
 	// catch(...) {
 	//	return false
 	//}

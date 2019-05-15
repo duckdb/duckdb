@@ -36,7 +36,7 @@ public:
 	bool CreateEntry(Transaction &transaction, const string &name, unique_ptr<CatalogEntry> value,
 	                 unordered_set<CatalogEntry *> &dependencies);
 
-	bool AlterEntry(Transaction &transaction, const string &name, AlterInfo *alter_info);
+	bool AlterEntry(ClientContext &context, const string &name, AlterInfo *alter_info);
 
 	bool DropEntry(Transaction &transaction, const string &name, bool cascade);
 	//! Returns the entry with the specified name

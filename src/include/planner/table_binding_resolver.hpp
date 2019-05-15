@@ -45,6 +45,7 @@ protected:
 	void Visit(LogicalCrossProduct &op);
 	void Visit(LogicalChunkGet &op);
 	void Visit(LogicalGet &op);
+	void Visit(LogicalIndexScan &op);
 	void Visit(LogicalProjection &op);
 	void Visit(LogicalSetOperation &op);
 	void Visit(LogicalSubquery &op);

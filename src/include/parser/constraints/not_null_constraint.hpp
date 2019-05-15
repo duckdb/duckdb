@@ -22,9 +22,9 @@ public:
 	index_t index;
 
 public:
-	string ToString() const override {
-		return "NOT NULL Constraint";
-	}
+	string ToString() const override;
+
+	unique_ptr<Constraint> Copy() override;
 
 	//! Serialize to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;

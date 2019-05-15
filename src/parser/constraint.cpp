@@ -8,28 +8,19 @@
 using namespace duckdb;
 using namespace std;
 
-// FIXME: this is quite dirty, just copy by first serializing and then
-// deserializing
-unique_ptr<Constraint> Constraint::Copy() {
-	BufferedSerializer serializer;
-	Serialize(serializer);
-	BufferedDeserializer source(serializer);
-	return Constraint::Deserialize(source);
-}
-
 void Constraint::Serialize(Serializer &serializer) {
-	serializer.Write<int>((int)type);
+	serializer.Write<ConstraintType>(type);
 }
 
 unique_ptr<Constraint> Constraint::Deserialize(Deserializer &source) {
-	auto type = (ConstraintType)source.Read<int>();
+	auto type = source.Read<ConstraintType>();
 	switch (type) {
 	case ConstraintType::NOT_NULL:
 		return NotNullConstraint::Deserialize(source);
 	case ConstraintType::CHECK:
 		return CheckConstraint::Deserialize(source);
-	case ConstraintType::DUMMY:
-		return ParsedConstraint::Deserialize(source);
+	case ConstraintType::UNIQUE:
+		return UniqueConstraint::Deserialize(source);
 	default:
 		// don't know how to serialize this constraint type
 		return nullptr;
