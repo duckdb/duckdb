@@ -8,7 +8,6 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <string.h>
 
 typedef uintptr_t Datum;
 typedef uint64_t Size;
