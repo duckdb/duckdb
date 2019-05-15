@@ -5,6 +5,8 @@
 #include "parser/tableref/basetableref.hpp"
 #include "parser/transformer.hpp"
 
+#include <cstring>
+
 using namespace duckdb;
 using namespace postgres;
 using namespace std;

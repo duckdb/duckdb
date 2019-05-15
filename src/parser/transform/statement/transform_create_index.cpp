@@ -11,8 +11,10 @@ static IndexType StringToIndexType(const string &str) {
 	string upper_str = StringUtil::Upper(str);
 	if (upper_str == "INVALID") {
 		return IndexType::INVALID;
-	} else if (upper_str == "BTREE") {
-		return IndexType::BTREE;
+	} else if (upper_str == "ART") {
+		return IndexType::ART;
+	} else if (upper_str == "ORDER_INDEX") {
+		return IndexType::ORDER_INDEX;
 	} else {
 		throw ConversionException(StringUtil::Format("No IndexType conversion from string '%s'", upper_str.c_str()));
 	}
@@ -38,7 +40,8 @@ unique_ptr<CreateIndexStatement> Transformer::TransformCreateIndex(Node *node) {
 
 		if (index_element->name) {
 			// create a column reference expression
-			result->expressions.push_back(make_unique<ColumnRefExpression>(index_element->name));
+			result->expressions.push_back(
+			    make_unique<ColumnRefExpression>(index_element->name, stmt->relation->relname));
 		} else {
 			// parse the index expression
 			assert(index_element->expr);

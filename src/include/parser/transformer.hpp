@@ -18,6 +18,7 @@ namespace postgres {
 #include "pg_definitions.h"
 // don't reorder
 #include "nodes/parsenodes.h"
+
 } // namespace postgres
 
 namespace duckdb {

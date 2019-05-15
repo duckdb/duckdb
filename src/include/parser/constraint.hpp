@@ -19,13 +19,11 @@ class Deserializer;
 // Constraint Types
 //===--------------------------------------------------------------------===//
 enum class ConstraintType : uint8_t {
-	INVALID = 0,     // invalid constraint type
-	NOT_NULL = 1,    // NOT NULL constraint
-	CHECK = 2,       // CHECK constraint
-	PRIMARY_KEY = 3, // PRIMARY KEY constraint
-	UNIQUE = 4,      // UNIQUE constraint
-	FOREIGN_KEY = 5, // FOREIGN KEY constraint
-	DUMMY = 6        // Dummy constraint used by parser
+	INVALID = 0,    // invalid constraint type
+	NOT_NULL = 1,   // NOT NULL constraint
+	CHECK = 2,      // CHECK constraint
+	UNIQUE = 3,     // UNIQUE constraint
+	FOREIGN_KEY = 4 // FOREIGN KEY constraint
 };
 
 //! Constraint is the base class of any type of table constraint.
@@ -41,7 +39,7 @@ public:
 	virtual string ToString() const = 0;
 	void Print();
 
-	virtual unique_ptr<Constraint> Copy();
+	virtual unique_ptr<Constraint> Copy() = 0;
 	//! Serializes a Constraint to a stand-alone binary blob
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes a blob back into a Constraint, returns NULL if

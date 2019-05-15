@@ -15,6 +15,7 @@
 #include "planner/operator/logical_explain.hpp"
 #include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_get.hpp"
+#include "planner/operator/logical_index_scan.hpp"
 #include "planner/operator/logical_insert.hpp"
 #include "planner/operator/logical_join.hpp"
 #include "planner/operator/logical_limit.hpp"

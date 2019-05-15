@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/order_index.hpp
+// execution/index/order_index.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -31,7 +31,8 @@ struct OrderIndexScanState : public IndexScanState {
 class OrderIndex : public Index {
 public:
 	OrderIndex(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, vector<TypeId> expression_types,
-	           vector<unique_ptr<Expression>> expressions, count_t initial_capacity);
+	           vector<unique_ptr<Expression>> expressions, count_t initial_capacity,
+	           vector<unique_ptr<Expression>> unbound_expressions);
 
 	//! Appends data into the index, but does not perform the sort yet! This can
 	//! be done separately by calling the OrderIndex::Sort() method
@@ -61,6 +62,11 @@ public:
 	void Update(ClientContext &context, vector<column_t> &column_ids, DataChunk &update_data,
 	            Vector &row_identifiers) override;
 
+	//! TODO: Implement Delete for Order Index
+	void Delete(DataChunk &entries, Vector &row_identifiers) override {
+		throw NotImplementedException("Delete is unimplemented for Order Index");
+	};
+
 	//! Lock used for updating the index
 	std::mutex lock;
 	//! The table
@@ -69,8 +75,6 @@ public:
 	vector<column_t> column_ids;
 	//! Types of the column identifiers
 	vector<TypeId> types;
-	//! The expressions to evaluate
-	vector<unique_ptr<Expression>> expressions;
 	//! The size of one tuple
 	count_t tuple_size;
 	//! The big sorted list

@@ -1,5 +1,6 @@
 #include "parser/statement/create_table_statement.hpp"
 #include "parser/transformer.hpp"
+#include "parser/constraint.hpp"
 
 using namespace duckdb;
 using namespace postgres;

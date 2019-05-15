@@ -3,6 +3,7 @@
 #include "catalog/catalog.hpp"
 #include "common/exception.hpp"
 #include "transaction/transaction_manager.hpp"
+#include "main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -61,7 +62,8 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, uniqu
 	return true;
 }
 
-bool CatalogSet::AlterEntry(Transaction &transaction, const string &name, AlterInfo *alter_info) {
+bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInfo *alter_info) {
+	auto &transaction = context.ActiveTransaction();
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.write_lock);
 
@@ -85,7 +87,7 @@ bool CatalogSet::AlterEntry(Transaction &transaction, const string &name, AlterI
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
 	// and point it to the updated table node
-	auto value = current.AlterEntry(alter_info);
+	auto value = current.AlterEntry(context, alter_info);
 
 	// now transfer all dependencies from the old table to the new table
 	catalog.dependency_manager.AlterObject(transaction, data[name].get(), value.get());

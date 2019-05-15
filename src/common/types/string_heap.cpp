@@ -1,6 +1,7 @@
 #include "common/types/string_heap.hpp"
 
 #include "common/exception.hpp"
+#include <cstring>
 
 using namespace duckdb;
 using namespace std;

@@ -1,15 +1,16 @@
+#include "parser/constraints/unique_constraint.hpp"
+
 #include "common/serializer.hpp"
-#include "parser/constraints/parsed_constraint.hpp"
 
 using namespace std;
 using namespace duckdb;
 
-string UniqueConstraint::ToString() const override {
+string UniqueConstraint::ToString() const {
 	return is_primary_key ? "PRIMARY KEY constraint" : "UNIQUE Constraint";
 }
 
 unique_ptr<Constraint> UniqueConstraint::Copy() {
-	if (index == (uint64_t)-1) {
+	if (index == INVALID_INDEX) {
 		return make_unique<UniqueConstraint>(columns, is_primary_key);
 	} else {
 		assert(columns.size() == 0);
@@ -33,7 +34,7 @@ unique_ptr<Constraint> UniqueConstraint::Deserialize(Deserializer &source) {
 	auto index = source.Read<uint64_t>();
 	auto column_count = source.Read<uint32_t>();
 
-	if (index != (uint64_t)-1) {
+	if (index != INVALID_INDEX) {
 		// single column parsed constraint
 		return make_unique<UniqueConstraint>(index, is_primary_key);
 	} else {

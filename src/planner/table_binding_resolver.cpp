@@ -73,6 +73,8 @@ void TableBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::CREATE_INDEX:
 		Visit((LogicalCreateIndex &)op);
 		break;
+	case LogicalOperatorType::INDEX_SCAN:
+		Visit((LogicalIndexScan &)op);
 	default:
 		// for the operators we do not handle explicitly, we just visit the children
 		LogicalOperatorVisitor::VisitOperator(op);
@@ -226,6 +228,18 @@ void TableBindingResolver::Visit(LogicalGet &op) {
 		binding.table_index = op.table_index;
 		binding.column_count = op.column_ids.size();
 	}
+	PushBinding(binding);
+}
+
+void TableBindingResolver::Visit(LogicalIndexScan &op) {
+	BoundTable binding;
+	//	if (!op.table.) {
+	//		binding.table_index = (size_t)-1;
+	//		binding.column_count = 1;
+	//	} else {
+	binding.table_index = op.table_index;
+	binding.column_count = op.column_ids.size();
+	//	}
 	PushBinding(binding);
 }
 

@@ -4,6 +4,7 @@
 #include "common/exception.hpp"
 #include "parser/column_definition.hpp"
 #include "storage/data_table.hpp"
+#include <cstring>
 
 using namespace duckdb;
 using namespace std;

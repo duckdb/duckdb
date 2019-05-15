@@ -6,8 +6,7 @@
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
 #include "main/client_context.hpp"
-#include "parser/constraints/list.hpp"
-#include "planner/constraints/bound_check_constraint.hpp"
+#include "planner/constraints/list.hpp"
 #include "transaction/transaction.hpp"
 #include "transaction/transaction_manager.hpp"
 
@@ -50,10 +49,10 @@ StorageChunk *DataTable::GetChunk(index_t row_number) {
 }
 
 void DataTable::VerifyConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
-	for (auto &constraint : table.constraints) {
+	for (auto &constraint : table.bound_constraints) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
-			auto &not_null = *reinterpret_cast<NotNullConstraint *>(constraint.get());
+			auto &not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
 			if (VectorOperations::HasNull(chunk.data[not_null.index])) {
 				throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name.c_str(),
 				                          table.columns[not_null.index].name.c_str());
@@ -83,9 +82,6 @@ void DataTable::VerifyConstraints(TableCatalogEntry &table, ClientContext &conte
 			}
 			break;
 		}
-		case ConstraintType::DUMMY:
-			break;
-		case ConstraintType::PRIMARY_KEY:
 		case ConstraintType::FOREIGN_KEY:
 		case ConstraintType::UNIQUE:
 			// we check these constraint later
@@ -200,7 +196,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 
 	// get an exclusive lock on the chunk
 	auto lock = chunk->GetExclusiveLock();
-
+	// no constraints are violated
 	// now delete the entries
 	VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
 		auto id = ids[i] - chunk->start;
