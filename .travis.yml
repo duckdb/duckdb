@@ -4,8 +4,8 @@ dist: trusty
 
 env:
   global:
-    - CIBW_BUILD='cp37-* cp36-* cp27-*'
-    - CIBW_SKIP='*-manylinux1_i686'
+    - CIBW_BUILD='cp37-* cp27-*'
+    - CIBW_SKIP='*-manylinux1_i686 *-win32'
     - CIBW_TEST_REQUIRES='pytest'
     - CIBW_BEFORE_BUILD='pip install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3" && pip install cmake'
     - CIBW_TEST_COMMAND='python -m pytest {project}/tests'
@@ -246,9 +246,8 @@ matrix:
         - C:/Program\ Files/R/R-3.5.3/bin/R.exe -f testthat.R
 
 
-
     - os: linux
-      name: Python Package Wheel
+      name: Python Package
 
       dist: xenial
       language: python
@@ -267,7 +266,7 @@ matrix:
           fi
 
     - os: osx
-      name: Python Package Wheel
+      name: Python Package
       language: generic
       osx_image: xcode10.2
 
@@ -283,16 +282,15 @@ matrix:
             python -m twine upload --skip-existing wheelhouse/*.whl
           fi
 
-
     - os: windows
-      name: Python Package Wheel
+      name: Python Package
       language: cpp
 
       before_install:
         - choco install python3 --version 3.7.3 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python37"
         - choco install python3 --version 3.7.3 --sidebyside -y --force --params "/InstallDir:C:\Python37-x64"
-        - choco install python3 --version 3.6.8 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python36"
-        - choco install python3 --version 3.6.8 --sidebyside -y --force --params "/InstallDir:C:\Python36-x64"
+#        - choco install python3 --version 3.6.8 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python36"
+#        - choco install python3 --version 3.6.8 --sidebyside -y --force --params "/InstallDir:C:\Python36-x64"
         - choco install python2 --version 2.7.16 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python27"
         - choco install python2 --version 2.7.16 --sidebyside -y --force --params "/InstallDir:C:\Python27-x64"
 
