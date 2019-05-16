@@ -27,7 +27,7 @@
 using namespace duckdb;
 using namespace std;
 
-constexpr uint64_t CheckpointManager::DATA_BLOCK_HEADER_SIZE;
+// constexpr uint64_t CheckpointManager::DATA_BLOCK_HEADER_SIZE;
 
 CheckpointManager::CheckpointManager(StorageManager &manager) :
 	block_manager(*manager.block_manager), database(manager.database) {
@@ -235,7 +235,7 @@ void CheckpointManager::WriteTableData(Transaction &transaction, TableCatalogEnt
 		// for each column, create a block that serves as the buffer for that blocks data
 		blocks.push_back(make_unique<Block>(-1));
 		// initialize offsets, tuple counts and row number sizes
-		offsets.push_back(DATA_BLOCK_HEADER_SIZE);
+		offsets.push_back(0);
 		tuple_counts.push_back(0);
 		row_numbers.push_back(0);
 	}
@@ -256,7 +256,7 @@ void CheckpointManager::WriteTableData(Transaction &transaction, TableCatalogEnt
 	// FIXME: pack together these unfilled blocks
 	for(uint64_t i = 0; i < table.columns.size(); i++) {
 		// we only write blocks that have data in them
-		if (offsets[i] > DATA_BLOCK_HEADER_SIZE) {
+		if (offsets[i] > 0) {
 			FlushBlock(i);
 		}
 	}
@@ -297,46 +297,27 @@ void CheckpointManager::WriteColumnData(DataChunk &chunk, uint64_t column_index)
 				// NULL value
 				val = NullValue<const char*>();
 			}
-			char *bufptr = (char*) blocks[column_index]->buffer;
-			uint64_t size = strlen(val);
-			// first write the size
-			if (offsets[column_index] + sizeof(uint64_t) >= blocks[column_index]->size) {
-				FlushBlock(column_index);
-			}
-			tuple_counts[column_index]++;
-			memcpy(bufptr + offsets[column_index], &size, sizeof(uint64_t));
-			offsets[column_index] += sizeof(uint64_t);
-			uint64_t pos = 0;
-			// now write the actual string
-			while(pos < size) {
-				uint64_t to_write = std::min(size - pos, blocks[column_index]->size - offsets[column_index]);
-				memcpy(bufptr + offsets[column_index], val + pos, to_write);
-				pos += to_write;
-				offsets[column_index] += to_write;
-				if (pos != size) {
-					// could not write entire string, flush the block
-					FlushBlock(column_index);
-				}
-			}
+			WriteString(column_index, val);
 		});
 	}
 }
 
-void CheckpointManager::FlushBlock(uint64_t column_index) {
+void CheckpointManager::FlushBlock(uint64_t col) {
 	// get a block id
-	blocks[column_index]->id = block_manager.GetFreeBlockId();
+	blocks[col]->id = block_manager.GetFreeBlockId();
 	// construct the data pointer, FIXME: add statistics as well
 	DataPointer data_pointer;
-	data_pointer.block_id = blocks[column_index]->id;
+	data_pointer.block_id = blocks[col]->id;
 	data_pointer.offset = 0;
-	data_pointer.tuple_count = tuple_counts[column_index];
-	data_pointers[column_index].push_back(data_pointer);
+	data_pointer.row_start = row_numbers[col];
+	data_pointer.tuple_count = tuple_counts[col];
+	data_pointers[col].push_back(data_pointer);
 	// write the block
-	block_manager.Write(*blocks[column_index]);
+	block_manager.Write(*blocks[col]);
 
-	offsets[column_index] = DATA_BLOCK_HEADER_SIZE;
-	row_numbers[column_index] += tuple_counts[column_index];
-	tuple_counts[column_index] = 0;
+	offsets[col] = 0;
+	row_numbers[col] += tuple_counts[col];
+	tuple_counts[col] = 0;
 }
 
 //===--------------------------------------------------------------------===//
@@ -361,7 +342,9 @@ void CheckpointManager::ReadTableData(ClientContext &context, TableCatalogEntry 
 	tuple_counts.resize(column_count);
 	indexes.resize(column_count);
 	for(index_t col = 0; col < column_count; col++) {
-		ReadBlock(col, 0);
+		blocks[col] = make_unique<Block>(-1);
+		indexes[col] = 0;
+		ReadBlock(col);
 	}
 
 	// construct a DataChunk to hold the intermediate objects we will push into the database
@@ -380,16 +363,15 @@ void CheckpointManager::ReadTableData(ClientContext &context, TableCatalogEntry 
 			TypeId type = insert_chunk.data[col].type;
 			if (TypeIsConstantSize(type)) {
 				while(insert_chunk.data[col].count < STANDARD_VECTOR_SIZE) {
-					count_t tuples_left = data_pointers[col][indexes[col]].tuple_count - tuple_counts[col];
+					count_t tuples_left = data_pointers[col][indexes[col] - 1].tuple_count - tuple_counts[col];
 					if (tuples_left == 0) {
 						// no tuples left in this block
 						// move to next block
-						if (indexes[col] + 1 == data_pointers[col].size()) {
+						if (!ReadBlock(col)) {
 							// no next block
 							break;
 						}
-						ReadBlock(col, indexes[col] + 1);
-						tuples_left = data_pointers[col][indexes[col]].tuple_count - tuple_counts[col];
+						tuples_left = data_pointers[col][indexes[col] - 1].tuple_count - tuple_counts[col];
 					}
 					Vector storage_vector(types[col], blocks[col]->buffer + offsets[col]);
 					storage_vector.count = std::min((count_t) STANDARD_VECTOR_SIZE, tuples_left);
@@ -401,17 +383,13 @@ void CheckpointManager::ReadTableData(ClientContext &context, TableCatalogEntry 
 			} else {
 				assert(type == TypeId::VARCHAR);
 				while(insert_chunk.data[col].count < STANDARD_VECTOR_SIZE) {
-					if (tuple_counts[col] >= data_pointers[col][indexes[col]].tuple_count) {
-						// no tuples left in this block
-						// move to next block
-						if (indexes[col] + 1 == data_pointers[col].size()) {
-							// no next block
+					if (tuple_counts[col] == data_pointers[col][indexes[col] - 1].tuple_count) {
+						if (!ReadBlock(col)) {
+							// no more tuples left to read
 							break;
 						}
-						ReadBlock(col, indexes[col] + 1);
 					}
 					ReadString(insert_chunk.data[col], col);
-					tuple_counts[col]++;
 				}
 			}
 		}
@@ -428,45 +406,91 @@ void CheckpointManager::ReadTableData(ClientContext &context, TableCatalogEntry 
 	tuple_counts.clear();
 }
 
-void CheckpointManager::ReadBlock(uint64_t col, uint64_t block_nr) {
-	blocks[col] = make_unique<Block>(data_pointers[col][block_nr].block_id);
-	offsets[col] = data_pointers[col][block_nr].offset + DATA_BLOCK_HEADER_SIZE;
+bool CheckpointManager::ReadBlock(uint64_t col) {
+	uint64_t block_nr = indexes[col];
+	if (block_nr >= data_pointers[col].size()) {
+		// ran out of blocks
+		return false;
+	}
+	blocks[col]->id = data_pointers[col][block_nr].block_id;
+	offsets[col] = data_pointers[col][block_nr].offset;
 	tuple_counts[col] = 0;
-	indexes[col] = block_nr;
+	indexes[col]++;
+	// printf("READ\n");
 	// read the data for the block from disk
 	block_manager.Read(*blocks[col]);
+	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// Write Strings to Block
+//===--------------------------------------------------------------------===//
+void CheckpointManager::WriteString(uint64_t col, const char *val) {
+	uint64_t size = strlen(val);
+	// first write the length of the string
+	if (offsets[col] + sizeof(uint64_t) >= blocks[col]->size) {
+		FlushBlock(col);
+	}
+
+	char *bufptr = (char*) blocks[col]->buffer;
+	*((uint64_t*) (bufptr + offsets[col])) = size;
+	offsets[col] += sizeof(uint64_t);
+
+	tuple_counts[col]++;
+	// now write the actual string
+	uint64_t pos = 0;
+	while(pos < size) {
+		uint64_t to_write = std::min(size - pos, blocks[col]->size - offsets[col]);
+		memcpy(bufptr + offsets[col], val + pos, to_write);
+
+		pos += to_write;
+		offsets[col] += to_write;
+		if (pos != size) {
+			assert(offsets[col] == blocks[col]->size);
+			// could not write entire string, flush the block
+			FlushBlock(col);
+		}
+	}
 }
 
 void CheckpointManager::ReadString(Vector &vector, uint64_t col) {
 	// first read the length of the string
-	char *ptr = (char*) blocks[col]->buffer + offsets[col];
-	uint64_t length = *((uint64_t*) ptr);
+	assert(offsets[col] + sizeof(uint64_t) < blocks[col]->size);
+
+	char *bufptr = (char*) blocks[col]->buffer;
+	uint64_t size = *((uint64_t*) (bufptr + offsets[col]));
 	offsets[col] += sizeof(uint64_t);
-	ptr += sizeof(uint64_t);
+
+
+	tuple_counts[col]++;
 	// now read the actual string
 	// first allocate space for the string
-	uint64_t pos = 0;
-	auto data = unique_ptr<char[]>(new char[length + 1]);
-	data[length] = '\0';
+	auto data = unique_ptr<char[]>(new char[size + 1]);
+	data[size] = '\0';
+	char *val = data.get();
 	// now read the string
-	while(pos < length) {
-		uint64_t to_read = std::min(length - pos, blocks[col]->size - offsets[col]);
-		memcpy(data.get() + pos, blocks[col]->buffer + offsets[col], to_read);
+	uint64_t pos = 0;
+	while(pos < size) {
+		uint64_t to_read = std::min(size - pos, blocks[col]->size - offsets[col]);
+		memcpy(val + pos, bufptr + offsets[col], to_read);
+
 		pos += to_read;
 		offsets[col] += to_read;
-		if (offsets[col] == blocks[col]->size) {
-			ReadBlock(col, indexes[col] + 1);
+		if (pos != size) {
+			assert(offsets[col] == blocks[col]->size);
+			if (!ReadBlock(col)) {
+				throw IOException("Corrupt database file: could not read string fully");
+			}
 		}
 	}
 	if (strcmp(data.get(), NullValue<const char*>()) == 0) {
 		vector.nullmask[vector.count] = true;
 	} else {
 		auto strings = (const char**) vector.data;
-		strings[vector.count] = vector.string_heap.AddString(data.get(), length);
+		strings[vector.count] = vector.string_heap.AddString(val, size);
 	}
 	vector.count++;
 }
-
 
 //===--------------------------------------------------------------------===//
 // Data Pointers for Table Data
@@ -481,6 +505,7 @@ void CheckpointManager::WriteDataPointers() {
 			auto &data_pointer = data_pointer_list[k];
 			tabledata_writer->Write<double>(data_pointer.min);
 			tabledata_writer->Write<double>(data_pointer.max);
+			tabledata_writer->Write<uint64_t>(data_pointer.row_start);
 			tabledata_writer->Write<uint64_t>(data_pointer.tuple_count);
 			tabledata_writer->Write<block_id_t>(data_pointer.block_id);
 			tabledata_writer->Write<uint32_t>(data_pointer.offset);
@@ -496,6 +521,7 @@ void CheckpointManager::ReadDataPointers(uint64_t column_count, MetaBlockReader 
 			DataPointer data_pointer;
 			data_pointer.min = reader.Read<double>();
 			data_pointer.max = reader.Read<double>();
+			data_pointer.row_start = reader.Read<uint64_t>();
 			data_pointer.tuple_count = reader.Read<uint64_t>();
 			data_pointer.block_id = reader.Read<block_id_t>();
 			data_pointer.offset = reader.Read<uint32_t>();

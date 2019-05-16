@@ -108,10 +108,6 @@ public:
 	//! Indexes
 	vector<unique_ptr<Index>> indexes;
 
-	//! Maps row offsets to blocks
-	vector<BlockEntry> data_blocks;
-
-private:
 	//! Retrieves versioned data from a set of pointers to tuples inside an
 	//! UndoBuffer and stores them inside the result chunk; used for scanning of
 	//! versioned tuples
