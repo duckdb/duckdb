@@ -92,6 +92,13 @@ TEST_CASE("Test storing NULLs and strings", "[storage]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 12, 13}));
 		REQUIRE(CHECK_COLUMN(result, 1, {"hello", Value(), "abcdefgh"}));
 	}
+	{
+		DuckDB db(storage_database);
+		Connection con(db);
+		result = con.Query("SELECT a, b FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 12, 13}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"hello", Value(), "abcdefgh"}));
+	}
 	DeleteDatabase(storage_database);
 }
 

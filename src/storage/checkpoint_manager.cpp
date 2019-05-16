@@ -210,7 +210,12 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 // Table Data
 //===--------------------------------------------------------------------===//
 void CheckpointManager::WriteTableData(Transaction &transaction, TableCatalogEntry &table) {
-	assert(blocks.size() == 0 && offsets.size() == 0 && tuple_counts.size() == 0 && row_numbers.size() == 0 && data_pointers.size() == 0);
+	blocks.clear();
+	offsets.clear();
+	tuple_counts.clear();
+	row_numbers.clear();
+	data_pointers.clear();
+
 	// when writing table data we write columns to individual blocks
 	// we scan the underlying table structure and write to the blocks
 	// then flush the blocks to disk when they are full
@@ -262,12 +267,6 @@ void CheckpointManager::WriteTableData(Transaction &transaction, TableCatalogEnt
 	}
 	// finally write the table storage information
 	WriteDataPointers();
-	// clear the data structures used for writing
-	blocks.clear();
-	offsets.clear();
-	tuple_counts.clear();
-	row_numbers.clear();
-	data_pointers.clear();
 }
 
 //===--------------------------------------------------------------------===//
@@ -324,7 +323,11 @@ void CheckpointManager::FlushBlock(uint64_t col) {
 // Read Table Data
 //===--------------------------------------------------------------------===//
 void CheckpointManager::ReadTableData(ClientContext &context, TableCatalogEntry &table, MetaBlockReader &reader) {
-	assert(blocks.size() == 0 && offsets.size() == 0 && tuple_counts.size() == 0 && indexes.size() == 0 && data_pointers.size() == 0);
+	data_pointers.clear();
+	blocks.clear();
+	indexes.clear();
+	offsets.clear();
+	tuple_counts.clear();
 
 	count_t column_count = table.columns.size();
 	assert(column_count > 0);
@@ -399,11 +402,6 @@ void CheckpointManager::ReadTableData(ClientContext &context, TableCatalogEntry 
 
 		table.storage->Append(table, context, insert_chunk);
 	}
-	data_pointers.clear();
-	blocks.clear();
-	indexes.clear();
-	offsets.clear();
-	tuple_counts.clear();
 }
 
 bool CheckpointManager::ReadBlock(uint64_t col) {

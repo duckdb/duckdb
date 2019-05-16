@@ -48,9 +48,20 @@ TEST_CASE("Test transactional integrity when facing process aborts", "[persisten
 		if (kill(pid, SIGKILL) != 0) {
 			FAIL();
 		}
-
-		DuckDB db(db_folder);
-		Connection con(db);
+		unique_ptr<DuckDB> db;
+		// it may take some time for the OS to reclaim the lock
+		// loop and wait until the database is successfully started again
+		for(size_t i = 0; i < 1000; i++) {
+			usleep(10000);
+			try {
+				db = make_unique<DuckDB>(db_folder);
+			} catch(...) {
+			}
+			if (db) {
+				break;
+			}
+		}
+		Connection con(*db);
 		auto res = con.Query("SELECT COUNT(*) FROM a");
 		// there may be an off-by-one if we kill exactly between query and count increment
 		REQUIRE(abs((int64_t)(res->GetValue(0, 0).GetNumericValue() - *count)) < 2);
