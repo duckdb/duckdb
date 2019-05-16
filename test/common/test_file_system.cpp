@@ -56,7 +56,7 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 	REQUIRE(!fs.DirectoryExists(dname));
 	REQUIRE(!fs.FileExists(fname_in_dir));
 	REQUIRE(!fs.FileExists(fname_in_dir2));
-}
+}/Users/myth/Programs/duckdb/test/common/test_file_system.cpp
 
 // note: the integer count is chosen as 512 so that we write 512*8=4096 bytes to the file
 // this is required for the Direct-IO as on Windows Direct-IO can only write multiples of sector sizes
@@ -66,11 +66,8 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 TEST_CASE("Test file operations", "[file_system]") {
 	FileSystem fs;
 	unique_ptr<FileHandle> handle, handle2;
-	auto test_buffer1 = make_unique<FileBuffer>(INTEGER_COUNT * sizeof(int64_t));
-	auto test_buffer2 = make_unique<FileBuffer>(INTEGER_COUNT * sizeof(int64_t));
-
-	int64_t *test_data = (int64_t *)test_buffer1->buffer;
-	int64_t *test_data2 = (int64_t *)test_buffer2->buffer;
+	int64_t test_data[INTEGER_COUNT];
+	int64_t test_data2[INTEGER_COUNT];
 	for (int i = 0; i < INTEGER_COUNT; i++) {
 		test_data[i] = i;
 		test_data2[i] = 0;
@@ -99,36 +96,6 @@ TEST_CASE("Test file operations", "[file_system]") {
 		REQUIRE(test_data[i] == i);
 	}
 	handle.reset();
-	fs.RemoveFile(fname);
-
-	// now test direct IO
-	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::WRITE | FileFlags::CREATE | FileFlags::DIRECT_IO,
-	                                     FileLockType::NO_LOCK));
-	// write 10 integers
-	REQUIRE_NOTHROW(handle->Write((void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
-	handle.reset();
-	// now read the integers using a separate handle, they should be there already
-	REQUIRE_NOTHROW(handle2 = fs.OpenFile(fname, FileFlags::READ, FileLockType::NO_LOCK));
-	REQUIRE_NOTHROW(handle2->Read((void *)test_data2, sizeof(int64_t) * INTEGER_COUNT, 0));
-	for (int i = 0; i < INTEGER_COUNT; i++) {
-		REQUIRE(test_data2[i] == i);
-	}
-	handle2.reset();
-	fs.RemoveFile(fname);
-
-	// test file locks
-	// NOTE: we can't actually test contention of locks, as the locks are held per process
-	// i.e. if we got two write locks to the same file, they would both succeed because our process would hold the write
-	// lock already the only way to properly test these locks is to use multiple processes
-
-	// we can get a write lock to a file
-	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::WRITE | FileFlags::CREATE, FileLockType::WRITE_LOCK));
-	handle.reset();
-
-	// we can get a read lock on a file
-	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::READ, FileLockType::READ_LOCK));
-	handle.reset();
-
 	fs.RemoveFile(fname);
 }
 
