@@ -66,7 +66,10 @@ unique_ptr<BoundQueryNode> Binder::Bind(QueryNode &node) {
 		result = Bind((SetOperationNode &)node);
 		break;
 	}
+	// DISTINCT ON select lit
 	result->select_distinct = node.select_distinct;
+	// DISTINCT ON specified targets
+	result->has_distinct_on = node.has_distinct_on;
 	// bind the limit nodes
 	if (node.limit) {
 		result->limit = BindConstant(*this, context, "LIMIT clause", node.limit);

@@ -18,7 +18,7 @@ public:
 	LogicalDistinct() : LogicalOperator(LogicalOperatorType::DISTINCT) {
 	}
 	LogicalDistinct(vector<unique_ptr<Expression>> targets)
-	    : LogicalOperator(LogicalOperatorType::DISTINCT, move(targets)) {
+	    : LogicalOperator(LogicalOperatorType::DISTINCT), distinct_targets(move(targets)) {
 	}
 	//! The set of distinct targets (optional).
 	vector<unique_ptr<Expression>> distinct_targets;
