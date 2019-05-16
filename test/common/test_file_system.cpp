@@ -56,7 +56,7 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 	REQUIRE(!fs.DirectoryExists(dname));
 	REQUIRE(!fs.FileExists(fname_in_dir));
 	REQUIRE(!fs.FileExists(fname_in_dir2));
-}/Users/myth/Programs/duckdb/test/common/test_file_system.cpp
+}
 
 // note: the integer count is chosen as 512 so that we write 512*8=4096 bytes to the file
 // this is required for the Direct-IO as on Windows Direct-IO can only write multiples of sector sizes
