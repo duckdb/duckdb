@@ -100,32 +100,32 @@ TEST_CASE("ART Integer Types", "[art-int]") {
 		}
 
 		//! Checking Multiple Range Queries
-		int32_t up_range_result = n_sizes[idx] * 2 - 1;
-		result = con.Query("SELECT sum(i) FROM integers WHERE i >=" + to_string(n_sizes[idx] - 1));
-		REQUIRE(CHECK_COLUMN(result, 0, {Value(up_range_result)}));
+//		int32_t up_range_result = n_sizes[idx] * 2 - 1;
+//		result = con.Query("SELECT sum(i) FROM integers WHERE i >=" + to_string(n_sizes[idx] - 1));
+//		REQUIRE(CHECK_COLUMN(result, 0, {Value(up_range_result)}));
 
-		result = con.Query("SELECT sum(i) FROM integers WHERE i >" + to_string(n_sizes[idx] - 2));
-		REQUIRE(CHECK_COLUMN(result, 0, {Value(up_range_result)}));
-
-		result = con.Query("SELECT sum(i) FROM integers WHERE i >2 AND i <5");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value(7)}));
-
-		result = con.Query("SELECT sum(i) FROM integers WHERE i >=2 AND i <5");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value(9)}));
-
-		result = con.Query("SELECT sum(i) FROM integers WHERE i >2 AND i <=5");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value(12)}));
-
-		result = con.Query("SELECT sum(i) FROM integers WHERE i >=2 AND i <=5");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value(14)}));
-		result = con.Query("SELECT sum(i) FROM integers WHERE i <=2");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value(3)}));
-
-		result = con.Query("SELECT sum(i) FROM integers WHERE i <0");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
-
-		result = con.Query("SELECT sum(i) FROM integers WHERE i >10000000");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+//		result = con.Query("SELECT sum(i) FROM integers WHERE i >" + to_string(n_sizes[idx] - 2));
+//		REQUIRE(CHECK_COLUMN(result, 0, {Value(up_range_result)}));
+//
+//		result = con.Query("SELECT sum(i) FROM integers WHERE i >2 AND i <5");
+//		REQUIRE(CHECK_COLUMN(result, 0, {Value(7)}));
+//
+//		result = con.Query("SELECT sum(i) FROM integers WHERE i >=2 AND i <5");
+//		REQUIRE(CHECK_COLUMN(result, 0, {Value(9)}));
+//
+//		result = con.Query("SELECT sum(i) FROM integers WHERE i >2 AND i <=5");
+//		REQUIRE(CHECK_COLUMN(result, 0, {Value(12)}));
+//
+//		result = con.Query("SELECT sum(i) FROM integers WHERE i >=2 AND i <=5");
+//		REQUIRE(CHECK_COLUMN(result, 0, {Value(14)}));
+//		result = con.Query("SELECT sum(i) FROM integers WHERE i <=2");
+//		REQUIRE(CHECK_COLUMN(result, 0, {Value(3)}));
+//
+//		result = con.Query("SELECT sum(i) FROM integers WHERE i <0");
+//		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+//
+//		result = con.Query("SELECT sum(i) FROM integers WHERE i >10000000");
+//		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 
 		//! Checking Duplicates
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(1) + ")"));

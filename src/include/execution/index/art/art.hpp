@@ -31,8 +31,8 @@ struct ARTIndexScanState : public IndexScanState {
 	Value values[2];
 	ExpressionType expressions[2];
 	bool checked;
-	StaticVector<int64_t> result_identifiers;
-	uint64_t current_tuple = 0;
+    uint64_t pointquery_tuple = 0;
+
 };
 
 struct IteratorEntry {
@@ -144,15 +144,21 @@ private:
 		}
 	}
 
-	template <class T> uint64_t templated_lookup(TypeId type, T data, int64_t *result_ids) {
+	template <class T> uint64_t templated_lookup(TypeId type, T data, int64_t *result_ids, ARTIndexScanState *state) {
 		auto key = make_unique<Key>(this->is_little_endian, type, data, sizeof(data));
 		uint64_t result_count = 0;
 		auto leaf = static_cast<Leaf *>(lookup(tree, *key, this->maxPrefix, 0));
 		if (leaf) {
-			for (uint64_t i = 0; i < leaf->num_elements; i++) {
-				result_ids[result_count++] = leaf->row_id[i];
+			for (; state->pointquery_tuple < leaf->num_elements; state->pointquery_tuple++) {
+				result_ids[result_count++] = leaf->row_id[state->pointquery_tuple];
+                if (result_count == STANDARD_VECTOR_SIZE) {
+                    state->pointquery_tuple++;
+                    return result_count;
+                }
 			}
-		}
+            state->checked = true;
+
+        }
 		return result_count;
 	}
 
