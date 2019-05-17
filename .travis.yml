@@ -186,19 +186,16 @@ matrix:
       language: r
       #gr: devel
 
-      before_install:
-        - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
-        - cd tools/rpkg
-
-      install:
-        -  R CMD INSTALL .
-
-      before_script:
-        - cd tests
-
       script:
-        - R -f testthat.R
-
+        - pip install boto3
+        - cd tools/rpkg
+        - R -f dependencies.R
+        - ./build-tarball.sh
+        - R CMD INSTALL --build duckdb_*.tar.gz
+        - R CMD INSTALL duckdb_*.tgz
+        - (cd tests && R -f testthat.R)
+        - cd ../../
+        - python tools/upload-s3.py rstats tools/rpkg/duckdb_*.tgz
 
     - os: windows
       name: R Package
