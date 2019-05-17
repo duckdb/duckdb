@@ -17,7 +17,7 @@ cmake -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DLEAN=1 -DCMAKE_MAKE_PROG
 cmake --build . --target duckdb_static
 
 rm -f src/*.*o
-if [ ! -f "$DDPREFIX/build/release_notest/src/libduckdb_static.a" ]
+if [ ! -f "build/release_notest/src/libduckdb_static.a" ]
 then
    echo "Build failed :/"
    exit 1
