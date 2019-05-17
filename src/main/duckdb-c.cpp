@@ -346,6 +346,33 @@ static Value GetCValue(duckdb_result *result, index_t col, index_t row) {
 	}
 }
 
+bool duckdb_value_boolean(duckdb_result *result, index_t col, index_t row) {
+	Value val = GetCValue(result, col, row);
+	if (val.is_null) {
+		return false;
+	} else {
+		return val.CastAs(TypeId::BOOLEAN).value_.boolean;
+	}
+}
+
+int8_t duckdb_value_int8(duckdb_result *result, index_t col, index_t row) {
+	Value val = GetCValue(result, col, row);
+	if (val.is_null) {
+		return 0;
+	} else {
+		return val.CastAs(TypeId::TINYINT).value_.tinyint;
+	}
+}
+
+int16_t duckdb_value_int16(duckdb_result *result, index_t col, index_t row) {
+	Value val = GetCValue(result, col, row);
+	if (val.is_null) {
+		return 0;
+	} else {
+		return val.CastAs(TypeId::SMALLINT).value_.smallint;
+	}
+}
+
 int32_t duckdb_value_int32(duckdb_result *result, index_t col, index_t row) {
 	Value val = GetCValue(result, col, row);
 	if (val.is_null) {
@@ -361,6 +388,24 @@ int64_t duckdb_value_int64(duckdb_result *result, index_t col, index_t row) {
 		return 0;
 	} else {
 		return val.CastAs(TypeId::BIGINT).value_.bigint;
+	}
+}
+
+float duckdb_value_float(duckdb_result *result, index_t col, index_t row) {
+	Value val = GetCValue(result, col, row);
+	if (val.is_null) {
+		return 0.0;
+	} else {
+		return val.CastAs(TypeId::FLOAT).value_.float_;
+	}
+}
+
+double duckdb_value_double(duckdb_result *result, index_t col, index_t row) {
+	Value val = GetCValue(result, col, row);
+	if (val.is_null) {
+		return 0.0;
+	} else {
+		return val.CastAs(TypeId::DOUBLE).value_.double_;
 	}
 }
 
