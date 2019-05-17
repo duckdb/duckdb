@@ -18,14 +18,23 @@ matrix:
       name: Xcode 6.4
       osx_image: xcode9.1
 
-    - os: osx
-      name: Xcode 9.4
-      osx_image: xcode9.1
 
     - os: osx
       name: Xcode 10.2
       osx_image: xcode10.2
 
+
+    - os: linux
+      name: Clang 6
+      dist: xenial
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - clang-6.0
+      env:
+        - MATRIX_EVAL="CC=clang-6.0 && CXX=clang++-6.0"
 
     - os: linux
       name: GCC 4.9
@@ -37,18 +46,6 @@ matrix:
             - g++-4.9 binutils-2.26
       env:
          - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
-
-    - os: linux
-      name: GCC 7
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-7 binutils-2.26
-      env:
-        - MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
-
 
     - os: linux
       dist: xenial
@@ -101,30 +98,6 @@ matrix:
 
       after_success:
         - coveralls -b build/coverage --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --gcov-options '\-lp'
-
-    - os: linux
-      name: Clang 3.9
-      addons:
-        apt:
-          sources:
-            - llvm-toolchain-trusty-3.9
-          packages:
-            - clang-3.9 binutils-2.26
-      env:
-        - MATRIX_EVAL="CC=clang-3.9 && CXX=clang++-3.9"
-
-    - os: linux
-      name: Clang 6
-      dist: xenial
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - clang-6.0
-      env:
-        - MATRIX_EVAL="CC=clang-6.0 && CXX=clang++-6.0"
-
 
     - os: windows
       name: VS 2017
@@ -254,16 +227,14 @@ matrix:
       python: 3.7
 
       script:
-        - pip install cibuildwheel==0.10.2
+        - pip install cibuildwheel==0.10.2 boto3
         - cd tools/pythonpkg
         - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
-        - |
-          if [[ $TRAVIS_TAG ]]; then
-            pip install twine
-            python -m twine upload --skip-existing wheelhouse/*.whl
-          fi
+        - cd ../..
+      after_success:
+        python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
 
     - os: osx
       name: Python Package
@@ -271,16 +242,14 @@ matrix:
       osx_image: xcode10.2
 
       script:
-        - pip install cibuildwheel==0.10.2
+        - pip install cibuildwheel==0.10.2 boto3
         - cd tools/pythonpkg
         - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
-        - |
-          if [[ $TRAVIS_TAG ]]; then
-            pip install twine
-            python -m twine upload --skip-existing wheelhouse/*.whl
-          fi
+        - cd ../..
+      after_success:
+        python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
 
     - os: windows
       name: Python Package
@@ -295,7 +264,7 @@ matrix:
         - choco install python2 --version 2.7.16 --sidebyside -y --force --params "/InstallDir:C:\Python27-x64"
 
         - C:/Python37-x64/python.exe -m pip install --upgrade pip
-        - C:/Python37-x64/python.exe -m pip install "cibuildwheel==0.10.2"
+        - C:/Python37-x64/python.exe -m pip install "cibuildwheel==0.10.2" boto3
         - C:/Python37-x64/python.exe -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
 
       script:
@@ -303,11 +272,9 @@ matrix:
         - C:/Python37-x64/python.exe  setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - C:/Python37-x64/python.exe -m cibuildwheel --platform windows --output-dir wheelhouse duckdb_tarball
-        - |
-          if [[ $TRAVIS_TAG ]]; then
-            C:/Python37-x64/python.exe -m pip install twine
-            C:/Python37-x64/python.exe -m twine upload --skip-existing wheelhouse/*.whl
-          fi
+        - cd ../..
+      after_success:
+        C:/Python37-x64/python.exe tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
 
 before_install:
   - eval "${MATRIX_EVAL}"
