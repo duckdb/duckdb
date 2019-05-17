@@ -142,12 +142,11 @@ matrix:
 
       before_script:
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
-        - C:/Python37-x64/python.exe -m pip install "cibuildwheel==0.10.2" boto3
-
+        - C:/Python37-x64/python.exe -m pip install boto3
 
       script:
         - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64
-        - cmake --build . --target unittest
+        - cmake --build . --target unittest --config Release
         - test/Release/unittest.exe
 
       after_success:
