@@ -100,6 +100,7 @@ matrix:
 
     - os: windows
       name: VS 2017
+      filter_secrets: false
 
       language: c
 
@@ -182,7 +183,7 @@ matrix:
       name: R Package
 
       language: r
-      #gr: devel
+      #r: devel
 
       before_install:
         - pip install --user boto3
@@ -200,6 +201,7 @@ matrix:
 
     - os: windows
       name: R Package
+      filter_secrets: false
 
       language: cpp
 
@@ -251,6 +253,7 @@ matrix:
     - os: windows
       name: Python Package
       language: cpp
+      filter_secrets: false
 
       before_install:
         - choco install python3 --version 3.7.3 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python37"
