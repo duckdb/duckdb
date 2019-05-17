@@ -93,12 +93,11 @@ matrix:
 
       script:
         - mkdir -p build && cd build
-        - cmake -DCMAKE_BUILD_TYPE .. && cmake --build .
+        - cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
         - ./test/unittest
 
       after_success:
-        - gzip src/libduckdb.so src/libduckdb_static.a
-        - python ../tools/upload-s3.py lib-linux-amd64 src/libduckdb*.gz
+        - python ../tools/upload-s3.py lib-linux-amd64 src/libduckdb*.so src/libduckdb*.a
 
     - os: linux
       dist: xenial
@@ -133,6 +132,26 @@ matrix:
         - cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_GENERATOR_PLATFORM=x64
         - cmake --build . --target unittest
         - test/Debug/unittest.exe
+
+
+    - os: windows
+      name: Binaries
+      filter_secrets: false
+
+      language: c
+
+      before_script:
+        - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
+        - C:/Python37-x64/python.exe -m pip install "cibuildwheel==0.10.2" boto3
+
+
+      script:
+        - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64
+        - cmake --build . --target unittest
+        - test/Release/unittest.exe
+
+      after_success:
+        - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll
 
 
     # - os: linux
@@ -202,6 +221,8 @@ matrix:
 
       script:
         - (cd tests && R -f testthat.R)
+
+      after_success:
         - python ../upload-s3.py rstats duckdb_*.tar.gz
 
     - os: osx
@@ -224,6 +245,8 @@ matrix:
 
       script:
         - (cd tests && R -f testthat.R)
+
+      after_success:
         - python ../upload-s3.py rstats duckdb_*.tgz
 
     - os: windows
@@ -249,6 +272,8 @@ matrix:
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL duckdb_*.zip
         - cd tests
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe -f testthat.R
+
+      after_success:
         - cd ..
         - python ../upload-s3.py rstats duckdb_*.zip
 
@@ -266,6 +291,7 @@ matrix:
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - cd ../..
+
       after_success:
         python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
 
@@ -281,6 +307,7 @@ matrix:
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - cd ../..
+
       after_success:
         python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
 
@@ -307,6 +334,7 @@ matrix:
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - C:/Python37-x64/python.exe -m cibuildwheel --platform windows --output-dir wheelhouse duckdb_tarball
         - cd ../..
+
       after_success:
         C:/Python37-x64/python.exe tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
 
