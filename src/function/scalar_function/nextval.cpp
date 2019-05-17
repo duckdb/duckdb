@@ -77,7 +77,7 @@ static int64_t next_sequence_value(Transaction &transaction, SequenceCatalogEntr
 		}
 	}
 	seq->usage_count++;
-	transaction.sequence_usage.insert(make_pair(seq, SequenceValue(seq->usage_count, seq->counter)));
+	transaction.sequence_usage[seq] = SequenceValue(seq->usage_count, seq->counter);
 	return result;
 }
 

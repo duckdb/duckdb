@@ -43,5 +43,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(UpdateStatement &stmt) {
 			result->expressions.push_back(move(bound_expr));
 		}
 	}
+	// bind the default values
+	BindDefaultValues(table->columns, result->bound_defaults);
 	return move(result);
 }

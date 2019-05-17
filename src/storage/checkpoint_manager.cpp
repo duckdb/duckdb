@@ -91,7 +91,7 @@ void CheckpointManager::LoadFromStorage() {
 void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry &schema) {
 	// write the schema data
 	schema.Serialize(*metadata_writer);
-	// then, we fetch the tables/views information
+	// then, we fetch the tables/views/sequences information
 	vector<TableCatalogEntry *> tables;
 	vector<ViewCatalogEntry *> views;
 	schema.tables.Scan(transaction, [&](CatalogEntry *entry) {
@@ -103,24 +103,25 @@ void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry
 			throw NotImplementedException("Catalog type for entries");
 		}
 	});
-	// store the amount of tables in the meta_block
-	metadata_writer->Write<uint32_t>(tables.size());
-	for (auto &table : tables) {
-		WriteTable(transaction, *table);
-	}
-	// now write the views
-	metadata_writer->Write<uint32_t>(views.size());
-	for (auto &view : views) {
-		WriteView(transaction, *view);
-	}
-	// now write the sequences
 	vector<SequenceCatalogEntry *> sequences;
 	schema.sequences.Scan(transaction, [&](CatalogEntry *entry) {
 		sequences.push_back((SequenceCatalogEntry*) entry);
 	});
+
+	// write the sequences
 	metadata_writer->Write<uint32_t>(sequences.size());
 	for (auto &seq : sequences) {
 		WriteSequence(transaction, *seq);
+	}
+	// now write the tables
+	metadata_writer->Write<uint32_t>(tables.size());
+	for (auto &table : tables) {
+		WriteTable(transaction, *table);
+	}
+	// finally write the views
+	metadata_writer->Write<uint32_t>(views.size());
+	for (auto &view : views) {
+		WriteView(transaction, *view);
 	}
 	// FIXME: free list?
 }
@@ -132,18 +133,20 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	info->if_not_exists = true;
 	database.catalog->CreateSchema(context.ActiveTransaction(), info.get());
 
+	// read the sequences
+	uint32_t seq_count = reader.Read<uint32_t>();
+	for(uint32_t i = 0; i < seq_count; i++) {
+		ReadSequence(context, reader);
+	}
 	// read the table count and recreate the tables
 	uint32_t table_count = reader.Read<uint32_t>();
 	for(uint32_t i = 0; i < table_count; i++) {
 		ReadTable(context, reader);
 	}
+	// finally read the views
 	uint32_t view_count = reader.Read<uint32_t>();
 	for(uint32_t i = 0; i < view_count; i++) {
 		ReadView(context, reader);
-	}
-	uint32_t seq_count = reader.Read<uint32_t>();
-	for(uint32_t i = 0; i < seq_count; i++) {
-		ReadSequence(context, reader);
 	}
 }
 

@@ -27,6 +27,8 @@ public:
 	vector<column_t> column_ids;
 	//! The expressions to update by
 	vector<unique_ptr<Expression>> expressions;
+	//! The default statements used by the table
+	vector<unique_ptr<Expression>> bound_defaults;
 	//! The projection index
 	index_t proj_index;
 

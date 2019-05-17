@@ -31,7 +31,7 @@ void PhysicalUpdate::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		for (index_t i = 0; i < expressions.size(); i++) {
 			if (expressions[i]->type == ExpressionType::VALUE_DEFAULT) {
 				// default expression, set to the default value of the column
-				executor.ExecuteExpression(*tableref.bound_defaults[columns[i]], update_chunk.data[i]);
+				executor.ExecuteExpression(*bound_defaults[columns[i]], update_chunk.data[i]);
 			} else {
 				assert(expressions[i]->type == ExpressionType::BOUND_REF);
 				// index into child chunk

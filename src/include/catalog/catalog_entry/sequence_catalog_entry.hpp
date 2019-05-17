@@ -19,6 +19,8 @@ namespace duckdb {
 class SchemaCatalogEntry;
 
 struct SequenceValue {
+	SequenceValue() :
+		usage_count(0), counter(-1) { }
 	SequenceValue(uint64_t usage_count, int64_t counter) :
 		usage_count(usage_count), counter(counter) { }
 

@@ -8,7 +8,7 @@ using namespace std;
 unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundInsertStatement &stmt) {
 	auto table = stmt.table;
 
-	auto insert = make_unique<LogicalInsert>(table);
+	auto insert = make_unique<LogicalInsert>(table, move(stmt.bound_defaults));
 	insert->column_index_map = stmt.column_index_map;
 	if (stmt.select_statement) {
 		// insert from select statement

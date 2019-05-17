@@ -85,5 +85,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			result->values.push_back(move(list));
 		}
 	}
+	// bind the default values
+	BindDefaultValues(table->columns, result->bound_defaults);
 	return move(result);
 }

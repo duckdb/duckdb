@@ -41,7 +41,7 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 				for (index_t i = 0; i < table->columns.size(); i++) {
 					if (column_index_map[i] < 0) {
 						// insert default value
-						executor.ExecuteExpression(*table->bound_defaults[i], insert_chunk.data[i]);
+						executor.ExecuteExpression(*bound_defaults[i], insert_chunk.data[i]);
 					} else {
 						// get value from child chunk
 						assert((index_t)column_index_map[i] < chunk.column_count);
@@ -76,7 +76,7 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 				for (index_t i = 0; i < table->columns.size(); i++) {
 					if (column_index_map[i] < 0) {
 						// insert default value
-						executor.ExecuteExpression(*table->bound_defaults[i], temp_chunk.data[i]);
+						executor.ExecuteExpression(*bound_defaults[i], temp_chunk.data[i]);
 					} else {
 						// get value from constants
 						assert(column_index_map[i] < (int)list.size());
@@ -93,7 +93,7 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 					// execute the expressions to get the values
 					auto &expr = list[i];
 					if (expr->type == ExpressionType::VALUE_DEFAULT) {
-						executor.ExecuteExpression(*table->bound_defaults[i], temp_chunk.data[i]);
+						executor.ExecuteExpression(*bound_defaults[i], temp_chunk.data[i]);
 					} else {
 						executor.ExecuteExpression(*expr, temp_chunk.data[i]);
 					}

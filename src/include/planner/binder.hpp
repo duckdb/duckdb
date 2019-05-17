@@ -93,6 +93,9 @@ private:
 	count_t bound_tables;
 
 private:
+	//! Bind the default values of the columns of a table
+	void BindDefaultValues(vector<ColumnDefinition>& columns, vector<unique_ptr<Expression>>& bound_defaults);
+
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);
 

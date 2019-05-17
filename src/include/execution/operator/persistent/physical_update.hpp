@@ -16,17 +16,18 @@ namespace duckdb {
 class PhysicalUpdate : public PhysicalOperator {
 public:
 	PhysicalUpdate(LogicalOperator &op, TableCatalogEntry &tableref, DataTable &table, vector<column_t> columns,
-	               vector<unique_ptr<Expression>> expressions)
+	               vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> bound_defaults)
 	    : PhysicalOperator(PhysicalOperatorType::UPDATE, op.types), tableref(tableref), table(table), columns(columns),
-	      expressions(std::move(expressions)) {
+	      expressions(move(expressions)), bound_defaults(move(bound_defaults)) {
 	}
-
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	TableCatalogEntry &tableref;
 	DataTable &table;
 	vector<column_t> columns;
 	vector<unique_ptr<Expression>> expressions;
+	vector<unique_ptr<Expression>> bound_defaults;
+public:
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };
 
 } // namespace duckdb
