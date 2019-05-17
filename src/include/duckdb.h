@@ -101,10 +101,20 @@ void duckdb_destroy_result(duckdb_result *result);
 // These functions will perform conversions if necessary. On failure (e.g. if conversion cannot be performed) a special
 // value is returned.
 
+//! Converts the specified value to a bool. Returns false on failure or NULL.
+bool duckdb_value_boolean(duckdb_result *result, index_t col, index_t row);
+//! Converts the specified value to an int8_t. Returns 0 on failure or NULL.
+int8_t duckdb_value_int8(duckdb_result *result, index_t col, index_t row);
+//! Converts the specified value to an int16_t. Returns 0 on failure or NULL.
+int16_t duckdb_value_int16(duckdb_result *result, index_t col, index_t row);
 //! Converts the specified value to an int64_t. Returns 0 on failure or NULL.
 int32_t duckdb_value_int32(duckdb_result *result, index_t col, index_t row);
 //! Converts the specified value to an int64_t. Returns 0 on failure or NULL.
 int64_t duckdb_value_int64(duckdb_result *result, index_t col, index_t row);
+//! Converts the specified value to a float. Returns 0.0 on failure or NULL.
+float duckdb_value_float(duckdb_result *result, index_t col, index_t row);
+//! Converts the specified value to a double. Returns 0.0 on failure or NULL.
+double duckdb_value_double(duckdb_result *result, index_t col, index_t row);
 //! Converts the specified value to a string. Returns nullptr on failure or NULL. The result must be freed with free.
 char *duckdb_value_varchar(duckdb_result *result, index_t col, index_t row);
 
