@@ -167,7 +167,7 @@ matrix:
 
       before_install:
         - pip install --user boto3
-        - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
+        - R -f dependencies.R
         - cd tools/rpkg
 
       install:
@@ -187,8 +187,8 @@ matrix:
 
       before_install:
         - pip install --user boto3
-        - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
         - cd tools/rpkg
+        - R -f dependencies.R
 
       install:
         - ./build-tarball.sh
@@ -206,17 +206,19 @@ matrix:
       language: cpp
 
       before_script:
-        - choco install r.project -y --version 3.5.3
+        - choco install r.project -y --version 3.6.0
         - wget "https://github.com/hannesmuehleisen/choco-rtools/raw/master/rtools.3.5.0.nupkg"
         - choco install rtools -s rtools.3.5.0.nupkg -f -y
+        - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
+        - C:/Python37-x64/python.exe -m pip install boto3
 
       script:
         - export "PATH=/c/Rtools/bin:$PATH"
         - cd tools/rpkg
-        - C:/Program\ Files/R/R-3.5.3/bin/R.exe -f dependencies.R
-        - C:/Program\ Files/R/R-3.5.3/bin/R.exe CMD INSTALL --no-multiarch .
+        - C:/Program\ Files/R/R-3.6.0/bin/R.exe -f dependencies.R
+        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL --no-multiarch .
         - cd tests
-        - C:/Program\ Files/R/R-3.5.3/bin/R.exe -f testthat.R
+        - C:/Program\ Files/R/R-3.6.0/bin/R.exe -f testthat.R
 
     - os: linux
       name: Python Package
