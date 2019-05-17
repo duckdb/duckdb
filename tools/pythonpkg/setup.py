@@ -25,7 +25,7 @@ archive_ext = 'a'
 lib_prefix = 'lib'
 if os.name == 'nt':
     archive_ext = 'lib'
-    lib_prefix = 'RelWithDebInfo/'
+    lib_prefix = 'Release/'
 
 dd_prefix = 'src/duckdb'
 if not os.path.exists(dd_prefix):
