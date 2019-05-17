@@ -13,5 +13,3 @@ cp -r ../../third_party/libpg_query src/duckdb/third_party
 cp -r ../../third_party/hyperloglog src/duckdb/third_party
 cp -r ../../third_party/re2 src/duckdb/third_party
 cp -r ../../third_party/miniz src/duckdb/third_party
-
-R CMD build .

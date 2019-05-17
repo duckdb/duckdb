@@ -171,8 +171,9 @@ matrix:
         - R -f dependencies.R
 
       install:
-        - ./build-tarball.sh
-        -  R CMD INSTALL duckdb_*.tar.gz
+        - ./prepare_sourcetree.sh
+        - R CMD build .
+        - R CMD INSTALL duckdb_*.tar.gz
 
       script:
         - (cd tests && R -f testthat.R)
@@ -191,7 +192,8 @@ matrix:
         - R -f dependencies.R
 
       install:
-        - ./build-tarball.sh
+        - ./prepare_sourcetree.sh
+        - R CMD build .
         - R CMD INSTALL --build duckdb_*.tar.gz
         - R CMD INSTALL duckdb_*.tgz
 
@@ -216,7 +218,9 @@ matrix:
         - export "PATH=/c/Rtools/bin:$PATH"
         - cd tools/rpkg
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe -f dependencies.R
-        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL --no-multiarch .
+        - sh prepare_sourcetree.sh
+        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD build .
+        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL --build --no-multiarch .
         - cd tests
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe -f testthat.R
 
