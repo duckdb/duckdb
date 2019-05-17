@@ -77,6 +77,31 @@ matrix:
 
     - os: linux
       dist: xenial
+      name: Binaries
+
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-8
+      env:
+        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
+
+      before_install:
+        - pip install --user boto3
+
+      script:
+        - mkdir -p build && cd build
+        - cmake -DCMAKE_BUILD_TYPE .. && cmake --build .
+        - ./test/unittest
+
+      after_success:
+        - gzip src/libduckdb.so src/libduckdb_static.a
+        - python ../tools/upload-s3.py lib-linux-amd64 src/libduckdb*.gz
+
+    - os: linux
+      dist: xenial
       name: Code Coverage
 
       addons:
@@ -220,9 +245,12 @@ matrix:
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe -f dependencies.R
         - sh prepare_sourcetree.sh
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD build .
-        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL --build --no-multiarch .
+        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL --build --no-multiarch duckdb_*.tar.gz
+        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL duckdb_*.zip
         - cd tests
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe -f testthat.R
+        - cd ..
+        - python ../upload-s3.py rstats duckdb_*.zip
 
     - os: linux
       name: Python Package
