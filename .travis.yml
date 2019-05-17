@@ -93,11 +93,11 @@ matrix:
 
       script:
         - mkdir -p build && cd build
-        - cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
-        - ./test/unittest
+        - cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build . & cd ..
+        - ./build/test/unittest
 
       after_success:
-        - python ../tools/upload-s3.py lib-linux-amd64 src/libduckdb*.so src/libduckdb*.a
+        - python tools/upload-s3.py lib-linux-amd64 build/src/libduckdb*.so build/src/libduckdb*.a
 
     - os: linux
       dist: xenial
