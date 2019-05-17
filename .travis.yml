@@ -165,7 +165,7 @@ matrix:
       r: devel
 
       before_install:
-        - pip install boto3
+        - pip install --user boto3
         - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
         - cd tools/rpkg
 
@@ -185,7 +185,7 @@ matrix:
       #gr: devel
 
       before_install:
-        - pip install boto3
+        - pip install --user boto3
         - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
         - cd tools/rpkg
 
