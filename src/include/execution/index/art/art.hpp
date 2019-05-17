@@ -24,7 +24,23 @@
 #include "node256.hpp"
 
 namespace duckdb {
-struct ARTIndexScanState : public IndexScanState {
+    struct IteratorEntry {
+        Node *node;
+        int pos;
+    };
+
+    struct Iterator {
+        //! The current Leaf Node, valid if depth>0
+        Leaf *node;
+        //! The current depth
+        int32_t depth = 0;
+        //! Stack, actually the size is determined at runtime
+        IteratorEntry stack[9];
+
+        bool start = false;
+    };
+
+    struct ARTIndexScanState : public IndexScanState {
 	ARTIndexScanState(vector<column_t> column_ids) : IndexScanState(column_ids), checked(false) {
 	}
 
@@ -32,22 +48,10 @@ struct ARTIndexScanState : public IndexScanState {
 	ExpressionType expressions[2];
 	bool checked;
     uint64_t pointquery_tuple = 0;
+    Iterator iterator;
 
 };
 
-struct IteratorEntry {
-	Node *node;
-	int pos;
-};
-
-struct Iterator {
-	//! The current Leaf Node, valid if depth>0
-	Leaf *node;
-	//! The current depth
-	uint32_t depth;
-	//! Stack, actually the size is determined at runtime
-	IteratorEntry stack[9];
-};
 
 class ART : public Index {
 public:
@@ -162,26 +166,41 @@ private:
 		return result_count;
 	}
 
-	template <class T> uint64_t templated_greater_scan(TypeId type, T data, int64_t *result_ids, bool inclusive) {
-		Iterator it;
+	template <class T> uint64_t templated_greater_scan(TypeId type, T data, int64_t *result_ids, bool inclusive,ARTIndexScanState *state) {
+        Iterator *it = &state->iterator;
 		auto key = make_unique<Key>(this->is_little_endian, type, data, sizeof(data));
 
 		uint64_t result_count = 0;
-		bool found = ART::bound(tree, *key, sizeof(data), it, sizeof(data), inclusive, is_little_endian);
+        bool found;
+        if (!it->start){
+            found = ART::bound(tree, *key, sizeof(data), *it, sizeof(data), inclusive, is_little_endian);
+            it->start = true;
+        }
+        else{
+            found = true;
+        }
 		if (found) {
 			bool hasNext;
 			do {
-				for (uint64_t i = 0; i < it.node->num_elements; i++) {
-					result_ids[result_count++] = it.node->row_id[i];
-				}
-				hasNext = ART::iteratorNext(it);
-			} while (hasNext && it.node->value >= (uint64_t)data);
+                if (state->pointquery_tuple >= it->node->num_elements){
+                    state->pointquery_tuple=0;
+                }
+                for (;state->pointquery_tuple < it->node->num_elements; state->pointquery_tuple++) {
+                    result_ids[result_count++] = it->node->row_id[state->pointquery_tuple];
+                    if (result_count == STANDARD_VECTOR_SIZE) {
+                        state->pointquery_tuple++;
+                        return result_count;
+                    }
+                }
+				hasNext = ART::iteratorNext(*it);
+			} while (hasNext && it->node->value >= (uint64_t)data);
 		}
-		return result_count;
+        state->checked = true;
+        return result_count;
 	}
 
-	template <class T> uint64_t templated_less_scan(TypeId type, T data, int64_t *result_ids, bool inclusive) {
-		Iterator it;
+	template <class T> uint64_t templated_less_scan(TypeId type, T data, int64_t *result_ids, bool inclusive,ARTIndexScanState *state) {
+		Iterator *it = &state->iterator;
 		uint64_t result_count = 0;
 		auto min_value = Node::minimum(tree)->get();
 		auto key = make_unique<Key>(this->is_little_endian, type, data, sizeof(data));
@@ -191,46 +210,75 @@ private:
 		// early out min value higher than upper bound query
 		if (*min_key > *key)
 			return result_count;
-		bool found = ART::bound(tree, *min_key, sizeof(data), it, sizeof(data), true, is_little_endian);
+		bool found;
+		if (!it->start){
+            found = ART::bound(tree, *min_key, sizeof(data), *it, sizeof(data), true, is_little_endian);
+            it->start = true;
+		}
+		else{
+            found = true;
+        }
 		if (found) {
 			bool hasNext;
 			do {
-				for (uint64_t i = 0; i < it.node->num_elements; i++) {
-					result_ids[result_count++] = it.node->row_id[i];
+			    if (state->pointquery_tuple >= it->node->num_elements){
+                    state->pointquery_tuple=0;
+			    }
+				for (;state->pointquery_tuple < it->node->num_elements; state->pointquery_tuple++) {
+					result_ids[result_count++] = it->node->row_id[state->pointquery_tuple];
+                    if (result_count == STANDARD_VECTOR_SIZE) {
+                        state->pointquery_tuple++;
+                        return result_count;
+                    }
 				}
-				if (it.node->value == (uint64_t)data)
+				if (it->node->value == (uint64_t)data)
 					break;
-				hasNext = ART::iteratorNext(it);
-				if (!inclusive && it.node->value == (uint64_t)data)
+				hasNext = ART::iteratorNext(*it);
+				if (!inclusive && it->node->value == (uint64_t)data)
 					break;
 			} while (hasNext);
 		}
+        state->checked = true;
 		return result_count;
 	}
 
 	template <class T>
 	uint64_t templated_close_range(TypeId type, T left_query, T right_query, int64_t *result_ids, bool left_inclusive,
-	                               bool right_inclusive) {
-		Iterator it;
+	                               bool right_inclusive,ARTIndexScanState *state) {
+        Iterator *it = &state->iterator;
 		auto key = make_unique<Key>(this->is_little_endian, type, left_query, sizeof(left_query));
 		uint64_t result_count = 0;
-		bool found =
-		    ART::bound(tree, *key, sizeof(left_query), it, sizeof(left_query), left_inclusive, is_little_endian);
+        bool found;
+        if (!it->start){
+            found = ART::bound(tree, *key, sizeof(left_query), *it, sizeof(left_query), left_inclusive, is_little_endian);
+            it->start = true;
+        }
+        else{
+            found = true;
+        }
 		if (found) {
 			bool hasNext;
 			do {
-				for (uint64_t i = 0; i < it.node->num_elements; i++) {
-					result_ids[result_count++] = it.node->row_id[i];
-				}
-				if (it.node->value == (uint64_t)right_query)
+                if (state->pointquery_tuple >= it->node->num_elements){
+                    state->pointquery_tuple=0;
+                }
+                for (;state->pointquery_tuple < it->node->num_elements; state->pointquery_tuple++) {
+                    result_ids[result_count++] = it->node->row_id[state->pointquery_tuple];
+                    if (result_count == STANDARD_VECTOR_SIZE) {
+                        state->pointquery_tuple++;
+                        return result_count;
+                    }
+                }
+				if (it->node->value == (uint64_t)right_query)
 					break;
-				hasNext = ART::iteratorNext(it);
-				if (!right_inclusive && it.node->value == (uint64_t)right_query)
+				hasNext = ART::iteratorNext(*it);
+				if (!right_inclusive && it->node->value == (uint64_t)right_query)
 					break;
 
 			} while (hasNext);
 		}
-		return result_count;
+        state->checked = true;
+        return result_count;
 	}
 
 	DataChunk expression_result;
