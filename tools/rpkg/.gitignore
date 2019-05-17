@@ -2,3 +2,4 @@ src/duckdb
 *.tar.gz
 *.tgz
 src/Makevars
+/src/

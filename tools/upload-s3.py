@@ -8,8 +8,8 @@ if (len(sys.argv) < 3):
 	exit(1)
 
 
-def get_git_revision_short_hash():
-    return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode("utf-8").strip()
+def git_rev_hash():
+    return subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode("utf-8").strip()
 
 prefix = sys.argv[1].strip()
 
@@ -34,7 +34,7 @@ if len(basenames) != len(basenames_set):
 
 for f in files:
 	base = os.path.basename(f)
-	key = 'rev/%s/%s/%s' % (get_git_revision_short_hash(), prefix, base)
+	key = 'rev/%s/%s/%s' % (git_rev_hash(), prefix, base)
 	print("%s\t->\thttps://download.duckdb.org/%s " % (f, key))
 	s3.upload_file(f, 'duckdb-bin', key)
 
