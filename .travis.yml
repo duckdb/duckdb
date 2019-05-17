@@ -93,7 +93,7 @@ matrix:
 
       script:
         - mkdir -p build && cd build
-        - cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build . & cd ..
+        - cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build . && cd ..
         - ./build/test/unittest
 
       after_success:
