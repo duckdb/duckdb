@@ -2,9 +2,6 @@
 
 #include "common/exception.hpp"
 
-#include <unistd.h>
-#include <fcntl.h>
-
 using namespace duckdb;
 using namespace std;
 
