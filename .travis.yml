@@ -167,8 +167,8 @@ matrix:
 
       before_install:
         - pip install --user boto3
-        - R -f dependencies.R
         - cd tools/rpkg
+        - R -f dependencies.R
 
       install:
         - ./build-tarball.sh
