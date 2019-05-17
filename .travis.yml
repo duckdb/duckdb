@@ -165,19 +165,15 @@ matrix:
       language: r
       r: devel
 
-      before_install:
-        - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
-        - cd tools/rpkg
-
-      install:
-        -  R CMD INSTALL .
-
-      before_script:
-        - cd tests
-
       script:
-        - R -f testthat.R
-
+        - pip install boto3
+        - cd tools/rpkg
+        - R -f dependencies.R
+        - ./build-tarball.sh
+        - R CMD INSTALL duckdb_*.tar.gz
+        - (cd tests && R -f testthat.R)
+        - cd ../../
+        - python tools/upload-s3.py rstats tools/rpkg/duckdb_*.tar.gz
 
     - os: osx
       osx_image: xcode10.1
@@ -197,6 +193,7 @@ matrix:
         - cd ../../
         - python tools/upload-s3.py rstats tools/rpkg/duckdb_*.tgz
 
+
     - os: windows
       name: R Package
 
@@ -215,7 +212,6 @@ matrix:
         - cd tests
         - C:/Program\ Files/R/R-3.5.3/bin/R.exe -f testthat.R
 
-
     - os: linux
       name: Python Package
 
@@ -231,7 +227,7 @@ matrix:
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - cd ../..
       after_success:
-        python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
+        python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
 
     - os: osx
       name: Python Package
