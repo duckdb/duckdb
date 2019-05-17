@@ -164,33 +164,39 @@ matrix:
       language: r
       r: devel
 
-      script:
+      before_install:
         - pip install boto3
+        - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
         - cd tools/rpkg
-        - R -f dependencies.R
+
+      install:
         - ./build-tarball.sh
-        - R CMD INSTALL duckdb_*.tar.gz
+        -  R CMD INSTALL duckdb_*.tar.gz
+
+      script:
         - (cd tests && R -f testthat.R)
-        - cd ../../
-        - python tools/upload-s3.py rstats tools/rpkg/duckdb_*.tar.gz
+        - python ../upload-s3.py rstats duckdb_*.tar.gz
 
     - os: osx
       osx_image: xcode10.1
       name: R Package
 
       language: r
+      #gr: devel
 
-      script:
+      before_install:
         - pip install boto3
+        - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
         - cd tools/rpkg
-        - R -f dependencies.R
+
+      install:
         - ./build-tarball.sh
         - R CMD INSTALL --build duckdb_*.tar.gz
         - R CMD INSTALL duckdb_*.tgz
-        - (cd tests && R -f testthat.R)
-        - cd ../../
-        - python tools/upload-s3.py rstats tools/rpkg/duckdb_*.tgz
 
+      script:
+        - (cd tests && R -f testthat.R)
+        - python ../upload-s3.py rstats duckdb_*.tgz
 
     - os: windows
       name: R Package
