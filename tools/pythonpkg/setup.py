@@ -78,11 +78,16 @@ class CustomSdistCommand(sdist):
 includes = [numpy.get_include(), '%s/src/include' % (dd_prefix), '.']
 sources = ['connection.cpp', 'cursor.cpp', 'module.cpp']
 
+toolchain_args = ['-std=c++11', '-Wall']
+if platform.system() == 'Darwin':
+    toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
+
 libduckdb = Extension('duckdb',
     include_dirs=includes,
     sources=sources,
-    extra_compile_args=['-std=c++11', '-Wall'],
-    language='c++', # for linking c++ stdlib
+    extra_compile_args=toolchain_args,
+    extra_link_args=toolchain_args,
+    language='c++',
     extra_objects=['%s/build/release_notest/src/%sduckdb_static.%s' % (dd_prefix, lib_prefix, archive_ext), '%s/build/release_notest/third_party/libpg_query/%spg_query.%s' % (dd_prefix, lib_prefix, archive_ext), '%s/build/release_notest/third_party/re2/%sre2.%s' % (dd_prefix, lib_prefix, archive_ext), '%s/build/release_notest/third_party/miniz/%sminiz.%s' % (dd_prefix, lib_prefix, archive_ext)])
 
 setup(
