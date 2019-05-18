@@ -48,6 +48,8 @@ private:
 	FileBuffer header_buffer;
 	//! The list of free blocks that can be written to currently
 	vector<block_id_t> free_list;
+	//! The list of blocks that are used by the current block manager
+	vector<block_id_t> used_blocks;
 	//! The current meta block id
 	block_id_t meta_block;
 	//! The current maximum block id, this id will be given away first after the free_list runs out

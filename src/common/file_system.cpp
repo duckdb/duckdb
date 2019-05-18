@@ -145,6 +145,15 @@ void FileSystem::Write(FileHandle &handle, void *buffer, count_t nr_bytes, index
 	}
 }
 
+int64_t FileSystem::GetFileSize(FileHandle &handle) {
+	int fd = ((UnixFileHandle &)handle).fd;
+	struct stat s;
+	if (fstat(fd, &s) == -1) {
+		return -1;
+	}
+	return s.st_size;
+}
+
 bool FileSystem::DirectoryExists(const string &directory) {
 	if (!directory.empty()) {
 		if (access(directory.c_str(), 0) == 0) {
@@ -389,6 +398,15 @@ void FileSystem::Write(FileHandle &handle, void *buffer, count_t nr_bytes, index
 		auto error = GetLastErrorAsString();
 		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), error.c_str());
 	}
+}
+
+int64_t FileSystem::GetFileSize(FileHandle &handle) {
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	LARGE_INTEGER result;
+	if (!GetFileSizeEx(hFile, &result)) {
+		return -1;
+	}
+	return result.QuadPart;
 }
 
 bool FileSystem::DirectoryExists(const string &directory) {

@@ -58,6 +58,8 @@ public:
 	}
 	virtual void Read(FileHandle &handle, void *buffer, index_t nr_bytes, index_t location);
 	virtual void Write(FileHandle &handle, void *buffer, index_t nr_bytes, index_t location);
+	//! Returns the file size of a file handle, returns -1 on error
+	virtual int64_t GetFileSize(FileHandle &handle);
 
 	//! Check if a directory exists
 	virtual bool DirectoryExists(const string &directory);

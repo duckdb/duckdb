@@ -11,7 +11,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test transactional integrity when facing process aborts", "[persistence]") {
+TEST_CASE("Test transactional integrity when facing process aborts", "[persistence][.]") {
 	FileSystem fs;
 
 	// shared memory to keep track of insertions

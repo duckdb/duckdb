@@ -1,5 +1,6 @@
 #include "storage/single_file_block_manager.hpp"
-
+#include "storage/meta_block_writer.hpp"
+#include "storage/meta_block_reader.hpp"
 #include "common/exception.hpp"
 
 using namespace duckdb;
@@ -81,8 +82,12 @@ SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool
 
 void SingleFileBlockManager::Initialize(DatabaseHeader &header) {
 	if (header.free_list >= 0) {
-		// FIXME: load free_list
-		// FIXME: initialize meta block pointer somewhere
+		MetaBlockReader reader(*this, header.free_list);
+		auto free_list_count = reader.Read<uint64_t>();
+		free_list.reserve(free_list_count);
+		for(index_t i = 0; i < free_list_count; i++) {
+			free_list.push_back(reader.Read<block_id_t>());
+		}
 	}
 	meta_block = header.meta_block;
 	iteration_count = header.iteration;
@@ -111,6 +116,7 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock() {
 
 void SingleFileBlockManager::Read(Block &block) {
 	assert(block.id >= 0);
+	used_blocks.push_back(block.id);
 	block.Read(*handle, BLOCK_START + block.id * BLOCK_SIZE);
 }
 
@@ -122,8 +128,22 @@ void SingleFileBlockManager::Write(Block &block) {
 void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	// set the iteration count
 	header.iteration = ++iteration_count;
-	header.free_list = -1;
 	header.block_count = max_block;
+	// now handle the free list
+	if (used_blocks.size() > 0) {
+		// there are blocks in the free list
+		// write them to the file
+		MetaBlockWriter writer(*this);
+		header.free_list = writer.block->id;
+		writer.Write<uint64_t>(used_blocks.size());
+		for(auto &block_id : used_blocks) {
+			writer.Write<block_id_t>(block_id);
+		}
+		writer.Flush();
+	} else {
+		// no blocks in the free list
+		header.free_list = -1;
+	}
 	// set the header inside the buffer
 	header_buffer.Clear();
 	*((DatabaseHeader*) header_buffer.buffer) = header;
@@ -134,4 +154,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	active_header = 1 - active_header;
 	//! Ensure the header write ends up on disk
 	handle->Sync();
+
+	// the free list is now equal to the blocks that were used by the previous iteration
+	free_list = used_blocks;
 }
