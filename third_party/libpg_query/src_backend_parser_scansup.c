@@ -23,6 +23,7 @@
  *-------------------------------------------------------------------------
  */
 #include "pg_functions.h"
+#include <string.h>
 
 #include <ctype.h>
 

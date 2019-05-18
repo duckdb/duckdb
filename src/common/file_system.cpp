@@ -287,7 +287,9 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 #else
 
 #include <string>
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <windows.h>
 
 #undef CreateDirectory

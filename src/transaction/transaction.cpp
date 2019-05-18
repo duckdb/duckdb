@@ -6,6 +6,8 @@
 #include "storage/data_table.hpp"
 #include "storage/write_ahead_log.hpp"
 
+#include <cstring>
+
 using namespace duckdb;
 using namespace std;
 

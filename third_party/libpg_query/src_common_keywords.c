@@ -22,6 +22,7 @@
  *-------------------------------------------------------------------------
  */
 #include "pg_functions.h"
+#include <string.h>
 
 #ifndef FRONTEND
 

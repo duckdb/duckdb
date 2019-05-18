@@ -6,6 +6,8 @@
 #include "parser/parser.h"
 #include <stdarg.h>
 #include <mutex>
+#include <cstring>
+
 
 // max parse tree size approx 100 MB, should be enough
 #define PG_MALLOC_SIZE 10240
