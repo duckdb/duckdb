@@ -1,6 +1,5 @@
 #include "execution/operator/filter/physical_filter.hpp"
 #include "execution/operator/scan/physical_index_scan.hpp"
-#include "execution/index/order_index.hpp"
 #include "execution/physical_plan_generator.hpp"
 #include "optimizer/matcher/expression_matcher.hpp"
 #include "parser/expression/comparison_expression.hpp"
