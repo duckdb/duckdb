@@ -5,6 +5,7 @@
 #include "parser/tableref/subqueryref.hpp"
 #include "planner/binder.hpp"
 #include "planner/tableref/bound_basetableref.hpp"
+#include "planner/tableref/bound_subqueryref.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -32,10 +33,12 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &expr) {
 		return move(result);
 	}
 	case CatalogType::VIEW: {
+		// the node is a view: get the query that the view represents
 		auto view_catalog_entry = (ViewCatalogEntry *)table_or_view;
 		SubqueryRef subquery(view_catalog_entry->query->Copy());
 		subquery.alias = expr.alias.empty() ? expr.table_name : expr.alias;
 		subquery.column_name_alias = view_catalog_entry->aliases;
+		// bind the child subquery
 		return Bind(subquery);
 	}
 	default:
