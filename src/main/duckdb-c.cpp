@@ -413,21 +413,3 @@ char *duckdb_value_varchar(duckdb_result *result, index_t col, index_t row) {
 	Value val = GetCValue(result, col, row);
 	return strdup(val.ToString(ConvertCTypeToCPP(result->columns[col].type)).c_str());
 }
-
-int32_t duckdb_value_int32_unsafe(duckdb_result *result, index_t col, index_t row) {
-	assert(col < result->column_count);
-	assert(result->columns[col].type == DUCKDB_TYPE_INTEGER);
-	return UnsafeFetch<int32_t>(result, col, row);
-}
-
-int64_t duckdb_value_int64_unsafe(duckdb_result *result, index_t col, index_t row) {
-	assert(col < result->column_count);
-	assert(result->columns[col].type == DUCKDB_TYPE_BIGINT);
-	return UnsafeFetch<int64_t>(result, col, row);
-}
-
-const char *duckdb_value_varchar_unsafe(duckdb_result *result, index_t col, index_t row) {
-	assert(col < result->column_count);
-	assert(result->columns[col].type == DUCKDB_TYPE_VARCHAR);
-	return UnsafeFetch<const char *>(result, col, row);
-}
