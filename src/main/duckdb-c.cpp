@@ -28,7 +28,7 @@ duckdb_state duckdb_open(const char *path, duckdb_database *out) {
 	try {
 		wrapper->database = new DuckDB(path);
 	} catch (...) {
-		delete DatabaseData;
+		delete wrapper;
 		return DuckDBError;
 	}
 	*out = (duckdb_database)wrapper;
