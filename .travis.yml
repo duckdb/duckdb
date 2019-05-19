@@ -94,13 +94,13 @@ matrix:
 
       before_install: pip install --user cpp-coveralls
 
-      script: 
+      script:
         - mkdir -p build/coverage
         - (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
         - build/coverage/test/unittest
 
       after_success:
-        - coveralls -b build/coverage --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --gcov-options '\-lp'
+        - coveralls -b build/coverage --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude build --gcov-options '\-lp'
 
     - os: linux
       name: Clang 3.9
@@ -174,7 +174,7 @@ matrix:
 
     #   language: cpp
 
-    #   before_install: 
+    #   before_install:
     #     - choco install python --version 3.7.3
     #     - c:/python37/python.exe -m pip install --upgrade pip
     #     - c:/python37/python.exe -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
