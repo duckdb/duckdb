@@ -22,11 +22,6 @@ public:
 	vector<index_t> keys;
 	//! Whether or not the unique constraint is a primary key
 	bool is_primary_key;
-
-public:
-	unique_ptr<BoundConstraint> Copy() override {
-		return make_unique<BoundUniqueConstraint>(keys, is_primary_key);
-	}
 };
 
 } // namespace duckdb

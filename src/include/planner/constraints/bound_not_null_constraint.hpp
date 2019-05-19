@@ -19,11 +19,6 @@ public:
 
 	//! Column index this constraint pertains to
 	uint64_t index;
-
-public:
-	unique_ptr<BoundConstraint> Copy() override {
-		return make_unique<BoundNotNullConstraint>(index);
-	}
 };
 
 } // namespace duckdb

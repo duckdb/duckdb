@@ -60,7 +60,7 @@ TEST_CASE("Test index creation statements with multiple connections", "[art]") {
 	//	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 }
 
-TEST_CASE("ART Integer Types", "[art][.]") {
+TEST_CASE("ART Integer Types", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 
@@ -132,34 +132,34 @@ TEST_CASE("ART Integer Types", "[art][.]") {
 		result = con.Query("SELECT SUM(i) FROM integers WHERE i=" + to_string(1));
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(2)}));
 
-		//        //! Successful update
+		//! Successful update
 		REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=14 WHERE i=13"));
 		result = con.Query("SELECT * FROM integers WHERE i=14");
 		REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
-		//
-		//        //!Testing rollbacks and commits
-		//        // rolled back update
+
+		// Testing rollbacks and commits
+		// rolled back update
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-		//        // update the value
+		// update the value
 		REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=14 WHERE i=12"));
-		//        // now there are three values with 14
+		// now there are three values with 14
 		result = con.Query("SELECT * FROM integers WHERE i=14");
 		REQUIRE(CHECK_COLUMN(result, 0, {14, 14, 14}));
-		//        // rollback the value
+		// rollback the value
 		REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
-		//        // after the rollback
+		// after the rollback
 		result = con.Query("SELECT * FROM integers WHERE i=14");
 		REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
-		//        // roll back insert
+		// roll back insert
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-		//        // update the value
+		// update the value
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (14)"));
-		//        // now there are three values with 14
+		// now there are three values with 14
 		result = con.Query("SELECT * FROM integers WHERE i=14");
 		REQUIRE(CHECK_COLUMN(result, 0, {14, 14, 14}));
-		//        // rollback the value
+		// rollback the value
 		REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
-		//        // after the rol
+		// after the rol
 		result = con.Query("SELECT * FROM integers WHERE i=14");
 		REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
 

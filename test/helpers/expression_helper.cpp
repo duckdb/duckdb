@@ -9,6 +9,7 @@
 #include "planner/operator/logical_projection.hpp"
 #include "planner/planner.hpp"
 #include "planner/statement/bound_select_statement.hpp"
+#include "planner/query_node/bound_select_node.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -53,9 +54,11 @@ unique_ptr<Expression> ExpressionHelper::ParseExpression(string expression) {
 	}
 	Binder binder(*con.context);
 	auto bound_statement = binder.Bind(*parser.statements[0]);
+	auto &select_statement = (BoundSelectStatement &)*bound_statement;
+	auto &select_node = (BoundSelectNode&)*select_statement.node;
+	assert(select_node.type == QueryNodeType::SELECT_NODE);
+	auto &select_list = select_node.select_list;
 
-	auto &select_list =
-	    (vector<unique_ptr<Expression>> &)((BoundSelectStatement &)*bound_statement).node->GetSelectList();
 	return move(select_list[0]);
 }
 
