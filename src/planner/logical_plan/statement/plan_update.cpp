@@ -46,7 +46,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundUpdateStatemen
 	proj->AddChild(move(root));
 
 	// create the update node
-	auto update = make_unique<LogicalUpdate>(table, stmt.column_ids, move(stmt.expressions));
+	auto update = make_unique<LogicalUpdate>(table, stmt.column_ids, move(stmt.expressions), move(stmt.bound_defaults));
 	update->AddChild(move(proj));
 	return move(update);
 }

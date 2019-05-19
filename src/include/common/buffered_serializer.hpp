@@ -28,7 +28,8 @@ public:
 	BufferedSerializer(unique_ptr<data_t[]> data, index_t size);
 	// //! Serializes to a provided non-owned data pointer, bounds on writing are
 	// //! not checked
-	void Write(const_data_ptr_t buffer, index_t write_size) override;
+
+	void WriteData(const_data_ptr_t buffer, uint64_t write_size) override;
 
 	//! Retrieves the data after the writing has been completed
 	BinaryData GetData() {

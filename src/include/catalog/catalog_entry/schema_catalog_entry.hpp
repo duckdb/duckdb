@@ -27,6 +27,7 @@ struct CreateScalarFunctionInfo;
 struct CreateViewInfo;
 struct BoundCreateTableInfo;
 struct CreateSequenceInfo;
+struct CreateSchemaInfo;
 struct CreateTableFunctionInfo;
 struct CreateScalarFunctionInfo;
 struct DropInfo;
@@ -38,6 +39,18 @@ class SchemaCatalogEntry : public CatalogEntry {
 public:
 	SchemaCatalogEntry(Catalog *catalog, string name);
 
+	//! The catalog set holding the tables
+	CatalogSet tables;
+	//! The catalog set holding the indexes
+	CatalogSet indexes;
+	//! The catalog set holding the table functions
+	CatalogSet table_functions;
+	//! The catalog set holding the scalar functions
+	CatalogSet scalar_functions;
+	//! The catalog set holding the sequences
+	CatalogSet sequences;
+
+public:
 	//! Returns a pointer to a table of the given name. Throws an exception if
 	//! the table does not exist.
 	TableCatalogEntry *GetTable(Transaction &transaction, const string &table);
@@ -78,15 +91,9 @@ public:
 	//! Gets the sequence with the given name
 	SequenceCatalogEntry *GetSequence(Transaction &transaction, const string &name);
 
-	//! The catalog set holding the tables
-	CatalogSet tables;
-	//! The catalog set holding the indexes
-	CatalogSet indexes;
-	//! The catalog set holding the table functions
-	CatalogSet table_functions;
-	//! The catalog set holding the scalar functions
-	CatalogSet scalar_functions;
-	//! The catalog set holding the sequences
-	CatalogSet sequences;
+	//! Serialize the meta information of the SchemaCatalogEntry a serializer
+	virtual void Serialize(Serializer &serializer);
+	//! Deserializes to a CreateSchemaInfo
+	static unique_ptr<CreateSchemaInfo> Deserialize(Deserializer &source);
 };
 } // namespace duckdb

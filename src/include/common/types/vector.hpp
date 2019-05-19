@@ -109,9 +109,8 @@ public:
 	//! Appends the other vector to this vector.
 	void Append(Vector &other);
 	//! Copies the data from this vector to another vector.
-	void Copy(Vector &other,
-	          index_t offset = 0); //! Moves the data from this vector to the
-	                               //! other vector. Effectively,
+	void Copy(Vector &other, index_t offset = 0);
+	//! Moves the data from this vector to the other vector. Effectively,
 	//! "other" will become equivalent to this vector, and this vector will be
 	//! turned into an empty vector.
 	void Move(Vector &other);

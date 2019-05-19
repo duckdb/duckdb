@@ -64,14 +64,18 @@ enum class ExceptionType {
 	Format(ap);                                                                                                        \
 	va_end(ap);
 
-class Exception : public std::runtime_error {
+class Exception : public std::exception {
 public:
-	Exception(string message) : std::runtime_error(message), type(ExceptionType::INVALID) {
+	Exception(string message) : std::exception(), type(ExceptionType::INVALID) {
 		exception_message_ = message;
 	}
 
-	Exception(ExceptionType exception_type, string message) : std::runtime_error(message), type(exception_type) {
+	Exception(ExceptionType exception_type, string message) : std::exception(), type(exception_type) {
 		exception_message_ = ExceptionTypeToString(exception_type) + ": " + message;
+	}
+
+	const char *what() const noexcept override {
+		return exception_message_.c_str();
 	}
 
 protected:

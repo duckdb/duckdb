@@ -23,6 +23,7 @@ namespace duckdb {
 void DeleteDatabase(string path);
 void TestDeleteDirectory(string path);
 void TestCreateDirectory(string path);
+void TestDeleteFile(string path);
 string TestCreatePath(string suffix);
 
 #define REQUIRE_NO_FAIL(result) REQUIRE((result)->success)

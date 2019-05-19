@@ -19,6 +19,8 @@ struct CreateSequenceInfo {
 	string schema;
 	//! Sequence name to create
 	string name;
+	//! Usage count of the sequence
+	uint64_t usage_count;
 	//! The increment value
 	int64_t increment;
 	//! The minimum value of the sequence
@@ -35,7 +37,7 @@ struct CreateSequenceInfo {
 	bool if_not_exists;
 
 	CreateSequenceInfo()
-	    : schema(DEFAULT_SCHEMA), name(string()), increment(1), min_value(1),
+	    : schema(DEFAULT_SCHEMA), name(string()), usage_count(0), increment(1), min_value(1),
 	      max_value(std::numeric_limits<int64_t>::max()), start_value(1), cycle(false), temporary(false) {
 	}
 };

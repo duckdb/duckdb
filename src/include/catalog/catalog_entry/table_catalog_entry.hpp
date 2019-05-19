@@ -41,8 +41,6 @@ public:
 	vector<unique_ptr<Constraint>> constraints;
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
-	//! Bound default values
-	vector<unique_ptr<Expression>> bound_defaults;
 	//! A map of column name to column index
 	unordered_map<string, column_t> name_map;
 
