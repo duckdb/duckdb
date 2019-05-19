@@ -108,10 +108,8 @@ void SchemaCatalogEntry::DropIndex(Transaction &transaction, DropInfo *info) {
 
 void SchemaCatalogEntry::DropTable(Transaction &transaction, DropInfo *info) {
 	auto old_table = tables.GetEntry(transaction, info->name);
-	if (info->if_exists && old_table) {
-		if (old_table->type != CatalogType::TABLE) {
-			throw CatalogException("Existing object %s is not a table", info->name.c_str());
-		}
+	if (old_table && old_table->type != CatalogType::TABLE) {
+		throw CatalogException("Existing object %s is not a table", info->name.c_str());
 	}
 	if (!tables.DropEntry(transaction, info->name, info->cascade)) {
 		if (!info->if_exists) {
