@@ -35,8 +35,7 @@ SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool
 		header_buffer.Clear();
 
 		// write the database headers
-		// we initialize meta_block and free_list to -1 because the database file does not contain any actual content
-		// yet
+		// initialize meta_block and free_list to -1 because the database file does not contain any actual content yet
 		DatabaseHeader *header = (DatabaseHeader *)header_buffer.buffer;
 		// header 1
 		header->iteration = 0;

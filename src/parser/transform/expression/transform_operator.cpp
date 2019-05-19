@@ -44,6 +44,16 @@ ExpressionType Transformer::OperatorToExpressionType(string &op) {
 		return ExpressionType::COMPARE_SIMILAR;
 	} else if (op == "!~") {
 		return ExpressionType::COMPARE_NOTSIMILAR;
+	} else if (op == "<<") {
+		return ExpressionType::OPERATOR_LSHIFT;
+	} else if (op == ">>") {
+		return ExpressionType::OPERATOR_RSHIFT;
+	} else if (op == "&") {
+		return ExpressionType::OPERATOR_BITWISE_AND;
+	} else if (op == "|") {
+		return ExpressionType::OPERATOR_BITWISE_OR;
+	} else if (op == "#") {
+		return ExpressionType::OPERATOR_BITWISE_XOR;
 	}
 	return ExpressionType::INVALID;
 }
