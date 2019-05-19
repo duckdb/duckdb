@@ -10,16 +10,6 @@ using namespace std;
 
 #include <cstdio>
 
-namespace duckdb {
-
-void RemoveFile(const string &fpath) {
-	if (remove(fpath.c_str()) != 0) {
-		throw IOException("Error deleting file");
-	}
-}
-
-} // namespace duckdb
-
 #ifndef _WIN32
 #include <dirent.h>
 #include <fcntl.h>
