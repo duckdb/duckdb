@@ -35,20 +35,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &expr) {
 		auto view_catalog_entry = (ViewCatalogEntry *)table_or_view;
 		SubqueryRef subquery(view_catalog_entry->query->Copy());
 		subquery.alias = expr.alias.empty() ? expr.table_name : expr.alias;
-
-		// if we have subquery aliases we need to set them for the subquery. However, there may be non-aliased result
-		// cols from the subquery. Those are returned as well, but are not renamed.
-		auto &select_list = subquery.subquery->GetSelectList();
-		if (view_catalog_entry->aliases.size() > 0) {
-			subquery.column_name_alias.resize(select_list.size());
-			for (index_t col_idx = 0; col_idx < select_list.size(); col_idx++) {
-				if (col_idx < view_catalog_entry->aliases.size()) {
-					subquery.column_name_alias[col_idx] = view_catalog_entry->aliases[col_idx];
-				} else {
-					subquery.column_name_alias[col_idx] = select_list[col_idx]->GetName();
-				}
-			}
-		}
+		subquery.column_name_alias = view_catalog_entry->aliases;
 		return Bind(subquery);
 	}
 	default:

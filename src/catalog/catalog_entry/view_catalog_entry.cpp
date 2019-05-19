@@ -13,6 +13,12 @@ using namespace std;
 void ViewCatalogEntry::Initialize(CreateViewInfo *info) {
 	query = move(info->query);
 	aliases = info->aliases;
+	// aliases might be shorter than the amount of entries in the query select list
+	// int his case we set the view aliases as the names of the entries
+	auto &select_list = query->GetSelectList();
+	for(index_t i = aliases.size(); i < select_list.size(); i++) {
+		aliases.push_back(select_list[i]->GetName());
+	}
 }
 
 ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateViewInfo *info)
@@ -26,7 +32,7 @@ void ViewCatalogEntry::Serialize(Serializer &serializer) {
 	query->Serialize(serializer);
 	assert(aliases.size() <= numeric_limits<uint32_t>::max());
 	serializer.Write<uint32_t>((uint32_t)aliases.size());
-	for (auto s : aliases) {
+	for (auto &s : aliases) {
 		serializer.WriteString(s);
 	}
 }
