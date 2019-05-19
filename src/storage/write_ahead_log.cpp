@@ -2,6 +2,7 @@
 
 #include "catalog/catalog.hpp"
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "catalog/catalog_entry/view_catalog_entry.hpp"
 #include "common/buffered_deserializer.hpp"
@@ -112,6 +113,9 @@ bool ReplayCreateView(Transaction &transaction, Catalog &catalog, Deserializer &
 bool ReplayDropView(Transaction &transaction, Catalog &catalog, Deserializer &source);
 bool ReplayDropSchema(Transaction &transaction, Catalog &catalog, Deserializer &source);
 bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog, Deserializer &source);
+bool ReplayCreateSequence(Transaction &transaction, Catalog &catalog, Deserializer &source);
+bool ReplayDropSequence(Transaction &transaction, Catalog &catalog, Deserializer &source);
+bool ReplaySequenceValue(Transaction &transaction, Catalog &catalog, Deserializer &source);
 bool ReplayInsert(ClientContext &context, Catalog &catalog, Deserializer &source);
 bool ReplayQuery(ClientContext &context, Deserializer &source);
 
@@ -129,6 +133,12 @@ bool ReplayEntry(ClientContext &context, DuckDB &database, WALEntry entry, Deser
 		return ReplayDropSchema(context.ActiveTransaction(), *database.catalog, source);
 	case WALEntry::CREATE_SCHEMA:
 		return ReplayCreateSchema(context.ActiveTransaction(), *database.catalog, source);
+	case WALEntry::DROP_SEQUENCE:
+		return ReplayDropSequence(context.ActiveTransaction(), *database.catalog, source);
+	case WALEntry::CREATE_SEQUENCE:
+		return ReplayCreateSequence(context.ActiveTransaction(), *database.catalog, source);
+	case WALEntry::SEQUENCE_VALUE:
+		return ReplaySequenceValue(context.ActiveTransaction(), *database.catalog, source);
 	case WALEntry::INSERT_TUPLE:
 		return ReplayInsert(context, *database.catalog, source);
 	case WALEntry::QUERY:
@@ -239,6 +249,67 @@ bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog, Deserializer
 	// } catch (...) {
 	// 	return false;
 	// }
+	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// SEQUENCES
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteCreateSequence(SequenceCatalogEntry *entry) {
+	BufferedSerializer serializer;
+	entry->Serialize(serializer);
+	WriteEntry(WALEntry::CREATE_SEQUENCE, serializer);
+}
+
+bool ReplayCreateSequence(Transaction &transaction, Catalog &catalog, Deserializer &source) {
+	auto entry = SequenceCatalogEntry::Deserialize(source);
+	// try {
+	catalog.CreateSequence(transaction, entry.get());
+	// } catch (...) {
+	// 	return false;
+	// }
+	return true;
+}
+
+void WriteAheadLog::WriteDropSequence(SequenceCatalogEntry *entry) {
+	BufferedSerializer serializer;
+	serializer.WriteString(entry->schema->name);
+	serializer.WriteString(entry->name);
+
+	WriteEntry(WALEntry::DROP_SEQUENCE, serializer);
+}
+
+bool ReplayDropSequence(Transaction &transaction, Catalog &catalog, Deserializer &source) {
+	DropInfo info;
+	info.type = CatalogType::SEQUENCE;
+	info.schema = source.Read<string>();
+	info.name = source.Read<string>();
+	catalog.DropSequence(transaction, &info);
+	return true;
+}
+
+void WriteAheadLog::WriteSequenceValue(SequenceCatalogEntry *entry, SequenceValue val) {
+	BufferedSerializer serializer;
+	serializer.WriteString(entry->schema->name);
+	serializer.WriteString(entry->name);
+	serializer.Write<uint64_t>(val.usage_count);
+	serializer.Write<int64_t>(val.counter);
+
+	WriteEntry(WALEntry::SEQUENCE_VALUE, serializer);
+}
+
+bool ReplaySequenceValue(Transaction &transaction, Catalog &catalog, Deserializer &source) {
+	auto schema = source.Read<string>();
+	auto name = source.Read<string>();
+	auto usage_count = source.Read<uint64_t>();
+	auto counter = source.Read<int64_t>();
+
+	// fetch the sequence from the catalog
+	auto seq = catalog.GetSequence(transaction, schema, name);
+	if (usage_count > seq->usage_count) {
+		seq->usage_count = usage_count;
+		seq->counter = counter;
+	}
 	return true;
 }
 

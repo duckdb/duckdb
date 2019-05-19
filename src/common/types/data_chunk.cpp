@@ -176,7 +176,7 @@ void DataChunk::Serialize(Serializer &serializer) {
 			auto ptr = unique_ptr<data_t[]>(new data_t[write_size]);
 			// constant size type: simple memcpy
 			VectorOperations::CopyToStorage(data[i], ptr.get());
-			serializer.Write(ptr.get(), write_size);
+			serializer.WriteData(ptr.get(), write_size);
 		} else {
 			assert(type == TypeId::VARCHAR);
 			// strings are inlined into the blob
@@ -206,7 +206,7 @@ void DataChunk::Deserialize(Deserializer &source) {
 			// constant size type: simple memcpy
 			auto column_size = GetTypeIdSize(type) * rows;
 			auto ptr = unique_ptr<data_t[]>(new data_t[column_size]);
-			source.Read(ptr.get(), column_size);
+			source.ReadData(ptr.get(), column_size);
 			Vector v(data[i].type, ptr.get());
 			v.count = rows;
 			VectorOperations::AppendFromStorage(v, data[i]);

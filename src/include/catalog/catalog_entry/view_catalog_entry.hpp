@@ -26,14 +26,16 @@ public:
 
 	//! The schema the table belongs to
 	SchemaCatalogEntry *schema;
+	//! The query of the view
+	unique_ptr<QueryNode> query;
+	//! The set of aliases associated with the view
+	vector<string> aliases;
 
-	//! Serialize the meta information of the TableCatalogEntry a serializer
+public:
+	//! Serialize the meta information of the ViewCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateTableInfo
 	static unique_ptr<CreateViewInfo> Deserialize(Deserializer &source);
-
-	unique_ptr<QueryNode> query;
-	vector<string> aliases;
 
 private:
 	void Initialize(CreateViewInfo *info);

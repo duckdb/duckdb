@@ -68,7 +68,6 @@ public:
 	//! Returns true if the ChunkCollections are equivalent
 	bool Equals(ChunkCollection &other);
 
-private:
 	//! Locates the chunk that belongs to the specific index
 	index_t LocateChunk(index_t index) {
 		index_t result = index / STANDARD_VECTOR_SIZE;

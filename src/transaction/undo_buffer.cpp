@@ -120,6 +120,9 @@ static void WriteCatalogEntry(WriteAheadLog *log, CatalogEntry *entry) {
 	case CatalogType::VIEW:
 		log->WriteCreateView((ViewCatalogEntry *)parent);
 		break;
+	case CatalogType::SEQUENCE:
+		log->WriteCreateSequence((SequenceCatalogEntry *)parent);
+		break;
 	case CatalogType::DELETED_ENTRY:
 		if (entry->type == CatalogType::TABLE) {
 			log->WriteDropTable((TableCatalogEntry *)entry);
@@ -127,6 +130,8 @@ static void WriteCatalogEntry(WriteAheadLog *log, CatalogEntry *entry) {
 			log->WriteDropSchema((SchemaCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::VIEW) {
 			log->WriteDropView((ViewCatalogEntry *)entry);
+		} else if (entry->type == CatalogType::SEQUENCE) {
+			log->WriteDropSequence((SequenceCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::PREPARED_STATEMENT) {
 			// do nothing, we log the query to drop this
 		} else {
@@ -276,9 +281,8 @@ void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
 		}
 	}
 	if (log) {
+		// flush any remaining appends
 		FlushAppends(log, appends);
-		// flush the WAL
-		log->Flush();
 	}
 }
 

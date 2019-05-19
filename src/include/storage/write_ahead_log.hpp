@@ -11,6 +11,7 @@
 #include "common/exception.hpp"
 #include "common/helper.hpp"
 #include "common/types/data_chunk.hpp"
+#include "catalog/catalog_entry/sequence_catalog_entry.hpp"
 
 #include <vector>
 
@@ -20,6 +21,7 @@ class BufferedSerializer;
 class Catalog;
 class DuckDB;
 class SchemaCatalogEntry;
+class SequenceCatalogEntry;
 class ViewCatalogEntry;
 class TableCatalogEntry;
 class Transaction;
@@ -37,7 +39,10 @@ struct WALEntry {
 	static constexpr wal_type_t DROP_VIEW = 5;
 	static constexpr wal_type_t CREATE_VIEW = 6;
 	static constexpr wal_type_t INSERT_TUPLE = 7;
-	static constexpr wal_type_t QUERY = 8;
+	static constexpr wal_type_t CREATE_SEQUENCE = 8;
+	static constexpr wal_type_t DROP_SEQUENCE = 9;
+	static constexpr wal_type_t SEQUENCE_VALUE = 10;
+	static constexpr wal_type_t QUERY = 11;
 	static constexpr wal_type_t WAL_FLUSH = 100;
 
 	static bool TypeIsValid(wal_type_t type) {
@@ -80,6 +85,10 @@ public:
 
 	void WriteCreateView(ViewCatalogEntry *entry);
 	void WriteDropView(ViewCatalogEntry *entry);
+
+	void WriteCreateSequence(SequenceCatalogEntry *entry);
+	void WriteDropSequence(SequenceCatalogEntry *entry);
+	void WriteSequenceValue(SequenceCatalogEntry *entry, SequenceValue val);
 
 	void WriteInsert(string &schema, string &table, DataChunk &chunk);
 	void WriteQuery(string &query);

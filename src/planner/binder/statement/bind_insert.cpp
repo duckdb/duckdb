@@ -20,7 +20,6 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 		// create a mapping of (list index) -> (column index)
 		unordered_map<string, index_t> column_name_map;
 		for (index_t i = 0; i < stmt.columns.size(); i++) {
-
 			column_name_map[stmt.columns[i]] = i;
 			auto entry = table->name_map.find(stmt.columns[i]);
 			if (entry == table->name_map.end()) {
@@ -85,5 +84,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			result->values.push_back(move(list));
 		}
 	}
+	// bind the default values
+	BindDefaultValues(table->columns, result->bound_defaults);
 	return move(result);
 }

@@ -16,6 +16,7 @@
 #include "storage/storage_chunk.hpp"
 #include "storage/table_statistics.hpp"
 #include "storage/unique_index.hpp"
+#include "storage/block.hpp"
 
 #include <atomic>
 #include <mutex>
@@ -35,6 +36,13 @@ struct ScanStructure {
 	index_t offset;
 	VersionInformation *version_chain;
 	vector<unique_ptr<StorageLock>> locks;
+};
+
+//! This is a structure to keep the location(Block) of a determined row in memory.
+struct BlockEntry {
+	uint64_t row_offset;
+	unique_ptr<Block> block;
+	VersionInformation *version_chain;
 };
 
 //! DataTable represents a physical table on disk

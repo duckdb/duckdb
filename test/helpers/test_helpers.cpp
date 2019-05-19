@@ -17,8 +17,16 @@ void TestDeleteDirectory(string path) {
 	}
 }
 
+void TestDeleteFile(string path) {
+	FileSystem fs;
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+}
+
 void DeleteDatabase(string path) {
-	TestDeleteDirectory(path);
+	TestDeleteFile(path);
+	TestDeleteFile(path + ".wal");
 }
 
 void TestCreateDirectory(string path) {

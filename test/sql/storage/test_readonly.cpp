@@ -9,7 +9,7 @@ using namespace std;
 namespace duckdb {
 class ReadOnlyFileSystem : public FileSystem {
 	unique_ptr<FileHandle> OpenFile(const char *path, uint8_t flags, FileLockType lock_type) override {
-		if (flags | FileFlags::WRITE) {
+		if (flags & FileFlags::WRITE) {
 			throw Exception("RO file system");
 		}
 		return FileSystem::OpenFile(path, flags, lock_type);

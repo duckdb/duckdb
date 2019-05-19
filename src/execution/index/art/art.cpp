@@ -181,13 +181,11 @@ void ART::erase(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned 
 				break;
 			}
 			case NodeType::N48: {
-
 				Node48::erase(node, pos);
 				break;
 			}
 			case NodeType::N256:
 				Node256::erase(node, pos);
-
 				break;
 			default:
 				assert(0);
@@ -277,7 +275,6 @@ void ART::insert(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned
 }
 
 Node *ART::lookup(unique_ptr<Node> &node, Key &key, unsigned keyLength, unsigned depth) {
-
 	bool skippedPrefix = false; // Did we optimistically skip some prefix without checking it?
 	auto node_val = node.get();
 
@@ -500,16 +497,18 @@ void ART::SearchEqual(StaticVector<int64_t> *result_identifiers, ARTIndexScanSta
 	auto row_ids = (int64_t *)result_identifiers->data;
 	switch (types[0]) {
 	case TypeId::TINYINT:
-		result_identifiers->count = templated_lookup<int8_t>(types[0], state->values[0].value_.tinyint, row_ids,state);
+		result_identifiers->count = templated_lookup<int8_t>(types[0], state->values[0].value_.tinyint, row_ids, state);
 		break;
 	case TypeId::SMALLINT:
-		result_identifiers->count = templated_lookup<int16_t>(types[0], state->values[0].value_.smallint, row_ids,state);
+		result_identifiers->count =
+		    templated_lookup<int16_t>(types[0], state->values[0].value_.smallint, row_ids, state);
 		break;
 	case TypeId::INTEGER:
-		result_identifiers->count = templated_lookup<int32_t>(types[0], state->values[0].value_.integer, row_ids,state);
+		result_identifiers->count =
+		    templated_lookup<int32_t>(types[0], state->values[0].value_.integer, row_ids, state);
 		break;
 	case TypeId::BIGINT:
-		result_identifiers->count = templated_lookup<int64_t>(types[0], state->values[0].value_.bigint, row_ids,state);
+		result_identifiers->count = templated_lookup<int64_t>(types[0], state->values[0].value_.bigint, row_ids, state);
 		break;
 	default:
 		throw InvalidTypeException(types[0], "Invalid type for index");
@@ -521,19 +520,19 @@ void ART::SearchGreater(StaticVector<int64_t> *result_identifiers, ARTIndexScanS
 	switch (types[0]) {
 	case TypeId::TINYINT:
 		result_identifiers->count =
-		    templated_greater_scan<int8_t>(types[0], state->values[0].value_.tinyint, row_ids, inclusive,state);
+		    templated_greater_scan<int8_t>(types[0], state->values[0].value_.tinyint, row_ids, inclusive, state);
 		break;
 	case TypeId::SMALLINT:
 		result_identifiers->count =
-		    templated_greater_scan<int16_t>(types[0], state->values[0].value_.smallint, row_ids, inclusive,state);
+		    templated_greater_scan<int16_t>(types[0], state->values[0].value_.smallint, row_ids, inclusive, state);
 		break;
 	case TypeId::INTEGER:
 		result_identifiers->count =
-		    templated_greater_scan<int32_t>(types[0], state->values[0].value_.integer, row_ids, inclusive,state);
+		    templated_greater_scan<int32_t>(types[0], state->values[0].value_.integer, row_ids, inclusive, state);
 		break;
 	case TypeId::BIGINT:
 		result_identifiers->count =
-		    templated_greater_scan<int64_t>(types[0], state->values[0].value_.bigint, row_ids, inclusive,state);
+		    templated_greater_scan<int64_t>(types[0], state->values[0].value_.bigint, row_ids, inclusive, state);
 		break;
 	default:
 		throw InvalidTypeException(types[0], "Invalid type for index");
@@ -545,19 +544,19 @@ void ART::SearchLess(StaticVector<int64_t> *result_identifiers, ARTIndexScanStat
 	switch (types[0]) {
 	case TypeId::TINYINT:
 		result_identifiers->count =
-		    templated_less_scan<int8_t>(types[0], state->values[0].value_.tinyint, row_ids, inclusive,state);
+		    templated_less_scan<int8_t>(types[0], state->values[0].value_.tinyint, row_ids, inclusive, state);
 		break;
 	case TypeId::SMALLINT:
 		result_identifiers->count =
-		    templated_less_scan<int16_t>(types[0], state->values[0].value_.smallint, row_ids, inclusive,state);
+		    templated_less_scan<int16_t>(types[0], state->values[0].value_.smallint, row_ids, inclusive, state);
 		break;
 	case TypeId::INTEGER:
 		result_identifiers->count =
-		    templated_less_scan<int32_t>(types[0], state->values[0].value_.integer, row_ids, inclusive,state);
+		    templated_less_scan<int32_t>(types[0], state->values[0].value_.integer, row_ids, inclusive, state);
 		break;
 	case TypeId::BIGINT:
 		result_identifiers->count =
-		    templated_less_scan<int64_t>(types[0], state->values[0].value_.bigint, row_ids, inclusive,state);
+		    templated_less_scan<int64_t>(types[0], state->values[0].value_.bigint, row_ids, inclusive, state);
 		break;
 	default:
 		throw InvalidTypeException(types[0], "Invalid type for index");
@@ -571,22 +570,22 @@ void ART::SearchCloseRange(StaticVector<int64_t> *result_identifiers, ARTIndexSc
 	case TypeId::TINYINT:
 		result_identifiers->count =
 		    templated_close_range<int8_t>(types[0], state->values[0].value_.tinyint, state->values[1].value_.tinyint,
-		                                  row_ids, left_inclusive, right_inclusive,state);
+		                                  row_ids, left_inclusive, right_inclusive, state);
 		break;
 	case TypeId::SMALLINT:
 		result_identifiers->count =
 		    templated_close_range<int16_t>(types[0], state->values[0].value_.smallint, state->values[1].value_.smallint,
-		                                   row_ids, left_inclusive, right_inclusive,state);
+		                                   row_ids, left_inclusive, right_inclusive, state);
 		break;
 	case TypeId::INTEGER:
 		result_identifiers->count =
 		    templated_close_range<int32_t>(types[0], state->values[0].value_.integer, state->values[1].value_.integer,
-		                                   row_ids, left_inclusive, right_inclusive,state);
+		                                   row_ids, left_inclusive, right_inclusive, state);
 		break;
 	case TypeId::BIGINT:
 		result_identifiers->count =
 		    templated_close_range<int64_t>(types[0], state->values[0].value_.bigint, state->values[1].value_.bigint,
-		                                   row_ids, left_inclusive, right_inclusive,state);
+		                                   row_ids, left_inclusive, right_inclusive, state);
 		break;
 	default:
 		throw InvalidTypeException(types[0], "Invalid type for index");
@@ -596,9 +595,9 @@ void ART::SearchCloseRange(StaticVector<int64_t> *result_identifiers, ARTIndexSc
 // FIXME: Returning one tuple per time so deletes in different chunks do not break.
 void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) {
 	auto state = (ARTIndexScanState *)ss;
-    StaticVector<int64_t> result_identifiers;
+	StaticVector<int64_t> result_identifiers;
 
-    // scan the index
+	// scan the index
 	if (!state->checked) {
 		assert(state->values[0].type == types[0]);
 

@@ -14,7 +14,7 @@ BufferedSerializer::BufferedSerializer(unique_ptr<data_t[]> data, count_t size) 
 	blob.data = move(data);
 }
 
-void BufferedSerializer::Write(const_data_ptr_t buffer, index_t write_size) {
+void BufferedSerializer::WriteData(const_data_ptr_t buffer, index_t write_size) {
 	if (blob.size + write_size >= maximum_size) {
 		do {
 			maximum_size *= 2;

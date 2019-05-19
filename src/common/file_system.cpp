@@ -3,12 +3,24 @@
 #include "common/exception.hpp"
 #include "common/helper.hpp"
 #include "common/string_util.hpp"
+#include "common/checksum.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-#ifndef _WIN32
 #include <cstdio>
+
+namespace duckdb {
+
+void RemoveFile(const string &fpath) {
+	if (remove(fpath.c_str()) != 0) {
+		throw IOException("Error deleting file");
+	}
+}
+
+} // namespace duckdb
+
+#ifndef _WIN32
 #include <dirent.h>
 #include <fcntl.h>
 #include <string.h>
@@ -45,8 +57,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	int rc;
 	// cannot combine Read and Write flags
 	assert(!(flags & FileFlags::READ && flags & FileFlags::WRITE));
-	// cannot combine Read and DirectIO/CREATE flags
-	assert(!(flags & FileFlags::READ && flags & FileFlags::DIRECT_IO));
+	// cannot combine Read and CREATE flags
 	assert(!(flags & FileFlags::READ && flags & FileFlags::CREATE));
 	if (flags & FileFlags::READ) {
 		open_flags = O_RDONLY;
@@ -57,14 +68,14 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		if (flags & FileFlags::CREATE) {
 			open_flags |= O_CREAT;
 		}
-		if (flags & FileFlags::DIRECT_IO) {
+	}
+	if (flags & FileFlags::DIRECT_IO) {
 #if defined(__DARWIN__) || defined(__APPLE__)
-			// OSX does not have O_DIRECT, instead we need to use fcntl afterwards to support direct IO
-			open_flags |= O_SYNC;
+		// OSX does not have O_DIRECT, instead we need to use fcntl afterwards to support direct IO
+		open_flags |= O_SYNC;
 #else
-			open_flags |= O_DIRECT | O_SYNC;
+		open_flags |= O_DIRECT | O_SYNC;
 #endif
-		}
 	}
 	int fd = open(path, open_flags, 0666);
 	if (fd == -1) {
@@ -132,6 +143,15 @@ void FileSystem::Write(FileHandle &handle, void *buffer, count_t nr_bytes, index
 	if ((index_t)bytes_written != nr_bytes) {
 		throw IOException("Could not write sufficient bytes from file \"%s\"", handle.path.c_str());
 	}
+}
+
+int64_t FileSystem::GetFileSize(FileHandle &handle) {
+	int fd = ((UnixFileHandle &)handle).fd;
+	struct stat s;
+	if (fstat(fd, &s) == -1) {
+		return -1;
+	}
+	return s.st_size;
 }
 
 bool FileSystem::DirectoryExists(const string &directory) {
@@ -250,6 +270,11 @@ string FileSystem::PathSeparator() {
 
 void FileSystem::FileSync(FILE *file) {
 	fsync(fileno(file));
+}
+
+void FileSystem::FileSync(FileHandle &handle) {
+	int fd = ((UnixFileHandle &)handle).fd;
+	fsync(fd);
 }
 
 void FileSystem::MoveFile(const string &source, const string &target) {
@@ -377,6 +402,15 @@ void FileSystem::Write(FileHandle &handle, void *buffer, count_t nr_bytes, index
 	}
 }
 
+int64_t FileSystem::GetFileSize(FileHandle &handle) {
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	LARGE_INTEGER result;
+	if (!GetFileSizeEx(hFile, &result)) {
+		return -1;
+	}
+	return result.QuadPart;
+}
+
 bool FileSystem::DirectoryExists(const string &directory) {
 	DWORD attrs = GetFileAttributesA(directory.c_str());
 	return (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY));
@@ -496,6 +530,13 @@ void FileSystem::FileSync(FILE *file) {
 	*/
 }
 
+void FileSystem::FileSync(FileHandle &handle) {
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	if (FlushFileBuffers(hFile) == 0) {
+		throw IOException("Could not flush file handle to disk!");
+	}
+}
+
 void FileSystem::MoveFile(const string &source, const string &target) {
 	if (!MoveFileA(source.c_str(), target.c_str())) {
 		throw IOException("Could not move file");
@@ -516,26 +557,6 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 	return a + PathSeparator() + b;
 }
 
-Buffer::Buffer(void *internal_buffer, data_ptr_t buffer, count_t size)
-    : buffer(buffer), size(size), internal_buffer(internal_buffer) {
-}
-
-Buffer::~Buffer() {
-	free(internal_buffer);
-}
-
-unique_ptr<Buffer> Buffer::AllocateAlignedBuffer(count_t bufsiz) {
-	assert(bufsiz % 4096 == 0);
-	// we add 4095 to ensure that we can align the buffer to 4096
-	data_ptr_t internal_buffer = (data_ptr_t)malloc(bufsiz + 4095);
-	// round to multiple of 4096
-	count_t num = (index_t)internal_buffer;
-	count_t remainder = num % 4096;
-	if (remainder != 0) {
-		num = num + 4096 - remainder;
-	}
-	assert(num % 4096 == 0);
-	assert(num + bufsiz <= ((index_t)internal_buffer + bufsiz + 4095));
-	assert(num >= (index_t)internal_buffer);
-	return unique_ptr<Buffer>(new Buffer(internal_buffer, (data_ptr_t)num, bufsiz));
+void FileHandle::Sync() {
+	file_system.FileSync(*this);
 }
