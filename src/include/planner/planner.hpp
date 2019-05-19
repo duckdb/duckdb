@@ -34,5 +34,7 @@ private:
 	void CreatePlan(SQLStatement &statement, vector<BoundParameterExpression *> *parameters = nullptr);
 
 	void VerifyQuery(BoundSQLStatement &statement);
+	void VerifyNode(BoundQueryNode &statement);
+	void VerifyExpression(Expression &expr, vector<unique_ptr<Expression>> &copies);
 };
 } // namespace duckdb
