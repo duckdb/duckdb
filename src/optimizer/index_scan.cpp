@@ -1,6 +1,5 @@
 #include "optimizer/index_scan.hpp"
 
-#include "execution/index/order_index.hpp"
 #include "optimizer/matcher/expression_matcher.hpp"
 #include "parser/expression/comparison_expression.hpp"
 #include "planner/expression/bound_comparison_expression.hpp"

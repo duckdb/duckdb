@@ -9,7 +9,6 @@
 #pragma once
 
 #include "execution/physical_operator.hpp"
-#include "execution/index/order_index.hpp"
 #include "execution/index/art/art.hpp"
 #include "parser/parsed_data/create_index_info.hpp"
 
@@ -43,7 +42,6 @@ public:
 	vector<unique_ptr<Expression>> unbound_expressions;
 
 private:
-	void createOrderIndex(ScanStructure *ss, DataChunk *intermediate, vector<TypeId> *result_types, DataChunk *result);
 	void createARTIndex(ScanStructure *ss, DataChunk *intermediate, vector<TypeId> *result_types, DataChunk *result);
 };
 } // namespace duckdb

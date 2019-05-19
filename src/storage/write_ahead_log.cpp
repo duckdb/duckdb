@@ -23,7 +23,6 @@
 
 #include <cstring>
 
-
 using namespace duckdb;
 using namespace std;
 
