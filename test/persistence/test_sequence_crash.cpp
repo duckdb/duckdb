@@ -26,7 +26,7 @@ TEST_CASE("Test that sequence never returns the same value twice even with abort
 	}
 
 	// now fork the process a bunch of times
-	for(int i = 0; i < 100; i++) {
+	for (int i = 0; i < 100; i++) {
 		// fork the process
 		pid_t pid = fork();
 		if (pid == 0) {
@@ -76,7 +76,8 @@ static void write_entries_to_table(DuckDB *db, int i) {
 	}
 }
 
-TEST_CASE("Test that sequence never returns the same value twice even with aborts and concurrent usage", "[persistence][.]") {
+TEST_CASE("Test that sequence never returns the same value twice even with aborts and concurrent usage",
+          "[persistence][.]") {
 	FileSystem fs;
 
 	string dbdir = TestCreatePath("defaultseqconcurrent");
@@ -89,7 +90,7 @@ TEST_CASE("Test that sequence never returns the same value twice even with abort
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE a (i INTEGER DEFAULT nextval('seq'), j INTEGER)"));
 	}
 	// now fork the process a bunch of times
-	for(int i = 0; i < 100; i++) {
+	for (int i = 0; i < 100; i++) {
 		// fork the process
 		pid_t pid = fork();
 		if (pid == 0) {
@@ -99,7 +100,8 @@ TEST_CASE("Test that sequence never returns the same value twice even with abort
 			for (size_t i = 0; i < 8; i++) {
 				write_threads[i] = thread(write_entries_to_table, &db, i);
 			}
-			while(true);
+			while (true)
+				;
 		} else if (pid > 0) {
 			// parent process, sleep a bit
 			usleep(100000);

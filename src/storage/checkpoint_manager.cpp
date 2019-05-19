@@ -29,9 +29,8 @@ using namespace std;
 
 // constexpr uint64_t CheckpointManager::DATA_BLOCK_HEADER_SIZE;
 
-CheckpointManager::CheckpointManager(StorageManager &manager) :
-	block_manager(*manager.block_manager), database(manager.database) {
-
+CheckpointManager::CheckpointManager(StorageManager &manager)
+    : block_manager(*manager.block_manager), database(manager.database) {
 }
 
 void CheckpointManager::CreateCheckpoint() {
@@ -40,7 +39,7 @@ void CheckpointManager::CreateCheckpoint() {
 
 	auto transaction = database.transaction_manager->StartTransaction();
 
-    //! Set up the writers for the checkpoints
+	//! Set up the writers for the checkpoints
 	metadata_writer = make_unique<MetaBlockWriter>(block_manager);
 	tabledata_writer = make_unique<MetaBlockWriter>(block_manager);
 
@@ -50,7 +49,7 @@ void CheckpointManager::CreateCheckpoint() {
 	vector<SchemaCatalogEntry *> schemas;
 	// we scan the schemas
 	database.catalog->schemas.Scan(*transaction,
-	                              [&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
+	                               [&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
 	// write the actual data into the database
 	// write the amount of schemas
 	metadata_writer->Write<uint32_t>(schemas.size());
@@ -79,7 +78,7 @@ void CheckpointManager::LoadFromStorage() {
 	// create the MetaBlockReader to read from the storage
 	MetaBlockReader reader(block_manager, meta_block);
 	uint32_t schema_count = reader.Read<uint32_t>();
-	for(uint32_t i = 0; i < schema_count; i++) {
+	for (uint32_t i = 0; i < schema_count; i++) {
 		ReadSchema(context, reader);
 	}
 	context.transaction.Commit();
@@ -96,17 +95,16 @@ void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry
 	vector<ViewCatalogEntry *> views;
 	schema.tables.Scan(transaction, [&](CatalogEntry *entry) {
 		if (entry->type == CatalogType::TABLE) {
-			tables.push_back((TableCatalogEntry*) entry);
+			tables.push_back((TableCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::VIEW) {
-			views.push_back((ViewCatalogEntry*) entry);
+			views.push_back((ViewCatalogEntry *)entry);
 		} else {
 			throw NotImplementedException("Catalog type for entries");
 		}
 	});
 	vector<SequenceCatalogEntry *> sequences;
-	schema.sequences.Scan(transaction, [&](CatalogEntry *entry) {
-		sequences.push_back((SequenceCatalogEntry*) entry);
-	});
+	schema.sequences.Scan(transaction,
+	                      [&](CatalogEntry *entry) { sequences.push_back((SequenceCatalogEntry *)entry); });
 
 	// write the sequences
 	metadata_writer->Write<uint32_t>(sequences.size());
@@ -135,17 +133,17 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 
 	// read the sequences
 	uint32_t seq_count = reader.Read<uint32_t>();
-	for(uint32_t i = 0; i < seq_count; i++) {
+	for (uint32_t i = 0; i < seq_count; i++) {
 		ReadSequence(context, reader);
 	}
 	// read the table count and recreate the tables
 	uint32_t table_count = reader.Read<uint32_t>();
-	for(uint32_t i = 0; i < table_count; i++) {
+	for (uint32_t i = 0; i < table_count; i++) {
 		ReadTable(context, reader);
 	}
 	// finally read the views
 	uint32_t view_count = reader.Read<uint32_t>();
-	for(uint32_t i = 0; i < view_count; i++) {
+	for (uint32_t i = 0; i < view_count; i++) {
 		ReadView(context, reader);
 	}
 }
@@ -205,7 +203,8 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 	MetaBlockReader table_data_reader(block_manager, block_id);
 	table_data_reader.offset = offset;
 	// fetch the table from the catalog for writing
-	auto table = database.catalog->GetTable(context.ActiveTransaction(), bound_info->base->schema, bound_info->base->table);
+	auto table =
+	    database.catalog->GetTable(context.ActiveTransaction(), bound_info->base->schema, bound_info->base->table);
 	ReadTableData(context, *table, table_data_reader);
 }
 
@@ -230,7 +229,7 @@ void CheckpointManager::WriteTableData(Transaction &transaction, TableCatalogEnt
 	for (auto &column : table.columns) {
 		column_ids.push_back(column.oid);
 	}
-    //! get all types of the table and initialize the chunk
+	//! get all types of the table and initialize the chunk
 	auto types = table.GetTypes();
 	DataChunk chunk;
 	chunk.Initialize(types);
@@ -255,14 +254,14 @@ void CheckpointManager::WriteTableData(Transaction &transaction, TableCatalogEnt
 			break;
 		}
 		// for each column, we append whatever we can fit into the block
-		for(uint64_t i = 0; i < table.columns.size(); i++) {
+		for (uint64_t i = 0; i < table.columns.size(); i++) {
 			assert(chunk.data[i].type == GetInternalType(table.columns[i].type));
 			WriteColumnData(chunk, i);
 		}
 	}
 	// finally we write the blocks that were not completely filled to disk
 	// FIXME: pack together these unfilled blocks
-	for(uint64_t i = 0; i < table.columns.size(); i++) {
+	for (uint64_t i = 0; i < table.columns.size(); i++) {
 		// we only write blocks that have data in them
 		if (offsets[i] > 0) {
 			FlushBlock(i);
@@ -294,10 +293,10 @@ void CheckpointManager::WriteColumnData(DataChunk &chunk, uint64_t column_index)
 	} else {
 		assert(type == TypeId::VARCHAR);
 		// we inline strings into the block
-		VectorOperations::ExecType<const char*>(chunk.data[column_index], [&](const char *val, size_t i, size_t k) {
+		VectorOperations::ExecType<const char *>(chunk.data[column_index], [&](const char *val, size_t i, size_t k) {
 			if (chunk.data[column_index].nullmask[i]) {
 				// NULL value
-				val = NullValue<const char*>();
+				val = NullValue<const char *>();
 			}
 			WriteString(column_index, val);
 		});
@@ -347,7 +346,7 @@ void CheckpointManager::ReadTableData(ClientContext &context, TableCatalogEntry 
 	offsets.resize(column_count);
 	tuple_counts.resize(column_count);
 	indexes.resize(column_count);
-	for(index_t col = 0; col < column_count; col++) {
+	for (index_t col = 0; col < column_count; col++) {
 		blocks[col] = make_unique<Block>(-1);
 		indexes[col] = 0;
 		ReadBlock(col);
@@ -355,20 +354,20 @@ void CheckpointManager::ReadTableData(ClientContext &context, TableCatalogEntry 
 
 	// construct a DataChunk to hold the intermediate objects we will push into the database
 	vector<TypeId> types;
-	for(auto &col : table.columns) {
+	for (auto &col : table.columns) {
 		types.push_back(GetInternalType(col.type));
 	}
 	DataChunk insert_chunk;
 	insert_chunk.Initialize(types);
 
 	// now load the actual data
-	while(true) {
+	while (true) {
 		// construct a DataChunk by loading tuples from each of the columns
 		insert_chunk.Reset();
-		for(index_t col = 0; col < column_count; col++) {
+		for (index_t col = 0; col < column_count; col++) {
 			TypeId type = insert_chunk.data[col].type;
 			if (TypeIsConstantSize(type)) {
-				while(insert_chunk.data[col].count < STANDARD_VECTOR_SIZE) {
+				while (insert_chunk.data[col].count < STANDARD_VECTOR_SIZE) {
 					count_t tuples_left = data_pointers[col][indexes[col] - 1].tuple_count - tuple_counts[col];
 					if (tuples_left == 0) {
 						// no tuples left in this block
@@ -380,7 +379,7 @@ void CheckpointManager::ReadTableData(ClientContext &context, TableCatalogEntry 
 						tuples_left = data_pointers[col][indexes[col] - 1].tuple_count - tuple_counts[col];
 					}
 					Vector storage_vector(types[col], blocks[col]->buffer + offsets[col]);
-					storage_vector.count = std::min((count_t) STANDARD_VECTOR_SIZE, tuples_left);
+					storage_vector.count = std::min((count_t)STANDARD_VECTOR_SIZE, tuples_left);
 					VectorOperations::AppendFromStorage(storage_vector, insert_chunk.data[col]);
 
 					tuple_counts[col] += storage_vector.count;
@@ -388,7 +387,7 @@ void CheckpointManager::ReadTableData(ClientContext &context, TableCatalogEntry 
 				}
 			} else {
 				assert(type == TypeId::VARCHAR);
-				while(insert_chunk.data[col].count < STANDARD_VECTOR_SIZE) {
+				while (insert_chunk.data[col].count < STANDARD_VECTOR_SIZE) {
 					if (tuple_counts[col] == data_pointers[col][indexes[col] - 1].tuple_count) {
 						if (!ReadBlock(col)) {
 							// no more tuples left to read
@@ -433,14 +432,14 @@ void CheckpointManager::WriteString(uint64_t col, const char *val) {
 		FlushBlock(col);
 	}
 
-	char *bufptr = (char*) blocks[col]->buffer;
-	*((uint64_t*) (bufptr + offsets[col])) = size;
+	char *bufptr = (char *)blocks[col]->buffer;
+	*((uint64_t *)(bufptr + offsets[col])) = size;
 	offsets[col] += sizeof(uint64_t);
 
 	tuple_counts[col]++;
 	// now write the actual string
 	uint64_t pos = 0;
-	while(pos < size) {
+	while (pos < size) {
 		uint64_t to_write = std::min(size - pos, blocks[col]->size - offsets[col]);
 		memcpy(bufptr + offsets[col], val + pos, to_write);
 
@@ -458,10 +457,9 @@ void CheckpointManager::ReadString(Vector &vector, uint64_t col) {
 	// first read the length of the string
 	assert(offsets[col] + sizeof(uint64_t) < blocks[col]->size);
 
-	char *bufptr = (char*) blocks[col]->buffer;
-	uint64_t size = *((uint64_t*) (bufptr + offsets[col]));
+	char *bufptr = (char *)blocks[col]->buffer;
+	uint64_t size = *((uint64_t *)(bufptr + offsets[col]));
 	offsets[col] += sizeof(uint64_t);
-
 
 	tuple_counts[col]++;
 	// now read the actual string
@@ -471,7 +469,7 @@ void CheckpointManager::ReadString(Vector &vector, uint64_t col) {
 	char *val = data.get();
 	// now read the string
 	uint64_t pos = 0;
-	while(pos < size) {
+	while (pos < size) {
 		uint64_t to_read = std::min(size - pos, blocks[col]->size - offsets[col]);
 		memcpy(val + pos, bufptr + offsets[col], to_read);
 
@@ -484,10 +482,10 @@ void CheckpointManager::ReadString(Vector &vector, uint64_t col) {
 			}
 		}
 	}
-	if (strcmp(data.get(), NullValue<const char*>()) == 0) {
+	if (strcmp(data.get(), NullValue<const char *>()) == 0) {
 		vector.nullmask[vector.count] = true;
 	} else {
-		auto strings = (const char**) vector.data;
+		auto strings = (const char **)vector.data;
 		strings[vector.count] = vector.string_heap.AddString(val, size);
 	}
 	vector.count++;
@@ -498,7 +496,7 @@ void CheckpointManager::ReadString(Vector &vector, uint64_t col) {
 //===--------------------------------------------------------------------===//
 void CheckpointManager::WriteDataPointers() {
 	for (uint64_t i = 0; i < data_pointers.size(); i++) {
-        // get a reference to the data column
+		// get a reference to the data column
 		auto &data_pointer_list = data_pointers[i];
 		tabledata_writer->Write<uint64_t>(data_pointer_list.size());
 		// then write the data pointers themselves
@@ -516,9 +514,9 @@ void CheckpointManager::WriteDataPointers() {
 
 void CheckpointManager::ReadDataPointers(uint64_t column_count, MetaBlockReader &reader) {
 	data_pointers.resize(column_count);
-	for(uint64_t col = 0; col < column_count; col++) {
+	for (uint64_t col = 0; col < column_count; col++) {
 		uint64_t data_pointer_count = reader.Read<uint64_t>();
-		for(uint64_t data_ptr = 0; data_ptr < data_pointer_count; data_ptr++) {
+		for (uint64_t data_ptr = 0; data_ptr < data_pointer_count; data_ptr++) {
 			DataPointer data_pointer;
 			data_pointer.min = reader.Read<double>();
 			data_pointer.max = reader.Read<double>();

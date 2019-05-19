@@ -7,10 +7,10 @@ namespace duckdb {
 
 uint64_t Checksum(uint8_t *buffer, size_t size) {
 	uint64_t result = 5381;
-	uint64_t *ptr = (uint64_t *) buffer;
+	uint64_t *ptr = (uint64_t *)buffer;
 	size_t i;
 	// for efficiency, we first hash uint64_t values
-	for(i = 0; i < size / 8; i++) {
+	for (i = 0; i < size / 8; i++) {
 		result ^= Hash(ptr[i]);
 	}
 	if (size - i * 8 > 0) {
@@ -20,4 +20,4 @@ uint64_t Checksum(uint8_t *buffer, size_t size) {
 	return result;
 }
 
-}
+} // namespace duckdb

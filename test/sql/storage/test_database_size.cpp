@@ -23,7 +23,7 @@ TEST_CASE("Test that database size does not grow after many checkpoints", "[stor
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(a INTEGER);"));
-		for(index_t i = 0; i < VALUE_COUNT; i++) {
+		for (index_t i = 0; i < VALUE_COUNT; i++) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (" + to_string(i) + ");"));
 			expected_sum += i;
 		}
@@ -45,7 +45,7 @@ TEST_CASE("Test that database size does not grow after many checkpoints", "[stor
 		REQUIRE(size >= 0);
 	}
 	// now reload the database a bunch of times, and everytime we reload update all the values
-	for(index_t i = 0; i < 20; i++) {
+	for (index_t i = 0; i < 20; i++) {
 		DuckDB db(storage_database);
 		Connection con(db);
 		// verify the current count
@@ -66,8 +66,8 @@ TEST_CASE("Test that database size does not grow after many checkpoints", "[stor
 		REQUIRE(new_size >= 0);
 	}
 	// require that the size did not grow more than factor 3
-	// we allow the database file to grow somewhat because there will be empty blocks inside the file after many checkpoints
-	// however this should never be more than factor ~2.5 the original database size
+	// we allow the database file to grow somewhat because there will be empty blocks inside the file after many
+	// checkpoints however this should never be more than factor ~2.5 the original database size
 	REQUIRE(new_size <= size * 3);
 	DeleteDatabase(storage_database);
 }

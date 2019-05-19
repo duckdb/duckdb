@@ -25,6 +25,7 @@ public:
 	vector<vector<unique_ptr<Expression>>> insert_values;
 	TableCatalogEntry *table;
 	vector<unique_ptr<Expression>> bound_defaults;
+
 public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };

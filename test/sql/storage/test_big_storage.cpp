@@ -24,7 +24,7 @@ TEST_CASE("Test storage that exceeds a single block", "[storage][.]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21), (NULL, NULL)"));
 		int64_t table_size = 4;
 		// grow the table until it exceeds integer_count
-		while(table_size < integer_count) {
+		while (table_size < integer_count) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM test"));
 			table_size *= 2;
 		}
@@ -67,7 +67,7 @@ TEST_CASE("Test storage that exceeds a single block with different types", "[sto
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21), (NULL, NULL)"));
 		int64_t table_size = 4;
 		// grow the table until it exceeds integer_count
-		while(table_size < integer_count) {
+		while (table_size < integer_count) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM test"));
 			table_size *= 2;
 		}
@@ -111,7 +111,7 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('a'), ('bb'), ('ccc'), ('dddd'), ('eeeee')"));
 		int64_t table_size = 5;
 		// grow the table until it exceeds integer_count
-		while(table_size < string_count) {
+		while (table_size < string_count) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM test"));
 			table_size *= 2;
 		}
@@ -119,7 +119,8 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 		// compute the sum
 		result = con.Query("SELECT a, COUNT(*) FROM test GROUP BY a ORDER BY a");
 		REQUIRE(CHECK_COLUMN(result, 0, {"a", "bb", "ccc", "dddd", "eeeee"}));
-		REQUIRE(CHECK_COLUMN(result, 1, {count_per_group, count_per_group, count_per_group, count_per_group, count_per_group}));
+		REQUIRE(CHECK_COLUMN(result, 1,
+		                     {count_per_group, count_per_group, count_per_group, count_per_group, count_per_group}));
 	}
 	// reload the database from disk
 	{
@@ -127,7 +128,8 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 		Connection con(db);
 		result = con.Query("SELECT a, COUNT(*) FROM test GROUP BY a ORDER BY a");
 		REQUIRE(CHECK_COLUMN(result, 0, {"a", "bb", "ccc", "dddd", "eeeee"}));
-		REQUIRE(CHECK_COLUMN(result, 1, {count_per_group, count_per_group, count_per_group, count_per_group, count_per_group}));
+		REQUIRE(CHECK_COLUMN(result, 1,
+		                     {count_per_group, count_per_group, count_per_group, count_per_group, count_per_group}));
 	}
 	// reload the database from disk, we do this again because checkpointing at startup causes this to follow a
 	// different code path
@@ -136,7 +138,8 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 		Connection con(db);
 		result = con.Query("SELECT a, COUNT(*) FROM test GROUP BY a ORDER BY a");
 		REQUIRE(CHECK_COLUMN(result, 0, {"a", "bb", "ccc", "dddd", "eeeee"}));
-		REQUIRE(CHECK_COLUMN(result, 1, {count_per_group, count_per_group, count_per_group, count_per_group, count_per_group}));
+		REQUIRE(CHECK_COLUMN(result, 1,
+		                     {count_per_group, count_per_group, count_per_group, count_per_group, count_per_group}));
 	}
 	DeleteDatabase(storage_database);
 }
@@ -156,9 +159,10 @@ TEST_CASE("Test storing big strings", "[storage][.]") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR, j BIGINT);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('" + big_string + "', 1)"));
 		uint64_t iteration = 2;
-		while(string_length < BLOCK_SIZE * 2) {
-			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a, " + to_string(iteration) + " FROM test"));
-			REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE j=" + to_string(iteration-1)));
+		while (string_length < BLOCK_SIZE * 2) {
+			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a, " + to_string(iteration) +
+			                          " FROM test"));
+			REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE j=" + to_string(iteration - 1)));
 			iteration++;
 			string_length *= 10;
 		}

@@ -25,6 +25,7 @@ public:
 	string column_name;
 	//! Table name of the column name that is referenced (optional)
 	string table_name;
+
 public:
 	bool IsScalar() const override {
 		return false;

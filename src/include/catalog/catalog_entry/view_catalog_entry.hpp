@@ -30,11 +30,13 @@ public:
 	unique_ptr<QueryNode> query;
 	//! The set of aliases associated with the view
 	vector<string> aliases;
+
 public:
 	//! Serialize the meta information of the ViewCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateTableInfo
 	static unique_ptr<CreateViewInfo> Deserialize(Deserializer &source);
+
 private:
 	void Initialize(CreateViewInfo *info);
 };

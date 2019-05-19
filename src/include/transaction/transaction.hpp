@@ -58,7 +58,8 @@ public:
 	//! no query is active.
 	transaction_t active_query;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
-	unordered_map<SequenceCatalogEntry*, SequenceValue> sequence_usage;
+	unordered_map<SequenceCatalogEntry *, SequenceValue> sequence_usage;
+
 public:
 	void PushCatalogEntry(CatalogEntry *entry);
 	//! Create deleted entries in the undo buffer

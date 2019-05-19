@@ -121,7 +121,7 @@ static void WriteCatalogEntry(WriteAheadLog *log, CatalogEntry *entry) {
 		log->WriteCreateView((ViewCatalogEntry *)parent);
 		break;
 	case CatalogType::SEQUENCE:
-		log->WriteCreateSequence((SequenceCatalogEntry *) parent);
+		log->WriteCreateSequence((SequenceCatalogEntry *)parent);
 		break;
 	case CatalogType::DELETED_ENTRY:
 		if (entry->type == CatalogType::TABLE) {

@@ -56,7 +56,8 @@ static int64_t next_sequence_value(Transaction &transaction, SequenceCatalogEntr
 	int64_t result;
 	if (seq->cycle) {
 		result = seq->counter;
-		seq->counter += seq->increment;;
+		seq->counter += seq->increment;
+		;
 		if (result < seq->min_value) {
 			result = seq->max_value;
 			seq->counter = seq->max_value + seq->increment;

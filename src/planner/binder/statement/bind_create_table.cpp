@@ -90,7 +90,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	}
 }
 
-void Binder::BindDefaultValues(vector<ColumnDefinition>& columns, vector<unique_ptr<Expression>>& bound_defaults) {
+void Binder::BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_ptr<Expression>> &bound_defaults) {
 	for (index_t i = 0; i < columns.size(); i++) {
 		unique_ptr<Expression> bound_default;
 		if (columns[i].default_value) {

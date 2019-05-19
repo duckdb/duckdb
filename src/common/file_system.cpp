@@ -18,7 +18,7 @@ void RemoveFile(const string &fpath) {
 	}
 }
 
-}
+} // namespace duckdb
 
 #ifndef _WIN32
 #include <dirent.h>

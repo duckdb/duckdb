@@ -42,6 +42,7 @@ public:
 	void CreateCheckpoint();
 	//! Load from a stored checkpoint
 	void LoadFromStorage();
+
 private:
 	void WriteSchema(Transaction &transaction, SchemaCatalogEntry &schema);
 	void WriteTable(Transaction &transaction, TableCatalogEntry &table);
@@ -64,6 +65,7 @@ private:
 	bool ReadBlock(uint64_t col);
 	void ReadString(Vector &vector, uint64_t col);
 	void ReadDataPointers(uint64_t column_count, MetaBlockReader &reader);
+
 private:
 	//! The block manager to write the checkpoint to
 	BlockManager &block_manager;
@@ -74,6 +76,7 @@ private:
 	unique_ptr<MetaBlockWriter> metadata_writer;
 	//! The table data writer is responsible for writing the DataPointers used by the table chunks
 	unique_ptr<MetaBlockWriter> tabledata_writer;
+
 private:
 	vector<unique_ptr<Block>> blocks;
 	vector<uint64_t> offsets;
@@ -84,4 +87,4 @@ private:
 	vector<vector<DataPointer>> data_pointers;
 };
 
-}
+} // namespace duckdb

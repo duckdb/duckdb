@@ -6,9 +6,8 @@
 using namespace duckdb;
 using namespace std;
 
-
-SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool read_only, bool create_new) :
-	path(path), header_buffer(HEADER_SIZE) {
+SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool read_only, bool create_new)
+    : path(path), header_buffer(HEADER_SIZE) {
 
 	uint8_t flags;
 	FileLockType lock;
@@ -29,15 +28,16 @@ SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool
 		// if we create a new file, we fill the metadata of the file
 		// first fill in the new header
 		header_buffer.Clear();
-		MainHeader *main_header = (MainHeader*) header_buffer.buffer;
+		MainHeader *main_header = (MainHeader *)header_buffer.buffer;
 		main_header->version_number = VERSION_NUMBER;
 		// now write the header to the file
 		header_buffer.Write(*handle, 0);
 		header_buffer.Clear();
 
 		// write the database headers
-		// we initialize meta_block and free_list to -1 because the database file does not contain any actual content yet
-		DatabaseHeader *header = (DatabaseHeader*) header_buffer.buffer;
+		// we initialize meta_block and free_list to -1 because the database file does not contain any actual content
+		// yet
+		DatabaseHeader *header = (DatabaseHeader *)header_buffer.buffer;
 		// header 1
 		header->iteration = 0;
 		header->meta_block = -1;
@@ -56,17 +56,19 @@ SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool
 		MainHeader header;
 		// otherwise, we check the metadata of the file
 		header_buffer.Read(*handle, 0);
-		header = *((MainHeader*) header_buffer.buffer);
+		header = *((MainHeader *)header_buffer.buffer);
 		// check the version number
 		if (header.version_number != VERSION_NUMBER) {
-			throw IOException("Trying to read a database file with version number %lld, but we can only read version %lld", header.version_number, VERSION_NUMBER);
+			throw IOException(
+			    "Trying to read a database file with version number %lld, but we can only read version %lld",
+			    header.version_number, VERSION_NUMBER);
 		}
 		// read the database headers from disk
 		DatabaseHeader h1, h2;
 		header_buffer.Read(*handle, HEADER_SIZE);
-		h1 = *((DatabaseHeader*) header_buffer.buffer);
+		h1 = *((DatabaseHeader *)header_buffer.buffer);
 		header_buffer.Read(*handle, HEADER_SIZE * 2);
-		h2 = *((DatabaseHeader*) header_buffer.buffer);
+		h2 = *((DatabaseHeader *)header_buffer.buffer);
 		// check the header with the highest iteration count
 		if (h1.iteration > h2.iteration) {
 			// h1 is active header
@@ -85,7 +87,7 @@ void SingleFileBlockManager::Initialize(DatabaseHeader &header) {
 		MetaBlockReader reader(*this, header.free_list);
 		auto free_list_count = reader.Read<uint64_t>();
 		free_list.reserve(free_list_count);
-		for(index_t i = 0; i < free_list_count; i++) {
+		for (index_t i = 0; i < free_list_count; i++) {
 			free_list.push_back(reader.Read<block_id_t>());
 		}
 	}
@@ -136,7 +138,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 		MetaBlockWriter writer(*this);
 		header.free_list = writer.block->id;
 		writer.Write<uint64_t>(used_blocks.size());
-		for(auto &block_id : used_blocks) {
+		for (auto &block_id : used_blocks) {
 			writer.Write<block_id_t>(block_id);
 		}
 		writer.Flush();
@@ -146,7 +148,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	}
 	// set the header inside the buffer
 	header_buffer.Clear();
-	*((DatabaseHeader*) header_buffer.buffer) = header;
+	*((DatabaseHeader *)header_buffer.buffer) = header;
 	// now write the header to the file, active_header determines whether we write to h1 or h2
 	// note that if active_header is h1 we write to h2, and vice versa
 	header_buffer.Write(*handle, active_header == 1 ? HEADER_SIZE : HEADER_SIZE * 2);

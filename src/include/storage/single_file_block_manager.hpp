@@ -20,6 +20,7 @@ class FileBuffer;
 class SingleFileBlockManager : public BlockManager {
 	//! The location in the file where the block writing starts
 	static constexpr uint64_t BLOCK_START = HEADER_SIZE * 3;
+
 public:
 	SingleFileBlockManager(FileSystem &fs, string path, bool read_only, bool create_new);
 
@@ -35,8 +36,10 @@ public:
 	void Write(Block &block) override;
 	//! Write the header to disk, this is the final step of the checkpointing process
 	void WriteHeader(DatabaseHeader header) override;
+
 private:
 	void Initialize(DatabaseHeader &header);
+
 private:
 	//! The active DatabaseHeader, either 0 (h1) or 1 (h2)
 	uint8_t active_header;

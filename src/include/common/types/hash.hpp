@@ -27,12 +27,12 @@ inline uint64_t murmurhash32(uint32_t x) {
 }
 
 inline uint64_t murmurhash64(uint64_t x) {
-    x ^= x >> 30;
-    x *= UINT64_C(0xbf58476d1ce4e5b9);
-    x ^= x >> 27;
-    x *= UINT64_C(0x94d049bb133111eb);
-    x ^= x >> 31;
-    return x;
+	x ^= x >> 30;
+	x *= UINT64_C(0xbf58476d1ce4e5b9);
+	x ^= x >> 27;
+	x *= UINT64_C(0x94d049bb133111eb);
+	x ^= x >> 31;
+	return x;
 }
 
 template <class T> uint64_t Hash(T value) {

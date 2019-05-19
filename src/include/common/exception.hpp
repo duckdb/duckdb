@@ -74,9 +74,10 @@ public:
 		exception_message_ = ExceptionTypeToString(exception_type) + ": " + message;
 	}
 
-	const char* what() const noexcept override {
+	const char *what() const noexcept override {
 		return exception_message_.c_str();
 	}
+
 protected:
 	void Format(va_list ap) {
 		exception_message_ = StringUtil::VFormat(exception_message_, ap);

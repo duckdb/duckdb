@@ -72,11 +72,10 @@ void Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) {
 	undo_buffer.Commit(log, commit_id);
 	if (log) {
 		// commit any sequences that were used to the WAL
-		for(auto &entry : sequence_usage) {
+		for (auto &entry : sequence_usage) {
 			log->WriteSequenceValue(entry.first, entry.second);
 		}
 		// flush the WAL
 		log->Flush();
 	}
-
 }

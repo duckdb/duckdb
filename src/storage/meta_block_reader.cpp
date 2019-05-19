@@ -3,8 +3,8 @@
 using namespace duckdb;
 using namespace std;
 
-MetaBlockReader::MetaBlockReader(BlockManager &manager, block_id_t block_id) :
-	manager(manager), block(make_unique<Block>(-1)), offset(0), next_block(-1) {
+MetaBlockReader::MetaBlockReader(BlockManager &manager, block_id_t block_id)
+    : manager(manager), block(make_unique<Block>(-1)), offset(0), next_block(-1) {
 	ReadNewBlock(block_id);
 }
 
@@ -28,6 +28,6 @@ void MetaBlockReader::ReadData(uint8_t *buffer, uint64_t read_size) {
 void MetaBlockReader::ReadNewBlock(block_id_t id) {
 	block->id = id;
 	manager.Read(*block);
-	next_block = *((block_id_t*) block->buffer);
+	next_block = *((block_id_t *)block->buffer);
 	offset = sizeof(block_id_t);
 }

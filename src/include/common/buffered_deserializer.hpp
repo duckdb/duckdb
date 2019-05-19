@@ -19,6 +19,7 @@ public:
 	BufferedDeserializer(BufferedSerializer &serializer);
 
 	void ReadData(data_ptr_t buffer, uint64_t read_size) override;
+
 public:
 	data_ptr_t ptr;
 	data_ptr_t endptr;

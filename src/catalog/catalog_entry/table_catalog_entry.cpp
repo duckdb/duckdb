@@ -24,8 +24,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
                                      std::shared_ptr<DataTable> inherited_storage)
     : CatalogEntry(CatalogType::TABLE, catalog, info->base->table), schema(schema), storage(inherited_storage),
       columns(move(info->base->columns)), constraints(move(info->base->constraints)),
-      bound_constraints(move(info->bound_constraints)),
-      name_map(info->name_map) {
+      bound_constraints(move(info->bound_constraints)), name_map(info->name_map) {
 	// add the "rowid" alias, if there is no rowid column specified in the table
 	if (name_map.find("rowid") == name_map.end()) {
 		name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;

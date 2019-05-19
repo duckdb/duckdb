@@ -15,7 +15,7 @@ using namespace duckdb;
 using namespace std;
 
 StorageManager::StorageManager(DuckDB &db, string path, bool read_only)
-    : database(db),path(path), wal(db), read_only(read_only) {
+    : database(db), path(path), wal(db), read_only(read_only) {
 }
 
 StorageManager::~StorageManager() {

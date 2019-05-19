@@ -21,5 +21,4 @@ public:
 	block_id_t id;
 };
 
-}
-
+} // namespace duckdb

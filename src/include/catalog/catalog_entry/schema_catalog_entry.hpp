@@ -49,6 +49,7 @@ public:
 	CatalogSet scalar_functions;
 	//! The catalog set holding the sequences
 	CatalogSet sequences;
+
 public:
 	//! Returns a pointer to a table of the given name. Throws an exception if
 	//! the table does not exist.

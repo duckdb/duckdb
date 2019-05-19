@@ -216,7 +216,6 @@ SequenceCatalogEntry *SchemaCatalogEntry::GetSequence(Transaction &transaction, 
 	return (SequenceCatalogEntry *)entry;
 }
 
-
 void SchemaCatalogEntry::Serialize(Serializer &serializer) {
 	serializer.WriteString(name);
 }

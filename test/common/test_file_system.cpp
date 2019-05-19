@@ -107,20 +107,21 @@ TEST_CASE("Test file buffers for reading/writing to file", "[file_system]") {
 
 	// create the buffer and fill it with data
 	auto buf = make_unique<FileBuffer>(4096);
-	int64_t *ptr = (int64_t*) buf->buffer;
-	for(size_t i = 0; i < 10; i++) {
+	int64_t *ptr = (int64_t *)buf->buffer;
+	for (size_t i = 0; i < 10; i++) {
 		ptr[i] = i;
 	}
 
 	// open file for writing
-	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::WRITE | FileFlags::CREATE | FileFlags::DIRECT_IO, FileLockType::WRITE_LOCK));
+	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::WRITE | FileFlags::CREATE | FileFlags::DIRECT_IO,
+	                                     FileLockType::WRITE_LOCK));
 	// write the buffer
 	REQUIRE_NOTHROW(buf->Write(*handle, 0));
 	// clear the buffer
 	buf->Clear();
 	// now read data back into the buffer
 	REQUIRE_NOTHROW(buf->Read(*handle, 0));
-	for(size_t i = 0; i < 10; i++) {
+	for (size_t i = 0; i < 10; i++) {
 		REQUIRE(ptr[i] == i);
 	}
 	// close the file

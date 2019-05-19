@@ -14,7 +14,8 @@ using namespace std;
 #define BOOL_COUNT 3
 
 TEST_CASE("Test write lock with multiple processes", "[persistence][.]") {
-	uint64_t *count = (uint64_t *)mmap(NULL, sizeof(uint64_t), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, 0, 0);
+	uint64_t *count =
+	    (uint64_t *)mmap(NULL, sizeof(uint64_t), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, 0, 0);
 	*count = 0;
 
 	string dbdir = TestCreatePath("writelocktest");
@@ -32,7 +33,7 @@ TEST_CASE("Test write lock with multiple processes", "[persistence][.]") {
 		(*count)++;
 		con.Query("CREATE TABLE a(i INTEGER)");
 		con.Query("INSERT INTO a VALUES(42)");
-		while(true) {
+		while (true) {
 			con.Query("SELECT * FROM a");
 			usleep(100);
 		}
@@ -40,7 +41,7 @@ TEST_CASE("Test write lock with multiple processes", "[persistence][.]") {
 		unique_ptr<DuckDB> db;
 		// parent process
 		// sleep a bit to wait for child process
-		while(*count == 0) {
+		while (*count == 0) {
 			usleep(100);
 		}
 		// try to open db for writing, this should fail
@@ -53,7 +54,8 @@ TEST_CASE("Test write lock with multiple processes", "[persistence][.]") {
 }
 
 TEST_CASE("Test read lock with multiple processes", "[persistence][.]") {
-	uint64_t *count = (uint64_t *)mmap(NULL, sizeof(uint64_t), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, 0, 0);
+	uint64_t *count =
+	    (uint64_t *)mmap(NULL, sizeof(uint64_t), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, 0, 0);
 	*count = 0;
 
 	string dbdir = TestCreatePath("readlocktest");
@@ -79,7 +81,7 @@ TEST_CASE("Test read lock with multiple processes", "[persistence][.]") {
 		(*count)++;
 		// query some values
 		con.Query("SELECT i+2 FROM a");
-		while(true) {
+		while (true) {
 			usleep(100);
 			con.Query("SELECT * FROM a");
 		}
@@ -87,7 +89,7 @@ TEST_CASE("Test read lock with multiple processes", "[persistence][.]") {
 		unique_ptr<DuckDB> db;
 		// parent process
 		// sleep a bit to wait for child process
-		while(*count == 0) {
+		while (*count == 0) {
 			usleep(100);
 		}
 		// try to open db for writing, this should fail
@@ -103,4 +105,3 @@ TEST_CASE("Test read lock with multiple processes", "[persistence][.]") {
 		}
 	}
 }
-

@@ -51,11 +51,11 @@ TEST_CASE("Test transactional integrity when facing process aborts", "[persisten
 		unique_ptr<DuckDB> db;
 		// it may take some time for the OS to reclaim the lock
 		// loop and wait until the database is successfully started again
-		for(size_t i = 0; i < 1000; i++) {
+		for (size_t i = 0; i < 1000; i++) {
 			usleep(10000);
 			try {
 				db = make_unique<DuckDB>(db_folder);
-			} catch(...) {
+			} catch (...) {
 			}
 			if (db) {
 				break;

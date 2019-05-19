@@ -45,6 +45,7 @@ public:
 	DependencyManager dependency_manager;
 	//! Write lock for the catalog
 	std::mutex write_lock;
+
 public:
 	//! Creates a schema in the catalog.
 	void CreateSchema(Transaction &transaction, CreateSchemaInfo *info);

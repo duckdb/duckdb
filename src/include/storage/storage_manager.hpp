@@ -40,6 +40,7 @@ public:
 	unique_ptr<BlockManager> block_manager;
 	//! The database this storagemanager belongs to
 	DuckDB &database;
+
 private:
 	//! Load the database from a directory
 	void LoadDatabase();
