@@ -181,13 +181,11 @@ void ART::erase(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned 
 				break;
 			}
 			case NodeType::N48: {
-
 				Node48::erase(node, pos);
 				break;
 			}
 			case NodeType::N256:
 				Node256::erase(node, pos);
-
 				break;
 			default:
 				assert(0);
@@ -277,7 +275,6 @@ void ART::insert(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned
 }
 
 Node *ART::lookup(unique_ptr<Node> &node, Key &key, unsigned keyLength, unsigned depth) {
-
 	bool skippedPrefix = false; // Did we optimistically skip some prefix without checking it?
 	auto node_val = node.get();
 
