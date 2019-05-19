@@ -26,28 +26,6 @@ public:
 	template<class T>
 	T Fetch(index_t col, index_t row) {
 		throw NotImplementedException("Unimplemented type for fetch");
-		// if (std::is_same<T, int8_t>()) {
-		// 	return duckdb_value_int8(&result, col, row);
-		// } else if (std::is_same<T, int16_t>()) {
-		// 	return duckdb_value_int16(&result, col, row);
-		// } else if (std::is_same<T, int32_t>()) {
-		// 	return duckdb_value_int32(&result, col, row);
-		// } else if (std::is_same<T, int64_t>()) {
-		// 	return duckdb_value_int64(&result, col, row);
-		// } else if (std::is_same<T, float>()) {
-		// 	return duckdb_value_float(&result, col, row);
-		// } else if (std::is_same<T, double>()) {
-		// 	return duckdb_value_double(&result, col, row);
-		// } else if (std::is_same<T, string>()) {
-		// 	auto value = duckdb_value_varchar(&result, col, row);
-		// 	string strval = string(value);
-		// 	free((void *)value);
-		// 	return strval;
-		// } else if (std::is_same<T, bool>()) {
-		// 	return duckdb_value_boolean(&result, col, row);
-		// } else {
-		// 	throw NotImplementedException("Unimplemented type for fetch");
-		// }
 	}
 
 	bool IsNull(index_t col, index_t row) {
@@ -102,17 +80,24 @@ template <> string CAPIResult::Fetch(index_t col, index_t row) {
 
 class CAPITester {
 public:
-	CAPITester(){}
+	CAPITester() : database(nullptr), connection(nullptr) {}
 	~CAPITester() {
+		Cleanup();
+	}
+
+	void Cleanup() {
 		if (connection) {
 			duckdb_disconnect(&connection);
+			connection = nullptr;
 		}
 		if (database) {
 			duckdb_close(&database);
+			database = nullptr;
 		}
 	}
 
 	bool OpenDatabase(const char *path) {
+		Cleanup();
 		if (duckdb_open(path, &database) != DuckDBSuccess) {
 			return false;
 		}
