@@ -26,6 +26,7 @@ unique_ptr<CreateIndexStatement> Transformer::TransformCreateIndex(Node *node) {
 	auto &info = *result->info.get();
 
 	info.unique = stmt->unique;
+	info.if_not_exists = stmt->if_not_exists;
 
 	for (auto cell = stmt->indexParams->head; cell != nullptr; cell = cell->next) {
 		auto index_element = (IndexElem *)cell->data.ptr_value;

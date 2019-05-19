@@ -96,6 +96,21 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, Vector &result) 
 		case ExpressionType::OPERATOR_MOD:
 			VectorOperations::Modulo(left, right, result);
 			break;
+		case ExpressionType::OPERATOR_LSHIFT:
+			VectorOperations::BitwiseShiftLeft(left, right, result);
+			break;
+		case ExpressionType::OPERATOR_RSHIFT:
+			VectorOperations::BitwiseShiftRight(left, right, result);
+			break;
+		case ExpressionType::OPERATOR_BITWISE_AND:
+			VectorOperations::BitwiseAND(left, right, result);
+			break;
+		case ExpressionType::OPERATOR_BITWISE_OR:
+			VectorOperations::BitwiseOR(left, right, result);
+			break;
+		case ExpressionType::OPERATOR_BITWISE_XOR:
+			VectorOperations::BitwiseXOR(left, right, result);
+			break;
 		default:
 			throw NotImplementedException("Unsupported operator type with 2 children!");
 		}

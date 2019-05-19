@@ -92,8 +92,8 @@ matrix:
         - pip install --user boto3
 
       script:
-        - mkdir -p build/release && cd build/release
-        - cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build . && cd ..
+        - mkdir -p build/release
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - ./build/release/test/unittest
 
       after_success:
@@ -116,11 +116,11 @@ matrix:
 
       script: 
         - mkdir -p build/coverage
-        - (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+        - (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
         - build/coverage/test/unittest
 
       after_success:
-        - coveralls -b build/coverage --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --gcov-options '\-lp'
+        - coveralls -b build/coverage --exclude tools --exclude build --exclude benchmark --exclude examples --exclude third_party --exclude test --gcov-options '\-lp'
 
     - os: windows
       name: VS 2017
@@ -190,7 +190,7 @@ matrix:
 
     #   language: cpp
 
-    #   before_install: 
+    #   before_install:
     #     - choco install python --version 3.7.3
     #     - c:/python37/python.exe -m pip install --upgrade pip
     #     - c:/python37/python.exe -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"

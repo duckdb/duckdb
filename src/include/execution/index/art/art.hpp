@@ -59,7 +59,8 @@ public:
 	//! Insert data into the index
 	void Insert(DataChunk &data, Vector &row_ids);
 	//! Print the index to the console
-	void Print(){}
+	void Print() {
+	}
 
 	void BulkLoad(DataChunk &data, Vector &row_ids);
 

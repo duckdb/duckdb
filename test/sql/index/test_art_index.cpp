@@ -7,7 +7,7 @@ using namespace duckdb;
 using namespace std;
 
 // FIXME: Rework undo buffer when destroying db
-TEST_CASE("Test index creation statements with multiple connections", "[art-index-mult]") {
+TEST_CASE("Test index creation statements with multiple connections", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -60,7 +60,7 @@ TEST_CASE("Test index creation statements with multiple connections", "[art-inde
 	//	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 }
 
-TEST_CASE("ART Integer Types", "[art-int]") {
+TEST_CASE("ART Integer Types", "[art][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 
@@ -183,7 +183,7 @@ TEST_CASE("ART Integer Types", "[art-int]") {
 	}
 }
 
-TEST_CASE("ART Big Range", "[art-big-range]") {
+TEST_CASE("ART Big Range", "[art][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 
@@ -215,7 +215,7 @@ TEST_CASE("ART Big Range", "[art-big-range]") {
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 }
 
-TEST_CASE("ART  Node 4", "[art-4]") {
+TEST_CASE("ART  Node 4", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 
@@ -247,7 +247,7 @@ TEST_CASE("ART  Node 4", "[art-4]") {
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 }
 
-TEST_CASE("ART  Node 16", "[art-16]") {
+TEST_CASE("ART  Node 16", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 
@@ -277,7 +277,7 @@ TEST_CASE("ART  Node 16", "[art-16]") {
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 }
 
-TEST_CASE("ART Node 48", "[art-48]") {
+TEST_CASE("ART Node 48", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 
@@ -307,7 +307,7 @@ TEST_CASE("ART Node 48", "[art-48]") {
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 }
 
-TEST_CASE("Index Exceptions", "[index-exception]") {
+TEST_CASE("Index Exceptions", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 
