@@ -1,5 +1,7 @@
 #include "common/serializer/buffered_deserializer.hpp"
 
+#include <cstring>
+
 using namespace duckdb;
 using namespace std;
 
