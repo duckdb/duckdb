@@ -1,4 +1,4 @@
-#include "common/buffered_serializer.hpp"
+#include "common/serializer/buffered_serializer.hpp"
 
 #include <cstring>
 

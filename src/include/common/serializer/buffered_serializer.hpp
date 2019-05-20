@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// common/buffered_serializer.hpp
+// common/serializer/buffered_serializer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -26,21 +26,18 @@ public:
 	BufferedSerializer(index_t maximum_size = SERIALIZER_DEFAULT_SIZE);
 	//! Serializes to a provided (owned) data pointer
 	BufferedSerializer(unique_ptr<data_t[]> data, index_t size);
-	// //! Serializes to a provided non-owned data pointer, bounds on writing are
-	// //! not checked
 
+	index_t maximum_size;
+	data_ptr_t data;
+
+	BinaryData blob;
+public:
 	void WriteData(const_data_ptr_t buffer, uint64_t write_size) override;
 
 	//! Retrieves the data after the writing has been completed
 	BinaryData GetData() {
 		return std::move(blob);
 	}
-
-public:
-	index_t maximum_size;
-	data_ptr_t data;
-
-	BinaryData blob;
 };
 
 } // namespace duckdb
