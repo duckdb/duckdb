@@ -21,7 +21,7 @@ TEST_CASE("Test storage that exceeds a single block", "[storage][.]") {
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21), (NULL, NULL)"));
-		int64_t table_size = 4;
+		uint64_t table_size = 4;
 		// grow the table until it exceeds integer_count
 		while (table_size < integer_count) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM test"));
@@ -64,7 +64,7 @@ TEST_CASE("Test storage that exceeds a single block with different types", "[sto
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b BIGINT);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21), (NULL, NULL)"));
-		int64_t table_size = 4;
+		uint64_t table_size = 4;
 		// grow the table until it exceeds integer_count
 		while (table_size < integer_count) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM test"));
@@ -108,7 +108,7 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('a'), ('bb'), ('ccc'), ('dddd'), ('eeeee')"));
-		int64_t table_size = 5;
+		uint64_t table_size = 5;
 		// grow the table until it exceeds integer_count
 		while (table_size < string_count) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM test"));

@@ -314,8 +314,7 @@ public:
 unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock_type) {
 	// cannot combine Read and Write flags
 	assert(!(flags & FileFlags::READ && flags & FileFlags::WRITE));
-	// cannot combine Read and DirectIO/CREATE flags
-	assert(!(flags & FileFlags::READ && flags & FileFlags::DIRECT_IO));
+	// cannot combine Read and CREATE flags
 	assert(!(flags & FileFlags::READ && flags & FileFlags::CREATE));
 	DWORD desired_access;
 	DWORD share_mode;
@@ -324,7 +323,6 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	if (flags & FileFlags::READ) {
 		desired_access = GENERIC_READ;
 		share_mode = FILE_SHARE_READ;
-
 	} else {
 		// need Read or Write
 		assert(flags & FileFlags::WRITE);
@@ -334,8 +332,11 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 			creation_disposition = CREATE_NEW;
 		}
 		if (flags & FileFlags::DIRECT_IO) {
-			flags_and_attributes |= FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH;
+			flags_and_attributes |= FILE_FLAG_WRITE_THROUGH;
 		}
+	}
+	if (flags & FileFlags::DIRECT_IO) {
+		flags_and_attributes |= FILE_FLAG_NO_BUFFERING;
 	}
 	HANDLE hFile =
 	    CreateFileA(path, desired_access, share_mode, NULL, creation_disposition, flags_and_attributes, NULL);
