@@ -1,6 +1,5 @@
 #include "catch.hpp"
 #include "common/file_system.hpp"
-#include "dbgen.hpp"
 #include "test_helpers.hpp"
 #include "storage/storage_info.hpp"
 
