@@ -30,7 +30,7 @@ public:
 	void Initialize();
 	//! Get the WAL of the StorageManager, returns nullptr if in-memory
 	WriteAheadLog *GetWriteAheadLog() {
-		return wal.IsInitialized() ? &wal : nullptr;
+		return wal.initialized ? &wal : nullptr;
 	}
 
 	DuckDB &GetDatabase() {

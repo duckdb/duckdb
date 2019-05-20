@@ -540,17 +540,17 @@ void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, index
 	}
 }
 
+string FileSystem::JoinPath(const string &a, const string &b) {
+	// FIXME: sanitize paths
+	return a + PathSeparator() + b;
+}
+
 void FileHandle::Read(void *buffer, index_t nr_bytes, index_t location) {
 	file_system.Read(*this, buffer, nr_bytes, location);
 }
 
 void FileHandle::Write(void *buffer, index_t nr_bytes, index_t location) {
 	file_system.Write(*this, buffer, nr_bytes, location);
-}
-
-string FileSystem::JoinPath(const string &a, const string &b) {
-	// FIXME: sanitize paths
-	return a + PathSeparator() + b;
 }
 
 void FileHandle::Sync() {

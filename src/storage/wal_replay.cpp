@@ -1,10 +1,13 @@
 #include "storage/write_ahead_log.hpp"
 #include "common/serializer/buffered_file_reader.hpp"
 
+#include "parser/parsed_data/drop_info.hpp"
+
+
 using namespace duckdb;
 using namespace std;
 
-static void ReplayEntry(ClientContext &context, DuckDB &database, WALEntry entry, Deserializer &source);
+static void ReplayEntry(ClientContext &context, DuckDB &database, WALType entry_type, Deserializer &source);
 
 void WriteAheadLog::Replay(DuckDB &database, string &path) {
 	BufferedFileReader reader(*database.file_system, path.c_str());
@@ -25,10 +28,8 @@ void WriteAheadLog::Replay(DuckDB &database, string &path) {
 	try {
 		while (true) {
 			// read the current entry
-			WALEntry entry;
-			entry.type = reader.Read<wal_type_t>();
-			entry.size = reader.Read<uint32_t>();
-			if (entry.type == WALEntry::WAL_FLUSH) {
+			WALType entry_type = reader.Read<WALType>();
+			if (entry_type == WALType::WAL_FLUSH) {
 				// flush: commit the current transaction
 				context.transaction.Commit();
 				// check if the file is exhausted
@@ -40,11 +41,11 @@ void WriteAheadLog::Replay(DuckDB &database, string &path) {
 				context.transaction.BeginTransaction();
 			} else {
 				// replay the entry
-				ReplayEntry(context, database, entry, reader);
+				ReplayEntry(context, database, entry_type, reader);
 			}
 		}
 	} catch(Exception &ex) {
-		// FIXME: this should be a warning
+		// FIXME: this report a proper warning in the connection
 		fprintf(stderr, "Exception in WAL playback: %s\n", ex.what());
 		// exception thrown in WAL replay: rollback
 		context.transaction.Rollback();
@@ -73,39 +74,39 @@ void ReplaySequenceValue(ClientContext &context, Catalog &catalog, Deserializer 
 void ReplayInsert(ClientContext &context, Catalog &catalog, Deserializer &source);
 void ReplayQuery(ClientContext &context, Deserializer &source);
 
-void ReplayEntry(ClientContext &context, DuckDB &database, WALEntry entry, Deserializer &source) {
-	switch (entry.type) {
-	case WALEntry::DROP_TABLE:
-		ReplayDropTable(context, *database.catalog, source);
-		break;
-	case WALEntry::CREATE_TABLE:
+void ReplayEntry(ClientContext &context, DuckDB &database, WALType entry_type, Deserializer &source) {
+	switch (entry_type) {
+	case WALType::CREATE_TABLE:
 		ReplayCreateTable(context, *database.catalog, source);
 		break;
-	case WALEntry::CREATE_VIEW:
+	case WALType::DROP_TABLE:
+		ReplayDropTable(context, *database.catalog, source);
+		break;
+	case WALType::CREATE_VIEW:
 		ReplayCreateView(context, *database.catalog, source);
 		break;
-	case WALEntry::DROP_VIEW:
+	case WALType::DROP_VIEW:
 		ReplayDropView(context, *database.catalog, source);
 		break;
-	case WALEntry::DROP_SCHEMA:
-		ReplayDropSchema(context, *database.catalog, source);
-		break;
-	case WALEntry::CREATE_SCHEMA:
+	case WALType::CREATE_SCHEMA:
 		ReplayCreateSchema(context, *database.catalog, source);
 		break;
-	case WALEntry::DROP_SEQUENCE:
-		ReplayDropSequence(context, *database.catalog, source);
+	case WALType::DROP_SCHEMA:
+		ReplayDropSchema(context, *database.catalog, source);
 		break;
-	case WALEntry::CREATE_SEQUENCE:
+	case WALType::CREATE_SEQUENCE:
 		ReplayCreateSequence(context, *database.catalog, source);
 		break;
-	case WALEntry::SEQUENCE_VALUE:
+	case WALType::DROP_SEQUENCE:
+		ReplayDropSequence(context, *database.catalog, source);
+		break;
+	case WALType::SEQUENCE_VALUE:
 		ReplaySequenceValue(context, *database.catalog, source);
 		break;
-	case WALEntry::INSERT_TUPLE:
+	case WALType::INSERT_TUPLE:
 		ReplayInsert(context, *database.catalog, source);
 		break;
-	case WALEntry::QUERY:
+	case WALType::QUERY:
 		ReplayQuery(context, source);
 		break;
 	default:
