@@ -74,7 +74,7 @@ void StorageManager::LoadDatabase() {
 		// check if the WAL file exists
 		if (database.file_system->FileExists(wal_path)) {
 			// replay the WAL
-			wal.Replay(wal_path);
+			WriteAheadLog::Replay(database, wal_path);
 			if (!read_only) {
 				// checkpoint the database
 				checkpointer.CreateCheckpoint();

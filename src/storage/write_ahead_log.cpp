@@ -5,8 +5,8 @@
 #include "catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "catalog/catalog_entry/view_catalog_entry.hpp"
-#include "common/buffered_deserializer.hpp"
-#include "common/buffered_serializer.hpp"
+#include "common/serializer/buffered_deserializer.hpp"
+#include "common/serializer/buffered_serializer.hpp"
 #include "common/file_system.hpp"
 #include "main/client_context.hpp"
 #include "main/connection.hpp"
@@ -32,122 +32,9 @@ WriteAheadLog::~WriteAheadLog() {
 	}
 }
 
-//===--------------------------------------------------------------------===//
-// Read Helper Function
-//===--------------------------------------------------------------------===//
-static bool ReadEntry(WALEntry &entry, FILE *wal_file) {
-	return fread(&entry.type, sizeof(wal_type_t), 1, wal_file) == 1 &&
-	       fread(&entry.size, sizeof(uint32_t), 1, wal_file) == 1;
-}
-
-//===--------------------------------------------------------------------===//
-// Replay & Initialize Log
-//===--------------------------------------------------------------------===//
-static bool ReplayEntry(ClientContext &context, DuckDB &database, WALEntry entry, Deserializer &source);
-
-void WriteAheadLog::Replay(string &path) {
-	auto wal_file = fopen(path.c_str(), "r");
-	if (!wal_file) {
-		throw IOException("WAL could not be opened for reading");
-	}
-	ClientContext context(database);
-	context.transaction.SetAutoCommit(false);
-
-	vector<WALEntryData> stored_entries;
-	WALEntry entry;
-	while (ReadEntry(entry, wal_file)) {
-		// read the entry
-		if (entry.type == WALEntry::WAL_FLUSH) {
-			// flush
-			bool failed = false;
-			context.transaction.BeginTransaction();
-			for (auto &stored_entry : stored_entries) {
-				BufferedDeserializer deserializer(stored_entry.data.get(), stored_entry.entry.size);
-
-				if (!ReplayEntry(context, database, stored_entry.entry, deserializer)) {
-					// failed to replay entry in log
-					context.transaction.Rollback();
-					failed = true;
-					break;
-				}
-			}
-			if (failed) {
-				// failed to replay entry: stop replaying the WAL
-				break;
-			}
-			stored_entries.clear();
-			context.transaction.Commit();
-		} else {
-			// check the integrity of the type
-			if (!WALEntry::TypeIsValid(entry.type)) {
-				// read invalid WAL entry type! stop replaying the WAL
-				break;
-			}
-			// store the WAL entry for replay after we encounter a flush
-			WALEntryData data;
-			data.entry = entry;
-			data.data = unique_ptr<data_t[]>(new data_t[entry.size]);
-			// read the data
-			if (fread(data.data.get(), entry.size, 1, wal_file) != 1) {
-				// could not read the data for this entry, stop replaying the
-				// WAL
-				break;
-			}
-			stored_entries.push_back(move(data));
-		}
-	}
-	fclose(wal_file);
-}
-
 void WriteAheadLog::Initialize(string &path) {
 	wal_file = fopen(path.c_str(), "a+");
 	initialized = true;
-}
-
-//===--------------------------------------------------------------------===//
-// Replay Entries
-//===--------------------------------------------------------------------===//
-bool ReplayDropTable(Transaction &transaction, Catalog &catalog, Deserializer &source);
-bool ReplayCreateTable(ClientContext &context, Catalog &catalog, Deserializer &source);
-bool ReplayCreateView(Transaction &transaction, Catalog &catalog, Deserializer &source);
-bool ReplayDropView(Transaction &transaction, Catalog &catalog, Deserializer &source);
-bool ReplayDropSchema(Transaction &transaction, Catalog &catalog, Deserializer &source);
-bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog, Deserializer &source);
-bool ReplayCreateSequence(Transaction &transaction, Catalog &catalog, Deserializer &source);
-bool ReplayDropSequence(Transaction &transaction, Catalog &catalog, Deserializer &source);
-bool ReplaySequenceValue(Transaction &transaction, Catalog &catalog, Deserializer &source);
-bool ReplayInsert(ClientContext &context, Catalog &catalog, Deserializer &source);
-bool ReplayQuery(ClientContext &context, Deserializer &source);
-
-bool ReplayEntry(ClientContext &context, DuckDB &database, WALEntry entry, Deserializer &source) {
-	switch (entry.type) {
-	case WALEntry::DROP_TABLE:
-		return ReplayDropTable(context.ActiveTransaction(), *database.catalog, source);
-	case WALEntry::CREATE_TABLE:
-		return ReplayCreateTable(context, *database.catalog, source);
-	case WALEntry::CREATE_VIEW:
-		return ReplayCreateView(context.ActiveTransaction(), *database.catalog, source);
-	case WALEntry::DROP_VIEW:
-		return ReplayDropView(context.ActiveTransaction(), *database.catalog, source);
-	case WALEntry::DROP_SCHEMA:
-		return ReplayDropSchema(context.ActiveTransaction(), *database.catalog, source);
-	case WALEntry::CREATE_SCHEMA:
-		return ReplayCreateSchema(context.ActiveTransaction(), *database.catalog, source);
-	case WALEntry::DROP_SEQUENCE:
-		return ReplayDropSequence(context.ActiveTransaction(), *database.catalog, source);
-	case WALEntry::CREATE_SEQUENCE:
-		return ReplayCreateSequence(context.ActiveTransaction(), *database.catalog, source);
-	case WALEntry::SEQUENCE_VALUE:
-		return ReplaySequenceValue(context.ActiveTransaction(), *database.catalog, source);
-	case WALEntry::INSERT_TUPLE:
-		return ReplayInsert(context, *database.catalog, source);
-	case WALEntry::QUERY:
-		return ReplayQuery(context, source);
-	default:
-		// unrecognized WAL entry type
-		return false;
-	}
-	return false;
 }
 
 //===--------------------------------------------------------------------===//
@@ -189,21 +76,6 @@ void WriteAheadLog::WriteCreateTable(TableCatalogEntry *entry) {
 	WriteEntry(WALEntry::CREATE_TABLE, serializer);
 }
 
-bool ReplayCreateTable(ClientContext &context, Catalog &catalog, Deserializer &source) {
-	auto info = TableCatalogEntry::Deserialize(source);
-
-	// bind the constraints to the table again
-	Binder binder(context);
-	auto bound_info = binder.BindCreateTableInfo(move(info));
-
-	// try {
-	catalog.CreateTable(context.ActiveTransaction(), bound_info.get());
-	// catch(...) {
-	//	return false
-	//}
-	return true;
-}
-
 //===--------------------------------------------------------------------===//
 // DROP TABLE
 //===--------------------------------------------------------------------===//
@@ -213,21 +85,6 @@ void WriteAheadLog::WriteDropTable(TableCatalogEntry *entry) {
 	serializer.WriteString(entry->name);
 
 	WriteEntry(WALEntry::DROP_TABLE, serializer);
-}
-
-bool ReplayDropTable(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	DropInfo info;
-
-	info.type = CatalogType::TABLE;
-	info.schema = source.Read<string>();
-	info.name = source.Read<string>();
-
-	// try {
-	catalog.DropTable(transaction, &info);
-	// } catch (...) {
-	// 	return false;
-	// }
-	return true;
 }
 
 //===--------------------------------------------------------------------===//
@@ -240,18 +97,6 @@ void WriteAheadLog::WriteCreateSchema(SchemaCatalogEntry *entry) {
 	WriteEntry(WALEntry::CREATE_SCHEMA, serializer);
 }
 
-bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	CreateSchemaInfo info;
-	info.schema = source.Read<string>();
-
-	// try {
-	catalog.CreateSchema(transaction, &info);
-	// } catch (...) {
-	// 	return false;
-	// }
-	return true;
-}
-
 //===--------------------------------------------------------------------===//
 // SEQUENCES
 //===--------------------------------------------------------------------===//
@@ -261,31 +106,12 @@ void WriteAheadLog::WriteCreateSequence(SequenceCatalogEntry *entry) {
 	WriteEntry(WALEntry::CREATE_SEQUENCE, serializer);
 }
 
-bool ReplayCreateSequence(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	auto entry = SequenceCatalogEntry::Deserialize(source);
-	// try {
-	catalog.CreateSequence(transaction, entry.get());
-	// } catch (...) {
-	// 	return false;
-	// }
-	return true;
-}
-
 void WriteAheadLog::WriteDropSequence(SequenceCatalogEntry *entry) {
 	BufferedSerializer serializer;
 	serializer.WriteString(entry->schema->name);
 	serializer.WriteString(entry->name);
 
 	WriteEntry(WALEntry::DROP_SEQUENCE, serializer);
-}
-
-bool ReplayDropSequence(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	DropInfo info;
-	info.type = CatalogType::SEQUENCE;
-	info.schema = source.Read<string>();
-	info.name = source.Read<string>();
-	catalog.DropSequence(transaction, &info);
-	return true;
 }
 
 void WriteAheadLog::WriteSequenceValue(SequenceCatalogEntry *entry, SequenceValue val) {
@@ -298,21 +124,6 @@ void WriteAheadLog::WriteSequenceValue(SequenceCatalogEntry *entry, SequenceValu
 	WriteEntry(WALEntry::SEQUENCE_VALUE, serializer);
 }
 
-bool ReplaySequenceValue(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	auto schema = source.Read<string>();
-	auto name = source.Read<string>();
-	auto usage_count = source.Read<uint64_t>();
-	auto counter = source.Read<int64_t>();
-
-	// fetch the sequence from the catalog
-	auto seq = catalog.GetSequence(transaction, schema, name);
-	if (usage_count > seq->usage_count) {
-		seq->usage_count = usage_count;
-		seq->counter = counter;
-	}
-	return true;
-}
-
 //===--------------------------------------------------------------------===//
 // VIEWS
 //===--------------------------------------------------------------------===//
@@ -320,16 +131,6 @@ void WriteAheadLog::WriteCreateView(ViewCatalogEntry *entry) {
 	BufferedSerializer serializer;
 	entry->Serialize(serializer);
 	WriteEntry(WALEntry::CREATE_VIEW, serializer);
-}
-
-bool ReplayCreateView(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	auto entry = ViewCatalogEntry::Deserialize(source);
-	// try {
-	catalog.CreateView(transaction, entry.get());
-	// } catch (...) {
-	// 	return false;
-	// }
-	return true;
 }
 
 void WriteAheadLog::WriteDropView(ViewCatalogEntry *entry) {
@@ -340,15 +141,6 @@ void WriteAheadLog::WriteDropView(ViewCatalogEntry *entry) {
 	WriteEntry(WALEntry::DROP_VIEW, serializer);
 }
 
-bool ReplayDropView(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	DropInfo info;
-	info.type = CatalogType::VIEW;
-	info.schema = source.Read<string>();
-	info.name = source.Read<string>();
-	catalog.DropView(transaction, &info);
-	return true;
-}
-
 //===--------------------------------------------------------------------===//
 // DROP SCHEMA
 //===--------------------------------------------------------------------===//
@@ -357,20 +149,6 @@ void WriteAheadLog::WriteDropSchema(SchemaCatalogEntry *entry) {
 	serializer.WriteString(entry->name);
 
 	WriteEntry(WALEntry::DROP_SCHEMA, serializer);
-}
-
-bool ReplayDropSchema(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	DropInfo info;
-
-	info.type = CatalogType::SCHEMA;
-	info.name = source.Read<string>();
-
-	// try {
-	catalog.DropSchema(transaction, &info);
-	// } catch (...) {
-	// 	return false;
-	// }
-	return true;
 }
 
 //===--------------------------------------------------------------------===//
@@ -393,26 +171,6 @@ void WriteAheadLog::WriteInsert(string &schema, string &table, DataChunk &chunk)
 	WriteEntry(WALEntry::INSERT_TUPLE, serializer);
 }
 
-bool ReplayInsert(ClientContext &context, Catalog &catalog, Deserializer &source) {
-	auto schema_name = source.Read<string>();
-	auto table_name = source.Read<string>();
-	DataChunk chunk;
-
-	chunk.Deserialize(source);
-
-	Transaction &transaction = context.ActiveTransaction();
-
-	try {
-		// first find the table
-		auto table = catalog.GetTable(transaction, schema_name, table_name);
-		// now append to the chunk
-		table->storage->Append(*table, context, chunk);
-	} catch (...) {
-		return false;
-	}
-	return true;
-}
-
 //===--------------------------------------------------------------------===//
 // QUERY
 //===--------------------------------------------------------------------===//
@@ -421,14 +179,6 @@ void WriteAheadLog::WriteQuery(string &query) {
 	serializer.WriteString(query);
 
 	WriteEntry(WALEntry::QUERY, serializer);
-}
-
-bool ReplayQuery(ClientContext &context, Deserializer &source) {
-	// read the query
-	auto query = source.Read<string>();
-
-	auto result = context.Query(query, false);
-	return result->success;
 }
 
 //===--------------------------------------------------------------------===//

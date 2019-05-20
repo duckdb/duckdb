@@ -52,12 +52,22 @@ public:
 
 class FileSystem {
 public:
+	virtual ~FileSystem() {
+	}
+public:
 	virtual unique_ptr<FileHandle> OpenFile(const char *path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK);
 	unique_ptr<FileHandle> OpenFile(string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK) {
 		return OpenFile(path.c_str(), flags, lock);
 	}
-	virtual void Read(FileHandle &handle, void *buffer, index_t nr_bytes, index_t location);
-	virtual void Write(FileHandle &handle, void *buffer, index_t nr_bytes, index_t location);
+	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is equivalent to calling SetFilePointer(location) followed by calling Read().
+	virtual void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, index_t location);
+	//! Write exactly nr_bytes to the specified location in the file. Fails if nr_bytes could not be read. This is equivalent to calling SetFilePointer(location) followed by calling Write().
+	virtual void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, index_t location);
+	//! Read nr_bytes from the specified file into the buffer, moving the file pointer forward by nr_bytes. Returns the amount of bytes read.
+	virtual int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes);
+	//! Write nr_bytes from the buffer into the file, moving the file pointer forward by nr_bytes.
+	virtual int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes);
+
 	//! Returns the file size of a file handle, returns -1 on error
 	virtual int64_t GetFileSize(FileHandle &handle);
 
@@ -84,9 +94,10 @@ public:
 	virtual void FileSync(FILE *file);
 	//! Sync a file handle to disk
 	virtual void FileSync(FileHandle &handle);
+private:
+	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
+	void SetFilePointer(FileHandle &handle, index_t location);
 
-	virtual ~FileSystem() {
-	}
 };
 
 } // namespace duckdb

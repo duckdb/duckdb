@@ -96,7 +96,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	return make_unique<UnixFileHandle>(*this, path, fd);
 }
 
-static void seek_in_file(FileHandle &handle, index_t location) {
+void FileSystem::SetFilePointer(FileHandle &handle, index_t location) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	off_t offset = lseek(fd, location, SEEK_SET);
 	if (offset == (off_t)-1) {
@@ -105,34 +105,22 @@ static void seek_in_file(FileHandle &handle, index_t location) {
 	}
 }
 
-void FileSystem::Read(FileHandle &handle, void *buffer, count_t nr_bytes, index_t location) {
+int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	int fd = ((UnixFileHandle &)handle).fd;
-	// lseek to the location
-	seek_in_file(handle, location);
-	// now read from the location
-	errno = 0;
 	int64_t bytes_read = read(fd, buffer, nr_bytes);
 	if (bytes_read == -1) {
 		throw IOException("Could not read from file \"%s\": %s", handle.path.c_str(), strerror(errno));
 	}
-	if ((index_t)bytes_read != nr_bytes) {
-		throw IOException("Could not read sufficient bytes from file \"%s\"", handle.path.c_str());
-	}
+	return bytes_read;
 }
 
-void FileSystem::Write(FileHandle &handle, void *buffer, count_t nr_bytes, index_t location) {
+int64_t FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	int fd = ((UnixFileHandle &)handle).fd;
-	// lseek to the location
-	seek_in_file(handle, location);
-	// now write to the location
-	errno = 0;
 	int64_t bytes_written = write(fd, buffer, nr_bytes);
 	if (bytes_written == -1) {
 		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), strerror(errno));
 	}
-	if ((index_t)bytes_written != nr_bytes) {
-		throw IOException("Could not write sufficient bytes from file \"%s\"", handle.path.c_str());
-	}
+	return bytes_written;
 }
 
 int64_t FileSystem::GetFileSize(FileHandle &handle) {
@@ -358,7 +346,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	return make_unique<WindowsFileHandle>(*this, path, hFile);
 }
 
-static void seek_in_file(FileHandle &handle, index_t location) {
+void FileSystem::SetFilePointer(FileHandle &handle, index_t location) {
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	LARGE_INTEGER loc;
 	loc.QuadPart = location;
@@ -370,26 +358,24 @@ static void seek_in_file(FileHandle &handle, index_t location) {
 	}
 }
 
-void FileSystem::Read(FileHandle &handle, void *buffer, count_t nr_bytes, index_t location) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
-	seek_in_file(handle, location);
-
-	auto rc = ReadFile(hFile, buffer, (DWORD)nr_bytes, NULL, NULL);
+int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+	DWORD bytes_read;
+	auto rc = ReadFile(hFile, buffer, (DWORD)nr_bytes, &bytes_read, NULL);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
 		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), error.c_str());
 	}
+	return bytes_read;
 }
 
-void FileSystem::Write(FileHandle &handle, void *buffer, count_t nr_bytes, index_t location) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
-	seek_in_file(handle, location);
-
-	auto rc = WriteFile(hFile, buffer, (DWORD)nr_bytes, NULL, NULL);
+int64_t FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+	DWORD bytes_read;
+	auto rc = WriteFile(hFile, buffer, (DWORD)nr_bytes, &bytes_read, NULL);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
 		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), error.c_str());
 	}
+	return bytes_read;
 }
 
 int64_t FileSystem::GetFileSize(FileHandle &handle) {
@@ -533,6 +519,26 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 	}
 }
 #endif
+
+void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, index_t location) {
+	// seek to the location
+	SetFilePointer(handle, location);
+	// now read from the location
+	int64_t bytes_read = Read(handle, buffer, nr_bytes);
+	if (bytes_read != nr_bytes) {
+		throw IOException("Could not read sufficient bytes from file \"%s\"", handle.path.c_str());
+	}
+}
+
+void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, index_t location) {
+	// seek to the location
+	SetFilePointer(handle, location);
+	// now write to the location
+	int64_t bytes_written = Write(handle, buffer, nr_bytes);
+	if (bytes_written != nr_bytes) {
+		throw IOException("Could not write sufficient bytes from file \"%s\"", handle.path.c_str());
+	}
+}
 
 void FileHandle::Read(void *buffer, index_t nr_bytes, index_t location) {
 	file_system.Read(*this, buffer, nr_bytes, location);

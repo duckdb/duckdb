@@ -1,4 +1,4 @@
-#include "common/buffered_deserializer.hpp"
+#include "common/serializer/buffered_deserializer.hpp"
 
 using namespace duckdb;
 using namespace std;

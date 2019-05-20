@@ -13,8 +13,6 @@
 #include "common/types/data_chunk.hpp"
 #include "catalog/catalog_entry/sequence_catalog_entry.hpp"
 
-#include <vector>
-
 namespace duckdb {
 
 class BufferedSerializer;
@@ -45,10 +43,6 @@ struct WALEntry {
 	static constexpr wal_type_t QUERY = 11;
 	static constexpr wal_type_t WAL_FLUSH = 100;
 
-	static bool TypeIsValid(wal_type_t type) {
-		return type == WALEntry::WAL_FLUSH || (type >= WALEntry::DROP_TABLE && type <= WALEntry::QUERY);
-	}
-
 	wal_type_t type;
 	uint32_t size;
 };
@@ -73,7 +67,7 @@ public:
 	}
 
 	//! Replay the WAL
-	void Replay(string &path);
+	static void Replay(DuckDB &database, string &path);
 	//! Initialize the WAL in the specified directory
 	void Initialize(string &path);
 
