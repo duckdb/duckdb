@@ -359,6 +359,7 @@ void FileSystem::SetFilePointer(FileHandle &handle, index_t location) {
 }
 
 int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	DWORD bytes_read;
 	auto rc = ReadFile(hFile, buffer, (DWORD)nr_bytes, &bytes_read, NULL);
 	if (rc == 0) {
@@ -369,6 +370,7 @@ int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 }
 
 int64_t FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	DWORD bytes_read;
 	auto rc = WriteFile(hFile, buffer, (DWORD)nr_bytes, &bytes_read, NULL);
 	if (rc == 0) {
