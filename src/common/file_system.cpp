@@ -246,10 +246,6 @@ string FileSystem::PathSeparator() {
 	return "/";
 }
 
-void FileSystem::FileSync(FILE *file) {
-	fsync(fileno(file));
-}
-
 void FileSystem::FileSync(FileHandle &handle) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	fsync(fd);
@@ -491,22 +487,6 @@ bool FileSystem::ListFiles(const string &directory, function<void(string)> callb
 
 string FileSystem::PathSeparator() {
 	return "\\";
-}
-
-void FileSystem::FileSync(FILE *file) {
-	throw NotImplementedException("Can't sync FILE* on Windows");
-
-	/* // this is the correct way but we need a file name or Windows HANDLE
-	HANDLE hdl = CreateFileA(lpFileName, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	if (hdl == INVALID_HANDLE_VALUE) {
-	    //error
-	}
-
-	if (FlushFileBuffers(hdl) == 0) {
-	    //error
-	}
-	CloseHandle(hdl);
-	*/
 }
 
 void FileSystem::FileSync(FileHandle &handle) {

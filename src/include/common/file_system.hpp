@@ -90,8 +90,6 @@ public:
 	virtual string PathSeparator();
 	//! Join two paths together
 	virtual string JoinPath(const string &a, const string &path);
-	//! Sync a file descriptor to disk
-	virtual void FileSync(FILE *file);
 	//! Sync a file handle to disk
 	virtual void FileSync(FileHandle &handle);
 private:
