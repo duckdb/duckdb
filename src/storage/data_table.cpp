@@ -106,11 +106,11 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 	VerifyConstraints(table, context, chunk);
 
 	auto last_chunk = tail_chunk;
-	auto lock = last_chunk->GetExclusiveLock();
+	auto lock = last_chunk->lock.GetExclusiveLock();
 	while (last_chunk != tail_chunk) {
 		// new chunk was added, have to obtain lock of last chunk
 		last_chunk = tail_chunk;
-		lock = last_chunk->GetExclusiveLock();
+		lock = last_chunk->lock.GetExclusiveLock();
 	}
 	assert(!last_chunk->next);
 
@@ -159,7 +159,7 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 		// we need to append more entries
 		// first create a new chunk and lock it
 		auto new_chunk = make_unique<StorageChunk>(*this, last_chunk->start + last_chunk->count);
-		auto new_chunk_lock = new_chunk->GetExclusiveLock();
+		auto new_chunk_lock = new_chunk->lock.GetExclusiveLock();
 		auto new_chunk_pointer = new_chunk.get();
 		assert(!last_chunk->next);
 		last_chunk->next = move(new_chunk);
@@ -195,7 +195,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 	auto chunk = GetChunk(first_id);
 
 	// get an exclusive lock on the chunk
-	auto lock = chunk->GetExclusiveLock();
+	auto lock = chunk->lock.GetExclusiveLock();
 	// no constraints are violated
 	// now delete the entries
 	VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
@@ -241,7 +241,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	auto chunk = GetChunk(first_id);
 
 	// get an exclusive lock on the chunk
-	auto lock = chunk->GetExclusiveLock();
+	auto lock = chunk->lock.GetExclusiveLock();
 
 	// first we handle any PRIMARY KEY and UNIQUE constraints
 	UniqueIndex::Update(context.ActiveTransaction(), chunk, unique_indexes, column_ids, updates, row_identifiers);
@@ -365,7 +365,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<c
 	while (structure.chunk) {
 		auto current_chunk = structure.chunk;
 		// first obtain a shared lock on the current chunk
-		auto lock = current_chunk->GetSharedLock();
+		auto lock = current_chunk->lock.GetSharedLock();
 		// now scan the chunk until we find enough pieces to fill a vector or
 		// reach the end
 		sel_t regular_entries[STANDARD_VECTOR_SIZE], version_entries[STANDARD_VECTOR_SIZE];
@@ -447,14 +447,14 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 	VectorOperations::Sort(row_identifiers, sort_vector);
 
 	StorageChunk *current_chunk = nullptr;
-	unique_ptr<StorageLock> lock;
+	unique_ptr<StorageLockKey> lock;
 	for (index_t i = 0; i < row_identifiers.count; i++) {
 		auto row_id = row_ids[sort_vector[i]];
 		auto chunk = GetChunk(row_id);
 		if (chunk != current_chunk) {
 			// chunk is not locked yet
 			// get the lock on the current chunk
-			lock = chunk->GetSharedLock();
+			lock = chunk->lock.GetSharedLock();
 			current_chunk = chunk;
 		}
 		assert((index_t)row_id >= chunk->start && (index_t)row_id < chunk->start + chunk->count);
@@ -523,7 +523,7 @@ void DataTable::CreateIndexScan(ScanStructure &structure, vector<column_t> &colu
 		if (structure.offset == 0 && !structure.version_chain) {
 			// first obtain a shared lock on the current chunk, if we don't have
 			// it already
-			structure.locks.push_back(current_chunk->GetSharedLock());
+			structure.locks.push_back(current_chunk->lock.GetSharedLock());
 		}
 
 		data_ptr_t alternate_version_pointers[STANDARD_VECTOR_SIZE];
