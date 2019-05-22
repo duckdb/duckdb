@@ -106,6 +106,7 @@ matrix:
         - test/Release/unittest.exe
 
       after_success:
+        - ls -R .
         - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll
 
     - os: linux
