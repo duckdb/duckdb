@@ -56,6 +56,19 @@ matrix:
 
     - os: linux
       dist: xenial
+      name: GCC 8 Debug
+
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-8
+      env:
+        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
+
+    - os: linux
+      dist: xenial
       name: GCC 8
 
       addons:
@@ -110,7 +123,7 @@ matrix:
 
       script:
         - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64
-        - cmake --build . --target unittest --config Release
+        - cmake --build . --target unittest --target duckdb --config Release
         - test/Release/unittest.exe
 
       after_success:
