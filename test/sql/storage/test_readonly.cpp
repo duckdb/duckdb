@@ -1,6 +1,5 @@
 #include "catch.hpp"
 #include "common/file_system.hpp"
-#include "dbgen.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -25,9 +24,6 @@ class ReadOnlyFileSystem : public FileSystem {
 		throw Exception("RO file system");
 	}
 	void RemoveFile(const string &filename) override {
-		throw Exception("RO file system");
-	}
-	void FileSync(FILE *file) override {
 		throw Exception("RO file system");
 	}
 };

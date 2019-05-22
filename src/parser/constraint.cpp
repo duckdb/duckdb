@@ -1,8 +1,7 @@
 #include "parser/constraint.hpp"
 
-#include "common/buffered_deserializer.hpp"
-#include "common/buffered_serializer.hpp"
 #include "common/printer.hpp"
+#include "common/serializer.hpp"
 #include "parser/constraints/list.hpp"
 
 using namespace duckdb;

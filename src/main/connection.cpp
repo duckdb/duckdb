@@ -21,11 +21,15 @@ Connection::~Connection() {
 	}
 }
 
-string Connection::GetProfilingInformation() {
+string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
 	if (context->is_invalidated) {
 		return "Context is invalidated.";
 	}
-	return context->profiler.ToString();
+	if (format == ProfilerPrintFormat::JSON) {
+		return context->profiler.ToJSON();
+	} else {
+		return context->profiler.ToString();
+	}
 }
 
 void Connection::Interrupt() {

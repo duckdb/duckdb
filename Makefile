@@ -5,8 +5,10 @@ opt: release
 unit: unittest
 
 GENERATOR=
+FORCE_COLOR=
 ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
+	FORCE_COLOR=-DFORCE_COLORED_OUTPUT=1
 endif
 
 clean:
@@ -15,13 +17,13 @@ clean:
 debug:
 	mkdir -p build/debug && \
 	cd build/debug && \
-	cmake $(GENERATOR) -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build .
 
 release:
 	mkdir -p build/release && \
 	cd build/release && \
-	cmake $(GENERATOR) -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build .
 
 unittest: debug

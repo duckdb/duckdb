@@ -20,8 +20,5 @@ public:
 	}
 
 	ConstraintType type;
-
-public:
-	virtual unique_ptr<BoundConstraint> Copy() = 0;
 };
 } // namespace duckdb

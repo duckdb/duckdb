@@ -42,9 +42,9 @@ UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple, in
 			// the row identifiers are correct
 			// for this reason locking it again here will cause a
 			// deadlock. We only need to lock chunks that are not the last
-			unique_ptr<StorageLock> lock;
+			unique_ptr<StorageLockKey> lock;
 			if (chunk != table.tail_chunk) {
-				lock = chunk->GetSharedLock();
+				lock = chunk->lock.GetSharedLock();
 			}
 			bool conflict = true;
 

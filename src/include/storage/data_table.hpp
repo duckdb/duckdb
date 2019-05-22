@@ -35,14 +35,7 @@ struct ScanStructure {
 	StorageChunk *chunk;
 	index_t offset;
 	VersionInformation *version_chain;
-	vector<unique_ptr<StorageLock>> locks;
-};
-
-//! This is a structure to keep the location(Block) of a determined row in memory.
-struct BlockEntry {
-	uint64_t row_offset;
-	unique_ptr<Block> block;
-	VersionInformation *version_chain;
+	vector<unique_ptr<StorageLockKey>> locks;
 };
 
 //! DataTable represents a physical table on disk

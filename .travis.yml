@@ -58,23 +58,10 @@ matrix:
             - g++-8
       env:
         - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
-
-    - os: linux
-      dist: xenial
-      name: All Unit Tests
-
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-8
-      env:
-        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
       before_install:
         - pip install --user boto3
       script:
-        - make opt
+        - (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest "*"
 
       after_success:
@@ -101,22 +88,10 @@ matrix:
         - build/coverage/test/unittest
 
       after_success:
-        - coveralls -b build/coverage --exclude tools --exclude build --exclude benchmark --exclude examples --exclude third_party --exclude test --gcov-options '\-lp'
+        - coveralls -b build/coverage --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --gcov-options '\-lp'
 
     - os: windows
       name: VS 2017
-      filter_secrets: false
-
-      language: c
-
-      script:
-        - cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_GENERATOR_PLATFORM=x64
-        - cmake --build . --target unittest
-        - test/Debug/unittest.exe
-
-
-    - os: windows
-      name: Binaries
       filter_secrets: false
 
       language: c
@@ -132,55 +107,6 @@ matrix:
 
       after_success:
         - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll
-
-
-    # - os: linux
-    #   name: Python Package
-
-    #   dist: xenial
-    #   language: python
-    #   python: 3.7
-
-    #   before_script:
-    #     - pip3 install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3"
-    #     - cd tools/pythonpkg
-
-    #   script:
-    #     - python3 setup.py install
-    #     - python3 -m pytest tests
-
-
-    # - os: osx
-    #   name: Python Package
-    #   osx_image: xcode10.1
-
-    #   language: c
-    #   #python: 3.7
-
-    #   before_script:
-    #     - pip3 install --user "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
-    #     - cd tools/pythonpkg
-
-    #   script:
-    #     - python3 setup.py install
-    #     - python3 -m pytest tests
-
-
-    # - os: windows
-    #   name: Python Package
-
-    #   language: cpp
-
-    #   before_install:
-    #     - choco install python --version 3.7.3
-    #     - c:/python37/python.exe -m pip install --upgrade pip
-    #     - c:/python37/python.exe -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
-
-    #   script:
-    #     - cd tools/pythonpkg
-    #     - c:/python37/python.exe setup.py install
-    #     - c:/python37/python.exe -m pytest tests
-
 
     - os: linux
       name: R Package

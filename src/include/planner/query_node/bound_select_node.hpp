@@ -47,9 +47,5 @@ public:
 	index_t window_index;
 	//! Window functions to compute (only used if HasWindow is true)
 	vector<unique_ptr<Expression>> windows;
-
-	const vector<unique_ptr<Expression>> &GetSelectList() const override {
-		return select_list;
-	}
 };
 }; // namespace duckdb

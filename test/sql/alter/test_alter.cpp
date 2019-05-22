@@ -125,3 +125,22 @@ TEST_CASE("Test failure conditions of ALTER TABLE", "[alter]") {
 	// after failure original columns should still be there
 	REQUIRE_NO_FAIL(con.Query("SELECT i, j FROM test"));
 }
+
+TEST_CASE("Test ALTER TABLE RENAME COLUMN on a table with constraints", "[alter]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// create a table with a check constraint referencing the to-be-renamed column
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(i INTEGER CHECK(i < 10), j INTEGER)"));
+	// insert some elements
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test (i, j) VALUES (1, 2), (2, 3)"));
+	REQUIRE_FAIL(con.Query("INSERT INTO test (i, j) VALUES (100, 2)"));
+	// now alter the column name
+	// currently, we don't support altering tables with constraints
+	REQUIRE_FAIL(con.Query("ALTER TABLE test RENAME COLUMN i TO k"));
+	// the check should still work after the alter table
+	// REQUIRE_NO_FAIL(con.Query("INSERT INTO test (k, j) VALUES (1, 2), (2, 3)"));
+	// REQUIRE_FAIL(con.Query("INSERT INTO test (k, j) VALUES (100, 2)"));
+
+}

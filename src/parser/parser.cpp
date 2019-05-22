@@ -108,15 +108,15 @@ bool Parser::ParsePragma(string &query) {
 		if (type == PragmaType::ASSIGNMENT) {
 			string assignment = StringUtil::Replace(StringUtil::Lower(query.substr(pos + 1)), ";", "");
 			if (assignment == "json") {
-				context.profiler.automatic_print_format = AutomaticPrintFormat::JSON;
+				context.profiler.automatic_print_format = ProfilerPrintFormat::JSON;
 			} else if (assignment == "query_tree") {
-				context.profiler.automatic_print_format = AutomaticPrintFormat::QUERY_TREE;
+				context.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
 			} else {
 				throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree]",
 				                      assignment.c_str());
 			}
 		} else if (type == PragmaType::NOTHING) {
-			context.profiler.automatic_print_format = AutomaticPrintFormat::QUERY_TREE;
+			context.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
 		} else {
 			throw ParserException("Cannot call PRAGMA enable_profiling");
 		}
@@ -124,7 +124,7 @@ bool Parser::ParsePragma(string &query) {
 	} else if (keyword == "disable_profile" || keyword == "disable_profiling") {
 		// enable profiling
 		context.profiler.Disable();
-		context.profiler.automatic_print_format = AutomaticPrintFormat::NONE;
+		context.profiler.automatic_print_format = ProfilerPrintFormat::NONE;
 	} else if (keyword == "profiling_output" || keyword == "profile_output") {
 		// set file location of where to save profiling output
 		if (type != PragmaType::ASSIGNMENT) {

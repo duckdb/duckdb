@@ -58,6 +58,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	if (info->type != AlterType::ALTER_TABLE) {
 		throw CatalogException("Can only modify table with ALTER TABLE statement");
 	}
+	if (constraints.size() > 0) {
+		throw CatalogException("Cannot modify a table with constraints");
+	}
 	auto table_info = (AlterTableInfo *)info;
 	switch (table_info->alter_table_type) {
 	case AlterTableType::RENAME_COLUMN: {
@@ -79,10 +82,11 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		if (!found) {
 			throw CatalogException("Table does not have a column with name \"%s\"", rename_info->name.c_str());
 		}
-		create_info->constraints.resize(constraints.size());
-		for (index_t i = 0; i < constraints.size(); i++) {
-			create_info->constraints[i] = constraints[i]->Copy();
-		}
+		assert(constraints.size() == 0);
+		// create_info->constraints.resize(constraints.size());
+		// for (index_t i = 0; i < constraints.size(); i++) {
+		// 	create_info->constraints[i] = constraints[i]->Copy();
+		// }
 		Binder binder(context);
 		auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
 		return make_unique<TableCatalogEntry>(catalog, schema, bound_create_info.get(), storage);

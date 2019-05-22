@@ -1,14 +1,14 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// common/buffered_deserializer.hpp
+// common/serializer/buffered_deserializer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "common/buffered_serializer.hpp"
+#include "common/serializer/buffered_serializer.hpp"
 #include "common/serializer.hpp"
 
 namespace duckdb {
@@ -18,11 +18,10 @@ public:
 	BufferedDeserializer(data_ptr_t ptr, index_t data_size);
 	BufferedDeserializer(BufferedSerializer &serializer);
 
-	void ReadData(data_ptr_t buffer, uint64_t read_size) override;
-
-public:
 	data_ptr_t ptr;
 	data_ptr_t endptr;
+public:
+	void ReadData(data_ptr_t buffer, uint64_t read_size) override;
 };
 
 } // namespace duckdb

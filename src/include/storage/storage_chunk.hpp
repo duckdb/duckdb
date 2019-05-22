@@ -9,10 +9,7 @@
 #pragma once
 
 #include "common/types/string_heap.hpp"
-
-#include <atomic>
-#include <mutex>
-#include <vector>
+#include "storage/storage_lock.hpp"
 
 namespace duckdb {
 class ColumnDefinition;
@@ -22,25 +19,7 @@ class StorageChunk;
 
 struct VersionInformation;
 
-enum class StorageLockType { SHARED = 0, EXCLUSIVE = 1 };
-
-class StorageLock {
-	friend class StorageChunk;
-
-public:
-	~StorageLock();
-
-private:
-	StorageLock(StorageChunk *chunk, StorageLockType type) : type(type), chunk(chunk) {
-	}
-
-	StorageLockType type;
-	StorageChunk *chunk;
-};
-
 class StorageChunk {
-	friend class StorageLock;
-
 public:
 	StorageChunk(DataTable &table, index_t start);
 
@@ -56,23 +35,12 @@ public:
 	// Undo the changes made by a tuple
 	void Undo(VersionInformation *info);
 
-	//! Get an exclusive lock
-	unique_ptr<StorageLock> GetExclusiveLock();
-	//! Get a shared lock on the chunk
-	unique_ptr<StorageLock> GetSharedLock();
-
+	StorageLock lock;
 	unique_ptr<StorageChunk> next;
 	StringHeap string_heap;
 
 private:
 	unique_ptr<data_t[]> owned_data;
-	std::mutex exclusive_lock;
-	std::atomic<index_t> read_count;
-
-	//! Release an exclusive lock on the chunk
-	void ReleaseExclusiveLock();
-	//! Release a shared lock on the chunk
-	void ReleaseSharedLock();
 };
 
 } // namespace duckdb
