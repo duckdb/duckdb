@@ -22,6 +22,14 @@ matrix:
       name: Xcode 10.2
       osx_image: xcode10.2
 
+      before_install:
+        - pip install --user boto3
+      script:
+        - (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        - build/release/test/unittest
+
+      after_success:
+        - python tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a
 
     - os: linux
       name: Clang 6
