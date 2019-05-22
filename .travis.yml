@@ -123,7 +123,8 @@ matrix:
 
       script:
         - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64
-        - cmake --build . --target unittest --target duckdb --config Release
+        - cmake --build . --target duckdb --config Release
+        - cmake --build . --target unittest --config Release
         - test/Release/unittest.exe
 
       after_success:
