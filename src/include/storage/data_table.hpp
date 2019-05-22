@@ -115,9 +115,7 @@ private:
 	//! Verify whether or not a new chunk violates any constraints
 	void VerifyConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &new_chunk);
 	//! The stored data of the table
-	unique_ptr<StorageChunk> chunk_list;
-	//! A reference to the last entry in the chunk list
-	StorageChunk *tail_chunk;
+	SegmentTree storage_tree;
 	//! The table statistics
 	TableStatistics table_statistics;
 	//! Row ID statistics

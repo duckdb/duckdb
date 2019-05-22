@@ -24,28 +24,17 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 	// create empty statistics for the table
 	statistics = unique_ptr<ColumnStatistics[]>(new ColumnStatistics[types.size()]);
 	// initialize the table with an empty data chunk
-	chunk_list = make_unique<StorageChunk>(*this, 0);
-	tail_chunk = chunk_list.get();
+	storage_tree.AppendSegment(make_unique<StorageChunk>(*this, 0));
 }
 
 void DataTable::InitializeScan(ScanStructure &structure) {
-	structure.chunk = chunk_list.get();
+	structure.chunk = (StorageChunk*) storage_tree.GetRootSegment();
 	structure.offset = 0;
 	structure.version_chain = nullptr;
 }
 
 StorageChunk *DataTable::GetChunk(index_t row_number) {
-	// FIXME: this could be O(1) in amount of chunks
-	// the loop is not necessary because every chunk besides the last
-	// has exactly STORAGE_CHUNK_SIZE elements
-	StorageChunk *chunk = chunk_list.get();
-	while (chunk) {
-		if (row_number >= chunk->start && row_number < chunk->start + chunk->count) {
-			return chunk;
-		}
-		chunk = chunk->next.get();
-	}
-	throw OutOfRangeException("Row identifiers out of bounds!");
+	return (StorageChunk*) storage_tree.GetSegment(row_number);
 }
 
 void DataTable::VerifyConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
@@ -105,13 +94,10 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 	chunk.Verify();
 	VerifyConstraints(table, context, chunk);
 
-	auto last_chunk = tail_chunk;
+	// ready to append: obtain an exclusive lock on the last segment
+	lock_guard<mutex> tree_lock(storage_tree.node_lock);
+	auto last_chunk = (StorageChunk*) storage_tree.nodes.back().node;
 	auto lock = last_chunk->lock.GetExclusiveLock();
-	while (last_chunk != tail_chunk) {
-		// new chunk was added, have to obtain lock of last chunk
-		last_chunk = tail_chunk;
-		lock = last_chunk->lock.GetExclusiveLock();
-	}
 	assert(!last_chunk->next);
 
 	StringHeap heap;
@@ -159,22 +145,18 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 		// we need to append more entries
 		// first create a new chunk and lock it
 		auto new_chunk = make_unique<StorageChunk>(*this, last_chunk->start + last_chunk->count);
-		auto new_chunk_lock = new_chunk->lock.GetExclusiveLock();
-		auto new_chunk_pointer = new_chunk.get();
-		assert(!last_chunk->next);
-		last_chunk->next = move(new_chunk);
-		this->tail_chunk = new_chunk_pointer;
 
 		// now append the remainder
 		index_t remainder = chunk.size() - current_count;
 		// first push the deleted entries
-		transaction.PushDeletedEntries(0, remainder, new_chunk_pointer, new_chunk_pointer->version_pointers);
+		transaction.PushDeletedEntries(0, remainder, new_chunk.get(), new_chunk->version_pointers);
 		// now insert the elements into the vector
 		for (index_t i = 0; i < chunk.column_count; i++) {
-			data_ptr_t target = new_chunk_pointer->columns[i];
+			data_ptr_t target = new_chunk->columns[i];
 			VectorOperations::CopyToStorage(chunk.data[i], target, current_count, remainder);
 		}
-		new_chunk_pointer->count = remainder;
+		new_chunk->count = remainder;
+		storage_tree.AppendSegment(move(new_chunk));
 	}
 	// after a successful append move the strings to the chunk
 	last_chunk->string_heap.MergeHeap(heap);
@@ -429,7 +411,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<c
 		structure.offset += STANDARD_VECTOR_SIZE;
 		if (structure.offset >= current_chunk->count) {
 			structure.offset = 0;
-			structure.chunk = current_chunk->next.get();
+			structure.chunk = (StorageChunk*) current_chunk->next.get();
 		}
 		if (result.size() > 0) {
 			return;
@@ -573,7 +555,7 @@ void DataTable::CreateIndexScan(ScanStructure &structure, vector<column_t> &colu
 		}
 		if (structure.offset >= current_chunk->count) {
 			// exceeded this chunk, move to next one
-			structure.chunk = structure.chunk->next.get();
+			structure.chunk = (StorageChunk*) structure.chunk->next.get();
 			structure.offset = 0;
 			structure.version_chain = nullptr;
 		}

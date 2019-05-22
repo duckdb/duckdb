@@ -10,6 +10,7 @@
 
 #include "common/types/string_heap.hpp"
 #include "storage/storage_lock.hpp"
+#include "storage/segment_tree.hpp"
 
 namespace duckdb {
 class ColumnDefinition;
@@ -19,7 +20,7 @@ class StorageChunk;
 
 struct VersionInformation;
 
-class StorageChunk {
+class StorageChunk : public SegmentBase {
 public:
 	StorageChunk(DataTable &table, index_t start);
 
@@ -27,8 +28,6 @@ public:
 	bool deleted[STORAGE_CHUNK_SIZE] = {0};
 	VersionInformation *version_pointers[STORAGE_CHUNK_SIZE] = {nullptr};
 	vector<data_ptr_t> columns;
-	index_t count;
-	index_t start;
 
 	// Cleanup the version information of a tuple
 	void Cleanup(VersionInformation *info);
@@ -36,7 +35,6 @@ public:
 	void Undo(VersionInformation *info);
 
 	StorageLock lock;
-	unique_ptr<StorageChunk> next;
 	StringHeap string_heap;
 
 private:

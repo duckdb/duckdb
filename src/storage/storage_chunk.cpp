@@ -8,7 +8,8 @@
 using namespace duckdb;
 using namespace std;
 
-StorageChunk::StorageChunk(DataTable &_table, index_t start) : table(_table), count(0), start(start) {
+StorageChunk::StorageChunk(DataTable &_table, index_t start) :
+	SegmentBase(start, 0), table(_table) {
 	columns.resize(table.types.size());
 	count_t tuple_size = 0;
 	for (auto &type : table.types) {
