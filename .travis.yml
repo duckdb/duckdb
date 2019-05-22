@@ -71,30 +71,11 @@ matrix:
             - g++-8
       env:
         - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
+      before_install:
+        - pip install --user boto3
       script:
         - make opt
         - build/release/test/unittest "*"
-
-    - os: linux
-      dist: xenial
-      name: Binaries
-
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-8
-      env:
-        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
-
-      before_install:
-        - pip install --user boto3
-
-      script:
-        - mkdir -p build/release
-        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
-        - ./build/release/test/unittest
 
       after_success:
         - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a
