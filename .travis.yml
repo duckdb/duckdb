@@ -82,7 +82,8 @@ matrix:
       before_install:
         - pip install --user boto3
       script:
-        - make allunit
+        - make opt
+        - build/release/test/unittest "*"
 
       after_success:
         - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a
