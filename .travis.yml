@@ -94,6 +94,7 @@ matrix:
       after_success:
         - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a
 
+
     - os: linux
       dist: xenial
       name: Code Coverage
@@ -111,13 +112,14 @@ matrix:
         - eval "${MATRIX_EVAL}"
         - pip install --user cpp-coveralls
 
-      script: 
+      script:
         - mkdir -p build/coverage
-        - (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
+        - (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
         - build/coverage/test/unittest
 
       after_success:
         - coveralls -b build/coverage --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --gcov-options '\-lp'
+
 
     - os: windows
       name: VS 2017
