@@ -2,6 +2,9 @@ language: cpp
 script: make unit
 dist: trusty
 
+before_install:
+  - eval "${MATRIX_EVAL}"
+
 env:
   global:
     - CIBW_BUILD='cp37-*'
@@ -9,6 +12,7 @@ env:
     - CIBW_TEST_REQUIRES='pytest'
     - CIBW_BEFORE_BUILD='pip install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3" && pip install cmake'
     - CIBW_TEST_COMMAND='python -m pytest {project}/tests'
+
 
 matrix:
   include:
@@ -80,9 +84,11 @@ matrix:
       env:
         - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
       before_install:
+        - eval "${MATRIX_EVAL}"
         - pip install --user boto3
       script:
-        - make opt
+        - mkdir -p build/release
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest "*"
 
       after_success:
@@ -101,7 +107,9 @@ matrix:
       env:
         - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
 
-      before_install: pip install --user cpp-coveralls
+      before_install: 
+        - eval "${MATRIX_EVAL}"
+        - pip install --user cpp-coveralls
 
       script: 
         - mkdir -p build/coverage
@@ -264,5 +272,4 @@ matrix:
       after_success:
         C:/Python37-x64/python.exe tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
 
-before_install:
-  - eval "${MATRIX_EVAL}"
+
