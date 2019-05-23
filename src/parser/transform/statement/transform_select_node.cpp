@@ -20,8 +20,6 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 			// checks distinct on clause
 			auto target = reinterpret_cast<Node *>(stmt->distinctClause->head->data.ptr_value);
 			if (target) {
-				// distinct has on clause  and specifies column(s) to apply the distinct
-				result->has_distinct_on = true;
 				//  add the columns defined in the ON clause to the select list
 				if (!TransformExpressionList(stmt->distinctClause, result->distinct_on_targets)) {
 					throw Exception("Failed to transform expression list from DISTINCT ON.");

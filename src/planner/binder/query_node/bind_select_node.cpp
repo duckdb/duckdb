@@ -64,7 +64,8 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 
 	// we bind the DISTINCT ON before we bind any order, aggregations or window functions
 	for (index_t i = 0; i < statement.distinct_on_targets.size(); i++) {
-		DistinctBinder distinct_binder(result->projection_index, statement, alias_map, projection_map);
+		// we treat the Distinct list as a order by
+		OrderBinder distinct_binder(result->projection_index, statement, alias_map, projection_map);
 		auto bound_expr = distinct_binder.Bind(move(statement.distinct_on_targets[i]));
 		if (!bound_expr) {
 			// DISTINCT ON non-integer constant
@@ -159,5 +160,15 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 		order.return_type = result->select_list[order.binding.column_index]->return_type;
 		assert(order.return_type != TypeId::INVALID);
 	}
+
+	// resolve the types of the DISTINCT ON clause
+	for (index_t i = 0; i < result->target_distincts.size(); i++) {
+		assert(result->target_distincts[i]->type == ExpressionType::BOUND_COLUMN_REF);
+		auto &distinct = (BoundColumnRefExpression &)*result->target_distincts[i];
+		assert(distinct.binding.column_index < statement.select_list.size());
+		distinct.return_type = result->select_list[distinct.binding.column_index]->return_type;
+		assert(distinct.return_type != TypeId::INVALID);
+	}
+
 	return move(result);
 }

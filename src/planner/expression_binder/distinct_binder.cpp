@@ -71,7 +71,7 @@ unique_ptr<Expression> DistinctBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		// just point to that entry
 		return CreateProjectionReference(*expr, entry->second);
 	}
-	// otherwise we need to push the ORDER BY entry into the select list
+	// otherwise we need to push the DISTINCT ON  entry into the select list
 	auto result = CreateProjectionReference(*expr, node.select_list.size());
 	node.select_list.push_back(move(expr));
 	return result;

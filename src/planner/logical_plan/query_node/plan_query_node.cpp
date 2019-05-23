@@ -13,11 +13,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::VisitQueryNode(BoundQueryNode 
 	if (node.select_distinct) {
 		unique_ptr<LogicalDistinct> distinct = nullptr;
 		// DISTINCT ON should give the target list
-		if (node.has_distinct_on) {
-			distinct = make_unique<LogicalDistinct>(move(node.target_distincts));
-		} else {
-			distinct = make_unique<LogicalDistinct>();
-		}
+		distinct = make_unique<LogicalDistinct>(move(node.target_distincts));
 		distinct->AddChild(move(root));
 		root = move(distinct);
 	}
