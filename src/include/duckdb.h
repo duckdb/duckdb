@@ -101,28 +101,22 @@ void duckdb_destroy_result(duckdb_result *result);
 // These functions will perform conversions if necessary. On failure (e.g. if conversion cannot be performed) a special
 // value is returned.
 
+//! Converts the specified value to a bool. Returns false on failure or NULL.
+bool duckdb_value_boolean(duckdb_result *result, index_t col, index_t row);
+//! Converts the specified value to an int8_t. Returns 0 on failure or NULL.
+int8_t duckdb_value_int8(duckdb_result *result, index_t col, index_t row);
+//! Converts the specified value to an int16_t. Returns 0 on failure or NULL.
+int16_t duckdb_value_int16(duckdb_result *result, index_t col, index_t row);
 //! Converts the specified value to an int64_t. Returns 0 on failure or NULL.
 int32_t duckdb_value_int32(duckdb_result *result, index_t col, index_t row);
 //! Converts the specified value to an int64_t. Returns 0 on failure or NULL.
 int64_t duckdb_value_int64(duckdb_result *result, index_t col, index_t row);
+//! Converts the specified value to a float. Returns 0.0 on failure or NULL.
+float duckdb_value_float(duckdb_result *result, index_t col, index_t row);
+//! Converts the specified value to a double. Returns 0.0 on failure or NULL.
+double duckdb_value_double(duckdb_result *result, index_t col, index_t row);
 //! Converts the specified value to a string. Returns nullptr on failure or NULL. The result must be freed with free.
 char *duckdb_value_varchar(duckdb_result *result, index_t col, index_t row);
-
-// UNSAFE fetch functions
-// These functions fetch a value from specific row from a specific column WITHOUT CASTING.
-// If the type does not match properly behavior is UNDEFINED.
-// If col exceeds the amount of columns in result the behavior is UNDEFINED.
-// If row exceeds the amount of rows in the result the behavior is UNDEFINED.
-// Only use these functions if you know what you are doing
-// NOTE: If the value is NULL, the result could be any number (but behavior is not undefined), except for VARCHAR
-// columns where the result will be nullptr
-
-//! Fetch a value from a DUCKDB_TYPE_INTEGER column [UNSAFE!]
-int32_t duckdb_value_int32_unsafe(duckdb_result *result, index_t col, index_t row);
-//! Fetch a value from a DUCKDB_TYPE_BIGINT column [UNSAFE!]
-int64_t duckdb_value_int64_unsafe(duckdb_result *result, index_t col, index_t row);
-//! Fetch a value from a DUCKDB_TYPE_VARCHAR column. The string IS NOT malloc'd! Do not free the return value. [UNSAFE!]
-const char *duckdb_value_varchar_unsafe(duckdb_result *result, index_t col, index_t row);
 
 #ifdef __cplusplus
 };

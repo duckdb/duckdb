@@ -90,21 +90,21 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	}
 }
 
-static void BindDefaultValues(Binder &binder, BoundCreateTableInfo &info) {
-	for (index_t i = 0; i < info.base->columns.size(); i++) {
+void Binder::BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_ptr<Expression>> &bound_defaults) {
+	for (index_t i = 0; i < columns.size(); i++) {
 		unique_ptr<Expression> bound_default;
-		if (info.base->columns[i].default_value) {
+		if (columns[i].default_value) {
 			// we bind a copy of the DEFAULT value because binding is destructive
 			// and we want to keep the original expression around for serialization
-			auto default_copy = info.base->columns[i].default_value->Copy();
-			ConstantBinder default_binder(binder, binder.context, "DEFAULT value");
-			default_binder.target_type = info.base->columns[i].type;
+			auto default_copy = columns[i].default_value->Copy();
+			ConstantBinder default_binder(*this, context, "DEFAULT value");
+			default_binder.target_type = columns[i].type;
 			bound_default = default_binder.Bind(default_copy);
 		} else {
 			// no default value specified: push a default value of constant null
-			bound_default = make_unique<BoundConstantExpression>(Value(GetInternalType(info.base->columns[i].type)));
+			bound_default = make_unique<BoundConstantExpression>(Value(GetInternalType(columns[i].type)));
 		}
-		info.bound_defaults.push_back(move(bound_default));
+		bound_defaults.push_back(move(bound_default));
 	}
 }
 
@@ -115,7 +115,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateTa
 	// bind any constraints
 	BindConstraints(*this, *result);
 	// bind the default values
-	BindDefaultValues(*this, *result);
+	BindDefaultValues(result->base->columns, result->bound_defaults);
 	return result;
 }
 

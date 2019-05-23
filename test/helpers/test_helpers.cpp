@@ -17,8 +17,16 @@ void TestDeleteDirectory(string path) {
 	}
 }
 
+void TestDeleteFile(string path) {
+	FileSystem fs;
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+}
+
 void DeleteDatabase(string path) {
-	TestDeleteDirectory(path);
+	TestDeleteFile(path);
+	TestDeleteFile(path + ".wal");
 }
 
 void TestCreateDirectory(string path) {
@@ -31,6 +39,16 @@ string TestCreatePath(string suffix) {
 	return fs.JoinPath(TESTING_DIRECTORY_NAME, suffix);
 }
 
+bool ApproxEqual(float ldecimal, float rdecimal) {
+	float epsilon = fabs(rdecimal) * 0.01;
+	return fabs(ldecimal - rdecimal) <= epsilon;
+}
+
+bool ApproxEqual(double ldecimal, double rdecimal) {
+	double epsilon = fabs(rdecimal) * 0.01;
+	return fabs(ldecimal - rdecimal) <= epsilon;
+}
+
 static bool ValuesAreEqual(Value result_value, Value value) {
 	if (result_value.is_null && value.is_null) {
 		// NULL = NULL in checking code
@@ -40,8 +58,7 @@ static bool ValuesAreEqual(Value result_value, Value value) {
 	case TypeId::FLOAT: {
 		float ldecimal = value.value_.float_;
 		float rdecimal = result_value.value_.float_;
-		float epsilon = fabs(rdecimal) * 0.01;
-		if (fabs(ldecimal - rdecimal) > epsilon) {
+		if (!ApproxEqual(ldecimal, rdecimal)) {
 			return false;
 		}
 		break;
@@ -49,8 +66,7 @@ static bool ValuesAreEqual(Value result_value, Value value) {
 	case TypeId::DOUBLE: {
 		double ldecimal = value.value_.double_;
 		double rdecimal = result_value.value_.double_;
-		double epsilon = fabs(rdecimal) * 0.01;
-		if (fabs(ldecimal - rdecimal) > epsilon) {
+		if (!ApproxEqual(ldecimal, rdecimal)) {
 			return false;
 		}
 		break;

@@ -13,8 +13,6 @@ static IndexType StringToIndexType(const string &str) {
 		return IndexType::INVALID;
 	} else if (upper_str == "ART") {
 		return IndexType::ART;
-	} else if (upper_str == "ORDER_INDEX") {
-		return IndexType::ORDER_INDEX;
 	} else {
 		throw ConversionException(StringUtil::Format("No IndexType conversion from string '%s'", upper_str.c_str()));
 	}
@@ -28,6 +26,7 @@ unique_ptr<CreateIndexStatement> Transformer::TransformCreateIndex(Node *node) {
 	auto &info = *result->info.get();
 
 	info.unique = stmt->unique;
+	info.if_not_exists = stmt->if_not_exists;
 
 	for (auto cell = stmt->indexParams->head; cell != nullptr; cell = cell->next) {
 		auto index_element = (IndexElem *)cell->data.ptr_value;

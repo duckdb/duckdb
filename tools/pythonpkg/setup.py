@@ -25,7 +25,7 @@ archive_ext = 'a'
 lib_prefix = 'lib'
 if os.name == 'nt':
     archive_ext = 'lib'
-    lib_prefix = 'RelWithDebInfo/'
+    lib_prefix = 'Release/'
 
 dd_prefix = 'src/duckdb'
 if not os.path.exists(dd_prefix):
@@ -44,12 +44,12 @@ class CustomBuiltExtCommand(build_ext):
             os.makedirs('build/release_notest')
         os.chdir('build/release_notest')
 
-        configcmd = 'cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLEAN=1 ../..'
+        configcmd = 'cmake -DCMAKE_BUILD_TYPE=Release -DLEAN=1 ../..'
         buildcmd = 'cmake --build . --target duckdb_static'
 
         if os.name == 'nt':
             configcmd += ' -DCMAKE_GENERATOR_PLATFORM=x64'
-            buildcmd += ' --config RelWithDebInfo'
+            buildcmd += ' --config Release'
 
         subprocess.Popen(configcmd.split(' ')).wait()
         subprocess.Popen(buildcmd.split(' ')).wait()
@@ -78,11 +78,16 @@ class CustomSdistCommand(sdist):
 includes = [numpy.get_include(), '%s/src/include' % (dd_prefix), '.']
 sources = ['connection.cpp', 'cursor.cpp', 'module.cpp']
 
+toolchain_args = ['-std=c++11', '-Wall']
+if platform.system() == 'Darwin':
+    toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
+
 libduckdb = Extension('duckdb',
     include_dirs=includes,
     sources=sources,
-    extra_compile_args=['-std=c++11', '-Wall'],
-    language='c++', # for linking c++ stdlib
+    extra_compile_args=toolchain_args,
+    extra_link_args=toolchain_args,
+    language='c++',
     extra_objects=['%s/build/release_notest/src/%sduckdb_static.%s' % (dd_prefix, lib_prefix, archive_ext), '%s/build/release_notest/third_party/libpg_query/%spg_query.%s' % (dd_prefix, lib_prefix, archive_ext), '%s/build/release_notest/third_party/re2/%sre2.%s' % (dd_prefix, lib_prefix, archive_ext), '%s/build/release_notest/third_party/miniz/%sminiz.%s' % (dd_prefix, lib_prefix, archive_ext)])
 
 setup(

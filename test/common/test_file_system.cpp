@@ -1,7 +1,9 @@
 #include "catch.hpp"
+#include "common/file_buffer.hpp"
 #include "common/file_system.hpp"
 #include "common/fstream.hpp"
 #include "test_helpers.hpp"
+#include "common/file_buffer.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -64,11 +66,8 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 TEST_CASE("Test file operations", "[file_system]") {
 	FileSystem fs;
 	unique_ptr<FileHandle> handle, handle2;
-	auto test_buffer1 = Buffer::AllocateAlignedBuffer(sizeof(uint64_t) * INTEGER_COUNT);
-	auto test_buffer2 = Buffer::AllocateAlignedBuffer(sizeof(uint64_t) * INTEGER_COUNT);
-
-	int64_t *test_data = (int64_t *)test_buffer1->buffer;
-	int64_t *test_data2 = (int64_t *)test_buffer2->buffer;
+	int64_t test_data[INTEGER_COUNT];
+	int64_t test_data2[INTEGER_COUNT];
 	for (int i = 0; i < INTEGER_COUNT; i++) {
 		test_data[i] = i;
 		test_data2[i] = 0;
@@ -98,33 +97,34 @@ TEST_CASE("Test file operations", "[file_system]") {
 	}
 	handle.reset();
 	fs.RemoveFile(fname);
+}
 
-	// now test direct IO
-	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::WRITE | FileFlags::CREATE | FileFlags::DIRECT_IO,
-	                                     FileLockType::NO_LOCK));
-	// write 10 integers
-	REQUIRE_NOTHROW(handle->Write((void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
-	handle.reset();
-	// now read the integers using a separate handle, they should be there already
-	REQUIRE_NOTHROW(handle2 = fs.OpenFile(fname, FileFlags::READ, FileLockType::NO_LOCK));
-	REQUIRE_NOTHROW(handle2->Read((void *)test_data2, sizeof(int64_t) * INTEGER_COUNT, 0));
-	for (int i = 0; i < INTEGER_COUNT; i++) {
-		REQUIRE(test_data2[i] == i);
+TEST_CASE("Test file buffers for reading/writing to file", "[file_system]") {
+	FileSystem fs;
+	unique_ptr<FileHandle> handle;
+
+	auto fname = TestCreatePath("test_file");
+
+	// create the buffer and fill it with data
+	auto buf = make_unique<FileBuffer>(4096);
+	int64_t *ptr = (int64_t *)buf->buffer;
+	for (size_t i = 0; i < 10; i++) {
+		ptr[i] = i;
 	}
-	handle2.reset();
-	fs.RemoveFile(fname);
 
-	// test file locks
-	// NOTE: we can't actually test contention of locks, as the locks are held per process
-	// i.e. if we got two write locks to the same file, they would both succeed because our process would hold the write
-	// lock already the only way to properly test these locks is to use multiple processes
-
-	// we can get a write lock to a file
-	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::WRITE | FileFlags::CREATE, FileLockType::WRITE_LOCK));
-	handle.reset();
-
-	// we can get a read lock on a file
-	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::READ, FileLockType::READ_LOCK));
+	// open file for writing
+	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::WRITE | FileFlags::CREATE | FileFlags::DIRECT_IO,
+	                                     FileLockType::WRITE_LOCK));
+	// write the buffer
+	REQUIRE_NOTHROW(buf->Write(*handle, 0));
+	// clear the buffer
+	buf->Clear();
+	// now read data back into the buffer
+	REQUIRE_NOTHROW(buf->Read(*handle, 0));
+	for (size_t i = 0; i < 10; i++) {
+		REQUIRE(ptr[i] == i);
+	}
+	// close the file
 	handle.reset();
 
 	fs.RemoveFile(fname);

@@ -16,6 +16,7 @@
 #include "storage/storage_chunk.hpp"
 #include "storage/table_statistics.hpp"
 #include "storage/unique_index.hpp"
+#include "storage/block.hpp"
 
 #include <atomic>
 #include <mutex>
@@ -34,7 +35,7 @@ struct ScanStructure {
 	StorageChunk *chunk;
 	index_t offset;
 	VersionInformation *version_chain;
-	vector<unique_ptr<StorageLock>> locks;
+	vector<unique_ptr<StorageLockKey>> locks;
 };
 
 //! DataTable represents a physical table on disk

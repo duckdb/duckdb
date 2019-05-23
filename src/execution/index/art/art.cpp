@@ -181,13 +181,11 @@ void ART::erase(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned 
 				break;
 			}
 			case NodeType::N48: {
-
 				Node48::erase(node, pos);
 				break;
 			}
 			case NodeType::N256:
 				Node256::erase(node, pos);
-
 				break;
 			default:
 				assert(0);
@@ -277,7 +275,6 @@ void ART::insert(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned
 }
 
 Node *ART::lookup(unique_ptr<Node> &node, Key &key, unsigned keyLength, unsigned depth) {
-
 	bool skippedPrefix = false; // Did we optimistically skip some prefix without checking it?
 	auto node_val = node.get();
 
@@ -500,16 +497,18 @@ void ART::SearchEqual(StaticVector<int64_t> *result_identifiers, ARTIndexScanSta
 	auto row_ids = (int64_t *)result_identifiers->data;
 	switch (types[0]) {
 	case TypeId::TINYINT:
-		result_identifiers->count = templated_lookup<int8_t>(types[0], state->values[0].value_.tinyint, row_ids);
+		result_identifiers->count = templated_lookup<int8_t>(types[0], state->values[0].value_.tinyint, row_ids, state);
 		break;
 	case TypeId::SMALLINT:
-		result_identifiers->count = templated_lookup<int16_t>(types[0], state->values[0].value_.smallint, row_ids);
+		result_identifiers->count =
+		    templated_lookup<int16_t>(types[0], state->values[0].value_.smallint, row_ids, state);
 		break;
 	case TypeId::INTEGER:
-		result_identifiers->count = templated_lookup<int32_t>(types[0], state->values[0].value_.integer, row_ids);
+		result_identifiers->count =
+		    templated_lookup<int32_t>(types[0], state->values[0].value_.integer, row_ids, state);
 		break;
 	case TypeId::BIGINT:
-		result_identifiers->count = templated_lookup<int64_t>(types[0], state->values[0].value_.bigint, row_ids);
+		result_identifiers->count = templated_lookup<int64_t>(types[0], state->values[0].value_.bigint, row_ids, state);
 		break;
 	default:
 		throw InvalidTypeException(types[0], "Invalid type for index");
@@ -521,19 +520,19 @@ void ART::SearchGreater(StaticVector<int64_t> *result_identifiers, ARTIndexScanS
 	switch (types[0]) {
 	case TypeId::TINYINT:
 		result_identifiers->count =
-		    templated_greater_scan<int8_t>(types[0], state->values[0].value_.tinyint, row_ids, inclusive);
+		    templated_greater_scan<int8_t>(types[0], state->values[0].value_.tinyint, row_ids, inclusive, state);
 		break;
 	case TypeId::SMALLINT:
 		result_identifiers->count =
-		    templated_greater_scan<int16_t>(types[0], state->values[0].value_.smallint, row_ids, inclusive);
+		    templated_greater_scan<int16_t>(types[0], state->values[0].value_.smallint, row_ids, inclusive, state);
 		break;
 	case TypeId::INTEGER:
 		result_identifiers->count =
-		    templated_greater_scan<int32_t>(types[0], state->values[0].value_.integer, row_ids, inclusive);
+		    templated_greater_scan<int32_t>(types[0], state->values[0].value_.integer, row_ids, inclusive, state);
 		break;
 	case TypeId::BIGINT:
 		result_identifiers->count =
-		    templated_greater_scan<int64_t>(types[0], state->values[0].value_.bigint, row_ids, inclusive);
+		    templated_greater_scan<int64_t>(types[0], state->values[0].value_.bigint, row_ids, inclusive, state);
 		break;
 	default:
 		throw InvalidTypeException(types[0], "Invalid type for index");
@@ -545,19 +544,19 @@ void ART::SearchLess(StaticVector<int64_t> *result_identifiers, ARTIndexScanStat
 	switch (types[0]) {
 	case TypeId::TINYINT:
 		result_identifiers->count =
-		    templated_less_scan<int8_t>(types[0], state->values[0].value_.tinyint, row_ids, inclusive);
+		    templated_less_scan<int8_t>(types[0], state->values[0].value_.tinyint, row_ids, inclusive, state);
 		break;
 	case TypeId::SMALLINT:
 		result_identifiers->count =
-		    templated_less_scan<int16_t>(types[0], state->values[0].value_.smallint, row_ids, inclusive);
+		    templated_less_scan<int16_t>(types[0], state->values[0].value_.smallint, row_ids, inclusive, state);
 		break;
 	case TypeId::INTEGER:
 		result_identifiers->count =
-		    templated_less_scan<int32_t>(types[0], state->values[0].value_.integer, row_ids, inclusive);
+		    templated_less_scan<int32_t>(types[0], state->values[0].value_.integer, row_ids, inclusive, state);
 		break;
 	case TypeId::BIGINT:
 		result_identifiers->count =
-		    templated_less_scan<int64_t>(types[0], state->values[0].value_.bigint, row_ids, inclusive);
+		    templated_less_scan<int64_t>(types[0], state->values[0].value_.bigint, row_ids, inclusive, state);
 		break;
 	default:
 		throw InvalidTypeException(types[0], "Invalid type for index");
@@ -571,22 +570,22 @@ void ART::SearchCloseRange(StaticVector<int64_t> *result_identifiers, ARTIndexSc
 	case TypeId::TINYINT:
 		result_identifiers->count =
 		    templated_close_range<int8_t>(types[0], state->values[0].value_.tinyint, state->values[1].value_.tinyint,
-		                                  row_ids, left_inclusive, right_inclusive);
+		                                  row_ids, left_inclusive, right_inclusive, state);
 		break;
 	case TypeId::SMALLINT:
 		result_identifiers->count =
 		    templated_close_range<int16_t>(types[0], state->values[0].value_.smallint, state->values[1].value_.smallint,
-		                                   row_ids, left_inclusive, right_inclusive);
+		                                   row_ids, left_inclusive, right_inclusive, state);
 		break;
 	case TypeId::INTEGER:
 		result_identifiers->count =
 		    templated_close_range<int32_t>(types[0], state->values[0].value_.integer, state->values[1].value_.integer,
-		                                   row_ids, left_inclusive, right_inclusive);
+		                                   row_ids, left_inclusive, right_inclusive, state);
 		break;
 	case TypeId::BIGINT:
 		result_identifiers->count =
 		    templated_close_range<int64_t>(types[0], state->values[0].value_.bigint, state->values[1].value_.bigint,
-		                                   row_ids, left_inclusive, right_inclusive);
+		                                   row_ids, left_inclusive, right_inclusive, state);
 		break;
 	default:
 		throw InvalidTypeException(types[0], "Invalid type for index");
@@ -596,6 +595,8 @@ void ART::SearchCloseRange(StaticVector<int64_t> *result_identifiers, ARTIndexSc
 // FIXME: Returning one tuple per time so deletes in different chunks do not break.
 void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) {
 	auto state = (ARTIndexScanState *)ss;
+	StaticVector<int64_t> result_identifiers;
+
 	// scan the index
 	if (!state->checked) {
 		assert(state->values[0].type == types[0]);
@@ -604,19 +605,19 @@ void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) 
 		if (state->values[1].is_null) {
 			switch (state->expressions[0]) {
 			case ExpressionType::COMPARE_EQUAL:
-				SearchEqual(&state->result_identifiers, state);
+				SearchEqual(&result_identifiers, state);
 				break;
 			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-				SearchGreater(&state->result_identifiers, state, true);
+				SearchGreater(&result_identifiers, state, true);
 				break;
 			case ExpressionType::COMPARE_GREATERTHAN:
-				SearchGreater(&state->result_identifiers, state, false);
+				SearchGreater(&result_identifiers, state, false);
 				break;
 			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-				SearchLess(&state->result_identifiers, state, true);
+				SearchLess(&result_identifiers, state, true);
 				break;
 			case ExpressionType::COMPARE_LESSTHAN:
-				SearchLess(&state->result_identifiers, state, false);
+				SearchLess(&result_identifiers, state, false);
 				break;
 			default:
 				throw NotImplementedException("Operation not implemented");
@@ -628,19 +629,13 @@ void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) 
 			assert(state->values[1].type == types[0]);
 			bool left_inclusive = state->expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
 			bool right_inclusive = state->expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
-			SearchCloseRange(&state->result_identifiers, state, left_inclusive, right_inclusive);
+			SearchCloseRange(&result_identifiers, state, left_inclusive, right_inclusive);
 		}
-		state->checked = true;
 	}
 
 	// scan the index
-	if (state->current_tuple == state->result_identifiers.count)
+	if (result_identifiers.count == 0)
 		return;
-	StaticVector<int64_t> result_identifiers_per_tuple;
-	auto row_id = (int64_t *)result_identifiers_per_tuple.data;
-	auto cur_row_id = (int64_t *)state->result_identifiers.data;
 
-	row_id[0] = cur_row_id[state->current_tuple++];
-	result_identifiers_per_tuple.count++;
-	table.Fetch(transaction, result, state->column_ids, result_identifiers_per_tuple);
+	table.Fetch(transaction, result, state->column_ids, result_identifiers);
 }

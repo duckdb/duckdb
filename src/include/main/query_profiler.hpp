@@ -13,13 +13,12 @@
 #include "common/string_util.hpp"
 #include "common/types/data_chunk.hpp"
 #include "common/unordered_map.hpp"
+#include "common/enums/profiler_format.hpp"
 
 #include <stack>
 
 namespace duckdb {
 class PhysicalOperator;
-
-enum class AutomaticPrintFormat : uint8_t { NONE, QUERY_TREE, JSON };
 
 //! The QueryProfiler can be used to measure timings of queries
 class QueryProfiler {
@@ -49,7 +48,7 @@ private:
 	static string RenderTree(TreeNode &node);
 
 public:
-	QueryProfiler() : automatic_print_format(AutomaticPrintFormat::NONE), enabled(false) {
+	QueryProfiler() : automatic_print_format(ProfilerPrintFormat::NONE), enabled(false) {
 	}
 
 	void Enable() {
@@ -80,7 +79,7 @@ public:
 	void WriteToFile(const char *path, string &info) const;
 
 	//! The format to automatically print query profiling information in (default: disabled)
-	AutomaticPrintFormat automatic_print_format;
+	ProfilerPrintFormat automatic_print_format;
 	//! The file to save query profiling information to, instead of printing it to the console (empty = print to
 	//! console)
 	string save_location;

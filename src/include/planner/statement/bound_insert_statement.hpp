@@ -30,6 +30,8 @@ public:
 	vector<int> column_index_map;
 	//! The expected types for the INSERT statement (obtained from the column types)
 	vector<SQLType> expected_types;
+	//! The default statements used by the table
+	vector<unique_ptr<Expression>> bound_defaults;
 
 public:
 	vector<string> GetNames() override {

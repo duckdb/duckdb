@@ -11,6 +11,8 @@
 #include "planner/operator/logical_explain.hpp"
 #include "planner/operator/logical_prepare.hpp"
 #include "planner/statement/bound_select_statement.hpp"
+#include "planner/query_node/bound_select_node.hpp"
+#include "planner/query_node/bound_set_operation_node.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -211,28 +213,60 @@ void Planner::VerifyQuery(BoundSQLStatement &statement) {
 		return;
 	}
 	auto &select = (BoundSelectStatement &)statement;
-	auto &expr_list = select.node->GetSelectList();
-	for (auto &expr : expr_list) {
-		if (expr->HasSubquery()) {
-			// can't copy subqueries
-			continue;
-		}
-		// verify that the copy of expressions works
-		auto copy = expr->Copy();
-		// copy should have identical hash and identical equality function
-		assert(copy->Hash() == expr->Hash());
-		assert(Expression::Equals(copy.get(), expr.get()));
-	}
+	VerifyNode(*select.node);
+}
 
-	// double loop to verify that (in)equality of hashes
-	for (index_t i = 0; i < expr_list.size(); i++) {
-		auto outer_hash = expr_list[i]->Hash();
-		for (index_t j = 0; j < expr_list.size(); j++) {
-			auto inner_hash = expr_list[j]->Hash();
-			if (outer_hash != inner_hash) {
-				// if hashes are not equivalent the expressions should not be equivalent
-				assert(!Expression::Equals(expr_list[i].get(), expr_list[j].get()));
+void Planner::VerifyNode(BoundQueryNode &node) {
+	if (node.type == QueryNodeType::SELECT_NODE) {
+		auto &select_node = (BoundSelectNode &)node;
+		vector<unique_ptr<Expression>> copies;
+		for (auto &expr : select_node.select_list) {
+			VerifyExpression(*expr, copies);
+		}
+		if (select_node.where_clause) {
+			VerifyExpression(*select_node.where_clause, copies);
+		}
+		for (auto &expr : select_node.groups) {
+			VerifyExpression(*expr, copies);
+		}
+		if (select_node.having) {
+			VerifyExpression(*select_node.having, copies);
+		}
+		for (auto &aggr : select_node.aggregates) {
+			VerifyExpression(*aggr, copies);
+		}
+		for (auto &window : select_node.windows) {
+			VerifyExpression(*window, copies);
+		}
+
+		// double loop to verify that (in)equality of hashes
+		for (index_t i = 0; i < copies.size(); i++) {
+			auto outer_hash = copies[i]->Hash();
+			for (index_t j = 0; j < copies.size(); j++) {
+				auto inner_hash = copies[j]->Hash();
+				if (outer_hash != inner_hash) {
+					// if hashes are not equivalent the expressions should not be equivalent
+					assert(!Expression::Equals(copies[i].get(), copies[j].get()));
+				}
 			}
 		}
+	} else {
+		assert(node.type == QueryNodeType::SET_OPERATION_NODE);
+		auto &setop_node = (BoundSetOperationNode &)node;
+		VerifyNode(*setop_node.left);
+		VerifyNode(*setop_node.right);
 	}
+}
+
+void Planner::VerifyExpression(Expression &expr, vector<unique_ptr<Expression>> &copies) {
+	if (expr.HasSubquery()) {
+		// can't copy subqueries
+		return;
+	}
+	// verify that the copy of expressions works
+	auto copy = expr.Copy();
+	// copy should have identical hash and identical equality function
+	assert(copy->Hash() == expr.Hash());
+	assert(Expression::Equals(copy.get(), &expr));
+	copies.push_back(move(copy));
 }

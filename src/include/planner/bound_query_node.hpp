@@ -49,8 +49,6 @@ public:
 	vector<string> names;
 	//! The types returned by this QueryNode.
 	vector<SQLType> types;
-
-	virtual const vector<unique_ptr<Expression>> &GetSelectList() const = 0;
 };
 
 }; // namespace duckdb

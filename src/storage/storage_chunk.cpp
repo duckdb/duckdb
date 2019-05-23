@@ -8,7 +8,7 @@
 using namespace duckdb;
 using namespace std;
 
-StorageChunk::StorageChunk(DataTable &_table, index_t start) : table(_table), count(0), start(start), read_count(0) {
+StorageChunk::StorageChunk(DataTable &_table, index_t start) : table(_table), count(0), start(start) {
 	columns.resize(table.types.size());
 	count_t tuple_size = 0;
 	for (auto &type : table.types) {
@@ -46,36 +46,5 @@ void StorageChunk::Undo(VersionInformation *info) {
 	if (version_pointers[entry]) {
 		version_pointers[entry]->prev.entry = entry;
 		version_pointers[entry]->chunk = this;
-	}
-}
-
-unique_ptr<StorageLock> StorageChunk::GetExclusiveLock() {
-	exclusive_lock.lock();
-	while (read_count != 0)
-		;
-	return unique_ptr<StorageLock>(new StorageLock(this, StorageLockType::EXCLUSIVE));
-}
-
-unique_ptr<StorageLock> StorageChunk::GetSharedLock() {
-	exclusive_lock.lock();
-	read_count++;
-	exclusive_lock.unlock();
-	return unique_ptr<StorageLock>(new StorageLock(this, StorageLockType::SHARED));
-}
-
-void StorageChunk::ReleaseExclusiveLock() {
-	exclusive_lock.unlock();
-}
-
-void StorageChunk::ReleaseSharedLock() {
-	read_count--;
-}
-
-StorageLock::~StorageLock() {
-	if (type == StorageLockType::EXCLUSIVE) {
-		chunk->ReleaseExclusiveLock();
-	} else {
-		assert(type == StorageLockType::SHARED);
-		chunk->ReleaseSharedLock();
 	}
 }

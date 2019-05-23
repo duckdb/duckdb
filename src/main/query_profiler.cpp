@@ -34,11 +34,11 @@ void QueryProfiler::EndQuery() {
 	main_query.End();
 
 	// print the query after termination, if this is enabled
-	if (automatic_print_format != AutomaticPrintFormat::NONE) {
+	if (automatic_print_format != ProfilerPrintFormat::NONE) {
 		string query_info;
-		if (automatic_print_format == AutomaticPrintFormat::JSON) {
+		if (automatic_print_format == ProfilerPrintFormat::JSON) {
 			query_info = ToJSON();
-		} else if (automatic_print_format == AutomaticPrintFormat::QUERY_TREE) {
+		} else if (automatic_print_format == ProfilerPrintFormat::QUERY_TREE) {
 			query_info = ToString();
 		}
 

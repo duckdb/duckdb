@@ -7,7 +7,7 @@ using namespace duckdb;
 using namespace std;
 
 // FIXME: Rework undo buffer when destroying db
-TEST_CASE("Test index creation statements with multiple connections", "[art-index-mult]") {
+TEST_CASE("Test index creation statements with multiple connections", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -60,7 +60,7 @@ TEST_CASE("Test index creation statements with multiple connections", "[art-inde
 	//	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 }
 
-TEST_CASE("ART Integer Types", "[art-int]") {
+TEST_CASE("ART Integer Types", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 
@@ -132,34 +132,34 @@ TEST_CASE("ART Integer Types", "[art-int]") {
 		result = con.Query("SELECT SUM(i) FROM integers WHERE i=" + to_string(1));
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(2)}));
 
-		//        //! Successful update
+		//! Successful update
 		REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=14 WHERE i=13"));
 		result = con.Query("SELECT * FROM integers WHERE i=14");
 		REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
-		//
-		//        //!Testing rollbacks and commits
-		//        // rolled back update
+
+		// Testing rollbacks and commits
+		// rolled back update
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-		//        // update the value
+		// update the value
 		REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=14 WHERE i=12"));
-		//        // now there are three values with 14
+		// now there are three values with 14
 		result = con.Query("SELECT * FROM integers WHERE i=14");
 		REQUIRE(CHECK_COLUMN(result, 0, {14, 14, 14}));
-		//        // rollback the value
+		// rollback the value
 		REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
-		//        // after the rollback
+		// after the rollback
 		result = con.Query("SELECT * FROM integers WHERE i=14");
 		REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
-		//        // roll back insert
+		// roll back insert
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-		//        // update the value
+		// update the value
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (14)"));
-		//        // now there are three values with 14
+		// now there are three values with 14
 		result = con.Query("SELECT * FROM integers WHERE i=14");
 		REQUIRE(CHECK_COLUMN(result, 0, {14, 14, 14}));
-		//        // rollback the value
+		// rollback the value
 		REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
-		//        // after the rol
+		// after the rol
 		result = con.Query("SELECT * FROM integers WHERE i=14");
 		REQUIRE(CHECK_COLUMN(result, 0, {14, 14}));
 
@@ -183,7 +183,39 @@ TEST_CASE("ART Integer Types", "[art-int]") {
 	}
 }
 
-TEST_CASE("ART  Node 4", "[art-4]") {
+TEST_CASE("ART Big Range", "[art][.]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
+	int n = 4;
+	auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
+	for (int32_t i = 0; i < n; i++)
+		keys[i] = i + 1;
+
+	for (int32_t i = 0; i < n; i++) {
+		for (int32_t j = 0; j < 1500; j++)
+			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(keys[i]) + ")"));
+	}
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
+
+	result = con.Query("SELECT count(i) FROM integers WHERE i >1 AND i <3");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(1500)}));
+	result = con.Query("SELECT count(i) FROM integers WHERE i >=1 AND i <3");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(3000)}));
+	result = con.Query("SELECT count(i) FROM integers WHERE i >1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(4500)}));
+	result = con.Query("SELECT count(i) FROM integers WHERE i <4");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(4500)}));
+	result = con.Query("SELECT count(i) FROM integers WHERE i <5");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(6000)}));
+	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+}
+
+TEST_CASE("ART  Node 4", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 
@@ -215,7 +247,7 @@ TEST_CASE("ART  Node 4", "[art-4]") {
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 }
 
-TEST_CASE("ART  Node 16", "[art-16]") {
+TEST_CASE("ART  Node 16", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 
@@ -245,7 +277,7 @@ TEST_CASE("ART  Node 16", "[art-16]") {
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 }
 
-TEST_CASE("ART Node 48", "[art-48]") {
+TEST_CASE("ART Node 48", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 
@@ -275,7 +307,7 @@ TEST_CASE("ART Node 48", "[art-48]") {
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 }
 
-TEST_CASE("Index Exceptions", "[index-exception]") {
+TEST_CASE("Index Exceptions", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 

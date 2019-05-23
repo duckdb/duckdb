@@ -1,16 +1,23 @@
 #!/bin/sh
-
+DDPREFIX=src/duckdb
+DDSRCPREFIX=duckdb
+if [ ! -d "$DDPREFIX" ]; then
+	DDPREFIX=../..
+	DDSRCPREFIX=../../..
+fi
 # run cmake to build duckdb library
 (
-	cd ../../
+	cd $DDPREFIX
 	mkdir -p build/release_notest
 	cd build/release_notest
-	cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLEAN=1 ../..
+	cmake -DCMAKE_BUILD_TYPE=Release -DLEAN=1 ../..
 	cmake --build . --target duckdb_static
 )
 rm -f src/*.*o
-if [ ! -f "../../build/release_notest/src/libduckdb_static.a" ] 
+if [ ! -f "$DDPREFIX/build/release_notest/src/libduckdb_static.a" ] 
 then
    echo "Build failed :/"
    exit 1
 fi
+
+sed "s|DDSRCPREFIX|$DDSRCPREFIX|g" < src/Makevars.in > src/Makevars

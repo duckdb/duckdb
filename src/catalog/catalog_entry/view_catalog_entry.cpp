@@ -26,7 +26,7 @@ void ViewCatalogEntry::Serialize(Serializer &serializer) {
 	query->Serialize(serializer);
 	assert(aliases.size() <= numeric_limits<uint32_t>::max());
 	serializer.Write<uint32_t>((uint32_t)aliases.size());
-	for (auto s : aliases) {
+	for (auto &s : aliases) {
 		serializer.WriteString(s);
 	}
 }

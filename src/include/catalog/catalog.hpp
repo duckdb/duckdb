@@ -37,6 +37,16 @@ class Catalog {
 public:
 	Catalog(StorageManager &storage);
 
+	//! Reference to the storage manager
+	StorageManager &storage;
+	//! The catalog set holding the schemas
+	CatalogSet schemas;
+	//! The DependencyManager manages dependencies between different catalog objects
+	DependencyManager dependency_manager;
+	//! Write lock for the catalog
+	std::mutex write_lock;
+
+public:
 	//! Creates a schema in the catalog.
 	void CreateSchema(Transaction &transaction, CreateSchemaInfo *info);
 	//! Drops a schema in the catalog.
@@ -82,14 +92,5 @@ public:
 	ScalarFunctionCatalogEntry *GetScalarFunction(Transaction &transaction, const string &schema, const string &name);
 	//! Drops an index from the catalog.
 	void DropIndex(Transaction &transaction, DropInfo *info);
-	//! Reference to the storage manager
-	StorageManager &storage;
-
-	//! The catalog set holding the schemas
-	CatalogSet schemas;
-	//! The DependencyManager manages dependencies between different catalog objects
-	DependencyManager dependency_manager;
-	//! Write lock for the catalog
-	std::mutex write_lock;
 };
 } // namespace duckdb

@@ -70,18 +70,21 @@ void TableBinding::GenerateAllColumnExpressions(BindContext &context,
 
 SubqueryBinding::SubqueryBinding(const string &alias, SubqueryRef &ref, BoundQueryNode &subquery, index_t index)
     : Binding(BindingType::SUBQUERY, alias, index), subquery(subquery) {
-	auto &select_list = subquery.GetSelectList();
-	if (ref.column_name_alias.size() > 0) {
-		assert(ref.column_name_alias.size() == select_list.size());
-		for (auto &name : ref.column_name_alias) {
-			name_map[name] = names.size();
-			names.push_back(name);
-		}
-	} else {
-		for (auto &name : subquery.names) {
-			name_map[name] = names.size();
-			names.push_back(name);
-		}
+	if (ref.column_name_alias.size() > subquery.names.size()) {
+		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", alias.c_str(), (int64_t) subquery.names.size(), (int64_t) ref.column_name_alias.size());
+	}
+	index_t i;
+	// use any provided aliases from the subquery
+	for(i = 0; i < ref.column_name_alias.size(); i++) {
+		auto &name = ref.column_name_alias[i];
+		name_map[name] = names.size();
+		names.push_back(name);
+	}
+	// if not enough aliases were provided, use the default names
+	for(; i < subquery.names.size(); i++) {
+		auto &name = subquery.names[i];
+		name_map[name] = names.size();
+		names.push_back(name);
 	}
 }
 

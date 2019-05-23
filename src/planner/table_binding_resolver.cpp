@@ -75,6 +75,7 @@ void TableBindingResolver::VisitOperator(LogicalOperator &op) {
 		break;
 	case LogicalOperatorType::INDEX_SCAN:
 		Visit((LogicalIndexScan &)op);
+		break;
 	default:
 		// for the operators we do not handle explicitly, we just visit the children
 		LogicalOperatorVisitor::VisitOperator(op);

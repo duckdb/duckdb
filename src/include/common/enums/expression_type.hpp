@@ -35,16 +35,26 @@ enum class ExpressionType : uint8_t {
 	OPERATOR_CONCAT = 5,
 	// left % right (both must be integer)
 	OPERATOR_MOD = 6,
+	// left << right (both must be integer)
+	OPERATOR_LSHIFT = 7,
+	// left >> right (both must be integer)
+	OPERATOR_RSHIFT = 8,
+	// left & right (both must be integer)
+	OPERATOR_BITWISE_AND = 9,
+	// left & right (both must be integer)
+	OPERATOR_BITWISE_OR = 10,
+	// left & right (both must be integer)
+	OPERATOR_BITWISE_XOR = 11,
 	// binary arithmetic operator boundary, used for quick comparisons
-	BINOP_BOUNDARY_END = OPERATOR_MOD,
+	BINOP_BOUNDARY_END = OPERATOR_BITWISE_XOR,
 	// explicitly cast left as right (right is integer in ValueType enum)
-	OPERATOR_CAST = 7,
+	OPERATOR_CAST = 12,
 	// logical not operator
-	OPERATOR_NOT = 8,
+	OPERATOR_NOT = 13,
 	// is null operator
-	OPERATOR_IS_NULL = 9,
+	OPERATOR_IS_NULL = 14,
 	// is not null operator
-	OPERATOR_IS_NOT_NULL = 10,
+	OPERATOR_IS_NOT_NULL = 15,
 
 	// -----------------------------
 	// Comparison Operators

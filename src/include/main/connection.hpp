@@ -11,6 +11,7 @@
 #include "main/materialized_query_result.hpp"
 #include "main/query_result.hpp"
 #include "main/stream_query_result.hpp"
+#include "common/enums/profiler_format.hpp"
 
 namespace duckdb {
 
@@ -27,7 +28,7 @@ public:
 	~Connection();
 
 	//! Returns query profiling information for the current query
-	string GetProfilingInformation();
+	string GetProfilingInformation(ProfilerPrintFormat format = ProfilerPrintFormat::QUERY_TREE);
 
 	//! Interrupt execution of the current query
 	void Interrupt();

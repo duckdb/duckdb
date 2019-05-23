@@ -27,4 +27,8 @@ TEST_CASE("Test table_info pragma", "[pragma]") {
 	REQUIRE(CHECK_COLUMN(result, 5, {false, false}));
 
 	REQUIRE_FAIL(con.Query("PRAGMA table_info('nonexistant_table');"));
+
+	// table_info on view does not work
+	REQUIRE_NO_FAIL(con.Query("CREATE VIEW vintegers AS SELECT 42"));
+	REQUIRE_FAIL(con.Query("PRAGMA table_info('vintegers')"));
 }

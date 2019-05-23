@@ -18,6 +18,21 @@ TEST_CASE("Test subqueries", "[subqueries]") {
 	result = con.Query("SELECT (SELECT (SELECT 42))");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 
+	//test aliasing of subquery
+	result = con.Query("SELECT * FROM (SELECT 42) v1(a);");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	REQUIRE(result->names[0] == "a");
+
+	// not enough aliases: defaults to using names for missing columns
+	result = con.Query("SELECT * FROM (SELECT 42, 41 AS x) v1(a);");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	REQUIRE(CHECK_COLUMN(result, 1, {41}));
+	REQUIRE(result->names[0] == "a");
+	REQUIRE(result->names[1] == "x");
+
+	// too many aliases: fails
+	REQUIRE_FAIL(con.Query("SELECT * FROM (SELECT 42, 41 AS x) v1(a, b, c);"));
+
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
 	result = con.Query("INSERT INTO test VALUES (11, 22)");
 	result = con.Query("INSERT INTO test VALUES (12, 21)");

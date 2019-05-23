@@ -12,6 +12,7 @@
 #include "parser/parsed_data/alter_table_info.hpp"
 #include "parser/parsed_data/create_index_info.hpp"
 #include "parser/parsed_data/create_scalar_function_info.hpp"
+#include "parser/parsed_data/create_schema_info.hpp"
 #include "parser/parsed_data/create_sequence_info.hpp"
 #include "parser/parsed_data/create_table_function_info.hpp"
 #include "parser/parsed_data/create_view_info.hpp"
@@ -107,10 +108,8 @@ void SchemaCatalogEntry::DropIndex(Transaction &transaction, DropInfo *info) {
 
 void SchemaCatalogEntry::DropTable(Transaction &transaction, DropInfo *info) {
 	auto old_table = tables.GetEntry(transaction, info->name);
-	if (info->if_exists && old_table) {
-		if (old_table->type != CatalogType::TABLE) {
-			throw CatalogException("Existing object %s is not a table", info->name.c_str());
-		}
+	if (old_table && old_table->type != CatalogType::TABLE) {
+		throw CatalogException("Existing object %s is not a table", info->name.c_str());
 	}
 	if (!tables.DropEntry(transaction, info->name, info->cascade)) {
 		if (!info->if_exists) {
@@ -213,4 +212,14 @@ SequenceCatalogEntry *SchemaCatalogEntry::GetSequence(Transaction &transaction, 
 		throw CatalogException("Sequence Function with name %s does not exist!", name.c_str());
 	}
 	return (SequenceCatalogEntry *)entry;
+}
+
+void SchemaCatalogEntry::Serialize(Serializer &serializer) {
+	serializer.WriteString(name);
+}
+
+unique_ptr<CreateSchemaInfo> SchemaCatalogEntry::Deserialize(Deserializer &source) {
+	auto info = make_unique<CreateSchemaInfo>();
+	info->schema = source.Read<string>();
+	return info;
 }

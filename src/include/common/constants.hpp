@@ -33,7 +33,8 @@ typedef uint64_t index_t;
 //! a saner siz_t for amounts of things, mostly for readability
 typedef uint64_t count_t;
 
-const index_t INVALID_INDEX = (index_t)-1;
+//! The value used to signify an invalid index entry
+extern const index_t INVALID_INDEX;
 
 //! data pointers
 typedef uint8_t data_t;
@@ -55,10 +56,10 @@ typedef index_t transaction_t;
 
 //! Type used for column identifiers
 typedef index_t column_t;
-//! Special value used to signify the ROW ID of
-extern column_t COLUMN_IDENTIFIER_ROW_ID;
+//! Special value used to signify the ROW ID of a table
+extern const column_t COLUMN_IDENTIFIER_ROW_ID;
 
 //! Zero selection vector: completely filled with the value 0 [READ ONLY]
-extern sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
+extern const sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
 
 } // namespace duckdb

@@ -28,6 +28,7 @@ duckdb_state duckdb_open(const char *path, duckdb_database *out) {
 	try {
 		wrapper->database = new DuckDB(path);
 	} catch (...) {
+		delete wrapper;
 		return DuckDBError;
 	}
 	*out = (duckdb_database)wrapper;
@@ -346,6 +347,33 @@ static Value GetCValue(duckdb_result *result, index_t col, index_t row) {
 	}
 }
 
+bool duckdb_value_boolean(duckdb_result *result, index_t col, index_t row) {
+	Value val = GetCValue(result, col, row);
+	if (val.is_null) {
+		return false;
+	} else {
+		return val.CastAs(TypeId::BOOLEAN).value_.boolean;
+	}
+}
+
+int8_t duckdb_value_int8(duckdb_result *result, index_t col, index_t row) {
+	Value val = GetCValue(result, col, row);
+	if (val.is_null) {
+		return 0;
+	} else {
+		return val.CastAs(TypeId::TINYINT).value_.tinyint;
+	}
+}
+
+int16_t duckdb_value_int16(duckdb_result *result, index_t col, index_t row) {
+	Value val = GetCValue(result, col, row);
+	if (val.is_null) {
+		return 0;
+	} else {
+		return val.CastAs(TypeId::SMALLINT).value_.smallint;
+	}
+}
+
 int32_t duckdb_value_int32(duckdb_result *result, index_t col, index_t row) {
 	Value val = GetCValue(result, col, row);
 	if (val.is_null) {
@@ -364,25 +392,25 @@ int64_t duckdb_value_int64(duckdb_result *result, index_t col, index_t row) {
 	}
 }
 
+float duckdb_value_float(duckdb_result *result, index_t col, index_t row) {
+	Value val = GetCValue(result, col, row);
+	if (val.is_null) {
+		return 0.0;
+	} else {
+		return val.CastAs(TypeId::FLOAT).value_.float_;
+	}
+}
+
+double duckdb_value_double(duckdb_result *result, index_t col, index_t row) {
+	Value val = GetCValue(result, col, row);
+	if (val.is_null) {
+		return 0.0;
+	} else {
+		return val.CastAs(TypeId::DOUBLE).value_.double_;
+	}
+}
+
 char *duckdb_value_varchar(duckdb_result *result, index_t col, index_t row) {
 	Value val = GetCValue(result, col, row);
 	return strdup(val.ToString(ConvertCTypeToCPP(result->columns[col].type)).c_str());
-}
-
-int32_t duckdb_value_int32_unsafe(duckdb_result *result, index_t col, index_t row) {
-	assert(col < result->column_count);
-	assert(result->columns[col].type == DUCKDB_TYPE_INTEGER);
-	return UnsafeFetch<int32_t>(result, col, row);
-}
-
-int64_t duckdb_value_int64_unsafe(duckdb_result *result, index_t col, index_t row) {
-	assert(col < result->column_count);
-	assert(result->columns[col].type == DUCKDB_TYPE_BIGINT);
-	return UnsafeFetch<int64_t>(result, col, row);
-}
-
-const char *duckdb_value_varchar_unsafe(duckdb_result *result, index_t col, index_t row) {
-	assert(col < result->column_count);
-	assert(result->columns[col].type == DUCKDB_TYPE_VARCHAR);
-	return UnsafeFetch<const char *>(result, col, row);
 }

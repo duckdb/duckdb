@@ -1,6 +1,5 @@
 #include "catch.hpp"
 #include "common/file_system.hpp"
-#include "dbgen.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -9,7 +8,7 @@ using namespace std;
 namespace duckdb {
 class ReadOnlyFileSystem : public FileSystem {
 	unique_ptr<FileHandle> OpenFile(const char *path, uint8_t flags, FileLockType lock_type) override {
-		if (flags | FileFlags::WRITE) {
+		if (flags & FileFlags::WRITE) {
 			throw Exception("RO file system");
 		}
 		return FileSystem::OpenFile(path, flags, lock_type);
@@ -25,9 +24,6 @@ class ReadOnlyFileSystem : public FileSystem {
 		throw Exception("RO file system");
 	}
 	void RemoveFile(const string &filename) override {
-		throw Exception("RO file system");
-	}
-	void FileSync(FILE *file) override {
 		throw Exception("RO file system");
 	}
 };
