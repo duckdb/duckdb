@@ -8,19 +8,8 @@
 using namespace duckdb;
 using namespace std;
 
-StorageChunk::StorageChunk(DataTable &_table, index_t start) :
-	SegmentBase(start, 0), table(_table) {
-	columns.resize(table.types.size());
-	count_t tuple_size = 0;
-	for (auto &type : table.types) {
-		tuple_size += GetTypeIdSize(type);
-	}
-	owned_data = unique_ptr<data_t[]>(new data_t[tuple_size * STORAGE_CHUNK_SIZE]);
-	data_ptr_t dataptr = owned_data.get();
-	for (index_t i = 0; i < table.types.size(); i++) {
-		columns[i] = dataptr;
-		dataptr += GetTypeIdSize(table.types[i]) * STORAGE_CHUNK_SIZE;
-	}
+StorageChunk::StorageChunk(DataTable &base_table, index_t start) :
+	SegmentBase(start, 0), table(base_table) {
 }
 
 void StorageChunk::Cleanup(VersionInformation *info) {
@@ -41,11 +30,18 @@ void StorageChunk::Undo(VersionInformation *info) {
 		// move data back to the original chunk
 		deleted[entry] = false;
 		auto tuple_data = info->tuple_data;
-		table.serializer.Deserialize(columns, entry, tuple_data);
+
+		// data_ptr_t dataptr = current_chunk->GetPointerToRow(column_ids[j], current_chunk->start + current_offset);
+		throw NotImplementedException("Undo");
+		//table.serializer.Deserialize(columns, entry, tuple_data);
 	}
 	version_pointers[entry] = info->next;
 	if (version_pointers[entry]) {
 		version_pointers[entry]->prev.entry = entry;
 		version_pointers[entry]->chunk = this;
 	}
+}
+
+data_ptr_t StorageChunk::GetPointerToRow(index_t col, index_t row) {
+	return columns[col].segment->GetPointerToRow(table.types[col], row);
 }

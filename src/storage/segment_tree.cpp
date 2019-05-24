@@ -7,6 +7,10 @@ SegmentBase* SegmentTree::GetRootSegment() {
 	return root_node.get();
 }
 
+SegmentBase* SegmentTree::GetLastSegment() {
+	return nodes.back().node;
+}
+
 SegmentBase* SegmentTree::GetSegment(index_t row_number) {
 	index_t lower = 0;
 	index_t upper = nodes.size() - 1;

@@ -17,6 +17,7 @@
 #include "storage/table_statistics.hpp"
 #include "storage/unique_index.hpp"
 #include "storage/block.hpp"
+#include "storage/column_segment.hpp"
 
 #include <atomic>
 #include <mutex>
@@ -33,6 +34,7 @@ struct VersionInformation;
 
 struct ScanStructure {
 	StorageChunk *chunk;
+	unique_ptr<ColumnSegment*[]> columns;
 	index_t offset;
 	VersionInformation *version_chain;
 	vector<unique_ptr<StorageLockKey>> locks;
@@ -45,6 +47,28 @@ class DataTable {
 public:
 	DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types);
 
+	//! The amount of elements in the table. Note that this number signifies the amount of COMMITTED entries in the
+	//! table. It can be inaccurate inside of transactions. More work is needed to properly support that.
+	std::atomic<index_t> cardinality;
+	//! Total per-tuple size of the table
+	index_t tuple_size;
+	//! Accumulative per-tuple size
+	vector<index_t> accumulative_tuple_size;
+	// schema of the table
+	string schema;
+	// name of the table
+	string table;
+	//! Types managed by data table
+	vector<TypeId> types;
+	//! Tuple serializer for this table
+	TupleSerializer serializer;
+	//! A reference to the base storage manager
+	StorageManager &storage;
+	//! Unique indexes
+	vector<unique_ptr<UniqueIndex>> unique_indexes;
+	//! Indexes
+	vector<unique_ptr<Index>> indexes;
+public:
 	void InitializeScan(ScanStructure &structure);
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	// from offset and store them in result. Offset is incremented with how many
@@ -73,33 +97,7 @@ public:
 		return statistics[oid];
 	}
 
-	//! The amount of elements in the table. Note that this number signifies the amount of COMMITTED entries in the
-	//! table. It can be inaccurate inside of transactions. More work is needed to properly support that.
-	std::atomic<index_t> cardinality;
-	//! Total per-tuple size of the table
-	index_t tuple_size;
-	//! Accumulative per-tuple size
-	vector<index_t> accumulative_tuple_size;
-
-	// schema of the table
-	string schema;
-	// name of the table
-	string table;
-	//! Types managed by data table
-	vector<TypeId> types;
-
-	//! Tuple serializer for this table
-	TupleSerializer serializer;
-	//! A reference to the base storage manager
-	StorageManager &storage;
-
 	StorageChunk *GetChunk(index_t row_number);
-
-	//! Unique indexes
-	vector<unique_ptr<UniqueIndex>> unique_indexes;
-
-	//! Indexes
-	vector<unique_ptr<Index>> indexes;
 
 	//! Retrieves versioned data from a set of pointers to tuples inside an
 	//! UndoBuffer and stores them inside the result chunk; used for scanning of
@@ -114,8 +112,15 @@ public:
 private:
 	//! Verify whether or not a new chunk violates any constraints
 	void VerifyConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &new_chunk);
+	//! Append a storage chunk with the given start index to the data table. Returns a pointer to the newly created storage chunk.
+	StorageChunk* AppendStorageChunk(index_t start);
+	//! Append a subset of a vector to the specified column of the table
+	void AppendVector(index_t column, Vector &data, index_t offset, index_t count);
+
 	//! The stored data of the table
 	SegmentTree storage_tree;
+	//! The physical columns of the table
+	unique_ptr<SegmentTree[]> columns;
 	//! The table statistics
 	TableStatistics table_statistics;
 	//! Row ID statistics

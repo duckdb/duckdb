@@ -35,12 +35,12 @@ SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool
 		header_buffer.Clear();
 
 		// write the database headers
-		// initialize meta_block and free_list to -1 because the database file does not contain any actual content yet
+		// initialize meta_block and free_list to INVALID_BLOCK because the database file does not contain any actual content yet
 		DatabaseHeader *header = (DatabaseHeader *)header_buffer.buffer;
 		// header 1
 		header->iteration = 0;
-		header->meta_block = -1;
-		header->free_list = -1;
+		header->meta_block = INVALID_BLOCK;
+		header->free_list = INVALID_BLOCK;
 		header->block_count = 0;
 		header_buffer.Write(*handle, HEADER_SIZE);
 		// header 2
@@ -82,7 +82,7 @@ SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool
 }
 
 void SingleFileBlockManager::Initialize(DatabaseHeader &header) {
-	if (header.free_list >= 0) {
+	if (header.free_list != INVALID_BLOCK) {
 		MetaBlockReader reader(*this, header.free_list);
 		auto free_list_count = reader.Read<uint64_t>();
 		free_list.reserve(free_list_count);
@@ -143,7 +143,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 		writer.Flush();
 	} else {
 		// no blocks in the free list
-		header.free_list = -1;
+		header.free_list = INVALID_BLOCK;
 	}
 	// set the header inside the buffer
 	header_buffer.Clear();

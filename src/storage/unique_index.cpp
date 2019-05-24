@@ -59,7 +59,8 @@ UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple, in
 					// first serialize to tuple
 					auto tuple_data = unique_ptr<data_t[]>{new data_t[chunk->table.serializer.TupleSize()]};
 
-					chunk->table.serializer.Serialize(chunk->columns, offset, tuple_data.get());
+					throw NotImplementedException("Resolution of conflict in unique index");
+					// chunk->table.serializer.Serialize(chunk->columns, offset, tuple_data.get());
 					// now compare them
 					// we use the TupleComparer because the tuple is serialized
 					// from the base table
@@ -269,7 +270,7 @@ void UniqueIndex::Append(Transaction &transaction, vector<unique_ptr<UniqueIndex
 // Handle an update in the UniqueIndex
 // Handling updates is a bit more difficult than handling an Append because we
 // do it in bulk and if we simply treat the entries as an append there might be
-// conflicts Consider for example if we do the query "UPDATE integers SET
+// conflicts. Consider for example if we do the query "UPDATE integers SET
 // i=i+1"; This will never cause a conflict to happen, but might cause a fake
 // conflict if we add the entries to the list in bulk, because {10, 11} -> {11,
 // 12}: 11 already exists ERROR For this reason we check separately for
@@ -330,9 +331,11 @@ void UniqueIndex::Update(Transaction &transaction, StorageChunk *storage, vector
 		                                 index.allow_nulls)) {
 			throw ConstraintException("PRIMARY KEY column cannot contain NULL values!");
 		}
+		throw NotImplementedException("update for unique index not implemented");
 
-		index.serializer.SerializeUpdate(storage->columns, affected_columns, update_chunk, row_identifiers,
-		                                 storage->start, tuples);
+
+		// index.serializer.SerializeUpdate(storage->columns, affected_columns, update_chunk, row_identifiers,
+		//                                  storage->start, tuples);
 
 		// check if there are duplicates in the tuples themselves
 		TupleSet set;

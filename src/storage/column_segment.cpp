@@ -1,4 +1,5 @@
 #include "storage/column_segment.hpp"
+#include "storage/block_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -12,7 +13,6 @@ ColumnSegment::ColumnSegment(index_t start) :
 }
 
 data_ptr_t ColumnSegment::GetData() {
-	// FIXME: we can do better than a mutex every time this pointer is obtained
 	if (!block) {
 		lock_guard<mutex> lock(data_lock);
 		if (!block) {
@@ -20,9 +20,24 @@ data_ptr_t ColumnSegment::GetData() {
 			// no block yet: have to load the block
 			if (block_id != INVALID_BLOCK) {
 				// block is not an in-memory block: load the contents from disk
+				// FIXME: this should be done using some buffer manager strategy
 				manager->Read(*block);
 			}
 		}
 	}
 	return block->buffer + offset;
+}
+
+data_ptr_t ColumnSegment::GetPointerToRow(TypeId type, index_t row) {
+	assert(row >= start);
+	// first check if the row is in this segment
+	if (row >= start + count) {
+		// not in this segment, check the next segment
+		assert(next);
+		auto &next_segment = (ColumnSegment&) *next;
+		return next_segment.GetPointerToRow(type, row);
+	}
+	// row is in this segment, get the pointer
+	index_t offset = row - start;
+	return GetData() + offset * GetTypeIdSize(type);
 }

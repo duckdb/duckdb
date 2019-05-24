@@ -20,6 +20,7 @@ public:
 	SegmentBase(index_t start, count_t count) :
 		start(start), count(count) {
 	}
+	virtual ~SegmentBase(){}
 
 	//! The start row id of this chunk
 	index_t start;
@@ -46,6 +47,8 @@ public:
 public:
 	//! Gets a pointer to the first segment. Useful for scans.
 	SegmentBase* GetRootSegment();
+	//! Gets a pointer to the last segment. Useful for appends.
+	SegmentBase* GetLastSegment();
 	//! Gets a pointer to a specific column segment for the given row
 	SegmentBase* GetSegment(index_t row_number);
 	//! Append a column segment to the tree

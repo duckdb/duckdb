@@ -218,9 +218,8 @@ static void WriteTuple(WriteAheadLog *log, VersionInformation *entry,
 		// append the tuple to the current chunk
 		index_t current_offset = chunk->size();
 		for (index_t i = 0; i < chunk->column_count; i++) {
-			auto type = chunk->data[i].type;
-			index_t value_size = GetTypeIdSize(type);
-			void *storage_pointer = storage->columns[i] + value_size * id;
+			index_t value_size = GetTypeIdSize(chunk->data[i].type);
+			data_ptr_t storage_pointer = storage->GetPointerToRow(i, storage->start + id);
 			memcpy(chunk->data[i].data + value_size * current_offset, storage_pointer, value_size);
 			chunk->data[i].count++;
 		}

@@ -11,6 +11,7 @@
 #include "common/types/string_heap.hpp"
 #include "storage/storage_lock.hpp"
 #include "storage/segment_tree.hpp"
+#include "storage/column_segment.hpp"
 
 namespace duckdb {
 class ColumnDefinition;
@@ -20,25 +21,36 @@ class StorageChunk;
 
 struct VersionInformation;
 
+struct ColumnPointer {
+	//! The column segment
+	ColumnSegment *segment;
+	//! The offset inside the column segment
+	index_t offset;
+};
+
 class StorageChunk : public SegmentBase {
 public:
 	StorageChunk(DataTable &table, index_t start);
 
+	//! The table
 	DataTable &table;
+	//! Deleted
 	bool deleted[STORAGE_CHUNK_SIZE] = {0};
+	//! The version pointers
 	VersionInformation *version_pointers[STORAGE_CHUNK_SIZE] = {nullptr};
-	vector<data_ptr_t> columns;
-
+	//! Pointers to the column segments
+	unique_ptr<ColumnPointer[]> columns;
+	//! The lock for the storage
+	StorageLock lock;
+	//! The string heap of the storage chunk
+	StringHeap string_heap;
+public:
+	//! Get a poiner to the row of the specified column
+	data_ptr_t GetPointerToRow(index_t col, index_t row);
 	// Cleanup the version information of a tuple
 	void Cleanup(VersionInformation *info);
 	// Undo the changes made by a tuple
 	void Undo(VersionInformation *info);
-
-	StorageLock lock;
-	StringHeap string_heap;
-
-private:
-	unique_ptr<data_t[]> owned_data;
 };
 
 } // namespace duckdb

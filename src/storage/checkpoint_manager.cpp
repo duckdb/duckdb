@@ -240,7 +240,7 @@ void CheckpointManager::WriteTableData(Transaction &transaction, TableCatalogEnt
 	// so make a list of all column ids of the table
 	for (uint64_t i = 0; i < table.columns.size(); i++) {
 		// for each column, create a block that serves as the buffer for that blocks data
-		blocks.push_back(make_unique<Block>(-1));
+		blocks.push_back(make_unique<Block>(INVALID_BLOCK));
 		// initialize offsets, tuple counts and row number sizes
 		offsets.push_back(0);
 		tuple_counts.push_back(0);
@@ -347,7 +347,7 @@ void CheckpointManager::ReadTableData(ClientContext &context, TableCatalogEntry 
 	tuple_counts.resize(column_count);
 	indexes.resize(column_count);
 	for (index_t col = 0; col < column_count; col++) {
-		blocks[col] = make_unique<Block>(-1);
+		blocks[col] = make_unique<Block>(INVALID_BLOCK);
 		indexes[col] = 0;
 		ReadBlock(col);
 	}

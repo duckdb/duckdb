@@ -23,12 +23,34 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 	tuple_size = accumulative_size;
 	// create empty statistics for the table
 	statistics = unique_ptr<ColumnStatistics[]>(new ColumnStatistics[types.size()]);
-	// initialize the table with an empty data chunk
-	storage_tree.AppendSegment(make_unique<StorageChunk>(*this, 0));
+	// and an empty column chunk for each column
+	columns = unique_ptr<SegmentTree[]>(new SegmentTree[types.size()]);
+	for (index_t i = 0; i < types.size(); i++) {
+		columns[i].AppendSegment(make_unique<ColumnSegment>(0));
+	}
+	// initialize the table with an empty storage chunk
+	AppendStorageChunk(0);
+}
+
+StorageChunk* DataTable::AppendStorageChunk(index_t start) {
+	auto chunk = make_unique<StorageChunk>(*this, 0);
+	auto chunk_pointer = chunk.get();
+	// set the columns of the chunk
+	chunk->columns = unique_ptr<ColumnPointer[]>(new ColumnPointer[types.size()]);
+	for(index_t i = 0; i < types.size(); i++) {
+		chunk->columns[i].segment = (ColumnSegment*) columns[i].nodes.back().node;
+		chunk->columns[i].offset = chunk->columns[i].segment->count;
+	}
+	storage_tree.AppendSegment(move(chunk));
+	return chunk_pointer;
 }
 
 void DataTable::InitializeScan(ScanStructure &structure) {
 	structure.chunk = (StorageChunk*) storage_tree.GetRootSegment();
+	structure.columns = unique_ptr<ColumnSegment*[]>(new ColumnSegment*[types.size()]);
+	for (index_t i = 0; i < types.size(); i++) {
+		structure.columns[i] = (ColumnSegment*) columns[i].GetRootSegment();
+	}
 	structure.offset = 0;
 	structure.version_chain = nullptr;
 }
@@ -83,6 +105,31 @@ void DataTable::VerifyConstraints(TableCatalogEntry &table, ClientContext &conte
 	}
 }
 
+void DataTable::AppendVector(index_t column_index, Vector &data, index_t offset, index_t count) {
+	// get the segment to append to
+	auto segment = (ColumnSegment*) columns[column_index].GetLastSegment();
+	// append the data from the vector
+	// first check how much we can append to the column segment
+	index_t type_size = GetTypeIdSize(types[column_index]);
+	data_ptr_t target = segment->GetData() + segment->offset * type_size;
+	data_ptr_t end = segment->GetData() + BLOCK_SIZE;
+	index_t elements_to_copy = std::min((index_t) (end - target) / type_size, count);
+	if (elements_to_copy > 0) {
+		// we can fit elements in the current column segment: copy them there
+		VectorOperations::CopyToStorage(data, target, offset, elements_to_copy);
+		offset += elements_to_copy;
+		segment->count += elements_to_copy;
+	}
+	if (elements_to_copy < count) {
+		// we couldn't fit everything we wanted in the original column segment
+		// create a new one
+		auto column_segment = make_unique<ColumnSegment>(segment->start + segment->count);
+		columns[column_index].AppendSegment(move(column_segment));
+		// now try again
+		AppendVector(column_index, data, offset, count - elements_to_copy);
+	}
+}
+
 void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
 	if (chunk.size() == 0) {
 		return;
@@ -130,11 +177,9 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 		// changes are committed
 		transaction.PushDeletedEntries(last_chunk->count, current_count, last_chunk,
 		                               last_chunk->version_pointers + last_chunk->count);
-		// now insert the elements into the vector
+		// now insert the elements into the column segments
 		for (index_t i = 0; i < chunk.column_count; i++) {
-			data_ptr_t target =
-			    last_chunk->columns[i] + last_chunk->count * GetTypeIdSize(GetInternalType(table.columns[i].type));
-			VectorOperations::CopyToStorage(chunk.data[i], target, 0, current_count);
+			AppendVector(i, chunk.data[i], 0, current_count);
 		}
 		// now increase the count of the chunk
 		last_chunk->count += current_count;
@@ -143,20 +188,17 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 	// check if we need to append more entries
 	if (current_count != chunk.size()) {
 		// we need to append more entries
-		// first create a new chunk and lock it
-		auto new_chunk = make_unique<StorageChunk>(*this, last_chunk->start + last_chunk->count);
+		auto new_chunk = AppendStorageChunk(last_chunk->start + last_chunk->count);
 
 		// now append the remainder
 		index_t remainder = chunk.size() - current_count;
 		// first push the deleted entries
-		transaction.PushDeletedEntries(0, remainder, new_chunk.get(), new_chunk->version_pointers);
-		// now insert the elements into the vector
+		transaction.PushDeletedEntries(0, remainder, new_chunk, new_chunk->version_pointers);
+		// now append the remaining elements into the column segments
 		for (index_t i = 0; i < chunk.column_count; i++) {
-			data_ptr_t target = new_chunk->columns[i];
-			VectorOperations::CopyToStorage(chunk.data[i], target, current_count, remainder);
+			AppendVector(i, chunk.data[i], current_count, remainder);
 		}
 		new_chunk->count = remainder;
-		storage_tree.AppendSegment(move(new_chunk));
 	}
 	// after a successful append move the strings to the chunk
 	last_chunk->string_heap.MergeHeap(heap);
@@ -252,12 +294,11 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	});
 
 	// now update the columns in the base table
-	for (index_t j = 0; j < column_ids.size(); j++) {
-		auto column_id = column_ids[j];
-		auto size = GetTypeIdSize(updates.data[j].type);
-		auto base_data = chunk->columns[column_id];
+	for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+		auto column_id = column_ids[col_idx];
+		auto size = GetTypeIdSize(updates.data[col_idx].type);
 
-		Vector *update_vector = &updates.data[j];
+		Vector *update_vector = &updates.data[col_idx];
 		Vector null_vector;
 		if (update_vector->nullmask.any()) {
 			// has NULL values in the nullmask
@@ -269,14 +310,13 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		}
 
 		VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
-			auto id = ids[i] - chunk->start;
-			auto dataptr = base_data + id * size;
+			auto dataptr = chunk->columns[i].segment->GetPointerToRow(types[col_idx], ids[i]);
 			auto update_index = update_vector->sel_vector ? update_vector->sel_vector[k] : k;
 			memcpy(dataptr, update_vector->data + update_index * size, size);
 		});
 
 		// update the statistics with the new data
-		statistics[column_id].Update(updates.data[j]);
+		statistics[column_id].Update(updates.data[col_idx]);
 	}
 	// after a successful update move the strings into the chunk
 	chunk->string_heap.MergeHeap(heap);
@@ -330,8 +370,8 @@ void DataTable::RetrieveBaseTableData(DataChunk &result, const vector<column_t> 
 		} else {
 			// normal column
 			// grab the data from the source using a selection vector
-			data_ptr_t dataptr =
-			    current_chunk->columns[column_ids[j]] + GetTypeIdSize(result.data[j].type) * current_offset;
+			// FIXME: what about data crossing multiple column segments?
+			data_ptr_t dataptr = current_chunk->GetPointerToRow(column_ids[j], current_chunk->start + current_offset);
 			Vector source(result.data[j].type, dataptr);
 			source.sel_vector = regular_entries;
 			source.count = regular_count;

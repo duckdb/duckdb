@@ -10,6 +10,7 @@
 
 #include "storage/block.hpp"
 #include "storage/segment_tree.hpp"
+#include "common/types.hpp"
 
 namespace duckdb {
 class BlockManager;
@@ -25,8 +26,8 @@ public:
 	block_id_t block_id;
 	//! The offset into the block
 	index_t offset;
-	//! A pointer to the next column segment (if any)
-	unique_ptr<ColumnSegment> next;
+	//! Returns a pointer to a specific row in the column segment. row must be >= start of this column segment
+	data_ptr_t GetPointerToRow(TypeId type, index_t row);
 public:
 	//! Returns a pointer to the data of the column segment
 	data_ptr_t GetData();
