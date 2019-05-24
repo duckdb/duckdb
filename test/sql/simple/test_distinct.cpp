@@ -60,20 +60,59 @@ TEST_CASE("Test DISTINCT ON", "[distinct]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 
-	con.Query("CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER);");
-	con.Query("INSERT INTO integers VALUES (2, 3, 5), (4, 5, 6), (2, 7, 8)");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (2, 3, 5), (4, 5, 6), (2, 7, 6)"));
 
-	result = con.Query("SELECT DISTINCT ON (i) i, j FROM integers");
-	REQUIRE(CHECK_COLUMN(result, 0, {4, 2}));
-	REQUIRE(CHECK_COLUMN(result, 1, {5, 3}));
+	result = con.Query("SELECT DISTINCT ON (i) i, j FROM integers WHERE i <> 2");
+	REQUIRE(CHECK_COLUMN(result, 0, {4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5}));
 
 	result = con.Query("SELECT DISTINCT ON (1) i, j FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {3, 5}));
 
+	result = con.Query("SELECT DISTINCT ON (1) i, j FROM integers ORDER BY i LIMIT 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3}));
+
+	result = con.Query("SELECT DISTINCT ON (1) i, j FROM integers ORDER BY i LIMIT 1 OFFSET 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5}));
+
 	result = con.Query("SELECT DISTINCT ON (2) i, j FROM integers ORDER BY 2");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {3, 5, 7}));
+
+	result = con.Query("SELECT DISTINCT ON (2) j, k FROM integers ORDER BY 2");
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5, 6}));
+
+	result = con.Query("SELECT DISTINCT ON (3) i, j, k FROM integers ORDER BY 2");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3, 5}));
+	REQUIRE(CHECK_COLUMN(result, 2, {5, 6}));
+
+	result = con.Query("SELECT DISTINCT ON (3) i, j, k FROM integers ORDER BY 3");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3, 5}));
+	REQUIRE(CHECK_COLUMN(result, 2, {5, 6}));
+
+	result = con.Query("SELECT DISTINCT ON (2) j, (SELECT i FROM integers) FROM integers ORDER BY 2");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+
+	result = con.Query(
+	    "SELECT DISTINCT ON (2) j, (SELECT DISTINCT ON (i) i FROM integers ORDER BY 1) FROM integers ORDER BY 2");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+
+	result = con.Query("SELECT DISTINCT ON (i) i, j FROM integers ORDER BY j");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3, 5}));
+
+	result = con.Query("SELECT * FROM (SELECT DISTINCT ON (i) i, j FROM integers) tbl1 WHERE i <> 2");
+	REQUIRE(CHECK_COLUMN(result, 0, {4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5}));
 
 	REQUIRE_FAIL(con.Query("SELECT DISTINCT ON (2) i FROM integers"));
 	REQUIRE_FAIL(con.Query("SELECT DISTINCT ON (i) i, j FROM integers ORDER BY k"));

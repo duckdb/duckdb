@@ -30,37 +30,34 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 	assert(distinct_targets.size() > 0);
 
 	auto &types = child->GetTypes();
-	auto &projection = reinterpret_cast<PhysicalProjection &>(*child);
-
-	vector<unique_ptr<Expression>> groups;
-	vector<unique_ptr<Expression>> expressions;
-	vector<unique_ptr<Expression>> projections;
-	vector<TypeId> target_types;
+	vector<unique_ptr<Expression>> groups, aggregates, projections;
 	// creates one group per distinct_target
-	for (index_t i = 0; i < distinct_targets.size(); i++) {
-		auto &colref = (BoundColumnRefExpression &)*distinct_targets[i];
-		auto col_index = colref.binding.column_index;
-		groups.push_back(make_unique<BoundReferenceExpression>(types[col_index], col_index));
+	for (auto &target : distinct_targets) {
+		groups.push_back(move(target));
 	}
-	// creates one aggregate per column in the select_list
-	for (index_t i = 0; i < projection.select_list.size(); ++i) {
+	// we need the projection to fetch the select_list
+	auto &child_projection = (PhysicalProjection &)*child;
+	// we need to create one aggregate per column in the select_list
+	for (index_t i = 0; i < child_projection.select_list.size(); ++i) {
 		// first we create an aggregate that returns the FIRST element
 		auto bound = make_unique<BoundReferenceExpression>(types[i], i);
 		auto first_aggregate =
 		    make_unique<BoundAggregateExpression>(types[i], ExpressionType::AGGREGATE_FIRST, move(bound));
-		// and push it to the list of expressions
-		expressions.push_back(move(first_aggregate));
+		// and push it to the list of aggregates
+		aggregates.push_back(move(first_aggregate));
 		projections.push_back(make_unique<BoundReferenceExpression>(types[i], i));
 	}
 
+	// we add a physical hash aggregation in the plan to select the distinct groups
 	auto groupby =
-	    make_unique<PhysicalHashAggregate>(types, move(expressions), move(groups), PhysicalOperatorType::DISTINCT_ON);
+	    make_unique<PhysicalHashAggregate>(types, move(aggregates), move(groups), PhysicalOperatorType::DISTINCT);
 	groupby->children.push_back(move(child));
 
-	auto final_projection = make_unique<PhysicalProjection>(types, move(projections));
-	final_projection->children.push_back(move(groupby));
+	// we add a physical projection on top of the aggregation to project all members in the select list
+	auto aggr_projection = make_unique<PhysicalProjection>(types, move(projections));
+	aggr_projection->children.push_back(move(groupby));
 
-	return move(final_projection);
+	return move(aggr_projection);
 }
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &op) {
