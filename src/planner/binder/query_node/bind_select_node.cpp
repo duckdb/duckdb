@@ -4,7 +4,6 @@
 #include "parser/query_node/select_node.hpp"
 #include "parser/tableref/joinref.hpp"
 #include "planner/binder.hpp"
-#include "planner/expression_binder/distinct_binder.hpp"
 #include "planner/expression_binder/group_binder.hpp"
 #include "planner/expression_binder/having_binder.hpp"
 #include "planner/expression_binder/order_binder.hpp"
