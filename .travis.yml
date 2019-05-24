@@ -118,7 +118,7 @@ matrix:
         - build/coverage/test/unittest
 
       after_success:
-        - coveralls -b build/coverage --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --gcov-options '\-lp'
+        - coveralls -b build/coverage -E '.*CMakeCXXCompilerId.cpp' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test  --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --gcov-options '\-lp'
 
 
     - os: windows
