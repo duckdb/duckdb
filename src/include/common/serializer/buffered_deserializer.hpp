@@ -20,6 +20,7 @@ public:
 
 	data_ptr_t ptr;
 	data_ptr_t endptr;
+
 public:
 	void ReadData(data_ptr_t buffer, uint64_t read_size) override;
 };
