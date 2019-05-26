@@ -3,7 +3,6 @@
 
 #include "parser/parsed_data/drop_info.hpp"
 
-
 using namespace duckdb;
 using namespace std;
 
@@ -44,12 +43,12 @@ void WriteAheadLog::Replay(DuckDB &database, string &path) {
 				ReplayEntry(context, database, entry_type, reader);
 			}
 		}
-	} catch(Exception &ex) {
+	} catch (Exception &ex) {
 		// FIXME: this report a proper warning in the connection
 		fprintf(stderr, "Exception in WAL playback: %s\n", ex.what());
 		// exception thrown in WAL replay: rollback
 		context.transaction.Rollback();
-	} catch(...) {
+	} catch (...) {
 		// exception thrown in WAL replay: rollback
 		context.transaction.Rollback();
 	}

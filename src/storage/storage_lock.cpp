@@ -3,9 +3,7 @@
 using namespace duckdb;
 using namespace std;
 
-StorageLockKey::StorageLockKey(StorageLock &lock, StorageLockType type) :
-	lock(lock), type(type) {
-
+StorageLockKey::StorageLockKey(StorageLock &lock, StorageLockType type) : lock(lock), type(type) {
 }
 
 StorageLockKey::~StorageLockKey() {
@@ -17,14 +15,13 @@ StorageLockKey::~StorageLockKey() {
 	}
 }
 
-StorageLock::StorageLock() :
-	read_count(0) {
-
+StorageLock::StorageLock() : read_count(0) {
 }
 
 unique_ptr<StorageLockKey> StorageLock::GetExclusiveLock() {
 	exclusive_lock.lock();
-	while (read_count != 0) { }
+	while (read_count != 0) {
+	}
 	return make_unique<StorageLockKey>(*this, StorageLockType::EXCLUSIVE);
 }
 

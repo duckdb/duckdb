@@ -18,7 +18,7 @@ TEST_CASE("Test subqueries", "[subqueries]") {
 	result = con.Query("SELECT (SELECT (SELECT 42))");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 
-	//test aliasing of subquery
+	// test aliasing of subquery
 	result = con.Query("SELECT * FROM (SELECT 42) v1(a);");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 	REQUIRE(result->names[0] == "a");
