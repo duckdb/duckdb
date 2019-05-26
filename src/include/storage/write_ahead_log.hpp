@@ -36,6 +36,7 @@ public:
 
 	//! Whether or not the WAL has been initialized
 	bool initialized;
+
 public:
 	//! Replay the WAL
 	static void Replay(DuckDB &database, string &path);
@@ -60,6 +61,7 @@ public:
 	void WriteQuery(string &query);
 
 	void Flush();
+
 private:
 	DuckDB &database;
 	unique_ptr<BufferedFileWriter> writer;

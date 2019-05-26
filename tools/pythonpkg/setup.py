@@ -25,7 +25,7 @@ archive_ext = 'a'
 lib_prefix = 'lib'
 if os.name == 'nt':
     archive_ext = 'lib'
-    lib_prefix = 'RelWithDebInfo/'
+    lib_prefix = 'Release/'
 
 dd_prefix = 'src/duckdb'
 if not os.path.exists(dd_prefix):
@@ -44,12 +44,12 @@ class CustomBuiltExtCommand(build_ext):
             os.makedirs('build/release_notest')
         os.chdir('build/release_notest')
 
-        configcmd = 'cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLEAN=1 ../..'
+        configcmd = 'cmake -DCMAKE_BUILD_TYPE=Release -DLEAN=1 ../..'
         buildcmd = 'cmake --build . --target duckdb_static'
 
         if os.name == 'nt':
             configcmd += ' -DCMAKE_GENERATOR_PLATFORM=x64'
-            buildcmd += ' --config RelWithDebInfo'
+            buildcmd += ' --config Release'
 
         subprocess.Popen(configcmd.split(' ')).wait()
         subprocess.Popen(buildcmd.split(' ')).wait()

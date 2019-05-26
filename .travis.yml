@@ -2,6 +2,9 @@ language: cpp
 script: make unit
 dist: trusty
 
+before_install:
+  - eval "${MATRIX_EVAL}"
+
 env:
   global:
     - CIBW_BUILD='cp37-*'
@@ -9,7 +12,7 @@ env:
     - CIBW_TEST_REQUIRES='pytest'
     - CIBW_BEFORE_BUILD='pip install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3" && pip install cmake'
     - CIBW_TEST_COMMAND='python -m pytest {project}/tests'
-    - TWINE_USERNAME=hfmuehleisen
+
 
 matrix:
   include:
@@ -18,100 +21,19 @@ matrix:
       name: Xcode 6.4
       osx_image: xcode9.1
 
-    - os: osx
-      name: Xcode 9.4
-      osx_image: xcode9.1
 
     - os: osx
       name: Xcode 10.2
       osx_image: xcode10.2
 
-
-    - os: linux
-      name: GCC 4.9
-      addons:
-         apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-4.9 binutils-2.26
-      env:
-         - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
-
-    - os: linux
-      name: GCC 7
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-7 binutils-2.26
-      env:
-        - MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
-
-
-    - os: linux
-      dist: xenial
-      name: GCC 8
-
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-8
-      env:
-        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
-
-    - os: linux
-      dist: xenial
-      name: All Unit Tests
-
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-8
-      env:
-        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
+      before_install:
+        - pip install --user boto3
       script:
-        - make opt
-        - build/release/test/unittest "*"
-
-    - os: linux
-      dist: xenial
-      name: Code Coverage
-
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-8
-      env:
-        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
-
-      before_install: pip install --user cpp-coveralls
-
-      script:
-        - mkdir -p build/coverage
-        - (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
-        - build/coverage/test/unittest
+        - (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        - build/release/test/unittest
 
       after_success:
-        - coveralls -b build/coverage --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --gcov-options '\-lp'
-
-    - os: linux
-      name: Clang 3.9
-      addons:
-        apt:
-          sources:
-            - llvm-toolchain-trusty-3.9
-          packages:
-            - clang-3.9 binutils-2.26
-      env:
-        - MATRIX_EVAL="CC=clang-3.9 && CXX=clang++-3.9"
+        - python tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a
 
     - os: linux
       name: Clang 6
@@ -125,65 +47,93 @@ matrix:
       env:
         - MATRIX_EVAL="CC=clang-6.0 && CXX=clang++-6.0"
 
+    - os: linux
+      name: GCC 4.9
+      addons:
+         apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-4.9 binutils-2.26
+      env:
+         - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
+
+    - os: linux
+      dist: xenial
+      name: GCC 8 Debug
+
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-8
+      env:
+        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
+
+    - os: linux
+      dist: xenial
+      name: GCC 8
+
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-8
+      env:
+        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
+      before_install:
+        - eval "${MATRIX_EVAL}"
+        - pip install --user boto3
+      script:
+        - mkdir -p build/release
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        - build/release/test/unittest "*"
+
+      after_success:
+        - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a
+
+
+    - os: linux
+      dist: xenial
+      name: Code Coverage
+
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+
+      before_install: 
+        - pip install --user cpp-coveralls
+
+      script:
+        - mkdir -p build/coverage
+        - (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+        - build/coverage/test/unittest
+
+      after_success:
+        - coveralls -b build/coverage -E '.*CMakeCXXCompilerId.cpp' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --gcov-options '\-lp'
+
 
     - os: windows
       name: VS 2017
+      filter_secrets: false
 
       language: c
 
+      before_script:
+        - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
+        - C:/Python37-x64/python.exe -m pip install boto3
+
       script:
-        - cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_GENERATOR_PLATFORM=x64
-        - cmake --build . --target unittest
-        - test/Debug/unittest.exe
+        - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64
+        - cmake --build . --target duckdb --config Release
+        - cmake --build . --target unittest --config Release
+        - test/Release/unittest.exe
 
-
-    # - os: linux
-    #   name: Python Package
-
-    #   dist: xenial
-    #   language: python
-    #   python: 3.7
-
-    #   before_script:
-    #     - pip3 install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3"
-    #     - cd tools/pythonpkg
-
-    #   script:
-    #     - python3 setup.py install
-    #     - python3 -m pytest tests
-
-
-    # - os: osx
-    #   name: Python Package
-    #   osx_image: xcode10.1
-
-    #   language: c
-    #   #python: 3.7
-
-    #   before_script:
-    #     - pip3 install --user "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
-    #     - cd tools/pythonpkg
-
-    #   script:
-    #     - python3 setup.py install
-    #     - python3 -m pytest tests
-
-
-    # - os: windows
-    #   name: Python Package
-
-    #   language: cpp
-
-    #   before_install:
-    #     - choco install python --version 3.7.3
-    #     - c:/python37/python.exe -m pip install --upgrade pip
-    #     - c:/python37/python.exe -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
-
-    #   script:
-    #     - cd tools/pythonpkg
-    #     - c:/python37/python.exe setup.py install
-    #     - c:/python37/python.exe -m pytest tests
-
+      after_success:
+        - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll
 
     - os: linux
       name: R Package
@@ -193,58 +143,70 @@ matrix:
       r: devel
 
       before_install:
-        - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
+        - pip install --user boto3
         - cd tools/rpkg
+        - R -f dependencies.R
 
       install:
-        -  R CMD INSTALL .
-
-      before_script:
-        - cd tests
+        - ./prepare_sourcetree.sh
+        - R CMD build .
+        - R CMD INSTALL duckdb_*.tar.gz
 
       script:
-        - R -f testthat.R
+        - (cd tests && R -f testthat.R)
 
+      after_success:
+        - python ../upload-s3.py rstats duckdb_*.tar.gz
 
     - os: osx
       osx_image: xcode10.1
       name: R Package
 
       language: r
-      #gr: devel
+      #r: devel
 
       before_install:
-        - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
+        - pip install --user boto3
         - cd tools/rpkg
+        - R -f dependencies.R
 
       install:
-        -  R CMD INSTALL .
-
-      before_script:
-        - cd tests
+        - ./prepare_sourcetree.sh
+        - R CMD build .
+        - R CMD INSTALL --build duckdb_*.tar.gz
+        - R CMD INSTALL duckdb_*.tgz
 
       script:
-        - R -f testthat.R
+        - (cd tests && R -f testthat.R)
 
+      after_success:
+        - python ../upload-s3.py rstats duckdb_*.tgz
 
     - os: windows
       name: R Package
+      filter_secrets: false
 
       language: cpp
 
       before_script:
-        - choco install r.project -y --version 3.5.3
+        - choco install r.project -y --version 3.6.0
         - wget "https://github.com/hannesmuehleisen/choco-rtools/raw/master/rtools.3.5.0.nupkg"
         - choco install rtools -s rtools.3.5.0.nupkg -f -y
+        - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
+        - C:/Python37-x64/python.exe -m pip install boto3
 
       script:
         - export "PATH=/c/Rtools/bin:$PATH"
         - cd tools/rpkg
-        - C:/Program\ Files/R/R-3.5.3/bin/R.exe -f dependencies.R
-        - C:/Program\ Files/R/R-3.5.3/bin/R.exe CMD INSTALL --no-multiarch .
-        - cd tests
-        - C:/Program\ Files/R/R-3.5.3/bin/R.exe -f testthat.R
+        - C:/Program\ Files/R/R-3.6.0/bin/R.exe -f dependencies.R
+        - sh prepare_sourcetree.sh
+        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD build .
+        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL --build --no-multiarch duckdb_*.tar.gz
+        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL duckdb_*.zip
+        - (cd tests; C:/Program\ Files/R/R-3.6.0/bin/R.exe -f testthat.R)
 
+      after_success:
+        - C:/Python37-x64/python.exe ../upload-s3.py rstats duckdb_*.zip
 
     - os: linux
       name: Python Package
@@ -254,16 +216,15 @@ matrix:
       python: 3.7
 
       script:
-        - pip install cibuildwheel==0.10.2
+        - pip install cibuildwheel==0.10.2 boto3
         - cd tools/pythonpkg
         - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
-        - |
-          if [[ $TRAVIS_TAG ]]; then
-            pip install twine
-            python -m twine upload --skip-existing wheelhouse/*.whl
-          fi
+        - cd ../..
+
+      after_success:
+        python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
 
     - os: osx
       name: Python Package
@@ -271,20 +232,20 @@ matrix:
       osx_image: xcode10.2
 
       script:
-        - pip install cibuildwheel==0.10.2
+        - pip install cibuildwheel==0.10.2 boto3
         - cd tools/pythonpkg
         - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
-        - |
-          if [[ $TRAVIS_TAG ]]; then
-            pip install twine
-            python -m twine upload --skip-existing wheelhouse/*.whl
-          fi
+        - cd ../..
+
+      after_success:
+        python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
 
     - os: windows
       name: Python Package
       language: cpp
+      filter_secrets: false
 
       before_install:
         - choco install python3 --version 3.7.3 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python37"
@@ -295,7 +256,7 @@ matrix:
         - choco install python2 --version 2.7.16 --sidebyside -y --force --params "/InstallDir:C:\Python27-x64"
 
         - C:/Python37-x64/python.exe -m pip install --upgrade pip
-        - C:/Python37-x64/python.exe -m pip install "cibuildwheel==0.10.2"
+        - C:/Python37-x64/python.exe -m pip install "cibuildwheel==0.10.2" boto3
         - C:/Python37-x64/python.exe -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
 
       script:
@@ -303,11 +264,9 @@ matrix:
         - C:/Python37-x64/python.exe  setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - C:/Python37-x64/python.exe -m cibuildwheel --platform windows --output-dir wheelhouse duckdb_tarball
-        - |
-          if [[ $TRAVIS_TAG ]]; then
-            C:/Python37-x64/python.exe -m pip install twine
-            C:/Python37-x64/python.exe -m twine upload --skip-existing wheelhouse/*.whl
-          fi
+        - cd ../..
 
-before_install:
-  - eval "${MATRIX_EVAL}"
+      after_success:
+        C:/Python37-x64/python.exe tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
+
+

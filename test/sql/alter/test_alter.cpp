@@ -142,5 +142,4 @@ TEST_CASE("Test ALTER TABLE RENAME COLUMN on a table with constraints", "[alter]
 	// the check should still work after the alter table
 	// REQUIRE_NO_FAIL(con.Query("INSERT INTO test (k, j) VALUES (1, 2), (2, 3)"));
 	// REQUIRE_FAIL(con.Query("INSERT INTO test (k, j) VALUES (100, 2)"));
-
 }

@@ -21,14 +21,15 @@ public:
 	index_t offset;
 	index_t read_data;
 	unique_ptr<FileHandle> handle;
+
 public:
 	void ReadData(data_ptr_t buffer, uint64_t read_size) override;
 	//! Returns true if the reader has finished reading the entire file
 	bool Finished();
+
 private:
 	index_t file_size;
 	index_t total_read;
-
 };
 
 } // namespace duckdb
