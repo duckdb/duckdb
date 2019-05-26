@@ -8,7 +8,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalCreateIndex::createARTIndex(ScanStructure *ss, DataChunk *intermediate, vector<TypeId> *result_types,
+void PhysicalCreateIndex::createARTIndex(ScanState *ss, DataChunk *intermediate, vector<TypeId> *result_types,
                                          DataChunk *result) {
 	auto art = make_unique<ART>(*table.storage, column_ids, types, *result_types, move(expressions),
 	                            move(unbound_expressions));
@@ -57,7 +57,7 @@ void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &ch
 
 	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 
-	ScanStructure ss;
+	ScanState ss;
 	table.storage->InitializeScan(ss);
 
 	DataChunk intermediate;

@@ -32,9 +32,9 @@ class Transaction;
 
 struct VersionInformation;
 
-struct ScanStructure {
+struct ScanState {
 	StorageChunk *chunk;
-	unique_ptr<ColumnSegment*[]> columns;
+	unique_ptr<ColumnPointer[]> columns;
 	index_t offset;
 	VersionInformation *version_chain;
 	vector<unique_ptr<StorageLockKey>> locks;
@@ -69,12 +69,12 @@ public:
 	//! Indexes
 	vector<unique_ptr<Index>> indexes;
 public:
-	void InitializeScan(ScanStructure &structure);
+	void InitializeScan(ScanState &structure);
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	// from offset and store them in result. Offset is incremented with how many
 	// elements were returned.
 	void Scan(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids,
-	          ScanStructure &structure);
+	          ScanState &structure);
 	//! Fetch data from the specific row identifiers from the base table
 	void Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, Vector &row_ids);
 	//! Append a DataChunk to the table. Throws an exception if the columns
@@ -87,7 +87,7 @@ public:
 	            DataChunk &data);
 
 	//! Scan used for creating an index, incrementally locks all storage chunks
-	void CreateIndexScan(ScanStructure &structure, vector<column_t> &column_ids, DataChunk &result);
+	void CreateIndexScan(ScanState &structure, vector<column_t> &column_ids, DataChunk &result);
 
 	//! Get statistics of the specified column
 	ColumnStatistics &GetStatistics(column_t oid) {
@@ -116,6 +116,12 @@ private:
 	StorageChunk* AppendStorageChunk(index_t start);
 	//! Append a subset of a vector to the specified column of the table
 	void AppendVector(index_t column, Vector &data, index_t offset, index_t count);
+
+	//! Fetch "count" entries from the specified column pointer, and place them in the result vector. The column pointer is advanced by "count" entries.
+	void RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &pointer, index_t count);
+	//! Fetch "sel_count" entries from a "count" size chunk of the specified column pointer, where the fetched entries are chosen by "sel_vector". The column pointer is advanced by "count" entries.
+	void RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &pointer, index_t count, sel_t *sel_vector, index_t sel_count);
+
 
 	//! The stored data of the table
 	SegmentTree storage_tree;

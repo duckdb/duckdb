@@ -31,9 +31,11 @@ void StorageChunk::Undo(VersionInformation *info) {
 		deleted[entry] = false;
 		auto tuple_data = info->tuple_data;
 
-		// data_ptr_t dataptr = current_chunk->GetPointerToRow(column_ids[j], current_chunk->start + current_offset);
-		throw NotImplementedException("Undo");
-		//table.serializer.Deserialize(columns, entry, tuple_data);
+		vector<data_ptr_t> data_pointers;
+		for(index_t i = 0; i < table.types.size(); i++) {
+			data_pointers.push_back(GetPointerToRow(i, start + entry));
+		}
+		table.serializer.Deserialize(data_pointers, 0, tuple_data);
 	}
 	version_pointers[entry] = info->next;
 	if (version_pointers[entry]) {

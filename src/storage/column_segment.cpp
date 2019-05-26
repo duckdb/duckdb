@@ -25,7 +25,7 @@ data_ptr_t ColumnSegment::GetData() {
 			}
 		}
 	}
-	return block->buffer + offset;
+	return block->buffer;
 }
 
 data_ptr_t ColumnSegment::GetPointerToRow(TypeId type, index_t row) {

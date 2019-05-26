@@ -33,7 +33,7 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 }
 
 StorageChunk* DataTable::AppendStorageChunk(index_t start) {
-	auto chunk = make_unique<StorageChunk>(*this, 0);
+	auto chunk = make_unique<StorageChunk>(*this, start);
 	auto chunk_pointer = chunk.get();
 	// set the columns of the chunk
 	chunk->columns = unique_ptr<ColumnPointer[]>(new ColumnPointer[types.size()]);
@@ -45,14 +45,15 @@ StorageChunk* DataTable::AppendStorageChunk(index_t start) {
 	return chunk_pointer;
 }
 
-void DataTable::InitializeScan(ScanStructure &structure) {
-	structure.chunk = (StorageChunk*) storage_tree.GetRootSegment();
-	structure.columns = unique_ptr<ColumnSegment*[]>(new ColumnSegment*[types.size()]);
+void DataTable::InitializeScan(ScanState &state) {
+	state.chunk = (StorageChunk*) storage_tree.GetRootSegment();
+	state.columns = unique_ptr<ColumnPointer[]>(new ColumnPointer[types.size()]);
 	for (index_t i = 0; i < types.size(); i++) {
-		structure.columns[i] = (ColumnSegment*) columns[i].GetRootSegment();
+		state.columns[i].segment = (ColumnSegment*) columns[i].GetRootSegment();
+		state.columns[i].offset = 0;
 	}
-	structure.offset = 0;
-	structure.version_chain = nullptr;
+	state.offset = 0;
+	state.version_chain = nullptr;
 }
 
 StorageChunk *DataTable::GetChunk(index_t row_number) {
@@ -111,14 +112,15 @@ void DataTable::AppendVector(index_t column_index, Vector &data, index_t offset,
 	// append the data from the vector
 	// first check how much we can append to the column segment
 	index_t type_size = GetTypeIdSize(types[column_index]);
-	data_ptr_t target = segment->GetData() + segment->offset * type_size;
-	data_ptr_t end = segment->GetData() + BLOCK_SIZE;
-	index_t elements_to_copy = std::min((index_t) (end - target) / type_size, count);
+	index_t start_position = segment->offset;
+	data_ptr_t target = segment->GetData() + start_position;
+	index_t elements_to_copy = std::min((BLOCK_SIZE - start_position) / type_size, count);
 	if (elements_to_copy > 0) {
 		// we can fit elements in the current column segment: copy them there
 		VectorOperations::CopyToStorage(data, target, offset, elements_to_copy);
 		offset += elements_to_copy;
 		segment->count += elements_to_copy;
+		segment->offset += elements_to_copy * type_size;
 	}
 	if (elements_to_copy < count) {
 		// we couldn't fit everything we wanted in the original column segment
@@ -310,7 +312,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		}
 
 		VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
-			auto dataptr = chunk->columns[i].segment->GetPointerToRow(types[col_idx], ids[i]);
+			auto dataptr = chunk->GetPointerToRow(column_ids[col_idx], ids[i]);
 			auto update_index = update_vector->sel_vector ? update_vector->sel_vector[k] : k;
 			memcpy(dataptr, update_vector->data + update_index * size, size);
 		});
@@ -325,9 +327,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 void DataTable::RetrieveVersionedData(DataChunk &result, const vector<column_t> &column_ids,
                                       data_ptr_t alternate_version_pointers[], index_t alternate_version_index[],
                                       index_t alternate_version_count) {
-	if (alternate_version_count == 0) {
-		return;
-	}
+	assert(alternate_version_count > 0);
 	// get data from the alternate versions for each column
 	for (index_t j = 0; j < column_ids.size(); j++) {
 		if (column_ids[j] == COLUMN_IDENTIFIER_ROW_ID) {
@@ -354,65 +354,132 @@ void DataTable::RetrieveVersionedData(DataChunk &result, const vector<column_t> 
 
 void DataTable::RetrieveBaseTableData(DataChunk &result, const vector<column_t> &column_ids, sel_t regular_entries[],
                                       index_t regular_count, StorageChunk *current_chunk, index_t current_offset) {
-	if (regular_count == 0) {
-		return;
+	throw NotImplementedException("No");
+}
+
+void DataTable::RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &pointer, index_t count) {
+	index_t type_size = GetTypeIdSize(type);
+	// copy data from the column storage
+	while(count > 0) {
+		// check how much we can copy from this column segment
+		index_t to_copy = std::min(count, (BLOCK_SIZE - pointer.offset) / type_size);
+		if (to_copy > 0) {
+			// copy elements from the column segment
+			data_ptr_t dataptr = pointer.segment->GetData() + pointer.offset;
+			Vector source(type, dataptr);
+			source.count = to_copy;
+			// FIXME: use ::Copy instead of ::AppendFromStorage if there are no null values in this segment
+			VectorOperations::AppendFromStorage(source, result);
+			pointer.offset += type_size * to_copy;
+			count -= to_copy;
+		}
+		if (count > 0) {
+			// there is still chunks to copy
+			// move to the next segment
+			assert(pointer.segment->next);
+			pointer.segment = (ColumnSegment*) pointer.segment->next.get();
+			pointer.offset = 0;
+		}
 	}
-	for (index_t j = 0; j < column_ids.size(); j++) {
-		if (column_ids[j] == COLUMN_IDENTIFIER_ROW_ID) {
-			// generate the row identifiers
-			// first generate a sequence of identifiers
-			assert(result.data[j].type == TypeId::BIGINT);
-			auto column_indexes = ((int64_t *)result.data[j].data + result.data[j].count);
-			for (index_t i = 0; i < regular_count; i++) {
-				column_indexes[i] = current_chunk->start + current_offset + regular_entries[i];
+}
+
+void DataTable::RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &pointer, index_t count, sel_t *sel_vector, index_t sel_count) {
+	sel_t temp_sel[2][STANDARD_VECTOR_SIZE];
+	index_t temp_sel_count[2];
+
+	index_t type_size = GetTypeIdSize(type);
+	// copy data from the column storage
+	while(count > 0) {
+		// check how much we can copy from this column segment
+		index_t to_copy = std::min(count, (BLOCK_SIZE - pointer.offset) / type_size);
+		if (to_copy == 0) {
+			// we can't copy anything from this segment, move to the next segment
+			assert(pointer.segment->next);
+			pointer.segment = (ColumnSegment*) pointer.segment->next.get();
+			pointer.offset = 0;
+		} else if (to_copy != count) {
+			// we can't copy everything from this column segment, but we can copy something
+			// first figure out which elements we need to copy from here, and which elements we need to copy from the next column segment
+			temp_sel_count[0] = temp_sel_count[1] = 0;
+			for(index_t i = 0; i < sel_count; i++) {
+				if (sel_vector[i] < to_copy) {
+					// belongs to first sel vector
+					temp_sel[0][temp_sel_count[0]++] = sel_vector[i];
+				} else {
+					// belongs to second sel vector
+					temp_sel[1][temp_sel_count[1]++] = sel_vector[i];
+				}
 			}
-			result.data[j].count += regular_count;
+			// now perform the actual copy from this node with whatever nodes we have
+			if (temp_sel_count[0] > 0) {
+				data_ptr_t dataptr = pointer.segment->GetData() + pointer.offset;
+				Vector source(type, dataptr);
+				source.count = temp_sel_count[0];
+				source.sel_vector = temp_sel[0];
+				// FIXME: use ::Copy instead of ::AppendFromStorage if there are no null values in this segment
+				VectorOperations::AppendFromStorage(source, result);
+			}
+			// now move to the next chunk
+			sel_vector = temp_sel[1];
+			sel_count = temp_sel_count[1];
+			count -= to_copy;
+			// move the pointer to the next segment
+			assert(pointer.segment->next);
+			pointer.segment = (ColumnSegment*) pointer.segment->next.get();
+			pointer.offset = 0;
 		} else {
-			// normal column
-			// grab the data from the source using a selection vector
-			// FIXME: what about data crossing multiple column segments?
-			data_ptr_t dataptr = current_chunk->GetPointerToRow(column_ids[j], current_chunk->start + current_offset);
-			Vector source(result.data[j].type, dataptr);
-			source.sel_vector = regular_entries;
-			source.count = regular_count;
-			// append while converting NullValue<T> to the nullmask
-			VectorOperations::AppendFromStorage(source, result.data[j]);
+			assert(to_copy > 0);
+			// we can copy everything from this column segment, copy with the sel vector
+			data_ptr_t dataptr = pointer.segment->GetData() + pointer.offset;
+			Vector source(type, dataptr);
+			source.count = sel_count;
+			source.sel_vector = sel_vector;
+			// FIXME: use ::Copy instead of ::AppendFromStorage if there are no null values in this segment
+			VectorOperations::AppendFromStorage(source, result);
+			pointer.offset += type_size * to_copy;
+			count -= to_copy;
 		}
 	}
 }
 
 void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids,
-                     ScanStructure &structure) {
+                     ScanState &state) {
+	sel_t regular_entries[STANDARD_VECTOR_SIZE], version_entries[STANDARD_VECTOR_SIZE];
+	index_t regular_count, version_count;
 	// scan the base table
-	while (structure.chunk) {
-		auto current_chunk = structure.chunk;
+	while (state.chunk) {
+		auto current_chunk = state.chunk;
 		// first obtain a shared lock on the current chunk
 		auto lock = current_chunk->lock.GetSharedLock();
-		// now scan the chunk until we find enough pieces to fill a vector or
-		// reach the end
-		sel_t regular_entries[STANDARD_VECTOR_SIZE], version_entries[STANDARD_VECTOR_SIZE];
-		index_t regular_count = 0, version_count = 0;
-		index_t end = min((index_t)STANDARD_VECTOR_SIZE, current_chunk->count - structure.offset);
-		for (index_t i = 0; i < end; i++) {
-			version_entries[version_count] = regular_entries[regular_count] = i;
-			bool has_version = current_chunk->version_pointers[structure.offset + i];
-			bool is_deleted = current_chunk->deleted[structure.offset + i];
-			version_count += has_version;
-			regular_count += !(is_deleted || has_version);
+		regular_count = version_count = 0;
+		index_t end = min((index_t)STANDARD_VECTOR_SIZE, current_chunk->count - state.offset);
+		{
+			// start scanning the chunk to check for deleted and version pointers
+			for (index_t i = 0; i < end; i++) {
+				version_entries[version_count] = regular_entries[regular_count] = i;
+				bool has_version = current_chunk->version_pointers[state.offset + i];
+				bool is_deleted = current_chunk->deleted[state.offset + i];
+				version_count += has_version;
+				regular_count += !(is_deleted || has_version);
+			}
+			// FIXME if regular_count == end, set dirty flag of this segment of the StorageChunk to false
 		}
 
 		if (regular_count < end) {
-			// first chase the version pointers, if there are any
+			// there are versions!
+			// chase the version pointers
 			data_ptr_t alternate_version_pointers[STANDARD_VECTOR_SIZE];
 			index_t alternate_version_index[STANDARD_VECTOR_SIZE];
 			index_t alternate_version_count = 0;
 
 			for (index_t i = 0; i < version_count; i++) {
-				auto version = current_chunk->version_pointers[structure.offset + version_entries[i]];
+				auto version = current_chunk->version_pointers[state.offset + version_entries[i]];
 				if (!version || (version->version_number == transaction.transaction_id ||
-				                 version->version_number < transaction.start_time)) {
-					// use the data in the original table
-					if (!current_chunk->deleted[structure.offset + version_entries[i]]) {
+								version->version_number < transaction.start_time)) {
+					// either (1) there is no version anymore as it was cleaned up,
+					// or (2) the base table data belongs to the current transaction
+					// in this case use the data in the original table
+					if (!current_chunk->deleted[state.offset + version_entries[i]]) {
 						regular_entries[regular_count++] = version_entries[i];
 					}
 				} else {
@@ -437,21 +504,49 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<c
 						continue;
 					} else {
 						alternate_version_pointers[alternate_version_count] = version->tuple_data;
-						alternate_version_index[alternate_version_count] = structure.offset + version_entries[i];
+						alternate_version_index[alternate_version_count] = state.offset + version_entries[i];
 						alternate_version_count++;
 					}
 				}
 			}
-			RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index,
-			                      alternate_version_count);
+			if (alternate_version_count > 0) {
+				// retrieve alternate versions, if any
+				RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index, alternate_version_count);
+			}
+			if (regular_count > 0) {
+				// retrieve entries from the base table with the selection vector
+				for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+					if (column_ids[col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
+						assert(result.data[col_idx].type == TypeId::BIGINT);
+						auto column_indexes = ((int64_t *)result.data[col_idx].data + result.data[col_idx].count);
+						for (index_t i = 0; i < regular_count; i++) {
+							column_indexes[i] = current_chunk->start + state.offset + regular_entries[i];
+						}
+						result.data[col_idx].count += regular_count;
+					} else {
+						// fetch the data from the base column segments
+						RetrieveColumnData(result.data[col_idx], types[column_ids[col_idx]], state.columns[column_ids[col_idx]], end, regular_entries, regular_count);
+					}
+				}
+			}
+		} else {
+			// no versions or deleted tuples, simply scan the column segments
+			for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+				if (column_ids[col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
+					// generate column ids
+					result.data[col_idx].count = regular_count;
+					VectorOperations::GenerateSequence(result.data[col_idx], current_chunk->start + state.offset, 1);
+				} else {
+					// fetch the data from the base column segments
+					RetrieveColumnData(result.data[col_idx], types[column_ids[col_idx]], state.columns[column_ids[col_idx]], regular_count);
+				}
+			}
 		}
-		// copy the regular entries
-		RetrieveBaseTableData(result, column_ids, regular_entries, regular_count, current_chunk, structure.offset);
 		// release the read lock
-		structure.offset += STANDARD_VECTOR_SIZE;
-		if (structure.offset >= current_chunk->count) {
-			structure.offset = 0;
-			structure.chunk = (StorageChunk*) current_chunk->next.get();
+		state.offset += STANDARD_VECTOR_SIZE;
+		if (state.offset >= current_chunk->count) {
+			state.offset = 0;
+			state.chunk = (StorageChunk*) current_chunk->next.get();
 		}
 		if (result.size() > 0) {
 			return;
@@ -537,7 +632,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 	}
 }
 
-void DataTable::CreateIndexScan(ScanStructure &structure, vector<column_t> &column_ids, DataChunk &result) {
+void DataTable::CreateIndexScan(ScanState &structure, vector<column_t> &column_ids, DataChunk &result) {
 	// scan the base table
 	index_t result_count = 0;
 	while (structure.chunk) {
@@ -600,11 +695,15 @@ void DataTable::CreateIndexScan(ScanStructure &structure, vector<column_t> &colu
 			structure.version_chain = nullptr;
 		}
 		if (result_count > 0) {
-			// first retrieve the versioned data
-			RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index,
-			                      alternate_version_count);
-			// now retrieve the base column data
-			RetrieveBaseTableData(result, column_ids, regular_entries, regular_count, current_chunk);
+			if (alternate_version_count > 0) {
+				// first retrieve the versioned data
+				RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index,
+									alternate_version_count);
+			}
+			if (regular_count > 0) {
+				// now retrieve the base column data
+				RetrieveBaseTableData(result, column_ids, regular_entries, regular_count, current_chunk);
+			}
 			return;
 		}
 	}

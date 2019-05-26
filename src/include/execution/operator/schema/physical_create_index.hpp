@@ -42,6 +42,6 @@ public:
 	vector<unique_ptr<Expression>> unbound_expressions;
 
 private:
-	void createARTIndex(ScanStructure *ss, DataChunk *intermediate, vector<TypeId> *result_types, DataChunk *result);
+	void createARTIndex(ScanState *ss, DataChunk *intermediate, vector<TypeId> *result_types, DataChunk *result);
 };
 } // namespace duckdb

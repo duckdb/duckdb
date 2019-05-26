@@ -13,6 +13,7 @@
 #include "storage/segment_tree.hpp"
 #include "storage/column_segment.hpp"
 
+
 namespace duckdb {
 class ColumnDefinition;
 class DataTable;
@@ -34,6 +35,8 @@ public:
 
 	//! The table
 	DataTable &table;
+	// //! Whether or not the part of the storage chunk is dirty
+	// bool is_dirty[STORAGE_CHUNK_VECTORS];
 	//! Deleted
 	bool deleted[STORAGE_CHUNK_SIZE] = {0};
 	//! The version pointers
