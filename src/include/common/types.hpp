@@ -124,6 +124,9 @@ template <class T> bool IsValidType() {
 	return GetTypeId<T>() != TypeId::INVALID;
 }
 
+//! The TypeId used by the row identifiers column
+extern const TypeId ROW_TYPE;
+
 string TypeIdToString(TypeId type);
 string TypeIdToString(TypeId type);
 count_t GetTypeIdSize(TypeId type);

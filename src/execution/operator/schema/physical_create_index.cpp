@@ -25,7 +25,7 @@ void PhysicalCreateIndex::createARTIndex(ScanState *ss, DataChunk *intermediate,
 		// resolve the expressions for this chunk
 		ExpressionExecutor executor(intermediate);
 		executor.Execute(art->expressions, *result);
-		//
+		// insert into the index
 		art->Insert(*result, intermediate->data[intermediate->column_count - 1]);
 	}
 	table.storage->indexes.push_back(move(art));

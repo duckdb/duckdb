@@ -15,6 +15,9 @@
 #include "storage/storage_manager.hpp"
 #include "planner/binder.hpp"
 
+#include "execution/index/art/art.hpp"
+#include "planner/expression/bound_reference_expression.hpp"
+
 #include <algorithm>
 
 using namespace duckdb;
@@ -35,16 +38,28 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 		// create the unique indexes for the UNIQUE and PRIMARY KEY constraints
 		for (auto &constraint : bound_constraints) {
 			if (constraint->type == ConstraintType::UNIQUE) {
-				vector<TypeId> types;
+				// unique constraint: create a unique index
 				auto &unique = (BoundUniqueConstraint &)*constraint;
-				// fetch the types from the columns
+				// fetch types and create expressions for the index from the columns
+				vector<TypeId> types;
+				vector<column_t> column_ids;
+				vector<unique_ptr<Expression>> expressions;
+				vector<unique_ptr<Expression>> unbound_expressions;
 				for (auto key : unique.keys) {
+					TypeId column_type = GetInternalType(columns[key].type);
 					assert(key < columns.size());
-					types.push_back(GetInternalType(columns[key].type));
+					types.push_back(column_type);
+
+					column_ids.push_back(key);
+					expressions.push_back(make_unique<BoundReferenceExpression>(column_type, key));
+					unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(column_type, ColumnBinding(0, key)));
 				}
-				// initialize the index with the parsed data
-				storage->unique_indexes.push_back(
-				    make_unique<UniqueIndex>(*storage, types, unique.keys, !unique.is_primary_key));
+				// create an adaptive radix tree around the expressions
+				// FIXME: this art should enforce the constraint!
+				auto art = make_unique<ART>(*storage, column_ids, types, types, move(expressions),
+											move(unbound_expressions));
+
+				storage->indexes.push_back(move(art));
 			}
 		}
 	}

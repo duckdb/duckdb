@@ -50,7 +50,6 @@ void UndoBuffer::Cleanup() {
 			// undo this entry
 			auto info = (VersionInformation *)entry.data.get();
 			if (entry.type == UndoFlags::DELETE_TUPLE || entry.type == UndoFlags::UPDATE_TUPLE) {
-				// FIXME: put into Cleanup, not Commit
 				if (info->table->indexes.size() > 0) {
 					assert(info->chunk);
 					assert(info->tuple_data);
@@ -302,8 +301,8 @@ void UndoBuffer::Rollback() {
 				// delete base table entry from index
 				assert(info->chunk);
 				if (info->table->indexes.size() > 0) {
-					uint64_t rowid = info->chunk->start + info->prev.entry;
-					Value ptr = Value::BIGINT(rowid);
+					row_t row_id = info->chunk->start + info->prev.entry;
+					Value ptr = Value::BIGINT(row_id);
 					sel_t regular_entries[STANDARD_VECTOR_SIZE];
 					regular_entries[0] = 0;
 
@@ -316,7 +315,7 @@ void UndoBuffer::Rollback() {
 					}
 					Vector row_identifiers(ptr);
 
-					info->table->RetrieveBaseTableData(result, column_ids, regular_entries, 1, info->chunk, rowid);
+					info->chunk->table.RetrieveTupleFromBaseTable(result, info->chunk, column_ids, row_id);
 					for (auto &index : info->table->indexes) {
 						index->Delete(result, row_identifiers);
 					}

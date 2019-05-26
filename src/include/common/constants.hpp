@@ -37,6 +37,9 @@ typedef uint64_t index_t;
 //! a saner siz_t for amounts of things, mostly for readability
 typedef uint64_t count_t;
 
+//! The type used for row identifiers
+typedef int64_t row_t;
+
 //! The value used to signify an invalid index entry
 extern const index_t INVALID_INDEX;
 

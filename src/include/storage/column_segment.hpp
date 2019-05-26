@@ -14,6 +14,7 @@
 
 namespace duckdb {
 class BlockManager;
+class Vector;
 
 class ColumnSegment : public SegmentBase {
 public:
@@ -28,6 +29,8 @@ public:
 	index_t offset;
 	//! Returns a pointer to a specific row in the column segment. row must be >= start of this column segment
 	data_ptr_t GetPointerToRow(TypeId type, index_t row);
+	//! Append a single value from this segment to a vector
+	void AppendValue(Vector &result, TypeId type, index_t row);
 public:
 	//! Returns a pointer to the data of the column segment
 	data_ptr_t GetData();

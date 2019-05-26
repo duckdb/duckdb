@@ -15,7 +15,6 @@
 #include "storage/index.hpp"
 #include "storage/storage_chunk.hpp"
 #include "storage/table_statistics.hpp"
-#include "storage/unique_index.hpp"
 #include "storage/block.hpp"
 #include "storage/column_segment.hpp"
 
@@ -64,8 +63,6 @@ public:
 	TupleSerializer serializer;
 	//! A reference to the base storage manager
 	StorageManager &storage;
-	//! Unique indexes
-	vector<unique_ptr<UniqueIndex>> unique_indexes;
 	//! Indexes
 	vector<unique_ptr<Index>> indexes;
 public:
@@ -105,10 +102,8 @@ public:
 	void RetrieveVersionedData(DataChunk &result, const vector<column_t> &column_ids,
 	                           data_ptr_t alternate_version_pointers[], index_t alternate_version_index[],
 	                           index_t alternate_version_count);
-	//! Retrieves data from the base table for use in scans
-	void RetrieveBaseTableData(DataChunk &result, const vector<column_t> &column_ids, sel_t regular_entries[],
-	                           index_t regular_count, StorageChunk *current_chunk, index_t current_offset = 0);
-
+	//! Fetches a single tuple from the base table at rowid row_id, and appends that tuple to the "result" DataChunk
+	void RetrieveTupleFromBaseTable(DataChunk &result, StorageChunk *chunk, vector<column_t> &column_ids, row_t row_id);
 private:
 	//! Verify whether or not a new chunk violates any constraints
 	void VerifyConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &new_chunk);
@@ -121,7 +116,6 @@ private:
 	void RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &pointer, index_t count);
 	//! Fetch "sel_count" entries from a "count" size chunk of the specified column pointer, where the fetched entries are chosen by "sel_vector". The column pointer is advanced by "count" entries.
 	void RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &pointer, index_t count, sel_t *sel_vector, index_t sel_count);
-
 
 	//! The stored data of the table
 	SegmentTree storage_tree;

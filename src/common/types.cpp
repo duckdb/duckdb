@@ -7,6 +7,8 @@ using namespace std;
 
 namespace duckdb {
 
+const TypeId ROW_TYPE = TypeId::BIGINT;
+
 string TypeIdToString(TypeId type) {
 	switch (type) {
 	case TypeId::BOOLEAN:

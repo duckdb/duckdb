@@ -1,5 +1,6 @@
 #include "storage/column_segment.hpp"
 #include "storage/block_manager.hpp"
+#include "common/types/vector.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -40,4 +41,10 @@ data_ptr_t ColumnSegment::GetPointerToRow(TypeId type, index_t row) {
 	// row is in this segment, get the pointer
 	index_t offset = row - start;
 	return GetData() + offset * GetTypeIdSize(type);
+}
+
+void ColumnSegment::AppendValue(Vector &result, TypeId type, index_t row) {
+	index_t type_size = GetTypeIdSize(type);
+	memcpy(result.data + type_size * result.count, GetPointerToRow(type, row), type_size);
+	result.count++;
 }

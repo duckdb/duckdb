@@ -192,12 +192,14 @@ TEST_CASE("ART Big Range", "[art][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
 	int n = 4;
 	auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
-	for (int32_t i = 0; i < n; i++)
+	for (int32_t i = 0; i < n; i++) {
 		keys[i] = i + 1;
+	}
 
 	for (int32_t i = 0; i < n; i++) {
-		for (int32_t j = 0; j < 1500; j++)
+		for (int32_t j = 0; j < 1500; j++) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(keys[i]) + ")"));
+		}
 	}
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 
@@ -224,8 +226,9 @@ TEST_CASE("ART  Node 4", "[art]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
 	int n = 4;
 	auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
-	for (int32_t i = 0; i < n; i++)
+	for (int32_t i = 0; i < n; i++) {
 		keys[i] = i + 1;
+	}
 
 	for (int32_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(keys[i]) + ")"));
@@ -256,8 +259,9 @@ TEST_CASE("ART  Node 16", "[art]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
 	int n = 6;
 	auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
-	for (int32_t i = 0; i < n; i++)
+	for (int32_t i = 0; i < n; i++) {
 		keys[i] = i + 1;
+	}
 
 	for (int32_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(keys[i]) + ")"));

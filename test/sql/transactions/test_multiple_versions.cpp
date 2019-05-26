@@ -26,7 +26,6 @@ TEST_CASE("Test multiple versions of the same data", "[transactions]") {
 	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=5 WHERE i=1;"));
 	result = con.Query("SELECT SUM(i) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
-
 	// con 2 still has the same result
 	result = con2.Query("SELECT SUM(i) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
@@ -35,7 +34,6 @@ TEST_CASE("Test multiple versions of the same data", "[transactions]") {
 	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=10 WHERE i=5;"));
 	result = con.Query("SELECT SUM(i) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {15}));
-
 	// con 2 still has the same result
 	result = con2.Query("SELECT SUM(i) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
@@ -44,7 +42,14 @@ TEST_CASE("Test multiple versions of the same data", "[transactions]") {
 	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i>5;"));
 	result = con.Query("SELECT SUM(i) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	// con 2 still has the same result
+	result = con2.Query("SELECT SUM(i) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 
+	// insert some new data again
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2)"));
+	result = con.Query("SELECT SUM(i) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {8}));
 	// con 2 still has the same result
 	result = con2.Query("SELECT SUM(i) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
@@ -54,7 +59,7 @@ TEST_CASE("Test multiple versions of the same data", "[transactions]") {
 
 	// con 2 now has the updated results
 	result = con2.Query("SELECT SUM(i) FROM integers");
-	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	REQUIRE(CHECK_COLUMN(result, 0, {8}));
 }
 
 TEST_CASE("Test multiple versions of the same data with a data set that exceeds a single block", "[transactions]") {
