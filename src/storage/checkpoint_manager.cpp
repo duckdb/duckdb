@@ -223,7 +223,7 @@ void CheckpointManager::WriteTableData(Transaction &transaction, TableCatalogEnt
 	// then flush the blocks to disk when they are full
 
 	// initialize scan structures to prepare for the scan
-	ScanState ss;
+	DataTable::ScanState ss;
 	table.storage->InitializeScan(ss);
 	vector<column_t> column_ids;
 	for (auto &column : table.columns) {

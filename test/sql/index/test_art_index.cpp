@@ -183,7 +183,7 @@ TEST_CASE("ART Integer Types", "[art]") {
 	}
 }
 
-TEST_CASE("ART Big Range", "[art][.]") {
+TEST_CASE("ART Big Range", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 
@@ -191,30 +191,94 @@ TEST_CASE("ART Big Range", "[art][.]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
 	int n = 4;
-	auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
-	for (int32_t i = 0; i < n; i++) {
+	auto keys = unique_ptr<int32_t[]>(new int32_t[n + 1]);
+	for (index_t i = 0; i < n + 1; i++) {
 		keys[i] = i + 1;
 	}
 
-	for (int32_t i = 0; i < n; i++) {
-		for (int32_t j = 0; j < 1500; j++) {
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	for (index_t i = 0; i < n; i++) {
+		for (index_t j = 0; j < 1500; j++) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(keys[i]) + ")"));
 		}
 	}
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 
-	result = con.Query("SELECT count(i) FROM integers WHERE i >1 AND i <3");
+	result = con.Query("SELECT count(i) FROM integers WHERE i > 1 AND i < 3");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(1500)}));
-	result = con.Query("SELECT count(i) FROM integers WHERE i >=1 AND i <3");
+	result = con.Query("SELECT count(i) FROM integers WHERE i >= 1 AND i < 3");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(3000)}));
-	result = con.Query("SELECT count(i) FROM integers WHERE i >1");
+	result = con.Query("SELECT count(i) FROM integers WHERE i > 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(4500)}));
-	result = con.Query("SELECT count(i) FROM integers WHERE i <4");
+	result = con.Query("SELECT count(i) FROM integers WHERE i < 4");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(4500)}));
-	result = con.Query("SELECT count(i) FROM integers WHERE i <5");
+	result = con.Query("SELECT count(i) FROM integers WHERE i < 5");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(6000)}));
 	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+
+	// now perform a an index creation and scan with deletions with a second transaction
+	Connection con2(db);
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
+	for (index_t j = 0; j < 1500; j++) {
+		for (index_t i = 0; i < n + 1; i++) {
+				REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(keys[i]) + ")"));
+		}
+	}
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+	// second transaction: begin and verify counts
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
+	for(index_t i = 0; i < n + 1; i++) {
+		result = con2.Query("SELECT FIRST(i), COUNT(i) FROM integers WHERE i=" + to_string(keys[i]));
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value(1500)}));
+	}
+	result = con2.Query("SELECT COUNT(i) FROM integers WHERE i < 10");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(7500)}));
+
+	// now delete entries in the first transaction
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i = 5"));
+	// verify that the counts are still correct in the second transaction
+	for(index_t i = 0; i < n + 1; i++) {
+		result = con2.Query("SELECT FIRST(i), COUNT(i) FROM integers WHERE i=" + to_string(keys[i]));
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value(1500)}));
+	}
+	result = con2.Query("SELECT COUNT(i) FROM integers WHERE i < 10");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(7500)}));
+
+	// create an index in the first transaction now
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
+	// verify that the counts are still correct for con2
+	for(index_t i = 0; i < n + 1; i++) {
+		result = con2.Query("SELECT FIRST(i), COUNT(i) FROM integers WHERE i=" + to_string(keys[i]));
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value(1500)}));
+	}
+	result = con2.Query("SELECT COUNT(i) FROM integers WHERE i<10");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(7500)}));
+
+	// do a bunch of queries in the first transaction
+	result = con.Query("SELECT count(i) FROM integers WHERE i > 1 AND i < 3");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(1500)}));
+	result = con.Query("SELECT count(i) FROM integers WHERE i >= 1 AND i < 3");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(3000)}));
+	result = con.Query("SELECT count(i) FROM integers WHERE i > 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(4500)}));
+	result = con.Query("SELECT count(i) FROM integers WHERE i < 4");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(4500)}));
+	result = con.Query("SELECT count(i) FROM integers WHERE i < 5");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(6000)}));
+	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+
+	// verify that the counts are still correct
+	result = con2.Query("SELECT COUNT(i) FROM integers WHERE i<10");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(7500)}));
+	result = con2.Query("SELECT COUNT(i) FROM integers WHERE i=5");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(1500)}));
 }
 
 TEST_CASE("ART  Node 4", "[art]") {
@@ -239,13 +303,13 @@ TEST_CASE("ART  Node 4", "[art]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
 	}
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
-	result = con.Query("SELECT sum(i) FROM integers WHERE i <=2");
+	result = con.Query("SELECT sum(i) FROM integers WHERE i <= 2");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(3)}));
 	// Now Deleting all elements
 	for (int32_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=" + to_string(keys[i])));
 	}
-	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i= 0"));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i = 0"));
 	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 }

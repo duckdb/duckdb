@@ -42,6 +42,6 @@ public:
 	}
 
 	//! The current position in the scan
-	ScanState scan_offset;
+	DataTable::ScanState scan_offset;
 };
 } // namespace duckdb

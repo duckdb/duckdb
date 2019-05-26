@@ -31,18 +31,22 @@ class Transaction;
 
 struct VersionInformation;
 
-struct ScanState {
-	StorageChunk *chunk;
-	unique_ptr<ColumnPointer[]> columns;
-	index_t offset;
-	VersionInformation *version_chain;
-	vector<unique_ptr<StorageLockKey>> locks;
-};
-
 //! DataTable represents a physical table on disk
 class DataTable {
-	friend class UniqueIndex;
+public:
+	struct ScanState {
+		virtual ~ScanState(){}
 
+		StorageChunk *chunk;
+		unique_ptr<ColumnPointer[]> columns;
+		index_t offset;
+		VersionInformation *version_chain;
+	};
+
+	struct IndexScanState : public ScanState {
+		index_t base_offset;
+		vector<unique_ptr<StorageLockKey>> locks;
+	};
 public:
 	DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types);
 
@@ -66,7 +70,7 @@ public:
 	//! Indexes
 	vector<unique_ptr<Index>> indexes;
 public:
-	void InitializeScan(ScanState &structure);
+	void InitializeScan(ScanState &state);
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	// from offset and store them in result. Offset is incremented with how many
 	// elements were returned.
@@ -83,8 +87,9 @@ public:
 	void Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, vector<column_t> &column_ids,
 	            DataChunk &data);
 
-	//! Scan used for creating an index, incrementally locks all storage chunks
-	void CreateIndexScan(ScanState &structure, vector<column_t> &column_ids, DataChunk &result);
+	void InitializeIndexScan(IndexScanState &state);
+	//! Scan used for creating an index, incrementally locks all storage chunks and scans ALL tuples in the table (including all versions of a tuple)
+	void CreateIndexScan(IndexScanState &structure, vector<column_t> &column_ids, DataChunk &result);
 
 	//! Get statistics of the specified column
 	ColumnStatistics &GetStatistics(column_t oid) {

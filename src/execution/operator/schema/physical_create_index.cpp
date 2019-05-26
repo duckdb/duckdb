@@ -8,25 +8,25 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalCreateIndex::createARTIndex(ScanState *ss, DataChunk *intermediate, vector<TypeId> *result_types,
-                                         DataChunk *result) {
-	auto art = make_unique<ART>(*table.storage, column_ids, types, *result_types, move(expressions),
+void PhysicalCreateIndex::createARTIndex(DataTable::IndexScanState &state, DataChunk &intermediate, vector<TypeId> &result_types,
+                                         DataChunk &result) {
+	auto art = make_unique<ART>(*table.storage, column_ids, types, result_types, move(expressions),
 	                            move(unbound_expressions));
 	// now we start incrementally building the index
 	while (true) {
-		intermediate->Reset();
+		intermediate.Reset();
 		// scan a new chunk from the table to index
-		table.storage->CreateIndexScan(*ss, column_ids, *intermediate);
-		if (intermediate->size() == 0) {
+		table.storage->CreateIndexScan(state, column_ids, intermediate);
+		if (intermediate.size() == 0) {
 			// finished scanning for index creation
 			// release all locks
 			break;
 		}
 		// resolve the expressions for this chunk
 		ExpressionExecutor executor(intermediate);
-		executor.Execute(art->expressions, *result);
+		executor.Execute(art->expressions, result);
 		// insert into the index
-		art->Insert(*result, intermediate->data[intermediate->column_count - 1]);
+		art->Insert(result, intermediate.data[intermediate.column_count - 1]);
 	}
 	table.storage->indexes.push_back(move(art));
 }
@@ -57,8 +57,8 @@ void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &ch
 
 	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 
-	ScanState ss;
-	table.storage->InitializeScan(ss);
+	DataTable::IndexScanState scan_state;
+	table.storage->InitializeIndexScan(scan_state);
 
 	DataChunk intermediate;
 	auto types = table.GetTypes(column_ids);
@@ -66,11 +66,11 @@ void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &ch
 
 	switch (info->index_type) {
 	case IndexType::ART:
-		createARTIndex(&ss, &intermediate, &result_types, &result);
+		createARTIndex(scan_state, intermediate, result_types, result);
 		break;
 	default:
 		assert(0);
-		break;
+		throw NotImplementedException("Unimplemented index type");
 	}
 
 	chunk.data[0].count = 1;
