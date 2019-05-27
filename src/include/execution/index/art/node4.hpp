@@ -16,7 +16,7 @@ public:
 	uint8_t key[4];
 	unique_ptr<Node> child[4];
 
-	Node4(uint8_t maxPrefixLength) : Node(NodeType::N4, maxPrefixLength) {
+	Node4(uint8_t max_prefix_length) : Node(NodeType::N4, max_prefix_length) {
 		memset(key, 0, sizeof(key));
 	}
 

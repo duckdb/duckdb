@@ -9,7 +9,7 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, ve
          vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> unbound_expressions)
     : Index(IndexType::ART, move(expressions), move(unbound_expressions)), table(table), column_ids(column_ids),
       types(types) {
-	tree = NULL;
+	tree = nullptr;
 	expression_result.Initialize(expression_types);
 	int n = 1;
 	// little endian if true
@@ -153,10 +153,10 @@ void ART::erase(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned 
 	}
 
 	// Handle prefix
-	if (node->prefixLength) {
-		if (Node::prefixMismatch(isLittleEndian, node.get(), key, depth, maxKeyLength, type) != node->prefixLength)
+	if (node->prefix_length) {
+		if (Node::prefixMismatch(isLittleEndian, node.get(), key, depth, maxKeyLength, type) != node->prefix_length)
 			return;
-		depth += node->prefixLength;
+		depth += node->prefix_length;
 	}
 	int pos = Node::findKeyPos(key[depth], &(*node));
 	auto child = Node::findChild(key[depth], node);
@@ -201,7 +201,8 @@ void ART::erase(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned 
 
 void ART::insert(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t value,
                  unsigned maxKeyLength, TypeId type, uint64_t row_id) {
-	if (node == NULL) {
+	if (!node) {
+		// node is currently empty, create a leaf here witht he key
 		node = make_unique<Leaf>(value, row_id, maxKeyLength);
 		return;
 	}
@@ -226,9 +227,9 @@ void ART::insert(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned
 				return;
 			}
 		}
-		unique_ptr<Node> newNode = make_unique<Node4>(node->maxPrefixLength);
-		newNode->prefixLength = newPrefixLength;
-		memcpy(newNode->prefix.get(), &key[depth], Node::min(newPrefixLength, node->maxPrefixLength));
+		unique_ptr<Node> newNode = make_unique<Node4>(node->max_prefix_length);
+		newNode->prefix_length = newPrefixLength;
+		memcpy(newNode->prefix.get(), &key[depth], Node::min(newPrefixLength, node->max_prefix_length));
 		Node4::insert(newNode, existingKey[depth + newPrefixLength], node);
 		unique_ptr<Node> leaf_node = make_unique<Leaf>(value, row_id, maxKeyLength);
 		Node4::insert(newNode, key[depth + newPrefixLength], leaf_node);
@@ -237,20 +238,20 @@ void ART::insert(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned
 	}
 
 	// Handle prefix of inner node
-	if (node->prefixLength) {
+	if (node->prefix_length) {
 		unsigned mismatchPos = Node::prefixMismatch(isLittleEndian, node.get(), key, depth, maxKeyLength, type);
-		if (mismatchPos != node->prefixLength) {
+		if (mismatchPos != node->prefix_length) {
 			// Prefix differs, create new node
-			unique_ptr<Node> newNode = make_unique<Node4>(node->maxPrefixLength);
-			newNode->prefixLength = mismatchPos;
-			memcpy(newNode->prefix.get(), node->prefix.get(), Node::min(mismatchPos, node->maxPrefixLength));
+			unique_ptr<Node> newNode = make_unique<Node4>(node->max_prefix_length);
+			newNode->prefix_length = mismatchPos;
+			memcpy(newNode->prefix.get(), node->prefix.get(), Node::min(mismatchPos, node->max_prefix_length));
 			// Break up prefix
-			if (node->prefixLength < node->maxPrefixLength) {
+			if (node->prefix_length < node->max_prefix_length) {
 				auto node_ptr = node.get();
 				Node4::insert(newNode, node->prefix[mismatchPos], node);
-				node_ptr->prefixLength -= (mismatchPos + 1);
+				node_ptr->prefix_length -= (mismatchPos + 1);
 				memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatchPos + 1,
-				        Node::min(node_ptr->prefixLength, node_ptr->maxPrefixLength));
+				        Node::min(node_ptr->prefix_length, node_ptr->max_prefix_length));
 			} else {
 				throw NotImplementedException("PrefixLength > MaxPrefixLength");
 			}
@@ -260,7 +261,7 @@ void ART::insert(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned
 			node = move(newNode);
 			return;
 		}
-		depth += node->prefixLength;
+		depth += node->prefix_length;
 	}
 
 	// Recurse
@@ -278,47 +279,53 @@ Node *ART::lookup(unique_ptr<Node> &node, Key &key, unsigned keyLength, unsigned
 	bool skippedPrefix = false; // Did we optimistically skip some prefix without checking it?
 	auto node_val = node.get();
 
-	while (node_val != NULL) {
+	while (node_val) {
 		if (node_val->type == NodeType::NLeaf) {
-			if (!skippedPrefix && depth == keyLength) // No check required
+			if (!skippedPrefix && depth == keyLength)  {// No check required
 				return node_val;
+			}
 
 			if (depth != keyLength) {
 				// Check leaf
 				auto leaf = static_cast<Leaf *>(node_val);
 				auto auxKey = make_unique<Key>(is_little_endian, types[0], leaf->value, keyLength);
 				Key &leafKey = *auxKey;
-				for (unsigned i = (skippedPrefix ? 0 : depth); i < keyLength; i++)
-					if (leafKey[i] != key[i])
+				for (unsigned i = (skippedPrefix ? 0 : depth); i < keyLength; i++) {
+					if (leafKey[i] != key[i]) {
 						return nullptr;
+					}
+				}
 			}
 			return node_val;
 		}
 
-		if (node_val->prefixLength) {
-			if (node_val->prefixLength < node_val->maxPrefixLength) {
-				for (unsigned pos = 0; pos < node_val->prefixLength; pos++)
-					if (key[depth + pos] != node_val->prefix[pos])
-						return NULL;
+		if (node_val->prefix_length) {
+			if (node_val->prefix_length < node_val->max_prefix_length) {
+				for (unsigned pos = 0; pos < node_val->prefix_length; pos++) {
+					if (key[depth + pos] != node_val->prefix[pos]) {
+						return nullptr;
+					}
+				}
 			} else {
 				skippedPrefix = true;
 			}
-			depth += node_val->prefixLength;
+			depth += node_val->prefix_length;
 		}
 
 		node_val = Node::findChild(key[depth], node_val);
 		if (!node_val)
-			return NULL;
+			return nullptr;
 		depth++;
 	}
 
-	return NULL;
+	return nullptr;
 }
 
 bool ART::iteratorNext(Iterator &iter) {
 	// Skip leaf
-	if ((iter.depth) && ((iter.stack[iter.depth - 1].node)->type == NodeType::NLeaf))
+	if ((iter.depth) && ((iter.stack[iter.depth - 1].node)->type == NodeType::NLeaf)) {
 		iter.depth--;
+	}
 
 	// Look for next leaf
 	while (iter.depth) {
@@ -336,34 +343,38 @@ bool ART::iteratorNext(Iterator &iter) {
 		switch (node->type) {
 		case NodeType::N4: {
 			Node4 *n = static_cast<Node4 *>(node);
-			if (iter.stack[iter.depth - 1].pos < node->count)
+			if (iter.stack[iter.depth - 1].pos < node->count) {
 				next = n->child[iter.stack[iter.depth - 1].pos++].get();
+			}
 			break;
 		}
 		case NodeType::N16: {
 			Node16 *n = static_cast<Node16 *>(node);
-			if (iter.stack[iter.depth - 1].pos < node->count)
+			if (iter.stack[iter.depth - 1].pos < node->count) {
 				next = n->child[iter.stack[iter.depth - 1].pos++].get();
+			}
 			break;
 		}
 		case NodeType::N48: {
 			Node48 *n = static_cast<Node48 *>(node);
 			unsigned depth = iter.depth - 1;
-			for (; iter.stack[depth].pos < 256; iter.stack[depth].pos++)
+			for (; iter.stack[depth].pos < 256; iter.stack[depth].pos++) {
 				if (n->childIndex[iter.stack[depth].pos] != 48) {
 					next = n->child[n->childIndex[iter.stack[depth].pos++]].get();
 					break;
 				}
+			}
 			break;
 		}
 		case NodeType::N256: {
 			Node256 *n = static_cast<Node256 *>(node);
 			unsigned depth = iter.depth - 1;
-			for (; iter.stack[depth].pos < 256; iter.stack[depth].pos++)
+			for (; iter.stack[depth].pos < 256; iter.stack[depth].pos++) {
 				if (n->child[iter.stack[depth].pos]) {
 					next = n->child[iter.stack[depth].pos++].get();
 					break;
 				}
+			}
 			break;
 		}
 		default:
@@ -399,14 +410,15 @@ bool ART::bound(unique_ptr<Node> &n, Key &key, unsigned keyLength, Iterator &ite
 			iterator.node = leaf;
 			if (depth == keyLength) {
 				// Equal
-				if (inclusive)
+				if (inclusive) {
 					return true;
-				else
+				} else {
 					return iteratorNext(iterator);
+				}
 			}
 			auto auxKey = make_unique<Key>(isLittleEndian, types[0], leaf->value, maxKeyLength);
 			Key &leafKey = *auxKey;
-			for (unsigned i = depth; i < keyLength; i++)
+			for (unsigned i = depth; i < keyLength; i++) {
 				if (leafKey[i] != key[i]) {
 					if (leafKey[i] < key[i]) {
 						// Less
@@ -416,16 +428,18 @@ bool ART::bound(unique_ptr<Node> &n, Key &key, unsigned keyLength, Iterator &ite
 					// Greater
 					return true;
 				}
+			}
 
 			// Equal
-			if (inclusive)
+			if (inclusive) {
 				return true;
-			else
+			} else {
 				return iteratorNext(iterator);
+			}
 		}
 		unsigned mismatchPos = Node::prefixMismatch(isLittleEndian, node, key, depth, maxKeyLength, types[0]);
 
-		if (mismatchPos != node->prefixLength) {
+		if (mismatchPos != node->prefix_length) {
 			if (node->prefix[mismatchPos] < key[depth + mismatchPos]) {
 				// Less
 				iterator.depth--;
@@ -435,12 +449,13 @@ bool ART::bound(unique_ptr<Node> &n, Key &key, unsigned keyLength, Iterator &ite
 			pos = 0;
 			return iteratorNext(iterator);
 		}
-		depth += node->prefixLength;
+		depth += node->prefix_length;
 		Node *next = Node::findChild(key[depth], node);
 		pos = Node::findKeyPos(key[depth], node);
 
-		if (!next)
+		if (!next) {
 			return iteratorNext(iterator);
+		}
 
 		pos++;
 		node = next;
@@ -634,8 +649,9 @@ void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) 
 	}
 
 	// scan the index
-	if (result_identifiers.count == 0)
+	if (result_identifiers.count == 0) {
 		return;
+	}
 
 	table.Fetch(transaction, result, state->column_ids, result_identifiers);
 }

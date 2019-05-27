@@ -16,7 +16,7 @@ public:
 	uint8_t childIndex[256];
 	unique_ptr<Node> child[48];
 
-	Node48(uint8_t maxPrefixLength) : Node(NodeType::N48, maxPrefixLength) {
+	Node48(uint8_t max_prefix_length) : Node(NodeType::N48, max_prefix_length) {
 		for (uint64_t i = 0; i < 256; i++) {
 			childIndex[i] = 48;
 		}

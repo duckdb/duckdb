@@ -7,7 +7,7 @@ unique_ptr<Node> *Node256::getChild(const uint8_t k) {
 	if (child[k]) {
 		return &child[k];
 	} else {
-		return NULL;
+		return nullptr;
 	}
 }
 
@@ -37,7 +37,7 @@ void Node256::erase(unique_ptr<Node> &node, int pos) {
 		n->child[pos].reset();
 		n->count--;
 	} else {
-		auto newNode = make_unique<Node48>(node->maxPrefixLength);
+		auto newNode = make_unique<Node48>(node->max_prefix_length);
 		copyPrefix(n, newNode.get());
 		for (unsigned b = 0; b < 256; b++) {
 			if (n->child[b]) {

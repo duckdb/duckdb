@@ -17,6 +17,7 @@
 #include "storage/index.hpp"
 #include "common/types/static_vector.hpp"
 #include "art_key.hpp"
+#include "leaf.hpp"
 #include "node.hpp"
 #include "node4.hpp"
 #include "node16.hpp"
@@ -56,11 +57,24 @@ public:
 	ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, vector<TypeId> expression_types,
 	    vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> unbound_expressions);
 	~ART();
+	//! Lock used for updating the index
+	std::mutex lock;
+	//! Root of the tree
+	unique_ptr<Node> tree;
+	//! The table
+	DataTable &table;
+	//! Column identifiers to extract from the base table
+	vector<column_t> column_ids;
+	//! Types of the column identifiers
+	vector<TypeId> types;
+	//! True if machine is little endian
+	bool is_little_endian;
+	//! The maximum prefix length for compressed paths stored in the
+	//! header, if the path is longer it is loaded from the database on demand
+	uint8_t maxPrefix;
+public:
 	//! Insert data into the index
 	void Insert(DataChunk &data, Vector &row_ids);
-	//! Print the index to the console
-	void Print() {
-	}
 
 	void BulkLoad(DataChunk &data, Vector &row_ids);
 
@@ -86,22 +100,6 @@ public:
 
 	//! Delete entries in the index
 	void Delete(DataChunk &entries, Vector &row_identifiers) override;
-	//! Lock used for updating the index
-	std::mutex lock;
-	//! Root of the tree
-	unique_ptr<Node> tree;
-	//! The table
-	DataTable &table;
-	//! Column identifiers to extract from the base table
-	vector<column_t> column_ids;
-	//! Types of the column identifiers
-	vector<TypeId> types;
-	//! True if machine is little endian
-	bool is_little_endian;
-	//! The maximum prefix length for compressed paths stored in the
-	//! header, if the path is longer it is loaded from the database on demand
-	uint8_t maxPrefix;
-
 private:
 	//! Insert the leaf value into the tree
 	void insert(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t value,

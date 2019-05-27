@@ -14,7 +14,7 @@ namespace duckdb {
 class Node256 : public Node {
 public:
 	unique_ptr<Node> child[256];
-	Node256(uint8_t maxPrefixLength) : Node(NodeType::N256, maxPrefixLength) {
+	Node256(uint8_t max_prefix_length) : Node(NodeType::N256, max_prefix_length) {
 	}
 
 	//! Get Node256 Child

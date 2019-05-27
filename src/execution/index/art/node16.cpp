@@ -47,7 +47,7 @@ void Node16::insert(unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &c
 		n->count++;
 	} else {
 		// Grow to Node48
-		auto newNode = make_unique<Node48>(node->maxPrefixLength);
+		auto newNode = make_unique<Node48>(node->max_prefix_length);
 		for (unsigned i = 0; i < node->count; i++) {
 			newNode->childIndex[n->key[i]] = i;
 			newNode->child[i] = move(n->child[i]);
@@ -76,7 +76,7 @@ void Node16::erase(unique_ptr<Node> &node, int pos) {
 	}
 	// Shrink node
 	else {
-		auto newNode = make_unique<Node4>(node->maxPrefixLength);
+		auto newNode = make_unique<Node4>(node->max_prefix_length);
 		for (unsigned i = 0; i < n->count; i++) {
 			newNode->key[newNode->count] = n->key[i];
 			newNode->child[newNode->count++] = move(n->child[i]);

@@ -46,7 +46,7 @@ void Node4::insert(unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &ch
 		n->count++;
 	} else {
 		// Grow to Node16
-		auto newNode = make_unique<Node16>(node->maxPrefixLength);
+		auto newNode = make_unique<Node16>(node->max_prefix_length);
 		newNode->count = 4;
 		copyPrefix(node.get(), newNode.get());
 		for (unsigned i = 0; i < 4; i++) {
@@ -76,13 +76,13 @@ void Node4::erase(unique_ptr<Node> &node, int pos) {
 		auto childref = n->child[0].get();
 		if (childref->type == NodeType::NLeaf) {
 			// Concantenate prefixes
-			int l1 = childref->prefixLength;
-			if (l1 < n->maxPrefixLength) {
+			int l1 = childref->prefix_length;
+			if (l1 < n->max_prefix_length) {
 				n->prefix[l1] = n->key[0];
 				l1++;
 			}
-			if (l1 < n->maxPrefixLength) {
-				int l2 = min(childref->prefixLength, n->maxPrefixLength - l1);
+			if (l1 < n->max_prefix_length) {
+				int l2 = min(childref->prefix_length, n->max_prefix_length - l1);
 				for (int i = 0; i < l2; i++) {
 					n->prefix[l1 + i] = childref->prefix[l2];
 				}

@@ -3,6 +3,7 @@
 #include "execution/index/art/node16.hpp"
 #include "execution/index/art/node48.hpp"
 #include "execution/index/art/node256.hpp"
+#include "common/exception.hpp"
 
 using namespace duckdb;
 
@@ -11,13 +12,13 @@ unsigned Node::min(unsigned a, unsigned b) {
 }
 
 void Node::copyPrefix(Node *src, Node *dst) {
-	dst->prefixLength = src->prefixLength;
-	memcpy(dst->prefix.get(), src->prefix.get(), min(src->prefixLength, src->maxPrefixLength));
+	dst->prefix_length = src->prefix_length;
+	memcpy(dst->prefix.get(), src->prefix.get(), min(src->prefix_length, src->max_prefix_length));
 }
 
 unique_ptr<Node> *Node::minimum(unique_ptr<Node> &node) {
 	if (!node)
-		return NULL;
+		return nullptr;
 
 	if (node->type == NodeType::NLeaf) {
 		return &node;
@@ -141,9 +142,9 @@ Node *Node::findChild(const uint8_t k, Node *node) {
 unsigned Node::prefixMismatch(bool isLittleEndian, Node *node, Key &key, uint64_t depth, unsigned maxKeyLength,
                               TypeId type) {
 	uint64_t pos;
-	// TODO: node->prefixLength > node->maxPrefixLength
-	if (node->prefixLength <= node->maxPrefixLength) {
-		for (pos = 0; pos < node->prefixLength; pos++)
+	// TODO: node->prefix_length > node->max_prefix_length
+	if (node->prefix_length <= node->max_prefix_length) {
+		for (pos = 0; pos < node->prefix_length; pos++)
 			if (key[depth + pos] != node->prefix[pos])
 				return pos;
 	} else {
