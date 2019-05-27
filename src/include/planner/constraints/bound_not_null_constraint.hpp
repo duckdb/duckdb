@@ -14,11 +14,11 @@ namespace duckdb {
 
 class BoundNotNullConstraint : public BoundConstraint {
 public:
-	BoundNotNullConstraint(uint64_t index) : BoundConstraint(ConstraintType::NOT_NULL), index(index) {
+	BoundNotNullConstraint(column_t index) : BoundConstraint(ConstraintType::NOT_NULL), index(index) {
 	}
 
 	//! Column index this constraint pertains to
-	uint64_t index;
+	column_t index;
 };
 
 } // namespace duckdb

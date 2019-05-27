@@ -92,7 +92,7 @@ TEST_CASE("ART Integer Types", "[art]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
 
 		//! Checking if all elements are still there
-		for (int32_t i = 0; i < n; i++) {
+		for (index_t i = 0; i < n; i++) {
 			result =
 			    con.Query("SELECT i FROM integers WHERE i=CAST(" + to_string(keys[i]) + " AS " + int_types[idx] + ")");
 			REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));

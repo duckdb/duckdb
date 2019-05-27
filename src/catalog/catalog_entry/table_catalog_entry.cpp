@@ -9,6 +9,7 @@
 #include "main/database.hpp"
 #include "parser/constraints/list.hpp"
 #include "parser/parsed_data/alter_table_info.hpp"
+#include "planner/constraints/bound_not_null_constraint.hpp"
 #include "planner/constraints/bound_unique_constraint.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
 #include "planner/parsed_data/bound_create_table_info.hpp"
@@ -36,7 +37,8 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 		// create the physical storage
 		storage = make_shared<DataTable>(catalog->storage, schema->name, name, GetTypes());
 		// create the unique indexes for the UNIQUE and PRIMARY KEY constraints
-		for (auto &constraint : bound_constraints) {
+		for(index_t i = 0; i < bound_constraints.size(); i++) {
+			auto &constraint = bound_constraints[i];
 			if (constraint->type == ConstraintType::UNIQUE) {
 				// unique constraint: create a unique index
 				auto &unique = (BoundUniqueConstraint &)*constraint;
@@ -60,6 +62,12 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 											move(unbound_expressions));
 
 				storage->indexes.push_back(move(art));
+				if (unique.is_primary_key) {
+					// if this is a primary key index, also create a NOT NULL constraint for each of the columns
+					for(auto &column_index : unique.keys) {
+						bound_constraints.push_back(make_unique<BoundNotNullConstraint>(column_index));
+					}
+				}
 			}
 		}
 	}
