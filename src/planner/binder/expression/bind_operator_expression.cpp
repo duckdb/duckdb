@@ -138,8 +138,9 @@ static SQLType ResolveArithmeticType(OperatorExpression &op, vector<BoundExpress
 	case ExpressionType::OPERATOR_BITWISE_AND:
 	case ExpressionType::OPERATOR_BITWISE_OR:
 	case ExpressionType::OPERATOR_BITWISE_XOR:
-		throw BinderException("Unimplemented types for bitwise operator: %s bitop %s", SQLTypeToString(children[0]->sql_type).c_str(),
-	                      SQLTypeToString(children[1]->sql_type).c_str());
+		throw BinderException("Unimplemented types for bitwise operator: %s bitop %s",
+		                      SQLTypeToString(children[0]->sql_type).c_str(),
+		                      SQLTypeToString(children[1]->sql_type).c_str());
 	default:
 		assert(op.type == ExpressionType::OPERATOR_MOD);
 		return ResolveModuloType(op, children);

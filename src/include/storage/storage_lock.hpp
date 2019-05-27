@@ -21,6 +21,7 @@ class StorageLockKey {
 public:
 	StorageLockKey(StorageLock &lock, StorageLockType type);
 	~StorageLockKey();
+
 private:
 	StorageLock &lock;
 	StorageLockType type;
@@ -28,6 +29,7 @@ private:
 
 class StorageLock {
 	friend class StorageLockKey;
+
 public:
 	StorageLock();
 
@@ -35,9 +37,11 @@ public:
 	unique_ptr<StorageLockKey> GetExclusiveLock();
 	//! Get a shared lock
 	unique_ptr<StorageLockKey> GetSharedLock();
+
 private:
 	std::mutex exclusive_lock;
 	std::atomic<index_t> read_count;
+
 private:
 	//! Release an exclusive lock
 	void ReleaseExclusiveLock();
@@ -45,4 +49,4 @@ private:
 	void ReleaseSharedLock();
 };
 
-}
+} // namespace duckdb

@@ -5,8 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-WriteAheadLog::WriteAheadLog(DuckDB &database) :
-	initialized(false), database(database) {
+WriteAheadLog::WriteAheadLog(DuckDB &database) : initialized(false), database(database) {
 }
 
 void WriteAheadLog::Initialize(string &path) {

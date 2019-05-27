@@ -12,10 +12,6 @@
 
 namespace duckdb {
 
-enum class ProfilerPrintFormat : uint8_t {
-	NONE,
-	QUERY_TREE,
-	JSON
-};
+enum class ProfilerPrintFormat : uint8_t { NONE, QUERY_TREE, JSON };
 
 } // namespace duckdb

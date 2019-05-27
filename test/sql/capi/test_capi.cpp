@@ -23,8 +23,7 @@ public:
 		return result.row_count;
 	}
 
-	template<class T>
-	T Fetch(index_t col, index_t row) {
+	template <class T> T Fetch(index_t col, index_t row) {
 		throw NotImplementedException("Unimplemented type for fetch");
 	}
 
@@ -34,6 +33,7 @@ public:
 
 public:
 	bool success = false;
+
 private:
 	duckdb_result result;
 };
@@ -67,7 +67,7 @@ template <> double CAPIResult::Fetch(index_t col, index_t row) {
 }
 
 template <> duckdb_date CAPIResult::Fetch(index_t col, index_t row) {
-	auto data = (duckdb_date *) result.columns[col].data;
+	auto data = (duckdb_date *)result.columns[col].data;
 	return data[row];
 }
 
@@ -80,7 +80,8 @@ template <> string CAPIResult::Fetch(index_t col, index_t row) {
 
 class CAPITester {
 public:
-	CAPITester() : database(nullptr), connection(nullptr) {}
+	CAPITester() : database(nullptr), connection(nullptr) {
+	}
 	~CAPITester() {
 		Cleanup();
 	}
@@ -112,6 +113,7 @@ public:
 		result->Query(connection, query);
 		return result;
 	}
+
 private:
 	duckdb_database database = nullptr;
 	duckdb_connection connection = nullptr;
@@ -172,7 +174,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 
 	// integer columns
 	vector<string> types = {"TINYINT", "SMALLINT", "INTEGER", "BIGINT"};
-	for(auto &type : types) {
+	for (auto &type : types) {
 		// create the table and insert values
 		REQUIRE_NO_FAIL(tester.Query("BEGIN TRANSACTION"));
 		REQUIRE_NO_FAIL(tester.Query("CREATE TABLE integers(i " + type + ")"));
@@ -200,7 +202,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	}
 	// real/double columns
 	types = {"REAL", "DOUBLE"};
-	for(auto &type : types) {
+	for (auto &type : types) {
 		// create the table and insert values
 		REQUIRE_NO_FAIL(tester.Query("BEGIN TRANSACTION"));
 		REQUIRE_NO_FAIL(tester.Query("CREATE TABLE doubles(i " + type + ")"));
@@ -246,7 +248,6 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(!result->Fetch<bool>(0, 1));
 	REQUIRE(result->Fetch<bool>(0, 2));
 }
-
 
 TEST_CASE("Test errors in C API", "[capi]") {
 	CAPITester tester;
