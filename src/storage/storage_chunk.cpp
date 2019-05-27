@@ -47,3 +47,27 @@ void StorageChunk::Undo(VersionInformation *info) {
 data_ptr_t StorageChunk::GetPointerToRow(index_t col, index_t row) {
 	return columns[col].segment->GetPointerToRow(table.types[col], row);
 }
+
+void StorageChunk::SetDirtyFlag(index_t start, index_t count, bool new_dirty_flag) {
+	assert(count > 0 && count <= STANDARD_VECTOR_SIZE);
+	assert(start + count <= STORAGE_CHUNK_SIZE);
+	index_t marker_start = start / STANDARD_VECTOR_SIZE;
+	index_t marker_end = (start + count - 1) / STANDARD_VECTOR_SIZE;
+	for(index_t i = marker_start; i <= marker_end; i++) {
+		assert(i < STORAGE_CHUNK_VECTORS);
+		is_dirty[i] = new_dirty_flag;
+	}
+}
+
+bool StorageChunk::IsDirty(index_t start, index_t count) {
+	assert(count > 0 && count <= STANDARD_VECTOR_SIZE);
+	assert(start + count <= STORAGE_CHUNK_SIZE);
+	index_t marker_start = start / STANDARD_VECTOR_SIZE;
+	index_t marker_end = (start + count - 1) / STANDARD_VECTOR_SIZE;
+	bool segment_is_dirty = false;
+	for(index_t i = marker_start; i <= marker_end; i++) {
+		assert(i < STORAGE_CHUNK_VECTORS);
+		segment_is_dirty = segment_is_dirty || is_dirty[i];
+	}
+	return segment_is_dirty;
+}

@@ -35,8 +35,8 @@ public:
 
 	//! The table
 	DataTable &table;
-	// //! Whether or not the part of the storage chunk is dirty
-	// bool is_dirty[STORAGE_CHUNK_VECTORS];
+	//! Whether or not the part of the storage chunk is dirty
+	bool is_dirty[STORAGE_CHUNK_VECTORS] = {0};
 	//! Deleted
 	bool deleted[STORAGE_CHUNK_SIZE] = {0};
 	//! The version pointers
@@ -54,6 +54,10 @@ public:
 	void Cleanup(VersionInformation *info);
 	// Undo the changes made by a tuple
 	void Undo(VersionInformation *info);
+	//! Mark a specific segment of the storage chunk as dirty or not dirty
+	void SetDirtyFlag(index_t start, index_t count, bool dirty);
+	//! Returns true if the specific segment of the storage chunk is dirty
+	bool IsDirty(index_t start, index_t count);
 };
 
 } // namespace duckdb

@@ -18,7 +18,6 @@ public:
 
 	//! The return type of the expression
 	TypeId return_type;
-
 public:
 	bool IsAggregate() const override;
 	bool IsWindow() const override;
@@ -34,7 +33,6 @@ public:
 	}
 	//! Create a copy of this expression
 	virtual unique_ptr<Expression> Copy() = 0;
-
 protected:
 	//! Copy base Expression properties from another expression to this one,
 	//! used in Copy method

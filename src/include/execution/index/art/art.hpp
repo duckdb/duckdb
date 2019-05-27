@@ -57,6 +57,7 @@ public:
 	ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, vector<TypeId> expression_types,
 	    vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> unbound_expressions);
 	~ART();
+
 	//! Lock used for updating the index
 	std::mutex lock;
 	//! Root of the tree
@@ -125,7 +126,7 @@ private:
 	template <class T> void templated_insert(DataChunk &input, Vector &row_ids) {
 		auto input_data = (T *)input.data[0].data;
 		auto row_identifiers = (int64_t *)row_ids.data;
-		for (uint64_t i = 0; i < row_ids.count; i++) {
+		for (index_t i = 0; i < row_ids.count; i++) {
 			auto key =
 			    make_unique<Key>(this->is_little_endian, input.data[0].type, input_data[i], sizeof(input_data[i]));
 			insert(this->is_little_endian, tree, *key, 0, input_data[i], sizeof(input_data[i]), input.data[0].type,
@@ -136,16 +137,16 @@ private:
 	template <class T> void templated_delete(DataChunk &input, Vector &row_ids) {
 		auto input_data = (T *)input.data[0].data;
 		auto row_identifiers = (int64_t *)row_ids.data;
-		for (uint64_t i = 0; i < row_ids.count; i++) {
+		for (index_t i = 0; i < row_ids.count; i++) {
 			auto key =
 			    make_unique<Key>(this->is_little_endian, input.data[0].type, input_data[i], sizeof(input_data[i]));
 			erase(this->is_little_endian, tree, *key, 0, sizeof(input_data[i]), input.data[0].type, row_identifiers[i]);
 		}
 	}
 
-	template <class T> uint64_t templated_lookup(TypeId type, T data, int64_t *result_ids, ARTIndexScanState *state) {
+	template <class T> index_t templated_lookup(TypeId type, T data, int64_t *result_ids, ARTIndexScanState *state) {
 		auto key = make_unique<Key>(this->is_little_endian, type, data, sizeof(data));
-		uint64_t result_count = 0;
+		index_t result_count = 0;
 		auto leaf = static_cast<Leaf *>(lookup(tree, *key, this->maxPrefix, 0));
 		if (leaf) {
 			for (; state->pointquery_tuple < leaf->num_elements; state->pointquery_tuple++) {
@@ -161,12 +162,12 @@ private:
 	}
 
 	template <class T>
-	uint64_t templated_greater_scan(TypeId type, T data, int64_t *result_ids, bool inclusive,
+	index_t templated_greater_scan(TypeId type, T data, int64_t *result_ids, bool inclusive,
 	                                ARTIndexScanState *state) {
 		Iterator *it = &state->iterator;
 		auto key = make_unique<Key>(this->is_little_endian, type, data, sizeof(data));
 
-		uint64_t result_count = 0;
+		index_t result_count = 0;
 		bool found;
 		if (!it->start) {
 			found = ART::bound(tree, *key, sizeof(data), *it, sizeof(data), inclusive, is_little_endian);
@@ -195,9 +196,9 @@ private:
 	}
 
 	template <class T>
-	uint64_t templated_less_scan(TypeId type, T data, int64_t *result_ids, bool inclusive, ARTIndexScanState *state) {
+	index_t templated_less_scan(TypeId type, T data, int64_t *result_ids, bool inclusive, ARTIndexScanState *state) {
 		Iterator *it = &state->iterator;
-		uint64_t result_count = 0;
+		index_t result_count = 0;
 		auto min_value = Node::minimum(tree)->get();
 		auto key = make_unique<Key>(this->is_little_endian, type, data, sizeof(data));
 		Leaf *minimum = static_cast<Leaf *>(min_value);
@@ -238,11 +239,11 @@ private:
 	}
 
 	template <class T>
-	uint64_t templated_close_range(TypeId type, T left_query, T right_query, int64_t *result_ids, bool left_inclusive,
+	index_t templated_close_range(TypeId type, T left_query, T right_query, int64_t *result_ids, bool left_inclusive,
 	                               bool right_inclusive, ARTIndexScanState *state) {
 		Iterator *it = &state->iterator;
 		auto key = make_unique<Key>(this->is_little_endian, type, left_query, sizeof(left_query));
-		uint64_t result_count = 0;
+		index_t result_count = 0;
 		bool found;
 		if (!it->start) {
 			found =

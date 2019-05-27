@@ -138,45 +138,55 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 	StringHeap heap;
 	chunk.MoveStringsToHeap(heap);
 
-	// ready to append: obtain an exclusive lock on the last segment
-	lock_guard<mutex> tree_lock(storage_tree.node_lock);
-	auto last_chunk = (StorageChunk*) storage_tree.nodes.back().node;
-	auto lock = last_chunk->lock.GetExclusiveLock();
-	assert(!last_chunk->next);
+	row_t row_start;
+	{
+		// ready to append: obtain an exclusive lock on the last segment
+		lock_guard<mutex> tree_lock(storage_tree.node_lock);
+		auto last_chunk = (StorageChunk*) storage_tree.nodes.back().node;
+		auto lock = last_chunk->lock.GetExclusiveLock();
+		assert(!last_chunk->next);
 
-	// first append the entries to the indexes
-	for (auto &index : indexes) {
-		index->Append(context, chunk, last_chunk->start + last_chunk->count);
-	}
+		// get the start row_id of the chunk
+		row_start = last_chunk->start + last_chunk->count;
 
-	// update the statistics with the new data
-	for (index_t i = 0; i < types.size(); i++) {
-		statistics[i].Update(chunk.data[i]);
-	}
+		// update the statistics with the new data
+		for (index_t i = 0; i < types.size(); i++) {
+			statistics[i].Update(chunk.data[i]);
+		}
 
-	Transaction &transaction = context.ActiveTransaction();
-	index_t remainder = chunk.size();
-	index_t offset = 0;
-	while(remainder > 0) {
-		index_t to_copy = min(STORAGE_CHUNK_SIZE - last_chunk->count, remainder);
-		if (to_copy > 0) {
-			transaction.PushDeletedEntries(last_chunk->count, to_copy, last_chunk,
-											last_chunk->version_pointers + last_chunk->count);
-			// now insert the elements into the column segments
-			for (index_t i = 0; i < chunk.column_count; i++) {
-				AppendVector(i, chunk.data[i], offset, to_copy);
+		Transaction &transaction = context.ActiveTransaction();
+		index_t remainder = chunk.size();
+		index_t offset = 0;
+		while(remainder > 0) {
+			index_t to_copy = min(STORAGE_CHUNK_SIZE - last_chunk->count, remainder);
+			if (to_copy > 0) {
+				// push deleted entries into the undo buffer
+				transaction.PushDeletedEntries(last_chunk->count, to_copy, last_chunk,
+												last_chunk->version_pointers + last_chunk->count);
+				// now insert the elements into the column segments
+				for (index_t i = 0; i < chunk.column_count; i++) {
+					AppendVector(i, chunk.data[i], offset, to_copy);
+				}
+				// set the is_dirty flags in the chunk
+				last_chunk->SetDirtyFlag(last_chunk->count, to_copy, true);
+				// now increase the count of the chunk
+				last_chunk->count += to_copy;
+				offset += to_copy;
+				remainder -= to_copy;
 			}
-			// now increase the count of the chunk
-			last_chunk->count += to_copy;
-			offset += to_copy;
-			remainder -= to_copy;
+			if (remainder > 0) {
+				last_chunk = AppendStorageChunk(last_chunk->start + last_chunk->count);
+			}
 		}
-		if (remainder > 0) {
-			last_chunk = AppendStorageChunk(last_chunk->start + last_chunk->count);
-		}
+
+		// after an append move the strings to the chunk
+		last_chunk->string_heap.MergeHeap(heap);
 	}
-	// after a successful append move the strings to the chunk
-	last_chunk->string_heap.MergeHeap(heap);
+
+	// Finally append the entries to the indexes. Note that the append can fail here in the last step!
+	for (auto &index : indexes) {
+		index->Append(context, chunk, row_start);
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -215,6 +225,8 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 		}
 		// no conflict, move the current tuple data into the undo buffer
 		transaction.PushTuple(UndoFlags::DELETE_TUPLE, id, chunk);
+		// mark the segment of the chunk as dirty
+		chunk->SetDirtyFlag(id, 1, true);
 		// and set the deleted flag
 		chunk->deleted[id] = true;
 	});
@@ -270,6 +282,8 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		}
 		// no conflict, move the current tuple data into the undo buffer
 		transaction.PushTuple(UndoFlags::UPDATE_TUPLE, id, chunk);
+		// mark the segment as dirty in the chunk
+		chunk->SetDirtyFlag(id, 1, true);
 	});
 
 	// now update the columns in the base table
@@ -441,20 +455,27 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<c
 		// first obtain a shared lock on the current chunk
 		auto lock = current_chunk->lock.GetSharedLock();
 		regular_count = version_count = 0;
-		index_t end = min((index_t)STANDARD_VECTOR_SIZE, current_chunk->count - state.offset);
-		{
+		index_t scan_count = min((index_t)STANDARD_VECTOR_SIZE, current_chunk->count - state.offset);
+		// if the segment is dirty we need to scan the version pointers and deleted flags
+		if (current_chunk->IsDirty(state.offset, scan_count)) {
 			// start scanning the chunk to check for deleted and version pointers
-			for (index_t i = 0; i < end; i++) {
+			for (index_t i = 0; i < scan_count; i++) {
 				version_entries[version_count] = regular_entries[regular_count] = i;
 				bool has_version = current_chunk->version_pointers[state.offset + i];
 				bool is_deleted = current_chunk->deleted[state.offset + i];
 				version_count += has_version;
 				regular_count += !(is_deleted || has_version);
 			}
-			// FIXME if regular_count == end, set dirty flag of this segment of the StorageChunk to false
+			if (regular_count == scan_count) {
+				// the scan was clean: set the dirty flag to false
+				current_chunk->SetDirtyFlag(state.offset, scan_count, false);
+			}
+		} else {
+			// no deleted entries or version information: just scan everything
+			regular_count = scan_count;
 		}
 
-		if (regular_count < end) {
+		if (regular_count < scan_count) {
 			// there are versions! chase the version pointers
 			data_ptr_t alternate_version_pointers[STANDARD_VECTOR_SIZE];
 			index_t alternate_version_index[STANDARD_VECTOR_SIZE];
@@ -494,7 +515,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<c
 					result.data[col_idx].count += regular_count;
 				} else {
 					// fetch the data from the base column segments
-					RetrieveColumnData(result.data[col_idx], types[column_ids[col_idx]], state.columns[column_ids[col_idx]], end, regular_entries, regular_count);
+					RetrieveColumnData(result.data[col_idx], types[column_ids[col_idx]], state.columns[column_ids[col_idx]], scan_count, regular_entries, regular_count);
 				}
 			}
 		} else {
