@@ -24,8 +24,10 @@ timestamp_t Timestamp::FromString(string str) {
 	assert(sizeof(date_t) == 4);
 	assert(sizeof(dtime_t) == 4);
 
-	if (str.size() < STD_TIMESTAMP_LENGTH) {
-		throw Exception("Input string is too short for a timestamp format");
+	if (str.size() != STD_TIMESTAMP_LENGTH) {
+		throw ConversionException("timestamp field value out of range: \"%s\", "
+		                          "expected format is (YYYY-MM-DD hh:mm:ss)",
+		                          str.c_str());
 	}
 
 	date_t date = Date::FromString(str.substr(0, 10));
