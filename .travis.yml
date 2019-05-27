@@ -10,7 +10,7 @@ env:
     - CIBW_BUILD='cp37-*'
     - CIBW_SKIP='*-manylinux1_i686 *-win32'
     - CIBW_TEST_REQUIRES='pytest'
-    - CIBW_BEFORE_BUILD='pip install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3" && pip install scikit-build && pip install cmake'
+    - CIBW_BEFORE_BUILD='pip install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3" && pip install cmake'
     - CIBW_TEST_COMMAND='python -m pytest {project}/tests'
 
 
@@ -222,7 +222,8 @@ matrix:
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - cd ../..
-
+      env:
+        - CIBW_BEFORE_BUILD='pip install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3"'
       after_success:
         python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
 
