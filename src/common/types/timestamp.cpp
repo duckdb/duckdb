@@ -11,6 +11,8 @@
 using namespace duckdb;
 using namespace std;
 
+constexpr const size_t STD_TIMESTAMP_LENGTH = 19;
+
 // timestamp/datetime uses 64 bits, high 32 bits for date and low 32 bits for time
 // string format is YYYY-MM-DDThh:mm:ssZ
 // T may be a space
@@ -22,7 +24,9 @@ timestamp_t Timestamp::FromString(string str) {
 	assert(sizeof(date_t) == 4);
 	assert(sizeof(dtime_t) == 4);
 
-	// TODO throw exception if string too short
+	if (str.size() < STD_TIMESTAMP_LENGTH) {
+		throw Exception("Input string is too short for a timestamp format");
+	}
 
 	date_t date = Date::FromString(str.substr(0, 10));
 	dtime_t time = Time::FromString(str.substr(10));
