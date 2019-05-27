@@ -29,6 +29,7 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 * Test with different types, especially numerics and strings
 * Try to test unexpected/incorrect usage as well, instead of only the happy path
 * Slower tests should be added to the **all** unit tests. You can do this by adding `[.]` after the test group. For an example see `test_tpch.cpp`.
+* Look at the code coverage report of your branch and attempt to cover all code paths in the fast unit tests. Attempt to trigger exceptions as well. It is acceptable to have some exceptions not triggered (e.g. out of memory exceptions or type switch exceptions), but large branches of code should always be either covered or removed.
 
 ## Formatting
 * Tabs for indentation, spaces for alignment
@@ -43,6 +44,8 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 * Use `[u]int(8|16|32|64)_t` instead of int, long, uint etc. In particular, use `count_t` instead of `size_t` and `index_t` for offsets/indices of any kind.
 * Prefer using references over pointers
 * Use C++11 for loops when possible: for (const auto& item : items) {...}
+* Use braces for indenting `if` statements and loops. Avoid single-line if statements and loops, especially nested ones.
+* **Class Layout:** Start out with a `public` block containing the constructor and public variables, followed by a `public` block containing public methods of the class. After that follow any private functions and private variables.
 
 ## Error Handling
 * Use exceptions **only** when an error is encountered that terminates a query (e.g. parser error, table not found). Exceptions should only be used for **exceptional** situations. For regular errors that does not break the execution flow (e.g. errors you **expect** might occur) use a return value instead.

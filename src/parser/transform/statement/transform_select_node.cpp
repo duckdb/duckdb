@@ -14,8 +14,18 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 	case SETOP_NONE: {
 		node = make_unique<SelectNode>();
 		auto result = (SelectNode *)node.get();
-		// distinct clause
-		result->select_distinct = stmt->distinctClause != NULL ? true : false;
+		// checks distinct clause
+		if (stmt->distinctClause != NULL) {
+			result->select_distinct = true;
+			// checks distinct on clause
+			auto target = reinterpret_cast<Node *>(stmt->distinctClause->head->data.ptr_value);
+			if (target) {
+				//  add the columns defined in the ON clause to the select list
+				if (!TransformExpressionList(stmt->distinctClause, result->distinct_on_targets)) {
+					throw Exception("Failed to transform expression list from DISTINCT ON.");
+				}
+			}
+		}
 		// from table
 		result->from_table = TransformFrom(stmt->fromClause);
 		// group by

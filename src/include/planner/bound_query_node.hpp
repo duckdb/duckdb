@@ -38,6 +38,8 @@ public:
 	bool select_distinct = false;
 	//! List of order nodes
 	vector<BoundOrderByNode> orders;
+	//! List of target nodes for DISTINCT ON
+	vector<unique_ptr<Expression>> target_distincts;
 	//! LIMIT count
 	int64_t limit = -1;
 	//! OFFSET
