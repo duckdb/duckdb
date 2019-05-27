@@ -9,11 +9,14 @@
 #include "main/stream_query_result.hpp"
 #include "optimizer/optimizer.hpp"
 #include "parser/parser.hpp"
+#include "parser/expression/constant_expression.hpp"
+#include "parser/statement/execute_statement.hpp"
 #include "parser/statement/explain_statement.hpp"
 #include "parser/statement/prepare_statement.hpp"
 #include "planner/operator/logical_execute.hpp"
 #include "planner/planner.hpp"
 #include "transaction/transaction_manager.hpp"
+#include "parser/statement/deallocate_statement.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -36,6 +39,10 @@ void ClientContext::Cleanup() {
 	}
 	assert(prepared_statements);
 	db.transaction_manager->AddCatalogSet(*this, move(prepared_statements));
+	// invalidate any prepared statements
+	for(auto &statement : prepared_statement_objects) {
+		statement->is_invalidated = true;
+	}
 	return CleanupInternal();
 }
 
@@ -238,7 +245,45 @@ static string CanExecuteStatementInReadOnlyMode(SQLStatement &stmt) {
 	}
 }
 
-unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_result) {
+unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
+	lock_guard<mutex> client_guard(context_lock);
+	// prepare the query
+	try {
+		if (is_invalidated) {
+			throw Exception("Database that this connection belongs to has been closed!");
+		}
+		//! Cleanup any open results and reset the interrupted flag
+		CleanupInternal();
+		interrupted = false;
+
+		// first parse the query
+		Parser parser(*this);
+		parser.ParseQuery(query.c_str());
+		if (parser.statements.size() != 1) {
+			throw Exception("Cannot prepare multiple statements at once!");
+		}
+		string prepare_name = "prepare_test" + to_string(prepare_count);
+		prepare_count++;
+		// create a prepare statement out of the underlying statement
+		auto prepare = make_unique<PrepareStatement>();
+		prepare->name = prepare_name;
+		prepare->statement = move(parser.statements[0]);
+		parser.statements[0] = move(prepare);
+
+		// now perform the actual PREPARE query
+		auto result = ExecuteStatementsInternal(query, parser.statements, false);
+		if (!result->success) {
+			throw Exception(result->error);
+		}
+		auto prepared_object = make_unique<PreparedStatement>(this, prepare_name);
+		prepared_statement_objects.insert(prepared_object.get());
+		return prepared_object;
+	} catch(Exception &ex) {
+		return make_unique<PreparedStatement>(ex.GetMessage());
+	}
+}
+
+unique_ptr<QueryResult> ClientContext::Execute(string name, vector<Value> &values) {
 	lock_guard<mutex> client_guard(context_lock);
 	if (is_invalidated) {
 		return make_unique<MaterializedQueryResult>("Database that this connection belongs to has been closed!");
@@ -248,28 +293,40 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 	CleanupInternal();
 	interrupted = false;
 
-	// now start by parsing the query
-	Parser parser(*this);
-	try {
-		// parse the query and transform it into a set of statements
-		parser.ParseQuery(query.c_str());
-	} catch (Exception &ex) {
-		return make_unique<MaterializedQueryResult>(ex.GetMessage());
-	} catch (...) {
-		return make_unique<MaterializedQueryResult>("Unhandled exception thrown in parser");
+	// create the execute statement
+	auto execute = make_unique<ExecuteStatement>();
+	execute->name = name;
+	for(auto &val : values) {
+		execute->values.push_back(make_unique<ConstantExpression>(SQLTypeFromInternalType(val.type), val));
 	}
 
-	if (parser.statements.size() == 0) {
-		// no statements, return empty successful result
-		return make_unique<MaterializedQueryResult>(StatementType::INVALID);
-	}
+	vector<unique_ptr<SQLStatement>> statements;
+	statements.push_back(move(execute));
 
+	return ExecuteStatementsInternal("", statements, true);
+}
+
+void ClientContext::RemovePreparedStatement(PreparedStatement *statement) {
+	lock_guard<mutex> client_guard(context_lock);
+	if (!statement->success || statement->is_invalidated || is_invalidated) {
+		return;
+	}
+	// erase the object from the list of prepared statements
+	prepared_statement_objects.erase(statement);
+	// drop it from the catalog
+	auto deallocate_statement = make_unique<DeallocateStatement>(statement->name);
+	vector<unique_ptr<SQLStatement>> statements;
+	statements.push_back(move(deallocate_statement));
+	ExecuteStatementsInternal("", statements, false);
+}
+
+unique_ptr<QueryResult> ClientContext::ExecuteStatementsInternal(string query, vector<unique_ptr<SQLStatement>> &statements, bool allow_stream_result) {
 	// now we have a list of statements
 	// iterate over them and execute them one by one
 	unique_ptr<QueryResult> result, current_result;
 	QueryResult *last_result = nullptr;
-	for (index_t i = 0; i < parser.statements.size(); i++) {
-		auto &statement = parser.statements[i];
+	for (index_t i = 0; i < statements.size(); i++) {
+		auto &statement = statements[i];
 		if (db.access_mode == AccessMode::READ_ONLY) {
 			// if the database is opened in read-only mode, check if we can execute this statement
 			string error = CanExecuteStatementInReadOnlyMode(*statement);
@@ -277,7 +334,7 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 				return make_unique<MaterializedQueryResult>(error);
 			}
 		}
-		bool is_last_statement = i + 1 == parser.statements.size();
+		bool is_last_statement = i + 1 == statements.size();
 		// check if we are on AutoCommit. In this case we should start a transaction.
 		if (transaction.IsAutoCommit()) {
 			transaction.BeginTransaction();
@@ -337,6 +394,35 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 		}
 	}
 	return result;
+}
+
+unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_result) {
+	lock_guard<mutex> client_guard(context_lock);
+	if (is_invalidated) {
+		return make_unique<MaterializedQueryResult>("Database that this connection belongs to has been closed!");
+	}
+
+	//! Cleanup any open results and reset the interrupted flag
+	CleanupInternal();
+	interrupted = false;
+
+	// now start by parsing the query
+	Parser parser(*this);
+	try {
+		// parse the query and transform it into a set of statements
+		parser.ParseQuery(query.c_str());
+	} catch (Exception &ex) {
+		return make_unique<MaterializedQueryResult>(ex.GetMessage());
+	} catch (...) {
+		return make_unique<MaterializedQueryResult>("Unhandled exception thrown in parser");
+	}
+
+	if (parser.statements.size() == 0) {
+		// no statements, return empty successful result
+		return make_unique<MaterializedQueryResult>(StatementType::INVALID);
+	}
+
+	return ExecuteStatementsInternal(query, parser.statements, allow_stream_result);
 }
 
 void ClientContext::Interrupt() {
