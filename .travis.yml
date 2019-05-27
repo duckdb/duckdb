@@ -104,7 +104,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
 
-      before_install: 
+      before_install:
         - pip install --user cpp-coveralls
 
       script:
@@ -113,7 +113,7 @@ matrix:
         - build/coverage/test/unittest
 
       after_success:
-        - coveralls -b build/coverage -E '.*CMakeCXXCompilerId.cpp' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --gcov-options '\-lp'
+        - coveralls -b build/coverage -E '.*CMakeCXXCompilerId.cpp' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --gcov-options '\-lp'
 
 
     - os: windows
@@ -216,7 +216,7 @@ matrix:
       python: 3.7
 
       script:
-        - pip install cibuildwheel==0.10.2 boto3
+        - pip install scikit-build cibuildwheel==0.10.2 boto3
         - cd tools/pythonpkg
         - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
