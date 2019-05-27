@@ -40,9 +40,6 @@ ART::~ART() {
 }
 
 void ART::Insert(DataChunk &input, Vector &row_ids) {
-	if (input.column_count > 1) {
-		throw NotImplementedException("We only support single dimensional indexes currently");
-	}
 	assert(row_ids.type == TypeId::BIGINT);
 	assert(input.size() == row_ids.count);
 	assert(types[0] == input.data[0].type);
@@ -65,28 +62,31 @@ void ART::Insert(DataChunk &input, Vector &row_ids) {
 }
 
 void ART::Delete(DataChunk &input, Vector &row_ids) {
-	if (input.column_count > 1) {
-		throw NotImplementedException("We only support single dimensional indexes currently");
-	}
 	lock_guard<mutex> l(lock);
+
+	expression_result.Reset();
+	// first resolve the expressions
+	ExpressionExecutor executor(input);
+	executor.Execute(expressions, expression_result);
+
 	assert(row_ids.type == TypeId::BIGINT);
-	assert(input.size() == row_ids.count);
-	assert(types[0] == input.data[0].type);
-	switch (input.data[0].type) {
+	assert(expression_result.size() == row_ids.count);
+	assert(types[0] == expression_result.data[0].type);
+	switch (expression_result.data[0].type) {
 	case TypeId::TINYINT:
-		templated_delete<int8_t>(input, row_ids);
+		templated_delete<int8_t>(expression_result, row_ids);
 		break;
 	case TypeId::SMALLINT:
-		templated_delete<int16_t>(input, row_ids);
+		templated_delete<int16_t>(expression_result, row_ids);
 		break;
 	case TypeId::INTEGER:
-		templated_delete<int32_t>(input, row_ids);
+		templated_delete<int32_t>(expression_result, row_ids);
 		break;
 	case TypeId::BIGINT:
-		templated_delete<int64_t>(input, row_ids);
+		templated_delete<int64_t>(expression_result, row_ids);
 		break;
 	default:
-		throw InvalidTypeException(input.data[0].type, "Invalid type for index");
+		throw InvalidTypeException(expression_result.data[0].type, "Invalid type for index");
 	}
 }
 

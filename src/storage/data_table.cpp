@@ -359,9 +359,6 @@ void DataTable::RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &p
 }
 
 void DataTable::RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &pointer, index_t count, sel_t *sel_vector, index_t sel_count) {
-	// sel_t temp_sel[2][STANDARD_VECTOR_SIZE];
-	// index_t temp_sel_count[2];
-
 	index_t type_size = GetTypeIdSize(type);
 	if (sel_count == 0) {
 		// skip this segment
@@ -377,39 +374,9 @@ void DataTable::RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &p
 			assert(pointer.segment->next);
 			pointer.segment = (ColumnSegment*) pointer.segment->next.get();
 			pointer.offset = 0;
-		} else if (to_copy != count) {
-			throw NotImplementedException("Unaligned access in RetrieveColumnData");
-			// // we can't copy everything from this column segment, but we can copy something
-			// // first figure out which elements we need to copy from here, and which elements we need to copy from the next column segment
-			// temp_sel_count[0] = temp_sel_count[1] = 0;
-			// for(index_t i = 0; i < sel_count; i++) {
-			// 	if (sel_vector[i] < to_copy) {
-			// 		// belongs to first sel vector
-			// 		temp_sel[0][temp_sel_count[0]++] = sel_vector[i];
-			// 	} else {
-			// 		// belongs to second sel vector
-			// 		temp_sel[1][temp_sel_count[1]++] = sel_vector[i];
-			// 	}
-			// }
-			// // now perform the actual copy from this node with whatever nodes we have
-			// if (temp_sel_count[0] > 0) {
-			// 	data_ptr_t dataptr = pointer.segment->GetData() + pointer.offset;
-			// 	Vector source(type, dataptr);
-			// 	source.count = temp_sel_count[0];
-			// 	source.sel_vector = temp_sel[0];
-			// 	// FIXME: use ::Copy instead of ::AppendFromStorage if there are no null values in this segment
-			// 	VectorOperations::AppendFromStorage(source, result);
-			// }
-			// // now move to the next chunk
-			// sel_vector = temp_sel[1];
-			// sel_count = temp_sel_count[1];
-			// count -= to_copy;
-			// // move the pointer to the next segment
-			// assert(pointer.segment->next);
-			// pointer.segment = (ColumnSegment*) pointer.segment->next.get();
-			// pointer.offset = 0;
 		} else {
-			assert(to_copy > 0);
+			// accesses to RetrieveColumnData should be aligned by STANDARD_VECTOR_SIZE, hence to_copy should be equivalent to either count or 0
+			assert(to_copy == count);
 			// we can copy everything from this column segment, copy with the sel vector
 			data_ptr_t dataptr = pointer.segment->GetData() + pointer.offset;
 			Vector source(type, dataptr);
