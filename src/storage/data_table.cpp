@@ -456,6 +456,9 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<c
 		auto lock = current_chunk->lock.GetSharedLock();
 		regular_count = version_count = 0;
 		index_t scan_count = min((index_t)STANDARD_VECTOR_SIZE, current_chunk->count - state.offset);
+		if (scan_count == 0) {
+			return;
+		}
 		// if the segment is dirty we need to scan the version pointers and deleted flags
 		if (current_chunk->IsDirty(state.offset, scan_count)) {
 			// start scanning the chunk to check for deleted and version pointers

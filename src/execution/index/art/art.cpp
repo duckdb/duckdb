@@ -121,7 +121,7 @@ void ART::Append(ClientContext &context, DataChunk &appended_data, uint64_t row_
 	StaticVector<int64_t> row_identifiers;
 	auto row_ids = (int64_t *)row_identifiers.data;
 	row_identifiers.count = appended_data.size();
-	for (uint64_t i = 0; i < row_identifiers.count; i++) {
+	for (index_t i = 0; i < row_identifiers.count; i++) {
 		row_ids[i] = row_identifier_start + i;
 	}
 
@@ -133,7 +133,7 @@ bool ART::leafMatches(bool is_little_endian, Node *node, Key &key, unsigned keyL
 		auto leaf = static_cast<Leaf *>(node);
 		auto leafKey = make_unique<Key>(is_little_endian, types[0], leaf->value, keyLength);
 		Key &key_ref = *leafKey;
-		for (unsigned i = depth; i < keyLength; i++)
+		for (index_t i = depth; i < keyLength; i++)
 			if (key_ref[i] != key[i])
 				return false;
 	}
@@ -147,15 +147,17 @@ void ART::erase(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned 
 	// Delete a leaf from a tree
 	if (node->type == NodeType::NLeaf) {
 		// Make sure we have the right leaf
-		if (ART::leafMatches(isLittleEndian, node.get(), key, maxKeyLength, depth))
+		if (ART::leafMatches(isLittleEndian, node.get(), key, maxKeyLength, depth)) {
 			node.reset();
+		}
 		return;
 	}
 
 	// Handle prefix
 	if (node->prefix_length) {
-		if (Node::prefixMismatch(isLittleEndian, node.get(), key, depth, maxKeyLength, type) != node->prefix_length)
+		if (Node::prefixMismatch(isLittleEndian, node.get(), key, depth, maxKeyLength, type) != node->prefix_length) {
 			return;
+		}
 		depth += node->prefix_length;
 	}
 	int pos = Node::findKeyPos(key[depth], &(*node));
@@ -290,7 +292,7 @@ Node *ART::lookup(unique_ptr<Node> &node, Key &key, unsigned keyLength, unsigned
 				auto leaf = static_cast<Leaf *>(node_val);
 				auto auxKey = make_unique<Key>(is_little_endian, types[0], leaf->value, keyLength);
 				Key &leafKey = *auxKey;
-				for (unsigned i = (skippedPrefix ? 0 : depth); i < keyLength; i++) {
+				for (index_t i = (skippedPrefix ? 0 : depth); i < keyLength; i++) {
 					if (leafKey[i] != key[i]) {
 						return nullptr;
 					}
@@ -301,7 +303,7 @@ Node *ART::lookup(unique_ptr<Node> &node, Key &key, unsigned keyLength, unsigned
 
 		if (node_val->prefix_length) {
 			if (node_val->prefix_length < node_val->max_prefix_length) {
-				for (unsigned pos = 0; pos < node_val->prefix_length; pos++) {
+				for (index_t pos = 0; pos < node_val->prefix_length; pos++) {
 					if (key[depth + pos] != node_val->prefix[pos]) {
 						return nullptr;
 					}
