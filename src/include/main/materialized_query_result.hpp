@@ -16,9 +16,9 @@ namespace duckdb {
 class MaterializedQueryResult : public QueryResult {
 public:
 	//! Creates an empty successful query result
-	MaterializedQueryResult();
+	MaterializedQueryResult(StatementType statement_type);
 	//! Creates a successful query result with the specified names and types
-	MaterializedQueryResult(vector<SQLType> sql_types, vector<TypeId> types, vector<string> names);
+	MaterializedQueryResult(StatementType statement_type, vector<SQLType> sql_types, vector<TypeId> types, vector<string> names);
 	//! Creates an unsuccessful query result with error condition
 	MaterializedQueryResult(string error);
 

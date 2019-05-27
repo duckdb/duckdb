@@ -119,11 +119,12 @@ unique_ptr<DataChunk> ClientContext::FetchInternal() {
 
 unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, unique_ptr<SQLStatement> statement,
                                                                 bool allow_stream_result) {
-	bool create_stream_result = statement->type == StatementType::SELECT && allow_stream_result;
+	StatementType statement_type = statement->type;
+	bool create_stream_result = statement_type == StatementType::SELECT && allow_stream_result;
 	// for many statements, we log the literal query string in the WAL
 	// also note the exception for EXECUTE below
 	bool log_query_string = false;
-	switch (statement->type) {
+	switch (statement_type) {
 	case StatementType::UPDATE:
 	case StatementType::DELETE:
 	case StatementType::ALTER:
@@ -145,7 +146,7 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 			ActiveTransaction().PushQuery(query);
 		}
 		// return an empty result
-		return make_unique<MaterializedQueryResult>();
+		return make_unique<MaterializedQueryResult>(statement_type);
 	}
 	profiler.EndPhase();
 
@@ -173,6 +174,7 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 		    exec->prep->statement_type == StatementType::DELETE) {
 			log_query_string = true;
 		}
+		statement_type = exec->prep->statement_type;
 	}
 
 	profiler.StartPhase("physical_planner");
@@ -192,14 +194,14 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 		// successfully compiled SELECT clause and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
 		assert(!log_query_string);
-		return make_unique<StreamQueryResult>(*this, sql_types, types, names);
+		return make_unique<StreamQueryResult>(statement_type, *this, sql_types, types, names);
 	}
 	// check if we need to log the query string
 	if (log_query_string) {
 		ActiveTransaction().PushQuery(query);
 	}
 	// create a materialized result by continuously fetching
-	auto result = make_unique<MaterializedQueryResult>(sql_types, types, names);
+	auto result = make_unique<MaterializedQueryResult>(statement_type, sql_types, types, names);
 	while (true) {
 		auto chunk = FetchInternal();
 		if (chunk->size() == 0) {
@@ -259,7 +261,7 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 
 	if (parser.statements.size() == 0) {
 		// no statements, return empty successful result
-		return make_unique<MaterializedQueryResult>();
+		return make_unique<MaterializedQueryResult>(StatementType::INVALID);
 	}
 
 	// now we have a list of statements
@@ -426,10 +428,10 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	// see below
 	auto statement_copy_for_explain = select_stmt->Copy();
 
-	auto original_result = make_unique<MaterializedQueryResult>(),
-	     copied_result = make_unique<MaterializedQueryResult>(),
-	     deserialized_result = make_unique<MaterializedQueryResult>(),
-	     unoptimized_result = make_unique<MaterializedQueryResult>();
+	auto original_result = make_unique<MaterializedQueryResult>(StatementType::SELECT),
+	     copied_result = make_unique<MaterializedQueryResult>(StatementType::SELECT),
+	     deserialized_result = make_unique<MaterializedQueryResult>(StatementType::SELECT),
+	     unoptimized_result = make_unique<MaterializedQueryResult>(StatementType::SELECT);
 	// execute the original statement
 	try {
 		auto result = ExecuteStatementInternal(query, move(statement), false);
