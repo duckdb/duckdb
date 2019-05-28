@@ -19,6 +19,8 @@ string TypeIdToString(TypeId type) {
 		return "INTEGER";
 	case TypeId::BIGINT:
 		return "BIGINT";
+	case TypeId::HASH:
+		return "HASH";
 	case TypeId::POINTER:
 		return "POINTER";
 	case TypeId::FLOAT:
@@ -50,8 +52,10 @@ count_t GetTypeIdSize(TypeId type) {
 		return sizeof(float);
 	case TypeId::DOUBLE:
 		return sizeof(double);
-	case TypeId::POINTER:
+	case TypeId::HASH:
 		return sizeof(uint64_t);
+	case TypeId::POINTER:
+		return sizeof(uintptr_t);
 	case TypeId::VARCHAR:
 		return sizeof(void *);
 	case TypeId::VARBINARY:
@@ -77,8 +81,6 @@ SQLType SQLTypeFromInternalType(TypeId type) {
 		return SQLType(SQLTypeId::FLOAT);
 	case TypeId::DOUBLE:
 		return SQLType(SQLTypeId::DOUBLE);
-	case TypeId::POINTER:
-		return SQLType(SQLTypeId::POINTER);
 	case TypeId::VARCHAR:
 		return SQLType(SQLTypeId::VARCHAR);
 	case TypeId::VARBINARY:
@@ -134,8 +136,6 @@ string SQLTypeIdToString(SQLTypeId id) {
 		return "FLOAT";
 	case SQLTypeId::DOUBLE:
 		return "DOUBLE";
-	case SQLTypeId::POINTER:
-		return "POINTER";
 	case SQLTypeId::DECIMAL:
 		return "DECIMAL";
 	case SQLTypeId::VARCHAR:

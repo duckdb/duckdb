@@ -57,7 +57,7 @@ void VectorOperations::Set(Vector &result, Value value) {
 			templated_set_loop<double>(result, value.value_.double_);
 			break;
 		case TypeId::POINTER:
-			templated_set_loop<uint64_t>(result, value.value_.pointer);
+			templated_set_loop<uintptr_t>(result, value.value_.pointer);
 			break;
 		case TypeId::VARCHAR: {
 			auto str = result.string_heap.AddString(value.str_value);
