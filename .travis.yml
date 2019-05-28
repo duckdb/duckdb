@@ -60,29 +60,29 @@ matrix:
 
     - os: linux
       dist: xenial
-      name: GCC 8 Debug
+      name: GCC 9 Debug
 
       addons:
         apt:
           sources:
             - ubuntu-toolchain-r-test
           packages:
-            - g++-8
+            - g++-9
       env:
-        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
+        - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
 
     - os: linux
       dist: xenial
-      name: GCC 8
+      name: GCC 9
 
       addons:
         apt:
           sources:
             - ubuntu-toolchain-r-test
           packages:
-            - g++-8
+            - g++-9
       env:
-        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
+        - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
       before_install:
         - eval "${MATRIX_EVAL}"
         - pip install --user boto3
@@ -97,17 +97,17 @@ matrix:
 
     - os: linux
       dist: xenial
-      name: GCC 8 32 Bit
+      name: GCC 9 32 Bit
 
       addons:
         apt:
           sources:
             - ubuntu-toolchain-r-test
           packages:
-            - g++-8 libc6-dev-i386 g++-8-multilib gcc-8-multilib gcc-multilib g++-multilib
+            - g++-9 libc6-dev-i386 g++-9-multilib gcc-9-multilib gcc-multilib g++g-multilib
 
       env:
-        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
+        - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
       before_install:
         - eval "${MATRIX_EVAL}"
         - pip install --user boto3
