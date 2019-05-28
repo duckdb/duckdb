@@ -33,11 +33,12 @@ enum class TypeId : uint8_t {
 	SMALLINT = 3,  /* int16_t */
 	INTEGER = 4,   /* int32_t */
 	BIGINT = 5,    /* int64_t */
-	POINTER = 6,   /* uint64_t */
-	FLOAT = 7,     /* float32_t */
-	DOUBLE = 8,    /* float64_t */
-	VARCHAR = 9,   /* char*, representing a null-terminated UTF-8 string */
-	VARBINARY = 10 /* blob_t, representing arbitrary bytes */
+	HASH = 6,   	   /* uint64_t */
+	POINTER = 7,   /* uintptr_t */
+	FLOAT = 8,     /* float32_t */
+	DOUBLE = 9,    /* float64_t */
+	VARCHAR = 10,   /* char*, representing a null-terminated UTF-8 string */
+	VARBINARY = 11 /* blob_t, representing arbitrary bytes */
 };
 
 //===--------------------------------------------------------------------===//
@@ -108,6 +109,8 @@ template <class T> TypeId GetTypeId() {
 		return TypeId::INTEGER;
 	} else if (std::is_same<T, int64_t>()) {
 		return TypeId::BIGINT;
+	} else if (std::is_same<T, uint64_t>()) {
+		return TypeId::HASH;
 	} else if (std::is_same<T, uintptr_t>()) {
 		return TypeId::POINTER;
 	} else if (std::is_same<T, double>()) {

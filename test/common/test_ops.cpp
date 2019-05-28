@@ -261,7 +261,7 @@ static void require_generate(TypeId t) {
 	for (size_t i = 0; i < v.count; i++) {
 		REQUIRE(v.GetValue(i).CastAs(TypeId::BIGINT) == Value::BIGINT(i + 42));
 	}
-	Vector hash(TypeId::POINTER, true, false);
+	Vector hash(TypeId::HASH, true, false);
 	hash.count = v.count;
 	VectorOperations::Hash(v, hash);
 }

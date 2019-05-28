@@ -67,10 +67,8 @@ TEST_CASE("Test file operations", "[file_system]") {
 	FileSystem fs;
 	unique_ptr<FileHandle> handle, handle2;
 	int64_t test_data[INTEGER_COUNT];
-	int64_t test_data2[INTEGER_COUNT];
 	for (int i = 0; i < INTEGER_COUNT; i++) {
 		test_data[i] = i;
-		test_data2[i] = 0;
 	}
 
 	auto fname = TestCreatePath("test_file");

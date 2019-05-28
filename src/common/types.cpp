@@ -19,6 +19,8 @@ string TypeIdToString(TypeId type) {
 		return "INTEGER";
 	case TypeId::BIGINT:
 		return "BIGINT";
+	case TypeId::HASH:
+		return "HASH";
 	case TypeId::POINTER:
 		return "POINTER";
 	case TypeId::FLOAT:
@@ -50,6 +52,8 @@ count_t GetTypeIdSize(TypeId type) {
 		return sizeof(float);
 	case TypeId::DOUBLE:
 		return sizeof(double);
+	case TypeId::HASH:
+		return sizeof(uint64_t);
 	case TypeId::POINTER:
 		return sizeof(uintptr_t);
 	case TypeId::VARCHAR:
