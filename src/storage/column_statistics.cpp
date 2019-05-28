@@ -26,7 +26,7 @@ void ColumnStatistics::Update(Vector &new_vector) {
 	}
 	if (new_vector.type == TypeId::VARCHAR) {
 		Value new_max_strlen = VectorOperations::MaximumStringLength(new_vector);
-		maximum_string_length = std::max(maximum_string_length, new_max_strlen.value_.pointer);
+		maximum_string_length = std::max(maximum_string_length, (count_t)new_max_strlen.value_.bigint);
 	}
 }
 

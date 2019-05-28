@@ -19,7 +19,7 @@ int64_t MinimumValue(TypeId type) {
 	case TypeId::BIGINT:
 		return MinimumValue<int64_t>();
 	case TypeId::POINTER:
-		return MinimumValue<uint64_t>();
+		return MinimumValue<uintptr_t>();
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires integral type");
 	}
@@ -36,7 +36,7 @@ int64_t MaximumValue(TypeId type) {
 	case TypeId::BIGINT:
 		return MaximumValue<int64_t>();
 	case TypeId::POINTER:
-		return MaximumValue<uint64_t>();
+		return MaximumValue<uintptr_t>();
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires integral type");
 	}

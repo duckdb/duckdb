@@ -36,9 +36,6 @@ template <class OP> static void generic_scatter_loop(Vector &source, Vector &des
 	case TypeId::DOUBLE:
 		scatter_templated_loop<double, OP>(source, dest);
 		break;
-	case TypeId::POINTER:
-		scatter_templated_loop<uint64_t, OP>(source, dest);
-		break;
 	default:
 		throw NotImplementedException("Unimplemented type for scatter");
 	}

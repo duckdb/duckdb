@@ -39,7 +39,7 @@ template <class OP> static void generic_fold_loop(Vector &input, Value &result) 
 		templated_unary_fold<double, double, OP>(input, &result.value_.double_);
 		break;
 	case TypeId::POINTER:
-		templated_unary_fold<uint64_t, uint64_t, OP>(input, &result.value_.pointer);
+		templated_unary_fold<uintptr_t, uintptr_t, OP>(input, &result.value_.pointer);
 		break;
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for addition");
@@ -142,10 +142,10 @@ Value VectorOperations::MaximumStringLength(Vector &left) {
 	if (left.type != TypeId::VARCHAR) {
 		throw InvalidTypeException(left.type, "String length can only be computed for char array columns!");
 	}
-	auto result = Value::POINTER(0);
+	auto result = Value::BIGINT(0);
 	if (left.count == 0) {
 		return result;
 	}
-	templated_unary_fold<const char *, uint64_t, duckdb::MaximumStringLength>(left, &result.value_.pointer);
+	templated_unary_fold<const char *, int64_t, duckdb::MaximumStringLength>(left, &result.value_.bigint);
 	return result;
 }

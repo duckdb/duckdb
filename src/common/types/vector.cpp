@@ -136,7 +136,7 @@ void Vector::SetValue(uint64_t index_, Value val) {
 		((double *)data)[index] = newVal.is_null ? 0 : newVal.value_.double_;
 		break;
 	case TypeId::POINTER:
-		((uint64_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.pointer;
+		((uintptr_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.pointer;
 		break;
 	case TypeId::VARCHAR: {
 		if (newVal.is_null) {

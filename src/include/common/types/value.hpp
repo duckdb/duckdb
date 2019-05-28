@@ -71,7 +71,7 @@ public:
 	//! Create a bigint Value from a specified value
 	static Value BIGINT(int64_t value);
 	//! Create a pointer Value from a specified value
-	static Value POINTER(uint64_t value);
+	static Value POINTER(uintptr_t value);
 	//! Create a date Value from a specified date
 	static Value DATE(int32_t year, int32_t month, int32_t day);
 
@@ -111,7 +111,7 @@ public:
 		int64_t bigint;
 		float float_;
 		double double_;
-		uint64_t pointer;
+		uintptr_t pointer;
 	} value_;
 
 	//! The value of the object, if it is of a variable size type

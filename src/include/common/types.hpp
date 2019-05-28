@@ -59,8 +59,7 @@ enum class SQLTypeId : uint8_t {
 	DECIMAL = 12,
 	CHAR = 13,
 	VARCHAR = 14,
-	VARBINARY = 15,
-	POINTER = 16
+	VARBINARY = 15
 };
 
 struct SQLType {
@@ -109,7 +108,7 @@ template <class T> TypeId GetTypeId() {
 		return TypeId::INTEGER;
 	} else if (std::is_same<T, int64_t>()) {
 		return TypeId::BIGINT;
-	} else if (std::is_same<T, uint64_t>()) {
+	} else if (std::is_same<T, uintptr_t>()) {
 		return TypeId::POINTER;
 	} else if (std::is_same<T, double>()) {
 		return TypeId::DOUBLE;

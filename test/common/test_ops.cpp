@@ -207,8 +207,8 @@ static void require_sg(Vector &v) {
 
 	Vector p(TypeId::POINTER, true, false);
 	p.count = v.count;
-	p.SetValue(0, Value::POINTER((uint64_t)&ptrs[0]));
-	p.SetValue(1, Value::POINTER((uint64_t)&ptrs[1]));
+	p.SetValue(0, Value::POINTER((uintptr_t)&ptrs[0]));
+	p.SetValue(1, Value::POINTER((uintptr_t)&ptrs[1]));
 
 	VectorOperations::Scatter::Set(v, p);
 
