@@ -137,7 +137,7 @@ void SuperLargeHashTable::Resize(count_t size) {
 
 			groups.Verify();
 			assert(groups.size() == entry);
-			StaticVector<uintptr_t> new_addresses;
+			StaticPointerVector new_addresses;
 			StaticVector<bool> new_group_dummy;
 			new_table->FindOrCreateGroups(groups, new_addresses, new_group_dummy);
 
@@ -174,7 +174,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		return;
 	}
 
-	StaticVector<uintptr_t> addresses;
+	StaticPointerVector addresses;
 	StaticVector<bool> new_group_dummy;
 
 	FindOrCreateGroups(groups, addresses, new_group_dummy);
@@ -228,7 +228,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			probe_chunk.sel_vector = groups.sel_vector;
 			probe_chunk.Verify();
 
-			StaticVector<uintptr_t> dummy_addresses;
+			StaticPointerVector dummy_addresses;
 			StaticVector<bool> probe_result;
 			probe_result.count = payload.data[payload_idx].count;
 			// this is the actual meat, find out which groups plus payload
@@ -329,7 +329,7 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 	}
 	// find the groups associated with the addresses
 	// FIXME: this should not use the FindOrCreateGroups, creating them is unnecessary
-	StaticVector<uintptr_t> addresses;
+	StaticPointerVector addresses;
 	StaticVector<bool> new_group_dummy;
 	FindOrCreateGroups(groups, addresses, new_group_dummy);
 	// now fetch the aggregates

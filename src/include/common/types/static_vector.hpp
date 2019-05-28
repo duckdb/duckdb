@@ -32,8 +32,6 @@ public:
 			type = TypeId::BIGINT;
 		} else if (std::is_same<T, uint64_t>::value) {
 			type = TypeId::HASH;
-		} else if (std::is_same<T, uintptr_t>::value) {
-			type = TypeId::POINTER;
 		} else if (std::is_same<T, double>::value) {
 			type = TypeId::DOUBLE;
 		} else {
@@ -41,6 +39,16 @@ public:
 			assert(0);
 		}
 	}
+};
+
+// this exists because the is_same check used above is somewhat unpredictable
+class StaticPointerVector : public Vector {
+public:
+	StaticPointerVector() {
+			owned_data = unique_ptr<data_t[]>(new data_t[sizeof(uintptr_t) * STANDARD_VECTOR_SIZE]);
+			data = owned_data.get();
+			type = TypeId::POINTER;
+		}
 };
 
 } // namespace duckdb
