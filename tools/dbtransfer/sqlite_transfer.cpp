@@ -124,7 +124,7 @@ unique_ptr<QueryResult> QueryDatabase(vector<SQLType> result_types, sqlite3 *sql
 		return nullptr;
 	}
 	// construct the result
-	auto result = make_unique<MaterializedQueryResult>();
+	auto result = make_unique<MaterializedQueryResult>(StatementType::SELECT);
 	// figure out the types of the columns
 	// construct the types of the result
 	int col_count = sqlite3_column_count(stmt);

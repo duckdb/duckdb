@@ -9,6 +9,9 @@ TEST_CASE("Schema creation/deletion", "[catalog]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
+	// cannot drop MAIN schema
+	REQUIRE_FAIL(con.Query("DROP SCHEMA main CASCADE;"));
+
 	// create and drop an empty schema
 	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA test;"));
 	REQUIRE_NO_FAIL(con.Query("DROP SCHEMA test;"));
