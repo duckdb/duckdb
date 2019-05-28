@@ -108,7 +108,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
-            - g++-9 libc6-dev-i386 g++-9-multilib gcc-9-multilib gcc-multilib g++-multilib
+            - g++-9 libc6-dev-i386 g++-9-multilib gcc-9-multilib gcc-multilib g++-multilib lib32readline6-dev lib32readline6
 
       env:
         - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
