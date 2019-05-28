@@ -48,7 +48,8 @@ class CustomBuiltExtCommand(build_ext):
         buildcmd = 'cmake --build . --target duckdb_static'
 
         if os.name == 'nt':
-            configcmd += ' -DCMAKE_GENERATOR_PLATFORM=x64'
+            if platform.architecture()[0] == '64bit':
+                configcmd += ' -DCMAKE_GENERATOR_PLATFORM=x64'
             buildcmd += ' --config Release'
 
         subprocess.Popen(configcmd.split(' ')).wait()
