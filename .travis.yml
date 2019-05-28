@@ -35,6 +35,7 @@ matrix:
       after_success:
         - python tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a
 
+
     - os: linux
       name: Clang 6
       dist: xenial
@@ -47,6 +48,7 @@ matrix:
       env:
         - MATRIX_EVAL="CC=clang-6.0 && CXX=clang++-6.0"
 
+
     - os: linux
       name: GCC 4.9
       addons:
@@ -57,6 +59,7 @@ matrix:
             - g++-4.9 binutils-2.26
       env:
          - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
+
 
     - os: linux
       dist: xenial
@@ -70,6 +73,7 @@ matrix:
             - g++-9
       env:
         - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
+
 
     - os: linux
       dist: xenial
@@ -160,6 +164,27 @@ matrix:
       after_success:
         - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll
 
+
+    - os: windows
+      name: VS 2017 32 Bit
+      filter_secrets: false
+
+      language: c
+
+      before_script:
+        - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
+        - C:/Python37-x64/python.exe -m pip install boto3
+
+      script:
+        - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32
+        - cmake --build . --target duckdb --config Release
+        - cmake --build . --target unittest --config Release
+        - test/Release/unittest.exe
+
+      after_success:
+        - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-i386 src/Release/duckdb.dll
+
+
     - os: linux
       name: R Package
 
@@ -182,6 +207,7 @@ matrix:
 
       after_success:
         - python ../upload-s3.py rstats duckdb_*.tar.gz
+
 
     - os: osx
       osx_image: xcode10.1
@@ -206,6 +232,7 @@ matrix:
 
       after_success:
         - python ../upload-s3.py rstats duckdb_*.tgz
+
 
     - os: windows
       name: R Package
@@ -233,6 +260,7 @@ matrix:
       after_success:
         - C:/Python37-x64/python.exe ../upload-s3.py rstats duckdb_*.zip
 
+
     - os: linux
       name: Python Package
 
@@ -250,6 +278,7 @@ matrix:
       after_success:
         python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
 
+
     - os: osx
       name: Python Package
       language: generic
@@ -265,6 +294,7 @@ matrix:
 
       after_success:
         python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
+
 
     - os: windows
       name: Python Package
