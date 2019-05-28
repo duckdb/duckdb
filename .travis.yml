@@ -104,7 +104,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
-            - g++-8
+            - g++-8 libc6-dev-i386
       env:
         - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
       before_install:
