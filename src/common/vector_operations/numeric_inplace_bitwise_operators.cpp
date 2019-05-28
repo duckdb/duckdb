@@ -28,7 +28,7 @@ template <class OP> static void templated_inplace_bitwise_operation(Vector &resu
 	case TypeId::BIGINT:
 		templated_inplace_loop<int64_t, int64_t, OP>(input, result);
 		break;
-	case TypeId::POINTER:
+	case TypeId::HASH:
 		templated_inplace_loop<uint64_t, uint64_t, OP>(input, result);
 		break;
 	default:

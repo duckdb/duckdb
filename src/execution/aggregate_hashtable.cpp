@@ -137,7 +137,7 @@ void SuperLargeHashTable::Resize(count_t size) {
 
 			groups.Verify();
 			assert(groups.size() == entry);
-			StaticVector<uint64_t> new_addresses;
+			StaticVector<uintptr_t> new_addresses;
 			StaticVector<bool> new_group_dummy;
 			new_table->FindOrCreateGroups(groups, new_addresses, new_group_dummy);
 
@@ -174,7 +174,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		return;
 	}
 
-	StaticVector<uint64_t> addresses;
+	StaticVector<uintptr_t> addresses;
 	StaticVector<bool> new_group_dummy;
 
 	FindOrCreateGroups(groups, addresses, new_group_dummy);
@@ -228,7 +228,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			probe_chunk.sel_vector = groups.sel_vector;
 			probe_chunk.Verify();
 
-			StaticVector<uint64_t> dummy_addresses;
+			StaticVector<uintptr_t> dummy_addresses;
 			StaticVector<bool> probe_result;
 			probe_result.count = payload.data[payload_idx].count;
 			// this is the actual meat, find out which groups plus payload
@@ -329,7 +329,7 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 	}
 	// find the groups associated with the addresses
 	// FIXME: this should not use the FindOrCreateGroups, creating them is unnecessary
-	StaticVector<uint64_t> addresses;
+	StaticVector<uintptr_t> addresses;
 	StaticVector<bool> new_group_dummy;
 	FindOrCreateGroups(groups, addresses, new_group_dummy);
 	// now fetch the aggregates
@@ -360,17 +360,19 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 
 	new_group.sel_vector = groups.data[0].sel_vector;
 
-	groups.Hash(addresses);
+	StaticVector<uint64_t> hashes;
+	groups.Hash(hashes);
 
-	assert(addresses.sel_vector == groups.sel_vector);
-	assert(addresses.type == TypeId::POINTER);
 	// list of addresses for the tuples
 	auto data_pointers = (data_ptr_t *)addresses.data;
 	// now compute the entry in the table based on the hash using a modulo
 	// multiply the position by the tuple size and add the base address
-	VectorOperations::ExecType<uint64_t>(addresses, [&](uint64_t element, index_t i, index_t k) {
+	VectorOperations::ExecType<uint64_t>(hashes, [&](uint64_t element, index_t i, index_t k) {
 		data_pointers[i] = data + ((element % capacity) * tuple_size);
 	});
+
+	addresses.sel_vector = hashes.sel_vector;
+	addresses.count = hashes.count;
 
 	assert(addresses.sel_vector == groups.sel_vector);
 	if (parallel) {

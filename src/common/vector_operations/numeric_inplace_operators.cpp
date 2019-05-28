@@ -33,14 +33,17 @@ void VectorOperations::AddInPlace(Vector &result, Vector &input) {
 	case TypeId::BIGINT:
 		templated_inplace_loop<int64_t, int64_t, duckdb::AddInPlace>(input, result);
 		break;
+	case TypeId::HASH:
+		templated_inplace_loop<uint64_t, uint64_t, duckdb::AddInPlace>(input, result);
+		break;
+	case TypeId::POINTER:
+		templated_inplace_loop<uintptr_t, uintptr_t, duckdb::AddInPlace>(input, result);
+		break;
 	case TypeId::FLOAT:
 		templated_inplace_loop<float, float, duckdb::AddInPlace>(input, result);
 		break;
 	case TypeId::DOUBLE:
 		templated_inplace_loop<double, double, duckdb::AddInPlace>(input, result);
-		break;
-	case TypeId::POINTER:
-		templated_inplace_loop<uint64_t, uint64_t, duckdb::AddInPlace>(input, result);
 		break;
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for addition");

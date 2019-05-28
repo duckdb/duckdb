@@ -18,6 +18,8 @@ int64_t MinimumValue(TypeId type) {
 		return MinimumValue<int32_t>();
 	case TypeId::BIGINT:
 		return MinimumValue<int64_t>();
+	case TypeId::HASH:
+		return MinimumValue<uint64_t>();
 	case TypeId::POINTER:
 		return MinimumValue<uintptr_t>();
 	default:
@@ -35,6 +37,8 @@ int64_t MaximumValue(TypeId type) {
 		return MaximumValue<int32_t>();
 	case TypeId::BIGINT:
 		return MaximumValue<int64_t>();
+	case TypeId::HASH:
+		return MaximumValue<uint64_t>();
 	case TypeId::POINTER:
 		return MaximumValue<uintptr_t>();
 	default:
