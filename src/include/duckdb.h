@@ -52,6 +52,18 @@ typedef struct {
 } duckdb_date;
 
 typedef struct {
+	int32_t hour;
+	int32_t min;
+	int32_t sec;
+	int32_t msec;
+} duckdb_time;
+
+typedef struct {
+	duckdb_date date;
+	duckdb_time time;
+} duckdb_timestamp;
+
+typedef struct {
 	void *data;
 	bool *nullmask;
 	duckdb_type type;

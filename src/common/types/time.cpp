@@ -70,10 +70,14 @@ string Time::Format(int32_t hour, int32_t minute, int32_t second) {
 	return ToString(Time::FromTime(hour, minute, second));
 }
 
-dtime_t Time::FromTime(int32_t hour, int32_t minute, int32_t second) {
-	return time_to_number(hour, minute, second, 0);
+dtime_t Time::FromTime(int32_t hour, int32_t minute, int32_t second, int32_t milisecond) {
+	return time_to_number(hour, minute, second, milisecond);
 }
 
 bool Time::IsValidTime(int32_t hour, int32_t minute, int32_t second) {
 	return TIME(hour, minute, second, 0);
+}
+
+void Time::Convert(dtime_t time, int32_t &out_hour, int32_t &out_min, int32_t &out_sec, int32_t &out_msec) {
+	number_to_time(time, out_hour, out_min, out_sec, out_msec);
 }

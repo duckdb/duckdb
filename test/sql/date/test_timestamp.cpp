@@ -18,8 +18,8 @@ TEST_CASE("Test TIMESTAMP type", "[timestamp]") {
 	// check if we can select timestamps
 	result = con.Query("SELECT timestamp '2017-07-23 13:10:11';");
 	REQUIRE(result->sql_types[0] == SQLType(SQLTypeId::TIMESTAMP));
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(Timestamp::FromString("2017-07-23 13:10:11")), Value()}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(Timestamp::FromString("2017-07-23 13:10:11"))}));
 
-	result = con.Query("SELECT t1 FROM test_timestamp;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value("2008-01-01 00:00:01"), Value()}));
+	result = con.Query("SELECT t FROM timestamp order by t;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value::BIGINT(Timestamp::FromString("2008-01-01 00:00:01"))}));
 }

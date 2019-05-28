@@ -24,7 +24,8 @@ timestamp_t Timestamp::FromString(string str) {
 	assert(sizeof(date_t) == 4);
 	assert(sizeof(dtime_t) == 4);
 
-	if (str.size() != STD_TIMESTAMP_LENGTH) {
+	// Character length	19 positions minimum to 23 maximum
+	if (str.size() < STD_TIMESTAMP_LENGTH) {
 		throw ConversionException("timestamp field value out of range: \"%s\", "
 		                          "expected format is (YYYY-MM-DD hh:mm:ss)",
 		                          str.c_str());
@@ -50,4 +51,13 @@ date_t Timestamp::GetDate(timestamp_t timestamp) {
 
 dtime_t Timestamp::GetTime(timestamp_t timestamp) {
 	return (dtime_t)timestamp;
+}
+
+timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {
+	return ((int64_t)date << 32 | (int32_t)time);
+}
+
+void Timestamp::Convert(timestamp_t date, date_t &out_date, dtime_t &out_time) {
+	out_date = GetDate(date);
+	out_time = GetTime(date);
 }
