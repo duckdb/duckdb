@@ -17,9 +17,9 @@ env:
 matrix:
   include:
 
-    - os: osx
-      name: Xcode 6.4
-      osx_image: xcode9.1
+    # - os: osx
+    #   name: Xcode 6.4
+    #   osx_image: xcode9.1
 
 
     - os: osx
