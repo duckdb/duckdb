@@ -66,6 +66,9 @@ void Vector::Reference(Value &value) {
 	case TypeId::DOUBLE:
 		data = (data_ptr_t)&value.value_.double_;
 		break;
+	case TypeId::HASH:
+		data = (data_ptr_t)&value.value_.hash;
+		break;
 	case TypeId::POINTER:
 		data = (data_ptr_t)&value.value_.pointer;
 		break;
@@ -182,8 +185,10 @@ Value Vector::GetValue(uint64_t index) const {
 		return Value::INTEGER(((int32_t *)data)[entry]);
 	case TypeId::BIGINT:
 		return Value::BIGINT(((int64_t *)data)[entry]);
+	case TypeId::HASH:
+		return Value::HASH(((uint64_t *)data)[entry]);
 	case TypeId::POINTER:
-		return Value::POINTER(((uint64_t *)data)[entry]);
+		return Value::POINTER(((uintptr_t *)data)[entry]);
 	case TypeId::FLOAT:
 		return Value(((float *)data)[entry]);
 	case TypeId::DOUBLE:

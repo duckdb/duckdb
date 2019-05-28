@@ -70,6 +70,8 @@ public:
 	static Value INTEGER(int32_t value);
 	//! Create a bigint Value from a specified value
 	static Value BIGINT(int64_t value);
+	//! Create a hash Value from a specified value
+	static Value HASH(uint64_t value);
 	//! Create a pointer Value from a specified value
 	static Value POINTER(uintptr_t value);
 	//! Create a date Value from a specified date
@@ -112,6 +114,8 @@ public:
 		float float_;
 		double double_;
 		uintptr_t pointer;
+		uint64_t hash;
+
 	} value_;
 
 	//! The value of the object, if it is of a variable size type

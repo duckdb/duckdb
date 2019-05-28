@@ -102,7 +102,7 @@ void VectorOperations::ModuloInPlace(Vector &result, Vector &input) {
 	case TypeId::BIGINT:
 		templated_inplace_divmod_loop<int64_t, int64_t, duckdb::ModuloInPlace>(input, result);
 		break;
-	case TypeId::POINTER:
+	case TypeId::HASH:
 		templated_inplace_divmod_loop<uint64_t, uint64_t, duckdb::ModuloInPlace>(input, result);
 		break;
 	default:

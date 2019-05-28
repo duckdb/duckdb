@@ -115,6 +115,12 @@ Value Value::BIGINT(int64_t value) {
 	result.is_null = false;
 	return result;
 }
+Value Value::HASH(uint64_t value) {
+	Value result(TypeId::HASH);
+	result.value_.hash = value;
+	result.is_null = false;
+	return result;
+}
 Value Value::POINTER(uintptr_t value) {
 	Value result(TypeId::POINTER);
 	result.value_.pointer = value;
@@ -171,6 +177,8 @@ Value Value::Numeric(TypeId type, int64_t value) {
 		return Value((float)value);
 	case TypeId::DOUBLE:
 		return Value((double)value);
+	case TypeId::HASH:
+		return Value::HASH(value);
 	case TypeId::POINTER:
 		return Value::POINTER(value);
 	default:
