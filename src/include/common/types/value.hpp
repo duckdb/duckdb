@@ -75,6 +75,10 @@ public:
 	//! Create a date Value from a specified date
 	static Value DATE(int32_t year, int32_t month, int32_t day);
 
+	template <class T> static Value CreateValue(T value) {
+		throw NotImplementedException("Unimplemented template type for value creation");
+	}
+
 	int64_t GetNumericValue();
 
 	//! Return a copy of this value
@@ -162,4 +166,12 @@ private:
 	//! Templated helper function for boolean operations
 	template <class OP> static bool _templated_boolean_operation(const Value &left, const Value &right);
 };
+
+template <> Value Value::CreateValue(int8_t value);
+template <> Value Value::CreateValue(int16_t value);
+template <> Value Value::CreateValue(int32_t value);
+template <> Value Value::CreateValue(int64_t value);
+template <> Value Value::CreateValue(const char *value);
+template <> Value Value::CreateValue(string value);
+
 } // namespace duckdb

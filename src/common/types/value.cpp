@@ -126,6 +126,30 @@ Value Value::DATE(int32_t year, int32_t month, int32_t day) {
 	return Value::INTEGER(Date::FromDate(year, month, day));
 }
 
+template <> Value Value::CreateValue(int8_t value) {
+	return Value::TINYINT(value);
+}
+
+template <> Value Value::CreateValue(int16_t value) {
+	return Value::SMALLINT(value);
+}
+
+template <> Value Value::CreateValue(int32_t value) {
+	return Value::INTEGER(value);
+}
+
+template <> Value Value::CreateValue(int64_t value) {
+	return Value::BIGINT(value);
+}
+
+template <> Value Value::CreateValue(const char *value) {
+	return Value(string(value));
+}
+
+template <> Value Value::CreateValue(string value) {
+	return Value(value);
+}
+
 Value Value::Numeric(TypeId type, int64_t value) {
 	assert(!TypeIsIntegral(type) || (value >= duckdb::MinimumValue(type) && value <= duckdb::MaximumValue(type)));
 	Value val(type);

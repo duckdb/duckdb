@@ -59,3 +59,15 @@ unique_ptr<MaterializedQueryResult> Connection::Query(string query) {
 	assert(result->type == QueryResultType::MATERIALIZED_RESULT);
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 }
+
+unique_ptr<PreparedStatement> Connection::Prepare(string query) {
+	return context->Prepare(query);
+}
+
+unique_ptr<QueryResult> Connection::QueryParamsRecursive(string query, vector<Value> &values) {
+	auto statement = Prepare(query);
+	if (!statement->success) {
+		return make_unique<MaterializedQueryResult>(statement->error);
+	}
+	return statement->Execute(values);
+}

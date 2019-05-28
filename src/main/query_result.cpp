@@ -5,11 +5,13 @@
 using namespace duckdb;
 using namespace std;
 
-QueryResult::QueryResult(QueryResultType type) : type(type), success(true) {
+QueryResult::QueryResult(QueryResultType type, StatementType statement_type)
+    : type(type), statement_type(statement_type), success(true) {
 }
 
-QueryResult::QueryResult(QueryResultType type, vector<SQLType> sql_types, vector<TypeId> types, vector<string> names)
-    : type(type), sql_types(sql_types), types(types), names(names), success(true) {
+QueryResult::QueryResult(QueryResultType type, StatementType statement_type, vector<SQLType> sql_types,
+                         vector<TypeId> types, vector<string> names)
+    : type(type), statement_type(statement_type), sql_types(sql_types), types(types), names(names), success(true) {
 	assert(types.size() == names.size());
 }
 
