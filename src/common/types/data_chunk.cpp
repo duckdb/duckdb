@@ -13,27 +13,34 @@ using namespace std;
 DataChunk::DataChunk() : column_count(0), data(nullptr), sel_vector(nullptr) {
 }
 
-void DataChunk::Initialize(vector<TypeId> &types, bool zero_data) {
+void DataChunk::InitializeEmpty(vector<TypeId> &types) {
+	assert(types.size() > 0);
 	column_count = types.size();
+	data = unique_ptr<Vector[]>(new Vector[types.size()]);
+	for (index_t i = 0; i < types.size(); i++) {
+		data[i].type = types[i];
+		data[i].data = nullptr;
+		data[i].count = 0;
+		data[i].sel_vector = nullptr;
+	}
+}
+
+void DataChunk::Initialize(vector<TypeId> &types, bool zero_data) {
+	assert(types.size() > 0);
+	InitializeEmpty(types);
 	index_t size = 0;
 	for (auto &type : types) {
 		size += GetTypeIdSize(type) * STANDARD_VECTOR_SIZE;
 	}
-	if (size > 0) {
-		owned_data = unique_ptr<data_t[]>(new data_t[size]);
-		if (zero_data) {
-			memset(owned_data.get(), 0, size);
-		}
+	assert(size > 0);
+	owned_data = unique_ptr<data_t[]>(new data_t[size]);
+	if (zero_data) {
+		memset(owned_data.get(), 0, size);
 	}
 
 	auto ptr = owned_data.get();
-	data = unique_ptr<Vector[]>(new Vector[types.size()]);
 	for (index_t i = 0; i < types.size(); i++) {
-		data[i].type = types[i];
 		data[i].data = ptr;
-		data[i].count = 0;
-		data[i].sel_vector = nullptr;
-
 		ptr += GetTypeIdSize(types[i]) * STANDARD_VECTOR_SIZE;
 	}
 }

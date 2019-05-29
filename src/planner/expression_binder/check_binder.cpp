@@ -6,8 +6,8 @@
 using namespace duckdb;
 using namespace std;
 
-CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table, vector<ColumnDefinition> &columns)
-    : ExpressionBinder(binder, context), table(table), columns(columns) {
+CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table, vector<ColumnDefinition> &columns, unordered_set<column_t> &bound_columns)
+    : ExpressionBinder(binder, context), table(table), columns(columns), bound_columns(bound_columns) {
 	target_type = SQLType(SQLTypeId::INTEGER);
 }
 
@@ -32,8 +32,8 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 		                      colref.table_name.c_str(), table.c_str());
 	}
 	for (index_t i = 0; i < columns.size(); i++) {
-
 		if (colref.column_name == columns[i].name) {
+			bound_columns.insert(i);
 			return BindResult(make_unique<BoundReferenceExpression>(GetInternalType(columns[i].type), i),
 			                  columns[i].type);
 		}

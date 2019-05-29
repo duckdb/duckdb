@@ -31,16 +31,17 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 		auto &cond = info.base->constraints[i];
 		switch (cond->type) {
 		case ConstraintType::CHECK: {
+			auto bound_constraint = make_unique<BoundCheckConstraint>();
 			// check constraint: bind the expression
-			CheckBinder check_binder(binder, binder.context, info.base->table, info.base->columns);
+			CheckBinder check_binder(binder, binder.context, info.base->table, info.base->columns, bound_constraint->bound_columns);
 			auto &check = (CheckConstraint &)*cond;
-			// create a copy of the unbound constraint because the binding destroys the constraint
-			auto unbound_constraint = check.expression->Copy();
+			// create a copy of the unbound expression because the binding destroys the constraint
+			auto unbound_expression = check.expression->Copy();
 			// now bind the constraint and create a new BoundCheckConstraint
-			auto condition = check_binder.Bind(check.expression);
-			info.bound_constraints.push_back(make_unique<BoundCheckConstraint>(move(condition)));
+			bound_constraint->expression = check_binder.Bind(check.expression);
+			info.bound_constraints.push_back(move(bound_constraint));
 			// move the unbound constraint back into the original check expression
-			check.expression = move(unbound_constraint);
+			check.expression = move(unbound_expression);
 			break;
 		}
 		case ConstraintType::NOT_NULL: {

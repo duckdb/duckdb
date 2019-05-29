@@ -9,6 +9,9 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, ve
          vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> unbound_expressions)
     : Index(IndexType::ART, move(expressions), move(unbound_expressions)), table(table), column_ids(column_ids),
       types(types) {
+	if (column_ids.size() > 1) {
+		throw NotImplementedException("Multiple columns in ART index not supported");
+	}
 	tree = nullptr;
 	expression_result.Initialize(expression_types);
 	int n = 1;
@@ -492,7 +495,7 @@ void ART::Update(ClientContext &context, vector<column_t> &update_columns, DataC
 			continue;
 		}
 		bool found_column = false;
-		for (uint64_t j = 0; i < update_columns.size(); j++) {
+		for (uint64_t j = 0; j < update_columns.size(); j++) {
 			if (column_ids[i] == update_columns[j]) {
 				temp_chunk.data[column_ids[i]].Reference(update_data.data[update_columns[j]]);
 				found_column = true;
