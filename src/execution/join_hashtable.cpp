@@ -55,7 +55,7 @@ JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> b
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, data_ptr_t key_locations[]) {
-	assert(hashes.type == TypeId::POINTER);
+	assert(hashes.type == TypeId::HASH);
 	hashes.Flatten();
 
 	// use modulo to get position in array (FIXME: can be done more efficiently)

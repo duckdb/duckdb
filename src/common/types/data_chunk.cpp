@@ -250,7 +250,7 @@ void DataChunk::MoveStringsToHeap(StringHeap &heap) {
 }
 
 void DataChunk::Hash(Vector &result) {
-	assert(result.type == TypeId::POINTER);
+	assert(result.type == TypeId::HASH);
 	VectorOperations::Hash(data[0], result);
 	for (index_t i = 1; i < column_count; i++) {
 		VectorOperations::CombineHash(result, data[i]);

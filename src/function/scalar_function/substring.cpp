@@ -39,8 +39,8 @@ void substring_function(ExpressionExecutor &exec, Vector inputs[], count_t input
 	    input, offset, length, result,
 	    [&](index_t input_index, index_t offset_index, index_t length_index, index_t result_index) {
 		    auto input_string = input_data[input_index];
-		    index_t offset = offset_data[offset_index] - 1; // minus one because SQL starts counting at 1
-		    count_t length = length_data[length_index];
+		    auto offset = offset_data[offset_index] - 1; // minus one because SQL starts counting at 1
+		    auto length = length_data[length_index];
 
 		    if (input.nullmask[input_index]) {
 			    return;
@@ -64,10 +64,10 @@ void substring_function(ExpressionExecutor &exec, Vector inputs[], count_t input
 		    while (input_string[input_byte_offset]) {
 			    char b = input_string[input_byte_offset++];
 			    input_char_offset += (b & 0xC0) != 0x80;
-			    if (input_char_offset > offset + length) {
+			    if (input_char_offset > (index_t)(offset + length)) {
 				    break;
 			    }
-			    if (input_char_offset > offset) {
+			    if (input_char_offset > (index_t)offset) {
 				    output[output_byte_offset++] = b;
 			    }
 		    }

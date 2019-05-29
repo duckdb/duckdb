@@ -202,7 +202,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 		auto id = ids[i] - chunk->start;
 		// assert that all ids in the vector belong to the same storage
 		// chunk
-		assert(id >= 0 && id < chunk->count);
+		assert(id < chunk->count);
 		// check for conflicts
 		auto version = chunk->version_pointers[id];
 		if (version) {
@@ -256,7 +256,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
 		auto id = ids[i] - chunk->start;
 		// assert that all ids in the vector belong to the same chunk
-		assert(id >= 0 && id < chunk->count);
+		assert(id < chunk->count);
 		// check for conflicts
 		auto version = chunk->version_pointers[id];
 		if (version) {

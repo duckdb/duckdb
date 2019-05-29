@@ -46,7 +46,11 @@ public:
 	}
 
 	//! Execute the prepared statement with the given set of values
+<<<<<<< HEAD
 	unique_ptr<QueryResult> Execute(vector<Value> &values);
+=======
+	unique_ptr<QueryResult> Execute(vector<Value> &values, bool allow_stream_result = true);
+>>>>>>> fbee2a245a5c4e9d2eea956113016a5ec7cd7a08
 
 private:
 	unique_ptr<QueryResult> ExecuteRecursive(vector<Value> &values) {

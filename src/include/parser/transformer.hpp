@@ -156,6 +156,7 @@ private:
 
 	//! Holds window expressions defined by name. We need those when transforming the expressions referring to them.
 	unordered_map<string, postgres::WindowDef *> window_clauses;
+	index_t prepared_statement_parameter_index = 0;
 };
 
 } // namespace duckdb

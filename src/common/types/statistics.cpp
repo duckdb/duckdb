@@ -79,7 +79,7 @@ bool ExpressionStatistics::FitsInType(TypeId type) {
 	}
 	auto min_value = MinimumValue(type);
 	auto max_value = MaximumValue(type);
-	return min_value <= min.GetNumericValue() && max_value >= max.GetNumericValue();
+	return min_value <= min.GetNumericValue() && max_value >= (uint64_t)max.GetNumericValue();
 }
 
 TypeId ExpressionStatistics::MinimalType() {
