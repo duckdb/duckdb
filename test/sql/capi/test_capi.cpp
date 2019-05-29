@@ -353,6 +353,8 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int32(&res, 0, 0) == 1000000);
 	duckdb_destroy_result(&res);
+	duckdb_destroy_prepare(&stmt);
+
 
 	// not-so-happy path
 	status = duckdb_prepare(tester.connection, "SELECT XXXXX", &stmt);
