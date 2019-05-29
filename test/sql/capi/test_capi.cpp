@@ -262,7 +262,6 @@ TEST_CASE("Test errors in C API", "[capi]") {
 	REQUIRE_FAIL(tester.Query("SELECT * FROM TABLE"));
 }
 
-
 TEST_CASE("Test prepared statements in C API", "[capi]") {
 	CAPITester tester;
 	unique_ptr<CAPIResult> result;
@@ -312,12 +311,10 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 43);
 
-
 	duckdb_bind_varchar(stmt, 1, "44");
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 44);
-
 
 	duckdb_destroy_result(&res);
 	duckdb_destroy_prepare(&stmt);
