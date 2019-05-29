@@ -18,14 +18,16 @@ int64_t MinimumValue(TypeId type) {
 		return MinimumValue<int32_t>();
 	case TypeId::BIGINT:
 		return MinimumValue<int64_t>();
-	case TypeId::POINTER:
+	case TypeId::HASH:
 		return MinimumValue<uint64_t>();
+	case TypeId::POINTER:
+		return MinimumValue<uintptr_t>();
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires integral type");
 	}
 }
 
-int64_t MaximumValue(TypeId type) {
+uint64_t MaximumValue(TypeId type) {
 	switch (type) {
 	case TypeId::TINYINT:
 		return MaximumValue<int8_t>();
@@ -35,21 +37,23 @@ int64_t MaximumValue(TypeId type) {
 		return MaximumValue<int32_t>();
 	case TypeId::BIGINT:
 		return MaximumValue<int64_t>();
-	case TypeId::POINTER:
+	case TypeId::HASH:
 		return MaximumValue<uint64_t>();
+	case TypeId::POINTER:
+		return MaximumValue<uintptr_t>();
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires integral type");
 	}
 }
 
 TypeId MinimalType(int64_t value) {
-	if (value >= MinimumValue(TypeId::TINYINT) && value <= MaximumValue(TypeId::TINYINT)) {
+	if (value >= MinimumValue(TypeId::TINYINT) && (uint64_t) value <= MaximumValue(TypeId::TINYINT)) {
 		return TypeId::TINYINT;
 	}
-	if (value >= MinimumValue(TypeId::SMALLINT) && value <= MaximumValue(TypeId::SMALLINT)) {
+	if (value >= MinimumValue(TypeId::SMALLINT) && (uint64_t) value <= MaximumValue(TypeId::SMALLINT)) {
 		return TypeId::SMALLINT;
 	}
-	if (value >= MinimumValue(TypeId::INTEGER) && value <= MaximumValue(TypeId::INTEGER)) {
+	if (value >= MinimumValue(TypeId::INTEGER) && (uint64_t) value <= MaximumValue(TypeId::INTEGER)) {
 		return TypeId::INTEGER;
 	}
 	return TypeId::BIGINT;

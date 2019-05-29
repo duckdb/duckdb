@@ -77,7 +77,7 @@ Value Value::MaximumValue(TypeId type) {
 		result.value_.double_ = std::numeric_limits<double>::max();
 		break;
 	case TypeId::POINTER:
-		result.value_.pointer = std::numeric_limits<uint64_t>::max();
+		result.value_.pointer = std::numeric_limits<uintptr_t>::max();
 		break;
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires numeric type");
@@ -115,12 +115,19 @@ Value Value::BIGINT(int64_t value) {
 	result.is_null = false;
 	return result;
 }
-Value Value::POINTER(uint64_t value) {
+Value Value::HASH(uint64_t value) {
+	Value result(TypeId::HASH);
+	result.value_.hash = value;
+	result.is_null = false;
+	return result;
+}
+Value Value::POINTER(uintptr_t value) {
 	Value result(TypeId::POINTER);
 	result.value_.pointer = value;
 	result.is_null = false;
 	return result;
 }
+
 
 Value Value::DATE(int32_t year, int32_t month, int32_t day) {
 	return Value::INTEGER(Date::FromDate(year, month, day));
@@ -151,7 +158,7 @@ template <> Value Value::CreateValue(string value) {
 }
 
 Value Value::Numeric(TypeId type, int64_t value) {
-	assert(!TypeIsIntegral(type) || (value >= duckdb::MinimumValue(type) && value <= duckdb::MaximumValue(type)));
+	assert(!TypeIsIntegral(type) || (value >= duckdb::MinimumValue(type) && (uint64_t)value <= duckdb::MaximumValue(type)));
 	Value val(type);
 	val.is_null = false;
 	switch (type) {
@@ -170,6 +177,8 @@ Value Value::Numeric(TypeId type, int64_t value) {
 		return Value((float)value);
 	case TypeId::DOUBLE:
 		return Value((double)value);
+	case TypeId::HASH:
+		return Value::HASH(value);
 	case TypeId::POINTER:
 		return Value::POINTER(value);
 	default:
@@ -218,8 +227,6 @@ string Value::ToString(SQLType sql_type) const {
 		return to_string(value_.float_);
 	case SQLTypeId::DOUBLE:
 		return to_string(value_.double_);
-	case SQLTypeId::POINTER:
-		return to_string(value_.pointer);
 	case SQLTypeId::DATE:
 		return Date::ToString(value_.integer);
 	case SQLTypeId::TIMESTAMP:
@@ -325,6 +332,9 @@ Value Value::CastAs(SQLType source_type, SQLType target_type) {
 }
 
 Value Value::CastAs(TypeId target_type) const {
+	if (target_type == type) {
+		return Copy(); // in case of types that have no SQLType equivalent such as POINTER
+	}
 	return Copy().CastAs(SQLTypeFromInternalType(type), SQLTypeFromInternalType(target_type));
 }
 
@@ -355,7 +365,7 @@ void Value::Serialize(Serializer &serializer) {
 			serializer.Write<double>(value_.double_);
 			break;
 		case TypeId::POINTER:
-			serializer.Write<uint64_t>(value_.pointer);
+			serializer.Write<uintptr_t>(value_.pointer);
 			break;
 		case TypeId::VARCHAR:
 			serializer.WriteString(str_value);

@@ -15,8 +15,8 @@ from distutils.command.build_ext import build_ext
 
 # some paranoia to start with
 
-if platform.architecture()[0] != '64bit':
-    raise Exception('DuckDB only supports 64 bit at this point')
+# if platform.architecture()[0] != '64bit':
+#     raise Exception('DuckDB only supports 64 bit at this point')
 
 # make sure we are in the right directory
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
@@ -48,7 +48,8 @@ class CustomBuiltExtCommand(build_ext):
         buildcmd = 'cmake --build . --target duckdb_static'
 
         if os.name == 'nt':
-            configcmd += ' -DCMAKE_GENERATOR_PLATFORM=x64'
+            if platform.architecture()[0] == '64bit':
+                configcmd += ' -DCMAKE_GENERATOR_PLATFORM=x64'
             buildcmd += ' --config Release'
 
         subprocess.Popen(configcmd.split(' ')).wait()

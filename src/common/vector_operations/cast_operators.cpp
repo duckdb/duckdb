@@ -59,10 +59,6 @@ static void result_cast_switch(Vector &source, Vector &result, SQLType source_ty
 		assert(result.type == TypeId::DOUBLE);
 		templated_cast_loop<SRC, double, OP, IGNORE_NULL>(source, result);
 		break;
-	case SQLTypeId::POINTER:
-		assert(result.type == TypeId::POINTER);
-		templated_cast_loop<SRC, uint64_t, OP, IGNORE_NULL>(source, result);
-		break;
 	case SQLTypeId::DATE:
 		assert(result.type == TypeId::INTEGER);
 		templated_cast_loop<SRC, int32_t, duckdb::CastToDate, true>(source, result);
@@ -129,10 +125,6 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 	case SQLTypeId::DOUBLE:
 		assert(source.type == TypeId::DOUBLE);
 		result_cast_switch<double, duckdb::Cast, true>(source, result, source_type, target_type);
-		break;
-	case SQLTypeId::POINTER:
-		assert(source.type == TypeId::POINTER);
-		result_cast_switch<uint64_t, duckdb::Cast, true>(source, result, source_type, target_type);
 		break;
 	case SQLTypeId::DATE:
 		assert(source.type == TypeId::INTEGER);

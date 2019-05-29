@@ -11,7 +11,7 @@ using namespace duckdb;
 using namespace std;
 
 void VectorOperations::Hash(Vector &input, Vector &result) {
-	if (result.type != TypeId::POINTER) {
+	if (result.type != TypeId::HASH) {
 		throw InvalidTypeException(result.type, "result of hash must be a uint64_t");
 	}
 	switch (input.type) {
@@ -28,9 +28,6 @@ void VectorOperations::Hash(Vector &input, Vector &result) {
 	case TypeId::BIGINT:
 		templated_unary_loop_process_null<int64_t, uint64_t, duckdb::HashOp>(input, result);
 		break;
-	case TypeId::POINTER:
-		templated_unary_loop_process_null<uint64_t, uint64_t, duckdb::HashOp>(input, result);
-		break;
 	case TypeId::FLOAT:
 		templated_unary_loop_process_null<float, uint64_t, duckdb::HashOp>(input, result);
 		break;
@@ -46,11 +43,11 @@ void VectorOperations::Hash(Vector &input, Vector &result) {
 }
 
 void VectorOperations::CombineHash(Vector &hashes, Vector &input) {
-	if (hashes.type != TypeId::POINTER) {
+	if (hashes.type != TypeId::HASH) {
 		throw NotImplementedException("Hashes must be 64-bit unsigned integer hash vector");
 	}
 	// first hash the input to an intermediate vector
-	Vector intermediate(TypeId::POINTER, true, false);
+	Vector intermediate(TypeId::HASH, true, false);
 	VectorOperations::Hash(input, intermediate);
 	// then XOR it together with the input
 	VectorOperations::BitwiseXORInPlace(hashes, intermediate);
