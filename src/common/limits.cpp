@@ -27,7 +27,7 @@ int64_t MinimumValue(TypeId type) {
 	}
 }
 
-int64_t MaximumValue(TypeId type) {
+uint64_t MaximumValue(TypeId type) {
 	switch (type) {
 	case TypeId::TINYINT:
 		return MaximumValue<int8_t>();
@@ -47,13 +47,13 @@ int64_t MaximumValue(TypeId type) {
 }
 
 TypeId MinimalType(int64_t value) {
-	if (value >= MinimumValue(TypeId::TINYINT) && value <= MaximumValue(TypeId::TINYINT)) {
+	if (value >= MinimumValue(TypeId::TINYINT) && (uint64_t) value <= MaximumValue(TypeId::TINYINT)) {
 		return TypeId::TINYINT;
 	}
-	if (value >= MinimumValue(TypeId::SMALLINT) && value <= MaximumValue(TypeId::SMALLINT)) {
+	if (value >= MinimumValue(TypeId::SMALLINT) && (uint64_t) value <= MaximumValue(TypeId::SMALLINT)) {
 		return TypeId::SMALLINT;
 	}
-	if (value >= MinimumValue(TypeId::INTEGER) && value <= MaximumValue(TypeId::INTEGER)) {
+	if (value >= MinimumValue(TypeId::INTEGER) && (uint64_t) value <= MaximumValue(TypeId::INTEGER)) {
 		return TypeId::INTEGER;
 	}
 	return TypeId::BIGINT;

@@ -158,7 +158,7 @@ template <> Value Value::CreateValue(string value) {
 }
 
 Value Value::Numeric(TypeId type, int64_t value) {
-	assert(!TypeIsIntegral(type) || (value >= duckdb::MinimumValue(type) && value <= duckdb::MaximumValue(type)));
+	assert(!TypeIsIntegral(type) || (value >= duckdb::MinimumValue(type) && (uint64_t)value <= duckdb::MaximumValue(type)));
 	Value val(type);
 	val.is_null = false;
 	switch (type) {
