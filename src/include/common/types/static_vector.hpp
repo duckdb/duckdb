@@ -45,10 +45,10 @@ public:
 class StaticPointerVector : public Vector {
 public:
 	StaticPointerVector() {
-			owned_data = unique_ptr<data_t[]>(new data_t[sizeof(uintptr_t) * STANDARD_VECTOR_SIZE]);
-			data = owned_data.get();
-			type = TypeId::POINTER;
-		}
+		owned_data = unique_ptr<data_t[]>(new data_t[sizeof(uintptr_t) * STANDARD_VECTOR_SIZE]);
+		data = owned_data.get();
+		type = TypeId::POINTER;
+	}
 };
 
 } // namespace duckdb

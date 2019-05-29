@@ -49,6 +49,7 @@ public:
 	bool query_verification_enabled = false;
 	//! Enable the running of optimizers
 	bool enable_optimizer = true;
+
 public:
 	Transaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
@@ -76,9 +77,10 @@ public:
 	//! Prepare a query
 	unique_ptr<PreparedStatement> Prepare(string query);
 	//! Execute a prepared statement with the given name and set of parameters
-	unique_ptr<QueryResult> Execute(string name, vector<Value> &values);
+	unique_ptr<QueryResult> Execute(string name, vector<Value> &values, bool allow_stream_result = true);
 	//! Removes a prepared statement from the set of prepared statements in the client context
 	void RemovePreparedStatement(PreparedStatement *statement);
+
 private:
 	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
 	//! true.
@@ -91,15 +93,16 @@ private:
 	unique_ptr<DataChunk> FetchInternal();
 	//! Internally execute a set of SQL statement. Caller must hold the context_lock.
 	unique_ptr<QueryResult> ExecuteStatementsInternal(string query, vector<unique_ptr<SQLStatement>> &statements,
-	                                                 bool allow_stream_result);
+	                                                  bool allow_stream_result);
 	//! Internally execute a SQL statement. Caller must hold the context_lock.
 	unique_ptr<QueryResult> ExecuteStatementInternal(string query, unique_ptr<SQLStatement> statement,
 	                                                 bool allow_stream_result);
+
 private:
 	index_t prepare_count = 0;
 	//! The currently opened StreamQueryResult (if any)
 	StreamQueryResult *open_result = nullptr;
 	//! Prepared statement objects that were created using the ClientContext::Prepare method
-	unordered_set<PreparedStatement*> prepared_statement_objects;
+	unordered_set<PreparedStatement *> prepared_statement_objects;
 };
 } // namespace duckdb

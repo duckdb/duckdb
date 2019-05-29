@@ -128,7 +128,6 @@ Value Value::POINTER(uintptr_t value) {
 	return result;
 }
 
-
 Value Value::DATE(int32_t year, int32_t month, int32_t day) {
 	return Value::INTEGER(Date::FromDate(year, month, day));
 }
@@ -158,7 +157,8 @@ template <> Value Value::CreateValue(string value) {
 }
 
 Value Value::Numeric(TypeId type, int64_t value) {
-	assert(!TypeIsIntegral(type) || (value >= duckdb::MinimumValue(type) && (uint64_t)value <= duckdb::MaximumValue(type)));
+	assert(!TypeIsIntegral(type) ||
+	       (value >= duckdb::MinimumValue(type) && (uint64_t)value <= duckdb::MaximumValue(type)));
 	Value val(type);
 	val.is_null = false;
 	switch (type) {
