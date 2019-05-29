@@ -43,40 +43,24 @@ public:
 	//! Load from a stored checkpoint
 	void LoadFromStorage();
 
+	//! The block manager to write the checkpoint to
+	BlockManager &block_manager;
+	//! The database this storagemanager belongs to
+	DuckDB &database;
+	//! The metadata writer is responsible for writing schema information
+	unique_ptr<MetaBlockWriter> metadata_writer;
+	//! The table data writer is responsible for writing the DataPointers used by the table chunks
+	unique_ptr<MetaBlockWriter> tabledata_writer;
 private:
 	void WriteSchema(Transaction &transaction, SchemaCatalogEntry &schema);
 	void WriteTable(Transaction &transaction, TableCatalogEntry &table);
 	void WriteView(Transaction &transaction, ViewCatalogEntry &table);
 	void WriteSequence(Transaction &transaction, SequenceCatalogEntry &table);
-	void WriteTableData(Transaction &transaction, TableCatalogEntry &table);
-
-	void WriteColumnData(DataChunk &chunk, uint64_t column_index);
-	void WriteString(uint64_t index, const char *val);
-	void WriteDataPointers();
-
-	void FlushBlock(uint64_t column_index);
 
 	void ReadSchema(ClientContext &context, MetaBlockReader &reader);
 	void ReadTable(ClientContext &context, MetaBlockReader &reader);
 	void ReadView(ClientContext &context, MetaBlockReader &reader);
 	void ReadSequence(ClientContext &context, MetaBlockReader &reader);
-	void ReadTableData(ClientContext &context, TableCatalogEntry &table, MetaBlockReader &reader);
-
-	bool ReadBlock(uint64_t col);
-	void ReadString(Vector &vector, uint64_t col);
-	void ReadDataPointers(uint64_t column_count, MetaBlockReader &reader);
-
-private:
-	//! The block manager to write the checkpoint to
-	BlockManager &block_manager;
-	//! The database this storagemanager belongs to
-	DuckDB &database;
-
-	//! The metadata writer is responsible for writing schema information
-	unique_ptr<MetaBlockWriter> metadata_writer;
-	//! The table data writer is responsible for writing the DataPointers used by the table chunks
-	unique_ptr<MetaBlockWriter> tabledata_writer;
-
 private:
 	vector<unique_ptr<Block>> blocks;
 	vector<uint64_t> offsets;
