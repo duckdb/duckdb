@@ -23,6 +23,8 @@ struct DatabaseData {
 	DuckDB *database;
 };
 
+
+
 duckdb_state duckdb_open(const char *path, duckdb_database *out) {
 	auto wrapper = new DatabaseData();
 	try {
@@ -74,9 +76,8 @@ template <class T> void WriteData(duckdb_result *out, ChunkCollection &source, i
 	}
 }
 
-duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckdb_result *out) {
-	Connection *conn = (Connection *)connection;
-	auto result = conn->Query(query);
+static duckdb_state duckdb_translate_result(MaterializedQueryResult* result, duckdb_result *out) {
+	assert(result);
 	if (!out) {
 		// no result to write to, only return the status
 		return result->success ? DuckDBSuccess : DuckDBError;
@@ -187,6 +188,12 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 	return DuckDBSuccess;
 }
 
+duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckdb_result *out) {
+	Connection *conn = (Connection *)connection;
+	auto result = conn->Query(query);
+	return duckdb_translate_result(result.get(), out);
+}
+
 static void duckdb_destroy_column(duckdb_column column, count_t count) {
 	if (column.data) {
 		if (column.type == DUCKDB_TYPE_VARCHAR) {
@@ -220,6 +227,72 @@ void duckdb_destroy_result(duckdb_result *result) {
 	}
 	memset(result, 0, sizeof(duckdb_result));
 }
+
+
+struct PreparedStatementWrapper {
+	PreparedStatementWrapper() : statement(nullptr) {
+	}
+	~PreparedStatementWrapper() {
+	}
+	unique_ptr<PreparedStatement> statement;
+	vector<Value> values;
+};
+
+duckdb_state duckdb_prepare(duckdb_connection connection, const char *query, duckdb_prepared_statement *out_prepared_statement) {
+	if (!connection || !out_prepared_statement) {
+		return DuckDBError;
+	}
+	auto wrapper = new PreparedStatementWrapper();
+	Connection *conn = (Connection *)connection;
+	wrapper->statement = conn->Prepare(query);
+	*out_prepared_statement = wrapper;
+	return wrapper->statement->success ?  DuckDBSuccess : DuckDBError;
+}
+
+
+const char* duckdb_prepare_geterr(duckdb_prepared_statement *prepared_statement) {
+	auto wrapper = (PreparedStatementWrapper*) prepared_statement;
+	if (wrapper && wrapper->statement) {
+		return wrapper->statement->error.c_str();
+	}
+	return NULL;
+}
+
+duckdb_state duckdb_bind_int32(duckdb_prepared_statement *prepared_statement, index_t param_idx, int32_t val) {
+	auto wrapper = (PreparedStatementWrapper*) prepared_statement;
+	if (!wrapper  || !wrapper->statement) {
+		return DuckDBError;
+	}
+
+	// TODO we need to know how many params this query has and fail if idx > param_count
+	if (param_idx > wrapper->values.size()) {
+		wrapper->values.resize(param_idx+1);
+	}
+	wrapper->values[param_idx] = Value::INTEGER(val);
+	return DuckDBSuccess;
+}
+
+
+duckdb_state duckdb_execute_prepared(duckdb_prepared_statement *prepared_statement, duckdb_result *out_result) {
+	auto wrapper = (PreparedStatementWrapper*) prepared_statement;
+
+	if (!wrapper || !wrapper->statement) {
+		return DuckDBError;
+	}
+	auto result = wrapper->statement->Execute(wrapper->values);
+	// FIXME need materialized query result here
+	//return duckdb_translate_result(result.get(), out_result);
+	return DuckDBError;
+
+}
+
+void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement) {
+	auto wrapper = (PreparedStatementWrapper*) prepared_statement;
+	if (wrapper) {
+		delete wrapper;
+	}
+}
+
 
 duckdb_type ConvertCPPTypeToC(SQLType sql_type) {
 	switch (sql_type.id) {

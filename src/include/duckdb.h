@@ -65,6 +65,7 @@ typedef struct {
 	char *error_message;
 } duckdb_result;
 
+
 // typedef struct {
 // 	void *data;
 // 	bool *nullmask;
@@ -78,6 +79,7 @@ typedef struct {
 
 typedef void *duckdb_database;
 typedef void *duckdb_connection;
+typedef void *duckdb_prepared_statement;
 
 typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
 
@@ -96,6 +98,18 @@ void duckdb_disconnect(duckdb_connection *connection);
 duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckdb_result *out_result);
 //! Destroys the specified result
 void duckdb_destroy_result(duckdb_result *result);
+
+//! prepares the specified SQL query in the specified connection handle. [OUT: prepared statement descriptor]
+duckdb_state duckdb_prepare(duckdb_connection connection, const char *query, duckdb_prepared_statement *out_prepared_statement);
+//! binds parameters to prepared statement
+duckdb_state duckdb_bind_int32(duckdb_prepared_statement *prepared_statement, index_t param_idx, int32_t val);
+//! Gets the error message for the prepare command if any
+const char* duckdb_prepare_geterr(duckdb_prepared_statement *prepared_statement);
+//! Executes the prepared statements with currently bound parameters
+duckdb_state duckdb_execute_prepared(duckdb_prepared_statement *prepared_statement, duckdb_result *out_result);
+
+//! Destroys the specified prepared statement descriptor
+void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement);
 
 // SAFE fetch functions
 // These functions will perform conversions if necessary. On failure (e.g. if conversion cannot be performed) a special
