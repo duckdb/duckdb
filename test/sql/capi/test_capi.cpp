@@ -325,7 +325,7 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	status = duckdb_query(tester.connection, "CREATE TABLE a (i INTEGER)", NULL);
 	REQUIRE(status == DuckDBSuccess);
 
-	status = duckdb_prepare(tester.connection, "INSERT INTO a VALUES ($1)", &stmt);
+	status = duckdb_prepare(tester.connection, "INSERT INTO a VALUES (?)", &stmt);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(stmt != NULL);
 
