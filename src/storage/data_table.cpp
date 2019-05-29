@@ -49,52 +49,6 @@ StorageChunk *DataTable::GetChunk(index_t row_number) {
 	return (StorageChunk*) storage_tree.GetSegment(row_number);
 }
 
-void DataTable::VerifyConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
-	for (auto &constraint : table.bound_constraints) {
-		switch (constraint->type) {
-		case ConstraintType::NOT_NULL: {
-			auto &not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
-			if (VectorOperations::HasNull(chunk.data[not_null.index])) {
-				throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name.c_str(),
-				                          table.columns[not_null.index].name.c_str());
-			}
-			break;
-		}
-		case ConstraintType::CHECK: {
-			auto &check = *reinterpret_cast<BoundCheckConstraint *>(constraint.get());
-			ExpressionExecutor executor(chunk);
-
-			Vector result(TypeId::INTEGER, true, false);
-			try {
-				executor.ExecuteExpression(*check.expression, result);
-			} catch (Exception &ex) {
-				throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name.c_str(),
-				                          ex.GetMessage().c_str());
-			} catch (...) {
-				throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name.c_str());
-			}
-
-			int *dataptr = (int *)result.data;
-			for (index_t i = 0; i < result.count; i++) {
-				index_t index = result.sel_vector ? result.sel_vector[i] : i;
-				if (!result.nullmask[index] && dataptr[index] == 0) {
-					throw ConstraintException("CHECK constraint failed: %s", table.name.c_str());
-				}
-			}
-			break;
-		}
-		case ConstraintType::FOREIGN_KEY:
-		case ConstraintType::UNIQUE:
-			// we check these constraint later
-			// as these checks rely on the data currently stored in the table
-			// instead of just on the to-be-inserted chunk
-			break;
-		default:
-			throw NotImplementedException("Constraint type not implemented!");
-		}
-	}
-}
-
 void DataTable::AppendVector(index_t column_index, Vector &data, index_t offset, index_t count) {
 	// get the segment to append to
 	auto segment = (ColumnSegment*) columns[column_index].GetLastSegment();
@@ -124,6 +78,59 @@ void DataTable::AppendVector(index_t column_index, Vector &data, index_t offset,
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
+static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, string &col_name) {
+	if (VectorOperations::HasNull(vector)) {
+		throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name.c_str(),
+									col_name.c_str());
+	}
+}
+
+static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, DataChunk &chunk) {
+	ExpressionExecutor executor(chunk);
+	Vector result(TypeId::INTEGER, true, false);
+	try {
+		executor.ExecuteExpression(expr, result);
+	} catch (Exception &ex) {
+		throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name.c_str(),
+									ex.GetMessage().c_str());
+	} catch (...) {
+		throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name.c_str());
+	}
+
+	int *dataptr = (int *)result.data;
+	for (index_t i = 0; i < result.count; i++) {
+		index_t index = result.sel_vector ? result.sel_vector[i] : i;
+		if (!result.nullmask[index] && dataptr[index] == 0) {
+			throw ConstraintException("CHECK constraint failed: %s", table.name.c_str());
+		}
+	}
+}
+
+static void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk) {
+	for (auto &constraint : table.bound_constraints) {
+		switch (constraint->type) {
+		case ConstraintType::NOT_NULL: {
+			auto &not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
+			VerifyNotNullConstraint(table, chunk.data[not_null.index], table.columns[not_null.index].name);
+			break;
+		}
+		case ConstraintType::CHECK: {
+			auto &check = *reinterpret_cast<BoundCheckConstraint *>(constraint.get());
+			VerifyCheckConstraint(table, *check.expression, chunk);
+			break;
+		}
+		case ConstraintType::FOREIGN_KEY:
+		case ConstraintType::UNIQUE:
+			// we check these constraint later
+			// as these checks rely on the data currently stored in the table
+			// instead of just on the to-be-inserted chunk
+			break;
+		default:
+			throw NotImplementedException("Constraint type not implemented!");
+		}
+	}
+}
+
 void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
 	if (chunk.size() == 0) {
 		return;
@@ -133,7 +140,9 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 	}
 
 	chunk.Verify();
-	VerifyConstraints(table, context, chunk);
+
+	// verify any constraints on the new chunk
+	VerifyAppendConstraints(table, chunk);
 
 	StringHeap heap;
 	chunk.MoveStringsToHeap(heap);
@@ -235,6 +244,31 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
+static void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, vector<column_t> &column_ids) {
+	for (auto &constraint : table.bound_constraints) {
+		switch (constraint->type) {
+		case ConstraintType::NOT_NULL: {
+			auto &not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
+			// check if the constraint is in the list of column_ids
+			for(index_t i = 0; i < column_ids.size(); i++) {
+				if (column_ids[i] == not_null.index) {
+					// found the column id: check the data in
+					VerifyNotNullConstraint(table, chunk.data[i], table.columns[not_null.index].name);
+					break;
+				}
+			}
+			break;
+		}
+		case ConstraintType::CHECK:
+			throw NotImplementedException("Check constraint verify on update!");
+		case ConstraintType::FOREIGN_KEY:
+		case ConstraintType::UNIQUE:
+			break;
+		default:
+			throw NotImplementedException("Constraint type not implemented!");
+		}
+	}
+}
 void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers,
                        vector<column_t> &column_ids, DataChunk &updates) {
 	assert(row_identifiers.type == ROW_TYPE);
@@ -244,7 +278,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	}
 
 	// first verify that no constraints are violated
-	VerifyConstraints(table, context, updates);
+	VerifyUpdateConstraints(table, updates, column_ids);
 
 	// move strings to a temporary heap
 	StringHeap heap;

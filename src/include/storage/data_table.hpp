@@ -110,8 +110,6 @@ public:
 	//! Fetches a single tuple from the base table at rowid row_id, and appends that tuple to the "result" DataChunk
 	void RetrieveTupleFromBaseTable(DataChunk &result, StorageChunk *chunk, vector<column_t> &column_ids, row_t row_id);
 private:
-	//! Verify whether or not a new chunk violates any constraints
-	void VerifyConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &new_chunk);
 	//! Append a storage chunk with the given start index to the data table. Returns a pointer to the newly created storage chunk.
 	StorageChunk* AppendStorageChunk(index_t start);
 	//! Append a subset of a vector to the specified column of the table
