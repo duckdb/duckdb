@@ -280,43 +280,50 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 1);
+	duckdb_destroy_result(&res);
 
 	duckdb_bind_int8(stmt, 1, 8);
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 8);
+	duckdb_destroy_result(&res);
 
 	duckdb_bind_int16(stmt, 1, 16);
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 16);
+	duckdb_destroy_result(&res);
 
 	duckdb_bind_int32(stmt, 1, 32);
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 32);
+	duckdb_destroy_result(&res);
 
 	duckdb_bind_int64(stmt, 1, 64);
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 64);
+	duckdb_destroy_result(&res);
 
 	duckdb_bind_float(stmt, 1, 42.0);
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 42);
+	duckdb_destroy_result(&res);
 
 	duckdb_bind_double(stmt, 1, 43.0);
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 43);
+	duckdb_destroy_result(&res);
 
 	duckdb_bind_varchar(stmt, 1, "44");
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 44);
-
 	duckdb_destroy_result(&res);
+
 	duckdb_destroy_prepare(&stmt);
 	// again to make sure it does not crash
 	duckdb_destroy_result(&res);
@@ -345,6 +352,7 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int32(&res, 0, 0) == 1000000);
+	duckdb_destroy_result(&res);
 
 	// not-so-happy path
 	status = duckdb_prepare(tester.connection, "SELECT XXXXX", &stmt);
