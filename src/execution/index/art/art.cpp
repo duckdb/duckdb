@@ -162,43 +162,44 @@ void ART::erase(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned 
 	}
 	int pos = Node::findKeyPos(key[depth], &(*node));
 	auto child = Node::findChild(key[depth], node);
+    if(child){
+        unique_ptr<Node> &child_ref = *child;
+        if (child_ref->type == NodeType::NLeaf && leafMatches(isLittleEndian, child_ref.get(), key, maxKeyLength, depth)) {
+            // Leaf found, remove entry
+            auto leaf = static_cast<Leaf *>(child_ref.get());
+            if (leaf->num_elements > 1) {
+                leaf->remove(leaf, row_id);
+                return;
+            }
+            // Leaf only has one element, delete leaf, decrement node counter and maybe shrink node
+            else {
+                switch (node->type) {
+                case NodeType::N4: {
+                    Node4::erase(node, pos);
+                    break;
+                }
+                case NodeType::N16: {
+                    Node16::erase(node, pos);
+                    break;
+                }
+                case NodeType::N48: {
+                    Node48::erase(node, pos);
+                    break;
+                }
+                case NodeType::N256:
+                    Node256::erase(node, pos);
+                    break;
+                default:
+                    assert(0);
+                    break;
+                }
+            }
 
-	unique_ptr<Node> &child_ref = *child;
-	if (child_ref->type == NodeType::NLeaf && leafMatches(isLittleEndian, child_ref.get(), key, maxKeyLength, depth)) {
-		// Leaf found, remove entry
-		auto leaf = static_cast<Leaf *>(child_ref.get());
-		if (leaf->num_elements > 1) {
-			leaf->remove(leaf, row_id);
-			return;
-		}
-		// Leaf only has one element, delete leaf, decrement node counter and maybe shrink node
-		else {
-			switch (node->type) {
-			case NodeType::N4: {
-				Node4::erase(node, pos);
-				break;
-			}
-			case NodeType::N16: {
-				Node16::erase(node, pos);
-				break;
-			}
-			case NodeType::N48: {
-				Node48::erase(node, pos);
-				break;
-			}
-			case NodeType::N256:
-				Node256::erase(node, pos);
-				break;
-			default:
-				assert(0);
-				break;
-			}
-		}
-
-	} else {
-		// Recurse
-		erase(isLittleEndian, *child, key, depth + 1, maxKeyLength, type, row_id);
-	}
+        } else {
+            // Recurse
+            erase(isLittleEndian, *child, key, depth + 1, maxKeyLength, type, row_id);
+        }
+    }
 }
 
 void ART::insert(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t value,

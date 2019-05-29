@@ -159,4 +159,3 @@ TEST_CASE("Test prepared statements and transactions", "[api]") {
 	REQUIRE_FAIL(prepare->Execute(12));
 	REQUIRE_FAIL(prepare2->Execute(11));
 }
-

@@ -60,8 +60,8 @@ void Node48::erase(unique_ptr<Node> &node, int pos) {
 	Node48 *n = static_cast<Node48 *>(node.get());
 
 	if (node->count > 12) {
-		n->child[pos].reset();
-		n->childIndex[pos] = 48;
+		n->child[n->childIndex[pos]].reset();
+		n->childIndex[pos] = Node::EMPTY_MARKER;
 		n->count--;
 	} else {
 		auto newNode = make_unique<Node16>(node->max_prefix_length);
