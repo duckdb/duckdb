@@ -119,7 +119,7 @@ private:
 	//! A reference to the last entry in the chunk list
 	StorageChunk *tail_chunk;
 	//! The table statistics
-	TableStatistics table_statistics;
+// FIXME unused?	TableStatistics table_statistics;
 	//! Row ID statistics
 	ColumnStatistics rowid_statistics;
 	//! The statistics of each of the columns
