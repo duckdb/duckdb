@@ -47,15 +47,15 @@ typedef enum DUCKDB_TYPE {
 
 typedef struct {
 	int16_t year;
-	int8_t month;
-	int8_t day;
+	int16_t month;
+	int16_t day;
 } duckdb_date;
 
 typedef struct {
-	int32_t hour;
-	int32_t min;
-	int32_t sec;
-	int32_t msec;
+	int16_t hour;
+	int16_t min;
+	int16_t sec;
+	int16_t msec;
 } duckdb_time;
 
 typedef struct {

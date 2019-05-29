@@ -375,7 +375,7 @@ static Value GetCValue(duckdb_result *result, index_t col, index_t row) {
 		auto date_int = Date::FromDate(timestamp.date.year, timestamp.date.month, timestamp.date.day);
 		auto time_int =
 		    Time::FromTime(timestamp.time.hour, timestamp.time.min, timestamp.time.sec, timestamp.time.msec);
-		return Value::INTEGER(Timestamp::FromDatetime(date_int, time_int));
+		return Value::BIGINT(Timestamp::FromDatetime(date_int, time_int));
 	}
 	case DUCKDB_TYPE_VARCHAR:
 		return Value(string(UnsafeFetch<const char *>(result, col, row)));

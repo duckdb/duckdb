@@ -42,7 +42,7 @@ string Timestamp::ToString(timestamp_t timestamp) {
 	assert(sizeof(date_t) == 4);
 	assert(sizeof(dtime_t) == 4);
 
-	return Date::ToString(GetDate(timestamp)) + "T" + Time::ToString(GetTime(timestamp)) + "Z";
+	return Date::ToString(GetDate(timestamp)) + " " + Time::ToString(GetTime(timestamp));
 }
 
 date_t Timestamp::GetDate(timestamp_t timestamp) {
