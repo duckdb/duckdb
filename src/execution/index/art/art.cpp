@@ -9,7 +9,7 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, ve
          vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> unbound_expressions)
     : Index(IndexType::ART, move(expressions), move(unbound_expressions)), table(table), column_ids(column_ids),
       types(types) {
-	if (column_ids.size() > 1) {
+	if (expression_types.size() > 1) {
 		throw NotImplementedException("Multiple columns in ART index not supported");
 	}
 	tree = nullptr;

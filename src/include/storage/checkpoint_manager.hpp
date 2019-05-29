@@ -32,8 +32,6 @@ struct DataPointer {
 
 //! CheckpointManager is responsible for checkpointing the database
 class CheckpointManager {
-	//! Header size of individual Data Blocks
-	// static constexpr uint64_t DATA_BLOCK_HEADER_SIZE = sizeof(uint64_t) + sizeof(uint64_t);
 public:
 	CheckpointManager(StorageManager &manager);
 
@@ -61,14 +59,6 @@ private:
 	void ReadTable(ClientContext &context, MetaBlockReader &reader);
 	void ReadView(ClientContext &context, MetaBlockReader &reader);
 	void ReadSequence(ClientContext &context, MetaBlockReader &reader);
-private:
-	vector<unique_ptr<Block>> blocks;
-	vector<uint64_t> offsets;
-	vector<uint64_t> tuple_counts;
-	vector<uint64_t> row_numbers;
-	vector<uint64_t> indexes;
-
-	vector<vector<DataPointer>> data_pointers;
 };
 
 } // namespace duckdb
