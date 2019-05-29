@@ -283,7 +283,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 	}
 }
 
-unique_ptr<QueryResult> ClientContext::Execute(string name, vector<Value> &values) {
+unique_ptr<QueryResult> ClientContext::Execute(string name, vector<Value> &values, bool allow_stream_result) {
 	lock_guard<mutex> client_guard(context_lock);
 	if (is_invalidated) {
 		return make_unique<MaterializedQueryResult>("Database that this connection belongs to has been closed!");
@@ -303,7 +303,7 @@ unique_ptr<QueryResult> ClientContext::Execute(string name, vector<Value> &value
 	vector<unique_ptr<SQLStatement>> statements;
 	statements.push_back(move(execute));
 
-	return ExecuteStatementsInternal("", statements, true);
+	return ExecuteStatementsInternal("", statements, allow_stream_result);
 }
 
 void ClientContext::RemovePreparedStatement(PreparedStatement *statement) {

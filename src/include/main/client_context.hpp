@@ -76,7 +76,7 @@ public:
 	//! Prepare a query
 	unique_ptr<PreparedStatement> Prepare(string query);
 	//! Execute a prepared statement with the given name and set of parameters
-	unique_ptr<QueryResult> Execute(string name, vector<Value> &values);
+	unique_ptr<QueryResult> Execute(string name, vector<Value> &values, bool allow_stream_result=true);
 	//! Removes a prepared statement from the set of prepared statements in the client context
 	void RemovePreparedStatement(PreparedStatement *statement);
 private:
