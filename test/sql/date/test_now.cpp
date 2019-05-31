@@ -4,7 +4,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("NOW function", "[timestamp]") {
+TEST_CASE("NOW function", "[timestamp_func]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

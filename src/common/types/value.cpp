@@ -148,7 +148,7 @@ template <> Value Value::CreateValue(int64_t value) {
 	return Value::BIGINT(value);
 }
 
-template <> Value Value::CreateValue(const char* value) {
+template <> Value Value::CreateValue(const char *value) {
 	return Value(string(value));
 }
 

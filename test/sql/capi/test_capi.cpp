@@ -355,7 +355,6 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	duckdb_destroy_result(&res);
 	duckdb_destroy_prepare(&stmt);
 
-
 	// not-so-happy path
 	status = duckdb_prepare(tester.connection, "SELECT XXXXX", &stmt);
 	REQUIRE(status == DuckDBError);

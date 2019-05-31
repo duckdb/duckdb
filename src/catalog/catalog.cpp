@@ -33,7 +33,8 @@ void Catalog::CreateSchema(Transaction &transaction, CreateSchemaInfo *info) {
 
 void Catalog::DropSchema(Transaction &transaction, DropInfo *info) {
 	if (info->name == DEFAULT_SCHEMA) {
-		throw CatalogException("Cannot drop schema \"%s\" because it is required by the database system", info->name.c_str());
+		throw CatalogException("Cannot drop schema \"%s\" because it is required by the database system",
+		                       info->name.c_str());
 	}
 	if (!schemas.DropEntry(transaction, info->name, info->cascade)) {
 		if (!info->if_exists) {

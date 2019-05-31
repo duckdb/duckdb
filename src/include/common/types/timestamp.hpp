@@ -24,5 +24,9 @@ public:
 	static date_t GetDate(timestamp_t timestamp);
 
 	static dtime_t GetTime(timestamp_t timestamp);
+	//! Create a Timestamp object from a specified (date, time) combination
+	static timestamp_t FromDatetime(date_t date, dtime_t time);
+	//! Extract the date and time from a given timestamp object
+	static void Convert(timestamp_t date, date_t &out_date, dtime_t &out_time);
 };
 } // namespace duckdb

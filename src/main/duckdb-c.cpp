@@ -1,4 +1,6 @@
 #include "common/types/date.hpp"
+#include "common/types/time.hpp"
+#include "common/types/timestamp.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 #include "duckdb.h"
 #include "duckdb.hpp"
@@ -176,7 +178,36 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			}
 			break;
 		}
-		case SQLTypeId::TIMESTAMP:
+		case SQLTypeId::TIMESTAMP: {
+			index_t row = 0;
+			duckdb_timestamp *target = (duckdb_timestamp *)out->columns[col].data;
+			for (auto &chunk : result->collection.chunks) {
+				timestamp_t *source = (timestamp_t *)chunk->data[col].data;
+				for (index_t k = 0; k < chunk->data[col].count; k++) {
+					if (!chunk->data[col].nullmask[k]) {
+						date_t date;
+						dtime_t time;
+						Timestamp::Convert(source[k], date, time);
+
+						int32_t year, month, day;
+						Date::Convert(date, year, month, day);
+
+						int32_t hour, min, sec, msec;
+						Time::Convert(time, hour, min, sec, msec);
+
+						target[row].date.year = year;
+						target[row].date.month = month;
+						target[row].date.day = day;
+						target[row].time.hour = hour;
+						target[row].time.min = min;
+						target[row].time.sec = sec;
+						target[row].time.msec = msec;
+					}
+					row++;
+				}
+			}
+			break;
+		}
 		default:
 			// unsupported type for C API
 			assert(0);
@@ -387,6 +418,8 @@ count_t GetCTypeSize(duckdb_type type) {
 		return sizeof(double);
 	case DUCKDB_TYPE_DATE:
 		return sizeof(duckdb_date);
+	case DUCKDB_TYPE_TIMESTAMP:
+		return sizeof(duckdb_timestamp);
 	case DUCKDB_TYPE_VARCHAR:
 		return sizeof(const char *);
 	default:
@@ -429,6 +462,13 @@ static Value GetCValue(duckdb_result *result, index_t col, index_t row) {
 	case DUCKDB_TYPE_DATE: {
 		auto date = UnsafeFetch<duckdb_date>(result, col, row);
 		return Value::INTEGER(Date::FromDate(date.year, date.month, date.day));
+	}
+	case DUCKDB_TYPE_TIMESTAMP: {
+		auto timestamp = UnsafeFetch<duckdb_timestamp>(result, col, row);
+		auto date_int = Date::FromDate(timestamp.date.year, timestamp.date.month, timestamp.date.day);
+		auto time_int =
+		    Time::FromTime(timestamp.time.hour, timestamp.time.min, timestamp.time.sec, timestamp.time.msec);
+		return Value::BIGINT(Timestamp::FromDatetime(date_int, time_int));
 	}
 	case DUCKDB_TYPE_VARCHAR:
 		return Value(string(UnsafeFetch<const char *>(result, col, row)));
