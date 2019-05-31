@@ -33,21 +33,29 @@ TEST_CASE("Test TIMESTAMP type", "[timestamp]") {
 	                      Value::BIGINT(Timestamp::FromString("2008-01-02 00:00:01")),
 	                      Value::BIGINT(Timestamp::FromString("2008-02-01 00:00:01"))}));
 
-	// sum can be done only with time zone
-	// result = con.Query("SELECT SUM(t) FROM timestamp;");
-	// REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(Timestamp::FromString("2017-07-23 13:10:11"))}));
-
 	result = con.Query("SELECT MIN(t) FROM timestamp;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(Timestamp::FromString("2007-01-01 00:00:01"))}));
 
 	result = con.Query("SELECT MAX(t) FROM timestamp;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(Timestamp::FromString("2008-02-01 00:00:01"))}));
+
+	// can't sum/avg timestamps
+	REQUIRE_FAIL(con.Query("SELECT SUM(t) FROM timestamp"));
+	REQUIRE_FAIL(con.Query("SELECT AVG(t) FROM timestamp"));
+	// can't add/multiply/divide timestamps
+	REQUIRE_FAIL(con.Query("SELECT t+t FROM timestamp"));
+	REQUIRE_FAIL(con.Query("SELECT t*t FROM timestamp"));
+	REQUIRE_FAIL(con.Query("SELECT t/t FROM timestamp"));
+	REQUIRE_FAIL(con.Query("SELECT t%t FROM timestamp"));
+	// FIXME: we can subtract timestamps!
+	//REQUIRE_NO_FAIL(con.Query("SELECT t-t FROM timestamp"));
 }
 
 TEST_CASE("Test out of range/incorrect timestamp formats", "[timestamp]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.EnableQueryVerification();
 
 	// create and insert into table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE timestamp(t TIMESTAMP)"));
