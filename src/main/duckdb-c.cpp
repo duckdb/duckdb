@@ -268,7 +268,7 @@ struct PreparedStatementWrapper {
 
 duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
                             duckdb_prepared_statement *out_prepared_statement) {
-	if (!connection) {
+	if (!connection || !query) {
 		return DuckDBError;
 	}
 	auto wrapper = new PreparedStatementWrapper();
@@ -461,18 +461,14 @@ static Value GetCValue(duckdb_result *result, index_t col, index_t row) {
 		return Value(UnsafeFetch<double>(result, col, row));
 	case DUCKDB_TYPE_DATE: {
 		auto date = UnsafeFetch<duckdb_date>(result, col, row);
-		return Value::INTEGER(Date::FromDate(date.year, date.month, date.day));
+		return Value::DATE(date.year, date.month, date.day);
 	}
 	case DUCKDB_TYPE_TIMESTAMP: {
 		auto timestamp = UnsafeFetch<duckdb_timestamp>(result, col, row);
-		auto date_int = Date::FromDate(timestamp.date.year, timestamp.date.month, timestamp.date.day);
-		auto time_int =
-		    Time::FromTime(timestamp.time.hour, timestamp.time.min, timestamp.time.sec, timestamp.time.msec);
-		return Value::BIGINT(Timestamp::FromDatetime(date_int, time_int));
+		return Value::TIMESTAMP(timestamp.date.year, timestamp.date.month, timestamp.date.day, timestamp.time.hour, timestamp.time.min, timestamp.time.sec, timestamp.time.msec);
 	}
 	case DUCKDB_TYPE_VARCHAR:
 		return Value(string(UnsafeFetch<const char *>(result, col, row)));
-	// case DUCKDB_TYPE_TIMESTAMP:
 	default:
 		// invalid type for C to C++ conversion
 		assert(0);

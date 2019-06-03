@@ -71,6 +71,11 @@ template <> duckdb_date CAPIResult::Fetch(index_t col, index_t row) {
 	return data[row];
 }
 
+template <> duckdb_timestamp CAPIResult::Fetch(index_t col, index_t row) {
+	auto data = (duckdb_timestamp *)result.columns[col].data;
+	return data[row];
+}
+
 template <> string CAPIResult::Fetch(index_t col, index_t row) {
 	auto value = duckdb_value_varchar(&result, col, row);
 	string strval = string(value);
@@ -236,6 +241,23 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(date.year == 1992);
 	REQUIRE(date.month == 9);
 	REQUIRE(date.day == 20);
+	REQUIRE(result->Fetch<string>(0, 1) == Value::DATE(1992, 9, 20).ToString(SQLType(SQLTypeId::DATE)));
+
+	// timestamp columns
+	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE timestamps(t TIMESTAMP)"));
+	REQUIRE_NO_FAIL(tester.Query("INSERT INTO timestamps VALUES ('1992-09-20 12:01:30'), (NULL)"));
+
+	REQUIRE_NO_FAIL(result = tester.Query("SELECT * FROM timestamps ORDER BY t"));
+	REQUIRE(result->IsNull(0, 0));
+	duckdb_timestamp stamp = result->Fetch<duckdb_timestamp>(0, 1);
+	REQUIRE(stamp.date.year == 1992);
+	REQUIRE(stamp.date.month == 9);
+	REQUIRE(stamp.date.day == 20);
+	REQUIRE(stamp.time.hour == 12);
+	REQUIRE(stamp.time.min == 1);
+	REQUIRE(stamp.time.sec == 30);
+	REQUIRE(stamp.time.msec == 0);
+	REQUIRE(result->Fetch<string>(0, 1) == Value::TIMESTAMP(1992, 9, 20, 12, 1, 30, 0).ToString(SQLType(SQLTypeId::TIMESTAMP)));
 
 	// boolean columns
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE booleans(b BOOLEAN)"));
@@ -246,6 +268,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(!result->Fetch<bool>(0, 0));
 	REQUIRE(!result->Fetch<bool>(0, 1));
 	REQUIRE(result->Fetch<bool>(0, 2));
+	REQUIRE(result->Fetch<string>(0, 2) == Value::BOOLEAN(true).ToString());
 }
 
 TEST_CASE("Test errors in C API", "[capi]") {
@@ -260,6 +283,15 @@ TEST_CASE("Test errors in C API", "[capi]") {
 	REQUIRE_FAIL(tester.Query("SELEC * FROM TABLE"));
 	// bind error
 	REQUIRE_FAIL(tester.Query("SELECT * FROM TABLE"));
+
+	duckdb_result res;
+	duckdb_prepared_statement stmt = nullptr;
+	// fail prepare API calls
+	REQUIRE(duckdb_prepare(NULL, "SELECT 42", &stmt) == DuckDBError);
+	REQUIRE(duckdb_prepare(tester.connection, NULL, &stmt) == DuckDBError);
+	REQUIRE(duckdb_bind_boolean(NULL, 0, true) == DuckDBError);
+	REQUIRE(duckdb_execute_prepared(NULL, &res) == DuckDBError);
+	duckdb_destroy_prepare(NULL);
 }
 
 TEST_CASE("Test prepared statements in C API", "[capi]") {
