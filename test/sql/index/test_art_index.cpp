@@ -223,10 +223,11 @@ TEST_CASE("ART Big Range", "[art]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
 	for (index_t j = 0; j < 1500; j++) {
 		for (index_t i = 0; i < n + 1; i++) {
-				REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", keys[i]));
+			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", keys[i]));
 		}
 	}
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
 	// second transaction: begin and verify counts
 	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
 	for(index_t i = 0; i < n + 1; i++) {
@@ -270,10 +271,8 @@ TEST_CASE("ART Big Range", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(4500)}));
 	result = con.Query("SELECT count(i) FROM integers WHERE i < 5");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(6000)}));
-	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
-	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 
-	// verify that the counts are still correct
+	// verify that the counts are still correct in the second transaction
 	result = con2.Query("SELECT COUNT(i) FROM integers WHERE i<10");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(7500)}));
 	result = con2.Query("SELECT COUNT(i) FROM integers WHERE i=5");
