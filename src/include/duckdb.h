@@ -52,6 +52,18 @@ typedef struct {
 } duckdb_date;
 
 typedef struct {
+	int8_t hour;
+	int8_t min;
+	int8_t sec;
+	int16_t msec;
+} duckdb_time;
+
+typedef struct {
+	duckdb_date date;
+	duckdb_time time;
+} duckdb_timestamp;
+
+typedef struct {
 	void *data;
 	bool *nullmask;
 	duckdb_type type;
@@ -78,6 +90,7 @@ typedef struct {
 
 typedef void *duckdb_database;
 typedef void *duckdb_connection;
+typedef void *duckdb_prepared_statement;
 
 typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
 
@@ -117,6 +130,27 @@ float duckdb_value_float(duckdb_result *result, index_t col, index_t row);
 double duckdb_value_double(duckdb_result *result, index_t col, index_t row);
 //! Converts the specified value to a string. Returns nullptr on failure or NULL. The result must be freed with free.
 char *duckdb_value_varchar(duckdb_result *result, index_t col, index_t row);
+
+// Prepared Statements
+
+//! prepares the specified SQL query in the specified connection handle. [OUT: prepared statement descriptor]
+duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
+                            duckdb_prepared_statement *out_prepared_statement);
+//! binds parameters to prepared statement
+duckdb_state duckdb_bind_boolean(duckdb_prepared_statement prepared_statement, index_t param_idx, bool val);
+duckdb_state duckdb_bind_int8(duckdb_prepared_statement prepared_statement, index_t param_idx, int8_t val);
+duckdb_state duckdb_bind_int16(duckdb_prepared_statement prepared_statement, index_t param_idx, int16_t val);
+duckdb_state duckdb_bind_int32(duckdb_prepared_statement prepared_statement, index_t param_idx, int32_t val);
+duckdb_state duckdb_bind_int64(duckdb_prepared_statement prepared_statement, index_t param_idx, int64_t val);
+duckdb_state duckdb_bind_float(duckdb_prepared_statement prepared_statement, index_t param_idx, float val);
+duckdb_state duckdb_bind_double(duckdb_prepared_statement prepared_statement, index_t param_idx, double val);
+duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, index_t param_idx, const char *val);
+
+//! Executes the prepared statements with currently bound parameters
+duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statement, duckdb_result *out_result);
+
+//! Destroys the specified prepared statement descriptor
+void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement);
 
 #ifdef __cplusplus
 };

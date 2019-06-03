@@ -1,4 +1,6 @@
 #include "common/types/date.hpp"
+#include "common/types/time.hpp"
+#include "common/types/timestamp.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 #include "duckdb.h"
 #include "duckdb.hpp"
@@ -74,9 +76,8 @@ template <class T> void WriteData(duckdb_result *out, ChunkCollection &source, i
 	}
 }
 
-duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckdb_result *out) {
-	Connection *conn = (Connection *)connection;
-	auto result = conn->Query(query);
+static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_result *out) {
+	assert(result);
 	if (!out) {
 		// no result to write to, only return the status
 		return result->success ? DuckDBSuccess : DuckDBError;
@@ -177,7 +178,36 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 			}
 			break;
 		}
-		case SQLTypeId::TIMESTAMP:
+		case SQLTypeId::TIMESTAMP: {
+			index_t row = 0;
+			duckdb_timestamp *target = (duckdb_timestamp *)out->columns[col].data;
+			for (auto &chunk : result->collection.chunks) {
+				timestamp_t *source = (timestamp_t *)chunk->data[col].data;
+				for (index_t k = 0; k < chunk->data[col].count; k++) {
+					if (!chunk->data[col].nullmask[k]) {
+						date_t date;
+						dtime_t time;
+						Timestamp::Convert(source[k], date, time);
+
+						int32_t year, month, day;
+						Date::Convert(date, year, month, day);
+
+						int32_t hour, min, sec, msec;
+						Time::Convert(time, hour, min, sec, msec);
+
+						target[row].date.year = year;
+						target[row].date.month = month;
+						target[row].date.day = day;
+						target[row].time.hour = hour;
+						target[row].time.min = min;
+						target[row].time.sec = sec;
+						target[row].time.msec = msec;
+					}
+					row++;
+				}
+			}
+			break;
+		}
 		default:
 			// unsupported type for C API
 			assert(0);
@@ -185,6 +215,12 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 		}
 	}
 	return DuckDBSuccess;
+}
+
+duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckdb_result *out) {
+	Connection *conn = (Connection *)connection;
+	auto result = conn->Query(query);
+	return duckdb_translate_result(result.get(), out);
 }
 
 static void duckdb_destroy_column(duckdb_column column, count_t count) {
@@ -219,6 +255,94 @@ void duckdb_destroy_result(duckdb_result *result) {
 		free(result->columns);
 	}
 	memset(result, 0, sizeof(duckdb_result));
+}
+
+struct PreparedStatementWrapper {
+	PreparedStatementWrapper() : statement(nullptr) {
+	}
+	~PreparedStatementWrapper() {
+	}
+	unique_ptr<PreparedStatement> statement;
+	vector<Value> values;
+};
+
+duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
+                            duckdb_prepared_statement *out_prepared_statement) {
+	if (!connection || !query) {
+		return DuckDBError;
+	}
+	auto wrapper = new PreparedStatementWrapper();
+	Connection *conn = (Connection *)connection;
+	wrapper->statement = conn->Prepare(query);
+	*out_prepared_statement = (duckdb_prepared_statement)wrapper;
+	return wrapper->statement->success ? DuckDBSuccess : DuckDBError;
+}
+
+static duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, index_t param_idx, Value val) {
+	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
+	if (!wrapper || !wrapper->statement || !wrapper->statement->success || wrapper->statement->is_invalidated) {
+		return DuckDBError;
+	}
+	// TODO we need to know how many params this query has and fail if idx > param_count
+	if (param_idx > wrapper->values.size()) {
+		wrapper->values.resize(param_idx);
+	}
+	wrapper->values[param_idx - 1] = val;
+	return DuckDBSuccess;
+}
+
+duckdb_state duckdb_bind_boolean(duckdb_prepared_statement prepared_statement, index_t param_idx, bool val) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value::BOOLEAN(val));
+}
+
+duckdb_state duckdb_bind_int8(duckdb_prepared_statement prepared_statement, index_t param_idx, int8_t val) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value::TINYINT(val));
+}
+
+duckdb_state duckdb_bind_int16(duckdb_prepared_statement prepared_statement, index_t param_idx, int16_t val) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value::SMALLINT(val));
+}
+
+duckdb_state duckdb_bind_int32(duckdb_prepared_statement prepared_statement, index_t param_idx, int32_t val) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value::INTEGER(val));
+}
+
+duckdb_state duckdb_bind_int64(duckdb_prepared_statement prepared_statement, index_t param_idx, int64_t val) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value::BIGINT(val));
+}
+
+duckdb_state duckdb_bind_float(duckdb_prepared_statement prepared_statement, index_t param_idx, float val) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value(val));
+}
+
+duckdb_state duckdb_bind_double(duckdb_prepared_statement prepared_statement, index_t param_idx, double val) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value(val));
+}
+
+duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, index_t param_idx, const char *val) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value(val));
+}
+
+duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statement, duckdb_result *out_result) {
+	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
+	if (!wrapper || !wrapper->statement || !wrapper->statement->success || wrapper->statement->is_invalidated) {
+		return DuckDBError;
+	}
+	auto result = wrapper->statement->Execute(wrapper->values, false);
+	assert(result->type == QueryResultType::MATERIALIZED_RESULT);
+	auto mat_res = (MaterializedQueryResult *)result.get();
+	return duckdb_translate_result(mat_res, out_result);
+}
+
+void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement) {
+	if (!prepared_statement) {
+		return;
+	}
+	auto wrapper = (PreparedStatementWrapper *)*prepared_statement;
+	if (wrapper) {
+		delete wrapper;
+	}
+	*prepared_statement = nullptr;
 }
 
 duckdb_type ConvertCPPTypeToC(SQLType sql_type) {
@@ -294,6 +418,8 @@ count_t GetCTypeSize(duckdb_type type) {
 		return sizeof(double);
 	case DUCKDB_TYPE_DATE:
 		return sizeof(duckdb_date);
+	case DUCKDB_TYPE_TIMESTAMP:
+		return sizeof(duckdb_timestamp);
 	case DUCKDB_TYPE_VARCHAR:
 		return sizeof(const char *);
 	default:
@@ -335,11 +461,14 @@ static Value GetCValue(duckdb_result *result, index_t col, index_t row) {
 		return Value(UnsafeFetch<double>(result, col, row));
 	case DUCKDB_TYPE_DATE: {
 		auto date = UnsafeFetch<duckdb_date>(result, col, row);
-		return Value::INTEGER(Date::FromDate(date.year, date.month, date.day));
+		return Value::DATE(date.year, date.month, date.day);
+	}
+	case DUCKDB_TYPE_TIMESTAMP: {
+		auto timestamp = UnsafeFetch<duckdb_timestamp>(result, col, row);
+		return Value::TIMESTAMP(timestamp.date.year, timestamp.date.month, timestamp.date.day, timestamp.time.hour, timestamp.time.min, timestamp.time.sec, timestamp.time.msec);
 	}
 	case DUCKDB_TYPE_VARCHAR:
 		return Value(string(UnsafeFetch<const char *>(result, col, row)));
-	// case DUCKDB_TYPE_TIMESTAMP:
 	default:
 		// invalid type for C to C++ conversion
 		assert(0);

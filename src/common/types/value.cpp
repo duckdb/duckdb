@@ -9,6 +9,7 @@
 #include "common/printer.hpp"
 #include "common/serializer.hpp"
 #include "common/types/date.hpp"
+#include "common/types/time.hpp"
 #include "common/types/timestamp.hpp"
 #include "common/types/vector.hpp"
 #include "common/value_operations/value_operations.hpp"
@@ -91,36 +92,42 @@ Value Value::BOOLEAN(int8_t value) {
 	result.is_null = false;
 	return result;
 }
+
 Value Value::TINYINT(int8_t value) {
 	Value result(TypeId::TINYINT);
 	result.value_.tinyint = value;
 	result.is_null = false;
 	return result;
 }
+
 Value Value::SMALLINT(int16_t value) {
 	Value result(TypeId::SMALLINT);
 	result.value_.smallint = value;
 	result.is_null = false;
 	return result;
 }
+
 Value Value::INTEGER(int32_t value) {
 	Value result(TypeId::INTEGER);
 	result.value_.integer = value;
 	result.is_null = false;
 	return result;
 }
+
 Value Value::BIGINT(int64_t value) {
 	Value result(TypeId::BIGINT);
 	result.value_.bigint = value;
 	result.is_null = false;
 	return result;
 }
+
 Value Value::HASH(uint64_t value) {
 	Value result(TypeId::HASH);
 	result.value_.hash = value;
 	result.is_null = false;
 	return result;
 }
+
 Value Value::POINTER(uintptr_t value) {
 	Value result(TypeId::POINTER);
 	result.value_.pointer = value;
@@ -128,9 +135,16 @@ Value Value::POINTER(uintptr_t value) {
 	return result;
 }
 
-
 Value Value::DATE(int32_t year, int32_t month, int32_t day) {
 	return Value::INTEGER(Date::FromDate(year, month, day));
+}
+
+Value Value::TIMESTAMP(date_t date, dtime_t time) {
+	return Value::BIGINT(Timestamp::FromDatetime(date, time));
+}
+
+Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec, int32_t msec) {
+	return Value::TIMESTAMP(Date::FromDate(year, month, day), Time::FromTime(hour, min, sec, msec));
 }
 
 template <> Value Value::CreateValue(int8_t value) {
@@ -149,7 +163,7 @@ template <> Value Value::CreateValue(int64_t value) {
 	return Value::BIGINT(value);
 }
 
-template <> Value Value::CreateValue(const char* value) {
+template <> Value Value::CreateValue(const char *value) {
 	return Value(string(value));
 }
 
@@ -158,7 +172,8 @@ template <> Value Value::CreateValue(string value) {
 }
 
 Value Value::Numeric(TypeId type, int64_t value) {
-	assert(!TypeIsIntegral(type) || (value >= duckdb::MinimumValue(type) && (uint64_t)value <= duckdb::MaximumValue(type)));
+	assert(!TypeIsIntegral(type) ||
+	       (value >= duckdb::MinimumValue(type) && (uint64_t)value <= duckdb::MaximumValue(type)));
 	Value val(type);
 	val.is_null = false;
 	switch (type) {

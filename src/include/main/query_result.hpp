@@ -23,7 +23,8 @@ public:
 	//! Creates an successful empty query result
 	QueryResult(QueryResultType type, StatementType statement_type);
 	//! Creates a successful query result with the specified names and types
-	QueryResult(QueryResultType type, StatementType statement_type, vector<SQLType> sql_types, vector<TypeId> types, vector<string> names);
+	QueryResult(QueryResultType type, StatementType statement_type, vector<SQLType> sql_types, vector<TypeId> types,
+	            vector<string> names);
 	//! Creates an unsuccessful query result with error condition
 	QueryResult(QueryResultType type, string error);
 	virtual ~QueryResult() {
@@ -45,6 +46,7 @@ public:
 	string error;
 	//! The next result (if any)
 	unique_ptr<QueryResult> next;
+
 public:
 	//! Fetches a DataChunk from the query result. Returns an empty chunk if the result is empty, or nullptr on failure.
 	virtual unique_ptr<DataChunk> Fetch() = 0;
@@ -58,6 +60,7 @@ public:
 
 protected:
 	string HeaderToString();
+
 private:
 	QueryResult(const QueryResult &) = delete;
 };

@@ -125,7 +125,7 @@ private:
 	//! The physical columns of the table
 	unique_ptr<SegmentTree[]> columns;
 	//! The table statistics
-// FIXME unused?	TableStatistics table_statistics;
+	// FIXME unused?	TableStatistics table_statistics;
 	//! Row ID statistics
 	ColumnStatistics rowid_statistics;
 	//! The statistics of each of the columns

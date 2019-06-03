@@ -23,8 +23,10 @@ public:
 
 	static string Format(int32_t hour, int32_t minute, int32_t second);
 
-	static dtime_t FromTime(int32_t hour, int32_t minute, int32_t second);
+	static dtime_t FromTime(int32_t hour, int32_t minute, int32_t second, int32_t milisecond = 0);
 
 	static bool IsValidTime(int32_t hour, int32_t minute, int32_t second);
+	//! Extract the time from a given timestamp object
+	static void Convert(dtime_t time, int32_t &out_hour, int32_t &out_min, int32_t &out_sec, int32_t &out_msec);
 };
 } // namespace duckdb

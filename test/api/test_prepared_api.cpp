@@ -26,13 +26,13 @@ TEST_CASE("Test prepared statements API", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
 
 	// test various integer types
-	result = con.Query("SELECT COUNT(*) FROM a WHERE i=$1", (int8_t) 12);
+	result = con.Query("SELECT COUNT(*) FROM a WHERE i=$1", (int8_t)12);
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
-	result = con.Query("SELECT COUNT(*) FROM a WHERE i=$1", (int16_t) 12);
+	result = con.Query("SELECT COUNT(*) FROM a WHERE i=$1", (int16_t)12);
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
-	result = con.Query("SELECT COUNT(*) FROM a WHERE i=$1", (int32_t) 12);
+	result = con.Query("SELECT COUNT(*) FROM a WHERE i=$1", (int32_t)12);
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
-	result = con.Query("SELECT COUNT(*) FROM a WHERE i=$1", (int64_t) 12);
+	result = con.Query("SELECT COUNT(*) FROM a WHERE i=$1", (int64_t)12);
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 	// create a prepared statement and use it to query

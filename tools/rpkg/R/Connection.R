@@ -156,7 +156,7 @@ setMethod("dbWriteTable", c("duckdb_connection", "character", "data.frame"),
                 )) {
               stop("invalid field.types argument")
             }
-            
+            value <- as.data.frame(value)
             if (!is.data.frame(value)) {
               stop("need a data frame as parameter")
             }

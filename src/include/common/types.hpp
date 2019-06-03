@@ -33,11 +33,11 @@ enum class TypeId : uint8_t {
 	SMALLINT = 3,  /* int16_t */
 	INTEGER = 4,   /* int32_t */
 	BIGINT = 5,    /* int64_t */
-	HASH = 6,   	   /* uint64_t */
+	HASH = 6,      /* uint64_t */
 	POINTER = 7,   /* uintptr_t */
 	FLOAT = 8,     /* float32_t */
 	DOUBLE = 9,    /* float64_t */
-	VARCHAR = 10,   /* char*, representing a null-terminated UTF-8 string */
+	VARCHAR = 10,  /* char*, representing a null-terminated UTF-8 string */
 	VARBINARY = 11 /* blob_t, representing arbitrary bytes */
 };
 

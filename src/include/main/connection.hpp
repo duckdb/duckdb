@@ -57,19 +57,20 @@ public:
 	unique_ptr<PreparedStatement> Prepare(string query);
 
 	// prepared statements
-	template<typename... Args>
-	unique_ptr<QueryResult> Query(string query, Args... args) {
+	template <typename... Args> unique_ptr<QueryResult> Query(string query, Args... args) {
 		vector<Value> values;
 		return QueryParamsRecursive(query, values, args...);
 	}
+
 public:
 	DuckDB &db;
 	unique_ptr<ClientContext> context;
 	warning_callback warning_cb;
+
 private:
 	unique_ptr<QueryResult> QueryParamsRecursive(string query, vector<Value> &values);
 
-	template<typename T, typename... Args>
+	template <typename T, typename... Args>
 	unique_ptr<QueryResult> QueryParamsRecursive(string query, vector<Value> &values, T value, Args... args) {
 		values.push_back(Value::CreateValue<T>(value));
 		return QueryParamsRecursive(query, values, args...);

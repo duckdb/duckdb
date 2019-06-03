@@ -40,7 +40,7 @@ void ClientContext::Cleanup() {
 	assert(prepared_statements);
 	db.transaction_manager->AddCatalogSet(*this, move(prepared_statements));
 	// invalidate any prepared statements
-	for(auto &statement : prepared_statement_objects) {
+	for (auto &statement : prepared_statement_objects) {
 		statement->is_invalidated = true;
 	}
 	return CleanupInternal();
@@ -262,7 +262,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 		if (parser.statements.size() != 1) {
 			throw Exception("Cannot prepare multiple statements at once!");
 		}
-		string prepare_name = "prepare_test" + to_string(prepare_count);
+		string prepare_name = "duckdb_internal_prepare_" + to_string(prepare_count);
 		prepare_count++;
 		// create a prepare statement out of the underlying statement
 		auto prepare = make_unique<PrepareStatement>();
@@ -278,12 +278,12 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 		auto prepared_object = make_unique<PreparedStatement>(this, prepare_name);
 		prepared_statement_objects.insert(prepared_object.get());
 		return prepared_object;
-	} catch(Exception &ex) {
+	} catch (Exception &ex) {
 		return make_unique<PreparedStatement>(ex.GetMessage());
 	}
 }
 
-unique_ptr<QueryResult> ClientContext::Execute(string name, vector<Value> &values) {
+unique_ptr<QueryResult> ClientContext::Execute(string name, vector<Value> &values, bool allow_stream_result) {
 	lock_guard<mutex> client_guard(context_lock);
 	if (is_invalidated) {
 		return make_unique<MaterializedQueryResult>("Database that this connection belongs to has been closed!");
@@ -296,14 +296,14 @@ unique_ptr<QueryResult> ClientContext::Execute(string name, vector<Value> &value
 	// create the execute statement
 	auto execute = make_unique<ExecuteStatement>();
 	execute->name = name;
-	for(auto &val : values) {
+	for (auto &val : values) {
 		execute->values.push_back(make_unique<ConstantExpression>(SQLTypeFromInternalType(val.type), val));
 	}
 
 	vector<unique_ptr<SQLStatement>> statements;
 	statements.push_back(move(execute));
 
-	return ExecuteStatementsInternal("", statements, true);
+	return ExecuteStatementsInternal("", statements, allow_stream_result);
 }
 
 void ClientContext::RemovePreparedStatement(PreparedStatement *statement) {
@@ -320,7 +320,9 @@ void ClientContext::RemovePreparedStatement(PreparedStatement *statement) {
 	ExecuteStatementsInternal("", statements, false);
 }
 
-unique_ptr<QueryResult> ClientContext::ExecuteStatementsInternal(string query, vector<unique_ptr<SQLStatement>> &statements, bool allow_stream_result) {
+unique_ptr<QueryResult> ClientContext::ExecuteStatementsInternal(string query,
+                                                                 vector<unique_ptr<SQLStatement>> &statements,
+                                                                 bool allow_stream_result) {
 	// now we have a list of statements
 	// iterate over them and execute them one by one
 	unique_ptr<QueryResult> result, current_result;
