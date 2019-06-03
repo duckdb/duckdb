@@ -422,10 +422,12 @@ Value Value::Deserialize(Deserializer &source) {
 bool Value::IsUTF8String(const char *s) {
 	int c;
 
-	if (s == NULL)
+	if (s == NULL) {
 		return true;
-	if (*s == '\200' && s[1] == '\0')
+	}
+	if (*s == '\200' && s[1] == '\0') {
 		return true; /* str_nil */
+	}
 	while ((c = *s++) != '\0') {
 		if ((c & 0x80) == 0)
 			continue;

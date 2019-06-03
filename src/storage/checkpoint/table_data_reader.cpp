@@ -1,4 +1,7 @@
 #include "storage/checkpoint/table_data_reader.hpp"
+#include "storage/checkpoint/table_data_writer.hpp"
+#include "storage/meta_block_reader.hpp"
+
 #include "storage/meta_block_reader.hpp"
 
 #include "common/vector_operations/vector_operations.hpp"
@@ -9,18 +12,18 @@
 using namespace duckdb;
 using namespace std;
 
-TableDataReader::TableDataReader(CheckpointManager &manager) :
-	manager(manager) {
+TableDataReader::TableDataReader(CheckpointManager &manager, TableCatalogEntry &table, MetaBlockReader &reader) :
+	manager(manager), table(table), reader(reader) {
 }
 
-void TableDataReader::ReadTableData(ClientContext &context, TableCatalogEntry &table, MetaBlockReader &reader) {
+void TableDataReader::ReadTableData(ClientContext &context) {
 	assert(blocks.size() == 0);
 
 	count_t column_count = table.columns.size();
 	assert(column_count > 0);
 
 	// load the data pointers for the table
-	ReadDataPointers(column_count, reader);
+	ReadDataPointers(column_count);
 	if (data_pointers[0].size() == 0) {
 		// if the table is empty there is no loading to be done
 		return;
@@ -31,6 +34,7 @@ void TableDataReader::ReadTableData(ClientContext &context, TableCatalogEntry &t
 	offsets.resize(column_count);
 	tuple_counts.resize(column_count);
 	indexes.resize(column_count);
+	dictionary_start.resize(column_count);
 	for (index_t col = 0; col < column_count; col++) {
 		blocks[col] = make_unique<Block>(INVALID_BLOCK);
 		indexes[col] = 0;
@@ -91,8 +95,8 @@ void TableDataReader::ReadTableData(ClientContext &context, TableCatalogEntry &t
 	}
 }
 
-bool TableDataReader::ReadBlock(uint64_t col) {
-	uint64_t block_nr = indexes[col];
+bool TableDataReader::ReadBlock(index_t col) {
+	index_t block_nr = indexes[col];
 	if (block_nr >= data_pointers[col].size()) {
 		// ran out of blocks
 		return false;
@@ -103,57 +107,51 @@ bool TableDataReader::ReadBlock(uint64_t col) {
 	indexes[col]++;
 	// read the data for the block from disk
 	manager.block_manager.Read(*blocks[col]);
+	if (table.columns[col].type == SQLTypeId::VARCHAR) {
+		// read the dictionary offset for string columns
+		int32_t dictionary_offset = *((int32_t*) (blocks[col]->buffer + offsets[col]));
+		dictionary_start[col] = blocks[col]->buffer + offsets[col] + dictionary_offset;
+		offsets[col] += TableDataWriter::BLOCK_HEADER_STRING;
+	}
 	return true;
 }
 
-void TableDataReader::ReadString(Vector &vector, uint64_t col) {
-	// first read the length of the string
-	assert(offsets[col] + sizeof(uint64_t) < blocks[col]->size);
-
-	char *bufptr = (char *)blocks[col]->buffer;
-	uint64_t size = *((uint64_t *)(bufptr + offsets[col]));
-	offsets[col] += sizeof(uint64_t);
-
+void TableDataReader::ReadString(Vector &vector, index_t col) {
+	// read the offset of the string into the
+	int32_t offset = *((int32_t*) (blocks[col]->buffer + offsets[col]));
+	offsets[col] += sizeof(int32_t);
+	// now fetch the string from the dictionary
 	tuple_counts[col]++;
-	// now read the actual string
-	// first allocate space for the string
-	auto data = unique_ptr<char[]>(new char[size + 1]);
-	data[size] = '\0';
-	char *val = data.get();
-	// now read the string
-	uint64_t pos = 0;
-	while (pos < size) {
-		uint64_t to_read = std::min(size - pos, blocks[col]->size - offsets[col]);
-		memcpy(val + pos, bufptr + offsets[col], to_read);
-
-		pos += to_read;
-		offsets[col] += to_read;
-		if (pos != size) {
-			assert(offsets[col] == blocks[col]->size);
-			if (!ReadBlock(col)) {
-				throw IOException("Corrupt database file: could not read string fully");
-			}
-		}
-	}
-	if (strcmp(data.get(), NullValue<const char *>()) == 0) {
+	auto str_value = (char*) (dictionary_start[col] + offset);
+	// place the string into the vector
+	if (strcmp(str_value, TableDataWriter::BIG_STRING_MARKER) == 0) {
+		// big string, read the block id and offset from where to get the actual string
+		auto block_id = *((block_id_t*) (str_value + 2 * sizeof(char)));
+		// now read the actual string
+		MetaBlockReader reader(manager.block_manager, block_id);
+		string big_string = reader.Read<string>();
+		// add the string to the vector
+		auto strings = (const char **)vector.data;
+		strings[vector.count] = vector.string_heap.AddString(big_string);
+	} else if (strcmp(str_value, NullValue<const char *>()) == 0) {
 		vector.nullmask[vector.count] = true;
 	} else {
 		auto strings = (const char **)vector.data;
-		strings[vector.count] = vector.string_heap.AddString(val, size);
+		strings[vector.count] = vector.string_heap.AddString(str_value);
 	}
 	vector.count++;
 }
 
-void TableDataReader::ReadDataPointers(uint64_t column_count, MetaBlockReader &reader) {
+void TableDataReader::ReadDataPointers(index_t column_count) {
 	data_pointers.resize(column_count);
 	for (index_t col = 0; col < column_count; col++) {
-		uint64_t data_pointer_count = reader.Read<uint64_t>();
+		index_t data_pointer_count = reader.Read<index_t>();
 		for (index_t data_ptr = 0; data_ptr < data_pointer_count; data_ptr++) {
 			DataPointer data_pointer;
 			data_pointer.min = reader.Read<double>();
 			data_pointer.max = reader.Read<double>();
-			data_pointer.row_start = reader.Read<uint64_t>();
-			data_pointer.tuple_count = reader.Read<uint64_t>();
+			data_pointer.row_start = reader.Read<index_t>();
+			data_pointer.tuple_count = reader.Read<index_t>();
 			data_pointer.block_id = reader.Read<block_id_t>();
 			data_pointer.offset = reader.Read<uint32_t>();
 			data_pointers[col].push_back(data_pointer);

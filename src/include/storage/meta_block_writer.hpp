@@ -23,12 +23,11 @@ public:
 
 	BlockManager &manager;
 	unique_ptr<Block> block;
-	uint64_t offset;
-
+	index_t offset;
 public:
 	void Flush();
 
-	void WriteData(const uint8_t *buffer, uint64_t write_size) override;
+	void WriteData(const_data_ptr_t buffer, index_t write_size) override;
 };
 
 } // namespace duckdb

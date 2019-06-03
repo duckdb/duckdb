@@ -44,7 +44,7 @@ void FileBuffer::Read(FileHandle &handle, uint64_t location) {
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
 		throw IOException(
-		    "Corrupt database file: computed checksum %llud does not match stored checksum %llud in block",
+		    "Corrupt database file: computed checksum %llu does not match stored checksum %llu in block",
 		    computed_checksum, stored_checksum);
 	}
 }

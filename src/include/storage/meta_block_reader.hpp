@@ -21,12 +21,12 @@ public:
 
 	BlockManager &manager;
 	unique_ptr<Block> block;
-	uint64_t offset;
+	index_t offset;
 	block_id_t next_block;
 
 public:
 	//! Read content of size read_size into the buffer
-	void ReadData(uint8_t *buffer, uint64_t read_size) override;
+	void ReadData(data_ptr_t buffer, index_t read_size) override;
 
 private:
 	void ReadNewBlock(block_id_t id);

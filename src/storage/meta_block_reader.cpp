@@ -8,14 +8,15 @@ MetaBlockReader::MetaBlockReader(BlockManager &manager, block_id_t block_id)
 	ReadNewBlock(block_id);
 }
 
-void MetaBlockReader::ReadData(uint8_t *buffer, uint64_t read_size) {
+void MetaBlockReader::ReadData(data_ptr_t buffer, index_t read_size) {
 	while (offset + read_size > block->size) {
 		// cannot read entire entry from block
 		// first read what we can from this block
-		uint64_t to_read = block->size - offset;
+		index_t to_read = block->size - offset;
 		if (to_read > 0) {
 			memcpy(buffer, block->buffer + offset, to_read);
 			read_size -= to_read;
+			buffer += to_read;
 		}
 		// then move to the next block
 		ReadNewBlock(next_block);

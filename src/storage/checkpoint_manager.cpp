@@ -188,8 +188,8 @@ void CheckpointManager::WriteTable(Transaction &transaction, TableCatalogEntry &
 	//! and the offset to where the info starts
 	metadata_writer->Write<uint64_t>(tabledata_writer->offset);
 	// now we need to write the table data
-	TableDataWriter writer(*this);
-	writer.WriteTableData(transaction, table);
+	TableDataWriter writer(*this, table);
+	writer.WriteTableData(transaction);
 }
 
 void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reader) {
@@ -209,6 +209,6 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 	// fetch the table from the catalog for writing
 	auto table =
 	    database.catalog->GetTable(context.ActiveTransaction(), bound_info->base->schema, bound_info->base->table);
-	TableDataReader data_reader(*this);
-	data_reader.ReadTableData(context, *table, table_data_reader);
+	TableDataReader data_reader(*this, *table, table_data_reader);
+	data_reader.ReadTableData(context);
 }
