@@ -56,6 +56,14 @@ struct VectorOperations {
 	static void Abs(Vector &A, Vector &result);
 	static void Round(Vector &A, Vector &B, Vector &result);
 
+	static void Sin(Vector &A, Vector &result);
+	static void Cos(Vector &A, Vector &result);
+	static void Tan(Vector &A, Vector &result);
+	static void ASin(Vector &A, Vector &result);
+	static void ACos(Vector &A, Vector &result);
+	static void ATan(Vector &A, Vector &result);
+	static void ATan2(Vector &A, Vector &B, Vector &result);
+
 	//===--------------------------------------------------------------------===//
 	// Bitwise Operators
 	//===--------------------------------------------------------------------===//
@@ -248,8 +256,7 @@ struct VectorOperations {
 	template <typename T, class FUNC>
 	static void ExecType(Vector &vector, FUNC &&fun, index_t offset = 0, count_t limit = 0) {
 		auto data = (T *)vector.data;
-		VectorOperations::Exec(
-		    vector, [&](index_t i, index_t k) { fun(data[i], i, k); }, offset, limit);
+		VectorOperations::Exec(vector, [&](index_t i, index_t k) { fun(data[i], i, k); }, offset, limit);
 	}
 	template <class FUNC> static void BinaryExec(Vector &a, Vector &b, Vector &result, FUNC &&fun) {
 		// it might be the case that not everything has a selection vector

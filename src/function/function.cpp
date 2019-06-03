@@ -54,4 +54,13 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddScalarFunction<NextvalFunction>(transaction, catalog);
 	AddScalarFunction<RegexpMatchesFunction>(transaction, catalog);
 	AddScalarFunction<RegexpReplaceFunction>(transaction, catalog);
+
+	AddScalarFunction<SinFunction>(transaction, catalog);
+	AddScalarFunction<CosFunction>(transaction, catalog);
+	AddScalarFunction<TanFunction>(transaction, catalog);
+	AddScalarFunction<ASinFunction>(transaction, catalog);
+	AddScalarFunction<ACosFunction>(transaction, catalog);
+	AddScalarFunction<ATanFunction>(transaction, catalog);
+	AddScalarFunction<CoTFunction>(transaction, catalog);
+	AddScalarFunction<ATan2Function>(transaction, catalog);
 }

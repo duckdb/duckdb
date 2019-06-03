@@ -9,7 +9,7 @@
 #pragma once
 
 #include <algorithm>
-#include <math.h>
+#include <cmath>
 
 namespace duckdb {
 
@@ -26,6 +26,54 @@ struct Round {
 		}
 		T modifier = pow(10, precision);
 		return ((int64_t)(input * modifier)) / modifier;
+	}
+};
+
+struct Sin {
+	template <class T> static inline double Operation(T left) {
+		return sin(left);
+	}
+};
+
+struct Cos {
+	template <class T> static inline double Operation(T left) {
+		return (double)cos(left);
+	}
+};
+
+struct Tan {
+	template <class T> static inline double Operation(T left) {
+		return (double)tan(left);
+	}
+};
+
+struct ASin {
+	template <class T> static inline double Operation(T left) {
+		if (left < -1 || left > 1) {
+			throw Exception("ASIN is undefined outside [-1,1]");
+		}
+		return (double)asin(left);
+	}
+};
+
+struct ACos {
+	template <class T> static inline double Operation(T left) {
+		if (left < -1 || left > 1) {
+			throw Exception("ACOS is undefined outside [-1,1]");
+		}
+		return (double)acos(left);
+	}
+};
+
+struct ATan {
+	template <class T> static inline double Operation(T left) {
+		return (double)atan(left);
+	}
+};
+
+struct ATan2 {
+	template <class T> static inline double Operation(T left, T right) {
+		return (double)atan2(left, right);
 	}
 };
 

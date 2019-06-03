@@ -8,4 +8,5 @@
 #include "function/scalar_function/regexp_replace.hpp"
 #include "function/scalar_function/round.hpp"
 #include "function/scalar_function/substring.hpp"
+#include "function/scalar_function/trigonometrics.hpp"
 #include "function/scalar_function/year.hpp"
