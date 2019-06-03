@@ -55,6 +55,8 @@ struct VectorOperations {
 	//! result = ABS(A)
 	static void Abs(Vector &A, Vector &result);
 	static void Round(Vector &A, Vector &B, Vector &result);
+	static void Ceil(Vector &A, Vector &result);
+	static void Floor(Vector &A, Vector &result);
 
 	static void Sin(Vector &A, Vector &result);
 	static void Cos(Vector &A, Vector &result);

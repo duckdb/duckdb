@@ -29,6 +29,18 @@ struct Round {
 	}
 };
 
+struct Ceil {
+	template <class T> static inline T Operation(T left) {
+		return ceil(left);
+	}
+};
+
+struct Floor {
+	template <class T> static inline T Operation(T left) {
+		return floor(left);
+	}
+};
+
 struct Sin {
 	template <class T> static inline double Operation(T left) {
 		return sin(left);

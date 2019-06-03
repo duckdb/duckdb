@@ -55,6 +55,11 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddScalarFunction<RegexpMatchesFunction>(transaction, catalog);
 	AddScalarFunction<RegexpReplaceFunction>(transaction, catalog);
 
+	AddScalarFunction<CeilFunction>(transaction, catalog);
+	// TODO allow functions to provide a list of aliases
+	AddScalarFunction<CeilingFunction>(transaction, catalog);
+	AddScalarFunction<FloorFunction>(transaction, catalog);
+
 	AddScalarFunction<SinFunction>(transaction, catalog);
 	AddScalarFunction<CosFunction>(transaction, catalog);
 	AddScalarFunction<TanFunction>(transaction, catalog);

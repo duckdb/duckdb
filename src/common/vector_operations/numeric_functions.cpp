@@ -71,6 +71,58 @@ void VectorOperations::Round(Vector &input, Vector &precision, Vector &result) {
 	}
 }
 
+void VectorOperations::Ceil(Vector &input, Vector &result) {
+	UNARY_TYPE_CHECK(input, result);
+	switch (input.type) {
+	case TypeId::TINYINT:
+		templated_unary_loop<int8_t, int8_t, duckdb::Ceil>(input, result);
+		break;
+	case TypeId::SMALLINT:
+		templated_unary_loop<int16_t, int16_t, duckdb::Ceil>(input, result);
+		break;
+	case TypeId::INTEGER:
+		templated_unary_loop<int32_t, int32_t, duckdb::Ceil>(input, result);
+		break;
+	case TypeId::BIGINT:
+		templated_unary_loop<int64_t, int64_t, duckdb::Ceil>(input, result);
+		break;
+	case TypeId::FLOAT:
+		templated_unary_loop<float, float, duckdb::Ceil>(input, result);
+		break;
+	case TypeId::DOUBLE:
+		templated_unary_loop<double, double, duckdb::Ceil>(input, result);
+		break;
+	default:
+		throw InvalidTypeException(input.type, "Invalid type for CEIL");
+	}
+}
+
+void VectorOperations::Floor(Vector &input, Vector &result) {
+	UNARY_TYPE_CHECK(input, result);
+	switch (input.type) {
+	case TypeId::TINYINT:
+		templated_unary_loop<int8_t, int8_t, duckdb::Floor>(input, result);
+		break;
+	case TypeId::SMALLINT:
+		templated_unary_loop<int16_t, int16_t, duckdb::Floor>(input, result);
+		break;
+	case TypeId::INTEGER:
+		templated_unary_loop<int32_t, int32_t, duckdb::Floor>(input, result);
+		break;
+	case TypeId::BIGINT:
+		templated_unary_loop<int64_t, int64_t, duckdb::Floor>(input, result);
+		break;
+	case TypeId::FLOAT:
+		templated_unary_loop<float, float, duckdb::Floor>(input, result);
+		break;
+	case TypeId::DOUBLE:
+		templated_unary_loop<double, double, duckdb::Floor>(input, result);
+		break;
+	default:
+		throw InvalidTypeException(input.type, "Invalid type for FLOOR");
+	}
+}
+
 // the low-level functions cast to double anyway so makes no sense to have different implementations
 void VectorOperations::Sin(Vector &left, Vector &result) {
 	if (left.type != TypeId::DOUBLE) {
@@ -79,44 +131,39 @@ void VectorOperations::Sin(Vector &left, Vector &result) {
 	templated_unary_loop<double, double, duckdb::Sin>(left, result);
 }
 
-
 void VectorOperations::Cos(Vector &left, Vector &result) {
 	if (left.type != TypeId::DOUBLE) {
-			throw InvalidTypeException(left.type, "Invalid type for COS");
-		}
-		templated_unary_loop<double, double, duckdb::Cos>(left, result);
+		throw InvalidTypeException(left.type, "Invalid type for COS");
+	}
+	templated_unary_loop<double, double, duckdb::Cos>(left, result);
 }
-
 
 void VectorOperations::Tan(Vector &left, Vector &result) {
 	if (left.type != TypeId::DOUBLE) {
-			throw InvalidTypeException(left.type, "Invalid type for TAN");
-		}
-		templated_unary_loop<double, double, duckdb::Tan>(left, result);
+		throw InvalidTypeException(left.type, "Invalid type for TAN");
+	}
+	templated_unary_loop<double, double, duckdb::Tan>(left, result);
 }
-
 
 void VectorOperations::ASin(Vector &left, Vector &result) {
 	if (left.type != TypeId::DOUBLE) {
-			throw InvalidTypeException(left.type, "Invalid type for ASIN");
-		}
-		templated_unary_loop<double, double, duckdb::ASin>(left, result);
+		throw InvalidTypeException(left.type, "Invalid type for ASIN");
+	}
+	templated_unary_loop<double, double, duckdb::ASin>(left, result);
 }
-
 
 void VectorOperations::ACos(Vector &left, Vector &result) {
 	if (left.type != TypeId::DOUBLE) {
-			throw InvalidTypeException(left.type, "Invalid type for ACOS");
-		}
-		templated_unary_loop<double, double, duckdb::ACos>(left, result);
+		throw InvalidTypeException(left.type, "Invalid type for ACOS");
+	}
+	templated_unary_loop<double, double, duckdb::ACos>(left, result);
 }
-
 
 void VectorOperations::ATan(Vector &left, Vector &result) {
 	if (left.type != TypeId::DOUBLE) {
-			throw InvalidTypeException(left.type, "Invalid type for ACOS");
-		}
-		templated_unary_loop<double, double, duckdb::ATan>(left, result);
+		throw InvalidTypeException(left.type, "Invalid type for ACOS");
+	}
+	templated_unary_loop<double, double, duckdb::ATan>(left, result);
 }
 
 void VectorOperations::ATan2(Vector &left, Vector &right, Vector &result) {

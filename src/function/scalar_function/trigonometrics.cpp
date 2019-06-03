@@ -70,11 +70,12 @@ void cot_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count
 
 void atan2_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
                     Vector &result) {
+	assert(input_count == 2);
+
 	inputs[0].Cast(TypeId::DOUBLE);
 	inputs[1].Cast(TypeId::DOUBLE);
 
 	result.Initialize(TypeId::DOUBLE);
-	assert(input_count == 2);
 	VectorOperations::ATan2(inputs[0], inputs[1], result);
 }
 
