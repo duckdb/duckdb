@@ -1,14 +1,16 @@
 #include "execution/index/art/art.hpp"
 #include "execution/expression_executor.hpp"
+#include "common/vector_operations/vector_operations.hpp"
+#include "main/client_context.hpp"
 #include <algorithm>
 
 using namespace duckdb;
 using namespace std;
 
 ART::ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, vector<TypeId> expression_types,
-         vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> unbound_expressions)
+         vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> unbound_expressions, bool is_unique)
     : Index(IndexType::ART, move(expressions), move(unbound_expressions)), table(table), column_ids(column_ids),
-      types(types) {
+      types(types), is_unique(is_unique) {
 	if (expression_types.size() > 1) {
 		throw NotImplementedException("Multiple columns in ART index not supported");
 	}
@@ -79,31 +81,31 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 // Insert
 //===--------------------------------------------------------------------===//
 template <class T>
-void ART::templated_insert(DataChunk &input, Vector &row_ids) {
+void ART::templated_insert(ClientContext &context, DataChunk &input, Vector &row_ids) {
 	auto input_data = (T *)input.data[0].data;
 	auto row_identifiers = (int64_t *)row_ids.data;
 	for (index_t i = 0; i < row_ids.count; i++) {
 		auto key = make_unique<Key>(*this, input.data[0].type, input_data[i]);
-		Insert(tree, *key, 0, input_data[i], input.data[0].type, row_identifiers[i]);
+		Insert(context, tree, *key, 0, input_data[i], input.data[0].type, row_identifiers[i]);
 	}
 }
 
-void ART::Insert(DataChunk &input, Vector &row_ids) {
+void ART::Insert(ClientContext &context, DataChunk &input, Vector &row_ids) {
 	assert(row_ids.type == TypeId::BIGINT);
 	assert(input.size() == row_ids.count);
 	assert(types[0] == input.data[0].type);
 	switch (input.data[0].type) {
 	case TypeId::TINYINT:
-		templated_insert<int8_t>(input, row_ids);
+		templated_insert<int8_t>(context, input, row_ids);
 		break;
 	case TypeId::SMALLINT:
-		templated_insert<int16_t>(input, row_ids);
+		templated_insert<int16_t>(context, input, row_ids);
 		break;
 	case TypeId::INTEGER:
-		templated_insert<int32_t>(input, row_ids);
+		templated_insert<int32_t>(context, input, row_ids);
 		break;
 	case TypeId::BIGINT:
-		templated_insert<int64_t>(input, row_ids);
+		templated_insert<int64_t>(context, input, row_ids);
 		break;
 	default:
 		throw InvalidTypeException(input.data[0].type, "Invalid type for index");
@@ -126,10 +128,39 @@ void ART::Append(ClientContext &context, DataChunk &appended_data, uint64_t row_
 		row_ids[i] = row_identifier_start + i;
 	}
 
-	Insert(expression_result, row_identifiers);
+	Insert(context, expression_result, row_identifiers);
 }
 
-void ART::Insert(unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t value, TypeId type, uint64_t row_id) {
+void ART::InsertToLeaf(ClientContext &context, Leaf &leaf, row_t row_id) {
+	if (is_unique && leaf.num_elements > 0) {
+		// trying to insert into leaf that already has elements in unique index
+		// check for uniqueness of values
+		assert(types.size() == 1);
+		DataChunk result;
+		result.Initialize(types);
+		Value inserted_value = Value::Numeric(types[0], leaf.value);
+		Vector inserted_data;
+		inserted_data.Reference(inserted_value);
+		Vector comparison_result(TypeId::BOOLEAN, true, false);
+		Vector row_ids(ROW_TYPE, true, false);
+		row_ids.count = 1;
+		for(index_t i = 0; i < leaf.num_elements; i++) {
+			// fetch the values for this row id
+			row_ids.data[0] = leaf.row_ids[i];
+			table.Fetch(context.ActiveTransaction(), result, column_ids, row_ids);
+			if (result.size() > 0) {
+				VectorOperations::Equals(result.data[0], inserted_data, comparison_result);
+				if (VectorOperations::AnyTrue(comparison_result)) {
+					// conflict
+					throw CatalogException("duplicate key value violates primary key or unique constraint");
+				}
+			}
+		}
+	}
+	leaf.Insert(row_id);
+}
+
+void ART::Insert(ClientContext &context, unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t value, TypeId type, row_t row_id) {
 	if (!node) {
 		// node is currently empty, create a leaf here witht he key
 		node = make_unique<Leaf>(*this, value, row_id);
@@ -145,14 +176,14 @@ void ART::Insert(unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t val
 		uint32_t newPrefixLength = 0;
 		// Leaf node is already there, update row_id vector
 		if (depth + newPrefixLength == maxPrefix) {
-			leaf->Insert(row_id);
+			InsertToLeaf(context, *leaf, row_id);
 			return;
 		}
 		while (existingKey[depth + newPrefixLength] == key[depth + newPrefixLength]) {
 			newPrefixLength++;
 			// Leaf node is already there, update row_id vector
 			if (depth + newPrefixLength == maxPrefix) {
-				leaf->Insert(row_id);
+				InsertToLeaf(context, *leaf, row_id);
 				return;
 			}
 		}
@@ -196,7 +227,7 @@ void ART::Insert(unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t val
 	// Recurse
 	auto child = Node::findChild(key[depth], node);
 	if (child) {
-		Insert(*child, key, depth + 1, value, type, row_id);
+		Insert(context, *child, key, depth + 1, value, type, row_id);
 		return;
 	}
 
@@ -246,7 +277,7 @@ void ART::Delete(DataChunk &input, Vector &row_ids) {
 	}
 }
 
-void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, TypeId type, uint64_t row_id) {
+void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, TypeId type, row_t row_id) {
 	if (!node)
 		return;
 	// Delete a leaf from a tree
@@ -470,14 +501,15 @@ void ART::Update(ClientContext &context, vector<column_t> &update_columns, DataC
 	DataChunk temp_chunk;
 	temp_chunk.Initialize(table.types);
 	temp_chunk.data[0].count = update_data.size();
-	for (uint64_t i = 0; i < column_ids.size(); i++) {
-		if (column_ids[i] == COLUMN_IDENTIFIER_ROW_ID) {
+	for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+		if (column_ids[col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
 			continue;
 		}
 		bool found_column = false;
-		for (uint64_t j = 0; j < update_columns.size(); j++) {
-			if (column_ids[i] == update_columns[j]) {
-				temp_chunk.data[column_ids[i]].Reference(update_data.data[update_columns[j]]);
+		for (index_t update_idx = 0; update_idx < update_columns.size(); update_idx++) {
+			if (column_ids[col_idx] == update_columns[update_idx]) {
+				temp_chunk.data[column_ids[col_idx]].Reference(update_data.data[update_idx]);
+				temp_chunk.sel_vector = temp_chunk.data[column_ids[col_idx]].sel_vector;
 				found_column = true;
 				break;
 			}
@@ -491,7 +523,7 @@ void ART::Update(ClientContext &context, vector<column_t> &update_columns, DataC
 	executor.Execute(expressions, expression_result);
 
 	// insert the expression result
-	Insert(expression_result, row_identifiers);
+	Insert(context, expression_result, row_identifiers);
 }
 
 //===--------------------------------------------------------------------===//
@@ -814,7 +846,6 @@ void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) 
 				break;
 			default:
 				throw NotImplementedException("Operation not implemented");
-				break;
 			}
 		}
 		// two predicates

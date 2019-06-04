@@ -57,9 +57,8 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 					unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(column_type, ColumnBinding(0, key)));
 				}
 				// create an adaptive radix tree around the expressions
-				// FIXME: this art should enforce the constraint!
 				auto art = make_unique<ART>(*storage, column_ids, types, types, move(expressions),
-											move(unbound_expressions));
+											move(unbound_expressions), true);
 
 				storage->indexes.push_back(move(art));
 				if (unique.is_primary_key) {

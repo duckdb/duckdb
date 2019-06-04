@@ -55,7 +55,7 @@ struct ARTIndexScanState : public IndexScanState {
 class ART : public Index {
 public:
 	ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, vector<TypeId> expression_types,
-	    vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> unbound_expressions);
+	    vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> unbound_expressions, bool is_unique = false);
 	~ART();
 
 	//! Lock used for updating the index
@@ -73,10 +73,9 @@ public:
 	//! The maximum prefix length for compressed paths stored in the
 	//! header, if the path is longer it is loaded from the database on demand
 	uint32_t maxPrefix;
+	//! Whether or not the ART is an index built to enforce a UNIQUE constraint
+	bool is_unique;
 public:
-	//! Insert data into the index
-	void Insert(DataChunk &data, Vector &row_ids);
-
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table for a single predicate
 	unique_ptr<IndexScanState> InitializeScanSinglePredicate(Transaction &transaction, vector<column_t> column_ids,
@@ -98,14 +97,19 @@ public:
 	            Vector &row_identifiers) override;
 	//! Delete entries in the index
 	void Delete(DataChunk &entries, Vector &row_identifiers) override;
+
+	//! Insert data into the index. Does not lock the index.
+	void Insert(ClientContext &context, DataChunk &data, Vector &row_ids);
 private:
 	DataChunk expression_result;
 private:
+	//! Insert a row id into a leaf node
+	void InsertToLeaf(ClientContext &context, Leaf &leaf, row_t row_id);
 	//! Insert the leaf value into the tree
-	void Insert(unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t value, TypeId type, uint64_t row_id);
+	void Insert(ClientContext &context, unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t value, TypeId type, row_t row_id);
 
 	//! Erase element from leaf (if leaf has more than one value) or eliminate the leaf itself
-	void Erase(unique_ptr<Node> &node, Key &key, unsigned depth, TypeId type, uint64_t row_id);
+	void Erase(unique_ptr<Node> &node, Key &key, unsigned depth, TypeId type, row_t row_id);
 
 	//! Check if the key of the leaf is equal to the searched key
 	bool LeafMatches(Node *node, Key &key, unsigned depth);
@@ -126,7 +130,7 @@ private:
 	                      bool right_inclusive);
 private:
 	template <class T>
-	void templated_insert(DataChunk &input, Vector &row_ids);
+	void templated_insert(ClientContext &context, DataChunk &input, Vector &row_ids);
 	template <class T>
 	void templated_delete(DataChunk &input, Vector &row_ids);
 	template <class T>

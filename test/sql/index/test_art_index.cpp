@@ -58,6 +58,78 @@ TEST_CASE("Test index creation statements with multiple connections", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 }
 
+TEST_CASE("Test ART index on table with multiple columns", "[art]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i BIGINT, j INTEGER, k VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(j)"));
+
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (10, 1, 'hello'), (11, 2, 'world')"));
+	result = con.Query("SELECT * FROM integers WHERE i=10");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"hello"}));
+
+	result = con.Query("SELECT * FROM integers WHERE k='hello'");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"hello"}));
+}
+
+TEST_CASE("Test ART index that requires multiple columns for expression", "[art]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// FIXME: this should work, not a multidimensional index
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i BIGINT, j INTEGER, k VARCHAR, l BIGINT)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art((j+l))"));
+
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (10, 1, 'hello', 4), (11, 2, 'world', 6)"));
+	result = con.Query("SELECT * FROM integers WHERE j+l=5");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"hello"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {4}));
+
+	result = con.Query("SELECT * FROM integers WHERE k='hello'");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"hello"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {4}));
+
+
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET j=5 WHERE j=1"));
+
+	result = con.Query("SELECT * FROM integers WHERE j+l=9");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"hello"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {4}));
+
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers"));
+}
+
+TEST_CASE("Test updates on ART index", "[art]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(j)"));
+
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 2), (2, 2)"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET j=10 WHERE i=1"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET j=10 WHERE rowid=1"));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE rowid=2"));
+
+	result = con.Query("SELECT * FROM integers WHERE j>5");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10}));
+}
+
 TEST_CASE("ART Integer Types", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -279,7 +351,7 @@ TEST_CASE("ART Big Range", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(1500)}));
 }
 
-TEST_CASE("ART  Node 4", "[art]") {
+TEST_CASE("ART Node 4", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 

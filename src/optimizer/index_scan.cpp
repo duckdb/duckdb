@@ -12,8 +12,9 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<LogicalOperator> IndexScan::Optimize(unique_ptr<LogicalOperator> op) {
-	if (op->type == LogicalOperatorType::FILTER && op->children[0]->type == LogicalOperatorType::GET)
+	if (op->type == LogicalOperatorType::FILTER && op->children[0]->type == LogicalOperatorType::GET) {
 		return TransformFilterToIndexScan(move(op));
+	}
 	for (auto &child : op->children) {
 		child = Optimize(move(child));
 	}
@@ -39,13 +40,13 @@ unique_ptr<LogicalOperator> IndexScan::TransformFilterToIndexScan(unique_ptr<Log
 	// check all the indexes
 	for (size_t j = 0; j < storage.indexes.size(); j++) {
 		Value low_value, high_value, equal_value;
-		int low_index = -1, high_index = -1, equal_index = -1;
+		index_t low_index = INVALID_INDEX, high_index = INVALID_INDEX, equal_index = INVALID_INDEX;
 		auto &index = storage.indexes[j];
 		// try to find a matching index for any of the filter expressions
 		auto expr = filter.expressions[0].get();
 		auto low_comparison_type = expr->type;
 		auto high_comparison_type = expr->type;
-		for (size_t i = 0; i < filter.expressions.size(); i++) {
+		for (index_t i = 0; i < filter.expressions.size(); i++) {
 			expr = filter.expressions[i].get();
 			// create a matcher for a comparison with a constant
 			ComparisonExpressionMatcher matcher;
@@ -94,21 +95,21 @@ unique_ptr<LogicalOperator> IndexScan::TransformFilterToIndexScan(unique_ptr<Log
 				}
 			}
 		}
-		if (equal_index >= 0 || low_index >= 0 || high_index >= 0) {
+		if (equal_index != INVALID_INDEX || low_index != INVALID_INDEX || high_index != INVALID_INDEX) {
 			auto logical_index_scan = make_unique<LogicalIndexScan>(*get->table, *get->table->storage, *index,
 			                                                        get->column_ids, get->table_index);
-			if (equal_index >= 0) {
+			if (equal_index != INVALID_INDEX) {
 				logical_index_scan->equal_value = equal_value;
 				logical_index_scan->equal_index = true;
 				filter.expressions.erase(filter.expressions.begin() + equal_index);
 			}
-			if (low_index >= 0) {
+			if (low_index != INVALID_INDEX) {
 				logical_index_scan->low_value = low_value;
 				logical_index_scan->low_index = true;
 				logical_index_scan->low_expression_type = low_comparison_type;
 				filter.expressions.erase(filter.expressions.begin() + low_index);
 			}
-			if (high_index >= 0) {
+			if (high_index != INVALID_INDEX) {
 				logical_index_scan->high_value = high_value;
 				logical_index_scan->high_index = true;
 				logical_index_scan->high_expression_type = high_comparison_type;
