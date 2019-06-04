@@ -81,7 +81,7 @@ void pi_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count,
 	assert(input_count == 0);
 	result.Initialize(TypeId::DOUBLE);
 	result.count = 1;
-	VectorOperations::Set(result, Value(M_PI));
+	VectorOperations::Set(result, Value(PI));
 }
 
 } // namespace duckdb

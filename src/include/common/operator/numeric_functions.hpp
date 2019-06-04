@@ -37,13 +37,13 @@ struct CbRt {
 
 struct Degrees {
 	template <class T> static inline double Operation(T left) {
-		return left * (180 / M_PI);
+		return left * (180 / PI);
 	}
 };
 
 struct Radians {
 	template <class T> static inline double Operation(T left) {
-		return left * (M_PI / 180);
+		return left * (PI / 180);
 	}
 };
 
