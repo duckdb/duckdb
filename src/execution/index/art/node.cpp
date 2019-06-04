@@ -136,13 +136,15 @@ Node *Node::findChild(const uint8_t k, Node *node) {
 	}
 }
 
-unsigned Node::PrefixMismatch(ART &art, Node *node, Key &key, uint64_t depth, TypeId type) {
+uint32_t Node::PrefixMismatch(ART &art, Node *node, Key &key, uint64_t depth, TypeId type) {
 	uint64_t pos;
 	// TODO: node->prefix_length > node->max_prefix_length
 	if (node->prefix_length <= art.maxPrefix) {
-		for (pos = 0; pos < node->prefix_length; pos++)
-			if (key[depth + pos] != node->prefix[pos])
+		for (pos = 0; pos < node->prefix_length; pos++) {
+			if (key[depth + pos] != node->prefix[pos]) {
 				return pos;
+			}
+		}
 	} else {
 		throw NotImplementedException("Operation not implemented");
 	}

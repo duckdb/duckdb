@@ -3,9 +3,9 @@
 
 using namespace duckdb;
 
-Key::Key(ART &art, TypeId type, uintptr_t k, uint8_t maxKeyLength) :
-	len(maxKeyLength) {
-	data = unique_ptr<uint8_t[]>(new uint8_t[maxKeyLength]);
+Key::Key(ART &art, TypeId type, uintptr_t k) :
+	len(art.maxPrefix) {
+	data = unique_ptr<uint8_t[]>(new uint8_t[art.maxPrefix]);
 	ConvertToBinaryComparable(art.is_little_endian, type, k);
 }
 

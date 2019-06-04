@@ -102,22 +102,19 @@ private:
 	DataChunk expression_result;
 private:
 	//! Insert the leaf value into the tree
-	void Insert(unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t value,
-	            unsigned maxKeyLength, TypeId type, uint64_t row_id);
+	void Insert(unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t value, TypeId type, uint64_t row_id);
 
 	//! Erase element from leaf (if leaf has more than one value) or eliminate the leaf itself
-	void Erase(unique_ptr<Node> &node, Key &key, unsigned depth, unsigned maxKeyLength,
-	           TypeId type, uint64_t row_id);
+	void Erase(unique_ptr<Node> &node, Key &key, unsigned depth, TypeId type, uint64_t row_id);
 
 	//! Check if the key of the leaf is equal to the searched key
-	bool LeafMatches(Node *node, Key &key, unsigned keyLength, unsigned depth);
+	bool LeafMatches(Node *node, Key &key, unsigned depth);
 
 	//! Find the node with a matching key, optimistic version
-	Node *Lookup(unique_ptr<Node> &node, Key &key, unsigned keyLength, unsigned depth);
+	Node *Lookup(unique_ptr<Node> &node, Key &key, unsigned depth);
 
 	//! Find the iterator position for bound queries
-	bool Bound(unique_ptr<Node> &node, Key &key, unsigned keyLength, Iterator &iterator, unsigned maxKeyLength,
-	           bool inclusive);
+	bool Bound(unique_ptr<Node> &node, Key &key, Iterator &iterator, bool inclusive);
 
 	//! Gets next node for range queries
 	bool IteratorNext(Iterator &iter);

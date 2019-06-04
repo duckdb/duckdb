@@ -23,16 +23,16 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, ve
 	}
 	switch (types[0]) {
 	case TypeId::TINYINT:
-		maxPrefix = 1;
+		maxPrefix = sizeof(int8_t);
 		break;
 	case TypeId::SMALLINT:
-		maxPrefix = 2;
+		maxPrefix = sizeof(int16_t);
 		break;
 	case TypeId::INTEGER:
-		maxPrefix = 4;
+		maxPrefix = sizeof(int32_t);
 		break;
 	case TypeId::BIGINT:
-		maxPrefix = 8;
+		maxPrefix = sizeof(int64_t);
 		break;
 	default:
 		throw InvalidTypeException(types[0], "Invalid type for index");
@@ -42,14 +42,16 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, ve
 ART::~ART() {
 }
 
-bool ART::LeafMatches(Node *node, Key &key, unsigned keyLength, unsigned depth) {
-	if (depth != keyLength) {
+bool ART::LeafMatches(Node *node, Key &key, unsigned depth) {
+	if (depth != maxPrefix) {
 		auto leaf = static_cast<Leaf *>(node);
-		auto leafKey = make_unique<Key>(*this, types[0], leaf->value, keyLength);
+		auto leafKey = make_unique<Key>(*this, types[0], leaf->value);
 		Key &key_ref = *leafKey;
-		for (index_t i = depth; i < keyLength; i++)
-			if (key_ref[i] != key[i])
+		for (index_t i = depth; i < maxPrefix; i++) {
+			if (key_ref[i] != key[i]) {
 				return false;
+			}
+		}
 	}
 	return true;
 }
@@ -81,9 +83,8 @@ void ART::templated_insert(DataChunk &input, Vector &row_ids) {
 	auto input_data = (T *)input.data[0].data;
 	auto row_identifiers = (int64_t *)row_ids.data;
 	for (index_t i = 0; i < row_ids.count; i++) {
-		auto key = make_unique<Key>(*this, input.data[0].type, input_data[i], sizeof(input_data[i]));
-		Insert(tree, *key, 0, input_data[i], sizeof(input_data[i]), input.data[0].type,
-				row_identifiers[i]);
+		auto key = make_unique<Key>(*this, input.data[0].type, input_data[i]);
+		Insert(tree, *key, 0, input_data[i], input.data[0].type, row_identifiers[i]);
 	}
 }
 
@@ -128,8 +129,7 @@ void ART::Append(ClientContext &context, DataChunk &appended_data, uint64_t row_
 	Insert(expression_result, row_identifiers);
 }
 
-void ART::Insert(unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t value,
-                 unsigned maxKeyLength, TypeId type, uint64_t row_id) {
+void ART::Insert(unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t value, TypeId type, uint64_t row_id) {
 	if (!node) {
 		// node is currently empty, create a leaf here witht he key
 		node = make_unique<Leaf>(*this, value, row_id);
@@ -139,19 +139,19 @@ void ART::Insert(unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t val
 	if (node->type == NodeType::NLeaf) {
 		// Replace leaf with Node4 and store both leaves in it
 		auto leaf = static_cast<Leaf *>(node.get());
-		auto auxKey = make_unique<Key>(*this, type, leaf->value, maxKeyLength);
+		auto auxKey = make_unique<Key>(*this, type, leaf->value);
 
 		Key &existingKey = *auxKey;
 		uint32_t newPrefixLength = 0;
 		// Leaf node is already there, update row_id vector
-		if (depth + newPrefixLength == maxKeyLength) {
+		if (depth + newPrefixLength == maxPrefix) {
 			leaf->Insert(row_id);
 			return;
 		}
 		while (existingKey[depth + newPrefixLength] == key[depth + newPrefixLength]) {
 			newPrefixLength++;
 			// Leaf node is already there, update row_id vector
-			if (depth + newPrefixLength == maxKeyLength) {
+			if (depth + newPrefixLength == maxPrefix) {
 				leaf->Insert(row_id);
 				return;
 			}
@@ -168,7 +168,7 @@ void ART::Insert(unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t val
 
 	// Handle prefix of inner node
 	if (node->prefix_length) {
-		unsigned mismatchPos = Node::PrefixMismatch(*this, node.get(), key, depth, type);
+		uint32_t mismatchPos = Node::PrefixMismatch(*this, node.get(), key, depth, type);
 		if (mismatchPos != node->prefix_length) {
 			// Prefix differs, create new node
 			unique_ptr<Node> newNode = make_unique<Node4>(*this);
@@ -196,7 +196,7 @@ void ART::Insert(unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t val
 	// Recurse
 	auto child = Node::findChild(key[depth], node);
 	if (child) {
-		Insert(*child, key, depth + 1, value, maxKeyLength, type, row_id);
+		Insert(*child, key, depth + 1, value, type, row_id);
 		return;
 	}
 
@@ -212,8 +212,8 @@ void ART::templated_delete(DataChunk &input, Vector &row_ids) {
 	auto input_data = (T *)input.data[0].data;
 	auto row_identifiers = (int64_t *)row_ids.data;
 	for (index_t i = 0; i < row_ids.count; i++) {
-		auto key = make_unique<Key>(*this, input.data[0].type, input_data[i], sizeof(input_data[i]));
-		Erase(tree, *key, 0, sizeof(input_data[i]), input.data[0].type, row_identifiers[i]);
+		auto key = make_unique<Key>(*this, input.data[0].type, input_data[i]);
+		Erase(tree, *key, 0, input.data[0].type, row_identifiers[i]);
 	}
 }
 
@@ -246,14 +246,13 @@ void ART::Delete(DataChunk &input, Vector &row_ids) {
 	}
 }
 
-void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, unsigned maxKeyLength,
-                TypeId type, uint64_t row_id) {
+void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, TypeId type, uint64_t row_id) {
 	if (!node)
 		return;
 	// Delete a leaf from a tree
 	if (node->type == NodeType::NLeaf) {
 		// Make sure we have the right leaf
-		if (ART::LeafMatches(node.get(), key, maxKeyLength, depth)) {
+		if (ART::LeafMatches(node.get(), key, depth)) {
 			node.reset();
 		}
 		return;
@@ -270,7 +269,7 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, unsigned maxKe
 	auto child = Node::findChild(key[depth], node);
     if(child){
         unique_ptr<Node> &child_ref = *child;
-        if (child_ref->type == NodeType::NLeaf && LeafMatches(child_ref.get(), key, maxKeyLength, depth)) {
+        if (child_ref->type == NodeType::NLeaf && LeafMatches(child_ref.get(), key, depth)) {
             // Leaf found, remove entry
             auto leaf = static_cast<Leaf *>(child_ref.get());
             if (leaf->num_elements > 1) {
@@ -303,7 +302,7 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, unsigned maxKe
 
         } else {
             // Recurse
-            Erase(*child, key, depth + 1, maxKeyLength, type, row_id);
+            Erase(*child, key, depth + 1, type, row_id);
         }
     }
 }
@@ -379,11 +378,11 @@ bool ART::IteratorNext(Iterator &iter) {
 	return false;
 }
 
-bool ART::Bound(unique_ptr<Node> &n, Key &key, unsigned keyLength, Iterator &iterator, unsigned maxKeyLength,
-                bool inclusive) {
+bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &iterator, bool inclusive) {
 	iterator.depth = 0;
-	if (!n)
+	if (!n) {
 		return false;
+	}
 	Node *node = n.get();
 
 	unsigned depth = 0;
@@ -395,7 +394,7 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, unsigned keyLength, Iterator &ite
 		if (node->type == NodeType::NLeaf) {
 			auto leaf = static_cast<Leaf *>(node);
 			iterator.node = leaf;
-			if (depth == keyLength) {
+			if (depth == maxPrefix) {
 				// Equal
 				if (inclusive) {
 					return true;
@@ -403,9 +402,9 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, unsigned keyLength, Iterator &ite
 					return IteratorNext(iterator);
 				}
 			}
-			auto auxKey = make_unique<Key>(*this, types[0], leaf->value, maxKeyLength);
+			auto auxKey = make_unique<Key>(*this, types[0], leaf->value);
 			Key &leafKey = *auxKey;
-			for (unsigned i = depth; i < keyLength; i++) {
+			for (unsigned i = depth; i < maxPrefix; i++) {
 				if (leafKey[i] != key[i]) {
 					if (leafKey[i] < key[i]) {
 						// Less
@@ -424,7 +423,7 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, unsigned keyLength, Iterator &ite
 				return IteratorNext(iterator);
 			}
 		}
-		unsigned mismatchPos = Node::PrefixMismatch(*this, node, key, depth, types[0]);
+		uint32_t mismatchPos = Node::PrefixMismatch(*this, node, key, depth, types[0]);
 
 		if (mismatchPos != node->prefix_length) {
 			if (node->prefix[mismatchPos] < key[depth + mismatchPos]) {
@@ -500,9 +499,9 @@ void ART::Update(ClientContext &context, vector<column_t> &update_columns, DataC
 //===--------------------------------------------------------------------===//
 template <class T>
 index_t ART::templated_lookup(TypeId type, T data, int64_t *result_ids, ARTIndexScanState *state) {
-	auto key = make_unique<Key>(*this, type, data, sizeof(data));
+	auto key = make_unique<Key>(*this, type, data);
 	index_t result_count = 0;
-	auto leaf = static_cast<Leaf *>(Lookup(tree, *key, this->maxPrefix, 0));
+	auto leaf = static_cast<Leaf *>(Lookup(tree, *key, 0));
 	if (leaf) {
 		for (; state->pointquery_tuple < leaf->num_elements; state->pointquery_tuple++) {
 			result_ids[result_count++] = leaf->row_ids[state->pointquery_tuple];
@@ -538,22 +537,22 @@ void ART::SearchEqual(StaticVector<int64_t> *result_identifiers, ARTIndexScanSta
 	}
 }
 
-Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned keyLength, unsigned depth) {
+Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 	bool skippedPrefix = false; // Did we optimistically skip some prefix without checking it?
 	auto node_val = node.get();
 
 	while (node_val) {
 		if (node_val->type == NodeType::NLeaf) {
-			if (!skippedPrefix && depth == keyLength)  {// No check required
+			if (!skippedPrefix && depth == maxPrefix)  {// No check required
 				return node_val;
 			}
 
-			if (depth != keyLength) {
+			if (depth != maxPrefix) {
 				// Check leaf
 				auto leaf = static_cast<Leaf *>(node_val);
-				auto auxKey = make_unique<Key>(*this, types[0], leaf->value, keyLength);
+				auto auxKey = make_unique<Key>(*this, types[0], leaf->value);
 				Key &leafKey = *auxKey;
-				for (index_t i = (skippedPrefix ? 0 : depth); i < keyLength; i++) {
+				for (index_t i = (skippedPrefix ? 0 : depth); i < maxPrefix; i++) {
 					if (leafKey[i] != key[i]) {
 						return nullptr;
 					}
@@ -576,8 +575,9 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned keyLength, unsigned
 		}
 
 		node_val = Node::findChild(key[depth], node_val);
-		if (!node_val)
+		if (!node_val) {
 			return nullptr;
+		}
 		depth++;
 	}
 
@@ -591,12 +591,12 @@ template <class T>
 index_t ART::templated_greater_scan(TypeId type, T data, int64_t *result_ids, bool inclusive,
 								ARTIndexScanState *state) {
 	Iterator *it = &state->iterator;
-	auto key = make_unique<Key>(*this, type, data, sizeof(data));
+	auto key = make_unique<Key>(*this, type, data);
 
 	index_t result_count = 0;
 	bool found;
 	if (!it->start) {
-		found = ART::Bound(tree, *key, sizeof(data), *it, sizeof(data), inclusive);
+		found = ART::Bound(tree, *key, *it, inclusive);
 		it->start = true;
 	} else {
 		found = true;
@@ -653,16 +653,16 @@ index_t ART::templated_less_scan(TypeId type, T data, int64_t *result_ids, bool 
 	Iterator *it = &state->iterator;
 	index_t result_count = 0;
 	auto min_value = Node::minimum(tree)->get();
-	auto key = make_unique<Key>(*this, type, data, sizeof(data));
+	auto key = make_unique<Key>(*this, type, data);
 	Leaf *minimum = static_cast<Leaf *>(min_value);
-	auto min_key = make_unique<Key>(*this, type, minimum->value, sizeof(data));
+	auto min_key = make_unique<Key>(*this, type, minimum->value);
 
 	// early out min value higher than upper bound query
 	if (*min_key > *key)
 		return result_count;
 	bool found;
 	if (!it->start) {
-		found = ART::Bound(tree, *min_key, sizeof(data), *it, sizeof(data), true);
+		found = ART::Bound(tree, *min_key, *it, true);
 		it->start = true;
 	} else {
 		found = true;
@@ -722,11 +722,11 @@ template <class T>
 index_t ART::templated_close_range(TypeId type, T left_query, T right_query, int64_t *result_ids, bool left_inclusive,
 								bool right_inclusive, ARTIndexScanState *state) {
 	Iterator *it = &state->iterator;
-	auto key = make_unique<Key>(*this, type, left_query, sizeof(left_query));
+	auto key = make_unique<Key>(*this, type, left_query);
 	index_t result_count = 0;
 	bool found;
 	if (!it->start) {
-		found = ART::Bound(tree, *key, sizeof(left_query), *it, sizeof(left_query), left_inclusive);
+		found = ART::Bound(tree, *key, *it, left_inclusive);
 		it->start = true;
 	} else {
 		found = true;

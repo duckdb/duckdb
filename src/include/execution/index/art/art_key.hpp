@@ -16,7 +16,7 @@ class ART;
 
 class Key {
 public:
-	Key(ART &art, TypeId type, uintptr_t k, uint8_t maxKeyLength);
+	Key(ART &art, TypeId type, uintptr_t k);
 	Key();
 	Key(const Key &key) = delete;
 
