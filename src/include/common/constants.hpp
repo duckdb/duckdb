@@ -69,4 +69,7 @@ extern const column_t COLUMN_IDENTIFIER_ROW_ID;
 //! Zero selection vector: completely filled with the value 0 [READ ONLY]
 extern const sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
 
+extern const double PI;
+
+
 } // namespace duckdb

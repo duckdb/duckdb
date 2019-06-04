@@ -17,6 +17,10 @@ struct InitialNestedLoopJoin {
 			index_t right_position = right.sel_vector ? right.sel_vector[rpos] : rpos;
 			assert(!right.nullmask[right_position]);
 			for (; lpos < left.count; lpos++) {
+				if (result_count == STANDARD_VECTOR_SIZE) {
+					// out of space!
+					return result_count;
+				}
 				index_t left_position = left.sel_vector ? left.sel_vector[lpos] : lpos;
 				assert(!left.nullmask[left_position]);
 				if (OP::Operation(ldata[left_position], rdata[right_position])) {
@@ -24,10 +28,6 @@ struct InitialNestedLoopJoin {
 					lvector[result_count] = left_position;
 					rvector[result_count] = right_position;
 					result_count++;
-					if (result_count == STANDARD_VECTOR_SIZE) {
-						// out of space!
-						return result_count;
-					}
 				}
 			}
 			lpos = 0;
@@ -73,10 +73,10 @@ static count_t nested_loop_join_operator(Vector &left, Vector &right, index_t &l
 		return NLTYPE::template Operation<int32_t, OP>(left, right, lpos, rpos, lvector, rvector, current_match_count);
 	case TypeId::BIGINT:
 		return NLTYPE::template Operation<int64_t, OP>(left, right, lpos, rpos, lvector, rvector, current_match_count);
+	case TypeId::FLOAT:
+		return NLTYPE::template Operation<float, OP>(left, right, lpos, rpos, lvector, rvector, current_match_count);
 	case TypeId::DOUBLE:
 		return NLTYPE::template Operation<double, OP>(left, right, lpos, rpos, lvector, rvector, current_match_count);
-	case TypeId::POINTER:
-		return NLTYPE::template Operation<uint64_t, OP>(left, right, lpos, rpos, lvector, rvector, current_match_count);
 	case TypeId::VARCHAR:
 		return NLTYPE::template Operation<const char *, OP>(left, right, lpos, rpos, lvector, rvector,
 		                                                    current_match_count);

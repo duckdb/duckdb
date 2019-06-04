@@ -1,7 +1,7 @@
 #include "optimizer/regex_range_filter.hpp"
 
+#include "function/scalar_function/regexp.hpp"
 #include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "function/scalar_function/regexp_matches.hpp"
 #include "planner/expression.hpp"
 #include "planner/expression/bound_comparison_expression.hpp"
 #include "planner/expression/bound_conjunction_expression.hpp"
