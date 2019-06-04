@@ -106,3 +106,55 @@ TEST_CASE("Test joins with different types", "[join]") {
 
 	REQUIRE_NO_FAIL(con.Query("rollback"));
 }
+
+TEST_CASE("Test mark join with different types", "[join]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// numeric types
+	vector<string> numeric_types = {"tinyint", "smallint", "integer", "bigint", "real", "double"};
+	for(auto &type : numeric_types) {
+		REQUIRE_NO_FAIL(con.Query("begin transaction"));
+		REQUIRE_NO_FAIL(con.Query("create table a (i " + type + ")"));
+		for(index_t i = 0; i < 100; i++) {
+			REQUIRE_NO_FAIL(con.Query("insert into a values ($1)", (int32_t) i + 1));
+		}
+		// range joins
+		result = con.Query("select count(*) from a WHERE i > ANY((SELECT 1::" + type + "))");
+		REQUIRE(CHECK_COLUMN(result, 0, {99}));
+		result = con.Query("select count(*) from a WHERE i >= ANY((SELECT 1::" + type + "))");
+		REQUIRE(CHECK_COLUMN(result, 0, {100}));
+		result = con.Query("select count(*) from a WHERE i < ANY((SELECT 100::" + type + "))");
+		REQUIRE(CHECK_COLUMN(result, 0, {99}));
+		result = con.Query("select count(*) from a WHERE i <= ANY((SELECT 100::" + type + "))");
+		REQUIRE(CHECK_COLUMN(result, 0, {100}));
+		result = con.Query("select count(*) from a WHERE i = ANY((SELECT 1::" + type + "))");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+		result = con.Query("select count(*) from a WHERE i <> ANY((SELECT 1::" + type + "))");
+		REQUIRE(CHECK_COLUMN(result, 0, {99}));
+
+		REQUIRE_NO_FAIL(con.Query("rollback"));
+	}
+	// strings
+	REQUIRE_NO_FAIL(con.Query("begin transaction"));
+	REQUIRE_NO_FAIL(con.Query("create table a (i VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("insert into a values ('a'), ('b'), ('c'), ('d'), ('e'), ('f')"));
+
+	// range joins
+	result = con.Query("select count(*) from a WHERE i < ANY((SELECT 'f'))");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	result = con.Query("select count(*) from a WHERE i <= ANY((SELECT 'f' AS j))");
+	REQUIRE(CHECK_COLUMN(result, 0, {6}));
+	result = con.Query("select count(*) from a WHERE i > ANY((SELECT 'a'))");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	result = con.Query("select count(*) from a WHERE i >= ANY((SELECT 'a'))");
+	REQUIRE(CHECK_COLUMN(result, 0, {6}));
+	result = con.Query("select count(*) from a WHERE i <> ANY((SELECT 'a'))");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	result = con.Query("select count(*) from a WHERE i = ANY((SELECT 'a'))");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	REQUIRE_NO_FAIL(con.Query("rollback"));
+}
