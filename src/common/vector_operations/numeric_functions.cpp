@@ -10,6 +10,8 @@
 #include "common/vector_operations/unary_loops.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 
+#include "common/vector_operations/unary_numeric.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -17,29 +19,7 @@ using namespace std;
 // Abs
 //===--------------------------------------------------------------------===//
 void VectorOperations::Abs(Vector &input, Vector &result) {
-	UNARY_TYPE_CHECK(input, result);
-	switch (input.type) {
-	case TypeId::TINYINT:
-		templated_unary_loop<int8_t, int8_t, duckdb::Abs>(input, result);
-		break;
-	case TypeId::SMALLINT:
-		templated_unary_loop<int16_t, int16_t, duckdb::Abs>(input, result);
-		break;
-	case TypeId::INTEGER:
-		templated_unary_loop<int32_t, int32_t, duckdb::Abs>(input, result);
-		break;
-	case TypeId::BIGINT:
-		templated_unary_loop<int64_t, int64_t, duckdb::Abs>(input, result);
-		break;
-	case TypeId::FLOAT:
-		templated_unary_loop<float, float, duckdb::Abs>(input, result);
-		break;
-	case TypeId::DOUBLE:
-		templated_unary_loop<double, double, duckdb::Abs>(input, result);
-		break;
-	default:
-		throw InvalidTypeException(input.type, "Invalid type for abs");
-	}
+	unary_numeric_op<duckdb::Abs>(input, result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -72,55 +52,39 @@ void VectorOperations::Round(Vector &input, Vector &precision, Vector &result) {
 }
 
 void VectorOperations::Ceil(Vector &input, Vector &result) {
-	UNARY_TYPE_CHECK(input, result);
-	switch (input.type) {
-	case TypeId::TINYINT:
-		templated_unary_loop<int8_t, int8_t, duckdb::Ceil>(input, result);
-		break;
-	case TypeId::SMALLINT:
-		templated_unary_loop<int16_t, int16_t, duckdb::Ceil>(input, result);
-		break;
-	case TypeId::INTEGER:
-		templated_unary_loop<int32_t, int32_t, duckdb::Ceil>(input, result);
-		break;
-	case TypeId::BIGINT:
-		templated_unary_loop<int64_t, int64_t, duckdb::Ceil>(input, result);
-		break;
-	case TypeId::FLOAT:
-		templated_unary_loop<float, float, duckdb::Ceil>(input, result);
-		break;
-	case TypeId::DOUBLE:
-		templated_unary_loop<double, double, duckdb::Ceil>(input, result);
-		break;
-	default:
-		throw InvalidTypeException(input.type, "Invalid type for CEIL");
-	}
+	unary_numeric_op<duckdb::Ceil>(input, result);
 }
 
 void VectorOperations::Floor(Vector &input, Vector &result) {
-	UNARY_TYPE_CHECK(input, result);
-	switch (input.type) {
-	case TypeId::TINYINT:
-		templated_unary_loop<int8_t, int8_t, duckdb::Floor>(input, result);
-		break;
-	case TypeId::SMALLINT:
-		templated_unary_loop<int16_t, int16_t, duckdb::Floor>(input, result);
-		break;
-	case TypeId::INTEGER:
-		templated_unary_loop<int32_t, int32_t, duckdb::Floor>(input, result);
-		break;
-	case TypeId::BIGINT:
-		templated_unary_loop<int64_t, int64_t, duckdb::Floor>(input, result);
-		break;
-	case TypeId::FLOAT:
-		templated_unary_loop<float, float, duckdb::Floor>(input, result);
-		break;
-	case TypeId::DOUBLE:
-		templated_unary_loop<double, double, duckdb::Floor>(input, result);
-		break;
-	default:
-		throw InvalidTypeException(input.type, "Invalid type for FLOOR");
-	}
+	unary_numeric_op<duckdb::Floor>(input, result);
+}
+
+void VectorOperations::Sqrt(Vector &input, Vector &result) {
+	unary_numeric_op<duckdb::Sqrt>(input, result);
+}
+
+void VectorOperations::Ln(Vector &input, Vector &result) {
+	unary_numeric_op<duckdb::Ln>(input, result);
+}
+
+void VectorOperations::Log10(Vector &input, Vector &result) {
+	unary_numeric_op<duckdb::Log10>(input, result);
+}
+
+void VectorOperations::CbRt(Vector &input, Vector &result) {
+	unary_numeric_op_dblret<duckdb::CbRt>(input, result);
+}
+
+void VectorOperations::Radians(Vector &input, Vector &result) {
+	unary_numeric_op_dblret<duckdb::Radians>(input, result);
+}
+
+void VectorOperations::Degrees(Vector &input, Vector &result) {
+	unary_numeric_op_dblret<duckdb::Degrees>(input, result);
+}
+
+void VectorOperations::Exp(Vector &input, Vector &result) {
+	unary_numeric_op<duckdb::Exp>(input, result);
 }
 
 // the low-level functions cast to double anyway so makes no sense to have different implementations

@@ -29,6 +29,48 @@ struct Round {
 	}
 };
 
+struct CbRt {
+	template <class T> static inline double Operation(T left) {
+		return cbrt(left);
+	}
+};
+
+struct Degrees {
+	template <class T> static inline double Operation(T left) {
+		return left * (180 / M_PI);
+	}
+};
+
+struct Radians {
+	template <class T> static inline double Operation(T left) {
+		return left * (M_PI / 180);
+	}
+};
+
+struct Exp {
+	template <class T> static inline double Operation(T left) {
+		return exp(left);
+	}
+};
+
+struct Sqrt {
+	template <class T> static inline T Operation(T left) {
+		return sqrt(left);
+	}
+};
+
+struct Ln {
+	template <class T> static inline T Operation(T left) {
+		return log(left);
+	}
+};
+
+struct Log10 {
+	template <class T> static inline T Operation(T left) {
+		return log10(left);
+	}
+};
+
 struct Ceil {
 	template <class T> static inline T Operation(T left) {
 		return ceil(left);

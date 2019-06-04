@@ -42,23 +42,21 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddTableFunction<PragmaTableInfo>(transaction, catalog);
 	AddTableFunction<SQLiteMaster>(transaction, catalog);
 
+	// math
 	AddScalarFunction<AbsFunction>(transaction, catalog);
-	AddScalarFunction<ConcatFunction>(transaction, catalog);
-	AddScalarFunction<DatePartFunction>(transaction, catalog);
-	AddScalarFunction<LengthFunction>(transaction, catalog);
+	AddScalarFunction<CbRtFunction>(transaction, catalog);
+	AddScalarFunction<DegreesFunction>(transaction, catalog);
+	AddScalarFunction<RadiansFunction>(transaction, catalog);
+	AddScalarFunction<ExpFunction>(transaction, catalog);
 	AddScalarFunction<RoundFunction>(transaction, catalog);
-	AddScalarFunction<SubstringFunction>(transaction, catalog);
-	AddScalarFunction<YearFunction>(transaction, catalog);
-	AddScalarFunction<UpperFunction>(transaction, catalog);
-	AddScalarFunction<LowerFunction>(transaction, catalog);
-	AddScalarFunction<NextvalFunction>(transaction, catalog);
-	AddScalarFunction<RegexpMatchesFunction>(transaction, catalog);
-	AddScalarFunction<RegexpReplaceFunction>(transaction, catalog);
-
 	AddScalarFunction<CeilFunction>(transaction, catalog);
-	// TODO allow functions to provide a list of aliases
 	AddScalarFunction<CeilingFunction>(transaction, catalog);
 	AddScalarFunction<FloorFunction>(transaction, catalog);
+	AddScalarFunction<PiFunction>(transaction, catalog);
+	AddScalarFunction<SqrtFunction>(transaction, catalog);
+	AddScalarFunction<LnFunction>(transaction, catalog);
+	AddScalarFunction<LogFunction>(transaction, catalog);
+	AddScalarFunction<Log10Function>(transaction, catalog);
 
 	AddScalarFunction<SinFunction>(transaction, catalog);
 	AddScalarFunction<CosFunction>(transaction, catalog);
@@ -68,4 +66,22 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddScalarFunction<ATanFunction>(transaction, catalog);
 	AddScalarFunction<CoTFunction>(transaction, catalog);
 	AddScalarFunction<ATan2Function>(transaction, catalog);
+
+	// strings
+	AddScalarFunction<ConcatFunction>(transaction, catalog);
+	AddScalarFunction<LengthFunction>(transaction, catalog);
+	AddScalarFunction<SubstringFunction>(transaction, catalog);
+	AddScalarFunction<UpperFunction>(transaction, catalog);
+	AddScalarFunction<LowerFunction>(transaction, catalog);
+
+	// regex
+	AddScalarFunction<RegexpMatchesFunction>(transaction, catalog);
+	AddScalarFunction<RegexpReplaceFunction>(transaction, catalog);
+
+	// datetime
+	AddScalarFunction<DatePartFunction>(transaction, catalog);
+	AddScalarFunction<YearFunction>(transaction, catalog);
+
+	// misc
+	AddScalarFunction<NextvalFunction>(transaction, catalog);
 }

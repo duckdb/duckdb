@@ -42,7 +42,30 @@ bool trig_matches_arguments(vector<SQLType> &arguments);
 bool atan2_matches_arguments(vector<SQLType> &arguments);
 SQLType trig_get_return_type(vector<SQLType> &arguments);
 
-class SinFunction {
+class TrigFunctionBase {
+public:
+	static matches_argument_function_t GetMatchesArgumentFunction() {
+		return trig_matches_arguments;
+	}
+
+	static get_return_type_function_t GetReturnTypeFunction() {
+		return trig_get_return_type;
+	}
+
+	static bind_scalar_function_t GetBindFunction() {
+		return nullptr;
+	}
+
+	static dependency_function_t GetDependencyFunction() {
+		return nullptr;
+	}
+
+	static bool HasSideEffects() {
+		return false;
+	}
+};
+
+class SinFunction : public TrigFunctionBase {
 public:
 	static const char *GetName() {
 		return "sin";
@@ -51,29 +74,9 @@ public:
 	static scalar_function_t GetFunction() {
 		return sin_function;
 	}
-
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return trig_matches_arguments;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return trig_get_return_type;
-	}
-
-	static bind_scalar_function_t GetBindFunction() {
-		return nullptr;
-	}
-
-	static dependency_function_t GetDependencyFunction() {
-		return nullptr;
-	}
-
-	static bool HasSideEffects() {
-		return false;
-	}
 };
 
-class CosFunction {
+class CosFunction : public TrigFunctionBase {
 public:
 	static const char *GetName() {
 		return "cos";
@@ -82,29 +85,9 @@ public:
 	static scalar_function_t GetFunction() {
 		return cos_function;
 	}
-
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return trig_matches_arguments;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return trig_get_return_type;
-	}
-
-	static bind_scalar_function_t GetBindFunction() {
-		return nullptr;
-	}
-
-	static dependency_function_t GetDependencyFunction() {
-		return nullptr;
-	}
-
-	static bool HasSideEffects() {
-		return false;
-	}
 };
 
-class TanFunction {
+class TanFunction : public TrigFunctionBase {
 public:
 	static const char *GetName() {
 		return "tan";
@@ -113,29 +96,9 @@ public:
 	static scalar_function_t GetFunction() {
 		return tan_function;
 	}
-
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return trig_matches_arguments;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return trig_get_return_type;
-	}
-
-	static bind_scalar_function_t GetBindFunction() {
-		return nullptr;
-	}
-
-	static dependency_function_t GetDependencyFunction() {
-		return nullptr;
-	}
-
-	static bool HasSideEffects() {
-		return false;
-	}
 };
 
-class ASinFunction {
+class ASinFunction : public TrigFunctionBase {
 public:
 	static const char *GetName() {
 		return "asin";
@@ -144,29 +107,9 @@ public:
 	static scalar_function_t GetFunction() {
 		return asin_function;
 	}
-
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return trig_matches_arguments;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return trig_get_return_type;
-	}
-
-	static bind_scalar_function_t GetBindFunction() {
-		return nullptr;
-	}
-
-	static dependency_function_t GetDependencyFunction() {
-		return nullptr;
-	}
-
-	static bool HasSideEffects() {
-		return false;
-	}
 };
 
-class ACosFunction {
+class ACosFunction : public TrigFunctionBase {
 public:
 	static const char *GetName() {
 		return "acos";
@@ -175,29 +118,9 @@ public:
 	static scalar_function_t GetFunction() {
 		return acos_function;
 	}
-
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return trig_matches_arguments;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return trig_get_return_type;
-	}
-
-	static bind_scalar_function_t GetBindFunction() {
-		return nullptr;
-	}
-
-	static dependency_function_t GetDependencyFunction() {
-		return nullptr;
-	}
-
-	static bool HasSideEffects() {
-		return false;
-	}
 };
 
-class ATanFunction {
+class ATanFunction : public TrigFunctionBase {
 public:
 	static const char *GetName() {
 		return "atan";
@@ -206,29 +129,9 @@ public:
 	static scalar_function_t GetFunction() {
 		return atan_function;
 	}
-
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return trig_matches_arguments;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return trig_get_return_type;
-	}
-
-	static bind_scalar_function_t GetBindFunction() {
-		return nullptr;
-	}
-
-	static dependency_function_t GetDependencyFunction() {
-		return nullptr;
-	}
-
-	static bool HasSideEffects() {
-		return false;
-	}
 };
 
-class CoTFunction {
+class CoTFunction : public TrigFunctionBase {
 public:
 	static const char *GetName() {
 		return "cot";
@@ -237,29 +140,9 @@ public:
 	static scalar_function_t GetFunction() {
 		return cot_function;
 	}
-
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return trig_matches_arguments;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return trig_get_return_type;
-	}
-
-	static bind_scalar_function_t GetBindFunction() {
-		return nullptr;
-	}
-
-	static dependency_function_t GetDependencyFunction() {
-		return nullptr;
-	}
-
-	static bool HasSideEffects() {
-		return false;
-	}
 };
 
-class ATan2Function {
+class ATan2Function : public TrigFunctionBase {
 public:
 	static const char *GetName() {
 		return "atan2";
@@ -271,22 +154,6 @@ public:
 
 	static matches_argument_function_t GetMatchesArgumentFunction() {
 		return atan2_matches_arguments;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return trig_get_return_type;
-	}
-
-	static bind_scalar_function_t GetBindFunction() {
-		return nullptr;
-	}
-
-	static dependency_function_t GetDependencyFunction() {
-		return nullptr;
-	}
-
-	static bool HasSideEffects() {
-		return false;
 	}
 };
 
