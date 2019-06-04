@@ -23,6 +23,8 @@ struct OrderByNode {
 	}
 	OrderByNode(OrderType type, unique_ptr<ParsedExpression> expression) : type(type), expression(move(expression)) {
 	}
+	OrderByNode(const OrderByNode &obj): type(obj.type), expression(obj.expression->Copy()) {
+	}
 
 	//! Sort order, ASC or DESC
 	OrderType type;
