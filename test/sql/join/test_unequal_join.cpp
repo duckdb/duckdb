@@ -21,3 +21,88 @@ TEST_CASE("Test not equals join", "[join]") {
 	result = con.Query("select count(*) from a,b where i <> j");
 	REQUIRE(CHECK_COLUMN(result, 0, {1080}));
 }
+
+TEST_CASE("Test less than join", "[join]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("create table a (i integer)"));
+	for(index_t i = 0; i < 2000; i++) {
+		REQUIRE_NO_FAIL(con.Query("insert into a values ($1)", (int32_t) i + 1));
+	}
+
+	result = con.Query("select count(*) from a, (SELECT 2000 AS j) b where i < j");
+	REQUIRE(CHECK_COLUMN(result, 0, {1999}));
+
+	result = con.Query("select count(*) from a, (SELECT 2000 AS j) b where i <= j");
+	REQUIRE(CHECK_COLUMN(result, 0, {2000}));
+
+	result = con.Query("select count(*) from a, (SELECT 1 AS j) b where i > j");
+	REQUIRE(CHECK_COLUMN(result, 0, {1999}));
+
+	result = con.Query("select count(*) from a, (SELECT 1 AS j) b where i >= j");
+	REQUIRE(CHECK_COLUMN(result, 0, {2000}));
+}
+
+TEST_CASE("Test joins with different types", "[join]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// numeric types
+	vector<string> numeric_types = {"tinyint", "smallint", "integer", "bigint", "real", "double"};
+	for(auto &type : numeric_types) {
+		REQUIRE_NO_FAIL(con.Query("begin transaction"));
+		REQUIRE_NO_FAIL(con.Query("create table a (i " + type + ")"));
+		for(index_t i = 0; i < 100; i++) {
+			REQUIRE_NO_FAIL(con.Query("insert into a values ($1)", (int32_t) i + 1));
+		}
+		// range joins
+		result = con.Query("select count(*) from a, (SELECT 100::" + type + " AS j) b where i < j");
+		REQUIRE(CHECK_COLUMN(result, 0, {99}));
+		result = con.Query("select count(*) from a, (SELECT 100::" + type + " AS j) b where i <= j");
+		REQUIRE(CHECK_COLUMN(result, 0, {100}));
+		result = con.Query("select count(*) from a, (SELECT 1::" + type + " AS j) b where i > j");
+		REQUIRE(CHECK_COLUMN(result, 0, {99}));
+		result = con.Query("select count(*) from a, (SELECT 1::" + type + " AS j) b where i >= j");
+		REQUIRE(CHECK_COLUMN(result, 0, {100}));
+		// inequality join
+		result = con.Query("select count(*) from a, (SELECT 1::" + type + " AS j) b where i <> j");
+		REQUIRE(CHECK_COLUMN(result, 0, {99}));
+		// equality join
+		result = con.Query("select count(*) from a, (SELECT 1::" + type + " AS j) b where i = j");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+		// no results on one side
+		result = con.Query("select count(*) from a, (SELECT 1::" + type + " AS j) b where i > j AND i>1000");
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+		result = con.Query("select count(*) from a, (SELECT 1::" + type + " AS j) b where i <> j AND i>1000");
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+		result = con.Query("select count(*) from a, (SELECT 1::" + type + " AS j) b where i = j AND i>1000");
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+		REQUIRE_NO_FAIL(con.Query("rollback"));
+	}
+	// strings
+	REQUIRE_NO_FAIL(con.Query("begin transaction"));
+	REQUIRE_NO_FAIL(con.Query("create table a (i VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("insert into a values ('a'), ('b'), ('c'), ('d'), ('e'), ('f')"));
+
+	// range joins
+	result = con.Query("select count(*) from a, (SELECT 'f' AS j) b where i < j");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	result = con.Query("select count(*) from a, (SELECT 'f' AS j) b where i <= j");
+	REQUIRE(CHECK_COLUMN(result, 0, {6}));
+	result = con.Query("select count(*) from a, (SELECT 'a' AS j) b where i > j");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	result = con.Query("select count(*) from a, (SELECT 'a' AS j) b where i >= j");
+	REQUIRE(CHECK_COLUMN(result, 0, {6}));
+	result = con.Query("select count(*) from a, (SELECT 'a' AS j) b where i <> j");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	result = con.Query("select count(*) from a, (SELECT 'a' AS j) b where i = j");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	REQUIRE_NO_FAIL(con.Query("rollback"));
+}
