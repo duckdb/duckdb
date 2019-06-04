@@ -82,28 +82,28 @@ TEST_CASE("Function test cases from PG docs", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {17.4}));
 
 	result = con.Query("select cbrt(27.0)");
-	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE(CHECK_COLUMN(result, 0, {3.0}));
 
 	result = con.Query("select ceil(-42.8)");
-	REQUIRE(CHECK_COLUMN(result, 0, {-42}));
+	REQUIRE(CHECK_COLUMN(result, 0, {-42.0}));
 
 	result = con.Query("select ceiling(-95.3)");
-	REQUIRE(CHECK_COLUMN(result, 0, {-95}));
+	REQUIRE(CHECK_COLUMN(result, 0, {-95.0}));
 
 	result = con.Query("select exp(1.0)");
 	REQUIRE(CHECK_COLUMN(result, 0, {2.71828182845905}));
 
 	result = con.Query("select floor(-42.8)");
-	REQUIRE(CHECK_COLUMN(result, 0, {-43}));
+	REQUIRE(CHECK_COLUMN(result, 0, {-43.0}));
 
 	result = con.Query("select ln(2.0)");
 	REQUIRE(CHECK_COLUMN(result, 0, {0.693147180559945}));
 
 	result = con.Query("select log(100.0)");
-	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	REQUIRE(CHECK_COLUMN(result, 0, {2.0}));
 
 	result = con.Query("select log10(100.0)");
-	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	REQUIRE(CHECK_COLUMN(result, 0, {2.0}));
 
 	result = con.Query("select pi()");
 	REQUIRE(CHECK_COLUMN(result, 0, {3.14159265358979}));

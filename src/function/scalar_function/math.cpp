@@ -1,6 +1,7 @@
 #include "function/scalar_function/math.hpp"
 #include "common/exception.hpp"
 #include "common/vector_operations/vector_operations.hpp"
+#include <cmath>
 
 using namespace std;
 
