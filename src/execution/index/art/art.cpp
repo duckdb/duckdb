@@ -42,6 +42,51 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, ve
 ART::~ART() {
 }
 
+bool ART::LeafMatches(Node *node, Key &key, unsigned keyLength, unsigned depth) {
+	if (depth != keyLength) {
+		auto leaf = static_cast<Leaf *>(node);
+		auto leafKey = make_unique<Key>(*this, types[0], leaf->value, keyLength);
+		Key &key_ref = *leafKey;
+		for (index_t i = depth; i < keyLength; i++)
+			if (key_ref[i] != key[i])
+				return false;
+	}
+	return true;
+}
+
+unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &transaction, vector<column_t> column_ids,
+                                                              Value value, ExpressionType expression_type) {
+	auto result = make_unique<ARTIndexScanState>(column_ids);
+	result->values[0] = value;
+	result->expressions[0] = expression_type;
+	return move(result);
+}
+
+unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transaction, vector<column_t> column_ids,
+                                                            Value low_value, ExpressionType low_expression_type,
+                                                            Value high_value, ExpressionType high_expression_type) {
+	auto result = make_unique<ARTIndexScanState>(column_ids);
+	result->values[0] = low_value;
+	result->expressions[0] = low_expression_type;
+	result->values[1] = high_value;
+	result->expressions[1] = high_expression_type;
+	return move(result);
+}
+
+//===--------------------------------------------------------------------===//
+// Insert
+//===--------------------------------------------------------------------===//
+template <class T>
+void ART::templated_insert(DataChunk &input, Vector &row_ids) {
+	auto input_data = (T *)input.data[0].data;
+	auto row_identifiers = (int64_t *)row_ids.data;
+	for (index_t i = 0; i < row_ids.count; i++) {
+		auto key = make_unique<Key>(*this, input.data[0].type, input_data[i], sizeof(input_data[i]));
+		Insert(tree, *key, 0, input_data[i], sizeof(input_data[i]), input.data[0].type,
+				row_identifiers[i]);
+	}
+}
+
 void ART::Insert(DataChunk &input, Vector &row_ids) {
 	assert(row_ids.type == TypeId::BIGINT);
 	assert(input.size() == row_ids.count);
@@ -61,6 +106,114 @@ void ART::Insert(DataChunk &input, Vector &row_ids) {
 		break;
 	default:
 		throw InvalidTypeException(input.data[0].type, "Invalid type for index");
+	}
+}
+
+void ART::Append(ClientContext &context, DataChunk &appended_data, uint64_t row_identifier_start) {
+	lock_guard<mutex> l(lock);
+
+	expression_result.Reset();
+	// first resolve the expressions
+	ExpressionExecutor executor(appended_data);
+	executor.Execute(expressions, expression_result);
+
+	// create the row identifiers
+	StaticVector<int64_t> row_identifiers;
+	auto row_ids = (int64_t *)row_identifiers.data;
+	row_identifiers.count = appended_data.size();
+	for (index_t i = 0; i < row_identifiers.count; i++) {
+		row_ids[i] = row_identifier_start + i;
+	}
+
+	Insert(expression_result, row_identifiers);
+}
+
+void ART::Insert(unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t value,
+                 unsigned maxKeyLength, TypeId type, uint64_t row_id) {
+	if (!node) {
+		// node is currently empty, create a leaf here witht he key
+		node = make_unique<Leaf>(*this, value, row_id);
+		return;
+	}
+
+	if (node->type == NodeType::NLeaf) {
+		// Replace leaf with Node4 and store both leaves in it
+		auto leaf = static_cast<Leaf *>(node.get());
+		auto auxKey = make_unique<Key>(*this, type, leaf->value, maxKeyLength);
+
+		Key &existingKey = *auxKey;
+		uint32_t newPrefixLength = 0;
+		// Leaf node is already there, update row_id vector
+		if (depth + newPrefixLength == maxKeyLength) {
+			leaf->Insert(row_id);
+			return;
+		}
+		while (existingKey[depth + newPrefixLength] == key[depth + newPrefixLength]) {
+			newPrefixLength++;
+			// Leaf node is already there, update row_id vector
+			if (depth + newPrefixLength == maxKeyLength) {
+				leaf->Insert(row_id);
+				return;
+			}
+		}
+		unique_ptr<Node> newNode = make_unique<Node4>(*this);
+		newNode->prefix_length = newPrefixLength;
+		memcpy(newNode->prefix.get(), &key[depth], std::min(newPrefixLength, maxPrefix));
+		Node4::insert(*this, newNode, existingKey[depth + newPrefixLength], node);
+		unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, value, row_id);
+		Node4::insert(*this, newNode, key[depth + newPrefixLength], leaf_node);
+		node = move(newNode);
+		return;
+	}
+
+	// Handle prefix of inner node
+	if (node->prefix_length) {
+		unsigned mismatchPos = Node::PrefixMismatch(*this, node.get(), key, depth, type);
+		if (mismatchPos != node->prefix_length) {
+			// Prefix differs, create new node
+			unique_ptr<Node> newNode = make_unique<Node4>(*this);
+			newNode->prefix_length = mismatchPos;
+			memcpy(newNode->prefix.get(), node->prefix.get(), std::min(mismatchPos, maxPrefix));
+			// Break up prefix
+			if (node->prefix_length < maxPrefix) {
+				auto node_ptr = node.get();
+				Node4::insert(*this, newNode, node->prefix[mismatchPos], node);
+				node_ptr->prefix_length -= (mismatchPos + 1);
+				memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatchPos + 1,
+				        std::min(node_ptr->prefix_length, maxPrefix));
+			} else {
+				throw NotImplementedException("PrefixLength > MaxPrefixLength");
+			}
+			unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, value, row_id);
+
+			Node4::insert(*this, newNode, key[depth + mismatchPos], leaf_node);
+			node = move(newNode);
+			return;
+		}
+		depth += node->prefix_length;
+	}
+
+	// Recurse
+	auto child = Node::findChild(key[depth], node);
+	if (child) {
+		Insert(*child, key, depth + 1, value, maxKeyLength, type, row_id);
+		return;
+	}
+
+	unique_ptr<Node> newNode = make_unique<Leaf>(*this, value, row_id);
+	Node::InsertLeaf(*this, node, key[depth], newNode);
+}
+
+//===--------------------------------------------------------------------===//
+// Delete
+//===--------------------------------------------------------------------===//
+template <class T>
+void ART::templated_delete(DataChunk &input, Vector &row_ids) {
+	auto input_data = (T *)input.data[0].data;
+	auto row_identifiers = (int64_t *)row_ids.data;
+	for (index_t i = 0; i < row_ids.count; i++) {
+		auto key = make_unique<Key>(*this, input.data[0].type, input_data[i], sizeof(input_data[i]));
+		Erase(tree, *key, 0, sizeof(input_data[i]), input.data[0].type, row_identifiers[i]);
 	}
 }
 
@@ -93,64 +246,14 @@ void ART::Delete(DataChunk &input, Vector &row_ids) {
 	}
 }
 
-unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &transaction, vector<column_t> column_ids,
-                                                              Value value, ExpressionType expression_type) {
-	auto result = make_unique<ARTIndexScanState>(column_ids);
-	result->values[0] = value;
-	result->expressions[0] = expression_type;
-	return move(result);
-}
-
-unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transaction, vector<column_t> column_ids,
-                                                            Value low_value, ExpressionType low_expression_type,
-                                                            Value high_value, ExpressionType high_expression_type) {
-	auto result = make_unique<ARTIndexScanState>(column_ids);
-	result->values[0] = low_value;
-	result->expressions[0] = low_expression_type;
-	result->values[1] = high_value;
-	result->expressions[1] = high_expression_type;
-	return move(result);
-}
-
-void ART::Append(ClientContext &context, DataChunk &appended_data, uint64_t row_identifier_start) {
-	lock_guard<mutex> l(lock);
-
-	expression_result.Reset();
-	// first resolve the expressions
-	ExpressionExecutor executor(appended_data);
-	executor.Execute(expressions, expression_result);
-
-	// create the row identifiers
-	StaticVector<int64_t> row_identifiers;
-	auto row_ids = (int64_t *)row_identifiers.data;
-	row_identifiers.count = appended_data.size();
-	for (index_t i = 0; i < row_identifiers.count; i++) {
-		row_ids[i] = row_identifier_start + i;
-	}
-
-	Insert(expression_result, row_identifiers);
-}
-
-bool ART::leafMatches(bool is_little_endian, Node *node, Key &key, unsigned keyLength, unsigned depth) {
-	if (depth != keyLength) {
-		auto leaf = static_cast<Leaf *>(node);
-		auto leafKey = make_unique<Key>(is_little_endian, types[0], leaf->value, keyLength);
-		Key &key_ref = *leafKey;
-		for (index_t i = depth; i < keyLength; i++)
-			if (key_ref[i] != key[i])
-				return false;
-	}
-	return true;
-}
-
-void ART::erase(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned depth, unsigned maxKeyLength,
+void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, unsigned maxKeyLength,
                 TypeId type, uint64_t row_id) {
 	if (!node)
 		return;
 	// Delete a leaf from a tree
 	if (node->type == NodeType::NLeaf) {
 		// Make sure we have the right leaf
-		if (ART::leafMatches(isLittleEndian, node.get(), key, maxKeyLength, depth)) {
+		if (ART::LeafMatches(node.get(), key, maxKeyLength, depth)) {
 			node.reset();
 		}
 		return;
@@ -158,7 +261,7 @@ void ART::erase(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned 
 
 	// Handle prefix
 	if (node->prefix_length) {
-		if (Node::prefixMismatch(isLittleEndian, node.get(), key, depth, maxKeyLength, type) != node->prefix_length) {
+		if (Node::PrefixMismatch(*this, node.get(), key, depth, type) != node->prefix_length) {
 			return;
 		}
 		depth += node->prefix_length;
@@ -167,30 +270,30 @@ void ART::erase(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned 
 	auto child = Node::findChild(key[depth], node);
     if(child){
         unique_ptr<Node> &child_ref = *child;
-        if (child_ref->type == NodeType::NLeaf && leafMatches(isLittleEndian, child_ref.get(), key, maxKeyLength, depth)) {
+        if (child_ref->type == NodeType::NLeaf && LeafMatches(child_ref.get(), key, maxKeyLength, depth)) {
             // Leaf found, remove entry
             auto leaf = static_cast<Leaf *>(child_ref.get());
             if (leaf->num_elements > 1) {
-                leaf->remove(leaf, row_id);
+                leaf->Remove(row_id);
                 return;
             }
             // Leaf only has one element, delete leaf, decrement node counter and maybe shrink node
             else {
                 switch (node->type) {
                 case NodeType::N4: {
-                    Node4::erase(node, pos);
+                    Node4::erase(*this, node, pos);
                     break;
                 }
                 case NodeType::N16: {
-                    Node16::erase(node, pos);
+                    Node16::erase(*this, node, pos);
                     break;
                 }
                 case NodeType::N48: {
-                    Node48::erase(node, pos);
+                    Node48::erase(*this, node, pos);
                     break;
                 }
                 case NodeType::N256:
-                    Node256::erase(node, pos);
+                    Node256::erase(*this, node, pos);
                     break;
                 default:
                     assert(0);
@@ -200,134 +303,12 @@ void ART::erase(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned 
 
         } else {
             // Recurse
-            erase(isLittleEndian, *child, key, depth + 1, maxKeyLength, type, row_id);
+            Erase(*child, key, depth + 1, maxKeyLength, type, row_id);
         }
     }
 }
 
-void ART::insert(bool isLittleEndian, unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t value,
-                 unsigned maxKeyLength, TypeId type, uint64_t row_id) {
-	if (!node) {
-		// node is currently empty, create a leaf here witht he key
-		node = make_unique<Leaf>(value, row_id, maxKeyLength);
-		return;
-	}
-
-	if (node->type == NodeType::NLeaf) {
-		// Replace leaf with Node4 and store both leaves in it
-		auto leaf = static_cast<Leaf *>(node.get());
-		auto auxKey = make_unique<Key>(isLittleEndian, type, leaf->value, maxKeyLength);
-
-		Key &existingKey = *auxKey;
-		unsigned newPrefixLength = 0;
-		// Leaf node is already there, update row_id vector
-		if (depth + newPrefixLength == maxKeyLength) {
-			Leaf::insert(leaf, row_id);
-			return;
-		}
-		while (existingKey[depth + newPrefixLength] == key[depth + newPrefixLength]) {
-			newPrefixLength++;
-			// Leaf node is already there, update row_id vector
-			if (depth + newPrefixLength == maxKeyLength) {
-				Leaf::insert(leaf, row_id);
-				return;
-			}
-		}
-		unique_ptr<Node> newNode = make_unique<Node4>(node->max_prefix_length);
-		newNode->prefix_length = newPrefixLength;
-		memcpy(newNode->prefix.get(), &key[depth], Node::min(newPrefixLength, node->max_prefix_length));
-		Node4::insert(newNode, existingKey[depth + newPrefixLength], node);
-		unique_ptr<Node> leaf_node = make_unique<Leaf>(value, row_id, maxKeyLength);
-		Node4::insert(newNode, key[depth + newPrefixLength], leaf_node);
-		node = move(newNode);
-		return;
-	}
-
-	// Handle prefix of inner node
-	if (node->prefix_length) {
-		unsigned mismatchPos = Node::prefixMismatch(isLittleEndian, node.get(), key, depth, maxKeyLength, type);
-		if (mismatchPos != node->prefix_length) {
-			// Prefix differs, create new node
-			unique_ptr<Node> newNode = make_unique<Node4>(node->max_prefix_length);
-			newNode->prefix_length = mismatchPos;
-			memcpy(newNode->prefix.get(), node->prefix.get(), Node::min(mismatchPos, node->max_prefix_length));
-			// Break up prefix
-			if (node->prefix_length < node->max_prefix_length) {
-				auto node_ptr = node.get();
-				Node4::insert(newNode, node->prefix[mismatchPos], node);
-				node_ptr->prefix_length -= (mismatchPos + 1);
-				memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatchPos + 1,
-				        Node::min(node_ptr->prefix_length, node_ptr->max_prefix_length));
-			} else {
-				throw NotImplementedException("PrefixLength > MaxPrefixLength");
-			}
-			unique_ptr<Node> leaf_node = make_unique<Leaf>(value, row_id, maxKeyLength);
-
-			Node4::insert(newNode, key[depth + mismatchPos], leaf_node);
-			node = move(newNode);
-			return;
-		}
-		depth += node->prefix_length;
-	}
-
-	// Recurse
-	auto child = Node::findChild(key[depth], node);
-	if (child) {
-		insert(isLittleEndian, *child, key, depth + 1, value, maxKeyLength, type, row_id);
-		return;
-	}
-
-	unique_ptr<Node> newNode = make_unique<Leaf>(value, row_id, maxKeyLength);
-	Node::insertLeaf(node, key[depth], newNode);
-}
-
-Node *ART::lookup(unique_ptr<Node> &node, Key &key, unsigned keyLength, unsigned depth) {
-	bool skippedPrefix = false; // Did we optimistically skip some prefix without checking it?
-	auto node_val = node.get();
-
-	while (node_val) {
-		if (node_val->type == NodeType::NLeaf) {
-			if (!skippedPrefix && depth == keyLength)  {// No check required
-				return node_val;
-			}
-
-			if (depth != keyLength) {
-				// Check leaf
-				auto leaf = static_cast<Leaf *>(node_val);
-				auto auxKey = make_unique<Key>(is_little_endian, types[0], leaf->value, keyLength);
-				Key &leafKey = *auxKey;
-				for (index_t i = (skippedPrefix ? 0 : depth); i < keyLength; i++) {
-					if (leafKey[i] != key[i]) {
-						return nullptr;
-					}
-				}
-			}
-			return node_val;
-		}
-
-		if (node_val->prefix_length) {
-			if (node_val->prefix_length < node_val->max_prefix_length) {
-				for (index_t pos = 0; pos < node_val->prefix_length; pos++) {
-					if (key[depth + pos] != node_val->prefix[pos]) {
-						return nullptr;
-					}
-				}
-			} else {
-				skippedPrefix = true;
-			}
-			depth += node_val->prefix_length;
-		}
-
-		node_val = Node::findChild(key[depth], node_val);
-		if (!node_val)
-			return nullptr;
-		depth++;
-	}
-
-	return nullptr;
-}
-
-bool ART::iteratorNext(Iterator &iter) {
+bool ART::IteratorNext(Iterator &iter) {
 	// Skip leaf
 	if ((iter.depth) && ((iter.stack[iter.depth - 1].node)->type == NodeType::NLeaf)) {
 		iter.depth--;
@@ -398,8 +379,8 @@ bool ART::iteratorNext(Iterator &iter) {
 	return false;
 }
 
-bool ART::bound(unique_ptr<Node> &n, Key &key, unsigned keyLength, Iterator &iterator, unsigned maxKeyLength,
-                bool inclusive, bool isLittleEndian) {
+bool ART::Bound(unique_ptr<Node> &n, Key &key, unsigned keyLength, Iterator &iterator, unsigned maxKeyLength,
+                bool inclusive) {
 	iterator.depth = 0;
 	if (!n)
 		return false;
@@ -419,17 +400,17 @@ bool ART::bound(unique_ptr<Node> &n, Key &key, unsigned keyLength, Iterator &ite
 				if (inclusive) {
 					return true;
 				} else {
-					return iteratorNext(iterator);
+					return IteratorNext(iterator);
 				}
 			}
-			auto auxKey = make_unique<Key>(isLittleEndian, types[0], leaf->value, maxKeyLength);
+			auto auxKey = make_unique<Key>(*this, types[0], leaf->value, maxKeyLength);
 			Key &leafKey = *auxKey;
 			for (unsigned i = depth; i < keyLength; i++) {
 				if (leafKey[i] != key[i]) {
 					if (leafKey[i] < key[i]) {
 						// Less
 						iterator.depth--;
-						return iteratorNext(iterator);
+						return IteratorNext(iterator);
 					}
 					// Greater
 					return true;
@@ -440,27 +421,27 @@ bool ART::bound(unique_ptr<Node> &n, Key &key, unsigned keyLength, Iterator &ite
 			if (inclusive) {
 				return true;
 			} else {
-				return iteratorNext(iterator);
+				return IteratorNext(iterator);
 			}
 		}
-		unsigned mismatchPos = Node::prefixMismatch(isLittleEndian, node, key, depth, maxKeyLength, types[0]);
+		unsigned mismatchPos = Node::PrefixMismatch(*this, node, key, depth, types[0]);
 
 		if (mismatchPos != node->prefix_length) {
 			if (node->prefix[mismatchPos] < key[depth + mismatchPos]) {
 				// Less
 				iterator.depth--;
-				return iteratorNext(iterator);
+				return IteratorNext(iterator);
 			}
 			// Greater
 			pos = 0;
-			return iteratorNext(iterator);
+			return IteratorNext(iterator);
 		}
 		depth += node->prefix_length;
 		Node *next = Node::findChild(key[depth], node);
 		pos = Node::findKeyPos(key[depth], node);
 
 		if (!next) {
-			return iteratorNext(iterator);
+			return IteratorNext(iterator);
 		}
 
 		pos++;
@@ -514,6 +495,27 @@ void ART::Update(ClientContext &context, vector<column_t> &update_columns, DataC
 	Insert(expression_result, row_identifiers);
 }
 
+//===--------------------------------------------------------------------===//
+// Point Query
+//===--------------------------------------------------------------------===//
+template <class T>
+index_t ART::templated_lookup(TypeId type, T data, int64_t *result_ids, ARTIndexScanState *state) {
+	auto key = make_unique<Key>(*this, type, data, sizeof(data));
+	index_t result_count = 0;
+	auto leaf = static_cast<Leaf *>(Lookup(tree, *key, this->maxPrefix, 0));
+	if (leaf) {
+		for (; state->pointquery_tuple < leaf->num_elements; state->pointquery_tuple++) {
+			result_ids[result_count++] = leaf->row_ids[state->pointquery_tuple];
+			if (result_count == STANDARD_VECTOR_SIZE) {
+				state->pointquery_tuple++;
+				return result_count;
+			}
+		}
+		state->checked = true;
+	}
+	return result_count;
+}
+
 void ART::SearchEqual(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state) {
 	auto row_ids = (int64_t *)result_identifiers->data;
 	switch (types[0]) {
@@ -534,6 +536,89 @@ void ART::SearchEqual(StaticVector<int64_t> *result_identifiers, ARTIndexScanSta
 	default:
 		throw InvalidTypeException(types[0], "Invalid type for index");
 	}
+}
+
+Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned keyLength, unsigned depth) {
+	bool skippedPrefix = false; // Did we optimistically skip some prefix without checking it?
+	auto node_val = node.get();
+
+	while (node_val) {
+		if (node_val->type == NodeType::NLeaf) {
+			if (!skippedPrefix && depth == keyLength)  {// No check required
+				return node_val;
+			}
+
+			if (depth != keyLength) {
+				// Check leaf
+				auto leaf = static_cast<Leaf *>(node_val);
+				auto auxKey = make_unique<Key>(*this, types[0], leaf->value, keyLength);
+				Key &leafKey = *auxKey;
+				for (index_t i = (skippedPrefix ? 0 : depth); i < keyLength; i++) {
+					if (leafKey[i] != key[i]) {
+						return nullptr;
+					}
+				}
+			}
+			return node_val;
+		}
+
+		if (node_val->prefix_length) {
+			if (node_val->prefix_length < maxPrefix) {
+				for (index_t pos = 0; pos < node_val->prefix_length; pos++) {
+					if (key[depth + pos] != node_val->prefix[pos]) {
+						return nullptr;
+					}
+				}
+			} else {
+				skippedPrefix = true;
+			}
+			depth += node_val->prefix_length;
+		}
+
+		node_val = Node::findChild(key[depth], node_val);
+		if (!node_val)
+			return nullptr;
+		depth++;
+	}
+
+	return nullptr;
+}
+
+//===--------------------------------------------------------------------===//
+// Greater Than
+//===--------------------------------------------------------------------===//
+template <class T>
+index_t ART::templated_greater_scan(TypeId type, T data, int64_t *result_ids, bool inclusive,
+								ARTIndexScanState *state) {
+	Iterator *it = &state->iterator;
+	auto key = make_unique<Key>(*this, type, data, sizeof(data));
+
+	index_t result_count = 0;
+	bool found;
+	if (!it->start) {
+		found = ART::Bound(tree, *key, sizeof(data), *it, sizeof(data), inclusive);
+		it->start = true;
+	} else {
+		found = true;
+	}
+	if (found) {
+		bool hasNext;
+		do {
+			if (state->pointquery_tuple >= it->node->num_elements) {
+				state->pointquery_tuple = 0;
+			}
+			for (; state->pointquery_tuple < it->node->num_elements; state->pointquery_tuple++) {
+				result_ids[result_count++] = it->node->row_ids[state->pointquery_tuple];
+				if (result_count == STANDARD_VECTOR_SIZE) {
+					state->pointquery_tuple++;
+					return result_count;
+				}
+			}
+			hasNext = ART::IteratorNext(*it);
+		} while (hasNext && it->node->value >= (uint64_t)data);
+	}
+	state->checked = true;
+	return result_count;
 }
 
 void ART::SearchGreater(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool inclusive) {
@@ -560,6 +645,52 @@ void ART::SearchGreater(StaticVector<int64_t> *result_identifiers, ARTIndexScanS
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Less Than
+//===--------------------------------------------------------------------===//
+template <class T>
+index_t ART::templated_less_scan(TypeId type, T data, int64_t *result_ids, bool inclusive, ARTIndexScanState *state) {
+	Iterator *it = &state->iterator;
+	index_t result_count = 0;
+	auto min_value = Node::minimum(tree)->get();
+	auto key = make_unique<Key>(*this, type, data, sizeof(data));
+	Leaf *minimum = static_cast<Leaf *>(min_value);
+	auto min_key = make_unique<Key>(*this, type, minimum->value, sizeof(data));
+
+	// early out min value higher than upper bound query
+	if (*min_key > *key)
+		return result_count;
+	bool found;
+	if (!it->start) {
+		found = ART::Bound(tree, *min_key, sizeof(data), *it, sizeof(data), true);
+		it->start = true;
+	} else {
+		found = true;
+	}
+	if (found) {
+		bool hasNext;
+		do {
+			if (state->pointquery_tuple >= it->node->num_elements) {
+				state->pointquery_tuple = 0;
+			}
+			for (; state->pointquery_tuple < it->node->num_elements; state->pointquery_tuple++) {
+				result_ids[result_count++] = it->node->row_ids[state->pointquery_tuple];
+				if (result_count == STANDARD_VECTOR_SIZE) {
+					state->pointquery_tuple++;
+					return result_count;
+				}
+			}
+			if (it->node->value == (uint64_t)data)
+				break;
+			hasNext = ART::IteratorNext(*it);
+			if (!inclusive && it->node->value == (uint64_t)data)
+				break;
+		} while (hasNext);
+	}
+	state->checked = true;
+	return result_count;
+}
+
 void ART::SearchLess(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool inclusive) {
 	auto row_ids = (int64_t *)result_identifiers->data;
 	switch (types[0]) {
@@ -582,6 +713,47 @@ void ART::SearchLess(StaticVector<int64_t> *result_identifiers, ARTIndexScanStat
 	default:
 		throw InvalidTypeException(types[0], "Invalid type for index");
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// Closed Range Query
+//===--------------------------------------------------------------------===//
+template <class T>
+index_t ART::templated_close_range(TypeId type, T left_query, T right_query, int64_t *result_ids, bool left_inclusive,
+								bool right_inclusive, ARTIndexScanState *state) {
+	Iterator *it = &state->iterator;
+	auto key = make_unique<Key>(*this, type, left_query, sizeof(left_query));
+	index_t result_count = 0;
+	bool found;
+	if (!it->start) {
+		found = ART::Bound(tree, *key, sizeof(left_query), *it, sizeof(left_query), left_inclusive);
+		it->start = true;
+	} else {
+		found = true;
+	}
+	if (found) {
+		bool hasNext;
+		do {
+			if (state->pointquery_tuple >= it->node->num_elements) {
+				state->pointquery_tuple = 0;
+			}
+			for (; state->pointquery_tuple < it->node->num_elements; state->pointquery_tuple++) {
+				result_ids[result_count++] = it->node->row_ids[state->pointquery_tuple];
+				if (result_count == STANDARD_VECTOR_SIZE) {
+					state->pointquery_tuple++;
+					return result_count;
+				}
+			}
+			if (it->node->value == (uint64_t)right_query)
+				break;
+			hasNext = ART::IteratorNext(*it);
+			if (!right_inclusive && it->node->value == (uint64_t)right_query)
+				break;
+
+		} while (hasNext);
+	}
+	state->checked = true;
+	return result_count;
 }
 
 void ART::SearchCloseRange(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool left_inclusive,

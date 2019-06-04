@@ -14,17 +14,15 @@ namespace duckdb {
 
 class Leaf : public Node {
 public:
-	Leaf(uint64_t value, row_t row_id, uint8_t max_prefix_length);
+	Leaf(ART &art, uint64_t value, row_t row_id);
 
 	uint64_t value;
 	index_t capacity;
 	index_t num_elements;
-	unique_ptr<row_t[]> row_id;
+	unique_ptr<row_t[]> row_ids;
 public:
-	static void insert(Leaf *leaf, row_t row_id) ;
-
-	//! TODO: Maybe shrink array dynamically?
-	static void remove(Leaf *leaf, row_t row_id);
+	void Insert(row_t row_id);
+	void Remove(row_t row_id);
 };
 
 }

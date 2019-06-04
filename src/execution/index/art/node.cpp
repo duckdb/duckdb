@@ -1,19 +1,16 @@
 #include "execution/index/art/node.hpp"
-#include "execution/index/art/node4.hpp"
-#include "execution/index/art/node16.hpp"
-#include "execution/index/art/node48.hpp"
-#include "execution/index/art/node256.hpp"
+#include "execution/index/art/art.hpp"
 #include "common/exception.hpp"
 
 using namespace duckdb;
 
-unsigned Node::min(unsigned a, unsigned b) {
-	return (a < b) ? a : b;
+Node::Node(ART &art, NodeType type) : prefix_length(0), count(0), type(type) {
+	this->prefix = unique_ptr<uint8_t[]>(new uint8_t[art.maxPrefix]);
 }
 
-void Node::copyPrefix(Node *src, Node *dst) {
+void Node::CopyPrefix(ART &art, Node *src, Node *dst) {
 	dst->prefix_length = src->prefix_length;
-	memcpy(dst->prefix.get(), src->prefix.get(), min(src->prefix_length, src->max_prefix_length));
+	memcpy(dst->prefix.get(), src->prefix.get(), std::min(src->prefix_length, art.maxPrefix));
 }
 
 unique_ptr<Node> *Node::minimum(unique_ptr<Node> &node) {
@@ -139,11 +136,10 @@ Node *Node::findChild(const uint8_t k, Node *node) {
 	}
 }
 
-unsigned Node::prefixMismatch(bool isLittleEndian, Node *node, Key &key, uint64_t depth, unsigned maxKeyLength,
-                              TypeId type) {
+unsigned Node::PrefixMismatch(ART &art, Node *node, Key &key, uint64_t depth, TypeId type) {
 	uint64_t pos;
 	// TODO: node->prefix_length > node->max_prefix_length
-	if (node->prefix_length <= node->max_prefix_length) {
+	if (node->prefix_length <= art.maxPrefix) {
 		for (pos = 0; pos < node->prefix_length; pos++)
 			if (key[depth + pos] != node->prefix[pos])
 				return pos;
@@ -153,19 +149,19 @@ unsigned Node::prefixMismatch(bool isLittleEndian, Node *node, Key &key, uint64_
 	return pos;
 }
 
-void Node::insertLeaf(unique_ptr<Node> &node, uint8_t key, unique_ptr<Node> &newNode) {
+void Node::InsertLeaf(ART &art, unique_ptr<Node> &node, uint8_t key, unique_ptr<Node> &newNode) {
 	switch (node->type) {
 	case NodeType::N4:
-		Node4::insert(node, key, newNode);
+		Node4::insert(art, node, key, newNode);
 		break;
 	case NodeType::N16:
-		Node16::insert(node, key, newNode);
+		Node16::insert(art, node, key, newNode);
 		break;
 	case NodeType::N48:
-		Node48::insert(node, key, newNode);
+		Node48::insert(art, node, key, newNode);
 		break;
 	case NodeType::N256:
-		Node256::insert(node, key, newNode);
+		Node256::insert(art, node, key, newNode);
 		break;
 	default:
 		assert(0);

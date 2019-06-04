@@ -1,7 +1,12 @@
 #include "execution/index/art/node4.hpp"
 #include "execution/index/art/node16.hpp"
+#include "execution/index/art/art.hpp"
 
 using namespace duckdb;
+
+Node4::Node4(ART &art) : Node(art, NodeType::N4) {
+	memset(key, 0, sizeof(key));
+}
 
 unique_ptr<Node> *Node4::getChild(const uint8_t k) {
 	for (uint32_t i = 0; i < count; ++i) {
@@ -26,7 +31,7 @@ unique_ptr<Node> *Node4::getMin() {
 	return &child[0];
 }
 
-void Node4::insert(unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child) {
+void Node4::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child) {
 	Node4 *n = static_cast<Node4 *>(node.get());
 
 	// Insert leaf into inner node
@@ -46,19 +51,19 @@ void Node4::insert(unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &ch
 		n->count++;
 	} else {
 		// Grow to Node16
-		auto newNode = make_unique<Node16>(node->max_prefix_length);
+		auto newNode = make_unique<Node16>(art);
 		newNode->count = 4;
-		copyPrefix(node.get(), newNode.get());
+		CopyPrefix(art, node.get(), newNode.get());
 		for (unsigned i = 0; i < 4; i++) {
 			newNode->key[i] = n->key[i];
 			newNode->child[i] = move(n->child[i]);
 		}
 		node = move(newNode);
-		Node16::insert(node, keyByte, child);
+		Node16::insert(art, node, keyByte, child);
 	}
 }
 
-void Node4::erase(unique_ptr<Node> &node, int pos) {
+void Node4::erase(ART &art, unique_ptr<Node> &node, int pos) {
 	Node4 *n = static_cast<Node4 *>(node.get());
 
 	if (n->count == 4) {
@@ -76,19 +81,19 @@ void Node4::erase(unique_ptr<Node> &node, int pos) {
 		auto childref = n->child[0].get();
 		if (childref->type == NodeType::NLeaf) {
 			// Concantenate prefixes
-			int l1 = childref->prefix_length;
-			if (l1 < n->max_prefix_length) {
+			uint32_t l1 = childref->prefix_length;
+			if (l1 < art.maxPrefix) {
 				n->prefix[l1] = n->key[0];
 				l1++;
 			}
-			if (l1 < n->max_prefix_length) {
-				int l2 = min(childref->prefix_length, n->max_prefix_length - l1);
-				for (int i = 0; i < l2; i++) {
+			if (l1 < art.maxPrefix) {
+				uint32_t l2 = std::min(childref->prefix_length, art.maxPrefix - l1);
+				for (index_t i = 0; i < l2; i++) {
 					n->prefix[l1 + i] = childref->prefix[l2];
 				}
 				l1 += l2;
 			}
-			for (int i = 0; i < l1; i++) {
+			for (index_t i = 0; i < l1; i++) {
 				childref->prefix[i] = n->prefix[i];
 			}
 		}

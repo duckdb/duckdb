@@ -4,6 +4,12 @@
 
 using namespace duckdb;
 
+Node48::Node48(ART &art) : Node(art, NodeType::N48) {
+	for (uint64_t i = 0; i < 256; i++) {
+		childIndex[i] = 48;
+	}
+}
+
 unique_ptr<Node> *Node48::getChild(const uint8_t k) {
 	if (childIndex[k] == Node::EMPTY_MARKER) {
 		return nullptr;
@@ -24,7 +30,7 @@ unique_ptr<Node> *Node48::getMin() {
 	return &child[childIndex[pos]];
 }
 
-void Node48::insert(unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child) {
+void Node48::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child) {
 	Node48 *n = static_cast<Node48 *>(node.get());
 
 	// Insert leaf into inner node
@@ -43,20 +49,20 @@ void Node48::insert(unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &c
 		n->count++;
 	} else {
 		// Grow to Node256
-		auto newNode = make_unique<Node256>(node->max_prefix_length);
+		auto newNode = make_unique<Node256>(art);
 		for (index_t i = 0; i < 256; i++) {
 			if (n->childIndex[i] != 48) {
 				newNode->child[i] = move(n->child[n->childIndex[i]]);
 			}
 		}
 		newNode->count = n->count;
-		copyPrefix(n, newNode.get());
+		CopyPrefix(art, n, newNode.get());
 		node = move(newNode);
-		Node256::insert(node, keyByte, child);
+		Node256::insert(art, node, keyByte, child);
 	}
 }
 
-void Node48::erase(unique_ptr<Node> &node, int pos) {
+void Node48::erase(ART &art, unique_ptr<Node> &node, int pos) {
 	Node48 *n = static_cast<Node48 *>(node.get());
 
 	if (node->count > 12) {
@@ -64,8 +70,8 @@ void Node48::erase(unique_ptr<Node> &node, int pos) {
 		n->childIndex[pos] = Node::EMPTY_MARKER;
 		n->count--;
 	} else {
-		auto newNode = make_unique<Node16>(node->max_prefix_length);
-		copyPrefix(n, newNode.get());
+		auto newNode = make_unique<Node16>(art);
+		CopyPrefix(art, n, newNode.get());
 		for (index_t i = 0; i < 256; i++) {
 			if (n->childIndex[i] != Node::EMPTY_MARKER) {
 				newNode->key[newNode->count] = i;
