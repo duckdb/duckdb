@@ -126,3 +126,24 @@ TEST_CASE("Test storage for timestamp type", "[timestamp]") {
 	}
 	DeleteDatabase(storage_database);
 }
+
+TEST_CASE("Test timestamp functions", "[timestamp]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	con.Query("SELECT AGE(TIMESTAMP '1957-06-13');");
+	REQUIRE(CHECK_COLUMN(result, 0, {"43 years 8 mons 3 days"}));
+
+	con.Query("SELECT AGE(TIMESTAMP '2001-04-10', TIMESTAMP '1957-06-13');");
+	REQUIRE(CHECK_COLUMN(result, 0, {"43 years 9 mons 27 days"}));
+
+	con.Query("SELECT EXTRACT(hour FROM TIMESTAMP '2001-02-16 20:38:40')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"20"}));
+
+	con.Query("SELECT TIMESTAMP '2001-09-28 01:00' + INTERVAL '23 hours'");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(Timestamp::FromString("2001-09-29 00:00:00"))}));
+
+	con.Query("SELECT INTERVAL '1 day' - INTERVAL '1 hour';");
+	REQUIRE(CHECK_COLUMN(result, 0, {"1 day -01:00:00"}));
+}
