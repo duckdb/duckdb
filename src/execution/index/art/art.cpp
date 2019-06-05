@@ -82,10 +82,10 @@ template <class T>
 void ART::templated_insert(ClientContext &context, DataChunk &input, Vector &row_ids) {
 	auto input_data = (T *)input.data[0].data;
 	auto row_identifiers = (int64_t *)row_ids.data;
-	for (index_t i = 0; i < row_ids.count; i++) {
+	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) {
 		auto key = make_unique<Key>(*this, input.data[0].type, input_data[i]);
 		Insert(context, tree, *key, 0, input_data[i], input.data[0].type, row_identifiers[i]);
-	}
+	});
 }
 
 void ART::Insert(ClientContext &context, DataChunk &input, Vector &row_ids) {
@@ -238,10 +238,10 @@ template <class T>
 void ART::templated_delete(DataChunk &input, Vector &row_ids) {
 	auto input_data = (T *)input.data[0].data;
 	auto row_identifiers = (int64_t *)row_ids.data;
-	for (index_t i = 0; i < row_ids.count; i++) {
+	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) {
 		auto key = make_unique<Key>(*this, input.data[0].type, input_data[i]);
 		Erase(tree, *key, 0, input.data[0].type, row_identifiers[i]);
-	}
+	});
 }
 
 void ART::Delete(DataChunk &input, Vector &row_ids) {

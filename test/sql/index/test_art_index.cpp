@@ -174,7 +174,11 @@ TEST_CASE("Test ART index with selection vector", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4, 6}));
 	result = con.Query("SELECT * FROM integers WHERE i<3 ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	result = con.Query("SELECT * FROM integers WHERE i<=3 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
 	result = con.Query("SELECT * FROM integers WHERE i>3 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 6}));
+	result = con.Query("SELECT * FROM integers WHERE i>=3 ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 6}));
 
 	// update with selection vector
