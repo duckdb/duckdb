@@ -129,39 +129,14 @@ void ART::Append(ClientContext &context, DataChunk &appended_data, uint64_t row_
 
 void ART::InsertToLeaf(ClientContext &context, Leaf &leaf, row_t row_id) {
 	if (is_unique && leaf.num_elements > 0) {
-		// trying to insert into leaf that already has elements in unique index
-		// check for uniqueness of values
-		assert(types.size() == 1);
-		DataChunk result;
-		result.Initialize(types);
-
-		Value inserted_value = Value::Numeric(types[0], leaf.value);
-		Vector inserted_data;
-		inserted_data.Reference(inserted_value);
-
-		Vector comparison_result(TypeId::BOOLEAN, true, false);
-		Vector row_ids(ROW_TYPE, true, false);
-		auto rows = (row_t*) row_ids.data;
-		row_ids.count = 1;
-		for(index_t i = 0; i < leaf.num_elements; i++) {
-			// fetch the values for this row id
-			rows[0] = leaf.row_ids[i];
-			table.Fetch(context.ActiveTransaction(), result, column_ids, row_ids);
-			if (result.size() > 0) {
-				VectorOperations::Equals(result.data[0], inserted_data, comparison_result);
-				if (VectorOperations::AnyTrue(comparison_result)) {
-					// conflict
-					throw CatalogException("duplicate key value violates primary key or unique constraint");
-				}
-			}
-		}
+		throw CatalogException("duplicate key value violates primary key or unique constraint");
 	}
 	leaf.Insert(row_id);
 }
 
 void ART::Insert(ClientContext &context, unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t value, TypeId type, row_t row_id) {
 	if (!node) {
-		// node is currently empty, create a leaf here witht he key
+		// node is currently empty, create a leaf here with the key
 		node = make_unique<Leaf>(*this, value, row_id);
 		return;
 	}
@@ -531,7 +506,7 @@ index_t ART::templated_lookup(TypeId type, T data, int64_t *result_ids, ARTIndex
 	auto leaf = static_cast<Leaf *>(Lookup(tree, *key, 0));
 	if (leaf) {
 		for (; state->pointquery_tuple < leaf->num_elements; state->pointquery_tuple++) {
-			result_ids[result_count++] = leaf->row_ids[state->pointquery_tuple];
+			result_ids[result_count++] = leaf->GetRowId(state->pointquery_tuple);
 			if (result_count == STANDARD_VECTOR_SIZE) {
 				state->pointquery_tuple++;
 				return result_count;
@@ -635,7 +610,7 @@ index_t ART::templated_greater_scan(TypeId type, T data, int64_t *result_ids, bo
 				state->pointquery_tuple = 0;
 			}
 			for (; state->pointquery_tuple < it->node->num_elements; state->pointquery_tuple++) {
-				result_ids[result_count++] = it->node->row_ids[state->pointquery_tuple];
+				result_ids[result_count++] = it->node->GetRowId(state->pointquery_tuple);
 				if (result_count == STANDARD_VECTOR_SIZE) {
 					state->pointquery_tuple++;
 					return result_count;
@@ -701,7 +676,7 @@ index_t ART::templated_less_scan(TypeId type, T data, int64_t *result_ids, bool 
 				state->pointquery_tuple = 0;
 			}
 			for (; state->pointquery_tuple < it->node->num_elements; state->pointquery_tuple++) {
-				result_ids[result_count++] = it->node->row_ids[state->pointquery_tuple];
+				result_ids[result_count++] = it->node->GetRowId(state->pointquery_tuple);
 				if (result_count == STANDARD_VECTOR_SIZE) {
 					state->pointquery_tuple++;
 					return result_count;
@@ -765,7 +740,7 @@ index_t ART::templated_close_range(TypeId type, T left_query, T right_query, int
 				state->pointquery_tuple = 0;
 			}
 			for (; state->pointquery_tuple < it->node->num_elements; state->pointquery_tuple++) {
-				result_ids[result_count++] = it->node->row_ids[state->pointquery_tuple];
+				result_ids[result_count++] = it->node->GetRowId(state->pointquery_tuple);
 				if (result_count == STANDARD_VECTOR_SIZE) {
 					state->pointquery_tuple++;
 					return result_count;

@@ -203,14 +203,42 @@ TEST_CASE("PRIMARY KEY and update/delete in the same transaction", "[constraints
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 33}));
 
 	// update and then insert
-	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1);"));
 	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=33;"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1);"));
-	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 
 	result = con.Query("SELECT * FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 33}));
+}
+
+TEST_CASE("Test appending the same value many times to a primary key column", "[constraints]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
+	// insert a bunch of values into the index and query the index
+	for(int32_t val = 0; val < 100; val++) {
+		result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", val));
+
+		result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	}
+	// now insert the same values, this should fail this time
+	for(int32_t it = 0; it < 10; it++) {
+		for(int32_t val = 64; val < 65; val++) {
+			result = con.Query("INSERT INTO integers VALUES ($1)", val);
+			REQUIRE_FAIL(result);
+		}
+	}
+
+	// now test that the counts are correct
+	result = con.Query("SELECT COUNT(*), COUNT(DISTINCT i) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {100}));
+	REQUIRE(CHECK_COLUMN(result, 1, {100}));
 }

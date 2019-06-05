@@ -18,8 +18,7 @@ void Leaf::Insert(row_t row_id) {
 		capacity *= 2;
 		row_ids = move(new_row_id);
 	}
-	row_ids[num_elements] = row_id;
-	num_elements++;
+	row_ids[num_elements++] = row_id;
 }
 
 //! TODO: Maybe shrink array dynamically?
@@ -32,6 +31,7 @@ void Leaf::Remove(row_t row_id) {
 		}
 	}
 	num_elements--;
-	for (index_t j = entry_offset; j < num_elements; j++)
+	for (index_t j = entry_offset; j < num_elements; j++) {
 		row_ids[j] = row_ids[j + 1];
+	}
 }
