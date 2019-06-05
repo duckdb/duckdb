@@ -310,69 +310,71 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	StringHeap heap;
 	updates.MoveStringsToHeap(heap);
 
-	// then update any indexes
+	{
+		// now perform the actual update
+		Transaction &transaction = context.ActiveTransaction();
+
+		auto ids = (row_t *)row_identifiers.data;
+		auto sel_vector = row_identifiers.sel_vector;
+		auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
+		// first find the chunk the row ids belong to
+		auto chunk = GetChunk(first_id);
+
+		// get an exclusive lock on the chunk
+		auto lock = chunk->lock.GetExclusiveLock();
+
+		// now update the entries
+		VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
+			auto id = ids[i] - chunk->start;
+			// assert that all ids in the vector belong to the same chunk
+			assert(id < chunk->count);
+			// check for conflicts
+			auto version = chunk->version_pointers[id];
+			if (version) {
+				if (version->version_number >= TRANSACTION_ID_START &&
+					version->version_number != transaction.transaction_id) {
+					throw TransactionException("Conflict on tuple update!");
+				}
+			}
+			// no conflict, move the current tuple data into the undo buffer
+			transaction.PushTuple(UndoFlags::UPDATE_TUPLE, id, chunk);
+			// mark the segment as dirty in the chunk
+			chunk->SetDirtyFlag(id, 1, true);
+		});
+
+		// now update the columns in the base table
+		for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+			auto column_id = column_ids[col_idx];
+			auto size = GetTypeIdSize(updates.data[col_idx].type);
+
+			Vector *update_vector = &updates.data[col_idx];
+			Vector null_vector;
+			if (update_vector->nullmask.any()) {
+				// has NULL values in the nullmask
+				// copy them to a temporary vector
+				null_vector.Initialize(update_vector->type, false);
+				null_vector.count = update_vector->count;
+				VectorOperations::CopyToStorage(*update_vector, null_vector.data);
+				update_vector = &null_vector;
+			}
+
+			VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
+				auto dataptr = chunk->GetPointerToRow(column_ids[col_idx], ids[i]);
+				auto update_index = update_vector->sel_vector ? update_vector->sel_vector[k] : k;
+				memcpy(dataptr, update_vector->data + update_index * size, size);
+			});
+
+			// update the statistics with the new data
+			statistics[column_id].Update(updates.data[col_idx]);
+		}
+		// after a successful update move the strings into the chunk
+		chunk->string_heap.MergeHeap(heap);
+	}
+
+	// finally update any indexes
 	for (auto &index : indexes) {
 		index->Update(context, column_ids, updates, row_identifiers);
 	}
-
-	// now perform the actual update
-	Transaction &transaction = context.ActiveTransaction();
-
-	auto ids = (row_t *)row_identifiers.data;
-	auto sel_vector = row_identifiers.sel_vector;
-	auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
-	// first find the chunk the row ids belong to
-	auto chunk = GetChunk(first_id);
-
-	// get an exclusive lock on the chunk
-	auto lock = chunk->lock.GetExclusiveLock();
-
-	// now update the entries
-	VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
-		auto id = ids[i] - chunk->start;
-		// assert that all ids in the vector belong to the same chunk
-		assert(id < chunk->count);
-		// check for conflicts
-		auto version = chunk->version_pointers[id];
-		if (version) {
-			if (version->version_number >= TRANSACTION_ID_START &&
-			    version->version_number != transaction.transaction_id) {
-				throw TransactionException("Conflict on tuple update!");
-			}
-		}
-		// no conflict, move the current tuple data into the undo buffer
-		transaction.PushTuple(UndoFlags::UPDATE_TUPLE, id, chunk);
-		// mark the segment as dirty in the chunk
-		chunk->SetDirtyFlag(id, 1, true);
-	});
-
-	// now update the columns in the base table
-	for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-		auto column_id = column_ids[col_idx];
-		auto size = GetTypeIdSize(updates.data[col_idx].type);
-
-		Vector *update_vector = &updates.data[col_idx];
-		Vector null_vector;
-		if (update_vector->nullmask.any()) {
-			// has NULL values in the nullmask
-			// copy them to a temporary vector
-			null_vector.Initialize(update_vector->type, false);
-			null_vector.count = update_vector->count;
-			VectorOperations::CopyToStorage(*update_vector, null_vector.data);
-			update_vector = &null_vector;
-		}
-
-		VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
-			auto dataptr = chunk->GetPointerToRow(column_ids[col_idx], ids[i]);
-			auto update_index = update_vector->sel_vector ? update_vector->sel_vector[k] : k;
-			memcpy(dataptr, update_vector->data + update_index * size, size);
-		});
-
-		// update the statistics with the new data
-		statistics[column_id].Update(updates.data[col_idx]);
-	}
-	// after a successful update move the strings into the chunk
-	chunk->string_heap.MergeHeap(heap);
 }
 
 //===--------------------------------------------------------------------===//

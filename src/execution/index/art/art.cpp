@@ -9,7 +9,7 @@ using namespace std;
 
 ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions, bool is_unique)
     : Index(IndexType::ART, table, column_ids, move(unbound_expressions)), is_unique(is_unique) {
-	if (unbound_expressions.size() > 1) {
+	if (this->unbound_expressions.size() > 1) {
 		throw NotImplementedException("Multiple columns in ART index not supported");
 	}
 	tree = nullptr;
@@ -134,15 +134,18 @@ void ART::InsertToLeaf(ClientContext &context, Leaf &leaf, row_t row_id) {
 		assert(types.size() == 1);
 		DataChunk result;
 		result.Initialize(types);
+
 		Value inserted_value = Value::Numeric(types[0], leaf.value);
 		Vector inserted_data;
 		inserted_data.Reference(inserted_value);
+
 		Vector comparison_result(TypeId::BOOLEAN, true, false);
 		Vector row_ids(ROW_TYPE, true, false);
+		auto rows = (row_t*) row_ids.data;
 		row_ids.count = 1;
 		for(index_t i = 0; i < leaf.num_elements; i++) {
 			// fetch the values for this row id
-			row_ids.data[0] = leaf.row_ids[i];
+			rows[0] = leaf.row_ids[i];
 			table.Fetch(context.ActiveTransaction(), result, column_ids, row_ids);
 			if (result.size() > 0) {
 				VectorOperations::Equals(result.data[0], inserted_data, comparison_result);
