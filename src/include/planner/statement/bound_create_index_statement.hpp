@@ -14,6 +14,7 @@
 #include "planner/statement/bound_select_statement.hpp"
 
 namespace duckdb {
+class BoundColumnRefExpression;
 
 //! Bound equivalent to CreateIndexStatement
 class BoundCreateIndexStatement : public BoundSQLStatement {
@@ -27,7 +28,6 @@ public:
 	vector<unique_ptr<Expression>> expressions;
 	// Info for index creation
 	unique_ptr<CreateIndexInfo> info;
-
 public:
 	vector<string> GetNames() override {
 		return {"Count"};

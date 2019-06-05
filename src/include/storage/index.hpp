@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "common/unordered_set.hpp"
 #include "common/enums/index_type.hpp"
 #include "common/types/data_chunk.hpp"
 #include "common/types/tuple.hpp"
@@ -17,6 +18,7 @@
 namespace duckdb {
 
 class ClientContext;
+class DataTable;
 class Transaction;
 
 struct IndexScanState {
@@ -31,17 +33,22 @@ struct IndexScanState {
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
 public:
-	Index(IndexType type, vector<unique_ptr<Expression>> expressions,
-	      vector<unique_ptr<Expression>> unbound_expressions)
-	    : type(type), expressions(move(expressions)), unbound_expressions(move(unbound_expressions)) {
-	}
+	Index(IndexType type, DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions);
 	virtual ~Index() = default;
 
+	//! The type of the index
 	IndexType type;
-	//! The expressions to evaluate
-	vector<unique_ptr<Expression>> expressions;
-	//! Unbound expressions to be used in the optimizer
+	//! The table
+	DataTable &table;
+	//! Column identifiers to extract from the base table
+	vector<column_t> column_ids;
+	//! unordered_set of column_ids used by the index
+	unordered_set<column_t> column_id_set;
+	//! Unbound expressions used by the index
 	vector<unique_ptr<Expression>> unbound_expressions;
+	//! The types of the expressions
+	vector<TypeId> types;
+public:
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table when we only have one query predicate
 	virtual unique_ptr<IndexScanState> InitializeScanSinglePredicate(Transaction &transaction,
@@ -64,6 +71,14 @@ public:
 
 	//! Called when data inside the index is Deleted
 	virtual void Delete(DataChunk &entries, Vector &row_identifiers) = 0;
+protected:
+	void ExecuteExpressions(DataChunk &input, DataChunk &result);
+
+private:
+	//! Bound expressions used by the index
+	vector<unique_ptr<Expression>> bound_expressions;
+
+	unique_ptr<Expression> BindExpression(unique_ptr<Expression> expr);
 };
 
 } // namespace duckdb

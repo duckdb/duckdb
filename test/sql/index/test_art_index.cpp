@@ -67,11 +67,29 @@ TEST_CASE("Test ART index on table with multiple columns", "[art]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(j)"));
 
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (10, 1, 'hello'), (11, 2, 'world')"));
+
+	// condition on "i"
+	result = con.Query("SELECT i FROM integers WHERE i=10");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 	result = con.Query("SELECT * FROM integers WHERE i=10");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"hello"}));
 
+	// condition on "j"
+	result = con.Query("SELECT j FROM integers WHERE j=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con.Query("SELECT * FROM integers WHERE j=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"hello"}));
+
+	// condition on "k"
+	result = con.Query("SELECT k FROM integers WHERE k='hello'");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
+	result = con.Query("SELECT i, k FROM integers WHERE k='hello'");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello"}));
 	result = con.Query("SELECT * FROM integers WHERE k='hello'");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1}));
@@ -100,8 +118,10 @@ TEST_CASE("Test ART index that requires multiple columns for expression", "[art]
 	REQUIRE(CHECK_COLUMN(result, 2, {"hello"}));
 	REQUIRE(CHECK_COLUMN(result, 3, {4}));
 
-
-	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET j=5 WHERE j=1"));
+	// update that uses both columns in the index
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET j=5, l=l WHERE j=1"));
+	// update that only uses one of the columns
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET j=5 WHERE j=5"));
 
 	result = con.Query("SELECT * FROM integers WHERE j+l=9");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
@@ -109,7 +129,13 @@ TEST_CASE("Test ART index that requires multiple columns for expression", "[art]
 	REQUIRE(CHECK_COLUMN(result, 2, {"hello"}));
 	REQUIRE(CHECK_COLUMN(result, 3, {4}));
 
-	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers"));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE j+l=8"));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE j+l=9"));
+
+	result = con.Query("SELECT COUNT(*) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	result = con.Query("SELECT COUNT(*) FROM integers WHERE j+l>0");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 }
 
 TEST_CASE("Test updates on ART index", "[art]") {
@@ -122,8 +148,8 @@ TEST_CASE("Test updates on ART index", "[art]") {
 
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 2), (2, 2)"));
 	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET j=10 WHERE i=1"));
-	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET j=10 WHERE rowid=1"));
-	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE rowid=2"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET j=10 WHERE rowid=0"));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE rowid=1"));
 
 	result = con.Query("SELECT * FROM integers WHERE j>5");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
@@ -384,7 +410,7 @@ TEST_CASE("ART Node 4", "[art]") {
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 }
 
-TEST_CASE("ART  Node 16", "[art]") {
+TEST_CASE("ART Node 16", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 

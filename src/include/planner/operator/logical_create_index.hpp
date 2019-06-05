@@ -31,7 +31,6 @@ public:
 	unique_ptr<CreateIndexInfo> info;
 	//! Unbound expressions to be used in the optimizer
 	vector<unique_ptr<Expression>> unbound_expressions;
-
 protected:
 	void ResolveTypes() override {
 		for (auto &expr : expressions) {

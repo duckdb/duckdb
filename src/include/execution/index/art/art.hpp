@@ -54,20 +54,13 @@ struct ARTIndexScanState : public IndexScanState {
 
 class ART : public Index {
 public:
-	ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, vector<TypeId> expression_types,
-	    vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> unbound_expressions, bool is_unique = false);
+	ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions, bool is_unique = false);
 	~ART();
 
 	//! Lock used for updating the index
 	std::mutex lock;
 	//! Root of the tree
 	unique_ptr<Node> tree;
-	//! The table
-	DataTable &table;
-	//! Column identifiers to extract from the base table
-	vector<column_t> column_ids;
-	//! Types of the column identifiers
-	vector<TypeId> types;
 	//! True if machine is little endian
 	bool is_little_endian;
 	//! The maximum prefix length for compressed paths stored in the

@@ -13,10 +13,6 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundCreateIndexSta
 	// we take the required columns from here
 	assert(root->type == LogicalOperatorType::GET);
 	auto &get = (LogicalGet &)*root;
-	auto column_ids = get.column_ids;
-	if (column_ids.size() > 1) {
-		throw NotImplementedException("Multidimensional indexes not supported yet");
-	}
 	// create the logical operator
-	return make_unique<LogicalCreateIndex>(*get.table, column_ids, move(stmt.expressions), move(stmt.info));
+	return make_unique<LogicalCreateIndex>(*get.table, get.column_ids, move(stmt.expressions), move(stmt.info));
 }

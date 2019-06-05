@@ -9,8 +9,10 @@
 #pragma once
 
 #include "planner/expression_binder.hpp"
+#include "common/unordered_map.hpp"
 
 namespace duckdb {
+class BoundColumnRefExpression;
 
 //! The INDEX binder is responsible for binding an expression within an Index statement
 class IndexBinder : public ExpressionBinder {

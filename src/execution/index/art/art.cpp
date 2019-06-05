@@ -7,15 +7,13 @@
 using namespace duckdb;
 using namespace std;
 
-ART::ART(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, vector<TypeId> expression_types,
-         vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> unbound_expressions, bool is_unique)
-    : Index(IndexType::ART, move(expressions), move(unbound_expressions)), table(table), column_ids(column_ids),
-      types(types), is_unique(is_unique) {
-	if (expression_types.size() > 1) {
+ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions, bool is_unique)
+    : Index(IndexType::ART, table, column_ids, move(unbound_expressions)), is_unique(is_unique) {
+	if (unbound_expressions.size() > 1) {
 		throw NotImplementedException("Multiple columns in ART index not supported");
 	}
 	tree = nullptr;
-	expression_result.Initialize(expression_types);
+	expression_result.Initialize(types);
 	int n = 1;
 	// little endian if true
 	if (*(char *)&n == 1) {
@@ -115,10 +113,8 @@ void ART::Insert(ClientContext &context, DataChunk &input, Vector &row_ids) {
 void ART::Append(ClientContext &context, DataChunk &appended_data, uint64_t row_identifier_start) {
 	lock_guard<mutex> l(lock);
 
-	expression_result.Reset();
-	// first resolve the expressions
-	ExpressionExecutor executor(appended_data);
-	executor.Execute(expressions, expression_result);
+	// first resolve the expressions for the index
+	ExecuteExpressions(appended_data, expression_result);
 
 	// create the row identifiers
 	StaticVector<int64_t> row_identifiers;
@@ -251,10 +247,8 @@ void ART::templated_delete(DataChunk &input, Vector &row_ids) {
 void ART::Delete(DataChunk &input, Vector &row_ids) {
 	lock_guard<mutex> l(lock);
 
-	expression_result.Reset();
 	// first resolve the expressions
-	ExpressionExecutor executor(input);
-	executor.Execute(expressions, expression_result);
+	ExecuteExpressions(input, expression_result);
 
 	assert(row_ids.type == TypeId::BIGINT);
 	assert(expression_result.size() == row_ids.count);
@@ -517,10 +511,8 @@ void ART::Update(ClientContext &context, vector<column_t> &update_columns, DataC
 		assert(found_column);
 	}
 
-	expression_result.Reset();
 	// now resolve the expressions on the temp_chunk
-	ExpressionExecutor executor(temp_chunk);
-	executor.Execute(expressions, expression_result);
+	ExecuteExpressions(temp_chunk, expression_result);
 
 	// insert the expression result
 	Insert(context, expression_result, row_identifiers);
