@@ -9,12 +9,16 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundCopyStatement 
 	if (stmt.select_statement) {
 		// COPY from a query
 		auto names = stmt.select_statement->names;
+		auto types = stmt.select_statement->types;
+
 		// first plan the query
 		auto root = CreatePlan(*stmt.select_statement);
 		// now create the copy information
 		auto copy = make_unique<LogicalCopy>(nullptr, move(stmt.info));
 		copy->AddChild(move(root));
 		copy->names = names;
+		copy->sql_types = types;
+
 		return move(copy);
 	} else {
 		// COPY to a table

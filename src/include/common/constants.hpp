@@ -64,5 +64,4 @@ extern const sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
 
 extern const double PI;
 
-
 } // namespace duckdb

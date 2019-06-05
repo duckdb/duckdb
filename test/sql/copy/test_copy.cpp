@@ -250,3 +250,21 @@ TEST_CASE("Test copy from web_page csv", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 12, {3, 3, 3}));
 	REQUIRE(CHECK_COLUMN(result, 13, {4, 1, 4}));
 }
+
+TEST_CASE("Test date copy", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE date_test(d date)"));
+
+	auto csv_path = GetCSVPath();
+	auto date_csv = fs.JoinPath(csv_path, "date.csv");
+	WriteCSV(date_csv, "2019-06-05\n");
+
+	result = con.Query("COPY date_test FROM '" + date_csv + "'");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result = con.Query("SELECT cast(d as string) FROM date_test");
+	REQUIRE(CHECK_COLUMN(result, 0, {"2019-06-05"}));
+}
