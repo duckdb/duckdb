@@ -48,7 +48,7 @@ TEST_CASE("Test TIMESTAMP type", "[timestamp]") {
 	REQUIRE_FAIL(con.Query("SELECT t/t FROM timestamp"));
 	REQUIRE_FAIL(con.Query("SELECT t%t FROM timestamp"));
 	// FIXME: we can subtract timestamps!
-	//REQUIRE_NO_FAIL(con.Query("SELECT t-t FROM timestamp"));
+	// REQUIRE_NO_FAIL(con.Query("SELECT t-t FROM timestamp"));
 }
 
 TEST_CASE("Test out of range/incorrect timestamp formats", "[timestamp]") {
