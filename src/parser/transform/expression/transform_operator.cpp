@@ -1,4 +1,4 @@
-#include "function/scalar_function/regexp_matches.hpp"
+#include "function/scalar_function/regexp.hpp"
 #include "parser/expression/case_expression.hpp"
 #include "parser/expression/comparison_expression.hpp"
 #include "parser/expression/conjunction_expression.hpp"

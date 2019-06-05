@@ -15,12 +15,14 @@ template <class MJ, class L_ARG, class R_ARG> static count_t merge_join(L_ARG &l
 		return MJ::template Operation<int32_t>(l, r);
 	case TypeId::BIGINT:
 		return MJ::template Operation<int64_t>(l, r);
+	case TypeId::FLOAT:
+		return MJ::template Operation<float>(l, r);
 	case TypeId::DOUBLE:
 		return MJ::template Operation<double>(l, r);
 	case TypeId::VARCHAR:
 		return MJ::template Operation<const char *>(l, r);
 	default:
-		throw NotImplementedException("Type not for merge join implemented!");
+		throw NotImplementedException("Type not implemented for merge join!");
 	}
 }
 

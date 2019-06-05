@@ -76,6 +76,11 @@ public:
 	static Value POINTER(uintptr_t value);
 	//! Create a date Value from a specified date
 	static Value DATE(int32_t year, int32_t month, int32_t day);
+	//! Create a timestamp Value from a specified date/time combination
+	static Value TIMESTAMP(date_t date, dtime_t time);
+	//! Create a timestamp Value from a specified timestamp
+	static Value TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
+	                       int32_t msec);
 
 	template <class T> static Value CreateValue(T value) {
 		throw NotImplementedException("Unimplemented template type for value creation");

@@ -22,6 +22,7 @@ public:
 	TableCatalogEntry *table;
 	unique_ptr<CopyInfo> info;
 	vector<string> names;
+	vector<SQLType> sql_types;
 
 protected:
 	void ResolveTypes() override {

@@ -6,6 +6,7 @@
 #include "main/client_context.hpp"
 #include "main/database.hpp"
 #include "storage/data_table.hpp"
+#include "parser/column_definition.hpp"
 
 #include <algorithm>
 #include <fstream>
@@ -65,6 +66,20 @@ void PhysicalCopy::PushValue(string &line, DataChunk &insert_chunk, index_t star
 		// non-empty: create the value
 		result = Value(line.substr(start, length));
 	}
+
+	auto target_sqltype = table->columns[column].type;
+	switch (target_sqltype.id) {
+	case SQLTypeId::DATE:
+	case SQLTypeId::TIMESTAMP:
+		if (!result.is_null) {
+			result = result.CastAs(SQLType(SQLTypeId::VARCHAR), target_sqltype);
+		}
+		break;
+	default:
+		// nop
+		break;
+	}
+
 	// insert the value into the column
 	index_t column_entry = info->select_list.size() > 0 ? select_list_oid[column] : column;
 	index_t entry = insert_chunk.data[column_entry].count++;
@@ -196,8 +211,9 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 					if (col != 0) {
 						to_csv << info.delimiter;
 					}
-					WriteQuotedString(to_csv, state->child_chunk.data[col].GetValue(i).ToString(), info.delimiter,
-					                  info.quote);
+					// need to cast to correct sql type because otherwise the string representation is wrong
+					auto val = state->child_chunk.data[col].GetValue(i);
+					WriteQuotedString(to_csv, val.ToString(sql_types[col]), info.delimiter, info.quote);
 				}
 				to_csv << endl;
 				nr_elements++;
