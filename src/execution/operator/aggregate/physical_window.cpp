@@ -72,7 +72,7 @@ static void MaterializeExpression(ClientContext &context, Expression *expr, Chun
 }
 
 static void SortCollectionForWindow(ClientContext &context, BoundWindowExpression *wexpr, ChunkCollection &input,
-                                    ChunkCollection &output) {
+                                    ChunkCollection &output, ChunkCollection &sort_collection) {
 	vector<TypeId> sort_types;
 	vector<Expression *> exprs;
 	vector<OrderType> orders;
@@ -102,16 +102,17 @@ static void SortCollectionForWindow(ClientContext &context, BoundWindowExpressio
 		ExpressionExecutor executor(*input.chunks[i]);
 		executor.Execute(exprs, sort_chunk);
 		sort_chunk.Verify();
-		output.Append(sort_chunk);
+		sort_collection.Append(sort_chunk);
 	}
 
-	assert(input.count == output.count);
+	assert(input.count == sort_collection.count);
 
 	auto sorted_vector = unique_ptr<index_t[]>(new index_t[input.count]);
-	output.Sort(orders, sorted_vector.get());
+	sort_collection.Sort(orders, sorted_vector.get());
 
 	input.Reorder(sorted_vector.get());
 	output.Reorder(sorted_vector.get());
+	sort_collection.Reorder(sorted_vector.get());
 }
 
 struct WindowBoundariesState {
@@ -254,7 +255,7 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 	ChunkCollection sort_collection;
 	bool needs_sorting = wexpr->partitions.size() + wexpr->orders.size() > 0;
 	if (needs_sorting) {
-		SortCollectionForWindow(context, wexpr, input, sort_collection);
+		SortCollectionForWindow(context, wexpr, input, output, sort_collection);
 	}
 
 	// evaluate inner expressions of window functions, could be more complex
