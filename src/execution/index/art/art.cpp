@@ -447,23 +447,20 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 // Iterator scans
 //===--------------------------------------------------------------------===//
 template<class T, bool HAS_BOUND, bool INCLUSIVE>
-index_t ART::iterator_scan(ARTIndexScanState *state, Iterator *it, int64_t *result_ids, T data) {
+index_t ART::iterator_scan(ARTIndexScanState *state, Iterator *it, int64_t *result_ids, T bound) {
 	index_t result_count = 0;
 	bool has_next;
 	do {
 		if (HAS_BOUND) {
 			if (INCLUSIVE) {
-				if (it->node->value > (uint64_t) data) {
+				if (it->node->value > (uint64_t) bound) {
 					break;
 				}
 			} else {
-				if (it->node->value >= (uint64_t) data) {
+				if (it->node->value >= (uint64_t) bound) {
 					break;
 				}
 			}
-		}
-		if (state->pointquery_tuple >= it->node->num_elements) {
-			state->pointquery_tuple = 0;
 		}
 		for (; state->pointquery_tuple < it->node->num_elements; state->pointquery_tuple++) {
 			result_ids[result_count++] = it->node->GetRowId(state->pointquery_tuple);
@@ -472,6 +469,7 @@ index_t ART::iterator_scan(ARTIndexScanState *state, Iterator *it, int64_t *resu
 				return result_count;
 			}
 		}
+		state->pointquery_tuple = 0;
 		has_next = ART::IteratorNext(*it);
 	} while (has_next);
 	state->checked = true;
