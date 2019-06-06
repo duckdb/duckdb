@@ -467,7 +467,7 @@ void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result) {
 		if (i != ht.predicates.size() - 1) {
 			count_t new_count = 0;
 			VectorOperations::ExecType<bool>(final_result, [&](bool match, index_t index, index_t k) {
-				if (match) {
+				if (match && !final_result.nullmask[index]) {
 					temporary_selection_vector[new_count++] = index;
 				}
 			});
@@ -494,7 +494,7 @@ count_t ScanStructure::ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk
 		// after doing all the comparisons we loop to find all the actual matches
 		result_count = 0;
 		VectorOperations::ExecType<bool>(comparison_result, [&](bool match, index_t index, index_t k) {
-			if (match) {
+			if (match && !comparison_result.nullmask[index]) {
 				found_match[index] = true;
 				result.owned_sel_vector[result_count] = index;
 				build_pointers[result_count] = ptrs[index];
