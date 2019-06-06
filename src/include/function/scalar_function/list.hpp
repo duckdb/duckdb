@@ -1,3 +1,4 @@
+#include "function/scalar_function/age.hpp"
 #include "function/scalar_function/caseconvert.hpp"
 #include "function/scalar_function/concat.hpp"
 #include "function/scalar_function/date_part.hpp"

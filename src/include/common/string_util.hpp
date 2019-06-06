@@ -128,5 +128,7 @@ public:
 		}
 		return source;
 	}
+
+	static string Concat(const string &str, int64_t value);
 };
 } // namespace duckdb
