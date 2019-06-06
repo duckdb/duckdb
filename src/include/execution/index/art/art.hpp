@@ -26,13 +26,13 @@
 
 namespace duckdb {
 struct IteratorEntry {
-	Node *node;
-	int pos;
+	Node *node = nullptr;
+	index_t pos = 0;
 };
 
 struct Iterator {
 	//! The current Leaf Node, valid if depth>0
-	Leaf *node;
+	Leaf *node = nullptr;
 	//! The current depth
 	int32_t depth = 0;
 	//! Stack, actually the size is determined at runtime
@@ -110,7 +110,7 @@ private:
 	//! Find the node with a matching key, optimistic version
 	Node *Lookup(unique_ptr<Node> &node, Key &key, unsigned depth);
 
-	//! Find the iterator position for bound queries
+	//! Find the first node that is bigger (or equal to) a specific key
 	bool Bound(unique_ptr<Node> &node, Key &key, Iterator &iterator, bool inclusive);
 
 	//! Gets next node for range queries
@@ -122,6 +122,10 @@ private:
 	void SearchCloseRange(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool left_inclusive,
 	                      bool right_inclusive);
 private:
+
+	template<class T, bool HAS_BOUND, bool INCLUSIVE>
+	index_t iterator_scan(ARTIndexScanState *state, Iterator *it, int64_t *result_ids, T upper_bound);
+
 	template <class T>
 	void templated_insert(ClientContext &context, DataChunk &input, Vector &row_ids);
 	template <class T>

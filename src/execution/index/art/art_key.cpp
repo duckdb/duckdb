@@ -76,10 +76,11 @@ void Key::ConvertToBinaryComparable(bool is_little_endian, TypeId type, uintptr_
 
 bool Key::operator>(const Key &k) const {
 	for (int i = 0; i < len; i++) {
-		if (data[i] > k.data[i])
+		if (data[i] > k.data[i]) {
 			return true;
-		else if (data[i] < k.data[i])
+		} else if (data[i] < k.data[i]) {
 			return false;
+		}
 	}
 	return false;
 }

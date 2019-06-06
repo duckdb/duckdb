@@ -123,7 +123,6 @@ void ART::Append(ClientContext &context, DataChunk &appended_data, uint64_t row_
 	for (index_t i = 0; i < row_identifiers.count; i++) {
 		row_ids[i] = row_identifier_start + i;
 	}
-
 	Insert(context, expression_result, row_identifiers);
 }
 
@@ -310,148 +309,6 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, TypeId type, r
     }
 }
 
-bool ART::IteratorNext(Iterator &iter) {
-	// Skip leaf
-	if ((iter.depth) && ((iter.stack[iter.depth - 1].node)->type == NodeType::NLeaf)) {
-		iter.depth--;
-	}
-
-	// Look for next leaf
-	while (iter.depth) {
-		Node *node = iter.stack[iter.depth - 1].node;
-
-		// Leaf found
-		if (node->type == NodeType::NLeaf) {
-			auto leaf = static_cast<Leaf *>(node);
-			iter.node = leaf;
-			return true;
-		}
-
-		// Find next node
-		Node *next = nullptr;
-		switch (node->type) {
-		case NodeType::N4: {
-			Node4 *n = static_cast<Node4 *>(node);
-			if (iter.stack[iter.depth - 1].pos < node->count) {
-				next = n->child[iter.stack[iter.depth - 1].pos++].get();
-			}
-			break;
-		}
-		case NodeType::N16: {
-			Node16 *n = static_cast<Node16 *>(node);
-			if (iter.stack[iter.depth - 1].pos < node->count) {
-				next = n->child[iter.stack[iter.depth - 1].pos++].get();
-			}
-			break;
-		}
-		case NodeType::N48: {
-			Node48 *n = static_cast<Node48 *>(node);
-			unsigned depth = iter.depth - 1;
-			for (; iter.stack[depth].pos < 256; iter.stack[depth].pos++) {
-				if (n->childIndex[iter.stack[depth].pos] != 48) {
-					next = n->child[n->childIndex[iter.stack[depth].pos++]].get();
-					break;
-				}
-			}
-			break;
-		}
-		case NodeType::N256: {
-			Node256 *n = static_cast<Node256 *>(node);
-			unsigned depth = iter.depth - 1;
-			for (; iter.stack[depth].pos < 256; iter.stack[depth].pos++) {
-				if (n->child[iter.stack[depth].pos]) {
-					next = n->child[iter.stack[depth].pos++].get();
-					break;
-				}
-			}
-			break;
-		}
-		default:
-			assert(0);
-			break;
-		}
-
-		if (next) {
-			iter.stack[iter.depth].pos = 0;
-			iter.stack[iter.depth].node = next;
-			iter.depth++;
-		} else
-			iter.depth--;
-	}
-	return false;
-}
-
-bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &iterator, bool inclusive) {
-	iterator.depth = 0;
-	if (!n) {
-		return false;
-	}
-	Node *node = n.get();
-
-	unsigned depth = 0;
-	while (true) {
-		iterator.stack[iterator.depth].node = node;
-		int &pos = iterator.stack[iterator.depth].pos;
-		iterator.depth++;
-
-		if (node->type == NodeType::NLeaf) {
-			auto leaf = static_cast<Leaf *>(node);
-			iterator.node = leaf;
-			if (depth == maxPrefix) {
-				// Equal
-				if (inclusive) {
-					return true;
-				} else {
-					return IteratorNext(iterator);
-				}
-			}
-			auto auxKey = make_unique<Key>(*this, types[0], leaf->value);
-			Key &leafKey = *auxKey;
-			for (unsigned i = depth; i < maxPrefix; i++) {
-				if (leafKey[i] != key[i]) {
-					if (leafKey[i] < key[i]) {
-						// Less
-						iterator.depth--;
-						return IteratorNext(iterator);
-					}
-					// Greater
-					return true;
-				}
-			}
-
-			// Equal
-			if (inclusive) {
-				return true;
-			} else {
-				return IteratorNext(iterator);
-			}
-		}
-		uint32_t mismatchPos = Node::PrefixMismatch(*this, node, key, depth, types[0]);
-
-		if (mismatchPos != node->prefix_length) {
-			if (node->prefix[mismatchPos] < key[depth + mismatchPos]) {
-				// Less
-				iterator.depth--;
-				return IteratorNext(iterator);
-			}
-			// Greater
-			pos = 0;
-			return IteratorNext(iterator);
-		}
-		depth += node->prefix_length;
-		Node *next = Node::findChild(key[depth], node);
-		pos = Node::findKeyPos(key[depth], node);
-
-		if (!next) {
-			return IteratorNext(iterator);
-		}
-
-		pos++;
-		node = next;
-		depth++;
-	}
-}
-
 void ART::Update(ClientContext &context, vector<column_t> &update_columns, DataChunk &update_data,
                  Vector &row_identifiers) {
 	// first check if the columns we use here are updated
@@ -587,6 +444,184 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 }
 
 //===--------------------------------------------------------------------===//
+// Iterator scans
+//===--------------------------------------------------------------------===//
+template<class T, bool HAS_BOUND, bool INCLUSIVE>
+index_t ART::iterator_scan(ARTIndexScanState *state, Iterator *it, int64_t *result_ids, T data) {
+	index_t result_count = 0;
+	bool has_next;
+	do {
+		if (HAS_BOUND) {
+			if (INCLUSIVE) {
+				if (it->node->value > (uint64_t) data) {
+					break;
+				}
+			} else {
+				if (it->node->value >= (uint64_t) data) {
+					break;
+				}
+			}
+		}
+		if (state->pointquery_tuple >= it->node->num_elements) {
+			state->pointquery_tuple = 0;
+		}
+		for (; state->pointquery_tuple < it->node->num_elements; state->pointquery_tuple++) {
+			result_ids[result_count++] = it->node->GetRowId(state->pointquery_tuple);
+			if (result_count == STANDARD_VECTOR_SIZE) {
+				state->pointquery_tuple++;
+				return result_count;
+			}
+		}
+		has_next = ART::IteratorNext(*it);
+	} while (has_next);
+	state->checked = true;
+	return result_count;
+}
+
+bool ART::IteratorNext(Iterator &iter) {
+	// Skip leaf
+	if ((iter.depth) && ((iter.stack[iter.depth - 1].node)->type == NodeType::NLeaf)) {
+		iter.depth--;
+	}
+
+	// Look for next leaf
+	while (iter.depth) {
+		Node *node = iter.stack[iter.depth - 1].node;
+
+		// Leaf found
+		if (node->type == NodeType::NLeaf) {
+			auto leaf = static_cast<Leaf *>(node);
+			iter.node = leaf;
+			return true;
+		}
+
+		// Find next node
+		Node *next = nullptr;
+		switch (node->type) {
+		case NodeType::N4: {
+			Node4 *n = static_cast<Node4 *>(node);
+			if (iter.stack[iter.depth - 1].pos < node->count) {
+				next = n->child[iter.stack[iter.depth - 1].pos++].get();
+			}
+			break;
+		}
+		case NodeType::N16: {
+			Node16 *n = static_cast<Node16 *>(node);
+			if (iter.stack[iter.depth - 1].pos < node->count) {
+				next = n->child[iter.stack[iter.depth - 1].pos++].get();
+			}
+			break;
+		}
+		case NodeType::N48: {
+			Node48 *n = static_cast<Node48 *>(node);
+			unsigned depth = iter.depth - 1;
+			for (; iter.stack[depth].pos < 256; iter.stack[depth].pos++) {
+				if (n->childIndex[iter.stack[depth].pos] != 48) {
+					next = n->child[n->childIndex[iter.stack[depth].pos++]].get();
+					break;
+				}
+			}
+			break;
+		}
+		case NodeType::N256: {
+			Node256 *n = static_cast<Node256 *>(node);
+			unsigned depth = iter.depth - 1;
+			for (; iter.stack[depth].pos < 256; iter.stack[depth].pos++) {
+				if (n->child[iter.stack[depth].pos]) {
+					next = n->child[iter.stack[depth].pos++].get();
+					break;
+				}
+			}
+			break;
+		}
+		default:
+			assert(0);
+			break;
+		}
+
+		if (next) {
+			iter.stack[iter.depth].pos = 0;
+			iter.stack[iter.depth].node = next;
+			iter.depth++;
+		} else {
+			iter.depth--;
+		}
+	}
+	return false;
+}
+
+bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &iterator, bool inclusive) {
+	iterator.depth = 0;
+	if (!n) {
+		return false;
+	}
+	Node *node = n.get();
+
+	index_t depth = 0;
+	while (true) {
+		iterator.stack[iterator.depth].node = node;
+		auto &pos = iterator.stack[iterator.depth].pos;
+		iterator.depth++;
+
+		if (node->type == NodeType::NLeaf) {
+			auto leaf = static_cast<Leaf *>(node);
+			iterator.node = leaf;
+			if (depth == maxPrefix) {
+				// Equal
+				if (inclusive) {
+					return true;
+				} else {
+					return IteratorNext(iterator);
+				}
+			}
+			auto auxKey = make_unique<Key>(*this, types[0], leaf->value);
+			Key &leafKey = *auxKey;
+			for (index_t i = depth; i < maxPrefix; i++) {
+				if (leafKey[i] != key[i]) {
+					if (leafKey[i] < key[i]) {
+						// Less
+						iterator.depth--;
+						return IteratorNext(iterator);
+					}
+					// Greater
+					return true;
+				}
+			}
+
+			// Equal
+			if (inclusive) {
+				return true;
+			} else {
+				return IteratorNext(iterator);
+			}
+		}
+		uint32_t mismatchPos = Node::PrefixMismatch(*this, node, key, depth, types[0]);
+		if (mismatchPos != node->prefix_length) {
+			if (node->prefix[mismatchPos] < key[depth + mismatchPos]) {
+				// Less
+				iterator.depth--;
+				return IteratorNext(iterator);
+			} else {
+				// Greater
+				pos = 0;
+				return IteratorNext(iterator);
+			}
+		}
+		// prefix matches, search inside the child for the key
+		depth += node->prefix_length;
+		Node *next = Node::findChild(key[depth], node);
+		pos = Node::findKeyPos(key[depth], node);
+		if (!next) {
+			return IteratorNext(iterator);
+		}
+
+		pos++;
+		node = next;
+		depth++;
+	}
+}
+
+//===--------------------------------------------------------------------===//
 // Greater Than
 //===--------------------------------------------------------------------===//
 template <class T>
@@ -595,32 +630,16 @@ index_t ART::templated_greater_scan(TypeId type, T data, int64_t *result_ids, bo
 	Iterator *it = &state->iterator;
 	auto key = make_unique<Key>(*this, type, data);
 
-	index_t result_count = 0;
-	bool found;
+	// greater than scan: first set the iterator to the node at which we will start our scan by finding the lowest node that satisfies our requirement
 	if (!it->start) {
-		found = ART::Bound(tree, *key, *it, inclusive);
+		bool found = ART::Bound(tree, *key, *it, inclusive);
+		if (!found) {
+			return 0;
+		}
 		it->start = true;
-	} else {
-		found = true;
 	}
-	if (found) {
-		bool hasNext;
-		do {
-			if (state->pointquery_tuple >= it->node->num_elements) {
-				state->pointquery_tuple = 0;
-			}
-			for (; state->pointquery_tuple < it->node->num_elements; state->pointquery_tuple++) {
-				result_ids[result_count++] = it->node->GetRowId(state->pointquery_tuple);
-				if (result_count == STANDARD_VECTOR_SIZE) {
-					state->pointquery_tuple++;
-					return result_count;
-				}
-			}
-			hasNext = ART::IteratorNext(*it);
-		} while (hasNext && it->node->value >= (uint64_t)data);
-	}
-	state->checked = true;
-	return result_count;
+	// after that we continue the scan; we don't need to check the bounds as any value following this value is automatically bigger and hence satisfies our predicate
+	return iterator_scan<T, false, false>(state, it, result_ids, 0);
 }
 
 void ART::SearchGreater(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool inclusive) {
@@ -653,44 +672,29 @@ void ART::SearchGreater(StaticVector<int64_t> *result_identifiers, ARTIndexScanS
 template <class T>
 index_t ART::templated_less_scan(TypeId type, T data, int64_t *result_ids, bool inclusive, ARTIndexScanState *state) {
 	Iterator *it = &state->iterator;
-	index_t result_count = 0;
 	auto min_value = Node::minimum(tree)->get();
 	auto key = make_unique<Key>(*this, type, data);
 	Leaf *minimum = static_cast<Leaf *>(min_value);
 	auto min_key = make_unique<Key>(*this, type, minimum->value);
 
 	// early out min value higher than upper bound query
-	if (*min_key > *key)
-		return result_count;
-	bool found;
+	if (*min_key > *key) {
+		return 0;
+	}
+	// find the minimum value in the ART: we start scanning from this value
 	if (!it->start) {
-		found = ART::Bound(tree, *min_key, *it, true);
+		bool found = ART::Bound(tree, *min_key, *it, true);
+		if (!found) {
+			return 0;
+		}
 		it->start = true;
+	}
+	// now continue the scan until we reach the upper bound
+	if (inclusive) {
+		return iterator_scan<T, true, true>(state, it, result_ids, data);
 	} else {
-		found = true;
+		return iterator_scan<T, true, false>(state, it, result_ids, data);
 	}
-	if (found) {
-		bool hasNext;
-		do {
-			if (state->pointquery_tuple >= it->node->num_elements) {
-				state->pointquery_tuple = 0;
-			}
-			for (; state->pointquery_tuple < it->node->num_elements; state->pointquery_tuple++) {
-				result_ids[result_count++] = it->node->GetRowId(state->pointquery_tuple);
-				if (result_count == STANDARD_VECTOR_SIZE) {
-					state->pointquery_tuple++;
-					return result_count;
-				}
-			}
-			if (it->node->value == (uint64_t)data)
-				break;
-			hasNext = ART::IteratorNext(*it);
-			if (!inclusive && it->node->value == (uint64_t)data)
-				break;
-		} while (hasNext);
-	}
-	state->checked = true;
-	return result_count;
 }
 
 void ART::SearchLess(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool inclusive) {
@@ -725,37 +729,20 @@ index_t ART::templated_close_range(TypeId type, T left_query, T right_query, int
 								bool right_inclusive, ARTIndexScanState *state) {
 	Iterator *it = &state->iterator;
 	auto key = make_unique<Key>(*this, type, left_query);
-	index_t result_count = 0;
-	bool found;
+	// first find the first node that satisfies the left predicate
 	if (!it->start) {
-		found = ART::Bound(tree, *key, *it, left_inclusive);
+		bool found = ART::Bound(tree, *key, *it, left_inclusive);
+		if (!found) {
+			return 0;
+		}
 		it->start = true;
+	}
+	// now continue the scan until we reach the upper bound
+	if (right_inclusive) {
+		return iterator_scan<T, true, true>(state, it, result_ids, right_query);
 	} else {
-		found = true;
+		return iterator_scan<T, true, false>(state, it, result_ids, right_query);
 	}
-	if (found) {
-		bool hasNext;
-		do {
-			if (state->pointquery_tuple >= it->node->num_elements) {
-				state->pointquery_tuple = 0;
-			}
-			for (; state->pointquery_tuple < it->node->num_elements; state->pointquery_tuple++) {
-				result_ids[result_count++] = it->node->GetRowId(state->pointquery_tuple);
-				if (result_count == STANDARD_VECTOR_SIZE) {
-					state->pointquery_tuple++;
-					return result_count;
-				}
-			}
-			if (it->node->value == (uint64_t)right_query)
-				break;
-			hasNext = ART::IteratorNext(*it);
-			if (!right_inclusive && it->node->value == (uint64_t)right_query)
-				break;
-
-		} while (hasNext);
-	}
-	state->checked = true;
-	return result_count;
 }
 
 void ART::SearchCloseRange(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool left_inclusive,
