@@ -433,3 +433,28 @@ TEST_CASE("TPC-DS inspired micro benchmarks", "[window]") {
 	REQUIRE(CHECK_COLUMN(result, 8, {1}));
 	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
 }
+
+TEST_CASE("TPC-DS Q49 bug fix for multi-sort window functions", "[window]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("create table wintest( item integer, return_ratio numeric, currency_ratio numeric)"));
+	REQUIRE_NO_FAIL(con.Query(
+	    "insert into wintest values  (7539  ,0.590000 , 0.590000), (3337  ,0.626506 , 0.626506), (15597 ,0.661972 , "
+	    "0.661972), (2915  ,0.698630 , 0.698630), (11933 ,0.717172 , 0.717172), (483   ,0.800000 , 0.800000), (85    "
+	    ",0.857143 , 0.857143), (97    ,0.903614 , 0.903614), (117   ,0.925000 , 0.925000), (5299  ,0.927083 , "
+	    "0.927083), (10055 ,0.945652 , 0.945652), (4231  ,0.977778 , 0.977778), (5647  ,0.987805 , 0.987805), (8679  "
+	    ",0.988764 , 0.988764), (10323 ,0.977778 , 1.111111), (3305  ,0.737500 , 1.293860)"));
+
+	result = con.Query("SELECT item, rank() OVER (ORDER BY return_ratio) AS return_rank, rank() OVER (ORDER BY "
+	                   "currency_ratio) AS currency_rank FROM wintest order by item");
+	REQUIRE(CHECK_COLUMN(
+	    result, 0, {85, 97, 117, 483, 2915, 3305, 3337, 4231, 5299, 5647, 7539, 8679, 10055, 10323, 11933, 15597}));
+	REQUIRE(CHECK_COLUMN(result, 1, {8, 9, 10, 7, 4, 6, 2, 13, 11, 15, 1, 16, 12, 13, 5, 3}));
+	REQUIRE(CHECK_COLUMN(result, 2, {7, 8, 9, 6, 4, 16, 2, 12, 10, 13, 1, 14, 11, 15, 5, 3}));
+
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+}

@@ -116,6 +116,7 @@ count_t nested_loop_join(Vector &left, Vector &right, index_t &lpos, index_t &rp
 count_t NestedLoopJoinInner::Perform(index_t &lpos, index_t &rpos, DataChunk &left_conditions,
                                      DataChunk &right_conditions, sel_t lvector[], sel_t rvector[],
                                      vector<JoinCondition> &conditions) {
+	assert(left_conditions.column_count == right_conditions.column_count);
 	if (lpos >= left_conditions.size() || rpos >= right_conditions.size()) {
 		return 0;
 	}
