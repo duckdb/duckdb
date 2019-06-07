@@ -42,6 +42,35 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expres
 ART::~ART() {
 }
 
+static void PrintTree(ART &art, Node &node, int depth = 0) {
+	switch(node.type) {
+		case NodeType::NLeaf: {
+			auto &leaf = (Leaf&) node;
+			string str = string(depth, ' ') + "Leaf: " + leaf.value->ToString(art.is_little_endian, art.types[0]) + (leaf.num_elements > 0 ? (" [" + to_string(leaf.num_elements) + "]") : "");
+			printf("%s\n", str.c_str());
+			break;
+		}
+		case NodeType::N4: {
+			auto &n4 = (Node4&) node;
+			string str = string(depth, ' ') + "Node4 [" + to_string(n4.count) + "]:";
+			printf("%s\n", str.c_str());
+			for(index_t i = 0; i < n4.count; i++) {
+				PrintTree(art, *n4.child[i], depth + 2);
+			}
+			break;
+		}
+		default:
+			printf("Unimplemented type for printing!");
+			break;
+	}
+}
+
+void ART::Print() {
+	printf("-- ART TREE -- \n");
+	PrintTree(*this, *tree, 0);
+	printf("\n\n");
+}
+
 bool ART::LeafMatches(Node *node, Key &key, unsigned depth) {
 	if (depth != maxPrefix) {
 		auto leaf = static_cast<Leaf *>(node);

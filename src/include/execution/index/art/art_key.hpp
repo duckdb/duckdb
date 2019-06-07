@@ -31,6 +31,8 @@ public:
 	bool operator>(const Key &k) const;
 	bool operator>=(const Key &k) const;
 	bool operator==(const Key &k) const;
+
+	string ToString(bool is_little_endian, TypeId type);
 private:
 	template<class T>
 	static unique_ptr<data_t[]> CreateData(T value, bool is_little_endian) {
