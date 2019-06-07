@@ -6,27 +6,38 @@ using namespace duckdb;
 
 Node48::Node48(ART &art) : Node(art, NodeType::N48) {
 	for (uint64_t i = 0; i < 256; i++) {
-		childIndex[i] = 48;
+		childIndex[i] = Node::EMPTY_MARKER;
 	}
 }
 
-unique_ptr<Node> *Node48::getChild(const uint8_t k) {
+index_t Node48::GetChildPos(uint8_t k) {
 	if (childIndex[k] == Node::EMPTY_MARKER) {
-		return nullptr;
+		return INVALID_INDEX;
 	} else {
-		return &child[childIndex[k]];
+		return k;
 	}
 }
 
-int Node48::getPos(const uint8_t k) {
-	return k;
+index_t Node48::GetChildGreaterEqual(uint8_t k) {
+	for(index_t pos = k; pos < 256; pos++) {
+		if (childIndex[pos] != Node::EMPTY_MARKER) {
+			return pos;
+		}
+	}
+	return Node::GetChildGreaterEqual(k);
 }
 
-unique_ptr<Node> *Node48::getMin() {
-	unsigned pos = 0;
-	while (childIndex[pos] == Node::EMPTY_MARKER) {
-		pos++;
+index_t Node48::GetNextPos(index_t pos) {
+	for(pos++; pos < 256; pos++) {
+		if (childIndex[pos] != Node::EMPTY_MARKER) {
+			return pos;
+		}
 	}
+	return Node::GetNextPos(pos);
+}
+
+unique_ptr<Node> *Node48::GetChild(index_t pos) {
+	assert(childIndex[pos] != Node::EMPTY_MARKER);
 	return &child[childIndex[pos]];
 }
 
@@ -51,7 +62,7 @@ void Node48::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_pt
 		// Grow to Node256
 		auto newNode = make_unique<Node256>(art);
 		for (index_t i = 0; i < 256; i++) {
-			if (n->childIndex[i] != 48) {
+			if (n->childIndex[i] != Node::EMPTY_MARKER) {
 				newNode->child[i] = move(n->child[n->childIndex[i]]);
 			}
 		}

@@ -6,24 +6,35 @@ using namespace duckdb;
 Node256::Node256(ART &art) : Node(art, NodeType::N256) {
 }
 
-unique_ptr<Node> *Node256::getChild(const uint8_t k) {
+index_t Node256::GetChildPos(uint8_t k) {
 	if (child[k]) {
-		return &child[k];
+		return k;
 	} else {
-		return nullptr;
+		return INVALID_INDEX;
 	}
 }
 
-int Node256::getPos(const uint8_t k) {
-	return k;
+index_t Node256::GetChildGreaterEqual(uint8_t k) {
+	for(index_t pos = k; pos < 256; pos++) {
+		if (child[pos]) {
+			return pos;
+		}
+	}
+	return INVALID_INDEX;
 }
 
-unique_ptr<Node> *Node256::getMin() {
-	unsigned pos = 0;
-	while (!child[pos])
-		pos++;
-	auto result = &child[pos];
-	return result;
+index_t Node256::GetNextPos(index_t pos) {
+	for(pos++; pos < 256; pos++) {
+		if (child[pos]) {
+			return pos;
+		}
+	}
+	return Node::GetNextPos(pos);
+}
+
+unique_ptr<Node> *Node256::GetChild(index_t pos) {
+	assert(child[pos]);
+	return &child[pos];
 }
 
 void Node256::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child) {

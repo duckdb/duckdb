@@ -26,6 +26,7 @@ public:
 	uint8_t &operator[](std::size_t i);
 	const uint8_t &operator[](std::size_t i) const;
 	bool operator>(const Key &k) const;
+	bool operator==(const Key &k) const;
 private:
 	void ConvertToBinaryComparable(bool is_little_endian, TypeId type, uintptr_t tid);
 };

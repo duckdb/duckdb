@@ -30,12 +30,20 @@ public:
 	//! compressed path (prefix)
 	unique_ptr<uint8_t[]> prefix;
 public:
-	//! Find the leaf with smallest element in the tree
-	static unique_ptr<Node> *minimum(unique_ptr<Node> &node);
-	//! Find the next child for the keyByte
-	static unique_ptr<Node> *findChild(const uint8_t k, unique_ptr<Node> &node);
-	static int findKeyPos(const uint8_t k, Node *node);
-	static Node *findChild(const uint8_t k, Node *node);
+	//! Get the position of a child corresponding exactly to the specific byte, returns INVALID_INDEX if not exists
+	virtual index_t GetChildPos(uint8_t k) {
+		return INVALID_INDEX;
+	}
+	//! Get the position of the first child that is greater or equal to the specific byte, or INVALID_INDEX if there are no children matching the criteria
+	virtual index_t GetChildGreaterEqual(uint8_t k) {
+		return INVALID_INDEX;
+	}
+	//! Get the next position in the node, or INVALID_INDEX if there is no next position
+	virtual index_t GetNextPos(index_t pos) {
+		return INVALID_INDEX;
+	}
+	//! Get the child at the specified position in the node. pos should be between [0, count). Throws an assertion if the element is not found.
+	virtual unique_ptr<Node> *GetChild(index_t pos);
 
 	//! Compare the key with the prefix of the node, return the number matching bytes
 	static uint32_t PrefixMismatch(ART &art, Node *node, Key &key, uint64_t depth, TypeId type);

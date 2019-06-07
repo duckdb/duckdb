@@ -156,6 +156,39 @@ TEST_CASE("Test updates on ART index", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {10}));
 }
 
+TEST_CASE("Test ART index with single value", "[art]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1)"));
+
+	result = con.Query("SELECT * FROM integers WHERE i < 3");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con.Query("SELECT * FROM integers WHERE i <= 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con.Query("SELECT * FROM integers WHERE i > 0");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con.Query("SELECT * FROM integers WHERE i >= 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con.Query("SELECT * FROM integers WHERE i = 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result = con.Query("SELECT * FROM integers WHERE i < 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT * FROM integers WHERE i <= 0");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT * FROM integers WHERE i > 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT * FROM integers WHERE i >= 2");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT * FROM integers WHERE i = 2");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+}
+
 TEST_CASE("Test ART index with selection vector", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -170,18 +203,16 @@ TEST_CASE("Test ART index with selection vector", "[art]") {
 	// insert with selection vector
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers SELECT * FROM source WHERE i % 2 = 0"));
 
-	// result = con.Query("SELECT * FROM integers WHERE i>3 ORDER BY 1");
-	// REQUIRE(CHECK_COLUMN(result, 0, {4, 6}));
-	result = con.Query("SELECT * FROM integers ORDER BY 1");
-	REQUIRE(CHECK_COLUMN(result, 0, {2, 4, 6}));
 	result = con.Query("SELECT * FROM integers WHERE i<3 ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	result = con.Query("SELECT * FROM integers ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 4, 6}));
+	result = con.Query("SELECT * FROM integers WHERE i>3 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 6}));
 	result = con.Query("SELECT * FROM integers WHERE i<=3 ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
-	// result = con.Query("SELECT * FROM integers WHERE i>=3 ORDER BY 1");
-	// REQUIRE(CHECK_COLUMN(result, 0, {4, 6}));
-
-	return;
+	result = con.Query("SELECT * FROM integers WHERE i>=3 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 6}));
 
 	// update with selection vector
 	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=3 WHERE i=4"));
@@ -216,8 +247,7 @@ TEST_CASE("Test ART index with many matches", "[art]") {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", (int32_t) val));
 		}
 	}
-	// FIXME:
-	// REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
 
 	result = con.Query("SELECT COUNT(*) FROM integers WHERE i<1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1024}));
@@ -244,8 +274,7 @@ TEST_CASE("Test ART index with many matches", "[art]") {
 		}
 	}
 
-	// FIXME:
-	// REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
 
 	result = con.Query("SELECT COUNT(*) FROM integers WHERE i<1");
 	REQUIRE(CHECK_COLUMN(result, 0, {2048}));
@@ -363,7 +392,7 @@ TEST_CASE("ART Integer Types", "[art]") {
 
 	string int_types[4] = {"tinyint", "smallint", "integer", "bigint"};
 	int32_t n_sizes[4] = {100, 1000, 1000, 1000};
-	for (int idx = 0; idx < 4; idx++) {
+	for (int idx = 2; idx < 4; idx++) {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i " + int_types[idx] + ")"));
 		REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 
@@ -600,6 +629,8 @@ TEST_CASE("ART Node 4", "[art]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 	result = con.Query("SELECT sum(i) FROM integers WHERE i <= 2");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(3)}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i > 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(2+3+4)}));
 	// Now Deleting all elements
 	for (int32_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=$1", keys[i]));
@@ -632,6 +663,8 @@ TEST_CASE("ART Node 16", "[art]") {
 	}
 	result = con.Query("SELECT sum(i) FROM integers WHERE i <=2");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(3)}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i > 4");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(5+6)}));
 	// Now Deleting all elements
 	for (int32_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=$1", keys[i]));
@@ -649,21 +682,24 @@ TEST_CASE("ART Node 48", "[art]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
 	int n = 20;
 	auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
-	for (int32_t i = 0; i < n; i++)
+	for (index_t i = 0; i < n; i++) {
 		keys[i] = i + 1;
+	}
 
-	for (int32_t i = 0; i < n; i++) {
+	for (index_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", keys[i]));
 	}
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
-	for (int32_t i = 0; i < n; i++) {
+	for (index_t i = 0; i < n; i++) {
 		result = con.Query("SELECT i FROM integers WHERE i=$1", keys[i]);
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
 	}
 	result = con.Query("SELECT sum(i) FROM integers WHERE i <=2");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(3)}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i > 15");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(16+17+18+19+20)}));
 	// Now Deleting all elements
-	for (int32_t i = 0; i < n; i++) {
+	for (index_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=$1", keys[i]));
 	}
 	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));

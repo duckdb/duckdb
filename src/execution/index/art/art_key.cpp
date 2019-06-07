@@ -85,6 +85,18 @@ bool Key::operator>(const Key &k) const {
 	return false;
 }
 
+bool Key::operator==(const Key &k) const {
+	if (len != k.len) {
+		return false;
+	}
+	for(index_t i = 0; i < len; i++) {
+		if (data[i] != k.data[i]) {
+			return false;
+		}
+	}
+	return true;
+}
+
 inline uint8_t &Key::operator[](std::size_t i) {
 	assert(i <= len);
 	return data[i];

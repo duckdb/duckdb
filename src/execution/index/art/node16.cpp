@@ -9,27 +9,32 @@ Node16::Node16(ART &art) : Node(art, NodeType::N16) {
 }
 
 // TODO : In the future this can be performed using SIMD (#include <emmintrin.h>  x86 SSE intrinsics)
-unique_ptr<Node> *Node16::getChild(const uint8_t k) {
-	for (uint32_t i = 0; i < count; ++i) {
-		if (key[i] == k) {
-			return &child[i];
-		}
-	}
-	return nullptr;
-}
-
-int Node16::getPos(const uint8_t k) {
-	int pos;
-	for (pos = 0; pos < count; ++pos) {
+index_t Node16::GetChildPos(uint8_t k) {
+	for (index_t pos = 0; pos < count; pos++) {
 		if (key[pos] == k) {
 			return pos;
 		}
 	}
-	return -1;
+	return Node::GetChildPos(k);
 }
 
-unique_ptr<Node> *Node16::getMin() {
-	return &child[0];
+index_t Node16::GetChildGreaterEqual(uint8_t k) {
+	for (index_t pos = 0; pos < count; pos++) {
+		if (key[pos] >= k) {
+			return pos;
+		}
+	}
+	return Node::GetChildGreaterEqual(k);
+}
+
+index_t Node16::GetNextPos(index_t pos) {
+	pos++;
+	return pos < count ? pos : INVALID_INDEX;
+}
+
+unique_ptr<Node> *Node16::GetChild(index_t pos) {
+	assert(pos >= 0 && pos < count);
+	return &child[pos];
 }
 
 void Node16::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child) {

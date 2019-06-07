@@ -198,8 +198,9 @@ void ART::Insert(ClientContext &context, unique_ptr<Node> &node, Key &key, unsig
 	}
 
 	// Recurse
-	auto child = Node::findChild(key[depth], node);
-	if (child) {
+	index_t pos = node->GetChildPos(key[depth]);
+	if (pos != INVALID_INDEX) {
+		auto child = node->GetChild(pos);
 		Insert(context, *child, key, depth + 1, value, type, row_id);
 		return;
 	}
@@ -267,9 +268,11 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, TypeId type, r
 		}
 		depth += node->prefix_length;
 	}
-	int pos = Node::findKeyPos(key[depth], &(*node));
-	auto child = Node::findChild(key[depth], node);
-    if(child){
+	index_t pos = node->GetChildPos(key[depth]);
+    if (pos != INVALID_INDEX) {
+		auto child = node->GetChild(pos);
+		assert(child);
+
         unique_ptr<Node> &child_ref = *child;
         if (child_ref->type == NodeType::NLeaf && LeafMatches(child_ref.get(), key, depth)) {
             // Leaf found, remove entry
@@ -432,11 +435,13 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 			}
 			depth += node_val->prefix_length;
 		}
-
-		node_val = Node::findChild(key[depth], node_val);
-		if (!node_val) {
+		index_t pos = node_val->GetChildPos(key[depth]);
+		if (pos == INVALID_INDEX) {
 			return nullptr;
 		}
+		node_val = node_val->GetChild(pos)->get();
+		assert(node_val);
+
 		depth++;
 	}
 
@@ -476,80 +481,43 @@ index_t ART::iterator_scan(ARTIndexScanState *state, Iterator *it, int64_t *resu
 	return result_count;
 }
 
-bool ART::IteratorNext(Iterator &iter) {
+bool ART::IteratorNext(Iterator &it) {
 	// Skip leaf
-	if ((iter.depth) && ((iter.stack[iter.depth - 1].node)->type == NodeType::NLeaf)) {
-		iter.depth--;
+	if ((it.depth) && ((it.stack[it.depth - 1].node)->type == NodeType::NLeaf)) {
+		it.depth--;
 	}
 
-	// Look for next leaf
-	while (iter.depth) {
-		Node *node = iter.stack[iter.depth - 1].node;
+	// Look for the next leaf
+	while (it.depth > 0) {
+		auto &top = it.stack[it.depth - 1];
+		Node *node = top.node;
 
-		// Leaf found
 		if (node->type == NodeType::NLeaf) {
-			auto leaf = static_cast<Leaf *>(node);
-			iter.node = leaf;
+			// found a leaf: move to next node
+			it.node = (Leaf*) node;
 			return true;
 		}
 
 		// Find next node
-		Node *next = nullptr;
-		switch (node->type) {
-		case NodeType::N4: {
-			Node4 *n = static_cast<Node4 *>(node);
-			if (iter.stack[iter.depth - 1].pos < node->count) {
-				next = n->child[iter.stack[iter.depth - 1].pos++].get();
-			}
-			break;
-		}
-		case NodeType::N16: {
-			Node16 *n = static_cast<Node16 *>(node);
-			if (iter.stack[iter.depth - 1].pos < node->count) {
-				next = n->child[iter.stack[iter.depth - 1].pos++].get();
-			}
-			break;
-		}
-		case NodeType::N48: {
-			Node48 *n = static_cast<Node48 *>(node);
-			unsigned depth = iter.depth - 1;
-			for (; iter.stack[depth].pos < 256; iter.stack[depth].pos++) {
-				if (n->childIndex[iter.stack[depth].pos] != 48) {
-					next = n->child[n->childIndex[iter.stack[depth].pos++]].get();
-					break;
-				}
-			}
-			break;
-		}
-		case NodeType::N256: {
-			Node256 *n = static_cast<Node256 *>(node);
-			unsigned depth = iter.depth - 1;
-			for (; iter.stack[depth].pos < 256; iter.stack[depth].pos++) {
-				if (n->child[iter.stack[depth].pos]) {
-					next = n->child[iter.stack[depth].pos++].get();
-					break;
-				}
-			}
-			break;
-		}
-		default:
-			assert(0);
-			break;
-		}
-
-		if (next) {
-			iter.stack[iter.depth].pos = 0;
-			iter.stack[iter.depth].node = next;
-			iter.depth++;
+		top.pos = node->GetNextPos(top.pos);
+		if (top.pos != INVALID_INDEX) {
+			// next node found: go there
+			it.stack[it.depth].pos = 0;
+			it.stack[it.depth].node = node->GetChild(top.pos)->get();
+			it.depth++;
 		} else {
-			iter.depth--;
+			// no node found: move up the tree
+			it.depth--;
 		}
 	}
 	return false;
 }
 
-bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &iterator, bool inclusive) {
-	iterator.depth = 0;
+//===--------------------------------------------------------------------===//
+// Greater Than
+//===--------------------------------------------------------------------===//
+bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
+	it.depth = 0;
 	if (!n) {
 		return false;
 	}
@@ -557,71 +525,56 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &iterator, bool inclusiv
 
 	index_t depth = 0;
 	while (true) {
-		iterator.stack[iterator.depth].node = node;
-		auto &pos = iterator.stack[iterator.depth].pos;
-		iterator.depth++;
+		auto &top = it.stack[it.depth];
+		top.node = node;
+		it.depth++;
 
 		if (node->type == NodeType::NLeaf) {
+			// found a leaf node: check if it is bigger than the current key
 			auto leaf = static_cast<Leaf *>(node);
-			iterator.node = leaf;
-			if (depth == maxPrefix) {
-				// Equal
-				if (inclusive) {
-					return true;
-				} else {
-					return IteratorNext(iterator);
+			it.node = leaf;
+			auto leaf_key = make_unique<Key>(*this, types[0], leaf->value);
+			if (key > *leaf_key) {
+				// the key is bigger than the min_key
+				// in this case there are no keys in the set that are bigger than key
+				// thus we terminate
+				return false;
+			}
+			// if the search is not inclusive the leaf node could still be equal to the current value
+			// check if leaf is equal to the current key
+			if (!inclusive && *leaf_key == key) {
+				// leaf is equal: move to next node
+				if (!IteratorNext(it)) {
+					return false;
 				}
 			}
-			auto auxKey = make_unique<Key>(*this, types[0], leaf->value);
-			Key &leafKey = *auxKey;
-			for (index_t i = depth; i < maxPrefix; i++) {
-				if (leafKey[i] != key[i]) {
-					if (leafKey[i] < key[i]) {
-						// Less
-						iterator.depth--;
-						return IteratorNext(iterator);
-					}
-					// Greater
-					return true;
-				}
-			}
-
-			// Equal
-			if (inclusive) {
-				return true;
-			} else {
-				return IteratorNext(iterator);
-			}
+			return true;
 		}
 		uint32_t mismatchPos = Node::PrefixMismatch(*this, node, key, depth, types[0]);
 		if (mismatchPos != node->prefix_length) {
 			if (node->prefix[mismatchPos] < key[depth + mismatchPos]) {
 				// Less
-				iterator.depth--;
-				return IteratorNext(iterator);
+				it.depth--;
+				return IteratorNext(it);
 			} else {
 				// Greater
-				pos = 0;
-				return IteratorNext(iterator);
+				top.pos = 0;
+				return IteratorNext(it);
 			}
 		}
 		// prefix matches, search inside the child for the key
 		depth += node->prefix_length;
-		Node *next = Node::findChild(key[depth], node);
-		pos = Node::findKeyPos(key[depth], node);
-		if (!next) {
-			return IteratorNext(iterator);
-		}
 
-		pos++;
-		node = next;
+		top.pos = node->GetChildGreaterEqual(key[depth]);
+		if (top.pos == INVALID_INDEX) {
+			// no node that is >= to the current node: abort
+			return false;
+		}
+		node = node->GetChild(top.pos)->get();
 		depth++;
 	}
 }
 
-//===--------------------------------------------------------------------===//
-// Greater Than
-//===--------------------------------------------------------------------===//
 template <class T>
 index_t ART::templated_greater_scan(TypeId type, T data, int64_t *result_ids, bool inclusive,
 								ARTIndexScanState *state) {
@@ -667,22 +620,57 @@ void ART::SearchGreater(StaticVector<int64_t> *result_identifiers, ARTIndexScanS
 //===--------------------------------------------------------------------===//
 // Less Than
 //===--------------------------------------------------------------------===//
+static Leaf& FindMinimum(Iterator &it, Node &node) {
+	Node *next = nullptr;
+	index_t pos = 0;
+	switch(node.type) {
+	case NodeType::NLeaf:
+		it.node = (Leaf*) &node;
+		return (Leaf&) node;
+	case NodeType::N4:
+		next = ((Node4&) node).child[0].get();
+		break;
+	case NodeType::N16:
+		next = ((Node16&) node).child[0].get();
+		break;
+	case NodeType::N48: {
+		auto &n48 = (Node48&) node;
+		while (n48.childIndex[pos] == Node::EMPTY_MARKER) {
+			pos++;
+		}
+		next = n48.child[n48.childIndex[pos]].get();
+		break;
+	}
+	case NodeType::N256: {
+		auto &n256 = (Node256&) node;
+		while (!n256.child[pos]) {
+			pos++;
+		}
+		next = n256.child[pos].get();
+		break;
+	}
+	}
+	it.stack[it.depth].node = &node;
+	it.stack[it.depth].pos = pos;
+	it.depth++;
+	return FindMinimum(it, *next);
+}
+
 template <class T>
 index_t ART::templated_less_scan(TypeId type, T data, int64_t *result_ids, bool inclusive, ARTIndexScanState *state) {
-	Iterator *it = &state->iterator;
-	auto min_value = Node::minimum(tree)->get();
-	auto key = make_unique<Key>(*this, type, data);
-	Leaf *minimum = static_cast<Leaf *>(min_value);
-	auto min_key = make_unique<Key>(*this, type, minimum->value);
-
-	// early out min value higher than upper bound query
-	if (*min_key > *key) {
+	if (!tree) {
 		return 0;
 	}
-	// find the minimum value in the ART: we start scanning from this value
+
+	Iterator *it = &state->iterator;
+
 	if (!it->start) {
-		bool found = ART::Bound(tree, *min_key, *it, true);
-		if (!found) {
+		// first find the minimum value in the ART: we start scanning from this value
+		auto &minimum = FindMinimum(state->iterator, *tree);
+		auto key = make_unique<Key>(*this, type, data);
+		auto min_key = make_unique<Key>(*this, type, minimum.value);
+		// early out min value higher than upper bound query
+		if (*min_key > *key) {
 			return 0;
 		}
 		it->start = true;
