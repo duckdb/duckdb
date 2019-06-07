@@ -155,7 +155,10 @@ template<class T>
 bool is_unique(Vector &vector, sel_t sel_vector[]) {
 	auto data = (T *)vector.data;
 	for(index_t i = 1; i < vector.count; i++) {
-		if (Equals::Operation<T>(data[0], data[1])) {
+		if (vector.nullmask[sel_vector[i]]) {
+			continue;
+		}
+		if (Equals::Operation<T>(data[sel_vector[i - 1]], data[sel_vector[i]])) {
 			return false;
 		}
 	}
@@ -163,6 +166,7 @@ bool is_unique(Vector &vector, sel_t sel_vector[]) {
 }
 
 bool VectorOperations::Unique(Vector &vector) {
+	// first we extract NULL values
 	sel_t sort_sel[STANDARD_VECTOR_SIZE];
 	// first sort the vector
 	VectorOperations::Sort(vector, sort_sel);
