@@ -106,7 +106,7 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	}
 }
 
-static void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk) {
+void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk) {
 	for (auto &constraint : table.bound_constraints) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
@@ -121,13 +121,15 @@ static void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk) 
 		}
 		case ConstraintType::FOREIGN_KEY:
 		case ConstraintType::UNIQUE:
-			// we check these constraint later
-			// as these checks rely on the data currently stored in the table
-			// instead of just on the to-be-inserted chunk
+			// we check these constraint in the unique index
 			break;
 		default:
 			throw NotImplementedException("Constraint type not implemented!");
 		}
+	}
+	// check any unique indexes
+	for (auto &index : indexes) {
+		index->CheckConstraint(chunk);
 	}
 }
 
@@ -243,7 +245,33 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-static void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, vector<column_t> &column_ids) {
+static bool CreateMockChunk(TableCatalogEntry &table, vector<column_t> &column_ids, unordered_set<column_t> &desired_column_ids, DataChunk &chunk, DataChunk &mock_chunk) {
+	index_t found_columns = 0;
+	// check whether the desired columns are present in the UPDATE clause
+	for(column_t i = 0; i < column_ids.size(); i++) {
+		if (desired_column_ids.find(column_ids[i]) != desired_column_ids.end()) {
+			found_columns++;
+		}
+	}
+	if (found_columns == 0) {
+		// no columns were found: no need to check the constraint again
+		return false;
+	}
+	if (found_columns != desired_column_ids.size()) {
+		// FIXME: not all columns in UPDATE clause are present!
+		// this should not be triggered at all as the binder should add these columns
+		throw NotImplementedException("Not all columns required for the CHECK constraint are present in the UPDATED chunk!");
+	}
+	// construct a mock DataChunk
+	auto types = table.GetTypes();
+	mock_chunk.InitializeEmpty(types);
+	for(column_t i = 0; i < column_ids.size(); i++) {
+		mock_chunk.data[column_ids[i]].Reference(chunk.data[i]);
+	}
+	return true;
+}
+
+void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, vector<column_t> &column_ids) {
 	for (auto &constraint : table.bound_constraints) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
@@ -260,30 +288,11 @@ static void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, 
 		}
 		case ConstraintType::CHECK: {
 			auto &check = *reinterpret_cast<BoundCheckConstraint *>(constraint.get());
-			// check whether the columns referenced by the CHECK constraint are present in the UPDATE clause
-			index_t found_columns = 0;
-			for(column_t i = 0; i < column_ids.size(); i++) {
-				if (check.bound_columns.find(column_ids[i]) != check.bound_columns.end()) {
-					found_columns++;
-				}
-			}
-			if (found_columns == 0) {
-				// no columns were found: no need to check the constraint again
-				return;
-			}
-			if (found_columns != check.bound_columns.size()) {
-				// FIXME: not all columns in UPDATE clause are present!
-				// this should not be triggered at all as the binder should add these columns
-				throw NotImplementedException("Not all columns required for the CHECK constraint are present in the UPDATED chunk!");
-			}
-			// construct a mock DataChunk to pass to the CHECK constraint
-			auto types = table.GetTypes();
+
 			DataChunk mock_chunk;
-			mock_chunk.InitializeEmpty(types);
-			for(column_t i = 0; i < column_ids.size(); i++) {
-				mock_chunk.data[column_ids[i]].Reference(chunk.data[i]);
+			if (CreateMockChunk(table, column_ids, check.bound_columns, chunk, mock_chunk)) {
+				VerifyCheckConstraint(table, *check.expression, mock_chunk);
 			}
-			VerifyCheckConstraint(table, *check.expression, mock_chunk);
 			break;
 		}
 		case ConstraintType::FOREIGN_KEY:
@@ -291,6 +300,13 @@ static void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, 
 			break;
 		default:
 			throw NotImplementedException("Constraint type not implemented!");
+		}
+	}
+	// check any unique indexes
+	for (auto &index : indexes) {
+		DataChunk mock_chunk;
+		if (CreateMockChunk(table, column_ids, index->column_id_set, chunk, mock_chunk)) {
+			index->CheckConstraint(chunk);
 		}
 	}
 }

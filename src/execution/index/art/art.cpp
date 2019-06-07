@@ -693,3 +693,24 @@ void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) 
 	// fetch the actual values from the base table
 	table.Fetch(transaction, result, state->column_ids, result_identifiers);
 }
+
+void ART::CheckConstraint(DataChunk &input) {
+	if (!is_unique) {
+		// not a unique index: no constraints can be violated
+		return;
+	}
+	lock_guard<mutex> l(lock);
+	// execute the expressions for the input chunk
+	ExecuteExpressions(input, expression_result);
+	// generate the keys for the search
+	vector<unique_ptr<Key>> keys;
+	GenerateKeys(expression_result, keys);
+	// verify for all keys that they do not exist in the tree
+	for(auto &key : keys) {
+		auto node = Lookup(tree, *key, 0);
+		if (node) {
+			// found the value in the tree! constraint violation
+			throw CatalogException("duplicate key value violates primary key or unique constraint");
+		}
+	}
+}

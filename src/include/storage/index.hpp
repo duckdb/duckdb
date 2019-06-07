@@ -70,6 +70,8 @@ public:
 
 	//! Called when data inside the index is Deleted
 	virtual void Delete(DataChunk &entries, Vector &row_identifiers) = 0;
+
+	virtual void CheckConstraint(DataChunk &input) = 0;
 protected:
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);
 

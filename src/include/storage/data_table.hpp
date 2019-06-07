@@ -120,6 +120,12 @@ private:
 	//! Fetch "sel_count" entries from a "count" size chunk of the specified column pointer, where the fetched entries are chosen by "sel_vector". The column pointer is advanced by "count" entries.
 	void RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &pointer, index_t count, sel_t *sel_vector, index_t sel_count);
 
+	//! Verify constraints with a chunk from the Append containing all columns of the table
+	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);
+	//! Verify constraints with a chunk from the Update containing only the specified column_ids
+	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, vector<column_t> &column_ids);
+
+private:
 	//! The stored data of the table
 	SegmentTree storage_tree;
 	//! The physical columns of the table

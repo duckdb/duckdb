@@ -89,6 +89,8 @@ public:
 	void Update(vector<column_t> &column_ids, DataChunk &update_data, Vector &row_identifiers) override;
 	//! Delete entries in the index
 	void Delete(DataChunk &entries, Vector &row_identifiers) override;
+	//! Check whether an input chunk violates any constraints imposed by this index
+	void CheckConstraint(DataChunk &input) override;
 
 	//! Insert data into the index. Does not lock the index.
 	void Insert(DataChunk &data, Vector &row_ids);
