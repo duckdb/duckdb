@@ -54,7 +54,6 @@ unique_ptr<data_t[]> Key::CreateData(int64_t value, bool is_little_endian) {
 	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
 	reinterpret_cast<uint64_t *>(data.get())[0] = is_little_endian ? BSWAP64(value) : value;
 	data[0] = FlipSign(data[0]);
-	assert(Flip64Value(data, is_little_endian) == value);
 	return data;
 }
 

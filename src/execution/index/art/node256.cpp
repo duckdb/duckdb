@@ -24,7 +24,7 @@ index_t Node256::GetChildGreaterEqual(uint8_t k) {
 }
 
 index_t Node256::GetNextPos(index_t pos) {
-	for(pos++; pos < 256; pos++) {
+	for(pos == INVALID_INDEX ? pos = 0 : pos++; pos < 256; pos++) {
 		if (child[pos]) {
 			return pos;
 		}

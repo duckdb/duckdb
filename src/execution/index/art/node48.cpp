@@ -28,7 +28,7 @@ index_t Node48::GetChildGreaterEqual(uint8_t k) {
 }
 
 index_t Node48::GetNextPos(index_t pos) {
-	for(pos++; pos < 256; pos++) {
+	for(pos == INVALID_INDEX ? pos = 0 : pos++; pos < 256; pos++) {
 		if (childIndex[pos] != Node::EMPTY_MARKER) {
 			return pos;
 		}

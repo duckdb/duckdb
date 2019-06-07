@@ -27,6 +27,9 @@ index_t Node4::GetChildGreaterEqual(uint8_t k) {
 }
 
 index_t Node4::GetNextPos(index_t pos) {
+	if (pos == INVALID_INDEX) {
+		return 0;
+	}
 	pos++;
 	return pos < count ? pos : INVALID_INDEX;
 }

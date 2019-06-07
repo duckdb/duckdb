@@ -28,6 +28,9 @@ index_t Node16::GetChildGreaterEqual(uint8_t k) {
 }
 
 index_t Node16::GetNextPos(index_t pos) {
+	if (pos == INVALID_INDEX) {
+		return 0;
+	}
 	pos++;
 	return pos < count ? pos : INVALID_INDEX;
 }

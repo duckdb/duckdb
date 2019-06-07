@@ -40,7 +40,7 @@ public:
 	virtual index_t GetChildGreaterEqual(uint8_t k) {
 		return INVALID_INDEX;
 	}
-	//! Get the next position in the node, or INVALID_INDEX if there is no next position
+	//! Get the next position in the node, or INVALID_INDEX if there is no next position. if pos == INVALID_INDEX, then the first valid position in the node will be returned.
 	virtual index_t GetNextPos(index_t pos) {
 		return INVALID_INDEX;
 	}
