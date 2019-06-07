@@ -17,7 +17,12 @@ unique_ptr<ParsedExpression> Transformer::TransformValue(postgres::Value val) {
 		// try to parse as long long
 		try {
 			// FIXME: use TryCast here
-			int64_t value = stoll(val.val.str, NULL, 10);
+			size_t index;
+			int64_t value = stoll(val.val.str, &index, 10);
+			if (val.val.str[index]) {
+				// didn't parse entire string!
+				throw Exception("not a bigint!");
+			}
 			return make_unique<ConstantExpression>(SQLType(SQLTypeId::BIGINT), Value::BIGINT(value));
 		} catch (...) {
 			return make_unique<ConstantExpression>(SQLType(SQLTypeId::DOUBLE), Value(stod(string(val.val.str))));
