@@ -8,7 +8,7 @@ using namespace duckdb;
 using namespace std;
 
 ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions, bool is_unique)
-    : Index(IndexType::ART, table, column_ids, move(unbound_expressions)), is_unique(is_unique) {
+	: Index(IndexType::ART, table, column_ids, move(unbound_expressions)), is_unique(is_unique) {
 	if (this->unbound_expressions.size() > 1) {
 		throw NotImplementedException("Multiple columns in ART index not supported");
 	}
@@ -45,10 +45,9 @@ ART::~ART() {
 bool ART::LeafMatches(Node *node, Key &key, unsigned depth) {
 	if (depth != maxPrefix) {
 		auto leaf = static_cast<Leaf *>(node);
-		auto leafKey = make_unique<Key>(*this, types[0], leaf->value);
-		Key &key_ref = *leafKey;
+		Key &leaf_key = *leaf->value;
 		for (index_t i = depth; i < maxPrefix; i++) {
-			if (key_ref[i] != key[i]) {
+			if (leaf_key[i] != key[i]) {
 				return false;
 			}
 		}
@@ -57,7 +56,7 @@ bool ART::LeafMatches(Node *node, Key &key, unsigned depth) {
 }
 
 unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &transaction, vector<column_t> column_ids,
-                                                              Value value, ExpressionType expression_type) {
+															  Value value, ExpressionType expression_type) {
 	auto result = make_unique<ARTIndexScanState>(column_ids);
 	result->values[0] = value;
 	result->expressions[0] = expression_type;
@@ -65,8 +64,8 @@ unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &trans
 }
 
 unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transaction, vector<column_t> column_ids,
-                                                            Value low_value, ExpressionType low_expression_type,
-                                                            Value high_value, ExpressionType high_expression_type) {
+															Value low_value, ExpressionType low_expression_type,
+															Value high_value, ExpressionType high_expression_type) {
 	auto result = make_unique<ARTIndexScanState>(column_ids);
 	result->values[0] = low_value;
 	result->expressions[0] = low_expression_type;
@@ -83,8 +82,8 @@ void ART::templated_insert(ClientContext &context, DataChunk &input, Vector &row
 	auto input_data = (T *)input.data[0].data;
 	auto row_identifiers = (int64_t *)row_ids.data;
 	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) {
-		auto key = make_unique<Key>(*this, input.data[0].type, input_data[i]);
-		Insert(context, tree, *key, 0, input_data[i], input.data[0].type, row_identifiers[i]);
+		auto key = Key::CreateKey<T>(*this, input_data[i]);
+		Insert(context, tree, move(key), 0, row_identifiers[i]);
 	});
 }
 
@@ -133,19 +132,19 @@ void ART::InsertToLeaf(ClientContext &context, Leaf &leaf, row_t row_id) {
 	leaf.Insert(row_id);
 }
 
-void ART::Insert(ClientContext &context, unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t value, TypeId type, row_t row_id) {
+void ART::Insert(ClientContext &context, unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, row_t row_id) {
+	Key &key = *value;
 	if (!node) {
 		// node is currently empty, create a leaf here with the key
-		node = make_unique<Leaf>(*this, value, row_id);
+		node = make_unique<Leaf>(*this, move(value), row_id);
 		return;
 	}
 
 	if (node->type == NodeType::NLeaf) {
 		// Replace leaf with Node4 and store both leaves in it
 		auto leaf = static_cast<Leaf *>(node.get());
-		auto auxKey = make_unique<Key>(*this, type, leaf->value);
 
-		Key &existingKey = *auxKey;
+		Key &existingKey = *leaf->value;
 		uint32_t newPrefixLength = 0;
 		// Leaf node is already there, update row_id vector
 		if (depth + newPrefixLength == maxPrefix) {
@@ -164,7 +163,7 @@ void ART::Insert(ClientContext &context, unique_ptr<Node> &node, Key &key, unsig
 		newNode->prefix_length = newPrefixLength;
 		memcpy(newNode->prefix.get(), &key[depth], std::min(newPrefixLength, maxPrefix));
 		Node4::insert(*this, newNode, existingKey[depth + newPrefixLength], node);
-		unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, value, row_id);
+		unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, move(value), row_id);
 		Node4::insert(*this, newNode, key[depth + newPrefixLength], leaf_node);
 		node = move(newNode);
 		return;
@@ -172,7 +171,7 @@ void ART::Insert(ClientContext &context, unique_ptr<Node> &node, Key &key, unsig
 
 	// Handle prefix of inner node
 	if (node->prefix_length) {
-		uint32_t mismatchPos = Node::PrefixMismatch(*this, node.get(), key, depth, type);
+		uint32_t mismatchPos = Node::PrefixMismatch(*this, node.get(), key, depth);
 		if (mismatchPos != node->prefix_length) {
 			// Prefix differs, create new node
 			unique_ptr<Node> newNode = make_unique<Node4>(*this);
@@ -184,11 +183,11 @@ void ART::Insert(ClientContext &context, unique_ptr<Node> &node, Key &key, unsig
 				Node4::insert(*this, newNode, node->prefix[mismatchPos], node);
 				node_ptr->prefix_length -= (mismatchPos + 1);
 				memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatchPos + 1,
-				        std::min(node_ptr->prefix_length, maxPrefix));
+						std::min(node_ptr->prefix_length, maxPrefix));
 			} else {
 				throw NotImplementedException("PrefixLength > MaxPrefixLength");
 			}
-			unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, value, row_id);
+			unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, move(value), row_id);
 
 			Node4::insert(*this, newNode, key[depth + mismatchPos], leaf_node);
 			node = move(newNode);
@@ -201,11 +200,11 @@ void ART::Insert(ClientContext &context, unique_ptr<Node> &node, Key &key, unsig
 	index_t pos = node->GetChildPos(key[depth]);
 	if (pos != INVALID_INDEX) {
 		auto child = node->GetChild(pos);
-		Insert(context, *child, key, depth + 1, value, type, row_id);
+		Insert(context, *child, move(value), depth + 1, row_id);
 		return;
 	}
 
-	unique_ptr<Node> newNode = make_unique<Leaf>(*this, value, row_id);
+	unique_ptr<Node> newNode = make_unique<Leaf>(*this, move(value), row_id);
 	Node::InsertLeaf(*this, node, key[depth], newNode);
 }
 
@@ -217,8 +216,8 @@ void ART::templated_delete(DataChunk &input, Vector &row_ids) {
 	auto input_data = (T *)input.data[0].data;
 	auto row_identifiers = (int64_t *)row_ids.data;
 	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) {
-		auto key = make_unique<Key>(*this, input.data[0].type, input_data[i]);
-		Erase(tree, *key, 0, input.data[0].type, row_identifiers[i]);
+		auto key = Key::CreateKey<T>(*this, input_data[i]);
+		Erase(tree, *key, 0, row_identifiers[i]);
 	});
 }
 
@@ -249,71 +248,48 @@ void ART::Delete(DataChunk &input, Vector &row_ids) {
 	}
 }
 
-void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, TypeId type, row_t row_id) {
-	if (!node)
+void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) {
+	if (!node) {
 		return;
+	}
 	// Delete a leaf from a tree
 	if (node->type == NodeType::NLeaf) {
 		// Make sure we have the right leaf
-		if (ART::LeafMatches(node.get(), key, depth)) {
-			node.reset();
-		}
+		assert(ART::LeafMatches(node.get(), key, depth));
+		node.reset();
 		return;
 	}
 
 	// Handle prefix
 	if (node->prefix_length) {
-		if (Node::PrefixMismatch(*this, node.get(), key, depth, type) != node->prefix_length) {
-			return;
-		}
+		assert(Node::PrefixMismatch(*this, node.get(), key, depth) == node->prefix_length);
 		depth += node->prefix_length;
 	}
 	index_t pos = node->GetChildPos(key[depth]);
-    if (pos != INVALID_INDEX) {
+	if (pos != INVALID_INDEX) {
 		auto child = node->GetChild(pos);
 		assert(child);
 
-        unique_ptr<Node> &child_ref = *child;
-        if (child_ref->type == NodeType::NLeaf && LeafMatches(child_ref.get(), key, depth)) {
-            // Leaf found, remove entry
-            auto leaf = static_cast<Leaf *>(child_ref.get());
-            if (leaf->num_elements > 1) {
-                leaf->Remove(row_id);
-                return;
-            }
-            // Leaf only has one element, delete leaf, decrement node counter and maybe shrink node
-            else {
-                switch (node->type) {
-                case NodeType::N4: {
-                    Node4::erase(*this, node, pos);
-                    break;
-                }
-                case NodeType::N16: {
-                    Node16::erase(*this, node, pos);
-                    break;
-                }
-                case NodeType::N48: {
-                    Node48::erase(*this, node, pos);
-                    break;
-                }
-                case NodeType::N256:
-                    Node256::erase(*this, node, pos);
-                    break;
-                default:
-                    assert(0);
-                    break;
-                }
-            }
-
-        } else {
-            // Recurse
-            Erase(*child, key, depth + 1, type, row_id);
-        }
-    }
+		unique_ptr<Node> &child_ref = *child;
+		if (child_ref->type == NodeType::NLeaf && LeafMatches(child_ref.get(), key, depth)) {
+			// Leaf found, remove entry
+			auto leaf = static_cast<Leaf *>(child_ref.get());
+			if (leaf->num_elements > 1) {
+				// leaf has multiple rows: remove the row from the leaf
+				leaf->Remove(row_id);
+			} else {
+				// Leaf only has one element, delete leaf, decrement node counter and maybe shrink node
+				Node::Erase(*this, node, pos);
+			}
+		} else {
+			// Recurse
+			Erase(*child, key, depth + 1, row_id);
+		}
+	}
 }
 
 void ART::Update(ClientContext &context, vector<column_t> &update_columns, DataChunk &update_data,
-                 Vector &row_identifiers) {
+				 Vector &row_identifiers) {
 	// first check if the columns we use here are updated
 	bool index_is_updated = false;
 	for (auto &column : update_columns) {
@@ -359,44 +335,39 @@ void ART::Update(ClientContext &context, vector<column_t> &update_columns, DataC
 //===--------------------------------------------------------------------===//
 // Point Query
 //===--------------------------------------------------------------------===//
-template <class T>
-index_t ART::templated_lookup(TypeId type, T data, int64_t *result_ids, ARTIndexScanState *state) {
-	auto key = make_unique<Key>(*this, type, data);
-	index_t result_count = 0;
-	auto leaf = static_cast<Leaf *>(Lookup(tree, *key, 0));
-	if (leaf) {
-		for (; state->pointquery_tuple < leaf->num_elements; state->pointquery_tuple++) {
-			result_ids[result_count++] = leaf->GetRowId(state->pointquery_tuple);
-			if (result_count == STANDARD_VECTOR_SIZE) {
-				state->pointquery_tuple++;
-				return result_count;
-			}
-		}
-		state->checked = true;
+static unique_ptr<Key> CreateKey(ART &art, TypeId type, Value &value) {
+	assert(type == value.type);
+	switch (type) {
+	case TypeId::TINYINT:
+		return Key::CreateKey<int8_t>(art, value.value_.tinyint);
+	case TypeId::SMALLINT:
+		return Key::CreateKey<int16_t>(art, value.value_.smallint);
+	case TypeId::INTEGER:
+		return Key::CreateKey<int32_t>(art, value.value_.integer);
+	case TypeId::BIGINT:
+		return Key::CreateKey<int64_t>(art, value.value_.bigint);
+	default:
+		throw InvalidTypeException(type, "Invalid type for index");
 	}
-	return result_count;
 }
 
 void ART::SearchEqual(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state) {
 	auto row_ids = (int64_t *)result_identifiers->data;
-	switch (types[0]) {
-	case TypeId::TINYINT:
-		result_identifiers->count = templated_lookup<int8_t>(types[0], state->values[0].value_.tinyint, row_ids, state);
-		break;
-	case TypeId::SMALLINT:
-		result_identifiers->count =
-		    templated_lookup<int16_t>(types[0], state->values[0].value_.smallint, row_ids, state);
-		break;
-	case TypeId::INTEGER:
-		result_identifiers->count =
-		    templated_lookup<int32_t>(types[0], state->values[0].value_.integer, row_ids, state);
-		break;
-	case TypeId::BIGINT:
-		result_identifiers->count = templated_lookup<int64_t>(types[0], state->values[0].value_.bigint, row_ids, state);
-		break;
-	default:
-		throw InvalidTypeException(types[0], "Invalid type for index");
+	unique_ptr<Key> key = CreateKey(*this, types[0], state->values[0]);
+	index_t result_count = 0;
+	auto leaf = static_cast<Leaf *>(Lookup(tree, *key, 0));
+	if (leaf) {
+		for (; state->pointquery_tuple < leaf->num_elements; state->pointquery_tuple++) {
+			row_ids[result_count++] = leaf->GetRowId(state->pointquery_tuple);
+			if (result_count == STANDARD_VECTOR_SIZE) {
+				state->pointquery_tuple++;
+				result_identifiers->count = result_count;
+				return;
+			}
+		}
+		state->checked = true;
 	}
+	result_identifiers->count = result_count;
 }
 
 Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
@@ -412,8 +383,7 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 			if (depth != maxPrefix) {
 				// Check leaf
 				auto leaf = static_cast<Leaf *>(node_val);
-				auto auxKey = make_unique<Key>(*this, types[0], leaf->value);
-				Key &leafKey = *auxKey;
+				Key &leafKey = *leaf->value;
 				for (index_t i = (skippedPrefix ? 0 : depth); i < maxPrefix; i++) {
 					if (leafKey[i] != key[i]) {
 						return nullptr;
@@ -451,18 +421,19 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 //===--------------------------------------------------------------------===//
 // Iterator scans
 //===--------------------------------------------------------------------===//
-template<class T, bool HAS_BOUND, bool INCLUSIVE>
-index_t ART::iterator_scan(ARTIndexScanState *state, Iterator *it, int64_t *result_ids, T bound) {
+template<bool HAS_BOUND, bool INCLUSIVE>
+index_t ART::iterator_scan(ARTIndexScanState *state, Iterator *it, int64_t *result_ids, Key *bound) {
 	index_t result_count = 0;
 	bool has_next;
 	do {
 		if (HAS_BOUND) {
+			assert(bound);
 			if (INCLUSIVE) {
-				if (it->node->value > (uint64_t) bound) {
+				if (*it->node->value > *bound) {
 					break;
 				}
 			} else {
-				if (it->node->value >= (uint64_t) bound) {
+				if (*it->node->value >= *bound) {
 					break;
 				}
 			}
@@ -533,8 +504,7 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 			// found a leaf node: check if it is bigger than the current key
 			auto leaf = static_cast<Leaf *>(node);
 			it.node = leaf;
-			auto leaf_key = make_unique<Key>(*this, types[0], leaf->value);
-			if (key > *leaf_key) {
+			if (key > *leaf->value) {
 				// the key is bigger than the min_key
 				// in this case there are no keys in the set that are bigger than key
 				// thus we terminate
@@ -542,7 +512,7 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 			}
 			// if the search is not inclusive the leaf node could still be equal to the current value
 			// check if leaf is equal to the current key
-			if (!inclusive && *leaf_key == key) {
+			if (!inclusive && *leaf->value == key) {
 				// leaf is equal: move to next node
 				if (!IteratorNext(it)) {
 					return false;
@@ -550,7 +520,7 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 			}
 			return true;
 		}
-		uint32_t mismatchPos = Node::PrefixMismatch(*this, node, key, depth, types[0]);
+		uint32_t mismatchPos = Node::PrefixMismatch(*this, node, key, depth);
 		if (mismatchPos != node->prefix_length) {
 			if (node->prefix[mismatchPos] < key[depth + mismatchPos]) {
 				// Less
@@ -575,46 +545,22 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 	}
 }
 
-template <class T>
-index_t ART::templated_greater_scan(TypeId type, T data, int64_t *result_ids, bool inclusive,
-								ARTIndexScanState *state) {
+void ART::SearchGreater(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool inclusive) {
+	auto row_ids = (int64_t *)result_identifiers->data;
 	Iterator *it = &state->iterator;
-	auto key = make_unique<Key>(*this, type, data);
+	auto key = CreateKey(*this, types[0], state->values[0]);
 
 	// greater than scan: first set the iterator to the node at which we will start our scan by finding the lowest node that satisfies our requirement
 	if (!it->start) {
 		bool found = ART::Bound(tree, *key, *it, inclusive);
 		if (!found) {
-			return 0;
+			result_identifiers->count = 0;
+			return;
 		}
 		it->start = true;
 	}
 	// after that we continue the scan; we don't need to check the bounds as any value following this value is automatically bigger and hence satisfies our predicate
-	return iterator_scan<T, false, false>(state, it, result_ids, 0);
-}
-
-void ART::SearchGreater(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool inclusive) {
-	auto row_ids = (int64_t *)result_identifiers->data;
-	switch (types[0]) {
-	case TypeId::TINYINT:
-		result_identifiers->count =
-		    templated_greater_scan<int8_t>(types[0], state->values[0].value_.tinyint, row_ids, inclusive, state);
-		break;
-	case TypeId::SMALLINT:
-		result_identifiers->count =
-		    templated_greater_scan<int16_t>(types[0], state->values[0].value_.smallint, row_ids, inclusive, state);
-		break;
-	case TypeId::INTEGER:
-		result_identifiers->count =
-		    templated_greater_scan<int32_t>(types[0], state->values[0].value_.integer, row_ids, inclusive, state);
-		break;
-	case TypeId::BIGINT:
-		result_identifiers->count =
-		    templated_greater_scan<int64_t>(types[0], state->values[0].value_.bigint, row_ids, inclusive, state);
-		break;
-	default:
-		throw InvalidTypeException(types[0], "Invalid type for index");
-	}
+	result_identifiers->count = iterator_scan<false, false>(state, it, row_ids, nullptr);
 }
 
 //===--------------------------------------------------------------------===//
@@ -656,107 +602,56 @@ static Leaf& FindMinimum(Iterator &it, Node &node) {
 	return FindMinimum(it, *next);
 }
 
-template <class T>
-index_t ART::templated_less_scan(TypeId type, T data, int64_t *result_ids, bool inclusive, ARTIndexScanState *state) {
+void ART::SearchLess(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool inclusive) {
+	result_identifiers->count = 0;
+	auto row_ids = (int64_t *)result_identifiers->data;
 	if (!tree) {
-		return 0;
+		return;
 	}
 
 	Iterator *it = &state->iterator;
+	auto upper_bound = CreateKey(*this, types[0], state->values[0]);
 
 	if (!it->start) {
 		// first find the minimum value in the ART: we start scanning from this value
 		auto &minimum = FindMinimum(state->iterator, *tree);
-		auto key = make_unique<Key>(*this, type, data);
-		auto min_key = make_unique<Key>(*this, type, minimum.value);
 		// early out min value higher than upper bound query
-		if (*min_key > *key) {
-			return 0;
+		if (*minimum.value > *upper_bound) {
+			return;
 		}
 		it->start = true;
 	}
 	// now continue the scan until we reach the upper bound
 	if (inclusive) {
-		return iterator_scan<T, true, true>(state, it, result_ids, data);
+		result_identifiers->count = iterator_scan<true, true>(state, it, row_ids, upper_bound.get());
 	} else {
-		return iterator_scan<T, true, false>(state, it, result_ids, data);
-	}
-}
-
-void ART::SearchLess(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool inclusive) {
-	auto row_ids = (int64_t *)result_identifiers->data;
-	switch (types[0]) {
-	case TypeId::TINYINT:
-		result_identifiers->count =
-		    templated_less_scan<int8_t>(types[0], state->values[0].value_.tinyint, row_ids, inclusive, state);
-		break;
-	case TypeId::SMALLINT:
-		result_identifiers->count =
-		    templated_less_scan<int16_t>(types[0], state->values[0].value_.smallint, row_ids, inclusive, state);
-		break;
-	case TypeId::INTEGER:
-		result_identifiers->count =
-		    templated_less_scan<int32_t>(types[0], state->values[0].value_.integer, row_ids, inclusive, state);
-		break;
-	case TypeId::BIGINT:
-		result_identifiers->count =
-		    templated_less_scan<int64_t>(types[0], state->values[0].value_.bigint, row_ids, inclusive, state);
-		break;
-	default:
-		throw InvalidTypeException(types[0], "Invalid type for index");
+		result_identifiers->count = iterator_scan<true, false>(state, it, row_ids, upper_bound.get());
 	}
 }
 
 //===--------------------------------------------------------------------===//
 // Closed Range Query
 //===--------------------------------------------------------------------===//
-template <class T>
-index_t ART::templated_close_range(TypeId type, T left_query, T right_query, int64_t *result_ids, bool left_inclusive,
-								bool right_inclusive, ARTIndexScanState *state) {
+void ART::SearchCloseRange(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool left_inclusive,
+						   bool right_inclusive) {
+	auto row_ids = (int64_t *)result_identifiers->data;
+	auto lower_bound = CreateKey(*this, types[0], state->values[0]);
+	auto upper_bound = CreateKey(*this, types[0], state->values[1]);
 	Iterator *it = &state->iterator;
-	auto key = make_unique<Key>(*this, type, left_query);
 	// first find the first node that satisfies the left predicate
 	if (!it->start) {
-		bool found = ART::Bound(tree, *key, *it, left_inclusive);
+		bool found = ART::Bound(tree, *lower_bound, *it, left_inclusive);
 		if (!found) {
-			return 0;
+			result_identifiers->count = 0;
+			return;
 		}
 		it->start = true;
 	}
 	// now continue the scan until we reach the upper bound
 	if (right_inclusive) {
-		return iterator_scan<T, true, true>(state, it, result_ids, right_query);
+		result_identifiers->count = iterator_scan<true, true>(state, it, row_ids, upper_bound.get());
 	} else {
-		return iterator_scan<T, true, false>(state, it, result_ids, right_query);
-	}
-}
-
-void ART::SearchCloseRange(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool left_inclusive,
-                           bool right_inclusive) {
-	auto row_ids = (int64_t *)result_identifiers->data;
-	switch (types[0]) {
-	case TypeId::TINYINT:
-		result_identifiers->count =
-		    templated_close_range<int8_t>(types[0], state->values[0].value_.tinyint, state->values[1].value_.tinyint,
-		                                  row_ids, left_inclusive, right_inclusive, state);
-		break;
-	case TypeId::SMALLINT:
-		result_identifiers->count =
-		    templated_close_range<int16_t>(types[0], state->values[0].value_.smallint, state->values[1].value_.smallint,
-		                                   row_ids, left_inclusive, right_inclusive, state);
-		break;
-	case TypeId::INTEGER:
-		result_identifiers->count =
-		    templated_close_range<int32_t>(types[0], state->values[0].value_.integer, state->values[1].value_.integer,
-		                                   row_ids, left_inclusive, right_inclusive, state);
-		break;
-	case TypeId::BIGINT:
-		result_identifiers->count =
-		    templated_close_range<int64_t>(types[0], state->values[0].value_.bigint, state->values[1].value_.bigint,
-		                                   row_ids, left_inclusive, right_inclusive, state);
-		break;
-	default:
-		throw InvalidTypeException(types[0], "Invalid type for index");
+		result_identifiers->count = iterator_scan<true, false>(state, it, row_ids, upper_bound.get());
 	}
 }
 
@@ -800,10 +695,10 @@ void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) 
 		}
 	}
 
-	// scan the index
 	if (result_identifiers.count == 0) {
 		return;
 	}
 
+	// fetch the actual values from the base table
 	table.Fetch(transaction, result, state->column_ids, result_identifiers);
 }

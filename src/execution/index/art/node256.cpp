@@ -53,12 +53,13 @@ void Node256::erase(ART &art, unique_ptr<Node> &node, int pos) {
 	} else {
 		auto newNode = make_unique<Node48>(art);
 		CopyPrefix(art, n, newNode.get());
-		for (unsigned b = 0; b < 256; b++) {
-			if (n->child[b]) {
-				newNode->childIndex[b] = newNode->count;
-				newNode->child[newNode->count] = move(n->child[b]);
+		for (index_t i = 0; i < 256; i++) {
+			if (n->child[i]) {
+				newNode->childIndex[i] = newNode->count;
+				newNode->child[newNode->count] = move(n->child[i]);
 				newNode->count++;
 			}
 		}
+		node = move(newNode);
 	}
 }

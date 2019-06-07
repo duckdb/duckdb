@@ -18,7 +18,7 @@ unique_ptr<Node> *Node::GetChild(index_t pos) {
 	return nullptr;
 }
 
-uint32_t Node::PrefixMismatch(ART &art, Node *node, Key &key, uint64_t depth, TypeId type) {
+uint32_t Node::PrefixMismatch(ART &art, Node *node, Key &key, uint64_t depth) {
 	uint64_t pos;
 	// TODO: node->prefix_length > node->max_prefix_length
 	if (node->prefix_length <= art.maxPrefix) {
@@ -49,5 +49,28 @@ void Node::InsertLeaf(ART &art, unique_ptr<Node> &node, uint8_t key, unique_ptr<
 		break;
 	default:
 		assert(0);
+	}
+}
+
+void Node::Erase(ART &art, unique_ptr<Node> &node, index_t pos) {
+	switch (node->type) {
+	case NodeType::N4: {
+		Node4::erase(art, node, pos);
+		break;
+	}
+	case NodeType::N16: {
+		Node16::erase(art, node, pos);
+		break;
+	}
+	case NodeType::N48: {
+		Node48::erase(art, node, pos);
+		break;
+	}
+	case NodeType::N256:
+		Node256::erase(art, node, pos);
+		break;
+	default:
+		assert(0);
+		break;
 	}
 }

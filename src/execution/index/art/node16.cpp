@@ -72,19 +72,16 @@ void Node16::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_pt
 void Node16::erase(ART &art, unique_ptr<Node> &node, int pos) {
 	Node16 *n = static_cast<Node16 *>(node.get());
 	if (node->count > 3) {
-		if (n->count == 16) {
-			n->child[15].reset();
-			n->count--;
-		} else {
-			for (; pos < n->count; pos++) {
-				n->key[pos] = n->key[pos + 1];
-				n->child[pos] = move(n->child[pos + 1]);
-			}
-			n->count--;
+		// erase the child and decrease the count
+		n->child[pos].reset();
+		n->count--;
+		// potentially move any children backwards
+		for (; pos < n->count; pos++) {
+			n->key[pos] = n->key[pos + 1];
+			n->child[pos] = move(n->child[pos + 1]);
 		}
-	}
-	// Shrink node
-	else {
+	} else {
+		// Shrink node
 		auto newNode = make_unique<Node4>(art);
 		for (unsigned i = 0; i < n->count; i++) {
 			newNode->key[newNode->count] = n->key[i];

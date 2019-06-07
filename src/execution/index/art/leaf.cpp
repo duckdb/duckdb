@@ -2,8 +2,8 @@
 #include "execution/index/art/leaf.hpp"
 
 
-Leaf::Leaf(ART &art, uint64_t value, row_t row_id) : Node(art, NodeType::NLeaf) {
-	this->value = value;
+Leaf::Leaf(ART &art, unique_ptr<Key> value, row_t row_id) : Node(art, NodeType::NLeaf) {
+	this->value = move(value);
 	this->capacity = 1;
 	this->row_ids = unique_ptr<row_t[]>(new row_t[this->capacity]);
 	this->row_ids[0] = row_id;

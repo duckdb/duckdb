@@ -14,9 +14,9 @@ namespace duckdb {
 
 class Leaf : public Node {
 public:
-	Leaf(ART &art, uint64_t value, row_t row_id);
+	Leaf(ART &art, unique_ptr<Key> value, row_t row_id);
 
-	uint64_t value;
+	unique_ptr<Key> value;
 	index_t capacity;
 	index_t num_elements;
 

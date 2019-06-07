@@ -99,10 +99,10 @@ private:
 	//! Insert a row id into a leaf node
 	void InsertToLeaf(ClientContext &context, Leaf &leaf, row_t row_id);
 	//! Insert the leaf value into the tree
-	void Insert(ClientContext &context, unique_ptr<Node> &node, Key &key, unsigned depth, uintptr_t value, TypeId type, row_t row_id);
+	void Insert(ClientContext &context, unique_ptr<Node> &node, unique_ptr<Key> key, unsigned depth, row_t row_id);
 
 	//! Erase element from leaf (if leaf has more than one value) or eliminate the leaf itself
-	void Erase(unique_ptr<Node> &node, Key &key, unsigned depth, TypeId type, row_t row_id);
+	void Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id);
 
 	//! Check if the key of the leaf is equal to the searched key
 	bool LeafMatches(Node *node, Key &key, unsigned depth);
@@ -123,23 +123,13 @@ private:
 	                      bool right_inclusive);
 private:
 
-	template<class T, bool HAS_BOUND, bool INCLUSIVE>
-	index_t iterator_scan(ARTIndexScanState *state, Iterator *it, int64_t *result_ids, T upper_bound);
+	template<bool HAS_BOUND, bool INCLUSIVE>
+	index_t iterator_scan(ARTIndexScanState *state, Iterator *it, int64_t *result_ids, Key *upper_bound);
 
 	template <class T>
 	void templated_insert(ClientContext &context, DataChunk &input, Vector &row_ids);
 	template <class T>
 	void templated_delete(DataChunk &input, Vector &row_ids);
-	template <class T>
-	index_t templated_lookup(TypeId type, T data, int64_t *result_ids, ARTIndexScanState *state);
-	template <class T>
-	index_t templated_greater_scan(TypeId type, T data, int64_t *result_ids, bool inclusive,
-	                                ARTIndexScanState *state);
-	template <class T>
-	index_t templated_less_scan(TypeId type, T data, int64_t *result_ids, bool inclusive, ARTIndexScanState *state);
-	template <class T>
-	index_t templated_close_range(TypeId type, T left_query, T right_query, int64_t *result_ids, bool left_inclusive,
-	                               bool right_inclusive, ARTIndexScanState *state);
 };
 
 } // namespace duckdb

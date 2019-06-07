@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "common/exception.hpp"
 
 namespace duckdb {
 
@@ -16,19 +17,32 @@ class ART;
 
 class Key {
 public:
-	Key(ART &art, TypeId type, uintptr_t k);
-	Key();
-	Key(const Key &key) = delete;
+	Key(unique_ptr<data_t[]> data, index_t len);
 
-	uint8_t len;
-	unique_ptr<uint8_t[]> data;
+	index_t len;
+	unique_ptr<data_t[]> data;
 public:
-	uint8_t &operator[](std::size_t i);
-	const uint8_t &operator[](std::size_t i) const;
+	template<class T>
+	static unique_ptr<Key> CreateKey(ART &art, T element) {
+		auto data = Key::CreateData<T>(art, element);
+		return make_unique<Key>(move(data), sizeof(element));
+	}
+public:
+	data_t &operator[](std::size_t i);
+	const data_t &operator[](std::size_t i) const;
 	bool operator>(const Key &k) const;
+	bool operator>=(const Key &k) const;
 	bool operator==(const Key &k) const;
 private:
-	void ConvertToBinaryComparable(bool is_little_endian, TypeId type, uintptr_t tid);
+	template<class T>
+	static unique_ptr<data_t[]> CreateData(ART &art, T value) {
+		throw NotImplementedException("Cannot create data from this type");
+	}
 };
+
+template<> unique_ptr<data_t[]> Key::CreateData(ART &art, int8_t value);
+template<> unique_ptr<data_t[]> Key::CreateData(ART &art, int16_t value);
+template<> unique_ptr<data_t[]> Key::CreateData(ART &art, int32_t value);
+template<> unique_ptr<data_t[]> Key::CreateData(ART &art, int64_t value);
 
 }

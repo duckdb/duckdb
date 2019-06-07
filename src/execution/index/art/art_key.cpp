@@ -3,15 +3,6 @@
 
 using namespace duckdb;
 
-Key::Key(ART &art, TypeId type, uintptr_t k) :
-	len(art.maxPrefix) {
-	data = unique_ptr<uint8_t[]>(new uint8_t[art.maxPrefix]);
-	ConvertToBinaryComparable(art.is_little_endian, type, k);
-}
-
-Key::Key() {
-}
-
 //! these are optimized and assume a particular byte order
 #define BSWAP8(x) ((uint8_t)((((uint8_t)(x)&0xf0) >> 4) | (((uint8_t)(x)&0x0f) << 4)))
 
@@ -31,51 +22,45 @@ static uint8_t FlipSign(uint8_t key_byte) {
 	return key_byte ^ 128;
 }
 
-void Key::ConvertToBinaryComparable(bool is_little_endian, TypeId type, uintptr_t tid) {
-	switch (type) {
-	case TypeId::TINYINT:
-		len = 1;
-		if (is_little_endian) {
-			data[0] = BSWAP8(tid);
-		} else {
-			data[0] = tid;
-		}
-		data[0] = FlipSign(data[0]);
-		break;
-	case TypeId::SMALLINT:
-		len = 2;
-		if (is_little_endian) {
-			reinterpret_cast<uint16_t *>(data.get())[0] = BSWAP16(tid);
-		} else {
-			reinterpret_cast<uint16_t *>(data.get())[0] = tid;
-		}
-		data[0] = FlipSign(data[0]);
-		break;
-	case TypeId::INTEGER:
-		len = 4;
-		if (is_little_endian) {
-			reinterpret_cast<uint32_t *>(data.get())[0] = BSWAP32(tid);
-		} else {
-			reinterpret_cast<uint32_t *>(data.get())[0] = tid;
-		}
-		data[0] = FlipSign(data[0]);
-		break;
-	case TypeId::BIGINT:
-		len = 8;
-		if (is_little_endian) {
-			reinterpret_cast<uint64_t *>(data.get())[0] = BSWAP64(tid);
-		} else {
-			reinterpret_cast<uint64_t *>(data.get())[0] = tid;
-		}
-		data[0] = FlipSign(data[0]);
-		break;
-	default:
-		throw NotImplementedException("Unimplemented type for ART index");
-	}
+Key::Key(unique_ptr<data_t[]> data, index_t len) :
+	len(len), data(move(data)) {
+
+}
+
+template<>
+unique_ptr<data_t[]> Key::CreateData(ART &art, int8_t value) {
+	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
+	reinterpret_cast<uint8_t *>(data.get())[0] = art.is_little_endian ? BSWAP8(value) : value;
+	data[0] = FlipSign(data[0]);
+	return data;
+}
+
+template<>
+unique_ptr<data_t[]> Key::CreateData(ART &art, int16_t value) {
+	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
+	reinterpret_cast<uint16_t *>(data.get())[0] = art.is_little_endian ? BSWAP16(value) : value;
+	data[0] = FlipSign(data[0]);
+	return data;
+}
+
+template<>
+unique_ptr<data_t[]> Key::CreateData(ART &art, int32_t value) {
+	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
+	reinterpret_cast<uint32_t *>(data.get())[0] = art.is_little_endian ? BSWAP32(value) : value;
+	data[0] = FlipSign(data[0]);
+	return data;
+}
+
+template<>
+unique_ptr<data_t[]> Key::CreateData(ART &art, int64_t value) {
+	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
+	reinterpret_cast<uint64_t *>(data.get())[0] = art.is_little_endian ? BSWAP64(value) : value;
+	data[0] = FlipSign(data[0]);
+	return data;
 }
 
 bool Key::operator>(const Key &k) const {
-	for (int i = 0; i < len; i++) {
+	for (index_t i = 0; i < len; i++) {
 		if (data[i] > k.data[i]) {
 			return true;
 		} else if (data[i] < k.data[i]) {
@@ -83,6 +68,17 @@ bool Key::operator>(const Key &k) const {
 		}
 	}
 	return false;
+}
+
+bool Key::operator>=(const Key &k) const {
+	for (index_t i = 0; i < len; i++) {
+		if (data[i] > k.data[i]) {
+			return true;
+		} else if (data[i] < k.data[i]) {
+			return false;
+		}
+	}
+	return len == k.len;
 }
 
 bool Key::operator==(const Key &k) const {

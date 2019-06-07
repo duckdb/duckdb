@@ -70,17 +70,17 @@ void Node4::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr
 
 void Node4::erase(ART &art, unique_ptr<Node> &node, int pos) {
 	Node4 *n = static_cast<Node4 *>(node.get());
+	assert(pos < n->count);
 
-	if (n->count == 4) {
-		n->child[3].reset();
-		n->count--;
-	} else {
-		for (; pos < n->count; pos++) {
-			n->key[pos] = n->key[pos + 1];
-			n->child[pos] = move(n->child[pos + 1]);
-		}
-		n->count--;
+	// erase the child and decrease the count
+	n->child[pos].reset();
+	n->count--;
+	// potentially move any children backwards
+	for (; pos < n->count; pos++) {
+		n->key[pos] = n->key[pos + 1];
+		n->child[pos] = move(n->child[pos + 1]);
 	}
+
 	// This is a one way node
 	if (n->count == 1) {
 		auto childref = n->child[0].get();

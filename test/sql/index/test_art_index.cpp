@@ -235,6 +235,113 @@ TEST_CASE("Test ART index with selection vector", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
 }
 
+TEST_CASE("Test ART index with prefixes", "[art]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i BIGINT)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+	// insert a bunch of values with different prefixes
+	vector<int64_t> values = {9312908412824241, -2092042498432234, 1, -100, 0, -598538523852390852, 4298421, -498249};
+	index_t gt_count = 0, lt_count = 0;
+	for(auto &value : values) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", value));
+		if (value >= 0) {
+			gt_count++;
+		} else {
+			lt_count++;
+		}
+		result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(value));
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(1)}));
+		result = con.Query("SELECT COUNT(*) FROM integers WHERE i >= 0");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(gt_count)}));
+		result = con.Query("SELECT COUNT(*) FROM integers WHERE i < -1");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(lt_count)}));
+		result = con.Query("SELECT COUNT(*) FROM integers WHERE i < 0");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(lt_count)}));
+	}
+}
+
+TEST_CASE("Test ART index with linear insertions and deletes", "[art]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	vector<index_t> insertion_count = {/*4, 16, 48, 256,*/ 1024};
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+	for(auto &insert_count : insertion_count) {
+		// insert the data
+		vector<index_t> elements;
+		index_t table_count = 0;
+		for(index_t i = 0; i < insert_count; i++) {
+			index_t element = i;
+			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", (int32_t) element ));
+			elements.push_back(element);
+			table_count++;
+			// test that the insert worked
+			result = con.Query("SELECT COUNT(*) FROM integers WHERE i < 100000000");
+			bool checked = CHECK_COLUMN(result, 0, {Value::BIGINT(table_count)});
+			REQUIRE(checked);
+			result = con.Query("SELECT COUNT(*) FROM integers WHERE i >= 0");
+			REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(table_count)}));
+		}
+		// test that it worked
+		result = con.Query("SELECT COUNT(*) FROM integers WHERE i < 100000000");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(table_count)}));
+		result = con.Query("SELECT COUNT(*) FROM integers WHERE i >= 0");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(table_count)}));
+
+		// delete random data
+		for(auto &element : elements) {
+			// delete the element
+			REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=$1", (int32_t) element ));
+			table_count--;
+			// verify that the deletion worked
+			result = con.Query("SELECT COUNT(*) FROM integers WHERE i >= 0");
+			bool check = CHECK_COLUMN(result, 0, {Value::BIGINT(table_count)});
+			REQUIRE(check);
+		}
+	}
+}
+
+TEST_CASE("Test ART index with random insertions and deletes", "[art]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	vector<index_t> insertion_count = {1024, 2048};
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+	for(auto &insert_count : insertion_count) {
+		// insert the data
+		vector<index_t> elements;
+		index_t table_count = 0;
+		for(index_t i = 0; i < insert_count; i++) {
+			index_t element = i * i;
+			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", (int32_t) element ));
+			elements.push_back(element);
+			table_count++;
+		}
+		// test that it worked
+		result = con.Query("SELECT COUNT(*) FROM integers WHERE i >= 0");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(table_count)}));
+
+		// delete random data
+		std::random_shuffle(elements.begin(), elements.end());
+		for(auto &element : elements) {
+			// delete the element
+			REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=$1", (int32_t) element ));
+			table_count--;
+			// verify that the deletion worked
+			result = con.Query("SELECT COUNT(*) FROM integers WHERE i >= 0");
+			bool check = CHECK_COLUMN(result, 0, {Value::BIGINT(table_count)});
+			REQUIRE(check);
+		}
+	}
+}
+
 TEST_CASE("Test ART index with many matches", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -432,7 +539,7 @@ TEST_CASE("ART Integer Types", "[art]") {
 		result = con.Query("SELECT sum(i) FROM integers WHERE i > " + to_string(n_sizes[idx] - 2));
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(up_range_result)}));
 
-		result = con.Query("SELECT sum(i) FROM integers WHERE i >2 AND i <5");
+		result = con.Query("SELECT sum(i) FROM integers WHERE i > 2 AND i < 5");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(7)}));
 
 		result = con.Query("SELECT sum(i) FROM integers WHERE i >=2 AND i <5");
