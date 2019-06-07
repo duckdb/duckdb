@@ -243,21 +243,28 @@ TEST_CASE("Test ART index with prefixes", "[art]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i BIGINT)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
 	// insert a bunch of values with different prefixes
-	vector<int64_t> values = {9312908412824241, -2092042498432234, 1, -100, 0, -598538523852390852, 4298421, -498249};
+	vector<int64_t> values = {9312908412824241, -2092042498432234, 1, -100, 0, -598538523852390852, 4298421, -498249, 9312908412824240, -2092042498432235, 2, -101, -598538523852390853, 4298422, -498261};
 	index_t gt_count = 0, lt_count = 0;
-	for(auto &value : values) {
+	index_t count = 0;
+	for(index_t val_index = 0; val_index < values.size(); val_index++) {
+		auto &value = values[val_index];
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", value));
 		if (value >= 0) {
 			gt_count++;
 		} else {
 			lt_count++;
 		}
-		result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(value));
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(1)}));
+		count++;
+		for(index_t i = 0; i <= val_index; i++) {
+			result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(values[i]));
+			REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(1)}));
+		}
+		result = con.Query("SELECT COUNT(*) FROM integers");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(count)}));
+		result = con.Query("SELECT COUNT(*) FROM integers WHERE i < 9223372036854775808");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(count)}));
 		result = con.Query("SELECT COUNT(*) FROM integers WHERE i >= 0");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(gt_count)}));
-		result = con.Query("SELECT COUNT(*) FROM integers WHERE i < -1");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(lt_count)}));
 		result = con.Query("SELECT COUNT(*) FROM integers WHERE i < 0");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(lt_count)}));
 	}

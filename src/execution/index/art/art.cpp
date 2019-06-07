@@ -458,6 +458,7 @@ bool ART::IteratorNext(Iterator &it) {
 		it.depth--;
 	}
 
+	bool get_next_pos = true;
 	// Look for the next leaf
 	while (it.depth > 0) {
 		auto &top = it.stack[it.depth - 1];
@@ -470,15 +471,19 @@ bool ART::IteratorNext(Iterator &it) {
 		}
 
 		// Find next node
-		top.pos = node->GetNextPos(top.pos);
+		if (get_next_pos) {
+			top.pos = node->GetNextPos(top.pos);
+		}
 		if (top.pos != INVALID_INDEX) {
 			// next node found: go there
 			it.stack[it.depth].pos = 0;
 			it.stack[it.depth].node = node->GetChild(top.pos)->get();
 			it.depth++;
+			get_next_pos = false;
 		} else {
 			// no node found: move up the tree
 			it.depth--;
+			get_next_pos = true;
 		}
 	}
 	return false;
