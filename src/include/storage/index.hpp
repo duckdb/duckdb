@@ -64,10 +64,9 @@ public:
 	virtual void Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) = 0;
 
 	//! Called when data is appended to the index
-	virtual void Append(ClientContext &context, DataChunk &entries, index_t row_identifier_start) = 0;
+	virtual void Append(DataChunk &entries, index_t row_identifier_start) = 0;
 	//! Called when data inside the index is updated
-	virtual void Update(ClientContext &context, vector<column_t> &column_ids, DataChunk &update_data,
-	                    Vector &row_identifiers) = 0;
+	virtual void Update(vector<column_t> &column_ids, DataChunk &update_data, Vector &row_identifiers) = 0;
 
 	//! Called when data inside the index is Deleted
 	virtual void Delete(DataChunk &entries, Vector &row_identifiers) = 0;

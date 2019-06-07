@@ -84,22 +84,21 @@ public:
 	//! Perform a lookup on the index
 	void Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) override;
 	//! Append entries to the index
-	void Append(ClientContext &context, DataChunk &entries, uint64_t row_identifier_start) override;
+	void Append(DataChunk &entries, uint64_t row_identifier_start) override;
 	//! Update entries in the index
-	void Update(ClientContext &context, vector<column_t> &column_ids, DataChunk &update_data,
-	            Vector &row_identifiers) override;
+	void Update(vector<column_t> &column_ids, DataChunk &update_data, Vector &row_identifiers) override;
 	//! Delete entries in the index
 	void Delete(DataChunk &entries, Vector &row_identifiers) override;
 
 	//! Insert data into the index. Does not lock the index.
-	void Insert(ClientContext &context, DataChunk &data, Vector &row_ids);
+	void Insert(DataChunk &data, Vector &row_ids);
 private:
 	DataChunk expression_result;
 private:
 	//! Insert a row id into a leaf node
-	void InsertToLeaf(ClientContext &context, Leaf &leaf, row_t row_id);
+	void InsertToLeaf(Leaf &leaf, row_t row_id);
 	//! Insert the leaf value into the tree
-	void Insert(ClientContext &context, unique_ptr<Node> &node, unique_ptr<Key> key, unsigned depth, row_t row_id);
+	void Insert(unique_ptr<Node> &node, unique_ptr<Key> key, unsigned depth, row_t row_id);
 
 	//! Erase element from leaf (if leaf has more than one value) or eliminate the leaf itself
 	void Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id);
@@ -122,14 +121,10 @@ private:
 	void SearchCloseRange(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool left_inclusive,
 	                      bool right_inclusive);
 private:
-
 	template<bool HAS_BOUND, bool INCLUSIVE>
-	index_t iterator_scan(ARTIndexScanState *state, Iterator *it, int64_t *result_ids, Key *upper_bound);
+	index_t IteratorScan(ARTIndexScanState *state, Iterator *it, int64_t *result_ids, Key *upper_bound);
 
-	template <class T>
-	void templated_insert(ClientContext &context, DataChunk &input, Vector &row_ids);
-	template <class T>
-	void templated_delete(DataChunk &input, Vector &row_ids);
+	void GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys);
 };
 
 } // namespace duckdb

@@ -191,10 +191,9 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 		// after an append move the strings to the chunk
 		last_chunk->string_heap.MergeHeap(heap);
 	}
-
-	// Finally append the entries to the indexes. Note that the append can fail here in the last step!
+	// Finally append the entries to the indexes
 	for (auto &index : indexes) {
-		index->Append(context, chunk, row_start);
+		index->Append(chunk, row_start);
 	}
 }
 
@@ -370,10 +369,9 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		// after a successful update move the strings into the chunk
 		chunk->string_heap.MergeHeap(heap);
 	}
-
 	// finally update any indexes
 	for (auto &index : indexes) {
-		index->Update(context, column_ids, updates, row_identifiers);
+		index->Update(column_ids, updates, row_identifiers);
 	}
 }
 

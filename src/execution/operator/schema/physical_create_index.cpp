@@ -8,7 +8,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalCreateIndex::CreateARTIndex(ClientContext &context) {
+void PhysicalCreateIndex::CreateARTIndex() {
 	auto art = make_unique<ART>(*table.storage, column_ids, move(unbound_expressions));
 
 	DataChunk result;
@@ -36,7 +36,7 @@ void PhysicalCreateIndex::CreateARTIndex(ClientContext &context) {
 		ExpressionExecutor executor(intermediate);
 		executor.Execute(expressions, result);
 		// insert into the index
-		art->Insert(context, result, intermediate.data[intermediate.column_count - 1]);
+		art->Insert(result, intermediate.data[intermediate.column_count - 1]);
 	}
 	table.storage->indexes.push_back(move(art));
 }
@@ -59,7 +59,7 @@ void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &ch
 
 	switch (info->index_type) {
 	case IndexType::ART: {
-		CreateARTIndex(context);
+		CreateARTIndex();
 		break;
 	}
 	default:

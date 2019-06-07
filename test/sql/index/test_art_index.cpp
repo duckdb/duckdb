@@ -466,9 +466,21 @@ TEST_CASE("Test ART index with the same value multiple times", "[art]") {
 	for(int32_t val = 0; val < 100; val++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", val));
 	}
+	for(int32_t val = 0; val < 100; val++) {
+		result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	}
 	for(int32_t it = 0; it < 10; it++) {
 		for(int32_t val = 0; val < 100; val++) {
+			result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
+			REQUIRE(CHECK_COLUMN(result, 0, {it + 1}));
+		}
+		for(int32_t val = 0; val < 100; val++) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", val));
+			result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
+			REQUIRE(CHECK_COLUMN(result, 0, {it + 2}));
+		}
+		for(int32_t val = 0; val < 100; val++) {
 			result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
 			REQUIRE(CHECK_COLUMN(result, 0, {it + 2}));
 		}

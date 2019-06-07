@@ -42,6 +42,6 @@ public:
 	vector<unique_ptr<Expression>> unbound_expressions;
 
 private:
-	void CreateARTIndex(ClientContext &context);
+	void CreateARTIndex();
 };
 } // namespace duckdb

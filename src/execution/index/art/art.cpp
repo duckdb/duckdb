@@ -77,39 +77,50 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 //===--------------------------------------------------------------------===//
 // Insert
 //===--------------------------------------------------------------------===//
-template <class T>
-void ART::templated_insert(ClientContext &context, DataChunk &input, Vector &row_ids) {
+template<class T>
+static void generate_keys(DataChunk &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
 	auto input_data = (T *)input.data[0].data;
-	auto row_identifiers = (int64_t *)row_ids.data;
-	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) {
-		auto key = Key::CreateKey<T>(input_data[i], is_little_endian);
-		Insert(context, tree, move(key), 0, row_identifiers[i]);
+	VectorOperations::Exec(input.data[0], [&](index_t i, index_t k) {
+		keys.push_back(Key::CreateKey<T>(input_data[i], is_little_endian));
 	});
 }
 
-void ART::Insert(ClientContext &context, DataChunk &input, Vector &row_ids) {
-	assert(row_ids.type == TypeId::BIGINT);
-	assert(input.size() == row_ids.count);
-	assert(types[0] == input.data[0].type);
+void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
+	keys.reserve(STANDARD_VECTOR_SIZE);
+
 	switch (input.data[0].type) {
 	case TypeId::TINYINT:
-		templated_insert<int8_t>(context, input, row_ids);
+		generate_keys<int8_t>(input, keys, is_little_endian);
 		break;
 	case TypeId::SMALLINT:
-		templated_insert<int16_t>(context, input, row_ids);
+		generate_keys<int16_t>(input, keys, is_little_endian);
 		break;
 	case TypeId::INTEGER:
-		templated_insert<int32_t>(context, input, row_ids);
+		generate_keys<int32_t>(input, keys, is_little_endian);
 		break;
 	case TypeId::BIGINT:
-		templated_insert<int64_t>(context, input, row_ids);
+		generate_keys<int64_t>(input, keys, is_little_endian);
 		break;
 	default:
 		throw InvalidTypeException(input.data[0].type, "Invalid type for index");
 	}
 }
 
-void ART::Append(ClientContext &context, DataChunk &appended_data, uint64_t row_identifier_start) {
+void ART::Insert(DataChunk &input, Vector &row_ids) {
+	assert(row_ids.type == TypeId::BIGINT);
+	assert(input.size() == row_ids.count);
+	assert(types[0] == input.data[0].type);
+	// generate the keys for the given input
+	vector<unique_ptr<Key>> keys;
+	GenerateKeys(input, keys);
+	// now insert the elements into the database
+	auto row_identifiers = (int64_t *)row_ids.data;
+	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) {
+		Insert(tree, move(keys[k]), 0, row_identifiers[i]);
+	});
+}
+
+void ART::Append(DataChunk &appended_data, uint64_t row_identifier_start) {
 	lock_guard<mutex> l(lock);
 
 	// first resolve the expressions for the index
@@ -122,17 +133,15 @@ void ART::Append(ClientContext &context, DataChunk &appended_data, uint64_t row_
 	for (index_t i = 0; i < row_identifiers.count; i++) {
 		row_ids[i] = row_identifier_start + i;
 	}
-	Insert(context, expression_result, row_identifiers);
+	Insert(expression_result, row_identifiers);
 }
 
-void ART::InsertToLeaf(ClientContext &context, Leaf &leaf, row_t row_id) {
-	if (is_unique && leaf.num_elements > 0) {
-		throw CatalogException("duplicate key value violates primary key or unique constraint");
-	}
+void ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
+	assert(!is_unique || leaf.num_elements == 0);
 	leaf.Insert(row_id);
 }
 
-void ART::Insert(ClientContext &context, unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, row_t row_id) {
+void ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, row_t row_id) {
 	Key &key = *value;
 	if (!node) {
 		// node is currently empty, create a leaf here with the key
@@ -148,14 +157,14 @@ void ART::Insert(ClientContext &context, unique_ptr<Node> &node, unique_ptr<Key>
 		uint32_t newPrefixLength = 0;
 		// Leaf node is already there, update row_id vector
 		if (depth + newPrefixLength == maxPrefix) {
-			InsertToLeaf(context, *leaf, row_id);
+			InsertToLeaf(*leaf, row_id);
 			return;
 		}
 		while (existingKey[depth + newPrefixLength] == key[depth + newPrefixLength]) {
 			newPrefixLength++;
 			// Leaf node is already there, update row_id vector
 			if (depth + newPrefixLength == maxPrefix) {
-				InsertToLeaf(context, *leaf, row_id);
+				InsertToLeaf(*leaf, row_id);
 				return;
 			}
 		}
@@ -200,7 +209,7 @@ void ART::Insert(ClientContext &context, unique_ptr<Node> &node, unique_ptr<Key>
 	index_t pos = node->GetChildPos(key[depth]);
 	if (pos != INVALID_INDEX) {
 		auto child = node->GetChild(pos);
-		Insert(context, *child, move(value), depth + 1, row_id);
+		Insert(*child, move(value), depth + 1, row_id);
 		return;
 	}
 
@@ -211,41 +220,21 @@ void ART::Insert(ClientContext &context, unique_ptr<Node> &node, unique_ptr<Key>
 //===--------------------------------------------------------------------===//
 // Delete
 //===--------------------------------------------------------------------===//
-template <class T>
-void ART::templated_delete(DataChunk &input, Vector &row_ids) {
-	auto input_data = (T *)input.data[0].data;
-	auto row_identifiers = (int64_t *)row_ids.data;
-	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) {
-		auto key = Key::CreateKey<T>(input_data[i], is_little_endian);
-		Erase(tree, *key, 0, row_identifiers[i]);
-	});
-}
-
 void ART::Delete(DataChunk &input, Vector &row_ids) {
 	lock_guard<mutex> l(lock);
 
 	// first resolve the expressions
 	ExecuteExpressions(input, expression_result);
 
-	assert(row_ids.type == TypeId::BIGINT);
-	assert(expression_result.size() == row_ids.count);
-	assert(types[0] == expression_result.data[0].type);
-	switch (expression_result.data[0].type) {
-	case TypeId::TINYINT:
-		templated_delete<int8_t>(expression_result, row_ids);
-		break;
-	case TypeId::SMALLINT:
-		templated_delete<int16_t>(expression_result, row_ids);
-		break;
-	case TypeId::INTEGER:
-		templated_delete<int32_t>(expression_result, row_ids);
-		break;
-	case TypeId::BIGINT:
-		templated_delete<int64_t>(expression_result, row_ids);
-		break;
-	default:
-		throw InvalidTypeException(expression_result.data[0].type, "Invalid type for index");
-	}
+	// then generate the keys for the given input
+	vector<unique_ptr<Key>> keys;
+	GenerateKeys(expression_result, keys);
+
+	// now erase the elements from the database
+	auto row_identifiers = (int64_t *)row_ids.data;
+	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) {
+		Erase(tree, *keys[k], 0, row_identifiers[i]);
+	});
 }
 
 void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) {
@@ -255,14 +244,17 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 	// Delete a leaf from a tree
 	if (node->type == NodeType::NLeaf) {
 		// Make sure we have the right leaf
-		assert(ART::LeafMatches(node.get(), key, depth));
-		node.reset();
+		if (ART::LeafMatches(node.get(), key, depth)) {
+			node.reset();
+		}
 		return;
 	}
 
 	// Handle prefix
 	if (node->prefix_length) {
-		assert(Node::PrefixMismatch(*this, node.get(), key, depth) == node->prefix_length);
+		if (Node::PrefixMismatch(*this, node.get(), key, depth) != node->prefix_length) {
+			return;
+		}
 		depth += node->prefix_length;
 	}
 	index_t pos = node->GetChildPos(key[depth]);
@@ -288,8 +280,7 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 	}
 }
 
-void ART::Update(ClientContext &context, vector<column_t> &update_columns, DataChunk &update_data,
-				 Vector &row_identifiers) {
+void ART::Update(vector<column_t> &update_columns, DataChunk &update_data, Vector &row_identifiers) {
 	// first check if the columns we use here are updated
 	bool index_is_updated = false;
 	for (auto &column : update_columns) {
@@ -329,7 +320,7 @@ void ART::Update(ClientContext &context, vector<column_t> &update_columns, DataC
 	ExecuteExpressions(temp_chunk, expression_result);
 
 	// insert the expression result
-	Insert(context, expression_result, row_identifiers);
+	Insert(expression_result, row_identifiers);
 }
 
 //===--------------------------------------------------------------------===//
@@ -422,7 +413,7 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 // Iterator scans
 //===--------------------------------------------------------------------===//
 template<bool HAS_BOUND, bool INCLUSIVE>
-index_t ART::iterator_scan(ARTIndexScanState *state, Iterator *it, int64_t *result_ids, Key *bound) {
+index_t ART::IteratorScan(ARTIndexScanState *state, Iterator *it, int64_t *result_ids, Key *bound) {
 	index_t result_count = 0;
 	bool has_next;
 	do {
@@ -560,7 +551,7 @@ void ART::SearchGreater(StaticVector<int64_t> *result_identifiers, ARTIndexScanS
 		it->start = true;
 	}
 	// after that we continue the scan; we don't need to check the bounds as any value following this value is automatically bigger and hence satisfies our predicate
-	result_identifiers->count = iterator_scan<false, false>(state, it, row_ids, nullptr);
+	result_identifiers->count = IteratorScan<false, false>(state, it, row_ids, nullptr);
 }
 
 //===--------------------------------------------------------------------===//
@@ -623,9 +614,9 @@ void ART::SearchLess(StaticVector<int64_t> *result_identifiers, ARTIndexScanStat
 	}
 	// now continue the scan until we reach the upper bound
 	if (inclusive) {
-		result_identifiers->count = iterator_scan<true, true>(state, it, row_ids, upper_bound.get());
+		result_identifiers->count = IteratorScan<true, true>(state, it, row_ids, upper_bound.get());
 	} else {
-		result_identifiers->count = iterator_scan<true, false>(state, it, row_ids, upper_bound.get());
+		result_identifiers->count = IteratorScan<true, false>(state, it, row_ids, upper_bound.get());
 	}
 }
 
@@ -649,9 +640,9 @@ void ART::SearchCloseRange(StaticVector<int64_t> *result_identifiers, ARTIndexSc
 	}
 	// now continue the scan until we reach the upper bound
 	if (right_inclusive) {
-		result_identifiers->count = iterator_scan<true, true>(state, it, row_ids, upper_bound.get());
+		result_identifiers->count = IteratorScan<true, true>(state, it, row_ids, upper_bound.get());
 	} else {
-		result_identifiers->count = iterator_scan<true, false>(state, it, row_ids, upper_bound.get());
+		result_identifiers->count = IteratorScan<true, false>(state, it, row_ids, upper_bound.get());
 	}
 }
 
