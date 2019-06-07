@@ -14,7 +14,14 @@ unique_ptr<ParsedExpression> Transformer::TransformValue(postgres::Value val) {
 	case T_String:
 		return make_unique<ConstantExpression>(SQLType(SQLTypeId::VARCHAR), Value(string(val.val.str)));
 	case T_Float:
-		return make_unique<ConstantExpression>(SQLType(SQLTypeId::DOUBLE), Value(stod(string(val.val.str))));
+		// try to parse as long long
+		try {
+			// FIXME: use TryCast here
+			int64_t value = stoll(val.val.str, NULL, 10);
+			return make_unique<ConstantExpression>(SQLType(SQLTypeId::BIGINT), Value::BIGINT(value));
+		} catch (...) {
+			return make_unique<ConstantExpression>(SQLType(SQLTypeId::DOUBLE), Value(stod(string(val.val.str))));
+		}
 	case T_Null:
 		return make_unique<ConstantExpression>(SQLType(SQLTypeId::SQLNULL), Value());
 	default:
