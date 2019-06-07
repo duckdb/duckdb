@@ -14,6 +14,8 @@
 namespace duckdb {
 enum class NodeType : uint8_t { N4 = 0, N16 = 1, N48 = 2, N256 = 3, NLeaf = 4 };
 
+class ART;
+
 class Node {
 public:
 	static const uint8_t EMPTY_MARKER = 48;

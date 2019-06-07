@@ -13,8 +13,6 @@
 
 namespace duckdb {
 
-class ART;
-
 class Key {
 public:
 	Key(unique_ptr<data_t[]> data, index_t len);
@@ -23,8 +21,8 @@ public:
 	unique_ptr<data_t[]> data;
 public:
 	template<class T>
-	static unique_ptr<Key> CreateKey(ART &art, T element) {
-		auto data = Key::CreateData<T>(art, element);
+	static unique_ptr<Key> CreateKey(T element, bool is_little_endian) {
+		auto data = Key::CreateData<T>(element, is_little_endian);
 		return make_unique<Key>(move(data), sizeof(element));
 	}
 public:
@@ -35,14 +33,17 @@ public:
 	bool operator==(const Key &k) const;
 private:
 	template<class T>
-	static unique_ptr<data_t[]> CreateData(ART &art, T value) {
+	static unique_ptr<data_t[]> CreateData(T value, bool is_little_endian) {
 		throw NotImplementedException("Cannot create data from this type");
 	}
 };
 
-template<> unique_ptr<data_t[]> Key::CreateData(ART &art, int8_t value);
-template<> unique_ptr<data_t[]> Key::CreateData(ART &art, int16_t value);
-template<> unique_ptr<data_t[]> Key::CreateData(ART &art, int32_t value);
-template<> unique_ptr<data_t[]> Key::CreateData(ART &art, int64_t value);
+template<> unique_ptr<data_t[]> Key::CreateData(int8_t value, bool is_little_endian);
+template<> unique_ptr<data_t[]> Key::CreateData(int16_t value, bool is_little_endian);
+template<> unique_ptr<data_t[]> Key::CreateData(int32_t value, bool is_little_endian);
+template<> unique_ptr<data_t[]> Key::CreateData(int64_t value, bool is_little_endian);
+
+template<>
+unique_ptr<Key> Key::CreateKey(string element, bool is_little_endian);
 
 }

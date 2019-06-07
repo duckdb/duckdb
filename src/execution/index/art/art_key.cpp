@@ -4,8 +4,6 @@
 using namespace duckdb;
 
 //! these are optimized and assume a particular byte order
-#define BSWAP8(x) ((uint8_t)((((uint8_t)(x)&0xf0) >> 4) | (((uint8_t)(x)&0x0f) << 4)))
-
 #define BSWAP16(x) ((uint16_t)((((uint16_t)(x)&0xff00) >> 8) | (((uint16_t)(x)&0x00ff) << 8)))
 
 #define BSWAP32(x)                                                                                                     \
@@ -28,57 +26,65 @@ Key::Key(unique_ptr<data_t[]> data, index_t len) :
 }
 
 template<>
-unique_ptr<data_t[]> Key::CreateData(ART &art, int8_t value) {
+unique_ptr<data_t[]> Key::CreateData(int8_t value, bool is_little_endian) {
 	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
-	reinterpret_cast<uint8_t *>(data.get())[0] = art.is_little_endian ? BSWAP8(value) : value;
+	reinterpret_cast<uint8_t *>(data.get())[0] = value;
 	data[0] = FlipSign(data[0]);
 	return data;
 }
 
 template<>
-unique_ptr<data_t[]> Key::CreateData(ART &art, int16_t value) {
+unique_ptr<data_t[]> Key::CreateData(int16_t value, bool is_little_endian) {
 	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
-	reinterpret_cast<uint16_t *>(data.get())[0] = art.is_little_endian ? BSWAP16(value) : value;
+	reinterpret_cast<uint16_t *>(data.get())[0] = is_little_endian ? BSWAP16(value) : value;
 	data[0] = FlipSign(data[0]);
 	return data;
 }
 
 template<>
-unique_ptr<data_t[]> Key::CreateData(ART &art, int32_t value) {
+unique_ptr<data_t[]> Key::CreateData(int32_t value, bool is_little_endian) {
 	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
-	reinterpret_cast<uint32_t *>(data.get())[0] = art.is_little_endian ? BSWAP32(value) : value;
+	reinterpret_cast<uint32_t *>(data.get())[0] = is_little_endian ? BSWAP32(value) : value;
 	data[0] = FlipSign(data[0]);
 	return data;
 }
 
 template<>
-unique_ptr<data_t[]> Key::CreateData(ART &art, int64_t value) {
+unique_ptr<data_t[]> Key::CreateData(int64_t value, bool is_little_endian) {
 	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
-	reinterpret_cast<uint64_t *>(data.get())[0] = art.is_little_endian ? BSWAP64(value) : value;
+	reinterpret_cast<uint64_t *>(data.get())[0] = is_little_endian ? BSWAP64(value) : value;
 	data[0] = FlipSign(data[0]);
 	return data;
+}
+
+template<>
+unique_ptr<Key> Key::CreateKey(string value, bool is_little_endian) {
+	index_t len = value.size() + 1;
+	auto data = unique_ptr<data_t[]>(new data_t[len]);
+	memcpy(data.get(), value.c_str(), len);
+	return make_unique<Key>(move(data), len);
 }
 
 bool Key::operator>(const Key &k) const {
-	for (index_t i = 0; i < len; i++) {
+	for (index_t i = 0; i < std::min(len, k.len); i++) {
 		if (data[i] > k.data[i]) {
 			return true;
 		} else if (data[i] < k.data[i]) {
 			return false;
 		}
 	}
-	return false;
+	return len > k.len;
 }
 
 bool Key::operator>=(const Key &k) const {
-	for (index_t i = 0; i < len; i++) {
+	for (index_t i = 0; i < std::min(len, k.len); i++) {
 		if (data[i] > k.data[i]) {
 			return true;
 		} else if (data[i] < k.data[i]) {
 			return false;
 		}
 	}
-	return len == k.len;
+	return len >= k.len;
 }
 
 bool Key::operator==(const Key &k) const {

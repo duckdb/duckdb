@@ -82,7 +82,7 @@ void ART::templated_insert(ClientContext &context, DataChunk &input, Vector &row
 	auto input_data = (T *)input.data[0].data;
 	auto row_identifiers = (int64_t *)row_ids.data;
 	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) {
-		auto key = Key::CreateKey<T>(*this, input_data[i]);
+		auto key = Key::CreateKey<T>(input_data[i], is_little_endian);
 		Insert(context, tree, move(key), 0, row_identifiers[i]);
 	});
 }
@@ -216,7 +216,7 @@ void ART::templated_delete(DataChunk &input, Vector &row_ids) {
 	auto input_data = (T *)input.data[0].data;
 	auto row_identifiers = (int64_t *)row_ids.data;
 	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) {
-		auto key = Key::CreateKey<T>(*this, input_data[i]);
+		auto key = Key::CreateKey<T>(input_data[i], is_little_endian);
 		Erase(tree, *key, 0, row_identifiers[i]);
 	});
 }
@@ -339,13 +339,13 @@ static unique_ptr<Key> CreateKey(ART &art, TypeId type, Value &value) {
 	assert(type == value.type);
 	switch (type) {
 	case TypeId::TINYINT:
-		return Key::CreateKey<int8_t>(art, value.value_.tinyint);
+		return Key::CreateKey<int8_t>(value.value_.tinyint, art.is_little_endian);
 	case TypeId::SMALLINT:
-		return Key::CreateKey<int16_t>(art, value.value_.smallint);
+		return Key::CreateKey<int16_t>(value.value_.smallint, art.is_little_endian);
 	case TypeId::INTEGER:
-		return Key::CreateKey<int32_t>(art, value.value_.integer);
+		return Key::CreateKey<int32_t>(value.value_.integer, art.is_little_endian);
 	case TypeId::BIGINT:
-		return Key::CreateKey<int64_t>(art, value.value_.bigint);
+		return Key::CreateKey<int64_t>(value.value_.bigint, art.is_little_endian);
 	default:
 		throw InvalidTypeException(type, "Invalid type for index");
 	}
