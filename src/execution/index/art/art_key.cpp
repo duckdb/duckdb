@@ -2,7 +2,6 @@
 #include "execution/index/art/art.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 //! these are optimized and assume a particular byte order
 #define BSWAP16(x) ((uint16_t)((((uint16_t)(x)&0xff00) >> 8) | (((uint16_t)(x)&0x00ff) << 8)))
@@ -50,18 +49,6 @@ unique_ptr<data_t[]> Key::CreateData(int32_t value, bool is_little_endian) {
 	return data;
 }
 
-static int64_t Flip64Value(unique_ptr<data_t[]> &data, bool is_little_endian) {
-	uint64_t source = reinterpret_cast<uint64_t *>(data.get())[0];
-	uint8_t *source_array = (uint8_t*) &source;
-	source_array[0] = FlipSign(source_array[0]);
-	int64_t int64 = *((int64_t*) &source);
-	if (is_little_endian) {
-		return BSWAP64(int64);
-	} else {
-		return int64;
-	}
-}
-
 template<>
 unique_ptr<data_t[]> Key::CreateData(int64_t value, bool is_little_endian) {
 	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
@@ -77,22 +64,6 @@ unique_ptr<Key> Key::CreateKey(string value, bool is_little_endian) {
 	auto data = unique_ptr<data_t[]>(new data_t[len]);
 	memcpy(data.get(), value.c_str(), len);
 	return make_unique<Key>(move(data), len);
-}
-
-string Key::ToString(bool is_little_endian, TypeId type) {
-	switch(type) {
-	case TypeId::TINYINT:
-	case TypeId::SMALLINT:
-	case TypeId::INTEGER:
-		break;
-	case TypeId::BIGINT: {
-		return to_string(Flip64Value(data, is_little_endian));
-	}
-	default:
-		assert(0);
-		break;
-	}
-	return "[not implemented]";
 }
 
 bool Key::operator>(const Key &k) const {

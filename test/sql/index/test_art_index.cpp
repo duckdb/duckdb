@@ -275,7 +275,7 @@ TEST_CASE("Test ART index with linear insertions and deletes", "[art]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	vector<index_t> insertion_count = {/*4, 16, 48, 256,*/ 1024};
+	vector<index_t> insertion_count = {4, 16, 48, 256, 1024};
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
 	for(auto &insert_count : insertion_count) {

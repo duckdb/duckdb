@@ -57,8 +57,6 @@ public:
 	ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions, bool is_unique = false);
 	~ART();
 
-	void Print();
-
 	//! Lock used for updating the index
 	std::mutex lock;
 	//! Root of the tree
