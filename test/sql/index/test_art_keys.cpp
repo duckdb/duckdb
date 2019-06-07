@@ -40,6 +40,15 @@ static void TestKeys(vector<unique_ptr<Key>> &keys) {
 	}
 }
 
+static unique_ptr<Key> CreateCompoundKey(string str_val, int32_t int_val, bool is_little_endian) {
+	auto key_left = Key::CreateKey<string>(str_val, is_little_endian);
+	auto key_right = Key::CreateKey<int32_t>(int_val, is_little_endian);
+	unique_ptr<data_t[]> data = unique_ptr<data_t[]>(new data_t[key_left->len + key_right->len]);
+	memcpy(data.get(), key_left->data.get(), key_left->len);
+	memcpy(data.get() + key_left->len, key_right->data.get(), key_right->len);
+	return make_unique<Key>(move(data), key_left->len + key_right->len);
+}
+
 TEST_CASE("Test correct functioning of art keys", "[art]") {
 	bool is_little_endian;
 	int n = 1;
@@ -121,4 +130,21 @@ TEST_CASE("Test correct functioning of art keys", "[art]") {
 	keys.push_back(Key::CreateKey<string>("z", is_little_endian));
 
 	TestKeys(keys);
+
+	keys.clear();
+
+	// test compound keys
+	keys.push_back(CreateCompoundKey("abc", -100, is_little_endian));
+	keys.push_back(CreateCompoundKey("abc", 1000, is_little_endian));
+	keys.push_back(CreateCompoundKey("abcd", -100000, is_little_endian));
+	keys.push_back(CreateCompoundKey("hello", -100000, is_little_endian));
+	keys.push_back(CreateCompoundKey("hello", -1, is_little_endian));
+	keys.push_back(CreateCompoundKey("hello", 0, is_little_endian));
+	keys.push_back(CreateCompoundKey("hello", 1, is_little_endian));
+	keys.push_back(CreateCompoundKey("hellow", -10000, is_little_endian));
+	keys.push_back(CreateCompoundKey("z", 30, is_little_endian));
+
+	TestKeys(keys);
+
+	keys.clear();
 }
