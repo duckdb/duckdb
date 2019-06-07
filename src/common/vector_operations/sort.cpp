@@ -147,3 +147,42 @@ void VectorOperations::Sort(Vector &vector, sel_t result[]) {
 		VectorOperations::Sort(vector, not_null_sel_vector, count, result + null_count);
 	}
 }
+
+
+#include "common/operator/comparison_operators.hpp"
+
+template<class T>
+bool is_unique(Vector &vector, sel_t sel_vector[]) {
+	auto data = (T *)vector.data;
+	for(index_t i = 1; i < vector.count; i++) {
+		if (Equals::Operation<T>(data[0], data[1])) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool VectorOperations::Unique(Vector &vector) {
+	sel_t sort_sel[STANDARD_VECTOR_SIZE];
+	// first sort the vector
+	VectorOperations::Sort(vector, sort_sel);
+	// now check whether or not the result contains unique values
+	switch (vector.type) {
+	case TypeId::TINYINT:
+		return is_unique<int8_t>(vector, sort_sel);
+	case TypeId::SMALLINT:
+		return is_unique<int16_t>(vector, sort_sel);
+	case TypeId::INTEGER:
+		return is_unique<int32_t>(vector, sort_sel);
+	case TypeId::BIGINT:
+		return is_unique<int64_t>(vector, sort_sel);
+	case TypeId::FLOAT:
+		return is_unique<float>(vector, sort_sel);
+	case TypeId::DOUBLE:
+		return is_unique<double>(vector, sort_sel);
+	case TypeId::VARCHAR:
+		return is_unique<const char*>(vector, sort_sel);
+	default:
+		throw NotImplementedException("Unimplemented type for unique");
+	}
+}

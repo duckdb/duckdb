@@ -45,13 +45,12 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 				// fetch types and create expressions for the index from the columns
 				vector<column_t> column_ids;
 				vector<unique_ptr<Expression>> unbound_expressions;
-				for(index_t i = 0; i < unique.keys.size(); i++) {
-					auto key = unique.keys[i];
+				for(auto &key : unique.keys) {
 					TypeId column_type = GetInternalType(columns[key].type);
 					assert(key < columns.size());
 
+					unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(column_type, ColumnBinding(0, column_ids.size())));
 					column_ids.push_back(key);
-					unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(column_type, ColumnBinding(0, i)));
 				}
 				// create an adaptive radix tree around the expressions
 				auto art = make_unique<ART>(*storage, column_ids, move(unbound_expressions), true);

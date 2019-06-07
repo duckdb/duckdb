@@ -710,7 +710,7 @@ void ART::CheckConstraint(DataChunk &input) {
 		auto node = Lookup(tree, *key, 0);
 		if (node) {
 			// found the value in the tree! constraint violation
-			throw CatalogException("duplicate key value violates primary key or unique constraint");
+			throw ConstraintException("duplicate key value violates primary key or unique constraint");
 		}
 	}
 }

@@ -52,11 +52,11 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 		case ConstraintType::UNIQUE: {
 			auto &unique = (UniqueConstraint &)*cond;
 			// have to resolve columns of the unique constraint
-			vector<index_t> keys;
+			unordered_set<index_t> keys;
 			if (unique.index != INVALID_INDEX) {
 				assert(unique.index < info.base->columns.size());
 				// unique constraint is given by single index
-				keys.push_back(unique.index);
+				keys.insert(unique.index);
 			} else {
 				// unique constraint is given by list of names
 				// have to resolve names
@@ -71,7 +71,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 						                      "primary key constraint",
 						                      keyname.c_str());
 					}
-					keys.push_back(entry->second);
+					keys.insert(entry->second);
 				}
 			}
 

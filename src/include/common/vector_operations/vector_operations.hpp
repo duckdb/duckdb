@@ -197,6 +197,8 @@ struct VectorOperations {
 	// Sort the vector, setting the given selection vector to a sorted state
 	// while ignoring NULL values.
 	static void Sort(Vector &vector, sel_t *result_vector, count_t count, sel_t result[]);
+	// Checks whether or not the vector contains only unique values
+	static bool Unique(Vector &vector);
 	//===--------------------------------------------------------------------===//
 	// Hash functions
 	//===--------------------------------------------------------------------===//
