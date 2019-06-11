@@ -251,30 +251,30 @@ TEST_CASE("Test ART index with multiple predicates", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {2}));
 }
 
-// TEST_CASE("Test ART index with simple updates", "[art]") {
-// 	unique_ptr<QueryResult> result;
-// 	DuckDB db(nullptr);
-// 	Connection con(db), con2(db);
+TEST_CASE("Test ART index with simple updates", "[art]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db);
 
-// 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
-// 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
 
-// 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1)"));
 
-// 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-// 	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=10 WHERE i=1"));
-// 	// con sees the new state
-// 	result = con.Query("SELECT * FROM integers WHERE i < 5");
-// 	REQUIRE(CHECK_COLUMN(result, 0, {}));
-// 	result = con.Query("SELECT * FROM integers WHERE i > 0");
-// 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
-// 	// con2 sees the old state
-// 	result = con2.Query("SELECT * FROM integers WHERE i < 5");
-// 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
-// 	result = con2.Query("SELECT * FROM integers WHERE i > 0");
-// 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
-// 	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
-// }
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=10 WHERE i=1"));
+	// con sees the new state
+	result = con.Query("SELECT * FROM integers WHERE i < 5");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT * FROM integers WHERE i > 0");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+	// con2 sees the old state
+	result = con2.Query("SELECT * FROM integers WHERE i < 5");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con2.Query("SELECT * FROM integers WHERE i > 0");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+}
 
 // TEST_CASE("Test ART index with multiple updates on the same value", "[art]") {
 // 	unique_ptr<QueryResult> result;
@@ -810,6 +810,50 @@ TEST_CASE("ART Big Range", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(7500)}));
 	result = con2.Query("SELECT COUNT(i) FROM integers WHERE i=5");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(1500)}));
+}
+
+TEST_CASE("Test updates resulting from big index scans", "[art][.]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	int64_t sum = 0;
+	int64_t count = 0;
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
+	for (int32_t i = 0; i < 25000; i++) {
+		int32_t value = i + 1;
+
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", value));
+
+		sum += value;
+		count++;
+	}
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
+	// check the sum and the count
+	result = con.Query("SELECT SUM(i), COUNT(i) FROM integers WHERE i>0");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(sum)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(count)}));
+
+	// update the data with an index scan
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=i+1 WHERE i>0"));
+	sum += count;
+
+	// now check the sum and the count again
+	result = con.Query("SELECT SUM(i), COUNT(i) FROM integers WHERE i>0");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(sum)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(count)}));
+
+	// now delete from the table with an index scan
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i>0"));
+
+	result = con.Query("SELECT SUM(i), COUNT(i) FROM integers WHERE i>0");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(0)}));
 }
 
 TEST_CASE("ART Node 4", "[art]") {

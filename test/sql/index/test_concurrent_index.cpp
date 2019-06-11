@@ -176,57 +176,103 @@ TEST_CASE("Concurrent updates to PRIMARY KEY column", "[index][.]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {1000}));
 }
 
-// static void mix_insert_to_primary_key(DuckDB *db, atomic<index_t>* count, index_t thread_nr) {
-// 	unique_ptr<QueryResult> result;
-// 	Connection con(*db);
-// 	for(int32_t i = 0; i < 10000; i++) {
-// 		result = con.Query("INSERT INTO integers VALUES ($1, $2)", i, i % 200);
-// 		if (result->success) {
-// 			(*count)++;
-// 		}
-// 	}
-// }
+static void mix_insert_to_primary_key(DuckDB *db, atomic<index_t>* count, index_t thread_nr) {
+	unique_ptr<QueryResult> result;
+	Connection con(*db);
+	for(int32_t i = 0; i < 10000; i++) {
+		result = con.Query("INSERT INTO integers VALUES ($1, $2)", i, i % 200);
+		if (result->success) {
+			(*count)++;
+		}
+	}
+}
 
-// static void mix_update_to_primary_key(DuckDB *db, atomic<index_t>* count, index_t thread_nr) {
-// 	unique_ptr<QueryResult> result;
-// 	Connection con(*db);
-// 	std::uniform_int_distribution<> distribution(1, 1000);
-// 	std::mt19937 gen;
-// 	gen.seed(thread_nr);
+static void mix_update_to_primary_key(DuckDB *db, atomic<index_t>* count, index_t thread_nr) {
+	unique_ptr<QueryResult> result;
+	Connection con(*db);
+	std::uniform_int_distribution<> distribution(1, 1000);
+	std::mt19937 gen;
+	gen.seed(thread_nr);
 
-// 	for(int32_t i = 0; i < 10000; i++) {
-// 		string column = distribution(gen) < 500 ? "i" : "j";
-// 		int32_t old_value = distribution(gen);
-// 		int32_t new_value = distribution(gen);
+	for(int32_t i = 0; i < 10000; i++) {
+		string column = distribution(gen) < 500 ? "i" : "j";
+		int32_t old_value = distribution(gen);
+		int32_t new_value = distribution(gen);
 
-// 		result = con.Query("UPDATE integers SET " + column + "=" + to_string(old_value) + " WHERE " + column + " = " + to_string(new_value));
-// 		REQUIRE(result->success);
-// 	}
-// }
+		result = con.Query("UPDATE integers SET " + column + "=" + to_string(old_value) + " WHERE " + column + " = " + to_string(new_value));
+		REQUIRE(result->success);
+	}
+}
 
-// TEST_CASE("Mix of UPDATES and INSERTS on table with UNIQUE and PRIMARY KEY constraints", "[index][.]") {
-// 	unique_ptr<QueryResult> result;
-// 	DuckDB db(nullptr);
-// 	Connection con(db);
+TEST_CASE("Mix of UPDATES and INSERTS on table with UNIQUE and PRIMARY KEY constraints", "[index][.]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
 
-// 	atomic<index_t> atomic_count;
+	atomic<index_t> atomic_count;
 
-// 	// create a single table
-// 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER UNIQUE)"));
+	// create a single table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER UNIQUE)"));
 
-// 	// now launch a bunch of concurrently updating threads
-// 	// each thread will update individual numbers and set their number one higher
-// 	thread threads[THREAD_COUNT];
-// 	for (index_t i = 0; i < THREAD_COUNT; i++) {
-// 		threads[i] = thread(i % 2 == 0 ? mix_insert_to_primary_key : mix_update_to_primary_key, &db, &atomic_count, i);
-// 	}
+	// now launch a bunch of concurrently updating threads
+	// each thread will update individual numbers and set their number one higher
+	thread threads[THREAD_COUNT];
+	for (index_t i = 0; i < THREAD_COUNT; i++) {
+		threads[i] = thread(i % 2 == 0 ? mix_insert_to_primary_key : mix_update_to_primary_key, &db, &atomic_count, i);
+	}
 
-// 	for (index_t i = 0; i < THREAD_COUNT; i++) {
-// 		threads[i].join();
-// 	}
+	for (index_t i = 0; i < THREAD_COUNT; i++) {
+		threads[i].join();
+	}
 
-// 	// now test that the counts are correct
-// 	result = con.Query("SELECT COUNT(*), COUNT(DISTINCT i) FROM integers");
-// 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(atomic_count)}));
-// 	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(atomic_count)}));
-// }
+	// now test that the counts are correct
+	result = con.Query("SELECT COUNT(*), COUNT(DISTINCT i) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(atomic_count)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(atomic_count)}));
+}
+
+static void append_to_primary_key_with_transaction(DuckDB *db, index_t thread_nr, bool success[]) {
+	unique_ptr<QueryResult> result;
+	Connection con(*db);
+
+	success[thread_nr] = true;
+	for(int32_t i = 0; i < 1000; i++) {
+		result = con.Query("INSERT INTO integers VALUES ($1)", (int32_t)(thread_nr * 1000 + i));
+		if (!result->success) {
+			success[thread_nr] = false;
+			break;
+		}
+		// check the count
+		result = con.Query("SELECT COUNT(*), COUNT(DISTINCT i) FROM integers WHERE i >= 0");
+		if (!CHECK_COLUMN(result, 0, {Value::BIGINT(i + 1)})) {
+			success[thread_nr] = false;
+			break;
+		}
+	}
+}
+
+TEST_CASE("Parallel appends to table with index with transactions", "[index][.]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// create a single table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
+
+	// now launch a bunch of concurrently inserting threads
+	thread threads[THREAD_COUNT];
+	bool success[THREAD_COUNT];
+	for (index_t i = 0; i < THREAD_COUNT; i++) {
+		threads[i] = thread(append_to_primary_key_with_transaction, &db, i, success);
+	}
+
+	for (index_t i = 0; i < THREAD_COUNT; i++) {
+		threads[i].join();
+		REQUIRE(success[i]);
+	}
+
+	// now test that the counts are correct
+	result = con.Query("SELECT COUNT(*), COUNT(DISTINCT i) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(THREAD_COUNT * 1000)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(THREAD_COUNT * 1000)}));
+}

@@ -42,13 +42,14 @@ struct Iterator {
 };
 
 struct ARTIndexScanState : public IndexScanState {
-	ARTIndexScanState(vector<column_t> column_ids) : IndexScanState(column_ids), checked(false) {
+	ARTIndexScanState(vector<column_t> column_ids) : IndexScanState(column_ids), checked(false), result_index(0) {
 	}
 
 	Value values[2];
 	ExpressionType expressions[2];
 	bool checked;
-	uint64_t pointquery_tuple = 0;
+	index_t result_index = 0;
+	vector<row_t> result_ids;
 	Iterator iterator;
 };
 
@@ -113,14 +114,13 @@ private:
 	//! Gets next node for range queries
 	bool IteratorNext(Iterator &iter);
 
-	void SearchEqual(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state);
-	void SearchGreater(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool inclusive);
-	void SearchLess(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool inclusive);
-	void SearchCloseRange(StaticVector<int64_t> *result_identifiers, ARTIndexScanState *state, bool left_inclusive,
-	                      bool right_inclusive);
+	void SearchEqual(vector<row_t> &result_ids, ARTIndexScanState *state);
+	void SearchGreater(vector<row_t> &result_ids, ARTIndexScanState *state, bool inclusive);
+	void SearchLess(vector<row_t> &result_ids, ARTIndexScanState *state, bool inclusive);
+	void SearchCloseRange(vector<row_t> &result_ids, ARTIndexScanState *state, bool left_inclusive, bool right_inclusive);
 private:
 	template<bool HAS_BOUND, bool INCLUSIVE>
-	index_t IteratorScan(ARTIndexScanState *state, Iterator *it, int64_t *result_ids, Key *upper_bound);
+	void IteratorScan(ARTIndexScanState *state, Iterator *it, vector<row_t> &result_ids, Key *upper_bound);
 
 	void GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys);
 };
