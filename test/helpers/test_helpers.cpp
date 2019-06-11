@@ -16,16 +16,17 @@ using namespace std;
 
 namespace duckdb {
 
-void REQUIRE_NO_FAIL(QueryResult &result) {
+bool NO_FAIL(QueryResult &result) {
 	if (!result.success) {
 		fprintf(stderr, "Query failed with message: %s\n", result.error.c_str());
 	}
-	REQUIRE(result.success);
+	return result.success;
 }
 
-void REQUIRE_NO_FAIL(unique_ptr<QueryResult> result) {
-	REQUIRE_NO_FAIL(*result);
+bool NO_FAIL(unique_ptr<QueryResult> result) {
+	return NO_FAIL(*result);
 }
+
 
 void TestDeleteDirectory(string path) {
 	FileSystem fs;

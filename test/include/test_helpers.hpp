@@ -27,10 +27,10 @@ bool ApproxEqual(float l, float r);
 bool ApproxEqual(double l, double r);
 
 
-void REQUIRE_NO_FAIL(QueryResult &result);
-void REQUIRE_NO_FAIL(unique_ptr<QueryResult> result);
+bool NO_FAIL(QueryResult &result);
+bool NO_FAIL(unique_ptr<QueryResult> result);
 
-// #define REQUIRE_NO_FAIL(result) auto res = (result); if (!res->success) { fprintf(stderr, "Query failed with message: %s\n", res->error.c_str()); } REQUIRE((res)->success)
+#define REQUIRE_NO_FAIL(result) REQUIRE(NO_FAIL((result)))
 #define REQUIRE_FAIL(result) REQUIRE(!(result)->success)
 
 #define COMPARE_CSV(result, csv, header)                                                                               \

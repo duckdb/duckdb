@@ -81,7 +81,11 @@ template<class T>
 static void generate_keys(DataChunk &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
 	auto input_data = (T *)input.data[0].data;
 	VectorOperations::Exec(input.data[0], [&](index_t i, index_t k) {
-		keys.push_back(Key::CreateKey<T>(input_data[i], is_little_endian));
+		if (input.data[0].nullmask[i]) {
+			keys.push_back(nullptr);
+		} else {
+			keys.push_back(Key::CreateKey<T>(input_data[i], is_little_endian));
+		}
 	});
 }
 
@@ -119,6 +123,9 @@ bool ART::Insert(DataChunk &input, Vector &row_ids) {
 	auto row_identifiers = (row_t *)row_ids.data;
 	index_t failed_index = INVALID_INDEX;
 	for(index_t i = 0; i < row_ids.count; i++) {
+		if (!keys[i]) {
+			continue;
+		}
 		row_t row_id = row_identifiers[row_ids.sel_vector ? row_ids.sel_vector[i] : i];
 		if (!Insert(tree, move(keys[i]), 0, row_id)) {
 			// failed to insert because of constraint violation
@@ -133,6 +140,9 @@ bool ART::Insert(DataChunk &input, Vector &row_ids) {
 		GenerateKeys(input, keys);
 		// now erase the entries
 		for(index_t i = 0; i < failed_index; i++) {
+			if (!keys[i]) {
+				continue;
+			}
 			index_t k = row_ids.sel_vector ? row_ids.sel_vector[i] : i;
 			row_t row_id = row_identifiers[k];
 			Erase(tree, *keys[i], 0, row_id);

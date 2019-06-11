@@ -38,12 +38,12 @@ private:
 	duckdb_result result;
 };
 
-static void REQUIRE_NO_FAIL(CAPIResult& result) {
-	REQUIRE(result.success);
+static bool NO_FAIL(CAPIResult& result) {
+	return result.success;
 }
 
-static void REQUIRE_NO_FAIL(unique_ptr<CAPIResult> result) {
-	REQUIRE_NO_FAIL(*result);
+static bool NO_FAIL(unique_ptr<CAPIResult> result) {
+	return NO_FAIL(*result);
 }
 
 template <> bool CAPIResult::Fetch(index_t col, index_t row) {
