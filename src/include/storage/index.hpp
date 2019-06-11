@@ -64,14 +64,13 @@ public:
 	virtual void Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) = 0;
 
 	//! Called when data is appended to the index
-	virtual void Append(DataChunk &entries, index_t row_identifier_start) = 0;
-	//! Called when data inside the index is updated
-	virtual void Update(vector<column_t> &column_ids, DataChunk &update_data, Vector &row_identifiers) = 0;
+	virtual bool Append(DataChunk &entries, Vector &row_identifiers) = 0;
 
 	//! Called when data inside the index is Deleted
 	virtual void Delete(DataChunk &entries, Vector &row_identifiers) = 0;
 
-	virtual void CheckConstraint(DataChunk &input) = 0;
+	//! Returns true if the index is affected by updates on the specified column ids, and false otherwise
+	bool IndexIsUpdated(vector<column_t> &column_ids);
 protected:
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);
 

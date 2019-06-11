@@ -106,47 +106,67 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	}
 }
 
-void ART::Insert(DataChunk &input, Vector &row_ids) {
+bool ART::Insert(DataChunk &input, Vector &row_ids) {
 	assert(row_ids.type == TypeId::BIGINT);
 	assert(input.size() == row_ids.count);
 	assert(types[0] == input.data[0].type);
+
 	// generate the keys for the given input
 	vector<unique_ptr<Key>> keys;
 	GenerateKeys(input, keys);
-	// now insert the elements into the database
-	auto row_identifiers = (int64_t *)row_ids.data;
-	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) {
-		Insert(tree, move(keys[k]), 0, row_identifiers[i]);
-	});
+
+	// now insert the elements into the index
+	auto row_identifiers = (row_t *)row_ids.data;
+	index_t failed_index = INVALID_INDEX;
+	for(index_t i = 0; i < row_ids.count; i++) {
+		row_t row_id = row_identifiers[row_ids.sel_vector ? row_ids.sel_vector[i] : i];
+		if (!Insert(tree, move(keys[i]), 0, row_id)) {
+			// failed to insert because of constraint violation
+			failed_index = i;
+			break;
+		}
+	}
+	if (failed_index != INVALID_INDEX) {
+		// failed to insert because of constraint violation: remove previously inserted entries
+		// generate keys again
+		keys.clear();
+		GenerateKeys(input, keys);
+		// now erase the entries
+		for(index_t i = 0; i < failed_index; i++) {
+			index_t k = row_ids.sel_vector ? row_ids.sel_vector[i] : i;
+			row_t row_id = row_identifiers[k];
+			Erase(tree, *keys[i], 0, row_id);
+		}
+		return false;
+
+	}
+	return true;
 }
 
-void ART::Append(DataChunk &appended_data, uint64_t row_identifier_start) {
+bool ART::Append(DataChunk &appended_data, Vector &row_identifiers) {
 	lock_guard<mutex> l(lock);
 
 	// first resolve the expressions for the index
 	ExecuteExpressions(appended_data, expression_result);
 
-	// create the row identifiers
-	StaticVector<int64_t> row_identifiers;
-	auto row_ids = (int64_t *)row_identifiers.data;
-	row_identifiers.count = appended_data.size();
-	for (index_t i = 0; i < row_identifiers.count; i++) {
-		row_ids[i] = row_identifier_start + i;
+	// now insert into the index
+	return Insert(expression_result, row_identifiers);
+}
+
+bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
+	if (is_unique && leaf.num_elements != 0) {
+		return false;
 	}
-	Insert(expression_result, row_identifiers);
-}
-
-void ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
-	assert(!is_unique || leaf.num_elements == 0);
 	leaf.Insert(row_id);
+	return true;
 }
 
-void ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, row_t row_id) {
+bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, row_t row_id) {
 	Key &key = *value;
 	if (!node) {
 		// node is currently empty, create a leaf here with the key
 		node = make_unique<Leaf>(*this, move(value), row_id);
-		return;
+		return true;
 	}
 
 	if (node->type == NodeType::NLeaf) {
@@ -157,15 +177,13 @@ void ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 		uint32_t newPrefixLength = 0;
 		// Leaf node is already there, update row_id vector
 		if (depth + newPrefixLength == maxPrefix) {
-			InsertToLeaf(*leaf, row_id);
-			return;
+			return InsertToLeaf(*leaf, row_id);
 		}
 		while (existingKey[depth + newPrefixLength] == key[depth + newPrefixLength]) {
 			newPrefixLength++;
 			// Leaf node is already there, update row_id vector
 			if (depth + newPrefixLength == maxPrefix) {
-				InsertToLeaf(*leaf, row_id);
-				return;
+				return InsertToLeaf(*leaf, row_id);
 			}
 		}
 		unique_ptr<Node> newNode = make_unique<Node4>(*this);
@@ -175,7 +193,7 @@ void ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 		unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, move(value), row_id);
 		Node4::insert(*this, newNode, key[depth + newPrefixLength], leaf_node);
 		node = move(newNode);
-		return;
+		return true;
 	}
 
 	// Handle prefix of inner node
@@ -200,7 +218,7 @@ void ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 
 			Node4::insert(*this, newNode, key[depth + mismatchPos], leaf_node);
 			node = move(newNode);
-			return;
+			return true;
 		}
 		depth += node->prefix_length;
 	}
@@ -209,12 +227,12 @@ void ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 	index_t pos = node->GetChildPos(key[depth]);
 	if (pos != INVALID_INDEX) {
 		auto child = node->GetChild(pos);
-		Insert(*child, move(value), depth + 1, row_id);
-		return;
+		return Insert(*child, move(value), depth + 1, row_id);
 	}
 
 	unique_ptr<Node> newNode = make_unique<Leaf>(*this, move(value), row_id);
 	Node::InsertLeaf(*this, node, key[depth], newNode);
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
@@ -278,49 +296,6 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 			Erase(*child, key, depth + 1, row_id);
 		}
 	}
-}
-
-void ART::Update(vector<column_t> &update_columns, DataChunk &update_data, Vector &row_identifiers) {
-	// first check if the columns we use here are updated
-	bool index_is_updated = false;
-	for (auto &column : update_columns) {
-		if (find(column_ids.begin(), column_ids.end(), column) != column_ids.end()) {
-			index_is_updated = true;
-			break;
-		}
-	}
-	if (!index_is_updated) {
-		// none of the indexed columns are updated
-		// we can ignore the update
-		return;
-	}
-	// otherwise we need to change the data inside the index
-	lock_guard<mutex> l(lock);
-
-	DataChunk temp_chunk;
-	temp_chunk.Initialize(table.types);
-	temp_chunk.data[0].count = update_data.size();
-	for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-		if (column_ids[col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
-			continue;
-		}
-		bool found_column = false;
-		for (index_t update_idx = 0; update_idx < update_columns.size(); update_idx++) {
-			if (column_ids[col_idx] == update_columns[update_idx]) {
-				temp_chunk.data[column_ids[col_idx]].Reference(update_data.data[update_idx]);
-				temp_chunk.sel_vector = temp_chunk.data[column_ids[col_idx]].sel_vector;
-				found_column = true;
-				break;
-			}
-		}
-		assert(found_column);
-	}
-
-	// now resolve the expressions on the temp_chunk
-	ExecuteExpressions(temp_chunk, expression_result);
-
-	// insert the expression result
-	Insert(expression_result, row_identifiers);
 }
 
 //===--------------------------------------------------------------------===//
@@ -692,25 +667,4 @@ void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) 
 
 	// fetch the actual values from the base table
 	table.Fetch(transaction, result, state->column_ids, result_identifiers);
-}
-
-void ART::CheckConstraint(DataChunk &input) {
-	if (!is_unique) {
-		// not a unique index: no constraints can be violated
-		return;
-	}
-	lock_guard<mutex> l(lock);
-	// execute the expressions for the input chunk
-	ExecuteExpressions(input, expression_result);
-	// generate the keys for the search
-	vector<unique_ptr<Key>> keys;
-	GenerateKeys(expression_result, keys);
-	// verify for all keys that they do not exist in the tree
-	for(auto &key : keys) {
-		auto node = Lookup(tree, *key, 0);
-		if (node) {
-			// found the value in the tree! constraint violation
-			throw ConstraintException("duplicate key value violates primary key or unique constraint");
-		}
-	}
 }

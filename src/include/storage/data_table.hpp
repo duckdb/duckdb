@@ -125,6 +125,10 @@ private:
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
 	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, vector<column_t> &column_ids);
 
+	//! Append a DataChunk to the set of indexes
+	void AppendToIndexes(DataChunk &chunk, row_t row_start);
+	//! Issue the specified update to the set of indexes
+	void UpdateIndexes(TableCatalogEntry &table, vector<column_t> &column_ids, DataChunk &updates, Vector &row_identifiers);
 private:
 	//! The stored data of the table
 	SegmentTree storage_tree;

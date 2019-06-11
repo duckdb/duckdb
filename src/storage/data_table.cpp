@@ -4,6 +4,7 @@
 #include "common/exception.hpp"
 #include "common/helper.hpp"
 #include "common/vector_operations/vector_operations.hpp"
+#include "common/types/static_vector.hpp"
 #include "execution/expression_executor.hpp"
 #include "main/client_context.hpp"
 #include "planner/constraints/list.hpp"
@@ -141,9 +142,33 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chu
 			throw NotImplementedException("Constraint type not implemented!");
 		}
 	}
-	// check any unique indexes
-	for (auto &index : indexes) {
-		index->CheckConstraint(chunk);
+}
+
+void DataTable::AppendToIndexes(DataChunk &chunk, row_t row_start) {
+	if (indexes.size() == 0) {
+		return;
+	}
+	// first generate the vector of row identifiers
+	StaticVector<row_t> row_identifiers;
+	row_identifiers.sel_vector = chunk.sel_vector;
+	row_identifiers.count = chunk.size();
+	VectorOperations::GenerateSequence(row_identifiers, row_start);
+
+	index_t failed_index = INVALID_INDEX;
+	// now append the entries to the indices
+	for(index_t i = 0; i < indexes.size(); i++) {
+		if (!indexes[i]->Append(chunk, row_identifiers)) {
+			failed_index = i;
+			break;
+		}
+	}
+	if (failed_index != INVALID_INDEX) {
+		// constraint violation!
+		// remove any appended entries from previous indexes (if any)
+		for(index_t i = 0; i < failed_index; i++) {
+			indexes[i]->Delete(chunk, row_identifiers);
+		}
+		throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
 	}
 }
 
@@ -173,6 +198,9 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 
 		// get the start row_id of the chunk
 		row_start = last_chunk->start + last_chunk->count;
+
+		// Append the entries to the indexes, we do this first because this might fail in case of unique index conflicts
+		AppendToIndexes(chunk, row_start);
 
 		// update the statistics with the new data
 		for (index_t i = 0; i < types.size(); i++) {
@@ -206,10 +234,6 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 
 		// after an append move the strings to the chunk
 		last_chunk->string_heap.MergeHeap(heap);
-	}
-	// Finally append the entries to the indexes
-	for (auto &index : indexes) {
-		index->Append(chunk, row_start);
 	}
 }
 
@@ -259,6 +283,16 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
+static void CreateMockChunk(TableCatalogEntry &table, vector<column_t> &column_ids, DataChunk &chunk, DataChunk &mock_chunk) {
+	// construct a mock DataChunk
+	auto types = table.GetTypes();
+	mock_chunk.InitializeEmpty(types);
+	for(column_t i = 0; i < column_ids.size(); i++) {
+		mock_chunk.data[column_ids[i]].Reference(chunk.data[i]);
+	}
+	mock_chunk.data[0].count = chunk.size();
+}
+
 static bool CreateMockChunk(TableCatalogEntry &table, vector<column_t> &column_ids, unordered_set<column_t> &desired_column_ids, DataChunk &chunk, DataChunk &mock_chunk) {
 	index_t found_columns = 0;
 	// check whether the desired columns are present in the UPDATE clause
@@ -277,13 +311,10 @@ static bool CreateMockChunk(TableCatalogEntry &table, vector<column_t> &column_i
 		throw NotImplementedException("Not all columns required for the CHECK constraint are present in the UPDATED chunk!");
 	}
 	// construct a mock DataChunk
-	auto types = table.GetTypes();
-	mock_chunk.InitializeEmpty(types);
-	for(column_t i = 0; i < column_ids.size(); i++) {
-		mock_chunk.data[column_ids[i]].Reference(chunk.data[i]);
-	}
+	CreateMockChunk(table, column_ids, chunk, mock_chunk);
 	return true;
 }
+
 
 void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, vector<column_t> &column_ids) {
 	for (auto &constraint : table.bound_constraints) {
@@ -324,14 +355,41 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 			throw NotImplementedException("Constraint type not implemented!");
 		}
 	}
-	// check any unique indexes
-	for (auto &index : indexes) {
-		DataChunk mock_chunk;
-		if (CreateMockChunk(table, column_ids, index->column_id_set, chunk, mock_chunk)) {
-			index->CheckConstraint(chunk);
+}
+
+void DataTable::UpdateIndexes(TableCatalogEntry &table, vector<column_t> &column_ids, DataChunk &updates, Vector &row_identifiers) {
+	if (indexes.size() == 0) {
+		return;
+	}
+	// first create a mock chunk to be used in the index appends
+	DataChunk mock_chunk;
+	CreateMockChunk(table, column_ids, updates, mock_chunk);
+
+	index_t failed_index = INVALID_INDEX;
+	// now insert the updated values into the index
+	for(index_t i = 0; i < indexes.size(); i++) {
+		// first check if the index is affected by the update
+		if (!indexes[i]->IndexIsUpdated(column_ids)) {
+			continue;
+		}
+		// if it is, we append the data to the index
+		if (!indexes[i]->Append(mock_chunk, row_identifiers)) {
+			failed_index = i;
+			break;
 		}
 	}
+	if (failed_index != INVALID_INDEX) {
+		// constraint violation!
+		// remove any appended entries from previous indexes (if any)
+		for(index_t i = 0; i < failed_index; i++) {
+			if (indexes[i]->IndexIsUpdated(column_ids)) {
+				indexes[i]->Delete(mock_chunk, row_identifiers);
+			}
+		}
+		throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
+	}
 }
+
 void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers,
                        vector<column_t> &column_ids, DataChunk &updates) {
 	assert(row_identifiers.type == ROW_TYPE);
@@ -361,11 +419,15 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		auto lock = chunk->lock.GetExclusiveLock();
 
 		// now update the entries
+		// first check for any conflicts before we insert anything into the undo buffer
+		// we check for any conflicts in ALL tuples first before inserting anything into the undo buffer
+		// to make sure that we complete our entire update transaction after we do
+		// this prevents inconsistencies after rollbacks, etc...
 		VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
 			auto id = ids[i] - chunk->start;
 			// assert that all ids in the vector belong to the same chunk
 			assert(id < chunk->count);
-			// check for conflicts
+			// check for version conflicts
 			auto version = chunk->version_pointers[id];
 			if (version) {
 				if (version->version_number >= TRANSACTION_ID_START &&
@@ -373,7 +435,15 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 					throw TransactionException("Conflict on tuple update!");
 				}
 			}
-			// no conflict, move the current tuple data into the undo buffer
+		});
+
+		// now we update any indexes, we do this before inserting anything into the undo buffer
+		UpdateIndexes(table, column_ids, updates, row_identifiers);
+
+		// now we know thre are no conflicts, move the tuples into the undo buffer and mark the chunk as dirty
+		VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
+			auto id = ids[i] - chunk->start;
+			// move the current tuple data into the undo buffer
 			transaction.PushTuple(UndoFlags::UPDATE_TUPLE, id, chunk);
 			// mark the segment as dirty in the chunk
 			chunk->SetDirtyFlag(id, 1, true);
@@ -406,10 +476,6 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		}
 		// after a successful update move the strings into the chunk
 		chunk->string_heap.MergeHeap(heap);
-	}
-	// finally update any indexes
-	for (auto &index : indexes) {
-		index->Update(column_ids, updates, row_identifiers);
 	}
 }
 

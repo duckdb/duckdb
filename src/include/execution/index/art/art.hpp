@@ -84,23 +84,19 @@ public:
 	//! Perform a lookup on the index
 	void Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) override;
 	//! Append entries to the index
-	void Append(DataChunk &entries, uint64_t row_identifier_start) override;
-	//! Update entries in the index
-	void Update(vector<column_t> &column_ids, DataChunk &update_data, Vector &row_identifiers) override;
+	bool Append(DataChunk &entries, Vector &row_identifiers) override;
 	//! Delete entries in the index
 	void Delete(DataChunk &entries, Vector &row_identifiers) override;
-	//! Check whether an input chunk violates any constraints imposed by this index
-	void CheckConstraint(DataChunk &input) override;
 
 	//! Insert data into the index. Does not lock the index.
-	void Insert(DataChunk &data, Vector &row_ids);
+	bool Insert(DataChunk &data, Vector &row_ids);
 private:
 	DataChunk expression_result;
 private:
 	//! Insert a row id into a leaf node
-	void InsertToLeaf(Leaf &leaf, row_t row_id);
+	bool InsertToLeaf(Leaf &leaf, row_t row_id);
 	//! Insert the leaf value into the tree
-	void Insert(unique_ptr<Node> &node, unique_ptr<Key> key, unsigned depth, row_t row_id);
+	bool Insert(unique_ptr<Node> &node, unique_ptr<Key> key, unsigned depth, row_t row_id);
 
 	//! Erase element from leaf (if leaf has more than one value) or eliminate the leaf itself
 	void Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id);
