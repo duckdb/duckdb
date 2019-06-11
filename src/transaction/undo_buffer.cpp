@@ -51,9 +51,17 @@ void UndoBuffer::Cleanup() {
 			auto info = (VersionInformation *)entry.data.get();
 			if (entry.type == UndoFlags::DELETE_TUPLE || entry.type == UndoFlags::UPDATE_TUPLE) {
 				if (info->table->indexes.size() > 0) {
-					assert(info->chunk);
+					// fetch the row identifiers
+					row_t row_number;
+					VersionInformation *current_info = info;
+					while(!current_info->chunk) {
+						assert(current_info->prev.pointer);
+						current_info = current_info->prev.pointer;
+					}
+					row_number = current_info->chunk->start + current_info->prev.entry;
+
 					assert(info->tuple_data);
-					Value ptr = Value::BIGINT(info->chunk->start + info->prev.entry);
+					Value ptr = Value::BIGINT(row_number);
 					uint8_t *alternate_version_pointers[1];
 					uint64_t alternate_version_index[1];
 
