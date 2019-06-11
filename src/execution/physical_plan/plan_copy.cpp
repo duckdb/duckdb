@@ -14,6 +14,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopy &op) 
 		assert(!op.table);
 		auto copy = make_unique<PhysicalCopy>(op, move(op.info));
 		copy->names = op.names;
+		copy->sql_types = op.sql_types;
+
 		copy->children.push_back(move(plan));
 		return move(copy);
 	} else {

@@ -162,22 +162,25 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			if (state->right_chunk >= state->right_chunks.chunks.size()) {
 				// we exhausted all right chunks!
 				// move to the next left chunk
-				children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-				if (state->child_chunk.size() == 0) {
-					return;
-				}
-				state->child_chunk.Flatten();
+				do {
+					children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+					if (state->child_chunk.size() == 0) {
+						return;
+					}
+					state->child_chunk.Flatten();
 
-				// resolve the left join condition for the current chunk
-				state->left_join_condition.Reset();
-				ExpressionExecutor executor(state->child_chunk);
-				executor.Execute(left_expressions, state->left_join_condition);
-				if (type != JoinType::MARK) {
-					// immediately disqualify any tuples from the left side that have NULL values
-					// we don't do this for the MARK join on the LHS, because the tuple will still be output, just with
-					// a NULL marker!
-					RemoveNullValues(state->left_join_condition);
-				}
+					// resolve the left join condition for the current chunk
+					state->left_join_condition.Reset();
+					ExpressionExecutor executor(state->child_chunk);
+					executor.Execute(left_expressions, state->left_join_condition);
+					if (type != JoinType::MARK) {
+						// immediately disqualify any tuples from the left side that have NULL values
+						// we don't do this for the MARK join on the LHS, because the tuple will still be output, just with
+						// a NULL marker!
+						RemoveNullValues(state->left_join_condition);
+					}
+				} while(state->left_join_condition.size() == 0);
+
 				state->right_chunk = 0;
 			}
 			// move to the start of this chunk

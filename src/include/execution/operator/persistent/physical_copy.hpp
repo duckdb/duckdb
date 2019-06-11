@@ -32,6 +32,8 @@ public:
 	unique_ptr<CopyInfo> info;
 	//! The names of the child expression (only for COPY TO)
 	vector<string> names;
+	//! The types of the child expression (only for COPY TO)
+	vector<SQLType> sql_types;
 
 private:
 	vector<index_t> select_list_oid;
