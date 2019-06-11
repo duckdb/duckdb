@@ -139,6 +139,10 @@ Value Value::DATE(int32_t year, int32_t month, int32_t day) {
 	return Value::INTEGER(Date::FromDate(year, month, day));
 }
 
+Value Value::TIMESTAMP(timestamp_t timestamp) {
+	return Value::BIGINT(timestamp);
+}
+
 Value Value::TIMESTAMP(date_t date, dtime_t time) {
 	return Value::BIGINT(Timestamp::FromDatetime(date, time));
 }
