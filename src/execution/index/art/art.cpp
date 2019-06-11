@@ -611,6 +611,7 @@ void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) 
 		assert(state->values[0].type == types[0]);
 
 		if (state->values[1].is_null) {
+			lock_guard<mutex> l(lock);
 			// single predicate
 			switch (state->expressions[0]) {
 			case ExpressionType::COMPARE_EQUAL:
@@ -632,6 +633,7 @@ void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) 
 				throw NotImplementedException("Operation not implemented");
 			}
 		} else {
+			lock_guard<mutex> l(lock);
 			// two predicates
 			assert(state->values[1].type == types[0]);
 			bool left_inclusive = state->expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
