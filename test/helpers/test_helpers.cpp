@@ -57,59 +57,6 @@ string TestCreatePath(string suffix) {
 	return fs.JoinPath(TESTING_DIRECTORY_NAME, suffix);
 }
 
-bool ApproxEqual(float ldecimal, float rdecimal) {
-	float epsilon = fabs(rdecimal) * 0.01;
-	return fabs(ldecimal - rdecimal) <= epsilon;
-}
-
-bool ApproxEqual(double ldecimal, double rdecimal) {
-	double epsilon = fabs(rdecimal) * 0.01;
-	return fabs(ldecimal - rdecimal) <= epsilon;
-}
-
-static bool ValuesAreEqual(Value result_value, Value value) {
-	if (result_value.is_null && value.is_null) {
-		// NULL = NULL in checking code
-		return true;
-	}
-	switch (value.type) {
-	case TypeId::FLOAT: {
-		float ldecimal = value.value_.float_;
-		float rdecimal = result_value.value_.float_;
-		if (!ApproxEqual(ldecimal, rdecimal)) {
-			return false;
-		}
-		break;
-	}
-	case TypeId::DOUBLE: {
-		double ldecimal = value.value_.double_;
-		double rdecimal = result_value.value_.double_;
-		if (!ApproxEqual(ldecimal, rdecimal)) {
-			return false;
-		}
-		break;
-	}
-	case TypeId::VARCHAR: {
-		// some results might contain padding spaces, e.g. when rendering
-		// VARCHAR(10) and the string only has 6 characters, they will be padded
-		// with spaces to 10 in the rendering. We don't do that here yet as we
-		// are looking at internal structures. So just ignore any extra spaces
-		// on the right
-		string left = result_value.str_value;
-		string right = value.str_value;
-		StringUtil::RTrim(left);
-		StringUtil::RTrim(right);
-		return left == right;
-	}
-	default:
-		if (value != result_value) {
-			return false;
-		}
-		break;
-	}
-	return true;
-}
-
 bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Value> values) {
 	unique_ptr<MaterializedQueryResult> materialized;
 	if (result_.type == QueryResultType::STREAM_RESULT) {
@@ -161,7 +108,7 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 				continue;
 			}
 
-			if (!ValuesAreEqual(vector.GetValue(j), values[i + j])) {
+			if (!Value::ValuesAreEqual(vector.GetValue(j), values[i + j])) {
 				// FAIL("Incorrect result! Got " + vector.GetValue(j).ToString()
 				// +
 				//      " but expected " + values[i + j].ToString());
@@ -268,7 +215,7 @@ string show_diff(DataChunk &left, DataChunk &right) {
 			for (size_t j = 0; j < left_vector.count; j++) {
 				auto left_value = left_vector.GetValue(j);
 				auto right_value = right_vector.GetValue(j);
-				if (!ValuesAreEqual(left_value, right_value)) {
+				if (!Value::ValuesAreEqual(left_value, right_value)) {
 					left_column += left_value.ToString() + ",";
 					right_column += right_value.ToString() + ",";
 					has_differences = true;
@@ -348,7 +295,7 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
 			}
 			// now perform a comparison
 			Value result_value = collection.GetValue(i, row);
-			if (!ValuesAreEqual(result_value, value)) {
+			if (!Value::ValuesAreEqual(result_value, value)) {
 				goto incorrect;
 			}
 		}

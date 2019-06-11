@@ -338,7 +338,7 @@ bool ChunkCollection::Equals(ChunkCollection &other) {
 		for (index_t col_idx = 0; col_idx < column_count(); col_idx++) {
 			auto lvalue = GetValue(col_idx, row_idx);
 			auto rvalue = other.GetValue(col_idx, row_idx);
-			if (lvalue != rvalue) {
+			if (!Value::ValuesAreEqual(lvalue, rvalue)) {
 				return false;
 			}
 		}

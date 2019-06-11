@@ -12,6 +12,7 @@
 #endif
 
 #include "common/string_util.hpp"
+#include "common/types.hpp"
 #include "compare_result.hpp"
 #include "duckdb.hpp"
 
@@ -22,10 +23,6 @@ void TestDeleteDirectory(string path);
 void TestCreateDirectory(string path);
 void TestDeleteFile(string path);
 string TestCreatePath(string suffix);
-
-bool ApproxEqual(float l, float r);
-bool ApproxEqual(double l, double r);
-
 
 bool NO_FAIL(QueryResult &result);
 bool NO_FAIL(unique_ptr<QueryResult> result);

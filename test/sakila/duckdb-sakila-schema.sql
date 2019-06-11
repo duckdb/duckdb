@@ -2,8 +2,8 @@ CREATE TABLE actor (
     actor_id numeric NOT NULL,
     first_name VARCHAR(45) NOT NULL,
     last_name VARCHAR(45) NOT NULL,
-    last_update TIMESTAMP NOT NULL,
-    PRIMARY KEY (actor_id)
+    last_update TIMESTAMP NOT NULL--,
+    --PRIMARY KEY (actor_id)
 );
 
 CREATE TABLE country (
@@ -95,8 +95,8 @@ CREATE TABLE film (
 CREATE TABLE film_actor (
     actor_id INT NOT NULL,
     film_id INT NOT NULL,
-    last_update TIMESTAMP NOT NULL,
-    PRIMARY KEY (actor_id, film_id) --,
+    last_update TIMESTAMP NOT NULL--,
+    -- PRIMARY KEY (actor_id, film_id) --,
     -- CONSTRAINT fk_film_actor_actor FOREIGN KEY (actor_id) REFERENCES actor (actor_id) ON DELETE NO ACTION ON UPDATE CASCADE,
     -- CONSTRAINT fk_film_actor_film FOREIGN KEY (film_id) REFERENCES film (film_id) ON DELETE NO ACTION ON UPDATE CASCADE
 );
@@ -104,8 +104,8 @@ CREATE TABLE film_actor (
 CREATE TABLE film_category (
     film_id INT NOT NULL,
     category_id SMALLINT NOT NULL,
-    last_update TIMESTAMP NOT NULL,
-    PRIMARY KEY (film_id, category_id) --,
+    last_update TIMESTAMP NOT NULL--,
+    --PRIMARY KEY (film_id, category_id) --,
     -- CONSTRAINT fk_film_category_film FOREIGN KEY (film_id) REFERENCES film (film_id) ON DELETE NO ACTION ON UPDATE CASCADE,
     -- CONSTRAINT fk_film_category_category FOREIGN KEY (category_id) REFERENCES category (category_id) ON DELETE NO ACTION ON UPDATE CASCADE
 );

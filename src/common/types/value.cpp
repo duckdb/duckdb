@@ -466,3 +466,36 @@ bool Value::IsUTF8String(const char *s) {
 void Value::Print() {
 	Printer::Print(ToString());
 }
+
+bool Value::ValuesAreEqual(Value result_value, Value value) {
+	if (result_value.is_null && value.is_null) {
+		// NULL = NULL in checking code
+		return true;
+	}
+	switch (value.type) {
+	case TypeId::FLOAT: {
+		float ldecimal = value.value_.float_;
+		float rdecimal = result_value.value_.float_;
+		return ApproxEqual(ldecimal, rdecimal);
+	}
+	case TypeId::DOUBLE: {
+		double ldecimal = value.value_.double_;
+		double rdecimal = result_value.value_.double_;
+		return ApproxEqual(ldecimal, rdecimal);
+	}
+	case TypeId::VARCHAR: {
+		// some results might contain padding spaces, e.g. when rendering
+		// VARCHAR(10) and the string only has 6 characters, they will be padded
+		// with spaces to 10 in the rendering. We don't do that here yet as we
+		// are looking at internal structures. So just ignore any extra spaces
+		// on the right
+		string left = result_value.str_value;
+		string right = value.str_value;
+		StringUtil::RTrim(left);
+		StringUtil::RTrim(right);
+		return left == right;
+	}
+	default:
+		return value == result_value;
+	}
+}
