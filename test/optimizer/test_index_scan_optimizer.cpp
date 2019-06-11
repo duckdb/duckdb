@@ -23,7 +23,8 @@ TEST_CASE("Test Index Scan Optimizer for Integers", "[index-optimizer-int]") {
 		auto tree = helper.ParseLogicalTree("SELECT i FROM integers where i > CAST(10 AS " + int_types[idx] + ")");
 		IndexScan index_scan;
 		auto plan = index_scan.Optimize(move(tree));
-		REQUIRE(plan->children[0]->type == LogicalOperatorType::INDEX_SCAN);
+		REQUIRE(plan->children[0]->type == LogicalOperatorType::FILTER);
+		REQUIRE(plan->children[0]->children[0]->type == LogicalOperatorType::INDEX_SCAN);
 		con.Query("DROP INDEX i_index");
 	}
 }
