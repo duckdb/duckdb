@@ -1,6 +1,12 @@
+
+// #define CATCH_CONFIG_RUNNER
+#include "catch.hpp"
+
 #include "common/file_system.hpp"
 #include "common/value_operations/value_operations.hpp"
 #include "compare_result.hpp"
+#include "main/query_result.hpp"
+#include "test_helpers.hpp"
 
 #include <cmath>
 
@@ -9,6 +15,17 @@ using namespace std;
 #define TESTING_DIRECTORY_NAME "duckdb_unittest_tempdir"
 
 namespace duckdb {
+
+void REQUIRE_NO_FAIL(QueryResult &result) {
+	if (!result.success) {
+		fprintf(stderr, "Query failed with message: %s\n", result.error.c_str());
+	}
+	REQUIRE(result.success);
+}
+
+void REQUIRE_NO_FAIL(unique_ptr<QueryResult> result) {
+	REQUIRE_NO_FAIL(*result);
+}
 
 void TestDeleteDirectory(string path) {
 	FileSystem fs;

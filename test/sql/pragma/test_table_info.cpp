@@ -12,7 +12,8 @@ TEST_CASE("Test table_info pragma", "[pragma]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER DEFAULT 1+3, j INTEGER)"));
 
 	// PRAGMA table_info(table) returns information on the table
-	REQUIRE_NO_FAIL(result = con.Query("PRAGMA table_info('integers');"));
+	result = con.Query("PRAGMA table_info('integers');");
+	REQUIRE_NO_FAIL(*result);
 	// cid
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1}));
 	// name

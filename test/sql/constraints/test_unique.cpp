@@ -22,16 +22,26 @@ TEST_CASE("Single UNIQUE constraint", "[constraints]") {
 	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES (6, 6), (3, 4);"));
 
 	// unique constraints accept NULL values, unlike PRIMARY KEY columns
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (NULL, 3), (NULL, 3)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (NULL, 6), (NULL, 7)"));
 
 	// but if we try to replace them like this it's going to fail
 	REQUIRE_FAIL(con.Query("UPDATE integers SET i=77 WHERE i IS NULL"));
 
-	result = con.Query("SELECT * FROM integers ORDER BY i");
+	result = con.Query("SELECT * FROM integers ORDER BY i, j");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {3, 3, 5, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {6, 7, 5, 4}));
 
-	// multiple constraints: PRIMARY KEY and UNIQUE
+	// we can replace them like this though
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=77 WHERE i IS NULL AND j=6"));
+
+	result = con.Query("SELECT * FROM integers ORDER BY i, j");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 3, 77}));
+	REQUIRE(CHECK_COLUMN(result, 1, {7, 5, 4, 6}));
+
+	for(index_t i = 0; i < 1000; i++) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (NULL, 6), (NULL, 7)"));
+	}
+
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 }
 

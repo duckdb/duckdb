@@ -75,7 +75,8 @@ TEST_CASE("Test storage that exceeds a single block with different types", "[sto
 			table_size *= 2;
 		}
 		// compute the sum
-		REQUIRE_NO_FAIL(result = con.Query("SELECT SUM(a) + SUM(b) FROM test"));
+		result = con.Query("SELECT SUM(a) + SUM(b) FROM test");
+		REQUIRE_NO_FAIL(*result);
 		sum = result->GetValue(0, 0);
 	}
 	// reload the database from disk

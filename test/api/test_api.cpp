@@ -233,8 +233,8 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 	conn = make_unique<Connection>(*db);
 	auto result1 = conn->SendQuery("SELECT 42");
 	auto result2 = conn->SendQuery("SELECT 84");
-	REQUIRE_NO_FAIL(result1);
-	REQUIRE_NO_FAIL(result2);
+	REQUIRE_NO_FAIL(*result1);
+	REQUIRE_NO_FAIL(*result2);
 
 	// result1 should be closed now
 	REQUIRE(!result1->Fetch());
