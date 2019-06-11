@@ -235,6 +235,87 @@ TEST_CASE("Test ART index with selection vector", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
 }
 
+TEST_CASE("Test ART index with multiple predicates", "[art]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 2), (1, 3)"));
+
+
+	result = con.Query("SELECT * FROM integers WHERE i = 1 AND j = 2");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+}
+
+// TEST_CASE("Test ART index with simple updates", "[art]") {
+// 	unique_ptr<QueryResult> result;
+// 	DuckDB db(nullptr);
+// 	Connection con(db), con2(db);
+
+// 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+// 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+
+// 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1)"));
+
+// 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+// 	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=10 WHERE i=1"));
+// 	// con sees the new state
+// 	result = con.Query("SELECT * FROM integers WHERE i < 5");
+// 	REQUIRE(CHECK_COLUMN(result, 0, {}));
+// 	result = con.Query("SELECT * FROM integers WHERE i > 0");
+// 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+// 	// con2 sees the old state
+// 	result = con2.Query("SELECT * FROM integers WHERE i < 5");
+// 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+// 	result = con2.Query("SELECT * FROM integers WHERE i > 0");
+// 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+// 	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+// }
+
+// TEST_CASE("Test ART index with multiple updates on the same value", "[art]") {
+// 	unique_ptr<QueryResult> result;
+// 	DuckDB db(nullptr);
+// 	Connection con(db);
+
+// 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+// 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+
+// 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1)"));
+
+// 	result = con.Query("SELECT * FROM integers WHERE i > 0");
+// 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+// 	// update the same tuple a bunch of times in the same transaction and then rollback
+// 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+// 	for(int32_t i = 0; i < 10; i++) {
+// 		REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=$1 WHERE i=$2", i + 2, i + 1));
+
+// 		result = con.Query("SELECT * FROM integers WHERE i > 0");
+// 		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(i + 2)}));
+// 	}
+// 	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+
+// 	result = con.Query("SELECT * FROM integers WHERE i > 0");
+// 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+// 	// now update the same tuple a bunch of times in the same transaction and then commit
+// 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+// 	for(int32_t i = 0; i < 10; i++) {
+// 		REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=$1 WHERE i=$2", i + 2, i + 1));
+
+// 		result = con.Query("SELECT * FROM integers WHERE i > 0");
+// 		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(i + 2)}));
+// 	}
+// 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
+// 	result = con.Query("SELECT * FROM integers WHERE i > 0");
+// 	REQUIRE(CHECK_COLUMN(result, 0, {11}));
+// }
+
 TEST_CASE("Test ART index with prefixes", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

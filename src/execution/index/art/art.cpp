@@ -342,7 +342,8 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 
 	while (node_val) {
 		if (node_val->type == NodeType::NLeaf) {
-			if (!skippedPrefix && depth == maxPrefix)  {// No check required
+			if (!skippedPrefix && depth == maxPrefix)  {
+				// No check required
 				return node_val;
 			}
 
