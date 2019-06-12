@@ -170,4 +170,24 @@ TEST_CASE("Test timestamp functions", "[timestamp]") {
 
 	result = con.Query(" SELECT age(timestamp '2019-06-11 12:00:00', timestamp '2019-07-11 11:00:00');");
 	REQUIRE(CHECK_COLUMN(result, 0, {"-29 days -23:00:00"}));
+
+	REQUIRE_FAIL(con.Query("SELECT AGE(NULL, NULL);"));
+
+	REQUIRE_FAIL(con.Query("SELECT AGE(TIMESTAMP '1957-06-13', NULL);"));
+
+	// create and insert into table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE timestamp(t1 TIMESTAMP, t2 TIMESTAMP)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO timestamp VALUES('2001-04-10', '1957-06-13')"));
+
+	result = con.Query("SELECT AGE(t1, TIMESTAMP '1957-06-13') FROM timestamp;");
+	REQUIRE(CHECK_COLUMN(result, 0, {"43 years 9 mons 27 days"}));
+
+	result = con.Query("SELECT AGE(TIMESTAMP '2001-04-10', t2) FROM timestamp;");
+	REQUIRE(CHECK_COLUMN(result, 0, {"43 years 9 mons 27 days"}));
+
+	result = con.Query("SELECT AGE(t1, t2) FROM timestamp;");
+	REQUIRE(CHECK_COLUMN(result, 0, {"43 years 9 mons 27 days"}));
+
+	result = con.Query("SELECT AGE(t1, t2) FROM timestamp WHERE t1 > '1957-12-12';");
+	REQUIRE(CHECK_COLUMN(result, 0, {"43 years 9 mons 27 days"}));
 }

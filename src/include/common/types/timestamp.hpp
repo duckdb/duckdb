@@ -55,7 +55,7 @@ struct Interval {
 };
 
 struct timestamp_struct {
-	int16_t year;
+	int32_t year;
 	int8_t month;
 	int8_t day;
 	int8_t hour;

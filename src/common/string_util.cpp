@@ -199,6 +199,3 @@ string StringUtil::Strip(const string &str, char c) {
 	tmp.erase(std::remove(tmp.begin(), tmp.end(), c), tmp.end());
 	return tmp;
 }
-string StringUtil::Concat(const string &str, int64_t value) {
-	return str + std::to_string(value);
-}

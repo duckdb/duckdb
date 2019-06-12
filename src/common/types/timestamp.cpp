@@ -66,11 +66,12 @@ void Timestamp::Convert(timestamp_t date, date_t &out_date, dtime_t &out_time) {
 }
 
 timestamp_t Timestamp::GetCurrentTimestamp() {
-	auto now = std::chrono::system_clock::now();
-	auto in_time_t = std::chrono::system_clock::to_time_t(now);
+
+	auto in_time_t = std::time(nullptr);
+	auto local_time = std::localtime(&in_time_t);
 
 	std::stringstream ss;
-	ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d %X");
+	ss << std::put_time(local_time, "%Y-%m-%d %X");
 	return Timestamp::FromString(ss.str());
 }
 
