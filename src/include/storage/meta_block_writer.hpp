@@ -24,6 +24,7 @@ public:
 	BlockManager &manager;
 	unique_ptr<Block> block;
 	index_t offset;
+
 public:
 	void Flush();
 

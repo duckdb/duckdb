@@ -1,4 +1,3 @@
-
 // #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
 
@@ -26,7 +25,6 @@ bool NO_FAIL(QueryResult &result) {
 bool NO_FAIL(unique_ptr<QueryResult> result) {
 	return NO_FAIL(*result);
 }
-
 
 void TestDeleteDirectory(string path) {
 	FileSystem fs;

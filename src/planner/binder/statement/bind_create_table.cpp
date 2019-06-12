@@ -33,7 +33,8 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 		case ConstraintType::CHECK: {
 			auto bound_constraint = make_unique<BoundCheckConstraint>();
 			// check constraint: bind the expression
-			CheckBinder check_binder(binder, binder.context, info.base->table, info.base->columns, bound_constraint->bound_columns);
+			CheckBinder check_binder(binder, binder.context, info.base->table, info.base->columns,
+			                         bound_constraint->bound_columns);
 			auto &check = (CheckConstraint &)*cond;
 			// create a copy of the unbound expression because the binding destroys the constraint
 			auto unbound_expression = check.expression->Copy();

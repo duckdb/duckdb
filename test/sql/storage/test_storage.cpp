@@ -152,7 +152,7 @@ TEST_CASE("Test large inserts in a single transaction", "[storage]") {
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
-		for(index_t i = 0; i < 1000; i++) {
+		for (index_t i = 0; i < 1000; i++) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
 			expected_sum_a += 11 + 13;
 			expected_sum_b += 22 + 22;
@@ -163,7 +163,6 @@ TEST_CASE("Test large inserts in a single transaction", "[storage]") {
 		result = con.Query("SELECT SUM(a), SUM(b) FROM test");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(expected_sum_a)}));
 		REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(expected_sum_b)}));
-
 	}
 	// reload the database from disk
 	{

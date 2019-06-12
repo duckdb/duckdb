@@ -27,12 +27,12 @@ unique_ptr<LogicalOperator> IndexScan::Optimize(unique_ptr<LogicalOperator> op) 
 
 static void RewriteIndexExpression(Index &index, LogicalGet &get, Expression &expr, bool &rewrite_possible) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = (BoundColumnRefExpression&) expr;
+		auto &bound_colref = (BoundColumnRefExpression &)expr;
 		// bound column ref: rewrite to fit in the current set of bound column ids
 		bound_colref.binding.table_index = get.table_index;
 		column_t referenced_column = index.column_ids[bound_colref.binding.column_index];
 		// search for the referenced column in the set of column_ids
-		for(index_t i = 0; i < get.column_ids.size(); i++) {
+		for (index_t i = 0; i < get.column_ids.size(); i++) {
 			if (get.column_ids[i] == referenced_column) {
 				bound_colref.binding.column_index = i;
 				return;
@@ -41,9 +41,8 @@ static void RewriteIndexExpression(Index &index, LogicalGet &get, Expression &ex
 		// column id not found in bound columns in the LogicalGet: rewrite not possible
 		rewrite_possible = false;
 	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
-		RewriteIndexExpression(index, get, child, rewrite_possible);
-	});
+	ExpressionIterator::EnumerateChildren(
+	    expr, [&](Expression &child) { RewriteIndexExpression(index, get, child, rewrite_possible); });
 }
 
 unique_ptr<LogicalOperator> IndexScan::TransformFilterToIndexScan(unique_ptr<LogicalOperator> op) {

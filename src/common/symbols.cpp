@@ -191,11 +191,11 @@ template class std::bitset<STORAGE_CHUNK_SIZE>;
 template class std::unordered_map<PhysicalOperator *, QueryProfiler::TreeNode *>;
 template class std::stack<PhysicalOperator *>;
 
-#define INSTANTIATE_UNORDERED_MAP(MAP_DEFINITION)                                                                  \
-	template MAP_DEFINITION::mapped_type& MAP_DEFINITION::operator[](MAP_DEFINITION::key_type&& k);                \
-	template MAP_DEFINITION::mapped_type& MAP_DEFINITION::operator[](const MAP_DEFINITION::key_type& k);
+#define INSTANTIATE_UNORDERED_MAP(MAP_DEFINITION)                                                                      \
+	template MAP_DEFINITION::mapped_type &MAP_DEFINITION::operator[](MAP_DEFINITION::key_type &&k);                    \
+	template MAP_DEFINITION::mapped_type &MAP_DEFINITION::operator[](const MAP_DEFINITION::key_type &k);
 
-using catalog_map = std::unordered_map<string,unique_ptr<CatalogEntry>>;
+using catalog_map = std::unordered_map<string, unique_ptr<CatalogEntry>>;
 INSTANTIATE_UNORDERED_MAP(catalog_map);
 
 template class std::unordered_map<string, uint64_t>;

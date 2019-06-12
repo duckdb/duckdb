@@ -7,13 +7,14 @@
 using namespace duckdb;
 using namespace std;
 
-Index::Index(IndexType type, DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions)
-	: type(type), table(table), column_ids(column_ids), unbound_expressions(move(unbound_expressions)) {
-	for(auto &expr : this->unbound_expressions) {
+Index::Index(IndexType type, DataTable &table, vector<column_t> column_ids,
+             vector<unique_ptr<Expression>> unbound_expressions)
+    : type(type), table(table), column_ids(column_ids), unbound_expressions(move(unbound_expressions)) {
+	for (auto &expr : this->unbound_expressions) {
 		types.push_back(expr->return_type);
 		bound_expressions.push_back(BindExpression(expr->Copy()));
 	}
-	for(auto column_id : column_ids) {
+	for (auto column_id : column_ids) {
 		column_id_set.insert(column_id);
 	}
 }
@@ -26,12 +27,11 @@ void Index::ExecuteExpressions(DataChunk &input, DataChunk &result) {
 
 unique_ptr<Expression> Index::BindExpression(unique_ptr<Expression> expr) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = (BoundColumnRefExpression&) *expr;
+		auto &bound_colref = (BoundColumnRefExpression &)*expr;
 		return make_unique<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
 	}
-	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> expr) {
-		return BindExpression(move(expr));
-	});
+	ExpressionIterator::EnumerateChildren(*expr,
+	                                      [&](unique_ptr<Expression> expr) { return BindExpression(move(expr)); });
 	return expr;
 }
 

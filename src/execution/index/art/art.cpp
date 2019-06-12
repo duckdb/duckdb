@@ -7,8 +7,9 @@
 using namespace duckdb;
 using namespace std;
 
-ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions, bool is_unique)
-	: Index(IndexType::ART, table, column_ids, move(unbound_expressions)), is_unique(is_unique) {
+ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions,
+         bool is_unique)
+    : Index(IndexType::ART, table, column_ids, move(unbound_expressions)), is_unique(is_unique) {
 	if (this->unbound_expressions.size() > 1) {
 		throw NotImplementedException("Multiple columns in ART index not supported");
 	}
@@ -56,7 +57,7 @@ bool ART::LeafMatches(Node *node, Key &key, unsigned depth) {
 }
 
 unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &transaction, vector<column_t> column_ids,
-															  Value value, ExpressionType expression_type) {
+                                                              Value value, ExpressionType expression_type) {
 	auto result = make_unique<ARTIndexScanState>(column_ids);
 	result->values[0] = value;
 	result->expressions[0] = expression_type;
@@ -64,8 +65,8 @@ unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &trans
 }
 
 unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transaction, vector<column_t> column_ids,
-															Value low_value, ExpressionType low_expression_type,
-															Value high_value, ExpressionType high_expression_type) {
+                                                            Value low_value, ExpressionType low_expression_type,
+                                                            Value high_value, ExpressionType high_expression_type) {
 	auto result = make_unique<ARTIndexScanState>(column_ids);
 	result->values[0] = low_value;
 	result->expressions[0] = low_expression_type;
@@ -77,8 +78,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 //===--------------------------------------------------------------------===//
 // Insert
 //===--------------------------------------------------------------------===//
-template<class T>
-static void generate_keys(DataChunk &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+template <class T> static void generate_keys(DataChunk &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
 	auto input_data = (T *)input.data[0].data;
 	VectorOperations::Exec(input.data[0], [&](index_t i, index_t k) {
 		if (input.data[0].nullmask[i]) {
@@ -122,7 +122,7 @@ bool ART::Insert(DataChunk &input, Vector &row_ids) {
 	// now insert the elements into the index
 	auto row_identifiers = (row_t *)row_ids.data;
 	index_t failed_index = INVALID_INDEX;
-	for(index_t i = 0; i < row_ids.count; i++) {
+	for (index_t i = 0; i < row_ids.count; i++) {
 		if (!keys[i]) {
 			continue;
 		}
@@ -139,7 +139,7 @@ bool ART::Insert(DataChunk &input, Vector &row_ids) {
 		keys.clear();
 		GenerateKeys(input, keys);
 		// now erase the entries
-		for(index_t i = 0; i < failed_index; i++) {
+		for (index_t i = 0; i < failed_index; i++) {
 			if (!keys[i]) {
 				continue;
 			}
@@ -148,7 +148,6 @@ bool ART::Insert(DataChunk &input, Vector &row_ids) {
 			Erase(tree, *keys[i], 0, row_id);
 		}
 		return false;
-
 	}
 	return true;
 }
@@ -220,7 +219,7 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 				Node4::insert(*this, newNode, node->prefix[mismatchPos], node);
 				node_ptr->prefix_length -= (mismatchPos + 1);
 				memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatchPos + 1,
-						std::min(node_ptr->prefix_length, maxPrefix));
+				        std::min(node_ptr->prefix_length, maxPrefix));
 			} else {
 				throw NotImplementedException("PrefixLength > MaxPrefixLength");
 			}
@@ -260,9 +259,7 @@ void ART::Delete(DataChunk &input, Vector &row_ids) {
 
 	// now erase the elements from the database
 	auto row_identifiers = (int64_t *)row_ids.data;
-	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) {
-		Erase(tree, *keys[k], 0, row_identifiers[i]);
-	});
+	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) { Erase(tree, *keys[k], 0, row_identifiers[i]); });
 }
 
 void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) {
@@ -345,7 +342,7 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 
 	while (node_val) {
 		if (node_val->type == NodeType::NLeaf) {
-			if (!skippedPrefix && depth == maxPrefix)  {
+			if (!skippedPrefix && depth == maxPrefix) {
 				// No check required
 				return node_val;
 			}
@@ -391,7 +388,7 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 //===--------------------------------------------------------------------===//
 // Iterator scans
 //===--------------------------------------------------------------------===//
-template<bool HAS_BOUND, bool INCLUSIVE>
+template <bool HAS_BOUND, bool INCLUSIVE>
 void ART::IteratorScan(ARTIndexScanState *state, Iterator *it, vector<row_t> &result_ids, Key *bound) {
 	bool has_next;
 	do {
@@ -428,7 +425,7 @@ bool ART::IteratorNext(Iterator &it) {
 
 		if (node->type == NodeType::NLeaf) {
 			// found a leaf: move to next node
-			it.node = (Leaf*) node;
+			it.node = (Leaf *)node;
 			return true;
 		}
 
@@ -512,7 +509,8 @@ void ART::SearchGreater(vector<row_t> &result_ids, ARTIndexScanState *state, boo
 	Iterator *it = &state->iterator;
 	auto key = CreateKey(*this, types[0], state->values[0]);
 
-	// greater than scan: first set the iterator to the node at which we will start our scan by finding the lowest node that satisfies our requirement
+	// greater than scan: first set the iterator to the node at which we will start our scan by finding the lowest node
+	// that satisfies our requirement
 	if (!it->start) {
 		bool found = ART::Bound(tree, *key, *it, inclusive);
 		if (!found) {
@@ -520,28 +518,29 @@ void ART::SearchGreater(vector<row_t> &result_ids, ARTIndexScanState *state, boo
 		}
 		it->start = true;
 	}
-	// after that we continue the scan; we don't need to check the bounds as any value following this value is automatically bigger and hence satisfies our predicate
+	// after that we continue the scan; we don't need to check the bounds as any value following this value is
+	// automatically bigger and hence satisfies our predicate
 	IteratorScan<false, false>(state, it, result_ids, nullptr);
 }
 
 //===--------------------------------------------------------------------===//
 // Less Than
 //===--------------------------------------------------------------------===//
-static Leaf& FindMinimum(Iterator &it, Node &node) {
+static Leaf &FindMinimum(Iterator &it, Node &node) {
 	Node *next = nullptr;
 	index_t pos = 0;
-	switch(node.type) {
+	switch (node.type) {
 	case NodeType::NLeaf:
-		it.node = (Leaf*) &node;
-		return (Leaf&) node;
+		it.node = (Leaf *)&node;
+		return (Leaf &)node;
 	case NodeType::N4:
-		next = ((Node4&) node).child[0].get();
+		next = ((Node4 &)node).child[0].get();
 		break;
 	case NodeType::N16:
-		next = ((Node16&) node).child[0].get();
+		next = ((Node16 &)node).child[0].get();
 		break;
 	case NodeType::N48: {
-		auto &n48 = (Node48&) node;
+		auto &n48 = (Node48 &)node;
 		while (n48.childIndex[pos] == Node::EMPTY_MARKER) {
 			pos++;
 		}
@@ -549,7 +548,7 @@ static Leaf& FindMinimum(Iterator &it, Node &node) {
 		break;
 	}
 	case NodeType::N256: {
-		auto &n256 = (Node256&) node;
+		auto &n256 = (Node256 &)node;
 		while (!n256.child[pos]) {
 			pos++;
 		}
@@ -592,7 +591,7 @@ void ART::SearchLess(vector<row_t> &result_ids, ARTIndexScanState *state, bool i
 // Closed Range Query
 //===--------------------------------------------------------------------===//
 void ART::SearchCloseRange(vector<row_t> &result_ids, ARTIndexScanState *state, bool left_inclusive,
-						   bool right_inclusive) {
+                           bool right_inclusive) {
 	auto lower_bound = CreateKey(*this, types[0], state->values[0]);
 	auto upper_bound = CreateKey(*this, types[0], state->values[1]);
 	Iterator *it = &state->iterator;
@@ -662,7 +661,7 @@ void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) 
 		state->result_ids.reserve(result_ids.size());
 
 		state->result_ids.push_back(result_ids[0]);
-		for(index_t i = 1; i < result_ids.size(); i++) {
+		for (index_t i = 1; i < result_ids.size(); i++) {
 			if (result_ids[i] != result_ids[i - 1]) {
 				state->result_ids.push_back(result_ids[i]);
 			}
@@ -675,8 +674,9 @@ void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) 
 	}
 
 	// create a vector pointing to the current set of row ids
-	Vector row_identifiers(ROW_TYPE, (data_ptr_t) &state->result_ids[state->result_index]);
-	row_identifiers.count = std::min( (index_t) STANDARD_VECTOR_SIZE, (index_t) state->result_ids.size() - state->result_index);
+	Vector row_identifiers(ROW_TYPE, (data_ptr_t)&state->result_ids[state->result_index]);
+	row_identifiers.count =
+	    std::min((index_t)STANDARD_VECTOR_SIZE, (index_t)state->result_ids.size() - state->result_index);
 
 	// fetch the actual values from the base table
 	table.Fetch(transaction, result, state->column_ids, row_identifiers);

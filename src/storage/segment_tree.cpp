@@ -3,21 +3,21 @@
 using namespace duckdb;
 using namespace std;
 
-SegmentBase* SegmentTree::GetRootSegment() {
+SegmentBase *SegmentTree::GetRootSegment() {
 	return root_node.get();
 }
 
-SegmentBase* SegmentTree::GetLastSegment() {
+SegmentBase *SegmentTree::GetLastSegment() {
 	return nodes.back().node;
 }
 
-SegmentBase* SegmentTree::GetSegment(index_t row_number) {
+SegmentBase *SegmentTree::GetSegment(index_t row_number) {
 	lock_guard<mutex> tree_lock(node_lock);
 
 	index_t lower = 0;
 	index_t upper = nodes.size() - 1;
 	// binary search to find the node
-	while(lower <= upper) {
+	while (lower <= upper) {
 		index_t index = (lower + upper) / 2;
 		auto &entry = nodes[index];
 		if (row_number < entry.row_start) {

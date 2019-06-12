@@ -49,6 +49,7 @@ public:
 	unique_ptr<MetaBlockWriter> metadata_writer;
 	//! The table data writer is responsible for writing the DataPointers used by the table chunks
 	unique_ptr<MetaBlockWriter> tabledata_writer;
+
 private:
 	void WriteSchema(Transaction &transaction, SchemaCatalogEntry &schema);
 	void WriteTable(Transaction &transaction, TableCatalogEntry &table);

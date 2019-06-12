@@ -175,11 +175,11 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 					executor.Execute(left_expressions, state->left_join_condition);
 					if (type != JoinType::MARK) {
 						// immediately disqualify any tuples from the left side that have NULL values
-						// we don't do this for the MARK join on the LHS, because the tuple will still be output, just with
-						// a NULL marker!
+						// we don't do this for the MARK join on the LHS, because the tuple will still be output, just
+						// with a NULL marker!
 						RemoveNullValues(state->left_join_condition);
 					}
-				} while(state->left_join_condition.size() == 0);
+				} while (state->left_join_condition.size() == 0);
 
 				state->right_chunk = 0;
 			}

@@ -13,7 +13,6 @@
 #include "storage/segment_tree.hpp"
 #include "storage/column_segment.hpp"
 
-
 namespace duckdb {
 class ColumnDefinition;
 class DataTable;
@@ -47,6 +46,7 @@ public:
 	StorageLock lock;
 	//! The string heap of the storage chunk
 	StringHeap string_heap;
+
 public:
 	//! Get a poiner to the row of the specified column
 	data_ptr_t GetPointerToRow(index_t col, index_t row);

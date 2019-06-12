@@ -19,9 +19,11 @@ class ART;
 class Node {
 public:
 	static const uint8_t EMPTY_MARKER = 48;
+
 public:
 	Node(ART &art, NodeType type);
-	virtual ~Node() {}
+	virtual ~Node() {
+	}
 
 	//! length of the compressed path (prefix)
 	uint32_t prefix_length;
@@ -31,20 +33,24 @@ public:
 	NodeType type;
 	//! compressed path (prefix)
 	unique_ptr<uint8_t[]> prefix;
+
 public:
 	//! Get the position of a child corresponding exactly to the specific byte, returns INVALID_INDEX if not exists
 	virtual index_t GetChildPos(uint8_t k) {
 		return INVALID_INDEX;
 	}
-	//! Get the position of the first child that is greater or equal to the specific byte, or INVALID_INDEX if there are no children matching the criteria
+	//! Get the position of the first child that is greater or equal to the specific byte, or INVALID_INDEX if there are
+	//! no children matching the criteria
 	virtual index_t GetChildGreaterEqual(uint8_t k) {
 		return INVALID_INDEX;
 	}
-	//! Get the next position in the node, or INVALID_INDEX if there is no next position. if pos == INVALID_INDEX, then the first valid position in the node will be returned.
+	//! Get the next position in the node, or INVALID_INDEX if there is no next position. if pos == INVALID_INDEX, then
+	//! the first valid position in the node will be returned.
 	virtual index_t GetNextPos(index_t pos) {
 		return INVALID_INDEX;
 	}
-	//! Get the child at the specified position in the node. pos should be between [0, count). Throws an assertion if the element is not found.
+	//! Get the child at the specified position in the node. pos should be between [0, count). Throws an assertion if
+	//! the element is not found.
 	virtual unique_ptr<Node> *GetChild(index_t pos);
 
 	//! Compare the key with the prefix of the node, return the number matching bytes
@@ -53,10 +59,10 @@ public:
 	static void InsertLeaf(ART &art, unique_ptr<Node> &node, uint8_t key, unique_ptr<Node> &newNode);
 	//! Erase entry from node
 	static void Erase(ART &art, unique_ptr<Node> &node, index_t pos);
+
 protected:
 	//! Copies the prefix from the source to the destination node
 	static void CopyPrefix(ART &art, Node *src, Node *dst);
-
 };
 
 } // namespace duckdb

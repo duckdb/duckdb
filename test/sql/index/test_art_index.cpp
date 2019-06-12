@@ -245,7 +245,6 @@ TEST_CASE("Test ART index with multiple predicates", "[art]") {
 
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 2), (1, 3)"));
 
-
 	result = con.Query("SELECT * FROM integers WHERE i = 1 AND j = 2");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2}));
@@ -291,7 +290,7 @@ TEST_CASE("Test ART index with multiple updates on the same value", "[art]") {
 
 	// update the same tuple a bunch of times in the same transaction and then rollback
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-	for(int32_t i = 0; i < 10; i++) {
+	for (int32_t i = 0; i < 10; i++) {
 		REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=$1 WHERE i=$2", i + 2, i + 1));
 
 		result = con.Query("SELECT * FROM integers WHERE i > 0");
@@ -304,7 +303,7 @@ TEST_CASE("Test ART index with multiple updates on the same value", "[art]") {
 
 	// now update the same tuple a bunch of times in the same transaction and then commit
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-	for(int32_t i = 0; i < 10; i++) {
+	for (int32_t i = 0; i < 10; i++) {
 		REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=$1 WHERE i=$2", i + 2, i + 1));
 
 		result = con.Query("SELECT * FROM integers WHERE i > 0");
@@ -324,10 +323,24 @@ TEST_CASE("Test ART index with prefixes", "[art]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i BIGINT)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
 	// insert a bunch of values with different prefixes
-	vector<int64_t> values = {9312908412824241, -2092042498432234, 1, -100, 0, -598538523852390852, 4298421, -498249, 9312908412824240, -2092042498432235, 2, -101, -598538523852390853, 4298422, -498261};
+	vector<int64_t> values = {9312908412824241,
+	                          -2092042498432234,
+	                          1,
+	                          -100,
+	                          0,
+	                          -598538523852390852,
+	                          4298421,
+	                          -498249,
+	                          9312908412824240,
+	                          -2092042498432235,
+	                          2,
+	                          -101,
+	                          -598538523852390853,
+	                          4298422,
+	                          -498261};
 	index_t gt_count = 0, lt_count = 0;
 	index_t count = 0;
-	for(index_t val_index = 0; val_index < values.size(); val_index++) {
+	for (index_t val_index = 0; val_index < values.size(); val_index++) {
 		auto &value = values[val_index];
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", value));
 		if (value >= 0) {
@@ -336,7 +349,7 @@ TEST_CASE("Test ART index with prefixes", "[art]") {
 			lt_count++;
 		}
 		count++;
-		for(index_t i = 0; i <= val_index; i++) {
+		for (index_t i = 0; i <= val_index; i++) {
 			result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(values[i]));
 			REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(1)}));
 		}
@@ -359,13 +372,13 @@ TEST_CASE("Test ART index with linear insertions and deletes", "[art]") {
 	vector<index_t> insertion_count = {4, 16, 48, 256, 1024};
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
-	for(auto &insert_count : insertion_count) {
+	for (auto &insert_count : insertion_count) {
 		// insert the data
 		vector<index_t> elements;
 		index_t table_count = 0;
-		for(index_t i = 0; i < insert_count; i++) {
+		for (index_t i = 0; i < insert_count; i++) {
 			index_t element = i;
-			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", (int32_t) element ));
+			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", (int32_t)element));
 			elements.push_back(element);
 			table_count++;
 			// test that the insert worked
@@ -382,9 +395,9 @@ TEST_CASE("Test ART index with linear insertions and deletes", "[art]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(table_count)}));
 
 		// delete random data
-		for(auto &element : elements) {
+		for (auto &element : elements) {
 			// delete the element
-			REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=$1", (int32_t) element ));
+			REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=$1", (int32_t)element));
 			table_count--;
 			// verify that the deletion worked
 			result = con.Query("SELECT COUNT(*) FROM integers WHERE i >= 0");
@@ -402,13 +415,13 @@ TEST_CASE("Test ART index with random insertions and deletes", "[art]") {
 	vector<index_t> insertion_count = {1024, 2048};
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
-	for(auto &insert_count : insertion_count) {
+	for (auto &insert_count : insertion_count) {
 		// insert the data
 		vector<index_t> elements;
 		index_t table_count = 0;
-		for(index_t i = 0; i < insert_count; i++) {
+		for (index_t i = 0; i < insert_count; i++) {
 			index_t element = i * i;
-			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", (int32_t) element ));
+			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", (int32_t)element));
 			elements.push_back(element);
 			table_count++;
 		}
@@ -418,9 +431,9 @@ TEST_CASE("Test ART index with random insertions and deletes", "[art]") {
 
 		// delete random data
 		std::random_shuffle(elements.begin(), elements.end());
-		for(auto &element : elements) {
+		for (auto &element : elements) {
 			// delete the element
-			REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=$1", (int32_t) element ));
+			REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=$1", (int32_t)element));
 			table_count--;
 			// verify that the deletion worked
 			result = con.Query("SELECT COUNT(*) FROM integers WHERE i >= 0");
@@ -437,9 +450,9 @@ TEST_CASE("Test ART index with many matches", "[art]") {
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
-	for(index_t i = 0; i < 1024; i++) {
-		for(index_t val = 0; val < 2; val++) {
-			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", (int32_t) val));
+	for (index_t i = 0; i < 1024; i++) {
+		for (index_t val = 0; val < 2; val++) {
+			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", (int32_t)val));
 		}
 	}
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
@@ -463,9 +476,9 @@ TEST_CASE("Test ART index with many matches", "[art]") {
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
-	for(index_t i = 0; i < 2048; i++) {
-		for(index_t val = 0; val < 2; val++) {
-			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", (int32_t) val));
+	for (index_t i = 0; i < 2048; i++) {
+		for (index_t val = 0; val < 2; val++) {
+			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", (int32_t)val));
 		}
 	}
 
@@ -497,8 +510,8 @@ TEST_CASE("Test ART index with non-linear insertion", "[art][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
 	index_t count = 0;
-	for(int32_t it = 0; it < 10; it++) {
-		for(int32_t val = 0; val < 1000; val++) {
+	for (int32_t it = 0; it < 10; it++) {
+		for (int32_t val = 0; val < 1000; val++) {
 			if (it + val % 2) {
 				count++;
 				REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", val));
@@ -519,8 +532,8 @@ TEST_CASE("Test ART index with rollbacks", "[art][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
 	index_t count = 0;
-	for(int32_t it = 0; it < 10; it++) {
-		for(int32_t val = 0; val < 1000; val++) {
+	for (int32_t it = 0; it < 10; it++) {
+		for (int32_t val = 0; val < 1000; val++) {
 			REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", val));
 			if (it + val % 2) {
@@ -544,24 +557,24 @@ TEST_CASE("Test ART index with the same value multiple times", "[art]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
-	for(int32_t val = 0; val < 100; val++) {
+	for (int32_t val = 0; val < 100; val++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", val));
 	}
-	for(int32_t val = 0; val < 100; val++) {
+	for (int32_t val = 0; val < 100; val++) {
 		result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	}
-	for(int32_t it = 0; it < 10; it++) {
-		for(int32_t val = 0; val < 100; val++) {
+	for (int32_t it = 0; it < 10; it++) {
+		for (int32_t val = 0; val < 100; val++) {
 			result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
 			REQUIRE(CHECK_COLUMN(result, 0, {it + 1}));
 		}
-		for(int32_t val = 0; val < 100; val++) {
+		for (int32_t val = 0; val < 100; val++) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", val));
 			result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
 			REQUIRE(CHECK_COLUMN(result, 0, {it + 2}));
 		}
-		for(int32_t val = 0; val < 100; val++) {
+		for (int32_t val = 0; val < 100; val++) {
 			result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
 			REQUIRE(CHECK_COLUMN(result, 0, {it + 2}));
 		}
@@ -574,8 +587,9 @@ TEST_CASE("Test ART index with negative values and big values", "[art]") {
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i BIGINT)"));
-	vector<int64_t> values = {-4611686018427387906, -4611686018427387904, -2305843009213693952, 0, 2305843009213693952, 4611686018427387904, 4611686018427387906};
-	for(auto val : values) {
+	vector<int64_t> values = {-4611686018427387906, -4611686018427387904, -2305843009213693952, 0,
+	                          2305843009213693952,  4611686018427387904,  4611686018427387906};
+	for (auto val : values) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", val));
 	}
 
@@ -585,9 +599,9 @@ TEST_CASE("Test ART index with negative values and big values", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	result = con.Query("SELECT COUNT(*) FROM integers WHERE i < $1", 0);
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
-	result = con.Query("SELECT COUNT(*) FROM integers WHERE i < $1", (int64_t) 4611686018427387906);
+	result = con.Query("SELECT COUNT(*) FROM integers WHERE i < $1", (int64_t)4611686018427387906);
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
-	result = con.Query("SELECT COUNT(*) FROM integers WHERE i <= $1", (int64_t) 4611686018427387906);
+	result = con.Query("SELECT COUNT(*) FROM integers WHERE i <= $1", (int64_t)4611686018427387906);
 	REQUIRE(CHECK_COLUMN(result, 0, {7}));
 }
 
@@ -614,7 +628,7 @@ TEST_CASE("Test ART with different Integer Types", "[art]") {
 
 	// now insert the values [1..5] in all columns
 	auto prepare = con.Prepare("INSERT INTO integers VALUES ($1, $2, $3, $4)");
-	for(int32_t i = 1; i <= 5; i++) {
+	for (int32_t i = 1; i <= 5; i++) {
 		REQUIRE_NO_FAIL(prepare->Execute(i, i, i, i));
 	}
 	prepare.reset();
@@ -813,7 +827,7 @@ TEST_CASE("ART Big Range", "[art]") {
 
 	// second transaction: begin and verify counts
 	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
-	for(index_t i = 0; i < n + 1; i++) {
+	for (index_t i = 0; i < n + 1; i++) {
 		result = con2.Query("SELECT FIRST(i), COUNT(i) FROM integers WHERE i=" + to_string(keys[i]));
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
 		REQUIRE(CHECK_COLUMN(result, 1, {Value(1500)}));
@@ -824,7 +838,7 @@ TEST_CASE("ART Big Range", "[art]") {
 	// now delete entries in the first transaction
 	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i = 5"));
 	// verify that the counts are still correct in the second transaction
-	for(index_t i = 0; i < n + 1; i++) {
+	for (index_t i = 0; i < n + 1; i++) {
 		result = con2.Query("SELECT FIRST(i), COUNT(i) FROM integers WHERE i=" + to_string(keys[i]));
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
 		REQUIRE(CHECK_COLUMN(result, 1, {Value(1500)}));
@@ -835,7 +849,7 @@ TEST_CASE("ART Big Range", "[art]") {
 	// create an index in the first transaction now
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 	// verify that the counts are still correct for con2
-	for(index_t i = 0; i < n + 1; i++) {
+	for (index_t i = 0; i < n + 1; i++) {
 		result = con2.Query("SELECT FIRST(i), COUNT(i) FROM integers WHERE i=" + to_string(keys[i]));
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
 		REQUIRE(CHECK_COLUMN(result, 1, {Value(1500)}));
@@ -931,7 +945,7 @@ TEST_CASE("ART Node 4", "[art]") {
 	result = con.Query("SELECT sum(i) FROM integers WHERE i <= 2");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(3)}));
 	result = con.Query("SELECT sum(i) FROM integers WHERE i > 1");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(2+3+4)}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(2 + 3 + 4)}));
 	// Now Deleting all elements
 	for (index_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=$1", keys[i]));
@@ -965,7 +979,7 @@ TEST_CASE("ART Node 16", "[art]") {
 	result = con.Query("SELECT sum(i) FROM integers WHERE i <=2");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(3)}));
 	result = con.Query("SELECT sum(i) FROM integers WHERE i > 4");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(5+6)}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(5 + 6)}));
 	// Now Deleting all elements
 	for (index_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=$1", keys[i]));
@@ -999,7 +1013,7 @@ TEST_CASE("ART Node 48", "[art]") {
 	result = con.Query("SELECT sum(i) FROM integers WHERE i <=2");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(3)}));
 	result = con.Query("SELECT sum(i) FROM integers WHERE i > 15");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(16+17+18+19+20)}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(16 + 17 + 18 + 19 + 20)}));
 
 	// delete an element and reinsert it
 	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=16"));
@@ -1009,7 +1023,7 @@ TEST_CASE("ART Node 48", "[art]") {
 	result = con.Query("SELECT sum(i) FROM integers WHERE i <=2");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(3)}));
 	result = con.Query("SELECT sum(i) FROM integers WHERE i > 15");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(16+17+18+19+20)}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(16 + 17 + 18 + 19 + 20)}));
 
 	// Now delete all elements
 	for (index_t i = 0; i < n; i++) {

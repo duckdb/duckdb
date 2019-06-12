@@ -18,8 +18,7 @@ namespace duckdb {
 //! every row in a table
 class BoundCheckConstraint : public BoundConstraint {
 public:
-	BoundCheckConstraint()
-	    : BoundConstraint(ConstraintType::CHECK) {
+	BoundCheckConstraint() : BoundConstraint(ConstraintType::CHECK) {
 	}
 
 	//! The expression

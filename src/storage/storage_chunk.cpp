@@ -8,8 +8,7 @@
 using namespace duckdb;
 using namespace std;
 
-StorageChunk::StorageChunk(DataTable &base_table, index_t start) :
-	SegmentBase(start, 0), table(base_table) {
+StorageChunk::StorageChunk(DataTable &base_table, index_t start) : SegmentBase(start, 0), table(base_table) {
 }
 
 void StorageChunk::Cleanup(VersionInformation *info) {
@@ -32,7 +31,7 @@ void StorageChunk::Undo(VersionInformation *info) {
 		auto tuple_data = info->tuple_data;
 
 		vector<data_ptr_t> data_pointers;
-		for(index_t i = 0; i < table.types.size(); i++) {
+		for (index_t i = 0; i < table.types.size(); i++) {
 			data_pointers.push_back(GetPointerToRow(i, start + entry));
 		}
 		table.serializer.Deserialize(data_pointers, 0, tuple_data);
@@ -53,7 +52,7 @@ void StorageChunk::SetDirtyFlag(index_t start, index_t count, bool new_dirty_fla
 	assert(start + count <= STORAGE_CHUNK_SIZE);
 	index_t marker_start = start / STANDARD_VECTOR_SIZE;
 	index_t marker_end = (start + count - 1) / STANDARD_VECTOR_SIZE;
-	for(index_t i = marker_start; i <= marker_end; i++) {
+	for (index_t i = marker_start; i <= marker_end; i++) {
 		assert(i < STORAGE_CHUNK_VECTORS);
 		is_dirty[i] = new_dirty_flag;
 	}
@@ -65,7 +64,7 @@ bool StorageChunk::IsDirty(index_t start, index_t count) {
 	index_t marker_start = start / STANDARD_VECTOR_SIZE;
 	index_t marker_end = (start + count - 1) / STANDARD_VECTOR_SIZE;
 	bool segment_is_dirty = false;
-	for(index_t i = marker_start; i <= marker_end; i++) {
+	for (index_t i = marker_start; i <= marker_end; i++) {
 		assert(i < STORAGE_CHUNK_VECTORS);
 		segment_is_dirty = segment_is_dirty || is_dirty[i];
 	}

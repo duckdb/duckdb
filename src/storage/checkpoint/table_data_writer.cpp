@@ -13,8 +13,8 @@ constexpr char TableDataWriter::BIG_STRING_MARKER[];
 
 static index_t GetTypeHeaderSize(SQLType type);
 
-TableDataWriter::TableDataWriter(CheckpointManager &manager, TableCatalogEntry &table) :
-	manager(manager), table(table) {
+TableDataWriter::TableDataWriter(CheckpointManager &manager, TableCatalogEntry &table)
+    : manager(manager), table(table) {
 }
 
 void TableDataWriter::WriteTableData(Transaction &transaction) {
@@ -138,9 +138,9 @@ void TableDataWriter::FlushDictionary(index_t col) {
 	assert(table.columns[col].type.id == SQLTypeId::VARCHAR);
 	assert(dictionaries[col].size > 0);
 	// write the dictionary size offset to the start of the block
-	*((int32_t*) blocks[col]->buffer) =  offsets[col];
+	*((int32_t *)blocks[col]->buffer) = offsets[col];
 	// now write the strings to the block
-	for(auto &entry : dictionaries[col].offsets) {
+	for (auto &entry : dictionaries[col].offsets) {
 		memcpy(blocks[col]->buffer + offsets[col] + entry.second, entry.first.c_str(), entry.first.size() + 1);
 	}
 	// reset the dictionary
@@ -163,7 +163,7 @@ static string BigStringMarker(block_id_t id) {
 	serializer.Write<block_id_t>(id);
 	auto data = serializer.GetData();
 	assert(data.size == TableDataWriter::BIG_STRING_MARKER_SIZE);
-	return string((char*) data.data.get(), data.size);
+	return string((char *)data.data.get(), data.size);
 }
 
 void TableDataWriter::WriteString(index_t col, const char *val) {
@@ -171,8 +171,8 @@ void TableDataWriter::WriteString(index_t col, const char *val) {
 	// create the string value
 	string str_value(val);
 	if (str_value.size() + 1 > blocks[col]->size - BLOCK_HEADER_STRING - sizeof(int32_t)) {
-		// string can never fit in a single block, insert a special marker followed by the block id and offset where it is stored
-		// create the special marker indicating it is a big string
+		// string can never fit in a single block, insert a special marker followed by the block id and offset where it
+		// is stored create the special marker indicating it is a big string
 		MetaBlockWriter writer(manager.block_manager);
 		string marker = BigStringMarker(writer.block->id);
 		// write the string to the overflow blocks
@@ -197,7 +197,7 @@ void TableDataWriter::WriteString(index_t col, const char *val) {
 		offset = entry->second;
 	}
 	// now write the offset of this string into the buffer
-	*((int32_t*) (blocks[col]->buffer + offsets[col])) = offset;
+	*((int32_t *)(blocks[col]->buffer + offsets[col])) = offset;
 	offsets[col] += sizeof(int32_t);
 	tuple_counts[col]++;
 }

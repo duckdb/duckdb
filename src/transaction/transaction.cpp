@@ -53,7 +53,7 @@ void Transaction::PushTuple(UndoFlags flags, index_t offset, StorageChunk *stora
 		meta->next->prev.pointer = meta;
 	}
 	vector<data_ptr_t> columns;
-	for(index_t i = 0; i < storage->table.types.size(); i++) {
+	for (index_t i = 0; i < storage->table.types.size(); i++) {
 		columns.push_back(storage->GetPointerToRow(i, storage->start + offset));
 	}
 

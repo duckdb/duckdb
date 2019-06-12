@@ -33,7 +33,8 @@ struct IndexScanState {
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
 public:
-	Index(IndexType type, DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions);
+	Index(IndexType type, DataTable &table, vector<column_t> column_ids,
+	      vector<unique_ptr<Expression>> unbound_expressions);
 	virtual ~Index() = default;
 
 	//! The type of the index
@@ -48,6 +49,7 @@ public:
 	vector<unique_ptr<Expression>> unbound_expressions;
 	//! The types of the expressions
 	vector<TypeId> types;
+
 public:
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table when we only have one query predicate
@@ -71,6 +73,7 @@ public:
 
 	//! Returns true if the index is affected by updates on the specified column ids, and false otherwise
 	bool IndexIsUpdated(vector<column_t> &column_ids);
+
 protected:
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);
 

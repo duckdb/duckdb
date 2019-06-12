@@ -20,45 +20,38 @@ static uint8_t FlipSign(uint8_t key_byte) {
 	return key_byte ^ 128;
 }
 
-Key::Key(unique_ptr<data_t[]> data, index_t len) :
-	len(len), data(move(data)) {
-
+Key::Key(unique_ptr<data_t[]> data, index_t len) : len(len), data(move(data)) {
 }
 
-template<>
-unique_ptr<data_t[]> Key::CreateData(int8_t value, bool is_little_endian) {
+template <> unique_ptr<data_t[]> Key::CreateData(int8_t value, bool is_little_endian) {
 	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
 	reinterpret_cast<uint8_t *>(data.get())[0] = value;
 	data[0] = FlipSign(data[0]);
 	return data;
 }
 
-template<>
-unique_ptr<data_t[]> Key::CreateData(int16_t value, bool is_little_endian) {
+template <> unique_ptr<data_t[]> Key::CreateData(int16_t value, bool is_little_endian) {
 	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
 	reinterpret_cast<uint16_t *>(data.get())[0] = is_little_endian ? BSWAP16(value) : value;
 	data[0] = FlipSign(data[0]);
 	return data;
 }
 
-template<>
-unique_ptr<data_t[]> Key::CreateData(int32_t value, bool is_little_endian) {
+template <> unique_ptr<data_t[]> Key::CreateData(int32_t value, bool is_little_endian) {
 	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
 	reinterpret_cast<uint32_t *>(data.get())[0] = is_little_endian ? BSWAP32(value) : value;
 	data[0] = FlipSign(data[0]);
 	return data;
 }
 
-template<>
-unique_ptr<data_t[]> Key::CreateData(int64_t value, bool is_little_endian) {
+template <> unique_ptr<data_t[]> Key::CreateData(int64_t value, bool is_little_endian) {
 	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
 	reinterpret_cast<uint64_t *>(data.get())[0] = is_little_endian ? BSWAP64(value) : value;
 	data[0] = FlipSign(data[0]);
 	return data;
 }
 
-template<>
-unique_ptr<Key> Key::CreateKey(string value, bool is_little_endian) {
+template <> unique_ptr<Key> Key::CreateKey(string value, bool is_little_endian) {
 	index_t len = value.size() + 1;
 	auto data = unique_ptr<data_t[]>(new data_t[len]);
 	memcpy(data.get(), value.c_str(), len);
@@ -91,7 +84,7 @@ bool Key::operator==(const Key &k) const {
 	if (len != k.len) {
 		return false;
 	}
-	for(index_t i = 0; i < len; i++) {
+	for (index_t i = 0; i < len; i++) {
 		if (data[i] != k.data[i]) {
 			return false;
 		}

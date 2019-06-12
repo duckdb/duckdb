@@ -34,7 +34,7 @@ void MetaBlockWriter::WriteData(const_data_ptr_t buffer, index_t write_size) {
 		// now we need to get a new block id
 		block_id_t new_block_id = manager.GetFreeBlockId();
 		// write the block id of the new block to the start of the current block
-		*((block_id_t*) block->buffer) = new_block_id;
+		*((block_id_t *)block->buffer) = new_block_id;
 		// first flush the old block
 		Flush();
 		// now update the block id of the lbock

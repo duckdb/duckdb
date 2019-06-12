@@ -26,7 +26,7 @@ TEST_CASE("Test scan with large deletions", "[delete]") {
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a(i INTEGER);"));
-	for(index_t i = 0; i < 10000; i++) {
+	for (index_t i = 0; i < 10000; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (" + to_string(i) + ")"));
 	}
 	REQUIRE_NO_FAIL(con.Query("COMMIT;"));
@@ -49,32 +49,32 @@ TEST_CASE("Test scan with many segmented deletions", "[delete][.]") {
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a(i INTEGER);"));
-	for(index_t k = 0; k < n; k++) {
-		for(index_t i = 0; i < val_count; i++) {
+	for (index_t k = 0; k < n; k++) {
+		for (index_t i = 0; i < val_count; i++) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (" + to_string(i) + ")"));
 		}
 	}
 	REQUIRE_NO_FAIL(con.Query("COMMIT;"));
 
 	// verify the initial count
-	for(index_t j = 0; j < 2; j++) {
+	for (index_t j = 0; j < 2; j++) {
 		// verify the initial count again twice
 		result = con.Query("SELECT COUNT(*) FROM a");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(n * val_count)}));
 	}
 
 	// for every value, delete it, verify the count and then roll back
-	for(auto &i : tested_values) {
+	for (auto &i : tested_values) {
 		// begin a transaction and delete tuples of a specific value
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM a WHERE i = " + to_string(i)));
 		// verify the count
 		result = con.Query("SELECT COUNT(*) FROM a");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(n * (val_count- 1))}));
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(n * (val_count - 1))}));
 		// rollback
 		REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
 
-		for(index_t j = 0; j < 2; j++) {
+		for (index_t j = 0; j < 2; j++) {
 			// verify the initial count again twice
 			result = con.Query("SELECT COUNT(*) FROM a");
 			REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(n * val_count)}));
@@ -83,14 +83,14 @@ TEST_CASE("Test scan with many segmented deletions", "[delete][.]") {
 
 	// for every value, delete it in a separate connection and verify the count
 	vector<unique_ptr<Connection>> cons;
-	for(auto &i : tested_values) {
+	for (auto &i : tested_values) {
 		auto new_connection = make_unique<Connection>(db);
 		// begin a transaction and delete tuples of a specific value
 		REQUIRE_NO_FAIL(new_connection->Query("BEGIN TRANSACTION"));
 		REQUIRE_NO_FAIL(new_connection->Query("DELETE FROM a WHERE i = " + to_string(i)));
 		// verify the count
 		result = new_connection->Query("SELECT COUNT(*) FROM a");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(n * (val_count- 1))}));
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(n * (val_count - 1))}));
 		// store the connection for now
 		cons.push_back(move(new_connection));
 	}

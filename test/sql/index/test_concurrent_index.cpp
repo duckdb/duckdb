@@ -111,7 +111,7 @@ TEST_CASE("Concurrent writes during index creation", "[index][.]") {
 
 static void append_to_primary_key(DuckDB *db) {
 	Connection con(*db);
-	for(int32_t i = 0; i < 1000; i++) {
+	for (int32_t i = 0; i < 1000; i++) {
 		con.Query("INSERT INTO integers VALUES ($1)", i);
 	}
 }
@@ -143,7 +143,7 @@ TEST_CASE("Concurrent inserts into PRIMARY KEY column", "[index][.]") {
 
 static void update_to_primary_key(DuckDB *db) {
 	Connection con(*db);
-	for(int32_t i = 0; i < 1000; i++) {
+	for (int32_t i = 0; i < 1000; i++) {
 		con.Query("UPDATE integers SET i=1000+(i % 100) WHERE i=$1", i);
 	}
 }
@@ -155,7 +155,7 @@ TEST_CASE("Concurrent updates to PRIMARY KEY column", "[index][.]") {
 
 	// create a single table and insert the values [1...1000]
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
-	for(int32_t i = 0; i < 1000; i++) {
+	for (int32_t i = 0; i < 1000; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", i));
 	}
 
@@ -176,10 +176,10 @@ TEST_CASE("Concurrent updates to PRIMARY KEY column", "[index][.]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {1000}));
 }
 
-static void mix_insert_to_primary_key(DuckDB *db, atomic<index_t>* count, index_t thread_nr) {
+static void mix_insert_to_primary_key(DuckDB *db, atomic<index_t> *count, index_t thread_nr) {
 	unique_ptr<QueryResult> result;
 	Connection con(*db);
-	for(int32_t i = 0; i < 100; i++) {
+	for (int32_t i = 0; i < 100; i++) {
 		result = con.Query("INSERT INTO integers VALUES ($1)", i);
 		if (result->success) {
 			(*count)++;
@@ -187,14 +187,14 @@ static void mix_insert_to_primary_key(DuckDB *db, atomic<index_t>* count, index_
 	}
 }
 
-static void mix_update_to_primary_key(DuckDB *db, atomic<index_t>* count, index_t thread_nr) {
+static void mix_update_to_primary_key(DuckDB *db, atomic<index_t> *count, index_t thread_nr) {
 	unique_ptr<QueryResult> result;
 	Connection con(*db);
 	std::uniform_int_distribution<> distribution(1, 100);
 	std::mt19937 gen;
 	gen.seed(thread_nr);
 
-	for(int32_t i = 0; i < 100; i++) {
+	for (int32_t i = 0; i < 100; i++) {
 		int32_t old_value = distribution(gen);
 		int32_t new_value = 100 + distribution(gen);
 
@@ -243,7 +243,7 @@ string append_to_primary_key(Connection &con, index_t thread_nr) {
 	auto chunk = result->Fetch();
 	Value initial_count = chunk->data[0].GetValue(0);
 
-	for(int32_t i = 0; i < 500; i++) {
+	for (int32_t i = 0; i < 500; i++) {
 		result = con.Query("INSERT INTO integers VALUES ($1)", (int32_t)(thread_nr * 1000 + i));
 		if (!result->success) {
 			return "Failed INSERT: " + result->error;
@@ -266,7 +266,7 @@ static void append_to_primary_key_with_transaction(DuckDB *db, index_t thread_nr
 	success[thread_nr] = true;
 	string result = append_to_primary_key(con, thread_nr);
 	if (!result.empty()) {
-		fprintf(stderr,  "Parallel append failed: %s\n", result.c_str());
+		fprintf(stderr, "Parallel append failed: %s\n", result.c_str());
 		success[thread_nr] = false;
 	}
 }

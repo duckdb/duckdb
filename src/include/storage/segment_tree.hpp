@@ -17,10 +17,10 @@ namespace duckdb {
 
 class SegmentBase {
 public:
-	SegmentBase(index_t start, count_t count) :
-		start(start), count(count) {
+	SegmentBase(index_t start, count_t count) : start(start), count(count) {
 	}
-	virtual ~SegmentBase(){}
+	virtual ~SegmentBase() {
+	}
 
 	//! The start row id of this chunk
 	index_t start;
@@ -35,7 +35,8 @@ struct SegmentNode {
 	SegmentBase *node;
 };
 
-//! The SegmentTree maintains a list of all segments of a specific column in a table, and allows searching for a segment by row number
+//! The SegmentTree maintains a list of all segments of a specific column in a table, and allows searching for a segment
+//! by row number
 class SegmentTree {
 public:
 	//! The initial segment of the tree
@@ -44,13 +45,14 @@ public:
 	vector<SegmentNode> nodes;
 	//! Lock to access or modify the nodes
 	std::mutex node_lock;
+
 public:
 	//! Gets a pointer to the first segment. Useful for scans.
-	SegmentBase* GetRootSegment();
+	SegmentBase *GetRootSegment();
 	//! Gets a pointer to the last segment. Useful for appends.
-	SegmentBase* GetLastSegment();
+	SegmentBase *GetLastSegment();
 	//! Gets a pointer to a specific column segment for the given row
-	SegmentBase* GetSegment(index_t row_number);
+	SegmentBase *GetSegment(index_t row_number);
 	//! Append a column segment to the tree
 	void AppendSegment(unique_ptr<SegmentBase> segment);
 };

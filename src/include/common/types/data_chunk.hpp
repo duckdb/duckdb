@@ -50,6 +50,7 @@ public:
 	StringHeap heap;
 	//! The selection vector of a chunk, if it owns it
 	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
+
 public:
 	count_t size() {
 		if (column_count == 0) {

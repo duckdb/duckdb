@@ -5,6 +5,7 @@
 //
 //
 //===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "storage/checkpoint_manager.hpp"
@@ -22,9 +23,11 @@ class TableDataWriter {
 public:
 	static constexpr index_t BLOCK_HEADER_NUMERIC = 0;
 	static constexpr index_t BLOCK_HEADER_STRING = sizeof(int32_t);
-	//! Marker indicating that a string is a big string (bigger than block size), and located in a special big string area
+	//! Marker indicating that a string is a big string (bigger than block size), and located in a special big string
+	//! area
 	static constexpr char BIG_STRING_MARKER[2] = {'\201', '\0'};
 	static constexpr index_t BIG_STRING_MARKER_SIZE = 2 * sizeof(char) + sizeof(block_id_t);
+
 public:
 	TableDataWriter(CheckpointManager &manager, TableCatalogEntry &table);
 
@@ -35,6 +38,7 @@ public:
 	void FlushBlock(index_t col);
 
 	void WriteDataPointers();
+
 private:
 	//! Flush the block of the column if it cannot fit write_size more bytes
 	void FlushIfFull(index_t col, index_t write_size);

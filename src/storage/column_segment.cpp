@@ -5,12 +5,12 @@
 using namespace duckdb;
 using namespace std;
 
-ColumnSegment::ColumnSegment(BlockManager *manager, block_id_t block_id, index_t offset, count_t count, index_t start) :
-	SegmentBase(start, count), block_id(block_id), offset(offset), manager(manager) {
+ColumnSegment::ColumnSegment(BlockManager *manager, block_id_t block_id, index_t offset, count_t count, index_t start)
+    : SegmentBase(start, count), block_id(block_id), offset(offset), manager(manager) {
 }
 
-ColumnSegment::ColumnSegment(index_t start) :
-	SegmentBase(start, 0), block_id(INVALID_BLOCK), offset(0), manager(nullptr) {
+ColumnSegment::ColumnSegment(index_t start)
+    : SegmentBase(start, 0), block_id(INVALID_BLOCK), offset(0), manager(nullptr) {
 }
 
 data_ptr_t ColumnSegment::GetData() {
@@ -35,7 +35,7 @@ data_ptr_t ColumnSegment::GetPointerToRow(TypeId type, index_t row) {
 	if (row >= start + count) {
 		// not in this segment, check the next segment
 		assert(next);
-		auto &next_segment = (ColumnSegment&) *next;
+		auto &next_segment = (ColumnSegment &)*next;
 		return next_segment.GetPointerToRow(type, row);
 	}
 	// row is in this segment, get the pointer

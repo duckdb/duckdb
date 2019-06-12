@@ -74,7 +74,7 @@ TEST_CASE("Test multiple versions of the same data with a data set that exceeds 
 	uint64_t expected_sum = 10;
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (4);"));
-	while(current_count < integer_count) {
+	while (current_count < integer_count) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers SELECT * FROM integers"));
 		current_count *= 2;
 		expected_sum *= 2;
@@ -85,7 +85,7 @@ TEST_CASE("Test multiple versions of the same data with a data set that exceeds 
 	result = con.Query("SELECT SUM(i) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(expected_sum)}));
 
-	for(index_t i = 1; i <= 4; i++) {
+	for (index_t i = 1; i <= 4; i++) {
 		// now delete some tuples
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=" + to_string(i)));

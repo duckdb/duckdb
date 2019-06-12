@@ -54,7 +54,7 @@ void UndoBuffer::Cleanup() {
 					// fetch the row identifiers
 					row_t row_number;
 					VersionInformation *current_info = info;
-					while(!current_info->chunk) {
+					while (!current_info->chunk) {
 						assert(current_info->prev.pointer);
 						current_info = current_info->prev.pointer;
 					}

@@ -220,7 +220,7 @@ TEST_CASE("Test appending the same value many times to a primary key column", "[
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
 	// insert a bunch of values into the index and query the index
-	for(int32_t val = 0; val < 100; val++) {
+	for (int32_t val = 0; val < 100; val++) {
 		result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
 		REQUIRE(CHECK_COLUMN(result, 0, {0}));
 
@@ -229,15 +229,15 @@ TEST_CASE("Test appending the same value many times to a primary key column", "[
 		result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	}
-	for(int32_t val = 0; val < 100; val++) {
+	for (int32_t val = 0; val < 100; val++) {
 		result = con.Query("SELECT COUNT(*) FROM integers WHERE i + i = " + to_string(val) + "+" + to_string(val));
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
 		result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	}
 	// now insert the same values, this should fail this time
-	for(int32_t it = 0; it < 10; it++) {
-		for(int32_t val = 64; val < 65; val++) {
+	for (int32_t it = 0; it < 10; it++) {
+		for (int32_t val = 64; val < 65; val++) {
 			result = con.Query("SELECT COUNT(*) FROM integers WHERE i + i = 64+" + to_string(val));
 			REQUIRE(CHECK_COLUMN(result, 0, {1}));
 			result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));

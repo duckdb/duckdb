@@ -12,8 +12,8 @@
 using namespace duckdb;
 using namespace std;
 
-TableDataReader::TableDataReader(CheckpointManager &manager, TableCatalogEntry &table, MetaBlockReader &reader) :
-	manager(manager), table(table), reader(reader) {
+TableDataReader::TableDataReader(CheckpointManager &manager, TableCatalogEntry &table, MetaBlockReader &reader)
+    : manager(manager), table(table), reader(reader) {
 }
 
 void TableDataReader::ReadTableData(ClientContext &context) {
@@ -109,7 +109,7 @@ bool TableDataReader::ReadBlock(index_t col) {
 	manager.block_manager.Read(*blocks[col]);
 	if (table.columns[col].type == SQLTypeId::VARCHAR) {
 		// read the dictionary offset for string columns
-		int32_t dictionary_offset = *((int32_t*) (blocks[col]->buffer + offsets[col]));
+		int32_t dictionary_offset = *((int32_t *)(blocks[col]->buffer + offsets[col]));
 		dictionary_start[col] = blocks[col]->buffer + offsets[col] + dictionary_offset;
 		offsets[col] += TableDataWriter::BLOCK_HEADER_STRING;
 	}
@@ -118,15 +118,15 @@ bool TableDataReader::ReadBlock(index_t col) {
 
 void TableDataReader::ReadString(Vector &vector, index_t col) {
 	// read the offset of the string into the
-	int32_t offset = *((int32_t*) (blocks[col]->buffer + offsets[col]));
+	int32_t offset = *((int32_t *)(blocks[col]->buffer + offsets[col]));
 	offsets[col] += sizeof(int32_t);
 	// now fetch the string from the dictionary
 	tuple_counts[col]++;
-	auto str_value = (char*) (dictionary_start[col] + offset);
+	auto str_value = (char *)(dictionary_start[col] + offset);
 	// place the string into the vector
 	if (strcmp(str_value, TableDataWriter::BIG_STRING_MARKER) == 0) {
 		// big string, read the block id and offset from where to get the actual string
-		auto block_id = *((block_id_t*) (str_value + 2 * sizeof(char)));
+		auto block_id = *((block_id_t *)(str_value + 2 * sizeof(char)));
 		// now read the actual string
 		MetaBlockReader reader(manager.block_manager, block_id);
 		string big_string = reader.Read<string>();

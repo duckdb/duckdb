@@ -5,6 +5,7 @@
 //
 //
 //===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "storage/checkpoint_manager.hpp"
@@ -21,6 +22,7 @@ public:
 	bool ReadBlock(index_t col);
 	void ReadString(Vector &vector, index_t col);
 	void ReadDataPointers(index_t column_count);
+
 private:
 	CheckpointManager &manager;
 	TableCatalogEntry &table;

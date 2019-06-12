@@ -55,7 +55,8 @@ struct ARTIndexScanState : public IndexScanState {
 
 class ART : public Index {
 public:
-	ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions, bool is_unique = false);
+	ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions,
+	    bool is_unique = false);
 	~ART();
 
 	//! Lock used for updating the index
@@ -69,6 +70,7 @@ public:
 	uint32_t maxPrefix;
 	//! Whether or not the ART is an index built to enforce a UNIQUE constraint
 	bool is_unique;
+
 public:
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table for a single predicate
@@ -91,8 +93,10 @@ public:
 
 	//! Insert data into the index. Does not lock the index.
 	bool Insert(DataChunk &data, Vector &row_ids);
+
 private:
 	DataChunk expression_result;
+
 private:
 	//! Insert a row id into a leaf node
 	bool InsertToLeaf(Leaf &leaf, row_t row_id);
@@ -117,9 +121,11 @@ private:
 	void SearchEqual(vector<row_t> &result_ids, ARTIndexScanState *state);
 	void SearchGreater(vector<row_t> &result_ids, ARTIndexScanState *state, bool inclusive);
 	void SearchLess(vector<row_t> &result_ids, ARTIndexScanState *state, bool inclusive);
-	void SearchCloseRange(vector<row_t> &result_ids, ARTIndexScanState *state, bool left_inclusive, bool right_inclusive);
+	void SearchCloseRange(vector<row_t> &result_ids, ARTIndexScanState *state, bool left_inclusive,
+	                      bool right_inclusive);
+
 private:
-	template<bool HAS_BOUND, bool INCLUSIVE>
+	template <bool HAS_BOUND, bool INCLUSIVE>
 	void IteratorScan(ARTIndexScanState *state, Iterator *it, vector<row_t> &result_ids, Key *upper_bound);
 
 	void GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys);

@@ -19,7 +19,7 @@ index_t Node48::GetChildPos(uint8_t k) {
 }
 
 index_t Node48::GetChildGreaterEqual(uint8_t k) {
-	for(index_t pos = k; pos < 256; pos++) {
+	for (index_t pos = k; pos < 256; pos++) {
 		if (childIndex[pos] != Node::EMPTY_MARKER) {
 			return pos;
 		}
@@ -28,7 +28,7 @@ index_t Node48::GetChildGreaterEqual(uint8_t k) {
 }
 
 index_t Node48::GetNextPos(index_t pos) {
-	for(pos == INVALID_INDEX ? pos = 0 : pos++; pos < 256; pos++) {
+	for (pos == INVALID_INDEX ? pos = 0 : pos++; pos < 256; pos++) {
 		if (childIndex[pos] != Node::EMPTY_MARKER) {
 			return pos;
 		}
@@ -51,7 +51,7 @@ void Node48::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_pt
 		if (n->child[pos]) {
 			// find an empty position in the node list if the current position is occupied
 			pos = 0;
-			while(n->child[pos]) {
+			while (n->child[pos]) {
 				pos++;
 			}
 		}

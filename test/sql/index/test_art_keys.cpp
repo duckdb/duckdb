@@ -27,8 +27,8 @@ static void TestKeyBigger(Key &big, Key &small) {
 }
 
 static void TestKeys(vector<unique_ptr<Key>> &keys) {
-	for(index_t outer = 0; outer < keys.size(); outer++) {
-		for(index_t inner = 0; inner < keys.size(); inner++) {
+	for (index_t outer = 0; outer < keys.size(); outer++) {
+		for (index_t inner = 0; inner < keys.size(); inner++) {
 			if (inner == outer) {
 				TestKeyEqual(*keys[inner], *keys[outer]);
 			} else if (inner > outer) {

@@ -23,11 +23,13 @@ public:
 	row_t GetRowId(index_t index) {
 		return row_ids[index];
 	}
+
 public:
 	void Insert(row_t row_id);
 	void Remove(row_t row_id);
+
 private:
 	unique_ptr<row_t[]> row_ids;
 };
 
-}
+} // namespace duckdb
