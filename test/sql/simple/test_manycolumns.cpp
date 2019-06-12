@@ -4,7 +4,7 @@
 using namespace duckdb;
 using namespace std;
 
-#define COLUMN_COUNT 30000
+#define COLUMN_COUNT 10000
 
 #include <fstream>
 
