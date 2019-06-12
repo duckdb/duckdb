@@ -247,7 +247,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	}
 	// date columns
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE dates(d DATE)"));
-	REQUIRE_NO_FAIL(tester.Query("INSERT INTO dates VALUES ('1992-09-20'), (NULL)"));
+	REQUIRE_NO_FAIL(tester.Query("INSERT INTO dates VALUES ('1992-09-20'), (NULL), ('1000000-09-20')"));
 
 	result = tester.Query("SELECT * FROM dates ORDER BY d");
 	REQUIRE_NO_FAIL(*result);
@@ -257,6 +257,11 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(date.month == 9);
 	REQUIRE(date.day == 20);
 	REQUIRE(result->Fetch<string>(0, 1) == Value::DATE(1992, 9, 20).ToString(SQLType(SQLTypeId::DATE)));
+	date = result->Fetch<duckdb_date>(0, 2);
+	REQUIRE(date.year == 1000000);
+	REQUIRE(date.month == 9);
+	REQUIRE(date.day == 20);
+	REQUIRE(result->Fetch<string>(0, 2) == Value::DATE(1000000, 9, 20).ToString(SQLType(SQLTypeId::DATE)));
 
 	// timestamp columns
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE timestamps(t TIMESTAMP)"));
