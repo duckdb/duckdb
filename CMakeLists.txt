@@ -19,7 +19,7 @@ SET(CMAKE_MACOSX_RPATH 1)
 
 SET(M32_FLAG "")
 IF (FORCE_32_BIT)
-SET(M32_FLAG " -m32 ")
+	SET(M32_FLAG " -m32 ")
 ENDIF()
 
 option (FORCE_COLORED_OUTPUT "Always produce ANSI-colored output (GNU/Clang only)." FALSE)
@@ -31,10 +31,15 @@ if (${FORCE_COLORED_OUTPUT})
     endif ()
 endif ()
 
+option (ENABLE_SANITIZER "Enable sanitizer." TRUE)
+if (${ENABLE_SANITIZER})
+	SET(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=address")
+endif ()
+
 IF(NOT MSVC)
 	SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG -Wall ${M32_FLAG}")
 
-	SET(CXX_EXTRA_DEBUG "-fsanitize=address -Wunused-variable -Wunused-const-variable -Werror=vla -Wnarrowing")
+	SET(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -Wunused-variable -Wunused-const-variable -Werror=vla -Wnarrowing")
 
 	IF("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 8.0)
 		SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_EXTRA_DEBUG}")

@@ -900,7 +900,7 @@ TEST_CASE("ART Node 16", "[art]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
 	index_t n = 6;
 	auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
-	for (int32_t i = 0; i < n; i++) {
+	for (index_t i = 0; i < n; i++) {
 		keys[i] = i + 1;
 	}
 

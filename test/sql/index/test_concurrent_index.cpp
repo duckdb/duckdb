@@ -236,6 +236,11 @@ static void append_to_primary_key_with_transaction(DuckDB *db, index_t thread_nr
 
 	success[thread_nr] = true;
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	// obtain the initial count
+	result = con.Query("SELECT COUNT(*) FROM integers WHERE i >= 0");
+	auto chunk = result->Fetch();
+	Value initial_count = chunk->data[0].GetValue(0);
+
 	for(int32_t i = 0; i < 500; i++) {
 		result = con.Query("INSERT INTO integers VALUES ($1)", (int32_t)(thread_nr * 1000 + i));
 		if (!result->success) {
@@ -244,7 +249,7 @@ static void append_to_primary_key_with_transaction(DuckDB *db, index_t thread_nr
 		}
 		// check the count
 		result = con.Query("SELECT COUNT(*), COUNT(DISTINCT i) FROM integers WHERE i >= 0");
-		if (!CHECK_COLUMN(result, 0, {Value::BIGINT(i + 1)})) {
+		if (!CHECK_COLUMN(result, 0, {initial_count + i + 1})) {
 			success[thread_nr] = false;
 			break;
 		}
