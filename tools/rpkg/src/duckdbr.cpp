@@ -118,23 +118,23 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 				SEXP dest = VECTOR_ELT(retlist, col_idx);
 				switch (chunk->GetTypes()[col_idx]) {
 				case TypeId::BOOLEAN:
-					vector_to_r<uint8_t, uint32_t>(chunk->data[col_idx], LOGICAL_POINTER(dest), dest_offset,
+					vector_to_r<int8_t, uint32_t>(chunk->data[col_idx], LOGICAL_POINTER(dest), dest_offset,
 					                               NA_LOGICAL);
 					break;
 				case TypeId::TINYINT:
-					vector_to_r<uint8_t, uint32_t>(chunk->data[col_idx], INTEGER_POINTER(dest), dest_offset,
+					vector_to_r<int8_t, uint32_t>(chunk->data[col_idx], INTEGER_POINTER(dest), dest_offset,
 					                               NA_INTEGER);
 					break;
 				case TypeId::SMALLINT:
-					vector_to_r<uint16_t, uint32_t>(chunk->data[col_idx], INTEGER_POINTER(dest), dest_offset,
+					vector_to_r<int16_t, uint32_t>(chunk->data[col_idx], INTEGER_POINTER(dest), dest_offset,
 					                                NA_INTEGER);
 					break;
 				case TypeId::INTEGER:
-					vector_to_r<uint32_t, uint32_t>(chunk->data[col_idx], INTEGER_POINTER(dest), dest_offset,
+					vector_to_r<int32_t, uint32_t>(chunk->data[col_idx], INTEGER_POINTER(dest), dest_offset,
 					                                NA_INTEGER);
 					break;
 				case TypeId::BIGINT:
-					vector_to_r<uint64_t, double>(chunk->data[col_idx], NUMERIC_POINTER(dest), dest_offset, NA_REAL);
+					vector_to_r<int64_t, double>(chunk->data[col_idx], NUMERIC_POINTER(dest), dest_offset, NA_REAL);
 					break;
 				case TypeId::FLOAT:
 					vector_to_r<float, double>(chunk->data[col_idx], NUMERIC_POINTER(dest), dest_offset, NA_REAL);
