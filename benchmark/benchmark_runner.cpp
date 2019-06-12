@@ -3,6 +3,9 @@
 #include "common/profiler.hpp"
 #include "common/string_util.hpp"
 
+#define CATCH_CONFIG_RUNNER
+#include "catch.hpp"
+
 #include <thread>
 
 using namespace duckdb;

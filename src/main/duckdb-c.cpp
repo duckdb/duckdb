@@ -465,7 +465,8 @@ static Value GetCValue(duckdb_result *result, index_t col, index_t row) {
 	}
 	case DUCKDB_TYPE_TIMESTAMP: {
 		auto timestamp = UnsafeFetch<duckdb_timestamp>(result, col, row);
-		return Value::TIMESTAMP(timestamp.date.year, timestamp.date.month, timestamp.date.day, timestamp.time.hour, timestamp.time.min, timestamp.time.sec, timestamp.time.msec);
+		return Value::TIMESTAMP(timestamp.date.year, timestamp.date.month, timestamp.date.day, timestamp.time.hour,
+		                        timestamp.time.min, timestamp.time.sec, timestamp.time.msec);
 	}
 	case DUCKDB_TYPE_VARCHAR:
 		return Value(string(UnsafeFetch<const char *>(result, col, row)));

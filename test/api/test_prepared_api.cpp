@@ -52,6 +52,21 @@ TEST_CASE("Test prepared statements API", "[api]") {
 	REQUIRE_FAIL(con.Query("EXECUTE " + prepare_name + "(12)"));
 }
 
+TEST_CASE("Test prepared statements and dependencies", "[api]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a(i TINYINT)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (11), (12), (13)"));
+
+	// query using a prepared statement in con1
+	result = con.Query("SELECT COUNT(*) FROM a WHERE i=$1", 12);
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	// now delete the table in con2
+	REQUIRE_NO_FAIL(con2.Query("DROP TABLE a"));
+}
+
 TEST_CASE("Test destructors of prepared statements", "[api]") {
 	unique_ptr<DuckDB> db;
 	unique_ptr<Connection> con;

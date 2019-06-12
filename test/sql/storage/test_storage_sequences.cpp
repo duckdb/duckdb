@@ -40,6 +40,18 @@ TEST_CASE("Use sequences over different runs", "[storage]") {
 		REQUIRE(CHECK_COLUMN(result, 1, {4}));
 		result = con.Query("SELECT nextval('seq_cycle')");
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+		// drop sequence
+		REQUIRE_NO_FAIL(con.Query("DROP SEQUENCE seq;"));
+	}
+	{
+		// reload
+		DuckDB db(storage_database);
+		Connection con(db);
+		// the sequence is gone now
+		REQUIRE_FAIL(con.Query("SELECT nextval('seq')"));
+		// the other sequence is still there
+		REQUIRE_NO_FAIL(con.Query("SELECT nextval('seq_cycle')"));
 	}
 	DeleteDatabase(storage_database);
 }

@@ -121,7 +121,9 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 			payload_types.push_back(TypeId::BIGINT);
 		}
 	}
-	state->payload_chunk.Initialize(payload_types);
+	if (payload_types.size() > 0) {
+		state->payload_chunk.Initialize(payload_types);
+	}
 
 	state->ht = make_unique<SuperLargeHashTable>(1024, group_types, payload_types, aggregate_kind);
 	return move(state);

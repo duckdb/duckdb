@@ -14,6 +14,7 @@
 #include "planner/statement/bound_select_statement.hpp"
 
 namespace duckdb {
+class BoundColumnRefExpression;
 
 //! Bound equivalent to CreateIndexStatement
 class BoundCreateIndexStatement : public BoundSQLStatement {

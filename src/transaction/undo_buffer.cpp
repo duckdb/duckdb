@@ -50,11 +50,18 @@ void UndoBuffer::Cleanup() {
 			// undo this entry
 			auto info = (VersionInformation *)entry.data.get();
 			if (entry.type == UndoFlags::DELETE_TUPLE || entry.type == UndoFlags::UPDATE_TUPLE) {
-				// FIXME: put into Cleanup, not Commit
 				if (info->table->indexes.size() > 0) {
-					assert(info->chunk);
+					// fetch the row identifiers
+					row_t row_number;
+					VersionInformation *current_info = info;
+					while (!current_info->chunk) {
+						assert(current_info->prev.pointer);
+						current_info = current_info->prev.pointer;
+					}
+					row_number = current_info->chunk->start + current_info->prev.entry;
+
 					assert(info->tuple_data);
-					Value ptr = Value::BIGINT(info->chunk->start + info->prev.entry);
+					Value ptr = Value::BIGINT(row_number);
 					uint8_t *alternate_version_pointers[1];
 					uint64_t alternate_version_index[1];
 
@@ -218,9 +225,8 @@ static void WriteTuple(WriteAheadLog *log, VersionInformation *entry,
 		// append the tuple to the current chunk
 		index_t current_offset = chunk->size();
 		for (index_t i = 0; i < chunk->column_count; i++) {
-			auto type = chunk->data[i].type;
-			index_t value_size = GetTypeIdSize(type);
-			void *storage_pointer = storage->columns[i] + value_size * id;
+			index_t value_size = GetTypeIdSize(chunk->data[i].type);
+			data_ptr_t storage_pointer = storage->GetPointerToRow(i, storage->start + id);
 			memcpy(chunk->data[i].data + value_size * current_offset, storage_pointer, value_size);
 			chunk->data[i].count++;
 		}
@@ -303,10 +309,8 @@ void UndoBuffer::Rollback() {
 				// delete base table entry from index
 				assert(info->chunk);
 				if (info->table->indexes.size() > 0) {
-					uint64_t rowid = info->chunk->start + info->prev.entry;
-					Value ptr = Value::BIGINT(rowid);
-					sel_t regular_entries[STANDARD_VECTOR_SIZE];
-					regular_entries[0] = 0;
+					row_t row_id = info->chunk->start + info->prev.entry;
+					Value ptr = Value::BIGINT(row_id);
 
 					DataChunk result;
 					result.Initialize(info->table->types);
@@ -317,25 +321,16 @@ void UndoBuffer::Rollback() {
 					}
 					Vector row_identifiers(ptr);
 
-					info->table->RetrieveBaseTableData(result, column_ids, regular_entries, 1, info->chunk, rowid);
+					info->chunk->table.RetrieveTupleFromBaseTable(result, info->chunk, column_ids, row_id);
 					for (auto &index : info->table->indexes) {
 						index->Delete(result, row_identifiers);
 					}
 				}
 			}
-			if (info->chunk) {
-				// parent refers to a storage chunk
-				// have to move information back into chunk
-				info->chunk->Undo(info);
-			} else {
-				// parent refers to another entry in UndoBuffer
-				// simply remove this entry from the list
-				auto parent = info->prev.pointer;
-				parent->next = info->next;
-				if (parent->next) {
-					parent->next->prev.pointer = parent;
-				}
-			}
+			assert(info->chunk);
+			// parent needs to refer to a storage chunk because of our transactional model
+			// the current entry is still dirty, hence no other transaction can have modified it
+			info->chunk->Undo(info);
 		} else {
 			assert(entry.type == UndoFlags::EMPTY_ENTRY || entry.type == UndoFlags::QUERY);
 		}

@@ -1,3 +1,5 @@
+#pragma once
+
 #include "common/string_util.hpp"
 #include "duckdb.hpp"
 

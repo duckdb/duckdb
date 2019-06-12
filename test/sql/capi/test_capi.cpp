@@ -38,6 +38,14 @@ private:
 	duckdb_result result;
 };
 
+static bool NO_FAIL(CAPIResult &result) {
+	return result.success;
+}
+
+static bool NO_FAIL(unique_ptr<CAPIResult> result) {
+	return NO_FAIL(*result);
+}
+
 template <> bool CAPIResult::Fetch(index_t col, index_t row) {
 	return duckdb_value_boolean(&result, col, row);
 }
@@ -131,21 +139,24 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	REQUIRE(tester.OpenDatabase(nullptr));
 
 	// select scalar value
-	REQUIRE_NO_FAIL(result = tester.Query("SELECT CAST(42 AS BIGINT)"));
+	result = tester.Query("SELECT CAST(42 AS BIGINT)");
+	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->column_count() == 1);
 	REQUIRE(result->row_count() == 1);
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 42);
 	REQUIRE(!result->IsNull(0, 0));
 
 	// select scalar NULL
-	REQUIRE_NO_FAIL(result = tester.Query("SELECT NULL"));
+	result = tester.Query("SELECT NULL");
+	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->column_count() == 1);
 	REQUIRE(result->row_count() == 1);
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 0);
 	REQUIRE(result->IsNull(0, 0));
 
 	// select scalar string
-	REQUIRE_NO_FAIL(result = tester.Query("SELECT 'hello'"));
+	result = tester.Query("SELECT 'hello'");
+	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->column_count() == 1);
 	REQUIRE(result->row_count() == 1);
 	REQUIRE(result->Fetch<string>(0, 0) == "hello");
@@ -158,7 +169,8 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("INSERT INTO test VALUES (13, 22)"));
 
 	// NULL selection
-	REQUIRE_NO_FAIL(result = tester.Query("SELECT a, b FROM test ORDER BY a"));
+	result = tester.Query("SELECT a, b FROM test ORDER BY a");
+	REQUIRE_NO_FAIL(*result);
 	// NULL, 11, 13
 	REQUIRE(result->IsNull(0, 0));
 	REQUIRE(result->Fetch<int32_t>(0, 1) == 11);
@@ -184,7 +196,8 @@ TEST_CASE("Test different types of C API", "[capi]") {
 		REQUIRE_NO_FAIL(tester.Query("CREATE TABLE integers(i " + type + ")"));
 		REQUIRE_NO_FAIL(tester.Query("INSERT INTO integers VALUES (1), (NULL)"));
 
-		REQUIRE_NO_FAIL(result = tester.Query("SELECT * FROM integers ORDER BY i"));
+		result = tester.Query("SELECT * FROM integers ORDER BY i");
+		REQUIRE_NO_FAIL(*result);
 		REQUIRE(result->IsNull(0, 0));
 		REQUIRE(result->Fetch<int8_t>(0, 0) == 0);
 		REQUIRE(result->Fetch<int16_t>(0, 0) == 0);
@@ -212,7 +225,8 @@ TEST_CASE("Test different types of C API", "[capi]") {
 		REQUIRE_NO_FAIL(tester.Query("CREATE TABLE doubles(i " + type + ")"));
 		REQUIRE_NO_FAIL(tester.Query("INSERT INTO doubles VALUES (1), (NULL)"));
 
-		REQUIRE_NO_FAIL(result = tester.Query("SELECT * FROM doubles ORDER BY i"));
+		result = tester.Query("SELECT * FROM doubles ORDER BY i");
+		REQUIRE_NO_FAIL(*result);
 		REQUIRE(result->IsNull(0, 0));
 		REQUIRE(result->Fetch<int8_t>(0, 0) == 0);
 		REQUIRE(result->Fetch<int16_t>(0, 0) == 0);
@@ -235,7 +249,8 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE dates(d DATE)"));
 	REQUIRE_NO_FAIL(tester.Query("INSERT INTO dates VALUES ('1992-09-20'), (NULL)"));
 
-	REQUIRE_NO_FAIL(result = tester.Query("SELECT * FROM dates ORDER BY d"));
+	result = tester.Query("SELECT * FROM dates ORDER BY d");
+	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->IsNull(0, 0));
 	duckdb_date date = result->Fetch<duckdb_date>(0, 1);
 	REQUIRE(date.year == 1992);
@@ -247,7 +262,8 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE timestamps(t TIMESTAMP)"));
 	REQUIRE_NO_FAIL(tester.Query("INSERT INTO timestamps VALUES ('1992-09-20 12:01:30'), (NULL)"));
 
-	REQUIRE_NO_FAIL(result = tester.Query("SELECT * FROM timestamps ORDER BY t"));
+	result = tester.Query("SELECT * FROM timestamps ORDER BY t");
+	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->IsNull(0, 0));
 	duckdb_timestamp stamp = result->Fetch<duckdb_timestamp>(0, 1);
 	REQUIRE(stamp.date.year == 1992);
@@ -257,13 +273,15 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(stamp.time.min == 1);
 	REQUIRE(stamp.time.sec == 30);
 	REQUIRE(stamp.time.msec == 0);
-	REQUIRE(result->Fetch<string>(0, 1) == Value::TIMESTAMP(1992, 9, 20, 12, 1, 30, 0).ToString(SQLType(SQLTypeId::TIMESTAMP)));
+	REQUIRE(result->Fetch<string>(0, 1) ==
+	        Value::TIMESTAMP(1992, 9, 20, 12, 1, 30, 0).ToString(SQLType(SQLTypeId::TIMESTAMP)));
 
 	// boolean columns
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE booleans(b BOOLEAN)"));
 	REQUIRE_NO_FAIL(tester.Query("INSERT INTO booleans VALUES (42 > 60), (42 > 20), (42 > NULL)"));
 
-	REQUIRE_NO_FAIL(result = tester.Query("SELECT * FROM booleans ORDER BY b"));
+	result = tester.Query("SELECT * FROM booleans ORDER BY b");
+	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->IsNull(0, 0));
 	REQUIRE(!result->Fetch<bool>(0, 0));
 	REQUIRE(!result->Fetch<bool>(0, 1));

@@ -40,5 +40,7 @@ PhysicalAggregateOperatorState::PhysicalAggregateOperatorState(PhysicalAggregate
 	for (auto &expr : parent->aggregates) {
 		aggregate_types.push_back(expr->return_type);
 	}
-	aggregate_chunk.Initialize(aggregate_types);
+	if (aggregate_types.size() > 0) {
+		aggregate_chunk.Initialize(aggregate_types);
+	}
 }

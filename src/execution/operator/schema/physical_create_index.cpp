@@ -8,25 +8,35 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalCreateIndex::createARTIndex(ScanStructure *ss, DataChunk *intermediate, vector<TypeId> *result_types,
-                                         DataChunk *result) {
-	auto art = make_unique<ART>(*table.storage, column_ids, types, *result_types, move(expressions),
-	                            move(unbound_expressions));
+void PhysicalCreateIndex::CreateARTIndex() {
+	auto art = make_unique<ART>(*table.storage, column_ids, move(unbound_expressions));
+
+	DataChunk result;
+	result.Initialize(art->types);
+
+	DataTable::IndexScanState state;
+	table.storage->InitializeIndexScan(state);
+
+	DataChunk intermediate;
+	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	auto types = table.GetTypes(column_ids);
+	intermediate.Initialize(types);
+
 	// now we start incrementally building the index
 	while (true) {
-		intermediate->Reset();
+		intermediate.Reset();
 		// scan a new chunk from the table to index
-		table.storage->CreateIndexScan(*ss, column_ids, *intermediate);
-		if (intermediate->size() == 0) {
+		table.storage->CreateIndexScan(state, column_ids, intermediate);
+		if (intermediate.size() == 0) {
 			// finished scanning for index creation
 			// release all locks
 			break;
 		}
 		// resolve the expressions for this chunk
 		ExpressionExecutor executor(intermediate);
-		executor.Execute(art->expressions, *result);
-		//
-		art->Insert(*result, intermediate->data[intermediate->column_count - 1]);
+		executor.Execute(expressions, result);
+		// insert into the index
+		art->Insert(result, intermediate.data[intermediate.column_count - 1]);
 	}
 	table.storage->indexes.push_back(move(art));
 }
@@ -44,37 +54,20 @@ void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &ch
 	}
 
 	// create the chunk to hold intermediate expression results
-	if (expressions.size() > 1) {
-		throw NotImplementedException("Multidimensional indexes not supported yet");
-	}
-
-	DataChunk result;
-	vector<TypeId> result_types;
-	for (auto &expr : expressions) {
-		result_types.push_back(expr->return_type);
-	}
-	result.Initialize(result_types);
-
-	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
-
-	ScanStructure ss;
-	table.storage->InitializeScan(ss);
-
-	DataChunk intermediate;
-	auto types = table.GetTypes(column_ids);
-	intermediate.Initialize(types);
+	// "Multidimensional indexes not supported yet"
+	assert(expressions.size() == 1);
 
 	switch (info->index_type) {
-	case IndexType::ART:
-		createARTIndex(&ss, &intermediate, &result_types, &result);
-		break;
-	default:
-		assert(0);
+	case IndexType::ART: {
+		CreateARTIndex();
 		break;
 	}
+	default:
+		assert(0);
+		throw NotImplementedException("Unimplemented index type");
+	}
 
-	chunk.data[0].count = 1;
-	chunk.data[0].SetValue(0, Value::BIGINT(0));
+	chunk.data[0].count = 0;
 
 	state->finished = true;
 }

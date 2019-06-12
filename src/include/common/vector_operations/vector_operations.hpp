@@ -197,6 +197,8 @@ struct VectorOperations {
 	// Sort the vector, setting the given selection vector to a sorted state
 	// while ignoring NULL values.
 	static void Sort(Vector &vector, sel_t *result_vector, count_t count, sel_t result[]);
+	// Checks whether or not the vector contains only unique values
+	static bool Unique(Vector &vector);
 	//===--------------------------------------------------------------------===//
 	// Hash functions
 	//===--------------------------------------------------------------------===//
@@ -265,7 +267,8 @@ struct VectorOperations {
 	template <typename T, class FUNC>
 	static void ExecType(Vector &vector, FUNC &&fun, index_t offset = 0, count_t limit = 0) {
 		auto data = (T *)vector.data;
-		VectorOperations::Exec(vector, [&](index_t i, index_t k) { fun(data[i], i, k); }, offset, limit);
+		VectorOperations::Exec(
+		    vector, [&](index_t i, index_t k) { fun(data[i], i, k); }, offset, limit);
 	}
 	template <class FUNC> static void BinaryExec(Vector &a, Vector &b, Vector &result, FUNC &&fun) {
 		// it might be the case that not everything has a selection vector

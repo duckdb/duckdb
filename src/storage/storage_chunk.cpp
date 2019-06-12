@@ -8,18 +8,7 @@
 using namespace duckdb;
 using namespace std;
 
-StorageChunk::StorageChunk(DataTable &_table, index_t start) : table(_table), count(0), start(start) {
-	columns.resize(table.types.size());
-	count_t tuple_size = 0;
-	for (auto &type : table.types) {
-		tuple_size += GetTypeIdSize(type);
-	}
-	owned_data = unique_ptr<data_t[]>(new data_t[tuple_size * STORAGE_CHUNK_SIZE]);
-	data_ptr_t dataptr = owned_data.get();
-	for (index_t i = 0; i < table.types.size(); i++) {
-		columns[i] = dataptr;
-		dataptr += GetTypeIdSize(table.types[i]) * STORAGE_CHUNK_SIZE;
-	}
+StorageChunk::StorageChunk(DataTable &base_table, index_t start) : SegmentBase(start, 0), table(base_table) {
 }
 
 void StorageChunk::Cleanup(VersionInformation *info) {
@@ -40,11 +29,44 @@ void StorageChunk::Undo(VersionInformation *info) {
 		// move data back to the original chunk
 		deleted[entry] = false;
 		auto tuple_data = info->tuple_data;
-		table.serializer.Deserialize(columns, entry, tuple_data);
+
+		vector<data_ptr_t> data_pointers;
+		for (index_t i = 0; i < table.types.size(); i++) {
+			data_pointers.push_back(GetPointerToRow(i, start + entry));
+		}
+		table.serializer.Deserialize(data_pointers, 0, tuple_data);
 	}
 	version_pointers[entry] = info->next;
 	if (version_pointers[entry]) {
 		version_pointers[entry]->prev.entry = entry;
 		version_pointers[entry]->chunk = this;
 	}
+}
+
+data_ptr_t StorageChunk::GetPointerToRow(index_t col, index_t row) {
+	return columns[col].segment->GetPointerToRow(table.types[col], row);
+}
+
+void StorageChunk::SetDirtyFlag(index_t start, index_t count, bool new_dirty_flag) {
+	assert(count > 0 && count <= STANDARD_VECTOR_SIZE);
+	assert(start + count <= STORAGE_CHUNK_SIZE);
+	index_t marker_start = start / STANDARD_VECTOR_SIZE;
+	index_t marker_end = (start + count - 1) / STANDARD_VECTOR_SIZE;
+	for (index_t i = marker_start; i <= marker_end; i++) {
+		assert(i < STORAGE_CHUNK_VECTORS);
+		is_dirty[i] = new_dirty_flag;
+	}
+}
+
+bool StorageChunk::IsDirty(index_t start, index_t count) {
+	assert(count > 0 && count <= STANDARD_VECTOR_SIZE);
+	assert(start + count <= STORAGE_CHUNK_SIZE);
+	index_t marker_start = start / STANDARD_VECTOR_SIZE;
+	index_t marker_end = (start + count - 1) / STANDARD_VECTOR_SIZE;
+	bool segment_is_dirty = false;
+	for (index_t i = marker_start; i <= marker_end; i++) {
+		assert(i < STORAGE_CHUNK_VECTORS);
+		segment_is_dirty = segment_is_dirty || is_dirty[i];
+	}
+	return segment_is_dirty;
 }

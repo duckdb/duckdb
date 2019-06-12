@@ -11,6 +11,7 @@ TEST_CASE("Test storage that exceeds a single block", "[storage][.]") {
 	auto storage_database = TestCreatePath("storage_test");
 
 	uint64_t integer_count = 3 * (BLOCK_SIZE / sizeof(int32_t));
+	uint64_t expected_sum;
 	Value sum;
 
 	// make sure the database does not exist
@@ -22,14 +23,17 @@ TEST_CASE("Test storage that exceeds a single block", "[storage][.]") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21), (NULL, NULL)"));
 		uint64_t table_size = 4;
+		expected_sum = 11 + 12 + 13 + 22 + 22 + 21;
 		// grow the table until it exceeds integer_count
 		while (table_size < integer_count) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM test"));
 			table_size *= 2;
+			expected_sum *= 2;
 		}
+		sum = Value::BIGINT(expected_sum);
 		// compute the sum
-		REQUIRE_NO_FAIL(result = con.Query("SELECT SUM(a) + SUM(b) FROM test"));
-		sum = result->GetValue(0, 0);
+		result = con.Query("SELECT SUM(a) + SUM(b) FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {sum}));
 	}
 	// reload the database from disk
 	{
@@ -71,7 +75,8 @@ TEST_CASE("Test storage that exceeds a single block with different types", "[sto
 			table_size *= 2;
 		}
 		// compute the sum
-		REQUIRE_NO_FAIL(result = con.Query("SELECT SUM(a) + SUM(b) FROM test"));
+		result = con.Query("SELECT SUM(a) + SUM(b) FROM test");
+		REQUIRE_NO_FAIL(*result);
 		sum = result->GetValue(0, 0);
 	}
 	// reload the database from disk
