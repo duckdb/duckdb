@@ -12,6 +12,8 @@ SegmentBase* SegmentTree::GetLastSegment() {
 }
 
 SegmentBase* SegmentTree::GetSegment(index_t row_number) {
+	lock_guard<mutex> tree_lock(node_lock);
+
 	index_t lower = 0;
 	index_t upper = nodes.size() - 1;
 	// binary search to find the node

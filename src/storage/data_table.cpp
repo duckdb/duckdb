@@ -736,17 +736,11 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 	sel_t sort_vector[STANDARD_VECTOR_SIZE];
 	VectorOperations::Sort(row_identifiers, sort_vector);
 
-	StorageChunk *current_chunk = nullptr;
-	unique_ptr<StorageLockKey> lock;
 	for (index_t i = 0; i < row_identifiers.count; i++) {
 		auto row_id = row_ids[sort_vector[i]];
 		auto chunk = GetChunk(row_id);
-		if (chunk != current_chunk) {
-			// chunk is not locked yet
-			// get the lock on the current chunk
-			lock = chunk->lock.GetSharedLock();
-			current_chunk = chunk;
-		}
+		auto lock = chunk->lock.GetSharedLock();
+
 		assert((index_t)row_id >= chunk->start && (index_t)row_id < chunk->start + chunk->count);
 		auto index = row_id - chunk->start;
 
@@ -764,7 +758,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 		} else {
 			if (!chunk->deleted[index]) {
 				// not versioned: retrieve info from base table
-				RetrieveTupleFromBaseTable(result, current_chunk, column_ids, row_id);
+				RetrieveTupleFromBaseTable(result, chunk, column_ids, row_id);
 			}
 		}
 	}

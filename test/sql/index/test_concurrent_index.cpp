@@ -230,20 +230,15 @@ TEST_CASE("Mix of UPDATES and INSERTS on table with PRIMARY KEY constraints", "[
 	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(atomic_count)}));
 }
 
-static void append_to_primary_key_with_transaction(DuckDB *db, index_t thread_nr, bool success[]) {
+string append_to_primary_key(Connection &con, index_t thread_nr) {
 	unique_ptr<QueryResult> result;
-	Connection con(*db);
-
-	success[thread_nr] = true;
 	if (!con.Query("BEGIN TRANSACTION")->success) {
-		success[thread_nr] = false;
-		return;
+		return "Failed BEGIN TRANSACTION";
 	}
 	// obtain the initial count
 	result = con.Query("SELECT COUNT(*) FROM integers WHERE i >= 0");
 	if (!result->success) {
-		success[thread_nr] = false;
-		return;
+		return "Failed initial query: " + result->error;
 	}
 	auto chunk = result->Fetch();
 	Value initial_count = chunk->data[0].GetValue(0);
@@ -251,19 +246,28 @@ static void append_to_primary_key_with_transaction(DuckDB *db, index_t thread_nr
 	for(int32_t i = 0; i < 500; i++) {
 		result = con.Query("INSERT INTO integers VALUES ($1)", (int32_t)(thread_nr * 1000 + i));
 		if (!result->success) {
-			success[thread_nr] = false;
-			break;
+			return "Failed INSERT: " + result->error;
 		}
 		// check the count
 		result = con.Query("SELECT COUNT(*), COUNT(DISTINCT i) FROM integers WHERE i >= 0");
 		if (!CHECK_COLUMN(result, 0, {initial_count + i + 1})) {
-			success[thread_nr] = false;
-			break;
+			return "Incorrect result for CHECK_COLUMN: " + result->error;
 		}
 	}
 	if (!con.Query("COMMIT")->success) {
+		return "Failed COMMIT";
+	}
+	return "";
+}
+
+static void append_to_primary_key_with_transaction(DuckDB *db, index_t thread_nr, bool success[]) {
+	Connection con(*db);
+
+	success[thread_nr] = true;
+	string result = append_to_primary_key(con, thread_nr);
+	if (!result.empty()) {
+		fprintf(stderr,  "Parallel append failed: %s\n", result.c_str());
 		success[thread_nr] = false;
-		return;
 	}
 }
 
