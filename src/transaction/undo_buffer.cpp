@@ -327,19 +327,10 @@ void UndoBuffer::Rollback() {
 					}
 				}
 			}
-			if (info->chunk) {
-				// parent refers to a storage chunk
-				// have to move information back into chunk
-				info->chunk->Undo(info);
-			} else {
-				// parent refers to another entry in UndoBuffer
-				// simply remove this entry from the list
-				auto parent = info->prev.pointer;
-				parent->next = info->next;
-				if (parent->next) {
-					parent->next->prev.pointer = parent;
-				}
-			}
+			assert(info->chunk);
+			// parent needs to refer to a storage chunk because of our transactional model
+			// the current entry is still dirty, hence no other transaction can have modified it
+			info->chunk->Undo(info);
 		} else {
 			assert(entry.type == UndoFlags::EMPTY_ENTRY || entry.type == UndoFlags::QUERY);
 		}

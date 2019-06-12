@@ -138,3 +138,48 @@ TEST_CASE("Test updates with storage", "[storage]") {
 	}
 	DeleteDatabase(storage_database);
 }
+
+TEST_CASE("Test large inserts in a single transaction", "[storage]") {
+	unique_ptr<QueryResult> result;
+	auto storage_database = TestCreatePath("storage_test");
+
+	// make sure the database does not exist
+	int64_t expected_sum_a = 0, expected_sum_b = 0;
+	DeleteDatabase(storage_database);
+	{
+		// create a database and insert values
+		DuckDB db(storage_database);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
+		for(index_t i = 0; i < 1000; i++) {
+			REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
+			expected_sum_a += 11 + 13;
+			expected_sum_b += 22 + 22;
+		}
+		REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE a=12"));
+		REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
+		result = con.Query("SELECT SUM(a), SUM(b) FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(expected_sum_a)}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(expected_sum_b)}));
+
+	}
+	// reload the database from disk
+	{
+		DuckDB db(storage_database);
+		Connection con(db);
+		result = con.Query("SELECT SUM(a), SUM(b) FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(expected_sum_a)}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(expected_sum_b)}));
+	}
+	// reload the database from disk again
+	{
+		DuckDB db(storage_database);
+		Connection con(db);
+		result = con.Query("SELECT SUM(a), SUM(b) FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(expected_sum_a)}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(expected_sum_b)}));
+	}
+	DeleteDatabase(storage_database);
+}
