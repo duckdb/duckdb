@@ -235,9 +235,16 @@ static void append_to_primary_key_with_transaction(DuckDB *db, index_t thread_nr
 	Connection con(*db);
 
 	success[thread_nr] = true;
-	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	if (!con.Query("BEGIN TRANSACTION")->success) {
+		success[thread_nr] = false;
+		return;
+	}
 	// obtain the initial count
 	result = con.Query("SELECT COUNT(*) FROM integers WHERE i >= 0");
+	if (!result->success) {
+		success[thread_nr] = false;
+		return;
+	}
 	auto chunk = result->Fetch();
 	Value initial_count = chunk->data[0].GetValue(0);
 
@@ -254,7 +261,10 @@ static void append_to_primary_key_with_transaction(DuckDB *db, index_t thread_nr
 			break;
 		}
 	}
-	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+	if (!con.Query("COMMIT")->success) {
+		success[thread_nr] = false;
+		return;
+	}
 }
 
 TEST_CASE("Parallel appends to table with index with transactions", "[index][.]") {
