@@ -289,6 +289,7 @@ static void CreateMockChunk(TableCatalogEntry &table, vector<column_t> &column_i
 	mock_chunk.InitializeEmpty(types);
 	for(column_t i = 0; i < column_ids.size(); i++) {
 		mock_chunk.data[column_ids[i]].Reference(chunk.data[i]);
+		mock_chunk.sel_vector = mock_chunk.data[column_ids[i]].sel_vector;
 	}
 	mock_chunk.data[0].count = chunk.size();
 }
