@@ -598,12 +598,12 @@ TEST_CASE("ART Integer Types", "[art]") {
 	Connection con(db);
 
 	string int_types[4] = {"tinyint", "smallint", "integer", "bigint"};
-	int32_t n_sizes[4] = {100, 1000, 1000, 1000};
-	for (int idx = 2; idx < 4; idx++) {
+	index_t n_sizes[4] = {100, 1000, 1000, 1000};
+	for (index_t idx = 2; idx < 4; idx++) {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i " + int_types[idx] + ")"));
 		REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 
-		int32_t n = n_sizes[idx];
+		index_t n = n_sizes[idx];
 		auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
 		auto key_pointer = keys.get();
 		for (index_t i = 0; i < n; i++) {
@@ -699,7 +699,7 @@ TEST_CASE("ART Integer Types", "[art]") {
 		// Delete non-existing element
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=0"));
 		// Now Deleting all elements
-		for (int32_t i = 0; i < n; i++) {
+		for (index_t i = 0; i < n; i++) {
 			REQUIRE_NO_FAIL(
 			    con.Query("DELETE FROM integers WHERE i=CAST(" + to_string(keys[i]) + " AS " + int_types[idx] + ")"));
 			// check the value does not exist
@@ -722,7 +722,7 @@ TEST_CASE("ART Big Range", "[art]") {
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
-	int n = 4;
+	index_t n = 4;
 	auto keys = unique_ptr<int32_t[]>(new int32_t[n + 1]);
 	for (index_t i = 0; i < n + 1; i++) {
 		keys[i] = i + 1;
@@ -824,7 +824,7 @@ TEST_CASE("Test updates resulting from big index scans", "[art][.]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
-	for (int32_t i = 0; i < 25000; i++) {
+	for (index_t i = 0; i < 25000; i++) {
 		int32_t value = i + 1;
 
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", value));
@@ -863,17 +863,17 @@ TEST_CASE("ART Node 4", "[art]") {
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
-	int n = 4;
+	index_t n = 4;
 	auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
-	for (int32_t i = 0; i < n; i++) {
+	for (index_t i = 0; i < n; i++) {
 		keys[i] = i + 1;
 	}
 
-	for (int32_t i = 0; i < n; i++) {
+	for (index_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", keys[i]));
 	}
 
-	for (int32_t i = 0; i < n; i++) {
+	for (index_t i = 0; i < n; i++) {
 		result = con.Query("SELECT i FROM integers WHERE i=$1", keys[i]);
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
 	}
@@ -883,7 +883,7 @@ TEST_CASE("ART Node 4", "[art]") {
 	result = con.Query("SELECT sum(i) FROM integers WHERE i > 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(2+3+4)}));
 	// Now Deleting all elements
-	for (int32_t i = 0; i < n; i++) {
+	for (index_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=$1", keys[i]));
 	}
 	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i = 0"));
@@ -898,17 +898,17 @@ TEST_CASE("ART Node 16", "[art]") {
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
-	int n = 6;
+	index_t n = 6;
 	auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
 	for (int32_t i = 0; i < n; i++) {
 		keys[i] = i + 1;
 	}
 
-	for (int32_t i = 0; i < n; i++) {
+	for (index_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", keys[i]));
 	}
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
-	for (int32_t i = 0; i < n; i++) {
+	for (index_t i = 0; i < n; i++) {
 		result = con.Query("SELECT i FROM integers WHERE i=$1", keys[i]);
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
 	}
@@ -917,7 +917,7 @@ TEST_CASE("ART Node 16", "[art]") {
 	result = con.Query("SELECT sum(i) FROM integers WHERE i > 4");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(5+6)}));
 	// Now Deleting all elements
-	for (int32_t i = 0; i < n; i++) {
+	for (index_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=$1", keys[i]));
 	}
 	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
@@ -931,7 +931,7 @@ TEST_CASE("ART Node 48", "[art]") {
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
-	int n = 20;
+	index_t n = 20;
 	auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
 	for (index_t i = 0; i < n; i++) {
 		keys[i] = i + 1;

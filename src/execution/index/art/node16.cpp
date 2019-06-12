@@ -36,7 +36,7 @@ index_t Node16::GetNextPos(index_t pos) {
 }
 
 unique_ptr<Node> *Node16::GetChild(index_t pos) {
-	assert(pos >= 0 && pos < count);
+	assert(pos < count);
 	return &child[pos];
 }
 

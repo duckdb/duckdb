@@ -311,8 +311,6 @@ void UndoBuffer::Rollback() {
 				if (info->table->indexes.size() > 0) {
 					row_t row_id = info->chunk->start + info->prev.entry;
 					Value ptr = Value::BIGINT(row_id);
-					sel_t regular_entries[STANDARD_VECTOR_SIZE];
-					regular_entries[0] = 0;
 
 					DataChunk result;
 					result.Initialize(info->table->types);
