@@ -142,10 +142,11 @@ TEST_CASE("Test timestamp functions", "[timestamp]") {
 
 	result = con.Query("SELECT AGE(TIMESTAMP '1957-06-13');");
 	auto current_timestamp = Timestamp::GetCurrentTimestamp();
-	auto timestamp_diff = Timestamp::GetDifference(Timestamp::FromString("1957-06-13"), current_timestamp);
-	auto years = Date::ExtractYear(Timestamp::GetDate(timestamp_diff));
-	auto months = Date::ExtractMonth(Timestamp::GetDate(timestamp_diff));
-	auto days = Date::ExtractDay(Timestamp::GetDate(timestamp_diff));
+	auto interval = Timestamp::GetDifference(Timestamp::FromString("1957-06-13"), current_timestamp);
+	auto timestamp = Timestamp::IntervalToTimestamp(interval);
+	auto years = timestamp.year;
+	auto months = timestamp.month;
+	auto days = timestamp.day;
 
 	auto output = std::to_string(years);
 	output += " years ";
@@ -157,4 +158,16 @@ TEST_CASE("Test timestamp functions", "[timestamp]") {
 
 	result = con.Query("SELECT AGE(TIMESTAMP '2001-04-10', TIMESTAMP '1957-06-13');");
 	REQUIRE(CHECK_COLUMN(result, 0, {"43 years 9 mons 27 days"}));
+
+	result = con.Query("SELECT age(TIMESTAMP '2014-04-25', TIMESTAMP '2014-04-17');");
+	REQUIRE(CHECK_COLUMN(result, 0, {"8 days"}));
+
+	result = con.Query("SELECT age(TIMESTAMP '2014-04-25', TIMESTAMP '2014-01-01');");
+	REQUIRE(CHECK_COLUMN(result, 0, {"3 mons 24 days"}));
+
+	result = con.Query("SELECT age(TIMESTAMP '2019-06-11', TIMESTAMP '2019-06-11');");
+	REQUIRE(CHECK_COLUMN(result, 0, {"00:00:00"}));
+
+	result = con.Query(" SELECT age(timestamp '2019-06-11 12:00:00', timestamp '2019-07-11 11:00:00');");
+	REQUIRE(CHECK_COLUMN(result, 0, {"-29 days -23:00:00"}));
 }

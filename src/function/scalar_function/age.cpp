@@ -1,11 +1,5 @@
 #include "function/scalar_function/age.hpp"
 
-#include "common/exception.hpp"
-#include "common/types/date.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-
-#include <string.h>
-
 using namespace std;
 
 namespace duckdb {
@@ -42,17 +36,34 @@ void age_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count
 		                             auto input1 = input1_data[input1_index];
 		                             auto input2 = input2_data[input2_index];
 
-		                             auto timestamp_diff = Timestamp::GetDifference(input1, input2);
-		                             auto years = Date::ExtractYear(Timestamp::GetDate(timestamp_diff));
-		                             auto months = Date::ExtractMonth(Timestamp::GetDate(timestamp_diff));
-		                             auto days = Date::ExtractDay(Timestamp::GetDate(timestamp_diff));
+		                             auto interval = Timestamp::GetDifference(input1, input2);
+		                             auto timestamp = Timestamp::IntervalToTimestamp(interval);
+		                             auto years = timestamp.year;
+		                             auto months = timestamp.month;
+		                             auto days = timestamp.day;
+		                             auto time = interval.time;
 
-		                             auto output = std::to_string(years);
-		                             output += " years ";
-		                             output += std::to_string(months);
-		                             output += " mons ";
-		                             output += std::to_string(days);
-		                             output += " days";
+		                             std::string output{""};
+		                             if (years == 0 && months == 0 && days == 0) {
+			                             output += DEFAULT_TIME;
+		                             } else {
+			                             if (years != 0) {
+				                             output = std::to_string(years);
+				                             output += " years ";
+			                             }
+			                             if (months != 0) {
+				                             output += std::to_string(months);
+				                             output += " mons ";
+			                             }
+			                             if (days != 0) {
+				                             output += std::to_string(days);
+				                             output += " days";
+			                             }
+			                             if (time != 0) {
+				                             output += " ";
+				                             output += Time::ToString(time);
+			                             }
+		                             }
 		                             result_data[result_index] = result.string_heap.AddString(output.c_str());
 	                             });
 }

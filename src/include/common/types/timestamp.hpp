@@ -24,7 +24,7 @@ constexpr const size_t DAYS_PER_MONTH = 30; //! assumes exactly 30 days per mont
 constexpr const size_t HOURS_PER_DAY = 24;  //! assume no daylight savings time changes
 constexpr const size_t STD_TIMESTAMP_LENGTH = 19;
 constexpr const size_t MAX_TIMESTAMP_LENGTH = 23;
-constexpr const char *DEFAULT_TIME = " 00:00:00";
+constexpr const char *DEFAULT_TIME = "00:00:00";
 
 /*
  *	This doesn't adjust for uneven daylight savings time intervals or leap
@@ -36,10 +36,10 @@ constexpr const size_t SECS_PER_DAY = 86400;
 constexpr const size_t SECS_PER_HOUR = 3600;
 constexpr const size_t SECS_PER_MINUTE = 60;
 constexpr const size_t MINS_PER_H = 60;
-constexpr const int64_t USECS_PER_DAY = 86400000000;
-constexpr const int64_t USECS_PER_HOUR = 3600000000;
-constexpr const int64_t USECS_PER_MINUTE = 60000000;
-constexpr const int64_t USECS_PER_SEC = 1000000;
+constexpr const int64_t MSECS_PER_DAY = 8640000;
+constexpr const int64_t MSECS_PER_HOUR = 360000;
+constexpr const int64_t MSECS_PER_MINUTE = 60000;
+constexpr const int64_t MSECS_PER_SEC = 1000;
 
 // Used to check amount of days per month in common year and leap year
 constexpr int days_per_month[2][13] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 0},
@@ -54,7 +54,16 @@ struct Interval {
 	int32_t months; //! months after time for alignment
 };
 
-//! The Date class is a static class that holds helper functions for the Timestamp
+struct timestamp_struct {
+	int16_t year;
+	int8_t month;
+	int8_t day;
+	int8_t hour;
+	int8_t min;
+	int8_t sec;
+	int16_t msec;
+};
+//! The Timestamp class is a static class that holds helper functions for the Timestamp
 //! type.
 class Timestamp {
 public:
@@ -73,6 +82,8 @@ public:
 	//! Returns current timestamp
 	static timestamp_t GetCurrentTimestamp();
 	//! Gets the timestamp which correspondes to the difference between the given ones
-	static timestamp_t GetDifference(timestamp_t timestamp_a, timestamp_t timestamp_b);
+	static Interval GetDifference(timestamp_t timestamp_a, timestamp_t timestamp_b);
+
+	static timestamp_struct IntervalToTimestamp(Interval &interval);
 };
 } // namespace duckdb

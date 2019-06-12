@@ -8,8 +8,14 @@
 
 #pragma once
 
+#include "common/exception.hpp"
 #include "common/types/data_chunk.hpp"
+#include "common/types/date.hpp"
+#include "common/types/time.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 #include "function/function.hpp"
+
+#include <string.h>
 
 namespace duckdb {
 

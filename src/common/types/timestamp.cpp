@@ -24,6 +24,7 @@ timestamp_t Timestamp::FromString(string str) {
 
 	// In case we have only date we add a default time
 	if (str.size() == 10) {
+		str += " ";
 		str += DEFAULT_TIME;
 	}
 	// Character length	19 positions minimum to 23 maximum
@@ -73,7 +74,7 @@ timestamp_t Timestamp::GetCurrentTimestamp() {
 	return Timestamp::FromString(ss.str());
 }
 
-timestamp_t Timestamp::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2) {
+Interval Timestamp::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2) {
 	// First extract the dates
 	auto date1 = GetDate(timestamp_1);
 	auto date2 = GetDate(timestamp_2);
@@ -90,6 +91,11 @@ timestamp_t Timestamp::GetDifference(timestamp_t timestamp_1, timestamp_t timest
 	// Now we extract the time
 	auto time1 = GetTime(timestamp_1);
 	auto time2 = GetTime(timestamp_2);
+
+	// In case time is not specified we do not show it in the output
+	if (timestamp_2 == GetCurrentTimestamp() && time1 == 0) {
+		time2 = time1;
+	}
 
 	// and from time extract hours, minutes, seconds and miliseconds
 	int32_t hour1, min1, sec1, msec1;
@@ -114,7 +120,7 @@ timestamp_t Timestamp::GetDifference(timestamp_t timestamp_1, timestamp_t timest
 	}
 	// now propagate any negative field into the next higher field
 	while (msec_diff < 0) {
-		msec_diff += USECS_PER_SEC;
+		msec_diff += MSECS_PER_SEC;
 		sec_diff--;
 	}
 	while (sec_diff < 0) {
@@ -142,8 +148,57 @@ timestamp_t Timestamp::GetDifference(timestamp_t timestamp_1, timestamp_t timest
 		month_diff += MONTHS_PER_YEAR;
 		year_diff--;
 	}
+	// recover sign if necessary
+	if (timestamp_1 < timestamp_2) {
+		year_diff = -year_diff;
+		month_diff = -month_diff;
+		day_diff = -day_diff;
+		hour_diff = -hour_diff;
+		min_diff = -min_diff;
+		sec_diff = -sec_diff;
+		msec_diff = -msec_diff;
+	}
+	Interval interval;
+	interval.months = year_diff * MONTHS_PER_YEAR + month_diff;
+	interval.days = day_diff;
+	interval.time =
+	    ((((((hour_diff * MINS_PER_H) + min_diff) * SECS_PER_MINUTE) + sec_diff) * MSECS_PER_SEC) + msec_diff);
 
-	auto date_diff = Date::FromDate(year_diff, month_diff, day_diff);
-	auto time_diff = Time::FromTime(hour_diff, min_diff, sec_diff, msec_diff);
-	return FromDatetime(date_diff, time_diff);
+	return interval;
+}
+
+timestamp_struct Timestamp::IntervalToTimestamp(Interval &interval) {
+
+	timestamp_struct timestamp;
+
+	if (interval.months != 0) {
+		timestamp.year = interval.months / MONTHS_PER_YEAR;
+		timestamp.month = interval.months % MONTHS_PER_YEAR;
+
+	} else {
+		timestamp.year = 0;
+		timestamp.month = 0;
+	}
+	timestamp.day = interval.days;
+	auto time = interval.time;
+
+	timestamp.hour = time / MSECS_PER_HOUR;
+	time -= timestamp.hour * MSECS_PER_HOUR;
+	timestamp.min = time / MSECS_PER_MINUTE;
+	time -= timestamp.min * MSECS_PER_MINUTE;
+	timestamp.sec = time / MSECS_PER_SEC;
+	timestamp.msec = time - (timestamp.sec * MSECS_PER_SEC);
+	return timestamp;
+}
+
+Interval TimestampToInterval(timestamp_struct *timestamp) {
+	Interval interval;
+
+	interval.months = timestamp->year * MONTHS_PER_YEAR + timestamp->month;
+	interval.days = timestamp->day;
+	interval.time =
+	    ((((((timestamp->hour * MINS_PER_H) + timestamp->min) * SECS_PER_MINUTE) + timestamp->sec) * MSECS_PER_SEC) +
+	     timestamp->msec);
+
+	return interval;
 }
