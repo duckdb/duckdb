@@ -252,3 +252,49 @@ TEST_CASE("Test appending the same value many times to a primary key column", "[
 	REQUIRE(CHECK_COLUMN(result, 0, {100}));
 	REQUIRE(CHECK_COLUMN(result, 1, {100}));
 }
+
+TEST_CASE("PRIMARY KEY and concurency conflicts", "[constraints]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
+
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
+
+	// con starts a transaction and modifies the second value
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=4 WHERE i=2"));
+
+	// now con2 starts a transaction
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
+	// it can't update the second value
+	REQUIRE_FAIL(con2.Query("UPDATE integers SET i=4 WHERE i=2"));
+	REQUIRE_FAIL(con2.Query("UPDATE integers SET i=5 WHERE i=2"));
+	// nor can it delete it
+	REQUIRE_FAIL(con2.Query("DELETE FROM integers WHERE i=2"));
+
+	// we tried to set i=5 in con2 but it failed, we can set it in con1 now though
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=5 WHERE i=3"));
+	// rollback con1
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+
+	// now we can performt he changes in con2
+	REQUIRE_NO_FAIL(con2.Query("UPDATE integers SET i=4 WHERE i=2"));
+	REQUIRE_NO_FAIL(con2.Query("UPDATE integers SET i=5 WHERE i=3"));
+
+	// check the results, con1 still gets the old results
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	result = con2.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 4, 5}));
+
+	// now commit
+	REQUIRE_NO_FAIL(con2.Query("COMMIT"));
+
+	// check the results again, both get the same (new) results now
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 4, 5}));
+	result = con2.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 4, 5}));
+}
