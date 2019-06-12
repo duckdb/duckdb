@@ -26,10 +26,32 @@ constexpr const size_t STD_TIMESTAMP_LENGTH = 19;
 constexpr const size_t MAX_TIMESTAMP_LENGTH = 23;
 constexpr const char *DEFAULT_TIME = " 00:00:00";
 
+/*
+ *	This doesn't adjust for uneven daylight savings time intervals or leap
+ *	seconds, and it crudely estimates leap years.  A more accurate value
+ *	for days per years is 365.2422.
+ */
+constexpr const size_t SECS_PER_YEAR = (36525 * 864); /* avoid floating-point computation */
+constexpr const size_t SECS_PER_DAY = 86400;
+constexpr const size_t SECS_PER_HOUR = 3600;
+constexpr const size_t SECS_PER_MINUTE = 60;
+constexpr const size_t MINS_PER_H = 60;
+constexpr const int64_t USECS_PER_DAY = 86400000000;
+constexpr const int64_t USECS_PER_HOUR = 3600000000;
+constexpr const int64_t USECS_PER_MINUTE = 60000000;
+constexpr const int64_t USECS_PER_SEC = 1000000;
+
+// Used to check amount of days per month in common year and leap year
+constexpr int days_per_month[2][13] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 0},
+                                       {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 0}};
+constexpr bool isleap(int16_t year) {
+	return (((year) % 4) == 0 && (((year) % 100) != 0 || ((year) % 400) == 0));
+}
+
 struct Interval {
 	int64_t time;
-	int32_t day;   //! days, after time for alignment
-	int32_t month; //! months after time for alignment
+	int32_t days;   //! days, after time for alignment
+	int32_t months; //! months after time for alignment
 };
 
 //! The Date class is a static class that holds helper functions for the Timestamp

@@ -27,7 +27,7 @@ timestamp_t Timestamp::FromString(string str) {
 		str += DEFAULT_TIME;
 	}
 	// Character length	19 positions minimum to 23 maximum
-	if (str.size() < STD_TIMESTAMP_LENGTH || str.size() > MAX_TIMESTAMP_LENGTH) {
+	if (str.size() < STD_TIMESTAMP_LENGTH) {
 		throw ConversionException("timestamp field value out of range: \"%s\", "
 		                          "expected format is (YYYY-MM-DD hh:mm:ss)",
 		                          str.c_str());
@@ -83,9 +83,9 @@ timestamp_t Timestamp::GetDifference(timestamp_t timestamp_1, timestamp_t timest
 	Date::Convert(date1, year1, month1, day1);
 	Date::Convert(date2, year2, month2, day2);
 	// finally perform the differences
-	auto year_diff = year2 - year1;
-	auto month_diff = month2 - month2;
-	auto day_diff = day2 - day1;
+	auto year_diff = year1 - year2;
+	auto month_diff = month1 - month2;
+	auto day_diff = day1 - day2;
 
 	// Now we extract the time
 	auto time1 = GetTime(timestamp_1);
@@ -97,13 +97,13 @@ timestamp_t Timestamp::GetDifference(timestamp_t timestamp_1, timestamp_t timest
 	Time::Convert(time1, hour1, min1, sec1, msec1);
 	Time::Convert(time2, hour2, min2, sec2, msec2);
 	// finally perform the differences
-	hour_diff = hour2 - hour1;
-	min_diff = min2 - min1;
-	sec_diff = sec2 - sec1;
-	msec_diff = msec2 - msec1;
+	auto hour_diff = hour1 - hour2;
+	auto min_diff = min2 - min2;
+	auto sec_diff = sec2 - sec2;
+	auto msec_diff = msec2 - msec2;
 
 	// flip sign if necessary
-	if (timestamp_2 < timestamp_1) {
+	if (timestamp_1 < timestamp_2) {
 		year_diff = -year_diff;
 		month_diff = -month_diff;
 		day_diff = -day_diff;
@@ -113,8 +113,37 @@ timestamp_t Timestamp::GetDifference(timestamp_t timestamp_1, timestamp_t timest
 		msec_diff = -msec_diff;
 	}
 	// now propagate any negative field into the next higher field
+	while (msec_diff < 0) {
+		msec_diff += USECS_PER_SEC;
+		sec_diff--;
+	}
+	while (sec_diff < 0) {
+		sec_diff += SECS_PER_MINUTE;
+		min_diff--;
+	}
+	while (min_diff < 0) {
+		min_diff += MINS_PER_H;
+		hour_diff--;
+	}
+	while (hour_diff < 0) {
+		hour_diff += HOURS_PER_DAY;
+		day_diff--;
+	}
+	while (day_diff < 0) {
+		if (timestamp_1 < timestamp_2) {
+			day_diff += days_per_month[isleap(year1)][month1 - 1];
+			month_diff--;
+		} else {
+			day_diff += days_per_month[isleap(year2)][month2 - 1];
+			month_diff--;
+		}
+	}
+	while (month_diff < 0) {
+		month_diff += MONTHS_PER_YEAR;
+		year_diff--;
+	}
 
-	auto date_diff = date_b - date_a;
-	auto time_diff = time_b - time_a;
+	auto date_diff = Date::FromDate(year_diff, month_diff, day_diff);
+	auto time_diff = Time::FromTime(hour_diff, min_diff, sec_diff, msec_diff);
 	return FromDatetime(date_diff, time_diff);
 }

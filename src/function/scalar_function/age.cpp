@@ -53,7 +53,7 @@ void age_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count
 		                             output += " mons ";
 		                             output += std::to_string(days);
 		                             output += " days";
-		                             result_data[result_index] = output.c_str();
+		                             result_data[result_index] = result.string_heap.AddString(output.c_str());
 	                             });
 }
 
