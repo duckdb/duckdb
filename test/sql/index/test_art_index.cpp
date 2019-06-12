@@ -591,6 +591,56 @@ TEST_CASE("Test ART index with negative values and big values", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {7}));
 }
 
+TEST_CASE("Test ART with different Integer Types", "[art]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i TINYINT, j SMALLINT, k INTEGER, l BIGINT)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index1 ON integers(i)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index2 ON integers(j)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index3 ON integers(k)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index4 ON integers(l)"));
+
+	// query the empty indices first
+	result = con.Query("SELECT i FROM integers WHERE i > 0");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT j FROM integers WHERE j < 0");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT k FROM integers WHERE k >= 0");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT l FROM integers WHERE l <= 0");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+
+	// now insert the values [1..5] in all columns
+	auto prepare = con.Prepare("INSERT INTO integers VALUES ($1, $2, $3, $4)");
+	for(int32_t i = 1; i <= 5; i++) {
+		REQUIRE_NO_FAIL(prepare->Execute(i, i, i, i));
+	}
+	prepare.reset();
+
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3, 4, 5}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3, 4, 5}));
+	REQUIRE(CHECK_COLUMN(result, 3, {1, 2, 3, 4, 5}));
+
+	result = con.Query("SELECT i FROM integers WHERE i > 0::TINYINT ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5}));
+	result = con.Query("SELECT j FROM integers WHERE j <= 2::SMALLINT ORDER BY j");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	result = con.Query("SELECT k FROM integers WHERE k >= -100000::INTEGER ORDER BY k");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5}));
+	result = con.Query("SELECT k FROM integers WHERE k >= 100000::INTEGER ORDER BY k");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT k FROM integers WHERE k >= 100000::INTEGER AND k <= 100001::INTEGER ORDER BY k");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT l FROM integers WHERE l <= 1000000000::BIGINT ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5}));
+	result = con.Query("SELECT l FROM integers WHERE l <= -1000000000::BIGINT ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+}
+
 TEST_CASE("ART Integer Types", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -599,7 +649,7 @@ TEST_CASE("ART Integer Types", "[art]") {
 
 	string int_types[4] = {"tinyint", "smallint", "integer", "bigint"};
 	index_t n_sizes[4] = {100, 1000, 1000, 1000};
-	for (index_t idx = 2; idx < 4; idx++) {
+	for (index_t idx = 0; idx < 4; idx++) {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i " + int_types[idx] + ")"));
 		REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 
@@ -936,9 +986,10 @@ TEST_CASE("ART Node 48", "[art]") {
 	for (index_t i = 0; i < n; i++) {
 		keys[i] = i + 1;
 	}
-
+	int64_t expected_sum = 0;
 	for (index_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", keys[i]));
+		expected_sum += keys[i];
 	}
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 	for (index_t i = 0; i < n; i++) {
@@ -949,9 +1000,24 @@ TEST_CASE("ART Node 48", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(3)}));
 	result = con.Query("SELECT sum(i) FROM integers WHERE i > 15");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(16+17+18+19+20)}));
-	// Now Deleting all elements
+
+	// delete an element and reinsert it
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=16"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (16)"));
+
+	// query again
+	result = con.Query("SELECT sum(i) FROM integers WHERE i <=2");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(3)}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i > 15");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(16+17+18+19+20)}));
+
+	// Now delete all elements
 	for (index_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=$1", keys[i]));
+		expected_sum -= keys[i];
+		// verify the sum
+		result = con.Query("SELECT sum(i) FROM integers WHERE i > 0");
+		REQUIRE(CHECK_COLUMN(result, 0, {expected_sum == 0 ? Value() : Value::BIGINT(expected_sum)}));
 	}
 	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));

@@ -38,9 +38,10 @@ TEST_CASE("Single UNIQUE constraint", "[constraints]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 3, 77}));
 	REQUIRE(CHECK_COLUMN(result, 1, {7, 5, 4, 6}));
 
-	for(index_t i = 0; i < 1000; i++) {
+	for(index_t i = 0; i < 10; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (NULL, 6), (NULL, 7)"));
 	}
+	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES (NULL, 6), (3, 7)"));
 
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 }

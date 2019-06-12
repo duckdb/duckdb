@@ -491,7 +491,7 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 				return IteratorNext(it);
 			} else {
 				// Greater
-				top.pos = 0;
+				top.pos = INVALID_INDEX;
 				return IteratorNext(it);
 			}
 		}
