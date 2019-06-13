@@ -27,19 +27,20 @@ static void WriteQuotedString(ofstream &to_csv, string str, char delimiter, char
 	}
 }
 
-void PhysicalCopy::Flush(ClientContext &context, DataChunk &parse_chunk, DataChunk &insert_chunk, count_t &nr_elements, count_t &total,
-                         vector<bool> &set_to_default) {
+void PhysicalCopy::Flush(ClientContext &context, DataChunk &parse_chunk, DataChunk &insert_chunk, count_t &nr_elements,
+                         count_t &total, vector<bool> &set_to_default) {
 	if (nr_elements == 0) {
 		return;
 	}
 	// convert the columns in the parsed chunk to the types of the table
 	insert_chunk.Reset();
-	for(index_t i = 0; i < column_oids.size(); i++) {
+	for (index_t i = 0; i < column_oids.size(); i++) {
 		index_t column_idx = column_oids[i];
 		if (table->columns[column_idx].type.id == SQLTypeId::VARCHAR) {
 			parse_chunk.data[column_idx].Move(insert_chunk.data[column_idx]);
 		} else {
-			VectorOperations::Cast(parse_chunk.data[column_idx], insert_chunk.data[column_idx], SQLType(SQLTypeId::VARCHAR), table->columns[column_idx].type);
+			VectorOperations::Cast(parse_chunk.data[column_idx], insert_chunk.data[column_idx],
+			                       SQLType(SQLTypeId::VARCHAR), table->columns[column_idx].type);
 		}
 	}
 	parse_chunk.Reset();
@@ -78,7 +79,7 @@ void PhysicalCopy::PushValue(string &line, DataChunk &insert_chunk, index_t star
 	if (length == 0) {
 		insert_chunk.data[column_entry].nullmask[row_entry] = true;
 	}
-	auto data = (const char**) insert_chunk.data[column_entry].data;
+	auto data = (const char **)insert_chunk.data[column_entry].data;
 	data[row_entry] = line.c_str() + start;
 	line[start + length] = '\0';
 	// move to the next column
@@ -98,7 +99,7 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 		auto types = table->GetTypes();
 		insert_chunk.Initialize(types);
 		// initialize the parse chunk with VARCHAR data
-		for(index_t i = 0; i < types.size(); i++) {
+		for (index_t i = 0; i < types.size(); i++) {
 			types[i] = TypeId::VARCHAR;
 		}
 		parse_chunk.Initialize(types);
@@ -111,7 +112,7 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 				set_to_default[column.oid] = false;
 			}
 		} else {
-			for(index_t i = 0; i < types.size(); i++) {
+			for (index_t i = 0; i < types.size(); i++) {
 				column_oids.push_back(i);
 			}
 		}
@@ -193,8 +194,8 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 				throw ParserException("Error on line %lld: unterminated quotes", linenr);
 			}
 			if (column < column_oids.size()) {
-				throw ParserException("Error on line %lld: expected %lld values but got %d", linenr,
-				                      column_oids.size(), column);
+				throw ParserException("Error on line %lld: expected %lld values but got %d", linenr, column_oids.size(),
+				                      column);
 			}
 			nr_elements++;
 			if (nr_elements == STANDARD_VECTOR_SIZE) {

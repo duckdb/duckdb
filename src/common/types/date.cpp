@@ -108,8 +108,8 @@ date_t Date::FromCString(const char *buf) {
 
 	if (yearneg == 0 && !std::isdigit(buf[0])) {
 		throw ConversionException("date/time field value out of range: \"%s\", "
-								"expected format is (YYYY-MM-DD)",
-								buf);
+		                          "expected format is (YYYY-MM-DD)",
+		                          buf);
 	} else {
 		for (pos = yearneg; std::isdigit(buf[pos]); pos++) {
 			year = (buf[pos] - '0') + year * 10;
@@ -120,8 +120,8 @@ date_t Date::FromCString(const char *buf) {
 		sep = buf[pos++];
 		if (sep != '-') {
 			throw ConversionException("date/time field value out of range: \"%s\", "
-									"expected format is (YYYY-MM-DD)",
-									buf);
+			                          "expected format is (YYYY-MM-DD)",
+			                          buf);
 		}
 		sep = LOWER(sep);
 		if (sep >= 'a' && sep <= 'z') {
@@ -132,8 +132,8 @@ date_t Date::FromCString(const char *buf) {
 			}
 		} else if (sep != '-' && sep != '/' && sep != '\\') {
 			throw ConversionException("date/time field value out of range: \"%s\", "
-									"expected format is (YYYY-MM-DD)",
-									buf);
+			                          "expected format is (YYYY-MM-DD)",
+			                          buf);
 		}
 	}
 	if (std::isdigit(buf[pos])) {

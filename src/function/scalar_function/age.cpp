@@ -23,7 +23,7 @@ void age_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count
 	assert(input2.type == TypeId::BIGINT);
 
 	result.Initialize(TypeId::VARCHAR);
-	result.nullmask = input1.nullmask;
+	result.nullmask = input1.nullmask | input2.nullmask;
 	result.count = input1.count;
 	result.sel_vector = input1.sel_vector;
 
@@ -33,43 +33,43 @@ void age_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count
 
 	VectorOperations::BinaryExec(input1, input2, result,
 	                             [&](index_t input1_index, index_t input2_index, index_t result_index) {
+		                             // One of them is NULL
+		                             if (result.nullmask[result_index]) {
+			                             return;
+		                             }
 		                             auto input1 = input1_data[input1_index];
 		                             auto input2 = input2_data[input2_index];
-		                             // One of them is NULL
-		                             if (input1 < 0 || input2 < 0) {
-			                             result.SetNull(result_index, true);
+
+		                             auto interval = Timestamp::GetDifference(input1, input2);
+		                             auto timestamp = Timestamp::IntervalToTimestamp(interval);
+		                             auto years = timestamp.year;
+		                             auto months = timestamp.month;
+		                             auto days = timestamp.day;
+		                             auto time = interval.time;
+
+		                             std::string output{""};
+		                             if (years == 0 && months == 0 && days == 0) {
+			                             output += DEFAULT_TIME;
 		                             } else {
-			                             auto interval = Timestamp::GetDifference(input1, input2);
-			                             auto timestamp = Timestamp::IntervalToTimestamp(interval);
-			                             auto years = timestamp.year;
-			                             auto months = timestamp.month;
-			                             auto days = timestamp.day;
-			                             auto time = interval.time;
-
-			                             std::string output{""};
-			                             if (years == 0 && months == 0 && days == 0) {
-				                             output += DEFAULT_TIME;
-			                             } else {
-				                             if (years != 0) {
-					                             output = std::to_string(years);
-					                             output += " years ";
-				                             }
-				                             if (months != 0) {
-					                             output += std::to_string(months);
-					                             output += " mons ";
-				                             }
-				                             if (days != 0) {
-					                             output += std::to_string(days);
-					                             output += " days";
-				                             }
-				                             if (time != 0) {
-					                             output += " ";
-					                             output += Time::ToString(time);
-				                             }
+			                             if (years != 0) {
+				                             output = std::to_string(years);
+				                             output += " years ";
 			                             }
-
-			                             result_data[result_index] = result.string_heap.AddString(output.c_str());
+			                             if (months != 0) {
+				                             output += std::to_string(months);
+				                             output += " mons ";
+			                             }
+			                             if (days != 0) {
+				                             output += std::to_string(days);
+				                             output += " days";
+			                             }
+			                             if (time != 0) {
+				                             output += " ";
+				                             output += Time::ToString(time);
+			                             }
 		                             }
+
+		                             result_data[result_index] = result.string_heap.AddString(output.c_str());
 	                             });
 }
 

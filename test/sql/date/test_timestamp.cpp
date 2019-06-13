@@ -218,7 +218,7 @@ TEST_CASE("Test timestamp functions", "[timestamp]") {
 	    {{"43 years 9 mons 27 days"}, {"8 days"}, {"3 mons 24 days"}, {"00:00:00"}, {Value()}, {Value()}, {Value()}}));
 
 	result = con.Query("SELECT AGE(t1, t2) FROM timestamp WHERE t1 > '2001-12-12';");
-	REQUIRE(CHECK_COLUMN(result, 0, {"43 years 9 mons 27 days"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {{"8 days"}, {"3 mons 24 days"}, {"00:00:00"}, {Value()}}));
 
 	// Test NULLS
 	REQUIRE_FAIL(con.Query("SELECT AGE(NULL, NULL);"));
