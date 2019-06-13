@@ -1,6 +1,7 @@
 #include "execution/operator/persistent/physical_copy.hpp"
 
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 #include "common/file_system.hpp"
 #include "common/gzip_stream.hpp"
 #include "main/client_context.hpp"
@@ -26,64 +27,60 @@ static void WriteQuotedString(ofstream &to_csv, string str, char delimiter, char
 	}
 }
 
-void PhysicalCopy::Flush(ClientContext &context, DataChunk &chunk, count_t &nr_elements, count_t &total,
+void PhysicalCopy::Flush(ClientContext &context, DataChunk &parse_chunk, DataChunk &insert_chunk, count_t &nr_elements, count_t &total,
                          vector<bool> &set_to_default) {
 	if (nr_elements == 0) {
 		return;
 	}
+	// convert the columns in the parsed chunk to the types of the table
+	insert_chunk.Reset();
+	for(index_t i = 0; i < column_oids.size(); i++) {
+		index_t column_idx = column_oids[i];
+		if (table->columns[column_idx].type.id == SQLTypeId::VARCHAR) {
+			parse_chunk.data[column_idx].Move(insert_chunk.data[column_idx]);
+		} else {
+			VectorOperations::Cast(parse_chunk.data[column_idx], insert_chunk.data[column_idx], SQLType(SQLTypeId::VARCHAR), table->columns[column_idx].type);
+		}
+	}
+	parse_chunk.Reset();
+
 	if (set_to_default.size() > 0) {
-		assert(set_to_default.size() == chunk.column_count);
+		assert(set_to_default.size() == insert_chunk.column_count);
 		for (index_t i = 0; i < set_to_default.size(); i++) {
 			if (set_to_default[i]) {
-				chunk.data[i].count = nr_elements;
-				chunk.data[i].nullmask.set();
+				insert_chunk.data[i].count = nr_elements;
+				insert_chunk.data[i].nullmask.set();
 			}
 		}
 	}
+	// now insert the chunk into the storage
 	total += nr_elements;
-	table->storage->Append(*table, context, chunk);
-	chunk.Reset();
+	table->storage->Append(*table, context, insert_chunk);
 	nr_elements = 0;
 }
 
 void PhysicalCopy::PushValue(string &line, DataChunk &insert_chunk, index_t start, index_t end, index_t &column,
                              index_t linenr) {
 	assert(end >= start);
-	count_t expected_column_count = info->select_list.size() > 0 ? info->select_list.size() : insert_chunk.column_count;
 	count_t length = end - start;
-	if (column == expected_column_count && length == 0) {
+	if (column == column_oids.size() && length == 0) {
 		// skip a single trailing delimiter
 		column++;
 		return;
 	}
-	if (column >= expected_column_count) {
-		throw ParserException("Error on line %lld: expected %lld values but got %d", linenr, expected_column_count,
+	if (column >= column_oids.size()) {
+		throw ParserException("Error on line %lld: expected %lld values but got %d", linenr, column_oids.size(),
 		                      column + 1);
 	}
-	// delimiter, get the value
-	Value result;
-	if (length > 0) {
-		// non-empty: create the value
-		result = Value(line.substr(start, length));
+	// insert the line number into the chunk
+	index_t column_entry = column_oids[column];
+	index_t row_entry = insert_chunk.data[column_entry].count++;
+	if (length == 0) {
+		insert_chunk.data[column_entry].nullmask[row_entry] = true;
 	}
-
-	auto target_sqltype = table->columns[column].type;
-	switch (target_sqltype.id) {
-	case SQLTypeId::DATE:
-	case SQLTypeId::TIMESTAMP:
-		if (!result.is_null) {
-			result = result.CastAs(SQLType(SQLTypeId::VARCHAR), target_sqltype);
-		}
-		break;
-	default:
-		// nop
-		break;
-	}
-
-	// insert the value into the column
-	index_t column_entry = info->select_list.size() > 0 ? select_list_oid[column] : column;
-	index_t entry = insert_chunk.data[column_entry].count++;
-	insert_chunk.data[column_entry].SetValue(entry, result);
+	auto data = (const char**) insert_chunk.data[column_entry].data;
+	data[row_entry] = line.c_str() + start;
+	line[start + length] = '\0';
 	// move to the next column
 	column++;
 }
@@ -96,20 +93,29 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 
 	if (table) {
 		assert(info.is_from);
-		DataChunk insert_chunk;
+		DataChunk insert_chunk, parse_chunk;
+		// initialize the insert_chunk with the actual to-be-inserted types
 		auto types = table->GetTypes();
 		insert_chunk.Initialize(types);
+		// initialize the parse chunk with VARCHAR data
+		for(index_t i = 0; i < types.size(); i++) {
+			types[i] = TypeId::VARCHAR;
+		}
+		parse_chunk.Initialize(types);
 		// handle the select list (if any)
 		if (info.select_list.size() > 0) {
 			set_to_default.resize(types.size(), true);
 			for (index_t i = 0; i < info.select_list.size(); i++) {
 				auto &column = table->GetColumn(info.select_list[i]);
-				select_list_oid.push_back(column.oid);
+				column_oids.push_back(column.oid);
 				set_to_default[column.oid] = false;
+			}
+		} else {
+			for(index_t i = 0; i < types.size(); i++) {
+				column_oids.push_back(i);
 			}
 		}
 		index_t linenr = 0;
-		string line;
 
 		if (!context.db.file_system->FileExists(info.file_path)) {
 			throw Exception("File not found");
@@ -123,20 +129,29 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 			csv_local->open(info.file_path);
 			from_csv_stream = move(csv_local);
 		}
+		vector<unique_ptr<string>> lines;
+		string read_line;
 
 		istream &from_csv = *from_csv_stream;
 
 		if (info.header) {
 			// ignore the first line as a header line
-			getline(from_csv, line);
+			getline(from_csv, read_line);
 			linenr++;
 		}
-		while (getline(from_csv, line)) {
+		auto line_to_read = make_unique<string>();
+		while (getline(from_csv, *line_to_read)) {
+			auto &line = *line_to_read;
+			lines.push_back(move(line_to_read));
+			line_to_read = make_unique<string>();
+
+			if (!Value::IsUTF8String(line.c_str())) {
+				throw ParserException("Error on line %lld: file is not valid UTF8", linenr);
+			}
+
 			bool in_quotes = false;
 			index_t start = 0;
 			index_t column = 0;
-			count_t expected_column_count =
-			    info.select_list.size() > 0 ? info.select_list.size() : insert_chunk.column_count;
 			for (index_t i = 0; i < line.size(); i++) {
 				// handle quoting
 				if (line[i] == info.quote) {
@@ -157,7 +172,7 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 						}
 						// offset end by one
 						in_quotes = false;
-						PushValue(line, insert_chunk, start, i, column, linenr);
+						PushValue(line, parse_chunk, start, i, column, linenr);
 						start = i + 2;
 						i++;
 						continue;
@@ -166,28 +181,29 @@ void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 					continue;
 				}
 				if (line[i] == info.delimiter) {
-					PushValue(line, insert_chunk, start, i, column, linenr);
+					PushValue(line, parse_chunk, start, i, column, linenr);
 					start = i + 1;
 				}
 				if (i + 1 >= line.size()) {
-					PushValue(line, insert_chunk, start, i + 1, column, linenr);
+					PushValue(line, parse_chunk, start, i + 1, column, linenr);
 					break;
 				}
 			}
 			if (in_quotes) {
 				throw ParserException("Error on line %lld: unterminated quotes", linenr);
 			}
-			if (column < expected_column_count) {
+			if (column < column_oids.size()) {
 				throw ParserException("Error on line %lld: expected %lld values but got %d", linenr,
-				                      expected_column_count, column);
+				                      column_oids.size(), column);
 			}
 			nr_elements++;
 			if (nr_elements == STANDARD_VECTOR_SIZE) {
-				Flush(context, insert_chunk, nr_elements, total, set_to_default);
+				Flush(context, parse_chunk, insert_chunk, nr_elements, total, set_to_default);
+				lines.clear();
 			}
 			linenr++;
 		}
-		Flush(context, insert_chunk, nr_elements, total, set_to_default);
+		Flush(context, parse_chunk, insert_chunk, nr_elements, total, set_to_default);
 	} else {
 		ofstream to_csv;
 		to_csv.open(info.file_path);
