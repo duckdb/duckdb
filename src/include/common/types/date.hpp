@@ -19,7 +19,7 @@ public:
 	//! Convert a string in the format "YYYY-MM-DD" to a date object
 	static date_t FromString(string str);
 	//! Convert a string in the format "YYYY-MM-DD" to a date object
-	static date_t FromCString(const char* str);
+	static date_t FromCString(const char *str);
 	//! Convert a date object to a string in the format "YYYY-MM-DD"
 	static string ToString(date_t date);
 
