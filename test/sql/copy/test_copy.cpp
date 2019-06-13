@@ -45,7 +45,7 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 
 	result = con.Query("SELECT COUNT(a), SUM(a) FROM test;");
-	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
+ 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 	REQUIRE(CHECK_COLUMN(result, 1, {12497500}));
 
 	result = con.Query("SELECT * FROM test ORDER BY 1 LIMIT 3 ");
@@ -146,6 +146,83 @@ TEST_CASE("Test copy statement with long lines", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {50}));
 }
 
+TEST_CASE("Test copy statement with quotes and newlines", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+
+	// Generate CSV file with quotes and newlines in the quotes
+	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
+	from_csv_file << "\"hello\nworld\",\"5\"" << endl;
+	from_csv_file << "\"what,\n brings, you here\n, today\",\"6\"" << endl;
+	from_csv_file.close();
+
+	// loading CSV into a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR, b INTEGER);"));
+	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+
+	result = con.Query("SELECT SUM(b) FROM test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {11}));
+
+	result = con.Query("SELECT a FROM test ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello\nworld", "what,\n brings, you here\n, today"}));
+
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
+
+	// quotes in the middle of a quoted string are ignored
+	from_csv_file.open(fs.JoinPath(csv_path, "test.csv"));
+	from_csv_file << "\"hello\n\"w\"o\"rld\",\"5\"" << endl;
+	from_csv_file << "\"what,\n brings, you here\n, today\",\"6\"" << endl;
+	from_csv_file.close();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR, b INTEGER);"));
+	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+
+	result = con.Query("SELECT SUM(b) FROM test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {11}));
+	result = con.Query("SELECT a FROM test ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello\n\"w\"o\"rld", "what,\n brings, you here\n, today"}));
+
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
+
+	// unclosed quotes results in failure
+	from_csv_file.open(fs.JoinPath(csv_path, "test.csv"));
+	from_csv_file << "\"hello\nworld\",\"5" << endl;
+	from_csv_file << "\"what,\n brings, you here\n, today\",\"6\"" << endl;
+	from_csv_file.close();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR, b INTEGER);"));
+	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';"));
+}
+
+TEST_CASE("Test copy statement with many empty lines", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+
+	// Generate CSV file with a very long string
+	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
+	from_csv_file << "1\n";
+	for(index_t i = 0; i < 19999; i++) {
+		from_csv_file << "\n";
+	}
+	from_csv_file.close();
+
+	// loading CSV into a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER);"));
+	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {20000}));
+
+	result = con.Query("SELECT SUM(a) FROM test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+}
+
 TEST_CASE("Test line endings", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -202,6 +279,24 @@ TEST_CASE("Test Windows Newlines with a long file", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {Value::BIGINT(5)}));
 	REQUIRE(CHECK_COLUMN(result, 3, {Value::BIGINT(5 * line_count)}));
 	REQUIRE(CHECK_COLUMN(result, 4, {Value::BIGINT(sum_c)}));
+
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
+
+	// generate a csv file with one value and many empty values
+	ofstream from_csv_file_empty(fs.JoinPath(csv_path, "test2.csv"));
+	from_csv_file_empty << 1 << "\r\n";
+	for(index_t i = 0; i < line_count - 1; i++) {
+		from_csv_file_empty << "\r\n";
+	}
+	from_csv_file_empty.close();
+
+	// loading CSV into a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER);"));
+	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test2.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(line_count)}));
+
+	result = con.Query("SELECT SUM(a) FROM test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(1)}));
 }
 
 TEST_CASE("Test lines that exceed the maximum allowed line size", "[copy]") {

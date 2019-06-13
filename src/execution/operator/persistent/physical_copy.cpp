@@ -15,10 +15,6 @@
 using namespace duckdb;
 using namespace std;
 
-static bool end_of_field(char *line, index_t line_size, index_t i, char delimiter) {
-	return i + 1 >= line_size || line[i] == delimiter;
-}
-
 static void WriteQuotedString(ofstream &to_csv, string str, char delimiter, char quote) {
 	if (str.find(delimiter) == string::npos) {
 		to_csv << str;
@@ -27,8 +23,55 @@ static void WriteQuotedString(ofstream &to_csv, string str, char delimiter, char
 	}
 }
 
-void PhysicalCopy::Flush(ClientContext &context, DataChunk &parse_chunk, DataChunk &insert_chunk, count_t &nr_elements,
-                         count_t &total, vector<bool> &set_to_default) {
+static char is_newline(char c) {
+	return c == '\n' || c == '\r';
+}
+
+BufferedCSVReader::BufferedCSVReader(PhysicalCopy &copy, istream &source) :
+	copy(copy), source(source), buffer_size(0), position(0) {}
+
+void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column) {
+	if (column == column_oids.size() && length == 0) {
+		// skip a single trailing delimiter
+		column++;
+		return;
+	}
+	if (column >= column_oids.size()) {
+		throw ParserException("Error on line %lld: expected %lld values but got %d", linenr, column_oids.size(),
+		                      column + 1);
+	}
+	// insert the line number into the chunk
+	index_t column_entry = column_oids[column];
+	index_t row_entry = parse_chunk.data[column_entry].count++;
+	if (length == 0) {
+		parse_chunk.data[column_entry].nullmask[row_entry] = true;
+	} else {
+		auto data = (const char **)parse_chunk.data[column_entry].data;
+		data[row_entry] = str_val;
+		str_val[length] = '\0';
+		if (!Value::IsUTF8String(str_val)) {
+			throw ParserException("Error on line %lld: file is not valid UTF8", linenr);
+		}
+	}
+	// move to the next column
+	column++;
+}
+
+void BufferedCSVReader::AddRow(ClientContext &context, index_t &column) {
+	if (column < column_oids.size()) {
+		throw ParserException("Error on line %lld: expected %lld values but got %d", linenr, column_oids.size(),
+								column);
+	}
+	nr_elements++;
+	if (nr_elements == STANDARD_VECTOR_SIZE) {
+		Flush(context);
+		cached_buffers.clear();
+	}
+	column = 0;
+	linenr++;
+}
+
+void BufferedCSVReader::Flush(ClientContext &context) {
 	if (nr_elements == 0) {
 		return;
 	}
@@ -36,11 +79,11 @@ void PhysicalCopy::Flush(ClientContext &context, DataChunk &parse_chunk, DataChu
 	insert_chunk.Reset();
 	for (index_t i = 0; i < column_oids.size(); i++) {
 		index_t column_idx = column_oids[i];
-		if (table->columns[column_idx].type.id == SQLTypeId::VARCHAR) {
+		if (copy.table->columns[column_idx].type.id == SQLTypeId::VARCHAR) {
 			parse_chunk.data[column_idx].Move(insert_chunk.data[column_idx]);
 		} else {
 			VectorOperations::Cast(parse_chunk.data[column_idx], insert_chunk.data[column_idx],
-			                       SQLType(SQLTypeId::VARCHAR), table->columns[column_idx].type);
+			                       SQLType(SQLTypeId::VARCHAR), copy.table->columns[column_idx].type);
 		}
 	}
 	parse_chunk.Reset();
@@ -56,274 +99,173 @@ void PhysicalCopy::Flush(ClientContext &context, DataChunk &parse_chunk, DataChu
 	}
 	// now insert the chunk into the storage
 	total += nr_elements;
-	table->storage->Append(*table, context, insert_chunk);
+	copy.table->storage->Append(*copy.table, context, insert_chunk);
 	nr_elements = 0;
 }
 
-void PhysicalCopy::PushValue(char *line, DataChunk &insert_chunk, index_t start, index_t end, index_t &column,
-                             index_t linenr) {
-	assert(end >= start);
-	count_t length = end - start;
-	if (column == column_oids.size() && length == 0) {
-		// skip a single trailing delimiter
-		column++;
-		return;
+void BufferedCSVReader::ParseCSV(ClientContext &context) {
+	auto &info = *copy.info;
+	if (info.header) {
+		// ignore the first line as a header line
+		string read_line;
+		getline(source, read_line);
+		linenr++;
 	}
-	if (column >= column_oids.size()) {
-		throw ParserException("Error on line %lld: expected %lld values but got %d", linenr, column_oids.size(),
-		                      column + 1);
-	}
-	// insert the line number into the chunk
-	index_t column_entry = column_oids[column];
-	index_t row_entry = insert_chunk.data[column_entry].count++;
-	if (length == 0) {
-		insert_chunk.data[column_entry].nullmask[row_entry] = true;
-	}
-	auto data = (const char **)insert_chunk.data[column_entry].data;
-	data[row_entry] = line + start;
-	line[start + length] = '\0';
-	// move to the next column
-	column++;
-}
 
-static char is_newline(char c) {
-	return c == '\n' || c == '\r';
-}
+	index_t start = 0;
+	index_t column = 0;
+	index_t offset = 0;
+	bool in_quotes = false;
 
-static void skip_newline(char *buffer, index_t &position) {
-	if (buffer[position] == '\r' && buffer[position + 1] == '\n') {
-		// skip \r\n
-		buffer[position] = '\0';
-		position += 2;
-	} else {
-		buffer[position] = '\0';
-		// skip the newline
-		position += 1;
-	}
-}
-
-class BufferedLineReader {
-	static constexpr index_t INITIAL_BUFFER_SIZE = 16384;
-	constexpr static index_t MAXIMUM_CSV_LINE_SIZE = 1048576;
-public:
-	BufferedLineReader(istream &source) :
-		source(source), buffer_size(0), position(0) {}
-
-	char* ReadLine(index_t &size) {
-		if (position >= buffer_size) {
-			if (!ReadBuffer()) {
-				return nullptr;
-			}
+	if (position >= buffer_size) {
+		if (!ReadBuffer(start)) {
+			return;
 		}
-		index_t start_position = position;
-		// read until we encounter a newline character
-		while(!is_newline(buffer[position])) {
-			position++;
-			if (position >= buffer_size) {
-				// we ran out of buffer! read a new buffer
-				// allocate space to hold the line that crosses the buffers
-				index_t current_pos = position - start_position;
-				index_t current_size = 1024;
-				while(current_pos >= current_size) {
-					current_size *= 2;
+	}
+
+	// read until we exhaust the stream
+	while(true) {
+		if (in_quotes) {
+			if (buffer[position] == info.quote) {
+				// end quote
+				offset = 1;
+				in_quotes = false;
+			}
+		} else {
+			if (buffer[position] == info.quote) {
+				// start quotes can only occur at the start of a field
+				if (position == start) {
+					// increment start by 1
+					start++;
+					// read until we encounter a quote again
+					in_quotes = true;
 				}
-				auto current_buffer = unique_ptr<char[]>(new char[current_size]);
-				// now copy the current set of data
-				memcpy(current_buffer.get(), buffer.get() + start_position, current_pos);
-				while(true) {
-					// read a new buffer
-					if (!ReadBuffer()) {
-						return nullptr;
-					}
-					// read until we encounter a newline character
-					index_t i = 0;
-					while(i < buffer_size && !is_newline(buffer[i])) {
-						i++;
-					}
-					if (i == buffer_size) {
-						// ran out of buffer without finding a newline character, append to current_buffer
-						if (current_pos + buffer_size >= current_size) {
-							// cannot fit in current line buffer
-							// allocate a new buffer and copy data to new buffer
-							while(current_pos + buffer_size >= current_size) {
-								current_size *= 2;
-							}
-							if (current_size > MAXIMUM_CSV_LINE_SIZE) {
-								throw ParserException("Maximum line size of %llu bytes exceeded!", MAXIMUM_CSV_LINE_SIZE);
-							}
-							auto new_buffer = unique_ptr<char[]>(new char[current_size]);
-							memcpy(new_buffer.get(), current_buffer.get(), current_pos);
-							current_buffer = move(new_buffer);
+			} else if (buffer[position] == info.delimiter) {
+				// encountered delimiter
+				AddValue(buffer.get() + start, position - start - offset, column);
+				start = position + 1;
+				offset = 0;
+			}
+			if (is_newline(buffer[position]) || (source.eof() && position + 1 == buffer_size)) {
+				char newline = buffer[position];
+				// encountered a newline, add the current value and push the row
+				AddValue(buffer.get() + start, position - start - offset, column);
+				AddRow(context, column);
+				// move to the next character
+				start = position + 1;
+				offset = 0;
+				if (newline == '\r') {
+					// \r, skip subsequent \n
+					if (position + 1 >= buffer_size) {
+						if (!ReadBuffer(start)) {
+							break;
 						}
-						// copy to the current buffer
-						memcpy(current_buffer.get() + current_pos, buffer.get(), buffer_size);
-						current_pos += buffer_size;
-					} else {
-						// found a newline character, copy remainder
-						memcpy(current_buffer.get() + current_pos, buffer.get(), i);
-						current_pos += i;
-						current_buffer[current_pos] = '\0';
-						// get the line and set the line size
-						auto line = current_buffer.get();
-						size = current_pos;
-						// add the line to the set of cached buffers
-						cached_buffers.push_back(move(current_buffer));
-						// finally set position for the next line
-						position = i;
-						skip_newline(buffer.get(), position);
-						return line;
+						if (buffer[position] == '\n') {
+							start++;
+							position++;
+						}
+						continue;
+					}
+					if (buffer[position + 1] == '\n') {
+						start++;
+						position++;
 					}
 				}
 			}
+			if (offset != 0) {
+				in_quotes = true;
+			}
 		}
-		size = position - start_position;
-		skip_newline(buffer.get(), position);
-		return buffer.get() + start_position;
-	}
 
-	void ClearBuffers() {
-		cached_buffers.clear();
-	}
-
-	bool ReadBuffer() {
-		if (buffer) {
-			cached_buffers.push_back(move(buffer));
+		position++;
+		if (position >= buffer_size) {
+			// exhausted the buffer
+			if (!ReadBuffer(start)) {
+				break;
+			}
 		}
-		buffer = unique_ptr<char[]>(new char [INITIAL_BUFFER_SIZE]);
-		position = 0;
-		buffer_size = INITIAL_BUFFER_SIZE;
-		source.read(buffer.get(), buffer_size);
-		buffer_size = source.eof() ? source.gcount() : INITIAL_BUFFER_SIZE;
-		return buffer_size > 0;
 	}
-private:
-	istream &source;
+	if (in_quotes) {
+		throw ParserException("Error on line %lld: unterminated quotes", linenr);
+	}
+	Flush(context);
+}
 
-	unique_ptr<char[]> buffer;
-	index_t buffer_size;
-	index_t position;
+bool BufferedCSVReader::ReadBuffer(index_t &start) {
+	auto old_buffer = move(buffer);
 
-	vector<unique_ptr<char[]>> cached_buffers;
-};
+	// the remaining part of the last buffer
+	index_t remaining = buffer_size - start;
+	index_t buffer_read_size = INITIAL_BUFFER_SIZE;
+	while (remaining > buffer_read_size) {
+		buffer_read_size *= 2;
+	}
+	if (remaining + buffer_read_size > MAXIMUM_CSV_LINE_SIZE) {
+		throw ParserException("Maximum line size of %llu bytes exceeded!", MAXIMUM_CSV_LINE_SIZE);
+	}
+	buffer = unique_ptr<char[]>(new char[buffer_read_size + remaining + 1]);
+	buffer_size = remaining + buffer_read_size;
+	if (remaining > 0) {
+		// remaining from last buffer: copy it here
+		memcpy(buffer.get(), old_buffer.get() + start, remaining);
+	}
+	source.read(buffer.get() + remaining, buffer_read_size);
+	index_t read_count = source.eof() ? source.gcount() : buffer_read_size;
+	buffer_size = remaining + read_count;
+	buffer[buffer_size] = '\0';
+	if (old_buffer && start != 0) {
+		cached_buffers.push_back(move(old_buffer));
+	}
+	start = 0;
+	position = remaining;
 
+	return read_count > 0;
+}
 
 void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
-	count_t nr_elements = 0;
-	count_t total = 0;
-
 	auto &info = *this->info;
+	index_t total = 0;
+	index_t nr_elements = 0;
 
 	if (table) {
 		assert(info.is_from);
-		DataChunk insert_chunk, parse_chunk;
-		// initialize the insert_chunk with the actual to-be-inserted types
-		auto types = table->GetTypes();
-		insert_chunk.Initialize(types);
-		// initialize the parse chunk with VARCHAR data
-		for (index_t i = 0; i < types.size(); i++) {
-			types[i] = TypeId::VARCHAR;
-		}
-		parse_chunk.Initialize(types);
-		// handle the select list (if any)
-		if (info.select_list.size() > 0) {
-			set_to_default.resize(types.size(), true);
-			for (index_t i = 0; i < info.select_list.size(); i++) {
-				auto &column = table->GetColumn(info.select_list[i]);
-				column_oids.push_back(column.oid);
-				set_to_default[column.oid] = false;
-			}
-		} else {
-			for (index_t i = 0; i < types.size(); i++) {
-				column_oids.push_back(i);
-			}
-		}
-		index_t linenr = 0;
-
 		if (!context.db.file_system->FileExists(info.file_path)) {
 			throw Exception("File not found");
 		}
 
-		unique_ptr<istream> from_csv_stream;
+		unique_ptr<istream> csv_stream;
 		if (StringUtil::EndsWith(StringUtil::Lower(info.file_path), ".gz")) {
-			from_csv_stream = make_unique<GzipStream>(info.file_path);
+			csv_stream = make_unique<GzipStream>(info.file_path);
 		} else {
 			auto csv_local = make_unique<ifstream>();
 			csv_local->open(info.file_path);
-			from_csv_stream = move(csv_local);
+			csv_stream = move(csv_local);
 		}
-		string read_line;
 
-		istream &from_csv = *from_csv_stream;
-
-		if (info.header) {
-			// ignore the first line as a header line
-			getline(from_csv, read_line);
-			linenr++;
+		BufferedCSVReader reader(*this, *csv_stream);
+		// initialize the insert_chunk with the actual to-be-inserted types
+		auto types = table->GetTypes();
+		reader.insert_chunk.Initialize(types);
+		// initialize the parse chunk with VARCHAR data
+		for (index_t i = 0; i < types.size(); i++) {
+			types[i] = TypeId::VARCHAR;
 		}
-		BufferedLineReader reader(from_csv);
-		char *line;
-		index_t line_size;
-		while ((line = reader.ReadLine(line_size)) != nullptr) {
-			if (!Value::IsUTF8String(line)) {
-				throw ParserException("Error on line %lld: file is not valid UTF8", linenr);
+		reader.parse_chunk.Initialize(types);
+		// handle the select list (if any)
+		if (info.select_list.size() > 0) {
+			reader.set_to_default.resize(types.size(), true);
+			for (index_t i = 0; i < info.select_list.size(); i++) {
+				auto &column = table->GetColumn(info.select_list[i]);
+				reader.column_oids.push_back(column.oid);
+				reader.set_to_default[column.oid] = false;
 			}
-
-			bool in_quotes = false;
-			index_t start = 0;
-			index_t column = 0;
-			for (index_t i = 0; i < line_size; i++) {
-				// handle quoting
-				if (line[i] == info.quote) {
-					if (!in_quotes) {
-						// start quotes can only occur at the start of a field
-						if (i != start) {
-							// quotes in the middle of a line are ignored
-							continue;
-						}
-						// offset start by one
-						in_quotes = true;
-						start++;
-						continue;
-					} else {
-						if (!end_of_field(line, line_size, i + 1, info.delimiter)) {
-							// quotes not at the end of a line are ignored
-							continue;
-						}
-						// offset end by one
-						in_quotes = false;
-						PushValue(line, parse_chunk, start, i, column, linenr);
-						start = i + 2;
-						i++;
-						continue;
-					}
-				} else if (in_quotes) {
-					continue;
-				}
-				if (line[i] == info.delimiter) {
-					PushValue(line, parse_chunk, start, i, column, linenr);
-					start = i + 1;
-				}
-				if (i + 1 >= line_size) {
-					PushValue(line, parse_chunk, start, i + 1, column, linenr);
-					break;
-				}
+		} else {
+			for (index_t i = 0; i < types.size(); i++) {
+				reader.column_oids.push_back(i);
 			}
-			if (in_quotes) {
-				throw ParserException("Error on line %lld: unterminated quotes", linenr);
-			}
-			if (column < column_oids.size()) {
-				throw ParserException("Error on line %lld: expected %lld values but got %d", linenr, column_oids.size(),
-				                      column);
-			}
-			nr_elements++;
-			if (nr_elements == STANDARD_VECTOR_SIZE) {
-				Flush(context, parse_chunk, insert_chunk, nr_elements, total, set_to_default);
-				reader.ClearBuffers();
-			}
-			linenr++;
 		}
-		Flush(context, parse_chunk, insert_chunk, nr_elements, total, set_to_default);
-		reader.ClearBuffers();
+		reader.ParseCSV(context);
+		total = reader.total + reader.nr_elements;
 	} else {
 		ofstream to_csv;
 		to_csv.open(info.file_path);
