@@ -231,7 +231,7 @@ template <> int64_t CastFromDate::Operation(date_t left) {
 // Cast To Date
 //===--------------------------------------------------------------------===//
 template <> date_t CastToDate::Operation(const char *left) {
-	return Date::FromString(left);
+	return Date::FromCString(left);
 }
 
 template <> date_t CastToDate::Operation(int32_t left) {
