@@ -35,36 +35,41 @@ void age_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count
 	                             [&](index_t input1_index, index_t input2_index, index_t result_index) {
 		                             auto input1 = input1_data[input1_index];
 		                             auto input2 = input2_data[input2_index];
-
-		                             auto interval = Timestamp::GetDifference(input1, input2);
-		                             auto timestamp = Timestamp::IntervalToTimestamp(interval);
-		                             auto years = timestamp.year;
-		                             auto months = timestamp.month;
-		                             auto days = timestamp.day;
-		                             auto time = interval.time;
-
-		                             std::string output{""};
-		                             if (years == 0 && months == 0 && days == 0) {
-			                             output += DEFAULT_TIME;
+		                             // One of them is NULL
+		                             if (input1 < 0 || input2 < 0) {
+			                             result.SetNull(result_index, true);
 		                             } else {
-			                             if (years != 0) {
-				                             output = std::to_string(years);
-				                             output += " years ";
+			                             auto interval = Timestamp::GetDifference(input1, input2);
+			                             auto timestamp = Timestamp::IntervalToTimestamp(interval);
+			                             auto years = timestamp.year;
+			                             auto months = timestamp.month;
+			                             auto days = timestamp.day;
+			                             auto time = interval.time;
+
+			                             std::string output{""};
+			                             if (years == 0 && months == 0 && days == 0) {
+				                             output += DEFAULT_TIME;
+			                             } else {
+				                             if (years != 0) {
+					                             output = std::to_string(years);
+					                             output += " years ";
+				                             }
+				                             if (months != 0) {
+					                             output += std::to_string(months);
+					                             output += " mons ";
+				                             }
+				                             if (days != 0) {
+					                             output += std::to_string(days);
+					                             output += " days";
+				                             }
+				                             if (time != 0) {
+					                             output += " ";
+					                             output += Time::ToString(time);
+				                             }
 			                             }
-			                             if (months != 0) {
-				                             output += std::to_string(months);
-				                             output += " mons ";
-			                             }
-			                             if (days != 0) {
-				                             output += std::to_string(days);
-				                             output += " days";
-			                             }
-			                             if (time != 0) {
-				                             output += " ";
-				                             output += Time::ToString(time);
-			                             }
+
+			                             result_data[result_index] = result.string_heap.AddString(output.c_str());
 		                             }
-		                             result_data[result_index] = result.string_heap.AddString(output.c_str());
 	                             });
 }
 

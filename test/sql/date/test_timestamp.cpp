@@ -148,12 +148,23 @@ TEST_CASE("Test timestamp functions", "[timestamp]") {
 	auto months = timestamp.month;
 	auto days = timestamp.day;
 
-	auto output = std::to_string(years);
-	output += " years ";
-	output += std::to_string(months);
-	output += " mons ";
-	output += std::to_string(days);
-	output += " days";
+	std::string output{""};
+	if (years == 0 && months == 0 && days == 0) {
+		output += DEFAULT_TIME;
+	} else {
+		if (years != 0) {
+			output = std::to_string(years);
+			output += " years ";
+		}
+		if (months != 0) {
+			output += std::to_string(months);
+			output += " mons ";
+		}
+		if (days != 0) {
+			output += std::to_string(days);
+			output += " days";
+		}
+	}
 	REQUIRE(CHECK_COLUMN(result, 0, {output.c_str()}));
 
 	result = con.Query("SELECT AGE(TIMESTAMP '2001-04-10', TIMESTAMP '1957-06-13');");
@@ -171,23 +182,46 @@ TEST_CASE("Test timestamp functions", "[timestamp]") {
 	result = con.Query(" SELECT age(timestamp '2019-06-11 12:00:00', timestamp '2019-07-11 11:00:00');");
 	REQUIRE(CHECK_COLUMN(result, 0, {"-29 days -23:00:00"}));
 
-	REQUIRE_FAIL(con.Query("SELECT AGE(NULL, NULL);"));
-
-	REQUIRE_FAIL(con.Query("SELECT AGE(TIMESTAMP '1957-06-13', NULL);"));
-
 	// create and insert into table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE timestamp(t1 TIMESTAMP, t2 TIMESTAMP)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO timestamp VALUES('2001-04-10', '1957-06-13')"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO timestamp VALUES('2014-04-25', '2014-04-17')"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO timestamp VALUES('2014-04-25','2014-01-01')"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO timestamp VALUES('2019-06-11', '2019-06-11')"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO timestamp VALUES(NULL, '2019-06-11')"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO timestamp VALUES('2019-06-11', NULL)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO timestamp VALUES(NULL, NULL)"));
 
 	result = con.Query("SELECT AGE(t1, TIMESTAMP '1957-06-13') FROM timestamp;");
-	REQUIRE(CHECK_COLUMN(result, 0, {"43 years 9 mons 27 days"}));
+	REQUIRE(CHECK_COLUMN(result, 0,
+	                     {{"43 years 9 mons 27 days"},
+	                      {"56 years 10 mons 12 days"},
+	                      {"56 years 10 mons 12 days"},
+	                      {"61 years 11 mons 28 days"},
+	                      {Value()},
+	                      {"61 years 11 mons 28 days"},
+	                      {Value()}}));
 
 	result = con.Query("SELECT AGE(TIMESTAMP '2001-04-10', t2) FROM timestamp;");
-	REQUIRE(CHECK_COLUMN(result, 0, {"43 years 9 mons 27 days"}));
+	REQUIRE(CHECK_COLUMN(result, 0,
+	                     {{"43 years 9 mons 27 days"},
+	                      {"-13 years -7 days"},
+	                      {"-12 years -8 mons -21 days"},
+	                      {"-18 years -2 mons -1 days"},
+	                      {"-18 years -2 mons -1 days"},
+	                      {Value()},
+	                      {Value()}}));
 
 	result = con.Query("SELECT AGE(t1, t2) FROM timestamp;");
+	REQUIRE(CHECK_COLUMN(
+	    result, 0,
+	    {{"43 years 9 mons 27 days"}, {"8 days"}, {"3 mons 24 days"}, {"00:00:00"}, {Value()}, {Value()}, {Value()}}));
+
+	result = con.Query("SELECT AGE(t1, t2) FROM timestamp WHERE t1 > '2001-12-12';");
 	REQUIRE(CHECK_COLUMN(result, 0, {"43 years 9 mons 27 days"}));
 
-	result = con.Query("SELECT AGE(t1, t2) FROM timestamp WHERE t1 > '1957-12-12';");
-	REQUIRE(CHECK_COLUMN(result, 0, {"43 years 9 mons 27 days"}));
+	// Test NULLS
+	REQUIRE_FAIL(con.Query("SELECT AGE(NULL, NULL);"));
+	REQUIRE_FAIL(con.Query("SELECT AGE(TIMESTAMP '1957-06-13', NULL);"));
+	REQUIRE_FAIL(con.Query("SELECT AGE(TIMESTAMP NULL, TIMESTAMP '1957-06-13');"));
 }

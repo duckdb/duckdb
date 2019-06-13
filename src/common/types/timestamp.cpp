@@ -70,9 +70,12 @@ timestamp_t Timestamp::GetCurrentTimestamp() {
 	auto in_time_t = std::time(nullptr);
 	auto local_time = std::localtime(&in_time_t);
 
-	std::stringstream ss;
-	ss << std::put_time(local_time, "%Y-%m-%d %X");
-	return Timestamp::FromString(ss.str());
+	// tm_year[0...] considers the amount of years since 1900 and tm_mon considers the amount of months since january
+	// tm_mon[0-11]
+	auto date = Date::FromDate(local_time->tm_year + START_YEAR, local_time->tm_mon + 1, local_time->tm_mday);
+	auto time = Time::FromTime(local_time->tm_hour, local_time->tm_min, local_time->tm_sec);
+
+	return Timestamp::FromDatetime(date, time);
 }
 
 Interval Timestamp::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2) {
@@ -94,7 +97,7 @@ Interval Timestamp::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp
 	auto time2 = GetTime(timestamp_2);
 
 	// In case time is not specified we do not show it in the output
-	if (timestamp_2 == GetCurrentTimestamp() && time1 == 0) {
+	if (time1 == 0) {
 		time2 = time1;
 	}
 
@@ -105,9 +108,9 @@ Interval Timestamp::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp
 	Time::Convert(time2, hour2, min2, sec2, msec2);
 	// finally perform the differences
 	auto hour_diff = hour1 - hour2;
-	auto min_diff = min2 - min2;
-	auto sec_diff = sec2 - sec2;
-	auto msec_diff = msec2 - msec2;
+	auto min_diff = min1 - min2;
+	auto sec_diff = sec1 - sec2;
+	auto msec_diff = msec1 - msec2;
 
 	// flip sign if necessary
 	if (timestamp_1 < timestamp_2) {
@@ -149,8 +152,9 @@ Interval Timestamp::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp
 		month_diff += MONTHS_PER_YEAR;
 		year_diff--;
 	}
+
 	// recover sign if necessary
-	if (timestamp_1 < timestamp_2) {
+	if (timestamp_1 < timestamp_2 && (month_diff != 0 || day_diff != 0)) {
 		year_diff = -year_diff;
 		month_diff = -month_diff;
 		day_diff = -day_diff;

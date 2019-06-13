@@ -19,11 +19,12 @@
 namespace duckdb {
 
 constexpr const double DAYS_PER_YEAR = 365.25; //! assumes leap year every four years
-constexpr const size_t MONTHS_PER_YEAR = 12;
-constexpr const size_t DAYS_PER_MONTH = 30; //! assumes exactly 30 days per month (ISO 8601 suggest 30 days)
-constexpr const size_t HOURS_PER_DAY = 24;  //! assume no daylight savings time changes
-constexpr const size_t STD_TIMESTAMP_LENGTH = 19;
-constexpr const size_t MAX_TIMESTAMP_LENGTH = 23;
+constexpr const int32_t MONTHS_PER_YEAR = 12;
+constexpr const int32_t DAYS_PER_MONTH = 30; //! assumes exactly 30 days per month (ISO 8601 suggest 30 days)
+constexpr const int32_t HOURS_PER_DAY = 24;  //! assume no daylight savings time changes
+constexpr const int32_t STD_TIMESTAMP_LENGTH = 19;
+constexpr const int32_t MAX_TIMESTAMP_LENGTH = 23;
+constexpr const int32_t START_YEAR = 1900;
 constexpr const char *DEFAULT_TIME = "00:00:00";
 
 /*
@@ -32,10 +33,10 @@ constexpr const char *DEFAULT_TIME = "00:00:00";
  *	for days per years is 365.2422.
  */
 constexpr const size_t SECS_PER_YEAR = (36525 * 864); /* avoid floating-point computation */
-constexpr const size_t SECS_PER_DAY = 86400;
-constexpr const size_t SECS_PER_HOUR = 3600;
-constexpr const size_t SECS_PER_MINUTE = 60;
-constexpr const size_t MINS_PER_H = 60;
+constexpr const int32_t SECS_PER_DAY = 86400;
+constexpr const int32_t SECS_PER_HOUR = 3600;
+constexpr const int32_t SECS_PER_MINUTE = 60;
+constexpr const int32_t MINS_PER_H = 60;
 constexpr const int64_t MSECS_PER_DAY = 8640000;
 constexpr const int64_t MSECS_PER_HOUR = 360000;
 constexpr const int64_t MSECS_PER_MINUTE = 60000;
