@@ -42,7 +42,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 
 	REQUIRE_NO_FAIL(con.Query(
 	    "CREATE TABLE HumanResources.Employee( BusinessEntityID int NOT NULL, NationalIDNumber string NOT NULL, "
-	    "LoginID string NOT NULL, OrganizationNode integer, 	OrganizationLevel integer not null, JobTitle string "
+	    "LoginID string NOT NULL, OrganizationNode VARCHAR, 	OrganizationLevel integer not null, JobTitle string "
 	    "NOT NULL, BirthDate date NOT NULL, MaritalStatus string NOT NULL, Gender string NOT NULL, HireDate date NOT "
 	    "NULL, SalariedFlag string NOT NULL , VacationHours smallint NOT NULL , SickLeaveHours smallint NOT NULL, "
 	    "CurrentFlag string NOT NULL , rowguid string , ModifiedDate datetime NOT NULL); "));

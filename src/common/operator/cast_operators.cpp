@@ -153,6 +153,19 @@ static bool TryIntegerCast(const char *buf, T &result) {
 	if (!negative) {
 		while(buf[pos]) {
 			if (!std::isdigit(buf[pos])) {
+				// not a digit!
+				if (buf[pos] == '.') {
+					// decimal point: we accept decimal values for integers as well
+					// we just truncate them
+					// make sure everything after the period is a number
+					pos++;
+					do {
+						if (!std::isdigit(buf[pos++])) {
+							return false;
+						}
+					} while(buf[pos]);
+					return true;
+				}
 				return false;
 			}
 			T digit = buf[pos++] - '0';

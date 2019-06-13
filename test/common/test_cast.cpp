@@ -1,6 +1,6 @@
 #include "catch.hpp"
 #include "common/operator/cast_operators.hpp"
-
+#include "common/string_util.hpp"
 #include <vector>
 
 using namespace duckdb;
@@ -30,8 +30,8 @@ static void TestStringCast(vector<string> &working_values, vector<DST> &expected
 		REQUIRE(TryCast::Operation<const char*, DST>(value.c_str(), result));
 		REQUIRE(result == expected_value);
 
-		// cast back and compare
-		REQUIRE(Cast::Operation<DST, string>(result) == value);
+		auto splits = StringUtil::Split(value, '.');
+		REQUIRE(Cast::Operation<DST, string>(result) == splits[0]);
 	}
 	for(auto &value : broken_values) {
 		REQUIRE_THROWS(Cast::Operation<const char*, DST>(value.c_str()));
@@ -80,9 +80,9 @@ TEST_CASE("Test casting to int8_t", "[cast]") {
 	vector<double> broken_values_double = { 128, -128, 10000000000, -10000000000, 1e100, -1e100 };
 	TestNumericCast<double, int8_t>(working_values_double, broken_values_double);
 	// string -> int8_t
-	vector<string> working_values_str     = { "10", "-10", "127", "-127" };
-	vector<int8_t> expected_values_str    = { 10, -10, 127, -127 };
-	vector<string> broken_values_str = { "128", "-128", "10000000000000000000000000000000000000000000000000000000000000", "1.3", "aaaa", "19A", "" };
+	vector<string> working_values_str     = { "10", "-10", "127", "-127", "1.3" };
+	vector<int8_t> expected_values_str    = { 10, -10, 127, -127, 1 };
+	vector<string> broken_values_str = { "128", "-128", "10000000000000000000000000000000000000000000000000000000000000", "1.", "aaaa", "19A", "" };
 	TestStringCast<int8_t>(working_values_str, expected_values_str, broken_values_str);
 }
 
@@ -104,9 +104,9 @@ TEST_CASE("Test casting to int16_t", "[cast]") {
 	vector<double> broken_values_double = { 32768, -32768, 10000000000, -10000000000, 1e100, -1e100 };
 	TestNumericCast<double, int16_t>(working_values_double, broken_values_double);
 	// string -> int16_t
-	vector<string> working_values_str     = { "10", "-10", "32767", "-32767" };
-	vector<int16_t> expected_values_str    = { 10, -10, 32767, -32767 };
-	vector<string> broken_values_str = { "32768", "-32768", "10000000000000000000000000000000000000000000000000000000000000", "1.3", "aaaa", "19A", "" };
+	vector<string> working_values_str     = { "10", "-10", "32767", "-32767", "1.3" };
+	vector<int16_t> expected_values_str    = { 10, -10, 32767, -32767, 1 };
+	vector<string> broken_values_str = { "32768", "-32768", "10000000000000000000000000000000000000000000000000000000000000", "1.", "aaaa", "19A", "", "1.A" };
 	TestStringCast<int16_t>(working_values_str, expected_values_str, broken_values_str);
 }
 
@@ -124,9 +124,9 @@ TEST_CASE("Test casting to int32_t", "[cast]") {
 	vector<double> broken_values_double = { 2147483648, -2147483648, 10000000000, -10000000000, 1e100, -1e100 };
 	TestNumericCast<double, int32_t>(working_values_double, broken_values_double);
 	// string -> int32_t
-	vector<string> working_values_str     = { "10", "-10", "2147483647", "-2147483647" };
-	vector<int32_t> expected_values_str    = { 10, -10, 2147483647, -2147483647 };
-	vector<string> broken_values_str = { "2147483648", "-2147483648", "10000000000000000000000000000000000000000000000000000000000000", "1.3", "aaaa", "19A", "" };
+	vector<string> working_values_str     = { "10", "-10", "2147483647", "-2147483647", "1.3" };
+	vector<int32_t> expected_values_str    = { 10, -10, 2147483647, -2147483647, 1 };
+	vector<string> broken_values_str = { "2147483648", "-2147483648", "10000000000000000000000000000000000000000000000000000000000000", "1.", "aaaa", "19A", "", "1.A" };
 	TestStringCast<int32_t>(working_values_str, expected_values_str, broken_values_str);
 }
 
@@ -140,8 +140,8 @@ TEST_CASE("Test casting to int64_t", "[cast]") {
 	vector<double> broken_values_double = { 18446744073709551616.0, -18446744073709551616.0, 1e100, -1e100 };
 	TestNumericCast<double, int64_t>(working_values_double, broken_values_double);
 	// string -> int64_t
-	vector<string> working_values_str     = { "10", "-10", "9223372036854775807", "-9223372036854775807" };
-	vector<int64_t> expected_values_str    = { 10, -10, 9223372036854775807LL, -9223372036854775807LL };
-	vector<string> broken_values_str = { "9223372036854775808", "-9223372036854775808", "10000000000000000000000000000000000000000000000000000000000000", "1.3", "aaaa", "19A", ""};
+	vector<string> working_values_str     = { "10", "-10", "9223372036854775807", "-9223372036854775807", "1.3" };
+	vector<int64_t> expected_values_str    = { 10, -10, 9223372036854775807LL, -9223372036854775807LL, 1 };
+	vector<string> broken_values_str = { "9223372036854775808", "-9223372036854775808", "10000000000000000000000000000000000000000000000000000000000000", "1.", "aaaa", "19A", "", "1.A", "1.2382398723A"};
 	TestStringCast<int64_t>(working_values_str, expected_values_str, broken_values_str);
 }
