@@ -13,9 +13,12 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CreateIndexStatement &stmt) {
 	if (result->table->type != TableReferenceType::BASE_TABLE) {
 		throw BinderException("Cannot create index on a view!");
 	}
+	if (stmt.expressions.size() > 1) {
+		throw NotImplementedException("Multidimensional indexes not supported yet");
+	}
 	// visit the expressions
+	IndexBinder binder(*this, context);
 	for (auto &expr : stmt.expressions) {
-		IndexBinder binder(*this, context);
 		result->expressions.push_back(binder.Bind(expr));
 	}
 	result->info = move(stmt.info);

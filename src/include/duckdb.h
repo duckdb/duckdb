@@ -46,7 +46,7 @@ typedef enum DUCKDB_TYPE {
 } duckdb_type;
 
 typedef struct {
-	int16_t year;
+	int32_t year;
 	int8_t month;
 	int8_t day;
 } duckdb_date;

@@ -23,6 +23,8 @@ extern const uint64_t VERSION_NUMBER;
 
 using block_id_t = int64_t;
 
+#define INVALID_BLOCK -1
+
 //! The MainHeader is the first header in the storage file. The MainHeader is typically written only once for a database
 //! file.
 struct MainHeader {

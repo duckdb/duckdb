@@ -1,8 +1,5 @@
 #pragma once
 
-#define CATCH_CONFIG_RUNNER
-#include "catch.hpp"
-
 #ifdef _MSC_VER
 // these break enum.hpp otherwise
 #undef DELETE
@@ -15,6 +12,7 @@
 #endif
 
 #include "common/string_util.hpp"
+#include "common/types.hpp"
 #include "compare_result.hpp"
 #include "duckdb.hpp"
 
@@ -26,10 +24,10 @@ void TestCreateDirectory(string path);
 void TestDeleteFile(string path);
 string TestCreatePath(string suffix);
 
-bool ApproxEqual(float l, float r);
-bool ApproxEqual(double l, double r);
+bool NO_FAIL(QueryResult &result);
+bool NO_FAIL(unique_ptr<QueryResult> result);
 
-#define REQUIRE_NO_FAIL(result) REQUIRE((result)->success)
+#define REQUIRE_NO_FAIL(result) REQUIRE(NO_FAIL((result)))
 #define REQUIRE_FAIL(result) REQUIRE(!(result)->success)
 
 #define COMPARE_CSV(result, csv, header)                                                                               \

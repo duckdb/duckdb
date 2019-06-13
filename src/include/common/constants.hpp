@@ -25,13 +25,20 @@ using std::vector;
 // NOTE: there is a copy of this in the Postgres' parser grammar (gram.y)
 #define DEFAULT_SCHEMA "main"
 
+//! The vector size used in the execution engine
 #define STANDARD_VECTOR_SIZE 1024
-#define STORAGE_CHUNK_SIZE 10240
+//! The amount of vectors per storage chunk
+#define STORAGE_CHUNK_VECTORS 10
+//! The storage chunk size
+#define STORAGE_CHUNK_SIZE (STANDARD_VECTOR_SIZE * STORAGE_CHUNK_VECTORS)
 
 //! a saner size_t for loop indices etc
 typedef uint64_t index_t;
 //! a saner siz_t for amounts of things, mostly for readability
 typedef uint64_t count_t;
+
+//! The type used for row identifiers
+typedef int64_t row_t;
 
 //! The value used to signify an invalid index entry
 extern const index_t INVALID_INDEX;

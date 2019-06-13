@@ -9,16 +9,24 @@
 #pragma once
 
 #include "art_key.hpp"
-#include <common/exception.hpp>
 #include "common/common.hpp"
 
 namespace duckdb {
 enum class NodeType : uint8_t { N4 = 0, N16 = 1, N48 = 2, N256 = 3, NLeaf = 4 };
 
+class ART;
+
 class Node {
 public:
+	static const uint8_t EMPTY_MARKER = 48;
+
+public:
+	Node(ART &art, NodeType type);
+	virtual ~Node() {
+	}
+
 	//! length of the compressed path (prefix)
-	uint32_t prefixLength;
+	uint32_t prefix_length;
 	//! number of non-null children
 	uint16_t count;
 	//! node type
@@ -26,74 +34,35 @@ public:
 	//! compressed path (prefix)
 	unique_ptr<uint8_t[]> prefix;
 
-	uint8_t maxPrefixLength;
-
-	static const uint8_t emptyMarker = 48;
-	Node(NodeType type, unsigned maxPrefixLength) : prefixLength(0), count(0), type(type) {
-		this->prefix = unique_ptr<uint8_t[]>(new uint8_t[maxPrefixLength]);
-		this->maxPrefixLength = maxPrefixLength;
+public:
+	//! Get the position of a child corresponding exactly to the specific byte, returns INVALID_INDEX if not exists
+	virtual index_t GetChildPos(uint8_t k) {
+		return INVALID_INDEX;
 	}
-	virtual ~Node() {
+	//! Get the position of the first child that is greater or equal to the specific byte, or INVALID_INDEX if there are
+	//! no children matching the criteria
+	virtual index_t GetChildGreaterEqual(uint8_t k) {
+		return INVALID_INDEX;
 	}
-
-	//! Copies the prefix from the source to the destination node
-	static void copyPrefix(Node *src, Node *dst);
-	//! Find the leaf with smallest element in the tree
-	static unique_ptr<Node> *minimum(unique_ptr<Node> &node);
-	//! Find the next child for the keyByte
-	static unique_ptr<Node> *findChild(const uint8_t k, unique_ptr<Node> &node);
-	static int findKeyPos(const uint8_t k, Node *node);
-	static Node *findChild(const uint8_t k, Node *node);
+	//! Get the next position in the node, or INVALID_INDEX if there is no next position. if pos == INVALID_INDEX, then
+	//! the first valid position in the node will be returned.
+	virtual index_t GetNextPos(index_t pos) {
+		return INVALID_INDEX;
+	}
+	//! Get the child at the specified position in the node. pos should be between [0, count). Throws an assertion if
+	//! the element is not found.
+	virtual unique_ptr<Node> *GetChild(index_t pos);
 
 	//! Compare the key with the prefix of the node, return the number matching bytes
-	static unsigned prefixMismatch(bool isLittleEndian, Node *node, Key &key, uint64_t depth, unsigned maxKeyLength,
-	                               TypeId type);
+	static uint32_t PrefixMismatch(ART &art, Node *node, Key &key, uint64_t depth);
 	//! Insert leaf into inner node
-	static void insertLeaf(unique_ptr<Node> &node, uint8_t key, unique_ptr<Node> &newNode);
-	//! Compare two elements and return the smaller
-	static unsigned min(unsigned a, unsigned b);
-};
+	static void InsertLeaf(ART &art, unique_ptr<Node> &node, uint8_t key, unique_ptr<Node> &newNode);
+	//! Erase entry from node
+	static void Erase(ART &art, unique_ptr<Node> &node, index_t pos);
 
-class Leaf : public Node {
-public:
-	uint64_t value;
-	uint64_t capacity;
-	uint64_t num_elements;
-	unique_ptr<uint64_t[]> row_id;
-
-	Leaf(uint64_t value, uint64_t row_id, uint8_t maxPrefixLength) : Node(NodeType::NLeaf, maxPrefixLength) {
-		this->value = value;
-		this->capacity = 1;
-		this->row_id = unique_ptr<uint64_t[]>(new uint64_t[this->capacity]);
-		this->row_id[0] = row_id;
-		this->num_elements = 1;
-	}
-
-	static void insert(Leaf *leaf, uint64_t row_id) {
-		// Grow array
-		if (leaf->num_elements == leaf->capacity) {
-			auto new_row_id = unique_ptr<uint64_t[]>(new uint64_t[leaf->capacity * 2]);
-			memcpy(new_row_id.get(), leaf->row_id.get(), leaf->capacity * sizeof(uint64_t));
-			leaf->capacity *= 2;
-			leaf->row_id = move(new_row_id);
-		}
-		leaf->row_id[leaf->num_elements] = row_id;
-		leaf->num_elements++;
-	}
-
-	//! TODO: Maybe shrink array dynamically?
-	static void remove(Leaf *leaf, uint64_t row_id) {
-		uint64_t entry_offset = -1;
-		for (uint64_t i = 0; i < leaf->num_elements; i++) {
-			if (leaf->row_id[i] == row_id) {
-				entry_offset = i;
-				break;
-			}
-		}
-		leaf->num_elements--;
-		for (uint64_t j = entry_offset; j < leaf->num_elements; j++)
-			leaf->row_id[j] = leaf->row_id[j + 1];
-	}
+protected:
+	//! Copies the prefix from the source to the destination node
+	static void CopyPrefix(ART &art, Node *src, Node *dst);
 };
 
 } // namespace duckdb

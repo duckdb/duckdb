@@ -3,9 +3,13 @@
 #include "common/exception.hpp"
 #include "common/serializer.hpp"
 
+#include <cmath>
+
 using namespace std;
 
 namespace duckdb {
+
+const TypeId ROW_TYPE = TypeId::BIGINT;
 
 string TypeIdToString(TypeId type) {
 	switch (type) {
@@ -213,6 +217,16 @@ SQLType MaxSQLType(SQLType left, SQLType right) {
 	} else {
 		return right;
 	}
+}
+
+bool ApproxEqual(float ldecimal, float rdecimal) {
+	float epsilon = fabs(rdecimal) * 0.01;
+	return fabs(ldecimal - rdecimal) <= epsilon;
+}
+
+bool ApproxEqual(double ldecimal, double rdecimal) {
+	double epsilon = fabs(rdecimal) * 0.01;
+	return fabs(ldecimal - rdecimal) <= epsilon;
 }
 
 } // namespace duckdb

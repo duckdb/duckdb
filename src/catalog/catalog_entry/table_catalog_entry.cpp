@@ -9,11 +9,15 @@
 #include "main/database.hpp"
 #include "parser/constraints/list.hpp"
 #include "parser/parsed_data/alter_table_info.hpp"
+#include "planner/constraints/bound_not_null_constraint.hpp"
 #include "planner/constraints/bound_unique_constraint.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
 #include "planner/parsed_data/bound_create_table_info.hpp"
 #include "storage/storage_manager.hpp"
 #include "planner/binder.hpp"
+
+#include "execution/index/art/art.hpp"
+#include "planner/expression/bound_reference_expression.hpp"
 
 #include <algorithm>
 
@@ -33,18 +37,32 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 		// create the physical storage
 		storage = make_shared<DataTable>(catalog->storage, schema->name, name, GetTypes());
 		// create the unique indexes for the UNIQUE and PRIMARY KEY constraints
-		for (auto &constraint : bound_constraints) {
+		for (index_t i = 0; i < bound_constraints.size(); i++) {
+			auto &constraint = bound_constraints[i];
 			if (constraint->type == ConstraintType::UNIQUE) {
-				vector<TypeId> types;
+				// unique constraint: create a unique index
 				auto &unique = (BoundUniqueConstraint &)*constraint;
-				// fetch the types from the columns
-				for (auto key : unique.keys) {
+				// fetch types and create expressions for the index from the columns
+				vector<column_t> column_ids;
+				vector<unique_ptr<Expression>> unbound_expressions;
+				for (auto &key : unique.keys) {
+					TypeId column_type = GetInternalType(columns[key].type);
 					assert(key < columns.size());
-					types.push_back(GetInternalType(columns[key].type));
+
+					unbound_expressions.push_back(
+					    make_unique<BoundColumnRefExpression>(column_type, ColumnBinding(0, column_ids.size())));
+					column_ids.push_back(key);
 				}
-				// initialize the index with the parsed data
-				storage->unique_indexes.push_back(
-				    make_unique<UniqueIndex>(*storage, types, unique.keys, !unique.is_primary_key));
+				// create an adaptive radix tree around the expressions
+				auto art = make_unique<ART>(*storage, column_ids, move(unbound_expressions), true);
+
+				storage->indexes.push_back(move(art));
+				if (unique.is_primary_key) {
+					// if this is a primary key index, also create a NOT NULL constraint for each of the columns
+					for (auto &column_index : unique.keys) {
+						bound_constraints.push_back(make_unique<BoundNotNullConstraint>(column_index));
+					}
+				}
 			}
 		}
 	}

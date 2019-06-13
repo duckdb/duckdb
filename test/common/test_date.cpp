@@ -8,6 +8,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Date parsing works", "[date]") {
+	// year first
 	REQUIRE(Date::ToString(Date::FromString("1992-01-01")) == "1992-01-01");
 	REQUIRE(Date::ToString(Date::FromString(Date::Format(1992, 1, 1))) == Date::Format(1992, 1, 1));
 	REQUIRE(Date::ToString(Date::FromString(Date::Format(1992, 10, 10))) == Date::Format(1992, 10, 10));
@@ -41,6 +42,14 @@ TEST_CASE("Date parsing works", "[date]") {
 			}
 		}
 	}
+	// invalid format
+	REQUIRE_THROWS(Date::FromString("100000"));
+	// big year
+	REQUIRE_THROWS(Date::FromString("10000000000-01-01"));
+	// big negative year
+	REQUIRE_THROWS(Date::FromString("-10000000000-01-01"));
+	// invalid date
+	REQUIRE_THROWS(Date::FromString("1992-30-30"));
 }
 
 TEST_CASE("Time parsing works", "[date]") {

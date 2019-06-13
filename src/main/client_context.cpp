@@ -362,6 +362,8 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementsInternal(string query,
 			assert(is_last_statement || current_result->type != QueryResultType::STREAM_RESULT);
 		} catch (Exception &ex) {
 			current_result = make_unique<MaterializedQueryResult>(ex.GetMessage());
+		} catch (std::bad_alloc &ex) {
+			current_result = make_unique<MaterializedQueryResult>("Out of memory!");
 		} catch (...) {
 			current_result = make_unique<MaterializedQueryResult>("Unhandled exception thrown in query execution");
 		}
@@ -415,6 +417,8 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 		parser.ParseQuery(query.c_str());
 	} catch (Exception &ex) {
 		return make_unique<MaterializedQueryResult>(ex.GetMessage());
+	} catch (std::bad_alloc &ex) {
+		return make_unique<MaterializedQueryResult>("Out of memory!");
 	} catch (...) {
 		return make_unique<MaterializedQueryResult>("Unhandled exception thrown in parser");
 	}

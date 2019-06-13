@@ -36,7 +36,6 @@ template <class T> inline bool in_bounds(int64_t value) {
 
 template <typename T, typename S> unique_ptr<S> unique_ptr_cast(unique_ptr<T> src) {
 	return unique_ptr<S>(static_cast<S *>(src.release()));
-	;
 }
 
 } // namespace duckdb

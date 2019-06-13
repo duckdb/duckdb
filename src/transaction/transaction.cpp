@@ -52,9 +52,13 @@ void Transaction::PushTuple(UndoFlags flags, index_t offset, StorageChunk *stora
 		meta->next->chunk = nullptr;
 		meta->next->prev.pointer = meta;
 	}
+	vector<data_ptr_t> columns;
+	for (index_t i = 0; i < storage->table.types.size(); i++) {
+		columns.push_back(storage->GetPointerToRow(i, storage->start + offset));
+	}
 
 	// now fill in the tuple data
-	storage->table.serializer.Serialize(storage->columns, offset, tuple_data);
+	storage->table.serializer.Serialize(columns, 0, tuple_data);
 }
 
 void Transaction::PushQuery(string query) {

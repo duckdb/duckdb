@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <cctype>
 
 using namespace duckdb;
 using namespace std;
@@ -83,14 +84,15 @@ static inline void number_to_date(int32_t n, int32_t &year, int32_t &month, int3
 static inline int32_t date_to_number(int32_t year, int32_t month, int32_t day) {
 	int32_t n = 0;
 	if (!(DATE(day, month, year))) {
-		throw Exception("Invalid date");
+		throw ConversionException("Date out of range: %d-%d-%d", year, month, day);
 	}
 
 	if (year < 0)
 		year++;
 	n = (int32_t)(day - 1);
-	if (month > 2 && leapyear(year))
+	if (month > 2 && leapyear(year)) {
 		n++;
+	}
 	n += CUMDAYS[month - 1];
 	/* current year does not count as leapyear */
 	n += 365 * year + leapyears(year >= 0 ? year - 1 : year);
@@ -98,22 +100,78 @@ static inline int32_t date_to_number(int32_t year, int32_t month, int32_t day) {
 	return n;
 }
 
-int32_t Date::FromString(string str) {
-	int32_t year, month, day;
-	char sep, sep2;
-	istringstream ss(str);
-	ss >> year;
-	ss >> sep;
-	ss >> month;
-	ss >> sep2;
-	ss >> day;
+date_t Date::FromCString(const char *buf) {
+	int day = 0, month = -1;
+	int year = 0, yearneg = (buf[0] == '-');
+	ssize_t pos = 0;
+	int sep;
 
-	if (ss.fail() || !IsValidDay(year, month, day) || sep != sep2 || sep != '-') {
+	if (yearneg == 0 && !std::isdigit(buf[0])) {
+		throw ConversionException("date/time field value out of range: \"%s\", "
+								"expected format is (YYYY-MM-DD)",
+								buf);
+	} else {
+		for (pos = yearneg; std::isdigit(buf[pos]); pos++) {
+			year = (buf[pos] - '0') + year * 10;
+			if (year > YEAR_MAX) {
+				break;
+			}
+		}
+		sep = buf[pos++];
+		if (sep != '-') {
+			throw ConversionException("date/time field value out of range: \"%s\", "
+									"expected format is (YYYY-MM-DD)",
+									buf);
+		}
+		sep = LOWER(sep);
+		if (sep >= 'a' && sep <= 'z') {
+			sep = 0;
+		} else if (sep == ' ') {
+			while (buf[pos] == ' ') {
+				pos++;
+			}
+		} else if (sep != '-' && sep != '/' && sep != '\\') {
+			throw ConversionException("date/time field value out of range: \"%s\", "
+									"expected format is (YYYY-MM-DD)",
+									buf);
+		}
+	}
+	if (std::isdigit(buf[pos])) {
+		month = buf[pos++] - '0';
+		if (std::isdigit(buf[pos])) {
+			month = (buf[pos++] - '0') + month * 10;
+		}
+	} else {
 		throw ConversionException("date/time field value out of range: \"%s\", "
 		                          "expected format is (YYYY-MM-DD)",
-		                          str.c_str());
+		                          buf);
 	}
-	return Date::FromDate(year, month, day);
+	if (month == -1 || (sep && buf[pos++] != sep)) {
+		throw ConversionException("date/time field value out of range: \"%s\", "
+		                          "expected format is (YYYY-MM-DD)",
+		                          buf);
+	}
+	if (sep == ' ') {
+		while (buf[pos] == ' ') {
+			pos++;
+		}
+	}
+	if (!std::isdigit(buf[pos])) {
+		throw ConversionException("date/time field value out of range: \"%s\", "
+		                          "expected format is (YYYY-MM-DD)",
+		                          buf);
+	}
+	while (std::isdigit(buf[pos])) {
+		day = (buf[pos++] - '0') + day * 10;
+		if (day > 31) {
+			break;
+		}
+	}
+	return Date::FromDate(yearneg ? -year : year, month, day);
+}
+
+date_t Date::FromString(string str) {
+	return Date::FromCString(str.c_str());
 }
 
 string Date::ToString(int32_t date) {

@@ -18,11 +18,13 @@ namespace duckdb {
 //! every row in a table
 class BoundCheckConstraint : public BoundConstraint {
 public:
-	BoundCheckConstraint(unique_ptr<Expression> expression)
-	    : BoundConstraint(ConstraintType::CHECK), expression(move(expression)) {
+	BoundCheckConstraint() : BoundConstraint(ConstraintType::CHECK) {
 	}
 
+	//! The expression
 	unique_ptr<Expression> expression;
+	//! The columns used by the CHECK constraint
+	unordered_set<column_t> bound_columns;
 };
 
 } // namespace duckdb

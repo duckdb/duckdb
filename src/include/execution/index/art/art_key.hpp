@@ -8,59 +8,44 @@
 
 #pragma once
 
-#include <stdint.h>
-#include <cstring>
-#include <memory>
-#include <assert.h>
 #include "common/common.hpp"
-#include <common/exception.hpp>
+#include "common/exception.hpp"
 
-using KeyLen = uint8_t;
-using namespace duckdb;
+namespace duckdb {
+
 class Key {
 public:
-	uint8_t len;
+	Key(unique_ptr<data_t[]> data, index_t len);
 
-	unique_ptr<uint8_t[]> data;
+	index_t len;
+	unique_ptr<data_t[]> data;
 
-	Key(bool isLittleEndian, TypeId type, uintptr_t k, uint8_t maxKeyLength) {
-		len = maxKeyLength;
-		data = unique_ptr<uint8_t[]>(new uint8_t[maxKeyLength]);
-		convert_to_binary_comparable(isLittleEndian, type, k);
+public:
+	template <class T> static unique_ptr<Key> CreateKey(T element, bool is_little_endian) {
+		auto data = Key::CreateData<T>(element, is_little_endian);
+		return make_unique<Key>(move(data), sizeof(element));
 	}
 
-	uint8_t flipSign(uint8_t keyByte) {
-		return keyByte ^ 128;
-	}
+public:
+	data_t &operator[](std::size_t i);
+	const data_t &operator[](std::size_t i) const;
+	bool operator>(const Key &k) const;
+	bool operator>=(const Key &k) const;
+	bool operator==(const Key &k) const;
 
-	void convert_to_binary_comparable(bool isLittleEndian, TypeId type, uintptr_t tid);
+	string ToString(bool is_little_endian, TypeId type);
 
-	Key() {
-	}
-
-	Key(const Key &key) = delete;
-
-	uint8_t &operator[](std::size_t i);
-
-	const uint8_t &operator[](std::size_t i) const;
-
-	bool operator>(const Key &k) const {
-		for (int i = 0; i < len; i++) {
-			if (data[i] > k.data[i])
-				return true;
-			else if (data[i] < k.data[i])
-				return false;
-		}
-		return false;
+private:
+	template <class T> static unique_ptr<data_t[]> CreateData(T value, bool is_little_endian) {
+		throw NotImplementedException("Cannot create data from this type");
 	}
 };
 
-inline uint8_t &Key::operator[](std::size_t i) {
-	assert(i <= len);
-	return data[i];
-}
+template <> unique_ptr<data_t[]> Key::CreateData(int8_t value, bool is_little_endian);
+template <> unique_ptr<data_t[]> Key::CreateData(int16_t value, bool is_little_endian);
+template <> unique_ptr<data_t[]> Key::CreateData(int32_t value, bool is_little_endian);
+template <> unique_ptr<data_t[]> Key::CreateData(int64_t value, bool is_little_endian);
 
-inline const uint8_t &Key::operator[](std::size_t i) const {
-	assert(i <= len);
-	return data[i];
-}
+template <> unique_ptr<Key> Key::CreateKey(string element, bool is_little_endian);
+
+} // namespace duckdb

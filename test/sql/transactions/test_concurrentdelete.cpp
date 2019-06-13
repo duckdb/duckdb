@@ -66,18 +66,21 @@ TEST_CASE("Sequential delete", "[transactions]") {
 
 	for (size_t i = 0; i < THREAD_COUNT; i++) {
 		// check the current count
-		REQUIRE_NO_FAIL(result = connections[i]->Query("SELECT SUM(i) FROM integers"));
+		result = connections[i]->Query("SELECT SUM(i) FROM integers");
+		REQUIRE_NO_FAIL(*result);
 		count = result->collection.chunks[0]->data[0].GetValue(0);
 		REQUIRE(count == sum);
 		// delete the elements for this thread
 		REQUIRE_NO_FAIL(connections[i]->Query("DELETE FROM integers WHERE i=" + to_string(i + 1)));
 		// check the updated count
-		REQUIRE_NO_FAIL(result = connections[i]->Query("SELECT SUM(i) FROM integers"));
+		result = connections[i]->Query("SELECT SUM(i) FROM integers");
+		REQUIRE_NO_FAIL(*result);
 		count = result->collection.chunks[0]->data[0].GetValue(0);
 		REQUIRE(count == sum - (i + 1) * INSERT_ELEMENTS);
 	}
 	// check the count on the original connection
-	REQUIRE_NO_FAIL(result = con.Query("SELECT SUM(i) FROM integers"));
+	result = con.Query("SELECT SUM(i) FROM integers");
+	REQUIRE_NO_FAIL(*result);
 	count = result->collection.chunks[0]->data[0].GetValue(0);
 	REQUIRE(count == sum);
 
@@ -87,7 +90,8 @@ TEST_CASE("Sequential delete", "[transactions]") {
 	}
 
 	// check that the count is 0 now
-	REQUIRE_NO_FAIL(result = con.Query("SELECT COUNT(i) FROM integers"));
+	result = con.Query("SELECT COUNT(i) FROM integers");
+	REQUIRE_NO_FAIL(*result);
 	count = result->collection.chunks[0]->data[0].GetValue(0);
 	REQUIRE(count == 0);
 }
@@ -193,7 +197,8 @@ TEST_CASE("Concurrent delete", "[transactions][.]") {
 	}
 
 	// check that the count is 0 now
-	REQUIRE_NO_FAIL(result = con.Query("SELECT COUNT(i) FROM integers"));
+	result = con.Query("SELECT COUNT(i) FROM integers");
+	REQUIRE_NO_FAIL(*result);
 	auto count = result->collection.chunks[0]->data[0].GetValue(0);
 	REQUIRE(count == 0);
 }

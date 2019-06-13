@@ -35,6 +35,9 @@ namespace duckdb {
 */
 class DataChunk {
 public:
+	//! Creates an empty DataChunk
+	DataChunk();
+
 	//! The amount of vectors that are part of this DataChunk.
 	count_t column_count;
 	//! The vectors owned by the DataChunk.
@@ -43,12 +46,12 @@ public:
 	//! vectors reference this selection vector.
 	sel_t *sel_vector;
 
-	DataChunk();
+	// strings owned by the chunk
+	StringHeap heap;
+	//! The selection vector of a chunk, if it owns it
+	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
 
-	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG
-	//! FUNCTION ONLY!
-	void Verify();
-
+public:
 	count_t size() {
 		if (column_count == 0) {
 			return 0;
@@ -56,12 +59,13 @@ public:
 		return data[0].count;
 	}
 	//! Initializes the DataChunk with the specified types to an empty DataChunk
-	//! that holds at most maximum_chunk_size elements.
 	//! This will create one vector of the specified type for each TypeId in the
 	//! types list. The vector will be referencing vector to the data owned by
 	//! the DataChunk.
 	//! If zero_data is set to true, the data is zero-initialized.
 	void Initialize(vector<TypeId> &types, bool zero_data = false);
+	//! Initializes an empty DataChunk with the given types. The vectors will *not* have any data allocated for them.
+	void InitializeEmpty(vector<TypeId> &types);
 	//! Append the other DataChunk to this one. The column count and types of
 	//! the two DataChunks have to match exactly. Throws an exception if there
 	//! is not enough space in the chunk.
@@ -117,10 +121,9 @@ public:
 
 	DataChunk(const DataChunk &) = delete;
 
-	// strings owned by the chunk
-	StringHeap heap;
-	//! The selection vector of a chunk, if it owns it
-	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
+	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG
+	//! FUNCTION ONLY!
+	void Verify();
 
 private:
 	//! The data owned by this DataChunk. This data is typically referenced by
