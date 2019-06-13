@@ -6,6 +6,7 @@
 #include "common/types/timestamp.hpp"
 
 #include <cstdlib>
+#include <cctype>
 
 using namespace duckdb;
 using namespace std;
