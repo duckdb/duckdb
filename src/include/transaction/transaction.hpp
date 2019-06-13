@@ -8,10 +8,10 @@
 
 #pragma once
 
+#include "catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "common/types/data_chunk.hpp"
 #include "common/unordered_map.hpp"
 #include "transaction/undo_buffer.hpp"
-#include "catalog/catalog_entry/sequence_catalog_entry.hpp"
 
 namespace duckdb {
 class SequenceCatalogEntry;
@@ -41,9 +41,9 @@ struct VersionInformation {
 
 class Transaction {
 public:
-	Transaction(transaction_t start_time, transaction_t transaction_id)
+	Transaction(transaction_t start_time, transaction_t transaction_id, timestamp_t start_timestamp)
 	    : start_time(start_time), transaction_id(transaction_id), commit_id(0), highest_active_query(0),
-	      active_query(MAXIMUM_QUERY_ID) {
+	      active_query(MAXIMUM_QUERY_ID), start_timestamp(start_timestamp) {
 	}
 
 	//! The start timestamp of this transaction
@@ -57,6 +57,8 @@ public:
 	//! The current active query for the transaction. Set to MAXIMUM_QUERY_ID if
 	//! no query is active.
 	transaction_t active_query;
+	//! The timestamp when the transaction started
+	timestamp_t start_timestamp;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	unordered_map<SequenceCatalogEntry *, SequenceValue> sequence_usage;
 
@@ -81,6 +83,11 @@ public:
 	//! Cleanup the undo buffer
 	void Cleanup() {
 		undo_buffer.Cleanup();
+	}
+
+	//
+	timestamp_t GetCurrentTransactionStartTimestamp() {
+		return start_timestamp;
 	}
 
 private:

@@ -82,6 +82,9 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddScalarFunction<DatePartFunction>(transaction, catalog);
 	AddScalarFunction<YearFunction>(transaction, catalog);
 
+	// timestamp
+	AddScalarFunction<AgeFunction>(transaction, catalog);
+
 	// misc
 	AddScalarFunction<NextvalFunction>(transaction, catalog);
 }
