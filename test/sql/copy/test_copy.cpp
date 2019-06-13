@@ -118,6 +118,112 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE_FAIL(con.Query("COPY test FROM '" + invalid_utf_csv + "' DELIMITER '|';"));
 }
 
+TEST_CASE("Test copy statement with long lines", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+
+	// Generate CSV file with a very long string
+	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
+	string big_string_a(100000, 'a');
+	string big_string_b(200000, 'b');
+	from_csv_file << 10 << "," << big_string_a << "," << 20 << endl;
+	from_csv_file << 20 << "," << big_string_b << "," << 30 << endl;
+	from_csv_file.close();
+
+	// loading CSV into a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);"));
+	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+
+	result = con.Query("SELECT LENGTH(b) FROM test ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {100000, 200000}));
+
+	result = con.Query("SELECT SUM(a), SUM(c) FROM test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {30}));
+	REQUIRE(CHECK_COLUMN(result, 1, {50}));
+}
+
+TEST_CASE("Test line endings", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+
+	// Generate CSV file with different line endings
+	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
+	from_csv_file << 10 << "," << "hello" << "," << 20 << "\r\n";
+	from_csv_file << 20 << "," << "world" << "," << 30 << '\n';
+	from_csv_file << 30 << "," << "test" << "," << 30 << '\r';
+	from_csv_file.close();
+
+	// loading CSV into a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);"));
+	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+	result = con.Query("SELECT LENGTH(b) FROM test ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {5, 5, 4}));
+
+	result = con.Query("SELECT SUM(a), SUM(c) FROM test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {60}));
+	REQUIRE(CHECK_COLUMN(result, 1, {80}));
+}
+
+TEST_CASE("Test Windows Newlines with a long file", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+
+	index_t line_count = 20000;
+	int64_t sum_a = 0, sum_c = 0;
+	// Generate CSV file with many strings
+	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
+	for(index_t i = 0; i < line_count; i++) {
+		from_csv_file << i << "," << "hello" << "," << i + 2 << "\r\n";
+		sum_a += i;
+		sum_c += i + 2;
+	}
+	from_csv_file.close();
+
+	// loading CSV into a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);"));
+	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(line_count)}));
+
+	result = con.Query("SELECT SUM(a), MIN(LENGTH(b)), MAX(LENGTH(b)), SUM(LENGTH(b)), SUM(c) FROM test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(sum_a)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(5)}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value::BIGINT(5)}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value::BIGINT(5 * line_count)}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value::BIGINT(sum_c)}));
+}
+
+TEST_CASE("Test lines that exceed the maximum allowed line size", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+
+	// Generate CSV file with many strings
+	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
+	// 20 MB string
+	string big_string(2048576, 'a');
+	from_csv_file << 10 << "," << big_string << "," << 20 << endl;
+	from_csv_file.close();
+
+
+	// loading CSV into a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);"));
+	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';"));
+}
+
 TEST_CASE("Test copy into from on-time dataset", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

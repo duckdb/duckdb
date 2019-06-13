@@ -39,7 +39,7 @@ private:
 	vector<index_t> column_oids;
 	vector<bool> set_to_default;
 
-	void PushValue(string &line, DataChunk &insert_chunk, index_t start, index_t end, index_t &column, index_t linenr);
+	void PushValue(char *line, DataChunk &insert_chunk, index_t start, index_t end, index_t &column, index_t linenr);
 	void Flush(ClientContext &context, DataChunk &parse_chunk, DataChunk &chunk, count_t &nr_elements, count_t &total,
 	           vector<bool> &set_to_default);
 };
