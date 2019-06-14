@@ -241,6 +241,11 @@ TEST_CASE("Aggregate only COUNT STAR", "[aggregations]") {
 	result = con.Query("SELECT i, COUNT(*) FROM integers GROUP BY i ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+
+	// test COUNT without the *
+	result = con.Query("SELECT i, COUNT() FROM integers GROUP BY i ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
 }
 
 TEST_CASE("GROUP BY NULL value", "[aggregations]") {
