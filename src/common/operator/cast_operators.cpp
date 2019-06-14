@@ -154,11 +154,11 @@ static bool IntegerCastLoop(const char *buf, T &result) {
 				// we just truncate them
 				// make sure everything after the period is a number
 				pos++;
-				do {
+				while(buf[pos]) {
 					if (!std::isdigit(buf[pos++])) {
 						return false;
 					}
-				} while(buf[pos]);
+				}
 				return true;
 			}
 			if (ALLOW_EXPONENT) {
@@ -243,12 +243,17 @@ template<class T, bool NEGATIVE>
 static bool DoubleCastLoop(const char *buf, T &result) {
 	index_t pos = NEGATIVE ? 1 : 0;
 	index_t decimal = 0;
+	index_t decimal_factor = 0;
 	while(buf[pos]) {
 		if (!std::isdigit(buf[pos])) {
 			// not a digit!
 			if (buf[pos] == '.') {
 				// decimal point
-				decimal = 10;
+				if (decimal_factor != 0) {
+					// nested periods
+					return false;
+				}
+				decimal_factor = 1;
 				pos++;
 				continue;
 			} else if (buf[pos] == 'e' || buf[pos] == 'E') {
@@ -259,6 +264,9 @@ static bool DoubleCastLoop(const char *buf, T &result) {
 				if (!TryIntegerCast<int64_t, false>(buf + pos, exponent)) {
 					return false;
 				}
+				if (decimal_factor > 1) {
+					result = result + (T)decimal / (T) decimal_factor;
+				}
 				result = result * pow(10, exponent);
 				return true;
 			} else {
@@ -266,12 +274,19 @@ static bool DoubleCastLoop(const char *buf, T &result) {
 			}
 		}
 		T digit = buf[pos++] - '0';
-		if (!decimal) {
+		if (decimal_factor == 0) {
 			result = result * 10 + (NEGATIVE ? -digit : digit);
 		} else {
-			result = result + (NEGATIVE ? -digit : digit) / decimal;
-			decimal *= 10;
+			if (decimal_factor >= 1000000000000000000) {
+				// decimal value will overflow if we parse more, ignore any subsequent numbers
+				continue;
+			}
+			decimal = decimal * 10 + (NEGATIVE ? -digit : digit);
+			decimal_factor *= 10;
 		}
+	}
+	if (decimal_factor > 1) {
+		result = result + (T)decimal / (T) decimal_factor;
 	}
 	return pos > (NEGATIVE ? 1 : 0);
 }
