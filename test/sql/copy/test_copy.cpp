@@ -436,10 +436,8 @@ TEST_CASE("Test copy from web_page csv", "[copy]") {
 	result = con.Query("SELECT * FROM web_page ORDER BY wp_web_page_sk LIMIT 3");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"AAAAAAAABAAAAAAA", "AAAAAAAACAAAAAAA", "AAAAAAAACAAAAAAA"}));
-	// REQUIRE(CHECK_COLUMN(result, 2,
-	//                      {Value("1997-09-03").CastAs(TypeId::DATE), Value("1997-09-03").CastAs(TypeId::DATE),
-	//                       Value("2000-09-03").CastAs(TypeId::DATE)}));
-	// REQUIRE(CHECK_COLUMN(result, 3, {Value(), Value("2000-09-02").CastAs(TypeId::DATE), Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value::DATE(1997, 9, 3), Value::DATE(1997, 9, 3), Value::DATE(2000, 9, 3)}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value(), Value::DATE(2000, 9, 2), Value()}));
 	REQUIRE(CHECK_COLUMN(result, 4, {2450810, 2450814, 2450814}));
 	REQUIRE(CHECK_COLUMN(result, 5, {2452620, 2452580, 2452611}));
 	REQUIRE(CHECK_COLUMN(result, 6, {"Y", "N", "N"}));
