@@ -3,6 +3,7 @@
 #include "catalog/catalog_set.hpp"
 #include "common/exception.hpp"
 #include "common/helper.hpp"
+#include "common/types/timestamp.hpp"
 #include "main/client_context.hpp"
 #include "main/database.hpp"
 #include "storage/storage_manager.hpp"
@@ -40,9 +41,10 @@ Transaction *TransactionManager::StartTransaction() {
 	// obtain the start time and transaction ID of this transaction
 	transaction_t start_time = current_start_timestamp++;
 	transaction_t transaction_id = current_transaction_id++;
+	timestamp_t start_timestamp = Timestamp::GetCurrentTimestamp();
 
 	// create the actual transaction
-	auto transaction = make_unique<Transaction>(start_time, transaction_id);
+	auto transaction = make_unique<Transaction>(start_time, transaction_id, start_timestamp);
 	auto transaction_ptr = transaction.get();
 
 	// store it in the set of active transactions

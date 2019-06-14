@@ -2,10 +2,10 @@
 
 #include "common/exception.hpp"
 
+#include <cctype>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
-#include <cctype>
 
 using namespace duckdb;
 using namespace std;
