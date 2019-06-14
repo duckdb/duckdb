@@ -35,8 +35,10 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "LIMIT";
 	case LogicalOperatorType::ORDER_BY:
 		return "ORDER_BY";
-	case LogicalOperatorType::COPY:
-		return "COPY";
+	case LogicalOperatorType::COPY_TO_FILE:
+		return "COPY_TO_FILE";
+	case LogicalOperatorType::COPY_FROM_FILE:
+		return "COPY_FROM_FILE";
 	case LogicalOperatorType::SUBQUERY:
 		return "SUBQUERY";
 	case LogicalOperatorType::JOIN:

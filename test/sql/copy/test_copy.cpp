@@ -155,6 +155,41 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1024}));
 }
 
+TEST_CASE("Test copy statement with default values", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+
+	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
+	int64_t expected_sum_a = 0;
+	int64_t expected_sum_c = 0;
+	for (int i = 0; i < 5000; i++) {
+		from_csv_file << i << endl;
+
+		expected_sum_a += i;
+		expected_sum_c += i + 7;
+	}
+	from_csv_file.close();
+
+	// Loading CSV into a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR DEFAULT('hello'), c INTEGER DEFAULT(3+4));"));
+	result = con.Query("COPY test (a) FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
+	result = con.Query("COPY test (c) FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
+
+	result = con.Query("SELECT COUNT(a), COUNT(b), COUNT(c), MIN(LENGTH(b)), MAX(LENGTH(b)), SUM(a), SUM(c) FROM test;");
+ 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
+ 	REQUIRE(CHECK_COLUMN(result, 1, {10000}));
+ 	REQUIRE(CHECK_COLUMN(result, 2, {10000}));
+ 	REQUIRE(CHECK_COLUMN(result, 3, {5}));
+ 	REQUIRE(CHECK_COLUMN(result, 4, {5}));
+ 	REQUIRE(CHECK_COLUMN(result, 5, {Value::BIGINT(expected_sum_a)}));
+ 	REQUIRE(CHECK_COLUMN(result, 6, {Value::BIGINT(expected_sum_c)}));
+}
+
 TEST_CASE("Test copy statement with long lines", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

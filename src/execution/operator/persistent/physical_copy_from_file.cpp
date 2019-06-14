@@ -12,52 +12,39 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalCopyFromFile::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalCopyFromFile::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+	auto &state = (PhysicalCopyFromFileOperatorState&) *state_;
 	auto &info = *this->info;
-	index_t total = 0;
-	index_t nr_elements = 0;
 
-	assert(info.is_from);
-	if (!context.db.file_system->FileExists(info.file_path)) {
-		throw Exception("File not found");
-	}
-
-	unique_ptr<istream> csv_stream;
-	if (StringUtil::EndsWith(StringUtil::Lower(info.file_path), ".gz")) {
-		csv_stream = make_unique<GzipStream>(info.file_path);
-	} else {
-		auto csv_local = make_unique<ifstream>();
-		csv_local->open(info.file_path);
-		csv_stream = move(csv_local);
-	}
-
-	BufferedCSVReader reader(*this, *csv_stream);
-	// initialize the insert_chunk with the actual to-be-inserted types
-	auto types = table->GetTypes();
-	reader.insert_chunk.Initialize(types);
-	// initialize the parse chunk with VARCHAR data
-	for (index_t i = 0; i < types.size(); i++) {
-		types[i] = TypeId::VARCHAR;
-	}
-	reader.parse_chunk.Initialize(types);
-	// handle the select list (if any)
-	if (info.select_list.size() > 0) {
-		reader.set_to_default.resize(types.size(), true);
-		for (index_t i = 0; i < info.select_list.size(); i++) {
-			auto &column = table->GetColumn(info.select_list[i]);
-			reader.column_oids.push_back(column.oid);
-			reader.set_to_default[column.oid] = false;
+	if (!state.csv_stream) {
+		// initialize CSV reader
+		// open the file
+		assert(info.is_from);
+		if (!context.db.file_system->FileExists(info.file_path)) {
+			throw IOException("File \"%s\" not found", info.file_path.c_str());
 		}
-	} else {
-		for (index_t i = 0; i < types.size(); i++) {
-			reader.column_oids.push_back(i);
+
+		// decide based on the extension which stream to use
+		if (StringUtil::EndsWith(StringUtil::Lower(info.file_path), ".gz")) {
+			state.csv_stream = make_unique<GzipStream>(info.file_path);
+		} else {
+			auto csv_local = make_unique<ifstream>();
+			csv_local->open(info.file_path);
+			state.csv_stream = move(csv_local);
 		}
+
+		state.csv_reader = make_unique<BufferedCSVReader>(info, sql_types, *state.csv_stream);
 	}
-	reader.ParseCSV(context);
-	total = reader.total + reader.nr_elements;
+	// read from the CSV reader
+	state.csv_reader->ParseCSV(chunk);
+}
 
-	chunk.data[0].count = 1;
-	chunk.data[0].SetValue(0, Value::BIGINT(total + nr_elements));
+unique_ptr<PhysicalOperatorState> PhysicalCopyFromFile::GetOperatorState() {
+	return make_unique<PhysicalCopyFromFileOperatorState>();
+}
 
-	state->finished = true;
+PhysicalCopyFromFileOperatorState::PhysicalCopyFromFileOperatorState() : PhysicalOperatorState(nullptr) {
+}
+
+PhysicalCopyFromFileOperatorState::~PhysicalCopyFromFileOperatorState() {
 }
