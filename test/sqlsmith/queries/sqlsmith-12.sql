@@ -31,6 +31,5 @@ SELECT
 FROM
     main.partsupp AS ref_0
 WHERE (ref_0.ps_suppkey IS NULL)
-OR (CAST(nullif (ref_0.ps_suppkey, 76) AS INTEGER)
-    IS NOT NULL)
+    OR (CAST(nullif (ref_0.ps_suppkey, 76) AS INTEGER) IS NOT NULL)
 LIMIT 121

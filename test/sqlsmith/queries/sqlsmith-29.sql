@@ -55,6 +55,6 @@ FROM (
 LIMIT 111) AS subq_1
 WHERE ((subq_1.c0 IS NOT NULL)
     OR (subq_1.c0 IS NOT NULL))
-OR ((1)
-    AND (subq_1.c2 IS NOT NULL))
+    OR ((1)
+        AND (subq_1.c2 IS NOT NULL))
 LIMIT 99

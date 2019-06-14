@@ -1,6 +1,7 @@
 #include "main/client_context.hpp"
 #include "parser/statement/copy_statement.hpp"
 #include "planner/binder.hpp"
+#include "parser/statement/insert_statement.hpp"
 #include "planner/statement/bound_copy_statement.hpp"
 
 using namespace duckdb;
@@ -11,10 +12,22 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CopyStatement &stmt) {
 	if (stmt.select_statement) {
 		// COPY from a query
 		result->select_statement = Bind(*stmt.select_statement);
+		result->names = {"Count"};
+		result->sql_types = {SQLType(SQLTypeId::BIGINT)};
 	} else {
 		assert(!stmt.info->table.empty());
 		// COPY to a table
-		result->table = context.catalog.GetTable(context.ActiveTransaction(), stmt.info->schema, stmt.info->table);
+		// generate an insert statement for the the to-be-inserted table
+		InsertStatement insert;
+		insert.table = stmt.info->table;
+		insert.schema = stmt.info->schema;
+		insert.columns = stmt.info->select_list;
+
+		// bind the insert statement to the base table
+		result->bound_insert = Bind(insert);
+		auto &bound_insert = (BoundInsertStatement &)*result->bound_insert;
+		// get the set of expected columns from the insert statement; these types will be parsed from the CSV
+		result->sql_types = bound_insert.expected_types;
 	}
 	result->info = move(stmt.info);
 	return move(result);

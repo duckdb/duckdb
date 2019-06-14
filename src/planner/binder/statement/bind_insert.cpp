@@ -35,8 +35,8 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			auto &col = result->table->columns[i];
 			auto entry = column_name_map.find(col.name);
 			if (entry == column_name_map.end()) {
-				// column not specified, set index to -1
-				result->column_index_map.push_back(-1);
+				// column not specified, set index to INVALID_INDEX
+				result->column_index_map.push_back(INVALID_INDEX);
 			} else {
 				// column was specified, set to the index
 				result->column_index_map.push_back(entry->second);

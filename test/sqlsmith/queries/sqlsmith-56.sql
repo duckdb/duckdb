@@ -30,59 +30,59 @@ FROM (
                 LIMIT 153))
         AND (
             CASE WHEN (((((((((EXISTS (
-                                                        SELECT
-                                                            ref_1.l_suppkey AS c0,
-                                                            subq_0.c0 AS c1,
-                                                            subq_0.c0 AS c2,
-                                                            ref_1.l_comment AS c3,
-                                                            subq_0.c0 AS c4,
-                                                            ref_3.s_acctbal AS c5,
-                                                            ref_1.l_discount AS c6,
-                                                            ref_1.l_comment AS c7,
-                                                            ref_1.l_receiptdate AS c8,
-                                                            subq_0.c0 AS c9,
-                                                            ref_1.l_partkey AS c10,
-                                                            ref_1.l_extendedprice AS c11,
-                                                            subq_0.c0 AS c12,
-                                                            ref_3.s_comment AS c13,
-                                                            ref_3.s_suppkey AS c14,
-                                                            subq_0.c0 AS c15,
-                                                            ref_3.s_phone AS c16,
-                                                            17 AS c17,
-                                                            ref_1.l_extendedprice AS c18
-                                                        FROM
-                                                            main.supplier AS ref_3
-                                                        WHERE
-                                                            0
-                                                        LIMIT 81))
-                                                OR (1))
-                                            OR (subq_0.c0 IS NULL))
-                                        OR (((1)
-                                                OR (ref_1.l_receiptdate IS NOT NULL))
-                                            AND ((0)
-                                                OR (subq_0.c0 IS NULL))))
-                                    AND (0))
-                                OR (1))
-                            OR ((0)
-                                OR ((ref_1.l_suppkey IS NULL)
-                                    OR ((0)
-                                        OR (1)))))
-                        OR ((1)
-                            AND ((1)
-                                AND (0))))
-                    AND ((((((((subq_0.c0 IS NULL)
-                                                OR (ref_1.l_discount IS NULL))
+                                                    SELECT
+                                                        ref_1.l_suppkey AS c0,
+                                                        subq_0.c0 AS c1,
+                                                        subq_0.c0 AS c2,
+                                                        ref_1.l_comment AS c3,
+                                                        subq_0.c0 AS c4,
+                                                        ref_3.s_acctbal AS c5,
+                                                        ref_1.l_discount AS c6,
+                                                        ref_1.l_comment AS c7,
+                                                        ref_1.l_receiptdate AS c8,
+                                                        subq_0.c0 AS c9,
+                                                        ref_1.l_partkey AS c10,
+                                                        ref_1.l_extendedprice AS c11,
+                                                        subq_0.c0 AS c12,
+                                                        ref_3.s_comment AS c13,
+                                                        ref_3.s_suppkey AS c14,
+                                                        subq_0.c0 AS c15,
+                                                        ref_3.s_phone AS c16,
+                                                        17 AS c17,
+                                                        ref_1.l_extendedprice AS c18
+                                                    FROM
+                                                        main.supplier AS ref_3
+                                                    WHERE
+                                                        0
+                                                    LIMIT 81))
                                             OR (1))
-                                        AND (ref_1.l_shipinstruct IS NOT NULL))
-                                    OR (0))
-                                OR (ref_1.l_receiptdate IS NOT NULL))
-                            OR (subq_0.c0 IS NULL))
-                        AND (0)))
+                                        OR (subq_0.c0 IS NULL))
+                                    OR (((1)
+                                            OR (ref_1.l_receiptdate IS NOT NULL))
+                                        AND ((0)
+                                            OR (subq_0.c0 IS NULL))))
+                                AND (0))
+                            OR (1))
+                        OR ((0)
+                            OR ((ref_1.l_suppkey IS NULL)
+                                OR ((0)
+                                    OR (1)))))
+                    OR ((1)
+                        AND ((1)
+                            AND (0))))
+                AND ((((((((subq_0.c0 IS NULL)
+                                            OR (ref_1.l_discount IS NULL))
+                                        OR (1))
+                                    AND (ref_1.l_shipinstruct IS NOT NULL))
+                                OR (0))
+                            OR (ref_1.l_receiptdate IS NOT NULL))
+                        OR (subq_0.c0 IS NULL))
+                    AND (0)))
                 AND (1) THEN
                 ref_1.l_linestatus
             ELSE
                 ref_1.l_linestatus
             END IS NULL))
 WHERE (subq_0.c0 IS NULL)
-OR (subq_0.c0 IS NULL)
+    OR (subq_0.c0 IS NULL)
 LIMIT 100

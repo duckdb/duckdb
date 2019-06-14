@@ -15,31 +15,27 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 	if (children.size() > 0) {
 		// insert from SELECT statement
 
-		// the child can include a scan of the table we are inserting from
-		// hence if we directly append to the same table, we will get into an
-		// infinite loop instead, buffer all the entries
-		ChunkCollection collection;
-		while (true) {
-			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-			if (state->child_chunk.size() == 0) {
-				break;
-			}
-			collection.Append(state->child_chunk);
-		}
-
 		// create the chunk to insert from
 		DataChunk insert_chunk;
 		auto types = table->GetTypes();
 
 		insert_chunk.Initialize(types);
-		for (auto &chunkptr : collection.chunks) {
-			auto &chunk = *chunkptr;
+		while (true) {
+			// scan the children for chunks to insert
+			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+			if (state->child_chunk.size() == 0) {
+				break;
+			}
+			auto &chunk = state->child_chunk;
+
+			state->child_chunk.Flatten();
+
 			ExpressionExecutor executor(chunk);
 			insert_chunk.Reset();
 			if (column_index_map.size() > 0) {
 				// columns specified by the user, use column_index_map
 				for (index_t i = 0; i < table->columns.size(); i++) {
-					if (column_index_map[i] < 0) {
+					if (column_index_map[i] == INVALID_INDEX) {
 						// insert default value
 						executor.ExecuteExpression(*bound_defaults[i], insert_chunk.data[i]);
 					} else {
@@ -74,12 +70,12 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			if (column_index_map.size() > 0) {
 				// columns specified by the user, use column_index_map
 				for (index_t i = 0; i < table->columns.size(); i++) {
-					if (column_index_map[i] < 0) {
+					if (column_index_map[i] == INVALID_INDEX) {
 						// insert default value
 						executor.ExecuteExpression(*bound_defaults[i], temp_chunk.data[i]);
 					} else {
 						// get value from constants
-						assert(column_index_map[i] < (int)list.size());
+						assert(column_index_map[i] < list.size());
 						auto &expr = list[column_index_map[i]];
 						executor.ExecuteExpression(*expr, temp_chunk.data[i]);
 					}

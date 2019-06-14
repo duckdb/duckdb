@@ -19,50 +19,73 @@ struct Cast {
 	}
 };
 
+struct TryCast {
+	template <class SRC, class DST> static inline bool Operation(SRC left, DST &target) {
+		target = Cast::Operation(left);
+		return true;
+	}
+};
+
 //===--------------------------------------------------------------------===//
 // Numeric -> int8_t casts
 //===--------------------------------------------------------------------===//
+template <> bool TryCast::Operation(int16_t left, int8_t &result);
+template <> bool TryCast::Operation(int32_t left, int8_t &result);
+template <> bool TryCast::Operation(int64_t left, int8_t &result);
+template <> bool TryCast::Operation(float left, int8_t &result);
+template <> bool TryCast::Operation(double left, int8_t &result);
+
 template <> int8_t Cast::Operation(int16_t left);
 template <> int8_t Cast::Operation(int32_t left);
 template <> int8_t Cast::Operation(int64_t left);
-template <> int8_t Cast::Operation(uint64_t left);
+template <> int8_t Cast::Operation(float left);
 template <> int8_t Cast::Operation(double left);
 //===--------------------------------------------------------------------===//
 // Numeric -> int16_t casts
 //===--------------------------------------------------------------------===//
+template <> bool TryCast::Operation(int32_t left, int16_t &result);
+template <> bool TryCast::Operation(int64_t left, int16_t &result);
+template <> bool TryCast::Operation(float left, int16_t &result);
+template <> bool TryCast::Operation(double left, int16_t &result);
+
 template <> int16_t Cast::Operation(int32_t left);
 template <> int16_t Cast::Operation(int64_t left);
-template <> int16_t Cast::Operation(uint64_t left);
+template <> int16_t Cast::Operation(float left);
 template <> int16_t Cast::Operation(double left);
 //===--------------------------------------------------------------------===//
 // Numeric -> int32_t casts
 //===--------------------------------------------------------------------===//
+template <> bool TryCast::Operation(int64_t left, int32_t &result);
+template <> bool TryCast::Operation(float left, int32_t &result);
+template <> bool TryCast::Operation(double left, int32_t &result);
+
 template <> int32_t Cast::Operation(int64_t left);
-template <> int32_t Cast::Operation(uint64_t left);
+template <> int32_t Cast::Operation(float left);
 template <> int32_t Cast::Operation(double left);
 //===--------------------------------------------------------------------===//
 // Numeric -> int64_t casts
 //===--------------------------------------------------------------------===//
-template <> int64_t Cast::Operation(uint64_t left);
-template <> int64_t Cast::Operation(double left);
-//===--------------------------------------------------------------------===//
-// Numeric -> uint64_t casts
-//===--------------------------------------------------------------------===//
-template <> uint64_t Cast::Operation(int8_t left);
-template <> uint64_t Cast::Operation(int16_t left);
-template <> uint64_t Cast::Operation(int32_t left);
-template <> uint64_t Cast::Operation(int64_t left);
-template <> uint64_t Cast::Operation(double left);
+template <> bool TryCast::Operation(float left, int64_t &result);
+template <> bool TryCast::Operation(double left, int64_t &result);
 
+template <> int64_t Cast::Operation(float left);
+template <> int64_t Cast::Operation(double left);
 //===--------------------------------------------------------------------===//
 // String -> Numeric Casts
 //===--------------------------------------------------------------------===//
+template <> bool TryCast::Operation(const char *left, bool &result);
+template <> bool TryCast::Operation(const char *left, int8_t &result);
+template <> bool TryCast::Operation(const char *left, int16_t &result);
+template <> bool TryCast::Operation(const char *left, int32_t &result);
+template <> bool TryCast::Operation(const char *left, int64_t &result);
+template <> bool TryCast::Operation(const char *left, float &result);
+template <> bool TryCast::Operation(const char *left, double &result);
+
 template <> bool Cast::Operation(const char *left);
 template <> int8_t Cast::Operation(const char *left);
 template <> int16_t Cast::Operation(const char *left);
 template <> int32_t Cast::Operation(const char *left);
 template <> int64_t Cast::Operation(const char *left);
-template <> uint64_t Cast::Operation(const char *left);
 template <> float Cast::Operation(const char *left);
 template <> double Cast::Operation(const char *left);
 //===--------------------------------------------------------------------===//

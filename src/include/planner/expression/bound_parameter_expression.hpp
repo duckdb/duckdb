@@ -15,32 +15,22 @@ namespace duckdb {
 
 class BoundParameterExpression : public Expression {
 public:
-	BoundParameterExpression(index_t parameter_nr)
-	    : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, TypeId::INVALID),
-	      sql_type(SQLType(SQLTypeId::INVALID)), parameter_nr(parameter_nr), value(nullptr) {
-	}
+	BoundParameterExpression(index_t parameter_nr);
 
 	SQLType sql_type;
 	index_t parameter_nr;
 	Value *value;
 
 public:
-	bool IsScalar() const override {
-		return true;
-	}
-	bool HasParameter() const override {
-		return true;
-	}
-	bool IsFoldable() const override {
-		return false;
-	}
+	bool IsScalar() const override;
+	bool HasParameter() const override;
+	bool IsFoldable() const override;
 
-	string ToString() const override {
-		return std::to_string(parameter_nr);
-	}
+	string ToString() const override;
 
-	unique_ptr<Expression> Copy() override {
-		return make_unique<BoundParameterExpression>(parameter_nr);
-	}
+	bool Equals(const BaseExpression *other) const override;
+	uint64_t Hash() const override;
+
+	unique_ptr<Expression> Copy() override;
 };
 } // namespace duckdb

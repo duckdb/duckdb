@@ -70,8 +70,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalLimit &)op);
 	case LogicalOperatorType::ORDER_BY:
 		return CreatePlan((LogicalOrder &)op);
-	case LogicalOperatorType::COPY:
-		return CreatePlan((LogicalCopy &)op);
+	case LogicalOperatorType::COPY_FROM_FILE:
+		return CreatePlan((LogicalCopyFromFile &)op);
+	case LogicalOperatorType::COPY_TO_FILE:
+		return CreatePlan((LogicalCopyToFile &)op);
 	case LogicalOperatorType::TABLE_FUNCTION:
 		return CreatePlan((LogicalTableFunction &)op);
 	case LogicalOperatorType::ANY_JOIN:

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/operator/logical_copy.hpp
+// planner/operator/logical_copy_from_file.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,20 +13,20 @@
 
 namespace duckdb {
 
-class LogicalCopy : public LogicalOperator {
+class LogicalCopyFromFile : public LogicalOperator {
 public:
-	LogicalCopy(TableCatalogEntry *table, unique_ptr<CopyInfo> info)
-	    : LogicalOperator(LogicalOperatorType::COPY), table(table), info(move(info)) {
+	LogicalCopyFromFile(unique_ptr<CopyInfo> info, vector<SQLType> sql_types)
+	    : LogicalOperator(LogicalOperatorType::COPY_FROM_FILE), info(move(info)), sql_types(sql_types) {
 	}
 
-	TableCatalogEntry *table;
 	unique_ptr<CopyInfo> info;
-	vector<string> names;
 	vector<SQLType> sql_types;
 
 protected:
 	void ResolveTypes() override {
-		types.push_back(TypeId::BIGINT);
+		for (auto &type : sql_types) {
+			types.push_back(GetInternalType(type));
+		}
 	}
 };
 } // namespace duckdb

@@ -10,6 +10,7 @@
 
 #include "planner/bound_query_node.hpp"
 #include "planner/bound_sql_statement.hpp"
+#include "planner/statement/bound_insert_statement.hpp"
 
 namespace duckdb {
 class TableCatalogEntry;
@@ -22,10 +23,13 @@ public:
 
 	//! The CopyInfo
 	unique_ptr<CopyInfo> info;
-	//! The destination table (only for COPY from file -> database)
-	TableCatalogEntry *table;
+	//! The bound insert statement (only for COPY from file -> database)
+	unique_ptr<BoundSQLStatement> bound_insert;
 	// The bound SQL statement (only for COPY from database -> file)
 	unique_ptr<BoundQueryNode> select_statement;
+
+	vector<string> names;
+	vector<SQLType> sql_types;
 
 public:
 	vector<string> GetNames() override {
