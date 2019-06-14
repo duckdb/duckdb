@@ -68,7 +68,7 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			if (column_index_map.size() > 0) {
 				// columns specified by the user, use column_index_map
 				for (index_t i = 0; i < table->columns.size(); i++) {
-					if (column_index_map[i] < 0) {
+					if (column_index_map[i] == INVALID_INDEX) {
 						// insert default value
 						executor.ExecuteExpression(*bound_defaults[i], temp_chunk.data[i]);
 					} else {
