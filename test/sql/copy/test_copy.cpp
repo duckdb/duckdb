@@ -35,8 +35,9 @@ TEST_CASE("Test copy statement", "[copy]") {
 
 	// Generate CSV file With ; as delimiter and complex strings
 	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
-	for (int i = 0; i < 5000; i++)
+	for (int i = 0; i < 5000; i++) {
 		from_csv_file << i << "," << i << ", test" << endl;
+	}
 	from_csv_file.close();
 
 	// Loading CSV into a table
@@ -65,6 +66,11 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 2, {" test", " test", " test"}));
 
+	// test too few rows
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_too_few_rows(a INTEGER, b INTEGER, c VARCHAR, d INTEGER);"));
+	REQUIRE_FAIL(con.Query("COPY test_too_few_rows FROM '" + fs.JoinPath(csv_path, "test2.csv") + "';"));
+
+
 	//  Creating CSV from Query
 	result = con.Query("COPY (select a,b from test where a < 4000) to '" + fs.JoinPath(csv_path, "test3.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {4000}));
@@ -92,8 +98,9 @@ TEST_CASE("Test copy statement", "[copy]") {
 	// use a different delimiter
 	auto pipe_csv = fs.JoinPath(csv_path, "test_pipe.csv");
 	ofstream from_csv_file_pipe(pipe_csv);
-	for (int i = 0; i < 10; i++)
+	for (int i = 0; i < 10; i++) {
 		from_csv_file_pipe << i << "|" << i << "|test" << endl;
+	}
 	from_csv_file_pipe.close();
 
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER,c VARCHAR(10));");
@@ -116,6 +123,36 @@ TEST_CASE("Test copy statement", "[copy]") {
 		from_csv_file_utf << i << "42|42|\xe2\x82\x28" << endl;
 	from_csv_file_utf.close();
 	REQUIRE_FAIL(con.Query("COPY test FROM '" + invalid_utf_csv + "' DELIMITER '|';"));
+
+	// empty file
+	ofstream empty_file(fs.JoinPath(csv_path, "empty.csv"));
+	empty_file.close();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE empty_table (a INTEGER, b INTEGER,c VARCHAR(10));"));
+	result = con.Query("COPY empty_table FROM '" + fs.JoinPath(csv_path, "empty.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	// unterminated quotes
+
+	// empty file
+	ofstream unterminated_quotes_file(fs.JoinPath(csv_path, "unterminated.csv"));
+	unterminated_quotes_file << "\"hello\n\n world\n";
+	unterminated_quotes_file.close();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE unterminated (a VARCHAR);"));
+	REQUIRE_FAIL(con.Query("COPY unterminated FROM '" + fs.JoinPath(csv_path, "unterminated.csv") + "';"));
+
+	// 1024 rows
+	ofstream csv_vector_size(fs.JoinPath(csv_path, "vsize.csv"));
+	for (int i = 0; i < 1024; i++) {
+		csv_vector_size << i << "," << i << ", test" << endl;
+	}
+	csv_vector_size.close();
+
+	// Loading CSV into a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE vsize (a INTEGER, b INTEGER,c VARCHAR(10));"));
+	result = con.Query("COPY vsize FROM '" + fs.JoinPath(csv_path, "vsize.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {1024}));
 }
 
 TEST_CASE("Test copy statement with long lines", "[copy]") {
