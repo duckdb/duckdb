@@ -265,7 +265,11 @@ static bool DoubleCastLoop(const char *buf, T &result) {
 					return false;
 				}
 				if (decimal_factor > 1) {
-					result = result + (T)decimal / (T) decimal_factor;
+					if (NEGATIVE) {
+						result -= (T)decimal / (T) decimal_factor;
+					} else {
+						result += (T)decimal / (T) decimal_factor;
+					}
 				}
 				result = result * pow(10, exponent);
 				return true;
@@ -281,12 +285,16 @@ static bool DoubleCastLoop(const char *buf, T &result) {
 				// decimal value will overflow if we parse more, ignore any subsequent numbers
 				continue;
 			}
-			decimal = decimal * 10 + (NEGATIVE ? -digit : digit);
+			decimal = decimal * 10 + digit;
 			decimal_factor *= 10;
 		}
 	}
 	if (decimal_factor > 1) {
-		result = result + (T)decimal / (T) decimal_factor;
+		if (NEGATIVE) {
+			result -= (T)decimal / (T) decimal_factor;
+		} else {
+			result += (T)decimal / (T) decimal_factor;
+		}
 	}
 	return pos > (NEGATIVE ? 1 : 0);
 }
