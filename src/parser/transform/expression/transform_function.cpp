@@ -192,7 +192,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
 	} else {
 		// Aggregate function
 		assert(!root->over); // see above
-		if (root->agg_star) {
+		if (root->agg_star || (agg_fun_type == ExpressionType::AGGREGATE_COUNT && !root->args)) {
 			return make_unique<AggregateExpression>(agg_fun_type, make_unique<StarExpression>());
 		} else {
 			if (root->agg_distinct) {
@@ -208,6 +208,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
 					break;
 				}
 			}
+
 			if (!root->args) {
 				throw NotImplementedException("Aggregation over zero columns not supported!");
 			} else if (root->args->length < 2) {
