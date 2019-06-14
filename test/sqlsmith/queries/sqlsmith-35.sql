@@ -18,9 +18,9 @@ FROM (
     WHERE
         ref_0.c_mktsegment IS NULL) AS subq_0
 WHERE (subq_0.c8 IS NOT NULL)
-AND ((subq_0.c7 IS NOT NULL)
-    AND ((subq_0.c7 IS NULL)
-        OR ((1)
-            OR ((subq_0.c6 IS NOT NULL)
-                OR (subq_0.c3 IS NULL)))))
+    AND ((subq_0.c7 IS NOT NULL)
+        AND ((subq_0.c7 IS NULL)
+            OR ((1)
+                OR ((subq_0.c6 IS NOT NULL)
+                    OR (subq_0.c3 IS NULL)))))
 LIMIT 105

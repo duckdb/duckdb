@@ -24,8 +24,8 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CopyStatement &stmt) {
 		insert.columns = stmt.info->select_list;
 
 		// bind the insert statement to the base table
-		result->bound_insert  = Bind(insert);
-		auto &bound_insert = (BoundInsertStatement&) *result->bound_insert;
+		result->bound_insert = Bind(insert);
+		auto &bound_insert = (BoundInsertStatement &)*result->bound_insert;
 		// get the set of expected columns from the insert statement; these types will be parsed from the CSV
 		result->sql_types = bound_insert.expected_types;
 	}

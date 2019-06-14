@@ -46,7 +46,7 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 
 	result = con.Query("SELECT COUNT(a), SUM(a) FROM test;");
- 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
+	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 	REQUIRE(CHECK_COLUMN(result, 1, {12497500}));
 
 	result = con.Query("SELECT * FROM test ORDER BY 1 LIMIT 3 ");
@@ -69,7 +69,6 @@ TEST_CASE("Test copy statement", "[copy]") {
 	// test too few rows
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_too_few_rows(a INTEGER, b INTEGER, c VARCHAR, d INTEGER);"));
 	REQUIRE_FAIL(con.Query("COPY test_too_few_rows FROM '" + fs.JoinPath(csv_path, "test2.csv") + "';"));
-
 
 	//  Creating CSV from Query
 	result = con.Query("COPY (select a,b from test where a < 4000) to '" + fs.JoinPath(csv_path, "test3.csv") + "';");
@@ -180,14 +179,15 @@ TEST_CASE("Test copy statement with default values", "[copy]") {
 	result = con.Query("COPY test (c) FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 
-	result = con.Query("SELECT COUNT(a), COUNT(b), COUNT(c), MIN(LENGTH(b)), MAX(LENGTH(b)), SUM(a), SUM(c) FROM test;");
- 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
- 	REQUIRE(CHECK_COLUMN(result, 1, {10000}));
- 	REQUIRE(CHECK_COLUMN(result, 2, {10000}));
- 	REQUIRE(CHECK_COLUMN(result, 3, {5}));
- 	REQUIRE(CHECK_COLUMN(result, 4, {5}));
- 	REQUIRE(CHECK_COLUMN(result, 5, {Value::BIGINT(expected_sum_a)}));
- 	REQUIRE(CHECK_COLUMN(result, 6, {Value::BIGINT(expected_sum_c)}));
+	result =
+	    con.Query("SELECT COUNT(a), COUNT(b), COUNT(c), MIN(LENGTH(b)), MAX(LENGTH(b)), SUM(a), SUM(c) FROM test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10000}));
+	REQUIRE(CHECK_COLUMN(result, 2, {10000}));
+	REQUIRE(CHECK_COLUMN(result, 3, {5}));
+	REQUIRE(CHECK_COLUMN(result, 4, {5}));
+	REQUIRE(CHECK_COLUMN(result, 5, {Value::BIGINT(expected_sum_a)}));
+	REQUIRE(CHECK_COLUMN(result, 6, {Value::BIGINT(expected_sum_c)}));
 }
 
 TEST_CASE("Test copy statement with long lines", "[copy]") {
@@ -281,7 +281,7 @@ TEST_CASE("Test copy statement with many empty lines", "[copy]") {
 	// Generate CSV file with a very long string
 	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
 	from_csv_file << "1\n";
-	for(index_t i = 0; i < 19999; i++) {
+	for (index_t i = 0; i < 19999; i++) {
 		from_csv_file << "\n";
 	}
 	from_csv_file.close();
@@ -304,9 +304,15 @@ TEST_CASE("Test line endings", "[copy]") {
 
 	// Generate CSV file with different line endings
 	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
-	from_csv_file << 10 << "," << "hello" << "," << 20 << "\r\n";
-	from_csv_file << 20 << "," << "world" << "," << 30 << '\n';
-	from_csv_file << 30 << "," << "test" << "," << 30 << '\r';
+	from_csv_file << 10 << ","
+	              << "hello"
+	              << "," << 20 << "\r\n";
+	from_csv_file << 20 << ","
+	              << "world"
+	              << "," << 30 << '\n';
+	from_csv_file << 30 << ","
+	              << "test"
+	              << "," << 30 << '\r';
 	from_csv_file.close();
 
 	// loading CSV into a table
@@ -333,8 +339,10 @@ TEST_CASE("Test Windows Newlines with a long file", "[copy]") {
 	int64_t sum_a = 0, sum_c = 0;
 	// Generate CSV file with many strings
 	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
-	for(index_t i = 0; i < line_count; i++) {
-		from_csv_file << i << "," << "hello" << "," << i + 2 << "\r\n";
+	for (index_t i = 0; i < line_count; i++) {
+		from_csv_file << i << ","
+		              << "hello"
+		              << "," << i + 2 << "\r\n";
 		sum_a += i;
 		sum_c += i + 2;
 	}
@@ -357,7 +365,7 @@ TEST_CASE("Test Windows Newlines with a long file", "[copy]") {
 	// generate a csv file with one value and many empty values
 	ofstream from_csv_file_empty(fs.JoinPath(csv_path, "test2.csv"));
 	from_csv_file_empty << 1 << "\r\n";
-	for(index_t i = 0; i < line_count - 1; i++) {
+	for (index_t i = 0; i < line_count - 1; i++) {
 		from_csv_file_empty << "\r\n";
 	}
 	from_csv_file_empty.close();

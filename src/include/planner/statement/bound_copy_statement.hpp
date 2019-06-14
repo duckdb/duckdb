@@ -30,6 +30,7 @@ public:
 
 	vector<string> names;
 	vector<SQLType> sql_types;
+
 public:
 	vector<string> GetNames() override {
 		return {"Count"};

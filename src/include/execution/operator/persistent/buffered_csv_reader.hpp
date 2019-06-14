@@ -18,6 +18,7 @@ struct CopyInfo;
 class BufferedCSVReader {
 	static constexpr index_t INITIAL_BUFFER_SIZE = 16384;
 	static constexpr index_t MAXIMUM_CSV_LINE_SIZE = 1048576;
+
 public:
 	BufferedCSVReader(CopyInfo &info, vector<SQLType> sql_types, std::istream &source);
 
@@ -36,9 +37,11 @@ public:
 	vector<unique_ptr<char[]>> cached_buffers;
 
 	DataChunk parse_chunk;
+
 public:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	void ParseCSV(DataChunk &insert_chunk);
+
 private:
 	//! Adds a value to the current row
 	void AddValue(char *str_val, index_t length, index_t &column);
@@ -50,4 +53,4 @@ private:
 	bool ReadBuffer(index_t &start);
 };
 
-}
+} // namespace duckdb

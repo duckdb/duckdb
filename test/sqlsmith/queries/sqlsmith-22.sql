@@ -28,7 +28,7 @@ SELECT
     subq_0.c3 AS c18,
     subq_0.c0 AS c19,
     CASE WHEN ((subq_0.c2 IS NOT NULL)
-            AND (subq_0.c2 IS NOT NULL))
+        AND (subq_0.c2 IS NOT NULL))
         AND ((subq_0.c1 IS NULL)
             OR ((EXISTS (
                         SELECT

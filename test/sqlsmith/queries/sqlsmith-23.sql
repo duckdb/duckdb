@@ -1,54 +1,54 @@
 INSERT INTO main.supplier
-        VALUES (68, DEFAULT, CASE WHEN ((25 IS NULL)
-                    AND ((((EXISTS (
-                                        SELECT
-                                            (
-                                                SELECT
-                                                    o_comment
-                                                FROM
-                                                    main.orders
-                                                LIMIT 1 offset 4) AS c0,
-                                            ref_0.s_nationkey AS c1,
-                                            ref_0.s_suppkey AS c2,
-                                            ref_0.s_comment AS c3,
-                                            ref_0.s_suppkey AS c4,
-                                            ref_0.s_suppkey AS c5,
-                                            ref_0.s_acctbal AS c6,
-                                            ref_0.s_name AS c7,
-                                            ref_0.s_phone AS c8,
-                                            ref_0.s_acctbal AS c9,
-                                            ref_0.s_nationkey AS c10,
-                                            ref_0.s_suppkey AS c11,
-                                            ref_0.s_name AS c12,
-                                            ref_0.s_address AS c13
-                                        FROM
-                                            main.supplier AS ref_0
-                                        WHERE
-                                            0
-                                        LIMIT 51))
-                                AND (63 IS NOT NULL))
-                            OR (55 IS NOT NULL))
-                        OR ((((6 IS NOT NULL)
-                                    OR (8 IS NULL))
-                                OR (0))
-                            AND (1))))
-                AND (EXISTS (
-                        SELECT
-                            (
+    VALUES (68, DEFAULT, CASE WHEN ((25 IS NULL)
+            AND ((((EXISTS (
                                 SELECT
-                                    s_suppkey
+                                    (
+                                        SELECT
+                                            o_comment
+                                        FROM
+                                            main.orders
+                                        LIMIT 1 offset 4) AS c0,
+                                    ref_0.s_nationkey AS c1,
+                                    ref_0.s_suppkey AS c2,
+                                    ref_0.s_comment AS c3,
+                                    ref_0.s_suppkey AS c4,
+                                    ref_0.s_suppkey AS c5,
+                                    ref_0.s_acctbal AS c6,
+                                    ref_0.s_name AS c7,
+                                    ref_0.s_phone AS c8,
+                                    ref_0.s_acctbal AS c9,
+                                    ref_0.s_nationkey AS c10,
+                                    ref_0.s_suppkey AS c11,
+                                    ref_0.s_name AS c12,
+                                    ref_0.s_address AS c13
                                 FROM
-                                    main.supplier
-                                LIMIT 1 offset 4) AS c0,
-                            60 AS c1,
-                            ref_1.o_orderpriority AS c2
-                        FROM
-                            main.orders AS ref_1
-                        WHERE (ref_1.o_orderpriority IS NULL)
-                        AND ((1)
-                            AND ((28 IS NOT NULL)
-                                AND (1)))
-                    LIMIT 98)) THEN
+                                    main.supplier AS ref_0
+                                WHERE
+                                    0
+                                LIMIT 51))
+                        AND (63 IS NOT NULL))
+                    OR (55 IS NOT NULL))
+                OR ((((6 IS NOT NULL)
+                            OR (8 IS NULL))
+                        OR (0))
+                    AND (1))))
+            AND (EXISTS (
+                    SELECT
+                        (
+                            SELECT
+                                s_suppkey
+                            FROM
+                                main.supplier
+                            LIMIT 1 offset 4) AS c0,
+                        60 AS c1,
+                        ref_1.o_orderpriority AS c2
+                    FROM
+                        main.orders AS ref_1
+                    WHERE (ref_1.o_orderpriority IS NULL)
+                    AND ((1)
+                        AND ((28 IS NOT NULL)
+                            AND (1)))
+                LIMIT 98)) THEN
             CAST(NULL AS VARCHAR)
         ELSE
             CAST(NULL AS VARCHAR)
@@ -57,58 +57,58 @@ INSERT INTO main.supplier
         CAST(NULL AS VARCHAR),
         CAST(NULL AS DECIMAL),
         CASE WHEN (EXISTS (
-                    SELECT
-                        (
-                            SELECT
-                                l_suppkey
-                            FROM
-                                main.lineitem
-                            LIMIT 1 offset 4) AS c0,
-                        subq_0.c0 AS c1,
-                        64 AS c2,
-                        subq_0.c1 AS c3,
-                        (
-                            SELECT
-                                p_retailprice
-                            FROM
-                                main.part
-                            LIMIT 1 offset 6) AS c4,
-                        subq_0.c0 AS c5
-                    FROM (
+                SELECT
+                    (
                         SELECT
-                            ref_2.c_nationkey AS c0,
-                            ref_2.c_phone AS c1
+                            l_suppkey
                         FROM
-                            main.customer AS ref_2
-                        WHERE
-                            1) AS subq_0
-                    WHERE ((subq_0.c0 IS NULL)
-                        OR (1))
-                    OR (EXISTS (
-                            SELECT
-                                ref_3.p_name AS c0, subq_0.c0 AS c1
-                            FROM
-                                main.part AS ref_3
-                            WHERE (((ref_3.p_type IS NOT NULL)
-                                    AND (ref_3.p_type IS NULL))
-                                OR (0))
-                            AND (((EXISTS (
-                                            SELECT
-                                                subq_0.c1 AS c0
-                                            FROM
-                                                main.orders AS ref_4
-                                            WHERE (ref_4.o_orderstatus IS NULL)
-                                            OR ((ref_4.o_comment IS NOT NULL)
-                                                AND ((((1)
-                                                            OR (0))
-                                                        AND (0))
-                                                    AND ((0)
-                                                        OR ((1)
-                                                            AND (1)))))
-                                        LIMIT 134))
-                                OR (ref_3.p_retailprice IS NOT NULL))
-                            AND (0))))))
-        AND ((1)
+                            main.lineitem
+                        LIMIT 1 offset 4) AS c0,
+                    subq_0.c0 AS c1,
+                    64 AS c2,
+                    subq_0.c1 AS c3,
+                    (
+                        SELECT
+                            p_retailprice
+                        FROM
+                            main.part
+                        LIMIT 1 offset 6) AS c4,
+                    subq_0.c0 AS c5
+                FROM (
+                    SELECT
+                        ref_2.c_nationkey AS c0,
+                        ref_2.c_phone AS c1
+                    FROM
+                        main.customer AS ref_2
+                    WHERE
+                        1) AS subq_0
+                WHERE ((subq_0.c0 IS NULL)
+                    OR (1))
+                OR (EXISTS (
+                        SELECT
+                            ref_3.p_name AS c0, subq_0.c0 AS c1
+                        FROM
+                            main.part AS ref_3
+                        WHERE (((ref_3.p_type IS NOT NULL)
+                                AND (ref_3.p_type IS NULL))
+                            OR (0))
+                        AND (((EXISTS (
+                                        SELECT
+                                            subq_0.c1 AS c0
+                                        FROM
+                                            main.orders AS ref_4
+                                        WHERE (ref_4.o_orderstatus IS NULL)
+                                        OR ((ref_4.o_comment IS NOT NULL)
+                                            AND ((((1)
+                                                        OR (0))
+                                                    AND (0))
+                                                AND ((0)
+                                                    OR ((1)
+                                                        AND (1)))))
+                                    LIMIT 134))
+                            OR (ref_3.p_retailprice IS NOT NULL))
+                        AND (0))))))
+    AND ((1)
             OR ((((90 IS NOT NULL)
                         OR ((((EXISTS (
                                             SELECT
@@ -289,8 +289,7 @@ INSERT INTO main.supplier
                                                                                                     s_name
                                                                                                 FROM
                                                                                                     main.supplier
-                                                                                                LIMIT 1 offset 43)
-                                                                                            IS NOT NULL)
+                                                                                                LIMIT 1 offset 43) IS NOT NULL)
                                                                                         OR ((ref_10.p_name IS NOT NULL)
                                                                                             AND ((0)
                                                                                                 OR (0)))
@@ -302,8 +301,7 @@ INSERT INTO main.supplier
                                                                                             s_acctbal
                                                                                         FROM
                                                                                             main.supplier
-                                                                                        LIMIT 1 offset 4)
-                                                                                    IS NULL)
+                                                                                        LIMIT 1 offset 4) IS NULL)
                                                                                 AND (0))
                                                                             AND ((0)
                                                                                 AND (((5 IS NULL)
@@ -440,7 +438,7 @@ INSERT INTO main.supplier
                                                     LIMIT 181))
                                             AND (0))
                                         OR (84 IS NOT NULL))))))) THEN
-                CAST(NULL AS VARCHAR)
-            ELSE
-                CAST(NULL AS VARCHAR)
-            END)
+            CAST(NULL AS VARCHAR)
+        ELSE
+            CAST(NULL AS VARCHAR)
+        END)

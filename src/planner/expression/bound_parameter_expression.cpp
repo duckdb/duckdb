@@ -4,8 +4,8 @@ using namespace duckdb;
 using namespace std;
 
 BoundParameterExpression::BoundParameterExpression(index_t parameter_nr)
-	: Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, TypeId::INVALID),
-		sql_type(SQLType(SQLTypeId::INVALID)), parameter_nr(parameter_nr), value(nullptr) {
+    : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, TypeId::INVALID),
+      sql_type(SQLType(SQLTypeId::INVALID)), parameter_nr(parameter_nr), value(nullptr) {
 }
 
 bool BoundParameterExpression::IsScalar() const {
@@ -33,7 +33,7 @@ bool BoundParameterExpression::Equals(const BaseExpression *other_) const {
 uint64_t BoundParameterExpression::Hash() const {
 	uint64_t result = Expression::Hash();
 	result = CombineHash(duckdb::Hash(parameter_nr), result);
-	result = CombineHash(duckdb::Hash((int) sql_type.id), result);
+	result = CombineHash(duckdb::Hash((int)sql_type.id), result);
 	return result;
 }
 

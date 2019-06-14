@@ -1,8 +1,8 @@
 SELECT
     CAST(nullif ((
-                SELECT
-                    ps_suppkey FROM main.partsupp
-                LIMIT 1 offset 2), ref_1.ps_suppkey) AS INTEGER) AS c0,
+            SELECT
+                ps_suppkey FROM main.partsupp
+            LIMIT 1 offset 2), ref_1.ps_suppkey) AS INTEGER) AS c0,
     ref_0.p_retailprice AS c1,
     ref_1.ps_supplycost AS c2,
     ref_0.p_container AS c3,

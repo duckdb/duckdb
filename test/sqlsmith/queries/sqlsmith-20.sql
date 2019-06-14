@@ -47,7 +47,6 @@ AND (((((1)
                     c_custkey
                 FROM
                     main.customer
-                LIMIT 1 offset 5)
-            IS NULL))
+                LIMIT 1 offset 5) IS NULL))
     OR (subq_0.c4 IS NOT NULL))
 LIMIT 109

@@ -18,14 +18,14 @@ template <class SRC, class DST> static bool try_cast_with_overflow_check(SRC val
 	if (value < MinimumValue<DST>() || value > MaximumValue<DST>()) {
 		return false;
 	}
-	result = (DST) value;
+	result = (DST)value;
 	return true;
 }
 
 template <class SRC, class DST> static DST cast_with_overflow_check(SRC value) {
 	DST result;
 	if (!try_cast_with_overflow_check<SRC, DST>(value, result)) {
-		throw ValueOutOfRangeException((int64_t) value, GetTypeId<SRC>(), GetTypeId<DST>());
+		throw ValueOutOfRangeException((int64_t)value, GetTypeId<SRC>(), GetTypeId<DST>());
 	}
 	return result;
 }
@@ -134,19 +134,17 @@ template <> int64_t Cast::Operation(double left) {
 //===--------------------------------------------------------------------===//
 // Cast String -> Numeric
 //===--------------------------------------------------------------------===//
-template<class T>
-static T try_cast_string(const char *left) {
+template <class T> static T try_cast_string(const char *left) {
 	T result;
-	if (!TryCast::Operation<const char*, T>(left, result)) {
+	if (!TryCast::Operation<const char *, T>(left, result)) {
 		throw ConversionException("Could not convert string '%s' to numeric", left);
 	}
 	return result;
 }
 
-template<class T, bool NEGATIVE, bool ALLOW_EXPONENT>
-static bool IntegerCastLoop(const char *buf, T &result) {
+template <class T, bool NEGATIVE, bool ALLOW_EXPONENT> static bool IntegerCastLoop(const char *buf, T &result) {
 	index_t pos = NEGATIVE ? 1 : 0;
-	while(buf[pos]) {
+	while (buf[pos]) {
 		if (!std::isdigit(buf[pos])) {
 			// not a digit!
 			if (buf[pos] == '.') {
@@ -154,7 +152,7 @@ static bool IntegerCastLoop(const char *buf, T &result) {
 				// we just truncate them
 				// make sure everything after the period is a number
 				pos++;
-				while(buf[pos]) {
+				while (buf[pos]) {
 					if (!std::isdigit(buf[pos++])) {
 						return false;
 					}
@@ -179,7 +177,7 @@ static bool IntegerCastLoop(const char *buf, T &result) {
 					if (dbl_res < MinimumValue<T>() || dbl_res > MaximumValue<T>()) {
 						return false;
 					}
-					result = (T) dbl_res;
+					result = (T)dbl_res;
 					return true;
 				}
 			}
@@ -201,8 +199,7 @@ static bool IntegerCastLoop(const char *buf, T &result) {
 	return pos > (NEGATIVE ? 1 : 0);
 }
 
-template<class T, bool ALLOW_EXPONENT = true>
-static bool TryIntegerCast(const char *buf, T &result) {
+template <class T, bool ALLOW_EXPONENT = true> static bool TryIntegerCast(const char *buf, T &result) {
 	if (!*buf) {
 		return false;
 	}
@@ -239,12 +236,11 @@ template <> bool TryCast::Operation(const char *left, int64_t &result) {
 	return TryIntegerCast<int64_t>(left, result);
 }
 
-template<class T, bool NEGATIVE>
-static bool DoubleCastLoop(const char *buf, T &result) {
+template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, T &result) {
 	index_t pos = NEGATIVE ? 1 : 0;
 	index_t decimal = 0;
 	index_t decimal_factor = 0;
-	while(buf[pos]) {
+	while (buf[pos]) {
 		if (!std::isdigit(buf[pos])) {
 			// not a digit!
 			if (buf[pos] == '.') {
@@ -266,9 +262,9 @@ static bool DoubleCastLoop(const char *buf, T &result) {
 				}
 				if (decimal_factor > 1) {
 					if (NEGATIVE) {
-						result -= (T)decimal / (T) decimal_factor;
+						result -= (T)decimal / (T)decimal_factor;
 					} else {
-						result += (T)decimal / (T) decimal_factor;
+						result += (T)decimal / (T)decimal_factor;
 					}
 				}
 				result = result * pow(10, exponent);
@@ -291,16 +287,15 @@ static bool DoubleCastLoop(const char *buf, T &result) {
 	}
 	if (decimal_factor > 1) {
 		if (NEGATIVE) {
-			result -= (T)decimal / (T) decimal_factor;
+			result -= (T)decimal / (T)decimal_factor;
 		} else {
-			result += (T)decimal / (T) decimal_factor;
+			result += (T)decimal / (T)decimal_factor;
 		}
 	}
 	return pos > (NEGATIVE ? 1 : 0);
 }
 
-template<class T>
-static bool TryDoubleCast(const char *buf, T &result) {
+template <class T> static bool TryDoubleCast(const char *buf, T &result) {
 	if (!*buf) {
 		return false;
 	}

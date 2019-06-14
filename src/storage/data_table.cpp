@@ -575,7 +575,7 @@ void DataTable::RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &p
 
 void DataTable::InitializeScan(ScanState &state) {
 	state.chunk = (StorageChunk *)storage_tree.GetRootSegment();
-	state.last_chunk = (StorageChunk *) storage_tree.GetLastSegment();
+	state.last_chunk = (StorageChunk *)storage_tree.GetLastSegment();
 	state.last_chunk_count = state.last_chunk->count;
 	state.columns = unique_ptr<ColumnPointer[]>(new ColumnPointer[types.size()]);
 	for (index_t i = 0; i < types.size(); i++) {

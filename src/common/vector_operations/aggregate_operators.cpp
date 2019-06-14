@@ -38,9 +38,6 @@ template <class OP> static void generic_fold_loop(Vector &input, Value &result) 
 	case TypeId::DOUBLE:
 		templated_unary_fold<double, double, OP>(input, &result.value_.double_);
 		break;
-	case TypeId::POINTER:
-		templated_unary_fold<uintptr_t, uintptr_t, OP>(input, &result.value_.pointer);
-		break;
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for addition");
 	}

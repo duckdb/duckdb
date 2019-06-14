@@ -2,30 +2,28 @@ SELECT
     subq_0.c4 AS c0,
     CASE WHEN subq_0.c6 IS NOT NULL THEN
         CASE WHEN (
-                SELECT
-                    ps_supplycost
-                FROM
-                    main.partsupp
-                LIMIT 1 offset 3)
-    IS NULL THEN
-    subq_0.c8
-ELSE
-    subq_0.c8
-END
-ELSE
-    CASE WHEN (
             SELECT
                 ps_supplycost
             FROM
                 main.partsupp
-            LIMIT 1 offset 3)
-        IS NULL THEN
-        subq_0.c8
+            LIMIT 1 offset 3) IS NULL THEN
+            subq_0.c8
+        ELSE
+            subq_0.c8
+        END
     ELSE
-        subq_0.c8
-    END
-END AS c1,
-subq_0.c1 AS c2
+        CASE WHEN (
+            SELECT
+                ps_supplycost
+            FROM
+                main.partsupp
+            LIMIT 1 offset 3) IS NULL THEN
+            subq_0.c8
+        ELSE
+            subq_0.c8
+        END
+    END AS c1,
+    subq_0.c1 AS c2
 FROM (
     SELECT
         ref_0.o_orderdate AS c0,

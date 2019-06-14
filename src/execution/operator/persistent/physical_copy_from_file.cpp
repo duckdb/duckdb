@@ -13,7 +13,7 @@ using namespace duckdb;
 using namespace std;
 
 void PhysicalCopyFromFile::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto &state = (PhysicalCopyFromFileOperatorState&) *state_;
+	auto &state = (PhysicalCopyFromFileOperatorState &)*state_;
 	auto &info = *this->info;
 
 	if (!state.csv_stream) {

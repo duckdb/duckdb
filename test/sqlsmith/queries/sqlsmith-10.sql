@@ -35,8 +35,7 @@ FROM (
                     ps_availqty
                 FROM
                     main.partsupp
-                LIMIT 1 offset 5)
-            IS NOT NULL))
+                LIMIT 1 offset 5) IS NOT NULL))
     OR (ref_1.n_regionkey IS NOT NULL)
 LIMIT 67) AS subq_0
 WHERE

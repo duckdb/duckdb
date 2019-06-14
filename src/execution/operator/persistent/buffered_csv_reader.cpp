@@ -7,7 +7,6 @@
 #include "storage/data_table.hpp"
 #include "parser/column_definition.hpp"
 
-
 #include <algorithm>
 #include <fstream>
 
@@ -18,11 +17,11 @@ static char is_newline(char c) {
 	return c == '\n' || c == '\r';
 }
 
-BufferedCSVReader::BufferedCSVReader(CopyInfo &info, vector<SQLType> sql_types, istream &source) :
-	info(info), sql_types(sql_types), source(source), buffer_size(0), position(0), start(0) {
+BufferedCSVReader::BufferedCSVReader(CopyInfo &info, vector<SQLType> sql_types, istream &source)
+    : info(info), sql_types(sql_types), source(source), buffer_size(0), position(0), start(0) {
 	// initialize the parse_chunk with a set of VARCHAR types
 	vector<TypeId> varchar_types;
-	for(index_t i = 0; i < sql_types.size(); i++) {
+	for (index_t i = 0; i < sql_types.size(); i++) {
 		varchar_types.push_back(TypeId::VARCHAR);
 	}
 	parse_chunk.Initialize(varchar_types);
@@ -50,7 +49,7 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 	}
 
 	// read until we exhaust the stream
-	while(true) {
+	while (true) {
 		if (finished_chunk) {
 			return;
 		}
@@ -180,8 +179,7 @@ void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column)
 
 bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, index_t &column) {
 	if (column < sql_types.size()) {
-		throw ParserException("Error on line %lld: expected %lld values but got %d", linenr, sql_types.size(),
-								column);
+		throw ParserException("Error on line %lld: expected %lld values but got %d", linenr, sql_types.size(), column);
 	}
 	nr_elements++;
 	if (nr_elements == STANDARD_VECTOR_SIZE) {
@@ -204,8 +202,8 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 			parse_chunk.data[col_idx].Move(insert_chunk.data[col_idx]);
 		} else {
 			// target type is not varchar: perform a cast
-			VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx],
-			                       SQLType(SQLTypeId::VARCHAR), sql_types[col_idx]);
+			VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], SQLType(SQLTypeId::VARCHAR),
+			                       sql_types[col_idx]);
 		}
 	}
 	parse_chunk.Reset();

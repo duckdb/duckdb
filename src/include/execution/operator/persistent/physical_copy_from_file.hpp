@@ -25,6 +25,7 @@ public:
 	vector<SQLType> sql_types;
 	//! Settings for the COPY statement
 	unique_ptr<CopyInfo> info;
+
 public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
