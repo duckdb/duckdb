@@ -1,13 +1,12 @@
-#include "execution/operator/persistent/physical_copy.hpp"
+#include "execution/operator/persistent/buffered_csv_reader.hpp"
+#include "execution/operator/persistent/physical_copy_from_file.hpp"
 
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "common/vector_operations/vector_operations.hpp"
-#include "common/file_system.hpp"
-#include "common/gzip_stream.hpp"
-#include "main/client_context.hpp"
 #include "main/database.hpp"
 #include "storage/data_table.hpp"
 #include "parser/column_definition.hpp"
+
 
 #include <algorithm>
 #include <fstream>
@@ -15,19 +14,11 @@
 using namespace duckdb;
 using namespace std;
 
-static void WriteQuotedString(ofstream &to_csv, string str, char delimiter, char quote) {
-	if (str.find(delimiter) == string::npos) {
-		to_csv << str;
-	} else {
-		to_csv << quote << str << quote;
-	}
-}
-
 static char is_newline(char c) {
 	return c == '\n' || c == '\r';
 }
 
-BufferedCSVReader::BufferedCSVReader(PhysicalCopy &copy, istream &source) :
+BufferedCSVReader::BufferedCSVReader(PhysicalCopyFromFile &copy, istream &source) :
 	copy(copy), source(source), buffer_size(0), position(0) {}
 
 void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column) {
@@ -220,87 +211,4 @@ bool BufferedCSVReader::ReadBuffer(index_t &start) {
 	position = remaining;
 
 	return read_count > 0;
-}
-
-void PhysicalCopy::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
-	auto &info = *this->info;
-	index_t total = 0;
-	index_t nr_elements = 0;
-
-	if (table) {
-		assert(info.is_from);
-		if (!context.db.file_system->FileExists(info.file_path)) {
-			throw Exception("File not found");
-		}
-
-		unique_ptr<istream> csv_stream;
-		if (StringUtil::EndsWith(StringUtil::Lower(info.file_path), ".gz")) {
-			csv_stream = make_unique<GzipStream>(info.file_path);
-		} else {
-			auto csv_local = make_unique<ifstream>();
-			csv_local->open(info.file_path);
-			csv_stream = move(csv_local);
-		}
-
-		BufferedCSVReader reader(*this, *csv_stream);
-		// initialize the insert_chunk with the actual to-be-inserted types
-		auto types = table->GetTypes();
-		reader.insert_chunk.Initialize(types);
-		// initialize the parse chunk with VARCHAR data
-		for (index_t i = 0; i < types.size(); i++) {
-			types[i] = TypeId::VARCHAR;
-		}
-		reader.parse_chunk.Initialize(types);
-		// handle the select list (if any)
-		if (info.select_list.size() > 0) {
-			reader.set_to_default.resize(types.size(), true);
-			for (index_t i = 0; i < info.select_list.size(); i++) {
-				auto &column = table->GetColumn(info.select_list[i]);
-				reader.column_oids.push_back(column.oid);
-				reader.set_to_default[column.oid] = false;
-			}
-		} else {
-			for (index_t i = 0; i < types.size(); i++) {
-				reader.column_oids.push_back(i);
-			}
-		}
-		reader.ParseCSV(context);
-		total = reader.total + reader.nr_elements;
-	} else {
-		ofstream to_csv;
-		to_csv.open(info.file_path);
-		if (info.header) {
-			// write the header line
-			for (index_t i = 0; i < names.size(); i++) {
-				if (i != 0) {
-					to_csv << info.delimiter;
-				}
-				WriteQuotedString(to_csv, names[i], info.delimiter, info.quote);
-			}
-			to_csv << endl;
-		}
-		while (true) {
-			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-			if (state->child_chunk.size() == 0) {
-				break;
-			}
-			for (index_t i = 0; i < state->child_chunk.size(); i++) {
-				for (index_t col = 0; col < state->child_chunk.column_count; col++) {
-					if (col != 0) {
-						to_csv << info.delimiter;
-					}
-					// need to cast to correct sql type because otherwise the string representation is wrong
-					auto val = state->child_chunk.data[col].GetValue(i);
-					WriteQuotedString(to_csv, val.ToString(sql_types[col]), info.delimiter, info.quote);
-				}
-				to_csv << endl;
-				nr_elements++;
-			}
-		}
-		to_csv.close();
-	}
-	chunk.data[0].count = 1;
-	chunk.data[0].SetValue(0, Value::BIGINT(total + nr_elements));
-
-	state->finished = true;
 }

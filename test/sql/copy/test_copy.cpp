@@ -313,8 +313,7 @@ TEST_CASE("Test lines that exceed the maximum allowed line size", "[copy]") {
 	from_csv_file << 10 << "," << big_string << "," << 20 << endl;
 	from_csv_file.close();
 
-
-	// loading CSV into a table
+	// the load fails because the value is too big
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);"));
 	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';"));
 }
