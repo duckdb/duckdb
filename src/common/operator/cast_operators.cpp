@@ -7,6 +7,7 @@
 
 #include <cstdlib>
 #include <cctype>
+#include <cmath>
 
 using namespace duckdb;
 using namespace std;
@@ -142,52 +143,77 @@ static T try_cast_string(const char *left) {
 	return result;
 }
 
-template<class T>
-static bool TryIntegerCast(const char *buf, T &result) {
-	if (!*buf) {
-		return false;
-	}
-	int negative = *buf == '-';
-	size_t pos = negative;
-
-	result = 0;
-	if (!negative) {
-		while(buf[pos]) {
-			if (!std::isdigit(buf[pos])) {
-				// not a digit!
-				if (buf[pos] == '.') {
-					// decimal point: we accept decimal values for integers as well
-					// we just truncate them
-					// make sure everything after the period is a number
+template<class T, bool NEGATIVE, bool ALLOW_EXPONENT>
+static bool IntegerCastLoop(const char *buf, T &result) {
+	index_t pos = NEGATIVE ? 1 : 0;
+	while(buf[pos]) {
+		if (!std::isdigit(buf[pos])) {
+			// not a digit!
+			if (buf[pos] == '.') {
+				// decimal point: we accept decimal values for integers as well
+				// we just truncate them
+				// make sure everything after the period is a number
+				pos++;
+				do {
+					if (!std::isdigit(buf[pos++])) {
+						return false;
+					}
+				} while(buf[pos]);
+				return true;
+			}
+			if (ALLOW_EXPONENT) {
+				if (buf[pos] == 'e' || buf[pos] == 'E') {
 					pos++;
-					do {
-						if (!std::isdigit(buf[pos++])) {
+					int64_t exponent = 0;
+					int negative = buf[pos] == '-';
+					if (negative) {
+						if (!IntegerCastLoop<int64_t, true, false>(buf + pos, exponent)) {
 							return false;
 						}
-					} while(buf[pos]);
+					} else {
+						if (!IntegerCastLoop<int64_t, false, false>(buf + pos, exponent)) {
+							return false;
+						}
+					}
+					double dbl_res = result * pow(10, exponent);
+					if (dbl_res < MinimumValue<T>() || dbl_res > MaximumValue<T>()) {
+						return false;
+					}
+					result = (T) dbl_res;
 					return true;
 				}
+			}
+			return false;
+		}
+		T digit = buf[pos++] - '0';
+		if (NEGATIVE) {
+			if (result < (MinimumValue<T>() + digit) / 10) {
 				return false;
 			}
-			T digit = buf[pos++] - '0';
+			result = result * 10 - digit;
+		} else {
 			if (result > (MaximumValue<T>() - digit) / 10) {
 				return false;
 			}
 			result = result * 10 + digit;
 		}
-	} else {
-		while(buf[pos]) {
-			if (!std::isdigit(buf[pos])) {
-				return false;
-			}
-			T digit = buf[pos++] - '0';
-			if (result < (MinimumValue<T>() + digit) / 10) {
-				return false;
-			}
-			result = result * 10 - digit;
-		}
 	}
-	return true;
+	return pos > (NEGATIVE ? 1 : 0);
+}
+
+template<class T, bool ALLOW_EXPONENT = true>
+static bool TryIntegerCast(const char *buf, T &result) {
+	if (!*buf) {
+		return false;
+	}
+	int negative = *buf == '-';
+
+	result = 0;
+	if (!negative) {
+		return IntegerCastLoop<T, false, ALLOW_EXPONENT>(buf, result);
+	} else {
+		return IntegerCastLoop<T, true, ALLOW_EXPONENT>(buf, result);
+	}
 }
 
 template <> bool TryCast::Operation(const char *left, bool &result) {
@@ -212,23 +238,64 @@ template <> bool TryCast::Operation(const char *left, int32_t &result) {
 template <> bool TryCast::Operation(const char *left, int64_t &result) {
 	return TryIntegerCast<int64_t>(left, result);
 }
-template <> bool TryCast::Operation(const char *left, float &result) {
-	// FIXME: don't use stod but implement own function
-	try {
-		result = (float)stod(left, NULL);
-		return true;
-	} catch (...) {
+
+template<class T, bool NEGATIVE>
+static bool DoubleCastLoop(const char *buf, T &result) {
+	index_t pos = NEGATIVE ? 1 : 0;
+	index_t decimal = 0;
+	while(buf[pos]) {
+		if (!std::isdigit(buf[pos])) {
+			// not a digit!
+			if (buf[pos] == '.') {
+				// decimal point
+				decimal = 10;
+				pos++;
+				continue;
+			} else if (buf[pos] == 'e' || buf[pos] == 'E') {
+				// E power
+				// parse an integer, this time not allowing another exponent
+				pos++;
+				int64_t exponent;
+				if (!TryIntegerCast<int64_t, false>(buf + pos, exponent)) {
+					return false;
+				}
+				result = result * pow(10, exponent);
+				return true;
+			} else {
+				return false;
+			}
+		}
+		T digit = buf[pos++] - '0';
+		if (!decimal) {
+			result = result * 10 + (NEGATIVE ? -digit : digit);
+		} else {
+			result = result + (NEGATIVE ? -digit : digit) / decimal;
+			decimal *= 10;
+		}
+	}
+	return pos > (NEGATIVE ? 1 : 0);
+}
+
+template<class T>
+static bool TryDoubleCast(const char *buf, T &result) {
+	if (!*buf) {
 		return false;
+	}
+	int negative = *buf == '-';
+
+	result = 0;
+	if (!negative) {
+		return DoubleCastLoop<T, false>(buf, result);
+	} else {
+		return DoubleCastLoop<T, true>(buf, result);
 	}
 }
+
+template <> bool TryCast::Operation(const char *left, float &result) {
+	return TryDoubleCast<float>(left, result);
+}
 template <> bool TryCast::Operation(const char *left, double &result) {
-	// FIXME: don't use stod but implement own function
-	try {
-		result = stod(left, NULL);
-		return true;
-	} catch (...) {
-		return false;
-	}
+	return TryDoubleCast<double>(left, result);
 }
 
 template <> bool Cast::Operation(const char *left) {
