@@ -28,6 +28,8 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			}
 			auto &chunk = state->child_chunk;
 
+			state->child_chunk.Flatten();
+
 			ExpressionExecutor executor(chunk);
 			insert_chunk.Reset();
 			if (column_index_map.size() > 0) {
