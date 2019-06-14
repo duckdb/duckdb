@@ -42,6 +42,9 @@ public:
 		unique_ptr<ColumnPointer[]> columns;
 		index_t offset;
 		VersionInformation *version_chain;
+
+		StorageChunk *last_chunk;
+		index_t last_chunk_count;
 	};
 
 	struct IndexScanState : public ScanState {
