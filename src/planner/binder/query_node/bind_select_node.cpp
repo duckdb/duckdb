@@ -46,7 +46,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 			}
 			result->values.push_back(move(list));
 		}
-		return result;
+		return move(result);
 	}
 	// first bind the FROM table statement
 	if (statement.from_table) {
