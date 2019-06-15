@@ -51,12 +51,26 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 	index_t expected_columns = stmt.columns.size() == 0 ? result->table->columns.size() : stmt.columns.size();
 	index_t result_columns;
 	if (stmt.select_statement) {
+		// bind the select statement, if any
 		result->select_statement =
 		    unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*stmt.select_statement));
 		result_columns = result->select_statement->node->types.size();
-	} else if (stmt.values.size() > 0) {
-		// visit the expressions, if any
-		result_columns = stmt.values[0].size();
+	} else {
+		result_columns = stmt.values.size() > 0 ? stmt.values[0].size() : expected_columns;
+	}
+
+	if (result_columns != expected_columns) {
+		string msg =
+		    StringUtil::Format(stmt.columns.size() == 0 ? "table %s has %d columns but %d values were supplied"
+		                                                : "Column name/value mismatch for insert on %s: "
+		                                                  "expected %llu columns but %llu values were supplied",
+		                       result->table->name.c_str(), expected_columns, result_columns);
+		throw BinderException(msg);
+	}
+
+	if (stmt.values.size() > 0) {
+		assert(!stmt.select_statement);
+		// visit the expressions
 		InsertBinder binder(*this, context);
 		for (auto &expression_list : stmt.values) {
 			vector<unique_ptr<Expression>> list;
@@ -70,17 +84,8 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			}
 			result->values.push_back(move(list));
 		}
-	} else {
-		result_columns = expected_columns;
 	}
-	if (result_columns != expected_columns) {
-		string msg =
-		    StringUtil::Format(stmt.columns.size() == 0 ? "table %s has %d columns but %d values were supplied"
-		                                                : "Column name/value mismatch for insert on %s: "
-		                                                  "expected %llu columns but %llu values were supplied",
-		                       result->table->name.c_str(), expected_columns, result_columns);
-		throw BinderException(msg);
-	}
+
 	// bind the default values
 	BindDefaultValues(table->columns, result->bound_defaults);
 	return move(result);
