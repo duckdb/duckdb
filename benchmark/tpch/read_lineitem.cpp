@@ -10,7 +10,7 @@ using namespace std;
 
 DUCKDB_BENCHMARK(ReadLineitemCSV, "[csv]")
 int64_t count = 0;
-virtual void Load(DuckDBBenchmarkState *state) {
+void Load(DuckDBBenchmarkState *state) override {
 	// load the data into the tpch schema
 	state->conn.Query("CREATE SCHEMA tpch");
 	tpch::dbgen(SF, state->db, "tpch");
@@ -23,10 +23,14 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	// create the empty schema to load into
 	tpch::dbgen(0, state->db);
 }
-virtual string GetQuery() {
+string GetQuery() override {
 	return "COPY lineitem FROM 'lineitem.csv' DELIMITER '|' HEADER";
 }
-virtual string VerifyResult(QueryResult *result) {
+void Cleanup(DuckDBBenchmarkState *state) override {
+	state->conn.Query("DROP TABLE lineitem");
+	tpch::dbgen(0, state->db);
+}
+string VerifyResult(QueryResult *result) override {
 	if (!result->success) {
 		return result->error;
 	}
@@ -37,7 +41,7 @@ virtual string VerifyResult(QueryResult *result) {
 	}
 	return string();
 }
-virtual string BenchmarkInfo() {
+string BenchmarkInfo() override {
 	return "Read the lineitem table from SF 0.1 from CSV format";
 }
 FINISH_BENCHMARK(ReadLineitemCSV)
