@@ -54,9 +54,8 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 		result->select_statement =
 		    unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*stmt.select_statement));
 		result_columns = result->select_statement->node->types.size();
-	} else {
-		// visit the expressions
-		assert(stmt.values.size() > 0);
+	} else if (stmt.values.size() > 0) {
+		// visit the expressions, if any
 		result_columns = stmt.values[0].size();
 		InsertBinder binder(*this, context);
 		for (auto &expression_list : stmt.values) {
@@ -71,6 +70,8 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			}
 			result->values.push_back(move(list));
 		}
+	} else {
+		result_columns = expected_columns;
 	}
 	if (result_columns != expected_columns) {
 		string msg = StringUtil::Format(
