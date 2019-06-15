@@ -20,6 +20,7 @@ public:
 
 	//! The JoinCondition on which this join is performed
 	unique_ptr<Expression> condition;
+
 public:
 	string ParamsToString() const override;
 };

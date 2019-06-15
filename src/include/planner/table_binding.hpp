@@ -35,6 +35,7 @@ struct Binding {
 	BindingType type;
 	string alias;
 	index_t index;
+
 public:
 	virtual bool HasMatchingBinding(const string &column_name) = 0;
 	virtual BindResult Bind(ColumnRefExpression &colref, count_t depth) = 0;
@@ -47,6 +48,7 @@ struct TableBinding : public Binding {
 	TableBinding(const string &alias, BoundBaseTableRef *bound);
 
 	BoundBaseTableRef *bound;
+
 public:
 	bool HasMatchingBinding(const string &column_name) override;
 	BindResult Bind(ColumnRefExpression &colref, count_t depth) override;
@@ -62,10 +64,12 @@ struct SubqueryBinding : public Binding {
 	vector<string> names;
 	//! Name -> index for the names
 	unordered_map<string, uint64_t> name_map;
+
 public:
 	bool HasMatchingBinding(const string &column_name) override;
 	BindResult Bind(ColumnRefExpression &colref, count_t depth) override;
 	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
+
 private:
 	void AddName(string &name);
 };

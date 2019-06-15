@@ -16,7 +16,8 @@ namespace duckdb {
 class LogicalExpressionGet : public LogicalOperator {
 public:
 	LogicalExpressionGet(index_t table_index, vector<TypeId> types, vector<vector<unique_ptr<Expression>>> expressions)
-	    : LogicalOperator(LogicalOperatorType::EXPRESSION_GET), table_index(table_index), expr_types(types), expressions(move(expressions)) {
+	    : LogicalOperator(LogicalOperatorType::EXPRESSION_GET), table_index(table_index), expr_types(types),
+	      expressions(move(expressions)) {
 	}
 
 	//! The table index in the current bind context
@@ -25,6 +26,7 @@ public:
 	vector<TypeId> expr_types;
 	//! The set of expressions
 	vector<vector<unique_ptr<Expression>>> expressions;
+
 protected:
 	void ResolveTypes() override {
 		// types are resolved in the constructor

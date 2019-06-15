@@ -20,13 +20,14 @@ public:
 	    : PhysicalOperator(PhysicalOperatorType::COPY_TO_FILE, op.types), info(move(info)) {
 	}
 
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
-
 	//! Settings for the COPY statement
 	unique_ptr<CopyInfo> info;
 	//! The names of the child expression
 	vector<string> names;
 	//! The types of the child expression
 	vector<SQLType> sql_types;
+
+public:
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };
 } // namespace duckdb

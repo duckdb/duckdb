@@ -20,8 +20,10 @@ public:
 	}
 	//! The set of distinct targets (optional).
 	vector<unique_ptr<Expression>> distinct_targets;
+
 public:
 	string ParamsToString() const override;
+
 protected:
 	void ResolveTypes() override {
 		types = children[0]->types;

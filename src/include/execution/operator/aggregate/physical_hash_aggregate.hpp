@@ -24,6 +24,7 @@ public:
 	                      vector<unique_ptr<Expression>> groups,
 	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
 
+public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;

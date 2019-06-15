@@ -21,6 +21,7 @@ public:
 	}
 
 	vector<BoundOrderByNode> orders;
+
 protected:
 	void ResolveTypes() override {
 		types = children[0]->types;

@@ -22,6 +22,7 @@ public:
 
 	//! The set of expressions to scan
 	vector<vector<unique_ptr<Expression>>> expressions;
+
 public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;

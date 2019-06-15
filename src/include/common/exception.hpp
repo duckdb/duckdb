@@ -62,14 +62,16 @@ public:
 	Exception(string message);
 	Exception(ExceptionType exception_type, string message);
 
-	// type
 	ExceptionType type;
+
 public:
 	const char *what() const noexcept override;
 
 	string ExceptionTypeToString(ExceptionType type);
+
 protected:
 	void Format(va_list ap);
+
 private:
 	string exception_message_;
 };

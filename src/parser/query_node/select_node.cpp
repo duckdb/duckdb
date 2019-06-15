@@ -18,11 +18,11 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 	    distinct_on_targets.size() != other->distinct_on_targets.size() || values.size() != other->values.size()) {
 		return false;
 	}
-	for(index_t i = 0; i < values.size(); i++) {
+	for (index_t i = 0; i < values.size(); i++) {
 		if (values[i].size() != other->values[i].size()) {
 			return false;
 		}
-		for(index_t j = 0; j < values[i].size(); j++) {
+		for (index_t j = 0; j < values[i].size(); j++) {
 			if (!values[i][j]->Equals(other->values[i][j].get())) {
 				return false;
 			}
@@ -88,7 +88,7 @@ unique_ptr<QueryNode> SelectNode::Copy() {
 	// value list
 	for (auto &val_list : values) {
 		vector<unique_ptr<ParsedExpression>> new_val_list;
-		for(auto &val : val_list) {
+		for (auto &val : val_list) {
 			new_val_list.push_back(val->Copy());
 		}
 		result->values.push_back(move(new_val_list));
@@ -112,7 +112,7 @@ void SelectNode::Serialize(Serializer &serializer) {
 	serializer.WriteOptional(having);
 	// value list
 	serializer.Write<index_t>(values.size());
-	for(index_t i = 0; i < values.size(); i++) {
+	for (index_t i = 0; i < values.size(); i++) {
 		serializer.WriteList(values[i]);
 	}
 }
@@ -132,7 +132,7 @@ unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &source) {
 	result->having = source.ReadOptional<ParsedExpression>();
 	// value list
 	index_t value_list_size = source.Read<index_t>();
-	for(index_t i = 0; i < value_list_size; i++) {
+	for (index_t i = 0; i < value_list_size; i++) {
 		vector<unique_ptr<ParsedExpression>> value_list;
 		source.ReadList<ParsedExpression>(value_list);
 		result->values.push_back(move(value_list));

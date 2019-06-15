@@ -21,10 +21,11 @@ public:
 	    : PhysicalProjection(op.types, move(select_list)) {
 	}
 
+	vector<unique_ptr<Expression>> select_list;
+
+public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	string ExtraRenderInformation() const override;
-
-	vector<unique_ptr<Expression>> select_list;
 };
 
 } // namespace duckdb

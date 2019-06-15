@@ -38,7 +38,8 @@ TEST_CASE("Test value list in selection", "[valuelist]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 2), (3, 4);"));
 
 	// value list with more complicated subqueries
-	result = con.Query("SELECT * FROM (VALUES ((SELECT MIN(a) FROM test), 2, 3), ((SELECT MAX(b) FROM test), 2, 3)) v1;");
+	result =
+	    con.Query("SELECT * FROM (VALUES ((SELECT MIN(a) FROM test), 2, 3), ((SELECT MAX(b) FROM test), 2, 3)) v1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2, 2}));
 	REQUIRE(CHECK_COLUMN(result, 2, {3, 3}));

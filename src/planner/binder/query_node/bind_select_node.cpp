@@ -25,7 +25,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 		// bind value list
 		WhereBinder binder(*this, context);
 		binder.target_type = SQLType(SQLTypeId::INVALID);
-		for(index_t list_idx = 0; list_idx < statement.values.size(); list_idx++) {
+		for (index_t list_idx = 0; list_idx < statement.values.size(); list_idx++) {
 			auto &expression_list = statement.values[list_idx];
 			vector<unique_ptr<Expression>> list;
 			if (list_idx == 0) {

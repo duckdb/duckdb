@@ -74,11 +74,11 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 		result_columns = expected_columns;
 	}
 	if (result_columns != expected_columns) {
-		string msg = StringUtil::Format(
-			stmt.columns.size() == 0 ? "table %s has %d columns but %d values were supplied"
-										: "Column name/value mismatch for insert on %s: "
-										"expected %llu columns but %llu values were supplied",
-			result->table->name.c_str(), expected_columns, result_columns);
+		string msg =
+		    StringUtil::Format(stmt.columns.size() == 0 ? "table %s has %d columns but %d values were supplied"
+		                                                : "Column name/value mismatch for insert on %s: "
+		                                                  "expected %llu columns but %llu values were supplied",
+		                       result->table->name.c_str(), expected_columns, result_columns);
 		throw BinderException(msg);
 	}
 	// bind the default values

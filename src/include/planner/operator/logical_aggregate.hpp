@@ -27,8 +27,10 @@ public:
 	index_t aggregate_index;
 	//! The set of groups (optional).
 	vector<unique_ptr<Expression>> groups;
+
 public:
 	string ParamsToString() const override;
+
 protected:
 	void ResolveTypes() override;
 };

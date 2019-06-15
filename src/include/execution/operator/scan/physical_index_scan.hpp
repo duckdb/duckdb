@@ -46,10 +46,9 @@ public:
 	ExpressionType low_expression_type;
 	ExpressionType high_expression_type;
 
+public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
-
 	string ExtraRenderInformation() const override;
-
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 

@@ -26,8 +26,7 @@ void StringUtil::LTrim(string &str) {
 
 // Remove trailing ' ', '\f', '\n', '\r', '\t', '\v'
 void StringUtil::RTrim(string &str) {
-	str.erase(find_if(str.rbegin(), str.rend(), [](int ch) { return ch > 0 && !isspace(ch); }).base(),
-	          str.end());
+	str.erase(find_if(str.rbegin(), str.rend(), [](int ch) { return ch > 0 && !isspace(ch); }).base(), str.end());
 }
 
 void StringUtil::Trim(string &str) {
@@ -201,7 +200,7 @@ string StringUtil::Replace(string source, const string &from, const string &to) 
 	while ((start_pos = source.find(from, start_pos)) != string::npos) {
 		source.replace(start_pos, from.length(), to);
 		start_pos += to.length(); // In case 'to' contains 'from', like
-									// replacing 'x' with 'yx'
+		                          // replacing 'x' with 'yx'
 	}
 	return source;
 }
