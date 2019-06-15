@@ -241,7 +241,7 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
 			parsed_result.Reset();
 			reader.ParseCSV(parsed_result);
 		} catch(Exception &ex) {
-			error_message = "Could not parse CSV: " + ex.what();
+			error_message = "Could not parse CSV: " + string(ex.what());
 			return false;
 		}
 		if (parsed_result.size() == 0) {
