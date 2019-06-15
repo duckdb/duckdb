@@ -15,7 +15,6 @@ constexpr const int32_t MONTHS_PER_YEAR = 12;
 constexpr const int32_t HOURS_PER_DAY = 24; //! assume no daylight savings time changes
 constexpr const int32_t STD_TIMESTAMP_LENGTH = 19;
 constexpr const int32_t START_YEAR = 1900;
-constexpr const char *DEFAULT_TIME = "00:00:00";
 
 constexpr const int32_t SECS_PER_MINUTE = 60;
 constexpr const int32_t MINS_PER_HOUR = 60;
@@ -44,7 +43,7 @@ timestamp_t Timestamp::FromString(string str) {
 	// In case we have only date we add a default time
 	if (str.size() == 10) {
 		str += " ";
-		str += DEFAULT_TIME;
+		str += "00:00:00";
 	}
 	// Character length	19 positions minimum to 23 maximum
 	if (str.size() < STD_TIMESTAMP_LENGTH) {
