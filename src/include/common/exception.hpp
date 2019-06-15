@@ -67,8 +67,6 @@ public:
 public:
 	const char *what() const noexcept override;
 
-	string GetMessage();
-
 	string ExceptionTypeToString(ExceptionType type);
 protected:
 	void Format(va_list ap);

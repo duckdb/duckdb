@@ -26,10 +26,6 @@ void Exception::Format(va_list ap) {
 	exception_message_ = StringUtil::VFormat(exception_message_, ap);
 }
 
-string Exception::GetMessage() {
-	return exception_message_;
-}
-
 string Exception::ExceptionTypeToString(ExceptionType type) {
 	switch (type) {
 	case ExceptionType::INVALID:
