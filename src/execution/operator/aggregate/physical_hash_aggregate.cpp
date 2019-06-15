@@ -59,7 +59,7 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 
 	state->group_chunk.Reset();
 	state->aggregate_chunk.Reset();
-	count_t elements_found = state->ht->Scan(state->ht_scan_position, state->group_chunk, state->aggregate_chunk);
+	index_t elements_found = state->ht->Scan(state->ht_scan_position, state->group_chunk, state->aggregate_chunk);
 
 	// special case hack to sort out aggregating from empty intermediates
 	// for aggregations without groups

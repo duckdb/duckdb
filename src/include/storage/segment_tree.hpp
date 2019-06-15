@@ -17,7 +17,7 @@ namespace duckdb {
 
 class SegmentBase {
 public:
-	SegmentBase(index_t start, count_t count) : start(start), count(count) {
+	SegmentBase(index_t start, index_t count) : start(start), count(count) {
 	}
 	virtual ~SegmentBase() {
 	}
@@ -25,7 +25,7 @@ public:
 	//! The start row id of this chunk
 	index_t start;
 	//! The amount of entries in this storage chunk
-	count_t count;
+	index_t count;
 	//! The next segment after this one
 	unique_ptr<SegmentBase> next;
 };

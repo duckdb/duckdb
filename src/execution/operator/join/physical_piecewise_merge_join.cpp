@@ -148,7 +148,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 		// perform the merge join
 		switch (type) {
 		case JoinType::INNER: {
-			count_t result_count = MergeJoinInner::Perform(left_info, right, conditions[0].comparison);
+			index_t result_count = MergeJoinInner::Perform(left_info, right, conditions[0].comparison);
 			if (result_count == 0) {
 				// exhausted this chunk on the right side
 				// move to the next

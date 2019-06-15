@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-BindResult ExpressionBinder::BindExpression(CaseExpression &expr, count_t depth) {
+BindResult ExpressionBinder::BindExpression(CaseExpression &expr, index_t depth) {
 	// first try to bind the children of the case expression
 	string error;
 	BindChild(expr.check, depth, error);

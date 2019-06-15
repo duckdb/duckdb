@@ -9,7 +9,7 @@ BufferedSerializer::BufferedSerializer(index_t maximum_size)
     : BufferedSerializer(unique_ptr<data_t[]>(new data_t[maximum_size]), maximum_size) {
 }
 
-BufferedSerializer::BufferedSerializer(unique_ptr<data_t[]> data, count_t size) : maximum_size(size), data(data.get()) {
+BufferedSerializer::BufferedSerializer(unique_ptr<data_t[]> data, index_t size) : maximum_size(size), data(data.get()) {
 	blob.size = 0;
 	blob.data = move(data);
 }

@@ -8,7 +8,7 @@
 using namespace duckdb;
 using namespace std;
 
-BindResult ExpressionBinder::BindExpression(FunctionExpression &function, count_t depth) {
+BindResult ExpressionBinder::BindExpression(FunctionExpression &function, index_t depth) {
 	// bind the children of the function expression
 	string error;
 	for (index_t i = 0; i < function.children.size(); i++) {

@@ -72,7 +72,7 @@ void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, 
 	}
 	index_t next = min(data.offset + STANDARD_VECTOR_SIZE, (index_t)data.entries.size());
 
-	count_t output_count = next - data.offset;
+	index_t output_count = next - data.offset;
 	for (index_t j = 0; j < output.column_count; j++) {
 		output.data[j].count = output_count;
 	}

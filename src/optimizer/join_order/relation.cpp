@@ -39,7 +39,7 @@ bool RelationSet::IsSubset(RelationSet *super, RelationSet *sub) {
 	return false;
 }
 
-RelationSet *RelationSetManager::GetRelation(unique_ptr<index_t[]> relations, count_t count) {
+RelationSet *RelationSetManager::GetRelation(unique_ptr<index_t[]> relations, index_t count) {
 	// now look it up in the tree
 	RelationTreeNode *info = &root;
 	for (index_t i = 0; i < count; i++) {
@@ -65,7 +65,7 @@ RelationSet *RelationSetManager::GetRelation(index_t index) {
 	// create a sorted vector of the relations
 	auto relations = unique_ptr<index_t[]>(new index_t[1]);
 	relations[0] = index;
-	count_t count = 1;
+	index_t count = 1;
 	return GetRelation(move(relations), count);
 }
 
@@ -73,7 +73,7 @@ RelationSet *RelationSetManager::GetRelation(unordered_set<index_t> &bindings) {
 	// create a sorted vector of the relations
 	unique_ptr<index_t[]> relations =
 	    bindings.size() == 0 ? nullptr : unique_ptr<index_t[]>(new index_t[bindings.size()]);
-	count_t count = 0;
+	index_t count = 0;
 	for (auto &entry : bindings) {
 		relations[count++] = entry;
 	}
@@ -83,7 +83,7 @@ RelationSet *RelationSetManager::GetRelation(unordered_set<index_t> &bindings) {
 
 RelationSet *RelationSetManager::Union(RelationSet *left, RelationSet *right) {
 	auto relations = unique_ptr<index_t[]>(new index_t[left->count + right->count]);
-	count_t count = 0;
+	index_t count = 0;
 	// move through the left and right relations, eliminating duplicates
 	index_t i = 0, j = 0;
 	while (true) {
@@ -119,7 +119,7 @@ RelationSet *RelationSetManager::Union(RelationSet *left, RelationSet *right) {
 
 RelationSet *RelationSetManager::Difference(RelationSet *left, RelationSet *right) {
 	auto relations = unique_ptr<index_t[]>(new index_t[left->count]);
-	count_t count = 0;
+	index_t count = 0;
 	// move through the left and right relations
 	index_t i = 0, j = 0;
 	while (true) {

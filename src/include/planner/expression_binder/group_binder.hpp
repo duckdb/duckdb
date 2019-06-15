@@ -28,7 +28,7 @@ public:
 	index_t bind_index;
 
 protected:
-	BindResult BindExpression(ParsedExpression &expr, count_t depth, bool root_expression) override;
+	BindResult BindExpression(ParsedExpression &expr, index_t depth, bool root_expression) override;
 
 	BindResult BindSelectRef(index_t entry);
 	BindResult BindColumnRef(ColumnRefExpression &expr);

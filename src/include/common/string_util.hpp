@@ -29,7 +29,7 @@ public:
 	static bool EndsWith(const string &str, const string &suffix);
 
 	//! Repeat a string multiple times
-	static string Repeat(const string &str, const count_t n);
+	static string Repeat(const string &str, const index_t n);
 
 	//! Split the input string based on newline char
 	static vector<string> Split(const string &str, char delimiter);

@@ -38,7 +38,7 @@ public:
 
 	//! The current position to scan the HT for output tuples
 	index_t ht_scan_position;
-	count_t tuples_scanned;
+	index_t tuples_scanned;
 	//! The HT
 	unique_ptr<SuperLargeHashTable> ht;
 	//! The payload chunk, only used while filling the HT

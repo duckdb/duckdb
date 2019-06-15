@@ -21,7 +21,7 @@ bool TableBinding::HasMatchingBinding(const string &column_name) {
 	return bound->table->ColumnExists(column_name);
 }
 
-BindResult TableBinding::Bind(ColumnRefExpression &colref, count_t depth) {
+BindResult TableBinding::Bind(ColumnRefExpression &colref, index_t depth) {
 	auto entry = bound->table->name_map.find(colref.column_name);
 	if (entry == bound->table->name_map.end()) {
 		return BindResult(StringUtil::Format("Table \"%s\" does not have a column named \"%s\"",
@@ -101,7 +101,7 @@ bool SubqueryBinding::HasMatchingBinding(const string &column_name) {
 	return entry != name_map.end();
 }
 
-BindResult SubqueryBinding::Bind(ColumnRefExpression &colref, count_t depth) {
+BindResult SubqueryBinding::Bind(ColumnRefExpression &colref, index_t depth) {
 	auto column_entry = name_map.find(colref.column_name);
 	if (column_entry == name_map.end()) {
 		return BindResult(StringUtil::Format("Subquery \"%s\" does not have a column named \"%s\"", alias.c_str(),
@@ -132,7 +132,7 @@ bool TableFunctionBinding::HasMatchingBinding(const string &column_name) {
 	return function->ColumnExists(column_name);
 }
 
-BindResult TableFunctionBinding::Bind(ColumnRefExpression &colref, count_t depth) {
+BindResult TableFunctionBinding::Bind(ColumnRefExpression &colref, index_t depth) {
 	auto column_entry = function->name_map.find(colref.column_name);
 	if (column_entry == function->name_map.end()) {
 		return BindResult(StringUtil::Format("Table Function \"%s\" does not have a column named \"%s\"", alias.c_str(),

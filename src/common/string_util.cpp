@@ -44,7 +44,7 @@ bool StringUtil::EndsWith(const string &str, const string &suffix) {
 	return equal(suffix.rbegin(), suffix.rend(), str.rbegin());
 }
 
-string StringUtil::Repeat(const string &str, count_t n) {
+string StringUtil::Repeat(const string &str, index_t n) {
 	ostringstream os;
 	if (n == 0 || str.empty()) {
 		return (os.str());
@@ -173,9 +173,9 @@ string StringUtil::VFormat(const string fmt_str, va_list args) {
 vector<string> StringUtil::Split(const string &input, const string &split) {
 	vector<string> splits;
 
-	count_t last = 0;
-	count_t input_len = input.size();
-	count_t split_len = split.size();
+	index_t last = 0;
+	index_t input_len = input.size();
+	index_t split_len = split.size();
 	while (last <= input_len) {
 		index_t next = input.find(split, last);
 		if (next == string::npos) {

@@ -15,7 +15,7 @@ namespace duckdb {
 
 struct BoundTable {
 	index_t table_index;
-	count_t column_count;
+	index_t column_count;
 	index_t column_offset;
 };
 

@@ -19,7 +19,7 @@
 
 namespace duckdb {
 
-void age_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void age_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                   Vector &result);
 bool age_matches_arguments(vector<SQLType> &arguments);
 SQLType age_get_return_type(vector<SQLType> &arguments);

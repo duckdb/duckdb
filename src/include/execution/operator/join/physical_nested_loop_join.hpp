@@ -13,10 +13,10 @@
 
 namespace duckdb {
 
-count_t nested_loop_join(ExpressionType op, Vector &left, Vector &right, index_t &lpos, index_t &rpos, sel_t lvector[],
+index_t nested_loop_join(ExpressionType op, Vector &left, Vector &right, index_t &lpos, index_t &rpos, sel_t lvector[],
                          sel_t rvector[]);
-count_t nested_loop_comparison(ExpressionType op, Vector &left, Vector &right, sel_t lvector[], sel_t rvector[],
-                               count_t count);
+index_t nested_loop_comparison(ExpressionType op, Vector &left, Vector &right, sel_t lvector[], sel_t rvector[],
+                               index_t count);
 
 //! PhysicalNestedLoopJoin represents a nested loop join between two tables
 class PhysicalNestedLoopJoin : public PhysicalComparisonJoin {

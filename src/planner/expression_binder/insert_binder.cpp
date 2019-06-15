@@ -8,7 +8,7 @@ using namespace std;
 InsertBinder::InsertBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
 }
 
-BindResult InsertBinder::BindExpression(ParsedExpression &expr, count_t depth, bool root_expression) {
+BindResult InsertBinder::BindExpression(ParsedExpression &expr, index_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::AGGREGATE:
 		return BindResult("INSERT statement cannot contain aggregates!");

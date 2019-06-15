@@ -26,18 +26,18 @@ public:
 	struct JoinNode {
 		RelationSet *set;
 		NeighborInfo *info;
-		count_t cardinality;
-		count_t cost;
+		index_t cardinality;
+		index_t cost;
 		JoinNode *left;
 		JoinNode *right;
 
 		//! Create a leaf node in the join tree
-		JoinNode(RelationSet *set, count_t cardinality)
+		JoinNode(RelationSet *set, index_t cardinality)
 		    : set(set), info(nullptr), cardinality(cardinality), cost(cardinality), left(nullptr), right(nullptr) {
 		}
 		//! Create an intermediate node in the join tree
-		JoinNode(RelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, count_t cardinality,
-		         count_t cost)
+		JoinNode(RelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, index_t cardinality,
+		         index_t cost)
 		    : set(set), info(info), cardinality(cardinality), cost(cost), left(left), right(right) {
 		}
 	};
@@ -48,7 +48,7 @@ public:
 
 private:
 	//! The total amount of join pairs that have been considered
-	count_t pairs = 0;
+	index_t pairs = 0;
 	//! Set of all relations considered in the join optimizer
 	vector<unique_ptr<Relation>> relations;
 	//! A mapping of base table index -> index into relations array (relation number)

@@ -12,7 +12,7 @@ using namespace duckdb;
 using namespace std;
 
 template <class T>
-static inline void set_loop(T *__restrict result_data, T value, count_t count, sel_t *__restrict sel_vector) {
+static inline void set_loop(T *__restrict result_data, T value, index_t count, sel_t *__restrict sel_vector) {
 	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) { result_data[i] = value; });
 }
 

@@ -16,7 +16,7 @@
 namespace duckdb {
 
 struct NestedLoopJoinInner {
-	static count_t Perform(index_t &ltuple, index_t &rtuple, DataChunk &left_conditions, DataChunk &right_conditions,
+	static index_t Perform(index_t &ltuple, index_t &rtuple, DataChunk &left_conditions, DataChunk &right_conditions,
 	                       sel_t lvector[], sel_t rvector[], vector<JoinCondition> &conditions);
 };
 

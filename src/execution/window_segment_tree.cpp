@@ -93,10 +93,10 @@ void WindowSegmentTree::ConstructTree() {
 	assert(input_ref->column_count() == 1);
 
 	// compute space required to store internal nodes of segment tree
-	count_t internal_nodes = 0;
-	count_t level_nodes = input_ref->count;
+	index_t internal_nodes = 0;
+	index_t level_nodes = input_ref->count;
 	do {
-		level_nodes = (count_t)ceil((double)level_nodes / TREE_FANOUT);
+		level_nodes = (index_t)ceil((double)level_nodes / TREE_FANOUT);
 		internal_nodes += level_nodes;
 	} while (level_nodes > 1);
 	levels_flat_native = unique_ptr<data_t[]>(new data_t[internal_nodes * GetTypeIdSize(payload_type)]);
@@ -105,7 +105,7 @@ void WindowSegmentTree::ConstructTree() {
 	index_t levels_flat_offset = 0;
 	index_t level_current = 0;
 	// level 0 is data itself
-	count_t level_size;
+	index_t level_size;
 	while ((level_size = (level_current == 0 ? input_ref->count
 	                                         : levels_flat_offset - levels_flat_start[level_current - 1])) > 1) {
 		for (index_t pos = 0; pos < level_size; pos += TREE_FANOUT) {

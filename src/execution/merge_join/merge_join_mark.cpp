@@ -6,11 +6,11 @@
 using namespace duckdb;
 using namespace std;
 
-template <class T> count_t MergeJoinMark::Equality::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+template <class T> index_t MergeJoinMark::Equality::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	throw NotImplementedException("Merge Join with Equality not implemented");
 }
 
-template <class T, class OP> static count_t merge_join_mark_gt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+template <class T, class OP> static index_t merge_join_mark_gt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	assert(l.sel_vector);
 	auto ldata = (T *)l.v.data;
 	l.pos = l.count;
@@ -41,15 +41,15 @@ template <class T, class OP> static count_t merge_join_mark_gt(ScalarMergeInfo &
 	}
 	return 0;
 }
-template <class T> count_t MergeJoinMark::GreaterThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+template <class T> index_t MergeJoinMark::GreaterThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	return merge_join_mark_gt<T, duckdb::GreaterThan>(l, r);
 }
 
-template <class T> count_t MergeJoinMark::GreaterThanEquals::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+template <class T> index_t MergeJoinMark::GreaterThanEquals::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	return merge_join_mark_gt<T, duckdb::GreaterThanEquals>(l, r);
 }
 
-template <class T, class OP> static count_t merge_join_mark_lt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+template <class T, class OP> static index_t merge_join_mark_lt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	assert(l.sel_vector);
 	auto ldata = (T *)l.v.data;
 	l.pos = 0;
@@ -81,12 +81,12 @@ template <class T, class OP> static count_t merge_join_mark_lt(ScalarMergeInfo &
 	return 0;
 }
 
-template <class T> count_t MergeJoinMark::LessThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+template <class T> index_t MergeJoinMark::LessThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	return merge_join_mark_lt<T, duckdb::LessThan>(l, r);
 	throw NotImplementedException("Not implemented");
 }
 
-template <class T> count_t MergeJoinMark::LessThanEquals::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+template <class T> index_t MergeJoinMark::LessThanEquals::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	return merge_join_mark_lt<T, duckdb::LessThanEquals>(l, r);
 }
 

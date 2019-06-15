@@ -19,7 +19,7 @@ TableDataReader::TableDataReader(CheckpointManager &manager, TableCatalogEntry &
 void TableDataReader::ReadTableData(ClientContext &context) {
 	assert(blocks.size() == 0);
 
-	count_t column_count = table.columns.size();
+	index_t column_count = table.columns.size();
 	assert(column_count > 0);
 
 	// load the data pointers for the table
@@ -57,7 +57,7 @@ void TableDataReader::ReadTableData(ClientContext &context) {
 			TypeId type = insert_chunk.data[col].type;
 			if (TypeIsConstantSize(type)) {
 				while (insert_chunk.data[col].count < STANDARD_VECTOR_SIZE) {
-					count_t tuples_left = data_pointers[col][indexes[col] - 1].tuple_count - tuple_counts[col];
+					index_t tuples_left = data_pointers[col][indexes[col] - 1].tuple_count - tuple_counts[col];
 					if (tuples_left == 0) {
 						// no tuples left in this block
 						// move to next block
@@ -68,7 +68,7 @@ void TableDataReader::ReadTableData(ClientContext &context) {
 						tuples_left = data_pointers[col][indexes[col] - 1].tuple_count - tuple_counts[col];
 					}
 					Vector storage_vector(types[col], blocks[col]->buffer + offsets[col]);
-					storage_vector.count = std::min((count_t)STANDARD_VECTOR_SIZE, tuples_left);
+					storage_vector.count = std::min((index_t)STANDARD_VECTOR_SIZE, tuples_left);
 					VectorOperations::AppendFromStorage(storage_vector, insert_chunk.data[col]);
 
 					tuple_counts[col] += storage_vector.count;
