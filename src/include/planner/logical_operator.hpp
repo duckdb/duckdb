@@ -64,11 +64,6 @@ public:
 		return max_cardinality;
 	}
 
-	virtual count_t ExpressionCount();
-	virtual Expression *GetExpression(index_t index);
-	virtual void ReplaceExpression(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
-	                               index_t index);
-
 protected:
 	//! Resolve types for this specific operator
 	virtual void ResolveTypes() = 0;

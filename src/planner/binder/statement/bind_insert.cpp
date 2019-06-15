@@ -48,30 +48,18 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 		}
 	}
 
-	count_t expected_columns = stmt.columns.size() == 0 ? result->table->columns.size() : stmt.columns.size();
+	index_t expected_columns = stmt.columns.size() == 0 ? result->table->columns.size() : stmt.columns.size();
+	index_t result_columns;
 	if (stmt.select_statement) {
 		result->select_statement =
 		    unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*stmt.select_statement));
-		if (result->select_statement->node->types.size() != expected_columns) {
-			string msg = StringUtil::Format(
-			    stmt.columns.size() == 0 ? "table %s has %d columns but %d values were supplied"
-			                             : "Column name/value mismatch for insert on %s: "
-			                               "expected %d columns but %d values were supplied",
-			    result->table->name.c_str(), (int)expected_columns, (int)result->select_statement->node->types.size());
-			throw BinderException(msg);
-		}
+		result_columns = result->select_statement->node->types.size();
 	} else {
 		// visit the expressions
+		assert(stmt.values.size() > 0);
+		result_columns = stmt.values[0].size();
 		InsertBinder binder(*this, context);
 		for (auto &expression_list : stmt.values) {
-			if (expression_list.size() != expected_columns) {
-				string msg =
-				    StringUtil::Format(stmt.columns.size() == 0 ? "table %s has %d columns but %d values were supplied"
-				                                                : "Column name/value mismatch for insert on %s: "
-				                                                  "expected %d columns but %d values were supplied",
-				                       result->table->name.c_str(), (int)expected_columns, (int)expression_list.size());
-				throw BinderException(msg);
-			}
 			vector<unique_ptr<Expression>> list;
 
 			for (index_t col_idx = 0; col_idx < expression_list.size(); col_idx++) {
@@ -83,6 +71,14 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			}
 			result->values.push_back(move(list));
 		}
+	}
+	if (result_columns != expected_columns) {
+		string msg = StringUtil::Format(
+			stmt.columns.size() == 0 ? "table %s has %d columns but %d values were supplied"
+										: "Column name/value mismatch for insert on %s: "
+										"expected %llu columns but %llu values were supplied",
+			result->table->name.c_str(), expected_columns, result_columns);
+		throw BinderException(msg);
 	}
 	// bind the default values
 	BindDefaultValues(table->columns, result->bound_defaults);

@@ -43,6 +43,9 @@ void TableBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::CHUNK_GET:
 		Visit((LogicalChunkGet &)op);
 		break;
+	case LogicalOperatorType::EXPRESSION_GET:
+		Visit((LogicalExpressionGet &)op);
+		break;
 	case LogicalOperatorType::DELIM_GET:
 		Visit((LogicalDelimGet &)op);
 		break;
@@ -201,6 +204,15 @@ void TableBindingResolver::Visit(LogicalSetOperation &op) {
 	BoundTable binding;
 	binding.table_index = op.table_index;
 	binding.column_count = op.column_count;
+	PushBinding(binding);
+}
+
+void TableBindingResolver::Visit(LogicalExpressionGet &op) {
+	RecurseIntoSubquery(op);
+
+	BoundTable binding;
+	binding.table_index = op.table_index;
+	binding.column_count = op.expr_types.size();
 	PushBinding(binding);
 }
 

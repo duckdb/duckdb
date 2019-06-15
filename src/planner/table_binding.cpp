@@ -79,15 +79,21 @@ SubqueryBinding::SubqueryBinding(const string &alias, SubqueryRef &ref, BoundQue
 	// use any provided aliases from the subquery
 	for (i = 0; i < ref.column_name_alias.size(); i++) {
 		auto &name = ref.column_name_alias[i];
-		name_map[name] = names.size();
-		names.push_back(name);
+		AddName(name);
 	}
 	// if not enough aliases were provided, use the default names
 	for (; i < subquery.names.size(); i++) {
 		auto &name = subquery.names[i];
-		name_map[name] = names.size();
-		names.push_back(name);
+		AddName(name);
 	}
+}
+
+void SubqueryBinding::AddName(string &name) {
+	if (name_map.find(name) != name_map.end()) {
+		throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias.c_str(), name.c_str());
+	}
+	name_map[name] = names.size();
+	names.push_back(name);
 }
 
 bool SubqueryBinding::HasMatchingBinding(const string &column_name) {

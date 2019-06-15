@@ -50,21 +50,6 @@ string LogicalOperator::ToString(count_t depth) const {
 	return result;
 }
 
-count_t LogicalOperator::ExpressionCount() {
-	return expressions.size();
-}
-
-Expression *LogicalOperator::GetExpression(index_t index) {
-	assert(index < expressions.size());
-	return expressions[index].get();
-}
-
-void LogicalOperator::ReplaceExpression(
-    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, index_t index) {
-	assert(index < expressions.size());
-	expressions[index] = callback(move(expressions[index]));
-}
-
 void LogicalOperator::Print() {
 	Printer::Print(ToString());
 }

@@ -41,6 +41,7 @@ protected:
 	void Visit(LogicalComparisonJoin &op);
 	void Visit(LogicalCreateIndex &op);
 	void Visit(LogicalDelimGet &op);
+	void Visit(LogicalExpressionGet &op);
 	void Visit(LogicalEmptyResult &op);
 	void Visit(LogicalCrossProduct &op);
 	void Visit(LogicalChunkGet &op);

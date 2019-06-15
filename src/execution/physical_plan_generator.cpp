@@ -96,6 +96,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalChunkGet &)op);
 	case LogicalOperatorType::DELIM_GET:
 		return CreatePlan((LogicalDelimGet &)op);
+	case LogicalOperatorType::EXPRESSION_GET:
+		return CreatePlan((LogicalExpressionGet &)op);
 	case LogicalOperatorType::UPDATE:
 		return CreatePlan((LogicalUpdate &)op);
 	case LogicalOperatorType::CREATE_TABLE:

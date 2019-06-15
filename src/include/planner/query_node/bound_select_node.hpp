@@ -29,6 +29,8 @@ public:
 	vector<unique_ptr<Expression>> groups;
 	//! HAVING clause
 	unique_ptr<Expression> having;
+	//! The bound VALUES list
+	vector<vector<unique_ptr<Expression>>> values;
 
 	//! The amount of columns in the final result
 	count_t column_count;
