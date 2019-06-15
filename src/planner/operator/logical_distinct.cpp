@@ -6,16 +6,6 @@ using namespace std;
 using namespace duckdb;
 using namespace std;
 
-/*void LogicalDistinct::ResolveTypes() {
-    for (auto &expr : distinct_targets) {
-        types.push_back(expr->return_type);
-    }
-    // get the chunk types from the projection list
-    for (auto &expr : expressions) {
-        types.push_back(expr->return_type);
-    }
-}*/
-
 string LogicalDistinct::ParamsToString() const {
 	string result = LogicalOperator::ParamsToString();
 	if (distinct_targets.size() > 0) {
