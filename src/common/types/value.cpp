@@ -14,6 +14,7 @@
 #include "common/types/vector.hpp"
 #include "common/value_operations/value_operations.hpp"
 #include "common/vector_operations/vector_operations.hpp"
+#include "common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;

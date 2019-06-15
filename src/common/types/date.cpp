@@ -1,6 +1,7 @@
 #include "common/types/date.hpp"
 
 #include "common/exception.hpp"
+#include "common/string_util.hpp"
 
 #include <cctype>
 #include <iomanip>

@@ -1,7 +1,8 @@
-#include "../../include/function/scalar_function/math.hpp"
+#include "function/scalar_function/math.hpp"
 #include "common/exception.hpp"
 #include "common/types/date.hpp"
 #include "common/vector_operations/vector_operations.hpp"
+#include "common/string_util.hpp"
 
 using namespace std;
 

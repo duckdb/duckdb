@@ -1,5 +1,6 @@
 #include "common/types/time.hpp"
 
+#include "common/string_util.hpp"
 #include "common/exception.hpp"
 
 #include <iomanip>

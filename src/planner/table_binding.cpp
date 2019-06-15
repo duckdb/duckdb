@@ -1,5 +1,6 @@
 #include "planner/table_binding.hpp"
 
+#include "common/string_util.hpp"
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "parser/expression/columnref_expression.hpp"

@@ -159,6 +159,15 @@ template <class T, bool NEGATIVE, bool ALLOW_EXPONENT> static bool IntegerCastLo
 				}
 				return true;
 			}
+			if (std::isspace(buf[pos])) {
+				// skip any trailing spaces
+				while(buf[++pos]) {
+					if (!std::isspace(buf[pos])) {
+						return false;
+					}
+				}
+				return true;
+			}
 			if (ALLOW_EXPONENT) {
 				if (buf[pos] == 'e' || buf[pos] == 'E') {
 					pos++;
@@ -203,6 +212,10 @@ template <class T, bool ALLOW_EXPONENT = true> static bool TryIntegerCast(const 
 	if (!*buf) {
 		return false;
 	}
+	// skip any spaces at the start
+	while (std::isspace(*buf)) {
+		buf++;
+	}
 	int negative = *buf == '-';
 
 	result = 0;
@@ -236,6 +249,17 @@ template <> bool TryCast::Operation(const char *left, int64_t &result) {
 	return TryIntegerCast<int64_t>(left, result);
 }
 
+template<class T, bool NEGATIVE>
+static void ComputeDoubleResult(T &result, index_t decimal, index_t decimal_factor) {
+	if (decimal_factor > 1) {
+		if (NEGATIVE) {
+			result -= (T)decimal / (T)decimal_factor;
+		} else {
+			result += (T)decimal / (T)decimal_factor;
+		}
+	}
+}
+
 template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, T &result) {
 	index_t pos = NEGATIVE ? 1 : 0;
 	index_t decimal = 0;
@@ -252,6 +276,15 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, T 
 				decimal_factor = 1;
 				pos++;
 				continue;
+			} else if (std::isspace(buf[pos])) {
+				// skip any trailing spaces
+				while(buf[++pos]) {
+					if (!std::isspace(buf[pos])) {
+						return false;
+					}
+				}
+				ComputeDoubleResult<T, NEGATIVE>(result, decimal, decimal_factor);
+				return true;
 			} else if (buf[pos] == 'e' || buf[pos] == 'E') {
 				// E power
 				// parse an integer, this time not allowing another exponent
@@ -260,13 +293,7 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, T 
 				if (!TryIntegerCast<int64_t, false>(buf + pos, exponent)) {
 					return false;
 				}
-				if (decimal_factor > 1) {
-					if (NEGATIVE) {
-						result -= (T)decimal / (T)decimal_factor;
-					} else {
-						result += (T)decimal / (T)decimal_factor;
-					}
-				}
+				ComputeDoubleResult<T, NEGATIVE>(result, decimal, decimal_factor);
 				result = result * pow(10, exponent);
 				return true;
 			} else {
@@ -285,19 +312,17 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, T 
 			decimal_factor *= 10;
 		}
 	}
-	if (decimal_factor > 1) {
-		if (NEGATIVE) {
-			result -= (T)decimal / (T)decimal_factor;
-		} else {
-			result += (T)decimal / (T)decimal_factor;
-		}
-	}
+	ComputeDoubleResult<T, NEGATIVE>(result, decimal, decimal_factor);
 	return pos > (NEGATIVE ? 1 : 0);
 }
 
 template <class T> static bool TryDoubleCast(const char *buf, T &result) {
 	if (!*buf) {
 		return false;
+	}
+	// skip any spaces at the start
+	while (std::isspace(*buf)) {
+		buf++;
 	}
 	int negative = *buf == '-';
 
