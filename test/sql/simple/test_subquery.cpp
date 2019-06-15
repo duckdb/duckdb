@@ -88,6 +88,9 @@ TEST_CASE("Test subqueries", "[subqueries]") {
 	                   "WHERE ts.a = test.a AND b>21)");
 	REQUIRE(CHECK_COLUMN(result, 0, {11, 13}));
 	REQUIRE(CHECK_COLUMN(result, 1, {22, 22}));
+
+	// duplicate name in subquery
+	REQUIRE_FAIL(con.Query("SELECT * FROM (SELECT 42 AS a, 44 AS a) tbl1"));
 }
 
 TEST_CASE("Test subqueries with (NOT) IN clause", "[subqueries]") {

@@ -25,14 +25,14 @@ inline void INPLACE_TYPE_CHECK(Vector &left, Vector &result) {
 }
 
 template <class LEFT_TYPE, class RESULT_TYPE, class OP>
-static inline void inplace_loop_function_constant(LEFT_TYPE ldata, RESULT_TYPE *__restrict result_data, count_t count,
+static inline void inplace_loop_function_constant(LEFT_TYPE ldata, RESULT_TYPE *__restrict result_data, index_t count,
                                                   sel_t *__restrict sel_vector) {
 	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) { OP::Operation(result_data[i], ldata); });
 }
 
 template <class LEFT_TYPE, class RESULT_TYPE, class OP>
 static inline void inplace_loop_function_array(LEFT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data,
-                                               count_t count, sel_t *__restrict sel_vector) {
+                                               index_t count, sel_t *__restrict sel_vector) {
 	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) { OP::Operation(result_data[i], ldata[i]); });
 }

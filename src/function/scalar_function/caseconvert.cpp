@@ -42,7 +42,7 @@ static void caseconvert_function(Vector inputs[], BoundFunctionExpression &expr,
 	auto input_data = (const char **)input.data;
 
 	// bool has_stats = expr.function->children[0]->stats.has_stats;
-	count_t current_len = 0;
+	index_t current_len = 0;
 	unique_ptr<char[]> output;
 	// if (has_stats) {
 	// 	// stats available, pre-allocate the result chunk
@@ -56,7 +56,7 @@ static void caseconvert_function(Vector inputs[], BoundFunctionExpression &expr,
 		}
 		// if (!has_stats) {
 		// no stats available, might need to reallocate
-		count_t required_len = strlen(input_data[i]) + 1;
+		index_t required_len = strlen(input_data[i]) + 1;
 		if (required_len > current_len) {
 			current_len = required_len + 1;
 			output = unique_ptr<char[]>{new char[current_len]};
@@ -69,13 +69,13 @@ static void caseconvert_function(Vector inputs[], BoundFunctionExpression &expr,
 	});
 }
 
-void caseconvert_upper_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count,
+void caseconvert_upper_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
                                 BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 1);
 	caseconvert_function<strtoupper>(inputs, expr, result);
 }
 
-void caseconvert_lower_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count,
+void caseconvert_lower_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
                                 BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 1);
 	caseconvert_function<strtolower>(inputs, expr, result);

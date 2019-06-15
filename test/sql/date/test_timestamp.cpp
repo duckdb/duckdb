@@ -149,7 +149,7 @@ TEST_CASE("Test timestamp functions", "[timestamp]") {
 
 	std::string output{""};
 	if (years == 0 && months == 0 && days == 0) {
-		output += DEFAULT_TIME;
+		output += "00:00:00";
 	} else {
 		if (years != 0) {
 			output = std::to_string(years);

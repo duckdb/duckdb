@@ -161,7 +161,7 @@ template <class T, bool NEGATIVE, bool ALLOW_EXPONENT> static bool IntegerCastLo
 			}
 			if (std::isspace(buf[pos])) {
 				// skip any trailing spaces
-				while(buf[++pos]) {
+				while (buf[++pos]) {
 					if (!std::isspace(buf[pos])) {
 						return false;
 					}
@@ -249,8 +249,7 @@ template <> bool TryCast::Operation(const char *left, int64_t &result) {
 	return TryIntegerCast<int64_t>(left, result);
 }
 
-template<class T, bool NEGATIVE>
-static void ComputeDoubleResult(T &result, index_t decimal, index_t decimal_factor) {
+template <class T, bool NEGATIVE> static void ComputeDoubleResult(T &result, index_t decimal, index_t decimal_factor) {
 	if (decimal_factor > 1) {
 		if (NEGATIVE) {
 			result -= (T)decimal / (T)decimal_factor;
@@ -278,7 +277,7 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, T 
 				continue;
 			} else if (std::isspace(buf[pos])) {
 				// skip any trailing spaces
-				while(buf[++pos]) {
+				while (buf[++pos]) {
 					if (!std::isspace(buf[pos])) {
 						return false;
 					}

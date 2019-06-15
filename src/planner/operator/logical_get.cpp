@@ -14,7 +14,7 @@ void LogicalGet::ResolveTypes() {
 	}
 }
 
-count_t LogicalGet::EstimateCardinality() {
+index_t LogicalGet::EstimateCardinality() {
 	if (table) {
 		return table->storage->cardinality;
 	} else {

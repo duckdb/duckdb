@@ -21,7 +21,7 @@ inline void UNARY_TYPE_CHECK(Vector &input, Vector &result) {
 }
 
 template <class LEFT_TYPE, class RESULT_TYPE, class OP>
-static inline void unary_loop_function(LEFT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, count_t count,
+static inline void unary_loop_function(LEFT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, index_t count,
                                        sel_t *__restrict sel_vector) {
 	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) { result_data[i] = OP::Operation(ldata[i]); });
@@ -39,7 +39,7 @@ template <class LEFT_TYPE, class RESULT_TYPE, class OP> void templated_unary_loo
 
 template <class LEFT_TYPE, class RESULT_TYPE, class OP>
 static inline void unary_loop_process_null_function(LEFT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data,
-                                                    count_t count, sel_t *__restrict sel_vector, nullmask_t &nullmask) {
+                                                    index_t count, sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 	if (nullmask.any()) {
 		VectorOperations::Exec(sel_vector, count,

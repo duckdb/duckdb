@@ -60,7 +60,7 @@ public:
 		return type;
 	}
 
-	string ToString(count_t depth = 0) const;
+	string ToString(index_t depth = 0) const;
 	void Print();
 
 	//! Return a vector of the types that will be returned by this operator

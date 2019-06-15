@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-void round_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void round_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                     Vector &result);
 bool round_matches_arguments(vector<SQLType> &arguments);
 SQLType round_get_return_type(vector<SQLType> &arguments);

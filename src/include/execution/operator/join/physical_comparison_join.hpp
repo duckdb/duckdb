@@ -18,9 +18,10 @@ public:
 	PhysicalComparisonJoin(LogicalOperator &op, PhysicalOperatorType type, vector<JoinCondition> cond,
 	                       JoinType join_type);
 
-	string ExtraRenderInformation() const override;
-
 	vector<JoinCondition> conditions;
+
+public:
+	string ExtraRenderInformation() const override;
 };
 
 } // namespace duckdb

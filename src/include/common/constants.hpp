@@ -34,8 +34,6 @@ using std::vector;
 
 //! a saner size_t for loop indices etc
 typedef uint64_t index_t;
-//! a saner siz_t for amounts of things, mostly for readability
-typedef uint64_t count_t;
 
 //! The type used for row identifiers
 typedef int64_t row_t;

@@ -217,7 +217,7 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
 
 	// set up the intermediate result chunk
 	vector<TypeId> internal_types;
-	for(auto &type : sql_types) {
+	for (auto &type : sql_types) {
 		internal_types.push_back(GetInternalType(type));
 	}
 	DataChunk parsed_result;
@@ -235,19 +235,20 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
 	BufferedCSVReader reader(info, sql_types, csv_stream);
 	index_t collection_index = 0;
 	index_t tuple_count = 0;
-	while(true) {
+	while (true) {
 		// parse a chunk from the CSV file
 		try {
 			parsed_result.Reset();
 			reader.ParseCSV(parsed_result);
-		} catch(Exception &ex) {
-			error_message = "Could not parse CSV: " + ex.GetMessage();
+		} catch (Exception &ex) {
+			error_message = "Could not parse CSV: " + string(ex.what());
 			return false;
 		}
 		if (parsed_result.size() == 0) {
 			// out of tuples in CSV file
 			if (collection_index < collection.chunks.size()) {
-				error_message = StringUtil::Format("Too many tuples in result! Found %llu tuples, but expected %llu", collection.count, tuple_count);
+				error_message = StringUtil::Format("Too many tuples in result! Found %llu tuples, but expected %llu",
+				                                   collection.count, tuple_count);
 				return false;
 			}
 			return true;
@@ -255,12 +256,13 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
 		if (collection_index >= collection.chunks.size()) {
 			// ran out of chunks in the collection, but there are still tuples in the result
 			// keep parsing the csv file to get the total expected count
-			while(parsed_result.size() > 0) {
+			while (parsed_result.size() > 0) {
 				tuple_count += parsed_result.size();
 				parsed_result.Reset();
 				reader.ParseCSV(parsed_result);
 			}
-			error_message = StringUtil::Format("Too few tuples in result! Found %llu tuples, but expected %llu", collection.count, tuple_count);
+			error_message = StringUtil::Format("Too few tuples in result! Found %llu tuples, but expected %llu",
+			                                   collection.count, tuple_count);
 			return false;
 		}
 		// same counts, compare tuples in chunks

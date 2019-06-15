@@ -29,7 +29,7 @@ inline void BINARY_TYPE_CHECK(Vector &left, Vector &right, Vector &result) {
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
 static inline void binary_loop_function_left_constant(LEFT_TYPE ldata, RIGHT_TYPE *__restrict rdata,
-                                                      RESULT_TYPE *__restrict result_data, count_t count,
+                                                      RESULT_TYPE *__restrict result_data, index_t count,
                                                       sel_t *__restrict sel_vector) {
 	ASSERT_RESTRICT(rdata, rdata + count, result_data, result_data + count);
 	VectorOperations::Exec(sel_vector, count,
@@ -38,7 +38,7 @@ static inline void binary_loop_function_left_constant(LEFT_TYPE ldata, RIGHT_TYP
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
 static inline void binary_loop_function_right_constant(LEFT_TYPE *__restrict ldata, RIGHT_TYPE rdata,
-                                                       RESULT_TYPE *__restrict result_data, count_t count,
+                                                       RESULT_TYPE *__restrict result_data, index_t count,
                                                        sel_t *__restrict sel_vector) {
 	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 	VectorOperations::Exec(sel_vector, count,
@@ -47,7 +47,7 @@ static inline void binary_loop_function_right_constant(LEFT_TYPE *__restrict lda
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
 static inline void binary_loop_function_array(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
-                                              RESULT_TYPE *__restrict result_data, count_t count,
+                                              RESULT_TYPE *__restrict result_data, index_t count,
                                               sel_t *__restrict sel_vector) {
 	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 	ASSERT_RESTRICT(rdata, rdata + count, result_data, result_data + count);

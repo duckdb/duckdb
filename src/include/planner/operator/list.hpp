@@ -14,6 +14,7 @@
 #include "planner/operator/logical_empty_result.hpp"
 #include "planner/operator/logical_execute.hpp"
 #include "planner/operator/logical_explain.hpp"
+#include "planner/operator/logical_expression_get.hpp"
 #include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_get.hpp"
 #include "planner/operator/logical_index_scan.hpp"

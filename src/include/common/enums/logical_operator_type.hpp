@@ -33,6 +33,7 @@ enum class LogicalOperatorType : uint8_t {
 	GET,
 	CHUNK_GET,
 	DELIM_GET,
+	EXPRESSION_GET,
 	TABLE_FUNCTION,
 	SUBQUERY,
 	EMPTY_RESULT,

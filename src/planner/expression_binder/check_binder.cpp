@@ -12,7 +12,7 @@ CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table, v
 	target_type = SQLType(SQLTypeId::INTEGER);
 }
 
-BindResult CheckBinder::BindExpression(ParsedExpression &expr, count_t depth, bool root_expression) {
+BindResult CheckBinder::BindExpression(ParsedExpression &expr, index_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::AGGREGATE:
 		return BindResult("aggregate functions are not allowed in check constraints");

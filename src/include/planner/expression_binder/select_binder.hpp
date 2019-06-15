@@ -31,7 +31,7 @@ public:
 	SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info);
 
 protected:
-	BindResult BindExpression(ParsedExpression &expr, count_t depth, bool root_expression = false) override;
+	BindResult BindExpression(ParsedExpression &expr, index_t depth, bool root_expression = false) override;
 
 	bool inside_window;
 
@@ -39,11 +39,11 @@ protected:
 	BoundGroupInformation &info;
 
 protected:
-	BindResult BindAggregate(AggregateExpression &expr, count_t depth);
-	BindResult BindWindow(WindowExpression &expr, count_t depth);
+	BindResult BindAggregate(AggregateExpression &expr, index_t depth);
+	BindResult BindWindow(WindowExpression &expr, index_t depth);
 
-	index_t TryBindGroup(ParsedExpression &expr, count_t depth);
-	BindResult BindGroup(ParsedExpression &expr, count_t depth, index_t group_index);
+	index_t TryBindGroup(ParsedExpression &expr, index_t depth);
+	BindResult BindGroup(ParsedExpression &expr, index_t depth, index_t group_index);
 };
 
 } // namespace duckdb

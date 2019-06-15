@@ -30,43 +30,48 @@ enum class BindingType : uint8_t { TABLE = 0, SUBQUERY = 1, TABLE_FUNCTION = 2 }
 struct Binding {
 	Binding(BindingType type, const string &alias, index_t index) : type(type), alias(alias), index(index) {
 	}
-	virtual ~Binding() {
-	}
-
-	virtual bool HasMatchingBinding(const string &column_name) = 0;
-	virtual BindResult Bind(ColumnRefExpression &colref, count_t depth) = 0;
-	virtual void GenerateAllColumnExpressions(BindContext &context,
-	                                          vector<unique_ptr<ParsedExpression>> &select_list) = 0;
+	virtual ~Binding() = default;
 
 	BindingType type;
 	string alias;
 	index_t index;
+
+public:
+	virtual bool HasMatchingBinding(const string &column_name) = 0;
+	virtual BindResult Bind(ColumnRefExpression &colref, index_t depth) = 0;
+	virtual void GenerateAllColumnExpressions(BindContext &context,
+	                                          vector<unique_ptr<ParsedExpression>> &select_list) = 0;
 };
 
 //! Represents a binding to a base table
 struct TableBinding : public Binding {
 	TableBinding(const string &alias, BoundBaseTableRef *bound);
 
-	bool HasMatchingBinding(const string &column_name) override;
-	BindResult Bind(ColumnRefExpression &colref, count_t depth) override;
-	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
-
 	BoundBaseTableRef *bound;
+
+public:
+	bool HasMatchingBinding(const string &column_name) override;
+	BindResult Bind(ColumnRefExpression &colref, index_t depth) override;
+	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
 };
 
 //! Represents a binding to a subquery
 struct SubqueryBinding : public Binding {
 	SubqueryBinding(const string &alias, SubqueryRef &ref, BoundQueryNode &subquery, index_t index);
 
-	bool HasMatchingBinding(const string &column_name) override;
-	BindResult Bind(ColumnRefExpression &colref, count_t depth) override;
-	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
-
 	BoundQueryNode &subquery;
 	//! Column names of the subquery
 	vector<string> names;
 	//! Name -> index for the names
 	unordered_map<string, uint64_t> name_map;
+
+public:
+	bool HasMatchingBinding(const string &column_name) override;
+	BindResult Bind(ColumnRefExpression &colref, index_t depth) override;
+	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
+
+private:
+	void AddName(string &name);
 };
 
 //! Represents a binding to a table-producing function
@@ -74,7 +79,7 @@ struct TableFunctionBinding : public Binding {
 	TableFunctionBinding(const string &alias, TableFunctionCatalogEntry *function, index_t index);
 
 	bool HasMatchingBinding(const string &column_name) override;
-	BindResult Bind(ColumnRefExpression &colref, count_t depth) override;
+	BindResult Bind(ColumnRefExpression &colref, index_t depth) override;
 	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
 
 	TableFunctionCatalogEntry *function;

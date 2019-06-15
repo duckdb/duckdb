@@ -6,13 +6,13 @@ using namespace std;
 
 struct InitialNestedLoopJoin {
 	template <class T, class OP>
-	static count_t Operation(Vector &left, Vector &right, index_t &lpos, index_t &rpos, sel_t lvector[],
-	                         sel_t rvector[], count_t current_match_count) {
+	static index_t Operation(Vector &left, Vector &right, index_t &lpos, index_t &rpos, sel_t lvector[],
+	                         sel_t rvector[], index_t current_match_count) {
 		// initialize phase of nested loop join
 		// fill lvector and rvector with matches from the base vectors
 		auto ldata = (T *)left.data;
 		auto rdata = (T *)right.data;
-		count_t result_count = 0;
+		index_t result_count = 0;
 		for (; rpos < right.count; rpos++) {
 			index_t right_position = right.sel_vector ? right.sel_vector[rpos] : rpos;
 			assert(!right.nullmask[right_position]);
@@ -38,15 +38,15 @@ struct InitialNestedLoopJoin {
 
 struct RefineNestedLoopJoin {
 	template <class T, class OP>
-	static count_t Operation(Vector &left, Vector &right, index_t &lpos, index_t &rpos, sel_t lvector[],
-	                         sel_t rvector[], count_t current_match_count) {
+	static index_t Operation(Vector &left, Vector &right, index_t &lpos, index_t &rpos, sel_t lvector[],
+	                         sel_t rvector[], index_t current_match_count) {
 		// refine phase of the nested loop join
 		// refine lvector and rvector based on matches of subsequent conditions (in case there are multiple conditions
 		// in the join)
 		assert(current_match_count > 0);
 		auto ldata = (T *)left.data;
 		auto rdata = (T *)right.data;
-		count_t result_count = 0;
+		index_t result_count = 0;
 		for (index_t i = 0; i < current_match_count; i++) {
 			// null values should be filtered out before
 			assert(!left.nullmask[lvector[i]] && !right.nullmask[rvector[i]]);
@@ -61,8 +61,8 @@ struct RefineNestedLoopJoin {
 };
 
 template <class NLTYPE, class OP>
-static count_t nested_loop_join_operator(Vector &left, Vector &right, index_t &lpos, index_t &rpos, sel_t lvector[],
-                                         sel_t rvector[], count_t current_match_count) {
+static index_t nested_loop_join_operator(Vector &left, Vector &right, index_t &lpos, index_t &rpos, sel_t lvector[],
+                                         sel_t rvector[], index_t current_match_count) {
 	switch (left.type) {
 	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
@@ -86,8 +86,8 @@ static count_t nested_loop_join_operator(Vector &left, Vector &right, index_t &l
 }
 
 template <class NLTYPE>
-count_t nested_loop_join(Vector &left, Vector &right, index_t &lpos, index_t &rpos, sel_t lvector[], sel_t rvector[],
-                         count_t current_match_count, ExpressionType comparison_type) {
+index_t nested_loop_join(Vector &left, Vector &right, index_t &lpos, index_t &rpos, sel_t lvector[], sel_t rvector[],
+                         index_t current_match_count, ExpressionType comparison_type) {
 	assert(left.type == right.type);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
@@ -113,7 +113,7 @@ count_t nested_loop_join(Vector &left, Vector &right, index_t &lpos, index_t &rp
 	}
 }
 
-count_t NestedLoopJoinInner::Perform(index_t &lpos, index_t &rpos, DataChunk &left_conditions,
+index_t NestedLoopJoinInner::Perform(index_t &lpos, index_t &rpos, DataChunk &left_conditions,
                                      DataChunk &right_conditions, sel_t lvector[], sel_t rvector[],
                                      vector<JoinCondition> &conditions) {
 	assert(left_conditions.column_count == right_conditions.column_count);
@@ -122,7 +122,7 @@ count_t NestedLoopJoinInner::Perform(index_t &lpos, index_t &rpos, DataChunk &le
 	}
 	// for the first condition, lvector and rvector are not set yet
 	// we initialize them using the InitialNestedLoopJoin
-	count_t match_count = nested_loop_join<InitialNestedLoopJoin>(
+	index_t match_count = nested_loop_join<InitialNestedLoopJoin>(
 	    left_conditions.data[0], right_conditions.data[0], lpos, rpos, lvector, rvector, 0, conditions[0].comparison);
 	// now resolve the rest of the conditions
 	for (index_t i = 1; i < conditions.size(); i++) {

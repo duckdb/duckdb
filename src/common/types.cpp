@@ -40,7 +40,7 @@ string TypeIdToString(TypeId type) {
 	}
 }
 
-count_t GetTypeIdSize(TypeId type) {
+index_t GetTypeIdSize(TypeId type) {
 	switch (type) {
 	case TypeId::BOOLEAN:
 		return sizeof(bool);

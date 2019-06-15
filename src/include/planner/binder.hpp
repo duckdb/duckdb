@@ -25,7 +25,7 @@ struct CorrelatedColumnInfo {
 	ColumnBinding binding;
 	TypeId type;
 	string name;
-	count_t depth;
+	index_t depth;
 
 	CorrelatedColumnInfo(BoundColumnRefExpression &expr)
 	    : binding(expr.binding), type(expr.return_type), name(expr.GetName()), depth(expr.depth) {
@@ -90,7 +90,7 @@ private:
 	//! The vector of active binders
 	vector<ExpressionBinder *> active_binders;
 	//! The count of bound_tables
-	count_t bound_tables;
+	index_t bound_tables;
 
 private:
 	//! Bind the default values of the columns of a table

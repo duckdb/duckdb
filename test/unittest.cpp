@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) {
 		// create the empty testing directory
 		TestCreateDirectory(dir);
 	} catch (Exception &ex) {
-		fprintf(stderr, "Failed to create testing directory \"%s\": %s", dir.c_str(), ex.GetMessage().c_str());
+		fprintf(stderr, "Failed to create testing directory \"%s\": %s", dir.c_str(), ex.what());
 		return 1;
 	}
 

@@ -23,17 +23,15 @@ public:
 	//! The conditions of the join
 	vector<JoinCondition> conditions;
 
+public:
+	string ParamsToString() const override;
+
+public:
 	static unique_ptr<LogicalOperator> CreateJoin(JoinType type, unique_ptr<LogicalOperator> left_child,
 	                                              unique_ptr<LogicalOperator> right_child,
 	                                              unordered_set<index_t> &left_bindings,
 	                                              unordered_set<index_t> &right_bindings,
 	                                              vector<unique_ptr<Expression>> &expressions);
-	count_t ExpressionCount() override;
-	Expression *GetExpression(index_t index) override;
-	void ReplaceExpression(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
-	                       index_t index) override;
-
-	string ParamsToString() const override;
 };
 
 } // namespace duckdb

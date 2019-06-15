@@ -22,7 +22,7 @@ public:
 	    : LogicalOperator(LogicalOperatorType::GET), table(table), table_index(table_index), column_ids(column_ids) {
 	}
 
-	count_t EstimateCardinality() override;
+	index_t EstimateCardinality() override;
 
 	//! The base table to retrieve data from
 	TableCatalogEntry *table;

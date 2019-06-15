@@ -24,6 +24,7 @@ class LogicalDelimGet;
 class LogicalDelimJoin;
 class LogicalDistinct;
 class LogicalEmptyResult;
+class LogicalExpressionGet;
 class LogicalFilter;
 class LogicalGet;
 class LogicalIndexScan;

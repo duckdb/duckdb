@@ -10,7 +10,7 @@ TEST_CASE("Test handling of overflows in basic types", "[overflowhandling]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 
-	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
 
 	//! Casting NULL should still work though
 	REQUIRE_NO_FAIL(con.Query("SELECT ALL CAST ( - SUM ( DISTINCT - CAST ( "

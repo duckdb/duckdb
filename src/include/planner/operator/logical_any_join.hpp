@@ -16,16 +16,12 @@ namespace duckdb {
 //! LogicalAnyJoin represents a join with an arbitrary expression as JoinCondition
 class LogicalAnyJoin : public LogicalJoin {
 public:
-	LogicalAnyJoin(JoinType type, LogicalOperatorType logical_type = LogicalOperatorType::ANY_JOIN);
+	LogicalAnyJoin(JoinType type);
 
 	//! The JoinCondition on which this join is performed
 	unique_ptr<Expression> condition;
 
-	count_t ExpressionCount() override;
-	Expression *GetExpression(index_t index) override;
-	void ReplaceExpression(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
-	                       index_t index) override;
-
+public:
 	string ParamsToString() const override;
 };
 

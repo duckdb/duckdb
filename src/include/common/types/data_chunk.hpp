@@ -39,7 +39,7 @@ public:
 	DataChunk();
 
 	//! The amount of vectors that are part of this DataChunk.
-	count_t column_count;
+	index_t column_count;
 	//! The vectors owned by the DataChunk.
 	unique_ptr<Vector[]> data;
 	//! The (optional) selection vector of the DataChunk. Each of the member
@@ -52,7 +52,7 @@ public:
 	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
 
 public:
-	count_t size() {
+	index_t size() {
 		if (column_count == 0) {
 			return 0;
 		}
@@ -78,7 +78,7 @@ public:
 
 	//! Merges the vector new_vector with an existing selection vector (i.e.
 	//! result[i] = current_vector[new_vector[i]];)
-	static void MergeSelVector(sel_t *current_vector, sel_t *new_vector, sel_t *result, count_t new_count);
+	static void MergeSelVector(sel_t *current_vector, sel_t *new_vector, sel_t *result, index_t new_count);
 
 	//! Filters elements from the vector based on a boolean vector. [True] is
 	//! included, [False] and [NULL] excluded.

@@ -20,13 +20,14 @@ public:
 	    : PhysicalOperator(op_type, types), collection(nullptr) {
 	}
 
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+
+public:
 	// the chunk collection to scan
 	ChunkCollection *collection;
 	//! Owned chunk collection, if any
 	unique_ptr<ChunkCollection> owned_collection;
-
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
 class PhysicalChunkScanState : public PhysicalOperatorState {

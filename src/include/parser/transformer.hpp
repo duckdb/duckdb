@@ -151,6 +151,8 @@ private:
 
 	//! Transform a Postgres SELECT clause into a list of Expressions
 	bool TransformExpressionList(postgres::List *list, vector<unique_ptr<ParsedExpression>> &result);
+	//! Transform a VALUES list into a set of expressions
+	void TransformValuesList(postgres::List *list, vector<vector<unique_ptr<ParsedExpression>>> &values);
 
 	void TransformWindowDef(postgres::WindowDef *window_spec, WindowExpression *expr);
 

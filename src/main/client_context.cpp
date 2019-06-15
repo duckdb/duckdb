@@ -62,7 +62,7 @@ unique_ptr<DataChunk> ClientContext::Fetch() {
 		auto chunk = FetchInternal();
 		return chunk;
 	} catch (Exception &ex) {
-		open_result->error = ex.GetMessage();
+		open_result->error = ex.what();
 	} catch (...) {
 		open_result->error = "Unhandled exception in Fetch";
 	}
@@ -90,7 +90,7 @@ string ClientContext::FinalizeQuery(bool success) {
 				}
 			}
 		} catch (Exception &ex) {
-			error = ex.GetMessage();
+			error = ex.what();
 		} catch (...) {
 			error = "Unhandled exception!";
 		}
@@ -279,7 +279,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 		prepared_statement_objects.insert(prepared_object.get());
 		return prepared_object;
 	} catch (Exception &ex) {
-		return make_unique<PreparedStatement>(ex.GetMessage());
+		return make_unique<PreparedStatement>(ex.what());
 	}
 }
 
@@ -361,7 +361,7 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementsInternal(string query,
 			// only the last result can be STREAM_RESULT
 			assert(is_last_statement || current_result->type != QueryResultType::STREAM_RESULT);
 		} catch (Exception &ex) {
-			current_result = make_unique<MaterializedQueryResult>(ex.GetMessage());
+			current_result = make_unique<MaterializedQueryResult>(ex.what());
 		} catch (std::bad_alloc &ex) {
 			current_result = make_unique<MaterializedQueryResult>("Out of memory!");
 		} catch (...) {
@@ -416,7 +416,7 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 		// parse the query and transform it into a set of statements
 		parser.ParseQuery(query.c_str());
 	} catch (Exception &ex) {
-		return make_unique<MaterializedQueryResult>(ex.GetMessage());
+		return make_unique<MaterializedQueryResult>(ex.what());
 	} catch (std::bad_alloc &ex) {
 		return make_unique<MaterializedQueryResult>("Out of memory!");
 	} catch (...) {
@@ -529,7 +529,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		auto result = ExecuteStatementInternal(query, move(statement), false);
 		original_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (Exception &ex) {
-		original_result->error = ex.GetMessage();
+		original_result->error = ex.what();
 		original_result->success = false;
 	}
 
@@ -549,14 +549,14 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		auto result = ExecuteStatementInternal(query, move(copied_stmt), false);
 		copied_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (Exception &ex) {
-		copied_result->error = ex.GetMessage();
+		copied_result->error = ex.what();
 	}
 	// now execute the deserialized statement
 	try {
 		auto result = ExecuteStatementInternal(query, move(deserialized_stmt), false);
 		deserialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (Exception &ex) {
-		deserialized_result->error = ex.GetMessage();
+		deserialized_result->error = ex.what();
 	}
 	// now execute the unoptimized statement
 	enable_optimizer = false;
@@ -564,7 +564,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		auto result = ExecuteStatementInternal(query, move(unoptimized_stmt), false);
 		unoptimized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (Exception &ex) {
-		unoptimized_result->error = ex.GetMessage();
+		unoptimized_result->error = ex.what();
 	}
 
 	enable_optimizer = true;

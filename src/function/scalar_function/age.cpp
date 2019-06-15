@@ -4,7 +4,7 @@ using namespace std;
 
 namespace duckdb {
 
-void age_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void age_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                   Vector &result) {
 	assert(input_count == 2 || input_count == 1);
 
@@ -49,7 +49,7 @@ void age_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count
 
 		                             std::string output{""};
 		                             if (years == 0 && months == 0 && days == 0) {
-			                             output += DEFAULT_TIME;
+			                             output += "00:00:00";
 		                             } else {
 			                             if (years != 0) {
 				                             output = std::to_string(years);

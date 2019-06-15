@@ -6,7 +6,7 @@ using namespace std;
 IndexBinder::IndexBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
 }
 
-BindResult IndexBinder::BindExpression(ParsedExpression &expr, count_t depth, bool root_expression) {
+BindResult IndexBinder::BindExpression(ParsedExpression &expr, index_t depth, bool root_expression) {
 	switch (expr.expression_class) {
 	case ExpressionClass::AGGREGATE:
 		return BindResult("aggregate functions are not allowed in index expressions");

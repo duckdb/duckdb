@@ -27,14 +27,14 @@ public:
 	}
 
 	//! The total amount of elements in the collection
-	count_t count;
+	index_t count;
 	//! The set of data chunks in the collection
 	vector<unique_ptr<DataChunk>> chunks;
 	//! The types of the ChunkCollection
 	vector<TypeId> types;
 
 	//! The amount of columns in the ChunkCollection
-	count_t column_count() {
+	index_t column_count() {
 		return types.size();
 	}
 

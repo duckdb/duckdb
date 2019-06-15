@@ -25,7 +25,7 @@ class QueryProfiler {
 public:
 	struct TimingInformation {
 		double time = 0;
-		count_t elements = 0;
+		index_t elements = 0;
 
 		TimingInformation() : time(0), elements(0) {
 		}
@@ -36,15 +36,15 @@ public:
 		vector<string> split_extra_info;
 		TimingInformation info;
 		vector<unique_ptr<TreeNode>> children;
-		count_t depth = 0;
+		index_t depth = 0;
 	};
 
 private:
-	static count_t GetDepth(QueryProfiler::TreeNode &node);
-	unique_ptr<TreeNode> CreateTree(PhysicalOperator *root, count_t depth = 0);
+	static index_t GetDepth(QueryProfiler::TreeNode &node);
+	unique_ptr<TreeNode> CreateTree(PhysicalOperator *root, index_t depth = 0);
 
-	static count_t RenderTreeRecursive(TreeNode &node, vector<string> &render, vector<count_t> &render_heights,
-	                                   index_t base_render_x = 0, index_t start_depth = 0, count_t depth = 0);
+	static index_t RenderTreeRecursive(TreeNode &node, vector<string> &render, vector<index_t> &render_heights,
+	                                   index_t base_render_x = 0, index_t start_depth = 0, index_t depth = 0);
 	static string RenderTree(TreeNode &node);
 
 public:

@@ -7,7 +7,7 @@ using namespace std;
 
 namespace duckdb {
 
-void substring_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void substring_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                         Vector &result) {
 	assert(input_count == 3);
 	auto &input = inputs[0];
@@ -27,7 +27,7 @@ void substring_function(ExpressionExecutor &exec, Vector inputs[], count_t input
 	auto length_data = (int *)length.data;
 
 	// bool has_stats = expr.function->children[0]->stats.has_stats;
-	count_t current_len = 0;
+	index_t current_len = 0;
 	unique_ptr<char[]> output;
 	// if (has_stats) {
 	// 	// stats available, pre-allocate the result chunk
@@ -50,7 +50,7 @@ void substring_function(ExpressionExecutor &exec, Vector inputs[], count_t input
 			    throw Exception("SUBSTRING cannot handle negative offsets");
 		    }
 
-		    count_t required_len = strlen(input_string) + 1;
+		    index_t required_len = strlen(input_string) + 1;
 		    if (required_len > current_len) {
 			    current_len = required_len;
 			    output = unique_ptr<char[]>{new char[required_len]};

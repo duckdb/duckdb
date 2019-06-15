@@ -33,6 +33,8 @@ public:
 	vector<unique_ptr<ParsedExpression>> distinct_on_targets;
 	//! HAVING clause
 	unique_ptr<ParsedExpression> having;
+	//! Value list, only used for VALUES statement
+	vector<vector<unique_ptr<ParsedExpression>>> values;
 
 	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
 		return select_list;

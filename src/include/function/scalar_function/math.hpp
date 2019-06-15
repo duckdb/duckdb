@@ -82,7 +82,7 @@ public:
 	}
 };
 
-void abs_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void abs_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                   Vector &result);
 
 class AbsFunction : public ScalarUnaryNumericSameReturnFunction {
@@ -96,7 +96,7 @@ public:
 	}
 };
 
-void cbrt_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void cbrt_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                    Vector &result);
 
 class CbRtFunction : public ScalarUnaryNumericFunction {
@@ -110,7 +110,7 @@ public:
 	}
 };
 
-void degrees_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void degrees_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                       Vector &result);
 
 class DegreesFunction : public ScalarUnaryNumericFunction {
@@ -124,7 +124,7 @@ public:
 	}
 };
 
-void radians_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void radians_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                       Vector &result);
 
 class RadiansFunction : public ScalarUnaryNumericFunction {
@@ -138,7 +138,7 @@ public:
 	}
 };
 
-void exp_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void exp_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                   Vector &result);
 
 class ExpFunction : public ScalarUnaryNumericFunction {
@@ -152,7 +152,7 @@ public:
 	}
 };
 
-void ln_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void ln_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                  Vector &result);
 
 class LnFunction : public ScalarUnaryNumericFunction {
@@ -166,7 +166,7 @@ public:
 	}
 };
 
-void log10_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void log10_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                     Vector &result);
 
 class LogFunction : public ScalarUnaryNumericFunction {
@@ -191,7 +191,7 @@ public:
 	}
 };
 
-void sqrt_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void sqrt_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                    Vector &result);
 
 class SqrtFunction : public ScalarUnaryNumericSameReturnFunction {
@@ -205,10 +205,10 @@ public:
 	}
 };
 
-void ceil_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void ceil_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                    Vector &result);
 
-void floor_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void floor_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                     Vector &result);
 
 class CeilFunction : public ScalarUnaryNumericSameReturnFunction {
@@ -244,7 +244,7 @@ public:
 	}
 };
 
-void pi_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void pi_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                  Vector &result);
 
 class PiFunction : public ScalarFunction {
@@ -266,7 +266,7 @@ public:
 	}
 };
 
-void random_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void random_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                      Vector &result);
 
 class RandomFunction : public ScalarFunction {

@@ -24,8 +24,8 @@ public:
 	virtual ~FileHandle() {
 	}
 
-	void Read(void *buffer, count_t nr_bytes, index_t location);
-	void Write(void *buffer, count_t nr_bytes, index_t location);
+	void Read(void *buffer, index_t nr_bytes, index_t location);
+	void Write(void *buffer, index_t nr_bytes, index_t location);
 	void Sync();
 
 protected:

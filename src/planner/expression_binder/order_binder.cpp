@@ -8,12 +8,12 @@
 using namespace duckdb;
 using namespace std;
 
-OrderBinder::OrderBinder(count_t projection_index, SelectNode &node, unordered_map<string, count_t> &alias_map,
-                         expression_map_t<count_t> &projection_map)
+OrderBinder::OrderBinder(index_t projection_index, SelectNode &node, unordered_map<string, index_t> &alias_map,
+                         expression_map_t<index_t> &projection_map)
     : projection_index(projection_index), node(node), alias_map(alias_map), projection_map(projection_map) {
 }
 
-unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &expr, count_t index) {
+unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &expr, index_t index) {
 	return make_unique<BoundColumnRefExpression>(expr.GetName(), TypeId::INVALID,
 	                                             ColumnBinding(projection_index, index));
 }
@@ -40,7 +40,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		auto index = (index_t)constant.value.GetNumericValue();
 		if (index < 1 || index > node.select_list.size()) {
 			throw BinderException("ORDER term out of range - should be between 1 and %lld",
-			                      (count_t)node.select_list.size());
+			                      (index_t)node.select_list.size());
 		}
 		return CreateProjectionReference(*expr, index - 1);
 	}

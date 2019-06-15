@@ -53,7 +53,7 @@ void QueryNode::Serialize(Serializer &serializer) {
 	serializer.Write<bool>(select_distinct);
 	serializer.WriteOptional(limit);
 	serializer.WriteOptional(offset);
-	serializer.Write<count_t>(orders.size());
+	serializer.Write<index_t>(orders.size());
 	for (index_t i = 0; i < orders.size(); i++) {
 		serializer.Write<OrderType>(orders[i].type);
 		orders[i].expression->Serialize(serializer);
@@ -66,7 +66,7 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &source) {
 	auto select_distinct = source.Read<bool>();
 	auto limit = source.ReadOptional<ParsedExpression>();
 	auto offset = source.ReadOptional<ParsedExpression>();
-	count_t order_count = source.Read<count_t>();
+	index_t order_count = source.Read<index_t>();
 	vector<OrderByNode> orders;
 	for (index_t i = 0; i < order_count; i++) {
 		OrderByNode node;

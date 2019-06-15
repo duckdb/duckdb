@@ -9,7 +9,7 @@ using namespace std;
 
 namespace duckdb {
 
-void sin_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void sin_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                   Vector &result) {
 	assert(input_count == 1);
 	inputs[0].Cast(TypeId::DOUBLE);
@@ -17,7 +17,7 @@ void sin_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count
 	VectorOperations::Sin(inputs[0], result);
 }
 
-void cos_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void cos_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                   Vector &result) {
 	assert(input_count == 1);
 	inputs[0].Cast(TypeId::DOUBLE);
@@ -25,7 +25,7 @@ void cos_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count
 	VectorOperations::Cos(inputs[0], result);
 }
 
-void tan_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void tan_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                   Vector &result) {
 	assert(input_count == 1);
 	inputs[0].Cast(TypeId::DOUBLE);
@@ -33,7 +33,7 @@ void tan_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count
 	VectorOperations::Tan(inputs[0], result);
 }
 
-void asin_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void asin_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                    Vector &result) {
 	assert(input_count == 1);
 	inputs[0].Cast(TypeId::DOUBLE);
@@ -41,7 +41,7 @@ void asin_function(ExpressionExecutor &exec, Vector inputs[], count_t input_coun
 	VectorOperations::ASin(inputs[0], result);
 }
 
-void acos_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void acos_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                    Vector &result) {
 	assert(input_count == 1);
 	inputs[0].Cast(TypeId::DOUBLE);
@@ -49,7 +49,7 @@ void acos_function(ExpressionExecutor &exec, Vector inputs[], count_t input_coun
 	VectorOperations::ACos(inputs[0], result);
 }
 
-void atan_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void atan_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                    Vector &result) {
 	assert(input_count == 1);
 	inputs[0].Cast(TypeId::DOUBLE);
@@ -57,7 +57,7 @@ void atan_function(ExpressionExecutor &exec, Vector inputs[], count_t input_coun
 	VectorOperations::ATan(inputs[0], result);
 }
 
-void cot_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void cot_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                   Vector &result) {
 	assert(input_count == 1);
 	inputs[0].Cast(TypeId::DOUBLE);
@@ -68,7 +68,7 @@ void cot_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count
 	VectorOperations::Divide(one, tan_res, result);
 }
 
-void atan2_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void atan2_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                     Vector &result) {
 	assert(input_count == 2);
 

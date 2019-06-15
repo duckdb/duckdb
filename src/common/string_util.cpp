@@ -26,8 +26,7 @@ void StringUtil::LTrim(string &str) {
 
 // Remove trailing ' ', '\f', '\n', '\r', '\t', '\v'
 void StringUtil::RTrim(string &str) {
-	str.erase(find_if(str.rbegin(), str.rend(), [](int ch) { return ch > 0 && !isspace(ch); }).base(),
-	          str.end());
+	str.erase(find_if(str.rbegin(), str.rend(), [](int ch) { return ch > 0 && !isspace(ch); }).base(), str.end());
 }
 
 void StringUtil::Trim(string &str) {
@@ -45,7 +44,7 @@ bool StringUtil::EndsWith(const string &str, const string &suffix) {
 	return equal(suffix.rbegin(), suffix.rend(), str.rbegin());
 }
 
-string StringUtil::Repeat(const string &str, count_t n) {
+string StringUtil::Repeat(const string &str, index_t n) {
 	ostringstream os;
 	if (n == 0 || str.empty()) {
 		return (os.str());
@@ -174,9 +173,9 @@ string StringUtil::VFormat(const string fmt_str, va_list args) {
 vector<string> StringUtil::Split(const string &input, const string &split) {
 	vector<string> splits;
 
-	count_t last = 0;
-	count_t input_len = input.size();
-	count_t split_len = split.size();
+	index_t last = 0;
+	index_t input_len = input.size();
+	index_t split_len = split.size();
 	while (last <= input_len) {
 		index_t next = input.find(split, last);
 		if (next == string::npos) {
@@ -201,7 +200,7 @@ string StringUtil::Replace(string source, const string &from, const string &to) 
 	while ((start_pos = source.find(from, start_pos)) != string::npos) {
 		source.replace(start_pos, from.length(), to);
 		start_pos += to.length(); // In case 'to' contains 'from', like
-									// replacing 'x' with 'yx'
+		                          // replacing 'x' with 'yx'
 	}
 	return source;
 }

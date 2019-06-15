@@ -34,7 +34,7 @@ public:
 			return true;
 		}
 		// try to find a match for the current matcher (m_idx)
-		count_t previous_binding_count = bindings.size();
+		index_t previous_binding_count = bindings.size();
 		for (index_t e_idx = 0; e_idx < entries.size(); e_idx++) {
 			// first check if this entry has already been matched
 			if (excluded_entries.find(e_idx) != excluded_entries.end()) {

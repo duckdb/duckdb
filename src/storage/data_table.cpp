@@ -91,8 +91,7 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	try {
 		executor.ExecuteExpression(expr, result);
 	} catch (Exception &ex) {
-		throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name.c_str(),
-		                          ex.GetMessage().c_str());
+		throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name.c_str(), ex.what());
 	} catch (...) {
 		throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name.c_str());
 	}

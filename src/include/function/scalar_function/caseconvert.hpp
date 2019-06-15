@@ -12,9 +12,9 @@
 
 namespace duckdb {
 
-void caseconvert_upper_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count,
+void caseconvert_upper_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
                                 BoundFunctionExpression &expr, Vector &result);
-void caseconvert_lower_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count,
+void caseconvert_lower_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
                                 BoundFunctionExpression &expr, Vector &result);
 
 bool caseconvert_matches_arguments(vector<SQLType> &arguments);

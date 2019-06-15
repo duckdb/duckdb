@@ -11,7 +11,7 @@ using namespace duckdb;
 
 static SQLType ConvertCTypeToCPP(duckdb_type type);
 static duckdb_type ConvertCPPTypeToC(SQLType type);
-static count_t GetCTypeSize(duckdb_type type);
+static index_t GetCTypeSize(duckdb_type type);
 
 struct DatabaseData {
 	DatabaseData() : database(nullptr) {
@@ -223,7 +223,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 	return duckdb_translate_result(result.get(), out);
 }
 
-static void duckdb_destroy_column(duckdb_column column, count_t count) {
+static void duckdb_destroy_column(duckdb_column column, index_t count) {
 	if (column.data) {
 		if (column.type == DUCKDB_TYPE_VARCHAR) {
 			// varchar, delete individual strings
@@ -400,7 +400,7 @@ SQLType ConvertCTypeToCPP(duckdb_type type) {
 	}
 }
 
-count_t GetCTypeSize(duckdb_type type) {
+index_t GetCTypeSize(duckdb_type type) {
 	switch (type) {
 	case DUCKDB_TYPE_BOOLEAN:
 		return sizeof(bool);

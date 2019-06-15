@@ -54,7 +54,7 @@ static unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression> &expr) 
 	return move(((BoundExpression &)*expr).expr);
 }
 
-BindResult SelectBinder::BindWindow(WindowExpression &window, count_t depth) {
+BindResult SelectBinder::BindWindow(WindowExpression &window, index_t depth) {
 	if (inside_window) {
 		return BindResult("window function calls cannot be nested");
 	}

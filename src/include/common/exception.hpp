@@ -62,16 +62,16 @@ public:
 	Exception(string message);
 	Exception(ExceptionType exception_type, string message);
 
-	// type
 	ExceptionType type;
+
 public:
 	const char *what() const noexcept override;
 
-	string GetMessage();
-
 	string ExceptionTypeToString(ExceptionType type);
+
 protected:
 	void Format(va_list ap);
+
 private:
 	string exception_message_;
 };
@@ -89,7 +89,7 @@ class ValueOutOfRangeException : public Exception {
 public:
 	ValueOutOfRangeException(const int64_t value, const TypeId origType, const TypeId newType);
 	ValueOutOfRangeException(const double value, const TypeId origType, const TypeId newType);
-	ValueOutOfRangeException(const TypeId varType, const count_t length);
+	ValueOutOfRangeException(const TypeId varType, const index_t length);
 };
 
 class ConversionException : public Exception {
