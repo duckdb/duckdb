@@ -35,7 +35,6 @@ void SQLiteBenchmark::Run(BenchmarkState *state_) {
 }
 
 void SQLiteBenchmark::Cleanup(BenchmarkState *state_) {
-
 }
 
 string SQLiteBenchmark::Verify(BenchmarkState *state_) {

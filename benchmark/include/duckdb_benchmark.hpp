@@ -13,6 +13,7 @@
 #include "benchmark.hpp"
 #include "duckdb.hpp"
 #include "main/client_context.hpp"
+#include "test_helpers.hpp"
 
 namespace duckdb {
 
@@ -22,7 +23,7 @@ struct DuckDBBenchmarkState : public BenchmarkState {
 	Connection conn;
 	unique_ptr<QueryResult> result;
 
-	DuckDBBenchmarkState() : db(nullptr), conn(db) {
+	DuckDBBenchmarkState(string path) : db(path.empty() ? nullptr : path.c_str()), conn(db) {
 		conn.EnableProfiling();
 	}
 	virtual ~DuckDBBenchmarkState() {
@@ -41,16 +42,33 @@ public:
 	//! Load data into DuckDB
 	virtual void Load(DuckDBBenchmarkState *state) = 0;
 	//! A single query to run against the database
-	virtual string GetQuery() { return string(); }
+	virtual string GetQuery() {
+		return string();
+	}
 	//! Run a bunch of queries, only called if GetQuery() returns an empty string
-	virtual void RunBenchmark(DuckDBBenchmarkState *state) {}
+	virtual void RunBenchmark(DuckDBBenchmarkState *state) {
+	}
 	//! This function gets called after the GetQuery() method
 	virtual void Cleanup(DuckDBBenchmarkState *state){};
 	//! Verify a result
 	virtual string VerifyResult(QueryResult *result) = 0;
+	//! Whether or not the benchmark is performed on an in-memory database
+	virtual bool InMemory() {
+		return true;
+	}
+
+	string GetDatabasePath() {
+		if (!InMemory()) {
+			string path = "duckdb_benchmark_db.db";
+			DeleteDatabase(path);
+			return path;
+		} else {
+			return string();
+		}
+	}
 
 	virtual unique_ptr<DuckDBBenchmarkState> CreateBenchmarkState() {
-		return make_unique<DuckDBBenchmarkState>();
+		return make_unique<DuckDBBenchmarkState>(GetDatabasePath());
 	}
 
 	unique_ptr<BenchmarkState> Initialize() override {
