@@ -16,7 +16,7 @@
 namespace duckdb {
 
 template <class T, class OP>
-static inline void scatter_loop_constant(T constant, T **__restrict destination, count_t count,
+static inline void scatter_loop_constant(T constant, T **__restrict destination, index_t count,
                                          sel_t *__restrict sel_vector) {
 	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
 		if (!IsNullValue<T>(*destination[i])) {
@@ -28,7 +28,7 @@ static inline void scatter_loop_constant(T constant, T **__restrict destination,
 }
 
 template <class T, class OP>
-static inline void scatter_loop(T *__restrict ldata, T **__restrict destination, count_t count,
+static inline void scatter_loop(T *__restrict ldata, T **__restrict destination, index_t count,
                                 sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 	ASSERT_RESTRICT(ldata, ldata + count, destination, destination + count);
 	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {

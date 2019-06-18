@@ -10,7 +10,7 @@ using namespace std;
 
 namespace duckdb {
 
-void concat_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void concat_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                      Vector &result) {
 	assert(input_count == 2);
 	auto &input1 = inputs[0];
@@ -26,7 +26,7 @@ void concat_function(ExpressionExecutor &exec, Vector inputs[], count_t input_co
 	auto input2_data = (const char **)input2.data;
 
 	// bool has_stats = expr.function->children[0]->stats.has_stats && expr.function->children[1]->stats.has_stats;
-	count_t current_len = 0;
+	index_t current_len = 0;
 	unique_ptr<char[]> output;
 
 	VectorOperations::BinaryExec(input1, input2, result,
@@ -36,8 +36,8 @@ void concat_function(ExpressionExecutor &exec, Vector inputs[], count_t input_co
 		                             }
 		                             auto input1 = input1_data[input1_index];
 		                             auto input2 = input2_data[input2_index];
-		                             count_t len1 = strlen(input1), len2 = strlen(input2);
-		                             count_t required_len = len1 + len2 + 1;
+		                             index_t len1 = strlen(input1), len2 = strlen(input2);
+		                             index_t required_len = len1 + len2 + 1;
 		                             if (required_len > current_len) {
 			                             current_len = required_len;
 			                             output = unique_ptr<char[]>{new char[required_len]};

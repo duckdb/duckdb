@@ -47,7 +47,9 @@ WITH jennifer_0 AS (
             WHERE
                 EXISTS (
                     SELECT
-                        subq_0.c5 AS c0, sample_1.p_type AS c1, (
+                        subq_0.c5 AS c0,
+                        sample_1.p_type AS c1,
+                        (
                             SELECT
                                 c_custkey
                             FROM
@@ -170,14 +172,22 @@ jennifer_1 AS (
                             1) AS subq_3
                     WHERE ((EXISTS (
                                 SELECT
-                                    ref_8.r_regionkey AS c0, subq_2.c0 AS c1, subq_2.c1 AS c2, ref_6.c_comment AS c3, ref_6.c_mktsegment AS c4, ref_6.c_custkey AS c5
+                                    ref_8.r_regionkey AS c0,
+                                    subq_2.c0 AS c1,
+                                    subq_2.c1 AS c2,
+                                    ref_6.c_comment AS c3,
+                                    ref_6.c_mktsegment AS c4,
+                                    ref_6.c_custkey AS c5
                                 FROM
                                     main.region AS ref_8
                                 WHERE
                                     subq_1.c0 IS NOT NULL))
                             AND (EXISTS (
                                     SELECT
-                                        ref_6.c_address AS c0, subq_1.c0 AS c1, sample_8.r_name AS c2, (
+                                        ref_6.c_address AS c0,
+                                        subq_1.c0 AS c1,
+                                        sample_8.r_name AS c2,
+                                        (
                                             SELECT
                                                 n_regionkey
                                             FROM
@@ -215,8 +225,7 @@ jennifer_1 AS (
                             c_address
                         FROM
                             main.customer
-                        LIMIT 1 offset 2)
-                    IS NULL))
+                        LIMIT 1 offset 2) IS NULL))
         LIMIT 115) AS subq_5
 WHERE (0)
 AND (0)

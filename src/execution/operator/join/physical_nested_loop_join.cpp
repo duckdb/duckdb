@@ -33,7 +33,7 @@ static bool RemoveNullValues(DataChunk &chunk) {
 	}
 	// now create a selection vector
 	sel_t not_null_vector[STANDARD_VECTOR_SIZE];
-	count_t not_null_entries = 0;
+	index_t not_null_entries = 0;
 	VectorOperations::Exec(chunk.data[0], [&](index_t i, index_t k) {
 		if (!nullmask[i]) {
 			not_null_vector[not_null_entries++] = i;
@@ -60,7 +60,7 @@ template <bool MATCH>
 static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
 	assert(left.column_count == result.column_count);
 	// create the selection vector from the matches that were found
-	count_t result_count = 0;
+	index_t result_count = 0;
 	for (index_t i = 0; i < left.size(); i++) {
 		if (found_match[i] == MATCH) {
 			// part of the result
@@ -226,7 +226,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 		switch (type) {
 		case JoinType::INNER: {
 			sel_t lvector[STANDARD_VECTOR_SIZE], rvector[STANDARD_VECTOR_SIZE];
-			count_t match_count =
+			index_t match_count =
 			    NestedLoopJoinInner::Perform(state->left_tuple, state->right_tuple, state->left_join_condition,
 			                                 right_chunk, lvector, rvector, conditions);
 			// we have finished resolving the join conditions

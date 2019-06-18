@@ -1,5 +1,5 @@
 #include "parser/expression/function_expression.hpp"
-
+#include "common/string_util.hpp"
 #include "common/exception.hpp"
 #include "common/serializer.hpp"
 #include "common/types/hash.hpp"

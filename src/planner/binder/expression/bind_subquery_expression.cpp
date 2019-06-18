@@ -6,7 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, count_t depth) {
+BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, index_t depth) {
 	// first bind the children of the subquery, if any
 	if (expr.child) {
 		string result = Bind(&expr.child, depth);

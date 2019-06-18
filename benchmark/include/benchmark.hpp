@@ -48,6 +48,8 @@ public:
 	}
 	//! Run the benchmark
 	virtual void Run(BenchmarkState *state) = 0;
+	//! Cleanup the benchmark, called after each Run
+	virtual void Cleanup(BenchmarkState *state) = 0;
 	//! Verify that the output of the benchmark was correct
 	virtual string Verify(BenchmarkState *state) = 0;
 	//! Finalize the benchmark runner

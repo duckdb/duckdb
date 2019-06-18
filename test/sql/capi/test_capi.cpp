@@ -15,11 +15,11 @@ public:
 		success = (duckdb_query(connection, query.c_str(), &result) == DuckDBSuccess);
 	}
 
-	count_t column_count() {
+	index_t column_count() {
 		return result.column_count;
 	}
 
-	count_t row_count() {
+	index_t row_count() {
 		return result.row_count;
 	}
 

@@ -12,9 +12,8 @@ SELECT
         LIMIT 1 offset 100) AS c5,
     subq_1.c0 AS c6,
     subq_1.c0 AS c7
-FROM (
-    SELECT
-        DISTINCT subq_0.c0 AS c0
+FROM ( SELECT DISTINCT
+        subq_0.c0 AS c0
     FROM (
         SELECT
             ref_0.c_phone AS c0

@@ -4,6 +4,7 @@
 #include "parser/statement/select_statement.hpp"
 #include "parser/tableref/basetableref.hpp"
 #include "parser/transformer.hpp"
+#include "common/string_util.hpp"
 
 #include <cstring>
 
@@ -74,7 +75,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			if (def_elem->defname == kDelimiterTok) {
 				// delimiter
 				auto *delimiter_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
-				count_t delim_len = strlen(delimiter_val->val.str);
+				index_t delim_len = strlen(delimiter_val->val.str);
 				info.delimiter = '\0';
 				char *delim_cstr = delimiter_val->val.str;
 				if (delim_len == 1) {

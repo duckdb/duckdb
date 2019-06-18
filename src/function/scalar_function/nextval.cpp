@@ -32,7 +32,7 @@ static void parse_schema_and_sequence(string input, string &schema, string &name
 	for (const char *istr = input.c_str(); *istr; istr++) {
 		if (*istr == '.') {
 			// separator
-			count_t len = istr - input.c_str();
+			index_t len = istr - input.c_str();
 			if (len == 0) {
 				throw ParserException("invalid name syntax");
 			}
@@ -82,7 +82,7 @@ static int64_t next_sequence_value(Transaction &transaction, SequenceCatalogEntr
 	return result;
 }
 
-void nextval_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void nextval_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                       Vector &result) {
 	auto &info = (NextvalBindData &)*expr.bind_info;
 	assert(input_count == 1 && inputs[0].type == TypeId::VARCHAR);

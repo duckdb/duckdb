@@ -1,6 +1,7 @@
 #include "planner/logical_plan_generator.hpp"
 #include "planner/operator/list.hpp"
 #include "planner/query_node/bound_select_node.hpp"
+#include "planner/operator/logical_expression_get.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -13,6 +14,24 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSelectNode &st
 	} else {
 		// SELECT without FROM, add empty GET
 		root = make_unique<LogicalGet>();
+	}
+
+	if (statement.values.size() > 0) {
+		// values list, first plan any subqueries in the list
+		for (auto &expr_list : statement.values) {
+			for (auto &expr : expr_list) {
+				PlanSubqueries(&expr, &root);
+			}
+		}
+		// now create a LogicalExpressionGet from the set of expressions
+		// fetch the types
+		vector<TypeId> types;
+		for (auto &expr : statement.values[0]) {
+			types.push_back(expr->return_type);
+		}
+		auto expr_get = make_unique<LogicalExpressionGet>(statement.projection_index, types, move(statement.values));
+		expr_get->AddChild(move(root));
+		return move(expr_get);
 	}
 
 	if (statement.where_clause) {

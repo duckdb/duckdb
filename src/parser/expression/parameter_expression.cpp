@@ -20,6 +20,11 @@ unique_ptr<ParsedExpression> ParameterExpression::Copy() const {
 	return move(copy);
 }
 
+uint64_t ParameterExpression::Hash() const {
+	uint64_t result = ParsedExpression::Hash();
+	return CombineHash(duckdb::Hash(parameter_nr), result);
+}
+
 void ParameterExpression::Serialize(Serializer &serializer) {
 	ParsedExpression::Serialize(serializer);
 	serializer.Write<index_t>(parameter_nr);

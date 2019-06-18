@@ -2,6 +2,7 @@
 #include "parser/statement/create_index_statement.hpp"
 #include "parser/tableref/basetableref.hpp"
 #include "parser/transformer.hpp"
+#include "common/string_util.hpp"
 
 using namespace duckdb;
 using namespace postgres;

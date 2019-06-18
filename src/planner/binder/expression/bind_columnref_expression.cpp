@@ -2,11 +2,12 @@
 #include "planner/binder.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/expression_binder.hpp"
+#include "common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, count_t depth) {
+BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, index_t depth) {
 	assert(!colref.column_name.empty());
 	// individual column reference
 	// resolve to either a base table or a subquery expression

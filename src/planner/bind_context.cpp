@@ -28,7 +28,7 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 	return result;
 }
 
-BindResult BindContext::BindColumn(ColumnRefExpression &colref, count_t depth) {
+BindResult BindContext::BindColumn(ColumnRefExpression &colref, index_t depth) {
 	if (colref.table_name.empty()) {
 		return BindResult(StringUtil::Format("Could not bind alias \"%s\"!", colref.column_name.c_str()));
 	}

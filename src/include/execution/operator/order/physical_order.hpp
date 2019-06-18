@@ -22,11 +22,11 @@ public:
 	    : PhysicalOperator(PhysicalOperatorType::ORDER_BY, op.types), orders(move(orders)) {
 	}
 
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
-
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-
 	vector<BoundOrderByNode> orders;
+
+public:
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
 class PhysicalOrderOperatorState : public PhysicalOperatorState {

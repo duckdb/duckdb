@@ -21,13 +21,14 @@ public:
 	PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	                        unique_ptr<Expression> condition, JoinType join_type);
 
+	unique_ptr<Expression> condition;
+
+public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 	string ExtraRenderInformation() const override;
-
-	unique_ptr<Expression> condition;
 };
 
 class PhysicalBlockwiseNLJoinState : public PhysicalOperatorState {

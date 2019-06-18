@@ -6,6 +6,23 @@ using namespace duckdb;
 using namespace postgres;
 using namespace std;
 
+void Transformer::TransformValuesList(List *list, vector<vector<unique_ptr<ParsedExpression>>> &values) {
+	for (auto value_list = list->head; value_list != NULL; value_list = value_list->next) {
+		auto target = (List *)(value_list->data.ptr_value);
+
+		vector<unique_ptr<ParsedExpression>> insert_values;
+		if (!TransformExpressionList(target, insert_values)) {
+			throw ParserException("Could not parse expression list!");
+		}
+		if (values.size() > 0) {
+			if (values[0].size() != insert_values.size()) {
+				throw ParserException("VALUES lists must all be the same length");
+			}
+		}
+		values.push_back(move(insert_values));
+	}
+}
+
 unique_ptr<InsertStatement> Transformer::TransformInsert(Node *node) {
 	InsertStmt *stmt = reinterpret_cast<InsertStmt *>(node);
 	assert(stmt);
@@ -25,22 +42,8 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(Node *node) {
 		// insert from select statement
 		result->select_statement = TransformSelect(stmt->selectStmt);
 	} else {
-		// transform the insert list
-		auto list = select_stmt->valuesLists;
-		for (auto value_list = list->head; value_list != NULL; value_list = value_list->next) {
-			List *target = (List *)(value_list->data.ptr_value);
-
-			vector<unique_ptr<ParsedExpression>> insert_values;
-			if (!TransformExpressionList(target, insert_values)) {
-				throw ParserException("Could not parse expression list!");
-			}
-			if (result->values.size() > 0) {
-				if (result->values[0].size() != insert_values.size()) {
-					throw ParserException("Insert VALUES lists must all be the same length");
-				}
-			}
-			result->values.push_back(move(insert_values));
-		}
+		// transform the value list
+		TransformValuesList(select_stmt->valuesLists, result->values);
 	}
 
 	auto ref = TransformRangeVar(stmt->relation);

@@ -10,35 +10,42 @@
 #include <string>
 
 using namespace duckdb;
+using namespace std;
 
 bool StringUtil::Contains(const string &haystack, const string &needle) {
 	return (haystack.find(needle) != string::npos);
 }
 
-/*
- * Remove trailing ' ', '\f', '\n', '\r', '\t', '\v'
- */
-void StringUtil::RTrim(string &str) {
-	str.erase(std::find_if(str.rbegin(), str.rend(), [](int ch) { return ch > 0 && !std::isspace(ch); }).base(),
-	          str.end());
+void StringUtil::LTrim(string &str) {
+	auto it = str.begin();
+	while (isspace(*it)) {
+		it++;
+	}
+	str.erase(str.begin(), it);
 }
 
-string StringUtil::Indent(int num_indent) {
-	return string(num_indent, ' ');
+// Remove trailing ' ', '\f', '\n', '\r', '\t', '\v'
+void StringUtil::RTrim(string &str) {
+	str.erase(find_if(str.rbegin(), str.rend(), [](int ch) { return ch > 0 && !isspace(ch); }).base(), str.end());
+}
+
+void StringUtil::Trim(string &str) {
+	StringUtil::LTrim(str);
+	StringUtil::RTrim(str);
 }
 
 bool StringUtil::StartsWith(const string &str, const string &prefix) {
-	return std::equal(prefix.begin(), prefix.end(), str.begin());
+	return equal(prefix.begin(), prefix.end(), str.begin());
 }
 
 bool StringUtil::EndsWith(const string &str, const string &suffix) {
 	if (suffix.size() > str.size())
 		return (false);
-	return std::equal(suffix.rbegin(), suffix.rend(), str.rbegin());
+	return equal(suffix.rbegin(), suffix.rend(), str.rbegin());
 }
 
-string StringUtil::Repeat(const string &str, count_t n) {
-	std::ostringstream os;
+string StringUtil::Repeat(const string &str, index_t n) {
+	ostringstream os;
 	if (n == 0 || str.empty()) {
 		return (os.str());
 	}
@@ -49,10 +56,10 @@ string StringUtil::Repeat(const string &str, count_t n) {
 }
 
 vector<string> StringUtil::Split(const string &str, char delimiter) {
-	std::stringstream ss(str);
+	stringstream ss(str);
 	vector<string> lines;
 	string temp;
-	while (std::getline(ss, temp, delimiter)) {
+	while (getline(ss, temp, delimiter)) {
 		lines.push_back(temp);
 	} // WHILE
 	return (lines);
@@ -82,56 +89,49 @@ string StringUtil::Prefix(const string &str, const string &prefix) {
 	if (lines.empty())
 		return ("");
 
-	std::ostringstream os;
+	ostringstream os;
 	for (index_t i = 0, cnt = lines.size(); i < cnt; i++) {
 		if (i > 0)
-			os << std::endl;
+			os << endl;
 		os << prefix << lines[i];
 	} // FOR
 	return (os.str());
 }
 
-string StringUtil::FormatSize(long bytes) {
+// http://ubuntuforums.org/showpost.php?p=10215516&postcount=5
+string StringUtil::FormatSize(index_t bytes) {
 	double BASE = 1024;
 	double KB = BASE;
 	double MB = KB * BASE;
 	double GB = MB * BASE;
 
-	std::ostringstream os;
+	ostringstream os;
 
 	if (bytes >= GB) {
-		os << std::fixed << std::setprecision(2) << (bytes / GB) << " GB";
+		os << fixed << setprecision(2) << (bytes / GB) << " GB";
 	} else if (bytes >= MB) {
-		os << std::fixed << std::setprecision(2) << (bytes / MB) << " MB";
+		os << fixed << setprecision(2) << (bytes / MB) << " MB";
 	} else if (bytes >= KB) {
-		os << std::fixed << std::setprecision(2) << (bytes / KB) << " KB";
+		os << fixed << setprecision(2) << (bytes / KB) << " KB";
 	} else {
-		os << std::to_string(bytes) + " bytes";
+		os << to_string(bytes) + " bytes";
 	}
-	return (os.str());
-}
-
-string StringUtil::Bold(const string &str) {
-	string SET_PLAIN_TEXT = "\033[0;0m";
-	string SET_BOLD_TEXT = "\033[0;1m";
-
-	std::ostringstream os;
-	os << SET_BOLD_TEXT << str << SET_PLAIN_TEXT;
 	return (os.str());
 }
 
 string StringUtil::Upper(const string &str) {
 	string copy(str);
-	std::transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return std::toupper(c); });
+	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return toupper(c); });
 	return (copy);
 }
 
 string StringUtil::Lower(const string &str) {
 	string copy(str);
-	std::transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return std::tolower(c); });
+	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return tolower(c); });
 	return (copy);
 }
 
+// http://stackoverflow.com/a/8098080
 string StringUtil::Format(const string fmt_str, ...) {
 	// Reserve two times as much as the length of the fmt_str
 	int final_n, n = ((int)fmt_str.size()) * 2;
@@ -173,9 +173,9 @@ string StringUtil::VFormat(const string fmt_str, va_list args) {
 vector<string> StringUtil::Split(const string &input, const string &split) {
 	vector<string> splits;
 
-	count_t last = 0;
-	count_t input_len = input.size();
-	count_t split_len = split.size();
+	index_t last = 0;
+	index_t input_len = input.size();
+	index_t split_len = split.size();
 	while (last <= input_len) {
 		index_t next = input.find(split, last);
 		if (next == string::npos) {
@@ -192,10 +192,15 @@ vector<string> StringUtil::Split(const string &input, const string &split) {
 	return splits;
 }
 
-string StringUtil::Strip(const string &str, char c) {
-	// There's a copy here which is wasteful, so don't use this in performance
-	// critical code!
-	string tmp = str;
-	tmp.erase(std::remove(tmp.begin(), tmp.end(), c), tmp.end());
-	return tmp;
+string StringUtil::Replace(string source, const string &from, const string &to) {
+	if (from.empty())
+		return source;
+	;
+	index_t start_pos = 0;
+	while ((start_pos = source.find(from, start_pos)) != string::npos) {
+		source.replace(start_pos, from.length(), to);
+		start_pos += to.length(); // In case 'to' contains 'from', like
+		                          // replacing 'x' with 'yx'
+	}
+	return source;
 }

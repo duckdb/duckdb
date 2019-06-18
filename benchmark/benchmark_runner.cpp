@@ -88,6 +88,8 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 		benchmark->Run(state.get());
 		profiler.End();
 
+		benchmark->Cleanup(state.get());
+
 		is_active = false;
 		interrupt_thread.join();
 		if (hotrun) {

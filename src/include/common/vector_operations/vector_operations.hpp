@@ -180,7 +180,7 @@ struct VectorOperations {
 		//! dest[i] = dest[i]
 		static void SetFirst(Vector &source, Vector &dest);
 		// dest[i] = dest[i] + source
-		static void Add(int64_t source, void **dest, count_t length);
+		static void Add(int64_t source, void **dest, index_t length);
 	};
 	// make sure dest.count is set for gather methods!
 	struct Gather {
@@ -196,7 +196,7 @@ struct VectorOperations {
 	static void Sort(Vector &vector, sel_t result[]);
 	// Sort the vector, setting the given selection vector to a sorted state
 	// while ignoring NULL values.
-	static void Sort(Vector &vector, sel_t *result_vector, count_t count, sel_t result[]);
+	static void Sort(Vector &vector, sel_t *result_vector, index_t count, sel_t result[]);
 	// Checks whether or not the vector contains only unique values
 	static bool Unique(Vector &vector);
 	//===--------------------------------------------------------------------===//
@@ -219,12 +219,12 @@ struct VectorOperations {
 	// Cast the data from the source type to the target type
 	static void Cast(Vector &source, Vector &result);
 	// Copy the data of <source> to the target location
-	static void Copy(Vector &source, void *target, index_t offset = 0, count_t element_count = 0);
+	static void Copy(Vector &source, void *target, index_t offset = 0, index_t element_count = 0);
 	// Copy the data of <source> to the target vector
 	static void Copy(Vector &source, Vector &target, index_t offset = 0);
 	// Copy the data of <source> to the target location, setting null values to
 	// NullValue<T>. Used to store data without separate NULL mask.
-	static void CopyToStorage(Vector &source, void *target, index_t offset = 0, count_t element_count = 0);
+	static void CopyToStorage(Vector &source, void *target, index_t offset = 0, index_t element_count = 0);
 	// Appends the data of <source> to the target vector, setting the nullmask
 	// for any NullValue<T> of source. Used to go back from storage to a
 	// nullmask.
@@ -235,7 +235,7 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Exec
 	//===--------------------------------------------------------------------===//
-	template <class T> static void Exec(sel_t *sel_vector, count_t count, T &&fun, index_t offset = 0) {
+	template <class T> static void Exec(sel_t *sel_vector, index_t count, T &&fun, index_t offset = 0) {
 		index_t i = offset;
 		if (sel_vector) {
 			//#pragma GCC ivdep
@@ -251,7 +251,7 @@ struct VectorOperations {
 	}
 	//! Exec over the set of indexes, calls the callback function with (i) =
 	//! index, dependent on selection vector and (k) = count
-	template <class T> static void Exec(const Vector &vector, T &&fun, index_t offset = 0, count_t count = 0) {
+	template <class T> static void Exec(const Vector &vector, T &&fun, index_t offset = 0, index_t count = 0) {
 		if (count == 0) {
 			count = vector.count;
 		} else {
@@ -265,7 +265,7 @@ struct VectorOperations {
 	//! is equivalent to calling ::Exec() and performing data[i] for
 	//! every entry
 	template <typename T, class FUNC>
-	static void ExecType(Vector &vector, FUNC &&fun, index_t offset = 0, count_t limit = 0) {
+	static void ExecType(Vector &vector, FUNC &&fun, index_t offset = 0, index_t limit = 0) {
 		auto data = (T *)vector.data;
 		VectorOperations::Exec(
 		    vector, [&](index_t i, index_t k) { fun(data[i], i, k); }, offset, limit);

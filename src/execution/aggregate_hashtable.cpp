@@ -11,7 +11,7 @@
 using namespace duckdb;
 using namespace std;
 
-static count_t GetAggrPayloadSize(ExpressionType expr_type, TypeId return_type) {
+static index_t GetAggrPayloadSize(ExpressionType expr_type, TypeId return_type) {
 	switch (expr_type) {
 	case ExpressionType::AGGREGATE_COUNT:
 	case ExpressionType::AGGREGATE_COUNT_DISTINCT:
@@ -26,7 +26,7 @@ static count_t GetAggrPayloadSize(ExpressionType expr_type, TypeId return_type) 
 	}
 }
 
-SuperLargeHashTable::SuperLargeHashTable(count_t initial_capacity, vector<TypeId> group_types,
+SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId> group_types,
                                          vector<TypeId> payload_types, vector<ExpressionType> aggregate_types,
                                          bool parallel)
     : group_serializer(group_types), aggregate_types(aggregate_types), group_types(group_types),
@@ -93,7 +93,7 @@ SuperLargeHashTable::SuperLargeHashTable(count_t initial_capacity, vector<TypeId
 SuperLargeHashTable::~SuperLargeHashTable() {
 }
 
-void SuperLargeHashTable::Resize(count_t size) {
+void SuperLargeHashTable::Resize(index_t size) {
 	if (size <= capacity) {
 		throw Exception("Cannot downsize a hash table!");
 	}
@@ -238,7 +238,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			// now fix up the payload and addresses accordingly by creating
 			// a selection vector
 			sel_t distinct_sel_vector[STANDARD_VECTOR_SIZE];
-			count_t match_count = 0;
+			index_t match_count = 0;
 			for (index_t probe_idx = 0; probe_idx < probe_result.count; probe_idx++) {
 				index_t sel_idx = payload.sel_vector ? payload.sel_vector[probe_idx] : probe_idx;
 				if (probe_result.data[sel_idx]) {

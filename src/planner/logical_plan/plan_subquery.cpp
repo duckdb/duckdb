@@ -29,7 +29,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// now we push a COUNT(*) aggregate onto the limit, this will be either 0 or 1 (EXISTS or NOT EXISTS)
 		auto count_star =
 		    make_unique<BoundAggregateExpression>(TypeId::BIGINT, ExpressionType::AGGREGATE_COUNT_STAR, nullptr);
-		auto count_type = count_star->return_type;
+		auto index_type = count_star->return_type;
 		vector<unique_ptr<Expression>> aggregate_list;
 		aggregate_list.push_back(move(count_star));
 		auto aggregate_index = binder.GenerateTableIndex();
@@ -39,8 +39,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		plan = move(aggregate);
 
 		// now we push a projection with a comparison to 1
-		auto left_child = make_unique<BoundColumnRefExpression>(count_type, ColumnBinding(aggregate_index, 0));
-		auto right_child = make_unique<BoundConstantExpression>(Value::Numeric(count_type, 1));
+		auto left_child = make_unique<BoundColumnRefExpression>(index_type, ColumnBinding(aggregate_index, 0));
+		auto right_child = make_unique<BoundConstantExpression>(Value::Numeric(index_type, 1));
 		auto comparison =
 		    make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left_child), move(right_child));
 

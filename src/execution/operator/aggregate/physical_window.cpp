@@ -30,7 +30,7 @@ static bool EqualsSubset(vector<Value> &a, vector<Value> &b, index_t start, inde
 }
 
 static index_t BinarySearchRightmost(ChunkCollection &input, vector<Value> row, index_t l, index_t r,
-                                     count_t comp_cols) {
+                                     index_t comp_cols) {
 	if (comp_cols == 0) {
 		return r - 1;
 	}
@@ -132,13 +132,13 @@ static bool WindowNeedsRank(BoundWindowExpression *wexpr) {
 	       wexpr->type == ExpressionType::WINDOW_RANK_DENSE || wexpr->type == ExpressionType::WINDOW_CUME_DIST;
 }
 
-static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection &input, count_t input_size,
+static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection &input, index_t input_size,
                                    index_t row_idx, ChunkCollection &boundary_start_collection,
                                    ChunkCollection &boundary_end_collection, WindowBoundariesState &bounds) {
 
 	if (input.column_count() > 0) {
 		vector<Value> row_cur = input.GetRow(row_idx);
-		count_t sort_col_count = wexpr->partitions.size() + wexpr->orders.size();
+		index_t sort_col_count = wexpr->partitions.size() + wexpr->orders.size();
 
 		// determine partition and peer group boundaries to ultimately figure out window size
 		bounds.is_same_partition = EqualsSubset(bounds.row_prev, row_cur, 0, wexpr->partitions.size());

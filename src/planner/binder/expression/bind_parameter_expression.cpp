@@ -6,7 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, count_t depth) {
+BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, index_t depth) {
 	if (!binder.parameters) {
 		throw BinderException("Parameter expressions are only allowed in PREPARE statements!");
 	}

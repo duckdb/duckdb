@@ -20,7 +20,7 @@ public:
 	IndexBinder(Binder &binder, ClientContext &context);
 
 protected:
-	BindResult BindExpression(ParsedExpression &expr, count_t depth, bool root_expression = false) override;
+	BindResult BindExpression(ParsedExpression &expr, index_t depth, bool root_expression = false) override;
 };
 
 } // namespace duckdb

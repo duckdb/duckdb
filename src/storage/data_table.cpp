@@ -91,8 +91,7 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	try {
 		executor.ExecuteExpression(expr, result);
 	} catch (Exception &ex) {
-		throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name.c_str(),
-		                          ex.GetMessage().c_str());
+		throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name.c_str(), ex.what());
 	} catch (...) {
 		throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name.c_str());
 	}
@@ -575,6 +574,8 @@ void DataTable::RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &p
 
 void DataTable::InitializeScan(ScanState &state) {
 	state.chunk = (StorageChunk *)storage_tree.GetRootSegment();
+	state.last_chunk = (StorageChunk *)storage_tree.GetLastSegment();
+	state.last_chunk_count = state.last_chunk->count;
 	state.columns = unique_ptr<ColumnPointer[]>(new ColumnPointer[types.size()]);
 	for (index_t i = 0; i < types.size(); i++) {
 		state.columns[i].segment = (ColumnSegment *)columns[i].GetRootSegment();
@@ -624,7 +625,8 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<c
 		// first obtain a shared lock on the current chunk
 		auto lock = current_chunk->lock.GetSharedLock();
 		regular_count = version_count = 0;
-		index_t scan_count = min((index_t)STANDARD_VECTOR_SIZE, current_chunk->count - state.offset);
+		index_t end = current_chunk == state.last_chunk ? state.last_chunk_count : current_chunk->count;
+		index_t scan_count = min((index_t)STANDARD_VECTOR_SIZE, end - state.offset);
 		if (scan_count == 0) {
 			return;
 		}
@@ -708,9 +710,14 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<c
 		}
 		// move to the next segment
 		state.offset += STANDARD_VECTOR_SIZE;
-		if (state.offset >= current_chunk->count) {
-			state.offset = 0;
-			state.chunk = (StorageChunk *)current_chunk->next.get();
+		if (state.offset >= end) {
+			if (state.chunk == state.last_chunk) {
+				state.chunk = nullptr;
+				break;
+			} else {
+				state.offset = 0;
+				state.chunk = (StorageChunk *)current_chunk->next.get();
+			}
 		}
 		if (result.size() > 0) {
 			return;

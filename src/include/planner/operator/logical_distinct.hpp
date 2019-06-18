@@ -21,11 +21,7 @@ public:
 	//! The set of distinct targets (optional).
 	vector<unique_ptr<Expression>> distinct_targets;
 
-	count_t ExpressionCount() override;
-	Expression *GetExpression(index_t index) override;
-	void ReplaceExpression(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
-	                       index_t index) override;
-
+public:
 	string ParamsToString() const override;
 
 protected:

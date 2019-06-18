@@ -1,5 +1,6 @@
 #include "parser/statement/select_statement.hpp"
 #include "parser/transformer.hpp"
+#include "common/string_util.hpp"
 
 using namespace duckdb;
 using namespace postgres;

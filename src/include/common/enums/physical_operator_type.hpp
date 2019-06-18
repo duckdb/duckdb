@@ -28,7 +28,8 @@ enum class PhysicalOperatorType : uint8_t {
 	FILTER,
 	PROJECTION,
 	BASE_GROUP_BY,
-	COPY,
+	COPY_FROM_FILE,
+	COPY_TO_FILE,
 	TABLE_FUNCTION,
 	// -----------------------------
 	// Scans
@@ -40,6 +41,7 @@ enum class PhysicalOperatorType : uint8_t {
 	DELIM_SCAN,
 	EXTERNAL_FILE_SCAN,
 	QUERY_DERIVED_SCAN,
+	EXPRESSION_SCAN,
 	// -----------------------------
 	// Joins
 	// -----------------------------

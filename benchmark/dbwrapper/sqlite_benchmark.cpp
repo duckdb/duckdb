@@ -34,6 +34,9 @@ void SQLiteBenchmark::Run(BenchmarkState *state_) {
 	state->result = sqlite::QueryDatabase(state->types, state->db, query, state->interrupt);
 }
 
+void SQLiteBenchmark::Cleanup(BenchmarkState *state_) {
+}
+
 string SQLiteBenchmark::Verify(BenchmarkState *state_) {
 	auto state = (SQLiteBenchmarkState *)state_;
 	return duckdb_benchmark->VerifyResult(state->result.get());

@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-BindResult ExpressionBinder::BindExpression(CastExpression &expr, count_t depth) {
+BindResult ExpressionBinder::BindExpression(CastExpression &expr, index_t depth) {
 	// first try to bind the child of the cast expression
 	string error = Bind(&expr.child, depth);
 	if (!error.empty()) {

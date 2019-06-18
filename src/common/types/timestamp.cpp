@@ -11,6 +11,24 @@
 using namespace duckdb;
 using namespace std;
 
+constexpr const int32_t MONTHS_PER_YEAR = 12;
+constexpr const int32_t HOURS_PER_DAY = 24; //! assume no daylight savings time changes
+constexpr const int32_t STD_TIMESTAMP_LENGTH = 19;
+constexpr const int32_t START_YEAR = 1900;
+
+constexpr const int32_t SECS_PER_MINUTE = 60;
+constexpr const int32_t MINS_PER_HOUR = 60;
+constexpr const int64_t MSECS_PER_HOUR = 360000;
+constexpr const int64_t MSECS_PER_MINUTE = 60000;
+constexpr const int64_t MSECS_PER_SEC = 1000;
+
+// Used to check amount of days per month in common year and leap year
+constexpr int days_per_month[2][13] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 0},
+                                       {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 0}};
+constexpr bool isleap(int16_t year) {
+	return (((year) % 4) == 0 && (((year) % 100) != 0 || ((year) % 400) == 0));
+}
+
 // timestamp/datetime uses 64 bits, high 32 bits for date and low 32 bits for time
 // string format is YYYY-MM-DDThh:mm:ssZ
 // T may be a space
@@ -25,7 +43,7 @@ timestamp_t Timestamp::FromString(string str) {
 	// In case we have only date we add a default time
 	if (str.size() == 10) {
 		str += " ";
-		str += DEFAULT_TIME;
+		str += "00:00:00";
 	}
 	// Character length	19 positions minimum to 23 maximum
 	if (str.size() < STD_TIMESTAMP_LENGTH) {
@@ -132,7 +150,7 @@ Interval Timestamp::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp
 		min_diff--;
 	}
 	while (min_diff < 0) {
-		min_diff += MINS_PER_H;
+		min_diff += MINS_PER_HOUR;
 		hour_diff--;
 	}
 	while (hour_diff < 0) {
@@ -167,7 +185,7 @@ Interval Timestamp::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp
 	interval.months = year_diff * MONTHS_PER_YEAR + month_diff;
 	interval.days = day_diff;
 	interval.time =
-	    ((((((hour_diff * MINS_PER_H) + min_diff) * SECS_PER_MINUTE) + sec_diff) * MSECS_PER_SEC) + msec_diff);
+	    ((((((hour_diff * MINS_PER_HOUR) + min_diff) * SECS_PER_MINUTE) + sec_diff) * MSECS_PER_SEC) + msec_diff);
 
 	return interval;
 }
@@ -201,7 +219,7 @@ Interval TimestampToInterval(timestamp_struct *timestamp) {
 	interval.months = timestamp->year * MONTHS_PER_YEAR + timestamp->month;
 	interval.days = timestamp->day;
 	interval.time =
-	    ((((((timestamp->hour * MINS_PER_H) + timestamp->min) * SECS_PER_MINUTE) + timestamp->sec) * MSECS_PER_SEC) +
+	    ((((((timestamp->hour * MINS_PER_HOUR) + timestamp->min) * SECS_PER_MINUTE) + timestamp->sec) * MSECS_PER_SEC) +
 	     timestamp->msec);
 
 	return interval;

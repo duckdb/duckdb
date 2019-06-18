@@ -19,13 +19,56 @@ void LogicalOperatorVisitor::VisitOperatorChildren(LogicalOperator &op) {
 }
 
 void LogicalOperatorVisitor::VisitOperatorExpressions(LogicalOperator &op) {
-	for (index_t i = 0, child_count = op.ExpressionCount(); i < child_count; i++) {
-		op.ReplaceExpression(
-		    [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
-			    VisitExpression(&child);
-			    return child;
-		    },
-		    i);
+	switch (op.type) {
+	case LogicalOperatorType::EXPRESSION_GET: {
+		auto &get = (LogicalExpressionGet &)op;
+		for (auto &expr_list : get.expressions) {
+			for (auto &expr : expr_list) {
+				VisitExpression(&expr);
+			}
+		}
+		break;
+	}
+	case LogicalOperatorType::ORDER_BY: {
+		auto &order = (LogicalOrder &)op;
+		for (auto &node : order.orders) {
+			VisitExpression(&node.expression);
+		}
+		break;
+	}
+	case LogicalOperatorType::DISTINCT: {
+		auto &distinct = (LogicalDistinct &)op;
+		for (auto &target : distinct.distinct_targets) {
+			VisitExpression(&target);
+		}
+		break;
+	}
+	case LogicalOperatorType::DELIM_JOIN:
+	case LogicalOperatorType::COMPARISON_JOIN: {
+		auto &join = (LogicalComparisonJoin &)op;
+		for (auto &cond : join.conditions) {
+			VisitExpression(&cond.left);
+			VisitExpression(&cond.right);
+		}
+		break;
+	}
+	case LogicalOperatorType::ANY_JOIN: {
+		auto &join = (LogicalAnyJoin &)op;
+		VisitExpression(&join.condition);
+		break;
+	}
+	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY: {
+		auto &aggr = (LogicalAggregate &)op;
+		for (index_t i = 0; i < aggr.groups.size(); i++) {
+			VisitExpression(&aggr.groups[i]);
+		}
+		break;
+	}
+	default:
+		break;
+	}
+	for (index_t i = 0; i < op.expressions.size(); i++) {
+		VisitExpression(&op.expressions[i]);
 	}
 }
 

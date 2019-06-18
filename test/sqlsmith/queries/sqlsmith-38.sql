@@ -2,6 +2,7 @@
 --     subq_1.c2 AS c0,
 --     subq_1.c0 AS c1
 -- FROM (
+
 SELECT
     nullif (nullif ((
                 SELECT

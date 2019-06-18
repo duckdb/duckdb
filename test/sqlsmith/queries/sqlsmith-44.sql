@@ -6,7 +6,7 @@ FROM (
         subq_0.c4 AS c0,
         subq_0.c2 AS c1,
         CASE WHEN ((0)
-                AND (0))
+            AND (0))
             AND (0) THEN
             subq_0.c0
         ELSE
@@ -42,6 +42,5 @@ WHERE (
         o_orderstatus
     FROM
         main.orders
-    LIMIT 1 offset 53)
-    IS NOT NULL
+    LIMIT 1 offset 53) IS NOT NULL
 LIMIT 168

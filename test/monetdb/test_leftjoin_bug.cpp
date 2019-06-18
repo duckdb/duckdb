@@ -53,8 +53,6 @@ TEST_CASE("MonetDB Test: outerjoin_project.Bug-3725.sql", "[monetdb]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 
-	return;
-
 	REQUIRE_NO_FAIL(con.Query("create table a (a integer);"));
 	REQUIRE_NO_FAIL(con.Query("create table b (a integer);"));
 	REQUIRE_NO_FAIL(con.Query("insert into a values (1);"));

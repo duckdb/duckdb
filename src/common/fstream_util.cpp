@@ -18,7 +18,7 @@ void FstreamUtil::CloseFile(fstream &file) {
 	}
 }
 
-count_t FstreamUtil::GetFileSize(fstream &file) {
+index_t FstreamUtil::GetFileSize(fstream &file) {
 	file.seekg(0, ios::end);
 	return file.tellg();
 }

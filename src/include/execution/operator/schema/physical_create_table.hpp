@@ -20,11 +20,12 @@ public:
 	    : PhysicalOperator(PhysicalOperatorType::CREATE, op.types), schema(schema), info(move(info)) {
 	}
 
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
-
 	//! Schema to insert to
 	SchemaCatalogEntry *schema;
 	//! Table name to create
 	unique_ptr<BoundCreateTableInfo> info;
+
+public:
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };
 } // namespace duckdb

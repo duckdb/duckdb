@@ -15,8 +15,18 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 	// first check counts of all lists and such
 	if (select_list.size() != other->select_list.size() || select_distinct != other->select_distinct ||
 	    orders.size() != other->orders.size() || groups.size() != other->groups.size() ||
-	    distinct_on_targets.size() != other->distinct_on_targets.size()) {
+	    distinct_on_targets.size() != other->distinct_on_targets.size() || values.size() != other->values.size()) {
 		return false;
+	}
+	for (index_t i = 0; i < values.size(); i++) {
+		if (values[i].size() != other->values[i].size()) {
+			return false;
+		}
+		for (index_t j = 0; j < values[i].size(); j++) {
+			if (!values[i][j]->Equals(other->values[i][j].get())) {
+				return false;
+			}
+		}
 	}
 	// SELECT
 	for (index_t i = 0; i < select_list.size(); i++) {
@@ -75,6 +85,14 @@ unique_ptr<QueryNode> SelectNode::Copy() {
 		result->groups.push_back(group->Copy());
 	}
 	result->having = having ? having->Copy() : nullptr;
+	// value list
+	for (auto &val_list : values) {
+		vector<unique_ptr<ParsedExpression>> new_val_list;
+		for (auto &val : val_list) {
+			new_val_list.push_back(val->Copy());
+		}
+		result->values.push_back(move(new_val_list));
+	}
 	this->CopyProperties(*result);
 	return move(result);
 }
@@ -92,6 +110,11 @@ void SelectNode::Serialize(Serializer &serializer) {
 	// group by / having
 	serializer.WriteList(groups);
 	serializer.WriteOptional(having);
+	// value list
+	serializer.Write<index_t>(values.size());
+	for (index_t i = 0; i < values.size(); i++) {
+		serializer.WriteList(values[i]);
+	}
 }
 
 unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &source) {
@@ -107,5 +130,12 @@ unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &source) {
 	// group by / having
 	source.ReadList<ParsedExpression>(result->groups);
 	result->having = source.ReadOptional<ParsedExpression>();
+	// value list
+	index_t value_list_size = source.Read<index_t>();
+	for (index_t i = 0; i < value_list_size; i++) {
+		vector<unique_ptr<ParsedExpression>> value_list;
+		source.ReadList<ParsedExpression>(value_list);
+		result->values.push_back(move(value_list));
+	}
 	return move(result);
 }

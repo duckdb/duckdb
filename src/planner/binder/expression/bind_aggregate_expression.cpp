@@ -78,7 +78,7 @@ static SQLType ResolveAggregateType(AggregateExpression &aggr, unique_ptr<Expres
 	return result_type;
 }
 
-BindResult SelectBinder::BindAggregate(AggregateExpression &aggr, count_t depth) {
+BindResult SelectBinder::BindAggregate(AggregateExpression &aggr, index_t depth) {
 	auto aggr_name = aggr.GetName();
 	// first bind the child of the aggregate expression (if any)
 	unique_ptr<Expression> child;

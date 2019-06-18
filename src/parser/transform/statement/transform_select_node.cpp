@@ -14,6 +14,10 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 	case SETOP_NONE: {
 		node = make_unique<SelectNode>();
 		auto result = (SelectNode *)node.get();
+		if (stmt->valuesLists) {
+			TransformValuesList(stmt->valuesLists, result->values);
+			return node;
+		}
 		// checks distinct clause
 		if (stmt->distinctClause != NULL) {
 			result->select_distinct = true;

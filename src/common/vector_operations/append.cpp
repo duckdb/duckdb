@@ -11,7 +11,7 @@ using namespace duckdb;
 using namespace std;
 
 template <class T>
-static void append_function(T *__restrict source, T *__restrict target, count_t count, sel_t *__restrict sel_vector,
+static void append_function(T *__restrict source, T *__restrict target, index_t count, sel_t *__restrict sel_vector,
                             nullmask_t &nullmask, index_t right_offset) {
 	target += right_offset;
 	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {

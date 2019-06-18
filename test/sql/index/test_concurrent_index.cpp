@@ -251,7 +251,8 @@ string append_to_primary_key(Connection &con, index_t thread_nr) {
 		// check the count
 		result = con.Query("SELECT COUNT(*), COUNT(DISTINCT i) FROM integers WHERE i >= 0");
 		if (!CHECK_COLUMN(result, 0, {initial_count + i + 1})) {
-			return "Incorrect result for CHECK_COLUMN: " + result->error;
+			return "Incorrect result for CHECK_COLUMN [" + result->error + "], expected " +
+			       (initial_count + i + 1).ToString() + " rows";
 		}
 	}
 	if (!con.Query("COMMIT")->success) {

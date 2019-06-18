@@ -79,7 +79,6 @@ TEST_CASE("Test out of range/incorrect timestamp formats", "[timestamp]") {
 	// ss-mm-hh
 	REQUIRE_FAIL(con.Query("INSERT INTO timestamp VALUES ('1900-1-1 59:59:23')"));
 	// different separators are not supported
-	// REQUIRE_FAIL(con.Query("INSERT INTO timestamp VALUES ('1900/01/01 00:00:00')"));
 	REQUIRE_FAIL(con.Query("INSERT INTO timestamp VALUES ('1900a01a01 00:00:00')"));
 	REQUIRE_FAIL(con.Query("INSERT INTO timestamp VALUES ('1900-1-1 00;00;00')"));
 	REQUIRE_FAIL(con.Query("INSERT INTO timestamp VALUES ('1900-1-1 00a00a00')"));
@@ -150,7 +149,7 @@ TEST_CASE("Test timestamp functions", "[timestamp]") {
 
 	std::string output{""};
 	if (years == 0 && months == 0 && days == 0) {
-		output += DEFAULT_TIME;
+		output += "00:00:00";
 	} else {
 		if (years != 0) {
 			output = std::to_string(years);

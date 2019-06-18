@@ -24,6 +24,7 @@ public:
 	                      vector<unique_ptr<Expression>> groups,
 	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
 
+public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
@@ -37,7 +38,7 @@ public:
 
 	//! The current position to scan the HT for output tuples
 	index_t ht_scan_position;
-	count_t tuples_scanned;
+	index_t tuples_scanned;
 	//! The HT
 	unique_ptr<SuperLargeHashTable> ht;
 	//! The payload chunk, only used while filling the HT

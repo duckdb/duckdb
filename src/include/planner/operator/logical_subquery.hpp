@@ -24,7 +24,7 @@ public:
 	//! The table index of the subquery
 	index_t table_index;
 	//! The total amount of columns of the subquery
-	count_t column_count;
+	index_t column_count;
 	//! The tables that are bound underneath the subquery
 	vector<BoundTable> bound_tables;
 

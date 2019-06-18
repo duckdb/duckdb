@@ -18,14 +18,14 @@ namespace duckdb {
 //! BoundExpressions, which refer to indexes into the physical chunks that pass through the executor.
 class BoundColumnRefExpression : public Expression {
 public:
-	BoundColumnRefExpression(TypeId type, ColumnBinding binding, count_t depth = 0);
-	BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, count_t depth = 0);
+	BoundColumnRefExpression(TypeId type, ColumnBinding binding, index_t depth = 0);
+	BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, index_t depth = 0);
 
 	//! Column index set by the binder, used to generate the final BoundExpression
 	ColumnBinding binding;
 	//! The subquery depth (i.e. depth 0 = current query, depth 1 = parent query, depth 2 = parent of parent, etc...).
 	//! This is only non-zero for correlated expressions inside subqueries.
-	count_t depth;
+	index_t depth;
 
 public:
 	bool IsScalar() const override {

@@ -26,8 +26,8 @@ public:
 	unique_ptr<BoundSelectStatement> select_statement;
 	//! The bound expressions to insert (if any)
 	vector<vector<unique_ptr<Expression>>> values;
-	//! The insertion map ([table_index -> index in result, or -1 if not specified])
-	vector<int> column_index_map;
+	//! The insertion map ([table_index -> index in result, or INVALID_INDEX if not specified])
+	vector<index_t> column_index_map;
 	//! The expected types for the INSERT statement (obtained from the column types)
 	vector<SQLType> expected_types;
 	//! The default statements used by the table

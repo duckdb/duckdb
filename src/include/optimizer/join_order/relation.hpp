@@ -28,13 +28,13 @@ struct Relation {
 
 //! Set of relations, used in the join graph.
 struct RelationSet {
-	RelationSet(unique_ptr<index_t[]> relations, count_t count) : relations(move(relations)), count(count) {
+	RelationSet(unique_ptr<index_t[]> relations, index_t count) : relations(move(relations)), count(count) {
 	}
 
 	string ToString();
 
 	unique_ptr<index_t[]> relations;
-	count_t count;
+	index_t count;
 
 	static bool IsSubset(RelationSet *super, RelationSet *sub);
 };
@@ -55,7 +55,7 @@ public:
 	//! Create or get a RelationSet from a set of relation bindings
 	RelationSet *GetRelation(unordered_set<index_t> &bindings);
 	//! Create or get a RelationSet from a (sorted, duplicate-free!) list of relations
-	RelationSet *GetRelation(unique_ptr<index_t[]> relations, count_t count);
+	RelationSet *GetRelation(unique_ptr<index_t[]> relations, index_t count);
 	//! Union two sets of relations together and create a new relation set
 	RelationSet *Union(RelationSet *left, RelationSet *right);
 	//! Create the set difference of left \ right (i.e. all elements in left that are not in right)

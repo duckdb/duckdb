@@ -28,10 +28,9 @@ public:
 	//! The column ids to project
 	vector<column_t> column_ids;
 
+public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
-
 	string ExtraRenderInformation() const override;
-
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 

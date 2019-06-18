@@ -1,11 +1,13 @@
 // #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
 
+#include "execution/operator/persistent/buffered_csv_reader.hpp"
 #include "common/file_system.hpp"
 #include "common/value_operations/value_operations.hpp"
 #include "compare_result.hpp"
 #include "main/query_result.hpp"
 #include "test_helpers.hpp"
+#include "parser/parsed_data/copy_info.hpp"
 
 #include <cmath>
 
@@ -143,58 +145,6 @@ string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
 	return "";
 }
 
-bool parse_datachunk(string csv, DataChunk &result, vector<SQLType> sql_types, bool has_header) {
-	istringstream f(csv);
-	string line;
-
-	size_t row = 0;
-	while (getline(f, line)) {
-		auto split = StringUtil::Split(line, '|');
-
-		if (has_header) {
-			if (split.size() != result.column_count) {
-				// column length is different
-				return false;
-			}
-			has_header = false;
-			continue;
-		}
-
-		if (line.back() == '|') {
-			split.push_back("");
-		}
-		if (split.size() != result.column_count) {
-			// column length is different
-			return false;
-		}
-		if (row >= STANDARD_VECTOR_SIZE) {
-			// chunk is full, but parsing so far was successful
-			// return the partially parsed chunk
-			// this function is used for printing, and we probably don't want to
-			// print >1000 rows anyway
-			return true;
-		}
-		// now compare the values
-		for (size_t i = 0; i < split.size(); i++) {
-			// first create a string value
-			Value value(split[i]);
-			value.is_null = split[i].empty();
-
-			// cast to the type of the column
-			try {
-				value = value.CastAs(SQLType(SQLTypeId::VARCHAR), sql_types[i]);
-			} catch (...) {
-				return false;
-			}
-			// now perform a comparison
-			result.data[i].count++;
-			result.data[i].SetValue(row, value);
-		}
-		row++;
-	}
-	return true;
-}
-
 string show_diff(DataChunk &left, DataChunk &right) {
 	if (left.column_count != right.column_count) {
 		return StringUtil::Format("Different column counts: %d vs %d", (int)left.column_count, (int)right.column_count);
@@ -236,11 +186,27 @@ string show_diff(DataChunk &left, DataChunk &right) {
 	return difference;
 }
 
-string show_diff(ChunkCollection &collection, DataChunk &chunk) {
-	if (collection.chunks.size() == 0) {
-		return "<EMPTY RESULT>";
+bool compare_chunk(DataChunk &left, DataChunk &right) {
+	if (left.column_count != right.column_count) {
+		return false;
 	}
-	return show_diff(*collection.chunks[0], chunk);
+	if (left.size() != right.size()) {
+		return false;
+	}
+	for (size_t i = 0; i < left.column_count; i++) {
+		auto &left_vector = left.data[i];
+		auto &right_vector = right.data[i];
+		if (left_vector.type == right_vector.type) {
+			for (size_t j = 0; j < left_vector.count; j++) {
+				auto left_value = left_vector.GetValue(j);
+				auto right_value = right_vector.GetValue(j);
+				if (!Value::ValuesAreEqual(left_value, right_value)) {
+					return false;
+				}
+			}
+		}
+	}
+	return true;
 }
 
 //! Compares the result of a pipe-delimited CSV with the given DataChunk
@@ -248,71 +214,64 @@ string show_diff(ChunkCollection &collection, DataChunk &chunk) {
 bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql_types, bool has_header,
                     string &error_message) {
 	assert(collection.types.size() == sql_types.size());
-	DataChunk correct_result;
 
-	istringstream f(csv);
-	string line;
-	size_t row = 0;
-	/// read and parse the header line
-	if (has_header) {
-		getline(f, line);
-		// check if the column length matches
-		auto split = StringUtil::Split(line, '|');
-		if (line.back() == '|') {
-			split.push_back("");
-		}
-		if (split.size() != sql_types.size()) {
-			// column length is different
-			goto incorrect;
-		}
+	// set up the intermediate result chunk
+	vector<TypeId> internal_types;
+	for (auto &type : sql_types) {
+		internal_types.push_back(GetInternalType(type));
 	}
-	// now compare the actual data
-	while (getline(f, line)) {
-		if (collection.count <= row) {
-			goto incorrect;
-		}
-		auto split = StringUtil::Split(line, '|');
-		if (line.back() == '|') {
-			split.push_back("");
-		}
-		if (split.size() != sql_types.size()) {
-			// column length is different
-			goto incorrect;
-		}
-		// now compare the values
-		for (size_t i = 0; i < split.size(); i++) {
-			// first create a string value
-			Value value(split[i]);
-			value.is_null = split[i].empty();
+	DataChunk parsed_result;
+	parsed_result.Initialize(internal_types);
 
-			// cast to the type of the column
-			try {
-				value = value.CastAs(SQLType(SQLTypeId::VARCHAR), sql_types[i]);
-			} catch (...) {
-				goto incorrect;
-			}
-			// now perform a comparison
-			Value result_value = collection.GetValue(i, row);
-			if (!Value::ValuesAreEqual(result_value, value)) {
-				goto incorrect;
-			}
+	// set up the CSV reader
+	CopyInfo info;
+	info.delimiter = '|';
+	info.header = true;
+	info.quote = '"';
+
+	// convert the CSV string into a stringstream
+	istringstream csv_stream(csv);
+
+	BufferedCSVReader reader(info, sql_types, csv_stream);
+	index_t collection_index = 0;
+	index_t tuple_count = 0;
+	while (true) {
+		// parse a chunk from the CSV file
+		try {
+			parsed_result.Reset();
+			reader.ParseCSV(parsed_result);
+		} catch (Exception &ex) {
+			error_message = "Could not parse CSV: " + string(ex.what());
+			return false;
 		}
-		row++;
+		if (parsed_result.size() == 0) {
+			// out of tuples in CSV file
+			if (collection_index < collection.chunks.size()) {
+				error_message = StringUtil::Format("Too many tuples in result! Found %llu tuples, but expected %llu",
+				                                   collection.count, tuple_count);
+				return false;
+			}
+			return true;
+		}
+		if (collection_index >= collection.chunks.size()) {
+			// ran out of chunks in the collection, but there are still tuples in the result
+			// keep parsing the csv file to get the total expected count
+			while (parsed_result.size() > 0) {
+				tuple_count += parsed_result.size();
+				parsed_result.Reset();
+				reader.ParseCSV(parsed_result);
+			}
+			error_message = StringUtil::Format("Too few tuples in result! Found %llu tuples, but expected %llu",
+			                                   collection.count, tuple_count);
+			return false;
+		}
+		// same counts, compare tuples in chunks
+		if (!compare_chunk(*collection.chunks[collection_index], parsed_result)) {
+			error_message = show_diff(*collection.chunks[collection_index], parsed_result);
+		}
+
+		collection_index++;
+		tuple_count += parsed_result.size();
 	}
-	if (collection.count != row) {
-		goto incorrect;
-	}
-	return true;
-incorrect:
-	correct_result.Initialize(collection.types);
-	if (!parse_datachunk(csv, correct_result, sql_types, has_header)) {
-		error_message = "Incorrect answer for query!\nProvided answer:\n" + collection.ToString() +
-		                "\nExpected answer [could not parse]:\n" + string(csv) + "\n";
-	} else {
-		error_message = "Incorrect answer for query!\nProvided answer:\n" + collection.ToString() +
-		                "\nExpected answer:\n" + correct_result.ToString() + "\n" +
-		                show_diff(collection, correct_result);
-	}
-	return false;
 }
 } // namespace duckdb

@@ -42,8 +42,10 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "PROJECTION";
 	case PhysicalOperatorType::BASE_GROUP_BY:
 		return "BASE_GROUP_BY";
-	case PhysicalOperatorType::COPY:
-		return "COPY";
+	case PhysicalOperatorType::COPY_FROM_FILE:
+		return "COPY_FROM_FILE";
+	case PhysicalOperatorType::COPY_TO_FILE:
+		return "COPY_TO_FILE";
 	case PhysicalOperatorType::DELIM_JOIN:
 		return "DELIM_JOIN";
 	case PhysicalOperatorType::BLOCKWISE_NL_JOIN:

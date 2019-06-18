@@ -8,7 +8,7 @@ using namespace std;
 
 namespace duckdb {
 
-void regexp_matches_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count,
+void regexp_matches_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
                              BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 2);
 	auto &strings = inputs[0];
@@ -86,7 +86,7 @@ unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionExpressio
 	return make_unique<RegexpMatchesBindData>(nullptr, "", "", false);
 }
 
-void regexp_replace_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count,
+void regexp_replace_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
                              BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 3);
 	auto &strings = inputs[0];

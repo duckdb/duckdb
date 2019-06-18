@@ -1,7 +1,8 @@
-#include "../../include/function/scalar_function/math.hpp"
+#include "function/scalar_function/math.hpp"
 #include "common/exception.hpp"
 #include "common/types/date.hpp"
 #include "common/vector_operations/vector_operations.hpp"
+#include "common/string_util.hpp"
 
 using namespace std;
 
@@ -114,7 +115,7 @@ static int64_t extract_element(SpecifierType type, date_t element) {
 	}
 }
 
-void date_part_function(ExpressionExecutor &exec, Vector inputs[], count_t input_count, BoundFunctionExpression &expr,
+void date_part_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                         Vector &result) {
 	result.Initialize(TypeId::BIGINT);
 	result.nullmask = inputs[1].nullmask;

@@ -19,7 +19,7 @@ class Vector;
 class ColumnSegment : public SegmentBase {
 public:
 	//! Initialize a column segment from a specific block
-	ColumnSegment(BlockManager *manager, block_id_t block_id, index_t offset, count_t count, index_t start);
+	ColumnSegment(BlockManager *manager, block_id_t block_id, index_t offset, index_t count, index_t start);
 	//! Initialize an empty in-memory column segment
 	ColumnSegment(index_t start);
 

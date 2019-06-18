@@ -42,6 +42,7 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalDelimJoin &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalDistinct &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalEmptyResult &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalExpressionGet &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalFilter &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalGet &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalLimit &op);
@@ -49,7 +50,8 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalOrder &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalProjection &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalInsert &op);
-	unique_ptr<PhysicalOperator> CreatePlan(LogicalCopy &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalCopyFromFile &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalCopyToFile &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalExplain &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSetOperation &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalUpdate &op);

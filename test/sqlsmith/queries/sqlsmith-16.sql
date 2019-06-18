@@ -6,13 +6,13 @@ SELECT
     subq_1.c0 AS c4,
     subq_1.c0 AS c5,
     CASE WHEN ((EXISTS (
-                    SELECT
-                        86 AS c0
-                    FROM
-                        main.supplier AS ref_6
-                    WHERE (0)
-                    OR (0)
-                LIMIT 102))
+                SELECT
+                    86 AS c0
+                FROM
+                    main.supplier AS ref_6
+                WHERE (0)
+                OR (0)
+            LIMIT 102))
         OR ((subq_1.c0 IS NULL)
             OR (subq_1.c0 IS NOT NULL)))
     OR ((EXISTS (
@@ -57,19 +57,19 @@ SELECT
                     main.region AS ref_9
                 WHERE
                     ref_9.r_regionkey IS NULL))) THEN
-        (
-            SELECT
-                c_address
-            FROM
-                main.customer
-            LIMIT 1 offset 2)
-    ELSE
-        (
-            SELECT
-                c_address
-            FROM
-                main.customer
-            LIMIT 1 offset 2)
+    (
+        SELECT
+            c_address
+        FROM
+            main.customer
+        LIMIT 1 offset 2)
+ELSE
+    (
+        SELECT
+            c_address
+        FROM
+            main.customer
+        LIMIT 1 offset 2)
     END AS c6,
     subq_1.c1 AS c7,
     subq_1.c0 AS c8,
@@ -124,8 +124,7 @@ FROM (
                 r_regionkey
             FROM
                 main.region
-            LIMIT 1 offset 1)
-        IS NOT NULL
+            LIMIT 1 offset 1) IS NOT NULL
     LIMIT 106) AS subq_0
     RIGHT JOIN main.part AS ref_1 ON (subq_0.c13 = ref_1.p_name)
 WHERE ((0)
@@ -148,41 +147,42 @@ WHERE ((0)
                                                 n_nationkey
                                             FROM
                                                 main.nation
-                                            LIMIT 1 offset 6)
-                                        IS NOT NULL)))
+                                            LIMIT 1 offset 6) IS NOT NULL)))
                             OR (1)))
                 LIMIT 65))
         OR ((subq_0.c16 IS NOT NULL)
             AND (1))))
-OR (EXISTS (
-        SELECT
-            ref_1.p_comment AS c0,
-            subq_0.c26 AS c1,
-            ref_1.p_retailprice AS c2,
-            ref_4.o_comment AS c3,
-            subq_0.c9 AS c4,
-            subq_0.c3 AS c5
-        FROM
-            main.orders AS ref_4
-        WHERE ((0)
-            AND (0))
-        OR ((0)
-            AND ((1)
-                AND (EXISTS (
-                        SELECT
-                            ref_4.o_clerk AS c0, ref_4.o_shippriority AS c1, ref_5.o_custkey AS c2, ref_5.o_orderpriority AS c3
-                        FROM
-                            main.orders AS ref_5
-                        WHERE (ref_5.o_orderkey IS NOT NULL)
-                        OR (1)
-                    LIMIT 128))))))
+    OR (EXISTS (
+            SELECT
+                ref_1.p_comment AS c0,
+                subq_0.c26 AS c1,
+                ref_1.p_retailprice AS c2,
+                ref_4.o_comment AS c3,
+                subq_0.c9 AS c4,
+                subq_0.c3 AS c5
+            FROM
+                main.orders AS ref_4
+            WHERE ((0)
+                AND (0))
+            OR ((0)
+                AND ((1)
+                    AND (EXISTS (
+                            SELECT
+                                ref_4.o_clerk AS c0, ref_4.o_shippriority AS c1, ref_5.o_custkey AS c2, ref_5.o_orderpriority AS c3
+                            FROM
+                                main.orders AS ref_5
+                            WHERE (ref_5.o_orderkey IS NOT NULL)
+                            OR (1)
+                        LIMIT 128))))))
 LIMIT 26) AS subq_1
 WHERE (subq_1.c0 IS NOT NULL)
 AND ((0)
     OR ((0)
         OR (EXISTS (
                 SELECT
-                    subq_1.c2 AS c0, ref_10.l_tax AS c1, ref_10.l_shipmode AS c2
+                    subq_1.c2 AS c0,
+                    ref_10.l_tax AS c1,
+                    ref_10.l_shipmode AS c2
                 FROM
                     main.lineitem AS ref_10
                 WHERE

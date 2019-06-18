@@ -1,0 +1,287 @@
+#include "catch.hpp"
+#include "common/operator/cast_operators.hpp"
+#include "common/string_util.hpp"
+#include "common/limits.hpp"
+#include "common/types.hpp"
+#include <vector>
+
+using namespace duckdb;
+using namespace std;
+
+template <class SRC, class DST> static void TestNumericCast(vector<SRC> &working_values, vector<SRC> &broken_values) {
+	DST result;
+	for (auto value : working_values) {
+		REQUIRE_NOTHROW(Cast::Operation<SRC, DST>(value) == (DST)value);
+		REQUIRE(TryCast::Operation<SRC, DST>(value, result));
+		REQUIRE(result == (DST)value);
+	}
+	for (auto value : broken_values) {
+		REQUIRE_THROWS(Cast::Operation<SRC, DST>(value));
+		REQUIRE(!TryCast::Operation<SRC, DST>(value, result));
+	}
+}
+
+template <class DST>
+static void TestStringCast(vector<string> &working_values, vector<DST> &expected_values,
+                           vector<string> &broken_values) {
+	DST result;
+	for (index_t i = 0; i < working_values.size(); i++) {
+		auto &value = working_values[i];
+		auto expected_value = expected_values[i];
+		REQUIRE_NOTHROW(Cast::Operation<const char *, DST>(value.c_str()) == expected_value);
+		REQUIRE(TryCast::Operation<const char *, DST>(value.c_str(), result));
+		REQUIRE(result == expected_value);
+
+		StringUtil::Trim(value);
+		vector<string> splits;
+		splits = StringUtil::Split(value, 'e');
+		if (splits.size() > 1) {
+			continue;
+		}
+		splits = StringUtil::Split(value, '.');
+		REQUIRE(Cast::Operation<DST, string>(result) == splits[0]);
+	}
+	for (auto &value : broken_values) {
+		REQUIRE_THROWS(Cast::Operation<const char *, DST>(value.c_str()));
+		REQUIRE(!TryCast::Operation<const char *, DST>(value.c_str(), result));
+	}
+}
+
+template <class T> static void TestExponent() {
+	T parse_result;
+	string str;
+	double value = 1;
+	T expected_value = 1;
+	for (index_t exponent = 0; exponent < 100; exponent++) {
+		if (value < MaximumValue<T>()) {
+			// expect success
+			str = "1e" + to_string(exponent);
+			REQUIRE(TryCast::Operation<const char *, T>(str.c_str(), parse_result));
+			REQUIRE(parse_result == expected_value);
+			str = "-1e" + to_string(exponent);
+			REQUIRE(TryCast::Operation<const char *, T>(str.c_str(), parse_result));
+			REQUIRE(parse_result == -expected_value);
+			value *= 10;
+			expected_value *= 10;
+		} else {
+			// expect failure
+			str = "1e" + to_string(exponent);
+			REQUIRE(!TryCast::Operation<const char *, T>(str.c_str(), parse_result));
+			str = "-1e" + to_string(exponent);
+			REQUIRE(!TryCast::Operation<const char *, T>(str.c_str(), parse_result));
+		}
+	}
+}
+
+TEST_CASE("Test casting to boolean", "[cast]") {
+	vector<string> working_values = {"true", "false", "TRUE", "FALSE", "T", "F"};
+	vector<int8_t> expected_values = {true, false, true, false, true, false};
+	vector<string> broken_values = {"1", "blabla", "", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaa"};
+
+	bool result;
+	for (index_t i = 0; i < working_values.size(); i++) {
+		auto &value = working_values[i];
+		auto expected_value = expected_values[i];
+		REQUIRE_NOTHROW(Cast::Operation<const char *, bool>(value.c_str()) == expected_value);
+		REQUIRE(TryCast::Operation<const char *, bool>(value.c_str(), result));
+		REQUIRE(result == expected_value);
+	}
+	for (auto &value : broken_values) {
+		REQUIRE_THROWS(Cast::Operation<const char *, bool>(value.c_str()));
+		REQUIRE(!TryCast::Operation<const char *, bool>(value.c_str(), result));
+	}
+}
+
+TEST_CASE("Test casting to int8_t", "[cast]") {
+	// int16_t -> int8_t
+	vector<int16_t> working_values_int16 = {10, -10, 127, -127};
+	vector<int16_t> broken_values_int16 = {128, -128, 1000, -1000};
+	TestNumericCast<int16_t, int8_t>(working_values_int16, broken_values_int16);
+	// int32_t -> int8_t
+	vector<int32_t> working_values_int32 = {10, -10, 127, -127};
+	vector<int32_t> broken_values_int32 = {128, -128, 1000000, -1000000};
+	TestNumericCast<int32_t, int8_t>(working_values_int32, broken_values_int32);
+	// int64_t -> int8_t
+	vector<int64_t> working_values_int64 = {10, -10, 127, -127};
+	vector<int64_t> broken_values_int64 = {128, -128, 10000000000, -10000000000};
+	TestNumericCast<int64_t, int8_t>(working_values_int64, broken_values_int64);
+	// float -> int8_t
+	vector<float> working_values_float = {10, -10, 127, -127, 1.3, -2.7};
+	vector<float> broken_values_float = {128, -128, 10000000000, -10000000000, 1e30f, -1e30f};
+	TestNumericCast<float, int8_t>(working_values_float, broken_values_float);
+	// double -> int8_t
+	vector<double> working_values_double = {10, -10, 127, -127, 1.3, -2.7};
+	vector<double> broken_values_double = {128, -128, 10000000000, -10000000000, 1e100, -1e100};
+	TestNumericCast<double, int8_t>(working_values_double, broken_values_double);
+	// string -> int8_t
+	vector<string> working_values_str = {"10",  "-10",   "127", "-127", "1.3",   "1e2",      "2e1",
+	                                     "2e0", "20e-1", "1.",  "  3",  " 3   ", "\t3 \t \n"};
+	vector<int8_t> expected_values_str = {10, -10, 127, -127, 1, 100, 20, 2, 2, 1, 3, 3, 3};
+	vector<string> broken_values_str = {
+	    "128",   "-128",        "10000000000000000000000000000000000000000000000000000000000000",
+	    "aaaa",  "19A",         "",
+	    "1e3",   "1e",          "1e-",
+	    "1e100", "1e100000000", "1000e-1",
+	    " 3 2"};
+	TestStringCast<int8_t>(working_values_str, expected_values_str, broken_values_str);
+	TestExponent<int8_t>();
+}
+
+TEST_CASE("Test casting to int16_t", "[cast]") {
+	// int32_t -> int16_t
+	vector<int32_t> working_values_int32 = {10, -10, 127, -127, 32767, -32767};
+	vector<int32_t> broken_values_int32 = {32768, -32768, 1000000, -1000000};
+	TestNumericCast<int32_t, int16_t>(working_values_int32, broken_values_int32);
+	// int64_t -> int16_t
+	vector<int64_t> working_values_int64 = {10, -10, 127, -127, 32767, -32767};
+	vector<int64_t> broken_values_int64 = {32768, -32768, 10000000000, -10000000000};
+	TestNumericCast<int64_t, int16_t>(working_values_int64, broken_values_int64);
+	// float -> int16_t
+	vector<float> working_values_float = {10.0f, -10.0f, 32767.0f, -32767.0f, 1.3f, -2.7f};
+	vector<float> broken_values_float = {32768.0f, -32768.0f, 10000000000.0f, -10000000000.0f, 1e30f, -1e30f};
+	TestNumericCast<float, int16_t>(working_values_float, broken_values_float);
+	// double -> int16_t
+	vector<double> working_values_double = {10, -10, 32767, -32767, 1.3, -2.7};
+	vector<double> broken_values_double = {32768, -32768, 10000000000, -10000000000, 1e100, -1e100};
+	TestNumericCast<double, int16_t>(working_values_double, broken_values_double);
+	// string -> int16_t
+	vector<string> working_values_str = {"10", "-10", "32767", "-32767", "1.3", "3e4", "250e2"};
+	vector<int16_t> expected_values_str = {10, -10, 32767, -32767, 1, 30000, 25000};
+	vector<string> broken_values_str = {
+	    "32768", "-32768",     "10000000000000000000000000000000000000000000000000000000000000",
+	    "aaaa",  "19A",        "",
+	    "1.A",   "1e",         "1e-",
+	    "1e100", "1e100000000"};
+	TestStringCast<int16_t>(working_values_str, expected_values_str, broken_values_str);
+	TestExponent<int16_t>();
+}
+
+TEST_CASE("Test casting to int32_t", "[cast]") {
+	// int64_t -> int32_t
+	vector<int64_t> working_values_int64 = {10, -10, 127, -127, 32767, -32767, 2147483647, -2147483647};
+	vector<int64_t> broken_values_int64 = {2147483648, -2147483648, 10000000000, -10000000000};
+	TestNumericCast<int64_t, int32_t>(working_values_int64, broken_values_int64);
+	// float -> int32_t
+	vector<float> working_values_float = {10.0f, -10.0f, 2000000000.0f, -2000000000.0f, 1.3f, -2.7f};
+	vector<float> broken_values_float = {3000000000.0f, -3000000000.0f, 10000000000.0f, -10000000000.0f, 1e30f, -1e30f};
+	TestNumericCast<float, int32_t>(working_values_float, broken_values_float);
+	// double -> int32_t
+	vector<double> working_values_double = {10, -10, 32767, -32767, 1.3, -2.7, 2147483647, -2147483647};
+	vector<double> broken_values_double = {2147483648, -2147483648, 10000000000, -10000000000, 1e100, -1e100};
+	TestNumericCast<double, int32_t>(working_values_double, broken_values_double);
+	// string -> int32_t
+	vector<string> working_values_str = {"10", "-10", "2147483647", "-2147483647", "1.3", "-1.3", "1e6"};
+	vector<int32_t> expected_values_str = {10, -10, 2147483647, -2147483647, 1, -1, 1000000};
+	vector<string> broken_values_str = {
+	    "2147483648", "-2147483648", "10000000000000000000000000000000000000000000000000000000000000",
+	    "aaaa",       "19A",         "",
+	    "1.A",        "1e1e1e1"};
+	TestStringCast<int32_t>(working_values_str, expected_values_str, broken_values_str);
+	TestExponent<int32_t>();
+}
+
+TEST_CASE("Test casting to int64_t", "[cast]") {
+	// float -> int64_t
+	vector<float> working_values_float = {10.0f,
+	                                      -10.0f,
+	                                      32767.0f,
+	                                      -32767.0f,
+	                                      1.3,
+	                                      -2.7,
+	                                      2000000000.0f,
+	                                      -2000000000.0f,
+	                                      4000000000000000000.0f,
+	                                      -4000000000000000000.0f};
+	vector<float> broken_values_float = {20000000000000000000.0f, -20000000000000000000.0f, 1e30f, -1e30f};
+	TestNumericCast<float, int64_t>(working_values_float, broken_values_float);
+	// double -> int64_t
+	vector<double> working_values_double = {
+	    10, -10, 32767, -32767, 1.3, -2.7, 2147483647, -2147483647, 4611686018427387904, -4611686018427387904};
+	vector<double> broken_values_double = {18446744073709551616.0, -18446744073709551616.0, 1e100, -1e100};
+	TestNumericCast<double, int64_t>(working_values_double, broken_values_double);
+	// string -> int64_t
+	vector<string> working_values_str = {
+	    "10",   "-10", "9223372036854775807", "-9223372036854775807", "1.3", "-9223372036854775807.1293813",
+	    "1e18", "1."};
+	vector<int64_t> expected_values_str = {
+	    10, -10, 9223372036854775807LL, -9223372036854775807LL, 1, -9223372036854775807LL, 1000000000000000000LL, 1};
+	vector<string> broken_values_str = {"9223372036854775808",
+	                                    "-9223372036854775808",
+	                                    "10000000000000000000000000000000000000000000000000000000000000",
+	                                    "aaaa",
+	                                    "19A",
+	                                    "",
+	                                    "1.A",
+	                                    "1.2382398723A"};
+	TestStringCast<int64_t>(working_values_str, expected_values_str, broken_values_str);
+	TestExponent<int64_t>();
+}
+
+template <class DST>
+static void TestStringCastDouble(vector<string> &working_values, vector<DST> &expected_values,
+                                 vector<string> &broken_values) {
+	DST result;
+	for (index_t i = 0; i < working_values.size(); i++) {
+		auto &value = working_values[i];
+		auto expected_value = expected_values[i];
+		REQUIRE_NOTHROW(Cast::Operation<const char *, DST>(value.c_str()) == expected_value);
+		REQUIRE(TryCast::Operation<const char *, DST>(value.c_str(), result));
+		REQUIRE(ApproxEqual(result, expected_value));
+	}
+	for (auto &value : broken_values) {
+		REQUIRE_THROWS(Cast::Operation<const char *, DST>(value.c_str()));
+		REQUIRE(!TryCast::Operation<const char *, DST>(value.c_str(), result));
+	}
+}
+
+TEST_CASE("Test casting to float", "[cast]") {
+	// string -> float
+	vector<string> working_values = {"1.3",
+	                                 "1.34514",
+	                                 "1e10",
+	                                 "1e-2",
+	                                 "-1e-1",
+	                                 "1.2e12.3",
+	                                 "1.1781237378938173987123987123981723981723981723987123",
+	                                 "1.123456789",
+	                                 "1."};
+	vector<float> expected_values = {
+	    1.3f,         1.34514f, 1e10f, 1e-2f, -1e-1f, 1.2e12f, 1.1781237378938173987123987123981723981723981723987123f,
+	    1.123456789f, 1.0f};
+	vector<string> broken_values = {
+	    "-",     "",        "aaa",
+	    "12aaa", "1e10e10", "1e",
+	    "1e-",   "1e10a",   "1.1781237378938173987123987123981723981723981723934834583490587123w",
+	    "1.2.3"};
+	TestStringCastDouble<float>(working_values, expected_values, broken_values);
+}
+
+TEST_CASE("Test casting to double", "[cast]") {
+	// string -> double
+	vector<string> working_values = {"1.3",
+	                                 "1.34514",
+	                                 "1e10",
+	                                 "1e-2",
+	                                 "-1e-1",
+	                                 "1.2e12.3",
+	                                 "1.1781237378938173987123987123981723981723981723987123",
+	                                 "1.123456789",
+	                                 "1.",
+	                                 "-1.2",
+	                                 "-1.2e1",
+	                                 " 1.2 ",
+	                                 "  1.2e2  ",
+	                                 " \t 1.2e2 \t",
+	                                 "1.2e 2"};
+	vector<double> expected_values = {
+	    1.3,         1.34514, 1e10, 1e-2, -1e-1, 1.2e12, 1.1781237378938173987123987123981723981723981723987123,
+	    1.123456789, 1.0,     -1.2, -12,  1.2,   120,    120,
+	    120};
+	vector<string> broken_values = {
+	    "-",     "",        "aaa",
+	    "12aaa", "1e10e10", "1e",
+	    "1e-",   "1e10a",   "1.1781237378938173987123987123981723981723981723934834583490587123w",
+	    "1.2.3", "1.222.",  "1..",
+	    "1 . 2", "1. 2",    "1.2 e20"};
+	TestStringCastDouble<double>(working_values, expected_values, broken_values);
+}

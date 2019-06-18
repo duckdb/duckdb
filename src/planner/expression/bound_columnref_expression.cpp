@@ -5,13 +5,13 @@
 using namespace duckdb;
 using namespace std;
 
-BoundColumnRefExpression::BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, count_t depth)
+BoundColumnRefExpression::BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, index_t depth)
     : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, type), binding(binding),
       depth(depth) {
 	this->alias = alias;
 }
 
-BoundColumnRefExpression::BoundColumnRefExpression(TypeId type, ColumnBinding binding, count_t depth)
+BoundColumnRefExpression::BoundColumnRefExpression(TypeId type, ColumnBinding binding, index_t depth)
     : BoundColumnRefExpression(string(), type, binding, depth) {
 }
 

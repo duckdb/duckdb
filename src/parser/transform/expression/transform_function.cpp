@@ -5,6 +5,7 @@
 #include "parser/expression/star_expression.hpp"
 #include "parser/expression/window_expression.hpp"
 #include "parser/transformer.hpp"
+#include "common/string_util.hpp"
 
 using namespace duckdb;
 using namespace postgres;

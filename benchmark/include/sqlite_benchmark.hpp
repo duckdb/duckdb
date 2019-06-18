@@ -40,6 +40,7 @@ public:
 
 	unique_ptr<BenchmarkState> Initialize() override;
 	void Run(BenchmarkState *state_) override;
+	void Cleanup(BenchmarkState *state_) override;
 	string Verify(BenchmarkState *state_) override;
 	string GetLogOutput(BenchmarkState *state_) override;
 	void Interrupt(BenchmarkState *state_) override;

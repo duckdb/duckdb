@@ -14,10 +14,10 @@ void PhysicalTableScan::GetChunkInternal(ClientContext &context, DataChunk &chun
 	table.Scan(context.ActiveTransaction(), chunk, column_ids, state->scan_offset);
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {
-	return make_unique<PhysicalTableScanOperatorState>(table);
-}
-
 string PhysicalTableScan::ExtraRenderInformation() const {
 	return tableref.name;
+}
+
+unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {
+	return make_unique<PhysicalTableScanOperatorState>(table);
 }

@@ -20,11 +20,12 @@ public:
 	      row_id_index(row_id_index) {
 	}
 
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
-
 	TableCatalogEntry &tableref;
 	DataTable &table;
 	index_t row_id_index;
+
+public:
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };
 
 } // namespace duckdb
