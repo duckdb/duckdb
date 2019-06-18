@@ -268,3 +268,18 @@ TEST_CASE("Test date copy", "[copy]") {
 	result = con.Query("SELECT cast(d as string) FROM date_test");
 	REQUIRE(CHECK_COLUMN(result, 0, {"2019-06-05"}));
 }
+
+
+
+TEST_CASE("Test cranlogs broken gzip copy", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE cranlogs (date date,time string,size int,r_version string,r_arch string,r_os string,package string,version string,country string,ip_id int)"));
+
+
+	result = con.Query("COPY cranlogs FROM 'test/sql/copy/tmp2013-06-15.csv.gz' DELIMITER ',' HEADER");
+	REQUIRE(CHECK_COLUMN(result, 0, {37459}));
+
+}

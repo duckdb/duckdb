@@ -179,6 +179,7 @@ streambuf::int_type GzipStreamBuf::underflow() {
 				mz_inflateEnd(zstrm_p);
 				delete zstrm_p;
 				mz_stream_ptr = nullptr;
+				break;
 			}
 
 		} while (out_buff_free_start == out_buff);
