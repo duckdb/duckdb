@@ -6,6 +6,7 @@
 #include "storage/data_table.hpp"
 #include "storage/write_ahead_log.hpp"
 
+#include "transaction/version_info.hpp"
 #include <cstring>
 
 using namespace duckdb;
@@ -18,10 +19,10 @@ void Transaction::PushCatalogEntry(CatalogEntry *entry) {
 }
 
 void Transaction::PushDeletedEntries(index_t offset, index_t count, VersionChunk *storage,
-                                     VersionInformation *version_pointers[]) {
+                                     VersionInfo *version_pointers[]) {
 	for (index_t i = 0; i < count; i++) {
 		auto ptr = PushTuple(UndoFlags::INSERT_TUPLE, 0);
-		auto meta = (VersionInformation *)ptr;
+		auto meta = (VersionInfo *)ptr;
 		meta->table = &storage->table;
 		meta->tuple_data = nullptr;
 		meta->version_number = transaction_id;
@@ -36,8 +37,8 @@ void Transaction::PushTuple(UndoFlags flags, index_t offset, VersionChunk *stora
 	// push the tuple into the undo buffer
 	auto ptr = PushTuple(flags, storage->table.tuple_size);
 
-	auto meta = (VersionInformation *)ptr;
-	auto tuple_data = ptr + sizeof(VersionInformation);
+	auto meta = (VersionInfo *)ptr;
+	auto tuple_data = ptr + sizeof(VersionInfo);
 
 	// fill in the meta data for the tuple
 	meta->table = &storage->table;
@@ -67,7 +68,7 @@ void Transaction::PushQuery(string query) {
 }
 
 data_ptr_t Transaction::PushTuple(UndoFlags flags, index_t data_size) {
-	return undo_buffer.CreateEntry(flags, sizeof(VersionInformation) + data_size);
+	return undo_buffer.CreateEntry(flags, sizeof(VersionInfo) + data_size);
 }
 
 void Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) {

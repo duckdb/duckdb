@@ -29,7 +29,7 @@ class StorageManager;
 class TableCatalogEntry;
 class Transaction;
 
-struct VersionInformation;
+struct VersionInfo;
 
 //! DataTable represents a physical table on disk
 class DataTable {
@@ -41,7 +41,7 @@ public:
 		VersionChunk *chunk;
 		unique_ptr<ColumnPointer[]> columns;
 		index_t offset;
-		VersionInformation *version_chain;
+		VersionInfo *version_chain;
 
 		VersionChunk *last_chunk;
 		index_t last_chunk_count;

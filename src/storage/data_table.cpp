@@ -11,6 +11,8 @@
 #include "transaction/transaction.hpp"
 #include "transaction/transaction_manager.hpp"
 
+#include "transaction/version_info.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -586,7 +588,7 @@ void DataTable::InitializeScan(ScanState &state) {
 }
 
 //! Given the specified root version, fetches the version that belongs to this transaction
-static VersionInformation *GetVersionInfo(Transaction &transaction, VersionInformation *version) {
+static VersionInfo *GetVersionInfo(Transaction &transaction, VersionInfo *version) {
 	if (!version ||
 	    (version->version_number == transaction.transaction_id || version->version_number < transaction.start_time)) {
 		// either (1) there is no version anymore as it was cleaned up,

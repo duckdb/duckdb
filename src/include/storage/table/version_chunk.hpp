@@ -18,7 +18,7 @@ class ColumnDefinition;
 class DataTable;
 class StorageManager;
 
-struct VersionInformation;
+struct VersionInfo;
 
 struct ColumnPointer {
 	//! The column segment
@@ -38,7 +38,7 @@ public:
 	//! Deleted
 	bool deleted[STORAGE_CHUNK_SIZE] = {0};
 	//! The version pointers
-	VersionInformation *version_pointers[STORAGE_CHUNK_SIZE] = {nullptr};
+	VersionInfo *version_pointers[STORAGE_CHUNK_SIZE] = {nullptr};
 	//! Pointers to the column segments
 	unique_ptr<ColumnPointer[]> columns;
 	//! The lock for the storage
@@ -50,9 +50,9 @@ public:
 	//! Get a poiner to the row of the specified column
 	data_ptr_t GetPointerToRow(index_t col, index_t row);
 	// Cleanup the version information of a tuple
-	void Cleanup(VersionInformation *info);
+	void Cleanup(VersionInfo *info);
 	// Undo the changes made by a tuple
-	void Undo(VersionInformation *info);
+	void Undo(VersionInfo *info);
 	//! Mark a specific segment of the storage chunk as dirty or not dirty
 	void SetDirtyFlag(index_t start, index_t count, bool dirty);
 	//! Returns true if the specific segment of the storage chunk is dirty

@@ -3,7 +3,7 @@
 #include "common/helper.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 #include "storage/data_table.hpp"
-#include "transaction/transaction.hpp"
+#include "transaction/version_info.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -11,7 +11,7 @@ using namespace std;
 VersionChunk::VersionChunk(DataTable &base_table, index_t start) : SegmentBase(start, 0), table(base_table) {
 }
 
-void VersionChunk::Cleanup(VersionInformation *info) {
+void VersionChunk::Cleanup(VersionInfo *info) {
 	index_t entry = info->prev.entry;
 	version_pointers[entry] = info->next;
 	if (version_pointers[entry]) {
@@ -20,7 +20,7 @@ void VersionChunk::Cleanup(VersionInformation *info) {
 	}
 }
 
-void VersionChunk::Undo(VersionInformation *info) {
+void VersionChunk::Undo(VersionInfo *info) {
 	index_t entry = info->prev.entry;
 	assert(version_pointers[entry] == info);
 	if (!info->tuple_data) {

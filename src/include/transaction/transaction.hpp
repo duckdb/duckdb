@@ -22,19 +22,8 @@ extern transaction_t MAXIMUM_QUERY_ID;
 class CatalogEntry;
 class DataTable;
 class VersionChunk;
+struct VersionInfo;
 class WriteAheadLog;
-
-struct VersionInformation {
-	DataTable *table;
-	VersionChunk *chunk;
-	union {
-		index_t entry;
-		VersionInformation *pointer;
-	} prev;
-	VersionInformation *next;
-	transaction_t version_number;
-	data_ptr_t tuple_data;
-};
 
 //! The transaction object holds information about a currently running or past
 //! transaction
@@ -66,7 +55,7 @@ public:
 	void PushCatalogEntry(CatalogEntry *entry);
 	//! Create deleted entries in the undo buffer
 	void PushDeletedEntries(index_t offset, index_t count, VersionChunk *storage,
-	                        VersionInformation *version_pointers[]);
+	                        VersionInfo *version_pointers[]);
 	//! Push an old tuple version in the undo buffer
 	void PushTuple(UndoFlags flag, index_t offset, VersionChunk *storage);
 	//! Push a query into the undo buffer, this will be written to the WAL for

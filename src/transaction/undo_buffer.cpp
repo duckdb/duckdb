@@ -7,9 +7,9 @@
 #include "storage/data_table.hpp"
 #include "storage/table/version_chunk.hpp"
 #include "storage/write_ahead_log.hpp"
+#include "transaction/version_info.hpp"
 
 #include <unordered_map>
-#include <transaction/transaction.hpp>
 
 using namespace duckdb;
 using namespace std;
@@ -48,12 +48,12 @@ void UndoBuffer::Cleanup() {
 		} else if (entry.type == UndoFlags::INSERT_TUPLE || entry.type == UndoFlags::DELETE_TUPLE ||
 		           entry.type == UndoFlags::UPDATE_TUPLE) {
 			// undo this entry
-			auto info = (VersionInformation *)entry.data.get();
+			auto info = (VersionInfo *)entry.data.get();
 			if (entry.type == UndoFlags::DELETE_TUPLE || entry.type == UndoFlags::UPDATE_TUPLE) {
 				if (info->table->indexes.size() > 0) {
 					// fetch the row identifiers
 					row_t row_number;
-					VersionInformation *current_info = info;
+					VersionInfo *current_info = info;
 					while (!current_info->chunk) {
 						assert(current_info->prev.pointer);
 						current_info = current_info->prev.pointer;
@@ -170,7 +170,7 @@ static void FlushAppends(WriteAheadLog *log, unordered_map<DataTable *, unique_p
 	appends.clear();
 }
 
-static void WriteTuple(WriteAheadLog *log, VersionInformation *entry,
+static void WriteTuple(WriteAheadLog *log, VersionInfo *entry,
                        unordered_map<DataTable *, unique_ptr<DataChunk>> &appends) {
 	if (!log) {
 		return;
@@ -260,7 +260,7 @@ void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
 		} else if (entry.type == UndoFlags::INSERT_TUPLE || entry.type == UndoFlags::DELETE_TUPLE ||
 		           entry.type == UndoFlags::UPDATE_TUPLE) {
 			// set the commit timestamp of the entry
-			auto info = (VersionInformation *)entry.data.get();
+			auto info = (VersionInfo *)entry.data.get();
 			info->version_number = commit_id;
 
 			// update the cardinality of the base table
@@ -303,7 +303,7 @@ void UndoBuffer::Rollback() {
 		} else if (entry.type == UndoFlags::INSERT_TUPLE || entry.type == UndoFlags::DELETE_TUPLE ||
 		           entry.type == UndoFlags::UPDATE_TUPLE) {
 			// undo this entry
-			auto info = (VersionInformation *)entry.data.get();
+			auto info = (VersionInfo *)entry.data.get();
 			if (entry.type == UndoFlags::UPDATE_TUPLE || entry.type == UndoFlags::INSERT_TUPLE) {
 				// update or insert rolled back
 				// delete base table entry from index
