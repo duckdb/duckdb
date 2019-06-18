@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// storage/column_segment.hpp
+// storage/table/column_segment.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,7 +9,7 @@
 #pragma once
 
 #include "storage/block.hpp"
-#include "storage/segment_tree.hpp"
+#include "storage/table/segment_tree.hpp"
 #include "common/types.hpp"
 
 namespace duckdb {

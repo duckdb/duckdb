@@ -126,7 +126,7 @@ template class std::unique_ptr<LogicalOperator>;
 template class std::unique_ptr<PhysicalOperator>;
 template class std::unique_ptr<PhysicalOperatorState>;
 template class std::unique_ptr<sel_t[]>;
-template class std::unique_ptr<StorageChunk>;
+template class std::unique_ptr<VersionChunk>;
 template class std::unique_ptr<StringHeap>;
 template class std::unique_ptr<SuperLargeHashTable>;
 template class std::unique_ptr<TableRef>;

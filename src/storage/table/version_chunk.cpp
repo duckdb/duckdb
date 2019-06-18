@@ -8,10 +8,10 @@
 using namespace duckdb;
 using namespace std;
 
-StorageChunk::StorageChunk(DataTable &base_table, index_t start) : SegmentBase(start, 0), table(base_table) {
+VersionChunk::VersionChunk(DataTable &base_table, index_t start) : SegmentBase(start, 0), table(base_table) {
 }
 
-void StorageChunk::Cleanup(VersionInformation *info) {
+void VersionChunk::Cleanup(VersionInformation *info) {
 	index_t entry = info->prev.entry;
 	version_pointers[entry] = info->next;
 	if (version_pointers[entry]) {
@@ -20,7 +20,7 @@ void StorageChunk::Cleanup(VersionInformation *info) {
 	}
 }
 
-void StorageChunk::Undo(VersionInformation *info) {
+void VersionChunk::Undo(VersionInformation *info) {
 	index_t entry = info->prev.entry;
 	assert(version_pointers[entry] == info);
 	if (!info->tuple_data) {
@@ -43,11 +43,11 @@ void StorageChunk::Undo(VersionInformation *info) {
 	}
 }
 
-data_ptr_t StorageChunk::GetPointerToRow(index_t col, index_t row) {
+data_ptr_t VersionChunk::GetPointerToRow(index_t col, index_t row) {
 	return columns[col].segment->GetPointerToRow(table.types[col], row);
 }
 
-void StorageChunk::SetDirtyFlag(index_t start, index_t count, bool new_dirty_flag) {
+void VersionChunk::SetDirtyFlag(index_t start, index_t count, bool new_dirty_flag) {
 	assert(count > 0 && count <= STANDARD_VECTOR_SIZE);
 	assert(start + count <= STORAGE_CHUNK_SIZE);
 	index_t marker_start = start / STANDARD_VECTOR_SIZE;
@@ -58,7 +58,7 @@ void StorageChunk::SetDirtyFlag(index_t start, index_t count, bool new_dirty_fla
 	}
 }
 
-bool StorageChunk::IsDirty(index_t start, index_t count) {
+bool VersionChunk::IsDirty(index_t start, index_t count) {
 	assert(count > 0 && count <= STANDARD_VECTOR_SIZE);
 	assert(start + count <= STORAGE_CHUNK_SIZE);
 	index_t marker_start = start / STANDARD_VECTOR_SIZE;

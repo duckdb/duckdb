@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// storage/storage_chunk.hpp
+// storage/table/version_chunk.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -10,14 +10,13 @@
 
 #include "common/types/string_heap.hpp"
 #include "storage/storage_lock.hpp"
-#include "storage/segment_tree.hpp"
-#include "storage/column_segment.hpp"
+#include "storage/table/segment_tree.hpp"
+#include "storage/table/column_segment.hpp"
 
 namespace duckdb {
 class ColumnDefinition;
 class DataTable;
 class StorageManager;
-class StorageChunk;
 
 struct VersionInformation;
 
@@ -28,9 +27,9 @@ struct ColumnPointer {
 	index_t offset;
 };
 
-class StorageChunk : public SegmentBase {
+class VersionChunk : public SegmentBase {
 public:
-	StorageChunk(DataTable &table, index_t start);
+	VersionChunk(DataTable &table, index_t start);
 
 	//! The table
 	DataTable &table;

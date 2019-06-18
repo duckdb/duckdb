@@ -1,4 +1,4 @@
-#include "storage/column_segment.hpp"
+#include "storage/table/column_segment.hpp"
 #include "storage/block_manager.hpp"
 #include "common/types/vector.hpp"
 

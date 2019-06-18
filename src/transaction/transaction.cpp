@@ -17,7 +17,7 @@ void Transaction::PushCatalogEntry(CatalogEntry *entry) {
 	*blob = entry;
 }
 
-void Transaction::PushDeletedEntries(index_t offset, index_t count, StorageChunk *storage,
+void Transaction::PushDeletedEntries(index_t offset, index_t count, VersionChunk *storage,
                                      VersionInformation *version_pointers[]) {
 	for (index_t i = 0; i < count; i++) {
 		auto ptr = PushTuple(UndoFlags::INSERT_TUPLE, 0);
@@ -32,7 +32,7 @@ void Transaction::PushDeletedEntries(index_t offset, index_t count, StorageChunk
 	}
 }
 
-void Transaction::PushTuple(UndoFlags flags, index_t offset, StorageChunk *storage) {
+void Transaction::PushTuple(UndoFlags flags, index_t offset, VersionChunk *storage) {
 	// push the tuple into the undo buffer
 	auto ptr = PushTuple(flags, storage->table.tuple_size);
 

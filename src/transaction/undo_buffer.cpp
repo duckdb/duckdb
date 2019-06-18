@@ -5,7 +5,7 @@
 #include "catalog/catalog_set.hpp"
 #include "common/exception.hpp"
 #include "storage/data_table.hpp"
-#include "storage/storage_chunk.hpp"
+#include "storage/table/version_chunk.hpp"
 #include "storage/write_ahead_log.hpp"
 
 #include <unordered_map>
@@ -181,15 +181,15 @@ static void WriteTuple(WriteAheadLog *log, VersionInformation *entry,
 		return;
 	}
 	// get the data for the insertion
-	StorageChunk *storage = nullptr;
+	VersionChunk *storage = nullptr;
 	DataChunk *chunk = nullptr;
 	if (entry->chunk) {
-		// versioninfo refers to data inside StorageChunk
+		// versioninfo refers to data inside VersionChunk
 		// fetch the data from the base rows
 		storage = entry->chunk;
 	} else {
 		// insertion was updated or deleted after insertion in the same
-		// transaction iterate back to the chunk to find the StorageChunk
+		// transaction iterate back to the chunk to find the VersionChunk
 		auto prev = entry->prev.pointer;
 		while (!prev->chunk) {
 			assert(entry->prev.pointer);

@@ -21,12 +21,12 @@ extern transaction_t MAXIMUM_QUERY_ID;
 
 class CatalogEntry;
 class DataTable;
-class StorageChunk;
+class VersionChunk;
 class WriteAheadLog;
 
 struct VersionInformation {
 	DataTable *table;
-	StorageChunk *chunk;
+	VersionChunk *chunk;
 	union {
 		index_t entry;
 		VersionInformation *pointer;
@@ -65,10 +65,10 @@ public:
 public:
 	void PushCatalogEntry(CatalogEntry *entry);
 	//! Create deleted entries in the undo buffer
-	void PushDeletedEntries(index_t offset, index_t count, StorageChunk *storage,
+	void PushDeletedEntries(index_t offset, index_t count, VersionChunk *storage,
 	                        VersionInformation *version_pointers[]);
 	//! Push an old tuple version in the undo buffer
-	void PushTuple(UndoFlags flag, index_t offset, StorageChunk *storage);
+	void PushTuple(UndoFlags flag, index_t offset, VersionChunk *storage);
 	//! Push a query into the undo buffer, this will be written to the WAL for
 	//! redo purposes
 

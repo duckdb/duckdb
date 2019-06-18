@@ -11,12 +11,12 @@
 #include "common/enums/index_type.hpp"
 #include "common/types/data_chunk.hpp"
 #include "common/types/tuple.hpp"
-#include "storage/column_statistics.hpp"
+#include "storage/table/column_statistics.hpp"
 #include "storage/index.hpp"
-#include "storage/storage_chunk.hpp"
+#include "storage/table/version_chunk.hpp"
 #include "storage/table_statistics.hpp"
 #include "storage/block.hpp"
-#include "storage/column_segment.hpp"
+#include "storage/table/column_segment.hpp"
 
 #include <atomic>
 #include <mutex>
@@ -38,12 +38,12 @@ public:
 		virtual ~ScanState() {
 		}
 
-		StorageChunk *chunk;
+		VersionChunk *chunk;
 		unique_ptr<ColumnPointer[]> columns;
 		index_t offset;
 		VersionInformation *version_chain;
 
-		StorageChunk *last_chunk;
+		VersionChunk *last_chunk;
 		index_t last_chunk_count;
 	};
 
@@ -105,7 +105,7 @@ public:
 		return statistics[oid];
 	}
 
-	StorageChunk *GetChunk(index_t row_number);
+	VersionChunk *GetChunk(index_t row_number);
 
 	//! Retrieves versioned data from a set of pointers to tuples inside an
 	//! UndoBuffer and stores them inside the result chunk; used for scanning of
@@ -114,12 +114,12 @@ public:
 	                           data_ptr_t alternate_version_pointers[], index_t alternate_version_index[],
 	                           index_t alternate_version_count);
 	//! Fetches a single tuple from the base table at rowid row_id, and appends that tuple to the "result" DataChunk
-	void RetrieveTupleFromBaseTable(DataChunk &result, StorageChunk *chunk, vector<column_t> &column_ids, row_t row_id);
+	void RetrieveTupleFromBaseTable(DataChunk &result, VersionChunk *chunk, vector<column_t> &column_ids, row_t row_id);
 
 private:
 	//! Append a storage chunk with the given start index to the data table. Returns a pointer to the newly created
 	//! storage chunk.
-	StorageChunk *AppendStorageChunk(index_t start);
+	VersionChunk *AppendVersionChunk(index_t start);
 	//! Append a subset of a vector to the specified column of the table
 	void AppendVector(index_t column, Vector &data, index_t offset, index_t count);
 

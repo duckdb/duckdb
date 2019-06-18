@@ -30,11 +30,11 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 		columns[i].AppendSegment(make_unique<ColumnSegment>(0));
 	}
 	// initialize the table with an empty storage chunk
-	AppendStorageChunk(0);
+	AppendVersionChunk(0);
 }
 
-StorageChunk *DataTable::AppendStorageChunk(index_t start) {
-	auto chunk = make_unique<StorageChunk>(*this, start);
+VersionChunk *DataTable::AppendVersionChunk(index_t start) {
+	auto chunk = make_unique<VersionChunk>(*this, start);
 	auto chunk_pointer = chunk.get();
 	// set the columns of the chunk
 	chunk->columns = unique_ptr<ColumnPointer[]>(new ColumnPointer[types.size()]);
@@ -46,8 +46,8 @@ StorageChunk *DataTable::AppendStorageChunk(index_t start) {
 	return chunk_pointer;
 }
 
-StorageChunk *DataTable::GetChunk(index_t row_number) {
-	return (StorageChunk *)storage_tree.GetSegment(row_number);
+VersionChunk *DataTable::GetChunk(index_t row_number) {
+	return (VersionChunk *)storage_tree.GetSegment(row_number);
 }
 
 void DataTable::AppendVector(index_t column_index, Vector &data, index_t offset, index_t count) {
@@ -190,7 +190,7 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 	{
 		// ready to append: obtain an exclusive lock on the last segment
 		lock_guard<mutex> tree_lock(storage_tree.node_lock);
-		auto last_chunk = (StorageChunk *)storage_tree.nodes.back().node;
+		auto last_chunk = (VersionChunk *)storage_tree.nodes.back().node;
 		auto lock = last_chunk->lock.GetExclusiveLock();
 		assert(!last_chunk->next);
 
@@ -226,7 +226,7 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 				remainder -= to_copy;
 			}
 			if (remainder > 0) {
-				last_chunk = AppendStorageChunk(last_chunk->start + last_chunk->count);
+				last_chunk = AppendVersionChunk(last_chunk->start + last_chunk->count);
 			}
 		}
 
@@ -573,8 +573,8 @@ void DataTable::RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &p
 }
 
 void DataTable::InitializeScan(ScanState &state) {
-	state.chunk = (StorageChunk *)storage_tree.GetRootSegment();
-	state.last_chunk = (StorageChunk *)storage_tree.GetLastSegment();
+	state.chunk = (VersionChunk *)storage_tree.GetRootSegment();
+	state.last_chunk = (VersionChunk *)storage_tree.GetLastSegment();
 	state.last_chunk_count = state.last_chunk->count;
 	state.columns = unique_ptr<ColumnPointer[]>(new ColumnPointer[types.size()]);
 	for (index_t i = 0; i < types.size(); i++) {
@@ -716,7 +716,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<c
 				break;
 			} else {
 				state.offset = 0;
-				state.chunk = (StorageChunk *)current_chunk->next.get();
+				state.chunk = (VersionChunk *)current_chunk->next.get();
 			}
 		}
 		if (result.size() > 0) {
@@ -725,7 +725,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<c
 	}
 }
 
-void DataTable::RetrieveTupleFromBaseTable(DataChunk &result, StorageChunk *chunk, vector<column_t> &column_ids,
+void DataTable::RetrieveTupleFromBaseTable(DataChunk &result, VersionChunk *chunk, vector<column_t> &column_ids,
                                            row_t row_id) {
 	assert(result.size() < STANDARD_VECTOR_SIZE);
 	assert((index_t)row_id >= chunk->start);
@@ -877,7 +877,7 @@ void DataTable::CreateIndexScan(IndexScanState &state, vector<column_t> &column_
 		}
 		if (state.offset >= current_chunk->count) {
 			// exceeded this chunk, move to next one
-			state.chunk = (StorageChunk *)state.chunk->next.get();
+			state.chunk = (VersionChunk *)state.chunk->next.get();
 			state.offset = 0;
 			state.base_offset = 0;
 			state.version_chain = nullptr;
