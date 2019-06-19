@@ -128,17 +128,9 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
                                                                 bool allow_stream_result) {
 	StatementType statement_type = statement->type;
 	bool create_stream_result = statement_type == StatementType::SELECT && allow_stream_result;
-	// for many statements, we log the literal query string in the WAL
-	bool log_query_string = false;
-	switch (statement_type) {
-	case StatementType::ALTER:
-	case StatementType::PREPARE:
-	case StatementType::DEALLOCATE:
-		log_query_string = true;
-		break;
-	default:
-		break;
-	}
+	// for some statements, we log the literal query string in the WAL
+	bool log_query_string = statement_type == StatementType::ALTER;
+
 	profiler.StartPhase("planner");
 	Planner planner(*this);
 	planner.CreatePlan(move(statement));
