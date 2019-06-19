@@ -14,17 +14,94 @@
 using namespace duckdb;
 using namespace std;
 
+constexpr uint32_t DEFAULT_UNDO_CHUNK_SIZE = 4096*3;
+constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
+
 static void CleanupIndexInsert(VersionInfo *info);
 static void RollbackIndexInsert(VersionInfo *info);
 
+UndoBuffer::UndoBuffer() {
+	head = make_unique<UndoChunk>(DEFAULT_UNDO_CHUNK_SIZE);
+	tail = head.get();
+}
+
+UndoChunk::UndoChunk(index_t size) : current_position(0), maximum_size(size), prev(nullptr) {
+	data = unique_ptr<data_t[]>(new data_t[maximum_size]);
+}
+UndoChunk::~UndoChunk() {
+	if (next) {
+		auto current_next = move(next);
+		while (current_next) {
+			current_next = move(current_next->next);
+		}
+	}
+}
+
+data_ptr_t UndoChunk::WriteEntry(UndoFlags type, uint32_t len) {
+	*((UndoFlags*)(data.get() + current_position)) = type;
+	current_position += sizeof(UndoFlags);
+	*((uint32_t*)(data.get() + current_position)) = len;
+	current_position += sizeof(uint32_t);
+
+	data_ptr_t result = data.get() + current_position;
+	current_position += len;
+	return result;
+}
+
 data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, index_t len) {
-	UndoEntry entry;
-	entry.type = type;
-	entry.length = len;
-	auto dataptr = new data_t[len];
-	entry.data = unique_ptr<data_t[]>(dataptr);
-	entries.push_back(move(entry));
-	return dataptr;
+	assert(len <= std::numeric_limits<uint32_t>::max());
+	index_t needed_space = len + UNDO_ENTRY_HEADER_SIZE;
+	if (head->current_position + needed_space >= head->maximum_size) {
+		auto new_chunk = make_unique<UndoChunk>(needed_space > DEFAULT_UNDO_CHUNK_SIZE ? needed_space : DEFAULT_UNDO_CHUNK_SIZE);
+		head->prev = new_chunk.get();
+		new_chunk->next = move(head);
+		head = move(new_chunk);
+	}
+	return head->WriteEntry(type, len);
+}
+
+template<class T>
+void UndoBuffer::IterateEntries(T &&callback) {
+	// iterate in insertion order: start with the tail
+	auto current = tail;
+	while(current) {
+		data_ptr_t start = current->data.get();
+		data_ptr_t end = start + current->current_position;
+		while(start < end) {
+			UndoFlags type = *((UndoFlags*) start);
+			start += sizeof(UndoFlags);
+			uint32_t len = *((uint32_t*) start);
+			start += sizeof(uint32_t);
+			callback(type, start);
+			start += len;
+		}
+		current = current->prev;
+	}
+}
+
+template<class T>
+void UndoBuffer::ReverseIterateEntries(T &&callback) {
+	// iterate in reverse insertion order: start with the head
+	auto current = head.get();
+	while(current) {
+		data_ptr_t start = current->data.get();
+		data_ptr_t end = start + current->current_position;
+		// create a vector with all nodes in this chunk
+		vector<pair<UndoFlags, data_ptr_t>> nodes;
+		while(start < end) {
+			UndoFlags type = *((UndoFlags*) start);
+			start += sizeof(UndoFlags);
+			uint32_t len = *((uint32_t*) start);
+			start += sizeof(uint32_t);
+			nodes.push_back(make_pair(type, start));
+			start += len;
+		}
+		// iterate over it in reverse order
+		for(index_t i = nodes.size(); i > 0; i--) {
+			callback(nodes[i - 1].first, nodes[i - 1].second);
+		}
+		current = current->next.get();
+	}
 }
 
 void UndoBuffer::Cleanup() {
@@ -36,10 +113,11 @@ void UndoBuffer::Cleanup() {
 	//      the chunks)
 	//  (2) there is no active transaction with start_id < commit_id of this
 	//  transaction
-	for (auto &entry : entries) {
-		switch (entry.type) {
+
+	IterateEntries([&](UndoFlags type, data_ptr_t data) {
+		switch (type) {
 		case UndoFlags::CATALOG_ENTRY: {
-			CatalogEntry *catalog_entry = *((CatalogEntry **)entry.data.get());
+			CatalogEntry *catalog_entry = *((CatalogEntry **)data);
 			// destroy the backed up entry: it is no longer required
 			assert(catalog_entry->parent);
 			if (catalog_entry->parent->type != CatalogType::UPDATED_ENTRY) {
@@ -55,8 +133,8 @@ void UndoBuffer::Cleanup() {
 		case UndoFlags::UPDATE_TUPLE:
 		case UndoFlags::INSERT_TUPLE: {
 			// undo this entry
-			auto info = (VersionInfo *)entry.data.get();
-			if (entry.type == UndoFlags::DELETE_TUPLE || entry.type == UndoFlags::UPDATE_TUPLE) {
+			auto info = (VersionInfo *)data;
+			if (type == UndoFlags::DELETE_TUPLE || type == UndoFlags::UPDATE_TUPLE) {
 				if (info->table->indexes.size() > 0) {
 					CleanupIndexInsert(info);
 				}
@@ -78,10 +156,10 @@ void UndoBuffer::Cleanup() {
 		case UndoFlags::QUERY:
 			break;
 		default:
-			assert(entry.type == UndoFlags::EMPTY_ENTRY);
+			assert(type == UndoFlags::EMPTY_ENTRY);
 			break;
 		}
-	}
+	});
 }
 
 class CommitState {
@@ -95,7 +173,7 @@ public:
 	index_t row_identifiers[STANDARD_VECTOR_SIZE];
 public:
 	template <bool HAS_LOG>
-	void CommitEntry(UndoEntry &entry);
+	void CommitEntry(UndoFlags type, data_ptr_t data);
 
 	void Flush(UndoFlags new_op);
 private:
@@ -318,15 +396,15 @@ void CommitState::WriteInsert(VersionInfo *info) {
 }
 
 template <bool HAS_LOG>
-void CommitState::CommitEntry(UndoEntry &entry) {
-	if (HAS_LOG && entry.type != current_op) {
-		Flush(entry.type);
+void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
+	if (HAS_LOG && type != current_op) {
+		Flush(type);
 		chunk = nullptr;
 	}
-	switch (entry.type) {
+	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
 		// set the commit timestamp of the catalog entry to the given id
-		CatalogEntry *catalog_entry = *((CatalogEntry **)entry.data.get());
+		CatalogEntry *catalog_entry = *((CatalogEntry **)data);
 		assert(catalog_entry->parent);
 		catalog_entry->parent->timestamp = commit_id;
 
@@ -339,12 +417,12 @@ void CommitState::CommitEntry(UndoEntry &entry) {
 	case UndoFlags::DELETE_TUPLE:
 	case UndoFlags::UPDATE_TUPLE:
 	case UndoFlags::INSERT_TUPLE: {
-		auto info = (VersionInfo *)entry.data.get();
+		auto info = (VersionInfo *)data;
 		// Before we set the commit timestamp we write the entry to the WAL. When we set the commit timestamp it enables
 		// other transactions to overwrite the data, but BEFORE we set the commit timestamp the other transactions will
 		// get a concurrency conflict error if they attempt ot modify these tuples. Hence BEFORE we set the commit
 		// timestamp we can safely access the data in the base table without needing any locks.
-		switch (entry.type) {
+		switch (type) {
 		case UndoFlags::UPDATE_TUPLE:
 			if (HAS_LOG) {
 				WriteUpdate(info);
@@ -357,7 +435,7 @@ void CommitState::CommitEntry(UndoEntry &entry) {
 			}
 			break;
 		default: // UndoFlags::INSERT_TUPLE
-			assert(entry.type == UndoFlags::INSERT_TUPLE);
+			assert(type == UndoFlags::INSERT_TUPLE);
 			info->table->cardinality++;
 			if (HAS_LOG) {
 				// push the tuple insert to the WAL
@@ -371,7 +449,7 @@ void CommitState::CommitEntry(UndoEntry &entry) {
 	}
 	case UndoFlags::QUERY: {
 		if (HAS_LOG) {
-			string query = string((char *)entry.data.get());
+			string query = string((char *)data);
 			log->WriteQuery(query);
 		}
 		break;
@@ -389,26 +467,25 @@ void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
 	state.current_op = UndoFlags::EMPTY_ENTRY;
 	if (log) {
 		// commit WITH write ahead log
-		for (auto &entry : entries) {
-			state.CommitEntry<true>(entry);
-		}
+		IterateEntries([&](UndoFlags type, data_ptr_t data) {
+			state.CommitEntry<true>(type, data);
+		});
 		// final flush after writing
 		state.Flush(UndoFlags::EMPTY_ENTRY);
 	} else {
 		// comit WITHOUT write ahead log
-		for (auto &entry : entries) {
-			state.CommitEntry<false>(entry);
-		}
+		IterateEntries([&](UndoFlags type, data_ptr_t data) {
+			state.CommitEntry<false>(type, data);
+		});
 	}
 }
 
 void UndoBuffer::Rollback() {
-	for (index_t i = entries.size(); i > 0; i--) {
-		auto &entry = entries[i - 1];
-		switch (entry.type) {
+	ReverseIterateEntries([&](UndoFlags type, data_ptr_t data) {
+		switch (type) {
 		case UndoFlags::CATALOG_ENTRY: {
 			// undo this catalog entry
-			CatalogEntry *catalog_entry = *((CatalogEntry **)entry.data.get());
+			CatalogEntry *catalog_entry = *((CatalogEntry **)data);
 			assert(catalog_entry->set);
 			catalog_entry->set->Undo(catalog_entry);
 			break;
@@ -417,8 +494,8 @@ void UndoBuffer::Rollback() {
 		case UndoFlags::UPDATE_TUPLE:
 		case UndoFlags::INSERT_TUPLE: {
 			// undo this entry
-			auto info = (VersionInfo *)entry.data.get();
-			if (entry.type == UndoFlags::UPDATE_TUPLE || entry.type == UndoFlags::INSERT_TUPLE) {
+			auto info = (VersionInfo *)data;
+			if (type == UndoFlags::UPDATE_TUPLE || type == UndoFlags::INSERT_TUPLE) {
 				// update or insert rolled back
 				// delete base table entry from index
 				assert(info->chunk);
@@ -435,11 +512,11 @@ void UndoBuffer::Rollback() {
 		case UndoFlags::QUERY:
 			break;
 		default:
-			assert(entry.type == UndoFlags::EMPTY_ENTRY);
+			assert(type == UndoFlags::EMPTY_ENTRY);
 			break;
 		}
-		entry.type = UndoFlags::EMPTY_ENTRY;
-	}
+		type = UndoFlags::EMPTY_ENTRY;
+	});
 }
 
 static void CleanupIndexInsert(VersionInfo *info) {

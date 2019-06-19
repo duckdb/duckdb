@@ -26,10 +26,17 @@ enum class UndoFlags : uint8_t {
 	QUERY = 5
 };
 
-struct UndoEntry {
-	UndoFlags type;
-	index_t length;
+struct UndoChunk {
+	UndoChunk(index_t size);
+	~UndoChunk();
+
+	data_ptr_t WriteEntry(UndoFlags type, uint32_t len);
+
 	unique_ptr<data_t[]> data;
+	index_t current_position;
+	index_t maximum_size;
+	unique_ptr<UndoChunk> next;
+	UndoChunk *prev;
 };
 
 //! The undo buffer of a transaction is used to hold previous versions of tuples
@@ -37,8 +44,7 @@ struct UndoEntry {
 //! transactions accessing them)
 class UndoBuffer {
 public:
-	UndoBuffer() {
-	}
+	UndoBuffer();
 
 	//! Reserve space for an entry of the specified type and length in the undo
 	//! buffer
@@ -53,10 +59,13 @@ public:
 	void Rollback();
 
 private:
-	// List of UndoEntries, FIXME: this can be more efficient
-	vector<UndoEntry> entries;
-
-	UndoBuffer(const UndoBuffer &) = delete;
+	unique_ptr<UndoChunk> head;
+	UndoChunk *tail;
+private:
+	template<class T>
+	void IterateEntries(T &&callback);
+	template<class T>
+	void ReverseIterateEntries(T &&callback);
 };
 
 } // namespace duckdb
