@@ -68,7 +68,7 @@ void TableDataReader::ReadTableData(ClientContext &context) {
 						tuples_left = data_pointers[col][indexes[col] - 1].tuple_count - tuple_counts[col];
 					}
 					Vector storage_vector(types[col], blocks[col]->buffer + offsets[col]);
-					storage_vector.count = std::min((index_t)STANDARD_VECTOR_SIZE, tuples_left);
+					storage_vector.count = std::min((index_t)STANDARD_VECTOR_SIZE - insert_chunk.data[col].count, tuples_left);
 					VectorOperations::AppendFromStorage(storage_vector, insert_chunk.data[col]);
 
 					tuple_counts[col] += storage_vector.count;

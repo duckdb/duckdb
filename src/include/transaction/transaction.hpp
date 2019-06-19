@@ -54,13 +54,10 @@ public:
 public:
 	void PushCatalogEntry(CatalogEntry *entry);
 	//! Create deleted entries in the undo buffer
-	void PushDeletedEntries(index_t offset, index_t count, VersionChunk *storage,
-	                        VersionInfo *version_pointers[]);
+	void PushDeletedEntries(index_t offset, index_t count, VersionChunk *storage, VersionInfo *version_pointers[]);
 	//! Push an old tuple version in the undo buffer
 	void PushTuple(UndoFlags flag, index_t offset, VersionChunk *storage);
-	//! Push a query into the undo buffer, this will be written to the WAL for
-	//! redo purposes
-
+	//! Push a query into the undo buffer
 	void PushQuery(string query);
 
 	//! Commit the current transaction with the given commit identifier

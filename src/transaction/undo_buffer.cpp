@@ -14,6 +14,9 @@
 using namespace duckdb;
 using namespace std;
 
+static void CleanupIndexInsert(VersionInfo *info);
+static void RollbackIndexInsert(VersionInfo *info);
+
 data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, index_t len) {
 	UndoEntry entry;
 	entry.type = type;
@@ -34,7 +37,8 @@ void UndoBuffer::Cleanup() {
 	//  (2) there is no active transaction with start_id < commit_id of this
 	//  transaction
 	for (auto &entry : entries) {
-		if (entry.type == UndoFlags::CATALOG_ENTRY) {
+		switch (entry.type) {
+		case UndoFlags::CATALOG_ENTRY: {
 			CatalogEntry *catalog_entry = *((CatalogEntry **)entry.data.get());
 			// destroy the backed up entry: it is no longer required
 			assert(catalog_entry->parent);
@@ -45,43 +49,16 @@ void UndoBuffer::Cleanup() {
 				}
 				catalog_entry->parent->child = move(catalog_entry->child);
 			}
-		} else if (entry.type == UndoFlags::INSERT_TUPLE || entry.type == UndoFlags::DELETE_TUPLE ||
-		           entry.type == UndoFlags::UPDATE_TUPLE) {
+			break;
+		}
+		case UndoFlags::DELETE_TUPLE:
+		case UndoFlags::UPDATE_TUPLE:
+		case UndoFlags::INSERT_TUPLE: {
 			// undo this entry
 			auto info = (VersionInfo *)entry.data.get();
 			if (entry.type == UndoFlags::DELETE_TUPLE || entry.type == UndoFlags::UPDATE_TUPLE) {
 				if (info->table->indexes.size() > 0) {
-					// fetch the row identifiers
-					row_t row_number;
-					VersionInfo *current_info = info;
-					while (!current_info->chunk) {
-						assert(current_info->prev.pointer);
-						current_info = current_info->prev.pointer;
-					}
-					row_number = current_info->chunk->start + current_info->prev.entry;
-
-					assert(info->tuple_data);
-					Value ptr = Value::BIGINT(row_number);
-					uint8_t *alternate_version_pointers[1];
-					uint64_t alternate_version_index[1];
-
-					alternate_version_pointers[0] = info->tuple_data;
-					alternate_version_index[0] = 0;
-
-					DataChunk result;
-					result.Initialize(info->table->types);
-
-					vector<column_t> column_ids;
-					for (size_t i = 0; i < info->table->types.size(); i++) {
-						column_ids.push_back(i);
-					}
-					Vector row_identifiers(ptr);
-
-					info->table->RetrieveVersionedData(result, column_ids, alternate_version_pointers,
-					                                   alternate_version_index, 1);
-					for (auto &index : info->table->indexes) {
-						index->Delete(result, row_identifiers);
-					}
+					CleanupIndexInsert(info);
 				}
 			}
 			if (info->chunk) {
@@ -96,17 +73,110 @@ void UndoBuffer::Cleanup() {
 					parent->next->prev.pointer = parent;
 				}
 			}
-		} else {
-			assert(entry.type == UndoFlags::EMPTY_ENTRY || entry.type == UndoFlags::QUERY);
+			break;
+		}
+		case UndoFlags::QUERY:
+			break;
+		default:
+			assert(entry.type == UndoFlags::EMPTY_ENTRY);
+			break;
 		}
 	}
 }
 
-static void WriteCatalogEntry(WriteAheadLog *log, CatalogEntry *entry) {
-	if (!log) {
+class CommitState {
+public:
+	WriteAheadLog *log;
+	transaction_t commit_id;
+	UndoFlags current_op;
+
+	DataTable *current_table;
+	unique_ptr<DataChunk> chunk;
+	index_t row_identifiers[STANDARD_VECTOR_SIZE];
+public:
+	template <bool HAS_LOG>
+	void CommitEntry(UndoEntry &entry);
+
+	void Flush(UndoFlags new_op);
+private:
+	void SwitchTable(DataTable *table, UndoFlags new_op);
+
+	void PrepareAppend(UndoFlags op);
+	void AppendToChunk(VersionInfo *info);
+
+
+	void WriteCatalogEntry(CatalogEntry *entry);
+	void WriteDelete(VersionInfo *info);
+	void WriteUpdate(VersionInfo *info);
+	void WriteInsert(VersionInfo *info);
+
+};
+
+void CommitState::Flush(UndoFlags new_op) {
+	auto prev_op = current_op;
+	current_op = new_op;
+	if (prev_op == UndoFlags::EMPTY_ENTRY) {
+		// nothing to flush
 		return;
 	}
+	if (!chunk || chunk->size() == 0) {
+		return;
+	}
+	switch (prev_op) {
+	case UndoFlags::INSERT_TUPLE:
+		log->WriteInsert(*chunk);
+		break;
+	case UndoFlags::DELETE_TUPLE:
+		log->WriteDelete(*chunk);
+		break;
+	case UndoFlags::UPDATE_TUPLE:
+		log->WriteUpdate(*chunk);
+		break;
+	default:
+		break;
+	}
+}
 
+void CommitState::SwitchTable(DataTable *table, UndoFlags new_op) {
+	if (current_table != table) {
+		// flush any previous appends/updates/deletes (if any)
+		Flush(new_op);
+
+		// write the current table to the log
+		log->WriteSetTable(table->schema, table->table);
+		current_table = table;
+		chunk = nullptr;
+	}
+}
+
+void CommitState::AppendToChunk(VersionInfo *info) {
+	if (info->chunk) {
+		// fetch from base table
+		auto id = info->prev.entry;
+		index_t current_offset = chunk->size();
+		for (index_t i = 0; i < current_table->types.size(); i++) {
+			index_t value_size = GetTypeIdSize(chunk->data[i].type);
+			data_ptr_t storage_pointer = info->chunk->GetPointerToRow(i, info->chunk->start + id);
+			memcpy(chunk->data[i].data + value_size * current_offset, storage_pointer, value_size);
+			chunk->data[i].count++;
+		}
+	} else {
+		// fetch from tuple data
+		assert(info->prev.pointer->tuple_data);
+		auto tuple_data = info->prev.pointer->tuple_data;
+		index_t current_offset = chunk->size();
+		for (index_t i = 0; i < current_table->types.size(); i++) {
+			auto type = chunk->data[i].type;
+			index_t value_size = GetTypeIdSize(type);
+			memcpy(chunk->data[i].data + value_size * current_offset, tuple_data, value_size);
+			tuple_data += value_size;
+			chunk->data[i].count++;
+		}
+	}
+}
+
+void CommitState::WriteCatalogEntry(CatalogEntry *entry) {
+	assert(log);
 	// look at the type of the parent entry
 	auto parent = entry->parent;
 	switch (parent->type) {
@@ -154,154 +224,198 @@ static void WriteCatalogEntry(WriteAheadLog *log, CatalogEntry *entry) {
 	}
 }
 
-static void FlushAppends(WriteAheadLog *log, unordered_map<DataTable *, unique_ptr<DataChunk>> &appends) {
-	// write appends that were not flushed yet to the WAL
-	assert(log);
-	if (appends.size() == 0) {
-		return;
+void CommitState::PrepareAppend(UndoFlags op) {
+	if (!chunk) {
+		chunk = make_unique<DataChunk>();
+		switch(op) {
+		case UndoFlags::INSERT_TUPLE:
+			chunk->Initialize(current_table->types);
+			break;
+		case UndoFlags::DELETE_TUPLE: {
+			vector<TypeId> delete_types = { ROW_TYPE };
+			chunk->Initialize(delete_types);
+			break;
+		}
+		default: {
+			assert(op == UndoFlags::UPDATE_TUPLE);
+			auto update_types = current_table->types;
+			update_types.push_back(ROW_TYPE);
+			chunk->Initialize(update_types);
+			break;
+		}
+		}
 	}
-	for (auto &entry : appends) {
-		auto dtable = entry.first;
-		auto chunk = entry.second.get();
-		auto &schema_name = dtable->schema;
-		auto &table_name = dtable->table;
-		log->WriteInsert(schema_name, table_name, *chunk);
+	if (chunk->size() >= STANDARD_VECTOR_SIZE) {
+		Flush(op);
+		chunk->Reset();
 	}
-	appends.clear();
 }
 
-static void WriteTuple(WriteAheadLog *log, VersionInfo *entry,
-                       unordered_map<DataTable *, unique_ptr<DataChunk>> &appends) {
-	if (!log) {
+void CommitState::WriteDelete(VersionInfo *info) {
+	assert(log);
+	assert(info->chunk);
+	// switch to the current table, if necessary
+	SwitchTable(&info->chunk->table, UndoFlags::DELETE_TUPLE);
+
+	// prepare the delete chunk for appending
+	PrepareAppend(UndoFlags::DELETE_TUPLE);
+
+	// write the rowid of this tuple
+	index_t rowid = info->chunk->start + info->prev.entry;
+	auto row_ids = (row_t *)chunk->data[0].data;
+	row_ids[chunk->data[0].count++] = rowid;
+}
+
+void CommitState::WriteUpdate(VersionInfo *info) {
+	assert(log);
+	if (!info->chunk) {
+		// tuple was deleted or updated after this tuple update; no need to write anything
 		return;
 	}
-	// we only insert tuples of insertions into the WAL
-	// for deletions and updates we instead write the queries
-	if (entry->tuple_data) {
-		return;
-	}
+	// switch to the current table, if necessary
+	SwitchTable(&info->chunk->table, UndoFlags::UPDATE_TUPLE);
+
+	// prepare the update chunk for appending
+	PrepareAppend(UndoFlags::UPDATE_TUPLE);
+
+	// append the updated info to the chunk
+	AppendToChunk(info);
+	// now update the rowid to the final block
+	index_t rowid = info->chunk->start + info->prev.entry;
+	auto &row_id_vector = chunk->data[chunk->column_count - 1];
+	auto row_ids = (row_t *)row_id_vector.data;
+	row_ids[row_id_vector.count++] = rowid;
+}
+
+void CommitState::WriteInsert(VersionInfo *info) {
+	assert(log);
+	assert(!info->tuple_data);
 	// get the data for the insertion
 	VersionChunk *storage = nullptr;
-	DataChunk *chunk = nullptr;
-	if (entry->chunk) {
+	if (info->chunk) {
 		// versioninfo refers to data inside VersionChunk
 		// fetch the data from the base rows
-		storage = entry->chunk;
+		storage = info->chunk;
 	} else {
 		// insertion was updated or deleted after insertion in the same
 		// transaction iterate back to the chunk to find the VersionChunk
-		auto prev = entry->prev.pointer;
+		auto prev = info->prev.pointer;
 		while (!prev->chunk) {
-			assert(entry->prev.pointer);
+			assert(info->prev.pointer);
 			prev = prev->prev.pointer;
 		}
 		storage = prev->chunk;
 	}
 
-	DataTable *dtable = &storage->table;
-	// first lookup the chunk to which we will append this entry to
-	auto append_entry = appends.find(dtable);
-	if (append_entry != appends.end()) {
-		// entry exists, check if we need to flush it
-		chunk = append_entry->second.get();
-		if (chunk->size() == STANDARD_VECTOR_SIZE) {
-			// entry is full: flush to WAL
-			auto &schema_name = dtable->schema;
-			auto &table_name = dtable->table;
-			log->WriteInsert(schema_name, table_name, *chunk);
-			chunk->Reset();
-		}
-	} else {
-		// entry does not exist: need to make a new entry
-		auto &types = dtable->types;
-		auto new_chunk = make_unique<DataChunk>();
-		chunk = new_chunk.get();
-		chunk->Initialize(types);
-		appends.insert(make_pair(dtable, move(new_chunk)));
-	}
+	// switch to the current table, if necessary
+	SwitchTable(&storage->table, UndoFlags::INSERT_TUPLE);
 
-	if (entry->chunk) {
-		auto id = entry->prev.entry;
-		// append the tuple to the current chunk
-		index_t current_offset = chunk->size();
-		for (index_t i = 0; i < chunk->column_count; i++) {
-			index_t value_size = GetTypeIdSize(chunk->data[i].type);
-			data_ptr_t storage_pointer = storage->GetPointerToRow(i, storage->start + id);
-			memcpy(chunk->data[i].data + value_size * current_offset, storage_pointer, value_size);
-			chunk->data[i].count++;
+	// prepare the insert chunk for appending
+	PrepareAppend(UndoFlags::INSERT_TUPLE);
+
+	// now append the tuple to the current chunk
+	AppendToChunk(info);
+}
+
+template <bool HAS_LOG>
+void CommitState::CommitEntry(UndoEntry &entry) {
+	if (HAS_LOG && entry.type != current_op) {
+		Flush(entry.type);
+		chunk = nullptr;
+	}
+	switch (entry.type) {
+	case UndoFlags::CATALOG_ENTRY: {
+		// set the commit timestamp of the catalog entry to the given id
+		CatalogEntry *catalog_entry = *((CatalogEntry **)entry.data.get());
+		assert(catalog_entry->parent);
+		catalog_entry->parent->timestamp = commit_id;
+
+		if (HAS_LOG) {
+			// push the catalog update to the WAL
+			WriteCatalogEntry(catalog_entry);
 		}
-	} else {
-		assert(entry->prev.pointer->tuple_data);
-		auto tuple_data = entry->prev.pointer->tuple_data;
-		// append the tuple to the current chunk
-		index_t current_offset = chunk->size();
-		for (index_t i = 0; i < chunk->column_count; i++) {
-			auto type = chunk->data[i].type;
-			index_t value_size = GetTypeIdSize(type);
-			memcpy(chunk->data[i].data + value_size * current_offset, tuple_data, value_size);
-			tuple_data += value_size;
-			chunk->data[i].count++;
+		break;
+	}
+	case UndoFlags::DELETE_TUPLE:
+	case UndoFlags::UPDATE_TUPLE:
+	case UndoFlags::INSERT_TUPLE: {
+		auto info = (VersionInfo *)entry.data.get();
+		// Before we set the commit timestamp we write the entry to the WAL. When we set the commit timestamp it enables
+		// other transactions to overwrite the data, but BEFORE we set the commit timestamp the other transactions will
+		// get a concurrency conflict error if they attempt ot modify these tuples. Hence BEFORE we set the commit
+		// timestamp we can safely access the data in the base table without needing any locks.
+		switch (entry.type) {
+		case UndoFlags::UPDATE_TUPLE:
+			if (HAS_LOG) {
+				WriteUpdate(info);
+			}
+			break;
+		case UndoFlags::DELETE_TUPLE:
+			info->table->cardinality--;
+			if (HAS_LOG) {
+				WriteDelete(info);
+			}
+			break;
+		default: // UndoFlags::INSERT_TUPLE
+			assert(entry.type == UndoFlags::INSERT_TUPLE);
+			info->table->cardinality++;
+			if (HAS_LOG) {
+				// push the tuple insert to the WAL
+				WriteInsert(info);
+			}
+			break;
 		}
+		// set the commit timestamp of the entry
+		info->version_number = commit_id;
+		break;
+	}
+	case UndoFlags::QUERY: {
+		if (HAS_LOG) {
+			string query = string((char *)entry.data.get());
+			log->WriteQuery(query);
+		}
+		break;
+	}
+	default:
+		throw NotImplementedException("UndoBuffer - don't know how to commit this type!");
 	}
 }
 
 void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
-	// the list of appends committed by this transaction for each table
-	unordered_map<DataTable *, unique_ptr<DataChunk>> appends;
-	for (auto &entry : entries) {
-		if (entry.type == UndoFlags::CATALOG_ENTRY) {
-			// set the commit timestamp of the catalog entry to the given id
-			CatalogEntry *catalog_entry = *((CatalogEntry **)entry.data.get());
-			assert(catalog_entry->parent);
-			catalog_entry->parent->timestamp = commit_id;
-
-			// push the catalog update to the WAL
-			WriteCatalogEntry(log, catalog_entry);
-		} else if (entry.type == UndoFlags::INSERT_TUPLE || entry.type == UndoFlags::DELETE_TUPLE ||
-		           entry.type == UndoFlags::UPDATE_TUPLE) {
-			// set the commit timestamp of the entry
-			auto info = (VersionInfo *)entry.data.get();
-			info->version_number = commit_id;
-
-			// update the cardinality of the base table
-			if (entry.type == UndoFlags::INSERT_TUPLE) {
-				// insertion
-				info->table->cardinality++;
-			} else if (entry.type == UndoFlags::DELETE_TUPLE) {
-				// deletion
-				info->table->cardinality--;
-			}
-
-			// push the tuple update to the WAL
-			WriteTuple(log, info, appends);
-		} else if (entry.type == UndoFlags::QUERY) {
-			string query = string((char *)entry.data.get());
-			if (log) {
-				// before we write a query we write any scheduled appends
-				// as the queries can reference previously appended data
-				FlushAppends(log, appends);
-				log->WriteQuery(query);
-			}
-		} else {
-			throw NotImplementedException("UndoBuffer - don't know how to commit this type!");
-		}
-	}
+	CommitState state;
+	state.log = log;
+	state.commit_id = commit_id;
+	state.current_table = nullptr;
+	state.current_op = UndoFlags::EMPTY_ENTRY;
 	if (log) {
-		// flush any remaining appends
-		FlushAppends(log, appends);
+		// commit WITH write ahead log
+		for (auto &entry : entries) {
+			state.CommitEntry<true>(entry);
+		}
+		// final flush after writing
+		state.Flush(UndoFlags::EMPTY_ENTRY);
+	} else {
+		// comit WITHOUT write ahead log
+		for (auto &entry : entries) {
+			state.CommitEntry<false>(entry);
+		}
 	}
 }
 
 void UndoBuffer::Rollback() {
 	for (index_t i = entries.size(); i > 0; i--) {
 		auto &entry = entries[i - 1];
-		if (entry.type == UndoFlags::CATALOG_ENTRY) {
+		switch (entry.type) {
+		case UndoFlags::CATALOG_ENTRY: {
 			// undo this catalog entry
 			CatalogEntry *catalog_entry = *((CatalogEntry **)entry.data.get());
 			assert(catalog_entry->set);
 			catalog_entry->set->Undo(catalog_entry);
-		} else if (entry.type == UndoFlags::INSERT_TUPLE || entry.type == UndoFlags::DELETE_TUPLE ||
-		           entry.type == UndoFlags::UPDATE_TUPLE) {
+			break;
+		}
+		case UndoFlags::DELETE_TUPLE:
+		case UndoFlags::UPDATE_TUPLE:
+		case UndoFlags::INSERT_TUPLE: {
 			// undo this entry
 			auto info = (VersionInfo *)entry.data.get();
 			if (entry.type == UndoFlags::UPDATE_TUPLE || entry.type == UndoFlags::INSERT_TUPLE) {
@@ -309,31 +423,74 @@ void UndoBuffer::Rollback() {
 				// delete base table entry from index
 				assert(info->chunk);
 				if (info->table->indexes.size() > 0) {
-					row_t row_id = info->chunk->start + info->prev.entry;
-					Value ptr = Value::BIGINT(row_id);
-
-					DataChunk result;
-					result.Initialize(info->table->types);
-
-					vector<column_t> column_ids;
-					for (size_t i = 0; i < info->table->types.size(); i++) {
-						column_ids.push_back(i);
-					}
-					Vector row_identifiers(ptr);
-
-					info->chunk->table.RetrieveTupleFromBaseTable(result, info->chunk, column_ids, row_id);
-					for (auto &index : info->table->indexes) {
-						index->Delete(result, row_identifiers);
-					}
+					RollbackIndexInsert(info);
 				}
 			}
 			assert(info->chunk);
 			// parent needs to refer to a storage chunk because of our transactional model
 			// the current entry is still dirty, hence no other transaction can have modified it
 			info->chunk->Undo(info);
-		} else {
-			assert(entry.type == UndoFlags::EMPTY_ENTRY || entry.type == UndoFlags::QUERY);
+			break;
+		}
+		case UndoFlags::QUERY:
+			break;
+		default:
+			assert(entry.type == UndoFlags::EMPTY_ENTRY);
+			break;
 		}
 		entry.type = UndoFlags::EMPTY_ENTRY;
+	}
+}
+
+static void CleanupIndexInsert(VersionInfo *info) {
+	// fetch the row identifiers
+	row_t row_number;
+	VersionInfo *current_info = info;
+	while (!current_info->chunk) {
+		assert(current_info->prev.pointer);
+		current_info = current_info->prev.pointer;
+	}
+	row_number = current_info->chunk->start + current_info->prev.entry;
+
+	assert(info->tuple_data);
+	uint8_t *alternate_version_pointers[1];
+	uint64_t alternate_version_index[1];
+
+	alternate_version_pointers[0] = info->tuple_data;
+	alternate_version_index[0] = 0;
+
+	DataChunk result;
+	result.Initialize(info->table->types);
+
+	vector<column_t> column_ids;
+	for (size_t i = 0; i < info->table->types.size(); i++) {
+		column_ids.push_back(i);
+	}
+
+	Value ptr = Value::BIGINT(row_number);
+	Vector row_identifiers(ptr);
+
+	info->table->RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index, 1);
+	for (auto &index : info->table->indexes) {
+		index->Delete(result, row_identifiers);
+	}
+}
+
+static void RollbackIndexInsert(VersionInfo *info) {
+	row_t row_id = info->chunk->start + info->prev.entry;
+	Value ptr = Value::BIGINT(row_id);
+
+	DataChunk result;
+	result.Initialize(info->table->types);
+
+	vector<column_t> column_ids;
+	for (size_t i = 0; i < info->table->types.size(); i++) {
+		column_ids.push_back(i);
+	}
+	Vector row_identifiers(ptr);
+
+	info->chunk->table.RetrieveTupleFromBaseTable(result, info->chunk, column_ids, row_id);
+	for (auto &index : info->table->indexes) {
+		index->Delete(result, row_identifiers);
 	}
 }

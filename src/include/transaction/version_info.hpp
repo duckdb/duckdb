@@ -27,4 +27,4 @@ struct VersionInfo {
 	data_ptr_t tuple_data;
 };
 
-}
+} // namespace duckdb

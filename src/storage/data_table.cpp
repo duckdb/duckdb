@@ -409,78 +409,76 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	StringHeap heap;
 	updates.MoveStringsToHeap(heap);
 
-	{
-		// now perform the actual update
-		Transaction &transaction = context.ActiveTransaction();
+	// now perform the actual update
+	Transaction &transaction = context.ActiveTransaction();
 
-		auto ids = (row_t *)row_identifiers.data;
-		auto sel_vector = row_identifiers.sel_vector;
-		auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
-		// first find the chunk the row ids belong to
-		auto chunk = GetChunk(first_id);
+	auto ids = (row_t *)row_identifiers.data;
+	auto sel_vector = row_identifiers.sel_vector;
+	auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
+	// first find the chunk the row ids belong to
+	auto chunk = GetChunk(first_id);
 
-		// get an exclusive lock on the chunk
-		auto lock = chunk->lock.GetExclusiveLock();
+	// get an exclusive lock on the chunk
+	auto lock = chunk->lock.GetExclusiveLock();
 
-		// now update the entries
-		// first check for any conflicts before we insert anything into the undo buffer
-		// we check for any conflicts in ALL tuples first before inserting anything into the undo buffer
-		// to make sure that we complete our entire update transaction after we do
-		// this prevents inconsistencies after rollbacks, etc...
-		VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
-			auto id = ids[i] - chunk->start;
-			// assert that all ids in the vector belong to the same chunk
-			assert(id < chunk->count);
-			// check for version conflicts
-			auto version = chunk->version_pointers[id];
-			if (version) {
-				if (version->version_number >= TRANSACTION_ID_START &&
-				    version->version_number != transaction.transaction_id) {
-					throw TransactionException("Conflict on tuple update!");
-				}
+	// now update the entries
+	// first check for any conflicts before we insert anything into the undo buffer
+	// we check for any conflicts in ALL tuples first before inserting anything into the undo buffer
+	// to make sure that we complete our entire update transaction after we do
+	// this prevents inconsistencies after rollbacks, etc...
+	VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
+		auto id = ids[i] - chunk->start;
+		// assert that all ids in the vector belong to the same chunk
+		assert(id < chunk->count);
+		// check for version conflicts
+		auto version = chunk->version_pointers[id];
+		if (version) {
+			if (version->version_number >= TRANSACTION_ID_START &&
+			    version->version_number != transaction.transaction_id) {
+				throw TransactionException("Conflict on tuple update!");
 			}
-		});
-
-		// now we update any indexes, we do this before inserting anything into the undo buffer
-		UpdateIndexes(table, column_ids, updates, row_identifiers);
-
-		// now we know thre are no conflicts, move the tuples into the undo buffer and mark the chunk as dirty
-		VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
-			auto id = ids[i] - chunk->start;
-			// move the current tuple data into the undo buffer
-			transaction.PushTuple(UndoFlags::UPDATE_TUPLE, id, chunk);
-			// mark the segment as dirty in the chunk
-			chunk->SetDirtyFlag(id, 1, true);
-		});
-
-		// now update the columns in the base table
-		for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-			auto column_id = column_ids[col_idx];
-			auto size = GetTypeIdSize(updates.data[col_idx].type);
-
-			Vector *update_vector = &updates.data[col_idx];
-			Vector null_vector;
-			if (update_vector->nullmask.any()) {
-				// has NULL values in the nullmask
-				// copy them to a temporary vector
-				null_vector.Initialize(update_vector->type, false);
-				null_vector.count = update_vector->count;
-				VectorOperations::CopyToStorage(*update_vector, null_vector.data);
-				update_vector = &null_vector;
-			}
-
-			VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
-				auto dataptr = chunk->GetPointerToRow(column_ids[col_idx], ids[i]);
-				auto update_index = update_vector->sel_vector ? update_vector->sel_vector[k] : k;
-				memcpy(dataptr, update_vector->data + update_index * size, size);
-			});
-
-			// update the statistics with the new data
-			statistics[column_id].Update(updates.data[col_idx]);
 		}
-		// after a successful update move the strings into the chunk
-		chunk->string_heap.MergeHeap(heap);
+	});
+
+	// now we update any indexes, we do this before inserting anything into the undo buffer
+	UpdateIndexes(table, column_ids, updates, row_identifiers);
+
+	// now we know thre are no conflicts, move the tuples into the undo buffer and mark the chunk as dirty
+	VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
+		auto id = ids[i] - chunk->start;
+		// move the current tuple data into the undo buffer
+		transaction.PushTuple(UndoFlags::UPDATE_TUPLE, id, chunk);
+		// mark the segment as dirty in the chunk
+		chunk->SetDirtyFlag(id, 1, true);
+	});
+
+	// now update the columns in the base table
+	for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+		auto column_id = column_ids[col_idx];
+		auto size = GetTypeIdSize(updates.data[col_idx].type);
+
+		Vector *update_vector = &updates.data[col_idx];
+		Vector null_vector;
+		if (update_vector->nullmask.any()) {
+			// has NULL values in the nullmask
+			// copy them to a temporary vector
+			null_vector.Initialize(update_vector->type, false);
+			null_vector.count = update_vector->count;
+			VectorOperations::CopyToStorage(*update_vector, null_vector.data);
+			update_vector = &null_vector;
+		}
+
+		VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
+			auto dataptr = chunk->GetPointerToRow(column_ids[col_idx], ids[i]);
+			auto update_index = update_vector->sel_vector ? update_vector->sel_vector[k] : k;
+			memcpy(dataptr, update_vector->data + update_index * size, size);
+		});
+
+		// update the statistics with the new data
+		statistics[column_id].Update(updates.data[col_idx]);
 	}
+	// after a successful update move the strings into the chunk
+	chunk->string_heap.MergeHeap(heap);
 }
 
 //===--------------------------------------------------------------------===//

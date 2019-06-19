@@ -62,13 +62,13 @@ void Transaction::PushTuple(UndoFlags flags, index_t offset, VersionChunk *stora
 	storage->table.serializer.Serialize(columns, 0, tuple_data);
 }
 
+data_ptr_t Transaction::PushTuple(UndoFlags flags, index_t data_size) {
+	return undo_buffer.CreateEntry(flags, sizeof(VersionInfo) + data_size);
+}
+
 void Transaction::PushQuery(string query) {
 	char *blob = (char *)undo_buffer.CreateEntry(UndoFlags::QUERY, query.size() + 1);
 	strcpy(blob, query.c_str());
-}
-
-data_ptr_t Transaction::PushTuple(UndoFlags flags, index_t data_size) {
-	return undo_buffer.CreateEntry(flags, sizeof(VersionInfo) + data_size);
 }
 
 void Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) {

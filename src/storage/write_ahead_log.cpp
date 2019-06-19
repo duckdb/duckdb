@@ -86,18 +86,39 @@ void WriteAheadLog::WriteDropSchema(SchemaCatalogEntry *entry) {
 }
 
 //===--------------------------------------------------------------------===//
-// INSERT
+// DATA
 //===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteInsert(string &schema, string &table, DataChunk &chunk) {
-	if (chunk.size() == 0) {
-		return;
-	}
+void WriteAheadLog::WriteSetTable(string &schema, string &table) {
+	writer->Write<WALType>(WALType::USE_TABLE);
+	writer->WriteString(schema);
+	writer->WriteString(table);
+}
+
+void WriteAheadLog::WriteInsert(DataChunk &chunk) {
+	assert(chunk.size() > 0);
 	chunk.Verify();
 	assert(!chunk.sel_vector); // "Cannot insert into WAL from chunk with SEL vector"
 
 	writer->Write<WALType>(WALType::INSERT_TUPLE);
-	writer->WriteString(schema);
-	writer->WriteString(table);
+	chunk.Serialize(*writer);
+}
+
+void WriteAheadLog::WriteDelete(DataChunk &chunk) {
+	assert(chunk.size() > 0);
+	assert(chunk.column_count == 1 && chunk.data[0].type == ROW_TYPE);
+	chunk.Verify();
+	assert(!chunk.sel_vector); // "Cannot insert into WAL from chunk with SEL vector"
+
+	writer->Write<WALType>(WALType::DELETE_TUPLE);
+	chunk.Serialize(*writer);
+}
+
+void WriteAheadLog::WriteUpdate(DataChunk &chunk) {
+	assert(chunk.size() > 0);
+	chunk.Verify();
+	assert(!chunk.sel_vector); // "Cannot insert into WAL from chunk with SEL vector"
+
+	writer->Write<WALType>(WALType::UPDATE_TUPLE);
 	chunk.Serialize(*writer);
 }
 
