@@ -42,4 +42,4 @@ for f in files:
     key = '%s/%s' % (folder, base)
     print("%s\t->\thttps://download.duckdb.org/%s " % (f, key))
 
-    subprocess.call(['curl', '-s','--ftp-create-dirs', '--ftp-pasv','--ftp-method', 'nocwd','-m','60', '-T', f, 'ftp://ftp10635776-duckdb:%s@wp10635776.server-he.de/%s' % (secret_key, key)])
+    subprocess.call(['curl', '-s','--ftp-create-dirs', '--ftp-pasv','--ftp-method', 'nocwd','-m','60', '--retry', '10', '-T', f, 'ftp://ftp10635776-duckdb:%s@wp10635776.server-he.de/%s' % (secret_key, key)])
