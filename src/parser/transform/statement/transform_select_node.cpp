@@ -12,14 +12,13 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 	unique_ptr<QueryNode> node;
 	switch (stmt->op) {
 	case SETOP_NONE: {
-		if (!stmt->targetList) {
-			throw ParserException("SELECT clause without selection list");
-		}
 		node = make_unique<SelectNode>();
 		auto result = (SelectNode *)node.get();
 		if (stmt->valuesLists) {
 			TransformValuesList(stmt->valuesLists, result->values);
 			return node;
+		} else if (!stmt->targetList) {
+			throw ParserException("SELECT clause without selection list");
 		}
 		// checks distinct clause
 		if (stmt->distinctClause != NULL) {
