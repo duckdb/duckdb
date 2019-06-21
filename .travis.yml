@@ -152,7 +152,7 @@ matrix:
 
       before_script:
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
-        - C:/Python37-x64/python.exe -m pip install boto3
+        - choco install curl -y"
 
       script:
         - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64
@@ -172,7 +172,7 @@ matrix:
 
       before_script:
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
-        - C:/Python37-x64/python.exe -m pip install boto3
+        - choco install curl -y"
 
       script:
         - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32
@@ -244,7 +244,7 @@ matrix:
         - wget "https://github.com/hannesmuehleisen/choco-rtools/raw/master/rtools.3.5.0.nupkg"
         - choco install rtools -s rtools.3.5.0.nupkg -f -y
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
-        - C:/Python37-x64/python.exe -m pip install boto3
+        - choco install curl -y"
 
       script:
         - export "PATH=/c/Rtools/bin:$PATH"
@@ -307,9 +307,10 @@ matrix:
 #        - choco install python3 --version 3.6.8 --sidebyside -y --force --params "/InstallDir:C:\Python36-x64"
         - choco install python2 --version 2.7.16 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python27"
         - choco install python2 --version 2.7.16 --sidebyside -y --force --params "/InstallDir:C:\Python27-x64"
+        - choco install curl -y"
 
         - C:/Python37-x64/python.exe -m pip install --upgrade pip
-        - C:/Python37-x64/python.exe -m pip install "cibuildwheel==0.10.2" boto3
+        - C:/Python37-x64/python.exe -m pip install "cibuildwheel==0.10.2"
         - C:/Python37-x64/python.exe -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
 
       script:
