@@ -21,7 +21,7 @@ if secret_key is None:
     print("Can't find FTP_PASSWORD in env ")
     exit(2)
 
-ftp = ftplib.FTP_TLS('wp10635776.server-he.de','ftp10635776-duckdb',secret_key)
+ftp = ftplib.FTP('wp10635776.server-he.de','ftp10635776-duckdb',secret_key)
 
 
 files = sys.argv[2:]
