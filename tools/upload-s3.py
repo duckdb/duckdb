@@ -21,7 +21,9 @@ if secret_key is None:
     print("Can't find FTP_PASSWORD in env ")
     exit(2)
 
-ftp = ftplib.FTP('wp10635776.server-he.de','ftp10635776-duckdb',secret_key)
+ftp = ftplib.FTP_TLS('wp10635776.server-he.de','ftp10635776-duckdb',secret_key)
+ftp.set_debuglevel(1)
+ftp.set_pasv(True)
 
 
 files = sys.argv[2:]
@@ -55,8 +57,9 @@ for f in files:
 
     file = open(f,'rb')
     ftp.storbinary('STOR %s' % base, file)
-    ftp.sendcmd('SITE CHMOD 755 %s' % base)
-
     file.close()
 
-ftp.quit()
+    ftp.sendcmd('SITE CHMOD 755 %s' % base)
+
+
+ftp.close()
