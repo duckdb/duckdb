@@ -34,6 +34,9 @@ TEST_CASE("Test scalar queries", "[scalarquery]") {
 
 	// cannot reference columns like this
 	REQUIRE_FAIL(con.Query("SELECT 1 AS a, a * 2"));
+	// query without selection list
+	REQUIRE_FAIL(con.Query("SELECT"));
+	REQUIRE_FAIL(con.Query("SELECT FROM (SELECT 42) v1"));
 }
 
 TEST_CASE("Test scalar queries from SQLLogicTests", "[scalarquery]") {
