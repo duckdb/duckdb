@@ -529,6 +529,30 @@ TEST_CASE("Test copy from web_page csv", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 13, {4, 1, 4}));
 }
 
+TEST_CASE("Test copy from greek-utf8 csv", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+	auto csv_file = fs.JoinPath(csv_path, "greek_utf8.csv");
+	WriteCSV(csv_file, greek_utf8);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE greek_utf8(i INTEGER, j VARCHAR, k INTEGER)"));
+
+	result = con.Query("COPY greek_utf8 FROM '" + csv_file + "' DELIMITER '|'");
+	REQUIRE(CHECK_COLUMN(result, 0, {8}));
+
+	result = con.Query("SELECT * FROM greek_utf8 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1689, 1690, 41561, 45804, 51981, 171067, 182773, 607808}));
+	REQUIRE(CHECK_COLUMN(result, 1,
+	                     {"\x30\x30\x69\\047\x6d", "\x30\x30\x69\\047\x76", "\x32\x30\x31\x35\xe2\x80\x8e",
+	                      "\x32\x31\xcf\x80", "\x32\x34\x68\x6f\x75\x72\x73\xe2\x80\xac",
+	                      "\x61\x72\x64\x65\xcc\x80\x63\x68", "\x61\xef\xac\x81",
+	                      "\x70\x6f\x76\x65\x72\x74\x79\xe2\x80\xaa"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {2, 2, 1, 1, 1, 2, 1, 1}));
+}
+
 TEST_CASE("Test date copy", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

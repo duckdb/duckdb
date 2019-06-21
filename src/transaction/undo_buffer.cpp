@@ -14,7 +14,7 @@
 using namespace duckdb;
 using namespace std;
 
-constexpr uint32_t DEFAULT_UNDO_CHUNK_SIZE = 4096*3;
+constexpr uint32_t DEFAULT_UNDO_CHUNK_SIZE = 4096 * 3;
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
 
 static void CleanupIndexInsert(VersionInfo *info);
@@ -38,9 +38,9 @@ UndoChunk::~UndoChunk() {
 }
 
 data_ptr_t UndoChunk::WriteEntry(UndoFlags type, uint32_t len) {
-	*((UndoFlags*)(data.get() + current_position)) = type;
+	*((UndoFlags *)(data.get() + current_position)) = type;
 	current_position += sizeof(UndoFlags);
-	*((uint32_t*)(data.get() + current_position)) = len;
+	*((uint32_t *)(data.get() + current_position)) = len;
 	current_position += sizeof(uint32_t);
 
 	data_ptr_t result = data.get() + current_position;
@@ -52,7 +52,8 @@ data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, index_t len) {
 	assert(len <= std::numeric_limits<uint32_t>::max());
 	index_t needed_space = len + UNDO_ENTRY_HEADER_SIZE;
 	if (head->current_position + needed_space >= head->maximum_size) {
-		auto new_chunk = make_unique<UndoChunk>(needed_space > DEFAULT_UNDO_CHUNK_SIZE ? needed_space : DEFAULT_UNDO_CHUNK_SIZE);
+		auto new_chunk =
+		    make_unique<UndoChunk>(needed_space > DEFAULT_UNDO_CHUNK_SIZE ? needed_space : DEFAULT_UNDO_CHUNK_SIZE);
 		head->prev = new_chunk.get();
 		new_chunk->next = move(head);
 		head = move(new_chunk);
@@ -60,17 +61,16 @@ data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, index_t len) {
 	return head->WriteEntry(type, len);
 }
 
-template<class T>
-void UndoBuffer::IterateEntries(T &&callback) {
+template <class T> void UndoBuffer::IterateEntries(T &&callback) {
 	// iterate in insertion order: start with the tail
 	auto current = tail;
-	while(current) {
+	while (current) {
 		data_ptr_t start = current->data.get();
 		data_ptr_t end = start + current->current_position;
-		while(start < end) {
-			UndoFlags type = *((UndoFlags*) start);
+		while (start < end) {
+			UndoFlags type = *((UndoFlags *)start);
 			start += sizeof(UndoFlags);
-			uint32_t len = *((uint32_t*) start);
+			uint32_t len = *((uint32_t *)start);
 			start += sizeof(uint32_t);
 			callback(type, start);
 			start += len;
@@ -79,25 +79,24 @@ void UndoBuffer::IterateEntries(T &&callback) {
 	}
 }
 
-template<class T>
-void UndoBuffer::ReverseIterateEntries(T &&callback) {
+template <class T> void UndoBuffer::ReverseIterateEntries(T &&callback) {
 	// iterate in reverse insertion order: start with the head
 	auto current = head.get();
-	while(current) {
+	while (current) {
 		data_ptr_t start = current->data.get();
 		data_ptr_t end = start + current->current_position;
 		// create a vector with all nodes in this chunk
 		vector<pair<UndoFlags, data_ptr_t>> nodes;
-		while(start < end) {
-			UndoFlags type = *((UndoFlags*) start);
+		while (start < end) {
+			UndoFlags type = *((UndoFlags *)start);
 			start += sizeof(UndoFlags);
-			uint32_t len = *((uint32_t*) start);
+			uint32_t len = *((uint32_t *)start);
 			start += sizeof(uint32_t);
 			nodes.push_back(make_pair(type, start));
 			start += len;
 		}
 		// iterate over it in reverse order
-		for(index_t i = nodes.size(); i > 0; i--) {
+		for (index_t i = nodes.size(); i > 0; i--) {
 			callback(nodes[i - 1].first, nodes[i - 1].second);
 		}
 		current = current->next.get();
@@ -171,23 +170,22 @@ public:
 	DataTable *current_table;
 	unique_ptr<DataChunk> chunk;
 	index_t row_identifiers[STANDARD_VECTOR_SIZE];
+
 public:
-	template <bool HAS_LOG>
-	void CommitEntry(UndoFlags type, data_ptr_t data);
+	template <bool HAS_LOG> void CommitEntry(UndoFlags type, data_ptr_t data);
 
 	void Flush(UndoFlags new_op);
+
 private:
 	void SwitchTable(DataTable *table, UndoFlags new_op);
 
 	void PrepareAppend(UndoFlags op);
 	void AppendToChunk(VersionInfo *info);
 
-
 	void WriteCatalogEntry(CatalogEntry *entry);
 	void WriteDelete(VersionInfo *info);
 	void WriteUpdate(VersionInfo *info);
 	void WriteInsert(VersionInfo *info);
-
 };
 
 void CommitState::Flush(UndoFlags new_op) {
@@ -305,12 +303,12 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry) {
 void CommitState::PrepareAppend(UndoFlags op) {
 	if (!chunk) {
 		chunk = make_unique<DataChunk>();
-		switch(op) {
+		switch (op) {
 		case UndoFlags::INSERT_TUPLE:
 			chunk->Initialize(current_table->types);
 			break;
 		case UndoFlags::DELETE_TUPLE: {
-			vector<TypeId> delete_types = { ROW_TYPE };
+			vector<TypeId> delete_types = {ROW_TYPE};
 			chunk->Initialize(delete_types);
 			break;
 		}
@@ -395,8 +393,7 @@ void CommitState::WriteInsert(VersionInfo *info) {
 	AppendToChunk(info);
 }
 
-template <bool HAS_LOG>
-void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
+template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	if (HAS_LOG && type != current_op) {
 		Flush(type);
 		chunk = nullptr;
@@ -467,16 +464,12 @@ void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
 	state.current_op = UndoFlags::EMPTY_ENTRY;
 	if (log) {
 		// commit WITH write ahead log
-		IterateEntries([&](UndoFlags type, data_ptr_t data) {
-			state.CommitEntry<true>(type, data);
-		});
+		IterateEntries([&](UndoFlags type, data_ptr_t data) { state.CommitEntry<true>(type, data); });
 		// final flush after writing
 		state.Flush(UndoFlags::EMPTY_ENTRY);
 	} else {
 		// comit WITHOUT write ahead log
-		IterateEntries([&](UndoFlags type, data_ptr_t data) {
-			state.CommitEntry<false>(type, data);
-		});
+		IterateEntries([&](UndoFlags type, data_ptr_t data) { state.CommitEntry<false>(type, data); });
 	}
 }
 

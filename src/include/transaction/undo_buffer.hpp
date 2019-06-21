@@ -61,11 +61,10 @@ public:
 private:
 	unique_ptr<UndoChunk> head;
 	UndoChunk *tail;
+
 private:
-	template<class T>
-	void IterateEntries(T &&callback);
-	template<class T>
-	void ReverseIterateEntries(T &&callback);
+	template <class T> void IterateEntries(T &&callback);
+	template <class T> void ReverseIterateEntries(T &&callback);
 };
 
 } // namespace duckdb

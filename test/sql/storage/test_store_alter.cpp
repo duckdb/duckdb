@@ -17,7 +17,7 @@ TEST_CASE("Test storage of alter table", "[storage]") {
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
-		for(index_t i = 0; i < 2; i++) {
+		for (index_t i = 0; i < 2; i++) {
 			REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 			result = con.Query("SELECT a FROM test ORDER BY a");
 			REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));

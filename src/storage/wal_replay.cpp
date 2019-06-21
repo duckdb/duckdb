@@ -16,8 +16,10 @@ public:
 	ClientContext &context;
 	Deserializer &source;
 	TableCatalogEntry *current_table;
+
 public:
 	void ReplayEntry(WALType entry_type);
+
 private:
 	void ReplayCreateTable();
 	void ReplayDropTable();
@@ -38,9 +40,7 @@ private:
 	void ReplayUpdate();
 
 	void ReplayQuery();
-
 };
-
 
 void WriteAheadLog::Replay(DuckDB &database, string &path) {
 	BufferedFileReader reader(*database.file_system, path.c_str());
@@ -259,12 +259,12 @@ void ReplayState::ReplayDelete() {
 
 	assert(chunk.column_count == 1 && chunk.data[0].type == ROW_TYPE);
 	row_t row_ids[1];
-	Vector row_identifiers(ROW_TYPE, (data_ptr_t) row_ids);
+	Vector row_identifiers(ROW_TYPE, (data_ptr_t)row_ids);
 	row_identifiers.count = 1;
 
-	auto source_ids = (row_t *) chunk.data[0].data;
+	auto source_ids = (row_t *)chunk.data[0].data;
 	// delete the tuples from the current table
-	for(index_t i = 0; i < chunk.size(); i++) {
+	for (index_t i = 0; i < chunk.size(); i++) {
 		row_ids[0] = source_ids[i];
 		current_table->storage->Delete(*current_table, context, row_identifiers);
 	}
@@ -278,12 +278,12 @@ void ReplayState::ReplayUpdate() {
 	chunk.Deserialize(source);
 
 	vector<column_t> column_ids;
-	for(index_t i = 0; i < chunk.column_count - 1; i++) {
+	for (index_t i = 0; i < chunk.column_count - 1; i++) {
 		column_ids.push_back(i);
 	}
 
 	index_t update_count = chunk.size();
-	for(index_t i = 0; i < chunk.column_count; i++) {
+	for (index_t i = 0; i < chunk.column_count; i++) {
 		chunk.data[i].sel_vector = chunk.owned_sel_vector;
 		chunk.data[i].count = 1;
 	}
@@ -292,7 +292,7 @@ void ReplayState::ReplayUpdate() {
 
 	auto &row_ids = chunk.data[chunk.column_count];
 
-	for(index_t i = 0; i < update_count; i++) {
+	for (index_t i = 0; i < update_count; i++) {
 		chunk.owned_sel_vector[0] = i;
 		current_table->storage->Update(*current_table, context, row_ids, column_ids, chunk);
 	}

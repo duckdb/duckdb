@@ -272,17 +272,18 @@ TEST_CASE("Test interleaving of insertions/updates/deletes on multiple tables", 
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER);"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2 (a INTEGER, b INTEGER);"));
 		int32_t test_insert = 0, test_insert2 = 0;
-		for(index_t i = 0; i < 1000; i++) {
+		for (index_t i = 0; i < 1000; i++) {
 			index_t stage = i % 7;
-			switch(stage) {
+			switch (stage) {
 			case 0:
-				for(; test_insert < i; test_insert++) {
+				for (; test_insert < i; test_insert++) {
 					REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (" + to_string(test_insert) + ")"));
 				}
 				break;
 			case 1:
-				for(; test_insert2 < i; test_insert2++) {
-					REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (" + to_string(test_insert) + ", " + to_string(test_insert) + " + 2)"));
+				for (; test_insert2 < i; test_insert2++) {
+					REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (" + to_string(test_insert) + ", " +
+					                          to_string(test_insert) + " + 2)"));
 				}
 				break;
 			case 2:
