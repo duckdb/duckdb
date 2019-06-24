@@ -82,17 +82,20 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 1, 2}));
 
 	// Exporting selected columns from a table to a CSV.
-	result = con.Query("COPY test(a,c) to '" + fs.JoinPath(csv_path, "test4.csv") + "';");
+	result = con.Query("COPY test(a,c) to '" + fs.JoinPath(csv_path, "test4.csv") + "' (DELIMITER ',', HEADER false);");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 
 	// Importing CSV to Selected Columns
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test4 (a INTEGER, b INTEGER,c VARCHAR(10));"));
-	result = con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + "';");
+	result = con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + "' (DELIMITER ',', HEADER 0);");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 	result = con.Query("SELECT * FROM test4 ORDER BY 1 LIMIT 3 ");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value()}));
 	REQUIRE(CHECK_COLUMN(result, 2, {" test", " test", " test"}));
+
+	// unsupported type for HEADER
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (DELIMITER ',', HEADER 0.2);"));
 
 	// use a different delimiter
 	auto pipe_csv = fs.JoinPath(csv_path, "test_pipe.csv");
@@ -132,8 +135,6 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 
 	// unterminated quotes
-
-	// empty file
 	ofstream unterminated_quotes_file(fs.JoinPath(csv_path, "unterminated.csv"));
 	unterminated_quotes_file << "\"hello\n\n world\n";
 	unterminated_quotes_file.close();
@@ -546,8 +547,6 @@ TEST_CASE("Test date copy", "[copy]") {
 	result = con.Query("SELECT cast(d as string) FROM date_test");
 	REQUIRE(CHECK_COLUMN(result, 0, {"2019-06-05"}));
 }
-
-
 
 TEST_CASE("Test cranlogs broken gzip copy", "[copy]") {
 	unique_ptr<QueryResult> result;
