@@ -12,6 +12,7 @@
 #include "transaction/transaction_manager.hpp"
 
 #include "transaction/version_info.hpp"
+#include "storage/table/transient_chunk.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -36,7 +37,7 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 }
 
 VersionChunk *DataTable::AppendVersionChunk(index_t start) {
-	auto chunk = make_unique<VersionChunk>(*this, start);
+	auto chunk = make_unique<TransientChunk>(*this, start);
 	auto chunk_pointer = chunk.get();
 	// set the columns of the chunk
 	chunk->columns = unique_ptr<ColumnPointer[]>(new ColumnPointer[types.size()]);

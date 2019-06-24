@@ -11,42 +11,6 @@ using namespace std;
 VersionChunk::VersionChunk(DataTable &base_table, index_t start) : SegmentBase(start, 0), table(base_table) {
 }
 
-void VersionChunk::Cleanup(VersionInfo *info) {
-	index_t entry = info->prev.entry;
-	version_pointers[entry] = info->next;
-	if (version_pointers[entry]) {
-		version_pointers[entry]->prev.entry = entry;
-		version_pointers[entry]->chunk = this;
-	}
-}
-
-void VersionChunk::Undo(VersionInfo *info) {
-	index_t entry = info->prev.entry;
-	assert(version_pointers[entry] == info);
-	if (!info->tuple_data) {
-		deleted[entry] = true;
-	} else {
-		// move data back to the original chunk
-		deleted[entry] = false;
-		auto tuple_data = info->tuple_data;
-
-		vector<data_ptr_t> data_pointers;
-		for (index_t i = 0; i < table.types.size(); i++) {
-			data_pointers.push_back(GetPointerToRow(i, start + entry));
-		}
-		table.serializer.Deserialize(data_pointers, 0, tuple_data);
-	}
-	version_pointers[entry] = info->next;
-	if (version_pointers[entry]) {
-		version_pointers[entry]->prev.entry = entry;
-		version_pointers[entry]->chunk = this;
-	}
-}
-
-data_ptr_t VersionChunk::GetPointerToRow(index_t col, index_t row) {
-	return columns[col].segment->GetPointerToRow(table.types[col], row);
-}
-
 void VersionChunk::SetDirtyFlag(index_t start, index_t count, bool new_dirty_flag) {
 	assert(count > 0 && count <= STANDARD_VECTOR_SIZE);
 	assert(start + count <= STORAGE_CHUNK_SIZE);

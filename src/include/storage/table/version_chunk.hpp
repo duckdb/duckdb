@@ -30,6 +30,7 @@ struct ColumnPointer {
 class VersionChunk : public SegmentBase {
 public:
 	VersionChunk(DataTable &table, index_t start);
+	virtual ~VersionChunk() = default;
 
 	//! The table
 	DataTable &table;
@@ -43,20 +44,15 @@ public:
 	unique_ptr<ColumnPointer[]> columns;
 	//! The lock for the storage
 	StorageLock lock;
-	//! The string heap of the storage chunk
-	StringHeap string_heap;
-
 public:
-	//! Get a poiner to the row of the specified column
-	data_ptr_t GetPointerToRow(index_t col, index_t row);
-	// Cleanup the version information of a tuple
-	void Cleanup(VersionInfo *info);
-	// Undo the changes made by a tuple
-	void Undo(VersionInfo *info);
 	//! Mark a specific segment of the storage chunk as dirty or not dirty
 	void SetDirtyFlag(index_t start, index_t count, bool dirty);
 	//! Returns true if the specific segment of the storage chunk is dirty
 	bool IsDirty(index_t start, index_t count);
+public:
+	virtual void Cleanup(VersionInfo *info) = 0;
+
+	virtual void Undo(VersionInfo *info) = 0;
 };
 
 } // namespace duckdb
