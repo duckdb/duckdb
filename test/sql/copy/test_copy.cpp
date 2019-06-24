@@ -440,13 +440,29 @@ TEST_CASE("Test copy into from on-time dataset", "[copy]") {
 	result = con.Query("COPY ontime FROM '" + ontime_csv + "' DELIMITER ',' HEADER");
 	REQUIRE(CHECK_COLUMN(result, 0, {9}));
 
-	result = con.Query("SELECT year, uniquecarrier, origin, origincityname FROM ontime");
+	result = con.Query("SELECT year, uniquecarrier, origin, origincityname, div5longestgtime FROM ontime");
 	REQUIRE(CHECK_COLUMN(result, 0, {1988, 1988, 1988, 1988, 1988, 1988, 1988, 1988, 1988}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"AA", "AA", "AA", "AA", "AA", "AA", "AA", "AA", "AA"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"JFK", "JFK", "JFK", "JFK", "JFK", "JFK", "JFK", "JFK", "JFK"}));
 	REQUIRE(CHECK_COLUMN(result, 3,
 	                     {"New York, NY", "New York, NY", "New York, NY", "New York, NY", "New York, NY",
 	                      "New York, NY", "New York, NY", "New York, NY", "New York, NY"}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value(), Value(), Value(), Value(), Value(), Value(), Value(), Value(), Value()}));
+
+	result = con.Query("COPY ontime TO '" + ontime_csv + "' DELIMITER ',' HEADER");
+	REQUIRE(CHECK_COLUMN(result, 0, {9}));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM ontime"));
+	result = con.Query("COPY ontime FROM '" + ontime_csv + "' DELIMITER ',' HEADER");
+	REQUIRE(CHECK_COLUMN(result, 0, {9}));
+
+	result = con.Query("SELECT year, uniquecarrier, origin, origincityname, div5longestgtime FROM ontime");
+	REQUIRE(CHECK_COLUMN(result, 0, {1988, 1988, 1988, 1988, 1988, 1988, 1988, 1988, 1988}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"AA", "AA", "AA", "AA", "AA", "AA", "AA", "AA", "AA"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"JFK", "JFK", "JFK", "JFK", "JFK", "JFK", "JFK", "JFK", "JFK"}));
+	REQUIRE(CHECK_COLUMN(result, 3,
+	                     {"New York, NY", "New York, NY", "New York, NY", "New York, NY", "New York, NY",
+	                      "New York, NY", "New York, NY", "New York, NY", "New York, NY"}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value(), Value(), Value(), Value(), Value(), Value(), Value(), Value(), Value()}));
 }
 
 TEST_CASE("Test copy from lineitem csv", "[copy]") {

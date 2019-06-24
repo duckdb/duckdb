@@ -201,3 +201,28 @@ FINISH_BENCHMARK(Append100KIntegersCOPYDisk)
 DUCKDB_BENCHMARK(Append100KIntegersCOPYPrimary, "[csv]")
 APPEND_BENCHMARK_COPY("CREATE TABLE integers(i INTEGER PRIMARY KEY)")
 FINISH_BENCHMARK(Append100KIntegersCOPYPrimary)
+
+DUCKDB_BENCHMARK(Write100KIntegers, "[csv]")
+void Load(DuckDBBenchmarkState *state) override {
+	state->conn.Query("CREATE TABLE integers(i INTEGER)");
+	Appender appender(state->db, DEFAULT_SCHEMA, "integers");
+	for (int32_t i = 0; i < 100000; i++) {
+		appender.BeginRow();
+		appender.AppendInteger(i);
+		appender.EndRow();
+	}
+	appender.Commit();
+}
+string GetQuery() override {
+	return "COPY integers TO 'integers.csv' DELIMITER '|' HEADER";
+}
+string VerifyResult(QueryResult *result) override {
+	if (!result->success) {
+		return result->error;
+	}
+	return string();
+}
+string BenchmarkInfo() override {
+	return "Write 100K 4-byte integers to CSV";
+}
+FINISH_BENCHMARK(Write100KIntegers)
