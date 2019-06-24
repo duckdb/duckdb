@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "common/assert.hpp"
+
 namespace duckdb {
 
 struct Add {
