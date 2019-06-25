@@ -73,6 +73,7 @@ data_ptr_t Transaction::PushTuple(UndoFlags flags, index_t data_size) {
 void Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) {
 	this->commit_id = commit_id;
 	// commit the undo buffer
+	bool changes_made = undo_buffer.ChangesMade();
 	undo_buffer.Commit(log, commit_id);
 	if (log) {
 		// commit any sequences that were used to the WAL
@@ -80,6 +81,8 @@ void Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) {
 			log->WriteSequenceValue(entry.first, entry.second);
 		}
 		// flush the WAL
-		log->Flush();
+		if (changes_made || sequence_usage.size() > 0) {
+			log->Flush();
+		}
 	}
 }
