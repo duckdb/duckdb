@@ -187,10 +187,13 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 
 	// step 1: allocate data and nullmasks for columns
 	for (size_t col_idx = 0; col_idx < ncol; col_idx++) {
+
+		// two owned references for each column, .array and .nullmask
 		cols[col_idx].array = PyArray_EMPTY(1, dims, duckdb_type_to_numpy_type(result->types[col_idx]), 0);
 		cols[col_idx].nullmask = PyArray_EMPTY(1, dims, NPY_BOOL, 0);
 		if (!cols[col_idx].array || !cols[col_idx].nullmask) {
 			PyErr_SetString(duckdb_DatabaseError, "memory allocation error");
+			self->result = nullptr;
 			return NULL;
 		}
 	}
@@ -220,6 +223,7 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 				for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
 					PyObject *str_obj = nullptr;
 					if (!mask_data[chunk_idx + offset]) {
+						// TODO how are those ever deleted?
 						str_obj = PyUnicode_FromString(((const char **)chunk->data[col_idx].data)[chunk_idx]);
 					}
 					((PyObject **)array_data)[offset + chunk_idx] = str_obj;
@@ -235,6 +239,7 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 		offset += chunk->size();
 	}
 
+
 	// step 4: convert to masked arrays
 	PyObject *col_dict = PyDict_New();
 	assert(mafunc_ref);
@@ -242,6 +247,9 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 	for (size_t col_idx = 0; col_idx < ncol; col_idx++) {
 		PyObject *mask;
 		PyObject *maargs;
+
+		// PyTuple_SetItem() is an exception and takes over ownership, hence no DECREF for arguments to it
+		// https://docs.python.org/3/extending/extending.html#ownership-rules
 
 		if (!cols[col_idx].found_nil) {
 			maargs = PyTuple_New(1);
@@ -256,13 +264,18 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 		// actually construct the mask by calling the masked array constructor
 		mask = PyObject_CallObject(mafunc_ref, maargs);
 		Py_DECREF(maargs);
+
 		if (!mask) {
 			PyErr_SetString(duckdb_DatabaseError, "unknown error");
+			self->result = nullptr;
 			return NULL;
 		}
 		PyDict_SetItem(col_dict, PyUnicode_FromString(self->result->names[col_idx].c_str()), mask);
+		Py_DECREF(mask);
 	}
+	// delete our holder object, the arrays within are either gone or we transferred ownership
 	delete[] cols;
+	self->result = nullptr;
 
 	return col_dict;
 }
