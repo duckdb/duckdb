@@ -27,7 +27,6 @@ enum class PhysicalOperatorType : uint8_t {
 	SORT_GROUP_BY,
 	FILTER,
 	PROJECTION,
-	BASE_GROUP_BY,
 	COPY_FROM_FILE,
 	COPY_TO_FILE,
 	TABLE_FUNCTION,

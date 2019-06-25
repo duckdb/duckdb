@@ -1,4 +1,3 @@
-#include "execution/operator/aggregate/physical_aggregate.hpp"
 #include "execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "execution/operator/aggregate/physical_window.hpp"
 #include "execution/operator/filter/physical_filter.hpp"
