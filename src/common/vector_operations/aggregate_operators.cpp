@@ -63,9 +63,20 @@ Value VectorOperations::Sum(Vector &left) {
 }
 
 Value VectorOperations::Count(Vector &left) {
-	Value result = Value::Numeric(left.type, 0);
-	generic_fold_loop<duckdb::AddOne>(left, result);
-	return result;
+	int64_t count = 0;
+	Value result = Value::BIGINT(0);
+	if (left.nullmask.any()) {
+		// NULL values, count the amount of NULL entries
+		VectorOperations::Exec(left, [&](index_t i, index_t k) {
+			if (!left.nullmask[i]) {
+				count++;
+			}
+		});
+	} else {
+		// no NULL values, return all
+		count = left.count;
+	}
+	return Value::BIGINT(count);
 }
 
 Value VectorOperations::Max(Vector &left) {
