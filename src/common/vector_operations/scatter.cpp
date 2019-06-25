@@ -82,23 +82,13 @@ void VectorOperations::Scatter::AddOne(Vector &source, Vector &dest) {
 template <class T> static void scatter_set_loop(Vector &source, Vector &dest) {
 	auto data = (T*) source.data;
 	auto destination = (T**) dest.data;
-	if (source.nullmask.any()) {
-		VectorOperations::Exec(source, [&](index_t i, index_t k) {
-			if (source.nullmask[i]) {
-				*destination[i] = NullValue<T>();
-			} else {
-				*destination[i] = data[i];
-			}
-		});
-	} else {
-		VectorOperations::Exec(source, [&](index_t i, index_t k) {
-			*destination[i] = data[i];
-		});
-	}
+	VectorOperations::Exec(source, [&](index_t i, index_t k) {
+		*destination[i] = data[i];
+	});
 
 }
 
-void VectorOperations::Scatter::SetNull(Vector &source, Vector &dest) {
+void VectorOperations::Scatter::SetAll(Vector &source, Vector &dest) {
 	if (dest.type != TypeId::POINTER) {
 		throw InvalidTypeException(dest.type, "Cannot scatter to non-pointer type!");
 	}

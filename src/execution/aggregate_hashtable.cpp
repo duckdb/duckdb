@@ -440,6 +440,11 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 		Resize(capacity * 2);
 	}
 
+	// for each group, fill in the NULL value
+	for(index_t group_idx = 0; group_idx < groups.column_count; group_idx++) {
+		VectorOperations::FillNullMask(groups.data[group_idx]);
+	}
+
 	// we need to be able to fit at least one vector of data
 	assert(capacity - entries > STANDARD_VECTOR_SIZE);
 	assert(new_group.type == TypeId::BOOLEAN);
@@ -506,7 +511,7 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 				pointers.sel_vector = empty_vector;
 				pointers.count = empty_count;
 
-				VectorOperations::Scatter::SetNull(group_column, pointers);
+				VectorOperations::Scatter::SetAll(group_column, pointers);
 
 				// restore the old sel_vector and count
 				group_column.sel_vector = old_sel_vector;
@@ -536,8 +541,6 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 		}
 		sel_count = no_match_count;
 	}
-
-
 }
 
 index_t SuperLargeHashTable::Scan(index_t &scan_position, DataChunk &groups, DataChunk &result) {
