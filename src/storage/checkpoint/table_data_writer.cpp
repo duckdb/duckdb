@@ -105,6 +105,9 @@ void TableDataWriter::WriteColumnData(DataChunk &chunk, index_t column_index) {
 }
 
 void TableDataWriter::FlushBlock(index_t col) {
+	if (tuple_counts[col] == 0) {
+		return;
+	}
 	assert(offsets[col] + dictionaries[col].size < blocks[col]->size);
 	// get a block id
 	blocks[col]->id = manager.block_manager.GetFreeBlockId();

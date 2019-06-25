@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <cassert>
+#include "common/assert.hpp"
 
 namespace duckdb {
 

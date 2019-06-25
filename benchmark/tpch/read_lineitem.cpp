@@ -45,3 +45,22 @@ string BenchmarkInfo() override {
 	return "Read the lineitem table from SF 0.1 from CSV format";
 }
 FINISH_BENCHMARK(ReadLineitemCSV)
+
+DUCKDB_BENCHMARK(WriteLineitemCSV, "[csv]")
+void Load(DuckDBBenchmarkState *state) override {
+	// load the data into the tpch schema
+	tpch::dbgen(SF, state->db);
+}
+string GetQuery() override {
+	return "COPY lineitem TO 'lineitem.csv' DELIMITER '|' HEADER";
+}
+string VerifyResult(QueryResult *result) override {
+	if (!result->success) {
+		return result->error;
+	}
+	return string();
+}
+string BenchmarkInfo() override {
+	return "Write the lineitem table from SF 0.1 to CSV format";
+}
+FINISH_BENCHMARK(WriteLineitemCSV)
