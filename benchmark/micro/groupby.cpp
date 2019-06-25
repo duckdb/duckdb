@@ -22,8 +22,6 @@ virtual void Load(DuckDBBenchmarkState *state) {
 		appender.EndRow();
 	}
 	appender.Commit();
-
-	state->conn.Query("COPY integers TO 'integers.csv'");
 }
 
 virtual string GetQuery() {

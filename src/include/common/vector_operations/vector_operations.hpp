@@ -181,6 +181,8 @@ struct VectorOperations {
 		static void SetFirst(Vector &source, Vector &dest);
 		// dest[i] = dest[i] + source
 		static void Add(int64_t source, void **dest, index_t length);
+		//! Similar to Set, but writes NullValue<T> into dest if source is NULL
+		static void SetNull(Vector &source, Vector &dest);
 	};
 	// make sure dest.count is set for gather methods!
 	struct Gather {
