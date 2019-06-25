@@ -370,6 +370,7 @@ void templated_compare_group_vector(data_ptr_t group_pointers[], Vector &groups,
 
 static void CompareGroupVector(data_ptr_t group_pointers[], Vector &groups, sel_t sel_vector[], index_t &sel_count, sel_t no_match_vector[], index_t &no_match_count) {
 	switch(groups.type) {
+		case TypeId::BOOLEAN:
 		case TypeId::TINYINT:
 			templated_compare_group_vector<int8_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector, no_match_count);
 			break;
