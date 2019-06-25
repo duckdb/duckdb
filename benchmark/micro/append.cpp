@@ -51,13 +51,6 @@ DUCKDB_BENCHMARK(Append100KIntegersINSERTAutoCommit, "[csv]")
 APPEND_BENCHMARK_INSERT("CREATE TABLE integers(i INTEGER)", true)
 FINISH_BENCHMARK(Append100KIntegersINSERTAutoCommit)
 
-DUCKDB_BENCHMARK(Append100KIntegersINSERTAutoCommitDisk, "[csv]")
-APPEND_BENCHMARK_INSERT("CREATE TABLE integers(i INTEGER)", true)
-bool InMemory() override {
-	return false;
-}
-FINISH_BENCHMARK(Append100KIntegersINSERTAutoCommitDisk)
-
 //////////////
 // PREPARED //
 //////////////
