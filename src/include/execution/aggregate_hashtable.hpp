@@ -51,6 +51,8 @@ public:
 	StringHeap string_heap;
 
 private:
+	void HashGroups(DataChunk &groups, Vector &addresses);
+
 	TupleSerializer group_serializer;
 
 	//! The aggregate types to be computed
@@ -71,12 +73,15 @@ private:
 	index_t entries;
 	//! The data of the HT
 	data_ptr_t data;
-	//! The maximum size of the chain
-	index_t max_chain;
+	//! The endptr of the hashtable
+	data_ptr_t endptr;
 	//! Whether or not the HT has to support parallel insertion operations
 	bool parallel = false;
 	//! The empty payload data
 	unique_ptr<data_t[]> empty_payload_data;
+	//! Bitmask for getting relevant bits from the hashes to determine the position
+	uint64_t bitmask;
+
 
 	vector<unique_ptr<SuperLargeHashTable>> distinct_hashes;
 

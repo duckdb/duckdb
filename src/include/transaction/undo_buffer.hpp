@@ -50,6 +50,8 @@ public:
 	//! buffer
 	data_ptr_t CreateEntry(UndoFlags type, index_t len);
 
+	bool ChangesMade();
+
 	//! Cleanup the undo buffer
 	void Cleanup();
 	//! Commit the changes made in the UndoBuffer: should be called on commit

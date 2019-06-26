@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <cassert>
-
 namespace duckdb {
 
 struct AddInPlace {

@@ -70,3 +70,49 @@ void VectorOperations::Set(Vector &result, Value value) {
 		}
 	}
 }
+
+//===--------------------------------------------------------------------===//
+// Set all elements of a vector to the constant value
+//===--------------------------------------------------------------------===//
+template <class T> void templated_fill_nullmask(Vector &v) {
+	auto data = (T *)v.data;
+	VectorOperations::Exec(v, [&](index_t i, index_t k) {
+		if (v.nullmask[i]) {
+			data[i] = NullValue<T>();
+		}
+	});
+	v.nullmask.reset();
+}
+
+void VectorOperations::FillNullMask(Vector &v) {
+	if (!v.nullmask.any()) {
+		// no NULL values, skip
+		return;
+	}
+	switch (v.type) {
+	case TypeId::BOOLEAN:
+	case TypeId::TINYINT:
+		templated_fill_nullmask<int8_t>(v);
+		break;
+	case TypeId::SMALLINT:
+		templated_fill_nullmask<int16_t>(v);
+		break;
+	case TypeId::INTEGER:
+		templated_fill_nullmask<int32_t>(v);
+		break;
+	case TypeId::BIGINT:
+		templated_fill_nullmask<int64_t>(v);
+		break;
+	case TypeId::FLOAT:
+		templated_fill_nullmask<float>(v);
+		break;
+	case TypeId::DOUBLE:
+		templated_fill_nullmask<double>(v);
+		break;
+	case TypeId::VARCHAR:
+		templated_fill_nullmask<const char *>(v);
+		break;
+	default:
+		throw NotImplementedException("Type not implemented for null mask");
+	}
+}

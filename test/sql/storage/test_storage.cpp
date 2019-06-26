@@ -22,6 +22,37 @@ TEST_CASE("Test empty startup", "[storage]") {
 	DeleteDatabase(storage_database);
 }
 
+TEST_CASE("Test empty table", "[storage]") {
+	unique_ptr<QueryResult> result;
+
+	auto storage_database = TestCreatePath("storage_test");
+
+	// make sure the database does not exist
+	// make sure the database does not exist
+	DeleteDatabase(storage_database);
+	{
+		// create a database and insert values
+		DuckDB db(storage_database);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR);"));
+
+		result = con.Query("SELECT COUNT(*) FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	}
+	{
+		DuckDB db(storage_database);
+		Connection con(db);
+		result = con.Query("SELECT COUNT(*) FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	}
+	{
+		DuckDB db(storage_database);
+		Connection con(db);
+		result = con.Query("SELECT COUNT(*) FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	}
+}
+
 TEST_CASE("Test simple storage", "[storage]") {
 	unique_ptr<QueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");

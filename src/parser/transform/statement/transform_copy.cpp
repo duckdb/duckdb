@@ -101,8 +101,18 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 				info.escape = *escape_val->val.str;
 			} else if (def_elem->defname == kHeaderTok) {
 				auto *header_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
-				assert(header_val->type == T_Integer);
-				info.header = header_val->val.ival == 1 ? true : false;
+				switch(header_val->type) {
+					case T_Integer:
+						info.header = header_val->val.ival == 1 ? true : false;
+						break;
+					case T_String: {
+						auto val = duckdb::Value(string(header_val->val.str));
+						info.header = val.CastAs(TypeId::BOOLEAN).value_.boolean;
+						break;
+					}
+					default:
+						throw ParserException("Unsupported parameter type for HEADER");
+				}
 			} else {
 				throw ParserException("Unsupported COPY option: %s", def_elem->defname);
 			}

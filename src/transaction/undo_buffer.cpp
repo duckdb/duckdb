@@ -393,6 +393,10 @@ void CommitState::WriteInsert(VersionInfo *info) {
 	AppendToChunk(info);
 }
 
+bool UndoBuffer::ChangesMade() {
+	return entries.size() > 0;
+}
+
 template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	if (HAS_LOG && type != current_op) {
 		Flush(type);

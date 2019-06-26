@@ -13,12 +13,6 @@ TEST_CASE("Test aggregation/group by statements", "[aggregations]") {
 	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
 	con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)");
 
-	result = con.Query("SELECT SUM(41), COUNT(*), SUM(NULL), COUNT(NULL);");
-	REQUIRE(CHECK_COLUMN(result, 0, {41}));
-	REQUIRE(CHECK_COLUMN(result, 1, {1}));
-	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
-	REQUIRE(CHECK_COLUMN(result, 3, {0}));
-
 	// aggregates cannot be nested
 	REQUIRE_FAIL(con.Query("SELECT SUM(SUM(41)), COUNT(*);"));
 
@@ -131,6 +125,11 @@ TEST_CASE("Test aggregation/group by statements", "[aggregations]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL);"));
 
+	// group by NULL
+	result = con.Query("SELECT i, SUM(i) FROM integers GROUP BY i ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
+
 	// column reference should have preference over alias reference in grouping
 	result = con.Query("SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY 1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
@@ -228,6 +227,22 @@ TEST_CASE("GROUP BY large strings", "[aggregations]") {
 	result = con.Query("SELECT a, SUM(b) FROM test GROUP BY a ORDER BY a");
 	REQUIRE(CHECK_COLUMN(result, 0, {"helloworld", "thisisalongstring"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {43, 22}));
+}
+
+TEST_CASE("Group by multiple columns", "[aggregations]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 1, 2), (1, 2, 2), (1, 1, 2), (2, 1, 2), (1, 2, 4), (1, 2, NULL);"));
+
+	result = con.Query("SELECT i, j, SUM(k), COUNT(*), COUNT(k) FROM integers GROUP BY i, j ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {4, 6, 2}));
+	REQUIRE(CHECK_COLUMN(result, 3, {2, 3, 1}));
+	REQUIRE(CHECK_COLUMN(result, 4, {2, 2, 1}));
 }
 
 TEST_CASE("Aggregate only COUNT STAR", "[aggregations]") {

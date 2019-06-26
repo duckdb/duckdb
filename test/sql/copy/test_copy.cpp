@@ -82,17 +82,20 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 1, 2}));
 
 	// Exporting selected columns from a table to a CSV.
-	result = con.Query("COPY test(a,c) to '" + fs.JoinPath(csv_path, "test4.csv") + "';");
+	result = con.Query("COPY test(a,c) to '" + fs.JoinPath(csv_path, "test4.csv") + "' (DELIMITER ',', HEADER false);");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 
 	// Importing CSV to Selected Columns
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test4 (a INTEGER, b INTEGER,c VARCHAR(10));"));
-	result = con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + "';");
+	result = con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + "' (DELIMITER ',', HEADER 0);");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 	result = con.Query("SELECT * FROM test4 ORDER BY 1 LIMIT 3 ");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value()}));
 	REQUIRE(CHECK_COLUMN(result, 2, {" test", " test", " test"}));
+
+	// unsupported type for HEADER
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (DELIMITER ',', HEADER 0.2);"));
 
 	// use a different delimiter
 	auto pipe_csv = fs.JoinPath(csv_path, "test_pipe.csv");
@@ -132,8 +135,6 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 
 	// unterminated quotes
-
-	// empty file
 	ofstream unterminated_quotes_file(fs.JoinPath(csv_path, "unterminated.csv"));
 	unterminated_quotes_file << "\"hello\n\n world\n";
 	unterminated_quotes_file.close();
@@ -439,13 +440,29 @@ TEST_CASE("Test copy into from on-time dataset", "[copy]") {
 	result = con.Query("COPY ontime FROM '" + ontime_csv + "' DELIMITER ',' HEADER");
 	REQUIRE(CHECK_COLUMN(result, 0, {9}));
 
-	result = con.Query("SELECT year, uniquecarrier, origin, origincityname FROM ontime");
+	result = con.Query("SELECT year, uniquecarrier, origin, origincityname, div5longestgtime FROM ontime");
 	REQUIRE(CHECK_COLUMN(result, 0, {1988, 1988, 1988, 1988, 1988, 1988, 1988, 1988, 1988}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"AA", "AA", "AA", "AA", "AA", "AA", "AA", "AA", "AA"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"JFK", "JFK", "JFK", "JFK", "JFK", "JFK", "JFK", "JFK", "JFK"}));
 	REQUIRE(CHECK_COLUMN(result, 3,
 	                     {"New York, NY", "New York, NY", "New York, NY", "New York, NY", "New York, NY",
 	                      "New York, NY", "New York, NY", "New York, NY", "New York, NY"}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value(), Value(), Value(), Value(), Value(), Value(), Value(), Value(), Value()}));
+
+	result = con.Query("COPY ontime TO '" + ontime_csv + "' DELIMITER ',' HEADER");
+	REQUIRE(CHECK_COLUMN(result, 0, {9}));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM ontime"));
+	result = con.Query("COPY ontime FROM '" + ontime_csv + "' DELIMITER ',' HEADER");
+	REQUIRE(CHECK_COLUMN(result, 0, {9}));
+
+	result = con.Query("SELECT year, uniquecarrier, origin, origincityname, div5longestgtime FROM ontime");
+	REQUIRE(CHECK_COLUMN(result, 0, {1988, 1988, 1988, 1988, 1988, 1988, 1988, 1988, 1988}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"AA", "AA", "AA", "AA", "AA", "AA", "AA", "AA", "AA"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"JFK", "JFK", "JFK", "JFK", "JFK", "JFK", "JFK", "JFK", "JFK"}));
+	REQUIRE(CHECK_COLUMN(result, 3,
+	                     {"New York, NY", "New York, NY", "New York, NY", "New York, NY", "New York, NY",
+	                      "New York, NY", "New York, NY", "New York, NY", "New York, NY"}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value(), Value(), Value(), Value(), Value(), Value(), Value(), Value(), Value()}));
 }
 
 TEST_CASE("Test copy from lineitem csv", "[copy]") {
@@ -569,4 +586,17 @@ TEST_CASE("Test date copy", "[copy]") {
 
 	result = con.Query("SELECT cast(d as string) FROM date_test");
 	REQUIRE(CHECK_COLUMN(result, 0, {"2019-06-05"}));
+}
+
+TEST_CASE("Test cranlogs broken gzip copy", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE cranlogs (date date,time string,size int,r_version string,r_arch string,r_os string,package string,version string,country string,ip_id int)"));
+
+
+	result = con.Query("COPY cranlogs FROM 'test/sql/copy/tmp2013-06-15.csv.gz' DELIMITER ',' HEADER");
+	REQUIRE(CHECK_COLUMN(result, 0, {37459}));
+
 }
