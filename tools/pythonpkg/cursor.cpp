@@ -63,8 +63,9 @@ static int check_cursor(duckdb_Cursor *cur) {
 PyObject *duckdb_cursor_execute(duckdb_Cursor *self, PyObject *args) {
 	PyObject *operation;
 
-	if (!check_cursor(self)) {
-		// FIXME	goto error;
+	if (!self->initialized) {
+		PyErr_SetString(duckdb_DatabaseError, "Base Cursor.__init__ not called.");
+		return 0;
 	}
 
 	duckdb_cursor_close(self, NULL);
@@ -174,7 +175,9 @@ typedef struct {
 } duckdb_numpy_result;
 
 PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
-	// TODO make sure there is an active result set
+	if (!check_cursor(self)) {
+		return NULL;
+	}
 
 	auto result = self->result.get();
 	assert(result);
@@ -270,7 +273,9 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 			self->result = nullptr;
 			return NULL;
 		}
-		PyDict_SetItem(col_dict, PyUnicode_FromString(self->result->names[col_idx].c_str()), mask);
+		auto name = PyUnicode_FromString(self->result->names[col_idx].c_str());
+		PyDict_SetItem(col_dict, name , mask);
+		Py_DECREF(name);
 		Py_DECREF(mask);
 	}
 	// delete our holder object, the arrays within are either gone or we transferred ownership
