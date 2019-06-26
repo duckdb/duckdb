@@ -224,10 +224,14 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 			switch (duckdb_type) {
 			case duckdb::TypeId::VARCHAR:
 				for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
-					PyObject *str_obj = nullptr;
+					assert(!chunk->data[col_idx].sel_vector);
+					PyObject *str_obj;
 					if (!mask_data[chunk_idx + offset]) {
-						// TODO how are those ever deleted?
 						str_obj = PyUnicode_FromString(((const char **)chunk->data[col_idx].data)[chunk_idx]);
+					} else {
+						assert(cols[col_idx].found_nil);
+						str_obj = Py_None;
+						Py_INCREF(str_obj);
 					}
 					((PyObject **)array_data)[offset + chunk_idx] = str_obj;
 				}
