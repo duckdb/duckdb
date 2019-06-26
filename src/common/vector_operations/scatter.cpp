@@ -85,7 +85,6 @@ template <class T> static void scatter_set_loop(Vector &source, Vector &dest) {
 	VectorOperations::Exec(source, [&](index_t i, index_t k) {
 		*destination[i] = data[i];
 	});
-
 }
 
 void VectorOperations::Scatter::SetAll(Vector &source, Vector &dest) {

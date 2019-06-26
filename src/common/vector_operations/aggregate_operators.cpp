@@ -51,11 +51,15 @@ Value VectorOperations::Sum(Vector &left) {
 	Value result = Value::Numeric(left.type, 0);
 
 	// check if all are NULL, because then the result is NULL and not 0
-	StaticVector<bool> is_null;
-	VectorOperations::IsNull(left, is_null);
+	if (left.nullmask.any()) {
+		StaticVector<bool> is_null;
+		VectorOperations::IsNull(left, is_null);
 
-	if (VectorOperations::AllTrue(is_null)) {
-		result.is_null = true;
+		if (VectorOperations::AllTrue(is_null)) {
+			result.is_null = true;
+		} else {
+			generic_fold_loop<duckdb::Add>(left, result);
+		}
 	} else {
 		generic_fold_loop<duckdb::Add>(left, result);
 	}
