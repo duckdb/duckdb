@@ -169,46 +169,6 @@ static index_t CreateNotNullSelVector(DataChunk &keys, sel_t *not_null_sel_vecto
 	return result_count;
 }
 
-template <class T> void FillNullMask(Vector &v) {
-	auto data = (T *)v.data;
-	VectorOperations::Exec(v, [&](index_t i, index_t k) {
-		if (v.nullmask[i]) {
-			data[i] = NullValue<T>();
-		}
-	});
-	v.nullmask.reset();
-}
-
-static void FillNullMask(Vector &v) {
-	if (!v.nullmask.any()) {
-		// no NULL values, skip
-		return;
-	}
-	switch (v.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
-		FillNullMask<int8_t>(v);
-		break;
-	case TypeId::SMALLINT:
-		FillNullMask<int16_t>(v);
-		break;
-	case TypeId::INTEGER:
-		FillNullMask<int32_t>(v);
-		break;
-	case TypeId::BIGINT:
-		FillNullMask<int64_t>(v);
-		break;
-	case TypeId::DOUBLE:
-		FillNullMask<double>(v);
-		break;
-	case TypeId::VARCHAR:
-		FillNullMask<const char *>(v);
-		break;
-	default:
-		throw NotImplementedException("Type not implemented for HT null mask");
-	}
-}
-
 void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	assert(keys.size() == payload.size());
 	if (keys.size() == 0) {
@@ -235,7 +195,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	bool null_values_equal_for_all = true;
 	for (index_t i = 0; i < keys.column_count; i++) {
 		if (null_values_are_equal[i]) {
-			FillNullMask(keys.data[i]);
+			VectorOperations::FillNullMask(keys.data[i]);
 		} else {
 			null_values_equal_for_all = false;
 		}
@@ -325,7 +285,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 
 	for (index_t i = 0; i < keys.column_count; i++) {
 		if (null_values_are_equal[i]) {
-			FillNullMask(keys.data[i]);
+			VectorOperations::FillNullMask(keys.data[i]);
 		}
 	}
 

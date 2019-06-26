@@ -32,6 +32,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "WINDOW";
 	case PhysicalOperatorType::DISTINCT:
 		return "DISTINCT";
+	case PhysicalOperatorType::SIMPLE_AGGREGATE:
+		return "SIMPLE_AGGREGATE";
 	case PhysicalOperatorType::HASH_GROUP_BY:
 		return "HASH_GROUP_BY";
 	case PhysicalOperatorType::SORT_GROUP_BY:
@@ -40,8 +42,6 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "FILTER";
 	case PhysicalOperatorType::PROJECTION:
 		return "PROJECTION";
-	case PhysicalOperatorType::BASE_GROUP_BY:
-		return "BASE_GROUP_BY";
 	case PhysicalOperatorType::COPY_FROM_FILE:
 		return "COPY_FROM_FILE";
 	case PhysicalOperatorType::COPY_TO_FILE:

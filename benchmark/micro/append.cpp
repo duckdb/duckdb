@@ -32,22 +32,22 @@ using namespace std;
 		return "Append 100K 4-byte integers to a table using a series of INSERT INTO statements";                      \
 	}
 
-DUCKDB_BENCHMARK(Append100KIntegersINSERT, "[csv]")
+DUCKDB_BENCHMARK(Append100KIntegersINSERT, "[append]")
 APPEND_BENCHMARK_INSERT("CREATE TABLE integers(i INTEGER)", false)
 FINISH_BENCHMARK(Append100KIntegersINSERT)
 
-DUCKDB_BENCHMARK(Append100KIntegersINSERTDisk, "[csv]")
+DUCKDB_BENCHMARK(Append100KIntegersINSERTDisk, "[append]")
 APPEND_BENCHMARK_INSERT("CREATE TABLE integers(i INTEGER)", false)
 bool InMemory() override {
 	return false;
 }
 FINISH_BENCHMARK(Append100KIntegersINSERTDisk)
 
-DUCKDB_BENCHMARK(Append100KIntegersINSERTPrimary, "[csv]")
+DUCKDB_BENCHMARK(Append100KIntegersINSERTPrimary, "[append]")
 APPEND_BENCHMARK_INSERT("CREATE TABLE integers(i INTEGER PRIMARY KEY)", false)
 FINISH_BENCHMARK(Append100KIntegersINSERTPrimary)
 
-DUCKDB_BENCHMARK(Append100KIntegersINSERTAutoCommit, "[csv]")
+DUCKDB_BENCHMARK(Append100KIntegersINSERTAutoCommit, "[append]")
 APPEND_BENCHMARK_INSERT("CREATE TABLE integers(i INTEGER)", true)
 FINISH_BENCHMARK(Append100KIntegersINSERTAutoCommit)
 
@@ -92,18 +92,18 @@ struct DuckDBPreparedState : public DuckDBBenchmarkState {
 		return "Append 100K 4-byte integers to a table using a series of prepared INSERT INTO statements";             \
 	}
 
-DUCKDB_BENCHMARK(Append100KIntegersPREPARED, "[csv]")
+DUCKDB_BENCHMARK(Append100KIntegersPREPARED, "[append]")
 APPEND_BENCHMARK_PREPARED("CREATE TABLE integers(i INTEGER)")
 FINISH_BENCHMARK(Append100KIntegersPREPARED)
 
-DUCKDB_BENCHMARK(Append100KIntegersPREPAREDDisk, "[csv]")
+DUCKDB_BENCHMARK(Append100KIntegersPREPAREDDisk, "[append]")
 APPEND_BENCHMARK_PREPARED("CREATE TABLE integers(i INTEGER)")
 bool InMemory() override {
 	return false;
 }
 FINISH_BENCHMARK(Append100KIntegersPREPAREDDisk)
 
-DUCKDB_BENCHMARK(Append100KIntegersPREPAREDPrimary, "[csv]")
+DUCKDB_BENCHMARK(Append100KIntegersPREPAREDPrimary, "[append]")
 APPEND_BENCHMARK_PREPARED("CREATE TABLE integers(i INTEGER PRIMARY KEY)")
 FINISH_BENCHMARK(Append100KIntegersPREPAREDPrimary)
 
@@ -134,18 +134,18 @@ FINISH_BENCHMARK(Append100KIntegersPREPAREDPrimary)
 		return "Append 100K 4-byte integers to a table using an Appender";                                             \
 	}
 
-DUCKDB_BENCHMARK(Append100KIntegersAPPENDER, "[csv]")
+DUCKDB_BENCHMARK(Append100KIntegersAPPENDER, "[append]")
 APPEND_BENCHMARK_APPENDER("CREATE TABLE integers(i INTEGER)")
 FINISH_BENCHMARK(Append100KIntegersAPPENDER)
 
-DUCKDB_BENCHMARK(Append100KIntegersAPPENDERDisk, "[csv]")
+DUCKDB_BENCHMARK(Append100KIntegersAPPENDERDisk, "[append]")
 APPEND_BENCHMARK_APPENDER("CREATE TABLE integers(i INTEGER)")
 bool InMemory() override {
 	return false;
 }
 FINISH_BENCHMARK(Append100KIntegersAPPENDERDisk)
 
-DUCKDB_BENCHMARK(Append100KIntegersAPPENDERPrimary, "[csv]")
+DUCKDB_BENCHMARK(Append100KIntegersAPPENDERPrimary, "[append]")
 APPEND_BENCHMARK_APPENDER("CREATE TABLE integers(i INTEGER PRIMARY KEY)")
 FINISH_BENCHMARK(Append100KIntegersAPPENDERPrimary)
 
@@ -180,22 +180,22 @@ FINISH_BENCHMARK(Append100KIntegersAPPENDERPrimary)
 		return "Append 100K 4-byte integers to a table using the COPY INTO statement";                                 \
 	}
 
-DUCKDB_BENCHMARK(Append100KIntegersCOPY, "[csv]")
+DUCKDB_BENCHMARK(Append100KIntegersCOPY, "[append]")
 APPEND_BENCHMARK_COPY("CREATE TABLE integers(i INTEGER)")
 FINISH_BENCHMARK(Append100KIntegersCOPY)
 
-DUCKDB_BENCHMARK(Append100KIntegersCOPYDisk, "[csv]")
+DUCKDB_BENCHMARK(Append100KIntegersCOPYDisk, "[append]")
 APPEND_BENCHMARK_COPY("CREATE TABLE integers(i INTEGER)")
 bool InMemory() override {
 	return false;
 }
 FINISH_BENCHMARK(Append100KIntegersCOPYDisk)
 
-DUCKDB_BENCHMARK(Append100KIntegersCOPYPrimary, "[csv]")
+DUCKDB_BENCHMARK(Append100KIntegersCOPYPrimary, "[append]")
 APPEND_BENCHMARK_COPY("CREATE TABLE integers(i INTEGER PRIMARY KEY)")
 FINISH_BENCHMARK(Append100KIntegersCOPYPrimary)
 
-DUCKDB_BENCHMARK(Write100KIntegers, "[csv]")
+DUCKDB_BENCHMARK(Write100KIntegers, "[append]")
 void Load(DuckDBBenchmarkState *state) override {
 	state->conn.Query("CREATE TABLE integers(i INTEGER)");
 	Appender appender(state->db, DEFAULT_SCHEMA, "integers");

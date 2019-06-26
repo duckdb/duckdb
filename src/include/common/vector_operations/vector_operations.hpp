@@ -181,6 +181,8 @@ struct VectorOperations {
 		static void SetFirst(Vector &source, Vector &dest);
 		// dest[i] = dest[i] + source
 		static void Add(int64_t source, void **dest, index_t length);
+		//! Similar to Set, do not ignore NULL values
+		static void SetAll(Vector &source, Vector &dest);
 	};
 	// make sure dest.count is set for gather methods!
 	struct Gather {
@@ -207,6 +209,7 @@ struct VectorOperations {
 	// A ^= HASH(B)
 	static void CombineHash(Vector &hashes, Vector &B);
 
+
 	//===--------------------------------------------------------------------===//
 	// Generate functions
 	//===--------------------------------------------------------------------===//
@@ -232,6 +235,8 @@ struct VectorOperations {
 
 	// Set all elements of the vector to the given constant value
 	static void Set(Vector &result, Value value);
+	//! Fill the null mask of a value, setting every NULL value to NullValue<T>()
+	static void FillNullMask(Vector &v);
 	//===--------------------------------------------------------------------===//
 	// Exec
 	//===--------------------------------------------------------------------===//

@@ -11,7 +11,7 @@ using namespace std;
 #define GROUP_COUNT 5
 
 
-DUCKDB_BENCHMARK(SimpleAggregate, "[micro]")
+DUCKDB_BENCHMARK(SimpleAggregate, "[aggregate]")
 virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.Query("CREATE TABLE integers(i INTEGER);");
 	Appender appender(state->db, DEFAULT_SCHEMA, "integers");
@@ -22,8 +22,6 @@ virtual void Load(DuckDBBenchmarkState *state) {
 		appender.EndRow();
 	}
 	appender.Commit();
-
-	state->conn.Query("COPY integers TO 'integers.csv'");
 }
 
 virtual string GetQuery() {
@@ -50,7 +48,7 @@ virtual string BenchmarkInfo() {
 FINISH_BENCHMARK(SimpleAggregate)
 
 
-DUCKDB_BENCHMARK(SimpleGroupByAggregate, "[micro]")
+DUCKDB_BENCHMARK(SimpleGroupByAggregate, "[aggregate]")
 virtual void Load(DuckDBBenchmarkState *state) {
 	// fixed seed random numbers
 	std::uniform_int_distribution<> distribution(1, 10000);
