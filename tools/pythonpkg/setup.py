@@ -93,7 +93,7 @@ libduckdb = Extension('duckdb',
 
 setup(
     name = "duckdb",
-    version = '0.0.4',
+    version = '0.1.0',
     description = 'DuckDB embedded database',
     keywords = 'DuckDB Database SQL OLAP',
     url="https://github.com/cwida/duckdb",
