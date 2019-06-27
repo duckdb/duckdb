@@ -3,18 +3,31 @@
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
 #include "planner/expression/bound_aggregate_expression.hpp"
+#include "planner/expression/bound_constant_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
-                                             PhysicalOperatorType type)
-    : PhysicalAggregate(types, move(expressions), type) {
+PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions, PhysicalOperatorType type )
+    : PhysicalHashAggregate(types, move(expressions), {}, type) {
 }
 
-PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
-                                             vector<unique_ptr<Expression>> groups, PhysicalOperatorType type)
-    : PhysicalAggregate(types, move(expressions), move(groups), type) {
+PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> groups, PhysicalOperatorType type )
+    : PhysicalOperator(type, types), groups(move(groups)) {
+	// get a list of all aggregates to be computed
+	// fake a single group with a constant value for aggregation without groups
+	if (this->groups.size() == 0) {
+		auto ce = make_unique<BoundConstantExpression>(Value::TINYINT(42));
+		this->groups.push_back(move(ce));
+		is_implicit_aggr = true;
+	} else {
+		is_implicit_aggr = false;
+	}
+	for (auto &expr : expressions) {
+		assert(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
+		assert(expr->IsAggregate());
+		aggregates.push_back(move(expr));
+	}
 }
 
 void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
@@ -127,4 +140,19 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 
 	state->ht = make_unique<SuperLargeHashTable>(1024, group_types, payload_types, aggregate_kind);
 	return move(state);
+}
+
+PhysicalHashAggregateOperatorState::PhysicalHashAggregateOperatorState(PhysicalHashAggregate *parent, PhysicalOperator *child)
+	: PhysicalOperatorState(child), ht_scan_position(0), tuples_scanned(0) {
+	vector<TypeId> group_types, aggregate_types;
+	for (auto &expr : parent->groups) {
+		group_types.push_back(expr->return_type);
+	}
+	group_chunk.Initialize(group_types);
+	for (auto &expr : parent->aggregates) {
+		aggregate_types.push_back(expr->return_type);
+	}
+	if (aggregate_types.size() > 0) {
+		aggregate_chunk.Initialize(aggregate_types);
+	}
 }

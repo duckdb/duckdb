@@ -78,3 +78,43 @@ void VectorOperations::Scatter::AddOne(Vector &source, Vector &dest) {
 		}
 	});
 }
+
+template <class T> static void scatter_set_loop(Vector &source, Vector &dest) {
+	auto data = (T*) source.data;
+	auto destination = (T**) dest.data;
+	VectorOperations::Exec(source, [&](index_t i, index_t k) {
+		*destination[i] = data[i];
+	});
+}
+
+void VectorOperations::Scatter::SetAll(Vector &source, Vector &dest) {
+	if (dest.type != TypeId::POINTER) {
+		throw InvalidTypeException(dest.type, "Cannot scatter to non-pointer type!");
+	}
+	switch (source.type) {
+	case TypeId::BOOLEAN:
+	case TypeId::TINYINT:
+		scatter_set_loop<int8_t>(source, dest);
+		break;
+	case TypeId::SMALLINT:
+		scatter_set_loop<int16_t>(source, dest);
+		break;
+	case TypeId::INTEGER:
+		scatter_set_loop<int32_t>(source, dest);
+		break;
+	case TypeId::BIGINT:
+		scatter_set_loop<int64_t>(source, dest);
+		break;
+	case TypeId::FLOAT:
+		scatter_set_loop<float>(source, dest);
+		break;
+	case TypeId::DOUBLE:
+		scatter_set_loop<double>(source, dest);
+		break;
+	case TypeId::VARCHAR:
+		scatter_set_loop<const char*>(source, dest);
+		break;
+	default:
+		throw NotImplementedException("Unimplemented type for scatter");
+	}
+}

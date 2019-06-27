@@ -245,6 +245,10 @@ static void WriteTuple(WriteAheadLog *log, VersionInformation *entry,
 	}
 }
 
+bool UndoBuffer::ChangesMade() {
+	return entries.size() > 0;
+}
+
 void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
 	// the list of appends committed by this transaction for each table
 	unordered_map<DataTable *, unique_ptr<DataChunk>> appends;
