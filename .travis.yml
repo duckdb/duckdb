@@ -32,7 +32,7 @@ matrix:
         - build/release/test/unittest
 
       after_success:
-        - python tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a
+        - python tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a build/release/duckdb
 
 
     - os: linux
@@ -95,7 +95,7 @@ matrix:
         - build/release/test/unittest "*"
 
       after_success:
-        - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a
+        - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb
 
 
     - os: linux
@@ -120,7 +120,7 @@ matrix:
         - build/release/test/unittest "*"
 
       after_success:
-        - python tools/upload-s3.py lib-linux-i386 build/release/src/libduckdb*.so build/release/src/libduckdb*.a
+        - python tools/upload-s3.py lib-linux-i386 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb
 
 
     - os: linux
@@ -161,7 +161,7 @@ matrix:
         - test/Release/unittest.exe
 
       after_success:
-        - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll
+        - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll Release/duckdb.exe
 
 
     - os: windows
@@ -181,7 +181,7 @@ matrix:
         - test/Release/unittest.exe
 
       after_success:
-        - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-i386 src/Release/duckdb.dll
+        - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-i386 src/Release/duckdb.dll Release/duckdb.exe
 
 
     - os: linux
@@ -303,8 +303,8 @@ matrix:
       before_install:
         - choco install python3 --version 3.7.3 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python37"
         - choco install python3 --version 3.7.3 --sidebyside -y --force --params "/InstallDir:C:\Python37-x64"
-#        - choco install python3 --version 3.6.8 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python36"
-#        - choco install python3 --version 3.6.8 --sidebyside -y --force --params "/InstallDir:C:\Python36-x64"
+        - choco install python3 --version 3.6.8 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python36"
+        - choco install python3 --version 3.6.8 --sidebyside -y --force --params "/InstallDir:C:\Python36-x64"
         - choco install python2 --version 2.7.16 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python27"
         - choco install python2 --version 2.7.16 --sidebyside -y --force --params "/InstallDir:C:\Python27-x64"
         - choco install curl -y --force
