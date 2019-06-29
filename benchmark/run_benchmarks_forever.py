@@ -13,4 +13,8 @@ while True:
     if proc.returncode == 0:
         proc = subprocess.Popen(['python', 'benchmark/benchmark_html.py'])
         proc.wait()
+        if proc.returncode != 0:
+            print("benchmark_html failed!")
+            exit(1)
+        os.system('./transfer.sh')
     time.sleep(60)
