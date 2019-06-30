@@ -278,12 +278,24 @@ duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
 	return wrapper->statement->success ? DuckDBSuccess : DuckDBError;
 }
 
+duckdb_state duckdb_nparams(duckdb_prepared_statement prepared_statement, index_t* nparams_out) {
+	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
+	if (!wrapper || !wrapper->statement || !wrapper->statement->success || wrapper->statement->is_invalidated) {
+		return DuckDBError;
+	}
+	*nparams_out = wrapper->statement->n_param;
+	return DuckDBSuccess;
+}
+
+
 static duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, index_t param_idx, Value val) {
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
 	if (!wrapper || !wrapper->statement || !wrapper->statement->success || wrapper->statement->is_invalidated) {
 		return DuckDBError;
 	}
-	// TODO we need to know how many params this query has and fail if idx > param_count
+	if (param_idx > wrapper->statement->n_param) {
+		return DuckDBError;
+	}
 	if (param_idx > wrapper->values.size()) {
 		wrapper->values.resize(param_idx);
 	}
@@ -322,6 +334,8 @@ duckdb_state duckdb_bind_double(duckdb_prepared_statement prepared_statement, in
 duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, index_t param_idx, const char *val) {
 	return duckdb_bind_value(prepared_statement, param_idx, Value(val));
 }
+
+
 
 duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statement, duckdb_result *out_result) {
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;

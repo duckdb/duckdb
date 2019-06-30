@@ -275,7 +275,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 		if (!result->success) {
 			throw Exception(result->error);
 		}
-		auto prepared_object = make_unique<PreparedStatement>(this, prepare_name);
+		auto prepared_object = make_unique<PreparedStatement>(this, prepare_name, parser.n_prepared_parameters);
 		prepared_statement_objects.insert(prepared_object.get());
 		return prepared_object;
 	} catch (Exception &ex) {

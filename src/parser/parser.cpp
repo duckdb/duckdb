@@ -41,6 +41,7 @@ void Parser::ParseQuery(string query) {
 	// SQLStatements
 	Transformer transformer;
 	transformer.TransformParseTree(parser.parse_tree, statements);
+	n_prepared_parameters = transformer.prepared_statement_parameter_index;
 }
 
 enum class PragmaType : uint8_t { NOTHING, ASSIGNMENT, CALL };

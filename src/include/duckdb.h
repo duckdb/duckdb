@@ -19,7 +19,6 @@ extern "C" {
 #endif
 
 typedef uint64_t index_t;
-typedef uint64_t count_t;
 
 typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_INVALID = 0,
@@ -71,8 +70,8 @@ typedef struct {
 } duckdb_column;
 
 typedef struct {
-	count_t column_count;
-	count_t row_count;
+	index_t column_count;
+	index_t row_count;
 	duckdb_column *columns;
 	char *error_message;
 } duckdb_result;
@@ -136,6 +135,9 @@ char *duckdb_value_varchar(duckdb_result *result, index_t col, index_t row);
 //! prepares the specified SQL query in the specified connection handle. [OUT: prepared statement descriptor]
 duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
                             duckdb_prepared_statement *out_prepared_statement);
+
+duckdb_state duckdb_nparams(duckdb_prepared_statement prepared_statement, index_t* nparams_out);
+
 //! binds parameters to prepared statement
 duckdb_state duckdb_bind_boolean(duckdb_prepared_statement prepared_statement, index_t param_idx, bool val);
 duckdb_state duckdb_bind_int8(duckdb_prepared_statement prepared_statement, index_t param_idx, int8_t val);
@@ -145,6 +147,8 @@ duckdb_state duckdb_bind_int64(duckdb_prepared_statement prepared_statement, ind
 duckdb_state duckdb_bind_float(duckdb_prepared_statement prepared_statement, index_t param_idx, float val);
 duckdb_state duckdb_bind_double(duckdb_prepared_statement prepared_statement, index_t param_idx, double val);
 duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, index_t param_idx, const char *val);
+
+
 
 //! Executes the prepared statements with currently bound parameters
 duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statement, duckdb_result *out_result);
