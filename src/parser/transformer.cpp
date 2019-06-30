@@ -63,6 +63,9 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(Node *stmt) {
 		ExplainStmt *explain_stmt = reinterpret_cast<ExplainStmt *>(stmt);
 		return make_unique<ExplainStatement>(TransformStatement(explain_stmt->query));
 	}
+	case T_VacuumStmt: { // Ignore VACUUM/ANALYZE for now
+		return nullptr;
+	}
 	default:
 		throw NotImplementedException(NodetypeToString(stmt->type));
 	}
