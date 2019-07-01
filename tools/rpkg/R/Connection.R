@@ -3,6 +3,7 @@
 NULL
 
 duckdb_connection <- function(duckdb_driver, dbdir, debug) {
+  dbdir <- path.expand(dbdir)
     if (debug) {
         message("CONNECT_START ", dbdir)
       }
