@@ -91,6 +91,12 @@ libduckdb = Extension('duckdb',
     language='c++',
     extra_objects=['%s/build/release_notest/src/%sduckdb_static.%s' % (dd_prefix, lib_prefix, archive_ext), '%s/build/release_notest/third_party/libpg_query/%spg_query.%s' % (dd_prefix, lib_prefix, archive_ext), '%s/build/release_notest/third_party/re2/%sre2.%s' % (dd_prefix, lib_prefix, archive_ext), '%s/build/release_notest/third_party/miniz/%sminiz.%s' % (dd_prefix, lib_prefix, archive_ext)])
 
+# Only include pytest-runner in setup_requires if we're invoking tests
+if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
+    setup_requires = ['pytest-runner']
+else:
+    setup_requires = []
+
 setup(
     name = "duckdb",
     version = '0.1.0',
@@ -102,7 +108,7 @@ setup(
          'numpy>=1.16',
          'pandas>=0.24'
     ],
-    setup_requires=['pytest-runner'],
+    setup_requires=setup_requires,
     tests_require=['pytest'],
     classifiers = [
         'Topic :: Database :: Database Engines/Servers',
