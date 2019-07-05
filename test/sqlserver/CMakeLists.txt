@@ -1,2 +1,4 @@
 add_library_unity(test_sqlserver OBJECT test_sqlserver.cpp)
-set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sqlserver> PARENT_SCOPE)
+set(ALL_OBJECT_FILES
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sqlserver>
+    PARENT_SCOPE)

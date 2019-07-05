@@ -24,10 +24,9 @@ add_subdirectory(transactions)
 add_subdirectory(views)
 add_subdirectory(storage)
 
-IF (NOT WIN32)
+if(NOT WIN32)
   add_subdirectory(tpch)
   add_subdirectory(tpcds)
-ENDIF()
-
+endif()
 
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} PARENT_SCOPE)
