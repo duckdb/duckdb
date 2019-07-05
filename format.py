@@ -94,7 +94,7 @@ def format_directory(directory, sort_includes=False):
 							file.close()
 						elif ext == ".txt" and f != 'CMakeLists.txt':
 							continue
-							
+
 						format_command = format_commands[ext]
 						if not directory_printed:
 							print(directory)
@@ -110,7 +110,8 @@ def format_directory(directory, sort_includes=False):
 							f.write(text)
 
 					break
-				
+
+format_directory('.', False)
 format_directory('src')
 format_directory('benchmark')
 format_directory('test')
