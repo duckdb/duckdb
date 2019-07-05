@@ -6,7 +6,8 @@ last_format_file = '.last_format'
 ignore_last_format = False
 cpp_format_command = 'clang-format -i -sort-includes=${SORT_INCLUDES} -style=file "${FILE}"'
 sql_format_command = 'pg_format "${FILE}" -o "${FILE}.out" && mv "${FILE}.out" "${FILE}"'
-extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', '.sql']
+cmake_format_command = 'cmake-format -i "${FILE}"'
+extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', '.sql', '.txt']
 ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpce_flat_input.hpp']
 
 for arg in sys.argv:
@@ -21,6 +22,7 @@ format_commands = {
 	'.hh': cpp_format_command,
 	'.cc': cpp_format_command,
 	'.sql': sql_format_command,
+	'.txt': cmake_format_command
 }
 # get the last time this command was run, if ever
 
@@ -90,6 +92,9 @@ def format_directory(directory, sort_includes=False):
 								if not is_old_header:
 									file.write(line)
 							file.close()
+						elif ext == ".txt" and f != 'CMakeLists.txt':
+							continue
+							
 						format_command = format_commands[ext]
 						if not directory_printed:
 							print(directory)
