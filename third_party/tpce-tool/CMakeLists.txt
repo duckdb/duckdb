@@ -11,6 +11,12 @@ add_subdirectory(utilities)
 
 add_definitions(-DCOMPILE_FLAT_FILE_LOAD)
 
-add_library(tpce STATIC ${TPCE_OBJECT_FILES} duckdb_interface.cpp tpce.cpp tpce_generated.cpp)
+add_library(tpce STATIC
+            ${TPCE_OBJECT_FILES}
+            duckdb_interface.cpp
+            tpce.cpp
+            tpce_generated.cpp)
 
-set_target_properties(tpce PROPERTIES COMPILE_FLAGS "-Wno-unused-private-field -Wno-exceptions")
+set_target_properties(tpce
+                      PROPERTIES COMPILE_FLAGS
+                                 "-Wno-unused-private-field -Wno-exceptions")

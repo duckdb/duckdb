@@ -12,19 +12,24 @@ add_subdirectory(monetdb)
 add_subdirectory(sql)
 add_subdirectory(optimizer)
 
-IF (NOT WIN32)
+if(NOT WIN32)
   add_subdirectory(sqlserver)
   add_subdirectory(sakila)
   add_subdirectory(sqlite)
   add_subdirectory(sqlsmith)
   add_subdirectory(tpce)
   add_subdirectory(persistence)
- ENDIF()
+endif()
 
 add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
 
-IF (NOT WIN32)
-  target_link_libraries(unittest duckdb dbgen dsdgen test_helpers tpce)
-ELSE()
+if(NOT WIN32)
+  target_link_libraries(unittest
+                        duckdb
+                        dbgen
+                        dsdgen
+                        test_helpers
+                        tpce)
+else()
   target_link_libraries(unittest duckdb_static test_helpers)
-ENDIF()
+endif()
