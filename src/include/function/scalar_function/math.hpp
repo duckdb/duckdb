@@ -191,6 +191,20 @@ public:
 	}
 };
 
+void log2_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
+                    Vector &result);
+
+class Log2Function : public ScalarUnaryNumericFunction {
+public:
+	static const char *GetName() {
+		return "log2";
+	}
+
+	static scalar_function_t GetFunction() {
+		return log2_function;
+	}
+};
+
 void sqrt_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                    Vector &result);
 

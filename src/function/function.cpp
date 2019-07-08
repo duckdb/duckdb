@@ -57,6 +57,7 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddScalarFunction<LnFunction>(transaction, catalog);
 	AddScalarFunction<LogFunction>(transaction, catalog);
 	AddScalarFunction<Log10Function>(transaction, catalog);
+	AddScalarFunction<Log2Function>(transaction, catalog);
 
 	AddScalarFunction<SinFunction>(transaction, catalog);
 	AddScalarFunction<CosFunction>(transaction, catalog);

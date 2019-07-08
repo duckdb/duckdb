@@ -71,6 +71,12 @@ struct Log10 {
 	}
 };
 
+struct Log2 {
+	template <class T> static inline T Operation(T left) {
+		return log2(left);
+	}
+};
+
 struct Ceil {
 	template <class T> static inline T Operation(T left) {
 		return ceil(left);

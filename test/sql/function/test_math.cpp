@@ -105,6 +105,9 @@ TEST_CASE("Function test cases from PG docs", "[function]") {
 	result = con.Query("select log10(100.0)");
 	REQUIRE(CHECK_COLUMN(result, 0, {2.0}));
 
+	result = con.Query("select log2(4.0)");
+	REQUIRE(CHECK_COLUMN(result, 0, {2.0}));
+
 	result = con.Query("select pi()");
 	REQUIRE(CHECK_COLUMN(result, 0, {3.14159265358979}));
 
