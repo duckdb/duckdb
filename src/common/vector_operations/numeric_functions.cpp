@@ -71,6 +71,10 @@ void VectorOperations::Log10(Vector &input, Vector &result) {
 	unary_numeric_op<duckdb::Log10>(input, result);
 }
 
+void VectorOperations::Log2(Vector &input, Vector &result) {
+	unary_numeric_op<duckdb::Log2>(input, result);
+}
+
 void VectorOperations::CbRt(Vector &input, Vector &result) {
 	unary_numeric_op_dblret<duckdb::CbRt>(input, result);
 }
