@@ -21,12 +21,14 @@ static void CleanupIndexInsert(VersionInfo *info);
 static void RollbackIndexInsert(VersionInfo *info);
 
 UndoBuffer::UndoBuffer() {
-	head = make_unique<UndoChunk>(DEFAULT_UNDO_CHUNK_SIZE);
+	head = make_unique<UndoChunk>(0);
 	tail = head.get();
 }
 
 UndoChunk::UndoChunk(index_t size) : current_position(0), maximum_size(size), prev(nullptr) {
-	data = unique_ptr<data_t[]>(new data_t[maximum_size]);
+	if (size > 0) {
+		data = unique_ptr<data_t[]>(new data_t[maximum_size]);
+	}
 }
 UndoChunk::~UndoChunk() {
 	if (next) {
@@ -394,7 +396,7 @@ void CommitState::WriteInsert(VersionInfo *info) {
 }
 
 bool UndoBuffer::ChangesMade() {
-	return entries.size() > 0;
+	return head->maximum_size > 0;
 }
 
 template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
