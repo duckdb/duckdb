@@ -45,6 +45,10 @@ static SQLType double_return_type(vector<SQLType> &arguments) {
 	return SQLTypeId::DOUBLE;
 }
 
+static SQLType tint_return_type(vector<SQLType> &arguments) {
+	return SQLTypeId::TINYINT;
+}
+
 class ScalarFunction {
 public:
 	static bind_scalar_function_t GetBindFunction() {
@@ -299,6 +303,24 @@ public:
 
 	static get_return_type_function_t GetReturnTypeFunction() {
 		return double_return_type;
+	}
+};
+
+void sign_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
+                    Vector &result);
+
+class SignFunction : public ScalarUnaryNumericFunction {
+public:
+	static const char *GetName() {
+		return "sign";
+	}
+
+	static scalar_function_t GetFunction() {
+		return sign_function;
+	}
+
+        static get_return_type_function_t GetReturnTypeFunction() {
+		return tint_return_type;
 	}
 };
 

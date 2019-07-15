@@ -91,4 +91,11 @@ void pi_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
 	VectorOperations::Set(result, Value(PI));
 }
 
+void sign_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
+                    Vector &result) {
+	assert(input_count == 1);
+	result.Initialize(TypeId::TINYINT);
+	VectorOperations::Sign(inputs[0], result);
+}
+
 } // namespace duckdb

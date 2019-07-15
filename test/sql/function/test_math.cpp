@@ -119,4 +119,16 @@ TEST_CASE("Function test cases from PG docs", "[function]") {
 
 	result = con.Query("select degrees(0.5)");
 	REQUIRE(CHECK_COLUMN(result, 0, {28.6478897565412}));
+
+        result = con.Query("select sign(4.1)");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result = con.Query("select sign(-4.1)");
+	REQUIRE(CHECK_COLUMN(result, 0, {-1}));
+
+	result = con.Query("select sign(0)");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	result = con.Query("select sign(3)");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
