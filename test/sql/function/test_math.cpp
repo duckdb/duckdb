@@ -132,3 +132,29 @@ TEST_CASE("Function test cases from PG docs", "[function]") {
 	result = con.Query("select sign(3)");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
+
+TEST_CASE("Mod test", "[function]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE modme(a DOUBLE, b INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO modme VALUES (42.123456, 3)"));
+
+	// input is real, divisor is an integer
+	result = con.Query("select mod(a, 40) from modme");
+	REQUIRE(CHECK_COLUMN(result, 0, {2.123456}));
+
+	// Mod with 0 should be null
+	result = con.Query("select mod(42, 0)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+
+	// input is real, divisor is a real
+	result = con.Query("select mod(a, 2) from modme");
+	REQUIRE(CHECK_COLUMN(result, 0, {.123456}));
+
+	// input is an integer, divisor is a real
+	result = con.Query("select mod(b, 2.1) from modme");
+	REQUIRE(CHECK_COLUMN(result, 0, {0.9}));
+}

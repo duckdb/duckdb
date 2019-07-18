@@ -59,8 +59,9 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddScalarFunction<Log10Function>(transaction, catalog);
 	AddScalarFunction<Log2Function>(transaction, catalog);
 	AddScalarFunction<SignFunction>(transaction, catalog);
+	AddScalarFunction<ModFunction>(transaction, catalog);
 
-        // Trignometric
+	// Trignometric
 	AddScalarFunction<SinFunction>(transaction, catalog);
 	AddScalarFunction<CosFunction>(transaction, catalog);
 	AddScalarFunction<TanFunction>(transaction, catalog);
