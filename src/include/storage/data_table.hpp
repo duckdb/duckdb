@@ -31,27 +31,26 @@ class Transaction;
 
 struct VersionInfo;
 
+struct TableScanState {
+	virtual ~TableScanState() {
+	}
+
+	VersionChunk *chunk;
+	unique_ptr<ColumnPointer[]> columns;
+	index_t offset;
+	VersionInfo *version_chain;
+	VersionChunk *last_chunk;
+};
+
+struct IndexTableScanState : public TableScanState {
+	index_t version_index;
+	index_t version_offset;
+	vector<unique_ptr<StorageLockKey>> locks;
+};
+
+
 //! DataTable represents a physical table on disk
 class DataTable {
-public:
-	struct ScanState {
-		virtual ~ScanState() {
-		}
-
-		VersionChunk *chunk;
-		unique_ptr<ColumnPointer[]> columns;
-		index_t offset;
-		VersionInfo *version_chain;
-
-		VersionChunk *last_chunk;
-		index_t last_chunk_count;
-	};
-
-	struct IndexScanState : public ScanState {
-		index_t base_offset;
-		vector<unique_ptr<StorageLockKey>> locks;
-	};
-
 public:
 	DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types);
 
@@ -76,11 +75,11 @@ public:
 	vector<unique_ptr<Index>> indexes;
 
 public:
-	void InitializeScan(ScanState &state);
+	void InitializeScan(TableScanState &state);
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	// from offset and store them in result. Offset is incremented with how many
 	// elements were returned.
-	void Scan(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids, ScanState &structure);
+	void Scan(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids, TableScanState &structure);
 	//! Fetch data from the specific row identifiers from the base table
 	void Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, Vector &row_ids);
 	//! Append a DataChunk to the table. Throws an exception if the columns
@@ -92,10 +91,10 @@ public:
 	void Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, vector<column_t> &column_ids,
 	            DataChunk &data);
 
-	void InitializeIndexScan(IndexScanState &state);
+	void InitializeIndexScan(IndexTableScanState &state);
 	//! Scan used for creating an index, incrementally locks all storage chunks and scans ALL tuples in the table
 	//! (including all versions of a tuple)
-	void CreateIndexScan(IndexScanState &structure, vector<column_t> &column_ids, DataChunk &result);
+	void CreateIndexScan(IndexTableScanState &structure, vector<column_t> &column_ids, DataChunk &result);
 
 	//! Get statistics of the specified column
 	ColumnStatistics &GetStatistics(column_t oid) {
@@ -107,29 +106,12 @@ public:
 
 	VersionChunk *GetChunk(index_t row_number);
 
-	//! Retrieves versioned data from a set of pointers to tuples inside an
-	//! UndoBuffer and stores them inside the result chunk; used for scanning of
-	//! versioned tuples
-	void RetrieveVersionedData(DataChunk &result, const vector<column_t> &column_ids,
-	                           data_ptr_t alternate_version_pointers[], index_t alternate_version_index[],
-	                           index_t alternate_version_count);
-	//! Fetches a single tuple from the base table at rowid row_id, and appends that tuple to the "result" DataChunk
-	void RetrieveTupleFromBaseTable(DataChunk &result, VersionChunk *chunk, vector<column_t> &column_ids, row_t row_id);
-
 private:
 	//! Append a storage chunk with the given start index to the data table. Returns a pointer to the newly created
 	//! storage chunk.
 	VersionChunk *AppendVersionChunk(index_t start);
 	//! Append a subset of a vector to the specified column of the table
 	void AppendVector(index_t column, Vector &data, index_t offset, index_t count);
-
-	//! Fetch "count" entries from the specified column pointer, and place them in the result vector. The column pointer
-	//! is advanced by "count" entries.
-	void RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &pointer, index_t count);
-	//! Fetch "sel_count" entries from a "count" size chunk of the specified column pointer, where the fetched entries
-	//! are chosen by "sel_vector". The column pointer is advanced by "count" entries.
-	void RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &pointer, index_t count, sel_t *sel_vector,
-	                        index_t sel_count);
 
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);

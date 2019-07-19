@@ -214,14 +214,11 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 			index_t to_copy = min(STORAGE_CHUNK_SIZE - last_chunk->count, remainder);
 			if (to_copy > 0) {
 				// push deleted entries into the undo buffer
-				transaction.PushDeletedEntries(last_chunk->count, to_copy, last_chunk,
-				                               last_chunk->version_pointers + last_chunk->count);
+				last_chunk->PushDeletedEntries(transaction, to_copy);
 				// now insert the elements into the column segments
 				for (index_t i = 0; i < chunk.column_count; i++) {
 					AppendVector(i, chunk.data[i], offset, to_copy);
 				}
-				// set the is_dirty flags in the chunk
-				last_chunk->SetDirtyFlag(last_chunk->count, to_copy, true);
 				// now increase the count of the chunk
 				last_chunk->count += to_copy;
 				offset += to_copy;
@@ -264,7 +261,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 		// chunk
 		assert(id < chunk->count);
 		// check for conflicts
-		auto version = chunk->version_pointers[id];
+		auto version = chunk->GetVersionInfo(id);
 		if (version) {
 			if (version->version_number >= TRANSACTION_ID_START &&
 			    version->version_number != transaction.transaction_id) {
@@ -272,11 +269,9 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 			}
 		}
 		// no conflict, move the current tuple data into the undo buffer
-		transaction.PushTuple(UndoFlags::DELETE_TUPLE, id, chunk);
-		// mark the segment of the chunk as dirty
-		chunk->SetDirtyFlag(id, 1, true);
+		chunk->PushTuple(transaction, UndoFlags::DELETE_TUPLE, id);
 		// and set the deleted flag
-		chunk->deleted[id] = true;
+		chunk->SetDeleted(id);
 	});
 }
 
@@ -431,7 +426,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		// assert that all ids in the vector belong to the same chunk
 		assert(id < chunk->count);
 		// check for version conflicts
-		auto version = chunk->version_pointers[id];
+		auto version = chunk->GetVersionInfo(id);
 		if (version) {
 			if (version->version_number >= TRANSACTION_ID_START &&
 			    version->version_number != transaction.transaction_id) {
@@ -443,13 +438,11 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	// now we update any indexes, we do this before inserting anything into the undo buffer
 	UpdateIndexes(table, column_ids, updates, row_identifiers);
 
-	// now we know thre are no conflicts, move the tuples into the undo buffer and mark the chunk as dirty
+	// now we know there are no conflicts, move the tuples into the undo buffer and mark the chunk as dirty
 	VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
 		auto id = ids[i] - chunk->start;
 		// move the current tuple data into the undo buffer
-		transaction.PushTuple(UndoFlags::UPDATE_TUPLE, id, chunk);
-		// mark the segment as dirty in the chunk
-		chunk->SetDirtyFlag(id, 1, true);
+		chunk->PushTuple(transaction, UndoFlags::UPDATE_TUPLE, id);
 	});
 
 	// now update the columns in the base table
@@ -484,98 +477,9 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void DataTable::RetrieveVersionedData(DataChunk &result, const vector<column_t> &column_ids,
-                                      data_ptr_t alternate_version_pointers[], index_t alternate_version_index[],
-                                      index_t alternate_version_count) {
-	assert(alternate_version_count > 0);
-	// get data from the alternate versions for each column
-	for (index_t j = 0; j < column_ids.size(); j++) {
-		if (column_ids[j] == COLUMN_IDENTIFIER_ROW_ID) {
-			assert(result.data[j].type == TypeId::BIGINT);
-			// assign the row identifiers
-			auto data = ((int64_t *)result.data[j].data) + result.data[j].count;
-			for (index_t k = 0; k < alternate_version_count; k++) {
-				data[k] = alternate_version_index[k];
-			}
-		} else {
-			// grab data from the stored tuple for each column
-			index_t tuple_size = GetTypeIdSize(result.data[j].type);
-			auto res_data = result.data[j].data + result.data[j].count * tuple_size;
-			index_t offset = accumulative_tuple_size[column_ids[j]];
-			for (index_t k = 0; k < alternate_version_count; k++) {
-				auto base_data = alternate_version_pointers[k] + offset;
-				memcpy(res_data, base_data, tuple_size);
-				res_data += tuple_size;
-			}
-		}
-		result.data[j].count += alternate_version_count;
-	}
-}
-
-void DataTable::RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &pointer, index_t count) {
-	index_t type_size = GetTypeIdSize(type);
-	// copy data from the column storage
-	while (count > 0) {
-		// check how much we can copy from this column segment
-		index_t to_copy = std::min(count, (BLOCK_SIZE - pointer.offset) / type_size);
-		if (to_copy > 0) {
-			// copy elements from the column segment
-			data_ptr_t dataptr = pointer.segment->GetData() + pointer.offset;
-			Vector source(type, dataptr);
-			source.count = to_copy;
-			// FIXME: use ::Copy instead of ::AppendFromStorage if there are no null values in this segment
-			VectorOperations::AppendFromStorage(source, result);
-			pointer.offset += type_size * to_copy;
-			count -= to_copy;
-		}
-		if (count > 0) {
-			// there is still chunks to copy
-			// move to the next segment
-			assert(pointer.segment->next);
-			pointer.segment = (ColumnSegment *)pointer.segment->next.get();
-			pointer.offset = 0;
-		}
-	}
-}
-
-void DataTable::RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &pointer, index_t count,
-                                   sel_t *sel_vector, index_t sel_count) {
-	index_t type_size = GetTypeIdSize(type);
-	if (sel_count == 0) {
-		// skip this segment
-		pointer.offset += type_size * count;
-		return;
-	}
-	// copy data from the column storage
-	while (count > 0) {
-		// check how much we can copy from this column segment
-		index_t to_copy = std::min(count, (BLOCK_SIZE - pointer.offset) / type_size);
-		if (to_copy == 0) {
-			// we can't copy anything from this segment, move to the next segment
-			assert(pointer.segment->next);
-			pointer.segment = (ColumnSegment *)pointer.segment->next.get();
-			pointer.offset = 0;
-		} else {
-			// accesses to RetrieveColumnData should be aligned by STANDARD_VECTOR_SIZE, hence to_copy should be
-			// equivalent to either count or 0
-			assert(to_copy == count);
-			// we can copy everything from this column segment, copy with the sel vector
-			data_ptr_t dataptr = pointer.segment->GetData() + pointer.offset;
-			Vector source(type, dataptr);
-			source.count = sel_count;
-			source.sel_vector = sel_vector;
-			// FIXME: use ::Copy instead of ::AppendFromStorage if there are no null values in this segment
-			VectorOperations::AppendFromStorage(source, result);
-			pointer.offset += type_size * to_copy;
-			count -= to_copy;
-		}
-	}
-}
-
-void DataTable::InitializeScan(ScanState &state) {
+void DataTable::InitializeScan(TableScanState &state) {
 	state.chunk = (VersionChunk *)storage_tree.GetRootSegment();
 	state.last_chunk = (VersionChunk *)storage_tree.GetLastSegment();
-	state.last_chunk_count = state.last_chunk->count;
 	state.columns = unique_ptr<ColumnPointer[]>(new ColumnPointer[types.size()]);
 	for (index_t i = 0; i < types.size(); i++) {
 		state.columns[i].segment = (ColumnSegment *)columns[i].GetRootSegment();
@@ -585,132 +489,17 @@ void DataTable::InitializeScan(ScanState &state) {
 	state.version_chain = nullptr;
 }
 
-//! Given the specified root version, fetches the version that belongs to this transaction
-static VersionInfo *GetVersionInfo(Transaction &transaction, VersionInfo *version) {
-	if (!version ||
-	    (version->version_number == transaction.transaction_id || version->version_number < transaction.start_time)) {
-		// either (1) there is no version anymore as it was cleaned up,
-		// or (2) the base table data belongs to the current transaction
-		// in this case use the data in the original table
-		return nullptr;
-	} else {
-		// follow the version pointers
-		while (true) {
-			auto next = version->next;
-			if (!next) {
-				// use this version: no predecessor
-				break;
-			}
-			if (next->version_number == transaction.transaction_id) {
-				// use this version: it was created by us
-				break;
-			}
-			if (next->version_number < transaction.start_time) {
-				// use this version: it was committed by us
-				break;
-			}
-			version = next;
-		}
-		return version;
-	}
-}
-
 void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids,
-                     ScanState &state) {
-	sel_t regular_entries[STANDARD_VECTOR_SIZE], version_entries[STANDARD_VECTOR_SIZE];
-	index_t regular_count, version_count;
+                     TableScanState &state) {
 	// scan the base table
 	while (state.chunk) {
 		auto current_chunk = state.chunk;
-		// first obtain a shared lock on the current chunk
-		auto lock = current_chunk->lock.GetSharedLock();
-		regular_count = version_count = 0;
-		index_t end = current_chunk == state.last_chunk ? state.last_chunk_count : current_chunk->count;
-		index_t scan_count = min((index_t)STANDARD_VECTOR_SIZE, end - state.offset);
-		if (scan_count == 0) {
-			return;
-		}
-		// if the segment is dirty we need to scan the version pointers and deleted flags
-		if (current_chunk->IsDirty(state.offset, scan_count)) {
-			// start scanning the chunk to check for deleted and version pointers
-			for (index_t i = 0; i < scan_count; i++) {
-				version_entries[version_count] = regular_entries[regular_count] = i;
-				bool has_version = current_chunk->version_pointers[state.offset + i];
-				bool is_deleted = current_chunk->deleted[state.offset + i];
-				version_count += has_version;
-				regular_count += !(is_deleted || has_version);
-			}
-			if (regular_count == scan_count) {
-				// the scan was clean: set the dirty flag to false
-				current_chunk->SetDirtyFlag(state.offset, scan_count, false);
-			}
-		} else {
-			// no deleted entries or version information: just scan everything
-			regular_count = scan_count;
-		}
 
-		if (regular_count < scan_count) {
-			// there are versions! chase the version pointers
-			data_ptr_t alternate_version_pointers[STANDARD_VECTOR_SIZE];
-			index_t alternate_version_index[STANDARD_VECTOR_SIZE];
-			index_t alternate_version_count = 0;
+		// scan the current chunk
+		bool is_last_segment = current_chunk->Scan(state, transaction, result, column_ids, state.offset);
 
-			for (index_t i = 0; i < version_count; i++) {
-				auto root_info = current_chunk->version_pointers[state.offset + version_entries[i]];
-				// follow the version chain for this version
-				auto version_info = GetVersionInfo(transaction, root_info);
-				if (!version_info) {
-					// no version info available for this transaction: use base table data
-					// check if entry was not deleted, if it was not deleted use the base table data
-					if (!current_chunk->deleted[state.offset + version_entries[i]]) {
-						regular_entries[regular_count++] = version_entries[i];
-					}
-				} else {
-					// version info available: use the version info
-					if (version_info->tuple_data) {
-						alternate_version_pointers[alternate_version_count] = version_info->tuple_data;
-						alternate_version_index[alternate_version_count] = state.offset + version_entries[i];
-						alternate_version_count++;
-					}
-				}
-			}
-			if (alternate_version_count > 0) {
-				// retrieve alternate versions, if any
-				RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index,
-				                      alternate_version_count);
-			}
-			// retrieve entries from the base table with the selection vector
-			for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-				if (column_ids[col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
-					assert(result.data[col_idx].type == TypeId::BIGINT);
-					auto column_indexes = ((int64_t *)result.data[col_idx].data + result.data[col_idx].count);
-					for (index_t i = 0; i < regular_count; i++) {
-						column_indexes[i] = current_chunk->start + state.offset + regular_entries[i];
-					}
-					result.data[col_idx].count += regular_count;
-				} else {
-					// fetch the data from the base column segments
-					RetrieveColumnData(result.data[col_idx], types[column_ids[col_idx]],
-					                   state.columns[column_ids[col_idx]], scan_count, regular_entries, regular_count);
-				}
-			}
-		} else {
-			// no versions or deleted tuples, simply scan the column segments
-			for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-				if (column_ids[col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
-					// generate column ids
-					result.data[col_idx].count = regular_count;
-					VectorOperations::GenerateSequence(result.data[col_idx], current_chunk->start + state.offset, 1);
-				} else {
-					// fetch the data from the base column segments
-					RetrieveColumnData(result.data[col_idx], types[column_ids[col_idx]],
-					                   state.columns[column_ids[col_idx]], regular_count);
-				}
-			}
-		}
-		// move to the next segment
-		state.offset += STANDARD_VECTOR_SIZE;
-		if (state.offset >= end) {
+		if (is_last_segment) {
+			// last segment of this chunk: move to next segment
 			if (state.chunk == state.last_chunk) {
 				state.chunk = nullptr;
 				break;
@@ -718,27 +507,12 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<c
 				state.offset = 0;
 				state.chunk = (VersionChunk *)current_chunk->next.get();
 			}
+		} else {
+			// move to next segment in this chunk
+			state.offset++;
 		}
 		if (result.size() > 0) {
 			return;
-		}
-	}
-}
-
-void DataTable::RetrieveTupleFromBaseTable(DataChunk &result, VersionChunk *chunk, vector<column_t> &column_ids,
-                                           row_t row_id) {
-	assert(result.size() < STANDARD_VECTOR_SIZE);
-	assert((index_t)row_id >= chunk->start);
-	assert(column_ids.size() == result.column_count);
-	for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-		if (column_ids[col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
-			((row_t *)result.data[col_idx].data)[result.data[col_idx].count] = row_id;
-			result.data[col_idx].count++;
-		} else {
-			assert(column_ids[col_idx] < types.size());
-			// get the column segment for this entry and append it to the vector
-			chunk->columns[column_ids[col_idx]].segment->AppendValue(result.data[col_idx], types[column_ids[col_idx]],
-			                                                         row_id);
 		}
 	}
 }
@@ -760,132 +534,31 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 		assert((index_t)row_id >= chunk->start && (index_t)row_id < chunk->start + chunk->count);
 		auto index = row_id - chunk->start;
 
-		// check if this tuple is versioned
-		auto root_info = chunk->version_pointers[index];
-		auto version_info = GetVersionInfo(transaction, root_info);
-		if (version_info) {
-			if (version_info->tuple_data) {
-				// tuple is versioned: retrieve the versioned data
-				data_ptr_t alternate_version_pointer = version_info->tuple_data;
-				index_t alternate_version_index = row_id;
-
-				RetrieveVersionedData(result, column_ids, &alternate_version_pointer, &alternate_version_index, 1);
-			}
-		} else {
-			if (!chunk->deleted[index]) {
-				// not versioned: retrieve info from base table
-				RetrieveTupleFromBaseTable(result, chunk, column_ids, row_id);
-			}
-		}
+		chunk->RetrieveTupleData(transaction, result, column_ids, index);
 	}
 }
 
-void DataTable::InitializeIndexScan(IndexScanState &state) {
+void DataTable::InitializeIndexScan(IndexTableScanState &state) {
 	InitializeScan(state);
-	state.base_offset = 0;
+	state.version_index = 0;
+	state.version_offset = 0;
 }
 
-void DataTable::CreateIndexScan(IndexScanState &state, vector<column_t> &column_ids, DataChunk &result) {
-	index_t result_count = 0;
+void DataTable::CreateIndexScan(IndexTableScanState &state, vector<column_t> &column_ids, DataChunk &result) {
 	while (state.chunk) {
 		auto current_chunk = state.chunk;
-		if (state.offset == 0 && state.base_offset == 0 && !state.version_chain) {
-			// first obtain a shared lock on the current chunk, if we don't have
-			// it already
-			state.locks.push_back(current_chunk->lock.GetSharedLock());
-		}
 
-		while (state.base_offset < current_chunk->count) {
-			// fill the result until we exhaust the tuples
-			// first scan the base tuples of this chunk
-			sel_t regular_entries[STANDARD_VECTOR_SIZE];
-			index_t scan_count = min((index_t)STANDARD_VECTOR_SIZE, current_chunk->count - state.base_offset);
-			{
-				// figure out the deleted tuples
-				// FIXME: we don't need to do this if the dirty flag is not set for this piece
-				for (index_t i = 0; i < scan_count; i++) {
-					if (!current_chunk->deleted[state.base_offset + i]) {
-						regular_entries[result_count++] = i;
-					}
-				}
-			}
-			if (result_count == scan_count) {
-				// no deleted tuples, use basic fetch calls
-				for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-					if (column_ids[col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
-						// generate column ids
-						result.data[col_idx].count = result_count;
-						VectorOperations::GenerateSequence(result.data[col_idx],
-						                                   current_chunk->start + state.base_offset, 1);
-					} else {
-						// fetch the data from the base column segments
-						RetrieveColumnData(result.data[col_idx], types[column_ids[col_idx]],
-						                   state.columns[column_ids[col_idx]], result_count);
-					}
-				}
-			} else {
-				// scan the tuples found in the base table
-				for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-					if (column_ids[col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
-						assert(result.data[col_idx].type == TypeId::BIGINT);
-						auto column_indexes = ((int64_t *)result.data[col_idx].data + result.data[col_idx].count);
-						for (index_t i = 0; i < result_count; i++) {
-							column_indexes[i] = current_chunk->start + state.base_offset + regular_entries[i];
-						}
-						result.data[col_idx].count += result_count;
-					} else {
-						RetrieveColumnData(result.data[col_idx], types[column_ids[col_idx]],
-						                   state.columns[column_ids[col_idx]], scan_count, regular_entries,
-						                   result_count);
-					}
-				}
-			}
-			state.base_offset += scan_count;
-			assert(result.size() == result_count);
-			if (result_count > 0) {
-				return;
-			}
-		}
-		// the base table was exhausted, now scan any remaining version chunks
-		data_ptr_t alternate_version_pointers[STANDARD_VECTOR_SIZE];
-		index_t alternate_version_index[STANDARD_VECTOR_SIZE];
+		bool chunk_exhausted = current_chunk->CreateIndexScan(state, column_ids, result);
 
-		while (state.offset < current_chunk->count) {
-			if (!state.version_chain) {
-				state.version_chain = current_chunk->version_pointers[state.offset];
-			}
-
-			// now chase the version pointer, if any
-			while (state.version_chain) {
-				if (state.version_chain->tuple_data) {
-					alternate_version_pointers[result_count] = state.version_chain->tuple_data;
-					alternate_version_index[result_count] = state.offset;
-					result_count++;
-				}
-				state.version_chain = state.version_chain->next;
-				if (result_count == STANDARD_VECTOR_SIZE) {
-					break;
-				}
-			}
-			if (!state.version_chain) {
-				state.offset++;
-				state.version_chain = nullptr;
-			}
-			if (result_count == STANDARD_VECTOR_SIZE) {
-				break;
-			}
-		}
-		if (state.offset >= current_chunk->count) {
+		if (chunk_exhausted) {
 			// exceeded this chunk, move to next one
 			state.chunk = (VersionChunk *)state.chunk->next.get();
 			state.offset = 0;
-			state.base_offset = 0;
+			state.version_index = 0;
+			state.version_offset = 0;
 			state.version_chain = nullptr;
 		}
-		if (result_count > 0) {
-			// retrieve the version data, if there was any
-			RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index,
-			                      result_count);
+		if (result.size() > 0) {
 			return;
 		}
 	}

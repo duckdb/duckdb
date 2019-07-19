@@ -76,9 +76,9 @@ public:
 		return start_timestamp;
 	}
 
-private:
 	data_ptr_t PushTuple(UndoFlags flag, index_t data_size);
 
+private:
 	//! The undo buffer is used to store old versions of rows that are updated
 	//! or deleted
 	UndoBuffer undo_buffer;

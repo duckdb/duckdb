@@ -25,7 +25,7 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 	// then flush the blocks to disk when they are full
 
 	// initialize scan structures to prepare for the scan
-	DataTable::ScanState state;
+	TableScanState state;
 	table.storage->InitializeScan(state);
 	vector<column_t> column_ids;
 	for (auto &column : table.columns) {

@@ -14,7 +14,7 @@ void PhysicalCreateIndex::CreateARTIndex() {
 	DataChunk result;
 	result.Initialize(art->types);
 
-	DataTable::IndexScanState state;
+	IndexTableScanState state;
 	table.storage->InitializeIndexScan(state);
 
 	DataChunk intermediate;
