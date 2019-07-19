@@ -110,6 +110,7 @@ private:
 	                        index_t sel_count);
 
 	void FetchColumnData(TableScanState &state, DataChunk &result, const vector<column_t> &column_ids, index_t offset_in_chunk, index_t count);
+	void FetchColumnData(TableScanState &state, DataChunk &result, const vector<column_t> &column_ids, index_t offset_in_chunk, index_t scan_count, sel_t sel_vector[], index_t count);
 };
 
 } // namespace duckdb

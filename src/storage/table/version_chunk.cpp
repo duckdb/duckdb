@@ -343,25 +343,29 @@ bool VersionChunk::Scan(TableScanState &state, Transaction &transaction, DataChu
 									alternate_version_count);
 		}
 		// retrieve entries from the base table with the selection vector
-		for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-			if (column_ids[col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
-				assert(result.data[col_idx].type == TypeId::BIGINT);
-				auto column_indexes = ((int64_t *)result.data[col_idx].data + result.data[col_idx].count);
-				for (index_t i = 0; i < regular_count; i++) {
-					column_indexes[i] = this->start + scan_start + regular_entries[i];
-				}
-				result.data[col_idx].count += regular_count;
-			} else {
-				// fetch the data from the base column segments
-				RetrieveColumnData(result.data[col_idx], table.types[column_ids[col_idx]],
-									state.columns[column_ids[col_idx]], scan_count, regular_entries, regular_count);
-			}
-		}
+		FetchColumnData(state, result, column_ids, scan_start, scan_count, regular_entries, regular_count);
 	} else {
 		// no versions or deleted tuples, simply scan the column segments
 		FetchColumnData(state, result, column_ids, scan_start, regular_count);
 	}
 	return scan_start + scan_count == end;
+}
+
+void VersionChunk::FetchColumnData(TableScanState &state, DataChunk &result, const vector<column_t> &column_ids, index_t offset_in_chunk, index_t scan_count, sel_t sel_vector[], index_t count) {
+	for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+		if (column_ids[col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
+			assert(result.data[col_idx].type == TypeId::BIGINT);
+			auto column_indexes = ((int64_t *)result.data[col_idx].data + result.data[col_idx].count);
+			for (index_t i = 0; i < count; i++) {
+				column_indexes[i] = this->start + offset_in_chunk + sel_vector[i];
+			}
+			result.data[col_idx].count += count;
+		} else {
+			// fetch the data from the base column segments
+			RetrieveColumnData(result.data[col_idx], table.types[column_ids[col_idx]],
+								state.columns[column_ids[col_idx]], scan_count, sel_vector, count);
+		}
+	}
 }
 
 void VersionChunk::FetchColumnData(TableScanState &state, DataChunk &result, const vector<column_t> &column_ids, index_t offset_in_chunk, index_t count) {
@@ -407,7 +411,7 @@ bool VersionChunk::CreateIndexScan(IndexTableScanState &state, vector<column_t> 
 				// no deleted tuples,get all data from the base columns
 				FetchColumnData(state, result, column_ids, state.offset, regular_count);
 			} else {
-				throw Exception("FIXME: deleted tuples in index scan");
+				FetchColumnData(state, result, column_ids, state.offset, scan_count, regular_entries, regular_count);
 			}
 		}
 		state.offset += STANDARD_VECTOR_SIZE;
@@ -416,42 +420,47 @@ bool VersionChunk::CreateIndexScan(IndexTableScanState &state, vector<column_t> 
 		}
 	}
 
+	// the base table was exhausted, now scan any remaining version chunks
 	while(state.version_index < this->count / STANDARD_VECTOR_SIZE) {
 		auto version = version_data[state.version_index];
 		if (!version) {
 			state.version_index++;
 			continue;
 		}
-		// // the base table was exhausted, now scan any remaining version chunks
-		// data_ptr_t alternate_version_pointers[STANDARD_VECTOR_SIZE];
-		// index_t alternate_version_index[STANDARD_VECTOR_SIZE];
+		index_t remaining_count = std::min((index_t) STANDARD_VECTOR_SIZE, this->count - state.version_index * STANDARD_VECTOR_SIZE);
+		data_ptr_t alternate_version_pointers[STANDARD_VECTOR_SIZE];
+		index_t alternate_version_index[STANDARD_VECTOR_SIZE];
+		index_t result_count = 0;
 
-		// while (state.offset < this->count) {
-		// 	if (!state.version_chain) {
-		// 		state.version_chain = current_chunk->version_pointers[state.offset];
-		// 	}
+		while (state.version_offset < remaining_count) {
+			if (!state.version_chain) {
+				state.version_chain = version->version_pointers[state.version_offset];
+			}
 
-		// 	// now chase the version pointer, if any
-		// 	while (state.version_chain) {
-		// 		if (state.version_chain->tuple_data) {
-		// 			alternate_version_pointers[result_count] = state.version_chain->tuple_data;
-		// 			alternate_version_index[result_count] = state.offset;
-		// 			result_count++;
-		// 		}
-		// 		state.version_chain = state.version_chain->next;
-		// 		if (result_count == STANDARD_VECTOR_SIZE) {
-		// 			break;
-		// 		}
-		// 	}
-		// 	if (!state.version_chain) {
-		// 		state.offset++;
-		// 		state.version_chain = nullptr;
-		// 	}
-		// 	if (result_count == STANDARD_VECTOR_SIZE) {
-		// 		break;
-		// 	}
-		// }
-		throw Exception("FIXME: index scan with versioned tuples");
+			// now chase the version pointer, if any
+			while (state.version_chain) {
+				if (state.version_chain->tuple_data) {
+					alternate_version_pointers[result_count] = state.version_chain->tuple_data;
+					alternate_version_index[result_count] = state.version_offset;
+					result_count++;
+				}
+				state.version_chain = state.version_chain->next;
+				if (result_count == STANDARD_VECTOR_SIZE) {
+					break;
+				}
+			}
+			if (!state.version_chain) {
+				state.version_offset++;
+			}
+			if (result_count == STANDARD_VECTOR_SIZE) {
+				break;
+			}
+		}
+		if (state.version_offset == remaining_count) {
+			state.version_index++;
+			state.version_offset = 0;
+			state.version_chain = nullptr;
+		}
 	}
 	return true;
 }
