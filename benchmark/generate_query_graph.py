@@ -233,7 +233,7 @@ def generate(input_file, output_file):
 		<meta name="viewport" content="width=device-width">
 		<title>Query Profile Graph for Query</title>
 		<style>
-		
+
 	.Treant { position: relative; overflow: hidden; padding: 0 !important; }
 	.Treant > .node,
 	.Treant > .pseudo { position: absolute; display: block; visibility: hidden; }
@@ -355,7 +355,7 @@ def generate(input_file, output_file):
 			});
 			// and recreate it
 			new Treant(chart_config );
-			
+
 
 		</script>
 
