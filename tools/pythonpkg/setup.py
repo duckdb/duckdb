@@ -134,6 +134,8 @@ setup(
          'numpy>=1.16',
          'pandas>=0.24'
     ],
+    packages=['duckdb_query_graph'],
+    include_package_data=True,
     setup_requires=setup_requires,
     tests_require=['pytest'],
     classifiers = [

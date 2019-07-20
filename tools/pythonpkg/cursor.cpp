@@ -415,9 +415,6 @@ static PyMethodDef cursor_methods[] = {
     {"profile_info", (PyCFunction)duckdb_cursor_profile, METH_O, PyDoc_STR("Returns the profile information of the last running query.")},
     {NULL, NULL}};
 
-//      {"fetchall", (PyCFunction)duckdb_cursor_fetchall, METH_NOARGS, PyDoc_STR("Fetches all rows from the
-//      resultset.")},
-
 static struct PyMemberDef cursor_members[] = {
     {"connection", T_OBJECT, offsetof(duckdb_Cursor, connection), READONLY},
     //    {"lastrowid", T_OBJECT, offsetof(pysqlite_Cursor, lastrowid), READONLY},

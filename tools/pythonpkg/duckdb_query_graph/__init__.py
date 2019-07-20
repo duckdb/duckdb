@@ -1,16 +1,14 @@
 import json
+import os
 
 MAX_NODES = 1000
 
-def generate(input_file, output_file):
+raphael_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'raphael.js')
+treant_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'treant.js')
+
+
+def generate_html(parsed_json):
 	global current_tone, execution_time, total_nodes
-	with open(input_file) as f:
-		text = f.read()
-		# we only render the first tree, extract it
-		text = '{ "result"' + text.split('{ "result"')[1]
-
-	parsed_json = json.loads(text)
-
 	# tones for the different nodes, we use "earth tones"
 	tones = [
 		"#493829",
@@ -222,18 +220,7 @@ def generate(input_file, output_file):
 			background-color: ${COLOR};
 		}""".replace("${INDEX}", str(i)).replace("${COLOR}", tones[i])
 
-
-	# finally create and write the html
-	with open(output_file, "w+") as f:
-		f.write("""
-	<!DOCTYPE html>
-	<html>
-		<head>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width">
-		<title>Query Profile Graph for Query</title>
-		<style>
-
+	css = """<style>
 	.Treant { position: relative; overflow: hidden; padding: 0 !important; }
 	.Treant > .node,
 	.Treant > .pseudo { position: absolute; display: block; visibility: hidden; }
@@ -323,19 +310,11 @@ def generate(input_file, output_file):
 
 
 	${TONES}
-		</style>
-	</head>
-	<body>
-		<script src="../../raphael.js"></script>
-		<script src="../../treant.js"></script>
+		</style>""".replace("${TONES}", tone_text)
+	chart_script = """
 		<script>
-		${CHART_SCRIPT}
-		</script>
+		${CHART_INFO}
 
-		<div id="meta-info">${META_INFO}</div>
-		<div class="chart" id="query-profile"></div>
-
-		<script>
 			// create a dummy chart to figure out how wide/high it is
 			new Treant(chart_config );
 			max_height = 0
@@ -357,8 +336,65 @@ def generate(input_file, output_file):
 			new Treant(chart_config );
 
 
-		</script>
+		</script>""".replace("${CHART_INFO}", chart_info)
+	libraries = """
+	<script>
+	${RAPHAEL}
+	</script>
+	<script>
+	${TREANT}
+	</script>
+	""".replace("${RAPHAEL}", open(raphael_path).read()).replace("${TREANT}", open(treant_path).read())
+	return {
+		'css': css,
+		'meta_info': meta_info,
+		'chart_script': chart_script,
+		'libraries': libraries
+	}
 
+def generate_ipython(json_input):
+	from IPython.core.display import HTML
+
+	parsed_json = json.loads(json_input)
+
+	html_output = generate_html(parsed_json)
+
+	return HTML("""
+	${CSS}
+	${LIBRARIES}
+	<div class="chart" id="query-profile"></div>
+	${CHART_SCRIPT}
+	""".replace("${CSS}", html_output['css']).replace('${CHART_SCRIPT}', html_output['chart_script']).replace('${LIBRARIES}', html_output['libraries']))
+
+
+def generate(input_file, output_file):
+	with open(input_file) as f:
+		text = f.read()
+		# we only render the first tree, extract it
+		text = '{ "result"' + text.split('{ "result"')[1]
+
+	parsed_json = json.loads(text)
+
+	html_output = generate_html(parsed_json)
+
+	# finally create and write the html
+	with open(output_file, "w+") as f:
+		f.write("""
+	<!DOCTYPE html>
+	<html>
+		<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width">
+		<title>Query Profile Graph for Query</title>
+		${CSS}
+	</head>
+	<body>
+		${LIBRARIES}
+
+		<div id="meta-info">${META_INFO}</div>
+		<div class="chart" id="query-profile"></div>
+
+		${CHART_SCRIPT}
 	</body>
 	</html>
-		""".replace("${TONES}", tone_text).replace("${CHART_SCRIPT}", chart_info).replace("${META_INFO}", meta_info))
+		""".replace("${CSS}", html_output['css']).replace("${META_INFO}", html_output['meta_info']).replace('${CHART_SCRIPT}', html_output['chart_script']).replace('${LIBRARIES}', html_output['libraries']))
