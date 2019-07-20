@@ -419,41 +419,35 @@ bool VersionChunk::CreateIndexScan(IndexTableScanState &state, vector<column_t> 
 			return false;
 		}
 	}
-
+	index_t max_version_index = std::min((index_t) STORAGE_CHUNK_VECTORS, this->count / STANDARD_VECTOR_SIZE);
+	data_ptr_t alternate_version_pointers[STANDARD_VECTOR_SIZE];
+	index_t alternate_version_index[STANDARD_VECTOR_SIZE];
+	index_t result_count = 0;
 	// the base table was exhausted, now scan any remaining version chunks
-	while(state.version_index < this->count / STANDARD_VECTOR_SIZE) {
+	while(state.version_index <= max_version_index && result_count < STANDARD_VECTOR_SIZE) {
 		auto version = version_data[state.version_index];
 		if (!version) {
 			state.version_index++;
 			continue;
 		}
 		index_t remaining_count = std::min((index_t) STANDARD_VECTOR_SIZE, this->count - state.version_index * STANDARD_VECTOR_SIZE);
-		data_ptr_t alternate_version_pointers[STANDARD_VECTOR_SIZE];
-		index_t alternate_version_index[STANDARD_VECTOR_SIZE];
-		index_t result_count = 0;
 
-		while (state.version_offset < remaining_count) {
+		while (state.version_offset < remaining_count && result_count < STANDARD_VECTOR_SIZE) {
 			if (!state.version_chain) {
 				state.version_chain = version->version_pointers[state.version_offset];
 			}
 
 			// now chase the version pointer, if any
-			while (state.version_chain) {
+			while (state.version_chain && result_count < STANDARD_VECTOR_SIZE) {
 				if (state.version_chain->tuple_data) {
 					alternate_version_pointers[result_count] = state.version_chain->tuple_data;
-					alternate_version_index[result_count] = state.version_offset;
+					alternate_version_index[result_count] = state.version_chain->GetRowId();
 					result_count++;
 				}
 				state.version_chain = state.version_chain->next;
-				if (result_count == STANDARD_VECTOR_SIZE) {
-					break;
-				}
 			}
 			if (!state.version_chain) {
 				state.version_offset++;
-			}
-			if (result_count == STANDARD_VECTOR_SIZE) {
-				break;
 			}
 		}
 		if (state.version_offset == remaining_count) {
@@ -461,6 +455,11 @@ bool VersionChunk::CreateIndexScan(IndexTableScanState &state, vector<column_t> 
 			state.version_offset = 0;
 			state.version_chain = nullptr;
 		}
+	}
+	if (result_count > 0) {
+		RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index,
+								result_count);
+		return false;
 	}
 	return true;
 }

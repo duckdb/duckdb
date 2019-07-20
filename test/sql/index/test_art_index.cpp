@@ -870,7 +870,6 @@ TEST_CASE("ART Big Range", "[art]") {
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 
 	// now perform a an index creation and scan with deletions with a second transaction
-	Connection con2(db);
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
 	for (index_t j = 0; j < 1500; j++) {
@@ -881,6 +880,7 @@ TEST_CASE("ART Big Range", "[art]") {
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 
 	// second transaction: begin and verify counts
+	Connection con2(db);
 	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
 	for (index_t i = 0; i < n + 1; i++) {
 		result = con2.Query("SELECT FIRST(i), COUNT(i) FROM integers WHERE i=" + to_string(keys[i]));
