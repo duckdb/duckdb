@@ -283,7 +283,7 @@ bool VersionChunk::Scan(TableScanState &state, Transaction &transaction, DataChu
 	auto shared_lock = lock.GetSharedLock();
 	// now figure out how many tuples to scan in this chunk
 	index_t scan_start = version_index * STANDARD_VECTOR_SIZE;
-	index_t end = this->count;
+	index_t end = this == state.last_chunk ? state.last_chunk_count : this->count;
 	index_t scan_count = min((index_t)STANDARD_VECTOR_SIZE, end - scan_start);
 	if (scan_count == 0) {
 		// exhausted this chunk already
@@ -303,7 +303,7 @@ bool VersionChunk::Scan(TableScanState &state, Transaction &transaction, DataChu
 			version_count += has_version;
 			regular_count += !(is_deleted || has_version);
 		}
-		if (regular_count == scan_count) {
+		if (regular_count == scan_count && (scan_count == STANDARD_VECTOR_SIZE || end == this->count)) {
 			// the scan was clean: delete the version_data
 			version_data[version_index] = nullptr;
 		}

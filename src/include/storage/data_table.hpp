@@ -40,6 +40,7 @@ struct TableScanState {
 	index_t offset;
 	VersionInfo *version_chain;
 	VersionChunk *last_chunk;
+	index_t last_chunk_count;
 };
 
 struct IndexTableScanState : public TableScanState {

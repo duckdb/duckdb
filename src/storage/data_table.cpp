@@ -480,6 +480,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 void DataTable::InitializeScan(TableScanState &state) {
 	state.chunk = (VersionChunk *)storage_tree.GetRootSegment();
 	state.last_chunk = (VersionChunk *)storage_tree.GetLastSegment();
+	state.last_chunk_count = state.last_chunk->count;
 	state.columns = unique_ptr<ColumnPointer[]>(new ColumnPointer[types.size()]);
 	for (index_t i = 0; i < types.size(); i++) {
 		state.columns[i].segment = (ColumnSegment *)columns[i].GetRootSegment();
