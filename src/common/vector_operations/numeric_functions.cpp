@@ -150,7 +150,7 @@ void VectorOperations::Mod(Vector &input, Vector &divisor, Vector &result) {
 	case TypeId::BIGINT:
           divisor.Cast(TypeId::BIGINT);
           input.Cast(TypeId::BIGINT);
-          templated_divmod_loop<int64_t, duckdb::ModInt>(input, divisor, result);
+          templated_divmod_loop<int64_t, duckdb::Modulo>(input, divisor, result);
           break;
 	case TypeId::DOUBLE:
           divisor.Cast(TypeId::DOUBLE);

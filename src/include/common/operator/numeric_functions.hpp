@@ -148,12 +148,6 @@ struct Sign {
 	}
 };
 
-struct ModInt {
-	template <class T> static inline T Operation(T input, T divisor) {
-		return input % divisor;
-	}
-};
-
 struct ModReal {
 	template <class T> static inline T Operation(T input, T divisor) {
 		return fmod(input, divisor);
