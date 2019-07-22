@@ -14,6 +14,17 @@ using namespace std;
 
 namespace duckdb {
 
+void count_function(Vector inputs[], index_t input_count, Vector &result ) {
+	assert(input_count == 1 );
+	VectorOperations::Scatter::AddOne(inputs[0], result);
+}
+
+void count_simple_function(Vector inputs[], index_t input_count, Value& result) {
+	assert(input_count == 1 );
+	Value count = VectorOperations::Count(inputs[0]);
+	result = result + count;
+}
+
 void max_function(Vector inputs[], index_t input_count, Vector &result ) {
 	assert(input_count == 1 );
 	VectorOperations::Scatter::Max(inputs[0], result);

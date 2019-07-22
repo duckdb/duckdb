@@ -200,18 +200,16 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			VectorOperations::Scatter::Add(one, addresses);
 			break;
 		case ExpressionType::AGGREGATE_COUNT:
-			VectorOperations::Scatter::AddOne(payload.data[payload_idx], addresses);
+			count_function(&payload.data[payload_idx], 1, addresses);
 			break;
 		case ExpressionType::AGGREGATE_SUM:
 			sum_function(&payload.data[payload_idx], 1, addresses);
 			break;
 		case ExpressionType::AGGREGATE_MIN:
-			// min
-			VectorOperations::Scatter::Min(payload.data[payload_idx], addresses);
+			min_function(&payload.data[payload_idx], 1, addresses);
 			break;
 		case ExpressionType::AGGREGATE_MAX:
-			// max
-			VectorOperations::Scatter::Max(payload.data[payload_idx], addresses);
+			max_function(&payload.data[payload_idx], 1, addresses);
 			break;
 		case ExpressionType::AGGREGATE_FIRST:
 			// first

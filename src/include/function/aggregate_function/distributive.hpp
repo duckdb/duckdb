@@ -22,6 +22,33 @@ static SQLType get_same_return_type(vector<SQLType> &arguments) {
 	return arguments[0];
 }
 
+static SQLType get_bigint_return_type(vector<SQLType> &arguments) {
+	return SQLTypeId::BIGINT;
+}
+
+void count_function( Vector inputs[], index_t input_count, Vector &result );
+void count_simple_function( Vector inputs[], index_t input_count, Value &result );
+
+class CountFunction {
+public:
+	static const char*GetName() {
+		return "count";
+	}
+
+	static aggregate_function_t GetFunction() {
+		return count_function;
+	}
+
+	static aggregate__simple_function_t GetSimpleFunction() {
+		return count_simple_function;
+	}
+
+	static get_return_type_function_t GetReturnTypeFunction() {
+		return get_bigint_return_type;
+	}
+
+};
+
 void max_function( Vector inputs[], index_t input_count, Vector &result );
 void max_simple_function( Vector inputs[], index_t input_count, Value &result );
 

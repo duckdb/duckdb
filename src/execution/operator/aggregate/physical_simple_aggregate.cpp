@@ -38,8 +38,7 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 				state->aggregates[aggr_idx] = state->aggregates[aggr_idx] + Value::BIGINT(payload_vector.count);
 				break;
 			case ExpressionType::AGGREGATE_COUNT: {
-				Value count = VectorOperations::Count(payload_vector);
-				state->aggregates[aggr_idx] = state->aggregates[aggr_idx] + count;
+				count_simple_function( &payload_vector, 1, state->aggregates[aggr_idx] );
 				break;
 			}
 			case ExpressionType::AGGREGATE_SUM:
