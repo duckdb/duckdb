@@ -34,7 +34,7 @@ void VersionChunkInfo::Undo(VersionInfo *info) {
 
 		vector<data_ptr_t> data_pointers;
 		for (index_t i = 0; i < chunk.table.types.size(); i++) {
-			data_pointers.push_back(chunk.GetPointerToRow(i, start + entry));
+			data_pointers.push_back(chunk.GetPointerToRow(i, chunk.start + start + entry));
 		}
 		chunk.table.serializer.Deserialize(data_pointers, 0, tuple_data);
 	}
@@ -419,12 +419,12 @@ bool VersionChunk::CreateIndexScan(IndexTableScanState &state, vector<column_t> 
 			return false;
 		}
 	}
-	index_t max_version_index = std::min((index_t) STORAGE_CHUNK_VECTORS, this->count / STANDARD_VECTOR_SIZE);
+	index_t max_version_index = std::min((index_t) STORAGE_CHUNK_VECTORS, 1 + (this->count / STANDARD_VECTOR_SIZE));
 	data_ptr_t alternate_version_pointers[STANDARD_VECTOR_SIZE];
 	index_t alternate_version_index[STANDARD_VECTOR_SIZE];
 	index_t result_count = 0;
 	// the base table was exhausted, now scan any remaining version chunks
-	while(state.version_index <= max_version_index && result_count < STANDARD_VECTOR_SIZE) {
+	while(state.version_index < max_version_index && result_count < STANDARD_VECTOR_SIZE) {
 		auto version = version_data[state.version_index];
 		if (!version) {
 			state.version_index++;
