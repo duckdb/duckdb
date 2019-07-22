@@ -2,6 +2,7 @@
 
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
+#include "function/aggregate_function/distributive.hpp"
 #include "planner/expression/bound_aggregate_expression.hpp"
 
 using namespace duckdb;
@@ -42,15 +43,7 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 				break;
 			}
 			case ExpressionType::AGGREGATE_SUM: {
-				Value sum = VectorOperations::Sum(payload_vector);
-				if (sum.is_null) {
-					break;
-				}
-				if (state->aggregates[aggr_idx].is_null) {
-					state->aggregates[aggr_idx] = sum;
-				} else {
-					state->aggregates[aggr_idx] = state->aggregates[aggr_idx] + sum;
-				}
+				sum_simple_function( &payload_vector, 1, state->aggregates[aggr_idx] );
 				break;
 			}
 			case ExpressionType::AGGREGATE_MIN: {

@@ -1,5 +1,7 @@
 #include "execution/aggregate_hashtable.hpp"
 
+#include "function/aggregate_function/distributive.hpp"
+
 #include "common/exception.hpp"
 #include "common/types/null_value.hpp"
 #include "common/types/static_vector.hpp"
@@ -201,8 +203,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			VectorOperations::Scatter::AddOne(payload.data[payload_idx], addresses);
 			break;
 		case ExpressionType::AGGREGATE_SUM:
-			// addition
-			VectorOperations::Scatter::Add(payload.data[payload_idx], addresses);
+			sum_function(&payload.data[payload_idx], 1, addresses);
 			break;
 		case ExpressionType::AGGREGATE_MIN:
 			// min
