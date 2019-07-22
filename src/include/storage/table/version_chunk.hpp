@@ -52,6 +52,7 @@ public:
 };
 
 class VersionChunk : public SegmentBase {
+	friend class VersionChunkInfo;
 public:
 	VersionChunk(DataTable &table, index_t start);
 
@@ -68,8 +69,6 @@ public:
 	StringHeap string_heap;
 
 public:
-	//! Get a pointer to the row of the specified column
-	data_ptr_t GetPointerToRow(index_t col, index_t row);
 	//! Get the VersionInfo index for a specific entry
 	index_t GetVersionIndex(index_t index);
 	//! Get the version info for a specific entry
@@ -87,6 +86,11 @@ public:
 
 	//! Scan used for creating an index, scans ALL tuples in the table (including all versions of a tuple). Returns true if the chunk is exhausted
 	bool CreateIndexScan(IndexTableScanState &state, vector<column_t> &column_ids, DataChunk &result);
+
+	//! Appends the data of a VersionInfo entry to a chunk
+	void AppendToChunk(DataChunk &chunk, VersionInfo *info);
+
+	void Update(Vector &row_identifiers, Vector &update_vector, index_t col_idx);
 public:
 	// FIXME: this should not be public!
 
@@ -99,6 +103,9 @@ public:
 	//! Fetches a single tuple from the base table at rowid row_id, and appends that tuple to the "result" DataChunk
 	void RetrieveTupleFromBaseTable(DataChunk &result, vector<column_t> &column_ids, row_t row_id);
 private:
+	//! Get a pointer to the row of the specified column
+	data_ptr_t GetPointerToRow(index_t col, index_t row);
+
 	VersionChunkInfo* GetOrCreateVersionInfo(index_t version_index);
 
 	//! Fetch "count" entries from the specified column pointer, and place them in the result vector. The column pointer

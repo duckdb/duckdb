@@ -448,24 +448,8 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	// now update the columns in the base table
 	for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
 		auto column_id = column_ids[col_idx];
-		auto size = GetTypeIdSize(updates.data[col_idx].type);
 
-		Vector *update_vector = &updates.data[col_idx];
-		Vector null_vector;
-		if (update_vector->nullmask.any()) {
-			// has NULL values in the nullmask
-			// copy them to a temporary vector
-			null_vector.Initialize(update_vector->type, false);
-			null_vector.count = update_vector->count;
-			VectorOperations::CopyToStorage(*update_vector, null_vector.data);
-			update_vector = &null_vector;
-		}
-
-		VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
-			auto dataptr = chunk->GetPointerToRow(column_ids[col_idx], ids[i]);
-			auto update_index = update_vector->sel_vector ? update_vector->sel_vector[k] : k;
-			memcpy(dataptr, update_vector->data + update_index * size, size);
-		});
+		chunk->Update(row_identifiers, updates.data[col_idx], column_id);
 
 		// update the statistics with the new data
 		statistics[column_id].Update(updates.data[col_idx]);

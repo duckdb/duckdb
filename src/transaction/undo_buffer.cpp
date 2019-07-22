@@ -182,7 +182,6 @@ private:
 	void SwitchTable(DataTable *table, UndoFlags new_op);
 
 	void PrepareAppend(UndoFlags op);
-	void AppendToChunk(VersionInfo *info);
 
 	void WriteCatalogEntry(CatalogEntry *entry);
 	void WriteDelete(VersionInfo *info);
@@ -224,32 +223,6 @@ void CommitState::SwitchTable(DataTable *table, UndoFlags new_op) {
 		log->WriteSetTable(table->schema, table->table);
 		current_table = table;
 		chunk = nullptr;
-	}
-}
-
-void CommitState::AppendToChunk(VersionInfo *info) {
-	if (!info->prev) {
-		// fetch from base table
-		auto id = info->GetRowId();
-		index_t current_offset = chunk->size();
-		for (index_t i = 0; i < current_table->types.size(); i++) {
-			index_t value_size = GetTypeIdSize(chunk->data[i].type);
-			data_ptr_t storage_pointer = info->vinfo->chunk.GetPointerToRow(i, id);
-			memcpy(chunk->data[i].data + value_size * current_offset, storage_pointer, value_size);
-			chunk->data[i].count++;
-		}
-	} else {
-		// fetch from tuple data
-		assert(info->prev->tuple_data);
-		auto tuple_data = info->prev->tuple_data;
-		index_t current_offset = chunk->size();
-		for (index_t i = 0; i < current_table->types.size(); i++) {
-			auto type = chunk->data[i].type;
-			index_t value_size = GetTypeIdSize(type);
-			memcpy(chunk->data[i].data + value_size * current_offset, tuple_data, value_size);
-			tuple_data += value_size;
-			chunk->data[i].count++;
-		}
 	}
 }
 
@@ -357,7 +330,7 @@ void CommitState::WriteUpdate(VersionInfo *info) {
 	PrepareAppend(UndoFlags::UPDATE_TUPLE);
 
 	// append the updated info to the chunk
-	AppendToChunk(info);
+	info->vinfo->chunk.AppendToChunk(*chunk, info);
 	// now update the rowid to the final block
 	index_t rowid = info->GetRowId();
 	auto &row_id_vector = chunk->data[chunk->column_count - 1];
@@ -391,7 +364,7 @@ void CommitState::WriteInsert(VersionInfo *info) {
 	PrepareAppend(UndoFlags::INSERT_TUPLE);
 
 	// now append the tuple to the current chunk
-	AppendToChunk(info);
+	info->vinfo->chunk.AppendToChunk(*chunk, info);
 }
 
 bool UndoBuffer::ChangesMade() {

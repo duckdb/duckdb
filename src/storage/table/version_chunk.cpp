@@ -81,7 +81,6 @@ VersionChunkInfo* VersionChunk::GetOrCreateVersionInfo(index_t version_index) {
 	return version_data[version_index].get();
 }
 
-
 void VersionChunk::PushDeletedEntries(Transaction &transaction, index_t amount) {
 	index_t version_index = GetVersionIndex(this->count);
 	index_t offset_in_version = this->count % STANDARD_VECTOR_SIZE;
@@ -187,6 +186,58 @@ void VersionChunk::RetrieveTupleFromBaseTable(DataChunk &result, vector<column_t
 			columns[column_ids[col_idx]].segment->AppendValue(result.data[col_idx], table.types[column_ids[col_idx]],
 			                                                         row_id);
 		}
+	}
+}
+
+void VersionChunk::AppendToChunk(DataChunk &chunk, VersionInfo *info) {
+	if (!info->prev) {
+		// fetch from base table
+		auto id = info->GetRowId();
+		index_t current_offset = chunk.size();
+		for (index_t i = 0; i < table.types.size(); i++) {
+			index_t value_size = GetTypeIdSize(chunk.data[i].type);
+			data_ptr_t storage_pointer = GetPointerToRow(i, id);
+			memcpy(chunk.data[i].data + value_size * current_offset, storage_pointer, value_size);
+			chunk.data[i].count++;
+		}
+	} else {
+		// fetch from tuple data
+		assert(info->prev->tuple_data);
+		auto tuple_data = info->prev->tuple_data;
+		index_t current_offset = chunk.size();
+		for (index_t i = 0; i < table.types.size(); i++) {
+			auto type = chunk.data[i].type;
+			index_t value_size = GetTypeIdSize(type);
+			memcpy(chunk.data[i].data + value_size * current_offset, tuple_data, value_size);
+			tuple_data += value_size;
+			chunk.data[i].count++;
+		}
+	}
+}
+
+void VersionChunk::Update(Vector &row_identifiers, Vector &update_vector, index_t col_idx) {
+	auto size = GetTypeIdSize(update_vector.type);
+	auto ids = (row_t *)row_identifiers.data;
+
+	if (update_vector.nullmask.any()) {
+		// has NULL values in the nullmask
+		// copy them to a temporary vector
+		Vector null_vector;
+		null_vector.Initialize(update_vector.type, false);
+		null_vector.count = update_vector.count;
+		VectorOperations::CopyToStorage(update_vector, null_vector.data);
+
+		assert(!null_vector.sel_vector);
+		VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
+			auto dataptr = GetPointerToRow(col_idx, ids[i]);
+			memcpy(dataptr, null_vector.data + k * size, size);
+		});
+	} else {
+		assert(row_identifiers.sel_vector == update_vector.sel_vector);
+		VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
+			auto dataptr = GetPointerToRow(col_idx, ids[i]);
+			memcpy(dataptr, update_vector.data + i * size, size);
+		});
 	}
 }
 
