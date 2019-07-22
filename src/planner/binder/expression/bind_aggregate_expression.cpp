@@ -4,26 +4,15 @@
 #include "planner/expression_binder/aggregate_binder.hpp"
 #include "planner/expression_binder/select_binder.hpp"
 #include "planner/query_node/bound_select_node.hpp"
+#include "function/aggregate_function/distributive.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 static SQLType ResolveSumType(SQLType input_type) {
-	switch (input_type.id) {
-	case SQLTypeId::SQLNULL:
-	case SQLTypeId::TINYINT:
-	case SQLTypeId::SMALLINT:
-	case SQLTypeId::INTEGER:
-	case SQLTypeId::BIGINT:
-		return SQLType(SQLTypeId::BIGINT);
-	case SQLTypeId::FLOAT:
-		return SQLType(SQLTypeId::FLOAT);
-	case SQLTypeId::DOUBLE:
-	case SQLTypeId::DECIMAL:
-		return SQLType(SQLTypeId::DECIMAL);
-	default:
-		throw BinderException("Unsupported SQLType %s for SUM aggregate", SQLTypeToString(input_type).c_str());
-	}
+	vector<SQLType> arguments;
+	arguments.push_back(input_type);
+	return sum_get_return_type( arguments );
 }
 
 static SQLType ResolveSTDDevType(SQLType input_type) {
