@@ -91,9 +91,7 @@ public:
 	void AppendToChunk(DataChunk &chunk, VersionInfo *info);
 
 	void Update(Vector &row_identifiers, Vector &update_vector, index_t col_idx);
-public:
-	// FIXME: this should not be public!
-
+private:
 	//! Retrieves versioned data from a set of pointers to tuples inside an
 	//! UndoBuffer and stores them inside the result chunk; used for scanning of
 	//! versioned tuples
@@ -102,7 +100,7 @@ public:
 	                           index_t alternate_version_count);
 	//! Fetches a single tuple from the base table at rowid row_id, and appends that tuple to the "result" DataChunk
 	void RetrieveTupleFromBaseTable(DataChunk &result, vector<column_t> &column_ids, row_t row_id);
-private:
+
 	//! Get a pointer to the row of the specified column
 	data_ptr_t GetPointerToRow(index_t col, index_t row);
 

@@ -490,28 +490,18 @@ void UndoBuffer::Rollback() {
 }
 
 static void CleanupIndexInsert(VersionInfo *info) {
+	assert(info->tuple_data);
+	VersionInfo next;
+	next.prev = info;
+
 	// fetch the row identifiers
 	row_t row_number = info->GetRowId();
-
-	assert(info->tuple_data);
-	uint8_t *alternate_version_pointers[1];
-	uint64_t alternate_version_index[1];
-
-	alternate_version_pointers[0] = info->tuple_data;
-	alternate_version_index[0] = 0;
-
-	DataChunk result;
-	result.Initialize(info->GetTable().types);
-
-	vector<column_t> column_ids;
-	for (size_t i = 0; i < info->GetTable().types.size(); i++) {
-		column_ids.push_back(i);
-	}
-
 	Value ptr = Value::BIGINT(row_number);
 	Vector row_identifiers(ptr);
 
-	info->vinfo->chunk.RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index, 1);
+	DataChunk result;
+	result.Initialize(info->GetTable().types);
+	info->vinfo->chunk.AppendToChunk(result, &next);
 	for (auto &index : info->GetTable().indexes) {
 		index->Delete(result, row_identifiers);
 	}
@@ -520,17 +510,11 @@ static void CleanupIndexInsert(VersionInfo *info) {
 static void RollbackIndexInsert(VersionInfo *info) {
 	row_t row_id = info->GetRowId();
 	Value ptr = Value::BIGINT(row_id);
+	Vector row_identifiers(ptr);
 
 	DataChunk result;
 	result.Initialize(info->GetTable().types);
-
-	vector<column_t> column_ids;
-	for (size_t i = 0; i < info->GetTable().types.size(); i++) {
-		column_ids.push_back(i);
-	}
-	Vector row_identifiers(ptr);
-
-	info->vinfo->chunk.RetrieveTupleFromBaseTable(result, column_ids, row_id);
+	info->vinfo->chunk.AppendToChunk(result, info);
 	for (auto &index : info->GetTable().indexes) {
 		index->Delete(result, row_identifiers);
 	}
