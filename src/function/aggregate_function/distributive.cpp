@@ -14,8 +14,40 @@ using namespace std;
 
 namespace duckdb {
 
+void max_function(Vector inputs[], index_t input_count, Vector &result ) {
+	assert(input_count == 1 );
+	VectorOperations::Scatter::Max(inputs[0], result);
+}
+
+void max_simple_function(Vector inputs[], index_t input_count, Value& result) {
+	assert(input_count == 1 );
+	Value max = VectorOperations::Max(inputs[0]);
+	if (max.is_null) {
+		return;
+	}
+	if (result.is_null || result < max) {
+		result = max;
+	}
+}
+
+void min_function(Vector inputs[], index_t input_count, Vector &result ) {
+	assert(input_count == 1 );
+	VectorOperations::Scatter::Min(inputs[0], result);
+}
+
+void min_simple_function(Vector inputs[], index_t input_count, Value& result) {
+	assert(input_count == 1 );
+	Value min = VectorOperations::Min(inputs[0]);
+	if (min.is_null) {
+		return;
+	}
+	if (result.is_null || result > min) {
+		result = min;
+	}
+}
+
 SQLType sum_get_return_type( vector<SQLType> &arguments ) {
-	assert(arguments.size() > 0);
+	assert(arguments.size() == 1);
 	const auto& input_type = arguments[0];
 	switch (input_type.id) {
 	case SQLTypeId::SQLNULL:

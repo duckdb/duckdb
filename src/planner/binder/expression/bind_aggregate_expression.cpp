@@ -15,6 +15,12 @@ static SQLType ResolveSumType(SQLType input_type) {
 	return sum_get_return_type( arguments );
 }
 
+static SQLType ResolveSameType(SQLType input_type) {
+	vector<SQLType> arguments;
+	arguments.push_back(input_type);
+	return get_same_return_type( arguments );
+}
+
 static SQLType ResolveSTDDevType(SQLType input_type) {
 	switch (input_type.id) {
 	case SQLTypeId::SQLNULL:
@@ -51,7 +57,7 @@ static SQLType ResolveAggregateType(AggregateExpression &aggr, unique_ptr<Expres
 	case ExpressionType::AGGREGATE_MIN:
 	case ExpressionType::AGGREGATE_FIRST:
 		// MAX/MIN/FIRST aggregates return the input type
-		result_type = child_type;
+		result_type = ResolveSameType(child_type);
 		break;
 	case ExpressionType::AGGREGATE_SUM:
 	case ExpressionType::AGGREGATE_SUM_DISTINCT:
