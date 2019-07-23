@@ -187,7 +187,6 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 
 	// now every cell has an entry
 	// update the aggregates
-	Vector one(Value::BIGINT(1));
 	index_t payload_idx = 0;
 
 	for (index_t aggr_idx = 0; aggr_idx < aggregate_types.size(); aggr_idx++) {
@@ -196,8 +195,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		// for any entries for which a group was found, update the aggregate
 		switch (aggregate_types[aggr_idx]) {
 		case ExpressionType::AGGREGATE_COUNT_STAR:
-			// add one to each address, regardless of if the value is NULL
-			countstar_function(&one, 1, addresses);
+			countstar_function(&payload.data[payload_idx], 0, addresses);
 			break;
 		case ExpressionType::AGGREGATE_COUNT:
 			count_function(&payload.data[payload_idx], 1, addresses);
