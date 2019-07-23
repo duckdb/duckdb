@@ -18,6 +18,7 @@ typedef index_t (*aggregate_size_t)(TypeId return_type);
 typedef void (*aggregate_initialize_t)(data_ptr_t payload, TypeId return_type);
 typedef void (*aggregate_function_t)(Vector inputs[], index_t input_count, Vector &result);
 typedef void (*aggregate_finalize_t)(Vector& payloads, Vector &result);
+typedef Value (*aggregate_simple_initialize_t)();
 typedef void (*aggregate_simple_function_t)(Vector inputs[], index_t input_count, Value &result);
 
 static index_t get_return_type_size(TypeId return_type) {
@@ -39,6 +40,14 @@ static SQLType get_same_return_type(vector<SQLType> &arguments) {
 
 static SQLType get_bigint_return_type(vector<SQLType> &arguments) {
 	return SQLTypeId::BIGINT;
+}
+
+static Value bigint_simple_initialize() {
+	return Value::BIGINT(0);
+}
+
+static Value null_simple_initialize() {
+	return Value();
 }
 
 void null_payload_initialize(data_ptr_t payload, TypeId return_type);
@@ -65,12 +74,16 @@ public:
 		return count_function;
 	}
 
-	static aggregate_simple_function_t GetSimpleFunction() {
-		return count_simple_function;
-	}
-
 	static aggregate_finalize_t GetFinalizeFunction() {
 		return gather_finalize;
+	}
+
+	static aggregate_simple_initialize_t GetSimpleInitializeFunction() {
+		return bigint_simple_initialize;
+	}
+
+	static aggregate_simple_function_t GetSimpleFunction() {
+		return count_simple_function;
 	}
 
 	static get_return_type_function_t GetReturnTypeFunction() {
@@ -99,12 +112,16 @@ public:
 		return countstar_function;
 	}
 
-	static aggregate_simple_function_t GetSimpleFunction() {
-		return countstar_simple_function;
-	}
-
 	static aggregate_finalize_t GetFinalizeFunction() {
 		return gather_finalize;
+	}
+
+	static aggregate_simple_initialize_t GetSimpleInitializeFunction() {
+		return bigint_simple_initialize;
+	}
+
+	static aggregate_simple_function_t GetSimpleFunction() {
+		return countstar_simple_function;
 	}
 
 	static get_return_type_function_t GetReturnTypeFunction() {
@@ -132,12 +149,16 @@ public:
 		return first_function;
 	}
 
-	static aggregate_simple_function_t GetSimpleFunction() {
+	static aggregate_finalize_t GetFinalizeFunction() {
+		return gather_finalize;
+	}
+
+	static aggregate_simple_initialize_t GetSimpleInitializeFunction() {
 		return nullptr;
 	}
 
-	static aggregate_finalize_t GetFinalizeFunction() {
-		return gather_finalize;
+	static aggregate_simple_function_t GetSimpleFunction() {
+		return nullptr;
 	}
 
 	static get_return_type_function_t GetReturnTypeFunction() {
@@ -166,12 +187,16 @@ public:
 		return max_function;
 	}
 
-	static aggregate_simple_function_t GetSimpleFunction() {
-		return max_simple_function;
-	}
-
 	static aggregate_finalize_t GetFinalizeFunction() {
 		return gather_finalize;
+	}
+
+	static aggregate_simple_initialize_t GetSimpleFunction() {
+		return null_simple_initialize;
+	}
+
+	static aggregate_simple_function_t GetSimpleInitializeFunction() {
+		return max_simple_function;
 	}
 
 	static get_return_type_function_t GetReturnTypeFunction() {
@@ -200,12 +225,16 @@ public:
 		return min_function;
 	}
 
-	static aggregate_simple_function_t GetSimpleFunction() {
-		return min_simple_function;
-	}
-
 	static aggregate_finalize_t GetFinalizeFunction() {
 		return gather_finalize;
+	}
+
+	static aggregate_simple_initialize_t GetSimpleFunction() {
+		return null_simple_initialize;
+	}
+
+	static aggregate_simple_function_t GetSimpleInitializeFunction() {
+		return min_simple_function;
 	}
 
 	static get_return_type_function_t GetReturnTypeFunction() {
@@ -244,12 +273,16 @@ public:
 		return stddevsamp_function;
 	}
 
-	static aggregate_simple_function_t GetSimpleFunction() {
+	static aggregate_finalize_t GetFinalizeFunction() {
+		return stddevsamp_finalize;
+	}
+
+	static aggregate_simple_initialize_t GetSimpleInitializeFunction() {
 		return nullptr;
 	}
 
-	static aggregate_finalize_t GetFinalizeFunction() {
-		return stddevsamp_finalize;
+	static aggregate_simple_function_t GetSimpleFunction() {
+		return nullptr;
 	}
 
 	static get_return_type_function_t GetReturnTypeFunction() {
@@ -279,12 +312,16 @@ public:
 		return sum_function;
 	}
 
-	static aggregate_simple_function_t GetSimpleFunction() {
-		return sum_simple_function;
-	}
-
 	static aggregate_finalize_t GetFinalizeFunction() {
 		return gather_finalize;
+	}
+
+	static aggregate_simple_initialize_t GetSimpleFunction() {
+		return null_simple_initialize;
+	}
+
+	static aggregate_simple_function_t GetSimpleInitializeFunction() {
+		return sum_simple_function;
 	}
 
 	static get_return_type_function_t GetReturnTypeFunction() {

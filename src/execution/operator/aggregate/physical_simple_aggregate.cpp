@@ -84,10 +84,10 @@ PhysicalSimpleAggregateOperatorState::PhysicalSimpleAggregateOperatorState(Physi
 		case ExpressionType::AGGREGATE_COUNT_STAR:
 		case ExpressionType::AGGREGATE_COUNT:
 		case ExpressionType::AGGREGATE_COUNT_DISTINCT:
-			aggregates.push_back(Value::BIGINT(0));
+			aggregates.push_back(bigint_simple_initialize());
 			break;
 		default:
-			aggregates.push_back(Value());
+			aggregates.push_back(null_simple_initialize());
 			break;
 		}
 	}
