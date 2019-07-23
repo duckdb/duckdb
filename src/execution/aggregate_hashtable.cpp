@@ -22,7 +22,7 @@ static index_t GetAggrPayloadSize(ExpressionType expr_type, TypeId return_type) 
 		return get_bigint_type_size(return_type);
 	case ExpressionType::AGGREGATE_STDDEV_SAMP:
 		// count running_mean running_dsquared
-		return stddev_payload_size( return_type);
+		return stddev_payload_size(return_type);
 	default:
 		return get_return_type_size(return_type);
 	}
@@ -53,11 +53,13 @@ SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId
 		case ExpressionType::AGGREGATE_COUNT:
 		case ExpressionType::AGGREGATE_COUNT_DISTINCT:
 		case ExpressionType::AGGREGATE_COUNT_STAR:
+			bigint_payload_initialize(pointer, payload_types[i]);
+			break;
 		case ExpressionType::AGGREGATE_STDDEV_SAMP:
-			memset(pointer, 0, GetAggrPayloadSize(aggregate_types[i], payload_types[i]));
+			stddevsamp_initialize(pointer, payload_types[i]);
 			break;
 		default:
-			SetNullValue(pointer, payload_types[i]);
+			null_payload_initialize(pointer, payload_types[i]);
 			break;
 		}
 
