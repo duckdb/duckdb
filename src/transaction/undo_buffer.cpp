@@ -7,7 +7,9 @@
 #include "storage/data_table.hpp"
 #include "storage/table/version_chunk.hpp"
 #include "storage/write_ahead_log.hpp"
+#include "transaction/cleanup_state.hpp"
 #include "transaction/commit_state.hpp"
+#include "transaction/rollback_state.hpp"
 #include "transaction/version_info.hpp"
 
 #include <unordered_map>
@@ -17,9 +19,6 @@ using namespace std;
 
 constexpr uint32_t DEFAULT_UNDO_CHUNK_SIZE = 4096 * 3;
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
-
-static void CleanupIndexInsert(VersionInfo *info);
-static void RollbackIndexInsert(VersionInfo *info);
 
 UndoBuffer::UndoBuffer() {
 	head = make_unique<UndoChunk>(0);
@@ -119,52 +118,9 @@ void UndoBuffer::Cleanup() {
 	//      the chunks)
 	//  (2) there is no active transaction with start_id < commit_id of this
 	//  transaction
-
+	CleanupState state;
 	IterateEntries([&](UndoFlags type, data_ptr_t data) {
-		switch (type) {
-		case UndoFlags::CATALOG_ENTRY: {
-			CatalogEntry *catalog_entry = *((CatalogEntry **)data);
-			// destroy the backed up entry: it is no longer required
-			assert(catalog_entry->parent);
-			if (catalog_entry->parent->type != CatalogType::UPDATED_ENTRY) {
-				if (!catalog_entry->parent->child->deleted) {
-					// delete the entry from the dependency manager, if it is not deleted yet
-					catalog_entry->catalog->dependency_manager.EraseObject(catalog_entry->parent->child.get());
-				}
-				catalog_entry->parent->child = move(catalog_entry->child);
-			}
-			break;
-		}
-		case UndoFlags::DELETE_TUPLE:
-		case UndoFlags::UPDATE_TUPLE:
-		case UndoFlags::INSERT_TUPLE: {
-			// undo this entry
-			auto info = (VersionInfo *)data;
-			if (type == UndoFlags::DELETE_TUPLE || type == UndoFlags::UPDATE_TUPLE) {
-				if (info->GetTable().indexes.size() > 0) {
-					CleanupIndexInsert(info);
-				}
-			}
-			if (!info->prev) {
-				// parent refers to a storage chunk
-				info->vinfo->Cleanup(info);
-			} else {
-				// parent refers to another entry in UndoBuffer
-				// simply remove this entry from the list
-				auto parent = info->prev;
-				parent->next = info->next;
-				if (parent->next) {
-					parent->next->prev = parent;
-				}
-			}
-			break;
-		}
-		case UndoFlags::QUERY:
-			break;
-		default:
-			assert(type == UndoFlags::EMPTY_ENTRY);
-			break;
-		}
+		state.CleanupEntry(type, data);
 	});
 }
 
@@ -183,70 +139,9 @@ void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
 }
 
 void UndoBuffer::Rollback() {
+	// rollback needs to be performed in reverse
+	RollbackState state;
 	ReverseIterateEntries([&](UndoFlags type, data_ptr_t data) {
-		switch (type) {
-		case UndoFlags::CATALOG_ENTRY: {
-			// undo this catalog entry
-			CatalogEntry *catalog_entry = *((CatalogEntry **)data);
-			assert(catalog_entry->set);
-			catalog_entry->set->Undo(catalog_entry);
-			break;
-		}
-		case UndoFlags::DELETE_TUPLE:
-		case UndoFlags::UPDATE_TUPLE:
-		case UndoFlags::INSERT_TUPLE: {
-			// undo this entry
-			auto info = (VersionInfo *)data;
-			if (type == UndoFlags::UPDATE_TUPLE || type == UndoFlags::INSERT_TUPLE) {
-				// update or insert rolled back
-				// delete base table entry from index
-				assert(!info->prev);
-				if (info->GetTable().indexes.size() > 0) {
-					RollbackIndexInsert(info);
-				}
-			}
-			// parent needs to refer to a storage chunk because of our transactional model
-			// the current entry is still dirty, hence no other transaction can have modified it
-			info->vinfo->Undo(info);
-			break;
-		}
-		case UndoFlags::QUERY:
-			break;
-		default:
-			assert(type == UndoFlags::EMPTY_ENTRY);
-			break;
-		}
-		type = UndoFlags::EMPTY_ENTRY;
+		state.RollbackEntry(type, data);
 	});
-}
-
-static void CleanupIndexInsert(VersionInfo *info) {
-	assert(info->tuple_data);
-	VersionInfo next;
-	next.prev = info;
-
-	// fetch the row identifiers
-	row_t row_number = info->GetRowId();
-	Value ptr = Value::BIGINT(row_number);
-	Vector row_identifiers(ptr);
-
-	DataChunk result;
-	result.Initialize(info->GetTable().types);
-	info->vinfo->chunk.AppendToChunk(result, &next);
-	for (auto &index : info->GetTable().indexes) {
-		index->Delete(result, row_identifiers);
-	}
-}
-
-static void RollbackIndexInsert(VersionInfo *info) {
-	row_t row_id = info->GetRowId();
-	Value ptr = Value::BIGINT(row_id);
-	Vector row_identifiers(ptr);
-
-	DataChunk result;
-	result.Initialize(info->GetTable().types);
-	info->vinfo->chunk.AppendToChunk(result, info);
-	for (auto &index : info->GetTable().indexes) {
-		index->Delete(result, row_identifiers);
-	}
 }

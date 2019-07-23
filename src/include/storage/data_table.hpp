@@ -107,6 +107,13 @@ public:
 
 	VersionChunk *GetChunk(index_t row_number);
 
+	//! Retrieve versioned data for all column_ids of the table
+	void RetrieveVersionedData(DataChunk &result, data_ptr_t alternate_version_pointers[], index_t alternate_version_count);
+
+	//! Retrieves versioned data for a specific set of column_ids of the table
+	void RetrieveVersionedData(DataChunk &result, const vector<column_t> &column_ids,
+	                           data_ptr_t alternate_version_pointers[], index_t alternate_version_index[],
+	                           index_t alternate_version_count);
 private:
 	//! Append a storage chunk with the given start index to the data table. Returns a pointer to the newly created
 	//! storage chunk.

@@ -92,12 +92,6 @@ public:
 
 	void Update(Vector &row_identifiers, Vector &update_vector, index_t col_idx);
 private:
-	//! Retrieves versioned data from a set of pointers to tuples inside an
-	//! UndoBuffer and stores them inside the result chunk; used for scanning of
-	//! versioned tuples
-	void RetrieveVersionedData(DataChunk &result, const vector<column_t> &column_ids,
-	                           data_ptr_t alternate_version_pointers[], index_t alternate_version_index[],
-	                           index_t alternate_version_count);
 	//! Fetches a single tuple from the base table at rowid row_id, and appends that tuple to the "result" DataChunk
 	void RetrieveTupleFromBaseTable(DataChunk &result, vector<column_t> &column_ids, row_t row_id);
 

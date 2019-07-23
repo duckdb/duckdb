@@ -144,32 +144,6 @@ void VersionChunk::PushTuple(Transaction &transaction, UndoFlags flag, index_t o
 	table.serializer.Serialize(columns, 0, tuple_data);
 }
 
-
-void VersionChunk::RetrieveVersionedData(DataChunk &result, const vector<column_t> &column_ids,
-                                      data_ptr_t alternate_version_pointers[], index_t alternate_version_index[],
-                                      index_t alternate_version_count) {
-	assert(alternate_version_count > 0);
-	// create a vector of the version pointers
-	Vector version_pointers(TypeId::POINTER, (data_ptr_t) alternate_version_pointers);
-	version_pointers.count = alternate_version_count;
-	// get data from the alternate versions for each column
-	for (index_t j = 0; j < column_ids.size(); j++) {
-		if (column_ids[j] == COLUMN_IDENTIFIER_ROW_ID) {
-			assert(result.data[j].type == ROW_TYPE);
-			// assign the row identifiers
-			auto data = ((row_t *)result.data[j].data) + result.data[j].count;
-			for (index_t k = 0; k < alternate_version_count; k++) {
-				data[k] = alternate_version_index[k];
-			}
-			result.data[j].count += alternate_version_count;
-		} else {
-			// grab data from the stored tuple for each column
-			index_t offset = table.accumulative_tuple_size[column_ids[j]];
-			VectorOperations::Gather::Append(version_pointers, result.data[j], offset);
-		}
-	}
-}
-
 void VersionChunk::RetrieveTupleFromBaseTable(DataChunk &result, vector<column_t> &column_ids, row_t row_id) {
 	assert(result.size() < STANDARD_VECTOR_SIZE);
 	assert(column_ids.size() == result.column_count);
@@ -256,7 +230,7 @@ void VersionChunk::RetrieveTupleData(Transaction &transaction, DataChunk &result
 			data_ptr_t alternate_version_pointer = version_info->tuple_data;
 			index_t alternate_version_index = start + offset;
 
-			RetrieveVersionedData(result, column_ids, &alternate_version_pointer, &alternate_version_index, 1);
+			table.RetrieveVersionedData(result, column_ids, &alternate_version_pointer, &alternate_version_index, 1);
 		}
 	} else {
 		if (!version->deleted[index_in_version]) {
@@ -387,7 +361,7 @@ bool VersionChunk::Scan(TableScanState &state, Transaction &transaction, DataChu
 		}
 		if (alternate_version_count > 0) {
 			// retrieve alternate versions, if any
-			RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index,
+			table.RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index,
 									alternate_version_count);
 		}
 		// retrieve entries from the base table with the selection vector
@@ -505,7 +479,7 @@ bool VersionChunk::CreateIndexScan(IndexTableScanState &state, vector<column_t> 
 		}
 	}
 	if (result_count > 0) {
-		RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index,
+		table.RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index,
 								result_count);
 		return false;
 	}
