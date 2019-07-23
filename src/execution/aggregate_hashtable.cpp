@@ -537,26 +537,11 @@ index_t SuperLargeHashTable::Scan(index_t &scan_position, DataChunk &groups, Dat
 		auto &target = result.data[i];
 		target.count = entry;
 		switch (aggregate_types[i]) {
-		case ExpressionType::AGGREGATE_STDDEV_SAMP: {
-			// compute finalization of streaming stddev of sample
-			VectorOperations::Exec(addresses, [&](uint64_t i, uint64_t k) {
-				auto base_ptr = ((data_ptr_t *)addresses.data)[i];
-				auto count_ptr = (uint64_t *)base_ptr;
-				auto dsquared_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
-
-				if (*count_ptr == 0) {
-					target.nullmask[i] = true;
-					return;
-				}
-				double res = *count_ptr > 1 ? sqrt(*dsquared_ptr / (*count_ptr - 1)) : 0;
-
-				((double *)target.data)[i] = res;
-			});
-
+		case ExpressionType::AGGREGATE_STDDEV_SAMP:
+			stddevsamp_finalize(addresses, target);
 			break;
-		}
 		default:
-			VectorOperations::Gather::Set(addresses, target);
+			gather_finalize(addresses, target);
 			break;
 		}
 

@@ -15,7 +15,8 @@ namespace duckdb {
 
 //! The type used for aggregate functions
 typedef void (*aggregate_function_t)(Vector inputs[], index_t input_count, Vector &result);
-typedef void (*aggregate__simple_function_t)(Vector inputs[], index_t input_count, Value &result);
+typedef void (*aggregate_simple_function_t)(Vector inputs[], index_t input_count, Value &result);
+typedef void (*aggregate_finalize_t)(Vector& payloads, Vector &result);
 
 static SQLType get_same_return_type(vector<SQLType> &arguments) {
 	assert(arguments.size() == 1);
@@ -25,6 +26,8 @@ static SQLType get_same_return_type(vector<SQLType> &arguments) {
 static SQLType get_bigint_return_type(vector<SQLType> &arguments) {
 	return SQLTypeId::BIGINT;
 }
+
+void gather_finalize(Vector& payloads, Vector &result);
 
 void count_function( Vector inputs[], index_t input_count, Vector &result );
 void count_simple_function( Vector inputs[], index_t input_count, Value &result );
@@ -39,8 +42,12 @@ public:
 		return count_function;
 	}
 
-	static aggregate__simple_function_t GetSimpleFunction() {
+	static aggregate_simple_function_t GetSimpleFunction() {
 		return count_simple_function;
+	}
+
+	static aggregate_finalize_t GetFinalizeFunction() {
+		return gather_finalize;
 	}
 
 	static get_return_type_function_t GetReturnTypeFunction() {
@@ -61,8 +68,12 @@ public:
 		return countstar_function;
 	}
 
-	static aggregate__simple_function_t GetSimpleFunction() {
+	static aggregate_simple_function_t GetSimpleFunction() {
 		return countstar_simple_function;
+	}
+
+	static aggregate_finalize_t GetFinalizeFunction() {
+		return gather_finalize;
 	}
 
 	static get_return_type_function_t GetReturnTypeFunction() {
@@ -82,8 +93,12 @@ public:
 		return first_function;
 	}
 
-	static aggregate__simple_function_t GetSimpleFunction() {
+	static aggregate_simple_function_t GetSimpleFunction() {
 		return nullptr;
+	}
+
+	static aggregate_finalize_t GetFinalizeFunction() {
+		return gather_finalize;
 	}
 
 	static get_return_type_function_t GetReturnTypeFunction() {
@@ -104,8 +119,12 @@ public:
 		return max_function;
 	}
 
-	static aggregate__simple_function_t GetSimpleFunction() {
+	static aggregate_simple_function_t GetSimpleFunction() {
 		return max_simple_function;
+	}
+
+	static aggregate_finalize_t GetFinalizeFunction() {
+		return gather_finalize;
 	}
 
 	static get_return_type_function_t GetReturnTypeFunction() {
@@ -126,8 +145,12 @@ public:
 		return min_function;
 	}
 
-	static aggregate__simple_function_t GetSimpleFunction() {
+	static aggregate_simple_function_t GetSimpleFunction() {
 		return min_simple_function;
+	}
+
+	static aggregate_finalize_t GetFinalizeFunction() {
+		return gather_finalize;
 	}
 
 	static get_return_type_function_t GetReturnTypeFunction() {
@@ -135,7 +158,8 @@ public:
 	}
 };
 
-void stddevsamp_function( Vector inputs[], index_t input_count, Vector &result );
+void stddevsamp_function(Vector inputs[], index_t input_count, Vector &result);
+void stddevsamp_finalize(Vector& payloads, Vector &result);
 SQLType stddev_get_return_type(vector<SQLType> &arguments);
 
 class StdDevSampFunction {
@@ -148,8 +172,12 @@ public:
 		return stddevsamp_function;
 	}
 
-	static aggregate__simple_function_t GetSimpleFunction() {
+	static aggregate_simple_function_t GetSimpleFunction() {
 		return nullptr;
+	}
+
+	static aggregate_finalize_t GetFinalizeFunction() {
+		return stddevsamp_finalize;
 	}
 
 	static get_return_type_function_t GetReturnTypeFunction() {
@@ -157,8 +185,8 @@ public:
 	}
 };
 
-void sum_function( Vector inputs[], index_t input_count, Vector &result );
-void sum_simple_function( Vector inputs[], index_t input_count, Value &result );
+void sum_function(Vector inputs[], index_t input_count, Vector &result);
+void sum_simple_function(Vector inputs[], index_t input_count, Value &result);
 SQLType sum_get_return_type(vector<SQLType> &arguments);
 
 class SumFunction {
@@ -171,8 +199,12 @@ public:
 		return sum_function;
 	}
 
-	static aggregate__simple_function_t GetSimpleFunction() {
+	static aggregate_simple_function_t GetSimpleFunction() {
 		return sum_simple_function;
+	}
+
+	static aggregate_finalize_t GetFinalizeFunction() {
+		return gather_finalize;
 	}
 
 	static get_return_type_function_t GetReturnTypeFunction() {

@@ -14,6 +14,10 @@ using namespace std;
 
 namespace duckdb {
 
+void gather_finalize(Vector& payloads, Vector &result) {
+	VectorOperations::Gather::Set(payloads, result);
+}
+
 void count_function(Vector inputs[], index_t input_count, Vector &result ) {
 	assert(input_count == 1 );
 	VectorOperations::Scatter::AddOne(inputs[0], result);
@@ -129,6 +133,23 @@ void stddevsamp_function(Vector inputs[], index_t input_count, Vector &result ) 
 		*mean_ptr = new_mean;
 		*dsquared_ptr = new_dsquared;
 		// see Finalize() method below for final step
+	});
+}
+
+void stddevsamp_finalize(Vector& payloads, Vector &result) {
+	// compute finalization of streaming stddev of sample
+	VectorOperations::Exec(payloads, [&](uint64_t i, uint64_t k) {
+		auto base_ptr = ((data_ptr_t *)payloads.data)[i];
+		auto count_ptr = (uint64_t *)base_ptr;
+		auto dsquared_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
+
+		if (*count_ptr == 0) {
+			result.nullmask[i] = true;
+			return;
+		}
+		double res = *count_ptr > 1 ? sqrt(*dsquared_ptr / (*count_ptr - 1)) : 0;
+
+		((double *)result.data)[i] = res;
 	});
 }
 
