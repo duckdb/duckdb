@@ -197,7 +197,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		switch (aggregate_types[aggr_idx]) {
 		case ExpressionType::AGGREGATE_COUNT_STAR:
 			// add one to each address, regardless of if the value is NULL
-			VectorOperations::Scatter::Add(one, addresses);
+			countstar_function(&one, 1, addresses);
 			break;
 		case ExpressionType::AGGREGATE_COUNT:
 			count_function(&payload.data[payload_idx], 1, addresses);
@@ -212,8 +212,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			max_function(&payload.data[payload_idx], 1, addresses);
 			break;
 		case ExpressionType::AGGREGATE_FIRST:
-			// first
-			VectorOperations::Scatter::SetFirst(payload.data[payload_idx], addresses);
+			first_function(&payload.data[payload_idx], 1, addresses);
 			break;
 		case ExpressionType::AGGREGATE_SUM_DISTINCT:
 		case ExpressionType::AGGREGATE_COUNT_DISTINCT: {
@@ -261,9 +260,9 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			distinct_addresses.Verify();
 
 			if (aggregate_types[aggr_idx] == ExpressionType::AGGREGATE_COUNT_DISTINCT) {
-				VectorOperations::Scatter::AddOne(distinct_payload, distinct_addresses);
+				count_function(&distinct_payload, 1, distinct_addresses);
 			} else {
-				VectorOperations::Scatter::Add(distinct_payload, distinct_addresses);
+				sum_function(&distinct_payload, 1, distinct_addresses);
 			}
 			break;
 		}

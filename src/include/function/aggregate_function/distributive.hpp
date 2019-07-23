@@ -46,7 +46,49 @@ public:
 	static get_return_type_function_t GetReturnTypeFunction() {
 		return get_bigint_return_type;
 	}
+};
 
+void countstar_function( Vector inputs[], index_t input_count, Vector &result );
+void countstar_simple_function( Vector inputs[], index_t input_count, Value &result );
+
+class CountStarFunction {
+public:
+	static const char*GetName() {
+		return "countstar";
+	}
+
+	static aggregate_function_t GetFunction() {
+		return countstar_function;
+	}
+
+	static aggregate__simple_function_t GetSimpleFunction() {
+		return countstar_simple_function;
+	}
+
+	static get_return_type_function_t GetReturnTypeFunction() {
+		return get_bigint_return_type;
+	}
+};
+
+void first_function( Vector inputs[], index_t input_count, Vector &result );
+
+class FirstFunction {
+public:
+	static const char*GetName() {
+		return "first";
+	}
+
+	static aggregate_function_t GetFunction() {
+		return first_function;
+	}
+
+	static aggregate__simple_function_t GetSimpleFunction() {
+		return nullptr;
+	}
+
+	static get_return_type_function_t GetReturnTypeFunction() {
+		return get_same_return_type;
+	}
 };
 
 void max_function( Vector inputs[], index_t input_count, Vector &result );
@@ -69,7 +111,6 @@ public:
 	static get_return_type_function_t GetReturnTypeFunction() {
 		return get_same_return_type;
 	}
-
 };
 
 void min_function( Vector inputs[], index_t input_count, Vector &result );
@@ -92,7 +133,6 @@ public:
 	static get_return_type_function_t GetReturnTypeFunction() {
 		return get_same_return_type;
 	}
-
 };
 
 void sum_function( Vector inputs[], index_t input_count, Vector &result );
@@ -116,7 +156,6 @@ public:
 	static get_return_type_function_t GetReturnTypeFunction() {
 		return sum_get_return_type;
 	}
-
 };
 
 } // namespace duckdb

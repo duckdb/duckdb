@@ -25,6 +25,22 @@ void count_simple_function(Vector inputs[], index_t input_count, Value& result) 
 	result = result + count;
 }
 
+void countstar_function(Vector inputs[], index_t input_count, Vector &result ) {
+	assert(input_count == 1 );
+	VectorOperations::Scatter::Add(inputs[0], result);
+}
+
+void countstar_simple_function(Vector inputs[], index_t input_count, Value& result) {
+	assert(input_count == 1 );
+	Value count = Value::BIGINT(inputs[0].count);
+	result = result + count;
+}
+
+void first_function(Vector inputs[], index_t input_count, Vector &result ) {
+	assert(input_count == 1 );
+	VectorOperations::Scatter::SetFirst(inputs[0], result);
+}
+
 void max_function(Vector inputs[], index_t input_count, Vector &result ) {
 	assert(input_count == 1 );
 	VectorOperations::Scatter::Max(inputs[0], result);
