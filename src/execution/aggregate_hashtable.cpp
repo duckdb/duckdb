@@ -264,46 +264,9 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			}
 			break;
 		}
-		case ExpressionType::AGGREGATE_STDDEV_SAMP: {
-			// Streaming approximate standard deviation using Welford's
-			// method, DOI: 10.2307/1266577
-
-			// convert input to floating point if required
-			Vector payload_double;
-			if (payload.data[payload_idx].type != TypeId::DOUBLE) {
-				payload_double.Initialize(TypeId::DOUBLE);
-				VectorOperations::Cast(payload.data[payload_idx], payload_double);
-			} else {
-				payload_double.Reference(payload.data[payload_idx]);
-			}
-
-			VectorOperations::Exec(addresses, [&](index_t i, index_t k) {
-				if (payload_double.nullmask[i]) {
-					return;
-				}
-				// Layout of payload for STDDEV_SAMP: count(uint64_t), mean
-				// (double), dsquared(double)
-
-				auto base_ptr = ((data_ptr_t *)addresses.data)[i];
-				auto count_ptr = (uint64_t *)base_ptr;
-				auto mean_ptr = (double *)(base_ptr + sizeof(uint64_t));
-				auto dsquared_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
-
-				// update running mean and d^2
-				(*count_ptr)++;
-				const double new_value = ((double *)payload_double.data)[i];
-				const double mean_differential = (new_value - (*mean_ptr)) / (*count_ptr);
-				const double new_mean = (*mean_ptr) + mean_differential;
-				const double dsquared_increment = (new_value - new_mean) * (new_value - (*mean_ptr));
-				const double new_dsquared = (*dsquared_ptr) + dsquared_increment;
-
-				*mean_ptr = new_mean;
-				*dsquared_ptr = new_dsquared;
-				// see Scan() method below for final step
-			});
-
+		case ExpressionType::AGGREGATE_STDDEV_SAMP:
+			stddevsamp_function(&payload.data[payload_idx], 1, addresses);
 			break;
-		}
 		default:
 			throw NotImplementedException("Unimplemented aggregate type!");
 		}

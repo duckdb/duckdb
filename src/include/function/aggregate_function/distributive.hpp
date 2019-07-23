@@ -135,6 +135,28 @@ public:
 	}
 };
 
+void stddevsamp_function( Vector inputs[], index_t input_count, Vector &result );
+SQLType stddev_get_return_type(vector<SQLType> &arguments);
+
+class StdDevSampFunction {
+public:
+	static const char*GetName() {
+		return "stddev_samp";
+	}
+
+	static aggregate_function_t GetFunction() {
+		return stddevsamp_function;
+	}
+
+	static aggregate__simple_function_t GetSimpleFunction() {
+		return nullptr;
+	}
+
+	static get_return_type_function_t GetReturnTypeFunction() {
+		return stddev_get_return_type;
+	}
+};
+
 void sum_function( Vector inputs[], index_t input_count, Vector &result );
 void sum_simple_function( Vector inputs[], index_t input_count, Value &result );
 SQLType sum_get_return_type(vector<SQLType> &arguments);

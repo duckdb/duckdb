@@ -12,29 +12,19 @@ using namespace std;
 static SQLType ResolveSumType(SQLType input_type) {
 	vector<SQLType> arguments;
 	arguments.push_back(input_type);
-	return sum_get_return_type( arguments );
+	return sum_get_return_type(arguments);
 }
 
 static SQLType ResolveSameType(SQLType input_type) {
 	vector<SQLType> arguments;
 	arguments.push_back(input_type);
-	return get_same_return_type( arguments );
+	return get_same_return_type(arguments);
 }
 
 static SQLType ResolveSTDDevType(SQLType input_type) {
-	switch (input_type.id) {
-	case SQLTypeId::SQLNULL:
-	case SQLTypeId::TINYINT:
-	case SQLTypeId::SMALLINT:
-	case SQLTypeId::INTEGER:
-	case SQLTypeId::BIGINT:
-	case SQLTypeId::FLOAT:
-	case SQLTypeId::DOUBLE:
-	case SQLTypeId::DECIMAL:
-		return SQLType(SQLTypeId::DECIMAL);
-	default:
-		throw BinderException("Unsupported SQLType %s for STDDEV_SAMP aggregate", SQLTypeToString(input_type).c_str());
-	}
+	vector<SQLType> arguments;
+	arguments.push_back(input_type);
+	return stddev_get_return_type(arguments);
 }
 
 static SQLType ResolveAggregateType(AggregateExpression &aggr, unique_ptr<Expression> *child, SQLType child_type) {
