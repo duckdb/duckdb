@@ -197,22 +197,22 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		// for any entries for which a group was found, update the aggregate
 		switch (aggregate_types[aggr_idx]) {
 		case ExpressionType::AGGREGATE_COUNT_STAR:
-			countstar_function(&payload.data[payload_idx], 0, addresses);
+			countstar_update(&payload.data[payload_idx], 0, addresses);
 			break;
 		case ExpressionType::AGGREGATE_COUNT:
-			count_function(&payload.data[payload_idx], 1, addresses);
+			count_update(&payload.data[payload_idx], 1, addresses);
 			break;
 		case ExpressionType::AGGREGATE_SUM:
-			sum_function(&payload.data[payload_idx], 1, addresses);
+			sum_update(&payload.data[payload_idx], 1, addresses);
 			break;
 		case ExpressionType::AGGREGATE_MIN:
-			min_function(&payload.data[payload_idx], 1, addresses);
+			min_update(&payload.data[payload_idx], 1, addresses);
 			break;
 		case ExpressionType::AGGREGATE_MAX:
-			max_function(&payload.data[payload_idx], 1, addresses);
+			max_update(&payload.data[payload_idx], 1, addresses);
 			break;
 		case ExpressionType::AGGREGATE_FIRST:
-			first_function(&payload.data[payload_idx], 1, addresses);
+			first_update(&payload.data[payload_idx], 1, addresses);
 			break;
 		case ExpressionType::AGGREGATE_SUM_DISTINCT:
 		case ExpressionType::AGGREGATE_COUNT_DISTINCT: {
@@ -260,14 +260,14 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			distinct_addresses.Verify();
 
 			if (aggregate_types[aggr_idx] == ExpressionType::AGGREGATE_COUNT_DISTINCT) {
-				count_function(&distinct_payload, 1, distinct_addresses);
+				count_update(&distinct_payload, 1, distinct_addresses);
 			} else {
-				sum_function(&distinct_payload, 1, distinct_addresses);
+				sum_update(&distinct_payload, 1, distinct_addresses);
 			}
 			break;
 		}
 		case ExpressionType::AGGREGATE_STDDEV_SAMP:
-			stddevsamp_function(&payload.data[payload_idx], 1, addresses);
+			stddevsamp_update(&payload.data[payload_idx], 1, addresses);
 			break;
 		default:
 			throw NotImplementedException("Unimplemented aggregate type!");

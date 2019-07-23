@@ -35,19 +35,19 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 			// perform the actual aggregation
 			switch (aggregate.type) {
 			case ExpressionType::AGGREGATE_COUNT_STAR:
-				countstar_simple_function(&payload_vector, 1, state->aggregates[aggr_idx]);
+				countstar_simple_update(&payload_vector, 1, state->aggregates[aggr_idx]);
 				break;
 			case ExpressionType::AGGREGATE_COUNT:
-				count_simple_function(&payload_vector, 1, state->aggregates[aggr_idx]);
+				count_simple_update(&payload_vector, 1, state->aggregates[aggr_idx]);
 				break;
 			case ExpressionType::AGGREGATE_SUM:
-				sum_simple_function(&payload_vector, 1, state->aggregates[aggr_idx]);
+				sum_simple_update(&payload_vector, 1, state->aggregates[aggr_idx]);
 				break;
 			case ExpressionType::AGGREGATE_MIN:
-				min_simple_function(&payload_vector, 1, state->aggregates[aggr_idx]);
+				min_simple_update(&payload_vector, 1, state->aggregates[aggr_idx]);
 				break;
 			case ExpressionType::AGGREGATE_MAX:
-				max_simple_function(&payload_vector, 1, state->aggregates[aggr_idx]);
+				max_simple_update(&payload_vector, 1, state->aggregates[aggr_idx]);
 				break;
 			default:
 				throw Exception("Unsupported aggregate for simple aggregation");

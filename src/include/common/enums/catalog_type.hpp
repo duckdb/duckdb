@@ -26,7 +26,8 @@ enum class CatalogType : uint8_t {
 	UPDATED_ENTRY = 10,
 	DELETED_ENTRY = 11,
 	PREPARED_STATEMENT = 12,
-	SEQUENCE = 13
+	SEQUENCE = 13,
+	AGGREGATE_FUNCTION = 14
 };
 
 } // namespace duckdb

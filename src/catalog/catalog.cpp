@@ -6,6 +6,7 @@
 #include "parser/expression/function_expression.hpp"
 #include "parser/parsed_data/alter_table_info.hpp"
 #include "parser/parsed_data/create_index_info.hpp"
+#include "parser/parsed_data/create_aggregate_function_info.hpp"
 #include "parser/parsed_data/create_scalar_function_info.hpp"
 #include "parser/parsed_data/create_schema_info.hpp"
 #include "parser/parsed_data/create_sequence_info.hpp"
@@ -113,6 +114,11 @@ void Catalog::CreateTableFunction(Transaction &transaction, CreateTableFunctionI
 TableFunctionCatalogEntry *Catalog::GetTableFunction(Transaction &transaction, FunctionExpression *expression) {
 	auto schema = GetSchema(transaction, expression->schema);
 	return schema->GetTableFunction(transaction, expression);
+}
+
+void Catalog::CreateAggregateFunction(Transaction &transaction, CreateAggregateFunctionInfo *info) {
+	auto schema = GetSchema(transaction, info->schema);
+	schema->CreateAggregateFunction(transaction, info);
 }
 
 void Catalog::CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInfo *info) {

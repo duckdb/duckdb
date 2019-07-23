@@ -20,6 +20,7 @@ struct DropInfo;
 struct BoundCreateTableInfo;
 struct AlterTableInfo;
 struct CreateTableFunctionInfo;
+struct CreateAggregateFunctionInfo;
 struct CreateScalarFunctionInfo;
 struct CreateViewInfo;
 struct CreateSequenceInfo;
@@ -29,6 +30,7 @@ class SchemaCatalogEntry;
 class TableCatalogEntry;
 class SequenceCatalogEntry;
 class TableFunctionCatalogEntry;
+class AggregateFunctionCatalogEntry;
 class ScalarFunctionCatalogEntry;
 class StorageManager;
 
@@ -61,6 +63,8 @@ public:
 	void AlterTable(ClientContext &context, AlterTableInfo *info);
 	//! Create a table function in the catalog
 	void CreateTableFunction(Transaction &transaction, CreateTableFunctionInfo *info);
+	//! Create an aggregate function in the catalog
+	void CreateAggregateFunction(Transaction &transaction, CreateAggregateFunctionInfo *info);
 	//! Create a scalar function in the catalog
 	void CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInfo *info);
 
@@ -89,6 +93,12 @@ public:
 	//! exception otherwise
 	TableFunctionCatalogEntry *GetTableFunction(Transaction &transaction, FunctionExpression *expression);
 
+	//! Returns a pointer to the aggregate function if it exists, or throws an
+	//! exception otherwise
+	ScalarFunctionCatalogEntry *GetAggregateFunction(Transaction &transaction, const string &schema, const string &name);
+
+	//! Returns a pointer to the scalar function if it exists, or throws an
+	//! exception otherwise
 	ScalarFunctionCatalogEntry *GetScalarFunction(Transaction &transaction, const string &schema, const string &name);
 	//! Drops an index from the catalog.
 	void DropIndex(Transaction &transaction, DropInfo *info);

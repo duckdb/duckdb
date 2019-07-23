@@ -23,41 +23,41 @@ void null_payload_initialize(data_ptr_t payload, TypeId return_type) {
 	SetNullValue(payload, return_type);
 }
 
-void count_function(Vector inputs[], index_t input_count, Vector &result ) {
+void count_update(Vector inputs[], index_t input_count, Vector &result ) {
 	assert(input_count == 1 );
 	VectorOperations::Scatter::AddOne(inputs[0], result);
 }
 
-void count_simple_function(Vector inputs[], index_t input_count, Value& result) {
+void count_simple_update(Vector inputs[], index_t input_count, Value& result) {
 	assert(input_count == 1 );
 	Value count = VectorOperations::Count(inputs[0]);
 	result = result + count;
 }
 
-void countstar_function(Vector inputs[], index_t input_count, Vector &result ) {
+void countstar_update(Vector inputs[], index_t input_count, Vector &result ) {
 	assert(input_count == 0 );
 	// add one to each address, regardless of if the value is NULL
 	Vector one(Value::BIGINT(1));
 	VectorOperations::Scatter::Add(one, result);
 }
 
-void countstar_simple_function(Vector inputs[], index_t input_count, Value& result) {
+void countstar_simple_update(Vector inputs[], index_t input_count, Value& result) {
 	assert(input_count == 1 );
 	Value count = Value::BIGINT(inputs[0].count);
 	result = result + count;
 }
 
-void first_function(Vector inputs[], index_t input_count, Vector &result ) {
+void first_update(Vector inputs[], index_t input_count, Vector &result ) {
 	assert(input_count == 1 );
 	VectorOperations::Scatter::SetFirst(inputs[0], result);
 }
 
-void max_function(Vector inputs[], index_t input_count, Vector &result ) {
+void max_update(Vector inputs[], index_t input_count, Vector &result ) {
 	assert(input_count == 1 );
 	VectorOperations::Scatter::Max(inputs[0], result);
 }
 
-void max_simple_function(Vector inputs[], index_t input_count, Value& result) {
+void max_simple_update(Vector inputs[], index_t input_count, Value& result) {
 	assert(input_count == 1 );
 	Value max = VectorOperations::Max(inputs[0]);
 	if (max.is_null) {
@@ -68,12 +68,12 @@ void max_simple_function(Vector inputs[], index_t input_count, Value& result) {
 	}
 }
 
-void min_function(Vector inputs[], index_t input_count, Vector &result ) {
+void min_update(Vector inputs[], index_t input_count, Vector &result ) {
 	assert(input_count == 1 );
 	VectorOperations::Scatter::Min(inputs[0], result);
 }
 
-void min_simple_function(Vector inputs[], index_t input_count, Value& result) {
+void min_simple_update(Vector inputs[], index_t input_count, Value& result) {
 	assert(input_count == 1 );
 	Value min = VectorOperations::Min(inputs[0]);
 	if (min.is_null) {
@@ -101,7 +101,7 @@ SQLType stddev_get_return_type(vector<SQLType> &arguments) {
 		throw BinderException("Unsupported SQLType %s for STDDEV_SAMP aggregate", SQLTypeToString(input_type).c_str());
 	}
 }
-void stddevsamp_function(Vector inputs[], index_t input_count, Vector &result ) {
+void stddevsamp_update(Vector inputs[], index_t input_count, Vector &result ) {
 	assert(input_count == 1 );
 	// Streaming approximate standard deviation using Welford's
 	// method, DOI: 10.2307/1266577
@@ -178,12 +178,12 @@ SQLType sum_get_return_type( vector<SQLType> &arguments ) {
 	}
 }
 
-void sum_function(Vector inputs[], index_t input_count, Vector &result ) {
+void sum_update(Vector inputs[], index_t input_count, Vector &result ) {
 	assert(input_count == 1 );
 	VectorOperations::Scatter::Add(inputs[0], result);
 }
 
-void sum_simple_function(Vector inputs[], index_t input_count, Value& result) {
+void sum_simple_update(Vector inputs[], index_t input_count, Value& result) {
 	assert(input_count == 1 );
 	Value sum = VectorOperations::Sum(inputs[0]);
 	if (sum.is_null) {

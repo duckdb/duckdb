@@ -1,8 +1,10 @@
 #include "function/function.hpp"
 
 #include "catalog/catalog.hpp"
+#include "function/aggregate_function/list.hpp"
 #include "function/scalar_function/list.hpp"
 #include "function/table_function/list.hpp"
+#include "parser/parsed_data/create_aggregate_function_info.hpp"
 #include "parser/parsed_data/create_scalar_function_info.hpp"
 #include "parser/parsed_data/create_table_function_info.hpp"
 
@@ -23,6 +25,25 @@ template <class T> static void AddTableFunction(Transaction &transaction, Catalo
 	catalog.CreateTableFunction(transaction, &info);
 }
 
+template <class T> static void AddAggregateFunction(Transaction &transaction, Catalog &catalog) {
+	CreateAggregateFunctionInfo info;
+
+	info.schema = DEFAULT_SCHEMA;
+	info.name = T::GetName();
+
+	info.payload_size = T::GetPayloadSizeFunction();
+	info.initialize = T::GetInitalizeFunction();
+	info.update = T::GetUpdateFunction();
+	info.finalize = T::GetFinalizeFunction();
+
+	info.simple_initialize = T::GetSimpleInitializeFunction();
+	info.simple_update = T::GetSimpleUpdateFunction();
+
+	info.return_type = T::GetReturnTypeFunction();
+
+	catalog.CreateAggregateFunction(transaction, &info);
+}
+
 template <class T> static void AddScalarFunction(Transaction &transaction, Catalog &catalog) {
 	CreateScalarFunctionInfo info;
 
@@ -41,6 +62,15 @@ template <class T> static void AddScalarFunction(Transaction &transaction, Catal
 void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddTableFunction<PragmaTableInfo>(transaction, catalog);
 	AddTableFunction<SQLiteMaster>(transaction, catalog);
+
+	// aggregates
+	AddAggregateFunction<CountFunction>(transaction, catalog);
+	AddAggregateFunction<CountStarFunction>(transaction, catalog);
+	AddAggregateFunction<FirstFunction>(transaction, catalog);
+	AddAggregateFunction<MaxFunction>(transaction, catalog);
+	AddAggregateFunction<MinFunction>(transaction, catalog);
+	AddAggregateFunction<StdDevSampFunction>(transaction, catalog);
+	AddAggregateFunction<SumFunction>(transaction, catalog);
 
 	// math
 	AddScalarFunction<AbsFunction>(transaction, catalog);
