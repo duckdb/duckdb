@@ -13,14 +13,12 @@
 #include "storage/storage_lock.hpp"
 #include "storage/table/segment_tree.hpp"
 #include "storage/table/column_segment.hpp"
+#include "storage/table/version_chunk_info.hpp"
 
 namespace duckdb {
 class ColumnDefinition;
 class DataTable;
 class StorageManager;
-
-class VersionChunk;
-struct VersionInfo;
 
 struct TableScanState;
 struct IndexTableScanState;
@@ -30,25 +28,6 @@ struct ColumnPointer {
 	ColumnSegment *segment;
 	//! The offset inside the column segment
 	index_t offset;
-};
-
-class VersionChunkInfo {
-public:
-	VersionChunkInfo(VersionChunk &chunk, index_t start);
-
-	//! Whether or not the tuples are deleted
-	bool deleted[STANDARD_VECTOR_SIZE] = {0};
-	//! The version pointers
-	VersionInfo *version_pointers[STANDARD_VECTOR_SIZE] = {nullptr};
-	//! The chunk this info belongs to
-	VersionChunk &chunk;
-	//! The start index
-	index_t start;
-public:
-	// Cleanup the version information of a tuple
-	void Cleanup(VersionInfo *info);
-	// Undo the changes made by a tuple
-	void Undo(VersionInfo *info);
 };
 
 class VersionChunk : public SegmentBase {
