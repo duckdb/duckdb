@@ -19,12 +19,12 @@ static index_t GetAggrPayloadSize(ExpressionType expr_type, TypeId return_type) 
 	case ExpressionType::AGGREGATE_COUNT_DISTINCT:
 	case ExpressionType::AGGREGATE_COUNT_STAR:
 		// COUNT aggregates always use TypeId::BIGINT
-		return GetTypeIdSize(TypeId::BIGINT);
+		return get_bigint_type_size(return_type);
 	case ExpressionType::AGGREGATE_STDDEV_SAMP:
 		// count running_mean running_dsquared
-		return sizeof(uint64_t) + sizeof(double) + sizeof(double);
+		return stddev_payload_size( return_type);
 	default:
-		return GetTypeIdSize(return_type);
+		return get_return_type_size(return_type);
 	}
 }
 
