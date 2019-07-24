@@ -11,11 +11,15 @@
 #include "planner/expression.hpp"
 
 namespace duckdb {
+class AggregateFunctionCatalogEntry;
 
 class BoundAggregateExpression : public Expression {
 public:
-	BoundAggregateExpression(TypeId return_type, ExpressionType type, unique_ptr<Expression> child);
+	BoundAggregateExpression(TypeId return_type, ExpressionType type, unique_ptr<Expression> child,
+							 AggregateFunctionCatalogEntry* bound_aggregate);
 
+	//! The bound function expression
+	AggregateFunctionCatalogEntry *bound_aggregate;
 	//! The child of the aggregate expression
 	unique_ptr<Expression> child;
 
