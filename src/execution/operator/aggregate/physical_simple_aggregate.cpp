@@ -4,6 +4,7 @@
 #include "execution/expression_executor.hpp"
 #include "function/aggregate_function/distributive.hpp"
 #include "planner/expression/bound_aggregate_expression.hpp"
+#include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -33,23 +34,10 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 				payload_vector.count = state->child_chunk.size();
 			}
 			// perform the actual aggregation
-			switch (aggregate.type) {
-			case ExpressionType::AGGREGATE_COUNT_STAR:
-				countstar_simple_update(&payload_vector, 1, state->aggregates[aggr_idx]);
-				break;
-			case ExpressionType::AGGREGATE_COUNT:
-				count_simple_update(&payload_vector, 1, state->aggregates[aggr_idx]);
-				break;
-			case ExpressionType::AGGREGATE_SUM:
-				sum_simple_update(&payload_vector, 1, state->aggregates[aggr_idx]);
-				break;
-			case ExpressionType::AGGREGATE_MIN:
-				min_simple_update(&payload_vector, 1, state->aggregates[aggr_idx]);
-				break;
-			case ExpressionType::AGGREGATE_MAX:
-				max_simple_update(&payload_vector, 1, state->aggregates[aggr_idx]);
-				break;
-			default:
+			if (aggregate.bound_aggregate->simple_update) {
+				aggregate.bound_aggregate->simple_update(&payload_vector, 1, state->aggregates[aggr_idx]);
+			}
+			else {
 				throw Exception("Unsupported aggregate for simple aggregation");
 			}
 		}
@@ -80,16 +68,7 @@ PhysicalSimpleAggregateOperatorState::PhysicalSimpleAggregateOperatorState(Physi
 			payload_types.push_back(TypeId::BIGINT);
 		}
 		// initialize the aggregate values
-		switch (aggregate->type) {
-		case ExpressionType::AGGREGATE_COUNT_STAR:
-		case ExpressionType::AGGREGATE_COUNT:
-		case ExpressionType::AGGREGATE_COUNT_DISTINCT:
-			aggregates.push_back(bigint_simple_initialize());
-			break;
-		default:
-			aggregates.push_back(null_simple_initialize());
-			break;
-		}
+		aggregates.push_back(aggr.bound_aggregate->simple_initialize());
 	}
 	payload_chunk.Initialize(payload_types);
 }

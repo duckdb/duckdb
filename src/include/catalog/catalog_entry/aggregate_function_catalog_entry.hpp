@@ -18,7 +18,7 @@ namespace duckdb {
 
 class SchemaCatalogEntry;
 
-//! A table function in the catalog
+//! An aggregate function in the catalog
 class AggregateFunctionCatalogEntry : public CatalogEntry {
 public:
 	AggregateFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateAggregateFunctionInfo *info)
