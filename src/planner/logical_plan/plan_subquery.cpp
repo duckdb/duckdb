@@ -30,7 +30,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// now we push a COUNT(*) aggregate onto the limit, this will be either 0 or 1 (EXISTS or NOT EXISTS)
 		auto func = binder.context.catalog.GetAggregateFunction(binder.context.ActiveTransaction(), DEFAULT_SCHEMA, "count_star");
 		auto count_star =
-		    make_unique<BoundAggregateExpression>(TypeId::BIGINT, ExpressionType::AGGREGATE_COUNT_STAR, nullptr, func);
+		    make_unique<BoundAggregateExpression>(TypeId::BIGINT, ExpressionType::AGGREGATE_COUNT_STAR, nullptr, func, false);
 		auto index_type = count_star->return_type;
 		vector<unique_ptr<Expression>> aggregate_list;
 		aggregate_list.push_back(move(count_star));
@@ -76,7 +76,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		auto bound = make_unique<BoundReferenceExpression>(expr.return_type, 0);
 		auto first_func = binder.context.catalog.GetAggregateFunction(binder.context.ActiveTransaction(), DEFAULT_SCHEMA, "first");
 		auto first_agg =
-		    make_unique<BoundAggregateExpression>(expr.return_type, ExpressionType::AGGREGATE_FIRST, move(bound),first_func);
+		    make_unique<BoundAggregateExpression>(expr.return_type, ExpressionType::AGGREGATE_FIRST, move(bound), first_func, false);
 		expressions.push_back(move(first_agg));
 		auto aggr_index = binder.GenerateTableIndex();
 		auto aggr = make_unique<LogicalAggregate>(binder.GenerateTableIndex(), aggr_index, move(expressions));

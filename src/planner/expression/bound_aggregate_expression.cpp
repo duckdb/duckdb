@@ -4,8 +4,10 @@ using namespace duckdb;
 using namespace std;
 
 BoundAggregateExpression::BoundAggregateExpression(TypeId return_type, ExpressionType type,
-                                                   unique_ptr<Expression> child, AggregateFunctionCatalogEntry* bound_aggregate)
-    : Expression(type, ExpressionClass::BOUND_AGGREGATE, return_type), bound_aggregate(bound_aggregate), child(move(child)) {
+                                                   unique_ptr<Expression> child, AggregateFunctionCatalogEntry* bound_aggregate,
+                                                   bool distinct)
+    : Expression(type, ExpressionClass::BOUND_AGGREGATE, return_type),
+    bound_aggregate(bound_aggregate), distinct(distinct), child(move(child)) {
 }
 
 string BoundAggregateExpression::ToString() const {
@@ -25,7 +27,7 @@ bool BoundAggregateExpression::Equals(const BaseExpression *other_) const {
 
 unique_ptr<Expression> BoundAggregateExpression::Copy() {
 	auto new_child = child ? child->Copy() : nullptr;
-	auto new_aggregate = make_unique<BoundAggregateExpression>(return_type, type, move(new_child), bound_aggregate);
+	auto new_aggregate = make_unique<BoundAggregateExpression>(return_type, type, move(new_child), bound_aggregate, distinct);
 	new_aggregate->CopyProperties(*this);
 	return move(new_aggregate);
 }

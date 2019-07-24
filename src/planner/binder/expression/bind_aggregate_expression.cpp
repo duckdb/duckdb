@@ -53,7 +53,7 @@ BindResult SelectBinder::BindAggregate(AggregateExpression &aggr, index_t depth)
 		child = AddCastToType(move(child), child_type, result_type);
 	}
 	// create the aggregate
-	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(result_type), aggr.type, move(child), func);
+	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(result_type), aggr.type, move(child), func, aggr.distinct);
 	// now create a column reference referring to this aggregate
 
 	auto colref = make_unique<BoundColumnRefExpression>(
