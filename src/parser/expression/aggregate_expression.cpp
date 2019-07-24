@@ -1,12 +1,30 @@
 #include "parser/expression/aggregate_expression.hpp"
 
 #include "common/serializer.hpp"
+#include "common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 AggregateExpression::AggregateExpression(ExpressionType type, unique_ptr<ParsedExpression> child)
-    : ParsedExpression(type, ExpressionClass::AGGREGATE) {
+    : ParsedExpression(type, ExpressionClass::AGGREGATE)
+    , schema(DEFAULT_SCHEMA)
+    , aggregate_name(StringUtil::Lower(ExpressionTypeToString(type)))
+    , distinct(false)
+{
+	// Extract the distinct flag
+	switch (type) {
+	case ExpressionType::AGGREGATE_COUNT_DISTINCT:
+		aggregate_name = StringUtil::Lower(ExpressionTypeToString(ExpressionType::AGGREGATE_COUNT));
+		distinct = true;
+		break;
+	case ExpressionType::AGGREGATE_SUM_DISTINCT:
+		aggregate_name = StringUtil::Lower(ExpressionTypeToString(ExpressionType::AGGREGATE_SUM));
+		distinct = true;
+		break;
+	default:
+		break;
+	}
 
 	// translate COUNT(*) into AGGREGATE_COUNT_STAR
 	if (type == ExpressionType::AGGREGATE_COUNT) {

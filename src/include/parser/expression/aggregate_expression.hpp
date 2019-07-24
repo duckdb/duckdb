@@ -16,8 +16,14 @@ class AggregateExpression : public ParsedExpression {
 public:
 	AggregateExpression(ExpressionType type, unique_ptr<ParsedExpression> child);
 
+	//! Schema of the aggregate
+	string schema;
+	//! Aggregate name
+	string aggregate_name;
 	//! The child of the aggregate expression
 	unique_ptr<ParsedExpression> child;
+	//! Whether the aggregate is applied to distinct values
+	bool distinct;
 
 public:
 	bool IsAggregate() const override {
