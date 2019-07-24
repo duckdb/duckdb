@@ -38,6 +38,10 @@ static SQLType get_bigint_return_type(vector<SQLType> &arguments) {
 	return SQLTypeId::BIGINT;
 }
 
+static bool dont_cast_arguments(vector<SQLType> &arguments) {
+	return false;
+}
+
 class AggregateBigintReturnFunction : public AggregateInPlaceFunction {
 public:
 	static aggregate_size_t GetPayloadSizeFunction() {
@@ -55,6 +59,10 @@ public:
 	static get_return_type_function_t GetReturnTypeFunction() {
 		return get_bigint_return_type;
 	}
+
+	static matches_argument_function_t GetCastArgumentsFunction() {
+		return dont_cast_arguments;
+	}
 };
 
 static index_t get_return_type_size(TypeId return_type) {
@@ -71,6 +79,11 @@ static SQLType get_same_return_type(vector<SQLType> &arguments) {
 	assert(arguments.size() == 1);
 	return arguments[0];
 }
+
+static bool cast_arguments(vector<SQLType> &arguments) {
+	return true;
+}
+
 class AggregateSameReturnFunction : public AggregateInPlaceFunction {
 public:
 	static aggregate_size_t GetPayloadSizeFunction() {
@@ -87,6 +100,10 @@ public:
 
 	static get_return_type_function_t GetReturnTypeFunction() {
 		return get_same_return_type;
+	}
+
+	static matches_argument_function_t GetCastArgumentsFunction() {
+		return cast_arguments;
 	}
 };
 
@@ -115,7 +132,7 @@ void countstar_simple_update( Vector inputs[], index_t input_count, Value &resul
 class CountStarFunction : public AggregateBigintReturnFunction {
 public:
 	static const char*GetName() {
-		return "countstar";
+		return "count_star";
 	}
 
 	static aggregate_update_t GetUpdateFunction() {
@@ -196,7 +213,7 @@ static void stddevsamp_initialize(data_ptr_t payload, TypeId return_type) {
 class StdDevSampFunction {
 public:
 	static const char*GetName() {
-		return "stddev_samp";
+		return "aggregate_stddev_samp";
 	}
 
 	static aggregate_size_t GetPayloadSizeFunction() {
@@ -225,6 +242,10 @@ public:
 
 	static get_return_type_function_t GetReturnTypeFunction() {
 		return stddev_get_return_type;
+	}
+
+	static matches_argument_function_t GetCastArgumentsFunction() {
+		return cast_arguments;
 	}
 };
 
@@ -260,6 +281,10 @@ public:
 
 	static get_return_type_function_t GetReturnTypeFunction() {
 		return sum_get_return_type;
+	}
+
+	static matches_argument_function_t GetCastArgumentsFunction() {
+		return cast_arguments;
 	}
 };
 

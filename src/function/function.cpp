@@ -40,6 +40,7 @@ template <class T> static void AddAggregateFunction(Transaction &transaction, Ca
 	info.simple_update = T::GetSimpleUpdateFunction();
 
 	info.return_type = T::GetReturnTypeFunction();
+	info.cast_arguments = T::GetCastArgumentsFunction();
 
 	catalog.CreateAggregateFunction(transaction, &info);
 }

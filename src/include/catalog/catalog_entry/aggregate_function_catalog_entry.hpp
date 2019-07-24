@@ -31,6 +31,7 @@ public:
 	    , simple_initialize(info->simple_initialize)
 	    , simple_update(info->simple_update)
 	    , return_type(info->return_type)
+	    , cast_arguments(info->cast_arguments)
 	{
 	}
 
@@ -54,5 +55,9 @@ public:
 	//! Function that gives the return type of the aggregate given the input
 	//! arguments
 	get_return_type_function_t return_type;
+
+	//! Function that returns true if the arguments need to be cast to the return type
+	//! arguments
+	matches_argument_function_t cast_arguments;
 };
 } // namespace duckdb

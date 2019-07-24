@@ -95,7 +95,7 @@ public:
 
 	//! Returns a pointer to the aggregate function if it exists, or throws an
 	//! exception otherwise
-	ScalarFunctionCatalogEntry *GetAggregateFunction(Transaction &transaction, const string &schema, const string &name);
+	AggregateFunctionCatalogEntry *GetAggregateFunction(Transaction &transaction, const string &schema, const string &name);
 
 	//! Returns a pointer to the scalar function if it exists, or throws an
 	//! exception otherwise

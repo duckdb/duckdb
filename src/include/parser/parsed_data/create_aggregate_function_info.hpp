@@ -39,6 +39,10 @@ struct CreateAggregateFunctionInfo {
 	//! arguments
 	get_return_type_function_t return_type;
 
+	//! Function that returns true if the arguments need to be cast to the return type
+	//! arguments
+	matches_argument_function_t cast_arguments;
+
 	CreateAggregateFunctionInfo() : schema(DEFAULT_SCHEMA), or_replace(false) {
 	}
 };

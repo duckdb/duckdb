@@ -126,6 +126,12 @@ void Catalog::CreateScalarFunction(Transaction &transaction, CreateScalarFunctio
 	schema->CreateScalarFunction(transaction, info);
 }
 
+AggregateFunctionCatalogEntry *Catalog::GetAggregateFunction(Transaction &transaction, const string &schema_name,
+                                                       const string &name) {
+	auto schema = GetSchema(transaction, schema_name);
+	return schema->GetAggregateFunction(transaction, name);
+}
+
 ScalarFunctionCatalogEntry *Catalog::GetScalarFunction(Transaction &transaction, const string &schema_name,
                                                        const string &name) {
 	auto schema = GetSchema(transaction, schema_name);
