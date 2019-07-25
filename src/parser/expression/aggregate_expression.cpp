@@ -37,7 +37,7 @@ AggregateExpression::AggregateExpression(ExpressionType type, bool distinct, uni
 }
 
 string AggregateExpression::ToString() const {
-	return ExpressionTypeToString(type) + "(" + (child ? child->ToString() : string()) + ")";
+	return ExpressionTypeToString(type) + "(" + (distinct ? "DISTINCT " : " " ) + (child ? child->ToString() : string()) + ")";
 }
 
 bool AggregateExpression::Equals(const BaseExpression *other_) const {
