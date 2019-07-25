@@ -14,7 +14,7 @@ namespace duckdb {
 //! The AggregateExpression represents an aggregate in the query
 class AggregateExpression : public ParsedExpression {
 public:
-	AggregateExpression(ExpressionType type, unique_ptr<ParsedExpression> child);
+	AggregateExpression(ExpressionType type, bool distinct, unique_ptr<ParsedExpression> child);
 
 	//! Schema of the aggregate
 	string schema;

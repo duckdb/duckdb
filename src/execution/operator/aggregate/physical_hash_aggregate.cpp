@@ -84,7 +84,6 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 			switch (aggregates[i]->type) {
 			case ExpressionType::AGGREGATE_COUNT_STAR:
 			case ExpressionType::AGGREGATE_COUNT:
-			case ExpressionType::AGGREGATE_COUNT_DISTINCT:
 				state->aggregate_chunk.data[i].SetValue(0, 0);
 				break;
 			default:

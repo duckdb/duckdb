@@ -61,7 +61,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 			                                          ExpressionType::AGGREGATE_COUNT};
 			vector<BoundAggregateExpression*> correlated_aggregates;
 			for (index_t i = 0; i < aggregate_types.size(); ++i) {
-				auto expr = make_unique<AggregateExpression>(aggregate_types[i], nullptr);
+				auto expr = make_unique<AggregateExpression>(aggregate_types[i], false, nullptr);
 				auto func = context.catalog.GetAggregateFunction(context.ActiveTransaction(), expr->schema, expr->aggregate_name);
 				auto aggr = make_unique<BoundAggregateExpression>(payload_types[i], aggregate_types[i], nullptr, func, expr->distinct);
 				correlated_aggregates.push_back(&*aggr);

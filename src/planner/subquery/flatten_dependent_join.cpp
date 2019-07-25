@@ -133,8 +133,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			for (index_t i = 0; i < aggr.expressions.size(); i++) {
 				assert(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 				if (aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT ||
-				    aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT_STAR ||
-				    aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT_DISTINCT) {
+				    aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT_STAR ) {
 					// have to replace this ColumnBinding with the CASE expression
 					replacement_map[ColumnBinding(aggr.aggregate_index, i)] = i;
 				}

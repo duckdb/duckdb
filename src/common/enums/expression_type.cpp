@@ -74,12 +74,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "COUNT";
 	case ExpressionType::AGGREGATE_COUNT_STAR:
 		return "COUNT_STAR";
-	case ExpressionType::AGGREGATE_COUNT_DISTINCT:
-		return "COUNT_DISTINCT";
 	case ExpressionType::AGGREGATE_SUM:
 		return "SUM";
-	case ExpressionType::AGGREGATE_SUM_DISTINCT:
-		return "SUM_DISTINCT";
 	case ExpressionType::AGGREGATE_MIN:
 		return "MIN";
 	case ExpressionType::AGGREGATE_MAX:

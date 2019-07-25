@@ -194,22 +194,8 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
 		// Aggregate function
 		assert(!root->over); // see above
 		if (root->agg_star || (agg_fun_type == ExpressionType::AGGREGATE_COUNT && !root->args)) {
-			return make_unique<AggregateExpression>(agg_fun_type, make_unique<StarExpression>());
+			return make_unique<AggregateExpression>(agg_fun_type, false, make_unique<StarExpression>());
 		} else {
-			if (root->agg_distinct) {
-				switch (agg_fun_type) {
-				case ExpressionType::AGGREGATE_COUNT:
-					agg_fun_type = ExpressionType::AGGREGATE_COUNT_DISTINCT;
-					break;
-				case ExpressionType::AGGREGATE_SUM:
-					agg_fun_type = ExpressionType::AGGREGATE_SUM_DISTINCT;
-					break;
-				default:
-					// makes no difference for other aggregation types
-					break;
-				}
-			}
-
 			if (!root->args) {
 				throw NotImplementedException("Aggregation over zero columns not supported!");
 			} else if (root->args->length < 2) {
@@ -221,11 +207,11 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
 					// rewrite AVG(a) to SUM(a) / COUNT(a)
 					// first create the SUM
 					auto sum = make_unique<AggregateExpression>(
-					    root->agg_distinct ? ExpressionType::AGGREGATE_SUM_DISTINCT : ExpressionType::AGGREGATE_SUM,
+					    ExpressionType::AGGREGATE_SUM, root->agg_distinct,
 					    child->Copy());
 					// now create the count
 					auto count = make_unique<AggregateExpression>(
-					    root->agg_distinct ? ExpressionType::AGGREGATE_COUNT_DISTINCT : ExpressionType::AGGREGATE_COUNT,
+					    ExpressionType::AGGREGATE_COUNT, root->agg_distinct,
 					    move(child));
 					// cast both to decimal
 					auto sum_cast = make_unique<CastExpression>(SQLType(SQLTypeId::DECIMAL), move(sum));
@@ -234,7 +220,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
 					return make_unique<OperatorExpression>(ExpressionType::OPERATOR_DIVIDE, move(sum_cast),
 					                                       move(count_cast));
 				} else {
-					return make_unique<AggregateExpression>(agg_fun_type, move(child));
+					return make_unique<AggregateExpression>(agg_fun_type, root->agg_distinct, move(child));
 				}
 			} else {
 				throw NotImplementedException("Aggregation over multiple columns not supported yet...\n");
