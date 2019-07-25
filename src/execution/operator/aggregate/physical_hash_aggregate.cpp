@@ -4,6 +4,7 @@
 #include "execution/expression_executor.hpp"
 #include "planner/expression/bound_aggregate_expression.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
+#include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -81,15 +82,9 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 		// for each column in the aggregates, seit either to NULL or 0
 		for (index_t i = 0; i < state->aggregate_chunk.column_count; i++) {
 			state->aggregate_chunk.data[i].count = 1;
-			switch (aggregates[i]->type) {
-			case ExpressionType::AGGREGATE_COUNT_STAR:
-			case ExpressionType::AGGREGATE_COUNT:
-				state->aggregate_chunk.data[i].SetValue(0, 0);
-				break;
-			default:
-				state->aggregate_chunk.data[i].SetValue(0, Value());
-				break;
-			}
+			assert(aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
+			auto aggr = (BoundAggregateExpression*) (&*aggregates[i]);
+			state->aggregate_chunk.data[i].SetValue(0, aggr->bound_aggregate->simple_initialize());
 		}
 		state->finished = true;
 	}
