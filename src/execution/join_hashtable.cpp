@@ -10,6 +10,17 @@ using namespace std;
 
 using ScanStructure = JoinHashTable::ScanStructure;
 
+static void DeserializeChunk(DataChunk &result, data_ptr_t source[], index_t count) {
+	Vector source_vector(TypeId::POINTER, (data_ptr_t) source);
+	source_vector.count = count;
+
+	index_t offset = 0;
+	for(index_t i = 0; i < result.column_count; i++) {
+		VectorOperations::Gather::Set(source_vector, result.data[i], false, offset);
+		offset += GetTypeIdSize(result.data[i].type);
+	}
+}
+
 JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type,
                              index_t initial_capacity, bool parallel)
     : build_serializer(build_types), build_types(build_types), equality_size(0), condition_size(0), build_size(0),
@@ -36,7 +47,6 @@ JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> b
 	}
 	// at least one equality is necessary
 	assert(equality_types.size() > 0);
-	equality_serializer.Initialize(equality_types);
 	condition_serializer.Initialize(condition_types);
 
 	if (type == JoinType::ANTI || type == JoinType::SEMI || type == JoinType::MARK) {
@@ -109,8 +119,6 @@ void JoinHashTable::Resize(index_t size) {
 		DataChunk keys;
 		keys.Initialize(equality_types);
 
-		Vector entry_pointers(TypeId::POINTER, true, true);
-		auto deserialize_locations = (data_ptr_t *)entry_pointers.data;
 		data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 
 		node = head.get();
@@ -119,17 +127,16 @@ void JoinHashTable::Resize(index_t size) {
 			auto dataptr = node->data.get();
 			for (index_t i = 0; i < node->count; i++) {
 				// key is stored at the start
-				key_locations[i] = deserialize_locations[i] = dataptr;
+				key_locations[i] = dataptr;
 				// move to next entry
 				dataptr += entry_size;
 			}
-			entry_pointers.count = node->count;
 
 			// reconstruct the keys chunk from the stored entries
 			// we only reconstruct the keys that are part of the equality
 			// comparison as these are the ones that are used to compute the
 			// hash
-			equality_serializer.Deserialize(entry_pointers, keys);
+			DeserializeChunk(keys, key_locations, node->count);
 
 			// create the hash
 			StaticVector<uint64_t> hashes;

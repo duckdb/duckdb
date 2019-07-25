@@ -499,13 +499,9 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
                       Vector &row_identifiers) {
 	assert(row_identifiers.type == ROW_TYPE);
 	auto row_ids = (row_t *)row_identifiers.data;
-	// sort the row identifiers first
-	// this is done so we can minimize the amount of chunks that we lock
-	sel_t sort_vector[STANDARD_VECTOR_SIZE];
-	VectorOperations::Sort(row_identifiers, sort_vector);
 
-	for (index_t i = 0; i < row_identifiers.count; i++) {
-		auto row_id = row_ids[sort_vector[i]];
+	VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
+		auto row_id = row_ids[i];
 		auto chunk = GetChunk(row_id);
 		auto lock = chunk->lock.GetSharedLock();
 
@@ -513,7 +509,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 		auto index = row_id - chunk->start;
 
 		chunk->RetrieveTupleData(transaction, result, column_ids, index);
-	}
+	});
 }
 
 void DataTable::InitializeIndexScan(IndexTableScanState &state) {

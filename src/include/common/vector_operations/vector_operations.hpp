@@ -188,7 +188,7 @@ struct VectorOperations {
 	struct Gather {
 		//! dest.data[i] = ptr[i]. If set_null is true, NullValue<T> is checked for and converted to the nullmask in
 		//! dest. If set_null is false, NullValue<T> is ignored.
-		static void Set(Vector &source, Vector &dest, bool set_null = true);
+		static void Set(Vector &source, Vector &dest, bool set_null = true, index_t offset = 0);
 		//! Append the values from source to the dest vector. If set_null is true, NullValue<T> is checked for and converted to the nullmask in
 		//! dest. If set_null is false, NullValue<T> is ignored. If offset is set, it is added to
 		static void Append(Vector &source, Vector &dest, index_t offset = 0, bool set_null = true);

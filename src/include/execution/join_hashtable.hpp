@@ -118,8 +118,6 @@ public:
 		return count;
 	}
 
-	//! Serializer for the keys used in equality comparison
-	TupleSerializer equality_serializer;
 	//! Serializer for all conditions
 	TupleSerializer condition_serializer;
 	//! Serializer for the build side

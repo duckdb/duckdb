@@ -87,12 +87,13 @@ template <class LOOP, class OP> static void generic_gather_loop(Vector &source, 
 	}
 }
 
-void VectorOperations::Gather::Set(Vector &source, Vector &dest, bool set_null) {
+void VectorOperations::Gather::Set(Vector &source, Vector &dest, bool set_null, index_t offset) {
 	if (set_null) {
-		generic_gather_loop<GatherLoopSetNull, PickLeft>(source, dest);
+		generic_gather_loop<GatherLoopSetNull, PickLeft>(source, dest, offset);
 	} else {
-		generic_gather_loop<GatherLoopIgnoreNull, PickLeft>(source, dest);
+		generic_gather_loop<GatherLoopIgnoreNull, PickLeft>(source, dest, offset);
 	}
+	dest.count = source.count;
 }
 
 struct GatherLoopAppendNull {
