@@ -53,8 +53,6 @@ public:
 private:
 	void HashGroups(DataChunk &groups, Vector &addresses);
 
-	TupleSerializer group_serializer;
-
 	//! The aggregate types to be computed
 	vector<ExpressionType> aggregate_types;
 
@@ -62,6 +60,8 @@ private:
 	vector<TypeId> group_types;
 	//! The types of the payload columns stored in the hashtable
 	vector<TypeId> payload_types;
+	//! The size of the groups in bytes
+	index_t group_width;
 	//! The size of the payload (aggregations) in bytes
 	index_t payload_width;
 	//! The total tuple size
