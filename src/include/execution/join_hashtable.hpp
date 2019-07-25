@@ -151,6 +151,8 @@ public:
 		//! The types of the duplicate eliminated columns, only used in correlated MARK JOIN for flattening ANY()/ALL()
 		//! expressions
 		vector<TypeId> correlated_types;
+		//! The aggregate expression nodes used by the HT
+		vector<unique_ptr<Expression>> correlated_aggregates;
 		//! The HT that holds the group counts for every correlated column
 		unique_ptr<SuperLargeHashTable> correlated_counts;
 		//! Group chunk used for aggregating into correlated_counts

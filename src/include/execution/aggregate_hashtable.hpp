@@ -9,12 +9,13 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/enums/expression_type.hpp"
+#include "planner/expression.hpp"
 #include "common/types/data_chunk.hpp"
 #include "common/types/tuple.hpp"
 #include "common/types/vector.hpp"
 
 namespace duckdb {
+class BoundAggregateExpression;
 
 //! SuperLargeHashTable is a linear probing HT that is used for computing
 //! aggregates
@@ -27,7 +28,7 @@ namespace duckdb {
 class SuperLargeHashTable {
 public:
 	SuperLargeHashTable(index_t initial_capacity, vector<TypeId> group_types, vector<TypeId> payload_types,
-	                    vector<ExpressionType> aggregate_types, bool parallel = false);
+	                    vector<BoundAggregateExpression*> aggregates, bool parallel = false);
 	~SuperLargeHashTable();
 
 	//! Resize the HT to the specified size. Must be larger than the current
@@ -55,8 +56,8 @@ private:
 
 	TupleSerializer group_serializer;
 
-	//! The aggregate types to be computed
-	vector<ExpressionType> aggregate_types;
+	//! The aggregates to be computed
+	vector<BoundAggregateExpression*> aggregates;
 
 	//! The types of the group columns stored in the hashtable
 	vector<TypeId> group_types;

@@ -119,14 +119,14 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 	    make_unique<PhysicalHashAggregateOperatorState>(this, children.size() == 0 ? nullptr : children[0].get());
 	state->tuples_scanned = 0;
 	vector<TypeId> group_types, payload_types;
-	vector<ExpressionType> aggregate_kind;
+	vector<BoundAggregateExpression*> aggregate_kind;
 	for (auto &expr : groups) {
 		group_types.push_back(expr->return_type);
 	}
 	for (auto &expr : aggregates) {
 		assert(expr->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 		auto &aggr = (BoundAggregateExpression &)*expr;
-		aggregate_kind.push_back(expr->type);
+		aggregate_kind.push_back(&aggr);
 		if (aggr.child) {
 			payload_types.push_back(aggr.child->return_type);
 		} else {

@@ -35,7 +35,6 @@ void count_simple_update(Vector inputs[], index_t input_count, Value& result) {
 }
 
 void countstar_update(Vector inputs[], index_t input_count, Vector &result ) {
-	assert(input_count == 0 );
 	// add one to each address, regardless of if the value is NULL
 	Vector one(Value::BIGINT(1));
 	VectorOperations::Scatter::Add(one, result);
