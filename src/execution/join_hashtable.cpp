@@ -75,11 +75,18 @@ JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> b
 	Resize(initial_capacity);
 }
 
+void JoinHashTable::ApplyBitmask(Vector &hashes) {
+	auto indices = (index_t *)hashes.data;
+	VectorOperations::Exec(hashes, [&](index_t i, index_t k) {
+		indices[i] = indices[i] & bitmask;
+	});
+}
+
 void JoinHashTable::InsertHashes(Vector &hashes, data_ptr_t key_locations[]) {
 	assert(hashes.type == TypeId::HASH);
 
-	// use modulo to get position in array (FIXME: can be done more efficiently)
-	VectorOperations::ModuloInPlace(hashes, capacity);
+	// use bitmask to get position in array
+	ApplyBitmask(hashes);
 
 	auto pointers = hashed_pointers.get();
 	auto indices = (index_t *)hashes.data;
@@ -101,6 +108,10 @@ void JoinHashTable::Resize(index_t size) {
 		throw Exception("Cannot downsize a hash table!");
 	}
 	capacity = size;
+
+	// size needs to be a power of 2
+	assert((size & (size - 1)) == 0);
+	bitmask = size - 1;
 
 	hashed_pointers = unique_ptr<data_ptr_t[]>(new data_ptr_t[capacity]);
 	memset(hashed_pointers.get(), 0, capacity * sizeof(data_ptr_t));
@@ -312,8 +323,8 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	StaticVector<uint64_t> hashes;
 	Hash(keys, hashes);
 
-	// use modulo to get index in array
-	VectorOperations::ModuloInPlace(hashes, capacity);
+	// use bitmask to get index in array
+	ApplyBitmask(hashes);
 
 	// now create the initial pointers from the hashes
 	auto ptrs = (data_ptr_t *)ss->pointers.data;

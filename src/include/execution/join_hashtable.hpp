@@ -138,6 +138,8 @@ public:
 	JoinType join_type;
 	//! Whether or not any of the key elements contain NULL
 	bool has_null;
+	//! Bitmask for getting relevant bits from the hashes to determine the position
+	uint64_t bitmask;
 
 	struct {
 		//! The types of the duplicate eliminated columns, only used in correlated MARK JOIN for flattening ANY()/ALL()
@@ -154,6 +156,8 @@ public:
 	} correlated_mark_join_info;
 
 private:
+	//! Apply a bitmask to the hashes
+	void ApplyBitmask(Vector &hashes);
 	//! Insert the given set of locations into the HT with the given set of
 	//! hashes. Caller should hold lock in parallel HT.
 	void InsertHashes(Vector &hashes, data_ptr_t key_locations[]);
