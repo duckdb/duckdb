@@ -68,8 +68,6 @@ public:
 	string table;
 	//! Types managed by data table
 	vector<TypeId> types;
-	//! Tuple serializer for this table
-	TupleSerializer serializer;
 	//! A reference to the base storage manager
 	StorageManager &storage;
 	//! Indexes

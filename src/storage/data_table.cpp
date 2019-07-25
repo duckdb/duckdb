@@ -18,7 +18,7 @@ using namespace duckdb;
 using namespace std;
 
 DataTable::DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types_)
-    : cardinality(0), schema(schema), table(table), types(types_), serializer(types), storage(storage) {
+    : cardinality(0), schema(schema), table(table), types(types_), storage(storage) {
 	index_t accumulative_size = 0;
 	for (index_t i = 0; i < types.size(); i++) {
 		accumulative_tuple_size.push_back(accumulative_size);

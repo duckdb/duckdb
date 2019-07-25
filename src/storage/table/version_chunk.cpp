@@ -107,9 +107,12 @@ void VersionChunk::PushTuple(Transaction &transaction, UndoFlags flag, index_t o
 
 	data_ptr_t target_locations[1];
 	target_locations[0] = tuple_data;
-
-	// now fill in the tuple data
-	table.serializer.Serialize(chunk, target_locations);
+	Vector target(TypeId::POINTER, (data_ptr_t) target_locations);
+	target.count = 1;
+	for(index_t i = 0; i < chunk.column_count; i++) {
+		VectorOperations::Scatter::SetAll(chunk.data[i], target);
+		target_locations[0] += columns[i].segment->type_size;
+	}
 }
 
 void VersionChunk::RetrieveTupleFromBaseTable(DataChunk &result, vector<column_t> &column_ids, row_t row_id) {
