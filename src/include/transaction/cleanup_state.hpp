@@ -17,15 +17,15 @@ public:
 	CleanupState();
 	~CleanupState();
 
-	DataTable *current_table;
-
+public:
+	void CleanupEntry(UndoFlags type, data_ptr_t data);
+private:
 	// data for index cleanup
+	DataTable *current_table;
 	DataChunk chunk;
 	data_ptr_t data[STANDARD_VECTOR_SIZE];
 	row_t row_numbers[STANDARD_VECTOR_SIZE];
 	index_t count;
-public:
-	void CleanupEntry(UndoFlags type, data_ptr_t data);
 private:
 	void CleanupIndexInsert(VersionInfo *info);
 	void FlushIndexCleanup();

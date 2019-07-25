@@ -25,12 +25,13 @@ void VersionChunkInfo::Undo(VersionInfo *info) {
 		// move data back to the original chunk
 		deleted[entry] = false;
 		auto tuple_data = info->tuple_data;
-
-		vector<data_ptr_t> data_pointers;
-		for (index_t i = 0; i < chunk.table.types.size(); i++) {
-			data_pointers.push_back(chunk.GetPointerToRow(i, chunk.start + start + entry));
+		auto row_id = info->GetRowId();
+		for(index_t i = 0; i < chunk.table.types.size(); i++) {
+			assert(chunk.columns[i].segment->segment_type == ColumnSegmentType::TRANSIENT);
+			auto &transient = (TransientSegment&) *chunk.columns[i].segment;
+			transient.Update(row_id, tuple_data);
+			tuple_data += transient.type_size;
 		}
-		chunk.table.serializer.Deserialize(data_pointers, 0, tuple_data);
 	}
 	version_pointers[entry] = info->next;
 	if (info->next) {

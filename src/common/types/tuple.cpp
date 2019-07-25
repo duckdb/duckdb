@@ -99,44 +99,6 @@ void TupleSerializer::Serialize(vector<data_ptr_t> &column_data, Vector &index_v
 	}
 }
 
-void TupleSerializer::SerializeUpdate(vector<data_ptr_t> &column_data, vector<column_t> &affected_columns,
-                                      DataChunk &update_chunk, Vector &index_vector, index_t index_offset,
-                                      Tuple targets[]) {
-	auto indices = (index_t *)index_vector.data;
-	assert(index_vector.count == update_chunk.size());
-
-	// first initialize the tuples
-	for (index_t i = 0; i < index_vector.count; i++) {
-		targets[i].size = base_size;
-		targets[i].data = unique_ptr<data_t[]>(new data_t[targets[i].size]);
-	}
-
-	// now copy the data to the tuples
-	index_t offset = 0;
-	for (index_t i = 0; i < columns.size(); i++) {
-		auto column = columns[i];
-		auto update_column = affected_columns[i];
-		if (update_column == (column_t)-1) {
-			// fetch from base column
-			for (index_t j = 0; j < index_vector.count; j++) {
-				auto index =
-				    (index_vector.sel_vector ? indices[index_vector.sel_vector[j]] : indices[j]) - index_offset;
-				auto source = column_data[column] + type_sizes[i] * index;
-				memcpy(targets[j].data.get() + offset, source, type_sizes[i]);
-			}
-		} else {
-			// fetch from update column
-			auto baseptr = update_chunk.data[update_column].data;
-			for (index_t j = 0; j < index_vector.count; j++) {
-				auto index = update_chunk.sel_vector ? update_chunk.sel_vector[j] : j;
-				auto source = baseptr + type_sizes[i] * index;
-				memcpy(targets[j].data.get() + offset, source, type_sizes[i]);
-			}
-		}
-		offset += type_sizes[i];
-	}
-}
-
 static void SerializeValue(data_ptr_t target_data, Vector &col, index_t index, index_t result_index,
                            index_t type_size) {
 	if (col.nullmask[index]) {
@@ -193,55 +155,4 @@ int TupleSerializer::Compare(const_data_ptr_t a, const_data_ptr_t b) {
 		}
 		return cmp;
 	}
-}
-
-TupleComparer::TupleComparer(TupleSerializer &left, TupleSerializer &right) : left(left) {
-	assert(left.columns.size() <= right.columns.size());
-	// compute the offsets
-	left_offsets.resize(left.columns.size());
-	right_offsets.resize(left.columns.size());
-
-	index_t left_offset = 0;
-	for (index_t i = 0; i < left.columns.size(); i++) {
-		left_offsets[i] = left_offset;
-		right_offsets[i] = INVALID_INDEX;
-
-		index_t right_offset = 0;
-		for (index_t j = 0; j < right.columns.size(); j++) {
-			if (left.columns[i] == right.columns[j]) {
-				assert(left.types[i] == right.types[j]);
-
-				// found it!
-				right_offsets[i] = right_offset;
-				break;
-			}
-			right_offset += right.type_sizes[j];
-		}
-		// assert that we found the column
-		left_offset += left.type_sizes[i];
-		assert(right_offsets[i] != INVALID_INDEX);
-	}
-}
-
-int TupleComparer::Compare(const_data_ptr_t left_data, const_data_ptr_t right_data) {
-	int cmp;
-	for (index_t i = 0; i < left_offsets.size(); i++) {
-		auto left_element = left_data + left_offsets[i];
-		auto right_element = right_data + right_offsets[i];
-
-		if (left.is_variable[i]) {
-			// string comparison
-			assert(left.types[i] == TypeId::VARCHAR);
-			auto left_string = *((char **)left_element);
-			auto right_string = *((char **)right_element);
-			cmp = strcmp(left_string, right_string);
-		} else {
-			cmp = memcmp(left_element, right_element, left.type_sizes[i]);
-		}
-
-		if (cmp != 0) {
-			return cmp;
-		}
-	}
-	return 0;
 }

@@ -23,13 +23,6 @@ class StorageManager;
 struct TableScanState;
 struct IndexTableScanState;
 
-struct ColumnPointer {
-	//! The column segment
-	ColumnSegment *segment;
-	//! The offset inside the column segment
-	index_t offset;
-};
-
 class VersionChunk : public SegmentBase {
 	friend class VersionChunkInfo;
 public:
@@ -74,18 +67,14 @@ private:
 	//! Fetches a single tuple from the base table at rowid row_id, and appends that tuple to the "result" DataChunk
 	void RetrieveTupleFromBaseTable(DataChunk &result, vector<column_t> &column_ids, row_t row_id);
 
-	//! Get a pointer to the row of the specified column
-	data_ptr_t GetPointerToRow(index_t col, index_t row);
-
 	VersionChunkInfo* GetOrCreateVersionInfo(index_t version_index);
-
 	//! Fetch "count" entries from the specified column pointer, and place them in the result vector. The column pointer
 	//! is advanced by "count" entries.
-	void RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &pointer, index_t count);
+	void RetrieveColumnData(ColumnPointer &pointer, Vector &result, index_t count);
 	//! Fetch "sel_count" entries from a "count" size chunk of the specified column pointer, where the fetched entries
 	//! are chosen by "sel_vector". The column pointer is advanced by "count" entries.
-	void RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &pointer, index_t count, sel_t *sel_vector,
-	                        index_t sel_count);
+	void RetrieveColumnData(ColumnPointer &pointer, Vector &result,index_t count, sel_t *sel_vector, index_t sel_count);
+
 
 	void FetchColumnData(TableScanState &state, DataChunk &result, const vector<column_t> &column_ids, index_t offset_in_chunk, index_t count);
 	void FetchColumnData(TableScanState &state, DataChunk &result, const vector<column_t> &column_ids, index_t offset_in_chunk, index_t scan_count, sel_t sel_vector[], index_t count);

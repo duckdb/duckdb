@@ -5,15 +5,12 @@
 #include "storage/data_table.hpp"
 #include "transaction/transaction.hpp"
 #include "transaction/version_info.hpp"
+#include "storage/table/transient_segment.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 VersionChunk::VersionChunk(DataTable &base_table, index_t start) : SegmentBase(start, 0), table(base_table) {
-}
-
-data_ptr_t VersionChunk::GetPointerToRow(index_t col, index_t row) {
-	return columns[col].segment->GetPointerToRow(table.types[col], row);
 }
 
 index_t VersionChunk::GetVersionIndex(index_t index) {
@@ -100,13 +97,19 @@ void VersionChunk::PushTuple(Transaction &transaction, UndoFlags flag, index_t o
 	if (meta->next) {
 		meta->next->prev = meta;
 	}
-	vector<data_ptr_t> columns;
+
+	DataChunk chunk;
+	chunk.Initialize(table.types);
+
 	for (index_t i = 0; i < table.types.size(); i++) {
-		columns.push_back(GetPointerToRow(i, start + offset));
+		columns[i].segment->Fetch(chunk.data[i], start + offset);
 	}
 
+	data_ptr_t target_locations[1];
+	target_locations[0] = tuple_data;
+
 	// now fill in the tuple data
-	table.serializer.Serialize(columns, 0, tuple_data);
+	table.serializer.Serialize(chunk, target_locations);
 }
 
 void VersionChunk::RetrieveTupleFromBaseTable(DataChunk &result, vector<column_t> &column_ids, row_t row_id) {
@@ -118,9 +121,7 @@ void VersionChunk::RetrieveTupleFromBaseTable(DataChunk &result, vector<column_t
 			result.data[col_idx].count++;
 		} else {
 			assert(column_ids[col_idx] < table.types.size());
-			// get the column segment for this entry and append it to the vector
-			columns[column_ids[col_idx]].segment->AppendValue(result.data[col_idx], table.types[column_ids[col_idx]],
-			                                                         row_id);
+			columns[column_ids[col_idx]].segment->Fetch(result.data[col_idx], row_id);
 		}
 	}
 }
@@ -129,12 +130,8 @@ void VersionChunk::AppendToChunk(DataChunk &chunk, VersionInfo *info) {
 	if (!info->prev) {
 		// fetch from base table
 		auto id = info->GetRowId();
-		index_t current_offset = chunk.size();
 		for (index_t i = 0; i < table.types.size(); i++) {
-			index_t value_size = GetTypeIdSize(chunk.data[i].type);
-			data_ptr_t storage_pointer = GetPointerToRow(i, id);
-			memcpy(chunk.data[i].data + value_size * current_offset, storage_pointer, value_size);
-			chunk.data[i].count++;
+			columns[i].segment->Fetch(chunk.data[i], id);
 		}
 	} else {
 		// fetch from tuple data
@@ -152,8 +149,13 @@ void VersionChunk::AppendToChunk(DataChunk &chunk, VersionInfo *info) {
 }
 
 void VersionChunk::Update(Vector &row_identifiers, Vector &update_vector, index_t col_idx) {
-	auto size = GetTypeIdSize(update_vector.type);
+	// in-place updates can only be done on transient segments
+	assert(columns[col_idx].segment->segment_type == ColumnSegmentType::TRANSIENT);
+	assert(update_vector.type == columns[col_idx].segment->type);
+
+	auto size = columns[col_idx].segment->type_size;
 	auto ids = (row_t *)row_identifiers.data;
+	auto &transient = (TransientSegment&) *columns[col_idx].segment;
 
 	if (update_vector.nullmask.any()) {
 		// has NULL values in the nullmask
@@ -165,14 +167,12 @@ void VersionChunk::Update(Vector &row_identifiers, Vector &update_vector, index_
 
 		assert(!null_vector.sel_vector);
 		VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
-			auto dataptr = GetPointerToRow(col_idx, ids[i]);
-			memcpy(dataptr, null_vector.data + k * size, size);
+			transient.Update(ids[i], null_vector.data + k * size);
 		});
 	} else {
 		assert(row_identifiers.sel_vector == update_vector.sel_vector);
 		VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
-			auto dataptr = GetPointerToRow(col_idx, ids[i]);
-			memcpy(dataptr, update_vector.data + i * size, size);
+			transient.Update(ids[i], update_vector.data + i * size);
 		});
 	}
 }
@@ -205,20 +205,14 @@ void VersionChunk::RetrieveTupleData(Transaction &transaction, DataChunk &result
 	}
 }
 
-void VersionChunk::RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &pointer, index_t count) {
-	index_t type_size = GetTypeIdSize(type);
+void VersionChunk::RetrieveColumnData(ColumnPointer &pointer, Vector &result, index_t count) {
 	// copy data from the column storage
 	while (count > 0) {
 		// check how much we can copy from this column segment
-		index_t to_copy = std::min(count, (BLOCK_SIZE - pointer.offset) / type_size);
+		index_t to_copy = std::min(count, pointer.segment->count - pointer.offset);
 		if (to_copy > 0) {
 			// copy elements from the column segment
-			data_ptr_t dataptr = pointer.segment->GetData() + pointer.offset;
-			Vector source(type, dataptr);
-			source.count = to_copy;
-			// FIXME: use ::Copy instead of ::AppendFromStorage if there are no null values in this segment
-			VectorOperations::AppendFromStorage(source, result);
-			pointer.offset += type_size * to_copy;
+			pointer.segment->Scan(pointer, result, count);
 			count -= to_copy;
 		}
 		if (count > 0) {
@@ -231,36 +225,21 @@ void VersionChunk::RetrieveColumnData(Vector &result, TypeId type, ColumnPointer
 	}
 }
 
-void VersionChunk::RetrieveColumnData(Vector &result, TypeId type, ColumnPointer &pointer, index_t count,
-                                   sel_t *sel_vector, index_t sel_count) {
-	index_t type_size = GetTypeIdSize(type);
-	if (sel_count == 0) {
-		// skip this segment
-		pointer.offset += type_size * count;
-		return;
-	}
+void VersionChunk::RetrieveColumnData(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector, index_t sel_count) {
 	// copy data from the column storage
 	while (count > 0) {
 		// check how much we can copy from this column segment
-		index_t to_copy = std::min(count, (BLOCK_SIZE - pointer.offset) / type_size);
-		if (to_copy == 0) {
+		index_t to_copy = std::min(count, pointer.segment->count - pointer.offset);
+		if (to_copy > 0) {
+			// we can copy everything from this column segment, copy with the sel vector
+			pointer.segment->Scan(pointer, result, count, sel_vector, sel_count);
+			count -= to_copy;
+		}
+		if (count > 0) {
 			// we can't copy anything from this segment, move to the next segment
 			assert(pointer.segment->next);
 			pointer.segment = (ColumnSegment *)pointer.segment->next.get();
 			pointer.offset = 0;
-		} else {
-			// accesses to RetrieveColumnData should be aligned by STANDARD_VECTOR_SIZE, hence to_copy should be
-			// equivalent to either count or 0
-			assert(to_copy == count);
-			// we can copy everything from this column segment, copy with the sel vector
-			data_ptr_t dataptr = pointer.segment->GetData() + pointer.offset;
-			Vector source(type, dataptr);
-			source.count = sel_count;
-			source.sel_vector = sel_vector;
-			// FIXME: use ::Copy instead of ::AppendFromStorage if there are no null values in this segment
-			VectorOperations::AppendFromStorage(source, result);
-			pointer.offset += type_size * to_copy;
-			count -= to_copy;
 		}
 	}
 }
@@ -349,8 +328,7 @@ void VersionChunk::FetchColumnData(TableScanState &state, DataChunk &result, con
 			result.data[col_idx].count += count;
 		} else {
 			// fetch the data from the base column segments
-			RetrieveColumnData(result.data[col_idx], table.types[column_ids[col_idx]],
-								state.columns[column_ids[col_idx]], scan_count, sel_vector, count);
+			RetrieveColumnData(state.columns[column_ids[col_idx]], result.data[col_idx], scan_count, sel_vector, count);
 		}
 	}
 }
@@ -363,8 +341,7 @@ void VersionChunk::FetchColumnData(TableScanState &state, DataChunk &result, con
 			VectorOperations::GenerateSequence(result.data[col_idx], this->start + offset_in_chunk, 1);
 		} else {
 			// fetch the data from the base column segments
-			RetrieveColumnData(result.data[col_idx], table.types[column_ids[col_idx]],
-								state.columns[column_ids[col_idx]], count);
+			RetrieveColumnData(state.columns[column_ids[col_idx]], result.data[col_idx], count);
 		}
 	}
 

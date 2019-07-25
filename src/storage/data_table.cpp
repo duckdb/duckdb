@@ -10,6 +10,7 @@
 #include "planner/constraints/list.hpp"
 #include "transaction/transaction.hpp"
 #include "transaction/transaction_manager.hpp"
+#include "storage/table/transient_segment.hpp"
 
 #include "transaction/version_info.hpp"
 
@@ -29,7 +30,7 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 	// and an empty column chunk for each column
 	columns = unique_ptr<SegmentTree[]>(new SegmentTree[types.size()]);
 	for (index_t i = 0; i < types.size(); i++) {
-		columns[i].AppendSegment(make_unique<ColumnSegment>(0));
+		columns[i].AppendSegment(make_unique<TransientSegment>(types[i], 0));
 	}
 	// initialize the table with an empty storage chunk
 	AppendVersionChunk(0);
@@ -54,27 +55,19 @@ VersionChunk *DataTable::GetChunk(index_t row_number) {
 
 void DataTable::AppendVector(index_t column_index, Vector &data, index_t offset, index_t count) {
 	// get the segment to append to
-	auto segment = (ColumnSegment *)columns[column_index].GetLastSegment();
+	auto segment = (TransientSegment *)columns[column_index].GetLastSegment();
+	// the last segment of a table should always be a transient segment
+	assert(segment->segment_type == ColumnSegmentType::TRANSIENT);
+
 	// append the data from the vector
-	// first check how much we can append to the column segment
-	index_t type_size = GetTypeIdSize(types[column_index]);
-	index_t start_position = segment->offset;
-	data_ptr_t target = segment->GetData() + start_position;
-	index_t elements_to_copy = std::min((BLOCK_SIZE - start_position) / type_size, count);
-	if (elements_to_copy > 0) {
-		// we can fit elements in the current column segment: copy them there
-		VectorOperations::CopyToStorage(data, target, offset, elements_to_copy);
-		offset += elements_to_copy;
-		segment->count += elements_to_copy;
-		segment->offset += elements_to_copy * type_size;
-	}
-	if (elements_to_copy < count) {
+	index_t copied_elements = segment->Append(data, offset, count);
+	if (copied_elements < count) {
 		// we couldn't fit everything we wanted in the original column segment
 		// create a new one
-		auto column_segment = make_unique<ColumnSegment>(segment->start + segment->count);
+		auto column_segment = make_unique<TransientSegment>(segment->type, segment->start + segment->count);
 		columns[column_index].AppendSegment(move(column_segment));
 		// now try again
-		AppendVector(column_index, data, offset, count - elements_to_copy);
+		AppendVector(column_index, data, offset + copied_elements, count - copied_elements);
 	}
 }
 

@@ -14,35 +14,40 @@
 
 namespace duckdb {
 class BlockManager;
+class ColumnSegment;
 class Vector;
+
+enum class ColumnSegmentType : uint8_t {
+	TRANSIENT,
+	PERSISTENT
+};
+
+//! The ColumnPointer is a class used for scanning ColumnSegments
+struct ColumnPointer {
+	//! The column segment
+	ColumnSegment *segment;
+	//! The offset inside the column segment
+	index_t offset;
+};
 
 class ColumnSegment : public SegmentBase {
 public:
-	//! Initialize a column segment from a specific block
-	ColumnSegment(BlockManager *manager, block_id_t block_id, index_t offset, index_t count, index_t start);
-	//! Initialize an empty in-memory column segment
-	ColumnSegment(index_t start);
+	//! Initialize an empty column segment of the specified type
+	ColumnSegment(TypeId type, ColumnSegmentType segment_type, index_t start);
+	virtual ~ColumnSegment() = default;
 
-	//! The block id to load the data from (if any)
-	block_id_t block_id;
-	//! The offset into the block
-	index_t offset;
-	//! Returns a pointer to a specific row in the column segment. row must be >= start of this column segment
-	data_ptr_t GetPointerToRow(TypeId type, index_t row);
-	//! Append a single value from this segment to a vector
-	void AppendValue(Vector &result, TypeId type, index_t row);
-
+	//! The type stored in the column
+	TypeId type;
+	//! The size of the type
+	index_t type_size;
+	//! The column segment type (transient or persistent)
+	ColumnSegmentType segment_type;
 public:
-	//! Returns a pointer to the data of the column segment
-	data_ptr_t GetData();
+	virtual void Scan(ColumnPointer &pointer, Vector &result, index_t count) = 0;
+	virtual void Scan(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector, index_t sel_count) = 0;
+	//! Fetch an individual value and append it to a vector, row_id must be >= start
+	virtual void Fetch(Vector &result, index_t row_id) = 0;
 
-private:
-	// The block manager
-	BlockManager *manager;
-	//! The data of the column segment
-	unique_ptr<Block> block;
-	//! Lock to get the data of the block
-	std::mutex data_lock;
 };
 
 } // namespace duckdb
