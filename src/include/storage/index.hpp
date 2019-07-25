@@ -11,7 +11,6 @@
 #include "common/unordered_set.hpp"
 #include "common/enums/index_type.hpp"
 #include "common/types/data_chunk.hpp"
-#include "common/types/tuple.hpp"
 #include "parser/parsed_expression.hpp"
 #include "planner/expression.hpp"
 

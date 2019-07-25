@@ -10,6 +10,18 @@ using namespace std;
 
 using ScanStructure = JoinHashTable::ScanStructure;
 
+static void SerializeChunk(DataChunk &source, data_ptr_t targets[]) {
+	Vector target_vector(TypeId::POINTER, (data_ptr_t) targets);
+	target_vector.count = source.size();
+	target_vector.sel_vector = source.sel_vector;
+
+	index_t offset = 0;
+	for(index_t i = 0; i < source.column_count; i++) {
+		VectorOperations::Scatter::SetAll(source.data[i], target_vector, true, offset);
+		offset += GetTypeIdSize(source.data[i].type);
+	}
+}
+
 static void DeserializeChunk(DataChunk &result, data_ptr_t source[], index_t count) {
 	Vector source_vector(TypeId::POINTER, (data_ptr_t) source);
 	source_vector.count = count;
@@ -23,7 +35,7 @@ static void DeserializeChunk(DataChunk &result, data_ptr_t source[], index_t cou
 
 JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type,
                              index_t initial_capacity, bool parallel)
-    : build_serializer(build_types), build_types(build_types), equality_size(0), condition_size(0), build_size(0),
+    : build_types(build_types), equality_size(0), condition_size(0), build_size(0),
       entry_size(0), tuple_size(0), join_type(type), has_null(false), capacity(0), count(0), parallel(parallel) {
 	for (auto &condition : conditions) {
 		assert(condition.left->return_type == condition.right->return_type);
@@ -47,7 +59,6 @@ JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> b
 	}
 	// at least one equality is necessary
 	assert(equality_types.size() > 0);
-	condition_serializer.Initialize(condition_types);
 
 	if (type == JoinType::ANTI || type == JoinType::SEMI || type == JoinType::MARK) {
 		// for ANTI, SEMI and MARK join, we only need to store the keys
@@ -66,7 +77,6 @@ JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> b
 
 void JoinHashTable::InsertHashes(Vector &hashes, data_ptr_t key_locations[]) {
 	assert(hashes.type == TypeId::HASH);
-	hashes.Flatten();
 
 	// use modulo to get position in array (FIXME: can be done more efficiently)
 	VectorOperations::ModuloInPlace(hashes, capacity);
@@ -74,7 +84,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, data_ptr_t key_locations[]) {
 	auto pointers = hashed_pointers.get();
 	auto indices = (index_t *)hashes.data;
 	// now fill in the entries
-	for (index_t i = 0; i < hashes.count; i++) {
+	VectorOperations::Exec(hashes, [&](index_t i, index_t k) {
 		auto index = indices[i];
 		// set prev in current key to the value (NOTE: this will be nullptr if
 		// there is none)
@@ -83,7 +93,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, data_ptr_t key_locations[]) {
 
 		// set pointer to current tuple
 		pointers[index] = key_locations[i];
-	}
+	});
 }
 
 void JoinHashTable::Resize(index_t size) {
@@ -253,20 +263,20 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	data_ptr_t tuple_locations[STANDARD_VECTOR_SIZE];
 	auto node = make_unique<Node>(entry_size, keys.size());
 	auto dataptr = node->data.get();
-	for (index_t i = 0; i < keys.size(); i++) {
+	VectorOperations::Exec(keys.data[0], [&](index_t i, index_t k) {
 		// key is stored at the start
 		key_locations[i] = dataptr;
 		// after that the build-side tuple is stored
 		tuple_locations[i] = dataptr + condition_size;
 		dataptr += entry_size;
-	}
+	});
 	node->count = keys.size();
 
 	// serialize the values to these locations
 	// we serialize all the condition variables here
-	condition_serializer.Serialize(keys, key_locations);
+	SerializeChunk(keys, key_locations);
 	if (build_size > 0) {
-		build_serializer.Serialize(payload, tuple_locations);
+		SerializeChunk(payload, tuple_locations);
 	}
 
 	// hash the keys and obtain an entry in the list
@@ -511,7 +521,8 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 			auto &vector = result.data[left.column_count + i];
 			vector.sel_vector = result.sel_vector;
 			vector.count = result_count;
-			ht.build_serializer.DeserializeColumn(build_pointer_vector, i, result.data[left.column_count + i]);
+			VectorOperations::Gather::Set(build_pointer_vector, vector);
+			VectorOperations::AddInPlace(build_pointer_vector, GetTypeIdSize(ht.build_types[i]));
 		}
 	}
 }
@@ -775,7 +786,8 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &
 		// fetch the data from the HT for tuples that found a match
 		vector.sel_vector = result_sel_vector;
 		vector.count = result_count;
-		ht.build_serializer.DeserializeColumn(build_pointer_vector, i, vector);
+		VectorOperations::Gather::Set(build_pointer_vector, vector);
+		VectorOperations::AddInPlace(build_pointer_vector, GetTypeIdSize(ht.build_types[i]));
 		// now we fill in NULL values in the remaining entries
 		vector.count = result.size();
 		vector.sel_vector = result.sel_vector;

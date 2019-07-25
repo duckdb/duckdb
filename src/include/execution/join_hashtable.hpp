@@ -10,7 +10,6 @@
 
 #include "common/common.hpp"
 #include "common/types/data_chunk.hpp"
-#include "common/types/tuple.hpp"
 #include "common/types/vector.hpp"
 #include "execution/aggregate_hashtable.hpp"
 #include "planner/operator/logical_comparison_join.hpp"
@@ -42,7 +41,6 @@ public:
 		Vector pointers;
 		Vector build_pointer_vector;
 		sel_t sel_vector[STANDARD_VECTOR_SIZE];
-		Tuple serialized_keys[STANDARD_VECTOR_SIZE];
 		// whether or not the given tuple has found a match, used for LeftJoin
 		bool found_match[STANDARD_VECTOR_SIZE];
 		JoinHashTable &ht;
@@ -118,10 +116,6 @@ public:
 		return count;
 	}
 
-	//! Serializer for all conditions
-	TupleSerializer condition_serializer;
-	//! Serializer for the build side
-	TupleSerializer build_serializer;
 	//! The types of the keys used in equality comparison
 	vector<TypeId> equality_types;
 	//! The types of the keys

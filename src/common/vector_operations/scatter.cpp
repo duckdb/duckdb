@@ -79,42 +79,62 @@ void VectorOperations::Scatter::AddOne(Vector &source, Vector &dest) {
 	});
 }
 
-template <class T> static void scatter_set_loop(Vector &source, Vector &dest) {
+template <class T, bool IGNORE_NULL> static void scatter_set_loop(Vector &source, data_ptr_t dest[], index_t offset) {
 	auto data = (T*) source.data;
-	auto destination = (T**) dest.data;
-	VectorOperations::Exec(source, [&](index_t i, index_t k) {
-		*destination[i] = data[i];
-	});
+	if (IGNORE_NULL || !source.nullmask.any()) {
+		VectorOperations::Exec(source, [&](index_t i, index_t k) {
+			auto destination = (T*) (dest[i] + offset);
+			*destination = data[i];
+		});
+	} else {
+		VectorOperations::Exec(source, [&](index_t i, index_t k) {
+			auto destination = (T*) (dest[i] + offset);
+			if (source.nullmask[i]) {
+				*destination = NullValue<T>();
+			} else {
+				*destination = data[i];
+			}
+		});
+	}
 }
 
-void VectorOperations::Scatter::SetAll(Vector &source, Vector &dest) {
-	if (dest.type != TypeId::POINTER) {
-		throw InvalidTypeException(dest.type, "Cannot scatter to non-pointer type!");
-	}
+template<bool IGNORE_NULL = false>
+static void scatter_set_all_loop(Vector &source, data_ptr_t dest[], index_t offset) {
 	switch (source.type) {
 	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
-		scatter_set_loop<int8_t>(source, dest);
+		scatter_set_loop<int8_t, IGNORE_NULL>(source, dest, offset);
 		break;
 	case TypeId::SMALLINT:
-		scatter_set_loop<int16_t>(source, dest);
+		scatter_set_loop<int16_t, IGNORE_NULL>(source, dest, offset);
 		break;
 	case TypeId::INTEGER:
-		scatter_set_loop<int32_t>(source, dest);
+		scatter_set_loop<int32_t, IGNORE_NULL>(source, dest, offset);
 		break;
 	case TypeId::BIGINT:
-		scatter_set_loop<int64_t>(source, dest);
+		scatter_set_loop<int64_t, IGNORE_NULL>(source, dest, offset);
 		break;
 	case TypeId::FLOAT:
-		scatter_set_loop<float>(source, dest);
+		scatter_set_loop<float, IGNORE_NULL>(source, dest, offset);
 		break;
 	case TypeId::DOUBLE:
-		scatter_set_loop<double>(source, dest);
+		scatter_set_loop<double, IGNORE_NULL>(source, dest, offset);
 		break;
 	case TypeId::VARCHAR:
-		scatter_set_loop<const char*>(source, dest);
+		scatter_set_loop<const char*, IGNORE_NULL>(source, dest, offset);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for scatter");
+	}
+}
+
+void VectorOperations::Scatter::SetAll(Vector &source, Vector &dest, bool set_null, index_t offset) {
+	if (dest.type != TypeId::POINTER) {
+		throw InvalidTypeException(dest.type, "Cannot scatter to non-pointer type!");
+	}
+	if (set_null) {
+		scatter_set_all_loop<false>(source, (data_ptr_t*) dest.data, offset);
+	} else {
+		scatter_set_all_loop<true>(source, (data_ptr_t*) dest.data, offset);
 	}
 }

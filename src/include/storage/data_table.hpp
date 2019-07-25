@@ -10,7 +10,6 @@
 
 #include "common/enums/index_type.hpp"
 #include "common/types/data_chunk.hpp"
-#include "common/types/tuple.hpp"
 #include "storage/table/column_statistics.hpp"
 #include "storage/index.hpp"
 #include "storage/table/version_chunk.hpp"

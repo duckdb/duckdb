@@ -11,7 +11,6 @@
 #include "common/common.hpp"
 #include "common/enums/expression_type.hpp"
 #include "common/types/data_chunk.hpp"
-#include "common/types/tuple.hpp"
 #include "common/types/vector.hpp"
 
 namespace duckdb {

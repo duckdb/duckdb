@@ -10,7 +10,6 @@
 
 #include "common/common.hpp"
 #include "common/types/data_chunk.hpp"
-#include "common/types/tuple.hpp"
 #include "common/types/vector.hpp"
 #include "parser/parsed_expression.hpp"
 #include "storage/data_table.hpp"
