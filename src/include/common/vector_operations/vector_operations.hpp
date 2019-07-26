@@ -234,7 +234,7 @@ struct VectorOperations {
 	// Appends the data of <source> to the target vector, setting the nullmask
 	// for any NullValue<T> of source. Used to go back from storage to a
 	// nullmask.
-	static void AppendFromStorage(Vector &source, Vector &target);
+	static void AppendFromStorage(Vector &source, Vector &target, bool has_null = true);
 
 	// Set all elements of the vector to the given constant value
 	static void Set(Vector &result, Value value);

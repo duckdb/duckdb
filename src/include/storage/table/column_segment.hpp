@@ -30,6 +30,17 @@ struct ColumnPointer {
 	index_t offset;
 };
 
+struct SegmentStatistics {
+	SegmentStatistics(TypeId type, index_t type_size);
+
+	//! The minimum value of the segment
+	unique_ptr<data_t[]> minimum;
+	//! The maximum value of the segment
+	unique_ptr<data_t[]> maximum;
+	//! Whether or not the segment has NULL values
+	bool has_null;
+};
+
 class ColumnSegment : public SegmentBase {
 public:
 	//! Initialize an empty column segment of the specified type
@@ -42,6 +53,8 @@ public:
 	index_t type_size;
 	//! The column segment type (transient or persistent)
 	ColumnSegmentType segment_type;
+	//! The statistics for the segment
+	SegmentStatistics stats;
 public:
 	virtual void Scan(ColumnPointer &pointer, Vector &result, index_t count) = 0;
 	virtual void Scan(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector, index_t sel_count) = 0;
