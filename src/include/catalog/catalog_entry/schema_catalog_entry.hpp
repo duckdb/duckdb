@@ -93,7 +93,7 @@ public:
 	void CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInfo *info);
 
 	//! Gets a scalar function with the given name
-	AggregateFunctionCatalogEntry *GetAggregateFunction(Transaction &transaction, const string &name);
+	AggregateFunctionCatalogEntry *GetAggregateFunction(Transaction &transaction, const string &name, bool if_exists = false);
 	//! Gets a scalar function with the given name
 	ScalarFunctionCatalogEntry *GetScalarFunction(Transaction &transaction, const string &name);
 	//! Gets the sequence with the given name

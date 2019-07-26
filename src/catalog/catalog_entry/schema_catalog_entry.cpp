@@ -220,9 +220,9 @@ void SchemaCatalogEntry::CreateScalarFunction(Transaction &transaction, CreateSc
 	}
 }
 
-AggregateFunctionCatalogEntry *SchemaCatalogEntry::GetAggregateFunction(Transaction &transaction, const string &name) {
+AggregateFunctionCatalogEntry *SchemaCatalogEntry::GetAggregateFunction(Transaction &transaction, const string &name, bool if_exists) {
 	auto entry = aggregate_functions.GetEntry(transaction, name);
-	if (!entry) {
+	if (!entry && !if_exists) {
 		throw CatalogException("Aggregate Function with name %s does not exist!", name.c_str());
 	}
 	return (AggregateFunctionCatalogEntry *)entry;

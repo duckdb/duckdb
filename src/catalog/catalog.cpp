@@ -127,9 +127,9 @@ void Catalog::CreateScalarFunction(Transaction &transaction, CreateScalarFunctio
 }
 
 AggregateFunctionCatalogEntry *Catalog::GetAggregateFunction(Transaction &transaction, const string &schema_name,
-                                                       const string &name) {
+                                                       const string &name, bool if_exists) {
 	auto schema = GetSchema(transaction, schema_name);
-	return schema->GetAggregateFunction(transaction, name);
+	return schema->GetAggregateFunction(transaction, name, if_exists);
 }
 
 ScalarFunctionCatalogEntry *Catalog::GetScalarFunction(Transaction &transaction, const string &schema_name,

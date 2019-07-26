@@ -213,7 +213,7 @@ static void stddevsamp_initialize(data_ptr_t payload, TypeId return_type) {
 class StdDevSampFunction {
 public:
 	static const char*GetName() {
-		return "aggregate_stddev_samp";
+		return "stddev_samp";
 	}
 
 	static aggregate_size_t GetPayloadSizeFunction() {

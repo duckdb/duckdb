@@ -14,7 +14,8 @@ namespace duckdb {
 //! The AggregateExpression represents an aggregate in the query
 class AggregateExpression : public ParsedExpression {
 public:
-	AggregateExpression(ExpressionType type, bool distinct, unique_ptr<ParsedExpression> child);
+	AggregateExpression(string schema, string aggregate_name, bool distinct, unique_ptr<ParsedExpression> child);
+	AggregateExpression(string aggregate_name, bool distinct, unique_ptr<ParsedExpression> child);
 
 	//! Schema of the aggregate
 	string schema;
@@ -33,6 +34,7 @@ public:
 	string ToString() const override;
 
 	bool Equals(const BaseExpression *other) const override;
+	uint64_t Hash() const override;
 
 	unique_ptr<ParsedExpression> Copy() const override;
 

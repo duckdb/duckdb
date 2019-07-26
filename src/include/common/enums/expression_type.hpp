@@ -114,15 +114,12 @@ enum class ExpressionType : uint8_t {
 	// -----------------------------
 	// Aggregates
 	// -----------------------------
-	AGGREGATE_COUNT = 100,
-	AGGREGATE_COUNT_STAR = 101,
-	AGGREGATE_SUM = 103,
-	AGGREGATE_MIN = 105,
-	AGGREGATE_MAX = 106,
-	AGGREGATE_AVG = 107,
-	AGGREGATE_FIRST = 108,
-	AGGREGATE_STDDEV_SAMP = 109,
+	AGGREGATE = 100,
+	BOUND_AGGREGATE = 101,
 
+	// -----------------------------
+	// Window Functions
+	// -----------------------------
 	WINDOW_SUM = 115,
 	WINDOW_COUNT_STAR = 116,
 	WINDOW_MIN = 117,

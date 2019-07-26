@@ -70,22 +70,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "VECTOR";
 	case ExpressionType::VALUE_SCALAR:
 		return "SCALAR";
-	case ExpressionType::AGGREGATE_COUNT:
-		return "COUNT";
-	case ExpressionType::AGGREGATE_COUNT_STAR:
-		return "COUNT_STAR";
-	case ExpressionType::AGGREGATE_SUM:
-		return "SUM";
-	case ExpressionType::AGGREGATE_MIN:
-		return "MIN";
-	case ExpressionType::AGGREGATE_MAX:
-		return "MAX";
-	case ExpressionType::AGGREGATE_AVG:
-		return "AVG";
-	case ExpressionType::AGGREGATE_FIRST:
-		return "FIRST";
-	case ExpressionType::AGGREGATE_STDDEV_SAMP:
-		return "AGGREGATE_STDDEV_SAMP";
+	case ExpressionType::AGGREGATE:
+		return "AGGREGATE";
 	case ExpressionType::WINDOW_SUM:
 		return "SUM";
 	case ExpressionType::WINDOW_COUNT_STAR:
@@ -154,6 +140,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "BOUND_COLUMN_REF";
 	case ExpressionType::BOUND_FUNCTION:
 		return "BOUND_FUNCTION";
+	case ExpressionType::BOUND_AGGREGATE:
+		return "BOUND_AGGREGATE";
 	case ExpressionType::INVALID:
 	default:
 		return "INVALID";
