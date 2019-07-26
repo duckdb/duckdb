@@ -194,7 +194,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
 		// Aggregate function
 		assert(!root->over); // see above
 		if (root->agg_star || (agg_fun_type == ExpressionType::AGGREGATE_COUNT && !root->args)) {
-			return make_unique<AggregateExpression>(agg_fun_type, false, make_unique<StarExpression>());
+			return make_unique<AggregateExpression>(ExpressionType::AGGREGATE_COUNT_STAR, false, nullptr);
 		} else {
 			if (!root->args) {
 				throw NotImplementedException("Aggregation over zero columns not supported!");

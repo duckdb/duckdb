@@ -12,15 +12,6 @@ AggregateExpression::AggregateExpression(ExpressionType type, bool distinct, uni
     , aggregate_name(StringUtil::Lower(ExpressionTypeToString(type)))
     , distinct(distinct)
 {
-	// translate COUNT(*) into AGGREGATE_COUNT_STAR
-	if (type == ExpressionType::AGGREGATE_COUNT) {
-		if (!child) {
-			this->type = ExpressionType::AGGREGATE_COUNT_STAR;
-		} else if (child->GetExpressionType() == ExpressionType::STAR) {
-			child = nullptr;
-			this->type = ExpressionType::AGGREGATE_COUNT_STAR;
-		}
-	}
 	switch (type) {
 	case ExpressionType::AGGREGATE_COUNT:
 	case ExpressionType::AGGREGATE_COUNT_STAR:
