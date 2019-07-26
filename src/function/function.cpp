@@ -64,7 +64,7 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddTableFunction<PragmaTableInfo>(transaction, catalog);
 	AddTableFunction<SQLiteMaster>(transaction, catalog);
 
-	// aggregates
+	// distributive aggregates
 	AddAggregateFunction<CountFunction>(transaction, catalog);
 	AddAggregateFunction<CountStarFunction>(transaction, catalog);
 	AddAggregateFunction<FirstFunction>(transaction, catalog);
@@ -72,6 +72,9 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddAggregateFunction<MinFunction>(transaction, catalog);
 	AddAggregateFunction<StdDevSampFunction>(transaction, catalog);
 	AddAggregateFunction<SumFunction>(transaction, catalog);
+
+	// algebraic aggregates
+	AddAggregateFunction<AvgFunction>(transaction, catalog);
 
 	// math
 	AddScalarFunction<AbsFunction>(transaction, catalog);

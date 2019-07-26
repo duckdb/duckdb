@@ -15,7 +15,7 @@ using namespace std;
 
 namespace duckdb {
 
-SQLType stddev_get_return_type(vector<SQLType> &arguments) {
+SQLType avg_get_return_type(vector<SQLType> &arguments) {
 	assert(arguments.size() == 1);
 	const auto& input_type = arguments[0];
 	switch (input_type.id) {
@@ -29,15 +29,12 @@ SQLType stddev_get_return_type(vector<SQLType> &arguments) {
 	case SQLTypeId::DECIMAL:
 		return SQLType(SQLTypeId::DECIMAL);
 	default:
-		throw BinderException("Unsupported SQLType %s for STDDEV_SAMP aggregate", SQLTypeToString(input_type).c_str());
+		throw BinderException("Unsupported SQLType %s for AVG aggregate", SQLTypeToString(input_type).c_str());
 	}
 }
-void stddevsamp_update(Vector inputs[], index_t input_count, Vector &result ) {
-	assert(input_count == 1 );
-	// Streaming approximate standard deviation using Welford's
-	// method, DOI: 10.2307/1266577
 
-	// convert input to floating point if required
+void avg_update(Vector inputs[], index_t input_count, Vector &result) {
+	assert(input_count == 1 );
 	Vector payload_double;
 	if (inputs[0].type != TypeId::DOUBLE) {
 		payload_double.Initialize(TypeId::DOUBLE);
@@ -50,42 +47,33 @@ void stddevsamp_update(Vector inputs[], index_t input_count, Vector &result ) {
 		if (payload_double.nullmask[i]) {
 			return;
 		}
-		// Layout of payload for STDDEV_SAMP: count(uint64_t), mean
-		// (double), dsquared(double)
+		// Layout of payload for AVG: count(uint64_t), sum(double)
 
 		auto base_ptr = ((data_ptr_t *)result.data)[i];
 		auto count_ptr = (uint64_t *)base_ptr;
-		auto mean_ptr = (double *)(base_ptr + sizeof(uint64_t));
-		auto dsquared_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
+		auto sum_ptr = (double *)(base_ptr + sizeof(uint64_t));
 
-		// update running mean and d^2
+		// update count and running sum
 		(*count_ptr)++;
-		const double new_value = ((double *)payload_double.data)[i];
-		const double mean_differential = (new_value - (*mean_ptr)) / (*count_ptr);
-		const double new_mean = (*mean_ptr) + mean_differential;
-		const double dsquared_increment = (new_value - new_mean) * (new_value - (*mean_ptr));
-		const double new_dsquared = (*dsquared_ptr) + dsquared_increment;
-
-		*mean_ptr = new_mean;
-		*dsquared_ptr = new_dsquared;
+		const auto new_value = ((double *)payload_double.data)[i];
+		(*sum_ptr) += new_value;
 		// see Finalize() method below for final step
 	});
 }
 
-void stddevsamp_finalize(Vector& payloads, Vector &result) {
-	// compute finalization of streaming stddev of sample
+void avg_finalize(Vector& payloads, Vector &result) {
+	// compute finalization of streaming avg
 	VectorOperations::Exec(payloads, [&](uint64_t i, uint64_t k) {
 		auto base_ptr = ((data_ptr_t *)payloads.data)[i];
 		auto count_ptr = (uint64_t *)base_ptr;
-		auto dsquared_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
+		auto sum_ptr = (double *)(base_ptr + sizeof(uint64_t));
 
 		if (*count_ptr == 0) {
 			result.nullmask[i] = true;
 			return;
 		}
-		double res = *count_ptr > 1 ? sqrt(*dsquared_ptr / (*count_ptr - 1)) : 0;
 
-		((double *)result.data)[i] = res;
+		((double *)result.data)[i] = *sum_ptr;
 	});
 }
 
