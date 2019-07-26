@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/parsed_data/create_scalar_function_info.hpp
+// parser/parsed_data/create_aggregate_function_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
