@@ -10,7 +10,6 @@
 
 #include "common/enums/index_type.hpp"
 #include "common/types/data_chunk.hpp"
-#include "storage/table/column_statistics.hpp"
 #include "storage/index.hpp"
 #include "storage/table/version_chunk.hpp"
 #include "storage/table_statistics.hpp"
@@ -94,14 +93,6 @@ public:
 	//! (including all versions of a tuple)
 	void CreateIndexScan(IndexTableScanState &structure, vector<column_t> &column_ids, DataChunk &result);
 
-	//! Get statistics of the specified column
-	ColumnStatistics &GetStatistics(column_t oid) {
-		if (oid == COLUMN_IDENTIFIER_ROW_ID) {
-			return rowid_statistics;
-		}
-		return statistics[oid];
-	}
-
 	VersionChunk *GetChunk(index_t row_number);
 
 	//! Retrieve versioned data for all column_ids of the table
@@ -134,11 +125,5 @@ private:
 	SegmentTree storage_tree;
 	//! The physical columns of the table
 	unique_ptr<SegmentTree[]> columns;
-	//! The table statistics
-	// FIXME unused?	TableStatistics table_statistics;
-	//! Row ID statistics
-	ColumnStatistics rowid_statistics;
-	//! The statistics of each of the columns
-	unique_ptr<ColumnStatistics[]> statistics;
 };
 } // namespace duckdb

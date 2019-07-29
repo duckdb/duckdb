@@ -25,8 +25,6 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 		accumulative_size += GetTypeIdSize(types[i]);
 	}
 	tuple_size = accumulative_size;
-	// create empty statistics for the table
-	statistics = unique_ptr<ColumnStatistics[]>(new ColumnStatistics[types.size()]);
 	// and an empty column chunk for each column
 	columns = unique_ptr<SegmentTree[]>(new SegmentTree[types.size()]);
 	for (index_t i = 0; i < types.size(); i++) {
@@ -194,11 +192,6 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 
 		// Append the entries to the indexes, we do this first because this might fail in case of unique index conflicts
 		AppendToIndexes(chunk, row_start);
-
-		// update the statistics with the new data
-		for (index_t i = 0; i < types.size(); i++) {
-			statistics[i].Update(chunk.data[i]);
-		}
 
 		Transaction &transaction = context.ActiveTransaction();
 		index_t remainder = chunk.size();
@@ -443,9 +436,6 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		auto column_id = column_ids[col_idx];
 
 		chunk->Update(row_identifiers, updates.data[col_idx], column_id);
-
-		// update the statistics with the new data
-		statistics[column_id].Update(updates.data[col_idx]);
 	}
 	// after a successful update move the strings into the chunk
 	chunk->string_heap.MergeHeap(heap);

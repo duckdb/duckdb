@@ -4,7 +4,6 @@
 #include "parser/tableref/subqueryref.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/tableref/bound_basetableref.hpp"
-#include "storage/table/column_statistics.hpp"
 
 #include <algorithm>
 

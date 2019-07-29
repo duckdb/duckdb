@@ -122,10 +122,6 @@ ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
 	return columns[entry->second];
 }
 
-ColumnStatistics &TableCatalogEntry::GetStatistics(column_t oid) {
-	return storage->GetStatistics(oid);
-}
-
 vector<TypeId> TableCatalogEntry::GetTypes() {
 	vector<TypeId> types;
 	for (auto &it : columns) {

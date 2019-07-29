@@ -44,7 +44,7 @@ struct SegmentStatistics {
 class ColumnSegment : public SegmentBase {
 public:
 	//! Initialize an empty column segment of the specified type
-	ColumnSegment(TypeId type, ColumnSegmentType segment_type, index_t start);
+	ColumnSegment(TypeId type, ColumnSegmentType segment_type, index_t start, index_t count = 0);
 	virtual ~ColumnSegment() = default;
 
 	//! The type stored in the column

@@ -1,5 +1,7 @@
 #include "storage/table/transient_segment.hpp"
 #include "common/types/null_value.hpp"
+#include "common/types/vector.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;

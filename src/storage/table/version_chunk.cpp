@@ -347,7 +347,6 @@ void VersionChunk::FetchColumnData(TableScanState &state, DataChunk &result, con
 			RetrieveColumnData(state.columns[column_ids[col_idx]], result.data[col_idx], count);
 		}
 	}
-
 }
 
 bool VersionChunk::CreateIndexScan(IndexTableScanState &state, vector<column_t> &column_ids, DataChunk &result) {
