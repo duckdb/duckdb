@@ -122,6 +122,13 @@ Value Value::BIGINT(int64_t value) {
 	return result;
 }
 
+Value Value::DOUBLE(double value) {
+	Value result(TypeId::DOUBLE);
+	result.value_.double_ = value;
+	result.is_null = false;
+	return result;
+}
+
 Value Value::HASH(uint64_t value) {
 	Value result(TypeId::HASH);
 	result.value_.hash = value;
@@ -174,6 +181,10 @@ template <> Value Value::CreateValue(const char *value) {
 
 template <> Value Value::CreateValue(string value) {
 	return Value(value);
+}
+
+template <> Value Value::CreateValue(double value) {
+	return Value::DOUBLE(value);
 }
 
 Value Value::Numeric(TypeId type, int64_t value) {

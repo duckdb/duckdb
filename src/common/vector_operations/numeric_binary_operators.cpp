@@ -144,21 +144,27 @@ void VectorOperations::Modulo(Vector &left, Vector &right, Vector &result) {
 	BINARY_TYPE_CHECK(left, right, result);
 	switch (left.type) {
 	case TypeId::TINYINT:
-		templated_divmod_loop<int8_t, duckdb::Modulo>(left, right, result);
+		templated_divmod_loop<int8_t, duckdb::ModuloInt>(left, right, result);
 		break;
 	case TypeId::SMALLINT:
-		templated_divmod_loop<int16_t, duckdb::Modulo>(left, right, result);
+		templated_divmod_loop<int16_t, duckdb::ModuloInt>(left, right, result);
 		break;
 	case TypeId::INTEGER:
-		templated_divmod_loop<int32_t, duckdb::Modulo>(left, right, result);
+		templated_divmod_loop<int32_t, duckdb::ModuloInt>(left, right, result);
 		break;
 	case TypeId::BIGINT:
-		templated_divmod_loop<int64_t, duckdb::Modulo>(left, right, result);
+		templated_divmod_loop<int64_t, duckdb::ModuloInt>(left, right, result);
+		break;
+	case TypeId::FLOAT:
+		templated_divmod_loop<float, duckdb::ModuloReal>(left, right, result);
+		break;
+	case TypeId::DOUBLE:
+		templated_divmod_loop<double, duckdb::ModuloReal>(left, right, result);
 		break;
 	case TypeId::POINTER:
-		templated_divmod_loop<uint64_t, duckdb::Modulo>(left, right, result);
+		templated_divmod_loop<uint64_t, duckdb::ModuloInt>(left, right, result);
 		break;
 	default:
-		throw InvalidTypeException(left.type, "Invalid type for division");
+		throw InvalidTypeException(left.type, "Invalid type for ModuloInt");
 	}
 }

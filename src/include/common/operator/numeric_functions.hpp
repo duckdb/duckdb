@@ -147,10 +147,4 @@ struct Sign {
                   return -1;
 	}
 };
-
-struct ModReal {
-	template <class T> static inline T Operation(T input, T divisor) {
-		return fmod(input, divisor);
-	}
-};
 } // namespace duckdb

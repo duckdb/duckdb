@@ -144,20 +144,3 @@ void VectorOperations::ATan2(Vector &left, Vector &right, Vector &result) {
 void VectorOperations::Sign(Vector &input, Vector &result) {
 	unary_numeric_op_tintret<duckdb::Sign>(input, result);
 }
-
-void VectorOperations::Mod(Vector &input, Vector &divisor, Vector &result) {
-	switch (result.type) {
-	case TypeId::BIGINT:
-          divisor.Cast(TypeId::BIGINT);
-          input.Cast(TypeId::BIGINT);
-          templated_divmod_loop<int64_t, duckdb::Modulo>(input, divisor, result);
-          break;
-	case TypeId::DOUBLE:
-          divisor.Cast(TypeId::DOUBLE);
-          input.Cast(TypeId::DOUBLE);
-          templated_divmod_loop<double, duckdb::ModReal>(input, divisor, result);
-          break;
-	default:
-          throw InvalidTypeException(result.type, "Invalid type for Mod");
-	}
-}
