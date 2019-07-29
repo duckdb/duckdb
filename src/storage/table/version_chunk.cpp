@@ -215,7 +215,7 @@ void VersionChunk::RetrieveColumnData(ColumnPointer &pointer, Vector &result, in
 		index_t to_copy = std::min(count, pointer.segment->count - pointer.offset);
 		if (to_copy > 0) {
 			// copy elements from the column segment
-			pointer.segment->Scan(pointer, result, count);
+			pointer.segment->Scan(pointer, result, to_copy);
 			count -= to_copy;
 		}
 		if (count > 0) {
@@ -235,11 +235,11 @@ void VersionChunk::RetrieveColumnData(ColumnPointer &pointer, Vector &result, in
 		index_t to_copy = std::min(count, pointer.segment->count - pointer.offset);
 		if (to_copy > 0) {
 			// we can copy everything from this column segment, copy with the sel vector
-			pointer.segment->Scan(pointer, result, count, sel_vector, sel_count);
+			pointer.segment->Scan(pointer, result, to_copy, sel_vector, sel_count);
 			count -= to_copy;
 		}
 		if (count > 0) {
-			// we can't copy anything from this segment, move to the next segment
+			// we can't copy everything from this segment, move to the next segment
 			assert(pointer.segment->next);
 			pointer.segment = (ColumnSegment *)pointer.segment->next.get();
 			pointer.offset = 0;

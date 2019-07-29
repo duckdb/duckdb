@@ -15,6 +15,7 @@
 #include "storage/table_statistics.hpp"
 #include "storage/block.hpp"
 #include "storage/table/column_segment.hpp"
+#include "storage/table/persistent_segment.hpp"
 
 #include <atomic>
 #include <mutex>
@@ -51,7 +52,7 @@ struct IndexTableScanState : public TableScanState {
 //! DataTable represents a physical table on disk
 class DataTable {
 public:
-	DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types);
+	DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types, unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data);
 
 	//! The amount of elements in the table. Note that this number signifies the amount of COMMITTED entries in the
 	//! table. It can be inaccurate inside of transactions. More work is needed to properly support that.
@@ -103,6 +104,7 @@ public:
 	                           data_ptr_t alternate_version_pointers[], index_t alternate_version_index[],
 	                           index_t alternate_version_count);
 private:
+	index_t InitializeTable(unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data);
 	//! Append a storage chunk with the given start index to the data table. Returns a pointer to the newly created
 	//! storage chunk.
 	VersionChunk *AppendVersionChunk(index_t start);

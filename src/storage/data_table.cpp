@@ -17,7 +17,7 @@
 using namespace duckdb;
 using namespace std;
 
-DataTable::DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types_)
+DataTable::DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types_, unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data)
     : cardinality(0), schema(schema), table(table), types(types_), storage(storage) {
 	index_t accumulative_size = 0;
 	for (index_t i = 0; i < types.size(); i++) {
@@ -25,13 +25,78 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 		accumulative_size += GetTypeIdSize(types[i]);
 	}
 	tuple_size = accumulative_size;
-	// and an empty column chunk for each column
+
+	// set up the segment trees for the column segments
 	columns = unique_ptr<SegmentTree[]>(new SegmentTree[types.size()]);
+
+	// initialize the table with the existing data from disk
+	index_t current_row = InitializeTable(move(data));
+
+	// now initialize the transient segments and the transient version chunk
 	for (index_t i = 0; i < types.size(); i++) {
-		columns[i].AppendSegment(make_unique<TransientSegment>(types[i], 0));
+		columns[i].AppendSegment(make_unique<TransientSegment>(types[i], current_row));
 	}
 	// initialize the table with an empty storage chunk
-	AppendVersionChunk(0);
+	AppendVersionChunk(current_row);
+}
+
+index_t DataTable::InitializeTable(unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data) {
+	if (!data || data[0].size() == 0) {
+		// no data: nothing to set up
+		return 0;
+	}
+
+	index_t current_row = 0;
+
+	// first append all the segments to the set of column segments
+	for (index_t i = 0; i < types.size(); i++) {
+		for(auto &segment : data[i]) {
+			columns[i].AppendSegment(move(segment));
+		}
+	}
+
+	// set up the initial segments
+	auto segments = unique_ptr<ColumnPointer[]>(new ColumnPointer[types.size()]);
+	for (index_t i = 0; i < types.size(); i++) {
+		segments[i].segment = (ColumnSegment*) columns[i].GetRootSegment();
+		segments[i].offset = 0;
+	}
+
+	// now create the version chunks
+	while(segments[0].segment) {
+		auto chunk = make_unique<VersionChunk>(*this, current_row);
+		// set the columns of the chunk
+		chunk->columns = unique_ptr<ColumnPointer[]>(new ColumnPointer[types.size()]);
+		for (index_t i = 0; i < types.size(); i++) {
+			chunk->columns[i].segment = segments[i].segment;
+			chunk->columns[i].offset = segments[i].offset;
+		}
+		// now advance each of the segments until either (1) the max for the version chunk is reached or (2) the end of the table is reached
+		for(index_t i = 0; i < types.size(); i++) {
+			index_t count = 0;
+			while(count < STORAGE_CHUNK_SIZE) {
+				index_t entries_in_segment = std::min(STORAGE_CHUNK_SIZE - count, segments[i].segment->count - segments[i].offset);
+				segments[i].offset += entries_in_segment;
+				count += entries_in_segment;
+				if (segments[i].offset == segments[i].segment->count) {
+					// move to the next segment
+					if (!segments[i].segment->next) {
+						// ran out of segments
+						segments[i].segment = nullptr;
+						break;
+					}
+					segments[i].segment = (ColumnSegment*) segments[i].segment->next.get();
+					segments[i].offset = 0;
+				}
+			}
+			assert(i == 0 || chunk->count == count);
+			chunk->count = count;
+		}
+
+		current_row += chunk->count;
+		storage_tree.AppendSegment(move(chunk));
+	}
+	return current_row;
 }
 
 VersionChunk *DataTable::AppendVersionChunk(index_t start) {
