@@ -1,6 +1,6 @@
-#include "storage/column_segment.hpp"
-#include "storage/block_manager.hpp"
-#include "common/types/vector.hpp"
+#include "duckdb/storage/column_segment.hpp"
+#include "duckdb/storage/block_manager.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 using namespace duckdb;
 using namespace std;

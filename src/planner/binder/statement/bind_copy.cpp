@@ -1,8 +1,8 @@
-#include "main/client_context.hpp"
-#include "parser/statement/copy_statement.hpp"
-#include "planner/binder.hpp"
-#include "parser/statement/insert_statement.hpp"
-#include "planner/statement/bound_copy_statement.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/statement/copy_statement.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/planner/statement/bound_copy_statement.hpp"
 
 using namespace duckdb;
 using namespace std;

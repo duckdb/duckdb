@@ -1,7 +1,7 @@
-#include "execution/operator/aggregate/physical_hash_aggregate.hpp"
-#include "execution/operator/aggregate/physical_simple_aggregate.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "planner/operator/logical_aggregate.hpp"
+#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
 
 using namespace duckdb;
 using namespace std;

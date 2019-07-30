@@ -1,9 +1,9 @@
 #include "catch.hpp"
-#include "common/file_buffer.hpp"
-#include "common/file_system.hpp"
-#include "common/fstream.hpp"
+#include "duckdb/common/file_buffer.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/fstream.hpp"
 #include "test_helpers.hpp"
-#include "common/file_buffer.hpp"
+#include "duckdb/common/file_buffer.hpp"
 
 using namespace duckdb;
 using namespace std;

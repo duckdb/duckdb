@@ -1,9 +1,9 @@
-#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "execution/operator/schema/physical_create_table.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "planner/expression/bound_function_expression.hpp"
-#include "planner/expression_iterator.hpp"
-#include "planner/operator/logical_create_table.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/execution/operator/schema/physical_create_table.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_create_table.hpp"
 
 using namespace duckdb;
 using namespace std;

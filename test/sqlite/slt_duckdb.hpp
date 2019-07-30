@@ -3,7 +3,7 @@
 #ifndef _MSC_VER
 #include <strings.h>
 #endif
-#include "duckdb.h"
+#include "duckdb/duckdb.h"
 
 #include <stdlib.h>
 

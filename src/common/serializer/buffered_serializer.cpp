@@ -1,4 +1,4 @@
-#include "common/serializer/buffered_serializer.hpp"
+#include "duckdb/common/serializer/buffered_serializer.hpp"
 
 #include <cstring>
 

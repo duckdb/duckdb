@@ -1,11 +1,11 @@
-#include "parser/expression/aggregate_expression.hpp"
-#include "parser/expression/cast_expression.hpp"
-#include "parser/expression/function_expression.hpp"
-#include "parser/expression/operator_expression.hpp"
-#include "parser/expression/star_expression.hpp"
-#include "parser/expression/window_expression.hpp"
-#include "parser/transformer.hpp"
-#include "common/string_util.hpp"
+#include "duckdb/parser/expression/aggregate_expression.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace postgres;

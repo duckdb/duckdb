@@ -1,8 +1,8 @@
-#include "common/types/chunk_collection.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 
-#include "common/exception.hpp"
-#include "common/printer.hpp"
-#include "common/value_operations/value_operations.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 
 #include <algorithm>
 #include <cstring>

@@ -1,12 +1,12 @@
-#include "execution/operator/aggregate/physical_window.hpp"
+#include "duckdb/execution/operator/aggregate/physical_window.hpp"
 
-#include "common/types/chunk_collection.hpp"
-#include "common/types/constant_vector.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "execution/window_segment_tree.hpp"
-#include "planner/expression/bound_reference_expression.hpp"
-#include "planner/expression/bound_window_expression.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/types/constant_vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/window_segment_tree.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
 
 #include <cmath>
 

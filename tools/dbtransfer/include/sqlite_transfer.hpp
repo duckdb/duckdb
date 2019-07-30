@@ -1,4 +1,4 @@
-#include "duckdb.hpp"
+#include "duckdb/duckdb.hpp"
 #include "sqlite3.h"
 
 namespace sqlite {

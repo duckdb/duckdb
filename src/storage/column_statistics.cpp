@@ -1,7 +1,7 @@
-#include "storage/column_statistics.hpp"
+#include "duckdb/storage/column_statistics.hpp"
 
-#include "common/value_operations/value_operations.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;

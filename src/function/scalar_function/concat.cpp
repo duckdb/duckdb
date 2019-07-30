@@ -1,8 +1,8 @@
-#include "function/scalar_function/concat.hpp"
+#include "duckdb/function/scalar_function/concat.hpp"
 
-#include "common/exception.hpp"
-#include "common/types/date.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <string.h>
 

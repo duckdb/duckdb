@@ -1,11 +1,11 @@
-#include "execution/operator/persistent/buffered_csv_reader.hpp"
-#include "execution/operator/persistent/physical_copy_from_file.hpp"
+#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/physical_copy_from_file.hpp"
 
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "main/database.hpp"
-#include "storage/data_table.hpp"
-#include "parser/column_definition.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/parser/column_definition.hpp"
 
 #include <algorithm>
 #include <fstream>

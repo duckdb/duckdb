@@ -1,7 +1,7 @@
 #include "connection.h"
 
 #include "cursor.h"
-#include "duckdb.hpp"
+#include "duckdb/duckdb.hpp"
 #include "module.h"
 #include "pythread.h"
 

@@ -1,4 +1,4 @@
-#include "planner/expression_binder/index_binder.hpp"
+#include "duckdb/planner/expression_binder/index_binder.hpp"
 
 using namespace duckdb;
 using namespace std;

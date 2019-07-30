@@ -1,6 +1,6 @@
-#include "common/exception.hpp"
-#include "parser/tableref/table_function.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/parser/tableref/table_function.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
 using namespace postgres;

@@ -1,4 +1,4 @@
-#include "main/materialized_query_result.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
 
 using namespace duckdb;
 using namespace std;

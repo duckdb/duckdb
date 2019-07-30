@@ -11,8 +11,8 @@
 #pragma once
 
 #include "benchmark.hpp"
-#include "common/constants.hpp"
-#include "common/fstream.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/fstream.hpp"
 
 namespace duckdb {
 

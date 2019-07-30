@@ -1,7 +1,7 @@
-#include "execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/execution/operator/join/physical_hash_join.hpp"
 
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 using namespace duckdb;
 using namespace std;

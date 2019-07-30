@@ -1,4 +1,4 @@
-#include "planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
 
 using namespace duckdb;
 using namespace std;

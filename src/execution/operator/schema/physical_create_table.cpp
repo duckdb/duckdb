@@ -1,10 +1,10 @@
-#include "execution/operator/schema/physical_create_table.hpp"
+#include "duckdb/execution/operator/schema/physical_create_table.hpp"
 
-#include "catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "execution/expression_executor.hpp"
-#include "main/client_context.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;

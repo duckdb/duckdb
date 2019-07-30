@@ -1,11 +1,11 @@
-#include "function/scalar_function/regexp.hpp"
-#include "parser/expression/case_expression.hpp"
-#include "parser/expression/comparison_expression.hpp"
-#include "parser/expression/conjunction_expression.hpp"
-#include "parser/expression/constant_expression.hpp"
-#include "parser/expression/function_expression.hpp"
-#include "parser/expression/operator_expression.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/function/scalar_function/regexp.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
 using namespace postgres;

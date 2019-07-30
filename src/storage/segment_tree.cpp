@@ -1,4 +1,4 @@
-#include "storage/segment_tree.hpp"
+#include "duckdb/storage/segment_tree.hpp"
 
 using namespace duckdb;
 using namespace std;

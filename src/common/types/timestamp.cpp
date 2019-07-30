@@ -1,8 +1,8 @@
-#include "common/types/timestamp.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
-#include "common/exception.hpp"
-#include "common/types/date.hpp"
-#include "common/types/time.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/time.hpp"
 
 #include <iomanip>
 #include <iostream>

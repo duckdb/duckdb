@@ -1,6 +1,6 @@
-#include "execution/operator/set/physical_union.hpp"
+#include "duckdb/execution/operator/set/physical_union.hpp"
 
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;

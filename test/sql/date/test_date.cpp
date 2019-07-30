@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "common/types/date.hpp"
+#include "duckdb/common/types/date.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "catalog/catalog.hpp"
-#include "duckdb.hpp"
+#include "duckdb/duckdb.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 namespace tpcds {
 //! Adds the TPC-DS tables filled with the given SF to the catalog. Suffix adds

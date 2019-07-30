@@ -1,10 +1,10 @@
-#include "parser/expression/columnref_expression.hpp"
-#include "parser/expression/star_expression.hpp"
-#include "parser/statement/copy_statement.hpp"
-#include "parser/statement/select_statement.hpp"
-#include "parser/tableref/basetableref.hpp"
-#include "parser/transformer.hpp"
-#include "common/string_util.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/statement/copy_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include <cstring>
 

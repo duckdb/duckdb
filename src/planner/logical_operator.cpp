@@ -1,6 +1,6 @@
-#include "planner/logical_operator.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
-#include "common/printer.hpp"
+#include "duckdb/common/printer.hpp"
 
 using namespace duckdb;
 using namespace std;

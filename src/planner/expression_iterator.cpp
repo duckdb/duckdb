@@ -1,10 +1,10 @@
-#include "planner/expression_iterator.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
-#include "planner/bound_query_node.hpp"
-#include "planner/expression/list.hpp"
-#include "planner/query_node/bound_select_node.hpp"
-#include "planner/query_node/bound_set_operation_node.hpp"
-#include "planner/tableref/list.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/query_node/bound_set_operation_node.hpp"
+#include "duckdb/planner/tableref/list.hpp"
 
 using namespace duckdb;
 using namespace std;

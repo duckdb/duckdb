@@ -1,6 +1,6 @@
-#include "parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 
-#include "common/exception.hpp"
+#include "duckdb/common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;

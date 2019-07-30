@@ -1,15 +1,15 @@
-#include "transaction/undo_buffer.hpp"
+#include "duckdb/transaction/undo_buffer.hpp"
 
-#include "catalog/catalog_entry.hpp"
-#include "catalog/catalog_entry/list.hpp"
-#include "catalog/catalog_set.hpp"
-#include "common/exception.hpp"
-#include "storage/data_table.hpp"
-#include "storage/storage_chunk.hpp"
-#include "storage/write_ahead_log.hpp"
+#include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/list.hpp"
+#include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/storage_chunk.hpp"
+#include "duckdb/storage/write_ahead_log.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 #include <unordered_map>
-#include <transaction/transaction.hpp>
 
 using namespace duckdb;
 using namespace std;

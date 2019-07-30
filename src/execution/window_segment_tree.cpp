@@ -1,7 +1,7 @@
-#include "execution/window_segment_tree.hpp"
+#include "duckdb/execution/window_segment_tree.hpp"
 
-#include "common/types/constant_vector.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/constant_vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <cmath>
 

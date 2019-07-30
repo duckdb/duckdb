@@ -1,4 +1,4 @@
-#include "planner/expression_binder/where_binder.hpp"
+#include "duckdb/planner/expression_binder/where_binder.hpp"
 
 using namespace duckdb;
 using namespace std;

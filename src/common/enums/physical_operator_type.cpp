@@ -1,4 +1,4 @@
-#include "common/enums/physical_operator_type.hpp"
+#include "duckdb/common/enums/physical_operator_type.hpp"
 
 using namespace std;
 

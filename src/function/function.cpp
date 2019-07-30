@@ -1,10 +1,10 @@
-#include "function/function.hpp"
+#include "duckdb/function/function.hpp"
 
-#include "catalog/catalog.hpp"
-#include "function/scalar_function/list.hpp"
-#include "function/table_function/list.hpp"
-#include "parser/parsed_data/create_scalar_function_info.hpp"
-#include "parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/function/scalar_function/list.hpp"
+#include "duckdb/function/table_function/list.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
 using namespace duckdb;
 using namespace std;

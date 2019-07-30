@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "duckdb.h"
+#include "duckdb/duckdb.h"
 
 using namespace std;
 

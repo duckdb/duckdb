@@ -1,4 +1,4 @@
-#include "planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,9 +1,9 @@
-#include "common/types/date.hpp"
-#include "common/types/time.hpp"
-#include "common/types/timestamp.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "duckdb.h"
-#include "duckdb.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/duckdb.h"
+#include "duckdb/duckdb.hpp"
 
 #include <cstring>
 

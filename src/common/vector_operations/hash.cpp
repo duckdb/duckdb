@@ -3,9 +3,9 @@
 // Description: This file contains the vectorized hash implementations
 //===--------------------------------------------------------------------===//
 
-#include "common/operator/hash_operators.hpp"
-#include "common/vector_operations/binary_loops.hpp"
-#include "common/vector_operations/unary_loops.hpp"
+#include "duckdb/common/operator/hash_operators.hpp"
+#include "duckdb/common/vector_operations/binary_loops.hpp"
+#include "duckdb/common/vector_operations/unary_loops.hpp"
 
 using namespace duckdb;
 using namespace std;

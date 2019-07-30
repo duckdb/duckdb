@@ -1,6 +1,6 @@
-#include "planner/logical_plan_generator.hpp"
-#include "planner/operator/logical_get.hpp"
-#include "planner/tableref/bound_basetableref.hpp"
+#include "duckdb/planner/logical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/tableref/bound_basetableref.hpp"
 
 using namespace duckdb;
 using namespace std;

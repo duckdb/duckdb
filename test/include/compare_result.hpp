@@ -1,7 +1,7 @@
 #pragma once
 
-#include "common/string_util.hpp"
-#include "duckdb.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/duckdb.hpp"
 
 namespace duckdb {
 

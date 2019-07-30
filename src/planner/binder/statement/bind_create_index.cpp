@@ -1,7 +1,7 @@
-#include "parser/statement/create_index_statement.hpp"
-#include "planner/binder.hpp"
-#include "planner/expression_binder/index_binder.hpp"
-#include "planner/statement/bound_create_index_statement.hpp"
+#include "duckdb/parser/statement/create_index_statement.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/index_binder.hpp"
+#include "duckdb/planner/statement/bound_create_index_statement.hpp"
 
 using namespace duckdb;
 using namespace std;

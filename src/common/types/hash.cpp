@@ -1,6 +1,6 @@
-#include "common/types/hash.hpp"
+#include "duckdb/common/types/hash.hpp"
 
-#include "common/exception.hpp"
+#include "duckdb/common/exception.hpp"
 
 #include <functional>
 

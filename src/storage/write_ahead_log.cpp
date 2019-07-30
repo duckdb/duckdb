@@ -1,4 +1,4 @@
-#include "storage/write_ahead_log.hpp"
+#include "duckdb/storage/write_ahead_log.hpp"
 
 #include <cstring>
 

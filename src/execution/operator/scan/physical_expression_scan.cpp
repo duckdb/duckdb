@@ -1,6 +1,6 @@
-#include "execution/operator/scan/physical_expression_scan.hpp"
+#include "duckdb/execution/operator/scan/physical_expression_scan.hpp"
 
-#include "execution/expression_executor.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 using namespace duckdb;
 using namespace std;

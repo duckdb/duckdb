@@ -4,7 +4,7 @@
 #ifndef DUCKDB_HH
 #define DUCKDB_HH
 
-#include "duckdb.hpp"
+#include "duckdb/duckdb.hpp"
 
 #include "dut.hh"
 #include "relmodel.hh"

@@ -1,4 +1,4 @@
-#include "parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 
 using namespace duckdb;
 using namespace std;

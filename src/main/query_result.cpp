@@ -1,6 +1,6 @@
-#include "main/query_result.hpp"
+#include "duckdb/main/query_result.hpp"
 
-#include "main/client_context.hpp"
+#include "duckdb/main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,31 +1,31 @@
-#include "storage/checkpoint_manager.hpp"
-#include "storage/block_manager.hpp"
-#include "storage/meta_block_reader.hpp"
+#include "duckdb/storage/checkpoint_manager.hpp"
+#include "duckdb/storage/block_manager.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
 
-#include "common/serializer.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "common/types/null_value.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/null_value.hpp"
 
-#include "catalog/catalog.hpp"
-#include "catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "catalog/catalog_entry/sequence_catalog_entry.hpp"
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 
-#include "parser/parsed_data/create_schema_info.hpp"
-#include "parser/parsed_data/create_table_info.hpp"
-#include "parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
 
-#include "planner/binder.hpp"
-#include "planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 
-#include "main/client_context.hpp"
-#include "main/database.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 
-#include "transaction/transaction_manager.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
 
-#include "storage/checkpoint/table_data_writer.hpp"
-#include "storage/checkpoint/table_data_reader.hpp"
+#include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/storage/checkpoint/table_data_reader.hpp"
 
 using namespace duckdb;
 using namespace std;

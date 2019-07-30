@@ -1,10 +1,10 @@
-#include "planner/expression_binder/having_binder.hpp"
+#include "duckdb/planner/expression_binder/having_binder.hpp"
 
-#include "main/client_context.hpp"
-#include "parser/expression/aggregate_expression.hpp"
-#include "parser/expression/columnref_expression.hpp"
-#include "planner/binder.hpp"
-#include "planner/expression_binder/aggregate_binder.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/expression/aggregate_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 
 using namespace duckdb;
 using namespace std;

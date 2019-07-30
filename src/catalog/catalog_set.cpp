@@ -1,9 +1,9 @@
-#include "catalog/catalog_set.hpp"
+#include "duckdb/catalog/catalog_set.hpp"
 
-#include "catalog/catalog.hpp"
-#include "common/exception.hpp"
-#include "transaction/transaction_manager.hpp"
-#include "main/client_context.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;

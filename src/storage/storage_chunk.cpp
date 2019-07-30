@@ -1,9 +1,9 @@
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "common/exception.hpp"
-#include "common/helper.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "storage/data_table.hpp"
-#include "transaction/transaction.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 using namespace duckdb;
 using namespace std;

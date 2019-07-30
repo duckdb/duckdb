@@ -1,15 +1,15 @@
-#include "storage/data_table.hpp"
+#include "duckdb/storage/data_table.hpp"
 
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "common/exception.hpp"
-#include "common/helper.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "common/types/static_vector.hpp"
-#include "execution/expression_executor.hpp"
-#include "main/client_context.hpp"
-#include "planner/constraints/list.hpp"
-#include "transaction/transaction.hpp"
-#include "transaction/transaction_manager.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/static_vector.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/constraints/list.hpp"
+#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
 
 using namespace duckdb;
 using namespace std;

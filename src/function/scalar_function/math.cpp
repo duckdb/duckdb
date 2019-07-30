@@ -1,6 +1,6 @@
-#include "function/scalar_function/math.hpp"
-#include "common/exception.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/scalar_function/math.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include <cmath>
 
 using namespace std;

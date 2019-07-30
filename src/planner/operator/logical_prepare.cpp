@@ -1,7 +1,7 @@
-#include "planner/operator/logical_prepare.hpp"
+#include "duckdb/planner/operator/logical_prepare.hpp"
 
-#include "planner/operator/logical_get.hpp"
-#include "planner/operator/logical_insert.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_insert.hpp"
 
 using namespace duckdb;
 using namespace std;

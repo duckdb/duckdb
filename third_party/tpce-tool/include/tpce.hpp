@@ -10,9 +10,9 @@
 
 #pragma once
 
-#include "catalog/catalog.hpp"
-#include "common/types/data_chunk.hpp"
-#include "duckdb.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/duckdb.hpp"
 
 namespace tpce {
 //! Adds the TPC-E tables filled with the given SF to the catalog. Suffix adds a

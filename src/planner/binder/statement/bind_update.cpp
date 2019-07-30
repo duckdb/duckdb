@@ -1,13 +1,13 @@
-#include "parser/statement/update_statement.hpp"
-#include "planner/binder.hpp"
-#include "planner/expression/bound_default_expression.hpp"
-#include "planner/expression_binder/update_binder.hpp"
-#include "planner/expression_binder/where_binder.hpp"
-#include "planner/statement/bound_update_statement.hpp"
-#include "planner/tableref/bound_basetableref.hpp"
-#include "planner/constraints/bound_check_constraint.hpp"
-#include "parser/expression/columnref_expression.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_default_expression.hpp"
+#include "duckdb/planner/expression_binder/update_binder.hpp"
+#include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/planner/statement/bound_update_statement.hpp"
+#include "duckdb/planner/tableref/bound_basetableref.hpp"
+#include "duckdb/planner/constraints/bound_check_constraint.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;

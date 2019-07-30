@@ -1,6 +1,6 @@
-#include "planner/expression_binder/aggregate_binder.hpp"
+#include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 
-#include "planner/binder.hpp"
+#include "duckdb/planner/binder.hpp"
 
 using namespace duckdb;
 using namespace std;

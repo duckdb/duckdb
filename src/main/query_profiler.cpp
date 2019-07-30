@@ -1,8 +1,8 @@
-#include "main/query_profiler.hpp"
+#include "duckdb/main/query_profiler.hpp"
 
-#include "common/fstream.hpp"
-#include "common/printer.hpp"
-#include "execution/physical_operator.hpp"
+#include "duckdb/common/fstream.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 
 #include <iostream>
 

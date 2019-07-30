@@ -1,7 +1,7 @@
-#include "planner/subquery/has_correlated_expressions.hpp"
+#include "duckdb/planner/subquery/has_correlated_expressions.hpp"
 
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_subquery_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

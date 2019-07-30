@@ -1,6 +1,6 @@
-#include "planner/logical_plan_generator.hpp"
-#include "planner/operator/logical_subquery.hpp"
-#include "planner/tableref/bound_subqueryref.hpp"
+#include "duckdb/planner/logical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_subquery.hpp"
+#include "duckdb/planner/tableref/bound_subqueryref.hpp"
 
 using namespace duckdb;
 using namespace std;

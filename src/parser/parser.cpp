@@ -1,7 +1,7 @@
-#include "parser/parser.hpp"
+#include "duckdb/parser/parser.hpp"
 
-#include "main/client_context.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/transformer.hpp"
 #include "postgres_parser.hpp"
 
 namespace postgres {

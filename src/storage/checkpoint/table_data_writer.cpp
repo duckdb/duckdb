@@ -1,10 +1,10 @@
-#include "storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/storage/checkpoint/table_data_writer.hpp"
 
-#include "common/vector_operations/vector_operations.hpp"
-#include "common/types/null_value.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/null_value.hpp"
 
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "common/serializer/buffered_serializer.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/serializer/buffered_serializer.hpp"
 
 using namespace duckdb;
 using namespace std;

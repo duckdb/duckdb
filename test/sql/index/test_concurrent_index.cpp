@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "main/appender.hpp"
+#include "duckdb/main/appender.hpp"
 #include "test_helpers.hpp"
 
 #include <atomic>

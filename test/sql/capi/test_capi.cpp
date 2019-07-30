@@ -1,7 +1,7 @@
 #include "catch.hpp"
-#include "duckdb.h"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/duckdb.h"
 #include "test_helpers.hpp"
-#include "common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;

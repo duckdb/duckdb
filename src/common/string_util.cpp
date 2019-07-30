@@ -1,4 +1,4 @@
-#include "common/string_util.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include <algorithm>
 #include <cctype>

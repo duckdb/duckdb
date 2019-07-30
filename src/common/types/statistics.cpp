@@ -1,11 +1,11 @@
-#include "common/types/statistics.hpp"
+#include "duckdb/common/types/statistics.hpp"
 
-#include "common/exception.hpp"
-#include "common/limits.hpp"
-#include "common/printer.hpp"
-#include "common/types/vector.hpp"
-#include "common/value_operations/value_operations.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -3,11 +3,11 @@
 // Description: This file contains the implementation of the scatter operations
 //===--------------------------------------------------------------------===//
 
-#include "common/operator/aggregate_operators.hpp"
-#include "common/operator/constant_operators.hpp"
-#include "common/operator/numeric_binary_operators.hpp"
-#include "common/vector_operations/scatter_loops.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/operator/aggregate_operators.hpp"
+#include "duckdb/common/operator/constant_operators.hpp"
+#include "duckdb/common/operator/numeric_binary_operators.hpp"
+#include "duckdb/common/vector_operations/scatter_loops.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;

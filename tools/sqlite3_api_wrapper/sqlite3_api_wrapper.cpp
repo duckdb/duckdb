@@ -1,7 +1,7 @@
 #include "sqlite3.h"
 
 #include <ctype.h>
-#include <duckdb.h>
+#include <duckdb/duckdb.h>
 #include <err.h>
 #include <stdio.h>
 #include <string.h>

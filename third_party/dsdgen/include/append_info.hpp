@@ -1,6 +1,6 @@
 #pragma once
 
-#include "main/appender.hpp"
+#include "duckdb/main/appender.hpp"
 #include <memory>
 
 namespace tpcds {

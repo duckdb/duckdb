@@ -1,6 +1,6 @@
-#include "parser/expression/aggregate_expression.hpp"
+#include "duckdb/parser/expression/aggregate_expression.hpp"
 
-#include "common/serializer.hpp"
+#include "duckdb/common/serializer.hpp"
 
 using namespace duckdb;
 using namespace std;

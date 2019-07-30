@@ -3,10 +3,10 @@
 // Description: This file contains the implementation of the gather operators
 //===--------------------------------------------------------------------===//
 
-#include "common/exception.hpp"
-#include "common/operator/constant_operators.hpp"
-#include "common/types/null_value.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/constant_operators.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,6 +1,6 @@
 #include "catch.hpp"
-#include "common/file_system.hpp"
-#include "common/types/date.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/types/date.hpp"
 #include "test_csv_header.hpp"
 #include "test_helpers.hpp"
 

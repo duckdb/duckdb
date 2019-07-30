@@ -1,8 +1,8 @@
-#include "planner/logical_plan_generator.hpp"
+#include "duckdb/planner/logical_plan_generator.hpp"
 
-#include "planner/bound_query_node.hpp"
-#include "planner/bound_sql_statement.hpp"
-#include "planner/bound_tableref.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/bound_sql_statement.hpp"
+#include "duckdb/planner/bound_tableref.hpp"
 
 using namespace duckdb;
 using namespace std;

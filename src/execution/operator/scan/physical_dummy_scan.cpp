@@ -1,4 +1,4 @@
-#include "execution/operator/scan/physical_dummy_scan.hpp"
+#include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
 
 using namespace duckdb;
 using namespace std;
