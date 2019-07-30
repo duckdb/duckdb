@@ -187,14 +187,13 @@ bool pg_verifymbstr(const char *mbstr, int len, bool noError) {
 }
 
 int pg_database_encoding_max_length(void) {
-    //throw std::runtime_error("pg_database_encoding_max_length NOT IMPLEMENTED");
 	return 4; // UTF8
 }
 
 static int
 pg_utf_mblen(const unsigned char *s)
 {
-	int			len;
+	int	len;
 
 	if ((*s & 0x80) == 0)
 		len = 1;
@@ -216,9 +215,17 @@ pg_utf_mblen(const unsigned char *s)
 }
 
 
-int	pg_mbstrlen_with_len(const char *mbstr, int len) {
-	return pg_utf_mblen((const unsigned char*) mbstr);
+int pg_mbstrlen_with_len(const char *mbstr, int limit) {
+	int	len = 0;
+	while (limit > 0 && *mbstr)	{
+		int	l = pg_utf_mblen((const unsigned char*) mbstr);
+		limit -= l;
+		mbstr += l;
+		len++;
+	}
+	return len;
 }
+
 
 int pg_mbcliplen(const char *mbstr, int len, int limit) {
     throw std::runtime_error("pg_mbcliplen NOT IMPLEMENTED");
