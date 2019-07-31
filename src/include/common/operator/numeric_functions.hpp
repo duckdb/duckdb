@@ -147,5 +147,4 @@ struct Sign {
                   return -1;
 	}
 };
-
 } // namespace duckdb
