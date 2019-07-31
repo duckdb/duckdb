@@ -6,29 +6,11 @@
 #include "parser/expression/window_expression.hpp"
 #include "parser/transformer.hpp"
 #include "common/string_util.hpp"
+#include "main/client_context.hpp"
 
 using namespace duckdb;
 using namespace postgres;
 using namespace std;
-
-static ExpressionType AggregateToExpressionType(string &fun_name) {
-	if (fun_name == "count") {
-		return ExpressionType::AGGREGATE_COUNT;
-	} else if (fun_name == "sum") {
-		return ExpressionType::AGGREGATE_SUM;
-	} else if (fun_name == "min") {
-		return ExpressionType::AGGREGATE_MIN;
-	} else if (fun_name == "max") {
-		return ExpressionType::AGGREGATE_MAX;
-	} else if (fun_name == "avg") {
-		return ExpressionType::AGGREGATE_AVG;
-	} else if (fun_name == "first") {
-		return ExpressionType::AGGREGATE_FIRST;
-	} else if (fun_name == "stddev_samp") {
-		return ExpressionType::AGGREGATE_STDDEV_SAMP;
-	}
-	return ExpressionType::INVALID;
-}
 
 static ExpressionType WindowToExpressionType(string &fun_name) {
 	if (fun_name == "sum") {
@@ -179,8 +161,13 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
 		return move(expr);
 	}
 
-	auto agg_fun_type = AggregateToExpressionType(lowercase_name);
-	if (agg_fun_type == ExpressionType::INVALID) {
+	// FIXME: Hack to get the dynamic list of aggregate functions currently in the system
+	const auto hasTransaction = context.transaction.HasActiveTransaction();
+	if (!hasTransaction) context.transaction.BeginTransaction();
+	auto agg_func = context.catalog.GetAggregateFunction(context.ActiveTransaction(), schema, lowercase_name, true);
+	if (!hasTransaction) context.transaction.Rollback();
+
+	if (!agg_func) {
 		// Normal functions (i.e. built-in functions or UDFs)
 		vector<unique_ptr<ParsedExpression>> children;
 		if (root->args != nullptr) {
@@ -193,23 +180,9 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
 	} else {
 		// Aggregate function
 		assert(!root->over); // see above
-		if (root->agg_star || (agg_fun_type == ExpressionType::AGGREGATE_COUNT && !root->args)) {
-			return make_unique<AggregateExpression>(agg_fun_type, make_unique<StarExpression>());
+		if (root->agg_star || (lowercase_name == "count" && !root->args)) {
+			return make_unique<AggregateExpression>("count_star", false, nullptr);
 		} else {
-			if (root->agg_distinct) {
-				switch (agg_fun_type) {
-				case ExpressionType::AGGREGATE_COUNT:
-					agg_fun_type = ExpressionType::AGGREGATE_COUNT_DISTINCT;
-					break;
-				case ExpressionType::AGGREGATE_SUM:
-					agg_fun_type = ExpressionType::AGGREGATE_SUM_DISTINCT;
-					break;
-				default:
-					// makes no difference for other aggregation types
-					break;
-				}
-			}
-
 			if (!root->args) {
 				throw NotImplementedException("Aggregation over zero columns not supported!");
 			} else if (root->args->length < 2) {
@@ -217,15 +190,15 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
 				if (child->IsAggregate()) {
 					throw ParserException("aggregate function calls cannot be nested");
 				}
-				if (agg_fun_type == ExpressionType::AGGREGATE_AVG) {
+				if (schema == DEFAULT_SCHEMA && lowercase_name == "avg") {
 					// rewrite AVG(a) to SUM(a) / COUNT(a)
 					// first create the SUM
 					auto sum = make_unique<AggregateExpression>(
-					    root->agg_distinct ? ExpressionType::AGGREGATE_SUM_DISTINCT : ExpressionType::AGGREGATE_SUM,
+					    "sum", root->agg_distinct,
 					    child->Copy());
 					// now create the count
 					auto count = make_unique<AggregateExpression>(
-					    root->agg_distinct ? ExpressionType::AGGREGATE_COUNT_DISTINCT : ExpressionType::AGGREGATE_COUNT,
+					    "count", root->agg_distinct,
 					    move(child));
 					// cast both to decimal
 					auto sum_cast = make_unique<CastExpression>(SQLType(SQLTypeId::DECIMAL), move(sum));
@@ -234,7 +207,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
 					return make_unique<OperatorExpression>(ExpressionType::OPERATOR_DIVIDE, move(sum_cast),
 					                                       move(count_cast));
 				} else {
-					return make_unique<AggregateExpression>(agg_fun_type, move(child));
+					return make_unique<AggregateExpression>(lowercase_name, root->agg_distinct, move(child));
 				}
 			} else {
 				throw NotImplementedException("Aggregation over multiple columns not supported yet...\n");

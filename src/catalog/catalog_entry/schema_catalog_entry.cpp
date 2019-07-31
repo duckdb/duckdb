@@ -2,6 +2,7 @@
 
 #include "catalog/catalog.hpp"
 #include "catalog/catalog_entry/index_catalog_entry.hpp"
+#include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
@@ -26,7 +27,7 @@ using namespace std;
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
     : CatalogEntry(CatalogType::SCHEMA, catalog, name), tables(*catalog), indexes(*catalog), table_functions(*catalog),
-      scalar_functions(*catalog), sequences(*catalog) {
+      aggregate_functions(*catalog), scalar_functions(*catalog), sequences(*catalog) {
 }
 
 void SchemaCatalogEntry::CreateTable(Transaction &transaction, BoundCreateTableInfo *info) {
@@ -177,6 +178,27 @@ void SchemaCatalogEntry::CreateTableFunction(Transaction &transaction, CreateTab
 	}
 }
 
+void SchemaCatalogEntry::CreateAggregateFunction(Transaction &transaction, CreateAggregateFunctionInfo *info) {
+	auto aggregate_function = make_unique_base<CatalogEntry, AggregateFunctionCatalogEntry>(catalog, this, info);
+	unordered_set<CatalogEntry *> dependencies{this};
+
+	if (!aggregate_functions.CreateEntry(transaction, info->name, move(aggregate_function), dependencies)) {
+		if (!info->or_replace) {
+			throw CatalogException("Aggregate function with name \"%s\" already exists!", info->name.c_str());
+		} else {
+			auto aggregate_function = make_unique_base<CatalogEntry, AggregateFunctionCatalogEntry>(catalog, this, info);
+			// function already exists: replace it
+			if (!aggregate_functions.DropEntry(transaction, info->name, false)) {
+				throw CatalogException("CREATE OR REPLACE was specified, but "
+				                       "aggregate function could not be dropped!");
+			}
+			if (!aggregate_functions.CreateEntry(transaction, info->name, move(aggregate_function), dependencies)) {
+				throw CatalogException("Error in recreating aggregate function in CREATE OR REPLACE");
+			}
+		}
+	}
+}
+
 void SchemaCatalogEntry::CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInfo *info) {
 	auto scalar_function = make_unique_base<CatalogEntry, ScalarFunctionCatalogEntry>(catalog, this, info);
 	unordered_set<CatalogEntry *> dependencies{this};
@@ -196,6 +218,14 @@ void SchemaCatalogEntry::CreateScalarFunction(Transaction &transaction, CreateSc
 			}
 		}
 	}
+}
+
+AggregateFunctionCatalogEntry *SchemaCatalogEntry::GetAggregateFunction(Transaction &transaction, const string &name, bool if_exists) {
+	auto entry = aggregate_functions.GetEntry(transaction, name);
+	if (!entry && !if_exists) {
+		throw CatalogException("Aggregate Function with name %s does not exist!", name.c_str());
+	}
+	return (AggregateFunctionCatalogEntry *)entry;
 }
 
 ScalarFunctionCatalogEntry *SchemaCatalogEntry::GetScalarFunction(Transaction &transaction, const string &name) {

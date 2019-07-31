@@ -39,7 +39,7 @@ void Parser::ParseQuery(string query) {
 
 	// if it succeeded, we transform the Postgres parse tree into a list of
 	// SQLStatements
-	Transformer transformer;
+	Transformer transformer(context);
 	transformer.TransformParseTree(parser.parse_tree, statements);
 	n_prepared_parameters = transformer.prepared_statement_parameter_index;
 }
