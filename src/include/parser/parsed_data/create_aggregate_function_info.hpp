@@ -8,18 +8,13 @@
 
 #pragma once
 
-#include "common/common.hpp"
-#include "function/function.hpp"
+#include "parser/parsed_data/create_function_info.hpp"
 
 namespace duckdb {
 
-struct CreateAggregateFunctionInfo {
-	//! Schema name
-	string schema;
-	//! Function name
-	string name;
-	//! Replace function if it already exists instead of failing
-	bool or_replace = false;
+struct CreateAggregateFunctionInfo : public CreateFunctionInfo {
+	CreateAggregateFunctionInfo() : CreateFunctionInfo(FunctionType::AGGREGATE) {
+	}
 
 	//! The hashed aggregate sizing function
 	aggregate_size_t payload_size;
@@ -42,9 +37,6 @@ struct CreateAggregateFunctionInfo {
 	//! Function that returns true if the arguments need to be cast to the return type
 	//! arguments
 	matches_argument_function_t cast_arguments;
-
-	CreateAggregateFunctionInfo() : schema(DEFAULT_SCHEMA), or_replace(false) {
-	}
 };
 
 } // namespace duckdb

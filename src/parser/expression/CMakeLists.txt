@@ -1,6 +1,5 @@
 add_library_unity(duckdb_expression
                   OBJECT
-                  aggregate_expression.cpp
                   case_expression.cpp
                   cast_expression.cpp
                   conjunction_expression.cpp

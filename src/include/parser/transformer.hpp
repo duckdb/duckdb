@@ -23,7 +23,6 @@ namespace postgres {
 
 namespace duckdb {
 
-class ClientContext;
 class ColumnDefinition;
 struct OrderByNode;
 
@@ -31,14 +30,11 @@ struct OrderByNode;
 //! parser representation into the DuckDB representation
 class Transformer {
 public:
-	Transformer(ClientContext &context) : context(context) {}
 	//! Transforms a Postgres parse tree into a set of SQL Statements
 	bool TransformParseTree(postgres::List *tree, vector<unique_ptr<SQLStatement>> &statements);
 	string NodetypeToString(postgres::NodeTag type);
 
 	index_t prepared_statement_parameter_index = 0;
-	ClientContext &context;
-
 private:
 	//! Transforms a Postgres statement into a single SQL statement
 	unique_ptr<SQLStatement> TransformStatement(postgres::Node *stmt);

@@ -42,7 +42,7 @@ template <class T> static void AddAggregateFunction(Transaction &transaction, Ca
 	info.return_type = T::GetReturnTypeFunction();
 	info.cast_arguments = T::GetCastArgumentsFunction();
 
-	catalog.CreateAggregateFunction(transaction, &info);
+	catalog.CreateFunction(transaction, &info);
 }
 
 template <class T> static void AddScalarFunction(Transaction &transaction, Catalog &catalog) {
@@ -57,7 +57,7 @@ template <class T> static void AddScalarFunction(Transaction &transaction, Catal
 	info.dependency = T::GetDependencyFunction();
 	info.has_side_effects = T::HasSideEffects();
 
-	catalog.CreateScalarFunction(transaction, &info);
+	catalog.CreateFunction(transaction, &info);
 }
 
 void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {

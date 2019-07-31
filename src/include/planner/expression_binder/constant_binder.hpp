@@ -22,6 +22,8 @@ public:
 
 protected:
 	BindResult BindExpression(ParsedExpression &expr, index_t depth, bool root_expression = false) override;
+
+	string UnsupportedAggregateMessage() override;
 };
 
 } // namespace duckdb

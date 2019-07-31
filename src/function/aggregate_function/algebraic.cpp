@@ -70,10 +70,9 @@ void avg_finalize(Vector& payloads, Vector &result) {
 
 		if (*count_ptr == 0) {
 			result.nullmask[i] = true;
-			return;
+		} else {
+			((double *)result.data)[i] = *sum_ptr / *count_ptr;
 		}
-
-		((double *)result.data)[i] = *sum_ptr;
 	});
 }
 

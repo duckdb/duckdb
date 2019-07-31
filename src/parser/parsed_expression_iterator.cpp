@@ -8,13 +8,6 @@ using namespace std;
 void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expr,
                                                  function<void(const ParsedExpression &child)> callback) {
 	switch (expr.expression_class) {
-	case ExpressionClass::AGGREGATE: {
-		auto &aggr_expr = (const AggregateExpression &)expr;
-		if (aggr_expr.child) {
-			callback(*aggr_expr.child);
-		}
-		break;
-	}
 	case ExpressionClass::CASE: {
 		auto &case_expr = (const CaseExpression &)expr;
 		callback(*case_expr.check);
