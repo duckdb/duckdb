@@ -2,6 +2,7 @@
 #include "common/exception.hpp"
 #include "common/types/null_value.hpp"
 #include "common/vector_operations/vector_operations.hpp"
+#include <cmath>
 
 using namespace std;
 
