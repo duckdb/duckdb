@@ -25,10 +25,6 @@ void avg_update(Vector inputs[], index_t input_count, Vector &result);
 void avg_finalize(Vector& payloads, Vector &result);
 SQLType avg_get_return_type(vector<SQLType> &arguments);
 
-static Value avg_simple_initialize() {
-	return Value(TypeId::DOUBLE);
-}
-
 class AvgFunction {
 public:
 	static const char*GetName() {
@@ -52,7 +48,7 @@ public:
 	}
 
 	static aggregate_simple_initialize_t GetSimpleInitializeFunction() {
-		return avg_simple_initialize;
+		return nullptr;
 	}
 
 	static aggregate_simple_update_t GetSimpleUpdateFunction() {

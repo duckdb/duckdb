@@ -65,6 +65,24 @@ TEST_CASE("Test AVG operator", "[aggregate]") {
 	REQUIRE_FAIL(con.Query("SELECT AVG(AVG(1))"));
 }
 
+TEST_CASE("Test implicit aggregate operators", "[aggregate]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// test implicit aggregates on empty set
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
+	result = con.Query("SELECT COUNT(*), COUNT(i), STDDEV_SAMP(i), SUM(i), SUM(DISTINCT i), FIRST(i), MAX(i), MIN(i) FROM integers WHERE i > 100");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 6, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 7, {Value()}));
+}
+
 TEST_CASE("Test GROUP BY on expression", "[aggregate]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
