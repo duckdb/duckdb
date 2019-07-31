@@ -23,11 +23,18 @@ class StorageManager;
 struct TableScanState;
 struct IndexTableScanState;
 
+enum class VersionChunkType : uint8_t {
+	TRANSIENT,
+	PERSISTENT
+};
+
 class VersionChunk : public SegmentBase {
 	friend class VersionChunkInfo;
 public:
-	VersionChunk(DataTable &table, index_t start);
+	VersionChunk(VersionChunkType type, DataTable &table, index_t start);
 
+	//! The type of version chunk
+	VersionChunkType type;
 	//! The table
 	DataTable &table;
 	//! The version chunk pointers for this version chunk

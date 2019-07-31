@@ -10,7 +10,8 @@
 using namespace duckdb;
 using namespace std;
 
-VersionChunk::VersionChunk(DataTable &base_table, index_t start) : SegmentBase(start, 0), table(base_table) {
+VersionChunk::VersionChunk(VersionChunkType type, DataTable &base_table, index_t start) :
+    SegmentBase(start, 0), type(type), table(base_table) {
 }
 
 index_t VersionChunk::GetVersionIndex(index_t index) {

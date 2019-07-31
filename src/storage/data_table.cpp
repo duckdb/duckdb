@@ -64,7 +64,7 @@ index_t DataTable::InitializeTable(unique_ptr<vector<unique_ptr<PersistentSegmen
 
 	// now create the version chunks
 	while(segments[0].segment) {
-		auto chunk = make_unique<VersionChunk>(*this, current_row);
+		auto chunk = make_unique<VersionChunk>(VersionChunkType::PERSISTENT, *this, current_row);
 		// set the columns of the chunk
 		chunk->columns = unique_ptr<ColumnPointer[]>(new ColumnPointer[types.size()]);
 		for (index_t i = 0; i < types.size(); i++) {
@@ -100,7 +100,7 @@ index_t DataTable::InitializeTable(unique_ptr<vector<unique_ptr<PersistentSegmen
 }
 
 VersionChunk *DataTable::AppendVersionChunk(index_t start) {
-	auto chunk = make_unique<VersionChunk>(*this, start);
+	auto chunk = make_unique<VersionChunk>(VersionChunkType::TRANSIENT, *this, start);
 	auto chunk_pointer = chunk.get();
 	// set the columns of the chunk
 	chunk->columns = unique_ptr<ColumnPointer[]>(new ColumnPointer[types.size()]);
@@ -451,10 +451,6 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	// first verify that no constraints are violated
 	VerifyUpdateConstraints(table, updates, column_ids);
 
-	// move strings to a temporary heap
-	StringHeap heap;
-	updates.MoveStringsToHeap(heap);
-
 	// now perform the actual update
 	Transaction &transaction = context.ActiveTransaction();
 
@@ -463,6 +459,57 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
 	// first find the chunk the row ids belong to
 	auto chunk = GetChunk(first_id);
+
+	if (chunk->type == VersionChunkType::PERSISTENT) {
+		// persistent chunk, we can't do an in-place update here
+		// first fetch the existing columns for any non-updated columns
+		updates.Flatten();
+		row_identifiers.Flatten();
+
+		vector<column_t> existing_ids;
+		vector<TypeId> existing_types;
+		for(index_t i = 0; i < types.size(); i++) {
+			if (std::find(column_ids.begin(), column_ids.end(), i) == column_ids.end()) {
+				existing_ids.push_back(i);
+				existing_types.push_back(types[i]);
+			}
+		}
+		if (existing_ids.size() > 0) {
+			DataChunk fetched_chunk, mixed_chunk;
+			fetched_chunk.Initialize(existing_types);
+			mixed_chunk.Initialize(types);
+			// fetch existing ids first
+			Fetch(context.ActiveTransaction(), fetched_chunk, existing_ids, row_identifiers);
+			// then merge with the updated ids in the mixed chunk
+			for(index_t i = 0; i < types.size(); i++) {
+				auto entry = std::find(column_ids.begin(), column_ids.end(), i);
+				if (entry != column_ids.end()) {
+					// fetch vector from updates
+					index_t update_column = entry - column_ids.begin();
+					mixed_chunk.data[i].Reference(updates.data[update_column]);
+				} else {
+					// fetch vector from fetched chunk
+					auto entry = std::find(existing_ids.begin(), existing_ids.end(), i);
+					mixed_chunk.data[i].Reference(fetched_chunk.data[entry - existing_ids.begin()]);
+				}
+			}
+			// finally append the new set of rows
+			Append(table, context, mixed_chunk);
+		} else {
+			// all rows in the table are updated
+			Append(table, context, updates);
+		}
+
+
+		// finally delete the current set of rows
+		Delete(table, context, row_identifiers);
+
+		return;
+	}
+
+	// move strings to a temporary heap
+	StringHeap heap;
+	updates.MoveStringsToHeap(heap);
 
 	// get an exclusive lock on the chunk
 	auto lock = chunk->lock.GetExclusiveLock();

@@ -436,3 +436,74 @@ TEST_CASE("Test update/deletes on big table", "[storage][.]") {
 	}
 	DeleteDatabase(storage_database);
 }
+
+TEST_CASE("Test updates/deletes/insertions on persistent segments", "[storage]") {
+	unique_ptr<QueryResult> result;
+	auto storage_database = TestCreatePath("storage_test");
+
+	// make sure the database does not exist
+	DeleteDatabase(storage_database);
+	{
+		// create a database and insert values
+		DuckDB db(storage_database);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(a INTEGER, b INTEGER);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 3), (NULL, NULL)"));
+	}
+	// reload the database from disk
+	{
+		DuckDB db(storage_database);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (2, 2)"));
+		result = con.Query("SELECT * FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value(), 3, 2}));
+	}
+	// reload the database from disk, we do this again because checkpointing at startup causes this to follow a
+	// different code path
+	{
+		DuckDB db(storage_database);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (3, 3)"));
+
+		REQUIRE_NO_FAIL(con.Query("UPDATE test SET b=4 WHERE a=1"));
+
+		result = con.Query("SELECT * FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value(), 4, 2, 3}));
+	}
+	{
+		DuckDB db(storage_database);
+		Connection con(db);
+		result = con.Query("SELECT * FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value(), 4, 2, 3}));
+
+		REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=4, b=4 WHERE a=1"));
+
+		result = con.Query("SELECT * FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 3, 4}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value(), 2, 3, 4}));
+	}
+	{
+		DuckDB db(storage_database);
+		Connection con(db);
+		result = con.Query("SELECT * FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 3, 4}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value(), 2, 3, 4}));
+
+		REQUIRE_NO_FAIL(con.Query("UPDATE test SET b=5, a=6 WHERE a=4"));
+
+		result = con.Query("SELECT * FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 3, 6}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value(), 2, 3, 5}));
+	}
+	{
+		DuckDB db(storage_database);
+		Connection con(db);
+		result = con.Query("SELECT * FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 3, 6}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value(), 2, 3, 5}));
+	}
+	DeleteDatabase(storage_database);
+}
