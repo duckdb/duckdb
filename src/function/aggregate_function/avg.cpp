@@ -1,12 +1,4 @@
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// function/aggregate_function/algebraic.cpp
-//
-//
-//===----------------------------------------------------------------------===//
-
-#include "function/aggregate_function/algebraic.hpp"
+#include "function/aggregate_function/avg.hpp"
 #include "common/exception.hpp"
 #include "common/types/null_value.hpp"
 #include "common/vector_operations/vector_operations.hpp"
