@@ -4,6 +4,7 @@ add_library_unity(test_sql_simple
                   test_bitwise_ops.cpp
                   test_case.cpp
                   test_in.cpp
+                  test_comparison.cpp
                   test_column_names.cpp
                   test_conjunctions.cpp
                   test_cse.cpp

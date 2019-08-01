@@ -24,7 +24,7 @@ ExpressionType Transformer::OperatorToExpressionType(string &op) {
 		return ExpressionType::OPERATOR_CONCAT;
 	} else if (op == "%") {
 		return ExpressionType::OPERATOR_MOD;
-	} else if (op == "=") {
+	} else if (op == "=" || op == "==") {
 		return ExpressionType::COMPARE_EQUAL;
 	} else if (op == "!=" || op == "<>") {
 		return ExpressionType::COMPARE_NOTEQUAL;
