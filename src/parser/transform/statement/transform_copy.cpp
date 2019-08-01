@@ -72,7 +72,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 		for_each_cell(cell, stmt->options->head) {
 			auto *def_elem = reinterpret_cast<DefElem *>(cell->data.ptr_value);
 
-			if (def_elem->defname == kDelimiterTok) {
+			if (StringUtil::StartsWith(def_elem->defname, "delim") || StringUtil::StartsWith(def_elem->defname, "sep")) {
 				// delimiter
 				auto *delimiter_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
 				index_t delim_len = strlen(delimiter_val->val.str);

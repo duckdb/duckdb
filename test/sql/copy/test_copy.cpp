@@ -87,7 +87,7 @@ TEST_CASE("Test copy statement", "[copy]") {
 
 	// Importing CSV to Selected Columns
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test4 (a INTEGER, b INTEGER,c VARCHAR(10));"));
-	result = con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + "' (DELIMITER ',', HEADER 0);");
+	result = con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + "' (DELIM ',', HEADER 0);");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 	result = con.Query("SELECT * FROM test4 ORDER BY 1 LIMIT 3 ");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
@@ -95,7 +95,7 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {" test", " test", " test"}));
 
 	// unsupported type for HEADER
-	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (DELIMITER ',', HEADER 0.2);"));
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (SEP ',', HEADER 0.2);"));
 
 	// use a different delimiter
 	auto pipe_csv = fs.JoinPath(csv_path, "test_pipe.csv");
@@ -106,7 +106,7 @@ TEST_CASE("Test copy statement", "[copy]") {
 	from_csv_file_pipe.close();
 
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER,c VARCHAR(10));");
-	result = con.Query("COPY test FROM '" + pipe_csv + "' DELIMITER '|';");
+	result = con.Query("COPY test FROM '" + pipe_csv + "' (SEPARATOR '|')");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
 	// test null
@@ -574,5 +574,4 @@ TEST_CASE("Test cranlogs broken gzip copy", "[copy]") {
 
 	result = con.Query("COPY cranlogs FROM 'test/sql/copy/tmp2013-06-15.csv.gz' DELIMITER ',' HEADER");
 	REQUIRE(CHECK_COLUMN(result, 0, {37459}));
-
 }
