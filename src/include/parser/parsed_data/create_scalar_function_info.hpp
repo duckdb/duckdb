@@ -8,18 +8,14 @@
 
 #pragma once
 
-#include "common/common.hpp"
-#include "function/function.hpp"
+#include "parser/parsed_data/create_function_info.hpp"
 
 namespace duckdb {
 
-struct CreateScalarFunctionInfo {
-	//! Schema name
-	string schema;
-	//! Function name
-	string name;
-	//! Replace function if it already exists instead of failing
-	bool or_replace = false;
+struct CreateScalarFunctionInfo : public CreateFunctionInfo {
+	CreateScalarFunctionInfo() : CreateFunctionInfo(FunctionType::SCALAR), has_side_effects(false) {
+	}
+
 	//! The main scalar function to execute
 	scalar_function_t function;
 	//! Function that checks whether or not a set of arguments matches
@@ -34,9 +30,6 @@ struct CreateScalarFunctionInfo {
 	//! Whether or not the function has side effects (e.g. sequence increments, random() functions, NOW()). Functions
 	//! with side-effects cannot be constant-folded.
 	bool has_side_effects;
-
-	CreateScalarFunctionInfo() : schema(DEFAULT_SCHEMA), or_replace(false), has_side_effects(false) {
-	}
 };
 
 } // namespace duckdb

@@ -2,7 +2,9 @@
 
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
+#include "function/aggregate_function/distributive.hpp"
 #include "planner/expression/bound_aggregate_expression.hpp"
+#include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -32,48 +34,10 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 				payload_vector.count = state->child_chunk.size();
 			}
 			// perform the actual aggregation
-			switch (aggregate.type) {
-			case ExpressionType::AGGREGATE_COUNT_STAR:
-				state->aggregates[aggr_idx] = state->aggregates[aggr_idx] + Value::BIGINT(payload_vector.count);
-				break;
-			case ExpressionType::AGGREGATE_COUNT: {
-				Value count = VectorOperations::Count(payload_vector);
-				state->aggregates[aggr_idx] = state->aggregates[aggr_idx] + count;
-				break;
+			if (aggregate.bound_aggregate->simple_update) {
+				aggregate.bound_aggregate->simple_update(&payload_vector, 1, state->aggregates[aggr_idx]);
 			}
-			case ExpressionType::AGGREGATE_SUM: {
-				Value sum = VectorOperations::Sum(payload_vector);
-				if (sum.is_null) {
-					break;
-				}
-				if (state->aggregates[aggr_idx].is_null) {
-					state->aggregates[aggr_idx] = sum;
-				} else {
-					state->aggregates[aggr_idx] = state->aggregates[aggr_idx] + sum;
-				}
-				break;
-			}
-			case ExpressionType::AGGREGATE_MIN: {
-				Value min = VectorOperations::Min(payload_vector);
-				if (min.is_null) {
-					break;
-				}
-				if (state->aggregates[aggr_idx].is_null || state->aggregates[aggr_idx] > min) {
-					state->aggregates[aggr_idx] = min;
-				}
-				break;
-			}
-			case ExpressionType::AGGREGATE_MAX: {
-				Value max = VectorOperations::Max(payload_vector);
-				if (max.is_null) {
-					break;
-				}
-				if (state->aggregates[aggr_idx].is_null || state->aggregates[aggr_idx] < max) {
-					state->aggregates[aggr_idx] = max;
-				}
-				break;
-			}
-			default:
+			else {
 				throw Exception("Unsupported aggregate for simple aggregation");
 			}
 		}
@@ -104,16 +68,7 @@ PhysicalSimpleAggregateOperatorState::PhysicalSimpleAggregateOperatorState(Physi
 			payload_types.push_back(TypeId::BIGINT);
 		}
 		// initialize the aggregate values
-		switch (aggregate->type) {
-		case ExpressionType::AGGREGATE_COUNT_STAR:
-		case ExpressionType::AGGREGATE_COUNT:
-		case ExpressionType::AGGREGATE_COUNT_DISTINCT:
-			aggregates.push_back(Value::BIGINT(0));
-			break;
-		default:
-			aggregates.push_back(Value());
-			break;
-		}
+		aggregates.push_back(aggr.bound_aggregate->simple_initialize());
 	}
 	payload_chunk.Initialize(payload_types);
 }

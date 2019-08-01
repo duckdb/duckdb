@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/assert.hpp"
+#include <cmath>
 
 namespace duckdb {
 
@@ -37,10 +38,17 @@ struct Divide {
 	}
 };
 
-struct Modulo {
+struct ModuloInt {
 	template <class T> static inline T Operation(T left, T right) {
 		assert(right != 0);
 		return left % right;
+	}
+};
+
+struct ModuloReal {
+	template <class T> static inline T Operation(T left, T right) {
+		assert(right != 0);
+		return fmod(left, right);
 	}
 };
 

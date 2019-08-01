@@ -1,3 +1,4 @@
+add_subdirectory(aggregate_function)
 add_subdirectory(scalar_function)
 add_subdirectory(table_function)
 

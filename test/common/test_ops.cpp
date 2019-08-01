@@ -437,6 +437,36 @@ static void require_mod(TypeId t) {
 	REQUIRE(v2.GetValue(6).is_null);
 }
 
+static void require_mod_double() {
+	Vector v1(TypeId::DOUBLE, true, false);
+	v1.count = 2;
+
+	Vector v2(TypeId::DOUBLE, true, false);
+	v2.count = v1.count;
+
+	v1.SetValue(0, Value::DOUBLE(10));
+	v1.SetValue(1, Value::DOUBLE(10));
+
+	v2.SetValue(0, Value::DOUBLE(2));
+	v2.SetValue(1, Value::DOUBLE(4));
+
+	Vector r(TypeId::DOUBLE, true, false);
+	r.count = v1.count;
+
+	VectorOperations::Modulo(v1, v2, r);
+	REQUIRE(r.GetValue(0).CastAs(TypeId::DOUBLE) == Value::DOUBLE(0));
+	REQUIRE(r.GetValue(1).CastAs(TypeId::DOUBLE) == Value::DOUBLE(2));
+
+	VectorOperations::ModuloInPlace(v1, v2);
+	REQUIRE(v1.GetValue(0).CastAs(TypeId::DOUBLE) == Value::DOUBLE(0));
+	REQUIRE(v1.GetValue(1).CastAs(TypeId::DOUBLE) == Value::DOUBLE(2));
+
+	VectorOperations::ModuloInPlace(v1, 2);
+	REQUIRE(v1.GetValue(0).CastAs(TypeId::DOUBLE) == Value::DOUBLE(0));
+	REQUIRE(v1.GetValue(1).CastAs(TypeId::DOUBLE) == Value::DOUBLE(0));
+}
+
+
 TEST_CASE("Arithmetic operations on vectors", "[vector_ops]") {
 	require_arith(TypeId::SMALLINT);
 	require_arith(TypeId::INTEGER);
@@ -447,4 +477,5 @@ TEST_CASE("Arithmetic operations on vectors", "[vector_ops]") {
 	require_mod(TypeId::SMALLINT);
 	require_mod(TypeId::INTEGER);
 	require_mod(TypeId::BIGINT);
+	require_mod_double();
 }

@@ -26,6 +26,7 @@ int duckdb_connection_init(duckdb_Connection *self, PyObject *args, PyObject *kw
 	try {
 		self->db = duckdb::make_unique<duckdb::DuckDB>(database);
 		self->conn = duckdb::make_unique<duckdb::Connection>(*self->db.get());
+		self->conn->EnableProfiling();
 	} catch (...) {
 		return -1;
 	}

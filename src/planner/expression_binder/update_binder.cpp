@@ -8,11 +8,13 @@ UpdateBinder::UpdateBinder(Binder &binder, ClientContext &context) : ExpressionB
 
 BindResult UpdateBinder::BindExpression(ParsedExpression &expr, index_t depth, bool root_expression) {
 	switch (expr.expression_class) {
-	case ExpressionClass::AGGREGATE:
-		return BindResult("aggregate functions are not allowed in UPDATE");
 	case ExpressionClass::WINDOW:
 		return BindResult("window functions are not allowed in UPDATE");
 	default:
 		return ExpressionBinder::BindExpression(expr, depth);
 	}
+}
+
+string UpdateBinder::UnsupportedAggregateMessage() {
+	return "aggregate functions are not allowed in UPDATE";
 }
