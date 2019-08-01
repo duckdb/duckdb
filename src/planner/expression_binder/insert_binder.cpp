@@ -10,8 +10,6 @@ InsertBinder::InsertBinder(Binder &binder, ClientContext &context) : ExpressionB
 
 BindResult InsertBinder::BindExpression(ParsedExpression &expr, index_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
-	case ExpressionClass::AGGREGATE:
-		return BindResult("INSERT statement cannot contain aggregates!");
 	case ExpressionClass::DEFAULT:
 		if (!root_expression) {
 			return BindResult("DEFAULT must be the root expression!");
@@ -22,4 +20,8 @@ BindResult InsertBinder::BindExpression(ParsedExpression &expr, index_t depth, b
 	default:
 		return ExpressionBinder::BindExpression(expr, depth);
 	}
+}
+
+string InsertBinder::UnsupportedAggregateMessage() {
+	return "INSERT statement cannot contain aggregates!";
 }

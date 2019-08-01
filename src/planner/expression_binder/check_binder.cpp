@@ -14,8 +14,6 @@ CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table, v
 
 BindResult CheckBinder::BindExpression(ParsedExpression &expr, index_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
-	case ExpressionClass::AGGREGATE:
-		return BindResult("aggregate functions are not allowed in check constraints");
 	case ExpressionClass::WINDOW:
 		return BindResult("window functions are not allowed in check constraints");
 	case ExpressionClass::SUBQUERY:
@@ -25,6 +23,10 @@ BindResult CheckBinder::BindExpression(ParsedExpression &expr, index_t depth, bo
 	default:
 		return ExpressionBinder::BindExpression(expr, depth);
 	}
+}
+
+string CheckBinder::UnsupportedAggregateMessage() {
+	return "aggregate functions are not allowed in check constraints";
 }
 
 BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {

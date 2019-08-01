@@ -84,7 +84,7 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 			state->aggregate_chunk.data[i].count = 1;
 			assert(aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto aggr = (BoundAggregateExpression*) (&*aggregates[i]);
-			state->aggregate_chunk.data[i].SetValue(0, aggr->bound_aggregate->simple_initialize());
+			state->aggregate_chunk.data[i].SetValue(0, aggr->bound_aggregate->simple_initialize ? aggr->bound_aggregate->simple_initialize() : Value());
 		}
 		state->finished = true;
 	}

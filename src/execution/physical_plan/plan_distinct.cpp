@@ -42,7 +42,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 	for (index_t i = 0; i < child_projection.select_list.size(); ++i) {
 		// first we create an aggregate that returns the FIRST element
 		auto bound = make_unique<BoundReferenceExpression>(types[i], i);
-		auto first_func = context.catalog.GetAggregateFunction(context.ActiveTransaction(), DEFAULT_SCHEMA, "first");
+		auto first_func = (AggregateFunctionCatalogEntry*) context.catalog.GetFunction(context.ActiveTransaction(), DEFAULT_SCHEMA, "first");
 		auto first_aggregate =
 		    make_unique<BoundAggregateExpression>(types[i], move(bound), first_func, false);
 		// and push it to the list of aggregates

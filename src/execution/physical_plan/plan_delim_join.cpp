@@ -6,7 +6,6 @@
 #include "execution/physical_plan_generator.hpp"
 #include "planner/operator/logical_delim_join.hpp"
 #include "planner/expression/bound_aggregate_expression.hpp"
-#include "parser/expression/aggregate_expression.hpp"
 #include "main/client_context.hpp"
 
 using namespace duckdb;
@@ -60,7 +59,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 			vector<string> aggregate_names = {"count_star", "count"};
 			vector<BoundAggregateExpression*> correlated_aggregates;
 			for (index_t i = 0; i < aggregate_names.size(); ++i) {
-				auto func = context.catalog.GetAggregateFunction(context.ActiveTransaction(), DEFAULT_SCHEMA, aggregate_names[i]);
+				auto func = (AggregateFunctionCatalogEntry*) context.catalog.GetFunction(context.ActiveTransaction(), DEFAULT_SCHEMA, aggregate_names[i]);
 				auto aggr = make_unique<BoundAggregateExpression>(payload_types[i], nullptr, func, false);
 				correlated_aggregates.push_back(&*aggr);
 				info.correlated_aggregates.push_back(move(aggr));

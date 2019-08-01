@@ -19,6 +19,9 @@ class Binder;
 class ClientContext;
 class SelectNode;
 
+class AggregateFunctionCatalogEntry;
+class ScalarFunctionCatalogEntry;
+
 struct BindResult {
 	BindResult(string error) : error(error) {
 	}
@@ -100,6 +103,11 @@ protected:
 
 protected:
 	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
+
+	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, index_t depth);
+	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, index_t depth);
+
+	virtual string UnsupportedAggregateMessage();
 
 	Binder &binder;
 	ClientContext &context;

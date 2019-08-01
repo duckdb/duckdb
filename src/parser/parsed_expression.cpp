@@ -65,9 +65,6 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source)
 	auto alias = source.Read<string>();
 	unique_ptr<ParsedExpression> result;
 	switch (expression_class) {
-	case ExpressionClass::AGGREGATE:
-		result = AggregateExpression::Deserialize(type, source);
-		break;
 	case ExpressionClass::CASE:
 		result = CaseExpression::Deserialize(type, source);
 		break;

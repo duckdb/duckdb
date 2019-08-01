@@ -1,4 +1,3 @@
-#include "parser/expression/aggregate_expression.hpp"
 #include "parser/expression/cast_expression.hpp"
 #include "parser/expression/function_expression.hpp"
 #include "parser/expression/operator_expression.hpp"
@@ -161,57 +160,13 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
 		return move(expr);
 	}
 
-	// FIXME: Hack to get the dynamic list of aggregate functions currently in the system
-	const auto hasTransaction = context.transaction.HasActiveTransaction();
-	if (!hasTransaction) context.transaction.BeginTransaction();
-	auto agg_func = context.catalog.GetAggregateFunction(context.ActiveTransaction(), schema, lowercase_name, true);
-	if (!hasTransaction) context.transaction.Rollback();
-
-	if (!agg_func) {
-		// Normal functions (i.e. built-in functions or UDFs)
-		vector<unique_ptr<ParsedExpression>> children;
-		if (root->args != nullptr) {
-			for (auto node = root->args->head; node != nullptr; node = node->next) {
-				auto child_expr = TransformExpression((Node *)node->data.ptr_value);
-				children.push_back(move(child_expr));
-			}
-		}
-		return make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children);
-	} else {
-		// Aggregate function
-		assert(!root->over); // see above
-		if (root->agg_star || (lowercase_name == "count" && !root->args)) {
-			return make_unique<AggregateExpression>("count_star", false, nullptr);
-		} else {
-			if (!root->args) {
-				throw NotImplementedException("Aggregation over zero columns not supported!");
-			} else if (root->args->length < 2) {
-				auto child = TransformExpression((Node *)root->args->head->data.ptr_value);
-				if (child->IsAggregate()) {
-					throw ParserException("aggregate function calls cannot be nested");
-				}
-				if (schema == DEFAULT_SCHEMA && lowercase_name == "avg") {
-					// rewrite AVG(a) to SUM(a) / COUNT(a)
-					// first create the SUM
-					auto sum = make_unique<AggregateExpression>(
-					    "sum", root->agg_distinct,
-					    child->Copy());
-					// now create the count
-					auto count = make_unique<AggregateExpression>(
-					    "count", root->agg_distinct,
-					    move(child));
-					// cast both to decimal
-					auto sum_cast = make_unique<CastExpression>(SQLType(SQLTypeId::DECIMAL), move(sum));
-					auto count_cast = make_unique<CastExpression>(SQLType(SQLTypeId::DECIMAL), move(count));
-					// create the divide operator
-					return make_unique<OperatorExpression>(ExpressionType::OPERATOR_DIVIDE, move(sum_cast),
-					                                       move(count_cast));
-				} else {
-					return make_unique<AggregateExpression>(lowercase_name, root->agg_distinct, move(child));
-				}
-			} else {
-				throw NotImplementedException("Aggregation over multiple columns not supported yet...\n");
-			}
+	vector<unique_ptr<ParsedExpression>> children;
+	if (root->args != nullptr) {
+		for (auto node = root->args->head; node != nullptr; node = node->next) {
+			auto child_expr = TransformExpression((Node *)node->data.ptr_value);
+			children.push_back(move(child_expr));
 		}
 	}
+
+	return make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children, root->agg_distinct);
 }

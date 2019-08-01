@@ -27,7 +27,7 @@ using namespace std;
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
     : CatalogEntry(CatalogType::SCHEMA, catalog, name), tables(*catalog), indexes(*catalog), table_functions(*catalog),
-      aggregate_functions(*catalog), scalar_functions(*catalog), sequences(*catalog) {
+      functions(*catalog), sequences(*catalog) {
 }
 
 void SchemaCatalogEntry::CreateTable(Transaction &transaction, BoundCreateTableInfo *info) {
@@ -178,62 +178,37 @@ void SchemaCatalogEntry::CreateTableFunction(Transaction &transaction, CreateTab
 	}
 }
 
-void SchemaCatalogEntry::CreateAggregateFunction(Transaction &transaction, CreateAggregateFunctionInfo *info) {
-	auto aggregate_function = make_unique_base<CatalogEntry, AggregateFunctionCatalogEntry>(catalog, this, info);
+void SchemaCatalogEntry::CreateFunction(Transaction &transaction, CreateFunctionInfo *info) {
+	unique_ptr<CatalogEntry> function;
+	if (info->type == FunctionType::SCALAR) {
+		// create a scalar function
+		function = make_unique_base<CatalogEntry, ScalarFunctionCatalogEntry>(catalog, this, (CreateScalarFunctionInfo*) info);
+	} else {
+		// create an aggregate function
+		function = make_unique_base<CatalogEntry, AggregateFunctionCatalogEntry>(catalog, this, (CreateAggregateFunctionInfo*) info);
+	}
 	unordered_set<CatalogEntry *> dependencies{this};
 
-	if (!aggregate_functions.CreateEntry(transaction, info->name, move(aggregate_function), dependencies)) {
+	if (info->or_replace) {
+		// replace is set: drop the function if it exists
+		functions.DropEntry(transaction, info->name, false);
+	}
+
+	if (!functions.CreateEntry(transaction, info->name, move(function), dependencies)) {
 		if (!info->or_replace) {
-			throw CatalogException("Aggregate function with name \"%s\" already exists!", info->name.c_str());
+			throw CatalogException("Function with name \"%s\" already exists!", info->name.c_str());
 		} else {
-			auto aggregate_function = make_unique_base<CatalogEntry, AggregateFunctionCatalogEntry>(catalog, this, info);
-			// function already exists: replace it
-			if (!aggregate_functions.DropEntry(transaction, info->name, false)) {
-				throw CatalogException("CREATE OR REPLACE was specified, but "
-				                       "aggregate function could not be dropped!");
-			}
-			if (!aggregate_functions.CreateEntry(transaction, info->name, move(aggregate_function), dependencies)) {
-				throw CatalogException("Error in recreating aggregate function in CREATE OR REPLACE");
-			}
+			throw CatalogException("Error in creating function in CREATE OR REPLACE");
 		}
 	}
 }
 
-void SchemaCatalogEntry::CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInfo *info) {
-	auto scalar_function = make_unique_base<CatalogEntry, ScalarFunctionCatalogEntry>(catalog, this, info);
-	unordered_set<CatalogEntry *> dependencies{this};
-
-	if (!scalar_functions.CreateEntry(transaction, info->name, move(scalar_function), dependencies)) {
-		if (!info->or_replace) {
-			throw CatalogException("Scalar function with name \"%s\" already exists!", info->name.c_str());
-		} else {
-			auto scalar_function = make_unique_base<CatalogEntry, ScalarFunctionCatalogEntry>(catalog, this, info);
-			// function already exists: replace it
-			if (!scalar_functions.DropEntry(transaction, info->name, false)) {
-				throw CatalogException("CREATE OR REPLACE was specified, but "
-				                       "function could not be dropped!");
-			}
-			if (!scalar_functions.CreateEntry(transaction, info->name, move(scalar_function), dependencies)) {
-				throw CatalogException("Error in recreating function in CREATE OR REPLACE");
-			}
-		}
-	}
-}
-
-AggregateFunctionCatalogEntry *SchemaCatalogEntry::GetAggregateFunction(Transaction &transaction, const string &name, bool if_exists) {
-	auto entry = aggregate_functions.GetEntry(transaction, name);
+CatalogEntry *SchemaCatalogEntry::GetFunction(Transaction &transaction, const string &name, bool if_exists) {
+	auto entry = functions.GetEntry(transaction, name);
 	if (!entry && !if_exists) {
 		throw CatalogException("Aggregate Function with name %s does not exist!", name.c_str());
 	}
-	return (AggregateFunctionCatalogEntry *)entry;
-}
-
-ScalarFunctionCatalogEntry *SchemaCatalogEntry::GetScalarFunction(Transaction &transaction, const string &name) {
-	auto entry = scalar_functions.GetEntry(transaction, name);
-	if (!entry) {
-		throw CatalogException("Scalar Function with name %s does not exist!", name.c_str());
-	}
-	return (ScalarFunctionCatalogEntry *)entry;
+	return entry;
 }
 
 SequenceCatalogEntry *SchemaCatalogEntry::GetSequence(Transaction &transaction, const string &name) {

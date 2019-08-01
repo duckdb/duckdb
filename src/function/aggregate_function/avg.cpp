@@ -1,12 +1,4 @@
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// function/aggregate_function/algebraic.cpp
-//
-//
-//===----------------------------------------------------------------------===//
-
-#include "function/aggregate_function/algebraic.hpp"
+#include "function/aggregate_function/avg.hpp"
 #include "common/exception.hpp"
 #include "common/types/null_value.hpp"
 #include "common/vector_operations/vector_operations.hpp"
@@ -70,10 +62,9 @@ void avg_finalize(Vector& payloads, Vector &result) {
 
 		if (*count_ptr == 0) {
 			result.nullmask[i] = true;
-			return;
+		} else {
+			((double *)result.data)[i] = *sum_ptr / *count_ptr;
 		}
-
-		((double *)result.data)[i] = *sum_ptr;
 	});
 }
 

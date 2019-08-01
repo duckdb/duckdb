@@ -116,26 +116,15 @@ TableFunctionCatalogEntry *Catalog::GetTableFunction(Transaction &transaction, F
 	return schema->GetTableFunction(transaction, expression);
 }
 
-void Catalog::CreateAggregateFunction(Transaction &transaction, CreateAggregateFunctionInfo *info) {
+void Catalog::CreateFunction(Transaction &transaction, CreateFunctionInfo *info) {
 	auto schema = GetSchema(transaction, info->schema);
-	schema->CreateAggregateFunction(transaction, info);
+	schema->CreateFunction(transaction, info);
 }
 
-void Catalog::CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
-	schema->CreateScalarFunction(transaction, info);
-}
-
-AggregateFunctionCatalogEntry *Catalog::GetAggregateFunction(Transaction &transaction, const string &schema_name,
+CatalogEntry *Catalog::GetFunction(Transaction &transaction, const string &schema_name,
                                                        const string &name, bool if_exists) {
 	auto schema = GetSchema(transaction, schema_name);
-	return schema->GetAggregateFunction(transaction, name, if_exists);
-}
-
-ScalarFunctionCatalogEntry *Catalog::GetScalarFunction(Transaction &transaction, const string &schema_name,
-                                                       const string &name) {
-	auto schema = GetSchema(transaction, schema_name);
-	return schema->GetScalarFunction(transaction, name);
+	return schema->GetFunction(transaction, name, if_exists);
 }
 
 void Catalog::DropIndex(Transaction &transaction, DropInfo *info) {

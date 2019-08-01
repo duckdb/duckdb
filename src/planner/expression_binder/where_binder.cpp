@@ -9,8 +9,6 @@ WhereBinder::WhereBinder(Binder &binder, ClientContext &context) : ExpressionBin
 
 BindResult WhereBinder::BindExpression(ParsedExpression &expr, index_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
-	case ExpressionClass::AGGREGATE:
-		return BindResult("WHERE clause cannot contain aggregates!");
 	case ExpressionClass::DEFAULT:
 		return BindResult("WHERE clause cannot contain DEFAULT clause");
 	case ExpressionClass::WINDOW:
@@ -18,4 +16,8 @@ BindResult WhereBinder::BindExpression(ParsedExpression &expr, index_t depth, bo
 	default:
 		return ExpressionBinder::BindExpression(expr, depth);
 	}
+}
+
+string WhereBinder::UnsupportedAggregateMessage() {
+	return "WHERE clause cannot contain aggregates!";
 }
