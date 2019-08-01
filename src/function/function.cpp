@@ -94,6 +94,8 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddScalarFunction<Log2Function>(transaction, catalog);
 	AddScalarFunction<SignFunction>(transaction, catalog);
 	AddScalarFunction<ModFunction>(transaction, catalog);
+	AddScalarFunction<PowFunction>(transaction, catalog);
+	AddScalarFunction<PowerFunction>(transaction, catalog);
 
 	// Trignometric
 	AddScalarFunction<SinFunction>(transaction, catalog);
