@@ -96,6 +96,21 @@ TEST_CASE("Test copy statement", "[copy]") {
 
 	// unsupported type for HEADER
 	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (SEP ',', HEADER 0.2);"));
+	// empty sep
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (SEP);"));
+	// number as separator
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (SEP 1);"));
+	// multiple format options
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + "' (FORMAT 'csv', FORMAT 'json');"));
+	// number as escape character
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (ESCAPE 1);"));
+	// no escape character
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (ESCAPE);"));
+	// no quote character
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (QUOTE);"));
+	// no format character
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (FORMAT);"));
+
 
 	// use a different delimiter
 	auto pipe_csv = fs.JoinPath(csv_path, "test_pipe.csv");
@@ -105,7 +120,8 @@ TEST_CASE("Test copy statement", "[copy]") {
 	}
 	from_csv_file_pipe.close();
 
-	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER,c VARCHAR(10));");
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER,c VARCHAR(10));"));
 	result = con.Query("COPY test FROM '" + pipe_csv + "' (SEPARATOR '|')");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
@@ -491,7 +507,7 @@ TEST_CASE("Test copy from lineitem csv", "[copy]") {
 	                  "lites. fluffily even de", " pending foxes. slyly re", "arefully slyly ex"}));
 
 	// test COPY TO with HEADER
-	result = con.Query("COPY lineitem TO '" + lineitem_csv + "' DELIMITER ' ' HEADER");
+	result = con.Query("COPY lineitem TO '" + lineitem_csv + "' (DELIMITER ' ', HEADER)");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
 	// clear out the table
