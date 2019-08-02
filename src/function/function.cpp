@@ -67,6 +67,8 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	// distributive aggregates
 	AddAggregateFunction<CountFunction>(transaction, catalog);
 	AddAggregateFunction<CountStarFunction>(transaction, catalog);
+	AddAggregateFunction<CovarPopFunction>(transaction, catalog);
+	AddAggregateFunction<CovarSampFunction>(transaction, catalog);
 	AddAggregateFunction<FirstFunction>(transaction, catalog);
 	AddAggregateFunction<MaxFunction>(transaction, catalog);
 	AddAggregateFunction<MinFunction>(transaction, catalog);

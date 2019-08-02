@@ -29,6 +29,67 @@ TEST_CASE("Test COUNT operator", "[aggregate]") {
 	REQUIRE(CHECK_COLUMN(result, 5, {1}));
 }
 
+TEST_CASE("Test COVAR operators", "[aggregate]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// test incorrect usage of COVAR_POP function
+	REQUIRE_FAIL(con.Query("SELECT COVAR_POP()"));
+	REQUIRE_FAIL(con.Query("SELECT COVAR_POP(1, 2, 3)"));
+	REQUIRE_FAIL(con.Query("SELECT COVAR_POP(COVAR_POP(1))"));
+
+	// test incorrect usage of COVAR_SAMP function
+	REQUIRE_FAIL(con.Query("SELECT COVAR_SAMP()"));
+	REQUIRE_FAIL(con.Query("SELECT COVAR_SAMP(1, 2, 3)"));
+	REQUIRE_FAIL(con.Query("SELECT COVAR_SAMP(COVAR_SAMP(1))"));
+
+	// test population covariance on scalar values
+	result = con.Query("SELECT COVAR_POP(3,3), COVAR_POP(NULL,3), COVAR_POP(3,NULL), COVAR_POP(NULL,NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+
+	// test sample covariance on scalar values
+	result = con.Query("SELECT COVAR_SAMP(3,3), COVAR_SAMP(NULL,3), COVAR_SAMP(3,NULL), COVAR_SAMP(NULL,NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+
+	// test population covariance on a sequence
+	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seqx;"));
+	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seqy;"));
+	result = con.Query("SELECT COVAR_POP(nextval('seqx'),nextval('seqy'))");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	result = con.Query("SELECT COVAR_POP(nextval('seqx'),nextval('seqy'))");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	// test population covariance on a set of values
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(x INTEGER, y INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (10,NULL), (10,11), (20,22), (25,NULL), (30,35)"));
+
+	result = con.Query("SELECT COVAR_POP(x,y), COVAR_POP(x,1), COVAR_POP(1,y), COVAR_POP(x,NULL), COVAR_POP(NULL,y) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {80.0}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0.0}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0.0}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
+
+	result = con.Query("SELECT COVAR_SAMP(x,y), COVAR_SAMP(x,1), COVAR_SAMP(1,y), COVAR_SAMP(x,NULL), COVAR_SAMP(NULL,y) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {120.0}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0.0}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0.0}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
+
+	// test average on empty set
+	result = con.Query("SELECT COVAR_POP(x,y), COVAR_SAMP(x,y) FROM integers WHERE x > 100");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+}
+
 TEST_CASE("Test AVG operator", "[aggregate]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -81,11 +142,6 @@ TEST_CASE("Test implicit aggregate operators", "[aggregate]") {
 	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 6, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 7, {Value()}));
-
-	// test incorrect usage of STDDEV_SAMP function
-	REQUIRE_FAIL(con.Query("SELECT STDDEV_SAMP()"));
-	REQUIRE_FAIL(con.Query("SELECT STDDEV_SAMP(1, 2, 3)"));
-	REQUIRE_FAIL(con.Query("SELECT STDDEV_SAMP(STDDEV_SAMP(1))"));
 }
 
 TEST_CASE("Test built in aggregate operator usage", "[aggregate]") {

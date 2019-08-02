@@ -29,9 +29,6 @@ static SQLType ValidateReturnType(vector<SQLType> &arguments, AggregateFunctionC
 
 BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, index_t depth) {
 	// first bind the child of the aggregate expression (if any)
-	if (aggr.children.size() > 1) {
-		throw ParserException("Aggregates with multiple children not supported");
-	}
 	vector<unique_ptr<Expression>> children;
 	vector<SQLType> child_types;
 	for (index_t i = 0; i < aggr.children.size(); i++) {
@@ -55,7 +52,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 				return BindResult(error);
 			}
 		}
-		auto &bound_expr = (BoundExpression &)*aggr.children[0];
+		auto &bound_expr = (BoundExpression &)*aggr.children[i];
 		child_types.push_back(bound_expr.sql_type);
 		children.push_back(move(bound_expr.expr));
 	}

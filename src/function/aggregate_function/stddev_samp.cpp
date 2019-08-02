@@ -27,7 +27,7 @@ SQLType stddev_get_return_type(vector<SQLType> &arguments) {
 	}
 }
 
-void stddevsamp_update(Vector** inputs, index_t input_count, Vector &result ) {
+void stddevsamp_update(Vector** inputs, index_t input_count, Vector &state ) {
 	assert(input_count == 1 );
 	// Streaming approximate standard deviation using Welford's
 	// method, DOI: 10.2307/1266577
@@ -41,14 +41,14 @@ void stddevsamp_update(Vector** inputs, index_t input_count, Vector &result ) {
 		payload_double.Reference(*inputs[0]);
 	}
 
-	VectorOperations::Exec(result, [&](index_t i, index_t k) {
+	VectorOperations::Exec(state, [&](index_t i, index_t k) {
 		if (payload_double.nullmask[i]) {
 			return;
 		}
 		// Layout of payload for STDDEV_SAMP: count(uint64_t), mean
 		// (double), dsquared(double)
 
-		auto base_ptr = ((data_ptr_t *)result.data)[i];
+		auto base_ptr = ((data_ptr_t *)state.data)[i];
 		auto count_ptr = (uint64_t *)base_ptr;
 		auto mean_ptr = (double *)(base_ptr + sizeof(uint64_t));
 		auto dsquared_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
@@ -67,10 +67,10 @@ void stddevsamp_update(Vector** inputs, index_t input_count, Vector &result ) {
 	});
 }
 
-void stddevsamp_finalize(Vector& payloads, Vector &result) {
+void stddevsamp_finalize(Vector& state, Vector &result) {
 	// compute finalization of streaming stddev of sample
-	VectorOperations::Exec(payloads, [&](uint64_t i, uint64_t k) {
-		auto base_ptr = ((data_ptr_t *)payloads.data)[i];
+	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+		auto base_ptr = ((data_ptr_t *)state.data)[i];
 		auto count_ptr = (uint64_t *)base_ptr;
 		auto dsquared_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
 
