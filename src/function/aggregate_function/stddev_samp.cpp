@@ -27,18 +27,18 @@ SQLType stddev_get_return_type(vector<SQLType> &arguments) {
 	}
 }
 
-void stddevsamp_update(Vector inputs[], index_t input_count, Vector &result ) {
+void stddevsamp_update(Vector** inputs, index_t input_count, Vector &result ) {
 	assert(input_count == 1 );
 	// Streaming approximate standard deviation using Welford's
 	// method, DOI: 10.2307/1266577
 
 	// convert input to floating point if required
 	Vector payload_double;
-	if (inputs[0].type != TypeId::DOUBLE) {
+	if (inputs[0]->type != TypeId::DOUBLE) {
 		payload_double.Initialize(TypeId::DOUBLE);
-		VectorOperations::Cast(inputs[0], payload_double);
+		VectorOperations::Cast(*inputs[0], payload_double);
 	} else {
-		payload_double.Reference(inputs[0]);
+		payload_double.Reference(*inputs[0]);
 	}
 
 	VectorOperations::Exec(result, [&](index_t i, index_t k) {
