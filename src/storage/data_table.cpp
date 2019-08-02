@@ -466,44 +466,46 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		updates.Flatten();
 		row_identifiers.Flatten();
 
-		vector<column_t> existing_ids;
-		vector<TypeId> existing_types;
+		unordered_map<column_t, column_t> update_ids;
+		vector<column_t> fetch_ids;
+		vector<TypeId> fetch_types;
 		for(index_t i = 0; i < types.size(); i++) {
-			if (std::find(column_ids.begin(), column_ids.end(), i) == column_ids.end()) {
-				existing_ids.push_back(i);
-				existing_types.push_back(types[i]);
+			auto entry = std::find(column_ids.begin(), column_ids.end(), i);
+			if (entry == column_ids.end()) {
+				// column is not present in update list: fetch from base table
+				fetch_ids.push_back(i);
+				fetch_types.push_back(types[i]);
+			} else {
+				// column is present in update list: get value from update
+				update_ids[i] = entry - column_ids.begin();
 			}
 		}
-		if (existing_ids.size() > 0) {
-			DataChunk fetched_chunk, mixed_chunk;
-			fetched_chunk.Initialize(existing_types);
-			mixed_chunk.Initialize(types);
-			// fetch existing ids first
-			Fetch(context.ActiveTransaction(), fetched_chunk, existing_ids, row_identifiers);
-			// then merge with the updated ids in the mixed chunk
-			for(index_t i = 0; i < types.size(); i++) {
-				auto entry = std::find(column_ids.begin(), column_ids.end(), i);
-				if (entry != column_ids.end()) {
-					// fetch vector from updates
-					index_t update_column = entry - column_ids.begin();
-					mixed_chunk.data[i].Reference(updates.data[update_column]);
-				} else {
-					// fetch vector from fetched chunk
-					auto entry = std::find(existing_ids.begin(), existing_ids.end(), i);
-					mixed_chunk.data[i].Reference(fetched_chunk.data[entry - existing_ids.begin()]);
-				}
-			}
-			// finally append the new set of rows
-			Append(table, context, mixed_chunk);
-		} else {
-			// all rows in the table are updated
-			Append(table, context, updates);
+		DataChunk append_chunk, fetched_chunk;
+		append_chunk.Initialize(types);
+		if (fetch_ids.size() > 0) {
+			// need to fetch entries from the base table
+			fetched_chunk.Initialize(fetch_types);
+			Fetch(context.ActiveTransaction(), fetched_chunk, fetch_ids, row_identifiers);
 		}
 
+		// now create the append chunk
+		for(index_t i = 0; i < types.size(); i++) {
+			auto entry = update_ids.find(i);
+			if (entry != update_ids.end()) {
+				// fetch vector from updates
+				append_chunk.data[i].Reference(updates.data[entry->second]);
+			} else {
+				// fetch vector from fetched chunk
+				auto entry = std::find(fetch_ids.begin(), fetch_ids.end(), i);
+				append_chunk.data[i].Reference(fetched_chunk.data[entry - fetch_ids.begin()]);
+			}
+		}
+
+		// append the new set of rows
+		Append(table, context, append_chunk);
 
 		// finally delete the current set of rows
 		Delete(table, context, row_identifiers);
-
 		return;
 	}
 

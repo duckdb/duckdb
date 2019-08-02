@@ -66,8 +66,11 @@ void StorageManager::LoadDatabase() {
 		// initialize the block manager while creating a new db file
 		block_manager = make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, true);
 	} else {
-		// checkpoint the database if the WAL exists
 		if (!database.checkpoint_only && database.file_system->FileExists(wal_path) && !read_only) {
+			// checkpoint the database if the WAL exists
+			// FIXME: we do this now by creating a new database and forcing a checkpoint in that database
+			// then reloading the file again
+			// this should be fixed and turned into an incremental checkpoint
 			DBConfig config;
 			config.checkpoint_only = true;
 			DuckDB db(path, &config);
