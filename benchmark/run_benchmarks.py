@@ -170,6 +170,7 @@ pull_new_changes()
 # get a list of all commits to benchmark
 list = get_list_of_commits(default_start_commit)
 list.reverse()
+list = list[0:1]
 
 if len(list) == 0:
     exit(1)

@@ -9,8 +9,6 @@ ConstantBinder::ConstantBinder(Binder &binder, ClientContext &context, string cl
 
 BindResult ConstantBinder::BindExpression(ParsedExpression &expr, index_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
-	case ExpressionClass::AGGREGATE:
-		return BindResult(clause + "cannot contain aggregates!");
 	case ExpressionClass::COLUMN_REF:
 		return BindResult(clause + "cannot contain column names");
 	case ExpressionClass::SUBQUERY:
@@ -22,4 +20,8 @@ BindResult ConstantBinder::BindExpression(ParsedExpression &expr, index_t depth,
 	default:
 		return ExpressionBinder::BindExpression(expr, depth);
 	}
+}
+
+string ConstantBinder::UnsupportedAggregateMessage() {
+	return clause + "cannot contain aggregates!";
 }

@@ -9,6 +9,18 @@ using namespace duckdb;
 using namespace std;
 
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, index_t depth) {
+	// lookup the function in the catalog
+	auto func = context.catalog.GetFunction(context.ActiveTransaction(), function.schema, function.function_name);
+	if (func->type == CatalogType::SCALAR_FUNCTION) {
+		// scalar function
+		return BindFunction(function, (ScalarFunctionCatalogEntry*) func, depth);
+	} else {
+		// aggregate function
+		return BindAggregate(function, (AggregateFunctionCatalogEntry*) func, depth);
+	}
+}
+
+BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry *func, index_t depth) {
 	// bind the children of the function expression
 	string error;
 	for (index_t i = 0; i < function.children.size(); i++) {
@@ -18,8 +30,6 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, index_
 		return BindResult(error);
 	}
 	// all children bound successfully
-	// lookup the function in the catalog
-	auto func = context.catalog.GetScalarFunction(context.ActiveTransaction(), function.schema, function.function_name);
 	// extract the children and types
 	vector<SQLType> types;
 	vector<unique_ptr<Expression>> children;
@@ -49,4 +59,12 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, index_
 		result->bind_info = func->bind(*result, context);
 	}
 	return BindResult(move(result), return_type);
+}
+
+BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, index_t depth) {
+	return BindResult(UnsupportedAggregateMessage());
+}
+
+string ExpressionBinder::UnsupportedAggregateMessage() {
+	return "Aggregate functions are not supported here";
 }

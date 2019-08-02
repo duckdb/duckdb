@@ -42,6 +42,7 @@ TEST_CASE("Test prepared statements API", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	result = prepare->Execute(13);
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(prepare->n_param == 1);
 
 	string prepare_name = prepare->name;
 	// we can execute the prepared statement ourselves as well using the name
@@ -173,4 +174,28 @@ TEST_CASE("Test prepared statements and transactions", "[api]") {
 
 	REQUIRE_FAIL(prepare->Execute(12));
 	REQUIRE_FAIL(prepare2->Execute(11));
+}
+
+TEST_CASE("Test prepared statement parameter counting", "[api]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto p0 = con.Prepare("SELECT 42");
+	REQUIRE(p0->n_param == 0);
+
+	auto p1 = con.Prepare("SELECT ?::int");
+	REQUIRE(p1->n_param == 1);
+
+	auto p2 = con.Prepare("SELECT $1::int");
+	REQUIRE(p2->n_param == 1);
+
+	auto p3 = con.Prepare("SELECT ?::int, ?::string");
+	REQUIRE(p3->n_param == 2);
+
+	auto p4 = con.Prepare("SELECT $1::int, $2::string");
+	REQUIRE(p4->n_param == 2);
+
+	auto p5 = con.Prepare("SELECT $2::int, $2::string");
+	REQUIRE(!p5->success);
 }

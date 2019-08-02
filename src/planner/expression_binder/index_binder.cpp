@@ -8,8 +8,6 @@ IndexBinder::IndexBinder(Binder &binder, ClientContext &context) : ExpressionBin
 
 BindResult IndexBinder::BindExpression(ParsedExpression &expr, index_t depth, bool root_expression) {
 	switch (expr.expression_class) {
-	case ExpressionClass::AGGREGATE:
-		return BindResult("aggregate functions are not allowed in index expressions");
 	case ExpressionClass::WINDOW:
 		return BindResult("window functions are not allowed in index expressions");
 	case ExpressionClass::SUBQUERY:
@@ -17,4 +15,8 @@ BindResult IndexBinder::BindExpression(ParsedExpression &expr, index_t depth, bo
 	default:
 		return ExpressionBinder::BindExpression(expr, depth);
 	}
+}
+
+string IndexBinder::UnsupportedAggregateMessage() {
+	return "aggregate functions are not allowed in index expressions";
 }

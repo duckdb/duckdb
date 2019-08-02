@@ -20,7 +20,7 @@ struct DropInfo;
 struct BoundCreateTableInfo;
 struct AlterTableInfo;
 struct CreateTableFunctionInfo;
-struct CreateScalarFunctionInfo;
+struct CreateFunctionInfo;
 struct CreateViewInfo;
 struct CreateSequenceInfo;
 
@@ -29,7 +29,6 @@ class SchemaCatalogEntry;
 class TableCatalogEntry;
 class SequenceCatalogEntry;
 class TableFunctionCatalogEntry;
-class ScalarFunctionCatalogEntry;
 class StorageManager;
 
 //! The Catalog object represents the catalog of the database.
@@ -61,8 +60,8 @@ public:
 	void AlterTable(ClientContext &context, AlterTableInfo *info);
 	//! Create a table function in the catalog
 	void CreateTableFunction(Transaction &transaction, CreateTableFunctionInfo *info);
-	//! Create a scalar function in the catalog
-	void CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInfo *info);
+	//! Create a scalar or aggregate function in the catalog
+	void CreateFunction(Transaction &transaction, CreateFunctionInfo *info);
 
 	//! Creates a table in the catalog.
 	void CreateView(Transaction &transaction, CreateViewInfo *info);
@@ -89,7 +88,9 @@ public:
 	//! exception otherwise
 	TableFunctionCatalogEntry *GetTableFunction(Transaction &transaction, FunctionExpression *expression);
 
-	ScalarFunctionCatalogEntry *GetScalarFunction(Transaction &transaction, const string &schema, const string &name);
+	//! Returns a pointer to the scalar or aggregate function if it exists, or throws an exception otherwise
+	CatalogEntry *GetFunction(Transaction &transaction, const string &schema, const string &name, bool if_exists = false);
+
 	//! Drops an index from the catalog.
 	void DropIndex(Transaction &transaction, DropInfo *info);
 };

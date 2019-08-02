@@ -6,7 +6,7 @@ import os
 import sys
 sys.path.insert(0, 'benchmark')
 
-import generate_query_graph
+import duckdb_query_graph
 
 if len(sys.argv) <= 1:
 	print("Usage: python generate_querygraph.py [input.json] [output.html] [open={1,0}]")
@@ -34,7 +34,7 @@ if len(sys.argv) >= 4:
 		exit(1)
 
 
-generate_query_graph.generate(input, output)
+duckdb_query_graph.generate(input, output)
 
 with open(output, 'r') as f:
 	text = f.read()

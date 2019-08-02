@@ -21,25 +21,44 @@ from distutils.command.build_ext import build_ext
 # make sure we are in the right directory
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
-archive_ext = 'a'
-lib_prefix = 'lib'
+ARCHIVE_EXT = 'a'
+LIB_PREFIX = 'lib'
 if os.name == 'nt':
-    archive_ext = 'lib'
-    lib_prefix = 'Release/'
+    ARCHIVE_EXT = 'lib'
+    LIB_PREFIX = 'Release/'
 
-dd_prefix = 'src/duckdb'
-if not os.path.exists(dd_prefix):
-    dd_prefix = '../../' # this is a build from within the tools/pythonpkg directory
+DIR_PREFIX = 'src/duckdb'
+if not os.path.exists(DIR_PREFIX):
+     # this is a build from within the tools/pythonpkg directory
+    DIR_PREFIX = '../../'
+
+def get_library_name(lib):
+    return LIB_PREFIX + lib + '.' + ARCHIVE_EXT
+
+DEFAULT_BUILD_DIR = os.path.join(DIR_PREFIX, 'build', 'release_notest')
+
+BUILD_DIR = DEFAULT_BUILD_DIR
+if 'DUCKDB_PYTHON_TARGET' in os.environ:
+    BUILD_DIR = os.environ['DUCKDB_PYTHON_TARGET']
+
+
+INCLUDE_DIR = os.path.join(DIR_PREFIX,  'src', 'include')
+
+DUCKDB_LIB = os.path.join(BUILD_DIR, 'src', get_library_name('duckdb_static'))
+PG_LIB = os.path.join(BUILD_DIR, 'third_party', 'libpg_query', get_library_name('pg_query'))
+RE2_LIB = os.path.join(BUILD_DIR, 'third_party', 're2', get_library_name('re2'))
+MINIZ_LIB = os.path.join(BUILD_DIR, 'third_party', 'miniz', get_library_name('miniz'))
+
 
 # wrapper that builds the main DuckDB library first
 class CustomBuiltExtCommand(build_ext):
-    def run(self):
+    def build_duckdb(self):
         cmake_bin = distutils.spawn.find_executable('cmake')
         if (cmake_bin is None):
             raise Exception('DuckDB needs cmake to build from source')
 
         wd = os.getcwd()
-        os.chdir(dd_prefix)
+        os.chdir(DIR_PREFIX)
         if not os.path.exists('build/release_notest'):
             os.makedirs('build/release_notest')
         os.chdir('build/release_notest')
@@ -56,8 +75,15 @@ class CustomBuiltExtCommand(build_ext):
         subprocess.Popen(buildcmd.split(' ')).wait()
 
         os.chdir(wd)
-        if not os.path.isfile('%s/build/release_notest/src/%sduckdb_static.%s' % (dd_prefix, lib_prefix, archive_ext)):
-            raise Exception('Library build failed :/') 
+
+    def run(self):
+        if BUILD_DIR == DEFAULT_BUILD_DIR:
+            self.build_duckdb()
+
+        for library in [DUCKDB_LIB, PG_LIB, RE2_LIB, MINIZ_LIB]:
+            if not os.path.isfile(library):
+                raise Exception('Build failed: could not find required library file "%s"' % library)
+        print(INCLUDE_DIR)
         build_ext.run(self)
 
 # create a distributable directory structure
@@ -76,7 +102,7 @@ class CustomSdistCommand(sdist):
         shutil.copytree('../../third_party/miniz', 'src/duckdb/third_party/miniz')
         sdist.run(self)
 
-includes = [numpy.get_include(), '%s/src/include' % (dd_prefix), '.']
+includes = [numpy.get_include(), INCLUDE_DIR, '.']
 sources = ['connection.cpp', 'cursor.cpp', 'module.cpp']
 
 toolchain_args = ['-std=c++11', '-Wall']
@@ -89,11 +115,17 @@ libduckdb = Extension('duckdb',
     extra_compile_args=toolchain_args,
     extra_link_args=toolchain_args,
     language='c++',
-    extra_objects=['%s/build/release_notest/src/%sduckdb_static.%s' % (dd_prefix, lib_prefix, archive_ext), '%s/build/release_notest/third_party/libpg_query/%spg_query.%s' % (dd_prefix, lib_prefix, archive_ext), '%s/build/release_notest/third_party/re2/%sre2.%s' % (dd_prefix, lib_prefix, archive_ext), '%s/build/release_notest/third_party/miniz/%sminiz.%s' % (dd_prefix, lib_prefix, archive_ext)])
+    extra_objects=[DUCKDB_LIB, PG_LIB, RE2_LIB, MINIZ_LIB])
+
+# Only include pytest-runner in setup_requires if we're invoking tests
+if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
+    setup_requires = ['pytest-runner']
+else:
+    setup_requires = []
 
 setup(
     name = "duckdb",
-    version = '0.0.4',
+    version = '0.1.0',
     description = 'DuckDB embedded database',
     keywords = 'DuckDB Database SQL OLAP',
     url="https://github.com/cwida/duckdb",
@@ -102,7 +134,9 @@ setup(
          'numpy>=1.16',
          'pandas>=0.24'
     ],
-    setup_requires=['pytest-runner'],
+    packages=['duckdb_query_graph'],
+    include_package_data=True,
+    setup_requires=setup_requires,
     tests_require=['pytest'],
     classifiers = [
         'Topic :: Database :: Database Engines/Servers',

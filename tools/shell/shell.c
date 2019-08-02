@@ -549,6 +549,20 @@ static void shellLog(void *pArg, int iErrCode, const char *zMsg) {
 }
 
 /*
+** Save or restore the current output mode
+*/
+static void outputModePush(ShellState *p){
+  p->modePrior = p->mode;
+  memcpy(p->colSepPrior, p->colSeparator, sizeof(p->colSeparator));
+  memcpy(p->rowSepPrior, p->rowSeparator, sizeof(p->rowSeparator));
+}
+static void outputModePop(ShellState *p){
+  p->mode = p->modePrior;
+  memcpy(p->colSeparator, p->colSepPrior, sizeof(p->colSeparator));
+  memcpy(p->rowSeparator, p->rowSepPrior, sizeof(p->rowSeparator));
+}
+
+/*
 ** Output the given string with characters that are special to
 ** HTML escaped.
 */
@@ -1146,7 +1160,13 @@ static char zHelp[] = ".cd DIRECTORY          Change the working directory to DI
                       "                         line     One value per line\n"
                       "                         list     Values delimited by \"|\"\n"
                       "                         tabs     Tab-separated values\n"
+					  ".once (-e|-x|FILE)     Output for the next SQL command only to FILE\n"
+  					  "     Other options:\n"
+  					  "       -e    Invoke system text editor\n"
+  					  "       -x    Invoke system csv editor\n"
+					  ".output ?FILE?         Send output to FILE or stdout if FILE is omitted\n"
                       ".print STRING...       Print literal STRING\n"
+					  ".excel                 Display the output of next command in the system csv viewer\n"
                       ".exit                  Exit this program\n"
                       ".quit                  Exit this program\n"
                       ".read FILENAME         Execute SQL in FILENAME\n"
@@ -1409,6 +1429,26 @@ static void output_reset(ShellState *p) {
 		pclose(p->out);
 	} else {
 		output_file_close(p->out);
+		// #ifndef SQLITE_NOHAVE_SYSTEM
+		if( p->doXdgOpen ){
+			const char *zXdgOpenCmd =
+		#if defined(_WIN32)
+			"start";
+		#elif defined(__APPLE__)
+			"open";
+		#else
+			"xdg-open";
+		#endif
+			char *zCmd;
+			zCmd = sqlite3_mprintf("%s %s", zXdgOpenCmd, p->zTempFile);
+			if( system(zCmd) ){
+				utf8_printf(stderr, "Failed: [%s]\n", zCmd);
+			}
+			sqlite3_free(zCmd);
+			outputModePop(p);
+			p->doXdgOpen = 0;
+		}
+		// #endif
 	}
 	p->outfile[0] = 0;
 	p->out = stdout;
@@ -1454,15 +1494,10 @@ static void clearTempFile(ShellState *p) {
 /*
 ** Create a new temp file name with the given suffix.
 */
-/*
 static void newTempFile(ShellState *p, const char *zSuffix){
     clearTempFile(p);
     sqlite3_free(p->zTempFile);
     p->zTempFile = 0;
-    if( p->db ){
-        sqlite3_file_control(p->db, 0, SQLITE_FCNTL_TEMPFILENAME,
-&p->zTempFile);
-    }
     if( p->zTempFile==0 ){
         sqlite3_uint64 r;
         sqlite3_randomness(sizeof(r), &r);
@@ -1474,7 +1509,7 @@ static void newTempFile(ShellState *p, const char *zSuffix){
         raw_printf(stderr, "out of memory\n");
         exit(1);
     }
-}*/
+}
 
 /*
 ** If an input line begins with "." then invoke this routine to
@@ -1906,7 +1941,7 @@ static int do_meta_command(char *zLine, ShellState *p) {
 			open_db(p, 0);
 		}
 	} else
-	    /*
+	    
 	        if( (c=='o'
 	             && (strncmp(azArg[0], "output", n)==0||strncmp(azArg[0],
 	    "once", n)==0))
@@ -1938,7 +1973,7 @@ static int do_meta_command(char *zLine, ShellState *p) {
 	            }
 	            output_reset(p);
 	            if( zFile[0]=='-' && zFile[1]=='-' ) zFile++;
-	    #ifndef SQLITE_NOHAVE_SYSTEM
+	    // #ifndef SQLITE_NOHAVE_SYSTEM
 	            if( strcmp(zFile, "-e")==0 || strcmp(zFile, "-x")==0 ){
 	                p->doXdgOpen = 1;
 	                outputModePush(p);
@@ -1951,30 +1986,28 @@ static int do_meta_command(char *zLine, ShellState *p) {
 	                }
 	                zFile = p->zTempFile;
 	            }
-	    #endif
-	            if( zFile[0]=='|' ){
-	                p->out = popen(zFile + 1, "w");
-	                if( p->out==0 ){
-	                    utf8_printf(stderr,"Error: cannot open pipe \"%s\"\n",
-	    zFile + 1); p->out = stdout; rc = 1; }else{
-	                    sqlite3_snprintf(sizeof(p->outfile), p->outfile, "%s",
-	    zFile);
-	                }
-	            }else{
+	    // #endif
+	    //         if( zFile[0]=='|' ){
+	    //             p->out = popen(zFile + 1, "w");
+	    //             if( p->out==0 ){
+	    //                 utf8_printf(stderr,"Error: cannot open pipe \"%s\"\n",
+	    // zFile + 1); p->out = stdout; rc = 1; }else{
+	    //                 sqlite3_snprintf(sizeof(p->outfile), p->outfile, "%s",
+	    // zFile);
+	    //             }
+	    //         }else{
 	                p->out = output_file_open(zFile, bTxtMode);
 	                if( p->out==0 ){
 	                    if( strcmp(zFile,"off")!=0 ){
-	                        utf8_printf(stderr,"Error: cannot write to
-	    \"%s\"\n", zFile);
+	                        utf8_printf(stderr,"Error: cannot write to \"%s\"\n", zFile);
 	                    }
 	                    p->out = stdout;
 	                    rc = 1;
 	                } else {
-	                    sqlite3_snprintf(sizeof(p->outfile), p->outfile, "%s",
-	    zFile);
+	                    sqlite3_snprintf(sizeof(p->outfile), p->outfile, "%s", zFile);
 	                }
-	            }
-	        }else */
+	            // }
+	        }else 
 
 	    if (c == 'p' && n >= 3 && strncmp(azArg[0], "print", n) == 0) {
 		int i;

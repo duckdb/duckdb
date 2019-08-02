@@ -71,6 +71,12 @@ struct Log10 {
 	}
 };
 
+struct Log2 {
+	template <class T> static inline T Operation(T left) {
+		return log2(left);
+	}
+};
+
 struct Ceil {
 	template <class T> static inline T Operation(T left) {
 		return ceil(left);
@@ -131,4 +137,14 @@ struct ATan2 {
 	}
 };
 
+struct Sign {
+	template <class T> static inline int8_t Operation(T left) {
+		if (left == T(0))
+                  return 0;
+                else if (left > T(0))
+                  return 1;
+                else
+                  return -1;
+	}
+};
 } // namespace duckdb

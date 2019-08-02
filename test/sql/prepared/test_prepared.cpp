@@ -56,6 +56,36 @@ TEST_CASE("Basic prepared statements", "[prepared]") {
 	REQUIRE(CHECK_COLUMN(result, 4, {true}));
 }
 
+TEST_CASE("Prepared statements and subqueries", "[prepared]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// simple subquery
+	REQUIRE_NO_FAIL(con.Query("PREPARE v1 AS SELECT * FROM (SELECT $1::INTEGER) sq1;"));
+
+	result = con.Query("EXECUTE v1(42)");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	// subquery with non-fulfillable predicate
+	REQUIRE_NO_FAIL(con.Query("PREPARE v2 AS SELECT * FROM (SELECT $1::INTEGER WHERE 1=0) sq1;"));
+
+	result = con.Query("EXECUTE v2(42)");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+
+	// prepared statement in correlated scalar subquery
+	REQUIRE_NO_FAIL(con.Query("PREPARE v3 AS SELECT (SELECT $1::INT+sq1.i) FROM (SELECT 42 AS i) sq1;"));
+
+	result = con.Query("EXECUTE v3(42)");
+	REQUIRE(CHECK_COLUMN(result, 0, {84}));
+
+	// prepared statement in nested correlated scalar subquery
+	REQUIRE_NO_FAIL(con.Query("PREPARE v4 AS SELECT (SELECT (SELECT $1::INT+sq1.i)+$2::INT+sq1.i) FROM (SELECT 42 AS i) sq1;"));
+
+	result = con.Query("EXECUTE v4(20, 20)");
+	REQUIRE(CHECK_COLUMN(result, 0, {124}));
+}
+
 TEST_CASE("PREPARE for SELECT clause", "[prepared]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

@@ -71,6 +71,10 @@ void VectorOperations::Log10(Vector &input, Vector &result) {
 	unary_numeric_op<duckdb::Log10>(input, result);
 }
 
+void VectorOperations::Log2(Vector &input, Vector &result) {
+	unary_numeric_op<duckdb::Log2>(input, result);
+}
+
 void VectorOperations::CbRt(Vector &input, Vector &result) {
 	unary_numeric_op_dblret<duckdb::CbRt>(input, result);
 }
@@ -135,4 +139,8 @@ void VectorOperations::ATan2(Vector &left, Vector &right, Vector &result) {
 		throw InvalidTypeException(left.type, "Invalid type for ATAN2");
 	}
 	templated_binary_loop<double, double, double, duckdb::ATan2>(left, right, result);
+}
+
+void VectorOperations::Sign(Vector &input, Vector &result) {
+	unary_numeric_op_tintret<duckdb::Sign>(input, result);
 }

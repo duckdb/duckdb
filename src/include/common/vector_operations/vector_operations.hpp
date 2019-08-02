@@ -64,6 +64,9 @@ struct VectorOperations {
 	static void Sqrt(Vector &A, Vector &result);
 	static void Ln(Vector &A, Vector &result);
 	static void Log10(Vector &A, Vector &result);
+	static void Log2(Vector &A, Vector &result);
+	static void Sign(Vector &A, Vector &result);
+	static void Mod(Vector &A, Vector &B, Vector &result);
 
 	static void Sin(Vector &A, Vector &result);
 	static void Cos(Vector &A, Vector &result);

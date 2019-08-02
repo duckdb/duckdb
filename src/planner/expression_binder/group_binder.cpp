@@ -26,8 +26,6 @@ BindResult GroupBinder::BindExpression(ParsedExpression &expr, index_t depth, bo
 		}
 	}
 	switch (expr.expression_class) {
-	case ExpressionClass::AGGREGATE:
-		return BindResult("GROUP BY clause cannot contain aggregates!");
 	case ExpressionClass::DEFAULT:
 		return BindResult("GROUP BY clause cannot contain DEFAULT clause");
 	case ExpressionClass::WINDOW:
@@ -35,6 +33,10 @@ BindResult GroupBinder::BindExpression(ParsedExpression &expr, index_t depth, bo
 	default:
 		return ExpressionBinder::BindExpression(expr, depth);
 	}
+}
+
+string GroupBinder::UnsupportedAggregateMessage() {
+	return "GROUP BY clause cannot contain aggregates!";
 }
 
 BindResult GroupBinder::BindSelectRef(index_t entry) {

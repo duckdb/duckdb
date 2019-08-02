@@ -13,7 +13,6 @@
 #include "planner/expression_binder.hpp"
 
 namespace duckdb {
-class AggregateExpression;
 class BoundColumnRefExpression;
 class WindowExpression;
 
@@ -33,13 +32,14 @@ public:
 protected:
 	BindResult BindExpression(ParsedExpression &expr, index_t depth, bool root_expression = false) override;
 
+	BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, index_t depth) override;
+
 	bool inside_window;
 
 	BoundSelectNode &node;
 	BoundGroupInformation &info;
 
 protected:
-	BindResult BindAggregate(AggregateExpression &expr, index_t depth);
 	BindResult BindWindow(WindowExpression &expr, index_t depth);
 
 	index_t TryBindGroup(ParsedExpression &expr, index_t depth);

@@ -8,16 +8,16 @@ using namespace duckdb;
 using namespace std;
 
 FunctionExpression::FunctionExpression(string schema, string function_name,
-                                       vector<unique_ptr<ParsedExpression>> &children)
+                                       vector<unique_ptr<ParsedExpression>> &children, bool distinct)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), schema(schema),
-      function_name(StringUtil::Lower(function_name)) {
+      function_name(StringUtil::Lower(function_name)), distinct(distinct) {
 	for (auto &child : children) {
 		this->children.push_back(move(child));
 	}
 }
 
-FunctionExpression::FunctionExpression(string function_name, vector<unique_ptr<ParsedExpression>> &children)
-    : FunctionExpression(DEFAULT_SCHEMA, function_name, children) {
+FunctionExpression::FunctionExpression(string function_name, vector<unique_ptr<ParsedExpression>> &children, bool distinct)
+    : FunctionExpression(DEFAULT_SCHEMA, function_name, children, distinct) {
 }
 
 string FunctionExpression::ToString() const {
@@ -33,7 +33,7 @@ bool FunctionExpression::Equals(const BaseExpression *other_) const {
 		return false;
 	}
 	auto other = (FunctionExpression *)other_;
-	if (schema != other->schema && function_name != other->function_name) {
+	if (schema != other->schema || function_name != other->function_name || other->distinct != distinct) {
 		return false;
 	}
 	if (other->children.size() != children.size()) {
@@ -51,6 +51,7 @@ uint64_t FunctionExpression::Hash() const {
 	uint64_t result = ParsedExpression::Hash();
 	result = CombineHash(result, duckdb::Hash<const char *>(schema.c_str()));
 	result = CombineHash(result, duckdb::Hash<const char *>(function_name.c_str()));
+	result = CombineHash(result, duckdb::Hash<bool>(distinct));
 	return result;
 }
 
@@ -59,7 +60,7 @@ unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	for (auto &child : children) {
 		copy_children.push_back(child->Copy());
 	}
-	auto copy = make_unique<FunctionExpression>(function_name, copy_children);
+	auto copy = make_unique<FunctionExpression>(function_name, copy_children, distinct);
 	copy->schema = schema;
 	copy->CopyProperties(*this);
 	return move(copy);
@@ -70,6 +71,7 @@ void FunctionExpression::Serialize(Serializer &serializer) {
 	serializer.WriteString(function_name);
 	serializer.WriteString(schema);
 	serializer.WriteList(children);
+	serializer.Write<bool>(distinct);
 }
 
 unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type, Deserializer &source) {
@@ -77,8 +79,9 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type
 	auto function_name = source.Read<string>();
 	auto schema = source.Read<string>();
 	source.ReadList<ParsedExpression>(children);
+	auto distinct = source.Read<bool>();
 
-	auto function = make_unique<FunctionExpression>(function_name, children);
+	auto function = make_unique<FunctionExpression>(function_name, children, distinct);
 	function->schema = schema;
 	return move(function);
 }

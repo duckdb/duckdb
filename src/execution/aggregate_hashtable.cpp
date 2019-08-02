@@ -1,9 +1,13 @@
 #include "execution/aggregate_hashtable.hpp"
 
+#include "function/aggregate_function/distributive.hpp"
+
 #include "common/exception.hpp"
 #include "common/types/null_value.hpp"
 #include "common/types/static_vector.hpp"
 #include "common/vector_operations/vector_operations.hpp"
+#include "planner/expression/bound_aggregate_expression.hpp"
+#include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 #include <cmath>
 #include <map>
@@ -11,26 +15,11 @@
 using namespace duckdb;
 using namespace std;
 
-static index_t GetAggrPayloadSize(ExpressionType expr_type, TypeId return_type) {
-	switch (expr_type) {
-	case ExpressionType::AGGREGATE_COUNT:
-	case ExpressionType::AGGREGATE_COUNT_DISTINCT:
-	case ExpressionType::AGGREGATE_COUNT_STAR:
-		// COUNT aggregates always use TypeId::BIGINT
-		return GetTypeIdSize(TypeId::BIGINT);
-	case ExpressionType::AGGREGATE_STDDEV_SAMP:
-		// count running_mean running_dsquared
-		return sizeof(uint64_t) + sizeof(double) + sizeof(double);
-	default:
-		return GetTypeIdSize(return_type);
-	}
-}
-
 SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId> group_types,
-                                         vector<TypeId> payload_types, vector<ExpressionType> aggregate_types,
+                                         vector<TypeId> payload_types, vector<BoundAggregateExpression*> bindings,
                                          bool parallel)
-    : aggregate_types(aggregate_types), group_types(group_types),
-      payload_types(payload_types), group_width(0), payload_width(0), capacity(0), entries(0), data(nullptr),
+    : aggregates(move(bindings)), group_types(group_types),
+      payload_types(payload_types), payload_width(0), capacity(0), entries(0), data(nullptr),
       parallel(parallel) {
 	// HT tuple layout is as follows:
 	// [FLAG][NULLMASK][GROUPS][PAYLOAD][COUNT]
@@ -42,50 +31,32 @@ SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId
 		group_width += GetTypeIdSize(group_types[i]);
 	}
 	for (index_t i = 0; i < payload_types.size(); i++) {
-		payload_width += GetAggrPayloadSize(aggregate_types[i], payload_types[i]);
+		payload_width += aggregates[i]->bound_aggregate->payload_size(payload_types[i]);
 	}
 	empty_payload_data = unique_ptr<data_t[]>(new data_t[payload_width]);
 	// initialize the aggregates to the NULL value
 	auto pointer = empty_payload_data.get();
 	for (index_t i = 0; i < payload_types.size(); i++) {
-		// counts are zero initialized, all other aggregates NULL
-		// initialized
-		switch (aggregate_types[i]) {
-		case ExpressionType::AGGREGATE_COUNT:
-		case ExpressionType::AGGREGATE_COUNT_DISTINCT:
-		case ExpressionType::AGGREGATE_COUNT_STAR:
-		case ExpressionType::AGGREGATE_STDDEV_SAMP:
-			memset(pointer, 0, GetAggrPayloadSize(aggregate_types[i], payload_types[i]));
-			break;
-		default:
-			SetNullValue(pointer, payload_types[i]);
-			break;
-		}
-
-		pointer += GetAggrPayloadSize(aggregate_types[i], payload_types[i]);
+		auto aggr = aggregates[i];
+		aggr->bound_aggregate->initialize(pointer, payload_types[i]);
+		pointer += aggr->bound_aggregate->payload_size(payload_types[i]);
 	}
 
 	// FIXME: this always creates this vector, even if no distinct if present.
 	// it likely does not matter.
-	distinct_hashes.resize(aggregate_types.size());
+	distinct_hashes.resize(aggregates.size());
 
 	// create additional hash tables for distinct aggrs
-	for (index_t i = 0; i < aggregate_types.size(); i++) {
-		switch (aggregate_types[i]) {
-		case ExpressionType::AGGREGATE_COUNT_DISTINCT:
-		case ExpressionType::AGGREGATE_SUM_DISTINCT: {
+	for (index_t i = 0; i < aggregates.size(); i++) {
+		auto aggr = aggregates[i];
+		if (aggr->distinct) {
 			// group types plus aggr return type
 			vector<TypeId> distinct_group_types(group_types);
 			vector<TypeId> distinct_payload_types;
-			vector<ExpressionType> distinct_aggregate_types;
+			vector<BoundAggregateExpression*> distinct_aggregates;
 			distinct_group_types.push_back(payload_types[i]);
 			distinct_hashes[i] = make_unique<SuperLargeHashTable>(initial_capacity, distinct_group_types,
-			                                                      distinct_payload_types, distinct_aggregate_types);
-			break;
-		}
-		default:
-			// nothing
-			break;
+			                                                      distinct_payload_types, distinct_aggregates);
 		}
 	}
 
@@ -105,7 +76,7 @@ void SuperLargeHashTable::Resize(index_t size) {
 	bitmask = size - 1;
 
 	if (entries > 0) {
-		auto new_table = make_unique<SuperLargeHashTable>(size, group_types, payload_types, aggregate_types, parallel);
+		auto new_table = make_unique<SuperLargeHashTable>(size, group_types, payload_types, aggregates, parallel);
 
 		DataChunk groups;
 		groups.Initialize(group_types, false);
@@ -188,39 +159,14 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 
 	// now every cell has an entry
 	// update the aggregates
-	Vector one(Value::BIGINT(1));
 	index_t payload_idx = 0;
 
-	for (index_t aggr_idx = 0; aggr_idx < aggregate_types.size(); aggr_idx++) {
+	for (index_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		assert(payload.column_count > payload_idx);
 
 		// for any entries for which a group was found, update the aggregate
-		switch (aggregate_types[aggr_idx]) {
-		case ExpressionType::AGGREGATE_COUNT_STAR:
-			// add one to each address, regardless of if the value is NULL
-			VectorOperations::Scatter::Add(one, addresses);
-			break;
-		case ExpressionType::AGGREGATE_COUNT:
-			VectorOperations::Scatter::AddOne(payload.data[payload_idx], addresses);
-			break;
-		case ExpressionType::AGGREGATE_SUM:
-			// addition
-			VectorOperations::Scatter::Add(payload.data[payload_idx], addresses);
-			break;
-		case ExpressionType::AGGREGATE_MIN:
-			// min
-			VectorOperations::Scatter::Min(payload.data[payload_idx], addresses);
-			break;
-		case ExpressionType::AGGREGATE_MAX:
-			// max
-			VectorOperations::Scatter::Max(payload.data[payload_idx], addresses);
-			break;
-		case ExpressionType::AGGREGATE_FIRST:
-			// first
-			VectorOperations::Scatter::SetFirst(payload.data[payload_idx], addresses);
-			break;
-		case ExpressionType::AGGREGATE_SUM_DISTINCT:
-		case ExpressionType::AGGREGATE_COUNT_DISTINCT: {
+		auto aggr = aggregates[aggr_idx];
+		if (aggr->distinct) {
 			assert(groups.sel_vector == payload.sel_vector);
 
 			// construct chunk for secondary hash table probing
@@ -264,60 +210,16 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			distinct_addresses.count = match_count;
 			distinct_addresses.Verify();
 
-			if (aggregate_types[aggr_idx] == ExpressionType::AGGREGATE_COUNT_DISTINCT) {
-				VectorOperations::Scatter::AddOne(distinct_payload, distinct_addresses);
-			} else {
-				VectorOperations::Scatter::Add(distinct_payload, distinct_addresses);
-			}
-			break;
+			aggr->bound_aggregate->update(&distinct_payload, 1, distinct_addresses);
 		}
-		case ExpressionType::AGGREGATE_STDDEV_SAMP: {
-			// Streaming approximate standard deviation using Welford's
-			// method, DOI: 10.2307/1266577
 
-			// convert input to floating point if required
-			Vector payload_double;
-			if (payload.data[payload_idx].type != TypeId::DOUBLE) {
-				payload_double.Initialize(TypeId::DOUBLE);
-				VectorOperations::Cast(payload.data[payload_idx], payload_double);
-			} else {
-				payload_double.Reference(payload.data[payload_idx]);
-			}
-
-			VectorOperations::Exec(addresses, [&](index_t i, index_t k) {
-				if (payload_double.nullmask[i]) {
-					return;
-				}
-				// Layout of payload for STDDEV_SAMP: count(uint64_t), mean
-				// (double), dsquared(double)
-
-				auto base_ptr = ((data_ptr_t *)addresses.data)[i];
-				auto count_ptr = (uint64_t *)base_ptr;
-				auto mean_ptr = (double *)(base_ptr + sizeof(uint64_t));
-				auto dsquared_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
-
-				// update running mean and d^2
-				(*count_ptr)++;
-				const double new_value = ((double *)payload_double.data)[i];
-				const double mean_differential = (new_value - (*mean_ptr)) / (*count_ptr);
-				const double new_mean = (*mean_ptr) + mean_differential;
-				const double dsquared_increment = (new_value - new_mean) * (new_value - (*mean_ptr));
-				const double new_dsquared = (*dsquared_ptr) + dsquared_increment;
-
-				*mean_ptr = new_mean;
-				*dsquared_ptr = new_dsquared;
-				// see Scan() method below for final step
-			});
-
-			break;
-		}
-		default:
-			throw NotImplementedException("Unimplemented aggregate type!");
+		else {
+			aggr->bound_aggregate->update(&payload.data[payload_idx], 1, addresses);
 		}
 
 		// move to the next aggregate
 		VectorOperations::AddInPlace(addresses,
-		                             GetAggrPayloadSize(aggregate_types[aggr_idx], payload.data[payload_idx].type));
+		                             aggr->bound_aggregate->payload_size(payload.data[payload_idx].type));
 		payload_idx++;
 	}
 }
@@ -340,15 +242,15 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 	StaticVector<bool> new_group_dummy;
 	FindOrCreateGroups(groups, addresses, new_group_dummy);
 	// now fetch the aggregates
-	for (index_t aggr_idx = 0; aggr_idx < aggregate_types.size(); aggr_idx++) {
+	for (index_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		assert(result.column_count > aggr_idx);
-		assert(aggregate_types[aggr_idx] == ExpressionType::AGGREGATE_COUNT_STAR ||
-		       aggregate_types[aggr_idx] == ExpressionType::AGGREGATE_COUNT);
+		//assert(aggregates[aggr_idx] == ExpressionType::AGGREGATE_COUNT_STAR ||
+		//       aggregates[aggr_idx] == ExpressionType::AGGREGATE_COUNT);
 		assert(payload_types[aggr_idx] == TypeId::BIGINT);
 
 		VectorOperations::Gather::Set(addresses, result.data[aggr_idx]);
 		VectorOperations::AddInPlace(addresses,
-		                             GetAggrPayloadSize(aggregate_types[aggr_idx], result.data[aggr_idx].type));
+		                             aggregates[aggr_idx]->bound_aggregate->payload_size(result.data[aggr_idx].type));
 	}
 }
 
@@ -575,34 +477,13 @@ index_t SuperLargeHashTable::Scan(index_t &scan_position, DataChunk &groups, Dat
 		VectorOperations::AddInPlace(addresses, GetTypeIdSize(column.type));
 	}
 
-	for (index_t i = 0; i < aggregate_types.size(); i++) {
+	for (index_t i = 0; i < aggregates.size(); i++) {
 		auto &target = result.data[i];
 		target.count = entry;
-		switch (aggregate_types[i]) {
-		case ExpressionType::AGGREGATE_STDDEV_SAMP: {
-			// compute finalization of streaming stddev of sample
-			VectorOperations::Exec(addresses, [&](uint64_t i, uint64_t k) {
-				auto base_ptr = ((data_ptr_t *)addresses.data)[i];
-				auto count_ptr = (uint64_t *)base_ptr;
-				auto dsquared_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
+		auto aggr = aggregates[i];
+		aggr->bound_aggregate->finalize(addresses, target);
 
-				if (*count_ptr == 0) {
-					target.nullmask[i] = true;
-					return;
-				}
-				double res = *count_ptr > 1 ? sqrt(*dsquared_ptr / (*count_ptr - 1)) : 0;
-
-				((double *)target.data)[i] = res;
-			});
-
-			break;
-		}
-		default:
-			VectorOperations::Gather::Set(addresses, target);
-			break;
-		}
-
-		VectorOperations::AddInPlace(addresses, GetAggrPayloadSize(aggregate_types[i], target.type));
+		VectorOperations::AddInPlace(addresses, aggr->bound_aggregate->payload_size(target.type));
 	}
 	scan_position = ptr - data;
 	return entry;

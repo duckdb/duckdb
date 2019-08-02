@@ -56,7 +56,6 @@ template class std::unique_ptr<QueryNode>;
 template class std::unique_ptr<SelectNode>;
 template class std::unique_ptr<SetOperationNode>;
 template class std::unique_ptr<ParsedExpression>;
-template class std::unique_ptr<AggregateExpression>;
 template class std::unique_ptr<CaseExpression>;
 template class std::unique_ptr<CastExpression>;
 template class std::unique_ptr<ColumnRefExpression>;
@@ -160,7 +159,6 @@ template class std::unique_ptr<Binder>;
 	template VECTOR_DEFINITION::const_reference VECTOR_DEFINITION::front() const;                                      \
 	template VECTOR_DEFINITION::reference VECTOR_DEFINITION::front();
 
-template class std::vector<AggregateExpression *>;
 template class std::vector<BoundTable>;
 INSTANTIATE_VECTOR(std::vector<ColumnDefinition>);
 template class std::vector<ExpressionType>;

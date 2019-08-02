@@ -76,12 +76,26 @@ void log10_function(ExpressionExecutor &exec, Vector inputs[], index_t input_cou
 	VectorOperations::Log10(inputs[0], result);
 }
 
+void log2_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
+                    Vector &result) {
+	assert(input_count == 1);
+	result.Initialize(inputs[0].type);
+	VectorOperations::Log2(inputs[0], result);
+}
+
 void pi_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                  Vector &result) {
 	assert(input_count == 0);
 	result.Initialize(TypeId::DOUBLE);
 	result.count = 1;
 	VectorOperations::Set(result, Value(PI));
+}
+
+void sign_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
+                    Vector &result) {
+	assert(input_count == 1);
+	result.Initialize(TypeId::TINYINT);
+	VectorOperations::Sign(inputs[0], result);
 }
 
 } // namespace duckdb

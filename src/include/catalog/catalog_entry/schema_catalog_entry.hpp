@@ -16,20 +16,18 @@ class FunctionExpression;
 
 class TableCatalogEntry;
 class TableFunctionCatalogEntry;
-class ScalarFunctionCatalogEntry;
 class SequenceCatalogEntry;
 
 struct AlterTableInfo;
 class ClientContext;
 struct CreateIndexInfo;
 struct CreateTableFunctionInfo;
-struct CreateScalarFunctionInfo;
+struct CreateFunctionInfo;
 struct CreateViewInfo;
 struct BoundCreateTableInfo;
 struct CreateSequenceInfo;
 struct CreateSchemaInfo;
 struct CreateTableFunctionInfo;
-struct CreateScalarFunctionInfo;
 struct DropInfo;
 
 class Transaction;
@@ -45,8 +43,8 @@ public:
 	CatalogSet indexes;
 	//! The catalog set holding the table functions
 	CatalogSet table_functions;
-	//! The catalog set holding the scalar functions
-	CatalogSet scalar_functions;
+	//! The catalog set holding the scalar and aggregate functions
+	CatalogSet functions;
 	//! The catalog set holding the sequences
 	CatalogSet sequences;
 
@@ -83,11 +81,11 @@ public:
 	TableFunctionCatalogEntry *GetTableFunction(Transaction &transaction, FunctionExpression *expression);
 	//! Create a table function within the given schema
 	void CreateTableFunction(Transaction &transaction, CreateTableFunctionInfo *info);
-	//! Create a scalar function within the given schema
-	void CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInfo *info);
+	//! Create a scalar or aggregate function within the given schema
+	void CreateFunction(Transaction &transaction, CreateFunctionInfo *info);
 
 	//! Gets a scalar function with the given name
-	ScalarFunctionCatalogEntry *GetScalarFunction(Transaction &transaction, const string &name);
+	CatalogEntry *GetFunction(Transaction &transaction, const string &name, bool if_exists = false);
 	//! Gets the sequence with the given name
 	SequenceCatalogEntry *GetSequence(Transaction &transaction, const string &name);
 
