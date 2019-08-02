@@ -10,6 +10,23 @@
 using namespace duckdb;
 using namespace std;
 
+static SQLType ValidateReturnType(vector<SQLType> &arguments, AggregateFunctionCatalogEntry *func)
+{
+	auto result = func->return_type(arguments);
+	if (result == SQLTypeId::INVALID) {
+		// types do not match up, throw exception
+		string type_str;
+		for (index_t i = 0; i < arguments.size(); i++) {
+			if (i > 0) {
+				type_str += ", ";
+			}
+			type_str += SQLTypeToString(arguments[i]);
+		}
+		throw BinderException("Unsupported input types for aggregate %s(%s)", func->name.c_str(), type_str.c_str());
+	}
+	return result;
+}
+
 BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, index_t depth) {
 	// first bind the child of the aggregate expression (if any)
 	if (aggr.children.size() > 1) {
@@ -45,7 +62,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	// all children bound successfully
 
 	// types match up, get the result type
-	SQLType result_type = func->return_type(child_types);
+	SQLType result_type = ValidateReturnType(child_types, func);
 	// add a cast to the child node (if needed)
 	if (func->cast_arguments(child_types)) {
 		for (index_t i = 0; i < children.size(); i++) {

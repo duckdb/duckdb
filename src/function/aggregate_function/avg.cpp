@@ -9,7 +9,7 @@ namespace duckdb {
 
 SQLType avg_get_return_type(vector<SQLType> &arguments) {
 	if (arguments.size() != 1)
-		throw BinderException("Unsupported argument count %d for AVG aggregate", (int) arguments.size());
+		return SQLTypeId::INVALID;
 	const auto& input_type = arguments[0];
 	switch (input_type.id) {
 	case SQLTypeId::SQLNULL:
@@ -22,7 +22,7 @@ SQLType avg_get_return_type(vector<SQLType> &arguments) {
 	case SQLTypeId::DECIMAL:
 		return SQLType(SQLTypeId::DECIMAL);
 	default:
-		throw BinderException("Unsupported SQLType %s for AVG aggregate", SQLTypeToString(input_type).c_str());
+		return SQLTypeId::INVALID;
 	}
 }
 
