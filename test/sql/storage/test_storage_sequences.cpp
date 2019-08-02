@@ -22,7 +22,11 @@ TEST_CASE("Use sequences over different runs", "[storage]") {
 		result = con.Query("SELECT nextval('seq_cycle')");
 		REQUIRE(CHECK_COLUMN(result, 0, {2}));
 	}
-	// reload the database from disk
+	// reload the database from disk twice
+	{
+		DuckDB db(storage_database);
+		Connection con(db);
+	}
 	{
 		DuckDB db(storage_database);
 		Connection con(db);

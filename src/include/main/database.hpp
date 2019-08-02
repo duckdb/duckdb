@@ -22,6 +22,7 @@ enum AccessMode { UNDEFINED, READ_ONLY, READ_WRITE }; // TODO AUTOMATIC
 // this is optional and only used in tests at the moment
 struct DBConfig {
 	AccessMode access_mode = AccessMode::UNDEFINED;
+	bool checkpoint_only = false;
 	unique_ptr<FileSystem> file_system;
 };
 
@@ -41,7 +42,10 @@ public:
 	unique_ptr<TransactionManager> transaction_manager;
 	unique_ptr<ConnectionManager> connection_manager;
 
-	AccessMode access_mode = AccessMode::READ_WRITE;
+	AccessMode access_mode;
+	bool checkpoint_only;
+private:
+	void Configure(DBConfig &config);
 };
 
 } // namespace duckdb

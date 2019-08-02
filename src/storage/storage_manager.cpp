@@ -66,6 +66,13 @@ void StorageManager::LoadDatabase() {
 		// initialize the block manager while creating a new db file
 		block_manager = make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, true);
 	} else {
+		// checkpoint the database if the WAL exists
+		if (!database.checkpoint_only && database.file_system->FileExists(wal_path) && !read_only) {
+			DBConfig config;
+			config.checkpoint_only = true;
+			DuckDB db(path, &config);
+			database.file_system->RemoveFile(wal_path);
+		}
 		// initialize the block manager while loading the current db file
 		block_manager = make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, false);
 		//! Load from storage
@@ -76,6 +83,7 @@ void StorageManager::LoadDatabase() {
 			// replay the WAL
 			WriteAheadLog::Replay(database, wal_path);
 			if (!read_only) {
+				assert(database.checkpoint_only);
 				// checkpoint the database
 				checkpointer.CreateCheckpoint();
 				// remove the WAL
