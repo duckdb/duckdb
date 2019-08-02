@@ -31,7 +31,7 @@ public:
 		return "avg";
 	}
 
-	static aggregate_size_t GetPayloadSizeFunction() {
+	static aggregate_size_t GetStateSizeFunction() {
 		return avg_payload_size;
 	}
 

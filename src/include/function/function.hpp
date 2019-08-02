@@ -46,9 +46,9 @@ typedef unique_ptr<FunctionData> (*bind_scalar_function_t)(BoundFunctionExpressi
 //! Adds the dependencies of this BoundFunctionExpression to the set of dependencies
 typedef void (*dependency_function_t)(BoundFunctionExpression &expr, unordered_set<CatalogEntry *> &dependencies);
 
-//! The type used for sizing hashed aggregate function payloads
+//! The type used for sizing hashed aggregate function states
 typedef index_t (*aggregate_size_t)(TypeId return_type);
-//! The type used for initializing hashed aggregate function payloads
+//! The type used for initializing hashed aggregate function states
 typedef void (*aggregate_initialize_t)(data_ptr_t payload, TypeId return_type);
 //! The type used for updating hashed aggregate functions
 typedef void (*aggregate_update_t)(Vector** inputs, index_t input_count, Vector &result);

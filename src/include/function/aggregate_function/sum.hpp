@@ -22,7 +22,7 @@ public:
 		return "sum";
 	}
 
-	static aggregate_size_t GetPayloadSizeFunction() {
+	static aggregate_size_t GetStateSizeFunction() {
 		return get_return_type_size;
 	}
 

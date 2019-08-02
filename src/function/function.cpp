@@ -31,7 +31,7 @@ template <class T> static void AddAggregateFunction(Transaction &transaction, Ca
 	info.schema = DEFAULT_SCHEMA;
 	info.name = T::GetName();
 
-	info.payload_size = T::GetPayloadSizeFunction();
+	info.state_size = T::GetStateSizeFunction();
 	info.initialize = T::GetInitalizeFunction();
 	info.update = T::GetUpdateFunction();
 	info.finalize = T::GetFinalizeFunction();

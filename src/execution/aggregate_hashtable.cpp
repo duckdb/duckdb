@@ -28,7 +28,7 @@ SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId
 	// [PAYLOAD] is the payload (i.e. the aggregates)
 	// [COUNT] is an 8-byte count for each element
 	for (index_t i = 0; i < payload_types.size(); i++) {
-		payload_width += aggregates[i]->bound_aggregate->payload_size(payload_types[i]);
+		payload_width += aggregates[i]->bound_aggregate->state_size(payload_types[i]);
 	}
 	empty_payload_data = unique_ptr<data_t[]>(new data_t[payload_width]);
 	// initialize the aggregates to the NULL value
@@ -36,7 +36,7 @@ SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId
 	for (index_t i = 0; i < payload_types.size(); i++) {
 		auto aggr = aggregates[i];
 		aggr->bound_aggregate->initialize(pointer, payload_types[i]);
-		pointer += aggr->bound_aggregate->payload_size(payload_types[i]);
+		pointer += aggr->bound_aggregate->state_size(payload_types[i]);
 	}
 
 	// FIXME: this always creates this vector, even if no distinct if present.
@@ -222,7 +222,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 
 		// move to the next aggregate
 		VectorOperations::AddInPlace(addresses,
-		                             aggr->bound_aggregate->payload_size(payload.data[payload_idx].type));
+		                             aggr->bound_aggregate->state_size(payload_types[aggr_idx]));
 		payload_idx++;
 	}
 }
@@ -253,7 +253,7 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 
 		VectorOperations::Gather::Set(addresses, result.data[aggr_idx]);
 		VectorOperations::AddInPlace(addresses,
-		                             aggregates[aggr_idx]->bound_aggregate->payload_size(result.data[aggr_idx].type));
+		                             aggregates[aggr_idx]->bound_aggregate->state_size(payload_types[aggr_idx]));
 	}
 }
 
@@ -488,7 +488,7 @@ index_t SuperLargeHashTable::Scan(index_t &scan_position, DataChunk &groups, Dat
 		auto aggr = aggregates[i];
 		aggr->bound_aggregate->finalize(addresses, target);
 
-		VectorOperations::AddInPlace(addresses, aggr->bound_aggregate->payload_size(target.type));
+		VectorOperations::AddInPlace(addresses, aggr->bound_aggregate->state_size(target.type));
 	}
 	scan_position = ptr - data;
 	return entry;

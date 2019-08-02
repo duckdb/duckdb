@@ -31,7 +31,7 @@ public:
 		return "stddev_samp";
 	}
 
-	static aggregate_size_t GetPayloadSizeFunction() {
+	static aggregate_size_t GetStateSizeFunction() {
 		return stddev_payload_size;
 	}
 

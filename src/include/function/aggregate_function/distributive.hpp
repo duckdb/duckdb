@@ -46,7 +46,7 @@ static bool dont_cast_arguments(vector<SQLType> &arguments) {
 
 class AggregateBigintReturnFunction : public AggregateInPlaceFunction {
 public:
-	static aggregate_size_t GetPayloadSizeFunction() {
+	static aggregate_size_t GetStateSizeFunction() {
 		return get_bigint_type_size;
 	}
 
@@ -89,7 +89,7 @@ static bool cast_arguments(vector<SQLType> &arguments) {
 
 class AggregateSameReturnFunction : public AggregateInPlaceFunction {
 public:
-	static aggregate_size_t GetPayloadSizeFunction() {
+	static aggregate_size_t GetStateSizeFunction() {
 		return get_return_type_size;
 	}
 
