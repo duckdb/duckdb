@@ -19,7 +19,7 @@ SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId
                                          vector<TypeId> payload_types, vector<BoundAggregateExpression*> bindings,
                                          bool parallel)
     : aggregates(move(bindings)), group_types(group_types),
-      payload_types(payload_types), payload_width(0), capacity(0), entries(0), data(nullptr),
+      payload_types(payload_types), group_width(0), payload_width(0), capacity(0), entries(0), data(nullptr),
       parallel(parallel) {
 	// HT tuple layout is as follows:
 	// [FLAG][NULLMASK][GROUPS][PAYLOAD][COUNT]
