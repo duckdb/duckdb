@@ -15,18 +15,18 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	if (aggr.children.size() > 1) {
 		throw ParserException("Aggregates with multiple children not supported");
 	}
-	unique_ptr<Expression> child;
-	SQLType child_type;
-	if (aggr.children.size() == 1) {
+	vector<unique_ptr<Expression>> children;
+	vector<SQLType> child_types;
+	for (index_t i = 0; i < aggr.children.size(); i++) {
 		AggregateBinder aggregate_binder(binder, context);
-		string error = aggregate_binder.Bind(&aggr.children[0], 0);
+		string error = aggregate_binder.Bind(&aggr.children[i], 0);
 		if (!error.empty()) {
 			// failed to bind child
 			if (aggregate_binder.BoundColumns()) {
 				// however, we bound columns!
 				// that means this aggregation belongs to this node
 				// check if we have to resolve any errors by binding with parent binders
-				bool success = aggregate_binder.BindCorrelatedColumns(aggr.children[0]);
+				bool success = aggregate_binder.BindCorrelatedColumns(aggr.children[i]);
 				// if there is still an error after this, we could not successfully bind the aggregate
 				if (!success) {
 					throw BinderException(error);
@@ -39,22 +39,22 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 			}
 		}
 		auto &bound_expr = (BoundExpression &)*aggr.children[0];
-		child_type = bound_expr.sql_type;
-		child = move(bound_expr.expr);
+		child_types.push_back(bound_expr.sql_type);
+		children.push_back(move(bound_expr.expr));
 	}
 	// all children bound successfully
 
 	// types match up, get the result type
-	vector<SQLType> arguments;
-	arguments.push_back(child_type);
-	SQLType result_type = func->return_type(arguments);
+	SQLType result_type = func->return_type(child_types);
 	// add a cast to the child node (if needed)
-	if (func->cast_arguments(arguments)) {
-		assert(child);
-		child = AddCastToType(move(child), child_type, result_type);
+	if (func->cast_arguments(child_types)) {
+		for (index_t i = 0; i < children.size(); i++) {
+			children[i] = AddCastToType(move(children[i]), child_types[i], result_type);
+		}
 	}
 	// create the aggregate
-	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(result_type), move(child), func, aggr.distinct);
+	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(result_type), func, aggr.distinct);
+	aggregate->children = move(children);
 	// now create a column reference referring to this aggregate
 
 	auto colref = make_unique<BoundColumnRefExpression>(

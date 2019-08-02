@@ -8,7 +8,8 @@ using namespace std;
 namespace duckdb {
 
 SQLType avg_get_return_type(vector<SQLType> &arguments) {
-	assert(arguments.size() == 1);
+	if (arguments.size() != 1)
+		throw BinderException("Unsupported argument count %d for AVG aggregate", (int) arguments.size());
 	const auto& input_type = arguments[0];
 	switch (input_type.id) {
 	case SQLTypeId::SQLNULL:
