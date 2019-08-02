@@ -88,6 +88,41 @@ TEST_CASE("Test implicit aggregate operators", "[aggregate]") {
 	REQUIRE_FAIL(con.Query("SELECT STDDEV_SAMP(STDDEV_SAMP(1))"));
 }
 
+TEST_CASE("Test built in aggregate operator usage", "[aggregate]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// test incorrect usage of the COUNT aggregate
+	REQUIRE_FAIL(con.Query("SELECT COUNT(1, 2, 3)"));
+	REQUIRE_FAIL(con.Query("SELECT COUNT(COUNT(1))"));
+
+	// test incorrect usage of STDDEV_SAMP aggregate
+	REQUIRE_FAIL(con.Query("SELECT STDDEV_SAMP()"));
+	REQUIRE_FAIL(con.Query("SELECT STDDEV_SAMP(1, 2, 3)"));
+	REQUIRE_FAIL(con.Query("SELECT STDDEV_SAMP(STDDEV_SAMP(1))"));
+
+	// test incorrect usage of SUM aggregate
+	REQUIRE_FAIL(con.Query("SELECT SUM()"));
+	REQUIRE_FAIL(con.Query("SELECT SUM(1, 2, 3)"));
+	REQUIRE_FAIL(con.Query("SELECT SUM(SUM(1))"));
+
+	// test incorrect usage of FIRST aggregate
+	REQUIRE_FAIL(con.Query("SELECT FIRST()"));
+	REQUIRE_FAIL(con.Query("SELECT FIRST(1, 2, 3)"));
+	REQUIRE_FAIL(con.Query("SELECT FIRST(FIRST(1))"));
+
+	// test incorrect usage of MAX aggregate
+	REQUIRE_FAIL(con.Query("SELECT MAX()"));
+	REQUIRE_FAIL(con.Query("SELECT MAX(1, 2, 3)"));
+	REQUIRE_FAIL(con.Query("SELECT MAX(MAX(1))"));
+
+	// test incorrect usage of MIN aggregate
+	REQUIRE_FAIL(con.Query("SELECT MIN()"));
+	REQUIRE_FAIL(con.Query("SELECT MIN(1, 2, 3)"));
+	REQUIRE_FAIL(con.Query("SELECT MIN(MIN(1))"));
+}
+
 TEST_CASE("Test GROUP BY on expression", "[aggregate]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

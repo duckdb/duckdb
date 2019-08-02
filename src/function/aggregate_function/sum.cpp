@@ -8,7 +8,8 @@ using namespace std;
 namespace duckdb {
 
 SQLType sum_get_return_type( vector<SQLType> &arguments ) {
-	assert(arguments.size() == 1);
+	if (arguments.size() != 1)
+		return SQLType(SQLTypeId::INVALID);
 	const auto& input_type = arguments[0];
 	switch (input_type.id) {
 	case SQLTypeId::SQLNULL:
@@ -23,7 +24,7 @@ SQLType sum_get_return_type( vector<SQLType> &arguments ) {
 	case SQLTypeId::DECIMAL:
 		return SQLType(SQLTypeId::DECIMAL);
 	default:
-		throw BinderException("Unsupported SQLType %s for SUM aggregate", SQLTypeToString(input_type).c_str());
+		return SQLType(SQLTypeId::INVALID);
 	}
 }
 

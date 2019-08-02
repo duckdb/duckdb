@@ -35,6 +35,8 @@ static Value bigint_simple_initialize() {
 }
 
 static SQLType get_bigint_return_type(vector<SQLType> &arguments) {
+	if (arguments.size() > 1)
+		return SQLTypeId::INVALID;
 	return SQLTypeId::BIGINT;
 }
 
@@ -76,7 +78,8 @@ static Value null_simple_initialize() {
 }
 
 static SQLType get_same_return_type(vector<SQLType> &arguments) {
-	assert(arguments.size() == 1);
+	if (arguments.size() != 1)
+		return SQLTypeId::INVALID;
 	return arguments[0];
 }
 
