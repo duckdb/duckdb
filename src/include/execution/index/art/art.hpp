@@ -91,7 +91,7 @@ public:
 	void Delete(DataChunk &entries, Vector &row_identifiers) override;
 
 	//! Insert data into the index. Does not lock the index.
-	bool Insert(DataChunk &data, Vector &row_ids);
+	bool Insert(DataChunk &data, Vector &row_ids) override;
 
 private:
 	DataChunk expression_result;

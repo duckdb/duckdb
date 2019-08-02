@@ -676,3 +676,40 @@ void DataTable::RetrieveVersionedData(DataChunk &result, const vector<column_t> 
 		}
 	}
 }
+
+void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>& expressions) {
+	// initialize an index scan
+	IndexTableScanState state;
+	InitializeIndexScan(state);
+
+	DataChunk result;
+	result.Initialize(index->types);
+
+	DataChunk intermediate;
+	vector<TypeId> intermediate_types;
+	auto column_ids = index->column_ids;
+	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	for(auto &id : index->column_ids) {
+		intermediate_types.push_back(types[id]);
+	}
+	intermediate_types.push_back(ROW_TYPE);
+	intermediate.Initialize(intermediate_types);
+
+	// now start incrementally building the index
+	while (true) {
+		intermediate.Reset();
+		// scan a new chunk from the table to index
+		CreateIndexScan(state, column_ids, intermediate);
+		if (intermediate.size() == 0) {
+			// finished scanning for index creation
+			// release all locks
+			break;
+		}
+		// resolve the expressions for this chunk
+		ExpressionExecutor executor(intermediate);
+		executor.Execute(expressions, result);
+		// insert into the index
+		index->Insert(result, intermediate.data[intermediate.column_count - 1]);
+	}
+	indexes.push_back(move(index));
+}

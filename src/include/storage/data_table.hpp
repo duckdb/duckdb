@@ -103,6 +103,9 @@ public:
 	void RetrieveVersionedData(DataChunk &result, const vector<column_t> &column_ids,
 	                           data_ptr_t alternate_version_pointers[], index_t alternate_version_index[],
 	                           index_t alternate_version_count);
+
+	//! Add an index to the DataTable
+	void AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>& expressions);
 private:
 	index_t InitializeTable(unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data);
 	//! Append a storage chunk with the given start index to the data table. Returns a pointer to the newly created
