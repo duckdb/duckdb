@@ -81,6 +81,11 @@ TEST_CASE("Test implicit aggregate operators", "[aggregate]") {
 	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 6, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 7, {Value()}));
+
+	// test incorrect usage of STDDEV_SAMP function
+	REQUIRE_FAIL(con.Query("SELECT STDDEV_SAMP()"));
+	REQUIRE_FAIL(con.Query("SELECT STDDEV_SAMP(1, 2, 3)"));
+	REQUIRE_FAIL(con.Query("SELECT STDDEV_SAMP(STDDEV_SAMP(1))"));
 }
 
 TEST_CASE("Test GROUP BY on expression", "[aggregate]") {
