@@ -184,7 +184,8 @@ struct VectorOperations {
 		static void SetFirst(Vector &source, Vector &dest);
 		// dest[i] = dest[i] + source
 		static void Add(int64_t source, void **dest, index_t length);
-		//! Similar to Set, but also write NullValue<T> if set_null = true, or ignore null values entirely if set_null = false
+		//! Similar to Set, but also write NullValue<T> if set_null = true, or ignore null values entirely if set_null =
+		//! false
 		static void SetAll(Vector &source, Vector &dest, bool set_null = false, index_t offset = 0);
 	};
 	// make sure dest.count is set for gather methods!
@@ -192,8 +193,9 @@ struct VectorOperations {
 		//! dest.data[i] = ptr[i]. If set_null is true, NullValue<T> is checked for and converted to the nullmask in
 		//! dest. If set_null is false, NullValue<T> is ignored.
 		static void Set(Vector &source, Vector &dest, bool set_null = true, index_t offset = 0);
-		//! Append the values from source to the dest vector. If set_null is true, NullValue<T> is checked for and converted to the nullmask in
-		//! dest. If set_null is false, NullValue<T> is ignored. If offset is set, it is added to
+		//! Append the values from source to the dest vector. If set_null is true, NullValue<T> is checked for and
+		//! converted to the nullmask in dest. If set_null is false, NullValue<T> is ignored. If offset is set, it is
+		//! added to
 		static void Append(Vector &source, Vector &dest, index_t offset = 0, bool set_null = true);
 	};
 
@@ -214,7 +216,6 @@ struct VectorOperations {
 	static void Hash(Vector &A, Vector &result);
 	// A ^= HASH(B)
 	static void CombineHash(Vector &hashes, Vector &B);
-
 
 	//===--------------------------------------------------------------------===//
 	// Generate functions

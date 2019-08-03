@@ -15,8 +15,7 @@ class DataChunk;
 class DataTable;
 class WriteAheadLog;
 
-template <bool HAS_LOG>
-class CommitState {
+template <bool HAS_LOG> class CommitState {
 public:
 	CommitState(transaction_t commit_id, WriteAheadLog *log = nullptr);
 
@@ -47,4 +46,4 @@ private:
 	void AppendRowId(VersionInfo *info);
 };
 
-}
+} // namespace duckdb

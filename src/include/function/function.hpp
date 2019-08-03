@@ -53,7 +53,7 @@ typedef void (*aggregate_initialize_t)(data_ptr_t payload, TypeId return_type);
 //! The type used for updating hashed aggregate functions
 typedef void (*aggregate_update_t)(Vector inputs[], index_t input_count, Vector &result);
 //! The type used for finalizing hashed aggregate function payloads
-typedef void (*aggregate_finalize_t)(Vector& payloads, Vector &result);
+typedef void (*aggregate_finalize_t)(Vector &payloads, Vector &result);
 
 //! The type used for initializing simple aggregate function
 typedef Value (*aggregate_simple_initialize_t)();

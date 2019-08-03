@@ -80,15 +80,15 @@ void VectorOperations::Scatter::AddOne(Vector &source, Vector &dest) {
 }
 
 template <class T, bool IGNORE_NULL> static void scatter_set_loop(Vector &source, data_ptr_t dest[], index_t offset) {
-	auto data = (T*) source.data;
+	auto data = (T *)source.data;
 	if (IGNORE_NULL || !source.nullmask.any()) {
 		VectorOperations::Exec(source, [&](index_t i, index_t k) {
-			auto destination = (T*) (dest[i] + offset);
+			auto destination = (T *)(dest[i] + offset);
 			*destination = data[i];
 		});
 	} else {
 		VectorOperations::Exec(source, [&](index_t i, index_t k) {
-			auto destination = (T*) (dest[i] + offset);
+			auto destination = (T *)(dest[i] + offset);
 			if (source.nullmask[i]) {
 				*destination = NullValue<T>();
 			} else {
@@ -98,7 +98,7 @@ template <class T, bool IGNORE_NULL> static void scatter_set_loop(Vector &source
 	}
 }
 
-template<bool IGNORE_NULL = false>
+template <bool IGNORE_NULL = false>
 static void scatter_set_all_loop(Vector &source, data_ptr_t dest[], index_t offset) {
 	switch (source.type) {
 	case TypeId::BOOLEAN:
@@ -121,7 +121,7 @@ static void scatter_set_all_loop(Vector &source, data_ptr_t dest[], index_t offs
 		scatter_set_loop<double, IGNORE_NULL>(source, dest, offset);
 		break;
 	case TypeId::VARCHAR:
-		scatter_set_loop<const char*, IGNORE_NULL>(source, dest, offset);
+		scatter_set_loop<const char *, IGNORE_NULL>(source, dest, offset);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for scatter");
@@ -133,8 +133,8 @@ void VectorOperations::Scatter::SetAll(Vector &source, Vector &dest, bool set_nu
 		throw InvalidTypeException(dest.type, "Cannot scatter to non-pointer type!");
 	}
 	if (set_null) {
-		scatter_set_all_loop<false>(source, (data_ptr_t*) dest.data, offset);
+		scatter_set_all_loop<false>(source, (data_ptr_t *)dest.data, offset);
 	} else {
-		scatter_set_all_loop<true>(source, (data_ptr_t*) dest.data, offset);
+		scatter_set_all_loop<true>(source, (data_ptr_t *)dest.data, offset);
 	}
 }

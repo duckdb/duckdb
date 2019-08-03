@@ -4,15 +4,14 @@
 using namespace duckdb;
 using namespace std;
 
-BoundAggregateExpression::BoundAggregateExpression(TypeId return_type,
-                                                   unique_ptr<Expression> child, AggregateFunctionCatalogEntry* bound_aggregate,
-                                                   bool distinct)
+BoundAggregateExpression::BoundAggregateExpression(TypeId return_type, unique_ptr<Expression> child,
+                                                   AggregateFunctionCatalogEntry *bound_aggregate, bool distinct)
     : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, return_type),
-    bound_aggregate(bound_aggregate), distinct(distinct), child(move(child)) {
+      bound_aggregate(bound_aggregate), distinct(distinct), child(move(child)) {
 }
 
 string BoundAggregateExpression::ToString() const {
-	return bound_aggregate->name + "(" + (distinct ? "DISTINCT " : " " ) + (child ? child->GetName() : string()) + ")";
+	return bound_aggregate->name + "(" + (distinct ? "DISTINCT " : " ") + (child ? child->GetName() : string()) + ")";
 }
 
 uint64_t BoundAggregateExpression::Hash() const {

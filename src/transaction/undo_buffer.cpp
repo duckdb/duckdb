@@ -119,9 +119,7 @@ void UndoBuffer::Cleanup() {
 	//  (2) there is no active transaction with start_id < commit_id of this
 	//  transaction
 	CleanupState state;
-	IterateEntries([&](UndoFlags type, data_ptr_t data) {
-		state.CleanupEntry(type, data);
-	});
+	IterateEntries([&](UndoFlags type, data_ptr_t data) { state.CleanupEntry(type, data); });
 }
 
 void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
@@ -141,7 +139,5 @@ void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
 void UndoBuffer::Rollback() {
 	// rollback needs to be performed in reverse
 	RollbackState state;
-	ReverseIterateEntries([&](UndoFlags type, data_ptr_t data) {
-		state.RollbackEntry(type, data);
-	});
+	ReverseIterateEntries([&](UndoFlags type, data_ptr_t data) { state.RollbackEntry(type, data); });
 }

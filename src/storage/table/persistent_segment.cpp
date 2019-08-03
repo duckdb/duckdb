@@ -9,8 +9,9 @@
 using namespace duckdb;
 using namespace std;
 
-PersistentSegment::PersistentSegment(BlockManager &manager, block_id_t id, index_t offset, TypeId type, index_t start, index_t count) :
-	ColumnSegment(type, ColumnSegmentType::PERSISTENT, start, count), manager(manager), block_id(id), offset(offset) {
+PersistentSegment::PersistentSegment(BlockManager &manager, block_id_t id, index_t offset, TypeId type, index_t start,
+                                     index_t count)
+    : ColumnSegment(type, ColumnSegmentType::PERSISTENT, start, count), manager(manager), block_id(id), offset(offset) {
 	// FIXME
 	stats.has_null = true;
 }
@@ -46,7 +47,8 @@ void PersistentSegment::Scan(ColumnPointer &pointer, Vector &result, index_t cou
 	pointer.offset += count;
 }
 
-void PersistentSegment::Scan(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector, index_t sel_count) {
+void PersistentSegment::Scan(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector,
+                             index_t sel_count) {
 	LoadBlock();
 
 	data_ptr_t dataptr = block->buffer + offset + pointer.offset * type_size;
@@ -63,7 +65,7 @@ void PersistentSegment::Fetch(Vector &result, index_t row_id) {
 	assert(row_id >= start);
 	if (row_id >= start + count) {
 		assert(next);
-		auto &next_segment = (ColumnSegment&) *next;
+		auto &next_segment = (ColumnSegment &)*next;
 		next_segment.Fetch(result, row_id);
 		return;
 	}
@@ -85,17 +87,16 @@ static void append_function(T *__restrict source, T *__restrict target, index_t 
 	});
 }
 
-template<bool HAS_NULL>
-void PersistentSegment::AppendStrings(Vector &source, Vector &target) {
-	auto offsets = (int32_t*) source.data;
-	auto target_strings = (const char **) target.data;
+template <bool HAS_NULL> void PersistentSegment::AppendStrings(Vector &source, Vector &target) {
+	auto offsets = (int32_t *)source.data;
+	auto target_strings = (const char **)target.data;
 	VectorOperations::Exec(source, [&](index_t i, index_t k) {
-		const char *str_val = (const char*) (dictionary + offsets[i]);
+		const char *str_val = (const char *)(dictionary + offsets[i]);
 		if (*str_val == TableDataWriter::BIG_STRING_MARKER[0]) {
 			// big string, load from block if not loaded yet
 			auto block_id = *((block_id_t *)(str_val + 2 * sizeof(char)));
 			target_strings[target.count + k] = GetBigString(block_id);
-		} else if (HAS_NULL && IsNullValue<const char*>(str_val)) {
+		} else if (HAS_NULL && IsNullValue<const char *>(str_val)) {
 			target.nullmask[target.count + k] = true;
 		} else {
 			target_strings[target.count + k] = str_val;

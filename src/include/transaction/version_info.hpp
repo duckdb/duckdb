@@ -27,7 +27,8 @@ struct VersionInfo {
 	DataTable &GetTable();
 	index_t GetRowId();
 
-	//! Given a specific version info, follow the version info chain and retrieve the VersionInfo for a specific transaction (if any)
+	//! Given a specific version info, follow the version info chain and retrieve the VersionInfo for a specific
+	//! transaction (if any)
 	static VersionInfo *GetVersionForTransaction(Transaction &transaction, VersionInfo *version);
 };
 

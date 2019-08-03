@@ -11,23 +11,23 @@ using namespace std;
 using ScanStructure = JoinHashTable::ScanStructure;
 
 static void SerializeChunk(DataChunk &source, data_ptr_t targets[]) {
-	Vector target_vector(TypeId::POINTER, (data_ptr_t) targets);
+	Vector target_vector(TypeId::POINTER, (data_ptr_t)targets);
 	target_vector.count = source.size();
 	target_vector.sel_vector = source.sel_vector;
 
 	index_t offset = 0;
-	for(index_t i = 0; i < source.column_count; i++) {
+	for (index_t i = 0; i < source.column_count; i++) {
 		VectorOperations::Scatter::SetAll(source.data[i], target_vector, true, offset);
 		offset += GetTypeIdSize(source.data[i].type);
 	}
 }
 
 static void DeserializeChunk(DataChunk &result, data_ptr_t source[], index_t count) {
-	Vector source_vector(TypeId::POINTER, (data_ptr_t) source);
+	Vector source_vector(TypeId::POINTER, (data_ptr_t)source);
 	source_vector.count = count;
 
 	index_t offset = 0;
-	for(index_t i = 0; i < result.column_count; i++) {
+	for (index_t i = 0; i < result.column_count; i++) {
 		VectorOperations::Gather::Set(source_vector, result.data[i], false, offset);
 		offset += GetTypeIdSize(result.data[i].type);
 	}
@@ -35,8 +35,8 @@ static void DeserializeChunk(DataChunk &result, data_ptr_t source[], index_t cou
 
 JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type,
                              index_t initial_capacity, bool parallel)
-    : build_types(build_types), equality_size(0), condition_size(0), build_size(0),
-      entry_size(0), tuple_size(0), join_type(type), has_null(false), capacity(0), count(0), parallel(parallel) {
+    : build_types(build_types), equality_size(0), condition_size(0), build_size(0), entry_size(0), tuple_size(0),
+      join_type(type), has_null(false), capacity(0), count(0), parallel(parallel) {
 	for (auto &condition : conditions) {
 		assert(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
@@ -77,9 +77,7 @@ JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> b
 
 void JoinHashTable::ApplyBitmask(Vector &hashes) {
 	auto indices = (index_t *)hashes.data;
-	VectorOperations::Exec(hashes, [&](index_t i, index_t k) {
-		indices[i] = indices[i] & bitmask;
-	});
+	VectorOperations::Exec(hashes, [&](index_t i, index_t k) { indices[i] = indices[i] & bitmask; });
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, data_ptr_t key_locations[]) {

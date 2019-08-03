@@ -17,7 +17,8 @@
 using namespace duckdb;
 using namespace std;
 
-DataTable::DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types_, unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data)
+DataTable::DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types_,
+                     unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data)
     : cardinality(0), schema(schema), table(table), types(types_), storage(storage) {
 	index_t accumulative_size = 0;
 	for (index_t i = 0; i < types.size(); i++) {
@@ -50,7 +51,7 @@ index_t DataTable::InitializeTable(unique_ptr<vector<unique_ptr<PersistentSegmen
 
 	// first append all the segments to the set of column segments
 	for (index_t i = 0; i < types.size(); i++) {
-		for(auto &segment : data[i]) {
+		for (auto &segment : data[i]) {
 			columns[i].AppendSegment(move(segment));
 		}
 	}
@@ -58,12 +59,12 @@ index_t DataTable::InitializeTable(unique_ptr<vector<unique_ptr<PersistentSegmen
 	// set up the initial segments
 	auto segments = unique_ptr<ColumnPointer[]>(new ColumnPointer[types.size()]);
 	for (index_t i = 0; i < types.size(); i++) {
-		segments[i].segment = (ColumnSegment*) columns[i].GetRootSegment();
+		segments[i].segment = (ColumnSegment *)columns[i].GetRootSegment();
 		segments[i].offset = 0;
 	}
 
 	// now create the version chunks
-	while(segments[0].segment) {
+	while (segments[0].segment) {
 		auto chunk = make_unique<VersionChunk>(VersionChunkType::PERSISTENT, *this, current_row);
 		// set the columns of the chunk
 		chunk->columns = unique_ptr<ColumnPointer[]>(new ColumnPointer[types.size()]);
@@ -71,11 +72,13 @@ index_t DataTable::InitializeTable(unique_ptr<vector<unique_ptr<PersistentSegmen
 			chunk->columns[i].segment = segments[i].segment;
 			chunk->columns[i].offset = segments[i].offset;
 		}
-		// now advance each of the segments until either (1) the max for the version chunk is reached or (2) the end of the table is reached
-		for(index_t i = 0; i < types.size(); i++) {
+		// now advance each of the segments until either (1) the max for the version chunk is reached or (2) the end of
+		// the table is reached
+		for (index_t i = 0; i < types.size(); i++) {
 			index_t count = 0;
-			while(count < STORAGE_CHUNK_SIZE) {
-				index_t entries_in_segment = std::min(STORAGE_CHUNK_SIZE - count, segments[i].segment->count - segments[i].offset);
+			while (count < STORAGE_CHUNK_SIZE) {
+				index_t entries_in_segment =
+				    std::min(STORAGE_CHUNK_SIZE - count, segments[i].segment->count - segments[i].offset);
 				segments[i].offset += entries_in_segment;
 				count += entries_in_segment;
 				if (segments[i].offset == segments[i].segment->count) {
@@ -85,7 +88,7 @@ index_t DataTable::InitializeTable(unique_ptr<vector<unique_ptr<PersistentSegmen
 						segments[i].segment = nullptr;
 						break;
 					}
-					segments[i].segment = (ColumnSegment*) segments[i].segment->next.get();
+					segments[i].segment = (ColumnSegment *)segments[i].segment->next.get();
 					segments[i].offset = 0;
 				}
 			}
@@ -469,7 +472,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		unordered_map<column_t, column_t> update_ids;
 		vector<column_t> fetch_ids;
 		vector<TypeId> fetch_types;
-		for(index_t i = 0; i < types.size(); i++) {
+		for (index_t i = 0; i < types.size(); i++) {
 			auto entry = std::find(column_ids.begin(), column_ids.end(), i);
 			if (entry == column_ids.end()) {
 				// column is not present in update list: fetch from base table
@@ -489,7 +492,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		}
 
 		// now create the append chunk
-		for(index_t i = 0; i < types.size(); i++) {
+		for (index_t i = 0; i < types.size(); i++) {
 			auto entry = update_ids.find(i);
 			if (entry != update_ids.end()) {
 				// fetch vector from updates
@@ -642,9 +645,10 @@ void DataTable::CreateIndexScan(IndexTableScanState &state, vector<column_t> &co
 	}
 }
 
-void DataTable::RetrieveVersionedData(DataChunk &result, data_ptr_t alternate_version_pointers[], index_t alternate_version_count) {
+void DataTable::RetrieveVersionedData(DataChunk &result, data_ptr_t alternate_version_pointers[],
+                                      index_t alternate_version_count) {
 	assert(alternate_version_count > 0);
-	Vector version_pointers(TypeId::POINTER, (data_ptr_t) alternate_version_pointers);
+	Vector version_pointers(TypeId::POINTER, (data_ptr_t)alternate_version_pointers);
 	version_pointers.count = alternate_version_count;
 	// get data from the alternate versions for each column
 	for (index_t j = 0; j < result.column_count; j++) {
@@ -657,7 +661,7 @@ void DataTable::RetrieveVersionedData(DataChunk &result, const vector<column_t> 
                                       index_t alternate_version_count) {
 	assert(alternate_version_count > 0);
 	// create a vector of the version pointers
-	Vector version_pointers(TypeId::POINTER, (data_ptr_t) alternate_version_pointers);
+	Vector version_pointers(TypeId::POINTER, (data_ptr_t)alternate_version_pointers);
 	version_pointers.count = alternate_version_count;
 	// get data from the alternate versions for each column
 	for (index_t j = 0; j < column_ids.size(); j++) {
@@ -677,7 +681,7 @@ void DataTable::RetrieveVersionedData(DataChunk &result, const vector<column_t> 
 	}
 }
 
-void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>& expressions) {
+void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>> &expressions) {
 	// initialize an index scan
 	IndexTableScanState state;
 	InitializeIndexScan(state);
@@ -689,7 +693,7 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 	vector<TypeId> intermediate_types;
 	auto column_ids = index->column_ids;
 	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
-	for(auto &id : index->column_ids) {
+	for (auto &id : index->column_ids) {
 		intermediate_types.push_back(types[id]);
 	}
 	intermediate_types.push_back(ROW_TYPE);

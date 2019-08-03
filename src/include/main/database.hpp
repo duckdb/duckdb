@@ -44,6 +44,7 @@ public:
 
 	AccessMode access_mode;
 	bool checkpoint_only;
+
 private:
 	void Configure(DBConfig &config);
 };

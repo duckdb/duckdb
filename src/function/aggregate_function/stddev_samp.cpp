@@ -10,7 +10,7 @@ namespace duckdb {
 
 SQLType stddev_get_return_type(vector<SQLType> &arguments) {
 	assert(arguments.size() == 1);
-	const auto& input_type = arguments[0];
+	const auto &input_type = arguments[0];
 	switch (input_type.id) {
 	case SQLTypeId::SQLNULL:
 	case SQLTypeId::TINYINT:
@@ -26,8 +26,8 @@ SQLType stddev_get_return_type(vector<SQLType> &arguments) {
 	}
 }
 
-void stddevsamp_update(Vector inputs[], index_t input_count, Vector &result ) {
-	assert(input_count == 1 );
+void stddevsamp_update(Vector inputs[], index_t input_count, Vector &result) {
+	assert(input_count == 1);
 	// Streaming approximate standard deviation using Welford's
 	// method, DOI: 10.2307/1266577
 
@@ -66,7 +66,7 @@ void stddevsamp_update(Vector inputs[], index_t input_count, Vector &result ) {
 	});
 }
 
-void stddevsamp_finalize(Vector& payloads, Vector &result) {
+void stddevsamp_finalize(Vector &payloads, Vector &result) {
 	// compute finalization of streaming stddev of sample
 	VectorOperations::Exec(payloads, [&](uint64_t i, uint64_t k) {
 		auto base_ptr = ((data_ptr_t *)payloads.data)[i];

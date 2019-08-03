@@ -14,7 +14,8 @@ namespace duckdb {
 //! Represents a function call
 class FunctionExpression : public ParsedExpression {
 public:
-	FunctionExpression(string schema_name, string function_name, vector<unique_ptr<ParsedExpression>> &children, bool distinct = false);
+	FunctionExpression(string schema_name, string function_name, vector<unique_ptr<ParsedExpression>> &children,
+	                   bool distinct = false);
 	FunctionExpression(string function_name, vector<unique_ptr<ParsedExpression>> &children, bool distinct = false);
 
 	//! Schema of the function
@@ -25,6 +26,7 @@ public:
 	vector<unique_ptr<ParsedExpression>> children;
 	//! Whether or not the aggregate function is distinct, only used for aggregates
 	bool distinct;
+
 public:
 	string ToString() const override;
 

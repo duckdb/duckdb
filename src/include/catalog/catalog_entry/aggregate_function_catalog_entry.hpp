@@ -22,17 +22,10 @@ class SchemaCatalogEntry;
 class AggregateFunctionCatalogEntry : public CatalogEntry {
 public:
 	AggregateFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateAggregateFunctionInfo *info)
-	    : CatalogEntry(CatalogType::AGGREGATE_FUNCTION, catalog, info->name)
-	    , schema(schema)
-	    , payload_size(info->payload_size)
-	    , initialize(info->initialize)
-	    , update(info->update)
-	    , finalize(info->finalize)
-	    , simple_initialize(info->simple_initialize)
-	    , simple_update(info->simple_update)
-	    , return_type(info->return_type)
-	    , cast_arguments(info->cast_arguments)
-	{
+	    : CatalogEntry(CatalogType::AGGREGATE_FUNCTION, catalog, info->name), schema(schema),
+	      payload_size(info->payload_size), initialize(info->initialize), update(info->update),
+	      finalize(info->finalize), simple_initialize(info->simple_initialize), simple_update(info->simple_update),
+	      return_type(info->return_type), cast_arguments(info->cast_arguments) {
 	}
 
 	//! The schema the table belongs to

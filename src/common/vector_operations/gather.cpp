@@ -13,7 +13,7 @@ using namespace std;
 
 struct GatherLoopSetNull {
 	template <class T, class OP> static void Operation(Vector &src, Vector &result, index_t offset) {
-		(void) offset;
+		(void)offset;
 		auto source = (T **)src.data;
 		auto ldata = (T *)result.data;
 		if (result.sel_vector) {
@@ -38,7 +38,7 @@ struct GatherLoopSetNull {
 
 struct GatherLoopIgnoreNull {
 	template <class T, class OP> static void Operation(Vector &src, Vector &result, index_t offset) {
-		(void) offset;
+		(void)offset;
 		auto source = (T **)src.data;
 		auto ldata = (T *)result.data;
 		if (result.sel_vector) {
@@ -98,13 +98,13 @@ void VectorOperations::Gather::Set(Vector &source, Vector &dest, bool set_null, 
 
 struct GatherLoopAppendNull {
 	template <class T, class OP> static void Operation(Vector &src, Vector &result, index_t offset) {
-		(void) offset;
+		(void)offset;
 		auto source = (data_ptr_t *)src.data;
 		auto ldata = (T *)result.data;
 		VectorOperations::Exec(src, [&](index_t i, index_t k) {
-			T val = *((T*)(source[i] + offset));
+			T val = *((T *)(source[i] + offset));
 			result.nullmask[result.count] = IsNullValue<T>(val);
-			ldata[result.count] = *((T*)(source[i] + offset));
+			ldata[result.count] = *((T *)(source[i] + offset));
 			result.count++;
 		});
 	}
@@ -112,12 +112,11 @@ struct GatherLoopAppendNull {
 
 struct GatherLoopAppend {
 	template <class T, class OP> static void Operation(Vector &src, Vector &result, index_t offset) {
-		(void) offset;
+		(void)offset;
 		auto source = (data_t **)src.data;
 		auto ldata = (T *)result.data;
-		VectorOperations::Exec(src, [&](index_t i, index_t k) {
-			ldata[result.count++] = *((T*)(source[i] + offset));
-		});
+		VectorOperations::Exec(src,
+		                       [&](index_t i, index_t k) { ldata[result.count++] = *((T *)(source[i] + offset)); });
 	}
 };
 

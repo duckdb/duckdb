@@ -48,11 +48,11 @@ struct IndexTableScanState : public TableScanState {
 	vector<unique_ptr<StorageLockKey>> locks;
 };
 
-
 //! DataTable represents a physical table on disk
 class DataTable {
 public:
-	DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types, unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data);
+	DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types,
+	          unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data);
 
 	//! The amount of elements in the table. Note that this number signifies the amount of COMMITTED entries in the
 	//! table. It can be inaccurate inside of transactions. More work is needed to properly support that.
@@ -77,7 +77,8 @@ public:
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	// from offset and store them in result. Offset is incremented with how many
 	// elements were returned.
-	void Scan(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids, TableScanState &structure);
+	void Scan(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids,
+	          TableScanState &structure);
 	//! Fetch data from the specific row identifiers from the base table
 	void Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, Vector &row_ids);
 	//! Append a DataChunk to the table. Throws an exception if the columns
@@ -97,7 +98,8 @@ public:
 	VersionChunk *GetChunk(index_t row_number);
 
 	//! Retrieve versioned data for all column_ids of the table
-	void RetrieveVersionedData(DataChunk &result, data_ptr_t alternate_version_pointers[], index_t alternate_version_count);
+	void RetrieveVersionedData(DataChunk &result, data_ptr_t alternate_version_pointers[],
+	                           index_t alternate_version_count);
 
 	//! Retrieves versioned data for a specific set of column_ids of the table
 	void RetrieveVersionedData(DataChunk &result, const vector<column_t> &column_ids,
@@ -105,7 +107,8 @@ public:
 	                           index_t alternate_version_count);
 
 	//! Add an index to the DataTable
-	void AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>& expressions);
+	void AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>> &expressions);
+
 private:
 	index_t InitializeTable(unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data);
 	//! Append a storage chunk with the given start index to the data table. Returns a pointer to the newly created

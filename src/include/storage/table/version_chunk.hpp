@@ -23,13 +23,11 @@ class StorageManager;
 struct TableScanState;
 struct IndexTableScanState;
 
-enum class VersionChunkType : uint8_t {
-	TRANSIENT,
-	PERSISTENT
-};
+enum class VersionChunkType : uint8_t { TRANSIENT, PERSISTENT };
 
 class VersionChunk : public SegmentBase {
 	friend class VersionChunkInfo;
+
 public:
 	VersionChunk(VersionChunkType type, DataTable &table, index_t start);
 
@@ -54,37 +52,44 @@ public:
 	VersionInfo *GetVersionInfo(index_t index);
 	//! Mark a specified entry in the version chunk as deleted. Requires write lock of the chunk to be held.
 	void SetDeleted(index_t index);
-	//! Push a number of deleted entries to the undo buffer of the transaction. Requires write lock of the chunk to be held.
+	//! Push a number of deleted entries to the undo buffer of the transaction. Requires write lock of the chunk to be
+	//! held.
 	void PushDeletedEntries(Transaction &transaction, index_t amount);
 	//! Push a specific tuple into the undo buffer of the transaction. Requires write lock of the chunk to be held.
 	void PushTuple(Transaction &transaction, UndoFlags flag, index_t offset);
 	//! Retrieve the tuple data for a specific row identifier. Requires shared lock of the chunk to be held.
 	void RetrieveTupleData(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, index_t offset);
-	//! Scan a DataChunk from the version chunk. Returns true if the scanned version_index is the last segment of the chunk.
-	bool Scan(TableScanState &state, Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids, index_t version_index);
+	//! Scan a DataChunk from the version chunk. Returns true if the scanned version_index is the last segment of the
+	//! chunk.
+	bool Scan(TableScanState &state, Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids,
+	          index_t version_index);
 
-	//! Scan used for creating an index, scans ALL tuples in the table (including all versions of a tuple). Returns true if the chunk is exhausted
+	//! Scan used for creating an index, scans ALL tuples in the table (including all versions of a tuple). Returns true
+	//! if the chunk is exhausted
 	bool CreateIndexScan(IndexTableScanState &state, vector<column_t> &column_ids, DataChunk &result);
 
 	//! Appends the data of a VersionInfo entry to a chunk
 	void AppendToChunk(DataChunk &chunk, VersionInfo *info);
 
 	void Update(Vector &row_identifiers, Vector &update_vector, index_t col_idx);
+
 private:
 	//! Fetches a single tuple from the base table at rowid row_id, and appends that tuple to the "result" DataChunk
 	void RetrieveTupleFromBaseTable(DataChunk &result, vector<column_t> &column_ids, row_t row_id);
 
-	VersionChunkInfo* GetOrCreateVersionInfo(index_t version_index);
+	VersionChunkInfo *GetOrCreateVersionInfo(index_t version_index);
 	//! Fetch "count" entries from the specified column pointer, and place them in the result vector. The column pointer
 	//! is advanced by "count" entries.
 	void RetrieveColumnData(ColumnPointer &pointer, Vector &result, index_t count);
 	//! Fetch "sel_count" entries from a "count" size chunk of the specified column pointer, where the fetched entries
 	//! are chosen by "sel_vector". The column pointer is advanced by "count" entries.
-	void RetrieveColumnData(ColumnPointer &pointer, Vector &result,index_t count, sel_t *sel_vector, index_t sel_count);
+	void RetrieveColumnData(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector,
+	                        index_t sel_count);
 
-
-	void FetchColumnData(TableScanState &state, DataChunk &result, const vector<column_t> &column_ids, index_t offset_in_chunk, index_t count);
-	void FetchColumnData(TableScanState &state, DataChunk &result, const vector<column_t> &column_ids, index_t offset_in_chunk, index_t scan_count, sel_t sel_vector[], index_t count);
+	void FetchColumnData(TableScanState &state, DataChunk &result, const vector<column_t> &column_ids,
+	                     index_t offset_in_chunk, index_t count);
+	void FetchColumnData(TableScanState &state, DataChunk &result, const vector<column_t> &column_ids,
+	                     index_t offset_in_chunk, index_t scan_count, sel_t sel_vector[], index_t count);
 };
 
 } // namespace duckdb

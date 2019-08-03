@@ -6,11 +6,12 @@
 using namespace duckdb;
 using namespace std;
 
-static void AppendToBlock(SegmentStatistics &stats, Vector &source, void *target, index_t offset, index_t element_count);
+static void AppendToBlock(SegmentStatistics &stats, Vector &source, void *target, index_t offset,
+                          index_t element_count);
 static void UpdateValue(TypeId type, SegmentStatistics &stats, data_ptr_t source, data_ptr_t target);
 
-TransientSegment::TransientSegment(TypeId type, index_t start) :
-	ColumnSegment(type, ColumnSegmentType::TRANSIENT, start), block(INVALID_BLOCK) {
+TransientSegment::TransientSegment(TypeId type, index_t start)
+    : ColumnSegment(type, ColumnSegmentType::TRANSIENT, start), block(INVALID_BLOCK) {
 }
 
 void TransientSegment::Scan(ColumnPointer &pointer, Vector &result, index_t count) {
@@ -21,7 +22,8 @@ void TransientSegment::Scan(ColumnPointer &pointer, Vector &result, index_t coun
 	pointer.offset += count;
 }
 
-void TransientSegment::Scan(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector, index_t sel_count) {
+void TransientSegment::Scan(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector,
+                            index_t sel_count) {
 	data_ptr_t dataptr = block.buffer + pointer.offset * type_size;
 	Vector source(type, dataptr);
 	source.count = sel_count;
@@ -48,7 +50,7 @@ void TransientSegment::Fetch(Vector &result, index_t row_id) {
 	assert(row_id >= start);
 	if (row_id >= start + count) {
 		assert(next);
-		auto &next_segment = (ColumnSegment&) *next;
+		auto &next_segment = (ColumnSegment &)*next;
 		next_segment.Fetch(result, row_id);
 		return;
 	}
@@ -62,7 +64,7 @@ void TransientSegment::Update(index_t row_id, data_ptr_t new_data) {
 	assert(row_id >= start);
 	if (row_id >= start + count) {
 		assert(next);
-		auto &next_segment = (TransientSegment&) *next;
+		auto &next_segment = (TransientSegment &)*next;
 		next_segment.Update(row_id, new_data);
 		return;
 	}
@@ -70,8 +72,7 @@ void TransientSegment::Update(index_t row_id, data_ptr_t new_data) {
 	UpdateValue(type, stats, new_data, dataptr);
 }
 
-template<class T>
-static void update_min_max(T value, T *__restrict min, T *__restrict max) {
+template <class T> static void update_min_max(T value, T *__restrict min, T *__restrict max) {
 	if (value < *min) {
 		*min = value;
 	}
@@ -82,45 +83,51 @@ static void update_min_max(T value, T *__restrict min, T *__restrict max) {
 
 template <class T>
 static void append_loop_null(T *__restrict source, T *__restrict target, index_t offset, index_t count,
-                                   sel_t *__restrict sel_vector, nullmask_t &nullmask,
-								   T *__restrict min, T *__restrict max, bool &has_null) {
+                             sel_t *__restrict sel_vector, nullmask_t &nullmask, T *__restrict min, T *__restrict max,
+                             bool &has_null) {
 	// null values, have to check the NULL values in the mask
-	VectorOperations::Exec(sel_vector, count + offset, [&](index_t i, index_t k) {
-		if (nullmask[i]) {
-			target[k - offset] = NullValue<T>();
-			has_null = true;
-		} else {
-			update_min_max(source[i], min, max);
-			target[k - offset] = source[i];
-		}
-	},
-	offset);
+	VectorOperations::Exec(
+	    sel_vector, count + offset,
+	    [&](index_t i, index_t k) {
+		    if (nullmask[i]) {
+			    target[k - offset] = NullValue<T>();
+			    has_null = true;
+		    } else {
+			    update_min_max(source[i], min, max);
+			    target[k - offset] = source[i];
+		    }
+	    },
+	    offset);
 }
-
 
 template <class T>
 static void append_loop_no_null(T *__restrict source, T *__restrict target, index_t offset, index_t count,
-                                   sel_t *__restrict sel_vector, T *__restrict min, T *__restrict max) {
-	VectorOperations::Exec(sel_vector, count + offset, [&](index_t i, index_t k) {
-		update_min_max(source[i], min, max);
-		target[k - offset] = source[i];
-	}, offset);
+                                sel_t *__restrict sel_vector, T *__restrict min, T *__restrict max) {
+	VectorOperations::Exec(
+	    sel_vector, count + offset,
+	    [&](index_t i, index_t k) {
+		    update_min_max(source[i], min, max);
+		    target[k - offset] = source[i];
+	    },
+	    offset);
 }
 
 template <class T>
 static void append_loop(SegmentStatistics &stats, Vector &input, void *target, index_t offset, index_t element_count) {
 	auto ldata = (T *)input.data;
 	auto result_data = (T *)target;
-	auto min = (T*) stats.minimum.get();
-	auto max = (T*) stats.maximum.get();
+	auto min = (T *)stats.minimum.get();
+	auto max = (T *)stats.maximum.get();
 	if (input.nullmask.any()) {
-		append_loop_null<T>(ldata, result_data, offset, element_count, input.sel_vector, input.nullmask, min, max, stats.has_null);
+		append_loop_null<T>(ldata, result_data, offset, element_count, input.sel_vector, input.nullmask, min, max,
+		                    stats.has_null);
 	} else {
 		append_loop_no_null<T>(ldata, result_data, offset, element_count, input.sel_vector, min, max);
 	}
 }
 
-static void AppendToBlock(SegmentStatistics &stats, Vector &source, void *target, index_t offset, index_t element_count) {
+static void AppendToBlock(SegmentStatistics &stats, Vector &source, void *target, index_t offset,
+                          index_t element_count) {
 	assert(offset + element_count <= source.count);
 
 	switch (source.type) {
@@ -151,12 +158,11 @@ static void AppendToBlock(SegmentStatistics &stats, Vector &source, void *target
 	}
 }
 
-template<class T>
-static void update_value(SegmentStatistics &stats, data_ptr_t source_data, data_ptr_t target_data) {
-	auto source = (T*) source_data;
-	auto target = (T*) target_data;
-	auto min = (T*) stats.minimum.get();
-	auto max = (T*) stats.maximum.get();
+template <class T> static void update_value(SegmentStatistics &stats, data_ptr_t source_data, data_ptr_t target_data) {
+	auto source = (T *)source_data;
+	auto target = (T *)target_data;
+	auto min = (T *)stats.minimum.get();
+	auto max = (T *)stats.maximum.get();
 	if (IsNullValue<T>(*source)) {
 		stats.has_null = true;
 	}

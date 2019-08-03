@@ -53,8 +53,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 
 					unbound_expressions.push_back(
 					    make_unique<BoundColumnRefExpression>(column_type, ColumnBinding(0, column_ids.size())));
-					bound_expressions.push_back(
-						make_unique<BoundReferenceExpression>(column_type, key_nr++));
+					bound_expressions.push_back(make_unique<BoundReferenceExpression>(column_type, key_nr++));
 					column_ids.push_back(key);
 				}
 				// create an adaptive radix tree around the expressions
@@ -67,7 +66,6 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 					}
 				}
 				storage->AddIndex(move(art), bound_expressions);
-
 			}
 		}
 	}

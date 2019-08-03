@@ -19,6 +19,7 @@ public:
 	TableDataReader(CheckpointManager &manager, MetaBlockReader &reader, BoundCreateTableInfo &info);
 
 	void ReadTableData();
+
 private:
 	CheckpointManager &manager;
 	MetaBlockReader &reader;

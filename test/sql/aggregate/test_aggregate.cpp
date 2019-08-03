@@ -20,7 +20,8 @@ TEST_CASE("Test COUNT operator", "[aggregate]") {
 	// test counts on a set of values
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (NULL)"));
-	result = con.Query("SELECT COUNT(*), COUNT(1), COUNT(i), COUNT(COALESCE(i, 1)), COUNT(DISTINCT i), COUNT(DISTINCT 1) FROM integers");
+	result = con.Query("SELECT COUNT(*), COUNT(1), COUNT(i), COUNT(COALESCE(i, 1)), COUNT(DISTINCT i), COUNT(DISTINCT "
+	                   "1) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {3}));
 	REQUIRE(CHECK_COLUMN(result, 2, {2}));
@@ -72,7 +73,8 @@ TEST_CASE("Test implicit aggregate operators", "[aggregate]") {
 
 	// test implicit aggregates on empty set
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
-	result = con.Query("SELECT COUNT(*), COUNT(i), STDDEV_SAMP(i), SUM(i), SUM(DISTINCT i), FIRST(i), MAX(i), MIN(i) FROM integers WHERE i > 100");
+	result = con.Query("SELECT COUNT(*), COUNT(i), STDDEV_SAMP(i), SUM(i), SUM(DISTINCT i), FIRST(i), MAX(i), MIN(i) "
+	                   "FROM integers WHERE i > 100");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));

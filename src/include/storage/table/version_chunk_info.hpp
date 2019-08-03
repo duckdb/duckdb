@@ -31,6 +31,7 @@ public:
 	VersionChunk &chunk;
 	//! The start index
 	index_t start;
+
 public:
 	// Cleanup the version information of a tuple
 	void Cleanup(VersionInfo *info);
@@ -38,4 +39,4 @@ public:
 	void Undo(VersionInfo *info);
 };
 
-}
+} // namespace duckdb

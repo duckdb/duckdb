@@ -13,7 +13,7 @@
 namespace duckdb {
 
 void stddevsamp_update(Vector inputs[], index_t input_count, Vector &result);
-void stddevsamp_finalize(Vector& payloads, Vector &result);
+void stddevsamp_finalize(Vector &payloads, Vector &result);
 SQLType stddev_get_return_type(vector<SQLType> &arguments);
 
 static index_t stddev_payload_size(TypeId return_type) {
@@ -27,7 +27,7 @@ static void stddevsamp_initialize(data_ptr_t payload, TypeId return_type) {
 
 class StdDevSampFunction {
 public:
-	static const char*GetName() {
+	static const char *GetName() {
 		return "stddev_samp";
 	}
 
@@ -64,4 +64,4 @@ public:
 	}
 };
 
-}
+} // namespace duckdb

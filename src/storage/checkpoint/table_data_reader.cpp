@@ -16,7 +16,8 @@ using namespace std;
 
 TableDataReader::TableDataReader(CheckpointManager &manager, MetaBlockReader &reader, BoundCreateTableInfo &info)
     : manager(manager), reader(reader), info(info) {
-	info.data = unique_ptr<vector<unique_ptr<PersistentSegment>>[]>(new vector<unique_ptr<PersistentSegment>>[info.base->columns.size()]);
+	info.data = unique_ptr<vector<unique_ptr<PersistentSegment>>[]>(
+	    new vector<unique_ptr<PersistentSegment>>[info.base->columns.size()]);
 }
 
 void TableDataReader::ReadTableData() {
@@ -37,7 +38,9 @@ void TableDataReader::ReadTableData() {
 			data_pointer.block_id = reader.Read<block_id_t>();
 			data_pointer.offset = reader.Read<uint32_t>();
 			// create a persistent segment
-			auto segment = make_unique<PersistentSegment>(manager.block_manager, data_pointer.block_id, data_pointer.offset, GetInternalType(column.type), data_pointer.row_start, data_pointer.tuple_count);
+			auto segment = make_unique<PersistentSegment>(manager.block_manager, data_pointer.block_id,
+			                                              data_pointer.offset, GetInternalType(column.type),
+			                                              data_pointer.row_start, data_pointer.tuple_count);
 			info.data[col].push_back(move(segment));
 		}
 	}

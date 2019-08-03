@@ -17,9 +17,11 @@ class WriteAheadLog;
 
 class RollbackState {
 public:
-	RollbackState() {}
+	RollbackState() {
+	}
+
 public:
 	void RollbackEntry(UndoFlags type, data_ptr_t data);
 };
 
-}
+} // namespace duckdb

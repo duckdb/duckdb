@@ -3,9 +3,7 @@
 using namespace duckdb;
 using namespace std;
 
-CleanupState::CleanupState() :
-	current_table(nullptr), count(0) {
-
+CleanupState::CleanupState() : current_table(nullptr), count(0) {
 }
 
 CleanupState::~CleanupState() {
@@ -87,7 +85,7 @@ void CleanupState::FlushIndexCleanup() {
 	}
 
 	// set up the row identifiers vector
-	Vector row_identifiers(ROW_TYPE, (data_ptr_t) row_numbers);
+	Vector row_identifiers(ROW_TYPE, (data_ptr_t)row_numbers);
 	row_identifiers.count = count;
 
 	// now retrieve data from the version info

@@ -7,7 +7,7 @@ using namespace std;
 
 namespace duckdb {
 
-void gather_finalize(Vector& payloads, Vector &result) {
+void gather_finalize(Vector &payloads, Vector &result) {
 	VectorOperations::Gather::Set(payloads, result);
 }
 

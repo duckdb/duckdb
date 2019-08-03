@@ -510,7 +510,6 @@ TEST_CASE("Test updates/deletes/insertions on persistent segments", "[storage]")
 		result = con.Query("SELECT * FROM test ORDER BY a");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 3, 6}));
 		REQUIRE(CHECK_COLUMN(result, 1, {Value(), 2, 7, 5}));
-
 	}
 	DeleteDatabase(storage_database);
 }

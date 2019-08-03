@@ -19,6 +19,7 @@ public:
 
 	//! The block that is used to store the data of the transient segment
 	Block block;
+
 public:
 	void Scan(ColumnPointer &pointer, Vector &result, index_t count) override;
 	void Scan(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector, index_t sel_count) override;

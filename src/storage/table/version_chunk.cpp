@@ -10,8 +10,8 @@
 using namespace duckdb;
 using namespace std;
 
-VersionChunk::VersionChunk(VersionChunkType type, DataTable &base_table, index_t start) :
-    SegmentBase(start, 0), type(type), table(base_table) {
+VersionChunk::VersionChunk(VersionChunkType type, DataTable &base_table, index_t start)
+    : SegmentBase(start, 0), type(type), table(base_table) {
 }
 
 index_t VersionChunk::GetVersionIndex(index_t index) {
@@ -36,7 +36,7 @@ void VersionChunk::SetDeleted(index_t index) {
 	version->deleted[index - version->start] = true;
 }
 
-VersionChunkInfo* VersionChunk::GetOrCreateVersionInfo(index_t version_index) {
+VersionChunkInfo *VersionChunk::GetOrCreateVersionInfo(index_t version_index) {
 	assert(version_index < STORAGE_CHUNK_VECTORS);
 	if (!version_data[version_index]) {
 		version_data[version_index] = make_shared<VersionChunkInfo>(*this, version_index * STANDARD_VECTOR_SIZE);
@@ -108,9 +108,9 @@ void VersionChunk::PushTuple(Transaction &transaction, UndoFlags flag, index_t o
 
 	data_ptr_t target_locations[1];
 	target_locations[0] = tuple_data;
-	Vector target(TypeId::POINTER, (data_ptr_t) target_locations);
+	Vector target(TypeId::POINTER, (data_ptr_t)target_locations);
 	target.count = 1;
-	for(index_t i = 0; i < chunk.column_count; i++) {
+	for (index_t i = 0; i < chunk.column_count; i++) {
 		VectorOperations::Scatter::SetAll(chunk.data[i], target);
 		target_locations[0] += columns[i].segment->type_size;
 	}
@@ -159,7 +159,7 @@ void VersionChunk::Update(Vector &row_identifiers, Vector &update_vector, index_
 
 	auto size = columns[col_idx].segment->type_size;
 	auto ids = (row_t *)row_identifiers.data;
-	auto &transient = (TransientSegment&) *columns[col_idx].segment;
+	auto &transient = (TransientSegment &)*columns[col_idx].segment;
 
 	if (update_vector.nullmask.any()) {
 		// has NULL values in the nullmask
@@ -170,18 +170,17 @@ void VersionChunk::Update(Vector &row_identifiers, Vector &update_vector, index_
 		VectorOperations::CopyToStorage(update_vector, null_vector.data);
 
 		assert(!null_vector.sel_vector);
-		VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
-			transient.Update(ids[i], null_vector.data + k * size);
-		});
+		VectorOperations::Exec(row_identifiers,
+		                       [&](index_t i, index_t k) { transient.Update(ids[i], null_vector.data + k * size); });
 	} else {
 		assert(row_identifiers.sel_vector == update_vector.sel_vector);
-		VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
-			transient.Update(ids[i], update_vector.data + i * size);
-		});
+		VectorOperations::Exec(row_identifiers,
+		                       [&](index_t i, index_t k) { transient.Update(ids[i], update_vector.data + i * size); });
 	}
 }
 
-void VersionChunk::RetrieveTupleData(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, index_t offset) {
+void VersionChunk::RetrieveTupleData(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids,
+                                     index_t offset) {
 	// check if this tuple is versioned
 	index_t version_index = GetVersionIndex(offset);
 	auto version = version_data[version_index];
@@ -229,7 +228,8 @@ void VersionChunk::RetrieveColumnData(ColumnPointer &pointer, Vector &result, in
 	}
 }
 
-void VersionChunk::RetrieveColumnData(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector, index_t sel_count) {
+void VersionChunk::RetrieveColumnData(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector,
+                                      index_t sel_count) {
 	// copy data from the column storage
 	while (count > 0) {
 		// check how much we can copy from this column segment
@@ -248,7 +248,8 @@ void VersionChunk::RetrieveColumnData(ColumnPointer &pointer, Vector &result, in
 	}
 }
 
-bool VersionChunk::Scan(TableScanState &state, Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids, index_t version_index) {
+bool VersionChunk::Scan(TableScanState &state, Transaction &transaction, DataChunk &result,
+                        const vector<column_t> &column_ids, index_t version_index) {
 	// obtain a shared lock on this chunk
 	auto shared_lock = lock.GetSharedLock();
 	// now figure out how many tuples to scan in this chunk
@@ -310,7 +311,7 @@ bool VersionChunk::Scan(TableScanState &state, Transaction &transaction, DataChu
 		if (alternate_version_count > 0) {
 			// retrieve alternate versions, if any
 			table.RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index,
-									alternate_version_count);
+			                            alternate_version_count);
 		}
 		// retrieve entries from the base table with the selection vector
 		FetchColumnData(state, result, column_ids, scan_start, scan_count, regular_entries, regular_count);
@@ -321,7 +322,8 @@ bool VersionChunk::Scan(TableScanState &state, Transaction &transaction, DataChu
 	return scan_start + scan_count == end;
 }
 
-void VersionChunk::FetchColumnData(TableScanState &state, DataChunk &result, const vector<column_t> &column_ids, index_t offset_in_chunk, index_t scan_count, sel_t sel_vector[], index_t count) {
+void VersionChunk::FetchColumnData(TableScanState &state, DataChunk &result, const vector<column_t> &column_ids,
+                                   index_t offset_in_chunk, index_t scan_count, sel_t sel_vector[], index_t count) {
 	for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
 		if (column_ids[col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
 			assert(result.data[col_idx].type == TypeId::BIGINT);
@@ -337,7 +339,8 @@ void VersionChunk::FetchColumnData(TableScanState &state, DataChunk &result, con
 	}
 }
 
-void VersionChunk::FetchColumnData(TableScanState &state, DataChunk &result, const vector<column_t> &column_ids, index_t offset_in_chunk, index_t count) {
+void VersionChunk::FetchColumnData(TableScanState &state, DataChunk &result, const vector<column_t> &column_ids,
+                                   index_t offset_in_chunk, index_t count) {
 	for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
 		if (column_ids[col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
 			// generate column ids
@@ -357,7 +360,7 @@ bool VersionChunk::CreateIndexScan(IndexTableScanState &state, vector<column_t> 
 	}
 
 	// first scan the base values
-	while(state.offset < this->count) {
+	while (state.offset < this->count) {
 		sel_t regular_entries[STANDARD_VECTOR_SIZE];
 		index_t regular_count = 0;
 		index_t scan_count = min((index_t)STANDARD_VECTOR_SIZE, this->count - state.offset);
@@ -386,18 +389,19 @@ bool VersionChunk::CreateIndexScan(IndexTableScanState &state, vector<column_t> 
 			return false;
 		}
 	}
-	index_t max_version_index = std::min((index_t) STORAGE_CHUNK_VECTORS, 1 + (this->count / STANDARD_VECTOR_SIZE));
+	index_t max_version_index = std::min((index_t)STORAGE_CHUNK_VECTORS, 1 + (this->count / STANDARD_VECTOR_SIZE));
 	data_ptr_t alternate_version_pointers[STANDARD_VECTOR_SIZE];
 	index_t alternate_version_index[STANDARD_VECTOR_SIZE];
 	index_t result_count = 0;
 	// the base table was exhausted, now scan any remaining version chunks
-	while(state.version_index < max_version_index && result_count < STANDARD_VECTOR_SIZE) {
+	while (state.version_index < max_version_index && result_count < STANDARD_VECTOR_SIZE) {
 		auto version = version_data[state.version_index];
 		if (!version) {
 			state.version_index++;
 			continue;
 		}
-		index_t remaining_count = std::min((index_t) STANDARD_VECTOR_SIZE, this->count - state.version_index * STANDARD_VECTOR_SIZE);
+		index_t remaining_count =
+		    std::min((index_t)STANDARD_VECTOR_SIZE, this->count - state.version_index * STANDARD_VECTOR_SIZE);
 
 		while (state.version_offset < remaining_count && result_count < STANDARD_VECTOR_SIZE) {
 			if (!state.version_chain) {
@@ -425,7 +429,7 @@ bool VersionChunk::CreateIndexScan(IndexTableScanState &state, vector<column_t> 
 	}
 	if (result_count > 0) {
 		table.RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index,
-								result_count);
+		                            result_count);
 		return false;
 	}
 	return true;

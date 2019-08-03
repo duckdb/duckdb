@@ -121,8 +121,8 @@ void Catalog::CreateFunction(Transaction &transaction, CreateFunctionInfo *info)
 	schema->CreateFunction(transaction, info);
 }
 
-CatalogEntry *Catalog::GetFunction(Transaction &transaction, const string &schema_name,
-                                                       const string &name, bool if_exists) {
+CatalogEntry *Catalog::GetFunction(Transaction &transaction, const string &schema_name, const string &name,
+                                   bool if_exists) {
 	auto schema = GetSchema(transaction, schema_name);
 	return schema->GetFunction(transaction, name, if_exists);
 }

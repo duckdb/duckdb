@@ -182,10 +182,12 @@ void SchemaCatalogEntry::CreateFunction(Transaction &transaction, CreateFunction
 	unique_ptr<CatalogEntry> function;
 	if (info->type == FunctionType::SCALAR) {
 		// create a scalar function
-		function = make_unique_base<CatalogEntry, ScalarFunctionCatalogEntry>(catalog, this, (CreateScalarFunctionInfo*) info);
+		function =
+		    make_unique_base<CatalogEntry, ScalarFunctionCatalogEntry>(catalog, this, (CreateScalarFunctionInfo *)info);
 	} else {
 		// create an aggregate function
-		function = make_unique_base<CatalogEntry, AggregateFunctionCatalogEntry>(catalog, this, (CreateAggregateFunctionInfo*) info);
+		function = make_unique_base<CatalogEntry, AggregateFunctionCatalogEntry>(catalog, this,
+		                                                                         (CreateAggregateFunctionInfo *)info);
 	}
 	unordered_set<CatalogEntry *> dependencies{this};
 

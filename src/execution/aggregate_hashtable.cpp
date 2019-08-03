@@ -16,11 +16,10 @@ using namespace duckdb;
 using namespace std;
 
 SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId> group_types,
-                                         vector<TypeId> payload_types, vector<BoundAggregateExpression*> bindings,
+                                         vector<TypeId> payload_types, vector<BoundAggregateExpression *> bindings,
                                          bool parallel)
-    : aggregates(move(bindings)), group_types(group_types),
-      payload_types(payload_types), group_width(0), payload_width(0), capacity(0), entries(0), data(nullptr),
-      parallel(parallel) {
+    : aggregates(move(bindings)), group_types(group_types), payload_types(payload_types), group_width(0),
+      payload_width(0), capacity(0), entries(0), data(nullptr), parallel(parallel) {
 	// HT tuple layout is as follows:
 	// [FLAG][NULLMASK][GROUPS][PAYLOAD][COUNT]
 	// [FLAG] is the state of the tuple in memory
@@ -53,7 +52,7 @@ SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId
 			// group types plus aggr return type
 			vector<TypeId> distinct_group_types(group_types);
 			vector<TypeId> distinct_payload_types;
-			vector<BoundAggregateExpression*> distinct_aggregates;
+			vector<BoundAggregateExpression *> distinct_aggregates;
 			distinct_group_types.push_back(payload_types[i]);
 			distinct_hashes[i] = make_unique<SuperLargeHashTable>(initial_capacity, distinct_group_types,
 			                                                      distinct_payload_types, distinct_aggregates);
@@ -218,8 +217,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		}
 
 		// move to the next aggregate
-		VectorOperations::AddInPlace(addresses,
-		                             aggr->bound_aggregate->payload_size(payload.data[payload_idx].type));
+		VectorOperations::AddInPlace(addresses, aggr->bound_aggregate->payload_size(payload.data[payload_idx].type));
 		payload_idx++;
 	}
 }
@@ -244,7 +242,7 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 	// now fetch the aggregates
 	for (index_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		assert(result.column_count > aggr_idx);
-		//assert(aggregates[aggr_idx] == ExpressionType::AGGREGATE_COUNT_STAR ||
+		// assert(aggregates[aggr_idx] == ExpressionType::AGGREGATE_COUNT_STAR ||
 		//       aggregates[aggr_idx] == ExpressionType::AGGREGATE_COUNT);
 		assert(payload_types[aggr_idx] == TypeId::BIGINT);
 
@@ -254,14 +252,15 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 	}
 }
 
-template<class T>
-void templated_compare_group_vector(data_ptr_t group_pointers[], Vector &groups, sel_t sel_vector[], index_t &sel_count, sel_t no_match_vector[], index_t &no_match_count) {
-	auto data = (T*) groups.data;
+template <class T>
+void templated_compare_group_vector(data_ptr_t group_pointers[], Vector &groups, sel_t sel_vector[], index_t &sel_count,
+                                    sel_t no_match_vector[], index_t &no_match_count) {
+	auto data = (T *)groups.data;
 	index_t current_count = 0;
-	for(index_t i = 0; i < sel_count; i++) {
+	for (index_t i = 0; i < sel_count; i++) {
 		index_t index = sel_vector[i];
 		auto entry = group_pointers[index];
-		if ((*((T*) entry)) == data[index]) {
+		if ((*((T *)entry)) == data[index]) {
 			// match, continue to next group (if any)
 			sel_vector[current_count++] = index;
 		} else {
@@ -273,48 +272,55 @@ void templated_compare_group_vector(data_ptr_t group_pointers[], Vector &groups,
 	sel_count = current_count;
 }
 
-static void CompareGroupVector(data_ptr_t group_pointers[], Vector &groups, sel_t sel_vector[], index_t &sel_count, sel_t no_match_vector[], index_t &no_match_count) {
-	switch(groups.type) {
-		case TypeId::BOOLEAN:
-		case TypeId::TINYINT:
-			templated_compare_group_vector<int8_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector, no_match_count);
-			break;
-		case TypeId::SMALLINT:
-			templated_compare_group_vector<int16_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector, no_match_count);
-			break;
-		case TypeId::INTEGER:
-			templated_compare_group_vector<int32_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector, no_match_count);
-			break;
-		case TypeId::BIGINT:
-			templated_compare_group_vector<int64_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector, no_match_count);
-			break;
-		case TypeId::FLOAT:
-			templated_compare_group_vector<float>(group_pointers, groups, sel_vector, sel_count, no_match_vector, no_match_count);
-			break;
-		case TypeId::DOUBLE:
-			templated_compare_group_vector<double>(group_pointers, groups, sel_vector, sel_count, no_match_vector, no_match_count);
-			break;
-		case TypeId::VARCHAR: {
-			// compare group vector for varchar
-			auto data = (const char**) groups.data;
-			index_t current_count = 0;
-			for(index_t i = 0; i < sel_count; i++) {
-				index_t index = sel_vector[i];
-				auto entry = group_pointers[index];
-				if (strcmp(data[index], *((const char**) entry)) == 0) {
-					// match, continue to next group (if any)
-					sel_vector[current_count++] = index;
-				} else {
-					// no match, move to next group
-					no_match_vector[no_match_count++] = index;
-				}
-				group_pointers[index] += sizeof(const char*);
+static void CompareGroupVector(data_ptr_t group_pointers[], Vector &groups, sel_t sel_vector[], index_t &sel_count,
+                               sel_t no_match_vector[], index_t &no_match_count) {
+	switch (groups.type) {
+	case TypeId::BOOLEAN:
+	case TypeId::TINYINT:
+		templated_compare_group_vector<int8_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
+		                                       no_match_count);
+		break;
+	case TypeId::SMALLINT:
+		templated_compare_group_vector<int16_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
+		                                        no_match_count);
+		break;
+	case TypeId::INTEGER:
+		templated_compare_group_vector<int32_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
+		                                        no_match_count);
+		break;
+	case TypeId::BIGINT:
+		templated_compare_group_vector<int64_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
+		                                        no_match_count);
+		break;
+	case TypeId::FLOAT:
+		templated_compare_group_vector<float>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
+		                                      no_match_count);
+		break;
+	case TypeId::DOUBLE:
+		templated_compare_group_vector<double>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
+		                                       no_match_count);
+		break;
+	case TypeId::VARCHAR: {
+		// compare group vector for varchar
+		auto data = (const char **)groups.data;
+		index_t current_count = 0;
+		for (index_t i = 0; i < sel_count; i++) {
+			index_t index = sel_vector[i];
+			auto entry = group_pointers[index];
+			if (strcmp(data[index], *((const char **)entry)) == 0) {
+				// match, continue to next group (if any)
+				sel_vector[current_count++] = index;
+			} else {
+				// no match, move to next group
+				no_match_vector[no_match_count++] = index;
 			}
-			sel_count = current_count;
-			break;
+			group_pointers[index] += sizeof(const char *);
 		}
-		default:
-			throw Exception("Unsupported type for group vector");
+		sel_count = current_count;
+		break;
+	}
+	default:
+		throw Exception("Unsupported type for group vector");
 	}
 }
 
@@ -347,7 +353,7 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 	}
 
 	// for each group, fill in the NULL value
-	for(index_t group_idx = 0; group_idx < groups.column_count; group_idx++) {
+	for (index_t group_idx = 0; group_idx < groups.column_count; group_idx++) {
 		VectorOperations::FillNullMask(groups.data[group_idx]);
 	}
 
@@ -362,9 +368,7 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 
 	sel_t sel_vector[STANDARD_VECTOR_SIZE], empty_vector[STANDARD_VECTOR_SIZE];
 	index_t sel_count = groups.size();
-	VectorOperations::Exec(addresses, [&](index_t i, index_t k) {
-		sel_vector[k] = i;
-	});
+	VectorOperations::Exec(addresses, [&](index_t i, index_t k) { sel_vector[k] = i; });
 
 	// list of addresses for the tuples
 	auto data_pointers = (data_ptr_t *)addresses.data;
@@ -373,18 +377,18 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 	}
 
 	// zero initialize the new_groups array
-	auto new_groups = ((bool*) new_group.data);
+	auto new_groups = ((bool *)new_group.data);
 	memset(new_groups, 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 
 	data_ptr_t group_pointers[STANDARD_VECTOR_SIZE];
-	Vector pointers(TypeId::POINTER, (data_ptr_t) group_pointers);
+	Vector pointers(TypeId::POINTER, (data_ptr_t)group_pointers);
 
-	while(sel_count > 0) {
+	while (sel_count > 0) {
 		index_t current_count = 0;
 		index_t empty_count = 0;
 
 		// first figure out for each remaining whether or not it belongs to a full or empty group
-		for(index_t i = 0; i < sel_count; i++) {
+		for (index_t i = 0; i < sel_count; i++) {
 			index_t index = sel_vector[i];
 			auto entry = data_pointers[index];
 			if (*entry == EMPTY_CELL) {
@@ -407,7 +411,7 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 			// for each of the locations that are empty, serialize the group columns to the locations
 			auto old_sel_vector = groups.sel_vector;
 			index_t old_count = groups.size();
-			for(index_t group_idx = 0; group_idx < groups.column_count; group_idx++) {
+			for (index_t group_idx = 0; group_idx < groups.column_count; group_idx++) {
 				// set up the new sel vector with the entries we need to write
 				auto &group_column = groups.data[group_idx];
 				group_column.sel_vector = empty_vector;
@@ -430,11 +434,12 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 		sel_t no_match_vector[STANDARD_VECTOR_SIZE];
 		index_t no_match_count = 0;
 		for (index_t group_idx = 0; group_idx < groups.column_count; group_idx++) {
-			CompareGroupVector(group_pointers, groups.data[group_idx], sel_vector, sel_count, no_match_vector, no_match_count);
+			CompareGroupVector(group_pointers, groups.data[group_idx], sel_vector, sel_count, no_match_vector,
+			                   no_match_count);
 		}
 
 		// each of the entries that do not match need to be moved to the next entry
-		for(index_t i = 0; i < no_match_count; i++) {
+		for (index_t i = 0; i < no_match_count; i++) {
 			index_t index = no_match_vector[i];
 			sel_vector[i] = index;
 			data_pointers[index] += payload_width;

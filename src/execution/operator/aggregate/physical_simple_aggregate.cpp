@@ -9,13 +9,14 @@
 using namespace duckdb;
 using namespace std;
 
-PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions) :
-	 PhysicalOperator(PhysicalOperatorType::SIMPLE_AGGREGATE, types), aggregates(move(expressions)) {
+PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions)
+    : PhysicalOperator(PhysicalOperatorType::SIMPLE_AGGREGATE, types), aggregates(move(expressions)) {
 }
 
-void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk &chunk,
+                                               PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalSimpleAggregateOperatorState *>(state_);
-	while(true) {
+	while (true) {
 		// iterate over the child
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 		if (state->child_chunk.size() == 0) {
@@ -24,8 +25,8 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 		ExpressionExecutor executor(state->child_chunk);
 		// now resolve the aggregates for each of the children
 		state->payload_chunk.Reset();
-		for(index_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-			auto &aggregate = (BoundAggregateExpression&) *aggregates[aggr_idx];
+		for (index_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
+			auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 			auto &payload_vector = state->payload_chunk.data[aggr_idx];
 			// resolve the child expression of the aggregate (if any)
 			if (aggregate.child) {
@@ -36,14 +37,13 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 			// perform the actual aggregation
 			if (aggregate.bound_aggregate->simple_update) {
 				aggregate.bound_aggregate->simple_update(&payload_vector, 1, state->aggregates[aggr_idx]);
-			}
-			else {
+			} else {
 				throw Exception("Unsupported aggregate for simple aggregation");
 			}
 		}
 	}
 	// initialize the result chunk with the aggregate values
-	for(index_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
+	for (index_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		chunk.data[aggr_idx].count = 1;
 		chunk.data[aggr_idx].SetValue(0, state->aggregates[aggr_idx]);
 	}
@@ -54,8 +54,9 @@ unique_ptr<PhysicalOperatorState> PhysicalSimpleAggregate::GetOperatorState() {
 	return make_unique<PhysicalSimpleAggregateOperatorState>(this, children[0].get());
 }
 
-PhysicalSimpleAggregateOperatorState::PhysicalSimpleAggregateOperatorState(PhysicalSimpleAggregate *parent, PhysicalOperator *child)
-	: PhysicalOperatorState(child) {
+PhysicalSimpleAggregateOperatorState::PhysicalSimpleAggregateOperatorState(PhysicalSimpleAggregate *parent,
+                                                                           PhysicalOperator *child)
+    : PhysicalOperatorState(child) {
 	vector<TypeId> payload_types;
 	for (auto &aggregate : parent->aggregates) {
 		assert(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);

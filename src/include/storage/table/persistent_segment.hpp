@@ -30,24 +30,25 @@ public:
 	unique_ptr<Block> block;
 	//! The lock to load the block into memory (if not loaded yet)
 	std::mutex load_lock;
+
 public:
 	void LoadBlock();
 
 	void Scan(ColumnPointer &pointer, Vector &result, index_t count) override;
 	void Scan(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector, index_t sel_count) override;
 	void Fetch(Vector &result, index_t row_id) override;
+
 private:
 	//! Pointer to the dictionary, only used for string blocks
 	data_ptr_t dictionary;
 	//! Heap used for big strings
 	StringHeap heap;
 	//! Big string map
-	unordered_map<block_id_t, const char*> big_strings;
+	unordered_map<block_id_t, const char *> big_strings;
 
 	void AppendFromStorage(Vector &source, Vector &target, bool has_null);
 
-	template<bool HAS_NULL>
-	void AppendStrings(Vector &source, Vector &target);
+	template <bool HAS_NULL> void AppendStrings(Vector &source, Vector &target);
 
 	const char *GetBigString(block_id_t block);
 };

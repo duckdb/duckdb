@@ -8,12 +8,11 @@ using namespace duckdb;
 using namespace std;
 
 template <bool HAS_LOG>
-CommitState<HAS_LOG>::CommitState(transaction_t commit_id, WriteAheadLog *log) :
-	log(log), commit_id(commit_id), current_op(UndoFlags::EMPTY_ENTRY), current_table(nullptr) {
+CommitState<HAS_LOG>::CommitState(transaction_t commit_id, WriteAheadLog *log)
+    : log(log), commit_id(commit_id), current_op(UndoFlags::EMPTY_ENTRY), current_table(nullptr) {
 }
 
-template <bool HAS_LOG>
-void CommitState<HAS_LOG>::Flush(UndoFlags new_op) {
+template <bool HAS_LOG> void CommitState<HAS_LOG>::Flush(UndoFlags new_op) {
 	auto prev_op = current_op;
 	current_op = new_op;
 	if (prev_op == UndoFlags::EMPTY_ENTRY) {
@@ -39,8 +38,7 @@ void CommitState<HAS_LOG>::Flush(UndoFlags new_op) {
 	}
 }
 
-template <bool HAS_LOG>
-void CommitState<HAS_LOG>::SwitchTable(DataTable *table, UndoFlags new_op) {
+template <bool HAS_LOG> void CommitState<HAS_LOG>::SwitchTable(DataTable *table, UndoFlags new_op) {
 	if (current_table != table) {
 		// flush any previous appends/updates/deletes (if any)
 		Flush(new_op);
@@ -52,8 +50,7 @@ void CommitState<HAS_LOG>::SwitchTable(DataTable *table, UndoFlags new_op) {
 	}
 }
 
-template <bool HAS_LOG>
-void CommitState<HAS_LOG>::WriteCatalogEntry(CatalogEntry *entry) {
+template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteCatalogEntry(CatalogEntry *entry) {
 	assert(log);
 	// look at the type of the parent entry
 	auto parent = entry->parent;
@@ -102,8 +99,7 @@ void CommitState<HAS_LOG>::WriteCatalogEntry(CatalogEntry *entry) {
 	}
 }
 
-template <bool HAS_LOG>
-void CommitState<HAS_LOG>::PrepareAppend(UndoFlags op) {
+template <bool HAS_LOG> void CommitState<HAS_LOG>::PrepareAppend(UndoFlags op) {
 	if (!chunk) {
 		chunk = make_unique<DataChunk>();
 		switch (op) {
@@ -130,8 +126,7 @@ void CommitState<HAS_LOG>::PrepareAppend(UndoFlags op) {
 	}
 }
 
-template <bool HAS_LOG>
-void CommitState<HAS_LOG>::WriteDelete(VersionInfo *info) {
+template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteDelete(VersionInfo *info) {
 	assert(log);
 	assert(!info->prev);
 	// switch to the current table, if necessary
@@ -144,8 +139,7 @@ void CommitState<HAS_LOG>::WriteDelete(VersionInfo *info) {
 	AppendRowId(info);
 }
 
-template <bool HAS_LOG>
-void CommitState<HAS_LOG>::WriteUpdate(VersionInfo *info) {
+template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteUpdate(VersionInfo *info) {
 	assert(log);
 	if (info->prev) {
 		// tuple was deleted or updated after this tuple update; no need to write anything
@@ -162,8 +156,7 @@ void CommitState<HAS_LOG>::WriteUpdate(VersionInfo *info) {
 	AppendRowId(info);
 }
 
-template <bool HAS_LOG>
-void CommitState<HAS_LOG>::WriteInsert(VersionInfo *info) {
+template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteInsert(VersionInfo *info) {
 	assert(log);
 	assert(!info->tuple_data);
 	// get the data for the insertion
@@ -179,21 +172,18 @@ void CommitState<HAS_LOG>::WriteInsert(VersionInfo *info) {
 	AppendInfoData(info);
 }
 
-template <bool HAS_LOG>
-void CommitState<HAS_LOG>::AppendInfoData(VersionInfo *info) {
+template <bool HAS_LOG> void CommitState<HAS_LOG>::AppendInfoData(VersionInfo *info) {
 	info->vinfo->chunk.AppendToChunk(*chunk, info);
 }
 
-template <bool HAS_LOG>
-void CommitState<HAS_LOG>::AppendRowId(VersionInfo *info) {
+template <bool HAS_LOG> void CommitState<HAS_LOG>::AppendRowId(VersionInfo *info) {
 	row_t rowid = info->GetRowId();
 	auto &row_id_vector = chunk->data[chunk->column_count - 1];
 	auto row_ids = (row_t *)row_id_vector.data;
 	row_ids[row_id_vector.count++] = rowid;
 }
 
-template <bool HAS_LOG>
-void CommitState<HAS_LOG>::CommitEntry(UndoFlags type, data_ptr_t data) {
+template <bool HAS_LOG> void CommitState<HAS_LOG>::CommitEntry(UndoFlags type, data_ptr_t data) {
 	if (HAS_LOG && type != current_op) {
 		Flush(type);
 		chunk = nullptr;

@@ -12,12 +12,12 @@
 
 namespace duckdb {
 
-void count_update( Vector inputs[], index_t input_count, Vector &result );
-void count_simple_update( Vector inputs[], index_t input_count, Value &result );
+void count_update(Vector inputs[], index_t input_count, Vector &result);
+void count_simple_update(Vector inputs[], index_t input_count, Value &result);
 
 class CountFunction : public AggregateBigintReturnFunction {
 public:
-	static const char*GetName() {
+	static const char *GetName() {
 		return "count";
 	}
 
@@ -30,4 +30,4 @@ public:
 	}
 };
 
-}
+} // namespace duckdb

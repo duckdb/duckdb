@@ -77,7 +77,7 @@ void log10_function(ExpressionExecutor &exec, Vector inputs[], index_t input_cou
 }
 
 void log2_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                    Vector &result) {
+                   Vector &result) {
 	assert(input_count == 1);
 	result.Initialize(inputs[0].type);
 	VectorOperations::Log2(inputs[0], result);
@@ -92,7 +92,7 @@ void pi_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
 }
 
 void sign_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                    Vector &result) {
+                   Vector &result) {
 	assert(input_count == 1);
 	result.Initialize(TypeId::TINYINT);
 	VectorOperations::Sign(inputs[0], result);

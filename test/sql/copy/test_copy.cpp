@@ -26,6 +26,12 @@ static void WriteCSV(string path, const char *csv) {
 	csv_writer.close();
 }
 
+static void WriteBinary(string path, const char *data, uint64_t length) {
+	ofstream binary_writer(path, ios::binary);
+	binary_writer << string(data, length);
+	binary_writer.close();
+}
+
 TEST_CASE("Test copy statement", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -95,13 +101,15 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {" test", " test", " test"}));
 
 	// unsupported type for HEADER
-	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (SEP ',', HEADER 0.2);"));
+	REQUIRE_FAIL(
+	    con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (SEP ',', HEADER 0.2);"));
 	// empty sep
 	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (SEP);"));
 	// number as separator
 	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (SEP 1);"));
 	// multiple format options
-	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + "' (FORMAT 'csv', FORMAT 'json');"));
+	REQUIRE_FAIL(
+	    con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + "' (FORMAT 'csv', FORMAT 'json');"));
 	// number as escape character
 	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (ESCAPE 1);"));
 	// no escape character
@@ -110,7 +118,6 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (QUOTE);"));
 	// no format character
 	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (FORMAT);"));
-
 
 	// use a different delimiter
 	auto pipe_csv = fs.JoinPath(csv_path, "test_pipe.csv");
@@ -609,9 +616,13 @@ TEST_CASE("Test cranlogs broken gzip copy", "[copy]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE cranlogs (date date,time string,size int,r_version string,r_arch string,r_os string,package string,version string,country string,ip_id int)"));
+	auto csv_path = GetCSVPath();
+	auto cranlogs_csv = fs.JoinPath(csv_path, "cranlogs.csv.gz");
+	WriteBinary(cranlogs_csv, tmp2013_06_15, tmp2013_06_15_length);
 
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE cranlogs (date date,time string,size int,r_version string,r_arch "
+	                          "string,r_os string,package string,version string,country string,ip_id int)"));
 
-	result = con.Query("COPY cranlogs FROM 'test/sql/copy/tmp2013-06-15.csv.gz' DELIMITER ',' HEADER");
+	result = con.Query("COPY cranlogs FROM '" + cranlogs_csv + "' DELIMITER ',' HEADER");
 	REQUIRE(CHECK_COLUMN(result, 0, {37459}));
 }

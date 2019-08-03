@@ -22,12 +22,12 @@ static void avg_initialize(data_ptr_t payload, TypeId return_type) {
 }
 
 void avg_update(Vector inputs[], index_t input_count, Vector &result);
-void avg_finalize(Vector& payloads, Vector &result);
+void avg_finalize(Vector &payloads, Vector &result);
 SQLType avg_get_return_type(vector<SQLType> &arguments);
 
 class AvgFunction {
 public:
-	static const char*GetName() {
+	static const char *GetName() {
 		return "avg";
 	}
 
@@ -63,6 +63,5 @@ public:
 		return cast_arguments;
 	}
 };
-
 
 } // namespace duckdb
