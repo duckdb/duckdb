@@ -111,10 +111,10 @@ def format_directory(directory, sort_includes=False):
 
 					break
 
-# format_directory('src')
-# format_directory('benchmark')
-# format_directory('test')
-# format_directory('tools')
+format_directory('src')
+format_directory('benchmark')
+format_directory('test')
+format_directory('tools')
 
 # write the last modified time
 if not ignore_last_format:
