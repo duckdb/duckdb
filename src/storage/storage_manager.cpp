@@ -85,8 +85,8 @@ void StorageManager::LoadDatabase() {
 		if (database.file_system->FileExists(wal_path)) {
 			// replay the WAL
 			WriteAheadLog::Replay(database, wal_path);
-			if (!read_only) {
-				assert(database.checkpoint_only);
+			if (database.checkpoint_only) {
+				assert(!read_only);
 				// checkpoint the database
 				checkpointer.CreateCheckpoint();
 				// remove the WAL

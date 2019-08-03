@@ -325,7 +325,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		desired_access = GENERIC_READ | GENERIC_WRITE;
 		share_mode = 0;
 		if (flags & FileFlags::CREATE) {
-			creation_disposition = CREATE_NEW;
+			creation_disposition = OPEN_ALWAYS;
 		}
 		if (flags & FileFlags::DIRECT_IO) {
 			flags_and_attributes |= FILE_FLAG_WRITE_THROUGH;
