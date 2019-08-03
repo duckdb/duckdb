@@ -8,7 +8,7 @@ cpp_format_command = 'clang-format -i -sort-includes=${SORT_INCLUDES} -style=fil
 sql_format_command = 'pg_format "${FILE}" -o "${FILE}.out" && mv "${FILE}.out" "${FILE}"'
 cmake_format_command = 'cmake-format -i "${FILE}"'
 extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', '.sql', '.txt']
-ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpce_flat_input.hpp']
+ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpce_flat_input.hpp', 'test_csv_header.hpp']
 
 for arg in sys.argv:
 	if arg == '--ignore-last-format':
@@ -111,6 +111,7 @@ def format_directory(directory, sort_includes=False):
 
 					break
 
+os.system(cmake_format_command.replace("${FILE}", "CMakeLists.txt"))
 format_directory('src')
 format_directory('benchmark')
 format_directory('test')
