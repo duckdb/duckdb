@@ -26,9 +26,9 @@ static void WriteCSV(string path, const char *csv) {
 	csv_writer.close();
 }
 
-static void WriteBinary(string path, const char *data, uint64_t length) {
+static void WriteBinary(string path, const uint8_t *data, uint64_t length) {
 	ofstream binary_writer(path, ios::binary);
-	binary_writer << string(data, length);
+	binary_writer.write((const char*) data, length);
 	binary_writer.close();
 }
 
@@ -429,7 +429,7 @@ TEST_CASE("Test copy into from on-time dataset", "[copy]") {
 
 	auto csv_path = GetCSVPath();
 	auto ontime_csv = fs.JoinPath(csv_path, "ontime.csv");
-	WriteCSV(ontime_csv, ontime_sample);
+	WriteBinary(ontime_csv, ontime_sample, sizeof(ontime_sample));
 
 	REQUIRE_NO_FAIL(con.Query(
 	    "CREATE TABLE ontime(year SMALLINT, quarter SMALLINT, month SMALLINT, dayofmonth SMALLINT, dayofweek SMALLINT, "
@@ -495,7 +495,7 @@ TEST_CASE("Test copy from lineitem csv", "[copy]") {
 
 	auto csv_path = GetCSVPath();
 	auto lineitem_csv = fs.JoinPath(csv_path, "lineitem.csv");
-	WriteCSV(lineitem_csv, lineitem_sample);
+	WriteBinary(lineitem_csv, lineitem_sample, sizeof(lineitem_sample));
 
 	REQUIRE_NO_FAIL(con.Query(
 	    "CREATE TABLE lineitem(l_orderkey INT NOT NULL, l_partkey INT NOT NULL, l_suppkey INT NOT NULL, l_linenumber "
@@ -541,7 +541,7 @@ TEST_CASE("Test copy from web_page csv", "[copy]") {
 
 	auto csv_path = GetCSVPath();
 	auto webpage_csv = fs.JoinPath(csv_path, "web_page.csv");
-	WriteCSV(webpage_csv, web_page);
+	WriteBinary(webpage_csv, web_page, sizeof(web_page));
 
 	REQUIRE_NO_FAIL(con.Query(
 	    "CREATE TABLE web_page(wp_web_page_sk integer not null, wp_web_page_id char(16) not null, wp_rec_start_date "
@@ -576,7 +576,7 @@ TEST_CASE("Test copy from greek-utf8 csv", "[copy]") {
 
 	auto csv_path = GetCSVPath();
 	auto csv_file = fs.JoinPath(csv_path, "greek_utf8.csv");
-	WriteCSV(csv_file, greek_utf8);
+	WriteBinary(csv_file, greek_utf8, sizeof(greek_utf8));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE greek_utf8(i INTEGER, j VARCHAR, k INTEGER)"));
 
@@ -618,7 +618,7 @@ TEST_CASE("Test cranlogs broken gzip copy", "[copy]") {
 
 	auto csv_path = GetCSVPath();
 	auto cranlogs_csv = fs.JoinPath(csv_path, "cranlogs.csv.gz");
-	WriteBinary(cranlogs_csv, tmp2013_06_15, tmp2013_06_15_length);
+	WriteBinary(cranlogs_csv, tmp2013_06_15, sizeof(tmp2013_06_15));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE cranlogs (date date,time string,size int,r_version string,r_arch "
 	                          "string,r_os string,package string,version string,country string,ip_id int)"));
