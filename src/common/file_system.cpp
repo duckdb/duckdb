@@ -10,6 +10,15 @@ using namespace std;
 
 #include <cstdio>
 
+static void AssertValidFileFlags(uint8_t flags) {
+	// cannot combine Read and Write flags
+	assert(!(flags & FileFlags::READ && flags & FileFlags::WRITE));
+	// cannot combine Read and Append flags
+	assert(!(flags & FileFlags::READ && flags & FileFlags::APPEND));
+	// cannot combine Read and CREATE flags
+	assert(!(flags & FileFlags::READ && flags & FileFlags::CREATE));
+}
+
 #ifndef _WIN32
 #include <dirent.h>
 #include <fcntl.h>
@@ -43,12 +52,10 @@ public:
 };
 
 unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock_type) {
+	AssertValidFileFlags(flags);
+
 	int open_flags = 0;
 	int rc;
-	// cannot combine Read and Write flags
-	assert(!(flags & FileFlags::READ && flags & FileFlags::WRITE));
-	// cannot combine Read and CREATE flags
-	assert(!(flags & FileFlags::READ && flags & FileFlags::CREATE));
 	if (flags & FileFlags::READ) {
 		open_flags = O_RDONLY;
 	} else {
@@ -311,10 +318,8 @@ public:
 };
 
 unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock_type) {
-	// cannot combine Read and Write flags
-	assert(!(flags & FileFlags::READ && flags & FileFlags::WRITE));
-	// cannot combine Read and CREATE flags
-	assert(!(flags & FileFlags::READ && flags & FileFlags::CREATE));
+	AssertValidFileFlags(flags);
+
 	DWORD desired_access;
 	DWORD share_mode;
 	DWORD creation_disposition = OPEN_EXISTING;
@@ -332,6 +337,9 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		}
 		if (flags & FileFlags::DIRECT_IO) {
 			flags_and_attributes |= FILE_FLAG_WRITE_THROUGH;
+		}
+		if (flags & FileFlags::CREATE) {
+			open_flags |= O_CREAT;
 		}
 	}
 	if (flags & FileFlags::DIRECT_IO) {

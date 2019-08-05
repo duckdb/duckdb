@@ -178,6 +178,40 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1024}));
 }
 
+TEST_CASE("Test copy statement with file overwrite", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+
+	// create a table and insert some values
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR(10));"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 'hello'), (2, 'world '), (3, ' xx');"));
+
+	result = con.Query("SELECT * FROM test ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "world ", " xx"}));
+
+	// copy to the file
+	result = con.Query("COPY test TO '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+	// now copy to the file again
+	result = con.Query("COPY test TO '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+	// reload the data from the file: it should only have three rows
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test"));
+
+	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+	result = con.Query("SELECT * FROM test ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "world ", " xx"}));
+}
+
 TEST_CASE("Test copy statement with default values", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
