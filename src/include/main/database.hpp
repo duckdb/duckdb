@@ -21,9 +21,16 @@ enum AccessMode { UNDEFINED, READ_ONLY, READ_WRITE }; // TODO AUTOMATIC
 
 // this is optional and only used in tests at the moment
 struct DBConfig {
+	friend class DuckDB;
+	friend class StorageManager;
+public:
 	AccessMode access_mode = AccessMode::UNDEFINED;
-	bool checkpoint_only = false;
 	unique_ptr<FileSystem> file_system;
+	// checkpoint when WAL reaches this size
+	index_t checkpoint_wal_size = 1 << 20;
+private:
+	// FIXME: don't set this as a user: used internally (only for now)
+	bool checkpoint_only = false;
 };
 
 //! The database object. This object holds the catalog and all the
@@ -44,6 +51,7 @@ public:
 
 	AccessMode access_mode;
 	bool checkpoint_only;
+	index_t checkpoint_wal_size;
 
 private:
 	void Configure(DBConfig &config);

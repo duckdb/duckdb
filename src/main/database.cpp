@@ -45,4 +45,5 @@ void DuckDB::Configure(DBConfig &config) {
 		file_system = make_unique<FileSystem>();
 	}
 	checkpoint_only = config.checkpoint_only;
+	checkpoint_wal_size = config.checkpoint_wal_size;
 }

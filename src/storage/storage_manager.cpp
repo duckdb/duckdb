@@ -10,6 +10,8 @@
 #include "parser/parsed_data/create_schema_info.hpp"
 #include "transaction/transaction_manager.hpp"
 #include "planner/binder.hpp"
+#include "common/serializer/buffered_file_reader.hpp"
+
 
 using namespace duckdb;
 using namespace std;
@@ -49,6 +51,33 @@ void StorageManager::Initialize() {
 	}
 }
 
+void StorageManager::Checkpoint(string wal_path) {
+	if (!database.file_system->FileExists(wal_path)) {
+		// no WAL to checkpoint
+		return;
+	}
+	if (read_only) {
+		// cannot checkpoint in read-only system
+		return;
+	}
+	// check the size of the WAL
+	{
+		BufferedFileReader reader(*database.file_system, wal_path.c_str());
+		if (reader.FileSize() <= database.checkpoint_wal_size) {
+			// WAL is too small
+			return;
+		}
+	}
+
+	// checkpoint the database
+	// FIXME: we do this now by creating a new database and forcing a checkpoint in that database
+	// then reloading the file again
+	// this should be fixed and turned into an incremental checkpoint
+	DBConfig config;
+	config.checkpoint_only = true;
+	DuckDB db(path, &config);
+}
+
 void StorageManager::LoadDatabase() {
 	string wal_path = path + ".wal";
 	// first check if the database exists
@@ -66,15 +95,8 @@ void StorageManager::LoadDatabase() {
 		// initialize the block manager while creating a new db file
 		block_manager = make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, true);
 	} else {
-		if (!database.checkpoint_only && database.file_system->FileExists(wal_path) && !read_only) {
-			// checkpoint the database if the WAL exists
-			// FIXME: we do this now by creating a new database and forcing a checkpoint in that database
-			// then reloading the file again
-			// this should be fixed and turned into an incremental checkpoint
-			DBConfig config;
-			config.checkpoint_only = true;
-			DuckDB db(path, &config);
-			database.file_system->RemoveFile(wal_path);
+		if (!database.checkpoint_only) {
+			Checkpoint(wal_path);
 		}
 		// initialize the block manager while loading the current db file
 		block_manager = make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, false);
@@ -94,9 +116,8 @@ void StorageManager::LoadDatabase() {
 			}
 		}
 	}
-	// FIXME: check if temporary file exists and delete that if it does
 	// initialize the WAL file
-	if (!read_only) {
+	if (!database.checkpoint_only && !read_only) {
 		wal.Initialize(wal_path);
 	}
 }

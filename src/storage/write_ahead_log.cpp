@@ -9,7 +9,7 @@ WriteAheadLog::WriteAheadLog(DuckDB &database) : initialized(false), database(da
 }
 
 void WriteAheadLog::Initialize(string &path) {
-	writer = make_unique<BufferedFileWriter>(*database.file_system, path.c_str());
+	writer = make_unique<BufferedFileWriter>(*database.file_system, path.c_str(), true);
 	initialized = true;
 }
 

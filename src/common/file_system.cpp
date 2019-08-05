@@ -58,6 +58,9 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		if (flags & FileFlags::CREATE) {
 			open_flags |= O_CREAT;
 		}
+		if (flags & FileFlags::APPEND) {
+			open_flags |= O_APPEND;
+		}
 	}
 	if (flags & FileFlags::DIRECT_IO) {
 #if defined(__DARWIN__) || defined(__APPLE__)
