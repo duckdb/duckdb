@@ -9,6 +9,10 @@
 using namespace duckdb;
 using namespace std;
 
+DBConfig::~DBConfig() {
+
+}
+
 DuckDB::DuckDB(const char *path, DBConfig *config) {
 	if (config) {
 		// user-supplied configuration

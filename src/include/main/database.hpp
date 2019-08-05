@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "common/file_system.hpp"
 
 namespace duckdb {
 class StorageManager;
@@ -24,6 +25,8 @@ struct DBConfig {
 	friend class DuckDB;
 	friend class StorageManager;
 public:
+	~DBConfig();
+
 	AccessMode access_mode = AccessMode::UNDEFINED;
 	unique_ptr<FileSystem> file_system;
 	// checkpoint when WAL reaches this size

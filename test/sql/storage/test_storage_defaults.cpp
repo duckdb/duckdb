@@ -8,20 +8,20 @@ using namespace std;
 TEST_CASE("Test storage of default values", "[storage]") {
 	unique_ptr<QueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
-	DBConfig config = GetTestConfig();
+	auto config = GetTestConfig();
 
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);
 	{
 		// create a database and insert values
-		DuckDB db(storage_database, &config);
+		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER DEFAULT 1, b INTEGER);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test (b) VALUES (11)"));
 	}
 	// reload the database from disk
 	{
-		DuckDB db(storage_database, &config);
+		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT * FROM test ORDER BY b");
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
@@ -33,7 +33,7 @@ TEST_CASE("Test storage of default values", "[storage]") {
 	}
 	// reload the database from disk
 	{
-		DuckDB db(storage_database, &config);
+		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT * FROM test ORDER BY b");
 		REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1}));
@@ -49,13 +49,13 @@ TEST_CASE("Test storage of default values", "[storage]") {
 TEST_CASE("Test storage of default values with sequences", "[storage]") {
 	unique_ptr<QueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
-	DBConfig config = GetTestConfig();
+	auto config = GetTestConfig();
 
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);
 	{
 		// create a database and insert values
-		DuckDB db(storage_database, &config);
+		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq;"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER DEFAULT nextval('seq'), b INTEGER);"));
@@ -63,7 +63,7 @@ TEST_CASE("Test storage of default values with sequences", "[storage]") {
 	}
 	// reload the database from disk
 	{
-		DuckDB db(storage_database, &config);
+		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT * FROM test ORDER BY b");
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
@@ -75,7 +75,7 @@ TEST_CASE("Test storage of default values with sequences", "[storage]") {
 	}
 	// reload the database from disk
 	{
-		DuckDB db(storage_database, &config);
+		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT * FROM test ORDER BY b");
 		REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
