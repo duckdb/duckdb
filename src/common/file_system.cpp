@@ -338,9 +338,6 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		if (flags & FileFlags::DIRECT_IO) {
 			flags_and_attributes |= FILE_FLAG_WRITE_THROUGH;
 		}
-		if (flags & FileFlags::CREATE) {
-			open_flags |= O_CREAT;
-		}
 	}
 	if (flags & FileFlags::DIRECT_IO) {
 		flags_and_attributes |= FILE_FLAG_NO_BUFFERING;
@@ -351,7 +348,11 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		auto error = GetLastErrorAsString();
 		throw IOException("Cannot open file \"%s\": %s", path, error.c_str());
 	}
-	return make_unique<WindowsFileHandle>(*this, path, hFile);
+	auto handle = make_unique<WindowsFileHandle>(*this, path, hFile);
+	if (flags & FileFlags::APPEND) {
+		SetFilePointer(*handle, GetFileSize(*handle));
+	}
+	return move(handle);
 }
 
 void FileSystem::SetFilePointer(FileHandle &handle, index_t location) {

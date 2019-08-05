@@ -57,6 +57,12 @@ string TestCreatePath(string suffix) {
 	return fs.JoinPath(TESTING_DIRECTORY_NAME, suffix);
 }
 
+DBConfig GetTestConfig() {
+	DBConfig config;
+	config.checkpoint_wal_size = 0;
+	return config;
+}
+
 bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Value> values) {
 	unique_ptr<MaterializedQueryResult> materialized;
 	if (result_.type == QueryResultType::STREAM_RESULT) {

@@ -13,9 +13,6 @@ BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const char *path, bool ap
 		flags |= FileFlags::APPEND;
 	}
 	handle = fs.OpenFile(path, flags, FileLockType::WRITE_LOCK);
-	if (append) {
-		offset = fs.GetFileSize(*handle);
-	}
 }
 
 void BufferedFileWriter::WriteData(const_data_ptr_t buffer, uint64_t write_size) {

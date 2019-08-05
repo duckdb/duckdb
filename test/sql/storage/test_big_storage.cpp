@@ -9,6 +9,7 @@ using namespace std;
 TEST_CASE("Test storage that exceeds a single block", "[storage][.]") {
 	unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
+	DBConfig config = GetTestConfig();
 
 	uint64_t integer_count = 3 * (BLOCK_SIZE / sizeof(int32_t));
 	uint64_t expected_sum;
@@ -18,7 +19,7 @@ TEST_CASE("Test storage that exceeds a single block", "[storage][.]") {
 	DeleteDatabase(storage_database);
 	{
 		// create a database and insert values
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, &config);
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21), (NULL, NULL)"));
@@ -37,7 +38,7 @@ TEST_CASE("Test storage that exceeds a single block", "[storage][.]") {
 	}
 	// reload the database from disk
 	{
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, &config);
 		Connection con(db);
 		result = con.Query("SELECT SUM(a) + SUM(b) FROM test");
 		REQUIRE(CHECK_COLUMN(result, 0, {sum}));
@@ -45,7 +46,7 @@ TEST_CASE("Test storage that exceeds a single block", "[storage][.]") {
 	// reload the database from disk, we do this again because checkpointing at startup causes this to follow a
 	// different code path
 	{
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, &config);
 		Connection con(db);
 		result = con.Query("SELECT SUM(a) + SUM(b) FROM test");
 		REQUIRE(CHECK_COLUMN(result, 0, {sum}));
@@ -56,6 +57,7 @@ TEST_CASE("Test storage that exceeds a single block", "[storage][.]") {
 TEST_CASE("Test storage that exceeds a single block with different types", "[storage][.]") {
 	unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
+	DBConfig config = GetTestConfig();
 
 	uint64_t integer_count = 3 * (BLOCK_SIZE / sizeof(int32_t));
 	Value sum;
@@ -64,7 +66,7 @@ TEST_CASE("Test storage that exceeds a single block with different types", "[sto
 	DeleteDatabase(storage_database);
 	{
 		// create a database and insert values
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, &config);
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b BIGINT);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21), (NULL, NULL)"));
@@ -81,7 +83,7 @@ TEST_CASE("Test storage that exceeds a single block with different types", "[sto
 	}
 	// reload the database from disk
 	{
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, &config);
 		Connection con(db);
 		result = con.Query("SELECT SUM(a) + SUM(b) FROM test");
 		REQUIRE(CHECK_COLUMN(result, 0, {sum}));
@@ -89,7 +91,7 @@ TEST_CASE("Test storage that exceeds a single block with different types", "[sto
 	// reload the database from disk, we do this again because checkpointing at startup causes this to follow a
 	// different code path
 	{
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, &config);
 		Connection con(db);
 		result = con.Query("SELECT SUM(a) + SUM(b) FROM test");
 		REQUIRE(CHECK_COLUMN(result, 0, {sum}));
@@ -100,6 +102,7 @@ TEST_CASE("Test storage that exceeds a single block with different types", "[sto
 TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 	unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
+	DBConfig config = GetTestConfig();
 
 	uint64_t string_count = 3 * (BLOCK_SIZE / (sizeof(char) * 15));
 	Value sum;
@@ -109,7 +112,7 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 	DeleteDatabase(storage_database);
 	{
 		// create a database and insert values
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, &config);
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('a'), ('bb'), ('ccc'), ('dddd'), ('eeeee')"));
@@ -128,7 +131,7 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 	}
 	// reload the database from disk
 	{
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, &config);
 		Connection con(db);
 		result = con.Query("SELECT a, COUNT(*) FROM test GROUP BY a ORDER BY a");
 		REQUIRE(CHECK_COLUMN(result, 0, {"a", "bb", "ccc", "dddd", "eeeee"}));
@@ -138,7 +141,7 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 	// reload the database from disk, we do this again because checkpointing at startup causes this to follow a
 	// different code path
 	{
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, &config);
 		Connection con(db);
 		result = con.Query("SELECT a, COUNT(*) FROM test GROUP BY a ORDER BY a");
 		REQUIRE(CHECK_COLUMN(result, 0, {"a", "bb", "ccc", "dddd", "eeeee"}));
@@ -151,13 +154,14 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 TEST_CASE("Test storing big strings", "[storage][.]") {
 	unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
+	DBConfig config = GetTestConfig();
 
 	uint64_t string_length = 64;
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);
 	{
 		// create a database and insert the big string
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, &config);
 		Connection con(db);
 		string big_string = string(string_length, 'a');
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR, j BIGINT);"));
@@ -177,7 +181,7 @@ TEST_CASE("Test storing big strings", "[storage][.]") {
 	}
 	// reload the database from disk
 	{
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, &config);
 		Connection con(db);
 		result = con.Query("SELECT LENGTH(a) FROM test");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(string_length)}));
@@ -185,7 +189,7 @@ TEST_CASE("Test storing big strings", "[storage][.]") {
 	// reload the database from disk, we do this again because checkpointing at startup causes this to follow a
 	// different code path
 	{
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, &config);
 		Connection con(db);
 		result = con.Query("SELECT LENGTH(a) FROM test");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(string_length)}));

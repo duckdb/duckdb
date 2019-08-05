@@ -6,12 +6,6 @@
 using namespace duckdb;
 using namespace std;
 
-DBConfig GetTestConfig() {
-	DBConfig config;
-	config.checkpoint_wal_size = 0;
-	return config;
-}
-
 TEST_CASE("Test empty startup", "[storage]") {
 	DBConfig config = GetTestConfig();
 	unique_ptr<DuckDB> db;

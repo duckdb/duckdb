@@ -10,18 +10,19 @@ TEST_CASE("Test storing TPC-H", "[storage][.]") {
 	unique_ptr<QueryResult> result;
 	double sf = 0.1;
 	auto storage_database = TestCreatePath("storage_tpch");
+	DBConfig config = GetTestConfig();
 
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);
 	{
 		// create a database and insert TPC-H tables
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, &config);
 		// generate the TPC-H data for SF 0.1
 		tpch::dbgen(sf, db);
 	}
 	// reload the database from disk
 	{
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, &config);
 		Connection con(db);
 		// check if all the counts are correct
 		result = con.Query("SELECT COUNT(*) FROM orders");
@@ -43,7 +44,7 @@ TEST_CASE("Test storing TPC-H", "[storage][.]") {
 	}
 	// reload the database from disk again
 	{
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, &config);
 		Connection con(db);
 		// check if all the counts are correct
 		result = con.Query("SELECT COUNT(*) FROM orders");
@@ -65,7 +66,7 @@ TEST_CASE("Test storing TPC-H", "[storage][.]") {
 	}
 	// reload the database from disk again
 	{
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, &config);
 		Connection con(db);
 		// check if all the counts are correct
 		result = con.Query("SELECT COUNT(*) FROM orders");
