@@ -144,3 +144,7 @@ void VectorOperations::ATan2(Vector &left, Vector &right, Vector &result) {
 void VectorOperations::Sign(Vector &input, Vector &result) {
 	unary_numeric_op_tintret<duckdb::Sign>(input, result);
 }
+
+void VectorOperations::Pow(Vector &base, Vector &exponent, Vector &result) {
+  templated_binary_loop<double, double, double, duckdb::Pow>(base, exponent, result);
+}

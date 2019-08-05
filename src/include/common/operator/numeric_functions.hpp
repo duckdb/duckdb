@@ -147,4 +147,11 @@ struct Sign {
                   return -1;
 	}
 };
+
+struct Pow {
+	template <class T> static inline T Operation(T base, T exponent) {
+		return pow(base, exponent);
+	}
+};
+
 } // namespace duckdb

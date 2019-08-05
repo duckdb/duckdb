@@ -11,3 +11,4 @@
 #include "function/scalar_function/trigonometrics.hpp"
 #include "function/scalar_function/year.hpp"
 #include "function/scalar_function/mod.hpp"
+#include "function/scalar_function/pow.hpp"
