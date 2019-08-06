@@ -29,14 +29,15 @@ static SQLType ValidateReturnType(vector<SQLType> &arguments, AggregateFunctionC
 
 BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, index_t depth) {
 	// first bind the child of the aggregate expression (if any)
-	vector<unique_ptr<Expression>> children;
-	vector<SQLType> child_types;
+	AggregateBinder aggregate_binder(binder, context);
+	string error;
 	for (index_t i = 0; i < aggr.children.size(); i++) {
-		AggregateBinder aggregate_binder(binder, context);
-		string error = aggregate_binder.Bind(&aggr.children[i], 0);
-		if (!error.empty()) {
-			// failed to bind child
-			if (aggregate_binder.BoundColumns()) {
+		aggregate_binder.BindChild(aggr.children[i], 0, error);
+	}
+	if (!error.empty()) {
+		// failed to bind child
+		if (aggregate_binder.BoundColumns()) {
+			for (index_t i = 0; i < aggr.children.size(); i++) {
 				// however, we bound columns!
 				// that means this aggregation belongs to this node
 				// check if we have to resolve any errors by binding with parent binders
@@ -45,25 +46,30 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 				if (!success) {
 					throw BinderException(error);
 				}
-				auto &bound_expr = (BoundExpression &)*aggr.children[0];
+				auto &bound_expr = (BoundExpression &)*aggr.children[i];
 				ExtractCorrelatedExpressions(binder, *bound_expr.expr);
-			} else {
-				// we didn't bind columns, try again in children
-				return BindResult(error);
 			}
+		} else {
+			// we didn't bind columns, try again in children
+			return BindResult(error);
 		}
-		auto &bound_expr = (BoundExpression &)*aggr.children[i];
-		child_types.push_back(bound_expr.sql_type);
-		children.push_back(move(bound_expr.expr));
 	}
 	// all children bound successfully
+	// extract the children and types
+	vector<SQLType> types;
+	vector<unique_ptr<Expression>> children;
+	for (index_t i = 0; i < aggr.children.size(); i++) {
+		auto &child = (BoundExpression &)*aggr.children[i];
+		types.push_back(child.sql_type);
+		children.push_back(move(child.expr));
+	}
 
 	// types match up, get the result type
-	SQLType result_type = ValidateReturnType(child_types, func);
+	SQLType result_type = ValidateReturnType(types, func);
 	// add a cast to the child node (if needed)
-	if (func->cast_arguments(child_types)) {
+	if (func->cast_arguments(types)) {
 		for (index_t i = 0; i < children.size(); i++) {
-			children[i] = AddCastToType(move(children[i]), child_types[i], result_type);
+			children[i] = AddCastToType(move(children[i]), types[i], result_type);
 		}
 	}
 	// create the aggregate
