@@ -27,10 +27,14 @@ struct DBConfig {
 public:
 	~DBConfig();
 
+	//! Access mode of the database (READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::UNDEFINED;
-	unique_ptr<FileSystem> file_system;
-	// checkpoint when WAL reaches this size
+	// Checkpoint when WAL reaches this size
 	index_t checkpoint_wal_size = 1 << 20;
+	//! Whether or not to use Direct IO, bypassing operating system buffers
+	bool use_direct_io = false;
+	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g. RamFS or something similar)
+	unique_ptr<FileSystem> file_system;
 private:
 	// FIXME: don't set this as a user: used internally (only for now)
 	bool checkpoint_only = false;
@@ -53,6 +57,7 @@ public:
 	unique_ptr<ConnectionManager> connection_manager;
 
 	AccessMode access_mode;
+	bool use_direct_io;
 	bool checkpoint_only;
 	index_t checkpoint_wal_size;
 

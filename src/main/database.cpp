@@ -50,4 +50,5 @@ void DuckDB::Configure(DBConfig &config) {
 	}
 	checkpoint_only = config.checkpoint_only;
 	checkpoint_wal_size = config.checkpoint_wal_size;
+	use_direct_io = config.use_direct_io;
 }

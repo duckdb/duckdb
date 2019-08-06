@@ -93,13 +93,13 @@ void StorageManager::LoadDatabase() {
 			database.file_system->RemoveFile(wal_path);
 		}
 		// initialize the block manager while creating a new db file
-		block_manager = make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, true);
+		block_manager = make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, true, database.use_direct_io);
 	} else {
 		if (!database.checkpoint_only) {
 			Checkpoint(wal_path);
 		}
 		// initialize the block manager while loading the current db file
-		block_manager = make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, false);
+		block_manager = make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, false, database.use_direct_io);
 		//! Load from storage
 		CheckpointManager checkpointer(*this);
 		checkpointer.LoadFromStorage();
