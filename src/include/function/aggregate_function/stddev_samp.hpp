@@ -21,13 +21,18 @@ void varpop_finalize(Vector &payloads, Vector &result);
 
 SQLType stddev_get_return_type(vector<SQLType> &arguments);
 
-static index_t stddev_payload_size(TypeId return_type) {
-	// count running_mean running_dsquared
-	return sizeof(uint64_t) + sizeof(double) + sizeof(double);
+struct stddev_state_t {
+    uint64_t    count;
+    double      mean;
+    double      dsquared;
+};
+
+static index_t stddev_state_size(TypeId return_type) {
+	return sizeof(stddev_state_t);
 }
 
 static void stddevsamp_initialize(data_ptr_t payload, TypeId return_type) {
-	memset(payload, 0, stddev_payload_size(return_type));
+	memset(payload, 0, stddev_state_size(return_type));
 }
 
 class StdDevSampFunction {
@@ -37,7 +42,7 @@ public:
 	}
 
 	static aggregate_size_t GetStateSizeFunction() {
-		return stddev_payload_size;
+		return stddev_state_size;
 	}
 
 	static aggregate_initialize_t GetInitalizeFunction() {
@@ -76,7 +81,7 @@ public:
 	}
 
 	static aggregate_size_t GetStateSizeFunction() {
-		return stddev_payload_size;
+		return stddev_state_size;
 	}
 
 	static aggregate_initialize_t GetInitalizeFunction() {
@@ -114,7 +119,7 @@ public:
 	}
 
 	static aggregate_size_t GetStateSizeFunction() {
-		return stddev_payload_size;
+		return stddev_state_size;
 	}
 
 	static aggregate_initialize_t GetInitalizeFunction() {
@@ -153,7 +158,7 @@ public:
 	}
 
 	static aggregate_size_t GetStateSizeFunction() {
-		return stddev_payload_size;
+		return stddev_state_size;
 	}
 
 	static aggregate_initialize_t GetInitalizeFunction() {
