@@ -7,14 +7,14 @@ using namespace std;
 
 namespace duckdb {
 
-void max_update(Vector inputs[], index_t input_count, Vector &result ) {
+void max_update(Vector** inputs, index_t input_count, Vector &result ) {
 	assert(input_count == 1 );
-	VectorOperations::Scatter::Max(inputs[0], result);
+	VectorOperations::Scatter::Max(*inputs[0], result);
 }
 
-void max_simple_update(Vector inputs[], index_t input_count, Value& result) {
+void max_simple_update(Vector** inputs, index_t input_count, Value& result) {
 	assert(input_count == 1 );
-	Value max = VectorOperations::Max(inputs[0]);
+	Value max = VectorOperations::Max(*inputs[0]);
 	if (max.is_null) {
 		return;
 	}

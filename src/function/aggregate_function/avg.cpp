@@ -8,7 +8,8 @@ using namespace std;
 namespace duckdb {
 
 SQLType avg_get_return_type(vector<SQLType> &arguments) {
-	assert(arguments.size() == 1);
+	if (arguments.size() != 1)
+		return SQLTypeId::INVALID;
 	const auto& input_type = arguments[0];
 	switch (input_type.id) {
 	case SQLTypeId::SQLNULL:
@@ -21,18 +22,18 @@ SQLType avg_get_return_type(vector<SQLType> &arguments) {
 	case SQLTypeId::DECIMAL:
 		return SQLType(SQLTypeId::DECIMAL);
 	default:
-		throw BinderException("Unsupported SQLType %s for AVG aggregate", SQLTypeToString(input_type).c_str());
+		return SQLTypeId::INVALID;
 	}
 }
 
-void avg_update(Vector inputs[], index_t input_count, Vector &result) {
+void avg_update(Vector** inputs, index_t input_count, Vector &result ) {
 	assert(input_count == 1 );
 	Vector payload_double;
-	if (inputs[0].type != TypeId::DOUBLE) {
+	if (inputs[0]->type != TypeId::DOUBLE) {
 		payload_double.Initialize(TypeId::DOUBLE);
-		VectorOperations::Cast(inputs[0], payload_double);
+		VectorOperations::Cast(*inputs[0], payload_double);
 	} else {
-		payload_double.Reference(inputs[0]);
+		payload_double.Reference(*inputs[0]);
 	}
 
 	VectorOperations::Exec(result, [&](index_t i, index_t k) {

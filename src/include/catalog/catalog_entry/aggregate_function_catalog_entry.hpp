@@ -24,7 +24,7 @@ public:
 	AggregateFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateAggregateFunctionInfo *info)
 	    : CatalogEntry(CatalogType::AGGREGATE_FUNCTION, catalog, info->name)
 	    , schema(schema)
-	    , payload_size(info->payload_size)
+	    , state_size(info->state_size)
 	    , initialize(info->initialize)
 	    , update(info->update)
 	    , finalize(info->finalize)
@@ -38,8 +38,8 @@ public:
 	//! The schema the table belongs to
 	SchemaCatalogEntry *schema;
 
-	//! The hashed aggregate sizing function
-	aggregate_size_t payload_size;
+	//! The hashed aggregate state sizing function
+	aggregate_size_t state_size;
 	//! The hashed aggregate initialization function
 	aggregate_initialize_t initialize;
 	//! The hashed aggregate update function

@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-void stddevsamp_update(Vector inputs[], index_t input_count, Vector &result);
+void stddevsamp_update(Vector** inputs, index_t input_count, Vector &result);
 void stddevsamp_finalize(Vector& payloads, Vector &result);
 SQLType stddev_get_return_type(vector<SQLType> &arguments);
 
@@ -31,7 +31,7 @@ public:
 		return "stddev_samp";
 	}
 
-	static aggregate_size_t GetPayloadSizeFunction() {
+	static aggregate_size_t GetStateSizeFunction() {
 		return stddev_payload_size;
 	}
 

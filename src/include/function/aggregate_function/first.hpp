@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-void first_update( Vector inputs[], index_t input_count, Vector &result );
+void first_update(Vector** inputs, index_t input_count, Vector &result);
 
 class FirstFunction : public AggregateSameReturnFunction {
 public:
