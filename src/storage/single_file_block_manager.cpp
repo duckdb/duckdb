@@ -6,7 +6,8 @@
 using namespace duckdb;
 using namespace std;
 
-SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool read_only, bool create_new, bool use_direct_io)
+SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool read_only, bool create_new,
+                                               bool use_direct_io)
     : path(path), header_buffer(HEADER_SIZE), use_direct_io(use_direct_io) {
 
 	uint8_t flags;
@@ -132,7 +133,8 @@ void SingleFileBlockManager::Write(Block &block) {
 
 void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	if (!use_direct_io) {
-		// if we are not using Direct IO we need to fsync BEFORE we write the header to ensure that all the previous blocks are written as well
+		// if we are not using Direct IO we need to fsync BEFORE we write the header to ensure that all the previous
+		// blocks are written as well
 		handle->Sync();
 	}
 	// set the iteration count

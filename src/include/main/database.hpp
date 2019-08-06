@@ -24,6 +24,7 @@ enum AccessMode { UNDEFINED, READ_ONLY, READ_WRITE }; // TODO AUTOMATIC
 struct DBConfig {
 	friend class DuckDB;
 	friend class StorageManager;
+
 public:
 	~DBConfig();
 
@@ -33,8 +34,10 @@ public:
 	index_t checkpoint_wal_size = 1 << 20;
 	//! Whether or not to use Direct IO, bypassing operating system buffers
 	bool use_direct_io = false;
-	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g. RamFS or something similar)
+	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
+	//! RamFS or something similar)
 	unique_ptr<FileSystem> file_system;
+
 private:
 	// FIXME: don't set this as a user: used internally (only for now)
 	bool checkpoint_only = false;

@@ -28,7 +28,7 @@ static void WriteCSV(string path, const char *csv) {
 
 static void WriteBinary(string path, const uint8_t *data, uint64_t length) {
 	ofstream binary_writer(path, ios::binary);
-	binary_writer.write((const char*) data, length);
+	binary_writer.write((const char *)data, length);
 	binary_writer.close();
 }
 
