@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-void gather_finalize(Vector& payloads, Vector &result);
+void gather_finalize(Vector &payloads, Vector &result);
 
 class AggregateInPlaceFunction {
 public:

@@ -72,7 +72,8 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 		for_each_cell(cell, stmt->options->head) {
 			auto *def_elem = reinterpret_cast<DefElem *>(cell->data.ptr_value);
 
-			if (StringUtil::StartsWith(def_elem->defname, "delim") || StringUtil::StartsWith(def_elem->defname, "sep")) {
+			if (StringUtil::StartsWith(def_elem->defname, "delim") ||
+			    StringUtil::StartsWith(def_elem->defname, "sep")) {
 				// delimiter
 				auto *delimiter_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
 				if (!delimiter_val || delimiter_val->type != T_String) {
@@ -117,17 +118,17 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 					info.header = true;
 					continue;
 				}
-				switch(header_val->type) {
-					case T_Integer:
-						info.header = header_val->val.ival == 1 ? true : false;
-						break;
-					case T_String: {
-						auto val = duckdb::Value(string(header_val->val.str));
-						info.header = val.CastAs(TypeId::BOOLEAN).value_.boolean;
-						break;
-					}
-					default:
-						throw ParserException("Unsupported parameter type for HEADER");
+				switch (header_val->type) {
+				case T_Integer:
+					info.header = header_val->val.ival == 1 ? true : false;
+					break;
+				case T_String: {
+					auto val = duckdb::Value(string(header_val->val.str));
+					info.header = val.CastAs(TypeId::BOOLEAN).value_.boolean;
+					break;
+				}
+				default:
+					throw ParserException("Unsupported parameter type for HEADER");
 				}
 			} else {
 				throw ParserException("Unsupported COPY option: %s", def_elem->defname);

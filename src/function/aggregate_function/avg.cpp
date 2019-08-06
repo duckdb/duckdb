@@ -10,7 +10,7 @@ namespace duckdb {
 SQLType avg_get_return_type(vector<SQLType> &arguments) {
 	if (arguments.size() != 1)
 		return SQLTypeId::INVALID;
-	const auto& input_type = arguments[0];
+	const auto &input_type = arguments[0];
 	switch (input_type.id) {
 	case SQLTypeId::SQLNULL:
 	case SQLTypeId::TINYINT:
@@ -26,8 +26,8 @@ SQLType avg_get_return_type(vector<SQLType> &arguments) {
 	}
 }
 
-void avg_update(Vector** inputs, index_t input_count, Vector &result ) {
-	assert(input_count == 1 );
+void avg_update(Vector **inputs, index_t input_count, Vector &result) {
+	assert(input_count == 1);
 	Vector payload_double;
 	if (inputs[0]->type != TypeId::DOUBLE) {
 		payload_double.Initialize(TypeId::DOUBLE);
@@ -54,7 +54,7 @@ void avg_update(Vector** inputs, index_t input_count, Vector &result ) {
 	});
 }
 
-void avg_finalize(Vector& payloads, Vector &result) {
+void avg_finalize(Vector &payloads, Vector &result) {
 	// compute finalization of streaming avg
 	VectorOperations::Exec(payloads, [&](uint64_t i, uint64_t k) {
 		auto base_ptr = ((data_ptr_t *)payloads.data)[i];

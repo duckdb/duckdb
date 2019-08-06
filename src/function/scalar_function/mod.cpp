@@ -20,8 +20,7 @@ bool mod_matches_arguments(vector<SQLType> &arguments) {
 		return false;
 	}
 
-	for (int i = 0; i < 2 ; i++)
-	{
+	for (int i = 0; i < 2; i++) {
 		switch (arguments[i].id) {
 		case SQLTypeId::TINYINT:
 		case SQLTypeId::SMALLINT:
@@ -38,7 +37,7 @@ bool mod_matches_arguments(vector<SQLType> &arguments) {
 }
 
 SQLType mod_get_return_type(vector<SQLType> &arguments) {
-  return MaxSQLType(arguments[0].id, arguments[1].id);
+	return MaxSQLType(arguments[0].id, arguments[1].id);
 }
 
 } // namespace duckdb

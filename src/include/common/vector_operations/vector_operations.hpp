@@ -213,7 +213,6 @@ struct VectorOperations {
 	// A ^= HASH(B)
 	static void CombineHash(Vector &hashes, Vector &B);
 
-
 	//===--------------------------------------------------------------------===//
 	// Generate functions
 	//===--------------------------------------------------------------------===//

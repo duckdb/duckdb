@@ -7,8 +7,8 @@ using namespace std;
 
 namespace duckdb {
 
-void first_update(Vector** inputs, index_t input_count, Vector &result ) {
-	assert(input_count == 1 );
+void first_update(Vector **inputs, index_t input_count, Vector &result) {
+	assert(input_count == 1);
 	VectorOperations::Scatter::SetFirst(*inputs[0], result);
 }
 

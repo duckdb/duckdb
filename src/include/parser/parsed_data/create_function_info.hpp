@@ -13,10 +13,7 @@
 
 namespace duckdb {
 
-enum class FunctionType : uint8_t {
-	SCALAR = 0,
-	AGGREGATE = 1
-};
+enum class FunctionType : uint8_t { SCALAR = 0, AGGREGATE = 1 };
 
 struct CreateFunctionInfo {
 	CreateFunctionInfo(FunctionType type) : type(type), schema(DEFAULT_SCHEMA), or_replace(false) {

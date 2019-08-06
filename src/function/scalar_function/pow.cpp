@@ -20,8 +20,7 @@ bool pow_matches_arguments(vector<SQLType> &arguments) {
 		return false;
 	}
 
-	for (int i = 0; i < 2 ; i++)
-	{
+	for (int i = 0; i < 2; i++) {
 		switch (arguments[i].id) {
 		case SQLTypeId::TINYINT:
 		case SQLTypeId::SMALLINT:
@@ -38,7 +37,7 @@ bool pow_matches_arguments(vector<SQLType> &arguments) {
 }
 
 SQLType pow_get_return_type(vector<SQLType> &arguments) {
-  return SQLTypeId::DOUBLE;
+	return SQLTypeId::DOUBLE;
 }
 
 } // namespace duckdb

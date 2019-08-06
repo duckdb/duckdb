@@ -15,8 +15,7 @@ class AggregateFunctionCatalogEntry;
 
 class BoundAggregateExpression : public Expression {
 public:
-	BoundAggregateExpression(TypeId return_type,
-							 AggregateFunctionCatalogEntry* bound_aggregate, bool distinct);
+	BoundAggregateExpression(TypeId return_type, AggregateFunctionCatalogEntry *bound_aggregate, bool distinct);
 
 	//! The bound function expression
 	AggregateFunctionCatalogEntry *bound_aggregate;

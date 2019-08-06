@@ -51,14 +51,14 @@ typedef index_t (*aggregate_size_t)(TypeId return_type);
 //! The type used for initializing hashed aggregate function states
 typedef void (*aggregate_initialize_t)(data_ptr_t payload, TypeId return_type);
 //! The type used for updating hashed aggregate functions
-typedef void (*aggregate_update_t)(Vector** inputs, index_t input_count, Vector &result);
+typedef void (*aggregate_update_t)(Vector **inputs, index_t input_count, Vector &result);
 //! The type used for finalizing hashed aggregate function payloads
-typedef void (*aggregate_finalize_t)(Vector& payloads, Vector &result);
+typedef void (*aggregate_finalize_t)(Vector &payloads, Vector &result);
 
 //! The type used for initializing simple aggregate function
 typedef Value (*aggregate_simple_initialize_t)();
 //! The type used for updating simple aggregate functions
-typedef void (*aggregate_simple_update_t)(Vector** inputs, index_t input_count, Value &result);
+typedef void (*aggregate_simple_update_t)(Vector **inputs, index_t input_count, Value &result);
 
 class BuiltinFunctions {
 public:

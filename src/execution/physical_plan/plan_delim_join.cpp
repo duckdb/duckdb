@@ -57,9 +57,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 
 			vector<TypeId> payload_types = {TypeId::BIGINT, TypeId::BIGINT}; // COUNT types
 			vector<string> aggregate_names = {"count_star", "count"};
-			vector<BoundAggregateExpression*> correlated_aggregates;
+			vector<BoundAggregateExpression *> correlated_aggregates;
 			for (index_t i = 0; i < aggregate_names.size(); ++i) {
-				auto func = (AggregateFunctionCatalogEntry*) context.catalog.GetFunction(context.ActiveTransaction(), DEFAULT_SCHEMA, aggregate_names[i]);
+				auto func = (AggregateFunctionCatalogEntry *)context.catalog.GetFunction(
+				    context.ActiveTransaction(), DEFAULT_SCHEMA, aggregate_names[i]);
 				auto aggr = make_unique<BoundAggregateExpression>(payload_types[i], func, false);
 				correlated_aggregates.push_back(&*aggr);
 				info.correlated_aggregates.push_back(move(aggr));

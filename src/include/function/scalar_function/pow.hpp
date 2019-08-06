@@ -49,7 +49,7 @@ public:
 		return false;
 	}
 };
-class PowerFunction : public PowFunction{
+class PowerFunction : public PowFunction {
 public:
 	static const char *GetName() {
 		return "power";

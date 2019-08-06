@@ -80,11 +80,9 @@ void VectorOperations::Scatter::AddOne(Vector &source, Vector &dest) {
 }
 
 template <class T> static void scatter_set_loop(Vector &source, Vector &dest) {
-	auto data = (T*) source.data;
-	auto destination = (T**) dest.data;
-	VectorOperations::Exec(source, [&](index_t i, index_t k) {
-		*destination[i] = data[i];
-	});
+	auto data = (T *)source.data;
+	auto destination = (T **)dest.data;
+	VectorOperations::Exec(source, [&](index_t i, index_t k) { *destination[i] = data[i]; });
 }
 
 void VectorOperations::Scatter::SetAll(Vector &source, Vector &dest) {
@@ -112,7 +110,7 @@ void VectorOperations::Scatter::SetAll(Vector &source, Vector &dest) {
 		scatter_set_loop<double>(source, dest);
 		break;
 	case TypeId::VARCHAR:
-		scatter_set_loop<const char*>(source, dest);
+		scatter_set_loop<const char *>(source, dest);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for scatter");

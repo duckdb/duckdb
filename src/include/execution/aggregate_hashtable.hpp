@@ -28,7 +28,7 @@ class BoundAggregateExpression;
 class SuperLargeHashTable {
 public:
 	SuperLargeHashTable(index_t initial_capacity, vector<TypeId> group_types, vector<TypeId> payload_types,
-	                    vector<BoundAggregateExpression*> aggregates, bool parallel = false);
+	                    vector<BoundAggregateExpression *> aggregates, bool parallel = false);
 	~SuperLargeHashTable();
 
 	//! Resize the HT to the specified size. Must be larger than the current
@@ -57,7 +57,7 @@ private:
 	TupleSerializer group_serializer;
 
 	//! The aggregates to be computed
-	vector<BoundAggregateExpression*> aggregates;
+	vector<BoundAggregateExpression *> aggregates;
 
 	//! The types of the group columns stored in the hashtable
 	vector<TypeId> group_types;
@@ -82,7 +82,6 @@ private:
 	unique_ptr<data_t[]> empty_payload_data;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	uint64_t bitmask;
-
 
 	vector<unique_ptr<SuperLargeHashTable>> distinct_hashes;
 

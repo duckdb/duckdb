@@ -12,12 +12,12 @@
 
 namespace duckdb {
 
-void max_update(Vector** inputs, index_t input_count, Vector &result);
-void max_simple_update(Vector** inputs, index_t input_count, Value &result);
+void max_update(Vector **inputs, index_t input_count, Vector &result);
+void max_simple_update(Vector **inputs, index_t input_count, Value &result);
 
-class MaxFunction : public AggregateSameReturnFunction{
+class MaxFunction : public AggregateSameReturnFunction {
 public:
-	static const char*GetName() {
+	static const char *GetName() {
 		return "max";
 	}
 
@@ -30,4 +30,4 @@ public:
 	}
 };
 
-}
+} // namespace duckdb

@@ -146,5 +146,5 @@ void VectorOperations::Sign(Vector &input, Vector &result) {
 }
 
 void VectorOperations::Pow(Vector &base, Vector &exponent, Vector &result) {
-  templated_binary_loop<double, double, double, duckdb::Pow>(base, exponent, result);
+	templated_binary_loop<double, double, double, duckdb::Pow>(base, exponent, result);
 }

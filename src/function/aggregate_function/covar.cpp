@@ -8,7 +8,7 @@ using namespace std;
 
 namespace duckdb {
 
-static Vector& CastVector(Vector& original, TypeId type, Vector& cast) {
+static Vector &CastVector(Vector &original, TypeId type, Vector &cast) {
 	if (original.type != type) {
 		cast.Initialize(type);
 		VectorOperations::Cast(original, cast);
@@ -21,7 +21,7 @@ static Vector& CastVector(Vector& original, TypeId type, Vector& cast) {
 SQLType covar_get_return_type(vector<SQLType> &arguments) {
 	if (arguments.size() != 2)
 		return SQLTypeId::INVALID;
-	const auto& input_type = MaxSQLType(arguments[0],arguments[1]);
+	const auto &input_type = MaxSQLType(arguments[0], arguments[1]);
 	switch (input_type.id) {
 	case SQLTypeId::SQLNULL:
 	case SQLTypeId::TINYINT:
@@ -37,7 +37,7 @@ SQLType covar_get_return_type(vector<SQLType> &arguments) {
 	}
 }
 
-void covar_update(Vector** inputs, index_t input_count, Vector &state ) {
+void covar_update(Vector **inputs, index_t input_count, Vector &state) {
 	assert(input_count == 2);
 	// Streaming approximate covariance
 
@@ -83,7 +83,7 @@ void covar_update(Vector** inputs, index_t input_count, Vector &state ) {
 	});
 }
 
-void covarpop_finalize(Vector& state, Vector &result) {
+void covarpop_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming population covariance
 	VectorOperations::Exec(result, [&](uint64_t i, uint64_t k) {
 		auto base_ptr = ((data_ptr_t *)state.data)[i];
@@ -100,7 +100,7 @@ void covarpop_finalize(Vector& state, Vector &result) {
 	});
 }
 
-void covarsamp_finalize(Vector& state, Vector &result) {
+void covarsamp_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming sample covariance
 	VectorOperations::Exec(result, [&](uint64_t i, uint64_t k) {
 		auto base_ptr = ((data_ptr_t *)state.data)[i];

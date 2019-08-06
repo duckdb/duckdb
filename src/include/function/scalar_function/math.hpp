@@ -196,7 +196,7 @@ public:
 };
 
 void log2_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                    Vector &result);
+                   Vector &result);
 
 class Log2Function : public ScalarUnaryNumericFunction {
 public:
@@ -307,7 +307,7 @@ public:
 };
 
 void sign_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                    Vector &result);
+                   Vector &result);
 
 class SignFunction : public ScalarUnaryNumericFunction {
 public:
@@ -319,7 +319,7 @@ public:
 		return sign_function;
 	}
 
-        static get_return_type_function_t GetReturnTypeFunction() {
+	static get_return_type_function_t GetReturnTypeFunction() {
 		return tint_return_type;
 	}
 };

@@ -16,6 +16,7 @@ namespace duckdb {
 //! SelectBinder)
 class AggregateBinder : public ExpressionBinder {
 	friend class SelectBinder;
+
 public:
 	AggregateBinder(Binder &binder, ClientContext &context);
 

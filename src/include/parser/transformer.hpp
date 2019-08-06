@@ -35,6 +35,7 @@ public:
 	string NodetypeToString(postgres::NodeTag type);
 
 	index_t prepared_statement_parameter_index = 0;
+
 private:
 	//! Transforms a Postgres statement into a single SQL statement
 	unique_ptr<SQLStatement> TransformStatement(postgres::Node *stmt);

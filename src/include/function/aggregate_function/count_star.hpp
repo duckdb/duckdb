@@ -12,12 +12,12 @@
 
 namespace duckdb {
 
-void countstar_update(Vector** inputs, index_t input_count, Vector &result);
-void countstar_simple_update(Vector** inputs, index_t input_count, Value &result);
+void countstar_update(Vector **inputs, index_t input_count, Vector &result);
+void countstar_simple_update(Vector **inputs, index_t input_count, Value &result);
 
 class CountStarFunction : public AggregateBigintReturnFunction {
 public:
-	static const char*GetName() {
+	static const char *GetName() {
 		return "count_star";
 	}
 
@@ -30,4 +30,4 @@ public:
 	}
 };
 
-}
+} // namespace duckdb

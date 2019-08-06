@@ -89,7 +89,8 @@ public:
 	TableFunctionCatalogEntry *GetTableFunction(Transaction &transaction, FunctionExpression *expression);
 
 	//! Returns a pointer to the scalar or aggregate function if it exists, or throws an exception otherwise
-	CatalogEntry *GetFunction(Transaction &transaction, const string &schema, const string &name, bool if_exists = false);
+	CatalogEntry *GetFunction(Transaction &transaction, const string &schema, const string &name,
+	                          bool if_exists = false);
 
 	//! Drops an index from the catalog.
 	void DropIndex(Transaction &transaction, DropInfo *info);

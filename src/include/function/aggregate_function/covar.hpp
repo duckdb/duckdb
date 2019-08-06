@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// function/aggregate_function/stddev_samp.hpp
+// function/aggregate_function/covar.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,9 +12,9 @@
 
 namespace duckdb {
 
-void covar_update(Vector** inputs, index_t input_count, Vector &result);
-void covarpop_finalize(Vector& payloads, Vector &result);
-void covarsamp_finalize(Vector& payloads, Vector &result);
+void covar_update(Vector **inputs, index_t input_count, Vector &result);
+void covarpop_finalize(Vector &payloads, Vector &result);
+void covarsamp_finalize(Vector &payloads, Vector &result);
 SQLType covar_get_return_type(vector<SQLType> &arguments);
 
 static index_t covar_state_size(TypeId return_type) {
@@ -28,7 +28,7 @@ static void covar_initialize(data_ptr_t payload, TypeId return_type) {
 
 class CovarSampFunction {
 public:
-	static const char*GetName() {
+	static const char *GetName() {
 		return "covar_samp";
 	}
 
@@ -67,7 +67,7 @@ public:
 
 class CovarPopFunction {
 public:
-	static const char*GetName() {
+	static const char *GetName() {
 		return "covar_pop";
 	}
 
@@ -104,4 +104,4 @@ public:
 	}
 };
 
-}
+} // namespace duckdb

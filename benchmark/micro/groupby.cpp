@@ -10,7 +10,6 @@ using namespace std;
 #define GROUP_ROW_COUNT 10000000
 #define GROUP_COUNT 5
 
-
 DUCKDB_BENCHMARK(SimpleAggregate, "[aggregate]")
 virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.Query("CREATE TABLE integers(i INTEGER);");
@@ -46,7 +45,6 @@ virtual string BenchmarkInfo() {
 	                          GROUP_ROW_COUNT);
 }
 FINISH_BENCHMARK(SimpleAggregate)
-
 
 DUCKDB_BENCHMARK(SimpleGroupByAggregate, "[aggregate]")
 virtual void Load(DuckDBBenchmarkState *state) {

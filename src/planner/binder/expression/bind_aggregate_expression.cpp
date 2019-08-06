@@ -10,8 +10,7 @@
 using namespace duckdb;
 using namespace std;
 
-static SQLType ValidateReturnType(vector<SQLType> &arguments, AggregateFunctionCatalogEntry *func)
-{
+static SQLType ValidateReturnType(vector<SQLType> &arguments, AggregateFunctionCatalogEntry *func) {
 	auto result = func->return_type(arguments);
 	if (result == SQLTypeId::INVALID) {
 		// types do not match up, throw exception
