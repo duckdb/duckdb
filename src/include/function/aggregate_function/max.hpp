@@ -12,8 +12,8 @@
 
 namespace duckdb {
 
-void max_update(Vector **inputs, index_t input_count, Vector &result);
-void max_simple_update(Vector **inputs, index_t input_count, Value &result);
+void max_update(Vector inputs[], index_t input_count, Vector &result);
+void max_simple_update(Vector inputs[], index_t input_count, Value &result);
 
 class MaxFunction : public AggregateSameReturnFunction {
 public:
