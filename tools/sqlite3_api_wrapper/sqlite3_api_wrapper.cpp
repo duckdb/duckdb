@@ -33,14 +33,14 @@ struct sqlite3 {
 	string last_error;
 };
 
-void sqlite3_randomness(int N, void *pBuf){
+void sqlite3_randomness(int N, void *pBuf) {
 	static bool init = false;
-	if (!init){
+	if (!init) {
 		srand(time(NULL));
 		init = true;
 	}
-	unsigned char *zBuf = (unsigned char *) pBuf;
-	while(N--){
+	unsigned char *zBuf = (unsigned char *)pBuf;
+	while (N--) {
 		unsigned char nextByte = rand() % 255;
 		zBuf[N] = nextByte;
 	}

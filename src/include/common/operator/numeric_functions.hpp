@@ -140,11 +140,18 @@ struct ATan2 {
 struct Sign {
 	template <class T> static inline int8_t Operation(T left) {
 		if (left == T(0))
-                  return 0;
-                else if (left > T(0))
-                  return 1;
-                else
-                  return -1;
+			return 0;
+		else if (left > T(0))
+			return 1;
+		else
+			return -1;
 	}
 };
+
+struct Pow {
+	template <class T> static inline T Operation(T base, T exponent) {
+		return pow(base, exponent);
+	}
+};
+
 } // namespace duckdb

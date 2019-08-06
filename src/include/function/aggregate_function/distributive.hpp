@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-void gather_finalize(Vector& payloads, Vector &result);
+void gather_finalize(Vector &payloads, Vector &result);
 
 class AggregateInPlaceFunction {
 public:
@@ -35,6 +35,8 @@ static Value bigint_simple_initialize() {
 }
 
 static SQLType get_bigint_return_type(vector<SQLType> &arguments) {
+	if (arguments.size() > 1)
+		return SQLTypeId::INVALID;
 	return SQLTypeId::BIGINT;
 }
 
@@ -44,7 +46,7 @@ static bool dont_cast_arguments(vector<SQLType> &arguments) {
 
 class AggregateBigintReturnFunction : public AggregateInPlaceFunction {
 public:
-	static aggregate_size_t GetPayloadSizeFunction() {
+	static aggregate_size_t GetStateSizeFunction() {
 		return get_bigint_type_size;
 	}
 
@@ -76,7 +78,8 @@ static Value null_simple_initialize() {
 }
 
 static SQLType get_same_return_type(vector<SQLType> &arguments) {
-	assert(arguments.size() == 1);
+	if (arguments.size() != 1)
+		return SQLTypeId::INVALID;
 	return arguments[0];
 }
 
@@ -86,7 +89,7 @@ static bool cast_arguments(vector<SQLType> &arguments) {
 
 class AggregateSameReturnFunction : public AggregateInPlaceFunction {
 public:
-	static aggregate_size_t GetPayloadSizeFunction() {
+	static aggregate_size_t GetStateSizeFunction() {
 		return get_return_type_size;
 	}
 

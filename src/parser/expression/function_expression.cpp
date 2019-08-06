@@ -16,7 +16,8 @@ FunctionExpression::FunctionExpression(string schema, string function_name,
 	}
 }
 
-FunctionExpression::FunctionExpression(string function_name, vector<unique_ptr<ParsedExpression>> &children, bool distinct)
+FunctionExpression::FunctionExpression(string function_name, vector<unique_ptr<ParsedExpression>> &children,
+                                       bool distinct)
     : FunctionExpression(DEFAULT_SCHEMA, function_name, children, distinct) {
 }
 

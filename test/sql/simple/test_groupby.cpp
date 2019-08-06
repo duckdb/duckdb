@@ -235,7 +235,8 @@ TEST_CASE("Group by multiple columns", "[aggregations]") {
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER);"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 1, 2), (1, 2, 2), (1, 1, 2), (2, 1, 2), (1, 2, 4), (1, 2, NULL);"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO integers VALUES (1, 1, 2), (1, 2, 2), (1, 1, 2), (2, 1, 2), (1, 2, 4), (1, 2, NULL);"));
 
 	result = con.Query("SELECT i, j, SUM(k), COUNT(*), COUNT(k) FROM integers GROUP BY i, j ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2}));

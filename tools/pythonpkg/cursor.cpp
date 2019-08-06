@@ -246,7 +246,6 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 		offset += chunk->size();
 	}
 
-
 	// step 4: convert to masked arrays
 	PyObject *col_dict = PyDict_New();
 	assert(mafunc_ref);
@@ -278,7 +277,7 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 			return NULL;
 		}
 		auto name = PyUnicode_FromString(self->result->names[col_idx].c_str());
-		PyDict_SetItem(col_dict, name , mask);
+		PyDict_SetItem(col_dict, name, mask);
 		Py_DECREF(name);
 		Py_DECREF(mask);
 	}
@@ -389,7 +388,8 @@ PyObject *duckdb_cursor_close(duckdb_Cursor *self, PyObject *args) {
 PyObject *duckdb_cursor_profile(duckdb_Cursor *self, PyObject *args) {
 	int check = PyObject_IsTrue(args);
 	if (check == -1) {
-		PyErr_SetString(PyExc_TypeError, "expected a boolean corresponding to either true (json) or false (query graph)");
+		PyErr_SetString(PyExc_TypeError,
+		                "expected a boolean corresponding to either true (json) or false (query graph)");
 		return NULL;
 	}
 	if (!self->connection) {
@@ -399,7 +399,8 @@ PyObject *duckdb_cursor_profile(duckdb_Cursor *self, PyObject *args) {
 	if (!duckdb_check_connection(self->connection)) {
 		return NULL;
 	}
-	duckdb::ProfilerPrintFormat format = check ? duckdb::ProfilerPrintFormat::JSON : duckdb::ProfilerPrintFormat::QUERY_TREE;
+	duckdb::ProfilerPrintFormat format =
+	    check ? duckdb::ProfilerPrintFormat::JSON : duckdb::ProfilerPrintFormat::QUERY_TREE;
 	return PyUnicode_FromString(self->connection->conn->GetProfilingInformation(format).c_str());
 }
 
@@ -412,7 +413,8 @@ static PyMethodDef cursor_methods[] = {
     {"fetchdf", (PyCFunction)duckdb_cursor_fetchdf, METH_NOARGS,
      PyDoc_STR("Fetches all rows from the result set as a pandas DataFrame.")},
     {"close", (PyCFunction)duckdb_cursor_close, METH_NOARGS, PyDoc_STR("Closes the cursor.")},
-    {"profile_info", (PyCFunction)duckdb_cursor_profile, METH_O, PyDoc_STR("Returns the profile information of the last running query.")},
+    {"profile_info", (PyCFunction)duckdb_cursor_profile, METH_O,
+     PyDoc_STR("Returns the profile information of the last running query.")},
     {NULL, NULL}};
 
 static struct PyMemberDef cursor_members[] = {

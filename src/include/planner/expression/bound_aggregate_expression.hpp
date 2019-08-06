@@ -15,15 +15,14 @@ class AggregateFunctionCatalogEntry;
 
 class BoundAggregateExpression : public Expression {
 public:
-	BoundAggregateExpression(TypeId return_type, unique_ptr<Expression> child,
-							 AggregateFunctionCatalogEntry* bound_aggregate, bool distinct);
+	BoundAggregateExpression(TypeId return_type, AggregateFunctionCatalogEntry *bound_aggregate, bool distinct);
 
 	//! The bound function expression
 	AggregateFunctionCatalogEntry *bound_aggregate;
 	//! True to aggregate on distinct values
 	bool distinct;
-	//! The child of the aggregate expression
-	unique_ptr<Expression> child;
+	//! List of arguments to the function
+	vector<unique_ptr<Expression>> children;
 
 public:
 	bool IsAggregate() const override {

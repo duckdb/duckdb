@@ -288,6 +288,16 @@ TEST_CASE("Test correlated aggregate subqueries", "[subquery]") {
 	                   "IS NOT NULL)) FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), false, true, true}));
+
+	// aggregates with multiple parameters
+	result = con.Query("SELECT (SELECT COVAR_POP(i1.i, i2.i) FROM integers i2) FROM integers i1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0, 0, 0}));
+
+	result = con.Query("SELECT (SELECT COVAR_POP(i2.i, i1.i) FROM integers i2) FROM integers i1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0, 0, 0}));
+
+	result = con.Query("SELECT (SELECT COVAR_POP(i1.i+i2.i, i1.i+i2.i) FROM integers i2) FROM integers i1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0.666667, 0.666667, 0.666667}));
 }
 
 TEST_CASE("Test correlated EXISTS subqueries", "[subquery]") {
@@ -338,6 +348,22 @@ TEST_CASE("Test correlated EXISTS subqueries", "[subquery]") {
 	result = con.Query(
 	    "SELECT SUM(CASE WHEN EXISTS(SELECT i FROM integers WHERE i=i1.i) THEN 1 ELSE 0 END) FROM integers i1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+	// aggregates with multiple parameters
+	result = con.Query("SELECT (SELECT COVAR_POP(i1.i, i2.i) FROM integers i2) FROM integers i1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0, 0, 0}));
+
+	result = con.Query("SELECT (SELECT COVAR_POP(i2.i, i1.i) FROM integers i2) FROM integers i1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0, 0, 0}));
+
+	result = con.Query("SELECT (SELECT COVAR_POP(i1.i+i2.i, i1.i+i2.i) FROM integers i2) FROM integers i1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0.666667, 0.666667, 0.666667}));
+
+	result = con.Query("SELECT (SELECT COVAR_POP(i2.i, i2.i) FROM integers i2) FROM integers i1 ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0.666667, 0.666667, 0.666667, 0.666667}));
+
+	result = con.Query("SELECT (SELECT COVAR_POP(i1.i, i1.i) FROM integers i2 LIMIT 1) FROM integers i1 ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0.666667}));
 }
 
 TEST_CASE("Test correlated ANY/ALL subqueries", "[subquery]") {
@@ -676,6 +702,10 @@ TEST_CASE("Test nested correlated subqueries", "[subquery]") {
 	                   "WHERE i2.i=i1.i))) AS j FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 6, 12, 18}));
+	result = con.Query("SELECT (SELECT (SELECT SUM(i1.i)+SUM(i2.i)+SUM(i3.i) FROM integers i3) FROM integers i2) FROM "
+	                   "integers i1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {18}));
+
 	// explicit join on subquery
 	result = con.Query("SELECT i, (SELECT SUM(s1.i) FROM integers s1 INNER JOIN integers s2 ON (SELECT "
 	                   "i1.i+s1.i)=(SELECT i1.i+s2.i)) AS j FROM integers i1 ORDER BY i;");
@@ -822,6 +852,15 @@ TEST_CASE("Test nested correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT i, (SELECT i1.i IN (1, 2, 3, 4, 5, 6, 7, 8)) AS j FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, true, true}));
+
+	// nested correlated subqueries with multiple aggregate parameters
+	result = con.Query("SELECT (SELECT (SELECT COVAR_POP(i1.i, i3.i) FROM integers i3) FROM integers i2 LIMIT 1) FROM "
+	                   "integers i1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0, 0, 0}));
+
+	result = con.Query("SELECT (SELECT (SELECT COVAR_POP(i2.i, i3.i) FROM integers i3) FROM integers i2 LIMIT 1) FROM "
+	                   "integers i1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, 0}));
 }
 
 TEST_CASE("Test varchar correlated subqueries", "[subquery]") {

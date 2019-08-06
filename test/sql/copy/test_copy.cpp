@@ -87,7 +87,7 @@ TEST_CASE("Test copy statement", "[copy]") {
 
 	// Importing CSV to Selected Columns
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test4 (a INTEGER, b INTEGER,c VARCHAR(10));"));
-	result = con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + "' (DELIMITER ',', HEADER 0);");
+	result = con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + "' (DELIM ',', HEADER 0);");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 	result = con.Query("SELECT * FROM test4 ORDER BY 1 LIMIT 3 ");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
@@ -95,7 +95,23 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {" test", " test", " test"}));
 
 	// unsupported type for HEADER
-	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (DELIMITER ',', HEADER 0.2);"));
+	REQUIRE_FAIL(
+	    con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (SEP ',', HEADER 0.2);"));
+	// empty sep
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (SEP);"));
+	// number as separator
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (SEP 1);"));
+	// multiple format options
+	REQUIRE_FAIL(
+	    con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + "' (FORMAT 'csv', FORMAT 'json');"));
+	// number as escape character
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (ESCAPE 1);"));
+	// no escape character
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (ESCAPE);"));
+	// no quote character
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (QUOTE);"));
+	// no format character
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (FORMAT);"));
 
 	// use a different delimiter
 	auto pipe_csv = fs.JoinPath(csv_path, "test_pipe.csv");
@@ -105,8 +121,9 @@ TEST_CASE("Test copy statement", "[copy]") {
 	}
 	from_csv_file_pipe.close();
 
-	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER,c VARCHAR(10));");
-	result = con.Query("COPY test FROM '" + pipe_csv + "' DELIMITER '|';");
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER,c VARCHAR(10));"));
+	result = con.Query("COPY test FROM '" + pipe_csv + "' (SEPARATOR '|')");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
 	// test null
@@ -491,7 +508,7 @@ TEST_CASE("Test copy from lineitem csv", "[copy]") {
 	                  "lites. fluffily even de", " pending foxes. slyly re", "arefully slyly ex"}));
 
 	// test COPY TO with HEADER
-	result = con.Query("COPY lineitem TO '" + lineitem_csv + "' DELIMITER ' ' HEADER");
+	result = con.Query("COPY lineitem TO '" + lineitem_csv + "' (DELIMITER ' ', HEADER)");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
 	// clear out the table
@@ -569,10 +586,9 @@ TEST_CASE("Test cranlogs broken gzip copy", "[copy]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE cranlogs (date date,time string,size int,r_version string,r_arch string,r_os string,package string,version string,country string,ip_id int)"));
-
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE cranlogs (date date,time string,size int,r_version string,r_arch "
+	                          "string,r_os string,package string,version string,country string,ip_id int)"));
 
 	result = con.Query("COPY cranlogs FROM 'test/sql/copy/tmp2013-06-15.csv.gz' DELIMITER ',' HEADER");
 	REQUIRE(CHECK_COLUMN(result, 0, {37459}));
-
 }

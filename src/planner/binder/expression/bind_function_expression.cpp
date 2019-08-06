@@ -13,14 +13,15 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, index_
 	auto func = context.catalog.GetFunction(context.ActiveTransaction(), function.schema, function.function_name);
 	if (func->type == CatalogType::SCALAR_FUNCTION) {
 		// scalar function
-		return BindFunction(function, (ScalarFunctionCatalogEntry*) func, depth);
+		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
 	} else {
 		// aggregate function
-		return BindAggregate(function, (AggregateFunctionCatalogEntry*) func, depth);
+		return BindAggregate(function, (AggregateFunctionCatalogEntry *)func, depth);
 	}
 }
 
-BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry *func, index_t depth) {
+BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry *func,
+                                          index_t depth) {
 	// bind the children of the function expression
 	string error;
 	for (index_t i = 0; i < function.children.size(); i++) {
@@ -61,7 +62,8 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	return BindResult(move(result), return_type);
 }
 
-BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, index_t depth) {
+BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function,
+                                           index_t depth) {
 	return BindResult(UnsupportedAggregateMessage());
 }
 

@@ -49,5 +49,4 @@ struct ModuloRealInPlace {
 	}
 };
 
-
 } // namespace duckdb

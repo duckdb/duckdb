@@ -395,7 +395,7 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(stmt != NULL);
 	index_t nparams;
-	REQUIRE(duckdb_nparams(stmt, &nparams)  == DuckDBSuccess);
+	REQUIRE(duckdb_nparams(stmt, &nparams) == DuckDBSuccess);
 	REQUIRE(nparams == 1);
 
 	for (int32_t i = 1; i <= 1000; i++) {

@@ -466,7 +466,6 @@ static void require_mod_double() {
 	REQUIRE(v1.GetValue(1).CastAs(TypeId::DOUBLE) == Value::DOUBLE(0));
 }
 
-
 TEST_CASE("Arithmetic operations on vectors", "[vector_ops]") {
 	require_arith(TypeId::SMALLINT);
 	require_arith(TypeId::INTEGER);

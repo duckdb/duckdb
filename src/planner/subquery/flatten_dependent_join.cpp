@@ -134,7 +134,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			// ELSE COUNT(*) END
 			for (index_t i = 0; i < aggr.expressions.size(); i++) {
 				assert(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-				auto bound = (BoundAggregateExpression*) &*aggr.expressions[i];
+				auto bound = (BoundAggregateExpression *)&*aggr.expressions[i];
 				vector<SQLType> arguments;
 				if (!bound->bound_aggregate->cast_arguments(arguments)) {
 					// have to replace this ColumnBinding with the CASE expression

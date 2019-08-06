@@ -72,9 +72,13 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 		for_each_cell(cell, stmt->options->head) {
 			auto *def_elem = reinterpret_cast<DefElem *>(cell->data.ptr_value);
 
-			if (def_elem->defname == kDelimiterTok) {
+			if (StringUtil::StartsWith(def_elem->defname, "delim") ||
+			    StringUtil::StartsWith(def_elem->defname, "sep")) {
 				// delimiter
 				auto *delimiter_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
+				if (!delimiter_val || delimiter_val->type != T_String) {
+					throw ParserException("Unsupported parameter type for DELIMITER: expected e.g. DELIMITER ','");
+				}
 				index_t delim_len = strlen(delimiter_val->val.str);
 				info.delimiter = '\0';
 				char *delim_cstr = delimiter_val->val.str;
@@ -90,28 +94,41 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			} else if (def_elem->defname == kFormatTok) {
 				// format
 				auto *format_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
+				if (!format_val || format_val->type != T_String) {
+					throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv'");
+				}
 				info.format = StringToExternalFileFormat(format_val->val.str);
 			} else if (def_elem->defname == kQuoteTok) {
 				// quote
 				auto *quote_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
+				if (!quote_val || quote_val->type != T_String) {
+					throw ParserException("Unsupported parameter type for QUOTE: expected e.g. QUOTE '\"'");
+				}
 				info.quote = *quote_val->val.str;
 			} else if (def_elem->defname == kEscapeTok) {
 				// escape
 				auto *escape_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
+				if (!escape_val || escape_val->type != T_String) {
+					throw ParserException("Unsupported parameter type for ESCAPE: expected e.g. ESCAPE '\\'");
+				}
 				info.escape = *escape_val->val.str;
 			} else if (def_elem->defname == kHeaderTok) {
 				auto *header_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
-				switch(header_val->type) {
-					case T_Integer:
-						info.header = header_val->val.ival == 1 ? true : false;
-						break;
-					case T_String: {
-						auto val = duckdb::Value(string(header_val->val.str));
-						info.header = val.CastAs(TypeId::BOOLEAN).value_.boolean;
-						break;
-					}
-					default:
-						throw ParserException("Unsupported parameter type for HEADER");
+				if (!header_val) {
+					info.header = true;
+					continue;
+				}
+				switch (header_val->type) {
+				case T_Integer:
+					info.header = header_val->val.ival == 1 ? true : false;
+					break;
+				case T_String: {
+					auto val = duckdb::Value(string(header_val->val.str));
+					info.header = val.CastAs(TypeId::BOOLEAN).value_.boolean;
+					break;
+				}
+				default:
+					throw ParserException("Unsupported parameter type for HEADER");
 				}
 			} else {
 				throw ParserException("Unsupported COPY option: %s", def_elem->defname);

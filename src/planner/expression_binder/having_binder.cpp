@@ -5,7 +5,6 @@
 #include "planner/expression_binder/aggregate_binder.hpp"
 #include "common/string_util.hpp"
 
-
 using namespace duckdb;
 using namespace std;
 

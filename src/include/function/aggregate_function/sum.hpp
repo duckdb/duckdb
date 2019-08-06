@@ -12,17 +12,17 @@
 
 namespace duckdb {
 
-void sum_update(Vector inputs[], index_t input_count, Vector &result);
-void sum_simple_update(Vector inputs[], index_t input_count, Value &result);
+void sum_update(Vector **inputs, index_t input_count, Vector &result);
+void sum_simple_update(Vector **inputs, index_t input_count, Value &result);
 SQLType sum_get_return_type(vector<SQLType> &arguments);
 
 class SumFunction : public AggregateInPlaceFunction {
 public:
-	static const char*GetName() {
+	static const char *GetName() {
 		return "sum";
 	}
 
-	static aggregate_size_t GetPayloadSizeFunction() {
+	static aggregate_size_t GetStateSizeFunction() {
 		return get_return_type_size;
 	}
 
@@ -51,4 +51,4 @@ public:
 	}
 };
 
-}
+} // namespace duckdb
