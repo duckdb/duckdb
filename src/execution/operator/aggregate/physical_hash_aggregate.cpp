@@ -43,7 +43,7 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 				break;
 			}
 		}
-
+		index_t payload_idx = 0;
 		ExpressionExecutor executor(state->child_chunk);
 		// aggregation with groups
 		DataChunk &group_chunk = state->group_chunk;
@@ -51,12 +51,16 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 		executor.Execute(groups, group_chunk);
 		for (index_t i = 0; i < aggregates.size(); i++) {
 			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
-			if (aggr.child) {
-				executor.ExecuteExpression(*aggr.child, payload_chunk.data[i]);
-				payload_chunk.heap.MergeHeap(payload_chunk.data[i].string_heap);
+			if (aggr.children.size()) {
+				for (index_t j = 0; j < aggr.children.size(); ++j) {
+					executor.ExecuteExpression(*aggr.children[j], payload_chunk.data[payload_idx]);
+					payload_chunk.heap.MergeHeap(payload_chunk.data[payload_idx].string_heap);
+					++payload_idx;
+				}
 			} else {
-				payload_chunk.data[i].count = group_chunk.size();
-				payload_chunk.data[i].sel_vector = group_chunk.sel_vector;
+				payload_chunk.data[payload_idx].count = group_chunk.size();
+				payload_chunk.data[payload_idx].sel_vector = group_chunk.sel_vector;
+				++payload_idx;
 			}
 		}
 		payload_chunk.sel_vector = group_chunk.sel_vector;
@@ -124,8 +128,10 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 		assert(expr->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 		auto &aggr = (BoundAggregateExpression &)*expr;
 		aggregate_kind.push_back(&aggr);
-		if (aggr.child) {
-			payload_types.push_back(aggr.child->return_type);
+		if (aggr.children.size()) {
+			for (index_t i = 0; i < aggr.children.size(); ++i) {
+				payload_types.push_back(aggr.children[i]->return_type);
+			}
 		} else {
 			// COUNT(*)
 			payload_types.push_back(TypeId::BIGINT);

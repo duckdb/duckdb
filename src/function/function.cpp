@@ -31,7 +31,7 @@ template <class T> static void AddAggregateFunction(Transaction &transaction, Ca
 	info.schema = DEFAULT_SCHEMA;
 	info.name = T::GetName();
 
-	info.payload_size = T::GetPayloadSizeFunction();
+	info.state_size = T::GetStateSizeFunction();
 	info.initialize = T::GetInitalizeFunction();
 	info.update = T::GetUpdateFunction();
 	info.finalize = T::GetFinalizeFunction();
@@ -67,6 +67,8 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	// distributive aggregates
 	AddAggregateFunction<CountFunction>(transaction, catalog);
 	AddAggregateFunction<CountStarFunction>(transaction, catalog);
+	AddAggregateFunction<CovarPopFunction>(transaction, catalog);
+	AddAggregateFunction<CovarSampFunction>(transaction, catalog);
 	AddAggregateFunction<FirstFunction>(transaction, catalog);
 	AddAggregateFunction<MaxFunction>(transaction, catalog);
 	AddAggregateFunction<MinFunction>(transaction, catalog);
@@ -94,6 +96,8 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddScalarFunction<Log2Function>(transaction, catalog);
 	AddScalarFunction<SignFunction>(transaction, catalog);
 	AddScalarFunction<ModFunction>(transaction, catalog);
+	AddScalarFunction<PowFunction>(transaction, catalog);
+	AddScalarFunction<PowerFunction>(transaction, catalog);
 
 	// Trignometric
 	AddScalarFunction<SinFunction>(transaction, catalog);

@@ -7,14 +7,14 @@ using namespace std;
 
 namespace duckdb {
 
-void min_update(Vector inputs[], index_t input_count, Vector &result) {
+void min_update(Vector **inputs, index_t input_count, Vector &result) {
 	assert(input_count == 1);
-	VectorOperations::Scatter::Min(inputs[0], result);
+	VectorOperations::Scatter::Min(*inputs[0], result);
 }
 
-void min_simple_update(Vector inputs[], index_t input_count, Value &result) {
+void min_simple_update(Vector **inputs, index_t input_count, Value &result) {
 	assert(input_count == 1);
-	Value min = VectorOperations::Min(inputs[0]);
+	Value min = VectorOperations::Min(*inputs[0]);
 	if (min.is_null) {
 		return;
 	}

@@ -44,7 +44,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 		auto bound = make_unique<BoundReferenceExpression>(types[i], i);
 		auto first_func = (AggregateFunctionCatalogEntry *)context.catalog.GetFunction(context.ActiveTransaction(),
 		                                                                               DEFAULT_SCHEMA, "first");
-		auto first_aggregate = make_unique<BoundAggregateExpression>(types[i], move(bound), first_func, false);
+		auto first_aggregate = make_unique<BoundAggregateExpression>(types[i], first_func, false);
+		first_aggregate->children.push_back(move(bound));
 		// and push it to the list of aggregates
 		aggregates.push_back(move(first_aggregate));
 		projections.push_back(make_unique<BoundReferenceExpression>(types[i], i));

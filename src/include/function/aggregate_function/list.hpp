@@ -1,6 +1,7 @@
 #include "function/aggregate_function/avg.hpp"
 #include "function/aggregate_function/count.hpp"
 #include "function/aggregate_function/count_star.hpp"
+#include "function/aggregate_function/covar.hpp"
 #include "function/aggregate_function/distributive.hpp"
 #include "function/aggregate_function/first.hpp"
 #include "function/aggregate_function/max.hpp"

@@ -13,12 +13,13 @@
 namespace duckdb {
 
 void stddevsamp_update(Vector inputs[], index_t input_count, Vector &result);
+void stddevsamp_update(Vector **inputs, index_t input_count, Vector &result);
 void stddevsamp_finalize(Vector &payloads, Vector &result);
 SQLType stddev_get_return_type(vector<SQLType> &arguments);
 
 static index_t stddev_payload_size(TypeId return_type) {
-	// count running_mean running_dsquared
-	return sizeof(uint64_t) + sizeof(double) + sizeof(double);
+      // count running_mean running_dsquared
+      return sizeof(uint64_t) + sizeof(double) + sizeof(double);
 }
 
 static void stddevsamp_initialize(data_ptr_t payload, TypeId return_type) {
@@ -31,7 +32,7 @@ public:
 		return "stddev_samp";
 	}
 
-	static aggregate_size_t GetPayloadSizeFunction() {
+	static aggregate_size_t GetStateSizeFunction() {
 		return stddev_payload_size;
 	}
 

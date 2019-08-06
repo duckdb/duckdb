@@ -6,6 +6,7 @@
 #include "function/scalar_function/math.hpp"
 #include "function/scalar_function/mod.hpp"
 #include "function/scalar_function/nextval.hpp"
+#include "function/scalar_function/pow.hpp"
 #include "function/scalar_function/regexp.hpp"
 #include "function/scalar_function/round.hpp"
 #include "function/scalar_function/substring.hpp"

@@ -12,8 +12,8 @@
 
 namespace duckdb {
 
-void min_update(Vector inputs[], index_t input_count, Vector &result);
-void min_simple_update(Vector inputs[], index_t input_count, Value &result);
+void min_update(Vector **inputs, index_t input_count, Vector &result);
+void min_simple_update(Vector **inputs, index_t input_count, Value &result);
 
 class MinFunction : public AggregateSameReturnFunction {
 public:

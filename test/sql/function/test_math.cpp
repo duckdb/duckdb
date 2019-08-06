@@ -158,3 +158,27 @@ TEST_CASE("Mod test", "[function]") {
 	result = con.Query("select mod(b, 2.1) from modme");
 	REQUIRE(CHECK_COLUMN(result, 0, {0.9}));
 }
+TEST_CASE("Power test", "[function]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE powerme(a DOUBLE, b INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO powerme VALUES (2.1, 3)"));
+
+	result = con.Query("select pow(a, 0) from powerme");
+	REQUIRE(CHECK_COLUMN(result, 0, {1.0}));
+
+	result = con.Query("select pow(b, -2) from powerme");
+	REQUIRE(CHECK_COLUMN(result, 0, {.1111}));
+
+	result = con.Query("select pow(a, b) from powerme");
+	REQUIRE(CHECK_COLUMN(result, 0, {9.261}));
+
+	result = con.Query("select pow(b, a) from powerme");
+	REQUIRE(CHECK_COLUMN(result, 0, {10.045}));
+
+	result = con.Query("select power(b, a) from powerme");
+	REQUIRE(CHECK_COLUMN(result, 0, {10.045}));
+}

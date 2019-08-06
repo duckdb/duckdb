@@ -296,3 +296,4 @@ third_party/sqllogictest
 # Benchmarks
 .last_benchmarked_commit
 benchmark_results/
+duckdb_unittest_tempdir/

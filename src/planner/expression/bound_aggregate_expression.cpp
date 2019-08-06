@@ -4,16 +4,26 @@
 using namespace duckdb;
 using namespace std;
 
-BoundAggregateExpression::BoundAggregateExpression(TypeId return_type, unique_ptr<Expression> child,
-                                                   AggregateFunctionCatalogEntry *bound_aggregate, bool distinct)
+BoundAggregateExpression::BoundAggregateExpression(TypeId return_type, AggregateFunctionCatalogEntry *bound_aggregate,
+                                                   bool distinct)
     : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, return_type),
-      bound_aggregate(bound_aggregate), distinct(distinct), child(move(child)) {
+      bound_aggregate(bound_aggregate), distinct(distinct) {
 }
 
 string BoundAggregateExpression::ToString() const {
-	return bound_aggregate->name + "(" + (distinct ? "DISTINCT " : " ") + (child ? child->GetName() : string()) + ")";
+	string str = bound_aggregate->name + "(";
+	if (distinct) {
+		str += "DISTINCT ";
+	}
+	for (index_t i = 0; i < children.size(); i++) {
+		if (i > 0) {
+			str += ", ";
+		}
+		str += children[i]->GetName();
+	}
+	str += ")";
+	return str;
 }
-
 uint64_t BoundAggregateExpression::Hash() const {
 	uint64_t result = Expression::Hash();
 	result = CombineHash(result, duckdb::Hash(bound_aggregate->name.c_str()));
@@ -32,12 +42,22 @@ bool BoundAggregateExpression::Equals(const BaseExpression *other_) const {
 	if (other->bound_aggregate != bound_aggregate) {
 		return false;
 	}
-	return Expression::Equals(child.get(), other->child.get());
+	if (children.size() != other->children.size()) {
+		return false;
+	}
+	for (index_t i = 0; i < children.size(); i++) {
+		if (!Expression::Equals(children[i].get(), other->children[i].get())) {
+			return false;
+		}
+	}
+	return true;
 }
 
 unique_ptr<Expression> BoundAggregateExpression::Copy() {
-	auto new_child = child ? child->Copy() : nullptr;
-	auto new_aggregate = make_unique<BoundAggregateExpression>(return_type, move(new_child), bound_aggregate, distinct);
-	new_aggregate->CopyProperties(*this);
-	return move(new_aggregate);
+	auto copy = make_unique<BoundAggregateExpression>(return_type, bound_aggregate, distinct);
+	for (auto &child : children) {
+		copy->children.push_back(child->Copy());
+	}
+	copy->CopyProperties(*this);
+	return move(copy);
 }

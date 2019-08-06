@@ -16,8 +16,8 @@ struct CreateAggregateFunctionInfo : public CreateFunctionInfo {
 	CreateAggregateFunctionInfo() : CreateFunctionInfo(FunctionType::AGGREGATE) {
 	}
 
-	//! The hashed aggregate sizing function
-	aggregate_size_t payload_size;
+	//! The hashed aggregate state sizing function
+	aggregate_size_t state_size;
 	//! The hashed aggregate initialization function
 	aggregate_initialize_t initialize;
 	//! The hashed aggregate update function
