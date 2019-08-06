@@ -67,6 +67,40 @@ void stddevsamp_update(Vector inputs[], index_t input_count, Vector &state) {
 	});
 }
 
+void varsamp_finalize(Vector &state, Vector &result) {
+	// compute finalization of streaming stddev of sample
+	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+		auto base_ptr = ((data_ptr_t *)state.data)[i];
+		auto count_ptr = (uint64_t *)base_ptr;
+		auto dsquared_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
+
+		if (*count_ptr == 0) {
+			result.nullmask[i] = true;
+			return;
+		}
+		double res = *count_ptr > 1 ? (*dsquared_ptr / (*count_ptr - 1)) : 0;
+
+		((double *)result.data)[i] = res;
+	});
+}
+
+void varpop_finalize(Vector &state, Vector &result) {
+	// compute finalization of streaming stddev of sample
+	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+		auto base_ptr = ((data_ptr_t *)state.data)[i];
+		auto count_ptr = (uint64_t *)base_ptr;
+		auto dsquared_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
+
+		if (*count_ptr == 0) {
+			result.nullmask[i] = true;
+			return;
+		}
+		double res = *count_ptr > 1 ? (*dsquared_ptr / *count_ptr) : 0;
+
+		((double *)result.data)[i] = res;
+	});
+}
+
 void stddevsamp_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming stddev of sample
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
@@ -79,6 +113,23 @@ void stddevsamp_finalize(Vector &state, Vector &result) {
 			return;
 		}
 		double res = *count_ptr > 1 ? sqrt(*dsquared_ptr / (*count_ptr - 1)) : 0;
+
+		((double *)result.data)[i] = res;
+	});
+}
+
+void stddevpop_finalize(Vector &state, Vector &result) {
+	// compute finalization of streaming stddev of sample
+	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+		auto base_ptr = ((data_ptr_t *)state.data)[i];
+		auto count_ptr = (uint64_t *)base_ptr;
+		auto dsquared_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
+
+		if (*count_ptr == 0) {
+			result.nullmask[i] = true;
+			return;
+		}
+		double res = *count_ptr > 1 ? sqrt(*dsquared_ptr / *count_ptr) : 0;
 
 		((double *)result.data)[i] = res;
 	});
