@@ -12,9 +12,14 @@
 
 namespace duckdb {
 
+struct avg_state_t {
+    uint64_t    count;
+    double      sum;
+};
+
+
 static index_t avg_payload_size(TypeId return_type) {
-	// count running_sum
-	return sizeof(uint64_t) + sizeof(double);
+	return sizeof(avg_state_t);
 }
 
 static void avg_initialize(data_ptr_t payload, TypeId return_type) {
