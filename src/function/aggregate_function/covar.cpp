@@ -57,28 +57,24 @@ void covar_update(Vector inputs[], index_t input_count, Vector &state) {
 		//  double      meany
 		//  double      co-moment
 
-		auto base_ptr = ((data_ptr_t *)state.data)[i];
-		auto count_ptr = (uint64_t *)base_ptr;
-		auto meanx_ptr = (double *)(base_ptr + sizeof(uint64_t));
-		auto meany_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
-		auto co_moment_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double) + sizeof(double));
+		auto state_ptr = (covar_state_t*) ((data_ptr_t *)state.data)[i];
 
 		// update running mean and d^2
-		const uint64_t n = ++(*count_ptr);
+		const uint64_t n = ++(state_ptr->count);
 
 		const double x = ((double *)doublex.data)[i];
-		const double dx = (x - (*meanx_ptr));
-		const double meanx = (*meanx_ptr) + dx / n;
+		const double dx = (x - state_ptr->meanx);
+		const double meanx = state_ptr->meanx + dx / n;
 
 		const double y = ((double *)doubley.data)[i];
-		const double dy = (y - (*meany_ptr));
-		const double meany = (*meany_ptr) + dy / n;
+		const double dy = (y - state_ptr->meany);
+		const double meany = state_ptr->meany + dy / n;
 
-		const double C = (*co_moment_ptr) + dx * (y - meany);
+		const double C = state_ptr->co_moment + dx * (y - meany);
 
-		*meanx_ptr = meanx;
-		*meany_ptr = meany;
-		*co_moment_ptr = C;
+		state_ptr->meanx = meanx;
+		state_ptr->meany = meany;
+		state_ptr->co_moment = C;
 		// see Finalize() methods below for final step
 	});
 }
@@ -86,15 +82,13 @@ void covar_update(Vector inputs[], index_t input_count, Vector &state) {
 void covarpop_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming population covariance
 	VectorOperations::Exec(result, [&](uint64_t i, uint64_t k) {
-		auto base_ptr = ((data_ptr_t *)state.data)[i];
-		auto count_ptr = (uint64_t *)base_ptr;
-		auto co_moment_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double) + sizeof(double));
+		auto state_ptr = (covar_state_t*) ((data_ptr_t *)state.data)[i];
 
-		if (*count_ptr == 0) {
+		if (state_ptr->count == 0) {
 			result.nullmask[i] = true;
 			return;
 		}
-		double res = (*co_moment_ptr) / (*count_ptr);
+		double res = state_ptr->co_moment / state_ptr->count;
 
 		((double *)result.data)[i] = res;
 	});
@@ -103,15 +97,13 @@ void covarpop_finalize(Vector &state, Vector &result) {
 void covarsamp_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming sample covariance
 	VectorOperations::Exec(result, [&](uint64_t i, uint64_t k) {
-		auto base_ptr = ((data_ptr_t *)state.data)[i];
-		auto count_ptr = (uint64_t *)base_ptr;
-		auto co_moment_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double) + sizeof(double));
+		auto state_ptr = (covar_state_t*) ((data_ptr_t *)state.data)[i];
 
-		if (*count_ptr < 2) {
+		if (state_ptr->count < 2) {
 			result.nullmask[i] = true;
 			return;
 		}
-		double res = (*co_moment_ptr) / ((*count_ptr) - 1);
+		double res = state_ptr->co_moment / (state_ptr->count - 1);
 
 		((double *)result.data)[i] = res;
 	});
