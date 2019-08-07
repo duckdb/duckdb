@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-void covar_update(Vector **inputs, index_t input_count, Vector &result);
+void covar_update(Vector inputs[], index_t input_count, Vector &result);
 void covarpop_finalize(Vector &payloads, Vector &result);
 void covarsamp_finalize(Vector &payloads, Vector &result);
 SQLType covar_get_return_type(vector<SQLType> &arguments);

@@ -72,8 +72,11 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddAggregateFunction<FirstFunction>(transaction, catalog);
 	AddAggregateFunction<MaxFunction>(transaction, catalog);
 	AddAggregateFunction<MinFunction>(transaction, catalog);
+	AddAggregateFunction<StdDevPopFunction>(transaction, catalog);
 	AddAggregateFunction<StdDevSampFunction>(transaction, catalog);
 	AddAggregateFunction<SumFunction>(transaction, catalog);
+	AddAggregateFunction<VarPopFunction>(transaction, catalog);
+	AddAggregateFunction<VarSampFunction>(transaction, catalog);
 
 	// algebraic aggregates
 	AddAggregateFunction<AvgFunction>(transaction, catalog);

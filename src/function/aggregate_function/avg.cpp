@@ -26,45 +26,40 @@ SQLType avg_get_return_type(vector<SQLType> &arguments) {
 	}
 }
 
-void avg_update(Vector **inputs, index_t input_count, Vector &result) {
+void avg_update(Vector inputs[], index_t input_count, Vector &state) {
 	assert(input_count == 1);
 	Vector payload_double;
-	if (inputs[0]->type != TypeId::DOUBLE) {
+	if (inputs[0].type != TypeId::DOUBLE) {
 		payload_double.Initialize(TypeId::DOUBLE);
-		VectorOperations::Cast(*inputs[0], payload_double);
+		VectorOperations::Cast(inputs[0], payload_double);
 	} else {
-		payload_double.Reference(*inputs[0]);
+		payload_double.Reference(inputs[0]);
 	}
 
-	VectorOperations::Exec(result, [&](index_t i, index_t k) {
+	VectorOperations::Exec(state, [&](index_t i, index_t k) {
 		if (payload_double.nullmask[i]) {
 			return;
 		}
-		// Layout of payload for AVG: count(uint64_t), sum(double)
 
-		auto base_ptr = ((data_ptr_t *)result.data)[i];
-		auto count_ptr = (uint64_t *)base_ptr;
-		auto sum_ptr = (double *)(base_ptr + sizeof(uint64_t));
+		auto state_ptr = (avg_state_t*) ((data_ptr_t *)state.data)[i];
 
 		// update count and running sum
-		(*count_ptr)++;
+		state_ptr->count++;
 		const auto new_value = ((double *)payload_double.data)[i];
-		(*sum_ptr) += new_value;
+		state_ptr->sum += new_value;
 		// see Finalize() method below for final step
 	});
 }
 
-void avg_finalize(Vector &payloads, Vector &result) {
+void avg_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming avg
-	VectorOperations::Exec(payloads, [&](uint64_t i, uint64_t k) {
-		auto base_ptr = ((data_ptr_t *)payloads.data)[i];
-		auto count_ptr = (uint64_t *)base_ptr;
-		auto sum_ptr = (double *)(base_ptr + sizeof(uint64_t));
+	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+		auto state_ptr = (avg_state_t*) ((data_ptr_t *)state.data)[i];
 
-		if (*count_ptr == 0) {
+		if (state_ptr->count == 0) {
 			result.nullmask[i] = true;
 		} else {
-			((double *)result.data)[i] = *sum_ptr / *count_ptr;
+			((double *)result.data)[i] = state_ptr->sum / state_ptr->count;
 		}
 	});
 }

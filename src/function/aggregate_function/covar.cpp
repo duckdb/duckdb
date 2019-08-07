@@ -37,15 +37,15 @@ SQLType covar_get_return_type(vector<SQLType> &arguments) {
 	}
 }
 
-void covar_update(Vector **inputs, index_t input_count, Vector &state) {
+void covar_update(Vector inputs[], index_t input_count, Vector &state) {
 	assert(input_count == 2);
 	// Streaming approximate covariance
 
 	// convert inputs to floating point if required
 	Vector doublex;
-	CastVector(*inputs[0], TypeId::DOUBLE, doublex);
+	CastVector(inputs[0], TypeId::DOUBLE, doublex);
 	Vector doubley;
-	CastVector(*inputs[1], TypeId::DOUBLE, doubley);
+	CastVector(inputs[1], TypeId::DOUBLE, doubley);
 
 	VectorOperations::Exec(state, [&](index_t i, index_t k) {
 		if (doublex.nullmask[i] || doubley.nullmask[i]) {

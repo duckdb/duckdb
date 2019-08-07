@@ -28,14 +28,14 @@ SQLType sum_get_return_type(vector<SQLType> &arguments) {
 	}
 }
 
-void sum_update(Vector **inputs, index_t input_count, Vector &result) {
+void sum_update(Vector inputs[], index_t input_count, Vector &result) {
 	assert(input_count == 1);
-	VectorOperations::Scatter::Add(*inputs[0], result);
+	VectorOperations::Scatter::Add(inputs[0], result);
 }
 
-void sum_simple_update(Vector **inputs, index_t input_count, Value &result) {
+void sum_simple_update(Vector inputs[], index_t input_count, Value &result) {
 	assert(input_count == 1);
-	Value sum = VectorOperations::Sum(*inputs[0]);
+	Value sum = VectorOperations::Sum(inputs[0]);
 	if (sum.is_null) {
 		return;
 	}
