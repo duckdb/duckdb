@@ -156,7 +156,6 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 
 	StaticPointerVector addresses;
 	StaticVector<bool> new_group_dummy;
-	vector<Vector *> inputs(1, nullptr);
 
 	FindOrCreateGroups(groups, addresses, new_group_dummy);
 
@@ -169,9 +168,6 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 
 		// for any entries for which a group was found, update the aggregate
 		auto aggr = aggregates[aggr_idx];
-		while (inputs.size() < aggr->children.size()) {
-			inputs.push_back(nullptr);
-		}
 		if (aggr->distinct) {
 			assert(groups.sel_vector == payload.sel_vector);
 
@@ -216,17 +212,14 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			distinct_addresses.count = match_count;
 			distinct_addresses.Verify();
 
-			inputs[0] = &distinct_payload;
-			aggr->bound_aggregate->update(inputs.data(), 1, distinct_addresses);
+			aggr->bound_aggregate->update(&distinct_payload, 1, distinct_addresses);
 			payload_idx++;
 		}
 
 		else {
 			auto input_count = max(size_t(1), aggr->children.size());
-			for (index_t i = 0; i < input_count; ++i) {
-				inputs[i] = &payload.data[payload_idx++];
-			}
-			aggr->bound_aggregate->update(inputs.data(), input_count, addresses);
+			aggr->bound_aggregate->update(&payload.data[payload_idx], input_count, addresses);
+			payload_idx += input_count;
 		}
 
 		// move to the next aggregate

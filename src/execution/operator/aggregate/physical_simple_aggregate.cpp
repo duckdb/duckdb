@@ -16,13 +16,6 @@ PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<TypeId> types, vector<un
 void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk &chunk,
                                                PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalSimpleAggregateOperatorState *>(state_);
-	vector<Vector *> inputs(1, nullptr); // There is always one input
-	for (const auto &expr : aggregates) {
-		auto &aggregate = (BoundAggregateExpression &)*expr;
-		if (aggregate.children.size() > inputs.size()) {
-			inputs.resize(aggregate.children.size(), nullptr);
-		}
-	}
 	while (true) {
 		// iterate over the child
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
@@ -40,18 +33,16 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 			// resolve the child expression of the aggregate (if any)
 			if (aggregate.children.size()) {
 				for (index_t i = 0; i < aggregate.children.size(); ++i) {
-					auto input = &payload_chunk.data[payload_idx + payload_cnt];
-					executor.ExecuteExpression(*aggregate.children[i], *input);
-					inputs[payload_cnt++] = input;
+					executor.ExecuteExpression(*aggregate.children[i], payload_chunk.data[payload_idx + payload_cnt]);
+					++payload_cnt;
 				}
 			} else {
-				auto input = &payload_chunk.data[payload_idx + payload_cnt];
-				input->count = state->child_chunk.size();
-				inputs[payload_cnt++] = input;
+				payload_chunk.data[payload_idx + payload_cnt].count = state->child_chunk.size();
+				++payload_cnt;
 			}
 			// perform the actual aggregation
 			if (aggregate.bound_aggregate->simple_update) {
-				aggregate.bound_aggregate->simple_update(inputs.data(), payload_cnt, state->aggregates[aggr_idx]);
+				aggregate.bound_aggregate->simple_update(&payload_chunk.data[payload_idx], payload_cnt, state->aggregates[aggr_idx]);
 			} else {
 				throw Exception("Unsupported aggregate for simple aggregation");
 			}

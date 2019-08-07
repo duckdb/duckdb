@@ -27,58 +27,96 @@ SQLType stddev_get_return_type(vector<SQLType> &arguments) {
 	}
 }
 
-void stddevsamp_update(Vector **inputs, index_t input_count, Vector &state) {
+void stddevsamp_update(Vector inputs[], index_t input_count, Vector &state) {
 	assert(input_count == 1);
 	// Streaming approximate standard deviation using Welford's
 	// method, DOI: 10.2307/1266577
 
 	// convert input to floating point if required
 	Vector payload_double;
-	if (inputs[0]->type != TypeId::DOUBLE) {
+	if (inputs[0].type != TypeId::DOUBLE) {
 		payload_double.Initialize(TypeId::DOUBLE);
-		VectorOperations::Cast(*inputs[0], payload_double);
+		VectorOperations::Cast(inputs[0], payload_double);
 	} else {
-		payload_double.Reference(*inputs[0]);
+		payload_double.Reference(inputs[0]);
 	}
 
 	VectorOperations::Exec(state, [&](index_t i, index_t k) {
 		if (payload_double.nullmask[i]) {
 			return;
 		}
-		// Layout of payload for STDDEV_SAMP: count(uint64_t), mean
-		// (double), dsquared(double)
 
-		auto base_ptr = ((data_ptr_t *)state.data)[i];
-		auto count_ptr = (uint64_t *)base_ptr;
-		auto mean_ptr = (double *)(base_ptr + sizeof(uint64_t));
-		auto dsquared_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
+		auto state_ptr = (stddev_state_t*) ((data_ptr_t *)state.data)[i];
 
 		// update running mean and d^2
-		(*count_ptr)++;
+		state_ptr->count++;
 		const double new_value = ((double *)payload_double.data)[i];
-		const double mean_differential = (new_value - (*mean_ptr)) / (*count_ptr);
-		const double new_mean = (*mean_ptr) + mean_differential;
-		const double dsquared_increment = (new_value - new_mean) * (new_value - (*mean_ptr));
-		const double new_dsquared = (*dsquared_ptr) + dsquared_increment;
+		const double mean_differential = (new_value - state_ptr->mean) / state_ptr->count;
+		const double new_mean = state_ptr->mean + mean_differential;
+		const double dsquared_increment = (new_value - new_mean) * (new_value - state_ptr->mean);
+		const double new_dsquared = state_ptr->dsquared + dsquared_increment;
 
-		*mean_ptr = new_mean;
-		*dsquared_ptr = new_dsquared;
+		state_ptr->mean = new_mean;
+		state_ptr->dsquared = new_dsquared;
 		// see Finalize() method below for final step
+	});
+}
+
+void varsamp_finalize(Vector &state, Vector &result) {
+	// compute finalization of streaming stddev of sample
+	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+		auto state_ptr = (stddev_state_t*) ((data_ptr_t *)state.data)[i];
+
+		if (state_ptr->count == 0) {
+			result.nullmask[i] = true;
+			return;
+		}
+		double res = state_ptr->count > 1 ? (state_ptr->dsquared / (state_ptr->count - 1)) : 0;
+
+		((double *)result.data)[i] = res;
+	});
+}
+
+void varpop_finalize(Vector &state, Vector &result) {
+	// compute finalization of streaming stddev of sample
+	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+		auto state_ptr = (stddev_state_t*) ((data_ptr_t *)state.data)[i];
+
+		if (state_ptr->count == 0) {
+			result.nullmask[i] = true;
+			return;
+		}
+		double res = state_ptr->count > 1 ? (state_ptr->dsquared / state_ptr->count) : 0;
+
+		((double *)result.data)[i] = res;
 	});
 }
 
 void stddevsamp_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming stddev of sample
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-		auto base_ptr = ((data_ptr_t *)state.data)[i];
-		auto count_ptr = (uint64_t *)base_ptr;
-		auto dsquared_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
+		auto state_ptr = (stddev_state_t*) ((data_ptr_t *)state.data)[i];
 
-		if (*count_ptr == 0) {
+		if (state_ptr->count == 0) {
 			result.nullmask[i] = true;
 			return;
 		}
-		double res = *count_ptr > 1 ? sqrt(*dsquared_ptr / (*count_ptr - 1)) : 0;
+		double res = state_ptr->count > 1 ? sqrt(state_ptr->dsquared / (state_ptr->count - 1)) : 0;
+
+		((double *)result.data)[i] = res;
+	});
+}
+
+void stddevpop_finalize(Vector &state, Vector &result) {
+	// compute finalization of streaming stddev of sample
+	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+		auto state_ptr = (stddev_state_t*) ((data_ptr_t *)state.data)[i];
+
+		if (state_ptr->count == 0) {
+			result.nullmask[i] = true;
+			return;
+		}
+		double res = state_ptr->count > 1 ? sqrt(state_ptr->dsquared / state_ptr->count) : 0;
 
 		((double *)result.data)[i] = res;
 	});
