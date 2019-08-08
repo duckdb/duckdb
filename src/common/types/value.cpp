@@ -122,6 +122,13 @@ Value Value::BIGINT(int64_t value) {
 	return result;
 }
 
+Value Value::FLOAT(float value) {
+	Value result(TypeId::FLOAT);
+	result.value_.float_ = value;
+	result.is_null = false;
+	return result;
+}
+
 Value Value::DOUBLE(double value) {
 	Value result(TypeId::DOUBLE);
 	result.value_.double_ = value;
@@ -181,6 +188,10 @@ template <> Value Value::CreateValue(const char *value) {
 
 template <> Value Value::CreateValue(string value) {
 	return Value(value);
+}
+
+template <> Value Value::CreateValue(float value) {
+	return Value::FLOAT(value);
 }
 
 template <> Value Value::CreateValue(double value) {
@@ -490,22 +501,25 @@ bool Value::ValuesAreEqual(Value result_value, Value value) {
 	}
 	switch (value.type) {
 	case TypeId::FLOAT: {
+		auto other = result_value.CastAs(TypeId::FLOAT);
 		float ldecimal = value.value_.float_;
-		float rdecimal = result_value.value_.float_;
+		float rdecimal = other.value_.float_;
 		return ApproxEqual(ldecimal, rdecimal);
 	}
 	case TypeId::DOUBLE: {
+		auto other = result_value.CastAs(TypeId::DOUBLE);
 		double ldecimal = value.value_.double_;
-		double rdecimal = result_value.value_.double_;
+		double rdecimal = other.value_.double_;
 		return ApproxEqual(ldecimal, rdecimal);
 	}
 	case TypeId::VARCHAR: {
+		auto other = result_value.CastAs(TypeId::VARCHAR);
 		// some results might contain padding spaces, e.g. when rendering
 		// VARCHAR(10) and the string only has 6 characters, they will be padded
 		// with spaces to 10 in the rendering. We don't do that here yet as we
 		// are looking at internal structures. So just ignore any extra spaces
 		// on the right
-		string left = result_value.str_value;
+		string left = other.str_value;
 		string right = value.str_value;
 		StringUtil::RTrim(left);
 		StringUtil::RTrim(right);

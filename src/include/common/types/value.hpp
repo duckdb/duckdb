@@ -84,6 +84,8 @@ public:
 	static Value TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
 	                       int32_t msec);
 
+	//! Create a float Value from a specified value
+	static Value FLOAT(float value);
 	//! Create a double Value from a specified value
 	static Value DOUBLE(double value);
 
@@ -189,6 +191,7 @@ template <> Value Value::CreateValue(int32_t value);
 template <> Value Value::CreateValue(int64_t value);
 template <> Value Value::CreateValue(const char *value);
 template <> Value Value::CreateValue(string value);
+template <> Value Value::CreateValue(float value);
 template <> Value Value::CreateValue(double value);
 
 } // namespace duckdb
