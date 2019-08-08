@@ -14,6 +14,7 @@
 #include "common/types/time.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 #include "function/function.hpp"
+#include "function/scalar_function.hpp"
 
 #include <string.h>
 
@@ -26,32 +27,8 @@ SQLType age_get_return_type(vector<SQLType> &arguments);
 
 class AgeFunction {
 public:
-	static const char *GetName() {
-		return "age";
-	}
-
-	static scalar_function_t GetFunction() {
-		return age_function;
-	}
-
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return age_matches_arguments;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return age_get_return_type;
-	}
-
-	static bind_scalar_function_t GetBindFunction() {
-		return nullptr;
-	}
-
-	static dependency_function_t GetDependencyFunction() {
-		return nullptr;
-	}
-
-	static bool HasSideEffects() {
-		return false;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("age", age_matches_arguments, age_get_return_type, age_function);
 	}
 };
 

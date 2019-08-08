@@ -10,7 +10,7 @@
 
 #include "common/types/data_chunk.hpp"
 #include "execution/expression_executor.hpp"
-#include "function/function.hpp"
+#include "function/scalar_function.hpp"
 
 namespace duckdb {
 
@@ -21,38 +21,14 @@ SQLType pow_get_return_type(vector<SQLType> &arguments);
 
 class PowFunction {
 public:
-	static const char *GetName() {
-		return "pow";
-	}
-
-	static scalar_function_t GetFunction() {
-		return pow_function;
-	}
-
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return pow_matches_arguments;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return pow_get_return_type;
-	}
-
-	static bind_scalar_function_t GetBindFunction() {
-		return nullptr;
-	}
-
-	static dependency_function_t GetDependencyFunction() {
-		return nullptr;
-	}
-
-	static bool HasSideEffects() {
-		return false;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("pow", pow_matches_arguments, pow_get_return_type, pow_function);
 	}
 };
-class PowerFunction : public PowFunction {
+class PowerFunction {
 public:
-	static const char *GetName() {
-		return "power";
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("power", pow_matches_arguments, pow_get_return_type, pow_function);
 	}
 };
 

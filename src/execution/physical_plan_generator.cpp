@@ -18,8 +18,8 @@ public:
 protected:
 	unique_ptr<Expression> VisitReplace(BoundFunctionExpression &expr, unique_ptr<Expression> *expr_ptr) override {
 		// extract dependencies from the bound function expression
-		if (expr.bound_function->dependency) {
-			expr.bound_function->dependency(expr, dependencies);
+		if (expr.bound_function->function.dependency) {
+			expr.bound_function->function.dependency(expr, dependencies);
 		}
 		return nullptr;
 	}

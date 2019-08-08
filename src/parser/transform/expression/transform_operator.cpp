@@ -150,9 +150,8 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
 			invert_similar = true;
 		}
 		const auto schema = DEFAULT_SCHEMA;
-		const auto regex_function = RegexpMatchesFunction::GetName();
-		const auto lowercase_name = StringUtil::Lower(regex_function);
-		auto result = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children);
+		const auto regex_function = "regexp_matches";
+		auto result = make_unique<FunctionExpression>(schema, regex_function, children);
 
 		if (invert_similar) {
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(result));
@@ -202,9 +201,8 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
 		children.push_back(move(right_expr));
 
 		const auto schema = DEFAULT_SCHEMA;
-		const auto regex_function = RegexpMatchesFunction::GetName();
-		const auto lowercase_name = StringUtil::Lower(regex_function);
-		auto result = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children);
+		const auto regex_function = "regexp_matches";
+		auto result = make_unique<FunctionExpression>(schema, regex_function, children);
 
 		if (invert_similar) {
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(result));

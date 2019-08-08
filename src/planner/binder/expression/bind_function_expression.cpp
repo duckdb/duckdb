@@ -40,7 +40,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		children.push_back(move(child.expr));
 	}
 	// now check if the child types match up with the function
-	if (!func->matches(types)) {
+	if (!func->function.matches(types)) {
 		// types do not match up, throw exception
 		string type_str;
 		for (index_t i = 0; i < types.size(); i++) {
@@ -52,12 +52,12 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		throw BinderException("Unsupported input types for function %s(%s)", func->name.c_str(), type_str.c_str());
 	}
 	// types match up, get the result type
-	auto return_type = func->return_type(types);
+	auto return_type = func->function.return_type(types);
 	// now create the function
 	auto result = make_unique<BoundFunctionExpression>(GetInternalType(return_type), func);
 	result->children = move(children);
-	if (func->bind) {
-		result->bind_info = func->bind(*result, context);
+	if (func->function.bind) {
+		result->bind_info = func->function.bind(*result, context);
 	}
 	return BindResult(move(result), return_type);
 }

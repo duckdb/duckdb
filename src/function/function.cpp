@@ -46,16 +46,11 @@ template <class T> static void AddAggregateFunction(Transaction &transaction, Ca
 }
 
 template <class T> static void AddScalarFunction(Transaction &transaction, Catalog &catalog) {
-	CreateScalarFunctionInfo info;
+	CreateScalarFunctionInfo info(T::GetFunction());
 
-	info.schema = DEFAULT_SCHEMA;
-	info.name = T::GetName();
-	info.function = T::GetFunction();
-	info.matches = T::GetMatchesArgumentFunction();
-	info.return_type = T::GetReturnTypeFunction();
-	info.bind = T::GetBindFunction();
-	info.dependency = T::GetDependencyFunction();
-	info.has_side_effects = T::HasSideEffects();
+	// info.schema = DEFAULT_SCHEMA;
+	// info.function = T::GetFunction();
+	// info.name = info.function.name;
 
 	catalog.CreateFunction(transaction, &info);
 }

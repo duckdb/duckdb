@@ -9,7 +9,7 @@
 #pragma once
 
 #include "common/types/data_chunk.hpp"
-#include "function/function.hpp"
+#include "function/scalar_function.hpp"
 
 namespace duckdb {
 
@@ -20,32 +20,8 @@ SQLType date_part_get_return_type(vector<SQLType> &arguments);
 
 class DatePartFunction {
 public:
-	static const char *GetName() {
-		return "date_part";
-	}
-
-	static scalar_function_t GetFunction() {
-		return date_part_function;
-	}
-
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return date_part_matches_arguments;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return date_part_get_return_type;
-	}
-
-	static bind_scalar_function_t GetBindFunction() {
-		return nullptr;
-	}
-
-	static dependency_function_t GetDependencyFunction() {
-		return nullptr;
-	}
-
-	static bool HasSideEffects() {
-		return false;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("date_part", date_part_matches_arguments, date_part_get_return_type, date_part_function);
 	}
 };
 

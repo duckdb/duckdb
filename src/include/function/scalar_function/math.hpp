@@ -9,7 +9,7 @@
 #pragma once
 
 #include "common/types/data_chunk.hpp"
-#include "function/function.hpp"
+#include "function/scalar_function.hpp"
 
 namespace duckdb {
 
@@ -49,177 +49,99 @@ static SQLType tint_return_type(vector<SQLType> &arguments) {
 	return SQLTypeId::TINYINT;
 }
 
-class ScalarFunction {
-public:
-	static bind_scalar_function_t GetBindFunction() {
-		return nullptr;
-	}
-
-	static dependency_function_t GetDependencyFunction() {
-		return nullptr;
-	}
-
-	static bool HasSideEffects() {
-		return false;
-	}
-};
-
-class ScalarUnaryNumericSameReturnFunction : public ScalarFunction {
-public:
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return single_numeric_argument;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return same_return_type;
-	}
-};
-
-class ScalarUnaryNumericFunction : public ScalarFunction {
-public:
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return single_numeric_argument;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return double_return_type;
-	}
-};
-
 void abs_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                   Vector &result);
 
-class AbsFunction : public ScalarUnaryNumericSameReturnFunction {
+class AbsFunction {
 public:
-	static const char *GetName() {
-		return "abs";
-	}
-
-	static scalar_function_t GetFunction() {
-		return abs_function;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("abs", single_numeric_argument, same_return_type, abs_function);
 	}
 };
 
 void cbrt_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                    Vector &result);
-
-class CbRtFunction : public ScalarUnaryNumericFunction {
+class CbRtFunction {
 public:
-	static const char *GetName() {
-		return "cbrt";
-	}
-
-	static scalar_function_t GetFunction() {
-		return cbrt_function;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("cbrt", single_numeric_argument, double_return_type, cbrt_function);
 	}
 };
 
 void degrees_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                       Vector &result);
 
-class DegreesFunction : public ScalarUnaryNumericFunction {
+class DegreesFunction {
 public:
-	static const char *GetName() {
-		return "degrees";
-	}
-
-	static scalar_function_t GetFunction() {
-		return degrees_function;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("degrees", single_numeric_argument, double_return_type, degrees_function);
 	}
 };
 
 void radians_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                       Vector &result);
 
-class RadiansFunction : public ScalarUnaryNumericFunction {
+class RadiansFunction {
 public:
-	static const char *GetName() {
-		return "radians";
-	}
-
-	static scalar_function_t GetFunction() {
-		return radians_function;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("radians", single_numeric_argument, double_return_type, radians_function);
 	}
 };
 
 void exp_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                   Vector &result);
 
-class ExpFunction : public ScalarUnaryNumericFunction {
+class ExpFunction {
 public:
-	static const char *GetName() {
-		return "exp";
-	}
-
-	static scalar_function_t GetFunction() {
-		return exp_function;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("exp", single_numeric_argument, double_return_type, exp_function);
 	}
 };
 
 void ln_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                  Vector &result);
 
-class LnFunction : public ScalarUnaryNumericFunction {
+class LnFunction {
 public:
-	static const char *GetName() {
-		return "ln";
-	}
-
-	static scalar_function_t GetFunction() {
-		return ln_function;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("ln", single_numeric_argument, double_return_type, ln_function);
 	}
 };
 
 void log10_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                     Vector &result);
 
-class LogFunction : public ScalarUnaryNumericFunction {
+class LogFunction {
 public:
-	static const char *GetName() {
-		return "log";
-	}
-
-	static scalar_function_t GetFunction() {
-		return log10_function;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("log", single_numeric_argument, double_return_type, log10_function);
 	}
 };
 
-class Log10Function : public ScalarUnaryNumericFunction {
+class Log10Function {
 public:
-	static const char *GetName() {
-		return "log10";
-	}
-
-	static scalar_function_t GetFunction() {
-		return log10_function;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("log10", single_numeric_argument, double_return_type, log10_function);
 	}
 };
 
 void log2_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                    Vector &result);
 
-class Log2Function : public ScalarUnaryNumericFunction {
+class Log2Function {
 public:
-	static const char *GetName() {
-		return "log2";
-	}
-
-	static scalar_function_t GetFunction() {
-		return log2_function;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("log2", single_numeric_argument, double_return_type, log2_function);
 	}
 };
 
 void sqrt_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                    Vector &result);
 
-class SqrtFunction : public ScalarUnaryNumericSameReturnFunction {
+class SqrtFunction {
 public:
-	static const char *GetName() {
-		return "sqrt";
-	}
-
-	static scalar_function_t GetFunction() {
-		return sqrt_function;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("sqrt", single_numeric_argument, same_return_type, sqrt_function);
 	}
 };
 
@@ -229,98 +151,44 @@ void ceil_function(ExpressionExecutor &exec, Vector inputs[], index_t input_coun
 void floor_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                     Vector &result);
 
-class CeilFunction : public ScalarUnaryNumericSameReturnFunction {
+class CeilFunction {
 public:
-	static const char *GetName() {
-		return "ceil";
-	}
-
-	static scalar_function_t GetFunction() {
-		return ceil_function;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("ceil", single_numeric_argument, same_return_type, ceil_function);
 	}
 };
 
-class CeilingFunction : public ScalarUnaryNumericSameReturnFunction {
+class CeilingFunction {
 public:
-	static const char *GetName() {
-		return "ceiling";
-	}
-
-	static scalar_function_t GetFunction() {
-		return ceil_function;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("ceiling", single_numeric_argument, same_return_type, ceil_function);
 	}
 };
 
-class FloorFunction : public ScalarUnaryNumericSameReturnFunction {
+class FloorFunction {
 public:
-	static const char *GetName() {
-		return "floor";
-	}
-
-	static scalar_function_t GetFunction() {
-		return floor_function;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("floor", single_numeric_argument, same_return_type, floor_function);
 	}
 };
 
 void pi_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                  Vector &result);
 
-class PiFunction : public ScalarFunction {
+class PiFunction {
 public:
-	static const char *GetName() {
-		return "pi";
-	}
-
-	static scalar_function_t GetFunction() {
-		return pi_function;
-	}
-
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return no_arguments;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return double_return_type;
-	}
-};
-
-void random_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                     Vector &result);
-
-class RandomFunction : public ScalarFunction {
-public:
-	static const char *GetName() {
-		return "random";
-	}
-
-	static scalar_function_t GetFunction() {
-		return random_function;
-	}
-
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return no_arguments;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return double_return_type;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("pi", no_arguments, double_return_type, pi_function);
 	}
 };
 
 void sign_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                    Vector &result);
 
-class SignFunction : public ScalarUnaryNumericFunction {
+class SignFunction {
 public:
-	static const char *GetName() {
-		return "sign";
-	}
-
-	static scalar_function_t GetFunction() {
-		return sign_function;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return tint_return_type;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("sign", single_numeric_argument, tint_return_type, sign_function);
 	}
 };
 

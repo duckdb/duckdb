@@ -10,7 +10,7 @@
 
 #include "common/types/data_chunk.hpp"
 #include "execution/expression_executor.hpp"
-#include "function/function.hpp"
+#include "function/scalar_function.hpp"
 
 namespace duckdb {
 
@@ -21,32 +21,8 @@ SQLType mod_get_return_type(vector<SQLType> &arguments);
 
 class ModFunction {
 public:
-	static const char *GetName() {
-		return "mod";
-	}
-
-	static scalar_function_t GetFunction() {
-		return mod_function;
-	}
-
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return mod_matches_arguments;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return mod_get_return_type;
-	}
-
-	static bind_scalar_function_t GetBindFunction() {
-		return nullptr;
-	}
-
-	static dependency_function_t GetDependencyFunction() {
-		return nullptr;
-	}
-
-	static bool HasSideEffects() {
-		return false;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("mod", mod_matches_arguments, mod_get_return_type, mod_function);
 	}
 };
 

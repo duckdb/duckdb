@@ -9,7 +9,7 @@
 #pragma once
 
 #include "common/types/data_chunk.hpp"
-#include "function/function.hpp"
+#include "function/scalar_function.hpp"
 
 namespace duckdb {
 
@@ -20,32 +20,8 @@ SQLType substring_get_return_type(vector<SQLType> &arguments);
 
 class SubstringFunction {
 public:
-	static const char *GetName() {
-		return "substring";
-	}
-
-	static scalar_function_t GetFunction() {
-		return substring_function;
-	}
-
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return substring_matches_arguments;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return substring_get_return_type;
-	}
-
-	static bind_scalar_function_t GetBindFunction() {
-		return nullptr;
-	}
-
-	static dependency_function_t GetDependencyFunction() {
-		return nullptr;
-	}
-
-	static bool HasSideEffects() {
-		return false;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("substring", substring_matches_arguments, substring_get_return_type, substring_function);
 	}
 };
 

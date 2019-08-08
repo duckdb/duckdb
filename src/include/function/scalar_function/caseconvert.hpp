@@ -8,7 +8,7 @@
 
 #pragma once
 #include "common/types/data_chunk.hpp"
-#include "function/function.hpp"
+#include "function/scalar_function.hpp"
 
 namespace duckdb {
 
@@ -22,63 +22,15 @@ SQLType caseconvert_get_return_type(vector<SQLType> &arguments);
 
 class UpperFunction {
 public:
-	static const char *GetName() {
-		return "upper";
-	}
-
-	static scalar_function_t GetFunction() {
-		return caseconvert_upper_function;
-	}
-
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return caseconvert_matches_arguments;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return caseconvert_get_return_type;
-	}
-
-	static bind_scalar_function_t GetBindFunction() {
-		return nullptr;
-	}
-
-	static dependency_function_t GetDependencyFunction() {
-		return nullptr;
-	}
-
-	static bool HasSideEffects() {
-		return false;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("upper", caseconvert_matches_arguments, caseconvert_get_return_type, caseconvert_upper_function);
 	}
 };
 
 class LowerFunction {
 public:
-	static const char *GetName() {
-		return "lower";
-	}
-
-	static scalar_function_t GetFunction() {
-		return caseconvert_lower_function;
-	}
-
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return caseconvert_matches_arguments;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return caseconvert_get_return_type;
-	}
-
-	static bind_scalar_function_t GetBindFunction() {
-		return nullptr;
-	}
-
-	static dependency_function_t GetDependencyFunction() {
-		return nullptr;
-	}
-
-	static bool HasSideEffects() {
-		return false;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("lower", caseconvert_matches_arguments, caseconvert_get_return_type, caseconvert_lower_function);
 	}
 };
 

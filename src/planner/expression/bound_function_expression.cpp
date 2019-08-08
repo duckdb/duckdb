@@ -13,7 +13,7 @@ BoundFunctionExpression::BoundFunctionExpression(TypeId return_type, ScalarFunct
 
 bool BoundFunctionExpression::IsFoldable() const {
 	// functions with side effects cannot be folded: they have to be executed once for every row
-	return bound_function->has_side_effects ? false : Expression::IsFoldable();
+	return bound_function->function.has_side_effects ? false : Expression::IsFoldable();
 }
 
 string BoundFunctionExpression::ToString() const {

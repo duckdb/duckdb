@@ -9,7 +9,7 @@
 #pragma once
 
 #include "common/types/data_chunk.hpp"
-#include "function/function.hpp"
+#include "function/scalar_function.hpp"
 #include "re2/re2.h"
 
 namespace duckdb {
@@ -37,32 +37,8 @@ struct RegexpMatchesBindData : public FunctionData {
 
 class RegexpMatchesFunction {
 public:
-	static const char *GetName() {
-		return "regexp_matches";
-	}
-
-	static scalar_function_t GetFunction() {
-		return regexp_matches_function;
-	}
-
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return regexp_matches_matches_arguments;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return regexp_matches_get_return_type;
-	}
-
-	static bind_scalar_function_t GetBindFunction() {
-		return regexp_matches_get_bind_function;
-	}
-
-	static dependency_function_t GetDependencyFunction() {
-		return nullptr;
-	}
-
-	static bool HasSideEffects() {
-		return false;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("regexp_matches", regexp_matches_matches_arguments, regexp_matches_get_return_type, regexp_matches_function, false, regexp_matches_get_bind_function);
 	}
 };
 
@@ -73,32 +49,8 @@ SQLType regexp_replace_get_return_type(vector<SQLType> &arguments);
 
 class RegexpReplaceFunction {
 public:
-	static const char *GetName() {
-		return "regexp_replace";
-	}
-
-	static scalar_function_t GetFunction() {
-		return regexp_replace_function;
-	}
-
-	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return regexp_replace_matches_arguments;
-	}
-
-	static get_return_type_function_t GetReturnTypeFunction() {
-		return regexp_replace_get_return_type;
-	}
-
-	static bind_scalar_function_t GetBindFunction() {
-		return nullptr;
-	}
-
-	static dependency_function_t GetDependencyFunction() {
-		return nullptr;
-	}
-
-	static bool HasSideEffects() {
-		return false;
+	static ScalarFunction GetFunction() {
+		return ScalarFunction("regexp_replace", regexp_replace_matches_arguments, regexp_replace_get_return_type, regexp_replace_function);
 	}
 };
 
