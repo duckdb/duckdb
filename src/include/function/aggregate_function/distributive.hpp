@@ -71,7 +71,7 @@ static index_t get_return_type_size(TypeId return_type) {
 	return GetTypeIdSize(return_type);
 }
 
-void null_payload_initialize(data_ptr_t payload, TypeId return_type);
+void null_state_initialize(data_ptr_t state, TypeId return_type);
 
 static Value null_simple_initialize() {
 	return Value();
@@ -94,7 +94,7 @@ public:
 	}
 
 	static aggregate_initialize_t GetInitalizeFunction() {
-		return null_payload_initialize;
+		return null_state_initialize;
 	}
 
 	static aggregate_simple_initialize_t GetSimpleInitializeFunction() {
