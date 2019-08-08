@@ -286,8 +286,9 @@ public:
 
 void random_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                      Vector &result);
+unique_ptr<FunctionData> random_bind(BoundFunctionExpression &expr, ClientContext &context);
 
-class RandomFunction : public ScalarFunction {
+class RandomFunction {
 public:
 	static const char *GetName() {
 		return "random";
@@ -303,6 +304,18 @@ public:
 
 	static get_return_type_function_t GetReturnTypeFunction() {
 		return double_return_type;
+	}
+
+	static bind_scalar_function_t GetBindFunction() {
+		return random_bind;
+	}
+
+	static dependency_function_t GetDependencyFunction() {
+		return nullptr;
+	}
+
+	static bool HasSideEffects() {
+		return true;
 	}
 };
 
