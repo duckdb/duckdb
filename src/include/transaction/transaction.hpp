@@ -21,20 +21,9 @@ extern transaction_t MAXIMUM_QUERY_ID;
 
 class CatalogEntry;
 class DataTable;
-class StorageChunk;
+class VersionChunk;
+struct VersionInfo;
 class WriteAheadLog;
-
-struct VersionInformation {
-	DataTable *table;
-	StorageChunk *chunk;
-	union {
-		index_t entry;
-		VersionInformation *pointer;
-	} prev;
-	VersionInformation *next;
-	transaction_t version_number;
-	data_ptr_t tuple_data;
-};
 
 //! The transaction object holds information about a currently running or past
 //! transaction
@@ -65,13 +54,10 @@ public:
 public:
 	void PushCatalogEntry(CatalogEntry *entry);
 	//! Create deleted entries in the undo buffer
-	void PushDeletedEntries(index_t offset, index_t count, StorageChunk *storage,
-	                        VersionInformation *version_pointers[]);
+	void PushDeletedEntries(index_t offset, index_t count, VersionChunk *storage, VersionInfo *version_pointers[]);
 	//! Push an old tuple version in the undo buffer
-	void PushTuple(UndoFlags flag, index_t offset, StorageChunk *storage);
-	//! Push a query into the undo buffer, this will be written to the WAL for
-	//! redo purposes
-
+	void PushTuple(UndoFlags flag, index_t offset, VersionChunk *storage);
+	//! Push a query into the undo buffer
 	void PushQuery(string query);
 
 	//! Commit the current transaction with the given commit identifier
@@ -90,9 +76,9 @@ public:
 		return start_timestamp;
 	}
 
-private:
 	data_ptr_t PushTuple(UndoFlags flag, index_t data_size);
 
+private:
 	//! The undo buffer is used to store old versions of rows that are updated
 	//! or deleted
 	UndoBuffer undo_buffer;

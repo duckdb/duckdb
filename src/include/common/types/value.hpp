@@ -124,7 +124,6 @@ public:
 		double double_;
 		uintptr_t pointer;
 		uint64_t hash;
-
 	} value_;
 
 	//! The value of the object, if it is of a variable size type

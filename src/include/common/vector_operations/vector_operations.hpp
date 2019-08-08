@@ -185,14 +185,19 @@ struct VectorOperations {
 		static void SetFirst(Vector &source, Vector &dest);
 		// dest[i] = dest[i] + source
 		static void Add(int64_t source, void **dest, index_t length);
-		//! Similar to Set, do not ignore NULL values
-		static void SetAll(Vector &source, Vector &dest);
+		//! Similar to Set, but also write NullValue<T> if set_null = true, or ignore null values entirely if set_null =
+		//! false
+		static void SetAll(Vector &source, Vector &dest, bool set_null = false, index_t offset = 0);
 	};
 	// make sure dest.count is set for gather methods!
 	struct Gather {
 		//! dest.data[i] = ptr[i]. If set_null is true, NullValue<T> is checked for and converted to the nullmask in
 		//! dest. If set_null is false, NullValue<T> is ignored.
-		static void Set(Vector &source, Vector &dest, bool set_null = true);
+		static void Set(Vector &source, Vector &dest, bool set_null = true, index_t offset = 0);
+		//! Append the values from source to the dest vector. If set_null is true, NullValue<T> is checked for and
+		//! converted to the nullmask in dest. If set_null is false, NullValue<T> is ignored. If offset is set, it is
+		//! added to
+		static void Append(Vector &source, Vector &dest, index_t offset = 0, bool set_null = true);
 	};
 
 	//===--------------------------------------------------------------------===//
@@ -234,7 +239,7 @@ struct VectorOperations {
 	// Appends the data of <source> to the target vector, setting the nullmask
 	// for any NullValue<T> of source. Used to go back from storage to a
 	// nullmask.
-	static void AppendFromStorage(Vector &source, Vector &target);
+	static void AppendFromStorage(Vector &source, Vector &target, bool has_null = true);
 
 	// Set all elements of the vector to the given constant value
 	static void Set(Vector &result, Value value);

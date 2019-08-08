@@ -10,6 +10,15 @@ using namespace std;
 
 #include <cstdio>
 
+static void AssertValidFileFlags(uint8_t flags) {
+	// cannot combine Read and Write flags
+	assert(!(flags & FileFlags::READ && flags & FileFlags::WRITE));
+	// cannot combine Read and Append flags
+	assert(!(flags & FileFlags::READ && flags & FileFlags::APPEND));
+	// cannot combine Read and CREATE flags
+	assert(!(flags & FileFlags::READ && flags & FileFlags::CREATE));
+}
+
 #ifndef _WIN32
 #include <dirent.h>
 #include <fcntl.h>
@@ -43,12 +52,10 @@ public:
 };
 
 unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock_type) {
+	AssertValidFileFlags(flags);
+
 	int open_flags = 0;
 	int rc;
-	// cannot combine Read and Write flags
-	assert(!(flags & FileFlags::READ && flags & FileFlags::WRITE));
-	// cannot combine Read and CREATE flags
-	assert(!(flags & FileFlags::READ && flags & FileFlags::CREATE));
 	if (flags & FileFlags::READ) {
 		open_flags = O_RDONLY;
 	} else {
@@ -57,6 +64,9 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		open_flags = O_RDWR | O_CLOEXEC;
 		if (flags & FileFlags::CREATE) {
 			open_flags |= O_CREAT;
+		}
+		if (flags & FileFlags::APPEND) {
+			open_flags |= O_APPEND;
 		}
 	}
 	if (flags & FileFlags::DIRECT_IO) {
@@ -308,10 +318,8 @@ public:
 };
 
 unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock_type) {
-	// cannot combine Read and Write flags
-	assert(!(flags & FileFlags::READ && flags & FileFlags::WRITE));
-	// cannot combine Read and CREATE flags
-	assert(!(flags & FileFlags::READ && flags & FileFlags::CREATE));
+	AssertValidFileFlags(flags);
+
 	DWORD desired_access;
 	DWORD share_mode;
 	DWORD creation_disposition = OPEN_EXISTING;
@@ -325,7 +333,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		desired_access = GENERIC_READ | GENERIC_WRITE;
 		share_mode = 0;
 		if (flags & FileFlags::CREATE) {
-			creation_disposition = CREATE_NEW;
+			creation_disposition = OPEN_ALWAYS;
 		}
 		if (flags & FileFlags::DIRECT_IO) {
 			flags_and_attributes |= FILE_FLAG_WRITE_THROUGH;
@@ -340,7 +348,11 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		auto error = GetLastErrorAsString();
 		throw IOException("Cannot open file \"%s\": %s", path, error.c_str());
 	}
-	return make_unique<WindowsFileHandle>(*this, path, hFile);
+	auto handle = make_unique<WindowsFileHandle>(*this, path, hFile);
+	if (flags & FileFlags::APPEND) {
+		SetFilePointer(*handle, GetFileSize(*handle));
+	}
+	return move(handle);
 }
 
 void FileSystem::SetFilePointer(FileHandle &handle, index_t location) {

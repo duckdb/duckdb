@@ -18,7 +18,7 @@ using namespace std;
 SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId> group_types,
                                          vector<TypeId> payload_types, vector<BoundAggregateExpression *> bindings,
                                          bool parallel)
-    : group_serializer(group_types), aggregates(move(bindings)), group_types(group_types), payload_types(payload_types),
+    : aggregates(move(bindings)), group_types(group_types), payload_types(payload_types), group_width(0),
       payload_width(0), capacity(0), entries(0), data(nullptr), parallel(parallel) {
 	// HT tuple layout is as follows:
 	// [FLAG][NULLMASK][GROUPS][PAYLOAD][COUNT]
@@ -26,6 +26,9 @@ SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId
 	// [GROUPS] is the groups
 	// [PAYLOAD] is the payload (i.e. the aggregate states)
 	// [COUNT] is an 8-byte count for each element
+	for (index_t i = 0; i < group_types.size(); i++) {
+		group_width += GetTypeIdSize(group_types[i]);
+	}
 	for (index_t i = 0; i < aggregates.size(); i++) {
 		payload_width += aggregates[i]->bound_aggregate->state_size(aggregates[i]->return_type);
 	}
@@ -62,7 +65,7 @@ SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId
 			payload_idx += 1;
 	}
 
-	tuple_size = FLAG_SIZE + (group_serializer.TupleSize() + payload_width);
+	tuple_size = FLAG_SIZE + (group_width + payload_width);
 	Resize(initial_capacity);
 }
 
@@ -380,8 +383,6 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 	if (parallel) {
 		throw NotImplementedException("Parallel HT not implemented");
 	}
-
-	auto group_width = group_serializer.TupleSize();
 
 	// zero initialize the new_groups array
 	auto new_groups = ((bool *)new_group.data);

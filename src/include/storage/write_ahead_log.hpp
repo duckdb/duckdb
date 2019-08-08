@@ -57,7 +57,13 @@ public:
 	void WriteDropSequence(SequenceCatalogEntry *entry);
 	void WriteSequenceValue(SequenceCatalogEntry *entry, SequenceValue val);
 
-	void WriteInsert(string &schema, string &table, DataChunk &chunk);
+	//! Sets the table used for subsequent insert/delete/update commands
+	void WriteSetTable(string &schema, string &table);
+
+	void WriteInsert(DataChunk &chunk);
+	void WriteDelete(DataChunk &chunk);
+	void WriteUpdate(DataChunk &chunk);
+
 	void WriteQuery(string &query);
 
 	void Flush();

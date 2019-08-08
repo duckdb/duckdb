@@ -1,4 +1,5 @@
-#include "storage/segment_tree.hpp"
+#include "storage/table/segment_tree.hpp"
+#include "common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;

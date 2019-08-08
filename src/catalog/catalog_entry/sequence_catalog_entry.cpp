@@ -19,11 +19,12 @@ SequenceCatalogEntry::SequenceCatalogEntry(Catalog *catalog, SchemaCatalogEntry 
 void SequenceCatalogEntry::Serialize(Serializer &serializer) {
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
+	// serializer.Write<int64_t>(counter);
 	serializer.Write<uint64_t>(usage_count);
 	serializer.Write<int64_t>(increment);
 	serializer.Write<int64_t>(min_value);
 	serializer.Write<int64_t>(max_value);
-	serializer.Write<int64_t>(start_value);
+	serializer.Write<int64_t>(counter);
 	serializer.Write<bool>(cycle);
 }
 
@@ -31,6 +32,7 @@ unique_ptr<CreateSequenceInfo> SequenceCatalogEntry::Deserialize(Deserializer &s
 	auto info = make_unique<CreateSequenceInfo>();
 	info->schema = source.Read<string>();
 	info->name = source.Read<string>();
+	// info->counter = source.Read<int64_t>();
 	info->usage_count = source.Read<uint64_t>();
 	info->increment = source.Read<int64_t>();
 	info->min_value = source.Read<int64_t>();

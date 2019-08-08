@@ -13,7 +13,6 @@
 namespace duckdb {
 
 void stddevsamp_update(Vector inputs[], index_t input_count, Vector &result);
-
 void stddevsamp_finalize(Vector &payloads, Vector &result);
 void stddevpop_finalize(Vector &payloads, Vector &result);
 void varsamp_finalize(Vector &payloads, Vector &result);

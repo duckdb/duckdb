@@ -259,7 +259,12 @@ void ART::Delete(DataChunk &input, Vector &row_ids) {
 
 	// now erase the elements from the database
 	auto row_identifiers = (int64_t *)row_ids.data;
-	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) { Erase(tree, *keys[k], 0, row_identifiers[i]); });
+	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) {
+		if (!keys[k]) {
+			return;
+		}
+		Erase(tree, *keys[k], 0, row_identifiers[i]);
+	});
 }
 
 void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) {

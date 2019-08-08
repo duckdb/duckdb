@@ -26,6 +26,12 @@ static void WriteCSV(string path, const char *csv) {
 	csv_writer.close();
 }
 
+static void WriteBinary(string path, const uint8_t *data, uint64_t length) {
+	ofstream binary_writer(path, ios::binary);
+	binary_writer.write((const char *)data, length);
+	binary_writer.close();
+}
+
 TEST_CASE("Test copy statement", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -170,6 +176,40 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE vsize (a INTEGER, b INTEGER,c VARCHAR(10));"));
 	result = con.Query("COPY vsize FROM '" + fs.JoinPath(csv_path, "vsize.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {1024}));
+}
+
+TEST_CASE("Test copy statement with file overwrite", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+
+	// create a table and insert some values
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR(10));"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 'hello'), (2, 'world '), (3, ' xx');"));
+
+	result = con.Query("SELECT * FROM test ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "world ", " xx"}));
+
+	// copy to the file
+	result = con.Query("COPY test TO '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+	// now copy to the file again
+	result = con.Query("COPY test TO '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+	// reload the data from the file: it should only have three rows
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test"));
+
+	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+	result = con.Query("SELECT * FROM test ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "world ", " xx"}));
 }
 
 TEST_CASE("Test copy statement with default values", "[copy]") {
@@ -423,7 +463,7 @@ TEST_CASE("Test copy into from on-time dataset", "[copy]") {
 
 	auto csv_path = GetCSVPath();
 	auto ontime_csv = fs.JoinPath(csv_path, "ontime.csv");
-	WriteCSV(ontime_csv, ontime_sample);
+	WriteBinary(ontime_csv, ontime_sample, sizeof(ontime_sample));
 
 	REQUIRE_NO_FAIL(con.Query(
 	    "CREATE TABLE ontime(year SMALLINT, quarter SMALLINT, month SMALLINT, dayofmonth SMALLINT, dayofweek SMALLINT, "
@@ -489,7 +529,7 @@ TEST_CASE("Test copy from lineitem csv", "[copy]") {
 
 	auto csv_path = GetCSVPath();
 	auto lineitem_csv = fs.JoinPath(csv_path, "lineitem.csv");
-	WriteCSV(lineitem_csv, lineitem_sample);
+	WriteBinary(lineitem_csv, lineitem_sample, sizeof(lineitem_sample));
 
 	REQUIRE_NO_FAIL(con.Query(
 	    "CREATE TABLE lineitem(l_orderkey INT NOT NULL, l_partkey INT NOT NULL, l_suppkey INT NOT NULL, l_linenumber "
@@ -535,7 +575,7 @@ TEST_CASE("Test copy from web_page csv", "[copy]") {
 
 	auto csv_path = GetCSVPath();
 	auto webpage_csv = fs.JoinPath(csv_path, "web_page.csv");
-	WriteCSV(webpage_csv, web_page);
+	WriteBinary(webpage_csv, web_page, sizeof(web_page));
 
 	REQUIRE_NO_FAIL(con.Query(
 	    "CREATE TABLE web_page(wp_web_page_sk integer not null, wp_web_page_id char(16) not null, wp_rec_start_date "
@@ -563,6 +603,30 @@ TEST_CASE("Test copy from web_page csv", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 13, {4, 1, 4}));
 }
 
+TEST_CASE("Test copy from greek-utf8 csv", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+	auto csv_file = fs.JoinPath(csv_path, "greek_utf8.csv");
+	WriteBinary(csv_file, greek_utf8, sizeof(greek_utf8));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE greek_utf8(i INTEGER, j VARCHAR, k INTEGER)"));
+
+	result = con.Query("COPY greek_utf8 FROM '" + csv_file + "' DELIMITER '|'");
+	REQUIRE(CHECK_COLUMN(result, 0, {8}));
+
+	result = con.Query("SELECT * FROM greek_utf8 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1689, 1690, 41561, 45804, 51981, 171067, 182773, 607808}));
+	REQUIRE(CHECK_COLUMN(result, 1,
+	                     {"\x30\x30\x69\\047\x6d", "\x30\x30\x69\\047\x76", "\x32\x30\x31\x35\xe2\x80\x8e",
+	                      "\x32\x31\xcf\x80", "\x32\x34\x68\x6f\x75\x72\x73\xe2\x80\xac",
+	                      "\x61\x72\x64\x65\xcc\x80\x63\x68", "\x61\xef\xac\x81",
+	                      "\x70\x6f\x76\x65\x72\x74\x79\xe2\x80\xaa"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {2, 2, 1, 1, 1, 2, 1, 1}));
+}
+
 TEST_CASE("Test date copy", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -586,9 +650,13 @@ TEST_CASE("Test cranlogs broken gzip copy", "[copy]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
+	auto csv_path = GetCSVPath();
+	auto cranlogs_csv = fs.JoinPath(csv_path, "cranlogs.csv.gz");
+	WriteBinary(cranlogs_csv, tmp2013_06_15, sizeof(tmp2013_06_15));
+
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE cranlogs (date date,time string,size int,r_version string,r_arch "
 	                          "string,r_os string,package string,version string,country string,ip_id int)"));
 
-	result = con.Query("COPY cranlogs FROM 'test/sql/copy/tmp2013-06-15.csv.gz' DELIMITER ',' HEADER");
+	result = con.Query("COPY cranlogs FROM '" + cranlogs_csv + "' DELIMITER ',' HEADER");
 	REQUIRE(CHECK_COLUMN(result, 0, {37459}));
 }

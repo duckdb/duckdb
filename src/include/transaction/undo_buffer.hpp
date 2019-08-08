@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "common/enums/undo_flags.hpp"
 
 #include <memory>
 #include <vector>
@@ -17,19 +18,17 @@ namespace duckdb {
 
 class WriteAheadLog;
 
-enum class UndoFlags : uint8_t {
-	EMPTY_ENTRY = 0,
-	CATALOG_ENTRY = 1,
-	INSERT_TUPLE = 2,
-	DELETE_TUPLE = 3,
-	UPDATE_TUPLE = 4,
-	QUERY = 5
-};
+struct UndoChunk {
+	UndoChunk(index_t size);
+	~UndoChunk();
 
-struct UndoEntry {
-	UndoFlags type;
-	index_t length;
+	data_ptr_t WriteEntry(UndoFlags type, uint32_t len);
+
 	unique_ptr<data_t[]> data;
+	index_t current_position;
+	index_t maximum_size;
+	unique_ptr<UndoChunk> next;
+	UndoChunk *prev;
 };
 
 //! The undo buffer of a transaction is used to hold previous versions of tuples
@@ -37,8 +36,7 @@ struct UndoEntry {
 //! transactions accessing them)
 class UndoBuffer {
 public:
-	UndoBuffer() {
-	}
+	UndoBuffer();
 
 	//! Reserve space for an entry of the specified type and length in the undo
 	//! buffer
@@ -55,10 +53,12 @@ public:
 	void Rollback();
 
 private:
-	// List of UndoEntries, FIXME: this can be more efficient
-	vector<UndoEntry> entries;
+	unique_ptr<UndoChunk> head;
+	UndoChunk *tail;
 
-	UndoBuffer(const UndoBuffer &) = delete;
+private:
+	template <class T> void IterateEntries(T &&callback);
+	template <class T> void ReverseIterateEntries(T &&callback);
 };
 
 } // namespace duckdb

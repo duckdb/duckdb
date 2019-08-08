@@ -193,22 +193,20 @@ void CheckpointManager::WriteTable(Transaction &transaction, TableCatalogEntry &
 }
 
 void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reader) {
-	// deserilize the table meta data
+	// deserialize the table meta data
 	auto info = TableCatalogEntry::Deserialize(reader);
 	// bind the info
 	Binder binder(context);
 	auto bound_info = binder.BindCreateTableInfo(move(info));
-	// create the table in the schema
-	database.catalog->CreateTable(context.ActiveTransaction(), bound_info.get());
-	// now load the table data
+
+	// now read the actual table data and place it into the create table info
 	auto block_id = reader.Read<block_id_t>();
 	auto offset = reader.Read<uint64_t>();
-	// read the block containing the table data
 	MetaBlockReader table_data_reader(block_manager, block_id);
 	table_data_reader.offset = offset;
-	// fetch the table from the catalog for writing
-	auto table =
-	    database.catalog->GetTable(context.ActiveTransaction(), bound_info->base->schema, bound_info->base->table);
-	TableDataReader data_reader(*this, *table, table_data_reader);
-	data_reader.ReadTableData(context);
+	TableDataReader data_reader(*this, table_data_reader, *bound_info);
+	data_reader.ReadTableData();
+
+	// finally create the table in the catalog
+	database.catalog->CreateTable(context.ActiveTransaction(), bound_info.get());
 }

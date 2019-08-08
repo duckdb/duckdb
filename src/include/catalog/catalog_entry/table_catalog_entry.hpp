@@ -9,7 +9,6 @@
 #pragma once
 
 #include "catalog/catalog_entry.hpp"
-#include "common/types/statistics.hpp"
 #include "common/unordered_map.hpp"
 #include "parser/column_definition.hpp"
 #include "parser/constraint.hpp"
@@ -48,9 +47,6 @@ public:
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
 	//! Returns whether or not a column with the given name exists
 	bool ColumnExists(const string &name);
-	//! Returns the statistics of the oid-th column. Throws an exception if the
-	//! access is out of range.
-	ColumnStatistics &GetStatistics(column_t oid);
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
 	ColumnDefinition &GetColumn(const string &name);

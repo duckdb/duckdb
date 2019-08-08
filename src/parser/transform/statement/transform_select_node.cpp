@@ -17,6 +17,8 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 		if (stmt->valuesLists) {
 			TransformValuesList(stmt->valuesLists, result->values);
 			return node;
+		} else if (!stmt->targetList) {
+			throw ParserException("SELECT clause without selection list");
 		}
 		// checks distinct clause
 		if (stmt->distinctClause != NULL) {

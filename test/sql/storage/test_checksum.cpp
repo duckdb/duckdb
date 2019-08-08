@@ -9,18 +9,19 @@ TEST_CASE("Test functioning of checksum", "[storage]") {
 	FileSystem fs;
 	unique_ptr<DuckDB> database;
 	auto storage_database = TestCreatePath("checksum_test");
+	auto config = GetTestConfig();
 
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);
 	{
 		// create a database and insert values
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(a INTEGER);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (3);"));
 	}
 	// we can open the database file now
-	REQUIRE_NOTHROW(database = make_unique<DuckDB>(storage_database));
+	REQUIRE_NOTHROW(database = make_unique<DuckDB>(storage_database, config.get()));
 	database.reset();
 
 	// now write random values into the file
@@ -30,7 +31,7 @@ TEST_CASE("Test functioning of checksum", "[storage]") {
 	handle->Sync();
 	handle.reset();
 	// reloading the database no longer works
-	REQUIRE_THROWS(database = make_unique<DuckDB>(storage_database));
+	REQUIRE_THROWS(database = make_unique<DuckDB>(storage_database, config.get()));
 
 	DeleteDatabase(storage_database);
 }

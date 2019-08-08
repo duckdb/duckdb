@@ -8,10 +8,8 @@ add_library(duckdb_common_types OBJECT
             string_heap.cpp
             timestamp.cpp
             time.cpp
-            tuple.cpp
             value.cpp
-            vector.cpp
-            statistics.cpp)
+            vector.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common_types>
     PARENT_SCOPE)

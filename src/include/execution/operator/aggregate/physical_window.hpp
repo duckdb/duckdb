@@ -9,7 +9,6 @@
 #pragma once
 
 #include "common/types/chunk_collection.hpp"
-#include "common/types/tuple.hpp"
 #include "execution/physical_operator.hpp"
 
 namespace duckdb {
