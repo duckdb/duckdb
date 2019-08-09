@@ -11,7 +11,7 @@ using namespace duckdb;
 using namespace std;
 
 static SQLType ValidateReturnType(vector<SQLType> &arguments, AggregateFunctionCatalogEntry *func) {
-	auto result = func->return_type(arguments);
+	auto result = func->function.return_type(arguments);
 	if (result == SQLTypeId::INVALID) {
 		// types do not match up, throw exception
 		string type_str;
@@ -66,7 +66,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	// types match up, get the result type
 	SQLType result_type = ValidateReturnType(types, func);
 	// add a cast to the child node (if needed)
-	if (func->cast_arguments(types)) {
+	if (func->function.cast_arguments) {
 		for (index_t i = 0; i < children.size(); i++) {
 			children[i] = AddCastToType(move(children[i]), types[i], result_type);
 		}

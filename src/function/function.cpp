@@ -1,4 +1,5 @@
 #include "function/function.hpp"
+#include "function/aggregate_function.hpp"
 #include "function/scalar_function.hpp"
 
 #include "catalog/catalog.hpp"
@@ -27,38 +28,18 @@ template <class T> static void AddTableFunction(Transaction &transaction, Catalo
 }
 
 template <class T> static void AddAggregateFunction(Transaction &transaction, Catalog &catalog) {
-	CreateAggregateFunctionInfo info;
-
-	info.schema = DEFAULT_SCHEMA;
-	info.name = T::GetName();
-
-	info.state_size = T::GetStateSizeFunction();
-	info.initialize = T::GetInitalizeFunction();
-	info.update = T::GetUpdateFunction();
-	info.finalize = T::GetFinalizeFunction();
-
-	info.simple_initialize = T::GetSimpleInitializeFunction();
-	info.simple_update = T::GetSimpleUpdateFunction();
-
-	info.return_type = T::GetReturnTypeFunction();
-	info.cast_arguments = T::GetCastArgumentsFunction();
-
-	catalog.CreateFunction(transaction, &info);
-}
-
-template <class T> static void AddScalarFunction(Transaction &transaction, Catalog &catalog) {
-	CreateScalarFunctionInfo info(T::GetFunction());
-
-	// info.schema = DEFAULT_SCHEMA;
-	// info.function = T::GetFunction();
-	// info.name = info.function.name;
-
+	CreateAggregateFunctionInfo info(AggregateFunction(T::GetName(), T::GetReturnTypeFunction(), T::GetStateSizeFunction(), T::GetInitalizeFunction(), T::GetUpdateFunction(), T::GetFinalizeFunction(), T::GetSimpleInitializeFunction(), T::GetSimpleUpdateFunction()));
 	catalog.CreateFunction(transaction, &info);
 }
 
 BuiltinFunctions::BuiltinFunctions(Transaction &transaction, Catalog &catalog) :
 	transaction(transaction), catalog(catalog) {
 
+}
+
+void BuiltinFunctions::AddFunction(AggregateFunction function) {
+	CreateAggregateFunctionInfo info(function);
+	catalog.CreateFunction(transaction, &info);
 }
 
 void BuiltinFunctions::AddFunction(ScalarFunction function) {
@@ -70,23 +51,8 @@ void BuiltinFunctions::Initialize() {
 	AddTableFunction<PragmaTableInfo>(transaction, catalog);
 	AddTableFunction<SQLiteMaster>(transaction, catalog);
 
-	// distributive aggregates
-	AddAggregateFunction<CountFunction>(transaction, catalog);
-	AddAggregateFunction<CountStarFunction>(transaction, catalog);
-	AddAggregateFunction<CovarPopFunction>(transaction, catalog);
-	AddAggregateFunction<CovarSampFunction>(transaction, catalog);
-	AddAggregateFunction<FirstFunction>(transaction, catalog);
-	AddAggregateFunction<MaxFunction>(transaction, catalog);
-	AddAggregateFunction<MinFunction>(transaction, catalog);
-	AddAggregateFunction<StdDevPopFunction>(transaction, catalog);
-	AddAggregateFunction<StdDevSampFunction>(transaction, catalog);
-	AddAggregateFunction<StringAggFunction>(transaction, catalog);
-	AddAggregateFunction<SumFunction>(transaction, catalog);
-	AddAggregateFunction<VarPopFunction>(transaction, catalog);
-	AddAggregateFunction<VarSampFunction>(transaction, catalog);
-
-	// algebraic aggregates
-	AddAggregateFunction<AvgFunction>(transaction, catalog);
+	RegisterAlgebraicAggregates();
+	RegisterDistributiveAggregates();
 
 	RegisterDateFunctions();
 	RegisterMathFunctions();

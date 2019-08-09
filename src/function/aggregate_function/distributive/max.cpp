@@ -1,4 +1,4 @@
-#include "function/aggregate_function/max.hpp"
+#include "function/aggregate_function/distributive_functions.hpp"
 #include "common/exception.hpp"
 #include "common/types/null_value.hpp"
 #include "common/vector_operations/vector_operations.hpp"

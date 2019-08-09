@@ -1,4 +1,4 @@
-#include "function/aggregate_function/stddev_samp.hpp"
+#include "function/aggregate_function/algebraic_functions.hpp"
 #include "common/exception.hpp"
 #include "common/types/null_value.hpp"
 #include "common/vector_operations/vector_operations.hpp"
@@ -7,6 +7,20 @@
 using namespace std;
 
 namespace duckdb {
+
+struct stddev_state_t {
+    uint64_t    count;
+    double      mean;
+    double      dsquared;
+};
+
+index_t stddev_state_size(TypeId return_type) {
+	return sizeof(stddev_state_t);
+}
+
+void stddevsamp_initialize(data_ptr_t payload, TypeId return_type) {
+	memset(payload, 0, stddev_state_size(return_type));
+}
 
 SQLType stddev_get_return_type(vector<SQLType> &arguments) {
 	if (arguments.size() != 1)

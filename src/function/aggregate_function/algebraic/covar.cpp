@@ -1,4 +1,4 @@
-#include "function/aggregate_function/covar.hpp"
+#include "function/aggregate_function/algebraic_functions.hpp"
 #include "common/exception.hpp"
 #include "common/types/null_value.hpp"
 #include "common/vector_operations/vector_operations.hpp"
@@ -7,6 +7,21 @@
 using namespace std;
 
 namespace duckdb {
+
+struct covar_state_t {
+    uint64_t    count;
+    double      meanx;
+    double      meany;
+    double      co_moment;
+};
+
+index_t covar_state_size(TypeId return_type) {
+	return sizeof(covar_state_t);
+}
+
+void covar_initialize(data_ptr_t payload, TypeId return_type) {
+	memset(payload, 0, covar_state_size(return_type));
+}
 
 static Vector &CastVector(Vector &original, TypeId type, Vector &cast) {
 	if (original.type != type) {

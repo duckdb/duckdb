@@ -19,6 +19,9 @@ class ClientContext;
 class ExpressionExecutor;
 class Transaction;
 
+class AggregateFunction;
+class ScalarFunction;
+
 //! Type used for checking if a function matches the input arguments
 typedef bool (*matches_argument_function_t)(vector<SQLType> &arguments);
 //! Gets the return type of the function given the types of the input argument
@@ -50,8 +53,6 @@ public:
 	bool has_side_effects;
 };
 
-class ScalarFunction;
-
 struct FunctionData {
 	virtual ~FunctionData() {
 	}
@@ -66,21 +67,6 @@ typedef void (*table_function_t)(ClientContext &, DataChunk &input, DataChunk &o
 //! Type used for final (cleanup) function
 typedef void (*table_function_final_t)(ClientContext &, FunctionData *dataptr);
 
-
-//! The type used for sizing hashed aggregate function states
-typedef index_t (*aggregate_size_t)(TypeId return_type);
-//! The type used for initializing hashed aggregate function states
-typedef void (*aggregate_initialize_t)(data_ptr_t payload, TypeId return_type);
-//! The type used for updating hashed aggregate functions
-typedef void (*aggregate_update_t)(Vector inputs[], index_t input_count, Vector &result);
-//! The type used for finalizing hashed aggregate function payloads
-typedef void (*aggregate_finalize_t)(Vector &payloads, Vector &result);
-
-//! The type used for initializing simple aggregate function
-typedef Value (*aggregate_simple_initialize_t)();
-//! The type used for updating simple aggregate functions
-typedef void (*aggregate_simple_update_t)(Vector inputs[], index_t input_count, Value &result);
-
 class BuiltinFunctions {
 public:
 	BuiltinFunctions(Transaction &transaction, Catalog &catalog);
@@ -91,7 +77,11 @@ private:
 	Transaction &transaction;
 	Catalog &catalog;
 private:
+	void AddFunction(AggregateFunction function);
 	void AddFunction(ScalarFunction function);
+
+	void RegisterAlgebraicAggregates();
+	void RegisterDistributiveAggregates();
 
 	void RegisterDateFunctions();
 	void RegisterMathFunctions();

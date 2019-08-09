@@ -1,4 +1,4 @@
-#include "function/aggregate_function/avg.hpp"
+#include "function/aggregate_function/algebraic_functions.hpp"
 #include "common/exception.hpp"
 #include "common/types/null_value.hpp"
 #include "common/vector_operations/vector_operations.hpp"
@@ -6,6 +6,19 @@
 using namespace std;
 
 namespace duckdb {
+
+struct avg_state_t {
+    uint64_t    count;
+    double      sum;
+};
+
+index_t avg_payload_size(TypeId return_type) {
+	return sizeof(avg_state_t);
+}
+
+void avg_initialize(data_ptr_t payload, TypeId return_type) {
+	memset(payload, 0, avg_payload_size(return_type));
+}
 
 SQLType avg_get_return_type(vector<SQLType> &arguments) {
 	if (arguments.size() != 1)

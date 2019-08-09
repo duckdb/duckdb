@@ -23,34 +23,12 @@ class AggregateFunctionCatalogEntry : public CatalogEntry {
 public:
 	AggregateFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateAggregateFunctionInfo *info)
 	    : CatalogEntry(CatalogType::AGGREGATE_FUNCTION, catalog, info->name), schema(schema),
-	      state_size(info->state_size), initialize(info->initialize), update(info->update), finalize(info->finalize),
-	      simple_initialize(info->simple_initialize), simple_update(info->simple_update),
-	      return_type(info->return_type), cast_arguments(info->cast_arguments) {
+	      function(info->function) {
 	}
 
 	//! The schema the table belongs to
 	SchemaCatalogEntry *schema;
 
-	//! The hashed aggregate state sizing function
-	aggregate_size_t state_size;
-	//! The hashed aggregate initialization function
-	aggregate_initialize_t initialize;
-	//! The hashed aggregate update function
-	aggregate_update_t update;
-	//! The hashed aggregate finalization function
-	aggregate_finalize_t finalize;
-
-	//! The simple aggregate initialization function (may be null)
-	aggregate_simple_initialize_t simple_initialize;
-	//! The simple aggregate update function (may be null)
-	aggregate_simple_update_t simple_update;
-
-	//! Function that gives the return type of the aggregate given the input
-	//! arguments
-	get_return_type_function_t return_type;
-
-	//! Function that returns true if the arguments need to be cast to the return type
-	//! arguments
-	matches_argument_function_t cast_arguments;
+	AggregateFunction function;
 };
 } // namespace duckdb
