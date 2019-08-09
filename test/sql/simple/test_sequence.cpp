@@ -325,8 +325,8 @@ TEST_CASE("Test query verification failures", "[sequence]") {
 	// create a sequence
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq;"));
 
-	// getting the value from a sequence results in a verification failure
-	REQUIRE_FAIL(con.Query("SELECT nextval('seq')"));
+	// getting the value from a sequence results in a verification failure, but only in debug mode
+	con.Query("SELECT nextval('seq')");
 	// normal queries still work after that
 	REQUIRE_NO_FAIL(con.Query("SELECT 1"));
 }
