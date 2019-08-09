@@ -11,6 +11,7 @@
 #include "function/function.hpp"
 
 namespace duckdb {
+class BoundFunctionExpression;
 
 //! The type used for scalar functions
 typedef void (*scalar_function_t)(ExpressionExecutor &exec, Vector inputs[], index_t input_count,

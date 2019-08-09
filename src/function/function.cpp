@@ -1,4 +1,5 @@
 #include "function/function.hpp"
+#include "function/scalar_function.hpp"
 
 #include "catalog/catalog.hpp"
 #include "function/aggregate_function/list.hpp"
@@ -55,7 +56,17 @@ template <class T> static void AddScalarFunction(Transaction &transaction, Catal
 	catalog.CreateFunction(transaction, &info);
 }
 
-void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
+BuiltinFunctions::BuiltinFunctions(Transaction &transaction, Catalog &catalog) :
+	transaction(transaction), catalog(catalog) {
+
+}
+
+void BuiltinFunctions::AddFunction(ScalarFunction function) {
+	CreateScalarFunctionInfo info(function);
+	catalog.CreateFunction(transaction, &info);
+}
+
+void BuiltinFunctions::Initialize() {
 	AddTableFunction<PragmaTableInfo>(transaction, catalog);
 	AddTableFunction<SQLiteMaster>(transaction, catalog);
 
@@ -77,55 +88,10 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	// algebraic aggregates
 	AddAggregateFunction<AvgFunction>(transaction, catalog);
 
-	// math
-	AddScalarFunction<AbsFunction>(transaction, catalog);
-	AddScalarFunction<CbRtFunction>(transaction, catalog);
-	AddScalarFunction<DegreesFunction>(transaction, catalog);
-	AddScalarFunction<RadiansFunction>(transaction, catalog);
-	AddScalarFunction<ExpFunction>(transaction, catalog);
-	AddScalarFunction<RoundFunction>(transaction, catalog);
-	AddScalarFunction<CeilFunction>(transaction, catalog);
-	AddScalarFunction<CeilingFunction>(transaction, catalog);
-	AddScalarFunction<FloorFunction>(transaction, catalog);
-	AddScalarFunction<PiFunction>(transaction, catalog);
-	AddScalarFunction<SqrtFunction>(transaction, catalog);
-	AddScalarFunction<LnFunction>(transaction, catalog);
-	AddScalarFunction<LogFunction>(transaction, catalog);
-	AddScalarFunction<Log10Function>(transaction, catalog);
-	AddScalarFunction<Log2Function>(transaction, catalog);
-	AddScalarFunction<SignFunction>(transaction, catalog);
-	AddScalarFunction<ModFunction>(transaction, catalog);
-	AddScalarFunction<PowFunction>(transaction, catalog);
-	AddScalarFunction<PowerFunction>(transaction, catalog);
-
-	// Trignometric
-	AddScalarFunction<SinFunction>(transaction, catalog);
-	AddScalarFunction<CosFunction>(transaction, catalog);
-	AddScalarFunction<TanFunction>(transaction, catalog);
-	AddScalarFunction<ASinFunction>(transaction, catalog);
-	AddScalarFunction<ACosFunction>(transaction, catalog);
-	AddScalarFunction<ATanFunction>(transaction, catalog);
-	AddScalarFunction<CoTFunction>(transaction, catalog);
-	AddScalarFunction<ATan2Function>(transaction, catalog);
-
-	// strings
-	AddScalarFunction<ConcatFunction>(transaction, catalog);
-	AddScalarFunction<LengthFunction>(transaction, catalog);
-	AddScalarFunction<SubstringFunction>(transaction, catalog);
-	AddScalarFunction<UpperFunction>(transaction, catalog);
-	AddScalarFunction<LowerFunction>(transaction, catalog);
-
-	// regex
-	AddScalarFunction<RegexpMatchesFunction>(transaction, catalog);
-	AddScalarFunction<RegexpReplaceFunction>(transaction, catalog);
-
-	// datetime
-	AddScalarFunction<DatePartFunction>(transaction, catalog);
-	AddScalarFunction<YearFunction>(transaction, catalog);
-
-	// timestamp
-	AddScalarFunction<AgeFunction>(transaction, catalog);
-
-	// misc
-	AddScalarFunction<NextvalFunction>(transaction, catalog);
+	RegisterDateFunctions();
+	RegisterMathFunctions();
+	RegisterSequenceFunctions();
+	RegisterSequenceFunctions();
+	RegisterStringFunctions();
+	RegisterTrigonometricsFunctions();
 }

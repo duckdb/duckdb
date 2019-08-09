@@ -1,0 +1,20 @@
+add_library_unity(duckdb_scalar_function_math
+				OBJECT
+				abs.cpp
+				cbrt.cpp
+				ceil.cpp
+				degrees.cpp
+				exp.cpp
+				floor.cpp
+				ln.cpp
+				log10.cpp
+				log2.cpp
+				mod.cpp
+				pi.cpp
+				pow.cpp
+				radians.cpp
+				round.cpp
+				sign.cpp
+				sqrt.cpp)
+set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES}
+                     $<TARGET_OBJECTS:duckdb_scalar_function_math> PARENT_SCOPE)

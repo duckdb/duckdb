@@ -13,7 +13,6 @@
 #include "parser/column_definition.hpp"
 
 namespace duckdb {
-class BoundFunctionExpression;
 class CatalogEntry;
 class Catalog;
 class ClientContext;
@@ -51,6 +50,8 @@ public:
 	bool has_side_effects;
 };
 
+class ScalarFunction;
+
 struct FunctionData {
 	virtual ~FunctionData() {
 	}
@@ -82,8 +83,21 @@ typedef void (*aggregate_simple_update_t)(Vector inputs[], index_t input_count, 
 
 class BuiltinFunctions {
 public:
+	BuiltinFunctions(Transaction &transaction, Catalog &catalog);
+
 	//! Initialize a catalog with all built-in functions
-	static void Initialize(Transaction &transaction, Catalog &catalog);
+	void Initialize();
+private:
+	Transaction &transaction;
+	Catalog &catalog;
+private:
+	void AddFunction(ScalarFunction function);
+
+	void RegisterDateFunctions();
+	void RegisterMathFunctions();
+	void RegisterStringFunctions();
+	void RegisterSequenceFunctions();
+	void RegisterTrigonometricsFunctions();
 };
 
 } // namespace duckdb
