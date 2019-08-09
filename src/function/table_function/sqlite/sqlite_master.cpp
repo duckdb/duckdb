@@ -1,4 +1,4 @@
-#include "function/table_function/sqlite_master.hpp"
+#include "function/table_function/sqlite_functions.hpp"
 
 #include "catalog/catalog.hpp"
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"

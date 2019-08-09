@@ -6,7 +6,7 @@ using namespace duckdb;
 using namespace std;
 
 void LogicalTableFunction::ResolveTypes() {
-	for (auto &column : function->return_values) {
-		types.push_back(GetInternalType(column.type));
+	for (auto &type : function->function.types) {
+		types.push_back(GetInternalType(type));
 	}
 }

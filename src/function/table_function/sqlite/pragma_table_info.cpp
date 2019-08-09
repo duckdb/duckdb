@@ -1,4 +1,4 @@
-#include "function/table_function/pragma_table_info.hpp"
+#include "function/table_function/sqlite_functions.hpp"
 
 #include "catalog/catalog.hpp"
 #include "catalog/catalog_entry/table_catalog_entry.hpp"

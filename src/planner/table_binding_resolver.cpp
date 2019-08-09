@@ -261,7 +261,7 @@ void TableBindingResolver::Visit(LogicalTableFunction &op) {
 
 	BoundTable binding;
 	binding.table_index = op.table_index;
-	binding.column_count = op.function->return_values.size();
+	binding.column_count = op.function->function.types.size();
 	PushBinding(binding);
 }
 

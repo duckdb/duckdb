@@ -13,25 +13,6 @@
 using namespace duckdb;
 using namespace std;
 
-template <class T> static void AddTableFunction(Transaction &transaction, Catalog &catalog) {
-	CreateTableFunctionInfo info;
-
-	info.schema = DEFAULT_SCHEMA;
-	info.name = T::GetName();
-	T::GetArguments(info.arguments);
-	T::GetReturnValues(info.return_values);
-	info.init = T::GetInitFunction();
-	info.function = T::GetFunction();
-	info.final = T::GetFinalFunction();
-
-	catalog.CreateTableFunction(transaction, &info);
-}
-
-template <class T> static void AddAggregateFunction(Transaction &transaction, Catalog &catalog) {
-	CreateAggregateFunctionInfo info(AggregateFunction(T::GetName(), T::GetReturnTypeFunction(), T::GetStateSizeFunction(), T::GetInitalizeFunction(), T::GetUpdateFunction(), T::GetFinalizeFunction(), T::GetSimpleInitializeFunction(), T::GetSimpleUpdateFunction()));
-	catalog.CreateFunction(transaction, &info);
-}
-
 BuiltinFunctions::BuiltinFunctions(Transaction &transaction, Catalog &catalog) :
 	transaction(transaction), catalog(catalog) {
 
@@ -47,9 +28,13 @@ void BuiltinFunctions::AddFunction(ScalarFunction function) {
 	catalog.CreateFunction(transaction, &info);
 }
 
+void BuiltinFunctions::AddFunction(TableFunction function) {
+	CreateTableFunctionInfo info(function);
+	catalog.CreateTableFunction(transaction, &info);
+}
+
 void BuiltinFunctions::Initialize() {
-	AddTableFunction<PragmaTableInfo>(transaction, catalog);
-	AddTableFunction<SQLiteMaster>(transaction, catalog);
+	RegisterSQLiteFunctions();
 
 	RegisterAlgebraicAggregates();
 	RegisterDistributiveAggregates();

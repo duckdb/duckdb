@@ -13,8 +13,8 @@ void PhysicalTableFunction::GetChunkInternal(ClientContext &context, DataChunk &
 	auto state = (PhysicalTableFunctionOperatorState *)state_;
 	if (!state->initialized) {
 		// run initialization code
-		if (function->init) {
-			auto function_data = function->init(context);
+		if (function->function.init) {
+			auto function_data = function->function.init(context);
 			if (function_data) {
 				state->function_data = unique_ptr<FunctionData>(function_data);
 			}
@@ -23,7 +23,7 @@ void PhysicalTableFunction::GetChunkInternal(ClientContext &context, DataChunk &
 	}
 	// create the input arguments
 	vector<TypeId> input_types;
-	for (auto &argument_type : function->arguments) {
+	for (auto &argument_type : function->function.arguments) {
 		input_types.push_back(GetInternalType(argument_type));
 	}
 
@@ -37,11 +37,11 @@ void PhysicalTableFunction::GetChunkInternal(ClientContext &context, DataChunk &
 	}
 
 	// run main code
-	function->function(context, input, chunk, state->function_data.get());
+	function->function.function(context, input, chunk, state->function_data.get());
 	if (chunk.size() == 0) {
 		// finished, call clean up
-		if (function->final) {
-			function->final(context, state->function_data.get());
+		if (function->function.final) {
+			function->function.final(context, state->function_data.get());
 		}
 	}
 }

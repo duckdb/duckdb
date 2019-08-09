@@ -21,6 +21,14 @@ class Transaction;
 
 class AggregateFunction;
 class ScalarFunction;
+class TableFunction;
+
+struct FunctionData {
+	virtual ~FunctionData() {
+	}
+
+	virtual unique_ptr<FunctionData> Copy() = 0;
+};
 
 //! Type used for checking if a function matches the input arguments
 typedef bool (*matches_argument_function_t)(vector<SQLType> &arguments);
@@ -53,20 +61,6 @@ public:
 	bool has_side_effects;
 };
 
-struct FunctionData {
-	virtual ~FunctionData() {
-	}
-
-	virtual unique_ptr<FunctionData> Copy() = 0;
-};
-
-//! Type used for initialization function
-typedef FunctionData *(*table_function_init_t)(ClientContext &);
-//! Type used for table-returning function
-typedef void (*table_function_t)(ClientContext &, DataChunk &input, DataChunk &output, FunctionData *dataptr);
-//! Type used for final (cleanup) function
-typedef void (*table_function_final_t)(ClientContext &, FunctionData *dataptr);
-
 class BuiltinFunctions {
 public:
 	BuiltinFunctions(Transaction &transaction, Catalog &catalog);
@@ -79,10 +73,16 @@ private:
 private:
 	void AddFunction(AggregateFunction function);
 	void AddFunction(ScalarFunction function);
+	void AddFunction(TableFunction function);
+private:
+	// table-producing functions
+	void RegisterSQLiteFunctions();
 
+	// aggregates
 	void RegisterAlgebraicAggregates();
 	void RegisterDistributiveAggregates();
 
+	// scalar functions
 	void RegisterDateFunctions();
 	void RegisterMathFunctions();
 	void RegisterStringFunctions();

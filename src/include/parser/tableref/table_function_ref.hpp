@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/tableref/table_function.hpp
+// parser/tableref/table_function_ref.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,9 +13,9 @@
 
 namespace duckdb {
 //! Represents a Table producing function
-class TableFunction : public TableRef {
+class TableFunctionRef : public TableRef {
 public:
-	TableFunction() : TableRef(TableReferenceType::TABLE_FUNCTION) {
+	TableFunctionRef() : TableRef(TableReferenceType::TABLE_FUNCTION) {
 	}
 
 	unique_ptr<ParsedExpression> function;

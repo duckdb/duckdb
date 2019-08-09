@@ -149,10 +149,10 @@ TableFunctionCatalogEntry *SchemaCatalogEntry::GetTableFunction(Transaction &tra
 	}
 	auto function_entry = (TableFunctionCatalogEntry *)entry;
 	// check if the argument lengths match
-	if (expression->children.size() != function_entry->arguments.size()) {
+	if (expression->children.size() != function_entry->function.arguments.size()) {
 		throw CatalogException("Function with name %s exists, but argument length does not match! "
 		                       "Expected %d arguments but got %d.",
-		                       expression->function_name.c_str(), (int)function_entry->arguments.size(),
+		                       expression->function_name.c_str(), (int)function_entry->function.arguments.size(),
 		                       (int)expression->children.size());
 	}
 	return function_entry;
