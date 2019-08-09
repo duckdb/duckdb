@@ -17,9 +17,15 @@ void covarpop_finalize(Vector &payloads, Vector &result);
 void covarsamp_finalize(Vector &payloads, Vector &result);
 SQLType covar_get_return_type(vector<SQLType> &arguments);
 
+struct covar_state_t {
+    uint64_t    count;
+    double      meanx;
+    double      meany;
+    double      co_moment;
+};
+
 static index_t covar_state_size(TypeId return_type) {
-	// count meanx meany co-moment
-	return sizeof(uint64_t) + 3 * sizeof(double);
+	return sizeof(covar_state_t);
 }
 
 static void covar_initialize(data_ptr_t payload, TypeId return_type) {

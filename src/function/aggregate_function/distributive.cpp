@@ -7,12 +7,12 @@ using namespace std;
 
 namespace duckdb {
 
-void gather_finalize(Vector &payloads, Vector &result) {
-	VectorOperations::Gather::Set(payloads, result);
+void gather_finalize(Vector &states, Vector &result) {
+	VectorOperations::Gather::Set(states, result);
 }
 
-void null_payload_initialize(data_ptr_t payload, TypeId return_type) {
-	SetNullValue(payload, return_type);
+void null_state_initialize(data_ptr_t state, TypeId return_type) {
+	SetNullValue(state, return_type);
 }
 
 } // namespace duckdb

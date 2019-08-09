@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// function/aggregate_function/sum.hpp
+// function/aggregate_function/stringagg.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,14 +12,13 @@
 
 namespace duckdb {
 
-void sum_update(Vector inputs[], index_t input_count, Vector &result);
-void sum_simple_update(Vector inputs[], index_t input_count, Value &result);
-SQLType sum_get_return_type(vector<SQLType> &arguments);
+void string_agg_update(Vector inputs[], index_t input_count, Vector &result);
+SQLType string_agg_get_return_type(vector<SQLType> &arguments);
 
-class SumFunction : public AggregateInPlaceFunction {
+class StringAggFunction : public AggregateInPlaceFunction {
 public:
 	static const char *GetName() {
-		return "sum";
+		return "string_agg";
 	}
 
 	static aggregate_size_t GetStateSizeFunction() {
@@ -31,7 +30,7 @@ public:
 	}
 
 	static aggregate_update_t GetUpdateFunction() {
-		return sum_update;
+		return string_agg_update;
 	}
 
 	static aggregate_simple_initialize_t GetSimpleInitializeFunction() {
@@ -39,11 +38,11 @@ public:
 	}
 
 	static aggregate_simple_update_t GetSimpleUpdateFunction() {
-		return sum_simple_update;
+		return nullptr;
 	}
 
 	static get_return_type_function_t GetReturnTypeFunction() {
-		return sum_get_return_type;
+		return string_agg_get_return_type;
 	}
 
 	static matches_argument_function_t GetCastArgumentsFunction() {

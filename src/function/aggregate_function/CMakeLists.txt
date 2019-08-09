@@ -8,6 +8,7 @@ add_library_unity(duckdb_aggregate_function
                   sum.cpp
                   covar.cpp
                   stddev_samp.cpp
+                  string_agg.cpp
                   distributive.cpp
                   avg.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES}
