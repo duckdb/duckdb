@@ -69,6 +69,7 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddAggregateFunction<MinFunction>(transaction, catalog);
 	AddAggregateFunction<StdDevPopFunction>(transaction, catalog);
 	AddAggregateFunction<StdDevSampFunction>(transaction, catalog);
+	AddAggregateFunction<StringAggFunction>(transaction, catalog);
 	AddAggregateFunction<SumFunction>(transaction, catalog);
 	AddAggregateFunction<VarPopFunction>(transaction, catalog);
 	AddAggregateFunction<VarSampFunction>(transaction, catalog);

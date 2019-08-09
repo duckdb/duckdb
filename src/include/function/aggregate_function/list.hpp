@@ -7,4 +7,5 @@
 #include "function/aggregate_function/max.hpp"
 #include "function/aggregate_function/min.hpp"
 #include "function/aggregate_function/stddev_samp.hpp"
+#include "function/aggregate_function/string_agg.hpp"
 #include "function/aggregate_function/sum.hpp"

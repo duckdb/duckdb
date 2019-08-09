@@ -93,6 +93,50 @@ TEST_CASE("Test COVAR operators", "[aggregate]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
 }
 
+TEST_CASE("Test STRING_AGG operator", "[aggregate]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// test incorrect usage of STRING_AGG function
+	REQUIRE_FAIL(con.Query("SELECT STRING_AGG()"));
+	REQUIRE_FAIL(con.Query("SELECT STRING_AGG(1)"));
+	REQUIRE_FAIL(con.Query("SELECT STRING_AGG(1, 2)"));
+	REQUIRE_FAIL(con.Query("SELECT STRING_AGG(1, 2, 3)"));
+	REQUIRE_FAIL(con.Query("SELECT STRING_AGG(STRING_AGG('a',','))"));
+
+	// test string aggregation on scalar values
+	result = con.Query("SELECT STRING_AGG('a',',')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"a"}));
+
+	// test string aggregation on scalar values
+	result = con.Query("SELECT STRING_AGG('a',','), STRING_AGG(NULL,','), STRING_AGG('a',NULL), STRING_AGG(NULL,NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {"a"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+
+	// test string aggregation on a set of values
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(g INTEGER, x VARCHAR, y VARCHAR);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES (1,'a','/'), (1,'b','-'), "
+	                            "(2,'i','/'), (2,NULL,'-'), (2,'j','+'), "
+	                            "(3,'p','/'), "
+	                            "(4,'x','/'), (4,'y','-'), (4,'z','+')"));
+
+	result = con.Query("SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"a,b,i,j,p,x,y,z"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"a-b/i+j/p/x-y+z"}));
+
+	result = con.Query("SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings GROUP BY g");
+	REQUIRE(CHECK_COLUMN(result, 0, {"a,b","x,y,z","i,j","p"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"a-b","x-y+z","i+j","p"}));
+
+	// test average on empty set
+	result = con.Query("SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings WHERE g > 100");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+}
+
 TEST_CASE("Test AVG operator", "[aggregate]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
