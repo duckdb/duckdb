@@ -315,3 +315,18 @@ TEST_CASE("Test Concurrent Usage of Sequences", "[sequence][.]") {
 	// the sequential and threaded data should be the same
 	REQUIRE(seq_data.results == data.results);
 }
+
+TEST_CASE("Test query verification failures", "[sequence]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// create a sequence
+	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq;"));
+
+	// getting the value from a sequence results in a verification failure
+	REQUIRE_FAIL(con.Query("SELECT nextval('seq')"));
+	// normal queries still work after that
+	REQUIRE_NO_FAIL(con.Query("SELECT 1"));
+}

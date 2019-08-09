@@ -91,7 +91,6 @@ void BuiltinFunctions::Initialize() {
 	RegisterDateFunctions();
 	RegisterMathFunctions();
 	RegisterSequenceFunctions();
-	RegisterSequenceFunctions();
 	RegisterStringFunctions();
 	RegisterTrigonometricsFunctions();
 }
