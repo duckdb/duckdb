@@ -5,7 +5,7 @@
 #include "planner/expression/bound_constant_expression.hpp"
 #include "planner/expression/bound_function_expression.hpp"
 #include "planner/operator/logical_filter.hpp"
-#include "function/scalar_function/string_functions.hpp"
+#include "function/scalar/string_functions.hpp"
 
 using namespace duckdb;
 using namespace std;

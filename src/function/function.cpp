@@ -3,9 +3,9 @@
 #include "function/scalar_function.hpp"
 
 #include "catalog/catalog.hpp"
-#include "function/aggregate_function/list.hpp"
-#include "function/scalar_function/list.hpp"
-#include "function/table_function/list.hpp"
+#include "function/aggregate/list.hpp"
+#include "function/scalar/list.hpp"
+#include "function/table/list.hpp"
 #include "parser/parsed_data/create_aggregate_function_info.hpp"
 #include "parser/parsed_data/create_scalar_function_info.hpp"
 #include "parser/parsed_data/create_table_function_info.hpp"

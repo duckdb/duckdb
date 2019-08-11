@@ -1,5 +1,0 @@
-#include "function/scalar_function/date_functions.hpp"
-#include "function/scalar_function/math_functions.hpp"
-#include "function/scalar_function/sequence_functions.hpp"
-#include "function/scalar_function/trigonometric_functions.hpp"
-#include "function/scalar_function/string_functions.hpp"

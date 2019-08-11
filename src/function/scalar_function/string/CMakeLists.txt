@@ -1,9 +1,0 @@
-add_library_unity(duckdb_scalar_function_string
-				  OBJECT
-				  caseconvert.cpp
-				  concat.cpp
-				  length.cpp
-				  regexp.cpp
-				  substring.cpp)
-set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES}
-                     $<TARGET_OBJECTS:duckdb_scalar_function_string> PARENT_SCOPE)

@@ -1,6 +1,6 @@
-add_subdirectory(aggregate_function)
-add_subdirectory(scalar_function)
-add_subdirectory(table_function)
+add_subdirectory(aggregate)
+add_subdirectory(scalar)
+add_subdirectory(table)
 
 add_library(duckdb_function OBJECT function.cpp)
 set(ALL_OBJECT_FILES
