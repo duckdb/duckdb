@@ -22,12 +22,12 @@ class SchemaCatalogEntry;
 class ScalarFunctionCatalogEntry : public CatalogEntry {
 public:
 	ScalarFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateScalarFunctionInfo *info)
-	    : CatalogEntry(CatalogType::SCALAR_FUNCTION, catalog, info->name), schema(schema), function(info->function) {
+	    : CatalogEntry(CatalogType::SCALAR_FUNCTION, catalog, info->name), schema(schema), functions(info->functions) {
 	}
 
 	//! The schema the table belongs to
 	SchemaCatalogEntry *schema;
-	//! The scalar function
-	ScalarFunction function;
+	//! The scalar functions
+	vector<ScalarFunction> functions;
 };
 } // namespace duckdb

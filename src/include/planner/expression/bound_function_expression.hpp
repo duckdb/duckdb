@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "function/function.hpp"
+#include "function/scalar_function.hpp"
 #include "planner/expression.hpp"
 
 namespace duckdb {
@@ -17,10 +17,10 @@ class ScalarFunctionCatalogEntry;
 //! Represents a function call that has been bound to a base function
 class BoundFunctionExpression : public Expression {
 public:
-	BoundFunctionExpression(TypeId return_type, ScalarFunctionCatalogEntry *bound_function);
+	BoundFunctionExpression(TypeId return_type, ScalarFunction bound_function);
 
 	// The bound function expression
-	ScalarFunctionCatalogEntry *bound_function;
+	ScalarFunction function;
 	//! List of arguments to the function
 	vector<unique_ptr<Expression>> children;
 	//! The bound function data (if any)

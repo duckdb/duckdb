@@ -11,8 +11,8 @@ using namespace std;
 static void ExtractDependencies(Expression &expr, unordered_set<CatalogEntry *> &dependencies) {
 	if (expr.type == ExpressionType::BOUND_FUNCTION) {
 		auto &function = (BoundFunctionExpression &)expr;
-		if (function.bound_function->function.dependency) {
-			function.bound_function->function.dependency(function, dependencies);
+		if (function.function.dependency) {
+			function.function.dependency(function, dependencies);
 		}
 	}
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ExtractDependencies(child, dependencies); });

@@ -7,7 +7,7 @@ using namespace std;
 
 namespace duckdb {
 
-void age_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
+static void age_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                   Vector &result) {
 	assert(input_count == 2 || input_count == 1);
 
@@ -76,18 +76,11 @@ void age_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count
 	                             });
 }
 
-// TODO: extend to support arbitrary number of arguments, not only two
-bool age_matches_arguments(vector<SQLType> &arguments) {
-	bool arguments_number = arguments.size() == 1 || arguments.size() == 2;
-	bool arguments_type = false;
-	for (auto argument : arguments) {
-		arguments_type = argument.id == SQLTypeId::TIMESTAMP;
-	}
-	return arguments_number && arguments_type;
-}
-
-SQLType age_get_return_type(vector<SQLType> &arguments) {
-	return SQLType(SQLTypeId::VARCHAR);
+void Age::RegisterFunction(BuiltinFunctions &set) {
+	FunctionSet age("age");
+	age.AddFunction(ScalarFunction({ SQLType::TIMESTAMP }, SQLType::VARCHAR, age_function));
+	age.AddFunction(ScalarFunction({ SQLType::TIMESTAMP,  SQLType::TIMESTAMP }, SQLType::VARCHAR, age_function));
+	set.AddFunction(age);
 }
 
 } // namespace duckdb

@@ -25,7 +25,7 @@ unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator
 	for (auto &expr : op->expressions) {
 		if (expr->type == ExpressionType::BOUND_FUNCTION) {
 			auto &func = (BoundFunctionExpression &)*expr.get();
-			if (func.bound_function->name != "regexp_matches" || func.children.size() != 2) {
+			if (func.function.name != "regexp_matches" || func.children.size() != 2) {
 				continue;
 			}
 			auto &info = (RegexpMatchesBindData &)*func.bind_info;

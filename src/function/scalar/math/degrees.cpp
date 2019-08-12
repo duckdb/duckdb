@@ -5,11 +5,15 @@ using namespace std;
 
 namespace duckdb {
 
-void degrees_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
+static void degrees_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                       Vector &result) {
 	assert(input_count == 1);
 	result.Initialize(TypeId::DOUBLE);
 	VectorOperations::Degrees(inputs[0], result);
+}
+
+void Degrees::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("degrees", { SQLType::DOUBLE }, SQLType::DOUBLE, degrees_function));
 }
 
 }

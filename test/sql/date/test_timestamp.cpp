@@ -20,7 +20,7 @@ TEST_CASE("Test TIMESTAMP type", "[timestamp]") {
 
 	// check if we can select timestamps
 	result = con.Query("SELECT timestamp '2017-07-23 13:10:11';");
-	REQUIRE(result->sql_types[0] == SQLType(SQLTypeId::TIMESTAMP));
+	REQUIRE(result->sql_types[0] == SQLType::TIMESTAMP);
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(Timestamp::FromString("2017-07-23 13:10:11"))}));
 	// check order
 	result = con.Query("SELECT t FROM timestamp ORDER BY t;");

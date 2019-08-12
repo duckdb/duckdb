@@ -26,10 +26,15 @@ typedef Value (*aggregate_simple_initialize_t)();
 //! The type used for updating simple aggregate functions
 typedef void (*aggregate_simple_update_t)(Vector inputs[], index_t input_count, Value &result);
 
-class AggregateFunction : public SimpleFunction {
+//! Gets the return type of the function given the types of the input argument
+typedef SQLType (*get_return_type_function_t)(vector<SQLType> &arguments);
+
+class AggregateFunction : public Function {
 public:
 	AggregateFunction(string name, get_return_type_function_t return_type, aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update, aggregate_finalize_t finalize, aggregate_simple_initialize_t simple_initialize = nullptr, aggregate_simple_update_t simple_update = nullptr, bool cast_arguments = true) :
-		SimpleFunction(name, nullptr, return_type, false), state_size(state_size), initialize(initialize), update(update), finalize(finalize), simple_initialize(simple_initialize), simple_update(simple_update), cast_arguments(cast_arguments) {}
+		Function(name), return_type(return_type), state_size(state_size), initialize(initialize), update(update), finalize(finalize), simple_initialize(simple_initialize), simple_update(simple_update), cast_arguments(cast_arguments) {}
+
+	get_return_type_function_t return_type;
 
 	//! The hashed aggregate state sizing function
 	aggregate_size_t state_size;

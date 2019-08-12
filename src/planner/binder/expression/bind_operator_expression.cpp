@@ -37,8 +37,8 @@ static SQLType ResolveAddType(OperatorExpression &op, vector<BoundExpression *> 
 			// integers can be added to dates, the result is a date again
 			// need to cast child to INTEGER
 			children[1]->expr =
-			    AddCastToType(move(children[1]->expr), children[1]->sql_type, SQLType(SQLTypeId::INTEGER));
-			return SQLType(SQLTypeId::DATE);
+			    AddCastToType(move(children[1]->expr), children[1]->sql_type, SQLType::INTEGER);
+			return SQLType::DATE;
 		default:
 			break;
 		}
@@ -56,7 +56,7 @@ static SQLType ResolveSubtractType(OperatorExpression &op, vector<BoundExpressio
 		switch (children[1]->sql_type.id) {
 		case SQLTypeId::DATE:
 			// dates can be subtracted from dates, the result is an integer (amount of days)
-			return SQLType(SQLTypeId::INTEGER);
+			return SQLType::INTEGER;
 		case SQLTypeId::TINYINT:
 		case SQLTypeId::SMALLINT:
 		case SQLTypeId::INTEGER:
@@ -64,8 +64,8 @@ static SQLType ResolveSubtractType(OperatorExpression &op, vector<BoundExpressio
 			// integers can be subtracted from dates, the result is a date again
 			// need to cast child to INTEGER
 			children[1]->expr =
-			    AddCastToType(move(children[1]->expr), children[1]->sql_type, SQLType(SQLTypeId::INTEGER));
-			return SQLType(SQLTypeId::DATE);
+			    AddCastToType(move(children[1]->expr), children[1]->sql_type, SQLType::INTEGER);
+			return SQLType::DATE;
 		default:
 			break;
 		}

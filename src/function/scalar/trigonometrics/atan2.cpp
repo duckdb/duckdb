@@ -6,7 +6,7 @@ using namespace std;
 
 namespace duckdb {
 
-void atan2_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
+static void atan2_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                     Vector &result) {
 	assert(input_count == 2);
 
@@ -17,15 +17,8 @@ void atan2_function(ExpressionExecutor &exec, Vector inputs[], index_t input_cou
 	VectorOperations::ATan2(inputs[0], inputs[1], result);
 }
 
-bool atan2_matches_arguments(vector<SQLType> &arguments) {
-	if (arguments.size() != 2) {
-		return false;
-	}
-	if ((!IsNumericType(arguments[0].id) && arguments[0].id != SQLTypeId::SQLNULL) ||
-	    (!IsNumericType(arguments[1].id) && arguments[1].id != SQLTypeId::SQLNULL)) {
-		return false;
-	}
-	return true;
+void Atan2::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("atan2", { SQLType::DOUBLE, SQLType::DOUBLE }, SQLType::DOUBLE, atan2_function));
 }
 
 }

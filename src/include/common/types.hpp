@@ -83,6 +83,20 @@ struct SQLType {
 	void Serialize(Serializer &serializer);
 	//! Deserializes a blob back into an SQLType
 	static SQLType Deserialize(Deserializer &source);
+public:
+	static const SQLType SQLNULL;
+	static const SQLType BOOLEAN;
+	static const SQLType TINYINT;
+	static const SQLType SMALLINT;
+	static const SQLType INTEGER;
+	static const SQLType BIGINT;
+	static const SQLType FLOAT;
+	static const SQLType DOUBLE;
+	static const SQLType DATE;
+	static const SQLType TIMESTAMP;
+	static const SQLType VARCHAR;
+
+	static const vector<SQLType> NUMERIC;
 };
 
 bool IsNumericType(SQLTypeId type);

@@ -20,6 +20,7 @@ class ExpressionExecutor;
 class Transaction;
 
 class AggregateFunction;
+class FunctionSet;
 class ScalarFunction;
 class TableFunction;
 
@@ -30,11 +31,6 @@ struct FunctionData {
 	virtual unique_ptr<FunctionData> Copy() = 0;
 };
 
-//! Type used for checking if a function matches the input arguments
-typedef bool (*matches_argument_function_t)(vector<SQLType> &arguments);
-//! Gets the return type of the function given the types of the input argument
-typedef SQLType (*get_return_type_function_t)(vector<SQLType> &arguments);
-
 //! Function is the base class used for any type of function (scalar, aggregate or simple function)
 class Function {
 public:
@@ -43,19 +39,23 @@ public:
 
 	//! The name of the function
 	string name;
+public:
+	//! Returns the formatted string name(arg1, arg2, ...)
+	static string CallToString(string name, vector<SQLType> arguments);
+	//! Returns the formatted string name(arg1, arg2..) -> return_type
+	static string CallToString(string name, vector<SQLType> arguments, SQLType return_type);
 };
 
 class SimpleFunction : public Function {
 public:
-	SimpleFunction(string name, matches_argument_function_t matches, get_return_type_function_t return_type, bool has_side_effects) :
-		Function(name), matches(matches), return_type(return_type), has_side_effects(has_side_effects) { }
+	SimpleFunction(string name, vector<SQLType> arguments, SQLType return_type, bool has_side_effects) :
+		Function(name), arguments(move(arguments)), return_type(return_type), has_side_effects(has_side_effects) { }
 	virtual ~SimpleFunction() {}
 
-	//! Function that checks whether or not a set of arguments matches
-	matches_argument_function_t matches;
-	//! Function that gives the return type of the function given the input
-	//! arguments
-	get_return_type_function_t return_type;
+	//! The set of arguments of the function
+	vector<SQLType> arguments;
+	//! Return type of the function
+	SQLType return_type;
 	//! Whether or not the function has side effects (e.g. sequence increments, random() functions, NOW()). Functions
 	//! with side-effects cannot be constant-folded.
 	bool has_side_effects;
@@ -67,14 +67,20 @@ public:
 
 	//! Initialize a catalog with all built-in functions
 	void Initialize();
+public:
+	void AddFunction(AggregateFunction function);
+	void AddFunction(FunctionSet set);
+	void AddFunction(ScalarFunction function);
+	void AddFunction(TableFunction function);
 private:
 	Transaction &transaction;
 	Catalog &catalog;
 private:
-	void AddFunction(AggregateFunction function);
-	void AddFunction(ScalarFunction function);
-	void AddFunction(TableFunction function);
-private:
+	template<class T>
+	void Register() {
+		T::RegisterFunction(*this);
+	}
+
 	// table-producing functions
 	void RegisterSQLiteFunctions();
 

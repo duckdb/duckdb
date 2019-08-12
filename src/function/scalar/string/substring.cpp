@@ -7,7 +7,7 @@ using namespace std;
 
 namespace duckdb {
 
-void substring_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
+static void substring_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                         Vector &result) {
 	assert(input_count == 3);
 	auto &input = inputs[0];
@@ -77,13 +77,8 @@ void substring_function(ExpressionExecutor &exec, Vector inputs[], index_t input
 	    });
 }
 
-bool substring_matches_arguments(vector<SQLType> &arguments) {
-	return arguments.size() == 3 && arguments[0].id == SQLTypeId::VARCHAR && arguments[1].id == SQLTypeId::INTEGER &&
-	       arguments[2].id == SQLTypeId::INTEGER;
-}
-
-SQLType substring_get_return_type(vector<SQLType> &arguments) {
-	return SQLType(SQLTypeId::VARCHAR);
+void Substring::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("substring", { SQLType::VARCHAR, SQLType::INTEGER, SQLType::INTEGER }, SQLType::BOOLEAN, substring_function));
 }
 
 } // namespace duckdb

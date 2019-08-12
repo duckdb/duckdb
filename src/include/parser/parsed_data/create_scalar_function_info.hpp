@@ -10,15 +10,20 @@
 
 #include "parser/parsed_data/create_function_info.hpp"
 #include "function/scalar_function.hpp"
+#include "function/function_set.hpp"
 
 namespace duckdb {
 
 struct CreateScalarFunctionInfo : public CreateFunctionInfo {
-	CreateScalarFunctionInfo(ScalarFunction function) : CreateFunctionInfo(FunctionType::SCALAR), function(function) {
+	CreateScalarFunctionInfo(ScalarFunction function) : CreateFunctionInfo(FunctionType::SCALAR) {
 		this->name = function.name;
+		functions.push_back(function);
+	}
+	CreateScalarFunctionInfo(FunctionSet set) : CreateFunctionInfo(FunctionType::SCALAR), functions(move(set.functions)) {
+		this->name = set.name;
 	}
 
-	ScalarFunction function;
+	vector<ScalarFunction> functions;
 };
 
 } // namespace duckdb

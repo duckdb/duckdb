@@ -36,7 +36,7 @@ public:
 		return {"Count"};
 	}
 	vector<SQLType> GetTypes() override {
-		return {SQLType(SQLTypeId::BIGINT)};
+		return {SQLType::BIGINT};
 	}
 };
 } // namespace duckdb

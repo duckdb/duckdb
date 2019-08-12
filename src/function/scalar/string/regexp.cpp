@@ -24,7 +24,7 @@ unique_ptr<FunctionData> RegexpMatchesBindData::Copy() {
 	return make_unique<RegexpMatchesBindData>(move(constant_pattern), range_min, range_max, range_success);
 }
 
-void regexp_matches_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
+static void regexp_matches_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
                              BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 2);
 	auto &strings = inputs[0];
@@ -67,15 +67,7 @@ void regexp_matches_function(ExpressionExecutor &exec, Vector inputs[], index_t 
 	                             });
 }
 
-bool regexp_matches_matches_arguments(vector<SQLType> &arguments) {
-	return arguments.size() == 2 && arguments[0].id == SQLTypeId::VARCHAR && arguments[1].id == SQLTypeId::VARCHAR;
-}
-
-SQLType regexp_matches_get_return_type(vector<SQLType> &arguments) {
-	return SQLType(SQLTypeId::BOOLEAN);
-}
-
-unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionExpression &expr, ClientContext &context) {
+static unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionExpression &expr, ClientContext &context) {
 	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
 	assert(expr.children.size() == 2);
 	if (expr.children[1]->IsScalar()) {
@@ -102,7 +94,7 @@ unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionExpressio
 	return make_unique<RegexpMatchesBindData>(nullptr, "", "", false);
 }
 
-void regexp_replace_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
+static void regexp_replace_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
                              BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 3);
 	auto &strings = inputs[0];
@@ -143,13 +135,9 @@ void regexp_replace_function(ExpressionExecutor &exec, Vector inputs[], index_t 
 	    });
 }
 
-bool regexp_replace_matches_arguments(vector<SQLType> &arguments) {
-	return arguments.size() == 3 && arguments[0].id == SQLTypeId::VARCHAR && arguments[1].id == SQLTypeId::VARCHAR &&
-	       arguments[2].id == SQLTypeId::VARCHAR;
-}
-
-SQLType regexp_replace_get_return_type(vector<SQLType> &arguments) {
-	return SQLType(SQLTypeId::VARCHAR);
+void Regexp::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("regexp_matches", { SQLType::VARCHAR, SQLType::VARCHAR }, SQLType::BOOLEAN, regexp_matches_function, false, regexp_matches_get_bind_function));
+	set.AddFunction(ScalarFunction("regexp_replace", { SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR }, SQLType::VARCHAR, regexp_replace_function));
 }
 
 } // namespace duckdb

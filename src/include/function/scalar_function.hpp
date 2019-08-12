@@ -23,8 +23,11 @@ typedef void (*dependency_function_t)(BoundFunctionExpression &expr, unordered_s
 
 class ScalarFunction : public SimpleFunction {
 public:
-	ScalarFunction(string name, matches_argument_function_t matches, get_return_type_function_t return_type, scalar_function_t function, bool has_side_effects = false, bind_scalar_function_t bind = nullptr, dependency_function_t dependency = nullptr) :
-		SimpleFunction(name, matches, return_type, has_side_effects), function(function), bind(bind), dependency(dependency) {}
+	ScalarFunction(string name, vector<SQLType> arguments, SQLType return_type, scalar_function_t function, bool has_side_effects = false, bind_scalar_function_t bind = nullptr, dependency_function_t dependency = nullptr) :
+		SimpleFunction(name, arguments, return_type, has_side_effects), function(function), bind(bind), dependency(dependency) {}
+
+	ScalarFunction(vector<SQLType> arguments, SQLType return_type, scalar_function_t function, bool has_side_effects = false, bind_scalar_function_t bind = nullptr, dependency_function_t dependency = nullptr) :
+		ScalarFunction(string(), arguments, return_type, function, has_side_effects, bind, dependency) {}
 
 	//! The main scalar function to execute
 	scalar_function_t function;
@@ -32,6 +35,13 @@ public:
 	bind_scalar_function_t bind;
 	// The dependency function (if any)
 	dependency_function_t dependency;
+
+	bool operator==(const ScalarFunction &rhs) const {
+		return function == rhs.function && bind == rhs.bind && dependency == rhs.dependency;
+	}
+	bool operator!=(const ScalarFunction &rhs) const {
+		return !(*this == rhs);
+	}
 };
 
 } // namespace duckdb

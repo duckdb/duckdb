@@ -9,10 +9,10 @@ unique_ptr<ParsedExpression> Transformer::TransformValue(postgres::Value val) {
 	switch (val.type) {
 	case T_Integer:
 		assert(val.val.ival <= numeric_limits<int32_t>::max());
-		return make_unique<ConstantExpression>(SQLType(SQLTypeId::INTEGER), Value::INTEGER((int32_t)val.val.ival));
+		return make_unique<ConstantExpression>(SQLType::INTEGER, Value::INTEGER((int32_t)val.val.ival));
 	case T_BitString: // FIXME: this should actually convert to BLOB
 	case T_String:
-		return make_unique<ConstantExpression>(SQLType(SQLTypeId::VARCHAR), Value(string(val.val.str)));
+		return make_unique<ConstantExpression>(SQLType::VARCHAR, Value(string(val.val.str)));
 	case T_Float:
 		// try to parse as long long
 		try {
@@ -23,12 +23,12 @@ unique_ptr<ParsedExpression> Transformer::TransformValue(postgres::Value val) {
 				// didn't parse entire string!
 				throw Exception("not a bigint!");
 			}
-			return make_unique<ConstantExpression>(SQLType(SQLTypeId::BIGINT), Value::BIGINT(value));
+			return make_unique<ConstantExpression>(SQLType::BIGINT, Value::BIGINT(value));
 		} catch (...) {
-			return make_unique<ConstantExpression>(SQLType(SQLTypeId::DOUBLE), Value(stod(string(val.val.str))));
+			return make_unique<ConstantExpression>(SQLType::DOUBLE, Value(stod(string(val.val.str))));
 		}
 	case T_Null:
-		return make_unique<ConstantExpression>(SQLType(SQLTypeId::SQLNULL), Value());
+		return make_unique<ConstantExpression>(SQLType::SQLNULL, Value());
 	default:
 		throw NotImplementedException("Value not implemented!");
 	}

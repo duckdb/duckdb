@@ -115,7 +115,7 @@ static int64_t extract_element(SpecifierType type, date_t element) {
 	}
 }
 
-void date_part_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
+static void date_part_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                         Vector &result) {
 	result.Initialize(TypeId::BIGINT);
 	result.nullmask = inputs[1].nullmask;
@@ -141,13 +141,8 @@ void date_part_function(ExpressionExecutor &exec, Vector inputs[], index_t input
 	}
 }
 
-bool date_part_matches_arguments(vector<SQLType> &arguments) {
-	return arguments.size() == 2 && arguments[0].id == SQLTypeId::VARCHAR &&
-	       (arguments[1].id == SQLTypeId::DATE || arguments[1].id == SQLTypeId::TIMESTAMP);
-}
-
-SQLType date_part_get_return_type(vector<SQLType> &arguments) {
-	return SQLType(SQLTypeId::BIGINT);
+void DatePart::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("date_part", { SQLType::VARCHAR, SQLType::DATE }, SQLType::BIGINT, date_part_function));
 }
 
 } // namespace duckdb

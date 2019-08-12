@@ -9,6 +9,27 @@ using namespace std;
 
 namespace duckdb {
 
+const SQLType SQLType::SQLNULL = SQLType(SQLTypeId::SQLNULL);
+const SQLType SQLType::BOOLEAN = SQLType(SQLTypeId::BOOLEAN);
+const SQLType SQLType::TINYINT = SQLType(SQLTypeId::TINYINT);
+const SQLType SQLType::SMALLINT = SQLType(SQLTypeId::SMALLINT);
+const SQLType SQLType::INTEGER = SQLType(SQLTypeId::INTEGER);
+const SQLType SQLType::BIGINT = SQLType(SQLTypeId::BIGINT);
+const SQLType SQLType::FLOAT = SQLType(SQLTypeId::FLOAT);
+const SQLType SQLType::DOUBLE = SQLType(SQLTypeId::DOUBLE);
+const SQLType SQLType::DATE = SQLType(SQLTypeId::DATE);
+const SQLType SQLType::TIMESTAMP = SQLType(SQLTypeId::TIMESTAMP);
+const SQLType SQLType::VARCHAR = SQLType(SQLTypeId::VARCHAR);
+
+const vector<SQLType> SQLType::NUMERIC = {
+	SQLType::TINYINT,
+	SQLType::SMALLINT,
+	SQLType::INTEGER,
+	SQLType::BIGINT,
+	SQLType::FLOAT,
+	SQLType::DOUBLE
+};
+
 const TypeId ROW_TYPE = TypeId::BIGINT;
 
 string TypeIdToString(TypeId type) {
@@ -74,19 +95,19 @@ SQLType SQLTypeFromInternalType(TypeId type) {
 	case TypeId::BOOLEAN:
 		return SQLType(SQLTypeId::BOOLEAN);
 	case TypeId::TINYINT:
-		return SQLType(SQLTypeId::TINYINT);
+		return SQLType::TINYINT;
 	case TypeId::SMALLINT:
-		return SQLType(SQLTypeId::SMALLINT);
+		return SQLType::SMALLINT;
 	case TypeId::INTEGER:
-		return SQLType(SQLTypeId::INTEGER);
+		return SQLType::INTEGER;
 	case TypeId::BIGINT:
-		return SQLType(SQLTypeId::BIGINT);
+		return SQLType::BIGINT;
 	case TypeId::FLOAT:
-		return SQLType(SQLTypeId::FLOAT);
+		return SQLType::FLOAT;
 	case TypeId::DOUBLE:
-		return SQLType(SQLTypeId::DOUBLE);
+		return SQLType::DOUBLE;
 	case TypeId::VARCHAR:
-		return SQLType(SQLTypeId::VARCHAR);
+		return SQLType::VARCHAR;
 	case TypeId::VARBINARY:
 		return SQLType(SQLTypeId::VARBINARY);
 	default:

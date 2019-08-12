@@ -82,7 +82,7 @@ static int64_t next_sequence_value(Transaction &transaction, SequenceCatalogEntr
 	return result;
 }
 
-void nextval_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
+static void nextval_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                       Vector &result) {
 	auto &info = (NextvalBindData &)*expr.bind_info;
 	assert(input_count == 1 && inputs[0].type == TypeId::VARCHAR);
@@ -121,18 +121,7 @@ void nextval_function(ExpressionExecutor &exec, Vector inputs[], index_t input_c
 	}
 }
 
-bool nextval_matches_arguments(vector<SQLType> &arguments) {
-	if (arguments.size() != 1) {
-		return false;
-	}
-	return arguments[0].id == SQLTypeId::VARCHAR;
-}
-
-SQLType nextval_get_return_type(vector<SQLType> &arguments) {
-	return SQLType(SQLTypeId::BIGINT);
-}
-
-unique_ptr<FunctionData> nextval_bind(BoundFunctionExpression &expr, ClientContext &context) {
+static unique_ptr<FunctionData> nextval_bind(BoundFunctionExpression &expr, ClientContext &context) {
 	SequenceCatalogEntry *sequence = nullptr;
 	if (expr.children[0]->IsFoldable()) {
 		string schema, seq;
@@ -146,11 +135,15 @@ unique_ptr<FunctionData> nextval_bind(BoundFunctionExpression &expr, ClientConte
 	return make_unique<NextvalBindData>(context, sequence);
 }
 
-void nextval_dependency(BoundFunctionExpression &expr, unordered_set<CatalogEntry *> &dependencies) {
+static void nextval_dependency(BoundFunctionExpression &expr, unordered_set<CatalogEntry *> &dependencies) {
 	auto &info = (NextvalBindData &)*expr.bind_info;
 	if (info.sequence) {
 		dependencies.insert(info.sequence);
 	}
+}
+
+void Nextval::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("nextval", { SQLType::VARCHAR }, SQLType::BIGINT, nextval_function, true, nextval_bind, nextval_dependency));
 }
 
 } // namespace duckdb

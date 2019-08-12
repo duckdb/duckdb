@@ -10,7 +10,7 @@ using namespace std;
 
 namespace duckdb {
 
-void concat_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
+static void concat_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                      Vector &result) {
 	assert(input_count == 2);
 	auto &input1 = inputs[0];
@@ -49,13 +49,9 @@ void concat_function(ExpressionExecutor &exec, Vector inputs[], index_t input_co
 	                             });
 }
 
-// TODO: extend to support arbitrary number of arguments, not only two
-bool concat_matches_arguments(vector<SQLType> &arguments) {
-	return arguments.size() == 2 && arguments[0].id == SQLTypeId::VARCHAR && arguments[1].id == SQLTypeId::VARCHAR;
-}
-
-SQLType concat_get_return_type(vector<SQLType> &arguments) {
-	return SQLType(SQLTypeId::VARCHAR);
+void Concat::RegisterFunction(BuiltinFunctions &set) {
+	// TODO: extend to support arbitrary number of arguments, not only two
+	set.AddFunction(ScalarFunction("concat", { SQLType::VARCHAR, SQLType::VARCHAR }, SQLType::VARCHAR, concat_function));
 }
 
 } // namespace duckdb

@@ -17,9 +17,9 @@ SQLType sum_get_return_type(vector<SQLType> &arguments) {
 	case SQLTypeId::SMALLINT:
 	case SQLTypeId::INTEGER:
 	case SQLTypeId::BIGINT:
-		return SQLType(SQLTypeId::BIGINT);
+		return SQLType::BIGINT;
 	case SQLTypeId::FLOAT:
-		return SQLType(SQLTypeId::FLOAT);
+		return SQLType::FLOAT;
 	case SQLTypeId::DOUBLE:
 	case SQLTypeId::DECIMAL:
 		return SQLType(SQLTypeId::DECIMAL);

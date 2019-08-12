@@ -31,7 +31,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, index_t depth) {
 	SQLType col_type;
 	if (entry->second == COLUMN_IDENTIFIER_ROW_ID) {
 		// row id: BIGINT type
-		col_type = SQLType(SQLTypeId::BIGINT);
+		col_type = SQLType::BIGINT;
 	} else {
 		// normal column: fetch type from base column
 		auto &col = bound->table->columns[entry->second];

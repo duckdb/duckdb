@@ -16,7 +16,7 @@ static SQLType ResolveWindowExpressionType(ExpressionType window_type, SQLType c
 		case SQLTypeId::SMALLINT:
 		case SQLTypeId::INTEGER:
 		case SQLTypeId::BIGINT:
-			return SQLType(SQLTypeId::BIGINT);
+			return SQLType::BIGINT;
 		default:
 			return child_type;
 		}
@@ -30,7 +30,7 @@ static SQLType ResolveWindowExpressionType(ExpressionType window_type, SQLType c
 	case ExpressionType::WINDOW_RANK:
 	case ExpressionType::WINDOW_RANK_DENSE:
 	case ExpressionType::WINDOW_NTILE:
-		return SQLType(SQLTypeId::BIGINT);
+		return SQLType::BIGINT;
 	case ExpressionType::WINDOW_MIN:
 	case ExpressionType::WINDOW_MAX:
 	case ExpressionType::WINDOW_FIRST_VALUE:

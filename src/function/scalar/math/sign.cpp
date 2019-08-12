@@ -5,11 +5,19 @@ using namespace std;
 
 namespace duckdb {
 
-void sign_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
+static void sign_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                    Vector &result) {
 	assert(input_count == 1);
 	result.Initialize(TypeId::TINYINT);
 	VectorOperations::Sign(inputs[0], result);
+}
+
+void Sign::RegisterFunction(BuiltinFunctions &set) {
+	FunctionSet sign("sign");
+	for(auto &type : SQLType::NUMERIC) {
+		sign.AddFunction(ScalarFunction({ type }, SQLType::TINYINT, sign_function));
+	}
+	set.AddFunction(sign);
 }
 
 }

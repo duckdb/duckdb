@@ -6,11 +6,11 @@ namespace duckdb {
 
 void BuiltinFunctions::RegisterSQLiteFunctions() {
 	AddFunction(TableFunction("sqlite_master", {}, {
-		SQLType(SQLTypeId::VARCHAR),
-		SQLType(SQLTypeId::VARCHAR),
-		SQLType(SQLTypeId::VARCHAR),
-		SQLType(SQLTypeId::INTEGER),
-		SQLType(SQLTypeId::VARCHAR)}, {
+		SQLType::VARCHAR,
+		SQLType::VARCHAR,
+		SQLType::VARCHAR,
+		SQLType::INTEGER,
+		SQLType::VARCHAR}, {
 		"type",
 		"name",
 		"tbl_name",
@@ -19,12 +19,12 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	}, sqlite_master_init, sqlite_master, nullptr));
 
 	AddFunction(TableFunction("pragma_table_info",
-		{ SQLType(SQLTypeId::VARCHAR) }, {
-		SQLType(SQLTypeId::INTEGER),
-		SQLType(SQLTypeId::VARCHAR),
-		SQLType(SQLTypeId::VARCHAR),
+		{ SQLType::VARCHAR }, {
+		SQLType::INTEGER,
+		SQLType::VARCHAR,
+		SQLType::VARCHAR,
 		SQLType(SQLTypeId::BOOLEAN),
-		SQLType(SQLTypeId::VARCHAR),
+		SQLType::VARCHAR,
 		SQLType(SQLTypeId::BOOLEAN)
 	}, {
 		"cid",
