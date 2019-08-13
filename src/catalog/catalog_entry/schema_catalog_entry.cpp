@@ -208,7 +208,7 @@ void SchemaCatalogEntry::CreateFunction(Transaction &transaction, CreateFunction
 CatalogEntry *SchemaCatalogEntry::GetFunction(Transaction &transaction, const string &name, bool if_exists) {
 	auto entry = functions.GetEntry(transaction, name);
 	if (!entry && !if_exists) {
-		throw CatalogException("Aggregate Function with name %s does not exist!", name.c_str());
+		throw CatalogException("Function with name %s does not exist!", name.c_str());
 	}
 	return entry;
 }

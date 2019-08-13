@@ -5,6 +5,7 @@
 #include "planner/expression/bound_cast_expression.hpp"
 #include "planner/expression/bound_function_expression.hpp"
 #include "planner/expression_binder.hpp"
+#include "common/cast_rules.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -23,15 +24,25 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, index_
 
 static index_t BindFunctionFromArguments(vector<ScalarFunction> &functions, vector<SQLType> &arguments) {
 	index_t best_function = INVALID_INDEX;
+	int64_t best_score = numeric_limits<int64_t>::max();
 	for(index_t f_idx = 0; f_idx < functions.size(); f_idx++) {
 		auto &func = functions[f_idx];
 		if (func.arguments.size() != arguments.size()) {
 			// invalid argument count: check the next function
 			continue;
 		}
-		int32_t score = 0;
+		// check the arguments of the function
+		int64_t score = 0;
 		for(index_t i = 0; i < arguments.size(); i++) {
-			if (func.arguments[i] != arguments[i]) {
+			if (arguments[i] == func.arguments[i]) {
+				// arguments match: do nothing
+				continue;
+			}
+			if (CastRules::ImplicitCast(arguments[i], func.arguments[i])) {
+				// we can implicitly cast, add one to the amount of required casts
+				score++;
+			} else {
+				// we can't implicitly cast: throw an error
 				score = -1;
 				break;
 			}
@@ -40,6 +51,10 @@ static index_t BindFunctionFromArguments(vector<ScalarFunction> &functions, vect
 			// auto casting was not possible
 			continue;
 		}
+		if (score >= best_score) {
+			continue;
+		}
+		best_score = score;
 		best_function = f_idx;
 	}
 	return best_function;

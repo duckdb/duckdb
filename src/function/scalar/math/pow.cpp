@@ -12,7 +12,10 @@ static void pow_function(ExpressionExecutor &exec, Vector inputs[], index_t inpu
 }
 
 void Pow::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction( { SQLType::DOUBLE, SQLType::DOUBLE }, SQLType::DOUBLE, pow_function));
+	ScalarFunction power_function("pow", { SQLType::DOUBLE, SQLType::DOUBLE }, SQLType::DOUBLE, pow_function);
+	set.AddFunction(power_function);
+	power_function.name = "power";
+	set.AddFunction(power_function);
 }
 
 }

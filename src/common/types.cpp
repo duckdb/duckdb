@@ -27,7 +27,8 @@ const vector<SQLType> SQLType::NUMERIC = {
 	SQLType::INTEGER,
 	SQLType::BIGINT,
 	SQLType::FLOAT,
-	SQLType::DOUBLE
+	SQLType::DOUBLE,
+	SQLType(SQLTypeId::DECIMAL)
 };
 
 const TypeId ROW_TYPE = TypeId::BIGINT;

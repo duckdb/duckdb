@@ -24,9 +24,12 @@ FunctionExpression::FunctionExpression(string function_name, vector<unique_ptr<P
 string FunctionExpression::ToString() const {
 	string result = function_name + "(";
 	for (index_t i = 0; i < children.size(); i++) {
-		result += children[i]->ToString() + (i + 1 == children.size() ? ")" : ",");
+		if (i != 0) {
+			result += ", ";
+		}
+		result += children[i]->ToString();
 	}
-	return result;
+	return result + ")";
 }
 
 bool FunctionExpression::Equals(const BaseExpression *other_) const {
