@@ -13,7 +13,7 @@ ArithmeticSimplificationRule::ArithmeticSimplificationRule(ExpressionRewriter &r
 	op->matchers.push_back(make_unique<ConstantExpressionMatcher>());
 	op->policy = SetMatcher::Policy::SOME;
 	// we only match on simple arithmetic expressions (+, -, *, /)
-	op->op_matcher = make_unique<ManyOperatorTypeMatcher>(vector<OperatorType>{OperatorType::ADD, OperatorType::SUBTRACT, OperatorType::MULTIPLY, OperatorType::DIVIDE});
+	op->function = make_unique<ManyFunctionMatcher>(unordered_set<string>{"+", "-", "*", "/"});
 	// and only with numeric results
 	op->type = make_unique<IntegerTypeMatcher>();
 	root = move(op);
@@ -29,29 +29,26 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 	if (constant->value.is_null) {
 		return make_unique<BoundConstantExpression>(Value(root->return_type));
 	}
-	switch (root->op_type) {
-	case OperatorType::ADD:
+	auto &func_name = root->function.name;
+	if (func_name == "+") {
 		if (constant->value == 0) {
 			// addition with 0
 			// we can remove the entire operator and replace it with the non-constant child
 			return move(root->children[1 - constant_child]);
 		}
-		break;
-	case OperatorType::SUBTRACT:
+	} else if (func_name == "-") {
 		if (constant_child == 1 && constant->value == 0) {
 			// subtraction by 0
 			// we can remove the entire operator and replace it with the non-constant child
 			return move(root->children[1 - constant_child]);
 		}
-		break;
-	case OperatorType::MULTIPLY:
+	} else if (func_name == "*") {
 		if (constant->value == 1) {
 			// multiply with 1, replace with non-constant child
 			return move(root->children[1 - constant_child]);
 		}
-		break;
-	default:
-		assert(root->op_type == OperatorType::DIVIDE);
+	} else {
+		assert(func_name == "/");
 		if (constant_child == 1) {
 			if (constant->value == 1) {
 				// divide by 1, replace with non-constant child
@@ -61,7 +58,6 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 				return make_unique<BoundConstantExpression>(Value(root->return_type));
 			}
 		}
-		break;
 	}
 	return nullptr;
 }

@@ -11,7 +11,7 @@ static void subtract_function(ExpressionExecutor &exec, Vector inputs[], index_t
 }
 
 void Subtract::RegisterFunction(BuiltinFunctions &set) {
-	FunctionSet functions("subtract");
+	FunctionSet functions("-");
 	for(auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({ type, type }, type, subtract_function));
 	}

@@ -51,7 +51,10 @@ static void concat_function(ExpressionExecutor &exec, Vector inputs[], index_t i
 
 void Concat::RegisterFunction(BuiltinFunctions &set) {
 	// TODO: extend to support arbitrary number of arguments, not only two
-	set.AddFunction(ScalarFunction("concat", { SQLType::VARCHAR, SQLType::VARCHAR }, SQLType::VARCHAR, concat_function));
+	ScalarFunction concat = ScalarFunction("concat", { SQLType::VARCHAR, SQLType::VARCHAR }, SQLType::VARCHAR, concat_function);
+	set.AddFunction(concat);
+	concat.name = "||";
+	set.AddFunction(concat);
 }
 
 } // namespace duckdb

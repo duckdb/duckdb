@@ -11,7 +11,7 @@ static void add_function(ExpressionExecutor &exec, Vector inputs[], index_t inpu
 }
 
 void Add::RegisterFunction(BuiltinFunctions &set) {
-	FunctionSet functions("add");
+	FunctionSet functions("+");
 	for(auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({ type, type }, type, add_function));
 	}

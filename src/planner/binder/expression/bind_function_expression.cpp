@@ -122,7 +122,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	// types match up, get the result type
 	auto return_type = bound_function.return_type;
 	// now create the function
-	auto result = make_unique<BoundFunctionExpression>(GetInternalType(return_type), bound_function, function.op_type);
+	auto result = make_unique<BoundFunctionExpression>(GetInternalType(return_type), bound_function, function.is_operator);
 	result->children = move(children);
 	if (bound_function.bind) {
 		result->bind_info = bound_function.bind(*result, context);

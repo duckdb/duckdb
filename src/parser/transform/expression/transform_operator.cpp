@@ -35,36 +35,6 @@ ExpressionType Transformer::OperatorToExpressionType(string &op) {
 	return ExpressionType::INVALID;
 }
 
-static string GetOperatorFunction(OperatorType op_type) {
-	switch(op_type) {
-	case OperatorType::ADD:
-		return "add";
-	case OperatorType::SUBTRACT:
-		return "subtract";
-	case OperatorType::MULTIPLY:
-		return "multiply";
-	case OperatorType::DIVIDE:
-		return "divide";
-	case OperatorType::MOD:
-		return "mod";
-	case OperatorType::BITWISE_LSHIFT:
-		return "bitwise_lshift";
-	case OperatorType::BITWISE_RSHIFT:
-		return "bitwise_rshift";
-	case OperatorType::BITWISE_AND:
-		return "bitwise_and";
-	case OperatorType::BITWISE_OR:
-		return "bitwise_or";
-	case OperatorType::BITWISE_XOR:
-		return "bitwise_xor";
-	default:
-		assert(0);
-		throw Exception("Unknown operator type");
-	}
-	// not an arithmetic
-	return string();
-}
-
 unique_ptr<ParsedExpression> Transformer::TransformUnaryOperator(string op, unique_ptr<ParsedExpression> child) {
 	if (op == "+") {
 		return child;
@@ -82,10 +52,7 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(string op, uni
 	children.push_back(move(left));
 	children.push_back(move(right));
 
-	if (op == "||") {
-		// concat operator, create function
-		return make_unique<FunctionExpression>("concat", children);
-	} else if (op == "~" || op == "!~") {
+	if (op == "~" || op == "!~") {
 		// rewrite SIMILAR TO into regexp_matches('asdf', '.*sd.*')
 		bool invert_similar = op == "!~";
 
@@ -96,18 +63,15 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(string op, uni
 			return move(result);
 		}
 	} else {
-		OperatorType op_type = OperatorTypeFromOperator(op);
-		if (op_type != OperatorType::NONE) {
-			// built-in operator function
-			auto result = make_unique<FunctionExpression>(schema, GetOperatorFunction(op_type), children);
-			result->op_type = op_type;
-			return move(result);
-		} else {
-			auto target_type = OperatorToExpressionType(op);
-			if (target_type == ExpressionType::INVALID) {
-				throw NotImplementedException("Operator not implemented.");
-			}
+		auto target_type = OperatorToExpressionType(op);
+		if (target_type != ExpressionType::INVALID) {
+			// built-in comparison operator
 			return make_unique<ComparisonExpression>(target_type, move(children[0]), move(children[1]));
+		} else {
+			// built-in operator function
+			auto result = make_unique<FunctionExpression>(schema, op, children);
+			result->is_operator = true;
+			return move(result);
 		}
 	}
 }

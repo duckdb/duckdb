@@ -9,5 +9,6 @@ FunctionSet::FunctionSet(string name) :
 }
 
 void FunctionSet::AddFunction(ScalarFunction function) {
+	function.name = name;
 	functions.push_back(function);
 }

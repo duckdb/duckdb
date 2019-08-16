@@ -86,7 +86,7 @@ bool FunctionExpressionMatcher::Match(Expression *expr_, vector<Expression *> &b
 		return false;
 	}
 	auto expr = (BoundFunctionExpression *)expr_;
-	if (!OperatorTypeMatcher::Match(op_matcher, expr->op_type)) {
+	if (!FunctionMatcher::Match(function, expr->function.name)) {
 		return false;
 	}
 	if (!SetMatcher::Match(matchers, expr->children, bindings, policy)) {

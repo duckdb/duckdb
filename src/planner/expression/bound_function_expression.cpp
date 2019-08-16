@@ -6,9 +6,9 @@
 using namespace duckdb;
 using namespace std;
 
-BoundFunctionExpression::BoundFunctionExpression(TypeId return_type, ScalarFunction bound_function, OperatorType op_type)
+BoundFunctionExpression::BoundFunctionExpression(TypeId return_type, ScalarFunction bound_function, bool is_operator)
     : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, return_type),
-      function(bound_function), op_type(op_type) {
+      function(bound_function), is_operator(is_operator) {
 }
 
 bool BoundFunctionExpression::IsFoldable() const {
@@ -53,7 +53,7 @@ bool BoundFunctionExpression::Equals(const BaseExpression *other_) const {
 }
 
 unique_ptr<Expression> BoundFunctionExpression::Copy() {
-	auto copy = make_unique<BoundFunctionExpression>(return_type, function, op_type);
+	auto copy = make_unique<BoundFunctionExpression>(return_type, function, is_operator);
 	for (auto &child : children) {
 		copy->children.push_back(child->Copy());
 	}

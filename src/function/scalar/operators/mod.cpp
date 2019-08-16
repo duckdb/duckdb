@@ -11,9 +11,11 @@ static void mod_function(ExpressionExecutor &exec, Vector inputs[], index_t inpu
 }
 
 void Mod::RegisterFunction(BuiltinFunctions &set) {
-	FunctionSet functions("mod");
+	FunctionSet functions("%");
 	for(auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({ type, type }, type, mod_function));
 	}
+	set.AddFunction(functions);
+	functions.name = "mod";
 	set.AddFunction(functions);
 }

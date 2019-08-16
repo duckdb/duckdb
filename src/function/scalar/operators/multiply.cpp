@@ -11,7 +11,7 @@ static void multiply_function(ExpressionExecutor &exec, Vector inputs[], index_t
 }
 
 void Multiply::RegisterFunction(BuiltinFunctions &set) {
-	FunctionSet functions("multiply");
+	FunctionSet functions("*");
 	for(auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({ type, type }, type, multiply_function));
 	}

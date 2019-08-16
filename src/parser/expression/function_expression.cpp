@@ -8,26 +8,26 @@ using namespace duckdb;
 using namespace std;
 
 FunctionExpression::FunctionExpression(string schema, string function_name,
-                                       vector<unique_ptr<ParsedExpression>> &children, bool distinct, OperatorType op_type)
+                                       vector<unique_ptr<ParsedExpression>> &children, bool distinct, bool is_operator)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), schema(schema),
-      function_name(StringUtil::Lower(function_name)), op_type(op_type), distinct(distinct) {
+      function_name(StringUtil::Lower(function_name)), is_operator(is_operator), distinct(distinct){
 	for (auto &child : children) {
 		this->children.push_back(move(child));
 	}
 }
 
 FunctionExpression::FunctionExpression(string function_name, vector<unique_ptr<ParsedExpression>> &children,
-                                       bool distinct, OperatorType op_type)
-    : FunctionExpression(DEFAULT_SCHEMA, function_name, children, distinct, op_type) {
+                                       bool distinct, bool is_operator)
+    : FunctionExpression(DEFAULT_SCHEMA, function_name, children, distinct, is_operator) {
 }
 
 string FunctionExpression::ToString() const {
-	if (op_type != OperatorType::NONE) {
+	if (is_operator) {
 		// built-in operator
 		if (children.size() == 1) {
-			return OperatorTypeToOperator(op_type) + children[0]->ToString();
+			return function_name + children[0]->ToString();
 		} else if (children.size() == 2) {
-			return children[0]->ToString() + " " + OperatorTypeToOperator(op_type) + " " + children[1]->ToString();
+			return children[0]->ToString() + " " + function_name + " " + children[1]->ToString();
 		}
 	}
 	// standard function call
@@ -73,7 +73,7 @@ unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	for (auto &child : children) {
 		copy_children.push_back(child->Copy());
 	}
-	auto copy = make_unique<FunctionExpression>(function_name, copy_children, distinct, op_type);
+	auto copy = make_unique<FunctionExpression>(function_name, copy_children, distinct, is_operator);
 	copy->schema = schema;
 	copy->CopyProperties(*this);
 	return move(copy);
@@ -85,7 +85,7 @@ void FunctionExpression::Serialize(Serializer &serializer) {
 	serializer.WriteString(schema);
 	serializer.WriteList(children);
 	serializer.Write<bool>(distinct);
-	serializer.Write<OperatorType>(op_type);
+	serializer.Write<bool>(is_operator);
 }
 
 unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type, Deserializer &source) {
@@ -94,9 +94,9 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type
 	auto schema = source.Read<string>();
 	source.ReadList<ParsedExpression>(children);
 	auto distinct = source.Read<bool>();
-	auto op_type = source.Read<OperatorType>();
+	auto is_operator = source.Read<bool>();
 
-	auto function = make_unique<FunctionExpression>(function_name, children, distinct, op_type);
+	auto function = make_unique<FunctionExpression>(function_name, children, distinct, is_operator);
 	function->schema = schema;
 	return move(function);
 }

@@ -18,7 +18,7 @@ MoveConstantsRule::MoveConstantsRule(ExpressionRewriter &rewriter) : Rule(rewrit
 	// we handle multiplication, addition and subtraction because those are "easy"
 	// integer division makes the division case difficult
 	// e.g. [x / 2 = 3] means [x = 6 OR x = 7] because of truncation -> no clean rewrite rules
-	arithmetic->op_matcher = make_unique<ManyOperatorTypeMatcher>(vector<OperatorType>{OperatorType::ADD, OperatorType::SUBTRACT, OperatorType::MULTIPLY});
+	arithmetic->function = make_unique<ManyFunctionMatcher>(unordered_set<string>{"+", "-", "*"});
 	// we match only on integral numeric types
 	arithmetic->type = make_unique<IntegerTypeMatcher>();
 	arithmetic->matchers.push_back(make_unique<ConstantExpressionMatcher>());
@@ -35,12 +35,13 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 	auto inner_constant = (BoundConstantExpression *)bindings[3];
 
 	int arithmetic_child_index = arithmetic->children[0].get() == inner_constant ? 1 : 0;
-	if (arithmetic->op_type == OperatorType::ADD) {
+	auto &op_type = arithmetic->function.name;
+	if (op_type == "+") {
 		// [x + 1 COMP 10] OR [1 + x COMP 10]
 		// order does not matter in addition:
 		// simply change right side to 10-1 (outer_constant - inner_constant)
 		outer_constant->value = outer_constant->value - inner_constant->value;
-	} else if (arithmetic->op_type == OperatorType::SUBTRACT) {
+	} else if (op_type == "-") {
 		// [x - 1 COMP 10] O R [1 - x COMP 10]
 		// order matters in subtraction:
 		if (arithmetic_child_index == 0) {
@@ -56,7 +57,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 			comparison->type = FlipComparisionExpression(comparison->type);
 		}
 	} else {
-		assert(arithmetic->op_type == OperatorType::MULTIPLY);
+		assert(op_type == "*");
 		// [x * 2 COMP 10] OR [2 * x COMP 10]
 		// order does not matter in multiplication:
 		// change right side to 10/2 (outer_constant / inner_constant)

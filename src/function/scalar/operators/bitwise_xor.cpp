@@ -11,7 +11,7 @@ static void bitwise_xor_function(ExpressionExecutor &exec, Vector inputs[], inde
 }
 
 void BitwiseXor::RegisterFunction(BuiltinFunctions &set) {
-	FunctionSet functions("bitwise_xor");
+	FunctionSet functions("#");
 	for(auto &type : SQLType::INTEGRAL) {
 		functions.AddFunction(ScalarFunction({ type, type }, type, bitwise_xor_function));
 	}
