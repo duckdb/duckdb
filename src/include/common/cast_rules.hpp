@@ -14,8 +14,8 @@ namespace duckdb {
 //! Contains a list of rules for casting
 class CastRules {
 public:
-	//! Returns true if the "from" type can be implicitly casted to the "to" type
-	static bool ImplicitCast(SQLType from, SQLType to);
+	//! Returns the cost of performing an implicit cost from "from" to "to", or -1 if an implicit cast is not possible
+	static int64_t ImplicitCast(SQLType from, SQLType to);
 };
 
 } // namespace duckdb

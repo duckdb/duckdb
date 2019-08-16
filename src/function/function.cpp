@@ -46,6 +46,7 @@ void BuiltinFunctions::Initialize() {
 
 	RegisterDateFunctions();
 	RegisterMathFunctions();
+	RegisterOperators();
 	RegisterSequenceFunctions();
 	RegisterStringFunctions();
 	RegisterTrigonometricsFunctions();

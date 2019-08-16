@@ -3,6 +3,7 @@ add_library_unity(duckdb_common_enums
                   expression_type.cpp
                   join_type.cpp
                   logical_operator_type.cpp
+                  operator_type.cpp
                   physical_operator_type.cpp
                   statement_type.cpp)
 set(ALL_OBJECT_FILES

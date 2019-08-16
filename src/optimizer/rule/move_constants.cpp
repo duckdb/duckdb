@@ -4,24 +4,21 @@
 #include "common/value_operations/value_operations.hpp"
 #include "planner/expression/bound_comparison_expression.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
-#include "planner/expression/bound_operator_expression.hpp"
+#include "planner/expression/bound_function_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 MoveConstantsRule::MoveConstantsRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
-	// match on a comparison operator that has a ConstantExpression and an ArithmeticExpression as a child
 	auto op = make_unique<ComparisonExpressionMatcher>();
 	op->matchers.push_back(make_unique<ConstantExpressionMatcher>());
 	op->policy = SetMatcher::Policy::UNORDERED;
 
-	auto arithmetic = make_unique<OperatorExpressionMatcher>();
+	auto arithmetic = make_unique<FunctionExpressionMatcher>();
 	// we handle multiplication, addition and subtraction because those are "easy"
 	// integer division makes the division case difficult
 	// e.g. [x / 2 = 3] means [x = 6 OR x = 7] because of truncation -> no clean rewrite rules
-	vector<ExpressionType> arithmetic_types{ExpressionType::OPERATOR_ADD, ExpressionType::OPERATOR_SUBTRACT,
-	                                        ExpressionType::OPERATOR_MULTIPLY};
-	arithmetic->expr_type = make_unique<ManyExpressionTypeMatcher>(arithmetic_types);
+	arithmetic->op_matcher = make_unique<ManyOperatorTypeMatcher>(vector<OperatorType>{OperatorType::ADD, OperatorType::SUBTRACT, OperatorType::MULTIPLY});
 	// we match only on integral numeric types
 	arithmetic->type = make_unique<IntegerTypeMatcher>();
 	arithmetic->matchers.push_back(make_unique<ConstantExpressionMatcher>());
@@ -34,16 +31,16 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
                                                 bool &changes_made) {
 	auto comparison = (BoundComparisonExpression *)bindings[0];
 	auto outer_constant = (BoundConstantExpression *)bindings[1];
-	auto arithmetic = (BoundOperatorExpression *)bindings[2];
+	auto arithmetic = (BoundFunctionExpression *)bindings[2];
 	auto inner_constant = (BoundConstantExpression *)bindings[3];
 
 	int arithmetic_child_index = arithmetic->children[0].get() == inner_constant ? 1 : 0;
-	if (arithmetic->type == ExpressionType::OPERATOR_ADD) {
+	if (arithmetic->op_type == OperatorType::ADD) {
 		// [x + 1 COMP 10] OR [1 + x COMP 10]
 		// order does not matter in addition:
 		// simply change right side to 10-1 (outer_constant - inner_constant)
 		outer_constant->value = outer_constant->value - inner_constant->value;
-	} else if (arithmetic->type == ExpressionType::OPERATOR_SUBTRACT) {
+	} else if (arithmetic->op_type == OperatorType::SUBTRACT) {
 		// [x - 1 COMP 10] O R [1 - x COMP 10]
 		// order matters in subtraction:
 		if (arithmetic_child_index == 0) {
@@ -59,7 +56,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 			comparison->type = FlipComparisionExpression(comparison->type);
 		}
 	} else {
-		assert(arithmetic->type == ExpressionType::OPERATOR_MULTIPLY);
+		assert(arithmetic->op_type == OperatorType::MULTIPLY);
 		// [x * 2 COMP 10] OR [2 * x COMP 10]
 		// order does not matter in multiplication:
 		// change right side to 10/2 (outer_constant / inner_constant)

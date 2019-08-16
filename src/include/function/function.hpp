@@ -91,6 +91,7 @@ private:
 	// scalar functions
 	void RegisterDateFunctions();
 	void RegisterMathFunctions();
+	void RegisterOperators();
 	void RegisterStringFunctions();
 	void RegisterSequenceFunctions();
 	void RegisterTrigonometricsFunctions();

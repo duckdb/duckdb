@@ -63,10 +63,6 @@ struct Ln {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Mod {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct Pow {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

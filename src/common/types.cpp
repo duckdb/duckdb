@@ -31,6 +31,13 @@ const vector<SQLType> SQLType::NUMERIC = {
 	SQLType(SQLTypeId::DECIMAL)
 };
 
+const vector<SQLType> SQLType::INTEGRAL = {
+	SQLType::TINYINT,
+	SQLType::SMALLINT,
+	SQLType::INTEGER,
+	SQLType::BIGINT
+};
+
 const TypeId ROW_TYPE = TypeId::BIGINT;
 
 string TypeIdToString(TypeId type) {
@@ -173,7 +180,7 @@ string SQLTypeIdToString(SQLTypeId id) {
 	case SQLTypeId::SQLNULL:
 		return "NULL";
 	default:
-		throw ConversionException("Invalid SQLTypeId %d", id);
+		return "INVALID";
 	}
 }
 

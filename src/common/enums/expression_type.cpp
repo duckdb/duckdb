@@ -8,18 +8,8 @@ namespace duckdb {
 
 string ExpressionTypeToString(ExpressionType type) {
 	switch (type) {
-	case ExpressionType::OPERATOR_ADD:
-		return "ADD";
-	case ExpressionType::OPERATOR_SUBTRACT:
-		return "SUBTRACT";
-	case ExpressionType::OPERATOR_MULTIPLY:
-		return "MULTIPLY";
-	case ExpressionType::OPERATOR_DIVIDE:
-		return "DIVIDE";
 	case ExpressionType::OPERATOR_CONCAT:
 		return "CONCAT";
-	case ExpressionType::OPERATOR_MOD:
-		return "MOD";
 	case ExpressionType::OPERATOR_CAST:
 		return "CAST";
 	case ExpressionType::OPERATOR_NOT:
@@ -150,18 +140,8 @@ string ExpressionTypeToString(ExpressionType type) {
 
 string ExpressionTypeToOperator(ExpressionType type) {
 	switch (type) {
-	case ExpressionType::OPERATOR_ADD:
-		return "+";
-	case ExpressionType::OPERATOR_SUBTRACT:
-		return "-";
-	case ExpressionType::OPERATOR_MULTIPLY:
-		return "*";
-	case ExpressionType::OPERATOR_DIVIDE:
-		return "/";
 	case ExpressionType::OPERATOR_CONCAT:
 		return "||";
-	case ExpressionType::OPERATOR_MOD:
-		return "%";
 	case ExpressionType::OPERATOR_NOT:
 		return "!";
 	case ExpressionType::COMPARE_EQUAL:

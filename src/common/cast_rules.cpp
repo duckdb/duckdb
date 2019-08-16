@@ -3,68 +3,94 @@
 using namespace duckdb;
 using namespace std;
 
-static bool ImplicitCastTinyint(SQLType to) {
+//! The target type determines the preferred implicit casts
+static int64_t TargetTypeCost(SQLType type) {
+	switch(type.id) {
+	case SQLTypeId::INTEGER:
+		return 103;
+	case SQLTypeId::BIGINT:
+		return 102;
+	case SQLTypeId::DOUBLE:
+		return 101;
+	default:
+		return 110;
+	}
+
+}
+
+static int64_t ImplicitCastTinyint(SQLType to) {
 	switch(to.id) {
 	case SQLTypeId::SMALLINT:
 	case SQLTypeId::INTEGER:
 	case SQLTypeId::BIGINT:
 	case SQLTypeId::FLOAT:
 	case SQLTypeId::DOUBLE:
-		return true;
+	case SQLTypeId::DECIMAL:
+		return TargetTypeCost(to);
 	default:
-		return false;
+		return -1;
 	}
 }
 
-static bool ImplicitCastSmallint(SQLType to) {
+static int64_t ImplicitCastSmallint(SQLType to) {
 	switch(to.id) {
 	case SQLTypeId::INTEGER:
 	case SQLTypeId::BIGINT:
 	case SQLTypeId::FLOAT:
 	case SQLTypeId::DOUBLE:
-		return true;
+	case SQLTypeId::DECIMAL:
+		return TargetTypeCost(to);
 	default:
-		return false;
+		return -1;
 	}
 }
 
-static bool ImplicitCastInteger(SQLType to) {
+static int64_t ImplicitCastInteger(SQLType to) {
 	switch(to.id) {
 	case SQLTypeId::BIGINT:
 	case SQLTypeId::FLOAT:
 	case SQLTypeId::DOUBLE:
-		return true;
+	case SQLTypeId::DECIMAL:
+		return TargetTypeCost(to);
 	default:
-		return false;
+		return -1;
 	}
 }
 
-static bool ImplicitCastBigint(SQLType to) {
+static int64_t ImplicitCastBigint(SQLType to) {
 	switch(to.id) {
 	case SQLTypeId::FLOAT:
 	case SQLTypeId::DOUBLE:
-		return true;
+	case SQLTypeId::DECIMAL:
+		return TargetTypeCost(to);
 	default:
-		return false;
+		return -1;
 	}
 }
 
-static bool ImplicitCastFloat(SQLType to) {
+static int64_t ImplicitCastFloat(SQLType to) {
 	switch(to.id) {
 	case SQLTypeId::DOUBLE:
-		return true;
+	case SQLTypeId::DECIMAL:
+		return TargetTypeCost(to);
 	default:
-		return false;
+		return -1;
 	}
 }
 
-bool CastRules::ImplicitCast(SQLType from, SQLType to) {
-	if (from.id == to.id) {
-		return true;
+static int64_t ImplicitCastDouble(SQLType to) {
+	switch(to.id) {
+	case SQLTypeId::DECIMAL:
+		return TargetTypeCost(to);
+	default:
+		return -1;
 	}
-	if (from.id == SQLTypeId::SQLNULL) {
-		// NULL can be cast to anything
-		return true;
+}
+
+int64_t CastRules::ImplicitCast(SQLType from, SQLType to) {
+	if (from.id == SQLTypeId::SQLNULL || from.id == SQLTypeId::UNKNOWN) {
+		// NULL expression or parameter expression can be cast to anything
+		return TargetTypeCost(to);
 	}
 	switch(from.id) {
 	case SQLTypeId::TINYINT:
@@ -77,7 +103,9 @@ bool CastRules::ImplicitCast(SQLType from, SQLType to) {
 		return ImplicitCastBigint(to);
 	case SQLTypeId::FLOAT:
 		return ImplicitCastFloat(to);
+	case SQLTypeId::DOUBLE:
+		return ImplicitCastDouble(to);
 	default:
-		return false;
+		return -1;
 	}
 }

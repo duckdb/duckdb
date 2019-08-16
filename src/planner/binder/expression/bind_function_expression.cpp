@@ -22,9 +22,10 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, index_
 	}
 }
 
-static index_t BindFunctionFromArguments(vector<ScalarFunction> &functions, vector<SQLType> &arguments) {
+static index_t BindFunctionFromArguments(string name, vector<ScalarFunction> &functions, vector<SQLType> &arguments) {
 	index_t best_function = INVALID_INDEX;
-	int64_t best_score = numeric_limits<int64_t>::max();
+	int64_t lowest_cost = numeric_limits<int64_t>::max();
+	vector<index_t> conflicting_functions;
 	for(index_t f_idx = 0; f_idx < functions.size(); f_idx++) {
 		auto &func = functions[f_idx];
 		if (func.arguments.size() != arguments.size()) {
@@ -32,30 +33,48 @@ static index_t BindFunctionFromArguments(vector<ScalarFunction> &functions, vect
 			continue;
 		}
 		// check the arguments of the function
-		int64_t score = 0;
+		int64_t cost = 0;
 		for(index_t i = 0; i < arguments.size(); i++) {
 			if (arguments[i] == func.arguments[i]) {
 				// arguments match: do nothing
 				continue;
 			}
-			if (CastRules::ImplicitCast(arguments[i], func.arguments[i])) {
-				// we can implicitly cast, add one to the amount of required casts
-				score++;
+			int64_t cast_cost = CastRules::ImplicitCast(arguments[i], func.arguments[i]);
+			if (cast_cost >= 0) {
+				// we can implicitly cast, add the cost to the total cost
+				cost += cast_cost;
 			} else {
 				// we can't implicitly cast: throw an error
-				score = -1;
+				cost = -1;
 				break;
 			}
 		}
-		if (score < 0) {
+		if (cost < 0) {
 			// auto casting was not possible
 			continue;
 		}
-		if (score >= best_score) {
+		if (cost == lowest_cost) {
+			conflicting_functions.push_back(f_idx);
 			continue;
 		}
-		best_score = score;
+		if (cost > lowest_cost) {
+			continue;
+		}
+		conflicting_functions.clear();
+		lowest_cost = cost;
 		best_function = f_idx;
+	}
+	if (conflicting_functions.size() > 0) {
+		// there are multiple possible function definitions
+		// throw an exception explaining which overloads are there
+		conflicting_functions.push_back(best_function);
+		string call_str = Function::CallToString(name, arguments);
+		string candidate_str = "";
+		for(auto &conf : conflicting_functions) {
+			auto &f = functions[conf];
+			candidate_str += "\t" + Function::CallToString(f.name, f.arguments, f.return_type) + "\n";
+		}
+		throw BinderException("Could not choose a best candidate function for the function call \"%s\". In order to select one, please add explicit type casts.\n\tCandidate functions:\n%s", call_str.c_str(), candidate_str.c_str());
 	}
 	return best_function;
 }
@@ -79,7 +98,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		types.push_back(child.sql_type);
 		children.push_back(move(child.expr));
 	}
-	index_t best_function = BindFunctionFromArguments(func->functions, types);
+	index_t best_function = BindFunctionFromArguments(func->name, func->functions, types);
 	if (best_function == INVALID_INDEX) {
 		// no matching function was found, throw an error
 		string call_str = Function::CallToString(func->name, types);
@@ -96,14 +115,14 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		auto target_type = bound_function.arguments[i];
 		if (types[i] != target_type) {
 			// type of child does not match type of function argument: add a cast
-			children[i] = make_unique<BoundCastExpression>(GetInternalType(target_type), move(children[i]), types[i], target_type);
+			children[i] = AddCastToType(move(children[i]), types[i], target_type);
 		}
 	}
 
 	// types match up, get the result type
 	auto return_type = bound_function.return_type;
 	// now create the function
-	auto result = make_unique<BoundFunctionExpression>(GetInternalType(return_type), bound_function);
+	auto result = make_unique<BoundFunctionExpression>(GetInternalType(return_type), bound_function, function.op_type);
 	result->children = move(children);
 	if (bound_function.bind) {
 		result->bind_info = bound_function.bind(*result, context);

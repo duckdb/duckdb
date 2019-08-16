@@ -11,19 +11,7 @@ using namespace postgres;
 using namespace std;
 
 ExpressionType Transformer::OperatorToExpressionType(string &op) {
-	if (op == "+") {
-		return ExpressionType::OPERATOR_ADD;
-	} else if (op == "-") {
-		return ExpressionType::OPERATOR_SUBTRACT;
-	} else if (op == "*") {
-		return ExpressionType::OPERATOR_MULTIPLY;
-	} else if (op == "/") {
-		return ExpressionType::OPERATOR_DIVIDE;
-	} else if (op == "||") {
-		return ExpressionType::OPERATOR_CONCAT;
-	} else if (op == "%") {
-		return ExpressionType::OPERATOR_MOD;
-	} else if (op == "=" || op == "==") {
+	if (op == "=" || op == "==") {
 		return ExpressionType::COMPARE_EQUAL;
 	} else if (op == "!=" || op == "<>") {
 		return ExpressionType::COMPARE_NOTEQUAL;
@@ -43,18 +31,85 @@ ExpressionType Transformer::OperatorToExpressionType(string &op) {
 		return ExpressionType::COMPARE_SIMILAR;
 	} else if (op == "!~") {
 		return ExpressionType::COMPARE_NOTSIMILAR;
-	} else if (op == "<<") {
-		return ExpressionType::OPERATOR_LSHIFT;
-	} else if (op == ">>") {
-		return ExpressionType::OPERATOR_RSHIFT;
-	} else if (op == "&") {
-		return ExpressionType::OPERATOR_BITWISE_AND;
-	} else if (op == "|") {
-		return ExpressionType::OPERATOR_BITWISE_OR;
-	} else if (op == "#") {
-		return ExpressionType::OPERATOR_BITWISE_XOR;
 	}
 	return ExpressionType::INVALID;
+}
+
+static string GetOperatorFunction(OperatorType op_type) {
+	switch(op_type) {
+	case OperatorType::ADD:
+		return "add";
+	case OperatorType::SUBTRACT:
+		return "subtract";
+	case OperatorType::MULTIPLY:
+		return "multiply";
+	case OperatorType::DIVIDE:
+		return "divide";
+	case OperatorType::MOD:
+		return "mod";
+	case OperatorType::BITWISE_LSHIFT:
+		return "bitwise_lshift";
+	case OperatorType::BITWISE_RSHIFT:
+		return "bitwise_rshift";
+	case OperatorType::BITWISE_AND:
+		return "bitwise_and";
+	case OperatorType::BITWISE_OR:
+		return "bitwise_or";
+	case OperatorType::BITWISE_XOR:
+		return "bitwise_xor";
+	default:
+		assert(0);
+		throw Exception("Unknown operator type");
+	}
+	// not an arithmetic
+	return string();
+}
+
+unique_ptr<ParsedExpression> Transformer::TransformUnaryOperator(string op, unique_ptr<ParsedExpression> child) {
+	if (op == "+") {
+		return child;
+	} else if (op == "-") {
+		return TransformBinaryOperator("*", move(child), make_unique<ConstantExpression>(SQLType::TINYINT, duckdb::Value::TINYINT(-1)));
+	} else {
+		throw Exception("Unknown unary operator");
+	}
+}
+
+unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(string op, unique_ptr<ParsedExpression> left, unique_ptr<ParsedExpression> right) {
+	const auto schema = DEFAULT_SCHEMA;
+
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(move(left));
+	children.push_back(move(right));
+
+	if (op == "||") {
+		// concat operator, create function
+		return make_unique<FunctionExpression>("concat", children);
+	} else if (op == "~" || op == "!~") {
+		// rewrite SIMILAR TO into regexp_matches('asdf', '.*sd.*')
+		bool invert_similar = op == "!~";
+
+		auto result = make_unique<FunctionExpression>(schema, "regexp_matches", children);
+		if (invert_similar) {
+			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(result));
+		} else {
+			return move(result);
+		}
+	} else {
+		OperatorType op_type = OperatorTypeFromOperator(op);
+		if (op_type != OperatorType::NONE) {
+			// built-in operator function
+			auto result = make_unique<FunctionExpression>(schema, GetOperatorFunction(op_type), children);
+			result->op_type = op_type;
+			return move(result);
+		} else {
+			auto target_type = OperatorToExpressionType(op);
+			if (target_type == ExpressionType::INVALID) {
+				throw NotImplementedException("Operator not implemented.");
+			}
+			return make_unique<ComparisonExpression>(target_type, move(children[0]), move(children[1]));
+		}
+	}
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
@@ -158,69 +213,16 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
 			return move(result);
 		}
 	} break;
-	default: {
-		target_type = OperatorToExpressionType(name);
-		if (target_type == ExpressionType::INVALID) {
-			throw NotImplementedException("A_Expr transform not implemented %s.", name.c_str());
-		}
+	default:
+		break;
 	}
-	} // continuing default case
+
 	auto left_expr = TransformExpression(root->lexpr);
 	auto right_expr = TransformExpression(root->rexpr);
+
 	if (!left_expr) {
-		switch (target_type) {
-		case ExpressionType::OPERATOR_ADD:
-			return right_expr;
-		case ExpressionType::OPERATOR_SUBTRACT:
-			target_type = ExpressionType::OPERATOR_MULTIPLY;
-			left_expr = make_unique<ConstantExpression>(SQLType::TINYINT, Value::TINYINT(-1));
-			break;
-		default:
-			throw Exception("Unknown unary operator");
-		}
-	}
-
-	if (target_type == ExpressionType::OPERATOR_CONCAT) {
-		// concat operator, create function
-		vector<unique_ptr<ParsedExpression>> children;
-		children.push_back(move(left_expr));
-		children.push_back(move(right_expr));
-		return make_unique<FunctionExpression>("concat", children);
-	}
-
-	// rewrite SIMILAR TO into regexp_matches('asdf', '.*sd.*')
-	if (target_type == ExpressionType::COMPARE_SIMILAR || target_type == ExpressionType::COMPARE_NOTSIMILAR) {
-		bool invert_similar = false;
-		if (name == "!~") {
-			// NOT SIMILAR TO
-			invert_similar = true;
-		}
-		vector<unique_ptr<ParsedExpression>> children;
-		children.push_back(move(left_expr));
-		children.push_back(move(right_expr));
-
-		const auto schema = DEFAULT_SCHEMA;
-		const auto regex_function = "regexp_matches";
-		auto result = make_unique<FunctionExpression>(schema, regex_function, children);
-
-		if (invert_similar) {
-			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(result));
-		} else {
-			return move(result);
-		}
-	}
-
-	unique_ptr<ParsedExpression> result = nullptr;
-	int type_id = static_cast<int>(target_type);
-	if (type_id >= static_cast<int>(ExpressionType::BINOP_BOUNDARY_START) &&
-	    type_id <= static_cast<int>(ExpressionType::BINOP_BOUNDARY_END)) {
-		// binary operator
-		result = make_unique<OperatorExpression>(target_type, move(left_expr), move(right_expr));
-	} else if (type_id >= static_cast<int>(ExpressionType::COMPARE_BOUNDARY_START) &&
-	           type_id <= static_cast<int>(ExpressionType::COMPARE_BOUNDARY_END)) {
-		result = make_unique<ComparisonExpression>(target_type, move(left_expr), move(right_expr));
+		return TransformUnaryOperator(name, move(right_expr));
 	} else {
-		throw NotImplementedException("A_Expr transform not implemented.");
+		return TransformBinaryOperator(name, move(left_expr), move(right_expr));
 	}
-	return result;
 }

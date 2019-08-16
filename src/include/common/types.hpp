@@ -46,21 +46,22 @@ enum class TypeId : uint8_t {
 //===--------------------------------------------------------------------===//
 enum class SQLTypeId : uint8_t {
 	INVALID = 0,
-	SQLNULL = 1,
-	BOOLEAN = 2,
-	TINYINT = 3,
-	SMALLINT = 4,
-	INTEGER = 5,
-	BIGINT = 6,
-	DATE = 7,
-	TIMESTAMP = 8,
-	REAL = 9,
-	DOUBLE = 10,
-	FLOAT = 11,
-	DECIMAL = 12,
-	CHAR = 13,
-	VARCHAR = 14,
-	VARBINARY = 15
+	SQLNULL = 1, /* NULL type, used for constant NULL */
+	UNKNOWN = 2, /* unknown type, used for parameter expressions */
+	BOOLEAN = 3,
+	TINYINT = 4,
+	SMALLINT = 5,
+	INTEGER = 6,
+	BIGINT = 7,
+	DATE = 8,
+	TIMESTAMP = 9,
+	REAL = 10,
+	DOUBLE = 11,
+	FLOAT = 12,
+	DECIMAL = 13,
+	CHAR = 14,
+	VARCHAR = 15,
+	VARBINARY = 16
 };
 
 struct SQLType {
@@ -97,6 +98,7 @@ public:
 	static const SQLType VARCHAR;
 
 	static const vector<SQLType> NUMERIC;
+	static const vector<SQLType> INTEGRAL;
 };
 
 bool IsNumericType(SQLTypeId type);

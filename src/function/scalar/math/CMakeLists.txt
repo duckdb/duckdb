@@ -9,7 +9,6 @@ add_library_unity(duckdb_func_math
 				ln.cpp
 				log10.cpp
 				log2.cpp
-				mod.cpp
 				pi.cpp
 				pow.cpp
 				radians.cpp

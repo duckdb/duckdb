@@ -35,3 +35,17 @@ TEST_CASE("Test type resolution of functions", "[function]") {
 	TestAddition(con, "REAL");
 	TestAddition(con, "DOUBLE");
 }
+
+TEST_CASE("Test type resolution of function with parameter expressions", "[function]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+	con.EnableQueryVerification();
+
+	// can deduce type of prepared parameter here
+	auto prepared = con.Prepare("select 1 + $1");
+	REQUIRE(prepared->error.empty());
+
+	result = prepared->Execute(1);
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+}

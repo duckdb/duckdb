@@ -20,7 +20,6 @@ void BuiltinFunctions::RegisterMathFunctions() {
 	Register<Log2>();
 	Register<Log10>();
 	Register<Ln>();
-	Register<Mod>();
 	Register<Pow>();
 	Register<Sqrt>();
 

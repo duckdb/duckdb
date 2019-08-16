@@ -42,8 +42,9 @@ TEST_CASE("Basic prepared statements", "[prepared]") {
 	REQUIRE_FAIL(con.Query("PREPARE CREATE TABLE a(i INTEGER)"));
 	REQUIRE_FAIL(con.Query("SELECT * FROM a;"));
 
-	// cannot resolve type
-	REQUIRE_FAIL(con.Query("PREPARE s1 AS SELECT $1+$2"));
+	// type will be resolved to "double"
+	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS SELECT $1+$2"));
+	REQUIRE_NO_FAIL(con.Query("DEALLOCATE s1"));
 
 	// but this works
 	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS SELECT NOT($1), 10+$2, $3+20, 4 IN (2, 3, $4), $5 IN (2, 3, 4)"));
