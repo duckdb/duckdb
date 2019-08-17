@@ -22,7 +22,7 @@ static void covar_initialize(data_ptr_t payload, TypeId return_type) {
 	memset(payload, 0, covar_state_size(return_type));
 }
 
-static static Vector &CastVector(Vector &original, TypeId type, Vector &cast) {
+static Vector &CastVector(Vector &original, TypeId type, Vector &cast) {
 	if (original.type != type) {
 		cast.Initialize(type);
 		VectorOperations::Cast(original, cast);
