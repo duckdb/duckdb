@@ -51,6 +51,13 @@ public:
 	aggregate_simple_update_t simple_update;
 	//! Whether or not to cast the arguments
 	bool cast_arguments;
+
+	bool operator==(const AggregateFunction &rhs) const {
+		return state_size == rhs.state_size && initialize == rhs.initialize && update == rhs.update && finalize == rhs.finalize;
+	}
+	bool operator!=(const AggregateFunction &rhs) const {
+		return !(*this == rhs);
+	}
 };
 
 } // namespace duckdb

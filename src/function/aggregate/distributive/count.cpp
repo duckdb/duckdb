@@ -18,4 +18,8 @@ void count_simple_update(Vector inputs[], index_t input_count, Value &result) {
 	result = result + count;
 }
 
+AggregateFunction Count::GetFunction() {
+	return AggregateFunction("count", get_bigint_return_type, get_bigint_type_size, bigint_payload_initialize, count_update, gather_finalize, bigint_simple_initialize, count_simple_update, false);
+}
+
 } // namespace duckdb

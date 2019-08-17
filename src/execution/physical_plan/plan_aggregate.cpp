@@ -18,7 +18,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 		bool use_simple_aggregation = true;
 		for (index_t i = 0; i < op.expressions.size(); i++) {
 			auto &aggregate = (BoundAggregateExpression &)*op.expressions[i];
-			if (!aggregate.bound_aggregate->function.simple_update || aggregate.distinct) {
+			if (!aggregate.function.simple_update || aggregate.distinct) {
 				// unsupported aggregate for simple aggregation: use hash aggregation
 				use_simple_aggregation = false;
 				break;

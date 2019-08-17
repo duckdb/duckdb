@@ -59,4 +59,8 @@ void string_agg_update(Vector inputs[], index_t input_count, Vector &state) {
     });
 }
 
+AggregateFunction StringAgg::GetFunction() {
+	return AggregateFunction("string_agg", string_agg_get_return_type, get_return_type_size, null_state_initialize, string_agg_update, gather_finalize);
+}
+
 } // namespace duckdb

@@ -46,4 +46,8 @@ void sum_simple_update(Vector inputs[], index_t input_count, Value &result) {
 	}
 }
 
+AggregateFunction Sum::GetFunction() {
+	return AggregateFunction("sum", sum_get_return_type, get_return_type_size, null_state_initialize, sum_update, gather_finalize, null_simple_initialize, sum_simple_update);
+}
+
 } // namespace duckdb

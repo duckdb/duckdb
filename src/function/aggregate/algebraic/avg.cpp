@@ -3,24 +3,23 @@
 #include "common/types/null_value.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 
+using namespace duckdb;
 using namespace std;
-
-namespace duckdb {
 
 struct avg_state_t {
     uint64_t    count;
     double      sum;
 };
 
-index_t avg_payload_size(TypeId return_type) {
+static index_t avg_payload_size(TypeId return_type) {
 	return sizeof(avg_state_t);
 }
 
-void avg_initialize(data_ptr_t payload, TypeId return_type) {
+static void avg_initialize(data_ptr_t payload, TypeId return_type) {
 	memset(payload, 0, avg_payload_size(return_type));
 }
 
-SQLType avg_get_return_type(vector<SQLType> &arguments) {
+static SQLType avg_get_return_type(vector<SQLType> &arguments) {
 	if (arguments.size() != 1)
 		return SQLTypeId::INVALID;
 	const auto &input_type = arguments[0];
@@ -39,7 +38,7 @@ SQLType avg_get_return_type(vector<SQLType> &arguments) {
 	}
 }
 
-void avg_update(Vector inputs[], index_t input_count, Vector &state) {
+static void avg_update(Vector inputs[], index_t input_count, Vector &state) {
 	assert(input_count == 1);
 	Vector payload_double;
 	if (inputs[0].type != TypeId::DOUBLE) {
@@ -64,7 +63,7 @@ void avg_update(Vector inputs[], index_t input_count, Vector &state) {
 	});
 }
 
-void avg_finalize(Vector &state, Vector &result) {
+static void avg_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming avg
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
 		auto state_ptr = (avg_state_t*) ((data_ptr_t *)state.data)[i];
@@ -77,4 +76,6 @@ void avg_finalize(Vector &state, Vector &result) {
 	});
 }
 
-} // namespace duckdb
+AggregateFunction Avg::GetFunction() {
+	return AggregateFunction("avg", avg_get_return_type, avg_payload_size, avg_initialize, avg_update, avg_finalize);
+}

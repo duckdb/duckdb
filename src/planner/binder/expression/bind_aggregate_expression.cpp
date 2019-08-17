@@ -72,7 +72,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		}
 	}
 	// create the aggregate
-	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(result_type), func, aggr.distinct);
+	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(result_type), func->function, aggr.distinct);
 	aggregate->children = move(children);
 	// now create a column reference referring to this aggregate
 

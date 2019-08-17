@@ -26,26 +26,32 @@ Value null_simple_initialize();
 
 SQLType get_same_return_type(vector<SQLType> &arguments);
 
-// count(*)
-void countstar_update(Vector inputs[], index_t input_count, Vector &result);
-void countstar_simple_update(Vector inputs[], index_t input_count, Value &result);
-// count
-void count_update(Vector inputs[], index_t input_count, Vector &result);
-void count_simple_update(Vector inputs[], index_t input_count, Value &result);
-// first
-void first_update(Vector inputs[], index_t input_count, Vector &result);
-// max
-void max_update(Vector inputs[], index_t input_count, Vector &result);
-void max_simple_update(Vector inputs[], index_t input_count, Value &result);
-// min
-void min_update(Vector inputs[], index_t input_count, Vector &result);
-void min_simple_update(Vector inputs[], index_t input_count, Value &result);
-// sum
-void sum_update(Vector inputs[], index_t input_count, Vector &result);
-void sum_simple_update(Vector inputs[], index_t input_count, Value &result);
-SQLType sum_get_return_type(vector<SQLType> &arguments);
-// string_agg
-void string_agg_update(Vector inputs[], index_t input_count, Vector &result);
-SQLType string_agg_get_return_type(vector<SQLType> &arguments);
+struct CountStar {
+	static AggregateFunction GetFunction();
+};
+
+struct Count {
+	static AggregateFunction GetFunction();
+};
+
+struct First {
+	static AggregateFunction GetFunction();
+};
+
+struct Max {
+	static AggregateFunction GetFunction();
+};
+
+struct Min {
+	static AggregateFunction GetFunction();
+};
+
+struct Sum {
+	static AggregateFunction GetFunction();
+};
+
+struct StringAgg {
+	static AggregateFunction GetFunction();
+};
 
 }

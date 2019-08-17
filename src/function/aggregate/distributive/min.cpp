@@ -23,4 +23,8 @@ void min_simple_update(Vector inputs[], index_t input_count, Value &result) {
 	}
 }
 
+AggregateFunction Min::GetFunction() {
+	return AggregateFunction("min", get_same_return_type, get_return_type_size, null_state_initialize, min_update, gather_finalize, null_simple_initialize, min_simple_update);
+}
+
 } // namespace duckdb

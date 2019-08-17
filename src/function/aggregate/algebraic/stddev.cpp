@@ -4,9 +4,8 @@
 #include "common/vector_operations/vector_operations.hpp"
 #include <cmath>
 
+using namespace duckdb;
 using namespace std;
-
-namespace duckdb {
 
 struct stddev_state_t {
     uint64_t    count;
@@ -14,15 +13,15 @@ struct stddev_state_t {
     double      dsquared;
 };
 
-index_t stddev_state_size(TypeId return_type) {
+static index_t stddev_state_size(TypeId return_type) {
 	return sizeof(stddev_state_t);
 }
 
-void stddevsamp_initialize(data_ptr_t payload, TypeId return_type) {
+static void stddevsamp_initialize(data_ptr_t payload, TypeId return_type) {
 	memset(payload, 0, stddev_state_size(return_type));
 }
 
-SQLType stddev_get_return_type(vector<SQLType> &arguments) {
+static SQLType stddev_get_return_type(vector<SQLType> &arguments) {
 	if (arguments.size() != 1)
 		return SQLTypeId::INVALID;
 	const auto &input_type = arguments[0];
@@ -41,7 +40,7 @@ SQLType stddev_get_return_type(vector<SQLType> &arguments) {
 	}
 }
 
-void stddevsamp_update(Vector inputs[], index_t input_count, Vector &state) {
+static void stddevsamp_update(Vector inputs[], index_t input_count, Vector &state) {
 	assert(input_count == 1);
 	// Streaming approximate standard deviation using Welford's
 	// method, DOI: 10.2307/1266577
@@ -76,7 +75,7 @@ void stddevsamp_update(Vector inputs[], index_t input_count, Vector &state) {
 	});
 }
 
-void varsamp_finalize(Vector &state, Vector &result) {
+static void varsamp_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming stddev of sample
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
 		auto state_ptr = (stddev_state_t*) ((data_ptr_t *)state.data)[i];
@@ -91,7 +90,7 @@ void varsamp_finalize(Vector &state, Vector &result) {
 	});
 }
 
-void varpop_finalize(Vector &state, Vector &result) {
+static void varpop_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming stddev of sample
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
 		auto state_ptr = (stddev_state_t*) ((data_ptr_t *)state.data)[i];
@@ -106,7 +105,7 @@ void varpop_finalize(Vector &state, Vector &result) {
 	});
 }
 
-void stddevsamp_finalize(Vector &state, Vector &result) {
+static void stddevsamp_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming stddev of sample
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
 		auto state_ptr = (stddev_state_t*) ((data_ptr_t *)state.data)[i];
@@ -121,7 +120,7 @@ void stddevsamp_finalize(Vector &state, Vector &result) {
 	});
 }
 
-void stddevpop_finalize(Vector &state, Vector &result) {
+static void stddevpop_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming stddev of sample
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
 		auto state_ptr = (stddev_state_t*) ((data_ptr_t *)state.data)[i];
@@ -136,4 +135,18 @@ void stddevpop_finalize(Vector &state, Vector &result) {
 	});
 }
 
-} // namespace duckdb
+AggregateFunction StdDevSamp::GetFunction() {
+	return AggregateFunction("stddev_samp", stddev_get_return_type, stddev_state_size, stddevsamp_initialize, stddevsamp_update, stddevsamp_finalize);
+}
+
+AggregateFunction StdDevPop::GetFunction() {
+	return AggregateFunction("stddev_pop", stddev_get_return_type, stddev_state_size, stddevsamp_initialize, stddevsamp_update, stddevpop_finalize);
+}
+
+AggregateFunction VarPop::GetFunction() {
+	return AggregateFunction("var_samp", stddev_get_return_type, stddev_state_size, stddevsamp_initialize, stddevsamp_update, varsamp_finalize);
+}
+
+AggregateFunction VarSamp::GetFunction() {
+	return AggregateFunction("var_pop", stddev_get_return_type, stddev_state_size, stddevsamp_initialize, stddevsamp_update, varpop_finalize);
+}

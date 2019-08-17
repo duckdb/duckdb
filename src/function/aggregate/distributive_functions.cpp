@@ -50,15 +50,13 @@ SQLType get_same_return_type(vector<SQLType> &arguments) {
 }
 
 void BuiltinFunctions::RegisterDistributiveAggregates() {
-	AddFunction(AggregateFunction("count_star", get_bigint_return_type, get_bigint_type_size, bigint_payload_initialize, countstar_update, gather_finalize, bigint_simple_initialize, countstar_simple_update, false));
-	AddFunction(AggregateFunction("count", get_bigint_return_type, get_bigint_type_size, bigint_payload_initialize, count_update, gather_finalize, bigint_simple_initialize, count_simple_update, false));
-
-	AddFunction(AggregateFunction("first", get_same_return_type, get_return_type_size, null_state_initialize, first_update, gather_finalize));
-	AddFunction(AggregateFunction("max", get_same_return_type, get_return_type_size, null_state_initialize, max_update, gather_finalize, null_simple_initialize, max_simple_update));
-	AddFunction(AggregateFunction("min", get_same_return_type, get_return_type_size, null_state_initialize, min_update, gather_finalize, null_simple_initialize, min_simple_update));
-	AddFunction(AggregateFunction("sum", sum_get_return_type, get_return_type_size, null_state_initialize, sum_update, gather_finalize, null_simple_initialize, sum_simple_update));
-	AddFunction(AggregateFunction("string_agg", string_agg_get_return_type, get_return_type_size, null_state_initialize, string_agg_update, gather_finalize));
-
+	AddFunction(CountStar::GetFunction());
+	AddFunction(Count::GetFunction());
+	AddFunction(First::GetFunction());
+	AddFunction(Max::GetFunction());
+	AddFunction(Min::GetFunction());
+	AddFunction(Sum::GetFunction());
+	AddFunction(StringAgg::GetFunction());
 }
 
 } // namespace duckdb

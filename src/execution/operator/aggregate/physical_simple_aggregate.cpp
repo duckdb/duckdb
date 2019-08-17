@@ -40,8 +40,8 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 				++payload_cnt;
 			}
 			// perform the actual aggregation
-			assert(aggregate.bound_aggregate->function.simple_update);
-			aggregate.bound_aggregate->function.simple_update(&payload_chunk.data[payload_idx], payload_cnt, state->aggregates[aggr_idx]);
+			assert(aggregate.function.simple_update);
+			aggregate.function.simple_update(&payload_chunk.data[payload_idx], payload_cnt, state->aggregates[aggr_idx]);
 
 			payload_idx += payload_cnt;
 		}
@@ -75,8 +75,8 @@ PhysicalSimpleAggregateOperatorState::PhysicalSimpleAggregateOperatorState(Physi
 			payload_types.push_back(TypeId::BIGINT);
 		}
 		// initialize the aggregate values
-		assert(aggr.bound_aggregate->function.simple_initialize);
-		aggregates.push_back(aggr.bound_aggregate->function.simple_initialize());
+		assert(aggr.function.simple_initialize);
+		aggregates.push_back(aggr.function.simple_initialize());
 	}
 	payload_chunk.Initialize(payload_types);
 }

@@ -19,4 +19,9 @@ void countstar_simple_update(Vector inputs[], index_t input_count, Value &result
 	result = result + count;
 }
 
+
+AggregateFunction CountStar::GetFunction() {
+	return AggregateFunction("count_star", get_bigint_return_type, get_bigint_type_size, bigint_payload_initialize, countstar_update, gather_finalize, bigint_simple_initialize, countstar_simple_update, false);
+}
+
 } // namespace duckdb

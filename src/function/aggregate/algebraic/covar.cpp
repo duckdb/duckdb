@@ -4,9 +4,8 @@
 #include "common/vector_operations/vector_operations.hpp"
 #include <cmath>
 
+using namespace duckdb;
 using namespace std;
-
-namespace duckdb {
 
 struct covar_state_t {
     uint64_t    count;
@@ -15,15 +14,15 @@ struct covar_state_t {
     double      co_moment;
 };
 
-index_t covar_state_size(TypeId return_type) {
+static index_t covar_state_size(TypeId return_type) {
 	return sizeof(covar_state_t);
 }
 
-void covar_initialize(data_ptr_t payload, TypeId return_type) {
+static void covar_initialize(data_ptr_t payload, TypeId return_type) {
 	memset(payload, 0, covar_state_size(return_type));
 }
 
-static Vector &CastVector(Vector &original, TypeId type, Vector &cast) {
+static static Vector &CastVector(Vector &original, TypeId type, Vector &cast) {
 	if (original.type != type) {
 		cast.Initialize(type);
 		VectorOperations::Cast(original, cast);
@@ -33,7 +32,7 @@ static Vector &CastVector(Vector &original, TypeId type, Vector &cast) {
 	return cast;
 }
 
-SQLType covar_get_return_type(vector<SQLType> &arguments) {
+static SQLType covar_get_return_type(vector<SQLType> &arguments) {
 	if (arguments.size() != 2)
 		return SQLTypeId::INVALID;
 	const auto &input_type = MaxSQLType(arguments[0], arguments[1]);
@@ -52,7 +51,7 @@ SQLType covar_get_return_type(vector<SQLType> &arguments) {
 	}
 }
 
-void covar_update(Vector inputs[], index_t input_count, Vector &state) {
+static void covar_update(Vector inputs[], index_t input_count, Vector &state) {
 	assert(input_count == 2);
 	// Streaming approximate covariance
 
@@ -94,7 +93,7 @@ void covar_update(Vector inputs[], index_t input_count, Vector &state) {
 	});
 }
 
-void covarpop_finalize(Vector &state, Vector &result) {
+static void covarpop_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming population covariance
 	VectorOperations::Exec(result, [&](uint64_t i, uint64_t k) {
 		auto state_ptr = (covar_state_t*) ((data_ptr_t *)state.data)[i];
@@ -109,7 +108,7 @@ void covarpop_finalize(Vector &state, Vector &result) {
 	});
 }
 
-void covarsamp_finalize(Vector &state, Vector &result) {
+static void covarsamp_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming sample covariance
 	VectorOperations::Exec(result, [&](uint64_t i, uint64_t k) {
 		auto state_ptr = (covar_state_t*) ((data_ptr_t *)state.data)[i];
@@ -124,4 +123,10 @@ void covarsamp_finalize(Vector &state, Vector &result) {
 	});
 }
 
-} // namespace duckdb
+AggregateFunction CovarSamp::GetFunction() {
+	return AggregateFunction("covar_samp", covar_get_return_type, covar_state_size, covar_initialize, covar_update, covarsamp_finalize);
+}
+
+AggregateFunction CovarPop::GetFunction() {
+	return AggregateFunction("covar_pop", covar_get_return_type, covar_state_size, covar_initialize, covar_update, covarpop_finalize);
+}
