@@ -18,11 +18,6 @@ namespace duckdb {
 enum class ExpressionType : uint8_t {
 	INVALID = 0,
 
-	// -----------------------------
-	// Arithmetic Operators
-	// -----------------------------
-	// left || right (both must be char/varchar)
-	OPERATOR_CONCAT = 5,
 	// explicitly cast left as right (right is integer in ValueType enum)
 	OPERATOR_CAST = 12,
 	// logical not operator
@@ -115,7 +110,7 @@ enum class ExpressionType : uint8_t {
 	// -----------------------------
 	// Operators
 	// -----------------------------
-	OPERATOR_CASE_EXPR = 150,
+	CASE_EXPR = 150,
 	OPERATOR_NULLIF = 151,
 	OPERATOR_COALESCE = 152,
 

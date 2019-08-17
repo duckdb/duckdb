@@ -12,6 +12,8 @@ static int64_t TargetTypeCost(SQLType type) {
 		return 102;
 	case SQLTypeId::DOUBLE:
 		return 101;
+	case SQLTypeId::VARCHAR:
+		return 199;
 	default:
 		return 110;
 	}
@@ -90,6 +92,10 @@ static int64_t ImplicitCastDouble(SQLType to) {
 int64_t CastRules::ImplicitCast(SQLType from, SQLType to) {
 	if (from.id == SQLTypeId::SQLNULL || from.id == SQLTypeId::UNKNOWN) {
 		// NULL expression or parameter expression can be cast to anything
+		return TargetTypeCost(to);
+	}
+	if (to.id == SQLTypeId::VARCHAR) {
+		// everything can be cast to VARCHAR, but this cast has a high cost
 		return TargetTypeCost(to);
 	}
 	switch(from.id) {
