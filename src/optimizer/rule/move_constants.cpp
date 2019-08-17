@@ -22,6 +22,7 @@ MoveConstantsRule::MoveConstantsRule(ExpressionRewriter &rewriter) : Rule(rewrit
 	// we match only on integral numeric types
 	arithmetic->type = make_unique<IntegerTypeMatcher>();
 	arithmetic->matchers.push_back(make_unique<ConstantExpressionMatcher>());
+	arithmetic->matchers.push_back(make_unique<ExpressionMatcher>());
 	arithmetic->policy = SetMatcher::Policy::SOME;
 	op->matchers.push_back(move(arithmetic));
 	root = move(op);

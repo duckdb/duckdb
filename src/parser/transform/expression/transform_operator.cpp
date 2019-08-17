@@ -36,13 +36,15 @@ ExpressionType Transformer::OperatorToExpressionType(string &op) {
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformUnaryOperator(string op, unique_ptr<ParsedExpression> child) {
-	if (op == "+") {
-		return child;
-	} else if (op == "-") {
-		return TransformBinaryOperator("*", move(child), make_unique<ConstantExpression>(SQLType::TINYINT, duckdb::Value::TINYINT(-1)));
-	} else {
-		throw Exception("Unknown unary operator");
-	}
+	const auto schema = DEFAULT_SCHEMA;
+
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(move(child));
+
+	// built-in operator function
+	auto result = make_unique<FunctionExpression>(schema, op, children);
+	result->is_operator = true;
+	return move(result);
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(string op, unique_ptr<ParsedExpression> left, unique_ptr<ParsedExpression> right) {
@@ -185,7 +187,10 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
 	auto right_expr = TransformExpression(root->rexpr);
 
 	if (!left_expr) {
+		// prefix operator
 		return TransformUnaryOperator(name, move(right_expr));
+	} else if (!right_expr) {
+		throw NotImplementedException("Postfix operators not implemented!");
 	} else {
 		return TransformBinaryOperator(name, move(left_expr), move(right_expr));
 	}

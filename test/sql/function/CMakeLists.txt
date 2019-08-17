@@ -3,6 +3,7 @@ add_library_unity(test_sql_function
                   test_math.cpp
                   test_concat.cpp
                   test_function_resolution.cpp
+                  test_unary_operators.cpp
                   test_substring.cpp
                   test_table_function.cpp
                   test_regex.cpp

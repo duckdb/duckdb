@@ -11,6 +11,7 @@ ArithmeticSimplificationRule::ArithmeticSimplificationRule(ExpressionRewriter &r
 	// match on an OperatorExpression that has a ConstantExpression as child
 	auto op = make_unique<FunctionExpressionMatcher>();
 	op->matchers.push_back(make_unique<ConstantExpressionMatcher>());
+	op->matchers.push_back(make_unique<ExpressionMatcher>());
 	op->policy = SetMatcher::Policy::SOME;
 	// we only match on simple arithmetic expressions (+, -, *, /)
 	op->function = make_unique<ManyFunctionMatcher>(unordered_set<string>{"+", "-", "*", "/"});
