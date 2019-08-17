@@ -55,6 +55,11 @@ TEST_CASE("Basic prepared statements", "[prepared]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {23}));
 	REQUIRE(CHECK_COLUMN(result, 3, {true}));
 	REQUIRE(CHECK_COLUMN(result, 4, {true}));
+
+	// cannot resolve these types
+	REQUIRE_FAIL(con.Query("PREPARE s1 AS SELECT $1"));
+	REQUIRE_FAIL(con.Query("PREPARE s1 AS SELECT (SELECT $1)"));
+	REQUIRE_FAIL(con.Query("PREPARE s1 AS SELECT $1=$2"));
 }
 
 TEST_CASE("Prepared statements and subqueries", "[prepared]") {

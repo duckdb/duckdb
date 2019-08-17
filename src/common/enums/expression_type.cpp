@@ -30,10 +30,6 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "LESSTHANOREQUALTO";
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		return "GREATERTHANOREQUALTO";
-	case ExpressionType::COMPARE_SIMILAR:
-		return "SIMILAR";
-	case ExpressionType::COMPARE_NOTSIMILAR:
-		return "NOTSIMILAR";
 	case ExpressionType::COMPARE_IN:
 		return "IN";
 	case ExpressionType::COMPARE_DISTINCT_FROM:
