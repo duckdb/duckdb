@@ -49,10 +49,6 @@ enum class ExpressionType : uint8_t {
 	COMPARE_LESSTHANOREQUALTO = 29,
 	// greater than equal operator between left and right
 	COMPARE_GREATERTHANOREQUALTO = 30,
-	// LIKE operator (left LIKE right). Both children must be string.
-	COMPARE_LIKE = 31,
-	// NOT LIKE operator (left NOT LIKE right). Both children must be string.
-	COMPARE_NOTLIKE = 32,
 	// SIMILAR TO operator (left SIMILAR TO right). Both children must be string.
 	COMPARE_SIMILAR = 33,
 	// NOT SIMILAR TO operator (left NOT SIMILAR TO right). Both children must be string.

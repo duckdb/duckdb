@@ -31,12 +31,6 @@ void ExpressionExecutor::Execute(BoundComparisonExpression &expr, Vector &result
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		VectorOperations::GreaterThanEquals(left, right, result);
 		break;
-	case ExpressionType::COMPARE_LIKE:
-		VectorOperations::Like(left, right, result);
-		break;
-	case ExpressionType::COMPARE_NOTLIKE:
-		VectorOperations::NotLike(left, right, result);
-		break;
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		throw NotImplementedException("Unimplemented compare: COMPARE_DISTINCT_FROM");
 	default:

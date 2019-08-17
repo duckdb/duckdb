@@ -23,10 +23,6 @@ ExpressionType Transformer::OperatorToExpressionType(string &op) {
 		return ExpressionType::COMPARE_LESSTHANOREQUALTO;
 	} else if (op == ">=") {
 		return ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-	} else if (op == "~~") {
-		return ExpressionType::COMPARE_LIKE;
-	} else if (op == "!~~") {
-		return ExpressionType::COMPARE_NOTLIKE;
 	} else if (op == "~") {
 		return ExpressionType::COMPARE_SIMILAR;
 	} else if (op == "!~") {

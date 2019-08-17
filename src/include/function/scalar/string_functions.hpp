@@ -33,6 +33,10 @@ struct Length {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct Like {
+    static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct Regexp {
     static void RegisterFunction(BuiltinFunctions &set);
 };
