@@ -119,6 +119,7 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddScalarFunction<SubstringFunction>(transaction, catalog);
 	AddScalarFunction<UpperFunction>(transaction, catalog);
 	AddScalarFunction<LowerFunction>(transaction, catalog);
+	AddScalarFunction<ConcatWSFunction>(transaction, catalog);
 
 	// regex
 	AddScalarFunction<RegexpMatchesFunction>(transaction, catalog);
