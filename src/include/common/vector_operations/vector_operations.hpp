@@ -151,19 +151,10 @@ struct VectorOperations {
 	static Value Min(Vector &A);
 	// Returns whether or not a vector has a NULL value
 	static bool HasNull(Vector &A);
-	// Maximum string length of the vector, only works on string vectors!
-	static Value MaximumStringLength(Vector &A);
-	// Check if any value is true in a bool vector
-	static bool AnyTrue(Vector &A);
-	// Check if all values are true in a bool vector
-	static bool AllTrue(Vector &A);
 
 	//! CASE expressions, ternary op
 	//! result = check ? A : B
 	static void Case(Vector &check, Vector &A, Vector &B, Vector &result);
-
-	// Returns true if the vector contains an instance of Value
-	static bool Contains(Vector &vector, Value &value);
 	//===--------------------------------------------------------------------===//
 	// Scatter methods
 	//===--------------------------------------------------------------------===//

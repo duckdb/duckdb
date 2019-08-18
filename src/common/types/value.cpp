@@ -28,6 +28,9 @@ Value Value::MinimumValue(TypeId type) {
 	result.type = type;
 	result.is_null = false;
 	switch (type) {
+	case TypeId::BOOLEAN:
+		result.value_.boolean = false;
+		break;
 	case TypeId::TINYINT:
 		result.value_.tinyint = std::numeric_limits<int8_t>::min();
 		break;
@@ -60,6 +63,9 @@ Value Value::MaximumValue(TypeId type) {
 	result.type = type;
 	result.is_null = false;
 	switch (type) {
+	case TypeId::BOOLEAN:
+		result.value_.boolean = true;
+		break;
 	case TypeId::TINYINT:
 		result.value_.tinyint = std::numeric_limits<int8_t>::max();
 		break;

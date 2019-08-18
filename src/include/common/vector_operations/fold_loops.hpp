@@ -14,27 +14,46 @@
 
 namespace duckdb {
 
-template <class LEFT_TYPE, class RESULT_TYPE, class OP>
-static inline void fold_loop_function(LEFT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result, index_t count,
+template <class LEFT_TYPE, class RESULT_TYPE, class OP, bool HAS_SEL_VECTOR>
+static inline bool fold_loop_function(LEFT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result, index_t count,
                                       sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 	ASSERT_RESTRICT(ldata, ldata + count, result, result + 1);
 	if (nullmask.any()) {
 		// skip null values in the operation
-		VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
+		index_t i = 0;
+		// find the first null value
+		for(; i < count; i++) {
 			if (!nullmask[i]) {
-				*result = OP::Operation(ldata[i], *result);
+				*result = ldata[HAS_SEL_VECTOR ? sel_vector[i] : i];
+				break;
 			}
-		});
+		}
+		if (i == count) {
+			return false;
+		}
+		// now perform the rest of the iteration
+		for(; i < count; i++) {
+			if (!nullmask[i]) {
+				*result = OP::Operation(ldata[HAS_SEL_VECTOR ? sel_vector[i] : i], *result);
+			}
+		}
 	} else {
 		// quick path: no NULL values
-		VectorOperations::Exec(sel_vector, count,
-		                       [&](index_t i, index_t k) { *result = OP::Operation(ldata[i], *result); });
+		*result = ldata[HAS_SEL_VECTOR ? sel_vector[0] : 0];
+		for(index_t i = 1; i < count; i++) {
+			*result = OP::Operation(ldata[HAS_SEL_VECTOR ? sel_vector[i] : i], *result);
+		}
 	}
+	return true;
 }
 
-template <class LEFT_TYPE, class RESULT_TYPE, class OP> void templated_unary_fold(Vector &input, RESULT_TYPE *result) {
+template <class LEFT_TYPE, class RESULT_TYPE, class OP> bool templated_unary_fold(Vector &input, RESULT_TYPE *result) {
 	auto ldata = (LEFT_TYPE *)input.data;
-	fold_loop_function<LEFT_TYPE, RESULT_TYPE, OP>(ldata, result, input.count, input.sel_vector, input.nullmask);
+	if (input.sel_vector) {
+		return fold_loop_function<LEFT_TYPE, RESULT_TYPE, OP, true>(ldata, result, input.count, input.sel_vector, input.nullmask);
+	} else {
+		return fold_loop_function<LEFT_TYPE, RESULT_TYPE, OP, false>(ldata, result, input.count, input.sel_vector, input.nullmask);
+	}
 }
 
 } // namespace duckdb
