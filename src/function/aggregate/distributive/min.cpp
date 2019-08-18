@@ -23,8 +23,12 @@ void min_simple_update(Vector inputs[], index_t input_count, Value &result) {
 	}
 }
 
-AggregateFunction Min::GetFunction() {
-	return AggregateFunction("min", get_same_return_type, get_return_type_size, null_state_initialize, min_update, gather_finalize, null_simple_initialize, min_simple_update);
+void Min::RegisterFunction(BuiltinFunctions &set) {
+	AggregateFunctionSet min("min");
+	for(auto type : SQLType::ALL_TYPES) {
+		min.AddFunction(AggregateFunction({type}, type, get_return_type_size, null_state_initialize, min_update, gather_finalize, null_simple_initialize, min_simple_update));
+	}
+	set.AddFunction(min);
 }
 
 } // namespace duckdb

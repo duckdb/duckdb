@@ -20,7 +20,8 @@ class ExpressionExecutor;
 class Transaction;
 
 class AggregateFunction;
-class FunctionSet;
+class AggregateFunctionSet;
+class ScalarFunctionSet;
 class ScalarFunction;
 class TableFunction;
 
@@ -44,6 +45,11 @@ public:
 	static string CallToString(string name, vector<SQLType> arguments);
 	//! Returns the formatted string name(arg1, arg2..) -> return_type
 	static string CallToString(string name, vector<SQLType> arguments, SQLType return_type);
+
+	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function, or throws an exception if none could be found.
+	static index_t BindFunction(string name, vector<ScalarFunction> &functions, vector<SQLType> &arguments);
+	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen function, or throws an exception if none could be found.
+	static index_t BindFunction(string name, vector<AggregateFunction> &functions, vector<SQLType> &arguments);
 };
 
 class SimpleFunction : public Function {
@@ -59,6 +65,10 @@ public:
 	//! Whether or not the function has side effects (e.g. sequence increments, random() functions, NOW()). Functions
 	//! with side-effects cannot be constant-folded.
 	bool has_side_effects;
+public:
+	string ToString() {
+		return Function::CallToString(name, arguments, return_type);
+	}
 };
 
 class BuiltinFunctions {
@@ -68,8 +78,9 @@ public:
 	//! Initialize a catalog with all built-in functions
 	void Initialize();
 public:
+	void AddFunction(AggregateFunctionSet set);
 	void AddFunction(AggregateFunction function);
-	void AddFunction(FunctionSet set);
+	void AddFunction(ScalarFunctionSet set);
 	void AddFunction(ScalarFunction function);
 	void AddFunction(TableFunction function);
 private:

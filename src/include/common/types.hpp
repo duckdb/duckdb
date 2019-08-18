@@ -48,20 +48,21 @@ enum class SQLTypeId : uint8_t {
 	INVALID = 0,
 	SQLNULL = 1, /* NULL type, used for constant NULL */
 	UNKNOWN = 2, /* unknown type, used for parameter expressions */
-	BOOLEAN = 3,
-	TINYINT = 4,
-	SMALLINT = 5,
-	INTEGER = 6,
-	BIGINT = 7,
-	DATE = 8,
-	TIMESTAMP = 9,
-	REAL = 10,
-	DOUBLE = 11,
-	FLOAT = 12,
-	DECIMAL = 13,
-	CHAR = 14,
-	VARCHAR = 15,
-	VARBINARY = 16
+	ANY = 3,     /* ANY type, used for functions that accept any type as parameter */
+
+	BOOLEAN = 10,
+	TINYINT = 11,
+	SMALLINT = 12,
+	INTEGER = 13,
+	BIGINT = 14,
+	DATE = 15,
+	TIMESTAMP = 16,
+	FLOAT = 17,
+	DOUBLE = 18,
+	DECIMAL = 20,
+	CHAR = 21,
+	VARCHAR = 22,
+	VARBINARY = 23
 };
 
 struct SQLType {
@@ -97,8 +98,12 @@ public:
 	static const SQLType TIMESTAMP;
 	static const SQLType VARCHAR;
 
+	//! A list of all NUMERIC types (integral and floating point types)
 	static const vector<SQLType> NUMERIC;
+	//! A list of all INTEGRAL types
 	static const vector<SQLType> INTEGRAL;
+	//! A list of ALL SQL types
+	static const vector<SQLType> ALL_TYPES;
 };
 
 bool IsNumericType(SQLTypeId type);

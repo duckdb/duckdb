@@ -16,7 +16,7 @@ static void unary_add_function(ExpressionExecutor &exec, Vector inputs[], index_
 }
 
 void Add::RegisterFunction(BuiltinFunctions &set) {
-	FunctionSet functions("+");
+	ScalarFunctionSet functions("+");
 	// binary add function adds two numbers together
 	for(auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({ type, type }, type, add_function));

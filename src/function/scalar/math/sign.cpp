@@ -13,7 +13,7 @@ static void sign_function(ExpressionExecutor &exec, Vector inputs[], index_t inp
 }
 
 void Sign::RegisterFunction(BuiltinFunctions &set) {
-	FunctionSet sign("sign");
+	ScalarFunctionSet sign("sign");
 	for(auto &type : SQLType::NUMERIC) {
 		sign.AddFunction(ScalarFunction({ type }, SQLType::TINYINT, sign_function));
 	}

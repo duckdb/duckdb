@@ -9,16 +9,21 @@
 #pragma once
 
 #include "parser/parsed_data/create_function_info.hpp"
-#include "function/aggregate_function.hpp"
+#include "function/function_set.hpp"
 
 namespace duckdb {
 
 struct CreateAggregateFunctionInfo : public CreateFunctionInfo {
-	CreateAggregateFunctionInfo(AggregateFunction function) : CreateFunctionInfo(FunctionType::AGGREGATE), function(function) {
+	CreateAggregateFunctionInfo(AggregateFunction function) : CreateFunctionInfo(FunctionType::AGGREGATE), functions(function.name) {
 		this->name = function.name;
+		functions.AddFunction(move(function));
 	}
 
-	AggregateFunction function;
+	CreateAggregateFunctionInfo(AggregateFunctionSet set) : CreateFunctionInfo(FunctionType::AGGREGATE), functions(move(set)) {
+		this->name = functions.name;
+	}
+
+	AggregateFunctionSet functions;
 };
 
 } // namespace duckdb

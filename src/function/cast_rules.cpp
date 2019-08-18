@@ -1,4 +1,4 @@
-#include "common/cast_rules.hpp"
+#include "function/cast_rules.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -90,6 +90,10 @@ static int64_t ImplicitCastDouble(SQLType to) {
 }
 
 int64_t CastRules::ImplicitCast(SQLType from, SQLType to) {
+	if (to.id == SQLTypeId::ANY) {
+		// anything can be cast to ANY type for no cost
+		return 0;
+	}
 	if (from.id == SQLTypeId::SQLNULL || from.id == SQLTypeId::UNKNOWN) {
 		// NULL expression or parameter expression can be cast to anything
 		return TargetTypeCost(to);

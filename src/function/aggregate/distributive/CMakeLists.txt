@@ -1,6 +1,5 @@
 add_library_unity(duckdb_aggr_distr
 				OBJECT
-				count_star.cpp
 				count.cpp
 				first.cpp
 				max.cpp

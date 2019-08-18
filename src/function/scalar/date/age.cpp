@@ -77,7 +77,7 @@ static void age_function(ExpressionExecutor &exec, Vector inputs[], index_t inpu
 }
 
 void Age::RegisterFunction(BuiltinFunctions &set) {
-	FunctionSet age("age");
+	ScalarFunctionSet age("age");
 	age.AddFunction(ScalarFunction({ SQLType::TIMESTAMP }, SQLType::VARCHAR, age_function));
 	age.AddFunction(ScalarFunction({ SQLType::TIMESTAMP,  SQLType::TIMESTAMP }, SQLType::VARCHAR, age_function));
 	set.AddFunction(age);

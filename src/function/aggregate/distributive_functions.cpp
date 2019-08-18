@@ -27,36 +27,22 @@ void bigint_payload_initialize(data_ptr_t payload, TypeId return_type) {
 Value bigint_simple_initialize() {
 	return Value::BIGINT(0);
 }
-
-SQLType get_bigint_return_type(vector<SQLType> &arguments) {
-	if (arguments.size() > 1)
-		return SQLTypeId::INVALID;
-	return SQLTypeId::BIGINT;
-}
-
 index_t get_return_type_size(TypeId return_type) {
 	return GetTypeIdSize(return_type);
 }
-
 
 Value null_simple_initialize() {
 	return Value();
 }
 
-SQLType get_same_return_type(vector<SQLType> &arguments) {
-	if (arguments.size() != 1)
-		return SQLTypeId::INVALID;
-	return arguments[0];
-}
-
 void BuiltinFunctions::RegisterDistributiveAggregates() {
-	AddFunction(CountStar::GetFunction());
-	AddFunction(Count::GetFunction());
-	AddFunction(First::GetFunction());
-	AddFunction(Max::GetFunction());
-	AddFunction(Min::GetFunction());
-	AddFunction(Sum::GetFunction());
-	AddFunction(StringAgg::GetFunction());
+	Register<CountStar>();
+	Register<Count>();
+	Register<First>();
+	Register<Max>();
+	Register<Min>();
+	Register<Sum>();
+	Register<StringAgg>();
 }
 
 } // namespace duckdb

@@ -11,7 +11,7 @@ static void abs_function(ExpressionExecutor &exec, Vector inputs[], index_t inpu
 }
 
 void Abs::RegisterFunction(BuiltinFunctions &set) {
-	FunctionSet abs("abs");
+	ScalarFunctionSet abs("abs");
 	for(auto &type : SQLType::NUMERIC) {
 		abs.AddFunction(ScalarFunction({ type }, type, abs_function));
 	}

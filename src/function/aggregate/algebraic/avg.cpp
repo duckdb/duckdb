@@ -19,37 +19,11 @@ static void avg_initialize(data_ptr_t payload, TypeId return_type) {
 	memset(payload, 0, avg_payload_size(return_type));
 }
 
-static SQLType avg_get_return_type(vector<SQLType> &arguments) {
-	if (arguments.size() != 1)
-		return SQLTypeId::INVALID;
-	const auto &input_type = arguments[0];
-	switch (input_type.id) {
-	case SQLTypeId::SQLNULL:
-	case SQLTypeId::TINYINT:
-	case SQLTypeId::SMALLINT:
-	case SQLTypeId::INTEGER:
-	case SQLTypeId::BIGINT:
-	case SQLTypeId::FLOAT:
-	case SQLTypeId::DOUBLE:
-	case SQLTypeId::DECIMAL:
-		return SQLType(SQLTypeId::DECIMAL);
-	default:
-		return SQLTypeId::INVALID;
-	}
-}
-
 static void avg_update(Vector inputs[], index_t input_count, Vector &state) {
 	assert(input_count == 1);
-	Vector payload_double;
-	if (inputs[0].type != TypeId::DOUBLE) {
-		payload_double.Initialize(TypeId::DOUBLE);
-		VectorOperations::Cast(inputs[0], payload_double);
-	} else {
-		payload_double.Reference(inputs[0]);
-	}
 
 	VectorOperations::Exec(state, [&](index_t i, index_t k) {
-		if (payload_double.nullmask[i]) {
+		if (inputs[0].nullmask[i]) {
 			return;
 		}
 
@@ -57,7 +31,7 @@ static void avg_update(Vector inputs[], index_t input_count, Vector &state) {
 
 		// update count and running sum
 		state_ptr->count++;
-		const auto new_value = ((double *)payload_double.data)[i];
+		const auto new_value = ((double *)inputs[0].data)[i];
 		state_ptr->sum += new_value;
 		// see Finalize() method below for final step
 	});
@@ -76,6 +50,6 @@ static void avg_finalize(Vector &state, Vector &result) {
 	});
 }
 
-AggregateFunction Avg::GetFunction() {
-	return AggregateFunction("avg", avg_get_return_type, avg_payload_size, avg_initialize, avg_update, avg_finalize);
+void Avg::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(AggregateFunction("avg", {SQLType::DOUBLE}, SQLType::DOUBLE, avg_payload_size, avg_initialize, avg_update, avg_finalize));
 }

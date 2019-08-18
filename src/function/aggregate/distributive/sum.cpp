@@ -7,27 +7,6 @@ using namespace std;
 
 namespace duckdb {
 
-SQLType sum_get_return_type(vector<SQLType> &arguments) {
-	if (arguments.size() != 1)
-		return SQLType(SQLTypeId::INVALID);
-	const auto &input_type = arguments[0];
-	switch (input_type.id) {
-	case SQLTypeId::SQLNULL:
-	case SQLTypeId::TINYINT:
-	case SQLTypeId::SMALLINT:
-	case SQLTypeId::INTEGER:
-	case SQLTypeId::BIGINT:
-		return SQLType::BIGINT;
-	case SQLTypeId::FLOAT:
-		return SQLType::FLOAT;
-	case SQLTypeId::DOUBLE:
-	case SQLTypeId::DECIMAL:
-		return SQLType(SQLTypeId::DECIMAL);
-	default:
-		return SQLType(SQLTypeId::INVALID);
-	}
-}
-
 void sum_update(Vector inputs[], index_t input_count, Vector &result) {
 	assert(input_count == 1);
 	VectorOperations::Scatter::Add(inputs[0], result);
@@ -46,8 +25,14 @@ void sum_simple_update(Vector inputs[], index_t input_count, Value &result) {
 	}
 }
 
-AggregateFunction Sum::GetFunction() {
-	return AggregateFunction("sum", sum_get_return_type, get_return_type_size, null_state_initialize, sum_update, gather_finalize, null_simple_initialize, sum_simple_update);
+void Sum::RegisterFunction(BuiltinFunctions &set) {
+	AggregateFunctionSet sum("sum");
+	// integer sums to bigint
+	sum.AddFunction(AggregateFunction({ SQLType::BIGINT }, SQLType::BIGINT, get_return_type_size, null_state_initialize, sum_update, gather_finalize, null_simple_initialize, sum_simple_update));
+	// float sums to float
+	sum.AddFunction(AggregateFunction({ SQLType::DOUBLE }, SQLType::DOUBLE, get_return_type_size, null_state_initialize, sum_update, gather_finalize, null_simple_initialize, sum_simple_update));
+
+	set.AddFunction(sum);
 }
 
 } // namespace duckdb

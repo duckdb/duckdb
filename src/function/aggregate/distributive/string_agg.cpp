@@ -10,23 +10,6 @@ namespace duckdb {
 
 typedef const char* string_agg_state_t;
 
-SQLType string_agg_get_return_type(vector<SQLType> &arguments) {
-    if (arguments.size() != 2)
-        return SQLTypeId::INVALID;
-
-    for ( index_t i = 0; i < arguments.size(); ++i) {
-        switch (arguments[i].id) {
-        case SQLTypeId::SQLNULL:
-        case SQLTypeId::VARCHAR:
-            break;
-        default:
-        return SQLTypeId::INVALID;
-        }
-    }
-
-    return SQLTypeId::VARCHAR;
-}
-
 void string_agg_update(Vector inputs[], index_t input_count, Vector &state) {
     assert(input_count == 2);
     auto& strs = inputs[0];
@@ -59,8 +42,8 @@ void string_agg_update(Vector inputs[], index_t input_count, Vector &state) {
     });
 }
 
-AggregateFunction StringAgg::GetFunction() {
-	return AggregateFunction("string_agg", string_agg_get_return_type, get_return_type_size, null_state_initialize, string_agg_update, gather_finalize);
+void StringAgg::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(AggregateFunction("string_agg", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR, get_return_type_size, null_state_initialize, string_agg_update, gather_finalize));
 }
 
 } // namespace duckdb

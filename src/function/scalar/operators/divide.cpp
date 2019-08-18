@@ -11,7 +11,7 @@ static void divide_function(ExpressionExecutor &exec, Vector inputs[], index_t i
 }
 
 void Divide::RegisterFunction(BuiltinFunctions &set) {
-	FunctionSet functions("/");
+	ScalarFunctionSet functions("/");
 	for(auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({ type, type }, type, divide_function));
 	}

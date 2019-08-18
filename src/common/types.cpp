@@ -38,6 +38,20 @@ const vector<SQLType> SQLType::INTEGRAL = {
 	SQLType::BIGINT
 };
 
+const vector<SQLType> SQLType::ALL_TYPES = {
+	SQLType::BOOLEAN,
+	SQLType::TINYINT,
+	SQLType::SMALLINT,
+	SQLType::INTEGER,
+	SQLType::BIGINT,
+	SQLType::DATE,
+	SQLType::TIMESTAMP,
+	SQLType::DOUBLE,
+	SQLType::FLOAT,
+	SQLType(SQLTypeId::DECIMAL),
+	SQLType::VARCHAR
+};
+
 const TypeId ROW_TYPE = TypeId::BIGINT;
 
 string TypeIdToString(TypeId type) {
@@ -179,6 +193,8 @@ string SQLTypeIdToString(SQLTypeId id) {
 		return "CHAR";
 	case SQLTypeId::SQLNULL:
 		return "NULL";
+	case SQLTypeId::ANY:
+		return "ANY";
 	default:
 		return "INVALID";
 	}

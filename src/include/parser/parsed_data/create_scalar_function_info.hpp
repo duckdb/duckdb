@@ -19,7 +19,7 @@ struct CreateScalarFunctionInfo : public CreateFunctionInfo {
 		this->name = function.name;
 		functions.push_back(function);
 	}
-	CreateScalarFunctionInfo(FunctionSet set) : CreateFunctionInfo(FunctionType::SCALAR), functions(move(set.functions)) {
+	CreateScalarFunctionInfo(ScalarFunctionSet set) : CreateFunctionInfo(FunctionType::SCALAR), functions(move(set.functions)) {
 		this->name = set.name;
 	}
 

@@ -21,7 +21,7 @@ static void unary_subtract_function(ExpressionExecutor &exec, Vector inputs[], i
 }
 
 void Subtract::RegisterFunction(BuiltinFunctions &set) {
-	FunctionSet functions("-");
+	ScalarFunctionSet functions("-");
 	// binary subtract function "a - b", subtracts b from a
 	for(auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({ type, type }, type, subtract_function));

@@ -13,7 +13,7 @@ static void ceil_function(ExpressionExecutor &exec, Vector inputs[], index_t inp
 }
 
 void Ceil::RegisterFunction(BuiltinFunctions &set) {
-	FunctionSet ceil("ceil");
+	ScalarFunctionSet ceil("ceil");
 	for(auto &type : SQLType::NUMERIC) {
 		ceil.AddFunction(ScalarFunction({ type }, type, ceil_function));
 	}

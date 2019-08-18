@@ -26,15 +26,14 @@ typedef Value (*aggregate_simple_initialize_t)();
 //! The type used for updating simple aggregate functions
 typedef void (*aggregate_simple_update_t)(Vector inputs[], index_t input_count, Value &result);
 
-//! Gets the return type of the function given the types of the input argument
-typedef SQLType (*get_return_type_function_t)(vector<SQLType> &arguments);
-
-class AggregateFunction : public Function {
+class AggregateFunction : public SimpleFunction {
 public:
-	AggregateFunction(string name, get_return_type_function_t return_type, aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update, aggregate_finalize_t finalize, aggregate_simple_initialize_t simple_initialize = nullptr, aggregate_simple_update_t simple_update = nullptr, bool cast_arguments = true) :
-		Function(name), return_type(return_type), state_size(state_size), initialize(initialize), update(update), finalize(finalize), simple_initialize(simple_initialize), simple_update(simple_update), cast_arguments(cast_arguments) {}
+	AggregateFunction(string name, vector<SQLType> arguments, SQLType return_type, aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update, aggregate_finalize_t finalize, aggregate_simple_initialize_t simple_initialize = nullptr, aggregate_simple_update_t simple_update = nullptr) :
+		SimpleFunction(name, arguments, return_type, false), state_size(state_size), initialize(initialize), update(update), finalize(finalize), simple_initialize(simple_initialize), simple_update(simple_update) {}
 
-	get_return_type_function_t return_type;
+	AggregateFunction(vector<SQLType> arguments, SQLType return_type, aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update, aggregate_finalize_t finalize, aggregate_simple_initialize_t simple_initialize = nullptr, aggregate_simple_update_t simple_update = nullptr) :
+		AggregateFunction(string(), arguments, return_type, state_size, initialize, update, finalize, simple_initialize, simple_update) {
+	}
 
 	//! The hashed aggregate state sizing function
 	aggregate_size_t state_size;
@@ -49,8 +48,6 @@ public:
 	aggregate_simple_initialize_t simple_initialize;
 	//! The simple aggregate update function (may be null)
 	aggregate_simple_update_t simple_update;
-	//! Whether or not to cast the arguments
-	bool cast_arguments;
 
 	bool operator==(const AggregateFunction &rhs) const {
 		return state_size == rhs.state_size && initialize == rhs.initialize && update == rhs.update && finalize == rhs.finalize;

@@ -21,6 +21,7 @@ class SelectNode;
 
 class AggregateFunctionCatalogEntry;
 class ScalarFunctionCatalogEntry;
+class SimpleFunction;
 
 struct BindResult {
 	BindResult(string error) : error(error) {
@@ -101,6 +102,7 @@ protected:
 
 	void BindChild(unique_ptr<ParsedExpression> &expr, index_t depth, string &error);
 
+	void CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children, vector<SQLType> &types);
 protected:
 	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
 
@@ -117,4 +119,5 @@ protected:
 
 //! Cast an expression to the specified SQL type if required
 unique_ptr<Expression> AddCastToType(unique_ptr<Expression> expr, SQLType source_type, SQLType target_type);
+
 } // namespace duckdb

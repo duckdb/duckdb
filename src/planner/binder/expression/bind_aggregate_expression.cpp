@@ -10,22 +10,6 @@
 using namespace duckdb;
 using namespace std;
 
-static SQLType ValidateReturnType(vector<SQLType> &arguments, AggregateFunctionCatalogEntry *func) {
-	auto result = func->function.return_type(arguments);
-	if (result == SQLTypeId::INVALID) {
-		// types do not match up, throw exception
-		string type_str;
-		for (index_t i = 0; i < arguments.size(); i++) {
-			if (i > 0) {
-				type_str += ", ";
-			}
-			type_str += SQLTypeToString(arguments[i]);
-		}
-		throw BinderException("Unsupported input types for aggregate %s(%s)", func->name.c_str(), type_str.c_str());
-	}
-	return result;
-}
-
 BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, index_t depth) {
 	// first bind the child of the aggregate expression (if any)
 	AggregateBinder aggregate_binder(binder, context);
@@ -62,17 +46,16 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		types.push_back(child.sql_type);
 		children.push_back(move(child.expr));
 	}
+	// bind the aggregate
+	index_t best_function = Function::BindFunction(func->name, func->functions, types);
+	// found a matching function!
+	auto &bound_function = func->functions[best_function];
+	// check if we need to add casts to the children
+	CastToFunctionArguments(bound_function, children, types);
 
-	// types match up, get the result type
-	SQLType result_type = ValidateReturnType(types, func);
-	// add a cast to the child node (if needed)
-	if (func->function.cast_arguments) {
-		for (index_t i = 0; i < children.size(); i++) {
-			children[i] = AddCastToType(move(children[i]), types[i], result_type);
-		}
-	}
+	auto return_type = bound_function.return_type;
 	// create the aggregate
-	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(result_type), func->function, aggr.distinct);
+	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(return_type), bound_function, aggr.distinct);
 	aggregate->children = move(children);
 	// now create a column reference referring to this aggregate
 
@@ -80,5 +63,5 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	    func->name, aggregate->return_type, ColumnBinding(node.aggregate_index, node.aggregates.size()), depth);
 	// move the aggregate expression into the set of bound aggregates
 	node.aggregates.push_back(move(aggregate));
-	return BindResult(move(colref), result_type);
+	return BindResult(move(colref), return_type);
 }

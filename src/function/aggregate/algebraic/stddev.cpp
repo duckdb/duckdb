@@ -21,41 +21,13 @@ static void stddevsamp_initialize(data_ptr_t payload, TypeId return_type) {
 	memset(payload, 0, stddev_state_size(return_type));
 }
 
-static SQLType stddev_get_return_type(vector<SQLType> &arguments) {
-	if (arguments.size() != 1)
-		return SQLTypeId::INVALID;
-	const auto &input_type = arguments[0];
-	switch (input_type.id) {
-	case SQLTypeId::SQLNULL:
-	case SQLTypeId::TINYINT:
-	case SQLTypeId::SMALLINT:
-	case SQLTypeId::INTEGER:
-	case SQLTypeId::BIGINT:
-	case SQLTypeId::FLOAT:
-	case SQLTypeId::DOUBLE:
-	case SQLTypeId::DECIMAL:
-		return SQLType(SQLTypeId::DECIMAL);
-	default:
-		return SQLTypeId::INVALID;
-	}
-}
-
 static void stddevsamp_update(Vector inputs[], index_t input_count, Vector &state) {
 	assert(input_count == 1);
 	// Streaming approximate standard deviation using Welford's
 	// method, DOI: 10.2307/1266577
 
-	// convert input to floating point if required
-	Vector payload_double;
-	if (inputs[0].type != TypeId::DOUBLE) {
-		payload_double.Initialize(TypeId::DOUBLE);
-		VectorOperations::Cast(inputs[0], payload_double);
-	} else {
-		payload_double.Reference(inputs[0]);
-	}
-
 	VectorOperations::Exec(state, [&](index_t i, index_t k) {
-		if (payload_double.nullmask[i]) {
+		if (inputs[0].nullmask[i]) {
 			return;
 		}
 
@@ -63,7 +35,7 @@ static void stddevsamp_update(Vector inputs[], index_t input_count, Vector &stat
 
 		// update running mean and d^2
 		state_ptr->count++;
-		const double new_value = ((double *)payload_double.data)[i];
+		const double new_value = ((double *)inputs[0].data)[i];
 		const double mean_differential = (new_value - state_ptr->mean) / state_ptr->count;
 		const double new_mean = state_ptr->mean + mean_differential;
 		const double dsquared_increment = (new_value - new_mean) * (new_value - state_ptr->mean);
@@ -135,18 +107,18 @@ static void stddevpop_finalize(Vector &state, Vector &result) {
 	});
 }
 
-AggregateFunction StdDevSamp::GetFunction() {
-	return AggregateFunction("stddev_samp", stddev_get_return_type, stddev_state_size, stddevsamp_initialize, stddevsamp_update, stddevsamp_finalize);
+void StdDevSamp::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(AggregateFunction("stddev_samp", {SQLType::DOUBLE}, SQLType::DOUBLE, stddev_state_size, stddevsamp_initialize, stddevsamp_update, stddevsamp_finalize));
 }
 
-AggregateFunction StdDevPop::GetFunction() {
-	return AggregateFunction("stddev_pop", stddev_get_return_type, stddev_state_size, stddevsamp_initialize, stddevsamp_update, stddevpop_finalize);
+void StdDevPop::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(AggregateFunction("stddev_pop", {SQLType::DOUBLE}, SQLType::DOUBLE, stddev_state_size, stddevsamp_initialize, stddevsamp_update, stddevpop_finalize));
 }
 
-AggregateFunction VarPop::GetFunction() {
-	return AggregateFunction("var_samp", stddev_get_return_type, stddev_state_size, stddevsamp_initialize, stddevsamp_update, varsamp_finalize);
+void VarPop::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(AggregateFunction("var_samp", {SQLType::DOUBLE}, SQLType::DOUBLE, stddev_state_size, stddevsamp_initialize, stddevsamp_update, varsamp_finalize));
 }
 
-AggregateFunction VarSamp::GetFunction() {
-	return AggregateFunction("var_pop", stddev_get_return_type, stddev_state_size, stddevsamp_initialize, stddevsamp_update, varpop_finalize);
+void VarSamp::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(AggregateFunction("var_pop", {SQLType::DOUBLE}, SQLType::DOUBLE, stddev_state_size, stddevsamp_initialize, stddevsamp_update, varpop_finalize));
 }

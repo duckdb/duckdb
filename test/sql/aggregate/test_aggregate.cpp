@@ -101,7 +101,6 @@ TEST_CASE("Test STRING_AGG operator", "[aggregate]") {
 	// test incorrect usage of STRING_AGG function
 	REQUIRE_FAIL(con.Query("SELECT STRING_AGG()"));
 	REQUIRE_FAIL(con.Query("SELECT STRING_AGG(1)"));
-	REQUIRE_FAIL(con.Query("SELECT STRING_AGG(1, 2)"));
 	REQUIRE_FAIL(con.Query("SELECT STRING_AGG(1, 2, 3)"));
 	REQUIRE_FAIL(con.Query("SELECT STRING_AGG(STRING_AGG('a',','))"));
 
@@ -135,6 +134,10 @@ TEST_CASE("Test STRING_AGG operator", "[aggregate]") {
 	result = con.Query("SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings WHERE g > 100");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+
+	// numerics are auto cast to strings
+	result = con.Query("SELECT STRING_AGG(1, 2)");
+	REQUIRE(CHECK_COLUMN(result, 0, {"1"}));
 }
 
 TEST_CASE("Test AVG operator", "[aggregate]") {

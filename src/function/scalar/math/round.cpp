@@ -11,7 +11,7 @@ static void round_function(ExpressionExecutor &exec, Vector inputs[], index_t in
 }
 
 void Round::RegisterFunction(BuiltinFunctions &set) {
-	FunctionSet round("round");
+	ScalarFunctionSet round("round");
 	for(auto &type : SQLType::NUMERIC) {
 		round.AddFunction(ScalarFunction({ type, SQLType::INTEGER }, type, round_function));
 	}

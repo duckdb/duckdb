@@ -12,8 +12,17 @@ void first_update(Vector inputs[], index_t input_count, Vector &result) {
 	VectorOperations::Scatter::SetFirst(inputs[0], result);
 }
 
-AggregateFunction First::GetFunction() {
-	return AggregateFunction("first", get_same_return_type, get_return_type_size, null_state_initialize, first_update, gather_finalize);
+
+AggregateFunction First::GetFunction(SQLType type) {
+	return AggregateFunction({ type }, type, get_return_type_size, null_state_initialize, first_update, gather_finalize);
+}
+
+void First::RegisterFunction(BuiltinFunctions &set) {
+	AggregateFunctionSet first("first");
+	for(auto type : SQLType::ALL_TYPES) {
+		first.AddFunction(First::GetFunction(type));
+	}
+	set.AddFunction(first);
 }
 
 } // namespace duckdb

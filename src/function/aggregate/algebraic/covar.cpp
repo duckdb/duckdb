@@ -22,47 +22,12 @@ static void covar_initialize(data_ptr_t payload, TypeId return_type) {
 	memset(payload, 0, covar_state_size(return_type));
 }
 
-static Vector &CastVector(Vector &original, TypeId type, Vector &cast) {
-	if (original.type != type) {
-		cast.Initialize(type);
-		VectorOperations::Cast(original, cast);
-	} else {
-		cast.Reference(original);
-	}
-	return cast;
-}
-
-static SQLType covar_get_return_type(vector<SQLType> &arguments) {
-	if (arguments.size() != 2)
-		return SQLTypeId::INVALID;
-	const auto &input_type = MaxSQLType(arguments[0], arguments[1]);
-	switch (input_type.id) {
-	case SQLTypeId::SQLNULL:
-	case SQLTypeId::TINYINT:
-	case SQLTypeId::SMALLINT:
-	case SQLTypeId::INTEGER:
-	case SQLTypeId::BIGINT:
-	case SQLTypeId::FLOAT:
-	case SQLTypeId::DOUBLE:
-	case SQLTypeId::DECIMAL:
-		return SQLType(SQLTypeId::DECIMAL);
-	default:
-		return SQLTypeId::INVALID;
-	}
-}
-
 static void covar_update(Vector inputs[], index_t input_count, Vector &state) {
 	assert(input_count == 2);
 	// Streaming approximate covariance
 
-	// convert inputs to floating point if required
-	Vector doublex;
-	CastVector(inputs[0], TypeId::DOUBLE, doublex);
-	Vector doubley;
-	CastVector(inputs[1], TypeId::DOUBLE, doubley);
-
 	VectorOperations::Exec(state, [&](index_t i, index_t k) {
-		if (doublex.nullmask[i] || doubley.nullmask[i]) {
+		if (inputs[0].nullmask[i] || inputs[1].nullmask[i]) {
 			return;
 		}
 		// Layout of state for online covariance:
@@ -76,11 +41,11 @@ static void covar_update(Vector inputs[], index_t input_count, Vector &state) {
 		// update running mean and d^2
 		const uint64_t n = ++(state_ptr->count);
 
-		const double x = ((double *)doublex.data)[i];
+		const double x = ((double *)inputs[0].data)[i];
 		const double dx = (x - state_ptr->meanx);
 		const double meanx = state_ptr->meanx + dx / n;
 
-		const double y = ((double *)doubley.data)[i];
+		const double y = ((double *)inputs[1].data)[i];
 		const double dy = (y - state_ptr->meany);
 		const double meany = state_ptr->meany + dy / n;
 
@@ -123,10 +88,10 @@ static void covarsamp_finalize(Vector &state, Vector &result) {
 	});
 }
 
-AggregateFunction CovarSamp::GetFunction() {
-	return AggregateFunction("covar_samp", covar_get_return_type, covar_state_size, covar_initialize, covar_update, covarsamp_finalize);
+void CovarSamp::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(AggregateFunction("covar_samp", {SQLType::DOUBLE, SQLType::DOUBLE}, SQLType::DOUBLE, covar_state_size, covar_initialize, covar_update, covarsamp_finalize));
 }
 
-AggregateFunction CovarPop::GetFunction() {
-	return AggregateFunction("covar_pop", covar_get_return_type, covar_state_size, covar_initialize, covar_update, covarpop_finalize);
+void CovarPop::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(AggregateFunction("covar_pop", {SQLType::DOUBLE, SQLType::DOUBLE}, SQLType::DOUBLE, covar_state_size, covar_initialize, covar_update, covarpop_finalize));
 }
