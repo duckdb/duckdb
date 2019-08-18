@@ -13,6 +13,7 @@ add_library_unity(duckdb_scalar_function
                   trigonometrics.cpp
                   age.cpp
                   mod.cpp
-                  pow.cpp)
+                  pow.cpp
+                  concat_ws.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES}
                      $<TARGET_OBJECTS:duckdb_scalar_function> PARENT_SCOPE)
