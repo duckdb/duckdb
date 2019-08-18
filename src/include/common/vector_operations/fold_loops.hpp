@@ -23,8 +23,9 @@ static inline bool fold_loop_function(LEFT_TYPE *__restrict ldata, RESULT_TYPE *
 		index_t i = 0;
 		// find the first null value
 		for(; i < count; i++) {
-			if (!nullmask[i]) {
-				*result = ldata[HAS_SEL_VECTOR ? sel_vector[i] : i];
+			index_t index = HAS_SEL_VECTOR ? sel_vector[i] : i;
+			if (!nullmask[index]) {
+				*result = ldata[index];
 				break;
 			}
 		}
@@ -32,9 +33,10 @@ static inline bool fold_loop_function(LEFT_TYPE *__restrict ldata, RESULT_TYPE *
 			return false;
 		}
 		// now perform the rest of the iteration
-		for(; i < count; i++) {
-			if (!nullmask[i]) {
-				*result = OP::Operation(ldata[HAS_SEL_VECTOR ? sel_vector[i] : i], *result);
+		for(i++; i < count; i++) {
+			index_t index = HAS_SEL_VECTOR ? sel_vector[i] : i;
+			if (!nullmask[index]) {
+				*result = OP::Operation(ldata[index], *result);
 			}
 		}
 	} else {

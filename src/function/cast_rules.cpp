@@ -9,9 +9,9 @@ static int64_t TargetTypeCost(SQLType type) {
 	case SQLTypeId::INTEGER:
 		return 103;
 	case SQLTypeId::BIGINT:
-		return 102;
-	case SQLTypeId::DOUBLE:
 		return 101;
+	case SQLTypeId::DOUBLE:
+		return 102;
 	case SQLTypeId::VARCHAR:
 		return 199;
 	default:

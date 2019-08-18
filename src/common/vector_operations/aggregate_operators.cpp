@@ -105,7 +105,7 @@ Value VectorOperations::Min(Vector &left) {
 		return Value(left.type);
 	}
 	Value result(left.type);
-	if (!generic_fold_loop<duckdb::Max>(left, result)) {
+	if (!generic_fold_loop<duckdb::Min>(left, result)) {
 		return Value(left.type);
 	}
 	result.is_null = false;
