@@ -17,7 +17,6 @@ RegexpMatchesBindData::RegexpMatchesBindData(unique_ptr<RE2> constant_pattern, s
 }
 
 RegexpMatchesBindData::~RegexpMatchesBindData() {
-
 }
 
 unique_ptr<FunctionData> RegexpMatchesBindData::Copy() {

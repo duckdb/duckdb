@@ -85,6 +85,7 @@ struct SQLType {
 	void Serialize(Serializer &serializer);
 	//! Deserializes a blob back into an SQLType
 	static SQLType Deserialize(Deserializer &source);
+
 public:
 	static const SQLType SQLNULL;
 	static const SQLType BOOLEAN;

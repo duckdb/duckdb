@@ -83,15 +83,18 @@ public:
 
 	//! Initialize a catalog with all built-in functions
 	void Initialize();
+
 public:
 	void AddFunction(AggregateFunctionSet set);
 	void AddFunction(AggregateFunction function);
 	void AddFunction(ScalarFunctionSet set);
 	void AddFunction(ScalarFunction function);
 	void AddFunction(TableFunction function);
+
 private:
 	Transaction &transaction;
 	Catalog &catalog;
+
 private:
 	template<class T>
 	void Register() {

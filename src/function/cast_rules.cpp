@@ -17,7 +17,6 @@ static int64_t TargetTypeCost(SQLType type) {
 	default:
 		return 110;
 	}
-
 }
 
 static int64_t ImplicitCastTinyint(SQLType to) {

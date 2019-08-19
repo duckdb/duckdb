@@ -16,7 +16,6 @@ using namespace std;
 
 BuiltinFunctions::BuiltinFunctions(Transaction &transaction, Catalog &catalog) :
 	transaction(transaction), catalog(catalog) {
-
 }
 
 void BuiltinFunctions::AddFunction(AggregateFunctionSet set) {

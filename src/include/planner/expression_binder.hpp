@@ -103,6 +103,7 @@ protected:
 	void BindChild(unique_ptr<ParsedExpression> &expr, index_t depth, string &error);
 
 	void CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children, vector<SQLType> &types);
+
 protected:
 	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
 

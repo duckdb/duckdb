@@ -92,23 +92,8 @@ TEST_CASE("Test random() function", "[function]") {
 	result = con.Query("select case when max(random()) < 1 then 1 else 0 end from numbers;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
-	// result1 = con.Query("select * from numbers order by random()");
-	// result2 = con.Query("select * from numbers order by random()");
-	// splits1 = StringUtil::Split(result1->ToString(), '\n');
-	// splits2 = StringUtil::Split(result2->ToString(), '\n');
-	// REQUIRE(splits1 != splits2);
-	// sort(begin(splits1), end(splits1));
-	// sort(begin(splits2), end(splits2));
-	// REQUIRE(splits1 == splits2);
-
-	// result1 = con.Query("select random() from numbers");
-	// result2 = con.Query("select random() from numbers");
-	// splits1 = StringUtil::Split(result1->ToString(), '\n');
-	// splits2 = StringUtil::Split(result2->ToString(), '\n');
-	// REQUIRE(splits1 != splits2);
-	// sort(begin(splits1), end(splits1));
-	// sort(begin(splits2), end(splits2));
-	// REQUIRE(splits1 != splits2);
+	REQUIRE_NO_FAIL(con.Query("select * from numbers order by random()"));
+	REQUIRE_NO_FAIL(con.Query("select random() from numbers"));
 }
 
 // see https://www.postgresql.org/docs/10/functions-math.html
