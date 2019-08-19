@@ -93,6 +93,7 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddScalarFunction<CeilingFunction>(transaction, catalog);
 	AddScalarFunction<FloorFunction>(transaction, catalog);
 	AddScalarFunction<PiFunction>(transaction, catalog);
+	AddScalarFunction<RandomFunction>(transaction, catalog);
 	AddScalarFunction<SqrtFunction>(transaction, catalog);
 	AddScalarFunction<LnFunction>(transaction, catalog);
 	AddScalarFunction<LogFunction>(transaction, catalog);
