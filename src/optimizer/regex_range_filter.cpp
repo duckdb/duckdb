@@ -1,6 +1,3 @@
-#include "optimizer/regex_range_filter.hpp"
-
-#include "function/scalar_function/regexp.hpp"
 #include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "planner/expression.hpp"
 #include "planner/expression/bound_comparison_expression.hpp"
@@ -8,6 +5,7 @@
 #include "planner/expression/bound_constant_expression.hpp"
 #include "planner/expression/bound_function_expression.hpp"
 #include "planner/operator/logical_filter.hpp"
+#include "function/scalar/string_functions.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -27,7 +25,7 @@ unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator
 	for (auto &expr : op->expressions) {
 		if (expr->type == ExpressionType::BOUND_FUNCTION) {
 			auto &func = (BoundFunctionExpression &)*expr.get();
-			if (func.bound_function->name != "regexp_matches" || func.children.size() != 2) {
+			if (func.function.name != "regexp_matches" || func.children.size() != 2) {
 				continue;
 			}
 			auto &info = (RegexpMatchesBindData &)*func.bind_info;

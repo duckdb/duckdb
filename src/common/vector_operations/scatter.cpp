@@ -12,7 +12,7 @@
 using namespace duckdb;
 using namespace std;
 
-template <class OP> static void generic_scatter_loop(Vector &source, Vector &dest) {
+template <class OP> static void numeric_scatter_loop(Vector &source, Vector &dest) {
 	if (dest.type != TypeId::POINTER) {
 		throw InvalidTypeException(dest.type, "Cannot scatter to non-pointer type!");
 	}
@@ -41,6 +41,17 @@ template <class OP> static void generic_scatter_loop(Vector &source, Vector &des
 	}
 }
 
+template <class OP> static void generic_scatter_loop(Vector &source, Vector &dest) {
+	switch (source.type) {
+	case TypeId::VARCHAR:
+		scatter_templated_loop<const char*, OP>(source, dest);
+		break;
+	default:
+		numeric_scatter_loop<OP>(source, dest);
+		break;
+	}
+}
+
 void VectorOperations::Scatter::Set(Vector &source, Vector &dest) {
 	if (source.type == TypeId::VARCHAR) {
 		scatter_templated_loop<char *, duckdb::PickLeft>(source, dest);
@@ -58,7 +69,7 @@ void VectorOperations::Scatter::SetFirst(Vector &source, Vector &dest) {
 }
 
 void VectorOperations::Scatter::Add(Vector &source, Vector &dest) {
-	generic_scatter_loop<duckdb::Add>(source, dest);
+	numeric_scatter_loop<duckdb::Add>(source, dest);
 }
 
 void VectorOperations::Scatter::Max(Vector &source, Vector &dest) {

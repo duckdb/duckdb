@@ -97,7 +97,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 		return Bind((SubqueryRef &)ref);
 	default:
 		assert(ref.type == TableReferenceType::TABLE_FUNCTION);
-		return Bind((TableFunction &)ref);
+		return Bind((TableFunctionRef &)ref);
 	}
 }
 

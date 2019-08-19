@@ -50,8 +50,6 @@ TEST_CASE("Aggregating boolean vectors", "[vector_ops]") {
 	v.SetValue(1, Value::BOOLEAN(true));
 	v.SetValue(2, Value::BOOLEAN(false));
 
-	REQUIRE(VectorOperations::AnyTrue(v));
-	REQUIRE(!VectorOperations::AllTrue(v));
 	REQUIRE(VectorOperations::HasNull(v));
 }
 
@@ -81,16 +79,6 @@ TEST_CASE("Aggregating numeric vectors", "[vector_ops]") {
 	require_aggrs(v);
 	v.Cast(TypeId::DOUBLE);
 	require_aggrs(v);
-}
-
-TEST_CASE("Aggregating string vectors", "[vector_ops]") {
-	Vector v(TypeId::VARCHAR, true, false);
-	v.count = 3;
-	v.SetStringValue(0, "Das Pferd");
-	v.SetStringValue(1, "frisst keinen Gurkensalat");
-	v.SetNull(2, true);
-
-	REQUIRE(VectorOperations::MaximumStringLength(v).CastAs(TypeId::BIGINT) == Value::BIGINT(25));
 }
 
 static void require_case(Vector &val) {

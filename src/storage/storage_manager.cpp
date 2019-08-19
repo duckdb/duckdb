@@ -39,7 +39,8 @@ void StorageManager::Initialize() {
 	database.catalog->CreateSchema(*transaction, &info);
 
 	// initialize default functions
-	BuiltinFunctions::Initialize(*transaction, *database.catalog);
+	BuiltinFunctions builtin(*transaction, *database.catalog);
+	builtin.Initialize();
 
 	// commit transactions
 	database.transaction_manager->CommitTransaction(transaction);

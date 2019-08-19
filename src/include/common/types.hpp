@@ -46,21 +46,23 @@ enum class TypeId : uint8_t {
 //===--------------------------------------------------------------------===//
 enum class SQLTypeId : uint8_t {
 	INVALID = 0,
-	SQLNULL = 1,
-	BOOLEAN = 2,
-	TINYINT = 3,
-	SMALLINT = 4,
-	INTEGER = 5,
-	BIGINT = 6,
-	DATE = 7,
-	TIMESTAMP = 8,
-	REAL = 9,
-	DOUBLE = 10,
-	FLOAT = 11,
-	DECIMAL = 12,
-	CHAR = 13,
-	VARCHAR = 14,
-	VARBINARY = 15
+	SQLNULL = 1, /* NULL type, used for constant NULL */
+	UNKNOWN = 2, /* unknown type, used for parameter expressions */
+	ANY = 3,     /* ANY type, used for functions that accept any type as parameter */
+
+	BOOLEAN = 10,
+	TINYINT = 11,
+	SMALLINT = 12,
+	INTEGER = 13,
+	BIGINT = 14,
+	DATE = 15,
+	TIMESTAMP = 16,
+	FLOAT = 17,
+	DOUBLE = 18,
+	DECIMAL = 20,
+	CHAR = 21,
+	VARCHAR = 22,
+	VARBINARY = 23
 };
 
 struct SQLType {
@@ -83,6 +85,26 @@ struct SQLType {
 	void Serialize(Serializer &serializer);
 	//! Deserializes a blob back into an SQLType
 	static SQLType Deserialize(Deserializer &source);
+
+public:
+	static const SQLType SQLNULL;
+	static const SQLType BOOLEAN;
+	static const SQLType TINYINT;
+	static const SQLType SMALLINT;
+	static const SQLType INTEGER;
+	static const SQLType BIGINT;
+	static const SQLType FLOAT;
+	static const SQLType DOUBLE;
+	static const SQLType DATE;
+	static const SQLType TIMESTAMP;
+	static const SQLType VARCHAR;
+
+	//! A list of all NUMERIC types (integral and floating point types)
+	static const vector<SQLType> NUMERIC;
+	//! A list of all INTEGRAL types
+	static const vector<SQLType> INTEGRAL;
+	//! A list of ALL SQL types
+	static const vector<SQLType> ALL_TYPES;
 };
 
 bool IsNumericType(SQLTypeId type);

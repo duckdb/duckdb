@@ -1,5 +1,5 @@
 #include "common/exception.hpp"
-#include "parser/tableref/table_function.hpp"
+#include "parser/tableref/table_function_ref.hpp"
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
@@ -29,7 +29,7 @@ unique_ptr<TableRef> Transformer::TransformRangeFunction(RangeFunction *root) {
 		throw NotImplementedException("Explicit column definition not supported yet");
 	}
 	// transform the function call
-	auto result = make_unique<TableFunction>();
+	auto result = make_unique<TableFunctionRef>();
 	result->function = TransformFuncCall((FuncCall *)call_tree);
 	result->alias = TransformAlias(root->alias);
 	return move(result);

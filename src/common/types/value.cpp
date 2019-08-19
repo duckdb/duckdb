@@ -28,6 +28,9 @@ Value Value::MinimumValue(TypeId type) {
 	result.type = type;
 	result.is_null = false;
 	switch (type) {
+	case TypeId::BOOLEAN:
+		result.value_.boolean = false;
+		break;
 	case TypeId::TINYINT:
 		result.value_.tinyint = std::numeric_limits<int8_t>::min();
 		break;
@@ -60,6 +63,9 @@ Value Value::MaximumValue(TypeId type) {
 	result.type = type;
 	result.is_null = false;
 	switch (type) {
+	case TypeId::BOOLEAN:
+		result.value_.boolean = true;
+		break;
 	case TypeId::TINYINT:
 		result.value_.tinyint = std::numeric_limits<int8_t>::max();
 		break;
@@ -118,6 +124,13 @@ Value Value::INTEGER(int32_t value) {
 Value Value::BIGINT(int64_t value) {
 	Value result(TypeId::BIGINT);
 	result.value_.bigint = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::FLOAT(float value) {
+	Value result(TypeId::FLOAT);
+	result.value_.float_ = value;
 	result.is_null = false;
 	return result;
 }
@@ -183,13 +196,17 @@ template <> Value Value::CreateValue(string value) {
 	return Value(value);
 }
 
+template <> Value Value::CreateValue(float value) {
+	return Value::FLOAT(value);
+}
+
 template <> Value Value::CreateValue(double value) {
 	return Value::DOUBLE(value);
 }
 
 Value Value::Numeric(TypeId type, int64_t value) {
 	assert(!TypeIsIntegral(type) ||
-	       (value >= duckdb::MinimumValue(type) && (uint64_t)value <= duckdb::MaximumValue(type)));
+	       (value >= duckdb::MinimumValue(type) && (value < 0 || (uint64_t)value <= duckdb::MaximumValue(type))));
 	Value val(type);
 	val.is_null = false;
 	switch (type) {
@@ -490,22 +507,25 @@ bool Value::ValuesAreEqual(Value result_value, Value value) {
 	}
 	switch (value.type) {
 	case TypeId::FLOAT: {
+		auto other = result_value.CastAs(TypeId::FLOAT);
 		float ldecimal = value.value_.float_;
-		float rdecimal = result_value.value_.float_;
+		float rdecimal = other.value_.float_;
 		return ApproxEqual(ldecimal, rdecimal);
 	}
 	case TypeId::DOUBLE: {
+		auto other = result_value.CastAs(TypeId::DOUBLE);
 		double ldecimal = value.value_.double_;
-		double rdecimal = result_value.value_.double_;
+		double rdecimal = other.value_.double_;
 		return ApproxEqual(ldecimal, rdecimal);
 	}
 	case TypeId::VARCHAR: {
+		auto other = result_value.CastAs(TypeId::VARCHAR);
 		// some results might contain padding spaces, e.g. when rendering
 		// VARCHAR(10) and the string only has 6 characters, they will be padded
 		// with spaces to 10 in the rendering. We don't do that here yet as we
 		// are looking at internal structures. So just ignore any extra spaces
 		// on the right
-		string left = result_value.str_value;
+		string left = other.str_value;
 		string right = value.str_value;
 		StringUtil::RTrim(left);
 		StringUtil::RTrim(right);

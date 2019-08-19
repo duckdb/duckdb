@@ -78,7 +78,7 @@ template class std::unique_ptr<BaseTableRef>;
 template class std::unique_ptr<CrossProductRef>;
 template class std::unique_ptr<JoinRef>;
 template class std::unique_ptr<SubqueryRef>;
-template class std::unique_ptr<TableFunction>;
+template class std::unique_ptr<TableFunctionRef>;
 
 template class std::unique_ptr<Expression>;
 template class std::unique_ptr<BoundSQLStatement>;

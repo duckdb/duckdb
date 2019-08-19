@@ -158,7 +158,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		auto explain = make_unique<LogicalExplain>(move(plan));
 		explain->logical_plan_unopt = logical_plan_unopt;
 		names = {"explain_key", "explain_value"};
-		sql_types = {SQLType(SQLTypeId::VARCHAR), SQLType(SQLTypeId::VARCHAR)};
+		sql_types = {SQLType::VARCHAR, SQLType::VARCHAR};
 		plan = move(explain);
 		break;
 	}

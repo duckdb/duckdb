@@ -149,10 +149,10 @@ TableFunctionCatalogEntry *SchemaCatalogEntry::GetTableFunction(Transaction &tra
 	}
 	auto function_entry = (TableFunctionCatalogEntry *)entry;
 	// check if the argument lengths match
-	if (expression->children.size() != function_entry->arguments.size()) {
+	if (expression->children.size() != function_entry->function.arguments.size()) {
 		throw CatalogException("Function with name %s exists, but argument length does not match! "
 		                       "Expected %d arguments but got %d.",
-		                       expression->function_name.c_str(), (int)function_entry->arguments.size(),
+		                       expression->function_name.c_str(), (int)function_entry->function.arguments.size(),
 		                       (int)expression->children.size());
 	}
 	return function_entry;
@@ -208,7 +208,7 @@ void SchemaCatalogEntry::CreateFunction(Transaction &transaction, CreateFunction
 CatalogEntry *SchemaCatalogEntry::GetFunction(Transaction &transaction, const string &name, bool if_exists) {
 	auto entry = functions.GetEntry(transaction, name);
 	if (!entry && !if_exists) {
-		throw CatalogException("Aggregate Function with name %s does not exist!", name.c_str());
+		throw CatalogException("Function with name %s does not exist!", name.c_str());
 	}
 	return entry;
 }

@@ -389,23 +389,23 @@ SQLType ConvertCTypeToCPP(duckdb_type type) {
 	case DUCKDB_TYPE_BOOLEAN:
 		return SQLType(SQLTypeId::BOOLEAN);
 	case DUCKDB_TYPE_TINYINT:
-		return SQLType(SQLTypeId::TINYINT);
+		return SQLType::TINYINT;
 	case DUCKDB_TYPE_SMALLINT:
-		return SQLType(SQLTypeId::SMALLINT);
+		return SQLType::SMALLINT;
 	case DUCKDB_TYPE_INTEGER:
-		return SQLType(SQLTypeId::INTEGER);
+		return SQLType::INTEGER;
 	case DUCKDB_TYPE_BIGINT:
-		return SQLType(SQLTypeId::BIGINT);
+		return SQLType::BIGINT;
 	case DUCKDB_TYPE_FLOAT:
-		return SQLType(SQLTypeId::FLOAT);
+		return SQLType::FLOAT;
 	case DUCKDB_TYPE_DOUBLE:
-		return SQLType(SQLTypeId::DOUBLE);
+		return SQLType::DOUBLE;
 	case DUCKDB_TYPE_TIMESTAMP:
-		return SQLType(SQLTypeId::TIMESTAMP);
+		return SQLType::TIMESTAMP;
 	case DUCKDB_TYPE_DATE:
-		return SQLType(SQLTypeId::DATE);
+		return SQLType::DATE;
 	case DUCKDB_TYPE_VARCHAR:
-		return SQLType(SQLTypeId::VARCHAR);
+		return SQLType::VARCHAR;
 	default:
 		return SQLType(SQLTypeId::INVALID);
 	}

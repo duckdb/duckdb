@@ -126,7 +126,7 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 		if (bound_expr->sql_type.id == SQLTypeId::SQLNULL) {
 			// SQL NULL type is only used internally in the binder
 			// cast to INTEGER if we encounter it outside of the binder
-			bound_expr->sql_type = SQLType(SQLTypeId::INTEGER);
+			bound_expr->sql_type = SQLType::INTEGER;
 			result = AddCastToType(move(result), bound_expr->sql_type, bound_expr->sql_type);
 		}
 	}

@@ -3,7 +3,7 @@
 #include "expression_helper.hpp"
 #include "optimizer/cse_optimizer.hpp"
 #include "planner/expression/bound_comparison_expression.hpp"
-#include "planner/expression/bound_operator_expression.hpp"
+#include "planner/expression/bound_function_expression.hpp"
 #include "planner/expression/common_subexpression.hpp"
 #include "test_helpers.hpp"
 
@@ -40,8 +40,8 @@ TEST_CASE("Test CSE Optimizer", "[optimizer]") {
 	REQUIRE(tree->expressions[1]->type == ExpressionType::COMMON_SUBEXPRESSION);
 	REQUIRE(tree->expressions[2]->type == ExpressionType::COMMON_SUBEXPRESSION);
 	REQUIRE(tree->expressions[3]->type == ExpressionType::COMMON_SUBEXPRESSION);
-	REQUIRE(tree->expressions[4]->type == ExpressionType::OPERATOR_ADD);
-	auto &op = (BoundOperatorExpression &)*tree->expressions[4];
+	REQUIRE(tree->expressions[4]->type == ExpressionType::BOUND_FUNCTION);
+	auto &op = (BoundFunctionExpression &)*tree->expressions[4];
 	REQUIRE(op.children[0]->type == ExpressionType::COMMON_SUBEXPRESSION);
 	REQUIRE(op.children[1]->type == ExpressionType::COMMON_SUBEXPRESSION);
 

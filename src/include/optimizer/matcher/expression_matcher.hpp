@@ -12,6 +12,7 @@
 #include "optimizer/matcher/expression_type_matcher.hpp"
 #include "optimizer/matcher/set_matcher.hpp"
 #include "optimizer/matcher/type_matcher.hpp"
+#include "optimizer/matcher/function_matcher.hpp"
 #include "planner/logical_operator.hpp"
 
 namespace duckdb {
@@ -110,6 +111,21 @@ public:
 	vector<unique_ptr<ExpressionMatcher>> matchers;
 	//! The set matcher matching policy to use
 	SetMatcher::Policy policy;
+
+	bool Match(Expression *expr_, vector<Expression *> &bindings) override;
+};
+
+
+class FunctionExpressionMatcher : public ExpressionMatcher {
+public:
+	FunctionExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_FUNCTION) {
+	}
+	//! The matchers for the child expressions
+	vector<unique_ptr<ExpressionMatcher>> matchers;
+	//! The set matcher matching policy to use
+	SetMatcher::Policy policy;
+	//! The function name to match
+	unique_ptr<FunctionMatcher> function;
 
 	bool Match(Expression *expr_, vector<Expression *> &bindings) override;
 };

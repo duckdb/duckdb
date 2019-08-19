@@ -28,8 +28,7 @@ void Parser::ParseQuery(string query) {
 	parser.Parse(query);
 
 	if (!parser.success) {
-		throw ParserException(parser.error_message + "[" + to_string(parser.error_location) + "]");
-		return;
+		throw ParserException("%s [%d]", parser.error_message.c_str(), parser.error_location);
 	}
 
 	if (!parser.parse_tree) {

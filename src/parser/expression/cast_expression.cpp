@@ -23,6 +23,9 @@ bool CastExpression::Equals(const BaseExpression *other_) const {
 	if (!child->Equals(other->child.get())) {
 		return false;
 	}
+	if (cast_type != other->cast_type) {
+		return false;
+	}
 	return true;
 }
 

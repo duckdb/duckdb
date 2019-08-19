@@ -2,7 +2,6 @@
 
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
-#include "function/aggregate_function/distributive.hpp"
 #include "planner/expression/bound_aggregate_expression.hpp"
 #include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
@@ -41,11 +40,9 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 				++payload_cnt;
 			}
 			// perform the actual aggregation
-			if (aggregate.bound_aggregate->simple_update) {
-				aggregate.bound_aggregate->simple_update(&payload_chunk.data[payload_idx], payload_cnt, state->aggregates[aggr_idx]);
-			} else {
-				throw Exception("Unsupported aggregate for simple aggregation");
-			}
+			assert(aggregate.function.simple_update);
+			aggregate.function.simple_update(&payload_chunk.data[payload_idx], payload_cnt, state->aggregates[aggr_idx]);
+
 			payload_idx += payload_cnt;
 		}
 	}
@@ -78,7 +75,8 @@ PhysicalSimpleAggregateOperatorState::PhysicalSimpleAggregateOperatorState(Physi
 			payload_types.push_back(TypeId::BIGINT);
 		}
 		// initialize the aggregate values
-		aggregates.push_back(aggr.bound_aggregate->simple_initialize());
+		assert(aggr.function.simple_initialize);
+		aggregates.push_back(aggr.function.simple_initialize());
 	}
 	payload_chunk.Initialize(payload_types);
 }

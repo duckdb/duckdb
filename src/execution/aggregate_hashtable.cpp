@@ -1,7 +1,5 @@
 #include "execution/aggregate_hashtable.hpp"
 
-#include "function/aggregate_function/distributive.hpp"
-
 #include "common/exception.hpp"
 #include "common/types/null_value.hpp"
 #include "common/types/static_vector.hpp"
@@ -30,7 +28,7 @@ SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId
 		group_width += GetTypeIdSize(group_types[i]);
 	}
 	for (index_t i = 0; i < aggregates.size(); i++) {
-		payload_width += aggregates[i]->bound_aggregate->state_size(aggregates[i]->return_type);
+		payload_width += aggregates[i]->function.state_size(aggregates[i]->return_type);
 	}
 	empty_payload_data = unique_ptr<data_t[]>(new data_t[payload_width]);
 	// initialize the aggregates to the NULL value
@@ -38,8 +36,8 @@ SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId
 	for (index_t i = 0; i < aggregates.size(); i++) {
 		auto aggr = aggregates[i];
 		auto return_type = aggregates[i]->return_type;
-		aggr->bound_aggregate->initialize(pointer, return_type);
-		pointer += aggr->bound_aggregate->state_size(return_type);
+		aggr->function.initialize(pointer, return_type);
+		pointer += aggr->function.state_size(return_type);
 	}
 
 	// FIXME: this always creates this vector, even if no distinct if present.
@@ -215,18 +213,18 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			distinct_addresses.count = match_count;
 			distinct_addresses.Verify();
 
-			aggr->bound_aggregate->update(&distinct_payload, 1, distinct_addresses);
+			aggr->function.update(&distinct_payload, 1, distinct_addresses);
 			payload_idx++;
 		}
 
 		else {
 			auto input_count = max(size_t(1), aggr->children.size());
-			aggr->bound_aggregate->update(&payload.data[payload_idx], input_count, addresses);
+			aggr->function.update(&payload.data[payload_idx], input_count, addresses);
 			payload_idx += input_count;
 		}
 
 		// move to the next aggregate
-		VectorOperations::AddInPlace(addresses, aggr->bound_aggregate->state_size(aggr->return_type));
+		VectorOperations::AddInPlace(addresses, aggr->function.state_size(aggr->return_type));
 	}
 }
 
@@ -256,7 +254,7 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 
 		VectorOperations::Gather::Set(addresses, result.data[aggr_idx]);
 		VectorOperations::AddInPlace(
-		    addresses, aggregates[aggr_idx]->bound_aggregate->state_size(aggregates[aggr_idx]->return_type));
+		    addresses, aggregates[aggr_idx]->function.state_size(aggregates[aggr_idx]->return_type));
 	}
 }
 
@@ -494,9 +492,9 @@ index_t SuperLargeHashTable::Scan(index_t &scan_position, DataChunk &groups, Dat
 		auto &target = result.data[i];
 		target.count = entry;
 		auto aggr = aggregates[i];
-		aggr->bound_aggregate->finalize(addresses, target);
+		aggr->function.finalize(addresses, target);
 
-		VectorOperations::AddInPlace(addresses, aggr->bound_aggregate->state_size(target.type));
+		VectorOperations::AddInPlace(addresses, aggr->function.state_size(target.type));
 	}
 	scan_position = ptr - data;
 	return entry;

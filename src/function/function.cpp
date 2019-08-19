@@ -1,9 +1,12 @@
 #include "function/function.hpp"
+#include "function/aggregate_function.hpp"
+#include "function/scalar_function.hpp"
+#include "function/cast_rules.hpp"
 
 #include "catalog/catalog.hpp"
-#include "function/aggregate_function/list.hpp"
-#include "function/scalar_function/list.hpp"
-#include "function/table_function/list.hpp"
+// #include "function/aggregate/list.hpp"
+// #include "function/scalar/list.hpp"
+// #include "function/table/list.hpp"
 #include "parser/parsed_data/create_aggregate_function_info.hpp"
 #include "parser/parsed_data/create_scalar_function_info.hpp"
 #include "parser/parsed_data/create_table_function_info.hpp"
@@ -11,128 +14,169 @@
 using namespace duckdb;
 using namespace std;
 
-template <class T> static void AddTableFunction(Transaction &transaction, Catalog &catalog) {
-	CreateTableFunctionInfo info;
+BuiltinFunctions::BuiltinFunctions(Transaction &transaction, Catalog &catalog) :
+	transaction(transaction), catalog(catalog) {
+}
 
-	info.schema = DEFAULT_SCHEMA;
-	info.name = T::GetName();
-	T::GetArguments(info.arguments);
-	T::GetReturnValues(info.return_values);
-	info.init = T::GetInitFunction();
-	info.function = T::GetFunction();
-	info.final = T::GetFinalFunction();
+void BuiltinFunctions::AddFunction(AggregateFunctionSet set) {
+	CreateAggregateFunctionInfo info(set);
+	catalog.CreateFunction(transaction, &info);
+}
 
+void BuiltinFunctions::AddFunction(AggregateFunction function) {
+	CreateAggregateFunctionInfo info(function);
+	catalog.CreateFunction(transaction, &info);
+}
+
+void BuiltinFunctions::AddFunction(ScalarFunction function) {
+	CreateScalarFunctionInfo info(function);
+	catalog.CreateFunction(transaction, &info);
+}
+
+void BuiltinFunctions::AddFunction(ScalarFunctionSet set) {
+	CreateScalarFunctionInfo info(set);
+	catalog.CreateFunction(transaction, &info);
+}
+
+void BuiltinFunctions::AddFunction(TableFunction function) {
+	CreateTableFunctionInfo info(function);
 	catalog.CreateTableFunction(transaction, &info);
 }
 
-template <class T> static void AddAggregateFunction(Transaction &transaction, Catalog &catalog) {
-	CreateAggregateFunctionInfo info;
+void BuiltinFunctions::Initialize() {
+	RegisterSQLiteFunctions();
 
-	info.schema = DEFAULT_SCHEMA;
-	info.name = T::GetName();
+	RegisterAlgebraicAggregates();
+	RegisterDistributiveAggregates();
 
-	info.state_size = T::GetStateSizeFunction();
-	info.initialize = T::GetInitalizeFunction();
-	info.update = T::GetUpdateFunction();
-	info.finalize = T::GetFinalizeFunction();
-
-	info.simple_initialize = T::GetSimpleInitializeFunction();
-	info.simple_update = T::GetSimpleUpdateFunction();
-
-	info.return_type = T::GetReturnTypeFunction();
-	info.cast_arguments = T::GetCastArgumentsFunction();
-
-	catalog.CreateFunction(transaction, &info);
+	RegisterDateFunctions();
+	RegisterMathFunctions();
+	RegisterOperators();
+	RegisterSequenceFunctions();
+	RegisterStringFunctions();
+	RegisterTrigonometricsFunctions();
 }
 
-template <class T> static void AddScalarFunction(Transaction &transaction, Catalog &catalog) {
-	CreateScalarFunctionInfo info;
-
-	info.schema = DEFAULT_SCHEMA;
-	info.name = T::GetName();
-	info.function = T::GetFunction();
-	info.matches = T::GetMatchesArgumentFunction();
-	info.return_type = T::GetReturnTypeFunction();
-	info.bind = T::GetBindFunction();
-	info.dependency = T::GetDependencyFunction();
-	info.has_side_effects = T::HasSideEffects();
-
-	catalog.CreateFunction(transaction, &info);
+string Function::CallToString(string name, vector<SQLType> arguments) {
+	string result = name + "(";
+	for (index_t i = 0; i < arguments.size(); i++) {
+		if (i != 0) {
+			result += ", ";
+		}
+		result += SQLTypeToString(arguments[i]);
+	}
+	return result + ")";
 }
 
-void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
-	AddTableFunction<PragmaTableInfo>(transaction, catalog);
-	AddTableFunction<SQLiteMaster>(transaction, catalog);
+string Function::CallToString(string name, vector<SQLType> arguments, SQLType return_type) {
+	string result = CallToString(name, arguments);
+	result += " -> " + SQLTypeToString(return_type);
+	return result;
+}
 
-	// distributive aggregates
-	AddAggregateFunction<CountFunction>(transaction, catalog);
-	AddAggregateFunction<CountStarFunction>(transaction, catalog);
-	AddAggregateFunction<CovarPopFunction>(transaction, catalog);
-	AddAggregateFunction<CovarSampFunction>(transaction, catalog);
-	AddAggregateFunction<FirstFunction>(transaction, catalog);
-	AddAggregateFunction<MaxFunction>(transaction, catalog);
-	AddAggregateFunction<MinFunction>(transaction, catalog);
-	AddAggregateFunction<StdDevPopFunction>(transaction, catalog);
-	AddAggregateFunction<StdDevSampFunction>(transaction, catalog);
-	AddAggregateFunction<StringAggFunction>(transaction, catalog);
-	AddAggregateFunction<SumFunction>(transaction, catalog);
-	AddAggregateFunction<VarPopFunction>(transaction, catalog);
-	AddAggregateFunction<VarSampFunction>(transaction, catalog);
+static int64_t BindVarArgsFunctionCost(SimpleFunction &func, vector<SQLType> &arguments) {
+	if (arguments.size() < func.arguments.size()) {
+		// not enough arguments to fulfill the non-vararg part of the function
+		return -1;
+	}
+	int64_t cost = 0;
+	for(index_t i = 0; i < arguments.size(); i++) {
+		SQLType arg_type = i < func.arguments.size() ? func.arguments[i] : func.varargs;
+		if (arguments[i] == arg_type) {
+			// arguments match: do nothing
+			continue;
+		}
+		int64_t cast_cost = CastRules::ImplicitCast(arguments[i], arg_type);
+		if (cast_cost >= 0) {
+			// we can implicitly cast, add the cost to the total cost
+			cost += cast_cost;
+		} else {
+			// we can't implicitly cast: throw an error
+			return -1;
+		}
+	}
+	return cost;
+}
 
-	// algebraic aggregates
-	AddAggregateFunction<AvgFunction>(transaction, catalog);
+static int64_t BindFunctionCost(SimpleFunction &func, vector<SQLType> &arguments) {
+	if (func.HasVarArgs()) {
+		// special case varargs function
+		return BindVarArgsFunctionCost(func, arguments);
+	}
+	if (func.arguments.size() != arguments.size()) {
+		// invalid argument count: check the next function
+		return -1;
+	}
+	int64_t cost = 0;
+	for(index_t i = 0; i < arguments.size(); i++) {
+		if (arguments[i] == func.arguments[i]) {
+			// arguments match: do nothing
+			continue;
+		}
+		int64_t cast_cost = CastRules::ImplicitCast(arguments[i], func.arguments[i]);
+		if (cast_cost >= 0) {
+			// we can implicitly cast, add the cost to the total cost
+			cost += cast_cost;
+		} else {
+			// we can't implicitly cast: throw an error
+			return -1;
+		}
+	}
+	return cost;
+}
 
-	// math
-	AddScalarFunction<AbsFunction>(transaction, catalog);
-	AddScalarFunction<CbRtFunction>(transaction, catalog);
-	AddScalarFunction<DegreesFunction>(transaction, catalog);
-	AddScalarFunction<RadiansFunction>(transaction, catalog);
-	AddScalarFunction<ExpFunction>(transaction, catalog);
-	AddScalarFunction<RoundFunction>(transaction, catalog);
-	AddScalarFunction<CeilFunction>(transaction, catalog);
-	AddScalarFunction<CeilingFunction>(transaction, catalog);
-	AddScalarFunction<FloorFunction>(transaction, catalog);
-	AddScalarFunction<PiFunction>(transaction, catalog);
-	AddScalarFunction<RandomFunction>(transaction, catalog);
-	AddScalarFunction<SqrtFunction>(transaction, catalog);
-	AddScalarFunction<LnFunction>(transaction, catalog);
-	AddScalarFunction<LogFunction>(transaction, catalog);
-	AddScalarFunction<Log10Function>(transaction, catalog);
-	AddScalarFunction<Log2Function>(transaction, catalog);
-	AddScalarFunction<SignFunction>(transaction, catalog);
-	AddScalarFunction<ModFunction>(transaction, catalog);
-	AddScalarFunction<PowFunction>(transaction, catalog);
-	AddScalarFunction<PowerFunction>(transaction, catalog);
+template<class T>
+static index_t BindFunctionFromArguments(string name, vector<T> &functions, vector<SQLType> &arguments) {
+	index_t best_function = INVALID_INDEX;
+	int64_t lowest_cost = numeric_limits<int64_t>::max();
+	vector<index_t> conflicting_functions;
+	for(index_t f_idx = 0; f_idx < functions.size(); f_idx++) {
+		auto &func = functions[f_idx];
+		// check the arguments of the function
+		int64_t cost = BindFunctionCost(func, arguments);
+		if (cost < 0) {
+			// auto casting was not possible
+			continue;
+		}
+		if (cost == lowest_cost) {
+			conflicting_functions.push_back(f_idx);
+			continue;
+		}
+		if (cost > lowest_cost) {
+			continue;
+		}
+		conflicting_functions.clear();
+		lowest_cost = cost;
+		best_function = f_idx;
+	}
+	if (conflicting_functions.size() > 0) {
+		// there are multiple possible function definitions
+		// throw an exception explaining which overloads are there
+		conflicting_functions.push_back(best_function);
+		string call_str = Function::CallToString(name, arguments);
+		string candidate_str = "";
+		for(auto &conf : conflicting_functions) {
+			auto &f = functions[conf];
+			candidate_str += "\t" + f.ToString() + "\n";
+		}
+		throw BinderException("Could not choose a best candidate function for the function call \"%s\". In order to select one, please add explicit type casts.\n\tCandidate functions:\n%s", call_str.c_str(), candidate_str.c_str());
+	}
+	if (best_function == INVALID_INDEX) {
+		// no matching function was found, throw an error
+		string call_str = Function::CallToString(name, arguments);
+		string candidate_str = "";
+		for(auto &f : functions) {
+			candidate_str += "\t" + f.ToString() + "\n";
+		}
+		throw BinderException("No function matches the given name and argument types '%s'. You might need to add explicit type casts.\n\tCandidate functions:\n%s", call_str.c_str(), candidate_str.c_str());
+	}
+	return best_function;
+}
 
-	// Trignometric
-	AddScalarFunction<SinFunction>(transaction, catalog);
-	AddScalarFunction<CosFunction>(transaction, catalog);
-	AddScalarFunction<TanFunction>(transaction, catalog);
-	AddScalarFunction<ASinFunction>(transaction, catalog);
-	AddScalarFunction<ACosFunction>(transaction, catalog);
-	AddScalarFunction<ATanFunction>(transaction, catalog);
-	AddScalarFunction<CoTFunction>(transaction, catalog);
-	AddScalarFunction<ATan2Function>(transaction, catalog);
+index_t Function::BindFunction(string name, vector<ScalarFunction> &functions, vector<SQLType> &arguments) {
+	return BindFunctionFromArguments(name, functions, arguments);
+}
 
-	// strings
-	AddScalarFunction<ConcatFunction>(transaction, catalog);
-	AddScalarFunction<LengthFunction>(transaction, catalog);
-	AddScalarFunction<SubstringFunction>(transaction, catalog);
-	AddScalarFunction<UpperFunction>(transaction, catalog);
-	AddScalarFunction<LowerFunction>(transaction, catalog);
-	AddScalarFunction<ConcatWSFunction>(transaction, catalog);
-
-	// regex
-	AddScalarFunction<RegexpMatchesFunction>(transaction, catalog);
-	AddScalarFunction<RegexpReplaceFunction>(transaction, catalog);
-
-	// datetime
-	AddScalarFunction<DatePartFunction>(transaction, catalog);
-	AddScalarFunction<YearFunction>(transaction, catalog);
-
-	// timestamp
-	AddScalarFunction<AgeFunction>(transaction, catalog);
-
-	// misc
-	AddScalarFunction<NextvalFunction>(transaction, catalog);
+index_t Function::BindFunction(string name, vector<AggregateFunction> &functions, vector<SQLType> &arguments)  {
+	return BindFunctionFromArguments(name, functions, arguments);
 }

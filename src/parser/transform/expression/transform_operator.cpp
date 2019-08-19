@@ -1,4 +1,3 @@
-#include "function/scalar_function/regexp.hpp"
 #include "parser/expression/case_expression.hpp"
 #include "parser/expression/comparison_expression.hpp"
 #include "parser/expression/conjunction_expression.hpp"
@@ -12,19 +11,7 @@ using namespace postgres;
 using namespace std;
 
 ExpressionType Transformer::OperatorToExpressionType(string &op) {
-	if (op == "+") {
-		return ExpressionType::OPERATOR_ADD;
-	} else if (op == "-") {
-		return ExpressionType::OPERATOR_SUBTRACT;
-	} else if (op == "*") {
-		return ExpressionType::OPERATOR_MULTIPLY;
-	} else if (op == "/") {
-		return ExpressionType::OPERATOR_DIVIDE;
-	} else if (op == "||") {
-		return ExpressionType::OPERATOR_CONCAT;
-	} else if (op == "%") {
-		return ExpressionType::OPERATOR_MOD;
-	} else if (op == "=" || op == "==") {
+	if (op == "=" || op == "==") {
 		return ExpressionType::COMPARE_EQUAL;
 	} else if (op == "!=" || op == "<>") {
 		return ExpressionType::COMPARE_NOTEQUAL;
@@ -36,26 +23,51 @@ ExpressionType Transformer::OperatorToExpressionType(string &op) {
 		return ExpressionType::COMPARE_LESSTHANOREQUALTO;
 	} else if (op == ">=") {
 		return ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-	} else if (op == "~~") {
-		return ExpressionType::COMPARE_LIKE;
-	} else if (op == "!~~") {
-		return ExpressionType::COMPARE_NOTLIKE;
-	} else if (op == "~") {
-		return ExpressionType::COMPARE_SIMILAR;
-	} else if (op == "!~") {
-		return ExpressionType::COMPARE_NOTSIMILAR;
-	} else if (op == "<<") {
-		return ExpressionType::OPERATOR_LSHIFT;
-	} else if (op == ">>") {
-		return ExpressionType::OPERATOR_RSHIFT;
-	} else if (op == "&") {
-		return ExpressionType::OPERATOR_BITWISE_AND;
-	} else if (op == "|") {
-		return ExpressionType::OPERATOR_BITWISE_OR;
-	} else if (op == "#") {
-		return ExpressionType::OPERATOR_BITWISE_XOR;
 	}
 	return ExpressionType::INVALID;
+}
+
+unique_ptr<ParsedExpression> Transformer::TransformUnaryOperator(string op, unique_ptr<ParsedExpression> child) {
+	const auto schema = DEFAULT_SCHEMA;
+
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(move(child));
+
+	// built-in operator function
+	auto result = make_unique<FunctionExpression>(schema, op, children);
+	result->is_operator = true;
+	return move(result);
+}
+
+unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(string op, unique_ptr<ParsedExpression> left, unique_ptr<ParsedExpression> right) {
+	const auto schema = DEFAULT_SCHEMA;
+
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(move(left));
+	children.push_back(move(right));
+
+	if (op == "~" || op == "!~") {
+		// rewrite SIMILAR TO into regexp_matches('asdf', '.*sd.*')
+		bool invert_similar = op == "!~";
+
+		auto result = make_unique<FunctionExpression>(schema, "regexp_matches", children);
+		if (invert_similar) {
+			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(result));
+		} else {
+			return move(result);
+		}
+	} else {
+		auto target_type = OperatorToExpressionType(op);
+		if (target_type != ExpressionType::INVALID) {
+			// built-in comparison operator
+			return make_unique<ComparisonExpression>(target_type, move(children[0]), move(children[1]));
+		} else {
+			// built-in operator function
+			auto result = make_unique<FunctionExpression>(schema, op, children);
+			result->is_operator = true;
+			return move(result);
+		}
+	}
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
@@ -92,7 +104,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
 		case_expr->check = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, value->Copy(),
 		                                                     TransformExpression(root->rexpr));
 		// if A = B, then constant NULL
-		case_expr->result_if_true = make_unique<ConstantExpression>(SQLType(SQLTypeId::SQLNULL), Value());
+		case_expr->result_if_true = make_unique<ConstantExpression>(SQLType::SQLNULL, Value());
 		// else A
 		case_expr->result_if_false = move(value);
 		return move(case_expr);
@@ -150,9 +162,8 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
 			invert_similar = true;
 		}
 		const auto schema = DEFAULT_SCHEMA;
-		const auto regex_function = RegexpMatchesFunction::GetName();
-		const auto lowercase_name = StringUtil::Lower(regex_function);
-		auto result = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children);
+		const auto regex_function = "regexp_matches";
+		auto result = make_unique<FunctionExpression>(schema, regex_function, children);
 
 		if (invert_similar) {
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(result));
@@ -160,70 +171,19 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
 			return move(result);
 		}
 	} break;
-	default: {
-		target_type = OperatorToExpressionType(name);
-		if (target_type == ExpressionType::INVALID) {
-			throw NotImplementedException("A_Expr transform not implemented %s.", name.c_str());
-		}
+	default:
+		break;
 	}
-	} // continuing default case
+
 	auto left_expr = TransformExpression(root->lexpr);
 	auto right_expr = TransformExpression(root->rexpr);
+
 	if (!left_expr) {
-		switch (target_type) {
-		case ExpressionType::OPERATOR_ADD:
-			return right_expr;
-		case ExpressionType::OPERATOR_SUBTRACT:
-			target_type = ExpressionType::OPERATOR_MULTIPLY;
-			left_expr = make_unique<ConstantExpression>(SQLType(SQLTypeId::TINYINT), Value::TINYINT(-1));
-			break;
-		default:
-			throw Exception("Unknown unary operator");
-		}
-	}
-
-	if (target_type == ExpressionType::OPERATOR_CONCAT) {
-		// concat operator, create function
-		vector<unique_ptr<ParsedExpression>> children;
-		children.push_back(move(left_expr));
-		children.push_back(move(right_expr));
-		return make_unique<FunctionExpression>("concat", children);
-	}
-
-	// rewrite SIMILAR TO into regexp_matches('asdf', '.*sd.*')
-	if (target_type == ExpressionType::COMPARE_SIMILAR || target_type == ExpressionType::COMPARE_NOTSIMILAR) {
-		bool invert_similar = false;
-		if (name == "!~") {
-			// NOT SIMILAR TO
-			invert_similar = true;
-		}
-		vector<unique_ptr<ParsedExpression>> children;
-		children.push_back(move(left_expr));
-		children.push_back(move(right_expr));
-
-		const auto schema = DEFAULT_SCHEMA;
-		const auto regex_function = RegexpMatchesFunction::GetName();
-		const auto lowercase_name = StringUtil::Lower(regex_function);
-		auto result = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children);
-
-		if (invert_similar) {
-			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(result));
-		} else {
-			return move(result);
-		}
-	}
-
-	unique_ptr<ParsedExpression> result = nullptr;
-	int type_id = static_cast<int>(target_type);
-	if (type_id >= static_cast<int>(ExpressionType::BINOP_BOUNDARY_START) &&
-	    type_id <= static_cast<int>(ExpressionType::BINOP_BOUNDARY_END)) {
-		// binary operator
-		result = make_unique<OperatorExpression>(target_type, move(left_expr), move(right_expr));
-	} else if (type_id >= static_cast<int>(ExpressionType::COMPARE_BOUNDARY_START) &&
-	           type_id <= static_cast<int>(ExpressionType::COMPARE_BOUNDARY_END)) {
-		result = make_unique<ComparisonExpression>(target_type, move(left_expr), move(right_expr));
+		// prefix operator
+		return TransformUnaryOperator(name, move(right_expr));
+	} else if (!right_expr) {
+		throw NotImplementedException("Postfix operators not implemented!");
 	} else {
-		throw NotImplementedException("A_Expr transform not implemented.");
+		return TransformBinaryOperator(name, move(left_expr), move(right_expr));
 	}
-	return result;
 }

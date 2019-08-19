@@ -15,13 +15,15 @@ namespace duckdb {
 class FunctionExpression : public ParsedExpression {
 public:
 	FunctionExpression(string schema_name, string function_name, vector<unique_ptr<ParsedExpression>> &children,
-	                   bool distinct = false);
-	FunctionExpression(string function_name, vector<unique_ptr<ParsedExpression>> &children, bool distinct = false);
+	                   bool distinct = false, bool is_operator = false);
+	FunctionExpression(string function_name, vector<unique_ptr<ParsedExpression>> &children, bool distinct = false, bool is_operator = false);
 
 	//! Schema of the function
 	string schema;
 	//! Function name
 	string function_name;
+	//! Whether or not the function is an operator, only used for rendering
+	bool is_operator;
 	//! List of arguments to the function
 	vector<unique_ptr<ParsedExpression>> children;
 	//! Whether or not the aggregate function is distinct, only used for aggregates

@@ -328,6 +328,8 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementsInternal(string query,
 			auto copied_statement = ((SelectStatement &)*statement).Copy();
 			string error = VerifyQuery(query, move(statement));
 			if (!error.empty()) {
+				// query failed: abort now
+				FinalizeQuery(false);
 				// error in verifying query
 				return make_unique<MaterializedQueryResult>(error);
 			}

@@ -31,7 +31,7 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source) {
 		result = SubqueryRef::Deserialize(source);
 		break;
 	case TableReferenceType::TABLE_FUNCTION:
-		result = TableFunction::Deserialize(source);
+		result = TableFunctionRef::Deserialize(source);
 		break;
 	case TableReferenceType::INVALID:
 		return nullptr;

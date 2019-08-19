@@ -9,16 +9,15 @@
 #pragma once
 
 #include "planner/expression.hpp"
+#include "function/aggregate_function.hpp"
 
 namespace duckdb {
-class AggregateFunctionCatalogEntry;
-
 class BoundAggregateExpression : public Expression {
 public:
-	BoundAggregateExpression(TypeId return_type, AggregateFunctionCatalogEntry *bound_aggregate, bool distinct);
+	BoundAggregateExpression(TypeId return_type, AggregateFunction function, bool distinct);
 
 	//! The bound function expression
-	AggregateFunctionCatalogEntry *bound_aggregate;
+	AggregateFunction function;
 	//! True to aggregate on distinct values
 	bool distinct;
 	//! List of arguments to the function
