@@ -21,6 +21,7 @@ void BuiltinFunctions::RegisterMathFunctions() {
 	Register<Log10>();
 	Register<Ln>();
 	Register<Pow>();
+	Register<Random>();
 	Register<Sqrt>();
 
 	Register<Pi>();

@@ -12,6 +12,7 @@ add_library_unity(duckdb_func_math
 				pi.cpp
 				pow.cpp
 				radians.cpp
+				random.cpp
 				round.cpp
 				sign.cpp
 				sqrt.cpp)

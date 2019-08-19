@@ -42,6 +42,9 @@ struct Radians {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct Random {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
 
 struct Cbrt {
 	static void RegisterFunction(BuiltinFunctions &set);
