@@ -75,8 +75,35 @@ string Function::CallToString(string name, vector<SQLType> arguments, SQLType re
 	return result;
 }
 
+static int64_t BindVarArgsFunctionCost(SimpleFunction &func, vector<SQLType> &arguments) {
+	if (arguments.size() < func.arguments.size()) {
+		// not enough arguments to fulfill the non-vararg part of the function
+		return -1;
+	}
+	int64_t cost = 0;
+	for(index_t i = 0; i < arguments.size(); i++) {
+		SQLType arg_type = i < func.arguments.size() ? func.arguments[i] : func.varargs;
+		if (arguments[i] == arg_type) {
+			// arguments match: do nothing
+			continue;
+		}
+		int64_t cast_cost = CastRules::ImplicitCast(arguments[i], arg_type);
+		if (cast_cost >= 0) {
+			// we can implicitly cast, add the cost to the total cost
+			cost += cast_cost;
+		} else {
+			// we can't implicitly cast: throw an error
+			return -1;
+		}
+	}
+	return cost;
+}
 
 static int64_t BindFunctionCost(SimpleFunction &func, vector<SQLType> &arguments) {
+	if (func.HasVarArgs()) {
+		// special case varargs function
+		return BindVarArgsFunctionCost(func, arguments);
+	}
 	if (func.arguments.size() != arguments.size()) {
 		// invalid argument count: check the next function
 		return -1;

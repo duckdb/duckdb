@@ -12,7 +12,7 @@ using namespace std;
 
 void ExpressionBinder::CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children, vector<SQLType> &types) {
 	for(index_t i = 0; i < types.size(); i++) {
-		auto target_type = function.arguments[i];
+		auto target_type = i < function.arguments.size() ? function.arguments[i] : function.varargs;
 		if (target_type.id != SQLTypeId::ANY && types[i] != target_type) {
 			// type of child does not match type of function argument: add a cast
 			children[i] = AddCastToType(move(children[i]), types[i], target_type);

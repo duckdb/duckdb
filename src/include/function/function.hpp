@@ -55,19 +55,25 @@ public:
 class SimpleFunction : public Function {
 public:
 	SimpleFunction(string name, vector<SQLType> arguments, SQLType return_type, bool has_side_effects) :
-		Function(name), arguments(move(arguments)), return_type(return_type), has_side_effects(has_side_effects) { }
+		Function(name), arguments(move(arguments)), return_type(return_type), varargs(SQLTypeId::INVALID), has_side_effects(has_side_effects) { }
 	virtual ~SimpleFunction() {}
 
 	//! The set of arguments of the function
 	vector<SQLType> arguments;
 	//! Return type of the function
 	SQLType return_type;
+	//! The type of varargs to support, or SQLTypeId::INVALID if the function does not accept variable length arguments
+	SQLType varargs;
 	//! Whether or not the function has side effects (e.g. sequence increments, random() functions, NOW()). Functions
 	//! with side-effects cannot be constant-folded.
 	bool has_side_effects;
 public:
 	string ToString() {
 		return Function::CallToString(name, arguments, return_type);
+	}
+
+	bool HasVarArgs() {
+		return varargs.id != SQLTypeId::INVALID;
 	}
 };
 

@@ -29,6 +29,10 @@ struct Concat {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ConcatWS {
+    static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct Length {
     static void RegisterFunction(BuiltinFunctions &set);
 };

@@ -330,5 +330,21 @@ struct VectorOperations {
 
 		VectorOperations::Exec(result, [&](index_t i, index_t k) { fun(a_mul * i, b_mul * i, c_mul * i, i); });
 	}
+
+	template <class FUNC> static void MultiaryExec(Vector inputs[], int input_count, Vector &result, FUNC &&fun) {
+		result.sel_vector = nullptr;
+		result.count = 1;
+		vector<index_t> mul(input_count, 0);
+
+		for (int i = 0; i < input_count; i++) {
+			auto &input = inputs[i];
+			if (!input.IsConstant()) {
+				result.sel_vector = input.sel_vector;
+				result.count = input.count;
+			}
+			mul[i] = input.IsConstant() ? 0 : 1;
+		}
+		VectorOperations::Exec(result, [&](index_t i, index_t k) { fun(mul, i); });
+	}
 };
 } // namespace duckdb
