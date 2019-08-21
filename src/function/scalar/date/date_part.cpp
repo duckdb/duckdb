@@ -150,7 +150,7 @@ static void date_part_function(ExpressionExecutor &exec, Vector inputs[], index_
 	result.nullmask = inputs[1].nullmask;
 	result.count = inputs[1].count;
 	result.sel_vector = inputs[1].sel_vector;
-	if (inputs[1].type != TypeId::INTEGER && inputs[1].type != TypeId::BIGINT) {
+	if (inputs[1].type != TypeId::INTEGER) {
 		throw NotImplementedException("Can only extract from dates or timestamps");
     }
 
@@ -158,34 +158,48 @@ static void date_part_function(ExpressionExecutor &exec, Vector inputs[], index_
 	if (inputs[0].IsConstant()) {
 		// constant specifier
 		auto specifier_type = GetSpecifierType(((const char **)inputs[0].data)[0]);
-        if (inputs[1].type == TypeId::INTEGER) {
-  		    VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, index_t i, index_t k) {
-			    result_data[i] = extract_element(specifier_type, element);
-    		});
-        } else {
-  		    VectorOperations::ExecType<timestamp_t>(inputs[1], [&](timestamp_t element, index_t i, index_t k) {
-			    result_data[i] = extract_element(specifier_type, element);
-    		});
-        }
+  		VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, index_t i, index_t k) {
+		    result_data[i] = extract_element(specifier_type, element);
+    	});
 	} else {
 		// not constant specifier
 		auto specifiers = ((const char **)inputs[0].data);
-        if (inputs[1].type == TypeId::INTEGER) {
-		    VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, index_t i, index_t k) {
-			    result_data[i] = extract_element(GetSpecifierType(specifiers[i]), element);
-    		});
-        } else {
-		    VectorOperations::ExecType<timestamp_t>(inputs[1], [&](timestamp_t element, index_t i, index_t k) {
-			    result_data[i] = extract_element(GetSpecifierType(specifiers[i]), element);
-    		});
-        }
+		VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, index_t i, index_t k) {
+		    result_data[i] = extract_element(GetSpecifierType(specifiers[i]), element);
+    	});
+	}
+}
+
+static void timestamp_part_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
+                        Vector &result) {
+	result.Initialize(TypeId::BIGINT);
+	result.nullmask = inputs[1].nullmask;
+	result.count = inputs[1].count;
+	result.sel_vector = inputs[1].sel_vector;
+	if (inputs[1].type != TypeId::BIGINT) {
+		throw NotImplementedException("Can only extract from dates or timestamps");
+    }
+
+	auto result_data = (int64_t *)result.data;
+	if (inputs[0].IsConstant()) {
+		// constant specifier
+		auto specifier_type = GetSpecifierType(((const char **)inputs[0].data)[0]);
+  		VectorOperations::ExecType<timestamp_t>(inputs[1], [&](timestamp_t element, index_t i, index_t k) {
+		    result_data[i] = extract_element(specifier_type, element);
+    	});
+	} else {
+		// not constant specifier
+		auto specifiers = ((const char **)inputs[0].data);
+		VectorOperations::ExecType<timestamp_t>(inputs[1], [&](timestamp_t element, index_t i, index_t k) {
+		    result_data[i] = extract_element(GetSpecifierType(specifiers[i]), element);
+    	});
 	}
 }
 
 void DatePart::RegisterFunction(BuiltinFunctions &set) {
     ScalarFunctionSet date_part("date_part");
 	date_part.AddFunction(ScalarFunction({ SQLType::VARCHAR, SQLType::DATE }, SQLType::BIGINT, date_part_function));
-	date_part.AddFunction(ScalarFunction({ SQLType::VARCHAR, SQLType::TIMESTAMP }, SQLType::BIGINT, date_part_function));
+	date_part.AddFunction(ScalarFunction({ SQLType::VARCHAR, SQLType::TIMESTAMP }, SQLType::BIGINT, timestamp_part_function));
     set.AddFunction(date_part);
 }
 
