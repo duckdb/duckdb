@@ -142,7 +142,7 @@ TEST_CASE("Extract timestamp function", "[timestamp]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(226), Value()}));
 	// epoch
 	result = con.Query("SELECT EXTRACT(epoch FROM i) FROM timestamps");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(775439400), Value()}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(745316553), Value()}));
 	// isodow (Monday = 1, Sunday = 7)
 	result = con.Query("SELECT EXTRACT(ISODOW FROM i) FROM timestamps");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(6), Value()}));
