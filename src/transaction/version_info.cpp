@@ -40,3 +40,19 @@ VersionInfo *VersionInfo::GetVersionForTransaction(Transaction &transaction, Ver
 		return version;
 	}
 }
+
+bool VersionInfo::HasConflict(VersionInfo *version, transaction_t transaction_id) {
+	if (!version) {
+		return false;
+	}
+	if (version->version_number < TRANSACTION_ID_START) {
+		// version was committed: no conflict
+		return false;
+	}
+	if (version->version_number == transaction_id) {
+		// version belongs to this transaction: no conflict
+		return false;
+	}
+	// version was not committed but belongs to other transaction: conflict
+	return true;
+}

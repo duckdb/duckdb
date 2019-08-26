@@ -316,11 +316,8 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 		assert(id < chunk->count);
 		// check for conflicts
 		auto version = chunk->GetVersionInfo(id);
-		if (version) {
-			if (version->version_number >= TRANSACTION_ID_START &&
-			    version->version_number != transaction.transaction_id) {
-				throw TransactionException("Conflict on tuple deletion!");
-			}
+		if (VersionInfo::HasConflict(version, transaction.transaction_id)) {
+			throw TransactionException("Conflict on tuple deletion!");
 		}
 		// no conflict, move the current tuple data into the undo buffer
 		chunk->PushTuple(transaction, UndoFlags::DELETE_TUPLE, id);
@@ -530,11 +527,8 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		assert(id < chunk->count);
 		// check for version conflicts
 		auto version = chunk->GetVersionInfo(id);
-		if (version) {
-			if (version->version_number >= TRANSACTION_ID_START &&
-			    version->version_number != transaction.transaction_id) {
-				throw TransactionException("Conflict on tuple update!");
-			}
+		if (VersionInfo::HasConflict(version, transaction.transaction_id)) {
+			throw TransactionException("Conflict on tuple update!");
 		}
 	});
 
