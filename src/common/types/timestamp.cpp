@@ -42,8 +42,7 @@ timestamp_t Timestamp::FromString(string str) {
 
 	// In case we have only date we add a default time
 	if (str.size() == 10) {
-		str += " ";
-		str += "00:00:00";
+		str += " 00:00:00";
 	}
 	// Character length	19 positions minimum to 23 maximum
 	if (str.size() < STD_TIMESTAMP_LENGTH) {
@@ -71,11 +70,11 @@ date_t Timestamp::GetDate(timestamp_t timestamp) {
 }
 
 dtime_t Timestamp::GetTime(timestamp_t timestamp) {
-	return (dtime_t)timestamp;
+	return (dtime_t)(timestamp & 0xFFFFFFFF);
 }
 
 timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {
-	return ((int64_t)date << 32 | (int32_t)time);
+	return ((int64_t)date << 32 | (int64_t)time);
 }
 
 void Timestamp::Convert(timestamp_t date, date_t &out_date, dtime_t &out_time) {
@@ -226,7 +225,7 @@ Interval TimestampToInterval(timestamp_struct *timestamp) {
 }
 
 int64_t Timestamp::GetEpoch(timestamp_t timestamp) {
-    return Date::Epoch(Timestamp::GetDate(timestamp)) + (int64_t)Timestamp::GetTime(timestamp);
+    return Date::Epoch(Timestamp::GetDate(timestamp)) + (int64_t)(Timestamp::GetTime(timestamp) / 1000);
 }
 
 int64_t Timestamp::GetMilliseconds(timestamp_t timestamp) {

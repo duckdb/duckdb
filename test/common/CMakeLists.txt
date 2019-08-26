@@ -7,6 +7,7 @@ add_library_unity(test_common
                   test_file_system.cpp
                   test_gzip_stream.cpp
                   test_hyperloglog.cpp
+                  test_timestamp.cpp
                   test_sort.cpp
                   test_utf.cpp) # test_serializer.cpp
 set(ALL_OBJECT_FILES
