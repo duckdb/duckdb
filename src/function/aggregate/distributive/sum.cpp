@@ -4,15 +4,19 @@
 #include "common/vector_operations/vector_operations.hpp"
 
 using namespace std;
+using namespace duckdb;
 
-namespace duckdb {
-
-void sum_update(Vector inputs[], index_t input_count, Vector &result) {
+static void sum_update(Vector inputs[], index_t input_count, Vector &result) {
 	assert(input_count == 1);
 	VectorOperations::Scatter::Add(inputs[0], result);
 }
 
-void sum_simple_update(Vector inputs[], index_t input_count, Value &result) {
+static void sum_combine(Vector &state_a, Vector &state_b, Vector &combined) {
+	VectorOperations::Copy(state_a, combined);
+	VectorOperations::Scatter::Add(state_b, combined);
+}
+
+static void sum_simple_update(Vector inputs[], index_t input_count, Value &result) {
 	assert(input_count == 1);
 	Value sum = VectorOperations::Sum(inputs[0]);
 	if (sum.is_null) {
@@ -25,12 +29,14 @@ void sum_simple_update(Vector inputs[], index_t input_count, Value &result) {
 	}
 }
 
+namespace duckdb {
+
 void Sum::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet sum("sum");
 	// integer sums to bigint
-	sum.AddFunction(AggregateFunction({ SQLType::BIGINT }, SQLType::BIGINT, get_return_type_size, null_state_initialize, sum_update, gather_finalize, null_simple_initialize, sum_simple_update));
+	sum.AddFunction(AggregateFunction({ SQLType::BIGINT }, SQLType::BIGINT, get_return_type_size, null_state_initialize, sum_update, sum_combine, gather_finalize, null_simple_initialize, sum_simple_update));
 	// float sums to float
-	sum.AddFunction(AggregateFunction({ SQLType::DOUBLE }, SQLType::DOUBLE, get_return_type_size, null_state_initialize, sum_update, gather_finalize, null_simple_initialize, sum_simple_update));
+	sum.AddFunction(AggregateFunction({ SQLType::DOUBLE }, SQLType::DOUBLE, get_return_type_size, null_state_initialize, sum_update, sum_combine, gather_finalize, null_simple_initialize, sum_simple_update));
 
 	set.AddFunction(sum);
 }

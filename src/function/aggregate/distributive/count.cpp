@@ -4,38 +4,44 @@
 #include "common/vector_operations/vector_operations.hpp"
 
 using namespace std;
+using namespace duckdb;
 
-namespace duckdb {
-
-void countstar_update(Vector inputs[], index_t input_count, Vector &result) {
+static void countstar_update(Vector inputs[], index_t input_count, Vector &result) {
 	// add one to each address, regardless of if the value is NULL
 	Vector one(Value::BIGINT(1));
 	VectorOperations::Scatter::Add(one, result);
 }
 
-void countstar_simple_update(Vector inputs[], index_t input_count, Value &result) {
+static void countstar_simple_update(Vector inputs[], index_t input_count, Value &result) {
 	assert(input_count == 1);
 	Value count = Value::BIGINT(inputs[0].count);
 	result = result + count;
 }
 
-void count_update(Vector inputs[], index_t input_count, Vector &result) {
+static void count_update(Vector inputs[], index_t input_count, Vector &result) {
 	assert(input_count == 1);
 	VectorOperations::Scatter::AddOne(inputs[0], result);
 }
 
-void count_simple_update(Vector inputs[], index_t input_count, Value &result) {
+static void count_combine(Vector &state_a, Vector &state_b, Vector &combined) {
+	VectorOperations::Copy(state_a, combined);
+	VectorOperations::Scatter::Add(state_b, combined);
+}
+
+static void count_simple_update(Vector inputs[], index_t input_count, Value &result) {
 	assert(input_count == 1);
 	Value count = VectorOperations::Count(inputs[0]);
 	result = result + count;
 }
 
+namespace duckdb {
+
 AggregateFunction Count::GetFunction() {
-	return AggregateFunction({SQLType(SQLTypeId::ANY)}, SQLType::BIGINT, get_bigint_type_size, bigint_payload_initialize, count_update, gather_finalize, bigint_simple_initialize, count_simple_update);
+	return AggregateFunction({SQLType(SQLTypeId::ANY)}, SQLType::BIGINT, get_bigint_type_size, bigint_payload_initialize, count_update, count_combine, gather_finalize, bigint_simple_initialize, count_simple_update);
 }
 
 AggregateFunction CountStar::GetFunction() {
-	return AggregateFunction("count_star", {SQLType(SQLTypeId::ANY)}, SQLType::BIGINT, get_bigint_type_size, bigint_payload_initialize, countstar_update, gather_finalize, bigint_simple_initialize, countstar_simple_update);
+	return AggregateFunction("count_star", {SQLType(SQLTypeId::ANY)}, SQLType::BIGINT, get_bigint_type_size, bigint_payload_initialize, countstar_update, count_combine, gather_finalize, bigint_simple_initialize, countstar_simple_update);
 }
 
 void Count::RegisterFunction(BuiltinFunctions &set) {

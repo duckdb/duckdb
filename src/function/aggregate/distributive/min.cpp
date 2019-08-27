@@ -4,15 +4,19 @@
 #include "common/vector_operations/vector_operations.hpp"
 
 using namespace std;
+using namespace duckdb;
 
-namespace duckdb {
-
-void min_update(Vector inputs[], index_t input_count, Vector &result) {
+static void min_update(Vector inputs[], index_t input_count, Vector &result) {
 	assert(input_count == 1);
 	VectorOperations::Scatter::Min(inputs[0], result);
 }
 
-void min_simple_update(Vector inputs[], index_t input_count, Value &result) {
+static void min_combine(Vector &state_a, Vector &state_b, Vector &combined) {
+	VectorOperations::Copy(state_a, combined);
+	VectorOperations::Scatter::Min(state_b, combined);
+}
+
+static void min_simple_update(Vector inputs[], index_t input_count, Value &result) {
 	assert(input_count == 1);
 	Value min = VectorOperations::Min(inputs[0]);
 	if (min.is_null) {
@@ -23,10 +27,12 @@ void min_simple_update(Vector inputs[], index_t input_count, Value &result) {
 	}
 }
 
+namespace duckdb {
+
 void Min::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet min("min");
 	for(auto type : SQLType::ALL_TYPES) {
-		min.AddFunction(AggregateFunction({type}, type, get_return_type_size, null_state_initialize, min_update, gather_finalize, null_simple_initialize, min_simple_update));
+		min.AddFunction(AggregateFunction({type}, type, get_return_type_size, null_state_initialize, min_update, min_combine, gather_finalize, null_simple_initialize, min_simple_update));
 	}
 	set.AddFunction(min);
 }
