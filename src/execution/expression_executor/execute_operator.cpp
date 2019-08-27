@@ -74,46 +74,6 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, Vector &result) 
 		default:
 			throw NotImplementedException("Unsupported operator type with 1 child!");
 		}
-	} else if (expr.children.size() == 2) {
-		Vector left, right;
-		Execute(*expr.children[0], left);
-		Execute(*expr.children[1], right);
-
-		result.Initialize(left.type);
-		switch (expr.type) {
-		case ExpressionType::OPERATOR_ADD:
-			VectorOperations::Add(left, right, result);
-			break;
-		case ExpressionType::OPERATOR_SUBTRACT:
-			VectorOperations::Subtract(left, right, result);
-			break;
-		case ExpressionType::OPERATOR_MULTIPLY:
-			VectorOperations::Multiply(left, right, result);
-			break;
-		case ExpressionType::OPERATOR_DIVIDE:
-			VectorOperations::Divide(left, right, result);
-			break;
-		case ExpressionType::OPERATOR_MOD:
-			VectorOperations::Modulo(left, right, result);
-			break;
-		case ExpressionType::OPERATOR_LSHIFT:
-			VectorOperations::BitwiseShiftLeft(left, right, result);
-			break;
-		case ExpressionType::OPERATOR_RSHIFT:
-			VectorOperations::BitwiseShiftRight(left, right, result);
-			break;
-		case ExpressionType::OPERATOR_BITWISE_AND:
-			VectorOperations::BitwiseAND(left, right, result);
-			break;
-		case ExpressionType::OPERATOR_BITWISE_OR:
-			VectorOperations::BitwiseOR(left, right, result);
-			break;
-		case ExpressionType::OPERATOR_BITWISE_XOR:
-			VectorOperations::BitwiseXOR(left, right, result);
-			break;
-		default:
-			throw NotImplementedException("Unsupported operator type with 2 children!");
-		}
 	} else {
 		throw NotImplementedException("operator");
 	}

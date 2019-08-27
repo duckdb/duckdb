@@ -70,6 +70,32 @@ TEST_CASE("Rounding test", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {42.123}));
 }
 
+TEST_CASE("Test random() function", "[function]") {
+	unique_ptr<QueryResult> result, result1, result2;
+	DuckDB db(nullptr);
+	Connection con(db);
+	vector<string> splits1, splits2;
+
+	// random() is evaluated twice here
+	result = con.Query("select case when random() between 0 and 0.99999 then 1 else 0 end");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result1 = con.Query("select random()");
+	result2 = con.Query("select random()");
+	REQUIRE(!result1->Equals(*result2));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(a INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10)"));
+
+	result = con.Query("select case when min(random()) >= 0 then 1 else 0 end from numbers;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con.Query("select case when max(random()) < 1 then 1 else 0 end from numbers;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	REQUIRE_NO_FAIL(con.Query("select * from numbers order by random()"));
+	REQUIRE_NO_FAIL(con.Query("select random() from numbers"));
+}
+
 // see https://www.postgresql.org/docs/10/functions-math.html
 
 TEST_CASE("Function test cases from PG docs", "[function]") {

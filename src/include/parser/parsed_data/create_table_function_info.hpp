@@ -8,32 +8,23 @@
 
 #pragma once
 
-#include "common/common.hpp"
-#include "function/function.hpp"
-#include "parser/column_definition.hpp"
+#include "function/table_function.hpp"
 
 namespace duckdb {
 
 struct CreateTableFunctionInfo {
+	CreateTableFunctionInfo(TableFunction function) : schema(DEFAULT_SCHEMA), or_replace(false), function(function) {
+		this->name = function.name;
+	}
+
 	//! Schema name
 	string schema;
 	//! Function name
 	string name;
 	//! Replace function if it already exists instead of failing
 	bool or_replace = false;
-	//! List of return columns
-	vector<ColumnDefinition> return_values;
-	//! Input arguments
-	vector<SQLType> arguments;
-	//! Initialize function pointer
-	table_function_init_t init;
-	//! The function pointer
-	table_function_t function;
-	//! Final function pointer
-	table_function_final_t final;
-
-	CreateTableFunctionInfo() : schema(DEFAULT_SCHEMA), or_replace(false) {
-	}
+	//! The table function
+	TableFunction function;
 };
 
 } // namespace duckdb

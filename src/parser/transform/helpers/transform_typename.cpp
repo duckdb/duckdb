@@ -10,27 +10,27 @@ static SQLType TransformStringToSQLType(char *str) {
 	string lower_str = StringUtil::Lower(string(str));
 	// Transform column type
 	if (lower_str == "int" || lower_str == "int4" || lower_str == "signed") {
-		return SQLType(SQLTypeId::INTEGER);
+		return SQLType::INTEGER;
 	} else if (lower_str == "varchar" || lower_str == "bpchar" || lower_str == "text" || lower_str == "string") {
-		return SQLType(SQLTypeId::VARCHAR);
+		return SQLType::VARCHAR;
 	} else if (lower_str == "int8") {
-		return SQLType(SQLTypeId::BIGINT);
+		return SQLType::BIGINT;
 	} else if (lower_str == "int2") {
-		return SQLType(SQLTypeId::SMALLINT);
+		return SQLType::SMALLINT;
 	} else if (lower_str == "timestamp" || lower_str == "datetime") {
-		return SQLType(SQLTypeId::TIMESTAMP);
+		return SQLType::TIMESTAMP;
 	} else if (lower_str == "bool") {
 		return SQLType(SQLTypeId::BOOLEAN);
 	} else if (lower_str == "real" || lower_str == "float4") {
-		return SQLType(SQLTypeId::FLOAT);
+		return SQLType::FLOAT;
 	} else if (lower_str == "double" || lower_str == "numeric" || lower_str == "float8") {
-		return SQLType(SQLTypeId::DOUBLE);
+		return SQLType::DOUBLE;
 	} else if (lower_str == "tinyint") {
-		return SQLType(SQLTypeId::TINYINT);
+		return SQLType::TINYINT;
 	} else if (lower_str == "varbinary") {
 		return SQLType(SQLTypeId::VARBINARY);
 	} else if (lower_str == "date") {
-		return SQLType(SQLTypeId::DATE);
+		return SQLType::DATE;
 	} else {
 		throw NotImplementedException("DataType %s not supported yet...\n", str);
 	}

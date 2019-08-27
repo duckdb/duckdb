@@ -19,6 +19,9 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, index_t 
 	// cast the input types to the same type
 	// now obtain the result type of the input types
 	auto input_type = MaxSQLType(left.sql_type, right.sql_type);
+	if (input_type.id == SQLTypeId::UNKNOWN) {
+		throw BinderException("Could not determine type of parameters: try adding explicit type casts");
+	}
 	// add casts (if necessary)
 	left.expr = AddCastToType(move(left.expr), left.sql_type, input_type);
 	right.expr = AddCastToType(move(right.expr), right.sql_type, input_type);

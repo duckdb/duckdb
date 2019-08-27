@@ -35,12 +35,15 @@ void StringUtil::Trim(string &str) {
 }
 
 bool StringUtil::StartsWith(const string &str, const string &prefix) {
+	if (prefix.size() > str.size()) {
+		return false;
+	}
 	return equal(prefix.begin(), prefix.end(), str.begin());
 }
 
 bool StringUtil::EndsWith(const string &str, const string &suffix) {
 	if (suffix.size() > str.size())
-		return (false);
+		return false;
 	return equal(suffix.rbegin(), suffix.rend(), str.rbegin());
 }
 

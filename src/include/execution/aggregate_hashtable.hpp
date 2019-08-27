@@ -11,7 +11,6 @@
 #include "common/common.hpp"
 #include "planner/expression.hpp"
 #include "common/types/data_chunk.hpp"
-#include "common/types/tuple.hpp"
 #include "common/types/vector.hpp"
 
 namespace duckdb {
@@ -54,15 +53,14 @@ public:
 private:
 	void HashGroups(DataChunk &groups, Vector &addresses);
 
-	TupleSerializer group_serializer;
-
 	//! The aggregates to be computed
 	vector<BoundAggregateExpression *> aggregates;
-
 	//! The types of the group columns stored in the hashtable
 	vector<TypeId> group_types;
 	//! The types of the payload columns stored in the hashtable
 	vector<TypeId> payload_types;
+	//! The size of the groups in bytes
+	index_t group_width;
 	//! The size of the payload (aggregations) in bytes
 	index_t payload_width;
 	//! The total tuple size

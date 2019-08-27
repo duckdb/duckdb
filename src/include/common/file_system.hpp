@@ -48,6 +48,8 @@ public:
 	static constexpr uint8_t DIRECT_IO = 1 << 2;
 	//! Create file if not exists, can only be used together with WRITE
 	static constexpr uint8_t CREATE = 1 << 3;
+	//! Open file in append mode
+	static constexpr uint8_t APPEND = 1 << 4;
 };
 
 class FileSystem {

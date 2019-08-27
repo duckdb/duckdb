@@ -21,6 +21,9 @@ bool BoundCastExpression::Equals(const BaseExpression *other_) const {
 	if (!Expression::Equals(child.get(), other->child.get())) {
 		return false;
 	}
+	if (source_type != other->source_type || target_type != other->target_type) {
+		return false;
+	}
 	return true;
 }
 

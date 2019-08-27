@@ -31,7 +31,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, index_t depth) {
 	SQLType col_type;
 	if (entry->second == COLUMN_IDENTIFIER_ROW_ID) {
 		// row id: BIGINT type
-		col_type = SQLType(SQLTypeId::BIGINT);
+		col_type = SQLType::BIGINT;
 	} else {
 		// normal column: fetch type from base column
 		auto &col = bound->table->columns[entry->second];
@@ -141,14 +141,14 @@ BindResult TableFunctionBinding::Bind(ColumnRefExpression &colref, index_t depth
 	ColumnBinding binding;
 	binding.table_index = index;
 	binding.column_index = column_entry->second;
-	SQLType sql_type = function->return_values[column_entry->second].type;
+	SQLType sql_type = function->function.types[column_entry->second];
 	return BindResult(
 	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(sql_type), binding, depth), sql_type);
 }
 
 void TableFunctionBinding::GenerateAllColumnExpressions(BindContext &context,
                                                         vector<unique_ptr<ParsedExpression>> &select_list) {
-	for (auto &column : function->return_values) {
-		select_list.push_back(make_unique<ColumnRefExpression>(column.name, alias));
+	for (auto &name : function->function.names) {
+		select_list.push_back(make_unique<ColumnRefExpression>(name, alias));
 	}
 }

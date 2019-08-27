@@ -10,7 +10,6 @@
 
 #include "common/common.hpp"
 #include "common/types/data_chunk.hpp"
-#include "common/types/tuple.hpp"
 #include "common/types/vector.hpp"
 #include "parser/parsed_expression.hpp"
 #include "storage/data_table.hpp"
@@ -92,7 +91,7 @@ public:
 	void Delete(DataChunk &entries, Vector &row_identifiers) override;
 
 	//! Insert data into the index. Does not lock the index.
-	bool Insert(DataChunk &data, Vector &row_ids);
+	bool Insert(DataChunk &data, Vector &row_ids) override;
 
 private:
 	DataChunk expression_result;

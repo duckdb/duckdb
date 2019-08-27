@@ -443,6 +443,61 @@ TEST_CASE("Test ART index with random insertions and deletes", "[art]") {
 	}
 }
 
+TEST_CASE("Test ART index creation with many versions", "[art]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	Connection r1(db), r2(db), r3(db);
+	int64_t expected_sum_r1 = 0, expected_sum_r2 = 0, expected_sum_r3 = 0, total_sum = 0;
+
+	// insert the values [0...20000]
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	for (index_t i = 0; i < 20000; i++) {
+		int32_t val = i + 1;
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", val));
+		expected_sum_r1 += val;
+		expected_sum_r2 += val + 1;
+		expected_sum_r3 += val + 2;
+		total_sum += val + 3;
+	}
+	// now start a transaction in r1
+	REQUIRE_NO_FAIL(r1.Query("BEGIN TRANSACTION"));
+	// increment values by 1
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=i+1"));
+	// now start a transaction in r2
+	REQUIRE_NO_FAIL(r2.Query("BEGIN TRANSACTION"));
+	// increment values by 1 again
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=i+1"));
+	// now start a transaction in r3
+	REQUIRE_NO_FAIL(r3.Query("BEGIN TRANSACTION"));
+	// increment values by 1 again
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=i+1"));
+	// create an index
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+
+	// now perform the sums, with and without an index scan
+	// r1
+	result = r1.Query("SELECT SUM(i) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(expected_sum_r1)}));
+	result = r1.Query("SELECT SUM(i) FROM integers WHERE i > 0");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(expected_sum_r1)}));
+	// r2
+	result = r2.Query("SELECT SUM(i) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(expected_sum_r2)}));
+	result = r2.Query("SELECT SUM(i) FROM integers WHERE i > 0");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(expected_sum_r2)}));
+	// r3
+	result = r3.Query("SELECT SUM(i) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(expected_sum_r3)}));
+	result = r3.Query("SELECT SUM(i) FROM integers WHERE i > 0");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(expected_sum_r3)}));
+	// total sum
+	result = con.Query("SELECT SUM(i) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(total_sum)}));
+	result = con.Query("SELECT SUM(i) FROM integers WHERE i > 0");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(total_sum)}));
+}
+
 TEST_CASE("Test ART index with many matches", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -815,7 +870,6 @@ TEST_CASE("ART Big Range", "[art]") {
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 
 	// now perform a an index creation and scan with deletions with a second transaction
-	Connection con2(db);
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
 	for (index_t j = 0; j < 1500; j++) {
@@ -826,6 +880,7 @@ TEST_CASE("ART Big Range", "[art]") {
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 
 	// second transaction: begin and verify counts
+	Connection con2(db);
 	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
 	for (index_t i = 0; i < n + 1; i++) {
 		result = con2.Query("SELECT FIRST(i), COUNT(i) FROM integers WHERE i=" + to_string(keys[i]));

@@ -66,7 +66,6 @@ struct VectorOperations {
 	static void Log10(Vector &A, Vector &result);
 	static void Log2(Vector &A, Vector &result);
 	static void Sign(Vector &A, Vector &result);
-	static void Mod(Vector &A, Vector &B, Vector &result);
 	static void Pow(Vector &A, Vector &B, Vector &result);
 
 	static void Sin(Vector &A, Vector &result);
@@ -152,19 +151,10 @@ struct VectorOperations {
 	static Value Min(Vector &A);
 	// Returns whether or not a vector has a NULL value
 	static bool HasNull(Vector &A);
-	// Maximum string length of the vector, only works on string vectors!
-	static Value MaximumStringLength(Vector &A);
-	// Check if any value is true in a bool vector
-	static bool AnyTrue(Vector &A);
-	// Check if all values are true in a bool vector
-	static bool AllTrue(Vector &A);
 
 	//! CASE expressions, ternary op
 	//! result = check ? A : B
 	static void Case(Vector &check, Vector &A, Vector &B, Vector &result);
-
-	// Returns true if the vector contains an instance of Value
-	static bool Contains(Vector &vector, Value &value);
 	//===--------------------------------------------------------------------===//
 	// Scatter methods
 	//===--------------------------------------------------------------------===//
@@ -185,14 +175,19 @@ struct VectorOperations {
 		static void SetFirst(Vector &source, Vector &dest);
 		// dest[i] = dest[i] + source
 		static void Add(int64_t source, void **dest, index_t length);
-		//! Similar to Set, do not ignore NULL values
-		static void SetAll(Vector &source, Vector &dest);
+		//! Similar to Set, but also write NullValue<T> if set_null = true, or ignore null values entirely if set_null =
+		//! false
+		static void SetAll(Vector &source, Vector &dest, bool set_null = false, index_t offset = 0);
 	};
 	// make sure dest.count is set for gather methods!
 	struct Gather {
 		//! dest.data[i] = ptr[i]. If set_null is true, NullValue<T> is checked for and converted to the nullmask in
 		//! dest. If set_null is false, NullValue<T> is ignored.
-		static void Set(Vector &source, Vector &dest, bool set_null = true);
+		static void Set(Vector &source, Vector &dest, bool set_null = true, index_t offset = 0);
+		//! Append the values from source to the dest vector. If set_null is true, NullValue<T> is checked for and
+		//! converted to the nullmask in dest. If set_null is false, NullValue<T> is ignored. If offset is set, it is
+		//! added to
+		static void Append(Vector &source, Vector &dest, index_t offset = 0, bool set_null = true);
 	};
 
 	//===--------------------------------------------------------------------===//
@@ -234,7 +229,7 @@ struct VectorOperations {
 	// Appends the data of <source> to the target vector, setting the nullmask
 	// for any NullValue<T> of source. Used to go back from storage to a
 	// nullmask.
-	static void AppendFromStorage(Vector &source, Vector &target);
+	static void AppendFromStorage(Vector &source, Vector &target, bool has_null = true);
 
 	// Set all elements of the vector to the given constant value
 	static void Set(Vector &result, Value value);
@@ -334,6 +329,22 @@ struct VectorOperations {
 		assert(c.IsConstant() || c.count == result.count);
 
 		VectorOperations::Exec(result, [&](index_t i, index_t k) { fun(a_mul * i, b_mul * i, c_mul * i, i); });
+	}
+
+	template <class FUNC> static void MultiaryExec(Vector inputs[], int input_count, Vector &result, FUNC &&fun) {
+		result.sel_vector = nullptr;
+		result.count = 1;
+		vector<index_t> mul(input_count, 0);
+
+		for (int i = 0; i < input_count; i++) {
+			auto &input = inputs[i];
+			if (!input.IsConstant()) {
+				result.sel_vector = input.sel_vector;
+				result.count = input.count;
+			}
+			mul[i] = input.IsConstant() ? 0 : 1;
+		}
+		VectorOperations::Exec(result, [&](index_t i, index_t k) { fun(mul, i); });
 	}
 };
 } // namespace duckdb

@@ -78,7 +78,7 @@ template class std::unique_ptr<BaseTableRef>;
 template class std::unique_ptr<CrossProductRef>;
 template class std::unique_ptr<JoinRef>;
 template class std::unique_ptr<SubqueryRef>;
-template class std::unique_ptr<TableFunction>;
+template class std::unique_ptr<TableFunctionRef>;
 
 template class std::unique_ptr<Expression>;
 template class std::unique_ptr<BoundSQLStatement>;
@@ -125,7 +125,7 @@ template class std::unique_ptr<LogicalOperator>;
 template class std::unique_ptr<PhysicalOperator>;
 template class std::unique_ptr<PhysicalOperatorState>;
 template class std::unique_ptr<sel_t[]>;
-template class std::unique_ptr<StorageChunk>;
+template class std::unique_ptr<VersionChunk>;
 template class std::unique_ptr<StringHeap>;
 template class std::unique_ptr<SuperLargeHashTable>;
 template class std::unique_ptr<TableRef>;
@@ -134,7 +134,6 @@ template class std::unique_ptr<uint64_t[]>;
 template class std::unique_ptr<data_t[]>;
 template class std::unique_ptr<Vector[]>;
 template class std::unique_ptr<DataChunk>;
-template class std::unique_ptr<ExpressionStatistics[]>;
 template class std::unique_ptr<JoinHashTable>;
 template class std::unique_ptr<JoinHashTable::ScanStructure>;
 template class std::unique_ptr<JoinHashTable::Node>;
@@ -166,7 +165,6 @@ template class std::vector<ExpressionType>;
 INSTANTIATE_VECTOR(std::vector<JoinCondition>);
 INSTANTIATE_VECTOR(std::vector<OrderByNode>);
 template class std::vector<uint64_t>;
-INSTANTIATE_VECTOR(std::vector<ExpressionStatistics>);
 template class std::vector<string>;
 INSTANTIATE_VECTOR(std::vector<Expression *>)
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Expression>>)

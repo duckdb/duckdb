@@ -44,6 +44,8 @@ public:
 private:
 	//! Load the database from a directory
 	void LoadDatabase();
+	//! Create a checkpoint of the database
+	void Checkpoint(string wal_path);
 
 	//! The path of the database
 	string path;

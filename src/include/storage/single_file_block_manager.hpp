@@ -22,7 +22,7 @@ class SingleFileBlockManager : public BlockManager {
 	static constexpr uint64_t BLOCK_START = HEADER_SIZE * 3;
 
 public:
-	SingleFileBlockManager(FileSystem &fs, string path, bool read_only, bool create_new);
+	SingleFileBlockManager(FileSystem &fs, string path, bool read_only, bool create_new, bool use_direct_io);
 
 	//! Creates a new Block and returns a pointer
 	unique_ptr<Block> CreateBlock() override;
@@ -59,5 +59,7 @@ private:
 	block_id_t max_block;
 	//! The current header iteration count
 	uint64_t iteration_count;
+	//! Whether or not to use Direct IO to read the blocks
+	bool use_direct_io;
 };
 } // namespace duckdb

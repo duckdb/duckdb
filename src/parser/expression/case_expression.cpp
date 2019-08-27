@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-CaseExpression::CaseExpression() : ParsedExpression(ExpressionType::OPERATOR_CASE_EXPR, ExpressionClass::CASE) {
+CaseExpression::CaseExpression() : ParsedExpression(ExpressionType::CASE_EXPR, ExpressionClass::CASE) {
 }
 
 string CaseExpression::ToString() const {
