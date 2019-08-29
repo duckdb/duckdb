@@ -95,13 +95,17 @@ void StorageManager::LoadDatabase() {
 		// initialize the block manager while creating a new db file
 		block_manager =
 		    make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, true, database.use_direct_io);
+		buffer_manager = make_unique<BufferManager>(*block_manager);
 	} else {
 		if (!database.checkpoint_only) {
 			Checkpoint(wal_path);
 		}
 		// initialize the block manager while loading the current db file
-		block_manager =
-		    make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, false, database.use_direct_io);
+		auto sf = make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, false, database.use_direct_io);
+		buffer_manager = make_unique<BufferManager>(*sf);
+		sf->LoadFreeList(*buffer_manager);
+		block_manager = move(sf);
+
 		//! Load from storage
 		CheckpointManager checkpointer(*this);
 		checkpointer.LoadFromStorage();

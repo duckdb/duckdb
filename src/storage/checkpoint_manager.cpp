@@ -33,7 +33,7 @@ using namespace std;
 // constexpr uint64_t CheckpointManager::DATA_BLOCK_HEADER_SIZE;
 
 CheckpointManager::CheckpointManager(StorageManager &manager)
-    : block_manager(*manager.block_manager), database(manager.database) {
+    : block_manager(*manager.block_manager), buffer_manager(*manager.buffer_manager), database(manager.database) {
 }
 
 void CheckpointManager::CreateCheckpoint() {
@@ -79,7 +79,7 @@ void CheckpointManager::LoadFromStorage() {
 	ClientContext context(database);
 	context.transaction.BeginTransaction();
 	// create the MetaBlockReader to read from the storage
-	MetaBlockReader reader(block_manager, meta_block);
+	MetaBlockReader reader(buffer_manager, meta_block);
 	uint32_t schema_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < schema_count; i++) {
 		ReadSchema(context, reader);
@@ -202,7 +202,7 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 	// now read the actual table data and place it into the create table info
 	auto block_id = reader.Read<block_id_t>();
 	auto offset = reader.Read<uint64_t>();
-	MetaBlockReader table_data_reader(block_manager, block_id);
+	MetaBlockReader table_data_reader(buffer_manager, block_id);
 	table_data_reader.offset = offset;
 	TableDataReader data_reader(*this, table_data_reader, *bound_info);
 	data_reader.ReadTableData();

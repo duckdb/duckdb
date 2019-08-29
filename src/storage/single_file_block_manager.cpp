@@ -8,7 +8,7 @@ using namespace std;
 
 SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool read_only, bool create_new,
                                                bool use_direct_io)
-    : path(path), header_buffer(HEADER_SIZE), use_direct_io(use_direct_io) {
+    : path(path), header_buffer(HEADER_SIZE), read_only(read_only), use_direct_io(use_direct_io) {
 
 	uint8_t flags;
 	FileLockType lock;
@@ -87,17 +87,27 @@ SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool
 }
 
 void SingleFileBlockManager::Initialize(DatabaseHeader &header) {
-	if (header.free_list != INVALID_BLOCK) {
-		MetaBlockReader reader(*this, header.free_list);
-		auto free_list_count = reader.Read<uint64_t>();
-		free_list.reserve(free_list_count);
-		for (index_t i = 0; i < free_list_count; i++) {
-			free_list.push_back(reader.Read<block_id_t>());
-		}
-	}
+	free_list_id = header.free_list;
 	meta_block = header.meta_block;
 	iteration_count = header.iteration;
 	max_block = header.block_count;
+}
+
+void SingleFileBlockManager::LoadFreeList(BufferManager &manager) {
+	if (read_only) {
+		// no need to load free list for read only db
+		return;
+	}
+	if (free_list_id == INVALID_BLOCK) {
+		// no free list
+		return;
+	}
+	MetaBlockReader reader(manager, free_list_id);
+	auto free_list_count = reader.Read<uint64_t>();
+	free_list.reserve(free_list_count);
+	for (index_t i = 0; i < free_list_count; i++) {
+		free_list.push_back(reader.Read<block_id_t>());
+	}
 }
 
 block_id_t SingleFileBlockManager::GetFreeBlockId() {

@@ -37,6 +37,9 @@ public:
 	//! Write the header to disk, this is the final step of the checkpointing process
 	void WriteHeader(DatabaseHeader header) override;
 
+	//! Load the free list from the file
+	void LoadFreeList(BufferManager &manager);
+
 private:
 	void Initialize(DatabaseHeader &header);
 
@@ -57,8 +60,12 @@ private:
 	block_id_t meta_block;
 	//! The current maximum block id, this id will be given away first after the free_list runs out
 	block_id_t max_block;
+	//! The block id where the free list can be found
+	block_id_t free_list_id;
 	//! The current header iteration count
 	uint64_t iteration_count;
+	//! Whether or not the db is opened in read-only mode
+	bool read_only;
 	//! Whether or not to use Direct IO to read the blocks
 	bool use_direct_io;
 };

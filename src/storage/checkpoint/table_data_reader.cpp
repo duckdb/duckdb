@@ -38,7 +38,7 @@ void TableDataReader::ReadTableData() {
 			data_pointer.block_id = reader.Read<block_id_t>();
 			data_pointer.offset = reader.Read<uint32_t>();
 			// create a persistent segment
-			auto segment = make_unique<PersistentSegment>(manager.block_manager, data_pointer.block_id,
+			auto segment = make_unique<PersistentSegment>(manager.buffer_manager, data_pointer.block_id,
 			                                              data_pointer.offset, GetInternalType(column.type),
 			                                              data_pointer.row_start, data_pointer.tuple_count);
 			info.data[col].push_back(move(segment));

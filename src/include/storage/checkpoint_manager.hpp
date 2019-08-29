@@ -43,6 +43,8 @@ public:
 
 	//! The block manager to write the checkpoint to
 	BlockManager &block_manager;
+	//! The buffer manager
+	BufferManager &buffer_manager;
 	//! The database this storagemanager belongs to
 	DuckDB &database;
 	//! The metadata writer is responsible for writing schema information
