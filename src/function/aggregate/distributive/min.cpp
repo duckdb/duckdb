@@ -11,9 +11,8 @@ static void min_update(Vector inputs[], index_t input_count, Vector &result) {
 	VectorOperations::Scatter::Min(inputs[0], result);
 }
 
-static void min_combine(Vector &state_a, Vector &state_b, Vector &combined) {
-	VectorOperations::Copy(state_a, combined);
-	VectorOperations::Scatter::Min(state_b, combined);
+static void min_combine(Vector &state, Vector &combined) {
+	VectorOperations::Scatter::Min(state, combined);
 }
 
 static void min_simple_update(Vector inputs[], index_t input_count, Value &result) {

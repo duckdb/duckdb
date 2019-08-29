@@ -19,7 +19,7 @@ typedef void (*aggregate_initialize_t)(data_ptr_t state, TypeId return_type);
 //! The type used for updating hashed aggregate functions
 typedef void (*aggregate_update_t)(Vector inputs[], index_t input_count, Vector &state);
 //! The type used for combining hashed aggregate states (optional)
-typedef void (*aggregate_combine_t)(Vector &state1, Vector &state2, Vector &combined);
+typedef void (*aggregate_combine_t)(Vector &state, Vector &combined);
 //! The type used for finalizing hashed aggregate function payloads
 typedef void (*aggregate_finalize_t)(Vector &state, Vector &result);
 

@@ -37,14 +37,21 @@ static void avg_update(Vector inputs[], index_t input_count, Vector &state) {
 	});
 }
 
-static void avg_combine(Vector &state1, Vector &state2, Vector &combined) {
+static void avg_combine(Vector &state, Vector &combined) {
 	// combine streaming avg states
-	VectorOperations::Exec(state1, [&](uint64_t i, uint64_t k) {
-		auto combined_ptr = (avg_state_t*) ((data_ptr_t *)combined.data)[i];
-		auto state1_ptr = (avg_state_t*) ((data_ptr_t *)state1.data)[i];
-		auto state2_ptr = (avg_state_t*) ((data_ptr_t *)state2.data)[i];
-		combined_ptr->count = state1_ptr->count + state2_ptr->count;
-		combined_ptr->sum = state1_ptr->sum + state2_ptr->sum;
+	auto combined_data = (avg_state_t**) combined.data;
+	auto state_data = (avg_state_t*) state.data;
+
+	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+		auto combined_ptr = combined_data[i];
+		auto state_ptr = state_data + i;
+
+		if (0 == combined_ptr->count) {
+			*combined_ptr = *state_ptr;
+		} else if (state_ptr->count) {
+			combined_ptr->count += state_ptr->count;
+			combined_ptr->sum += state_ptr->sum;
+		}
 	});
 }
 

@@ -23,9 +23,8 @@ static void count_update(Vector inputs[], index_t input_count, Vector &result) {
 	VectorOperations::Scatter::AddOne(inputs[0], result);
 }
 
-static void count_combine(Vector &state_a, Vector &state_b, Vector &combined) {
-	VectorOperations::Copy(state_a, combined);
-	VectorOperations::Scatter::Add(state_b, combined);
+static void count_combine(Vector &state, Vector &combined) {
+	VectorOperations::Scatter::Add(state, combined);
 }
 
 static void count_simple_update(Vector inputs[], index_t input_count, Value &result) {

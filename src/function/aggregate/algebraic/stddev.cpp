@@ -48,24 +48,26 @@ static void stddev_update(Vector inputs[], index_t input_count, Vector &state) {
 }
 
 
-static void stddev_combine(Vector &state_a, Vector &state_b, Vector &combined) {
-    // combine streaming avg states
-    VectorOperations::Exec(state_a, [&](uint64_t i, uint64_t k) {
-        auto c_ptr = (stddev_state_t*) ((data_ptr_t *)combined.data)[i];
-        auto a_ptr = (const stddev_state_t*) ((data_ptr_t *)state_a.data)[i];
-        auto b_ptr = (const stddev_state_t*) ((data_ptr_t *)state_b.data)[i];
+static void stddev_combine(Vector &state, Vector &combined) {
+	// combine streaming avg states
+	auto combined_data = (stddev_state_t**) combined.data;
+	auto state_data = (stddev_state_t*) state.data;
 
-        if (0 == a_ptr->count) {
-            *c_ptr = *b_ptr;
-        } else if (0 == b_ptr->count) {
-            *c_ptr = *a_ptr;
-        } else {
-            c_ptr->count = a_ptr->count + b_ptr->count;
-            c_ptr->mean = ( a_ptr->count * a_ptr->mean + b_ptr->count * b_ptr->mean ) / c_ptr->count;
-            const auto delta = b_ptr->mean - a_ptr->mean;
-            c_ptr->dsquared = a_ptr->dsquared + b_ptr->dsquared + delta * delta * a_ptr->count * b_ptr->count / c_ptr->count;
-        }
-    });
+	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+		auto combined_ptr = combined_data[i];
+		auto state_ptr = state_data + i;
+
+		if (0 == combined_ptr->count) {
+			*combined_ptr = *state_ptr;
+		} else if (state_ptr->count) {
+			const auto count = combined_ptr->count + state_ptr->count;
+			const auto mean = ( state_ptr->count * state_ptr->mean + combined_ptr->count * combined_ptr->mean ) / count;
+			const auto delta = state_ptr->mean - combined_ptr->mean;
+			combined_ptr->dsquared = state_ptr->dsquared + combined_ptr->dsquared + delta * delta * state_ptr->count * combined_ptr->count / count;
+			combined_ptr->mean = mean;
+			combined_ptr->count = count;
+		}
+	});
 }
 
 static void varsamp_finalize(Vector &state, Vector &result) {

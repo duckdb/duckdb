@@ -11,9 +11,8 @@ static void sum_update(Vector inputs[], index_t input_count, Vector &result) {
 	VectorOperations::Scatter::Add(inputs[0], result);
 }
 
-static void sum_combine(Vector &state_a, Vector &state_b, Vector &combined) {
-	VectorOperations::Copy(state_a, combined);
-	VectorOperations::Scatter::Add(state_b, combined);
+static void sum_combine(Vector &state, Vector &combined) {
+	VectorOperations::Scatter::Add(state, combined);
 }
 
 static void sum_simple_update(Vector inputs[], index_t input_count, Value &result) {

@@ -53,28 +53,31 @@ static void covar_update(Vector inputs[], index_t input_count, Vector &state) {
 	});
 }
 
-static void covar_combine(Vector &state_a, Vector &state_b, Vector &combined) {
-    // combine streaming avg states
-    VectorOperations::Exec(state_a, [&](uint64_t i, uint64_t k) {
-        auto c_ptr = (covar_state_t*) ((data_ptr_t *)combined.data)[i];
-        auto a_ptr = (const covar_state_t*) ((data_ptr_t *)state_a.data)[i];
-        auto b_ptr = (const covar_state_t*) ((data_ptr_t *)state_b.data)[i];
+static void covar_combine(Vector &state, Vector &combined) {
+	// combine streaming covar states
+	auto combined_data = (covar_state_t**) combined.data;
+	auto state_data = (covar_state_t*) state.data;
 
-        if (0 == a_ptr->count) {
-            *c_ptr = *b_ptr;
-        } else if (0 == b_ptr->count) {
-            *c_ptr = *a_ptr;
-        } else {
-            c_ptr->count = a_ptr->count + b_ptr->count;
-            c_ptr->meanx = ( a_ptr->count * a_ptr->meanx + b_ptr->count * b_ptr->meanx ) / c_ptr->count;
-            c_ptr->meany = ( a_ptr->count * a_ptr->meany + b_ptr->count * b_ptr->meany ) / c_ptr->count;
+	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+		auto combined_ptr = combined_data[i];
+		auto state_ptr = state_data + i;
 
-            //  Schubert and Gertz SSDBM 2018, equation 21
-            const auto deltax = b_ptr->meanx - a_ptr->meanx;
-            const auto deltay = b_ptr->meany - a_ptr->meany;
-            c_ptr->co_moment = a_ptr->co_moment + b_ptr->co_moment + deltax * deltay * a_ptr->count * b_ptr->count / c_ptr->count;
-        }
-    });
+		if (0 == combined_ptr->count) {
+			*combined_ptr = *state_ptr;
+		} else if (state_ptr->count) {
+			const auto count = combined_ptr->count + state_ptr->count;
+			const auto meanx = ( state_ptr->count * state_ptr->meanx + combined_ptr->count * combined_ptr->meanx ) / count;
+			const auto meany = ( state_ptr->count * state_ptr->meany + combined_ptr->count * combined_ptr->meany ) / count;
+
+			//  Schubert and Gertz SSDBM 2018, equation 21
+			const auto deltax = combined_ptr->meanx - state_ptr->meanx;
+			const auto deltay = combined_ptr->meany - state_ptr->meany;
+			combined_ptr->co_moment = state_ptr->co_moment + combined_ptr->co_moment + deltax * deltay * state_ptr->count * combined_ptr->count / count;
+			combined_ptr->meanx = meanx;
+			combined_ptr->meany = meany;
+			combined_ptr->count = count;
+		}
+	});
 }
 
 static void covarpop_finalize(Vector &state, Vector &result) {

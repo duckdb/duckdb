@@ -11,9 +11,8 @@ static void max_update(Vector inputs[], index_t input_count, Vector &result) {
 	VectorOperations::Scatter::Max(inputs[0], result);
 }
 
-static void max_combine(Vector &state_a, Vector &state_b, Vector &combined) {
-	VectorOperations::Copy(state_a, combined);
-	VectorOperations::Scatter::Max(state_b, combined);
+static void max_combine(Vector &state, Vector &combined) {
+	VectorOperations::Scatter::Max(state, combined);
 }
 
 static void max_simple_update(Vector inputs[], index_t input_count, Value &result) {
