@@ -79,6 +79,30 @@ TEST_CASE("Most basic window function", "[window]") {
 	REQUIRE(CHECK_COLUMN(
 	    result, 3,
 	    {4200.0, 5020.0, 4350.0, 4633.33333333333, 4775.0, 3700.0, 3500.0, 4866.66666666667, 4800.0, 4800.0}));
+
+	// stddev_pop
+	result = con.Query("SELECT depname, "
+	                   "STDDEV_POP(salary) OVER (PARTITION BY depname ORDER BY salary, empno) s "
+	                   "FROM empsalary ORDER BY depname, empno");
+	REQUIRE(result->types.size() == 2);
+	REQUIRE(CHECK_COLUMN(
+	    result, 0,
+	    {"develop", "develop", "develop", "develop", "develop", "personnel", "personnel", "sales", "sales", "sales"}));
+	REQUIRE(CHECK_COLUMN(
+	    result, 1,
+	    {0.0, 627.375486, 150.0, 418.993503, 438.035387, 200, 0.0, 94.280904, 0.0, 0.0}));
+
+	// covar_pop
+	result = con.Query("SELECT depname, "
+	                   "COVAR_POP(salary, empno) OVER (PARTITION BY depname ORDER BY salary, empno) c "
+	                   "FROM empsalary ORDER BY depname, empno");
+	REQUIRE(result->types.size() == 2);
+	REQUIRE(CHECK_COLUMN(
+	    result, 0,
+	    {"develop", "develop", "develop", "develop", "develop", "personnel", "personnel", "sales", "sales", "sales"}));
+	REQUIRE(CHECK_COLUMN(
+	    result, 1,
+	    {0.0, 240.0, 150.0, 477.777778, 606.250000, -300.0, 0.0, -111.111111, 0.0, 0.0}));
 }
 
 TEST_CASE("Illegal window function", "[window]") {

@@ -52,15 +52,25 @@ static index_t BinarySearchRightmost(ChunkCollection &input, vector<Value> row, 
 	return l - 1;
 }
 
-static void MaterializeExpression(ClientContext &context, Expression *expr, ChunkCollection &input,
+static void MaterializeExpressions(ClientContext &context, Expression** exprs, index_t expr_count, ChunkCollection &input,
                                   ChunkCollection &output, bool scalar = false) {
-	ChunkCollection boundary_start_collection;
-	vector<TypeId> types = {expr->return_type};
+	if (expr_count == 0 ) {
+		return;
+	}
+
+	vector<TypeId> types;
+	for ( index_t expr_idx = 0; expr_idx < expr_count; ++expr_idx ) {
+		types.push_back(exprs[expr_idx]->return_type);
+	}
+
 	for (index_t i = 0; i < input.chunks.size(); i++) {
 		DataChunk chunk;
 		chunk.Initialize(types);
 		ExpressionExecutor executor(*input.chunks[i]);
-		executor.ExecuteExpression(*expr, chunk.data[0]);
+		for ( index_t expr_idx = 0; expr_idx < expr_count; ++expr_idx ) {
+			auto expr = exprs[expr_idx];
+			executor.ExecuteExpression(*expr, chunk.data[expr_idx]);
+		}
 
 		chunk.Verify();
 		output.Append(chunk);
@@ -69,6 +79,11 @@ static void MaterializeExpression(ClientContext &context, Expression *expr, Chun
 			break;
 		}
 	}
+}
+
+static void MaterializeExpression(ClientContext &context, Expression* expr, ChunkCollection &input,
+                                  ChunkCollection &output, bool scalar = false) {
+	MaterializeExpressions(context, &expr, 1, input, output, scalar);
 }
 
 static void SortCollectionForWindow(ClientContext &context, BoundWindowExpression *wexpr, ChunkCollection &input,
@@ -260,10 +275,12 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 
 	// evaluate inner expressions of window functions, could be more complex
 	ChunkCollection payload_collection;
+	vector<Expression*> exprs;
 	for (auto& child : wexpr->children)  {
-		// TODO: child may be a scalar, don't need to materialize the whole collection then
-		MaterializeExpression(context, child.get(), input, payload_collection);
+		exprs.push_back(child.get());
 	}
+	// TODO: child may be a scalar, don't need to materialize the whole collection then
+	MaterializeExpressions(context, exprs.data(), exprs.size(), input, payload_collection);
 
 	ChunkCollection leadlag_offset_collection;
 	ChunkCollection leadlag_default_collection;

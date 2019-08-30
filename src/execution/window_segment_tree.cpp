@@ -11,16 +11,15 @@ using namespace std;
 WindowSegmentTree::WindowSegmentTree(AggregateFunction& aggregate, TypeId result_type, ChunkCollection *input)
 	: aggregate(aggregate), state(aggregate.state_size(result_type)), statep(TypeId::POINTER, true, false), result_type(result_type),
 	input_ref(input) {
-	assert(aggregate.initialize);
-	assert(aggregate.update);
-	assert(aggregate.finalize);
 	statep.count = STANDARD_VECTOR_SIZE;
 	VectorOperations::Set(statep, Value::POINTER((index_t) state.data()));
 
-	if (aggregate.combine && (input_ref->column_count() == 1)) {
-		ConstructTree();
-	} else {
+	if (input_ref && input_ref->column_count() > 0) {
 		inputs = unique_ptr<Vector[]>(new Vector[input_ref->column_count()]);
+	}
+
+	if (aggregate.combine && inputs) {
+		ConstructTree();
 	}
 }
 
@@ -49,17 +48,20 @@ void WindowSegmentTree::WindowSegmentValue(index_t l_idx, index_t begin, index_t
 	s.count = end - begin;
 	Vector v;
 	if (l_idx == 0) {
-		auto &vec = input_ref->GetChunk(begin).data[0];
-		v.Reference(vec);
-		index_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
-		v.data = v.data + GetTypeIdSize(v.type) * start_in_vector;
-		v.count = end - begin;
-		v.nullmask <<= start_in_vector;
-		assert(v.count + start_in_vector <=
-			   vec.count); // if STANDARD_VECTOR_SIZE is not divisible by fanout this will trip
-		assert(!v.sel_vector);
-		v.Verify();
-		aggregate.update(&v, 1, s);
+		const auto input_count = input_ref->column_count();
+		auto &chunk = input_ref->GetChunk(begin);
+		for (index_t i = 0; i < input_count; ++i) {
+			auto &v = inputs[i];
+			auto &vec = chunk.data[i];
+			v.Reference(vec);
+			index_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
+			v.data = v.data + GetTypeIdSize(v.type) * start_in_vector;
+			v.count = end - begin;
+			v.nullmask <<= start_in_vector;
+			assert(!v.sel_vector);
+			v.Verify();
+		}
+		aggregate.update(&inputs[0], input_count, s);
 	} else {
 		assert(end - begin < STANDARD_VECTOR_SIZE);
 		v.data = levels_flat_native.get() + state.size() * (begin + levels_flat_start[l_idx - 1]);
@@ -73,7 +75,7 @@ void WindowSegmentTree::WindowSegmentValue(index_t l_idx, index_t begin, index_t
 
 void WindowSegmentTree::ConstructTree() {
 	assert(input_ref);
-	assert(input_ref->column_count() == 1);
+	assert(inputs);
 
 	// compute space required to store internal nodes of segment tree
 	index_t internal_nodes = 0;
@@ -105,43 +107,22 @@ void WindowSegmentTree::ConstructTree() {
 	}
 }
 
-Value WindowSegmentTree::Aggregate(index_t begin, index_t end) {
+Value WindowSegmentTree::Compute(index_t begin, index_t end) {
 	assert(input_ref);
-	const auto input_count = input_ref->column_count();
-	if (!input_count) {
+
+	// No arguments, so just count
+	if (!inputs) {
 		return Value::Numeric(result_type, end - begin);
 	}
 
-	Vector s;
-	s.Reference(statep);
-
 	AggregateInit();
 
-	auto &chunk = input_ref->GetChunk(begin);
-	for (index_t i = 0; i < input_count; ++i) {
-		auto &v = inputs[i];
-		auto &vec = chunk.data[i];
-		v.Reference(vec);
-		index_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
-		v.data = v.data + GetTypeIdSize(v.type) * start_in_vector;
-		v.count = end - begin;
-		v.nullmask <<= start_in_vector;
-		assert(!v.sel_vector);
-		v.Verify();
-	}
-	s.count = end - begin;
-	aggregate.update(&inputs[0], input_count, s);
-
-	return AggegateFinal();
-}
-
-Value WindowSegmentTree::Compute(index_t begin, index_t end) {
-	assert(input_ref);
-	if (inputs) {
-		return Aggregate(begin, end);
+	// Aggregate everything at once if we can't combine states
+	if (!aggregate.combine) {
+		WindowSegmentValue(0, begin, end);
+		return AggegateFinal();
 	}
 
-	AggregateInit();
 	for (index_t l_idx = 0; l_idx < levels_flat_start.size() + 1; l_idx++) {
 		index_t parent_begin = begin / TREE_FANOUT;
 		index_t parent_end = end / TREE_FANOUT;

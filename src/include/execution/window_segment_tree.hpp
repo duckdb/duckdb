@@ -18,7 +18,6 @@ class WindowSegmentTree {
 public:
     WindowSegmentTree(AggregateFunction& aggregate, TypeId result_type, ChunkCollection *input);
     Value Compute(index_t start, index_t end);
-    Value Aggregate(index_t start, index_t end);
 
 private:
     void ConstructTree();
