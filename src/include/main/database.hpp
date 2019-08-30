@@ -37,7 +37,8 @@ public:
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
 	//! RamFS or something similar)
 	unique_ptr<FileSystem> file_system;
-
+	//! The maximum memory used by the database system (in bytes). Default: 1GB
+	index_t maximum_memory = 1 << 30;
 private:
 	// FIXME: don't set this as a user: used internally (only for now)
 	bool checkpoint_only = false;
@@ -63,6 +64,7 @@ public:
 	bool use_direct_io;
 	bool checkpoint_only;
 	index_t checkpoint_wal_size;
+	index_t maximum_memory;
 
 private:
 	void Configure(DBConfig &config);

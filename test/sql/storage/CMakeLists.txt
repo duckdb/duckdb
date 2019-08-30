@@ -1,6 +1,7 @@
 if(NOT WIN32)
   add_library_unity(test_sql_storage
                     OBJECT
+                    test_buffer_manager.cpp
                     test_constraints.cpp
                     test_checksum.cpp
                     test_droptable.cpp
@@ -18,6 +19,7 @@ if(NOT WIN32)
 else()
   add_library_unity(test_sql_storage
                     OBJECT
+                    test_buffer_manager.cpp
                     test_constraints.cpp
                     test_checksum.cpp
                     test_droptable.cpp

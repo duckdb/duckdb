@@ -95,14 +95,14 @@ void StorageManager::LoadDatabase() {
 		// initialize the block manager while creating a new db file
 		block_manager =
 		    make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, true, database.use_direct_io);
-		buffer_manager = make_unique<BufferManager>(*block_manager);
+		buffer_manager = make_unique<BufferManager>(*block_manager, database.maximum_memory);
 	} else {
 		if (!database.checkpoint_only) {
 			Checkpoint(wal_path);
 		}
 		// initialize the block manager while loading the current db file
 		auto sf = make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, false, database.use_direct_io);
-		buffer_manager = make_unique<BufferManager>(*sf);
+		buffer_manager = make_unique<BufferManager>(*sf, database.maximum_memory);
 		sf->LoadFreeList(*buffer_manager);
 		block_manager = move(sf);
 
