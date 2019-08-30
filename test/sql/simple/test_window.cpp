@@ -145,7 +145,7 @@ TEST_CASE("More evil cases", "[window]") {
 	                     {23.904382, 51.724138, 54.450262, 100.000000, 52.702703, 100.000000, 34.246575, 100.000000}));
 }
 
-TEST_CASE("Wiscosin-derived window test cases", "[window]") {
+TEST_CASE("Wisconsin-derived window test cases", "[window]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

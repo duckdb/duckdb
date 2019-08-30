@@ -260,9 +260,9 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 
 	// evaluate inner expressions of window functions, could be more complex
 	ChunkCollection payload_collection;
-	if (wexpr->child) {
-		// TODO: child[0] may be a scalar, don't need to materialize the whole collection then
-		MaterializeExpression(context, wexpr->child.get(), input, payload_collection);
+	for (auto& child : wexpr->children)  {
+		// TODO: child may be a scalar, don't need to materialize the whole collection then
+		MaterializeExpression(context, child.get(), input, payload_collection);
 	}
 
 	ChunkCollection leadlag_offset_collection;
@@ -296,16 +296,8 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
 	unique_ptr<WindowSegmentTree> segment_tree = nullptr;
 
-	switch (wexpr->type) {
-	case ExpressionType::WINDOW_SUM:
-	case ExpressionType::WINDOW_MIN:
-	case ExpressionType::WINDOW_MAX:
-	case ExpressionType::WINDOW_AVG:
-		segment_tree = make_unique<WindowSegmentTree>(wexpr->type, wexpr->return_type, &payload_collection);
-		break;
-	default:
-		break;
-		// nothing
+	if (wexpr->aggregate && wexpr->aggregate->combine && !wexpr->children.empty()) {
+		segment_tree = make_unique<WindowSegmentTree>(*(wexpr->aggregate), wexpr->return_type, &payload_collection);
 	}
 
 	WindowBoundariesState bounds;
@@ -342,16 +334,12 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 		}
 
 		switch (wexpr->type) {
-		case ExpressionType::WINDOW_SUM:
-		case ExpressionType::WINDOW_MIN:
-		case ExpressionType::WINDOW_MAX:
-		case ExpressionType::WINDOW_AVG: {
-			assert(segment_tree);
-			res = segment_tree->Compute(bounds.window_start, bounds.window_end);
-			break;
-		}
-		case ExpressionType::WINDOW_COUNT_STAR: {
-			res = Value::Numeric(wexpr->return_type, bounds.window_end - bounds.window_start);
+		case ExpressionType::WINDOW_AGGREGATE: {
+			if (segment_tree) {
+				res = segment_tree->Compute(bounds.window_start, bounds.window_end);
+			} else {
+				res = Value::Numeric(wexpr->return_type, bounds.window_end - bounds.window_start);
+			}
 			break;
 		}
 		case ExpressionType::WINDOW_ROW_NUMBER: {
