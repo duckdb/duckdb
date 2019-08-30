@@ -49,7 +49,7 @@ static void stddev_update(Vector inputs[], index_t input_count, Vector &state) {
 
 
 static void stddev_combine(Vector &state, Vector &combined) {
-	// combine streaming avg states
+	// combine streaming stddev states
 	auto combined_data = (stddev_state_t**) combined.data;
 	auto state_data = (stddev_state_t*) state.data;
 
