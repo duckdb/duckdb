@@ -20,9 +20,40 @@ PersistentSegment::PersistentSegment(BufferManager &manager, block_id_t id, inde
 	}
 }
 
+void PersistentSegment::InitializeScan(ColumnPointer &pointer) {
+	// initialize the scan: unpin all handles except the ones needed by this segment
+	auto entry = pointer.handles.find(block_id);
+	if (entry == pointer.handles.end()) {
+		// not pinned yet: just clear eveything
+		pointer.handles.clear();
+	} else {
+		// pinned: store the handle
+		auto handle = move(entry->second);
+		// now clear
+		pointer.handles.clear();
+		// insert it again
+		pointer.handles.insert(make_pair(block_id, move(handle)));
+	}
+}
+
+Block *PersistentSegment::PinHandle(ColumnPointer &pointer) {
+	// first check if the handle is already pinned
+	auto entry = pointer.handles.find(block_id);
+	if (entry == pointer.handles.end()) {
+		// not pinned yet: pin it and insert the handle
+		auto handle = manager.Pin(block_id);
+		auto block = handle->block;
+		pointer.handles.insert(make_pair(block_id, move(handle)));
+		return block;
+	} else {
+		// pinned: just return the block
+		return entry->second->block;
+	}
+}
+
 void PersistentSegment::Scan(ColumnPointer &pointer, Vector &result, index_t count) {
-	auto handle = manager.Pin(block_id);
-	auto block = handle->block;
+	// pin the block if it is not yet pinned
+	auto block = PinHandle(pointer);
 
 	data_ptr_t dataptr = block->buffer + offset + pointer.offset * type_size;
 	Vector source(type, dataptr);
@@ -33,8 +64,7 @@ void PersistentSegment::Scan(ColumnPointer &pointer, Vector &result, index_t cou
 
 void PersistentSegment::Scan(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector,
                              index_t sel_count) {
-	auto handle = manager.Pin(block_id);
-	auto block = handle->block;
+	auto block = PinHandle(pointer);
 
 	data_ptr_t dataptr = block->buffer + offset + pointer.offset * type_size;
 	Vector source(type, dataptr);

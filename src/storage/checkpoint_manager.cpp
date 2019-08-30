@@ -124,7 +124,6 @@ void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry
 	for (auto &view : views) {
 		WriteView(transaction, *view);
 	}
-	// FIXME: free list?
 }
 
 void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &reader) {

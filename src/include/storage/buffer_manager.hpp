@@ -28,6 +28,16 @@ struct BlockHandle {
 	block_id_t block_id;
 };
 
+struct BufferEntry {
+	BufferEntry(unique_ptr<Block> block) :
+		block(move(block)), ref_count(1) { }
+
+	//! The actual block
+	unique_ptr<Block> block;
+	//! The amount of references to this entry
+	index_t ref_count;
+};
+
 //! The buffer manager is a
 class BufferManager {
 	friend struct BlockHandle;
@@ -44,7 +54,7 @@ private:
 	BlockManager &manager;
 	//! The lock for the set of blocks
 	std::mutex block_lock;
-	//! A mapping of block id -> block
-	unordered_map<block_id_t, unique_ptr<Block>> blocks;
+	//! A mapping of block id -> BufferEntry
+	unordered_map<block_id_t, BufferEntry> blocks;
 };
 } // namespace duckdb

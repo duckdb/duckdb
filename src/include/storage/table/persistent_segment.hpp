@@ -27,6 +27,7 @@ public:
 	//! The offset into the block
 	index_t offset;
 public:
+	void InitializeScan(ColumnPointer &pointer) override;
 	void Scan(ColumnPointer &pointer, Vector &result, index_t count) override;
 	void Scan(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector, index_t sel_count) override;
 	void Fetch(Vector &result, index_t row_id) override;
@@ -37,6 +38,8 @@ private:
 	std::mutex big_string_lock;
 	//! Big string map
 	unordered_map<block_id_t, const char *> big_strings;
+
+	Block *PinHandle(ColumnPointer &pointer);
 
 	void AppendFromStorage(Block *block, Vector &source, Vector &target, bool has_null);
 

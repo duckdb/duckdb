@@ -11,6 +11,7 @@
 #include "storage/block.hpp"
 #include "storage/table/segment_tree.hpp"
 #include "common/types.hpp"
+#include "storage/buffer_manager.hpp"
 
 namespace duckdb {
 class BlockManager;
@@ -25,6 +26,8 @@ struct ColumnPointer {
 	ColumnSegment *segment;
 	//! The offset inside the column segment
 	index_t offset;
+	//! The set of pinned block handles for this scan
+	unordered_map<block_id_t, unique_ptr<BlockHandle>> handles;
 };
 
 struct SegmentStatistics {
@@ -54,6 +57,7 @@ public:
 	SegmentStatistics stats;
 
 public:
+	virtual void InitializeScan(ColumnPointer &pointer) {}
 	virtual void Scan(ColumnPointer &pointer, Vector &result, index_t count) = 0;
 	virtual void Scan(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector, index_t sel_count) = 0;
 	//! Fetch an individual value and append it to a vector, row_id must be >= start

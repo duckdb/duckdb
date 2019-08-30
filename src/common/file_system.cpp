@@ -258,7 +258,9 @@ string FileSystem::PathSeparator() {
 
 void FileSystem::FileSync(FileHandle &handle) {
 	int fd = ((UnixFileHandle &)handle).fd;
-	fsync(fd);
+	if (fsync(fd) != 0) {
+		throw IOException("FATAL ERROR: fsync failed!");
+	}
 }
 
 void FileSystem::MoveFile(const string &source, const string &target) {

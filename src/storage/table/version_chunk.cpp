@@ -135,6 +135,7 @@ void VersionChunk::AppendToChunk(DataChunk &chunk, VersionInfo *info) {
 		// fetch from base table
 		auto id = info->GetRowId();
 		for (index_t i = 0; i < table.types.size(); i++) {
+			assert(columns[i].segment->segment_type == ColumnSegmentType::TRANSIENT);
 			columns[i].segment->Fetch(chunk.data[i], id);
 		}
 	} else {
@@ -210,6 +211,7 @@ void VersionChunk::RetrieveTupleData(Transaction &transaction, DataChunk &result
 
 void VersionChunk::RetrieveColumnData(ColumnPointer &pointer, Vector &result, index_t count) {
 	// copy data from the column storage
+	pointer.segment->InitializeScan(pointer);
 	while (count > 0) {
 		// check how much we can copy from this column segment
 		index_t to_copy = std::min(count, pointer.segment->count - pointer.offset);
@@ -231,6 +233,7 @@ void VersionChunk::RetrieveColumnData(ColumnPointer &pointer, Vector &result, in
 void VersionChunk::RetrieveColumnData(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector,
                                       index_t sel_count) {
 	// copy data from the column storage
+	pointer.segment->InitializeScan(pointer);
 	while (count > 0) {
 		// check how much we can copy from this column segment
 		index_t to_copy = std::min(count, pointer.segment->count - pointer.offset);

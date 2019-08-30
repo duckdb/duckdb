@@ -260,6 +260,9 @@ int64_t Value::GetNumericValue() {
 }
 
 string Value::ToString(SQLType sql_type) const {
+	if (is_null) {
+		return "NULL";
+	}
 	switch (sql_type.id) {
 	case SQLTypeId::BOOLEAN:
 		return value_.boolean ? "True" : "False";
@@ -287,9 +290,6 @@ string Value::ToString(SQLType sql_type) const {
 }
 
 string Value::ToString() const {
-	if (is_null) {
-		return "NULL";
-	}
 	return ToString(SQLTypeFromInternalType(type));
 }
 

@@ -13,6 +13,7 @@ if(NOT WIN32)
                     test_views.cpp
                     test_readonly.cpp
                     test_storage_tpch.cpp
+                    test_storage_scan.cpp
                     test_database_size.cpp)
 else()
   add_library_unity(test_sql_storage
@@ -26,6 +27,7 @@ else()
                     test_storage.cpp
                     test_storage_defaults.cpp
                     test_store_alter.cpp
+                    test_storage_scan.cpp
                     test_views.cpp
                     test_readonly.cpp
                     test_database_size.cpp)

@@ -132,7 +132,7 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock() {
 
 void SingleFileBlockManager::Read(Block &block) {
 	assert(block.id >= 0);
-	used_blocks.push_back(block.id);
+	used_blocks.insert(block.id);
 	block.Read(*handle, BLOCK_START + block.id * BLOCK_SIZE);
 }
 
@@ -142,11 +142,6 @@ void SingleFileBlockManager::Write(Block &block) {
 }
 
 void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
-	if (!use_direct_io) {
-		// if we are not using Direct IO we need to fsync BEFORE we write the header to ensure that all the previous
-		// blocks are written as well
-		handle->Sync();
-	}
 	// set the iteration count
 	header.iteration = ++iteration_count;
 	header.block_count = max_block;
@@ -165,6 +160,11 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 		// no blocks in the free list
 		header.free_list = INVALID_BLOCK;
 	}
+	if (!use_direct_io) {
+		// if we are not using Direct IO we need to fsync BEFORE we write the header to ensure that all the previous
+		// blocks are written as well
+		handle->Sync();
+	}
 	// set the header inside the buffer
 	header_buffer.Clear();
 	*((DatabaseHeader *)header_buffer.buffer) = header;
@@ -177,5 +177,8 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	handle->Sync();
 
 	// the free list is now equal to the blocks that were used by the previous iteration
-	free_list = used_blocks;
+	for (auto &block_id : used_blocks) {
+		free_list.push_back(block_id);
+	}
+	used_blocks.clear();
 }
