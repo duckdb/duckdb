@@ -13,11 +13,15 @@ WindowSegmentTree::WindowSegmentTree(AggregateFunction& aggregate, TypeId result
 	input_ref(input) {
 	assert(aggregate.initialize);
 	assert(aggregate.update);
-	assert(aggregate.combine);
 	assert(aggregate.finalize);
 	statep.count = STANDARD_VECTOR_SIZE;
 	VectorOperations::Set(statep, Value::POINTER((index_t) state.data()));
-	ConstructTree();
+
+	if (aggregate.combine && (input_ref->column_count() == 1)) {
+		ConstructTree();
+	} else {
+		inputs = unique_ptr<Vector[]>(new Vector[input_ref->column_count()]);
+	}
 }
 
 void WindowSegmentTree::AggregateInit() {
@@ -101,8 +105,42 @@ void WindowSegmentTree::ConstructTree() {
 	}
 }
 
+Value WindowSegmentTree::Aggregate(index_t begin, index_t end) {
+	assert(input_ref);
+	const auto input_count = input_ref->column_count();
+	if (!input_count) {
+		return Value::Numeric(result_type, end - begin);
+	}
+
+	Vector s;
+	s.Reference(statep);
+
+	AggregateInit();
+
+	auto &chunk = input_ref->GetChunk(begin);
+	for (index_t i = 0; i < input_count; ++i) {
+		auto &v = inputs[i];
+		auto &vec = chunk.data[i];
+		v.Reference(vec);
+		index_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
+		v.data = v.data + GetTypeIdSize(v.type) * start_in_vector;
+		v.count = end - begin;
+		v.nullmask <<= start_in_vector;
+		assert(!v.sel_vector);
+		v.Verify();
+	}
+	s.count = end - begin;
+	aggregate.update(&inputs[0], input_count, s);
+
+	return AggegateFinal();
+}
+
 Value WindowSegmentTree::Compute(index_t begin, index_t end) {
 	assert(input_ref);
+	if (inputs) {
+		return Aggregate(begin, end);
+	}
+
 	AggregateInit();
 	for (index_t l_idx = 0; l_idx < levels_flat_start.size() + 1; l_idx++) {
 		index_t parent_begin = begin / TREE_FANOUT;

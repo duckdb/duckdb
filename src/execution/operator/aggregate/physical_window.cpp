@@ -296,7 +296,7 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
 	unique_ptr<WindowSegmentTree> segment_tree = nullptr;
 
-	if (wexpr->aggregate && wexpr->aggregate->combine && !wexpr->children.empty()) {
+	if (wexpr->aggregate) {
 		segment_tree = make_unique<WindowSegmentTree>(*(wexpr->aggregate), wexpr->return_type, &payload_collection);
 	}
 
@@ -335,11 +335,7 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 
 		switch (wexpr->type) {
 		case ExpressionType::WINDOW_AGGREGATE: {
-			if (segment_tree) {
-				res = segment_tree->Compute(bounds.window_start, bounds.window_end);
-			} else {
-				res = Value::Numeric(wexpr->return_type, bounds.window_end - bounds.window_start);
-			}
+			res = segment_tree->Compute(bounds.window_start, bounds.window_end);
 			break;
 		}
 		case ExpressionType::WINDOW_ROW_NUMBER: {
