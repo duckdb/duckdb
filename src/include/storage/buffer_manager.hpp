@@ -8,6 +8,9 @@
 
 #pragma once
 
+#include "storage/buffer/buffer_handle.hpp"
+#include "storage/buffer/buffer_list.hpp"
+#include "storage/buffer/managed_buffer.hpp"
 #include "storage/block_manager.hpp"
 
 #include "common/unordered_map.hpp"
@@ -17,65 +20,30 @@
 namespace duckdb {
 class BufferManager;
 
-struct BlockHandle {
-	BlockHandle(BufferManager &manager, Block *block, block_id_t block_id);
-	~BlockHandle();
-
-	BufferManager &manager;
-	//! The managed block
-	Block *block;
-	//! The block id of the block
-	block_id_t block_id;
-};
-
-struct BufferEntry {
-	BufferEntry(unique_ptr<Block> block) :
-		block(move(block)), ref_count(1), prev(nullptr) { }
-
-	//! The actual block
-	unique_ptr<Block> block;
-	//! The amount of references to this entry
-	index_t ref_count;
-	//! Next node
-	unique_ptr<BufferEntry> next;
-	//! Prev entry
-	BufferEntry *prev;
-};
-
-class BufferList {
-public:
-	BufferList() : last(nullptr), count(0) {}
-public:
-	//! Removes the first element (root) from the buffer list and returns it, O(1)
-	unique_ptr<BufferEntry> Pop();
-	//! Erase the specified element from the list and returns it, O(1)
-	unique_ptr<BufferEntry> Erase(BufferEntry *entry);
-	//! Insert an entry to the back of the list
-	void Append(unique_ptr<BufferEntry> entry);
-private:
-	//! Root pointer
-	unique_ptr<BufferEntry> root;
-	//! Pointer to last element in list
-	BufferEntry *last;
-	//! The amount of entries in the list
-	index_t count;
-};
-
-
 //! The buffer manager is a
 class BufferManager {
-	friend struct BlockHandle;
+	friend class BufferHandle;
 public:
 	BufferManager(BlockManager &manager, index_t maximum_memory);
 
 	//! Pin a block id, returning a block handle holding a pointer to the block
 	unique_ptr<BlockHandle> Pin(block_id_t block);
+
+	//! Allocate a buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or not the buffer can be freely destroyed when unpinned, or whether or not it needs to be written to a temporary file so it can be reloaded.
+	unique_ptr<ManagedBufferHandle> Allocate(index_t alloc_size, bool can_destroy);
+	//! Pin a managed buffer handle, returning the buffer handle or nullptr if the buffer handle could not be found (because it was destroyed)
+	unique_ptr<ManagedBufferHandle> PinBuffer(block_id_t buffer_id);
+	//! Destroy the managed buffer with the specified buffer_id, freeing its memory
+	void DestroyBuffer(block_id_t buffer_id);
 private:
-	//! Unpin a block id
+	//! Unpin a block id, decreasing its reference count and potentially allowing it to be freed.
 	void Unpin(block_id_t block);
 
 	//! Evict the least recently used block from the buffer manager, or throws an exception if there are no blocks available to evict
 	unique_ptr<Block> EvictBlock();
+
+	//! Add a reference to the refcount of a buffer entry
+	void AddReference(BufferEntry *entry);
 private:
 	//! The current amount of memory that is occupied by the buffer manager (in bytes)
 	index_t current_memory;
@@ -91,6 +59,8 @@ private:
 	BufferList used_list;
 	//! LRU list of unused blocks
 	BufferList lru;
+	//! The temporary id used for managed buffers
+	block_id_t temporary_id;
 
 };
 } // namespace duckdb

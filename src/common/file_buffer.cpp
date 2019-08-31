@@ -7,7 +7,8 @@
 using namespace duckdb;
 using namespace std;
 
-FileBuffer::FileBuffer(uint64_t bufsiz) {
+FileBuffer::FileBuffer(uint64_t bufsiz) :
+	Buffer(BufferType::FILE_BUFFER) {
 	assert(bufsiz % FILE_BUFFER_BLOCK_SIZE == 0);
 	assert(bufsiz >= FILE_BUFFER_BLOCK_SIZE);
 	// we add (FILE_BUFFER_BLOCK_SIZE - 1) to ensure that we can align the buffer to FILE_BUFFER_BLOCK_SIZE

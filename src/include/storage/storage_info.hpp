@@ -25,6 +25,9 @@ using block_id_t = int64_t;
 
 #define INVALID_BLOCK -1
 
+// maximum block id, 2^62
+#define MAXIMUM_BLOCK 4611686018427388000LL
+
 //! The MainHeader is the first header in the storage file. The MainHeader is typically written only once for a database
 //! file.
 struct MainHeader {

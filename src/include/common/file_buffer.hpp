@@ -8,13 +8,13 @@
 
 #pragma once
 
-#include "common/constants.hpp"
+#include "common/buffer.hpp"
 
 namespace duckdb {
 struct FileHandle;
 
 //! The FileBuffer represents a buffer that can be read or written to a Direct IO FileHandle.
-class FileBuffer {
+class FileBuffer : public Buffer {
 	constexpr static int FILE_BUFFER_BLOCK_SIZE = 4096;
 	constexpr static int FILE_BUFFER_HEADER_SIZE = sizeof(uint64_t);
 
@@ -24,7 +24,7 @@ public:
 	//! DIRECT_IO on all operating systems, however, the entire buffer must be written to the file. Note that the
 	//! returned size is 8 bytes less than the allocation size to account for the checksum.
 	FileBuffer(uint64_t bufsiz);
-	~FileBuffer();
+	virtual ~FileBuffer();
 
 	//! The buffer that users can write to
 	data_ptr_t buffer;

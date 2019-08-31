@@ -179,7 +179,8 @@ void TableDataWriter::WriteString(index_t col, const char *val) {
 		MetaBlockWriter writer(manager.block_manager);
 		string marker = BigStringMarker(writer.block->id);
 		// write the string to the overflow blocks
-		writer.WriteString(str_value);
+		writer.Write<uint64_t>(str_value.size());
+		writer.WriteData((const_data_ptr_t) str_value.c_str(), str_value.size() + 1);
 		// now write the marker in the dictionary
 		str_value = marker;
 	}

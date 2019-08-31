@@ -32,20 +32,18 @@ public:
 	void Scan(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector, index_t sel_count) override;
 	void Fetch(Vector &result, index_t row_id) override;
 private:
-	//! Heap used for big strings
-	StringHeap heap;
 	//! Lock for big strings
 	std::mutex big_string_lock;
 	//! Big string map
-	unordered_map<block_id_t, const char *> big_strings;
+	unordered_map<block_id_t, block_id_t> big_strings;
 
 	Block *PinHandle(ColumnPointer &pointer);
 
-	void AppendFromStorage(Block *block, Vector &source, Vector &target, bool has_null);
+	void AppendFromStorage(ColumnPointer &pointer, Block *block, Vector &source, Vector &target, bool has_null);
 
-	template <bool HAS_NULL> void AppendStrings(Block *block, Vector &source, Vector &target);
+	template <bool HAS_NULL> void AppendStrings(ColumnPointer &pointer, Block *block, Vector &source, Vector &target);
 
-	const char *GetBigString(block_id_t block);
+	const char *GetBigString(ColumnPointer &pointer, block_id_t block);
 };
 
 } // namespace duckdb

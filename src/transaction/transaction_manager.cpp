@@ -13,7 +13,7 @@ using namespace duckdb;
 using namespace std;
 
 namespace duckdb {
-transaction_t TRANSACTION_ID_START = 4294967296ULL;                         // 2^32
+transaction_t TRANSACTION_ID_START = 4611686018427388000ULL;                // 2^62
 transaction_t MAXIMUM_QUERY_ID = std::numeric_limits<transaction_t>::max(); // 2^64
 } // namespace duckdb
 

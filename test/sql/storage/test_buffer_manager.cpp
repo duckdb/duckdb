@@ -52,3 +52,67 @@ TEST_CASE("Test scanning a table and computing an aggregate over a table that ex
 	}
 	DeleteDatabase(storage_database);
 }
+
+TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storage][.]") {
+	unique_ptr<MaterializedQueryResult> result;
+	auto storage_database = TestCreatePath("storage_test");
+	auto config = GetTestConfig();
+
+	uint64_t string_length = 64;
+	uint64_t desired_size = 10000000; // desired size is 10MB
+	uint64_t iteration = 2;
+	// make sure the database does not exist
+	DeleteDatabase(storage_database);
+	{
+		// create a database and insert the big string
+		DuckDB db(storage_database, config.get());
+		Connection con(db);
+		string big_string = string(string_length, 'a');
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR, j BIGINT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('" + big_string + "', 1)"));
+		while (string_length < desired_size) {
+			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a, " + to_string(iteration) +
+			                          " FROM test"));
+			REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE j=" + to_string(iteration - 1)));
+			iteration++;
+			string_length *= 10;
+		}
+
+		// check the length
+		result = con.Query("SELECT LENGTH(a) FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(string_length)}));
+		result = con.Query("SELECT j FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(iteration - 1)}));
+
+	}
+	{
+		DuckDB db(storage_database, config.get());
+		Connection con(db);
+		result = con.Query("SELECT LENGTH(a) FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(string_length)}));
+		result = con.Query("SELECT j FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(iteration - 1)}));
+	}
+	// now reload the database, but this time with a max memory of 5MB
+	{
+		config->maximum_memory = 5000000;
+		DuckDB db(storage_database, config.get());
+		Connection con(db);
+		// we can still select the integer
+		result = con.Query("SELECT j FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(iteration - 1)}));
+		// however the string is too big to fit in our buffer manager
+		REQUIRE_FAIL(con.Query("SELECT LENGTH(a) FROM test"));
+	}
+	{
+		// reloading with a bigger limit again makes it work
+		config->maximum_memory = (index_t) -1;
+		DuckDB db(storage_database, config.get());
+		Connection con(db);
+		result = con.Query("SELECT LENGTH(a) FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(string_length)}));
+		result = con.Query("SELECT j FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(iteration - 1)}));
+	}
+	DeleteDatabase(storage_database);
+}
