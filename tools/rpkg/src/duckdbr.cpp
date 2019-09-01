@@ -283,10 +283,10 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 
 	// TODO transaction :/
 	try {
-		Appender appender(conn->db, DEFAULT_SCHEMA, name);
+		auto appender = conn->OpenAppender(DEFAULT_SCHEMA, name);
 		auto nrows = LENGTH(VECTOR_ELT(valuesexp, 0));
 		for (uint64_t row_idx = 0; row_idx < nrows; row_idx++) {
-			appender.BeginRow();
+			appender->BeginRow();
 			for (uint32_t col_idx = 0; col_idx < LENGTH(valuesexp); col_idx++) {
 				SEXP coldata = VECTOR_ELT(valuesexp, col_idx);
 
@@ -294,47 +294,47 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 				if (isFactor(coldata) && TYPEOF(coldata) == INTSXP) {
 					int val = INTEGER_POINTER(coldata)[row_idx];
 					if (val == NA_INTEGER) {
-						appender.AppendValue(Value());
+						appender->AppendValue(Value());
 					} else {
 						SEXP factor_levels = GET_LEVELS(coldata);
-						appender.AppendString(CHAR(STRING_ELT(factor_levels, val - 1)));
+						appender->AppendString(CHAR(STRING_ELT(factor_levels, val - 1)));
 					}
 				} else if (TYPEOF(coldata) == LGLSXP) {
 					int val = INTEGER_POINTER(coldata)[row_idx];
 					if (val == NA_INTEGER) {
-						appender.AppendValue(Value()); // TODO add AppendNull to appender
+						appender->AppendValue(Value()); // TODO add AppendNull to appender
 					} else {
-						appender.AppendTinyInt(val);
+						appender->AppendBoolean(val);
 					}
 				} else if (TYPEOF(coldata) == INTSXP) {
 					int val = INTEGER_POINTER(coldata)[row_idx];
 					if (val == NA_INTEGER) {
-						appender.AppendValue(Value());
+						appender->AppendValue(Value());
 					} else {
-						appender.AppendInteger(val);
+						appender->AppendInteger(val);
 					}
 				} else if (TYPEOF(coldata) == REALSXP) {
 					double val = NUMERIC_POINTER(coldata)[row_idx];
 					if (val == NA_REAL) {
-						appender.AppendValue(Value());
+						appender->AppendValue(Value());
 					} else {
-						appender.AppendDouble(val);
+						appender->AppendDouble(val);
 					}
 				} else if (TYPEOF(coldata) == STRSXP) {
 					SEXP val = STRING_ELT(coldata, row_idx);
 					if (val == NA_STRING) {
-						appender.AppendValue(Value());
+						appender->AppendValue(Value());
 					} else {
-						appender.AppendString(CHAR(val));
+						appender->AppendString(CHAR(val));
 					}
 				} else {
 					throw;
 				}
 			}
-			appender.EndRow();
+			appender->EndRow();
 		}
 
-		appender.Commit();
+		conn->CloseAppender();
 	} catch (...) {
 		Rf_error("duckdb_append_R: Failed to append data");
 	}

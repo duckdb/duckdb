@@ -45,6 +45,9 @@ public:
 	// Note that none of these functions (besides AppendValue) does type
 	// conversion, using the wrong type for the wrong column will trigger an
 	// assert
+	//! Append a bool
+
+	void AppendBoolean(int8_t value);
 
 	//! Append a tinyint
 	void AppendTinyInt(int8_t value);

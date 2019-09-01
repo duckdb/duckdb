@@ -44,6 +44,12 @@ void Appender::EndRow() {
 	}
 }
 
+void Appender::AppendBoolean(int8_t value) {
+	CheckAppend(TypeId::BOOLEAN);
+	auto &col = chunk.data[column++];
+	((int8_t *)col.data)[col.count++] = value;
+}
+
 void Appender::AppendTinyInt(int8_t value) {
 	CheckAppend(TypeId::TINYINT);
 	auto &col = chunk.data[column++];
