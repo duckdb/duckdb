@@ -18,6 +18,7 @@ Connection::Connection(DuckDB &database) : db(database), context(make_unique<Cli
 Connection::~Connection() {
 	if (!context->is_invalidated) {
 		context->Cleanup();
+		CloseAppender();
 		db.connection_manager->RemoveConnection(this);
 	}
 }
