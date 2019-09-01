@@ -16,13 +16,12 @@ namespace duckdb {
 class ClientContext;
 class DuckDB;
 class TableCatalogEntry;
+class Connection;
 
 //! The Appender class can be used to append elements to a table.
 class Appender {
-	//! A reference to the database
-	DuckDB &db;
-	//! The client context
-	ClientContext context;
+	//! A reference to a database connection that created this appender
+	Connection &con;
 	//! The table entry to append to
 	TableCatalogEntry *table_entry;
 	//! Internal chunk used for appends
@@ -31,7 +30,8 @@ class Appender {
 	index_t column = 0;
 
 public:
-	Appender(DuckDB &db, string schema_name, string table_name);
+	Appender(Connection &con, string schema_name, string table_name);
+
 	~Appender();
 
 	//! Begins a new row append, after calling this the other AppendX() functions
@@ -45,6 +45,9 @@ public:
 	// Note that none of these functions (besides AppendValue) does type
 	// conversion, using the wrong type for the wrong column will trigger an
 	// assert
+	//! Append a bool
+
+	void AppendBoolean(int8_t value);
 
 	//! Append a tinyint
 	void AppendTinyInt(int8_t value);
@@ -63,9 +66,7 @@ public:
 	void AppendValue(Value value);
 
 	//! Commit the changes made by the appender. The appender cannot be used after this point.
-	void Commit();
-	//! Rollback any changes made by the appender The appender cannot be used after this point.
-	void Rollback();
+	void Flush();
 
 	index_t CurrentColumn() {
 		return column;
@@ -73,7 +74,5 @@ public:
 
 private:
 	void CheckAppend(TypeId type = TypeId::INVALID);
-	//! Flushes all appends to the base table.
-	void Flush();
 };
 } // namespace duckdb

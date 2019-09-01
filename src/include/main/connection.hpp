@@ -12,6 +12,7 @@
 #include "main/query_result.hpp"
 #include "main/stream_query_result.hpp"
 #include "main/prepared_statement.hpp"
+#include "main/appender.hpp"
 #include "common/enums/profiler_format.hpp"
 
 namespace duckdb {
@@ -56,6 +57,9 @@ public:
 	//! Prepare the specified query, returning a prepared statement object
 	unique_ptr<PreparedStatement> Prepare(string query);
 
+	Appender *OpenAppender(string schema_name, string table_name);
+	void CloseAppender();
+
 	// prepared statements
 	template <typename... Args> unique_ptr<QueryResult> Query(string query, Args... args) {
 		vector<Value> values;
@@ -68,6 +72,8 @@ public:
 	warning_callback warning_cb;
 
 private:
+	unique_ptr<Appender> appender = nullptr;
+
 	unique_ptr<QueryResult> QueryParamsRecursive(string query, vector<Value> &values);
 
 	template <typename T, typename... Args>

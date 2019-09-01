@@ -34,13 +34,13 @@ TEST_CASE("Concurrent reads during index creation", "[index][.]") {
 	// create a single table to append to
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	// append a bunch of entries
-	Appender appender(db, DEFAULT_SCHEMA, "integers");
+	auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
 	for (index_t i = 0; i < 1000000; i++) {
-		appender.BeginRow();
-		appender.AppendInteger(i);
-		appender.EndRow();
+		appender->BeginRow();
+		appender->AppendInteger(i);
+		appender->EndRow();
 	}
-	appender.Commit();
+	con.CloseAppender();
 
 	is_finished = false;
 	// now launch a bunch of reading threads
@@ -66,13 +66,13 @@ TEST_CASE("Concurrent reads during index creation", "[index][.]") {
 
 static void append_to_integers(DuckDB *db, index_t threadnr) {
 	Connection con(*db);
-	Appender appender(*db, DEFAULT_SCHEMA, "integers");
+	auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
 	for (index_t i = 0; i < INSERT_COUNT; i++) {
-		appender.BeginRow();
-		appender.AppendInteger(1);
-		appender.EndRow();
+		appender->BeginRow();
+		appender->AppendInteger(1);
+		appender->EndRow();
 	}
-	appender.Commit();
+	con.CloseAppender();
 }
 
 TEST_CASE("Concurrent writes during index creation", "[index][.]") {
@@ -83,13 +83,13 @@ TEST_CASE("Concurrent writes during index creation", "[index][.]") {
 	// create a single table to append to
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	// append a bunch of entries
-	Appender appender(db, DEFAULT_SCHEMA, "integers");
+	auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
 	for (index_t i = 0; i < 1000000; i++) {
-		appender.BeginRow();
-		appender.AppendInteger(i);
-		appender.EndRow();
+		appender->BeginRow();
+		appender->AppendInteger(i);
+		appender->EndRow();
 	}
-	appender.Commit();
+	con.CloseAppender();
 
 	// now launch a bunch of concurrently writing threads (!)
 	thread threads[THREAD_COUNT];

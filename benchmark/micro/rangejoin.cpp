@@ -17,15 +17,15 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	gen.seed(42);
 
 	state->conn.Query("CREATE TABLE integers(i INTEGER, j INTEGER);");
-	Appender appender(state->db, DEFAULT_SCHEMA, "integers");
+	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers");                                                      \
 	// insert the elements into the database
 	for (size_t i = 0; i < RANGEJOIN_COUNT; i++) {
-		appender.BeginRow();
-		appender.AppendInteger(distribution(gen));
-		appender.AppendInteger(distribution(gen));
-		appender.EndRow();
+		appender->BeginRow();
+		appender->AppendInteger(distribution(gen));
+		appender->AppendInteger(distribution(gen));
+		appender->EndRow();
 	}
-	appender.Commit();
+	state->conn.CloseAppender();
 }
 
 virtual string GetQuery() {
