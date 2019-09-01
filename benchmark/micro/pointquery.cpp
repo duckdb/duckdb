@@ -13,15 +13,15 @@ using namespace std;
 DUCKDB_BENCHMARK(PointQueryWithoutIndex, "[micro]")
 virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.Query("CREATE TABLE integers(i INTEGER, j INTEGER);");
-	Appender appender(state->db, DEFAULT_SCHEMA, "integers");
+	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers");                                                      \
 	// insert the elements into the database
 	for (size_t i = 0; i < POINT_QUERY_ROW_COUNT; i++) {
-		appender.BeginRow();
-		appender.AppendInteger(i);
-		appender.AppendInteger(i + 2);
-		appender.EndRow();
+		appender->BeginRow();
+		appender->AppendInteger(i);
+		appender->AppendInteger(i + 2);
+		appender->EndRow();
 	}
-	appender.Commit();
+	state->conn.CloseAppender();
 }
 
 virtual string GetQuery() {
@@ -53,15 +53,15 @@ FINISH_BENCHMARK(PointQueryWithoutIndex)
 DUCKDB_BENCHMARK(PointQueryWithIndexART, "[micro]")
 virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.Query("CREATE TABLE integers(i INTEGER, j INTEGER);");
-	Appender appender(state->db, DEFAULT_SCHEMA, "integers");
+	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers");                                                      \
 	// insert the elements into the database
 	for (size_t i = 0; i < POINT_QUERY_ROW_COUNT; i++) {
-		appender.BeginRow();
-		appender.AppendInteger(i);
-		appender.AppendInteger(i + 2);
-		appender.EndRow();
+		appender->BeginRow();
+		appender->AppendInteger(i);
+		appender->AppendInteger(i + 2);
+		appender->EndRow();
 	}
-	appender.Commit();
+	state->conn.CloseAppender();
 	state->conn.Query("CREATE INDEX i_index ON integers using art(i)");
 }
 
