@@ -17,11 +17,13 @@ struct tpcds_table_def {
 #define DBGEN_VERSION 24
 
 struct tpcds_append_information {
-	tpcds_append_information(duckdb::Connection &con, std::string schema_name, std::string table_name) : appender(*con.OpenAppender(schema_name, table_name))
+	tpcds_append_information(duckdb::DuckDB &db, std::string schema_name, std::string table_name) : connection(db), appender(*connection.OpenAppender(schema_name, table_name))
 	     {
 	}
 
+	duckdb::Connection connection;
 	duckdb::Appender& appender;
+
 	tpcds_table_def table_def;
 };
 
