@@ -9,26 +9,17 @@
 using namespace duckdb;
 using namespace std;
 
-Appender::Appender(DuckDB &database, string schema_name, string table_name)
-    : db(database), context(database), table_entry(nullptr), column(0) {
-	// begin the transaction
-	context.transaction.BeginTransaction();
+Appender::Appender(Connection &con, string schema_name, string table_name) : con(con), table_entry(nullptr), column(0) {
 
-	try {
-		table_entry = db.catalog->GetTable(context.transaction.ActiveTransaction(), schema_name, table_name);
-	} catch (...) {
-		if (context.transaction.IsAutoCommit()) {
-			context.transaction.Rollback();
-		}
-		throw;
-	}
+	table_entry = con.db.catalog->GetTable(con.context->transaction.ActiveTransaction(), schema_name, table_name);
+
 	// get the table entry
 	auto types = table_entry->GetTypes();
 	chunk.Initialize(types);
 }
 
 Appender::~Appender() {
-	Rollback();
+	con.CloseAppender();
 }
 
 void Appender::CheckAppend(TypeId type) {
@@ -96,23 +87,7 @@ void Appender::AppendValue(Value value) {
 
 void Appender::Flush() {
 	assert(table_entry);
-	table_entry->storage->Append(*table_entry, context, chunk);
+	table_entry->storage->Append(*table_entry, *con.context.get(), chunk);
 	chunk.Reset();
 	column = 0;
-}
-
-void Appender::Commit() {
-	if (table_entry) {
-		Flush();
-		context.transaction.Commit();
-		table_entry = nullptr;
-	}
-}
-
-void Appender::Rollback() {
-	if (table_entry) {
-		Flush();
-		context.transaction.Rollback();
-		table_entry = nullptr;
-	}
 }

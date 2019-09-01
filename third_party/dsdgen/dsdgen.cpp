@@ -41,7 +41,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	for (int table_id = tmin; table_id < tmax; table_id++) {
 		auto table_def = GetTDefByNumber(table_id);
 		assert(table_def.name);
-		auto append = make_unique<tpcds_append_information>(db, schema, table_def.name);
+		auto append = make_unique<tpcds_append_information>(con, schema, table_def.name);
 		append->table_def = table_def;
 		append_info[table_id] = move(append);
 	}
@@ -77,7 +77,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 
 	// flush any incomplete chunks
 	for (int table_id = tmin; table_id < tmax; table_id++) {
-		append_info[table_id]->appender.Commit();
+		append_info[table_id]->appender.Flush();
 	}
 }
 

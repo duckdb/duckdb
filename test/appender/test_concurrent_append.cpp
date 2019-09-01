@@ -18,16 +18,17 @@ static void append_to_integers(DuckDB *db, size_t threadnr) {
 	REQUIRE(db);
 	Connection con(*db);
 
-	Appender appender(*db, DEFAULT_SCHEMA, "integers");
+	auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
 	for (size_t i = 0; i < INSERT_ELEMENTS; i++) {
-		appender.BeginRow();
-		appender.AppendInteger(1);
-		appender.EndRow();
+		appender->BeginRow();
+		appender->AppendInteger(1);
+		appender->EndRow();
 	}
 	finished_threads++;
 	while (finished_threads != THREAD_COUNT)
 		;
-	appender.Commit();
+	appender->Flush();
+	con.CloseAppender();
 }
 
 TEST_CASE("Test concurrent appends", "[appender][.]") {

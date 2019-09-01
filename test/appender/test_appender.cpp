@@ -17,14 +17,16 @@ TEST_CASE("Basic appender tests", "[appender]") {
 
 	// append a bunch of values
 	{
-		Appender appender(db, DEFAULT_SCHEMA, "integers");
+		auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
 		for (size_t i = 0; i < 2000; i++) {
-			appender.BeginRow();
-			appender.AppendInteger(1);
-			appender.EndRow();
+			appender->BeginRow();
+			appender->AppendInteger(1);
+			appender->EndRow();
 		}
-		appender.Commit();
+		con.CloseAppender();
 	}
+
+	con.Query("BEGIN TRANSACTION");
 
 	// check that the values have been added to the database
 	result = con.Query("SELECT SUM(i) FROM integers");
@@ -32,15 +34,16 @@ TEST_CASE("Basic appender tests", "[appender]") {
 
 	// test a rollback of the appender
 	{
-		Appender appender2(db, DEFAULT_SCHEMA, "integers");
+		auto appender2 = con.OpenAppender(DEFAULT_SCHEMA, "integers");
 		// now append a bunch of values
 		for (size_t i = 0; i < 2000; i++) {
-			appender2.BeginRow();
-			appender2.AppendInteger(1);
-			appender2.EndRow();
+			appender2->BeginRow();
+			appender2->AppendInteger(1);
+			appender2->EndRow();
 		}
-		appender2.Rollback();
+		con.CloseAppender();
 	}
+	con.Query("ROLLBACK");
 
 	// the data in the database should not be changed
 	result = con.Query("SELECT SUM(i) FROM integers");
@@ -51,17 +54,18 @@ TEST_CASE("Basic appender tests", "[appender]") {
 
 	// now append a bunch of values
 	{
-		Appender appender(db, DEFAULT_SCHEMA, "vals");
+		auto appender = con.OpenAppender(DEFAULT_SCHEMA, "vals");
+
 		for (size_t i = 0; i < 2000; i++) {
-			appender.BeginRow();
-			appender.AppendTinyInt(1);
-			appender.AppendSmallInt(1);
-			appender.AppendBigInt(1);
-			appender.AppendString("hello");
-			appender.AppendDouble(3.33);
-			appender.EndRow();
+			appender->BeginRow();
+			appender->AppendTinyInt(1);
+			appender->AppendSmallInt(1);
+			appender->AppendBigInt(1);
+			appender->AppendString("hello");
+			appender->AppendDouble(3.33);
+			appender->EndRow();
 		}
-		appender.Commit();
+		con.CloseAppender();
 	}
 
 	// check that the values have been added to the database
@@ -72,17 +76,17 @@ TEST_CASE("Basic appender tests", "[appender]") {
 	// now test various error conditions
 	// too few values per row
 	{
-		Appender appender(db, DEFAULT_SCHEMA, "integers");
-		appender.BeginRow();
-		REQUIRE_THROWS(appender.EndRow());
-		appender.Rollback();
+		auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
+		appender->BeginRow();
+		REQUIRE_THROWS(appender->EndRow());
+		con.CloseAppender();
 	}
 	// too many values per row
 	{
-		Appender appender(db, DEFAULT_SCHEMA, "integers");
-		appender.BeginRow();
-		appender.AppendValue(Value::INTEGER(2000));
-		REQUIRE_THROWS(appender.AppendValue(Value::INTEGER(2000)));
-		appender.Rollback();
+		auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
+		appender->BeginRow();
+		appender->AppendValue(Value::INTEGER(2000));
+		REQUIRE_THROWS(appender->AppendValue(Value::INTEGER(2000)));
+		con.CloseAppender();
 	}
 }
