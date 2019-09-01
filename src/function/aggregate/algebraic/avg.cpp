@@ -37,6 +37,24 @@ static void avg_update(Vector inputs[], index_t input_count, Vector &state) {
 	});
 }
 
+static void avg_combine(Vector &state, Vector &combined) {
+	// combine streaming avg states
+	auto combined_data = (avg_state_t**) combined.data;
+	auto state_data = (avg_state_t*) state.data;
+
+	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+		auto combined_ptr = combined_data[i];
+		auto state_ptr = state_data + i;
+
+		if (0 == combined_ptr->count) {
+			*combined_ptr = *state_ptr;
+		} else if (state_ptr->count) {
+			combined_ptr->count += state_ptr->count;
+			combined_ptr->sum += state_ptr->sum;
+		}
+	});
+}
+
 static void avg_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming avg
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
@@ -51,5 +69,5 @@ static void avg_finalize(Vector &state, Vector &result) {
 }
 
 void Avg::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(AggregateFunction("avg", {SQLType::DOUBLE}, SQLType::DOUBLE, avg_payload_size, avg_initialize, avg_update, avg_finalize));
+	set.AddFunction(AggregateFunction("avg", {SQLType::DOUBLE}, SQLType::DOUBLE, avg_payload_size, avg_initialize, avg_update, avg_combine, avg_finalize));
 }

@@ -86,8 +86,8 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		for (auto &order : window_expr.orders) {
 			order.expression = callback(move(order.expression));
 		}
-		if (window_expr.child) {
-			window_expr.child = callback(move(window_expr.child));
+		for (auto &child : window_expr.children) {
+			child = callback(move(child));
 		}
 		if (window_expr.offset_expr) {
 			window_expr.offset_expr = callback(move(window_expr.offset_expr));
