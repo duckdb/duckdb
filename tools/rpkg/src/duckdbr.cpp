@@ -1,4 +1,7 @@
 #include "duckdb.hpp"
+#include "common/types/timestamp.hpp"
+#include "common/types/date.hpp"
+
 #include "main/appender.hpp"
 
 #include <Rdefines.h>
@@ -86,6 +89,7 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 			case SQLTypeId::FLOAT:
 			case SQLTypeId::DOUBLE:
 			case SQLTypeId::DECIMAL:
+			case SQLTypeId::TIMESTAMP:
 				varvalue = PROTECT(NEW_NUMERIC(nrows));
 				break;
 			case SQLTypeId::VARCHAR:
@@ -116,31 +120,50 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 			assert(chunk->column_count == LENGTH(retlist));
 			for (size_t col_idx = 0; col_idx < chunk->column_count; col_idx++) {
 				SEXP dest = VECTOR_ELT(retlist, col_idx);
-				switch (chunk->GetTypes()[col_idx]) {
-				case TypeId::BOOLEAN:
+				switch (result->sql_types[col_idx].id) {
+				case SQLTypeId::BOOLEAN:
 					vector_to_r<int8_t, uint32_t>(chunk->data[col_idx], LOGICAL_POINTER(dest), dest_offset, NA_LOGICAL);
 					break;
-				case TypeId::TINYINT:
+				case SQLTypeId::TINYINT:
 					vector_to_r<int8_t, uint32_t>(chunk->data[col_idx], INTEGER_POINTER(dest), dest_offset, NA_INTEGER);
 					break;
-				case TypeId::SMALLINT:
+				case SQLTypeId::SMALLINT:
 					vector_to_r<int16_t, uint32_t>(chunk->data[col_idx], INTEGER_POINTER(dest), dest_offset,
 					                               NA_INTEGER);
 					break;
-				case TypeId::INTEGER:
+				case SQLTypeId::INTEGER:
 					vector_to_r<int32_t, uint32_t>(chunk->data[col_idx], INTEGER_POINTER(dest), dest_offset,
 					                               NA_INTEGER);
 					break;
-				case TypeId::BIGINT:
+				case SQLTypeId::TIMESTAMP: {
+					auto &src_vec = chunk->data[col_idx];
+					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
+					for (size_t row_idx = 0; row_idx < src_vec.count; row_idx++) {
+						dest_ptr[row_idx] = src_vec.nullmask[row_idx]
+						                        ? NA_REAL
+						                        : Timestamp::GetEpoch(((int64_t *)src_vec.data)[row_idx]);
+					}
+
+					// some dresssup for R
+					SEXP cl = PROTECT(NEW_STRING(2));
+					SET_STRING_ELT(cl, 0, PROTECT(mkChar("POSIXct")));
+					SET_STRING_ELT(cl, 1, PROTECT(mkChar("POSIXt")));
+					SET_CLASS(dest, cl);
+					setAttrib(dest, install("tzone"), PROTECT(mkString("UTC")));
+					UNPROTECT(4);
+					break;
+				}
+				case SQLTypeId::BIGINT:
 					vector_to_r<int64_t, double>(chunk->data[col_idx], NUMERIC_POINTER(dest), dest_offset, NA_REAL);
 					break;
-				case TypeId::FLOAT:
+				case SQLTypeId::FLOAT:
 					vector_to_r<float, double>(chunk->data[col_idx], NUMERIC_POINTER(dest), dest_offset, NA_REAL);
 					break;
-				case TypeId::DOUBLE:
+
+				case SQLTypeId::DOUBLE:
 					vector_to_r<double, double>(chunk->data[col_idx], NUMERIC_POINTER(dest), dest_offset, NA_REAL);
 					break;
-				case TypeId::VARCHAR:
+				case SQLTypeId::VARCHAR:
 					for (size_t row_idx = 0; row_idx < chunk->data[col_idx].count; row_idx++) {
 						char **src_ptr = ((char **)chunk->data[col_idx].data);
 						if (chunk->data[col_idx].nullmask[row_idx]) {
@@ -281,7 +304,6 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 		Rf_error("duckdb_append_R: Need at least one-column data frame parameter for value");
 	}
 
-	// TODO transaction :/
 	try {
 		auto appender = conn->OpenAppender(DEFAULT_SCHEMA, name);
 		auto nrows = LENGTH(VECTOR_ELT(valuesexp, 0));
@@ -290,8 +312,22 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 			for (uint32_t col_idx = 0; col_idx < LENGTH(valuesexp); col_idx++) {
 				SEXP coldata = VECTOR_ELT(valuesexp, col_idx);
 
-				// TODO date time etc. types, ...
-				if (isFactor(coldata) && TYPEOF(coldata) == INTSXP) {
+				// TODO date time etc. types, 64 bit ints, ...
+
+				// timestamp
+				if (TYPEOF(coldata) == REALSXP && TYPEOF(GET_CLASS(coldata)) == STRSXP &&
+				    strcmp("POSIXct", CHAR(STRING_ELT(GET_CLASS(coldata), 0))) == 0) {
+					double val = NUMERIC_POINTER(coldata)[row_idx];
+					if (val == NA_REAL) {
+						appender->AppendValue(Value());
+					} else {
+						auto date = Date::EpochToDate((int64_t)val);
+						auto time = (int32_t)(((int64_t)val % (60 * 60 * 24)) * 1000);
+						appender->AppendBigInt(Timestamp::FromDatetime(date, time));
+					}
+				}
+
+				else if (isFactor(coldata) && TYPEOF(coldata) == INTSXP) {
 					int val = INTEGER_POINTER(coldata)[row_idx];
 					if (val == NA_INTEGER) {
 						appender->AppendValue(Value());
