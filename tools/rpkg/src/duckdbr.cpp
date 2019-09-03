@@ -97,7 +97,7 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 				break;
 			default:
 				UNPROTECT(1); // retlist
-				Rf_error("duckdb_query_R: Unknown column type %s", TypeIdToString(result->types[col_idx]).c_str());
+				Rf_error("duckdb_query_R: Unknown column type %s/%s", SQLTypeToString(result->sql_types[col_idx]).c_str(),  TypeIdToString(result->types[col_idx]).c_str());
 			}
 			if (!varvalue) {
 				UNPROTECT(2); // varvalue, retlist

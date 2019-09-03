@@ -31,6 +31,8 @@ static SQLType TransformStringToSQLType(char *str) {
 		return SQLType(SQLTypeId::VARBINARY);
 	} else if (lower_str == "date") {
 		return SQLType::DATE;
+	} else if (lower_str == "time") {
+		return SQLType::TIME;
 	} else {
 		throw NotImplementedException("DataType %s not supported yet...\n", str);
 	}

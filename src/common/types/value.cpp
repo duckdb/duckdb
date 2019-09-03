@@ -160,6 +160,11 @@ Value Value::DATE(int32_t year, int32_t month, int32_t day) {
 	return Value::INTEGER(Date::FromDate(year, month, day));
 }
 
+Value Value::TIME(int32_t hour, int32_t min, int32_t sec,
+        int32_t msec) {
+	return Value::INTEGER(Time::FromTime(hour, min, sec, msec));
+}
+
 Value Value::TIMESTAMP(timestamp_t timestamp) {
 	return Value::BIGINT(timestamp);
 }
@@ -277,6 +282,8 @@ string Value::ToString(SQLType sql_type) const {
 		return to_string(value_.double_);
 	case SQLTypeId::DATE:
 		return Date::ToString(value_.integer);
+	case SQLTypeId::TIME:
+		return Time::ToString(value_.integer);
 	case SQLTypeId::TIMESTAMP:
 		return Timestamp::ToString(value_.bigint);
 	case SQLTypeId::VARCHAR:

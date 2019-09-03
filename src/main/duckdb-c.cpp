@@ -178,6 +178,26 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			}
 			break;
 		}
+		case SQLTypeId::TIME: {
+					index_t row = 0;
+					duckdb_time *target = (duckdb_time *)out->columns[col].data;
+					for (auto &chunk : result->collection.chunks) {
+						dtime_t *source = (dtime_t *)chunk->data[col].data;
+						for (index_t k = 0; k < chunk->data[col].count; k++) {
+							if (!chunk->data[col].nullmask[k]) {
+								int32_t hour, min, sec, msec;
+								Time::Convert(source[k], hour, min, sec, msec);
+								target[row].hour = hour;
+								target[row].min = min;
+								target[row].sec = sec;
+								target[row].msec = msec;
+
+							}
+							row++;
+						}
+					}
+					break;
+				}
 		case SQLTypeId::TIMESTAMP: {
 			index_t row = 0;
 			duckdb_timestamp *target = (duckdb_timestamp *)out->columns[col].data;
@@ -377,6 +397,8 @@ duckdb_type ConvertCPPTypeToC(SQLType sql_type) {
 		return DUCKDB_TYPE_TIMESTAMP;
 	case SQLTypeId::DATE:
 		return DUCKDB_TYPE_DATE;
+	case SQLTypeId::TIME:
+		return DUCKDB_TYPE_TIME;
 	case SQLTypeId::VARCHAR:
 		return DUCKDB_TYPE_VARCHAR;
 	default:
@@ -404,6 +426,8 @@ SQLType ConvertCTypeToCPP(duckdb_type type) {
 		return SQLType::TIMESTAMP;
 	case DUCKDB_TYPE_DATE:
 		return SQLType::DATE;
+	case DUCKDB_TYPE_TIME:
+		return SQLType::TIME;
 	case DUCKDB_TYPE_VARCHAR:
 		return SQLType::VARCHAR;
 	default:
@@ -429,6 +453,8 @@ index_t GetCTypeSize(duckdb_type type) {
 		return sizeof(double);
 	case DUCKDB_TYPE_DATE:
 		return sizeof(duckdb_date);
+	case DUCKDB_TYPE_TIME:
+		return sizeof(duckdb_time);
 	case DUCKDB_TYPE_TIMESTAMP:
 		return sizeof(duckdb_timestamp);
 	case DUCKDB_TYPE_VARCHAR:
@@ -474,6 +500,10 @@ static Value GetCValue(duckdb_result *result, index_t col, index_t row) {
 		auto date = UnsafeFetch<duckdb_date>(result, col, row);
 		return Value::DATE(date.year, date.month, date.day);
 	}
+	case DUCKDB_TYPE_TIME: {
+			auto time = UnsafeFetch<duckdb_time>(result, col, row);
+			return Value::TIME(time.hour, time.min, time.sec, time.msec);
+		}
 	case DUCKDB_TYPE_TIMESTAMP: {
 		auto timestamp = UnsafeFetch<duckdb_timestamp>(result, col, row);
 		return Value::TIMESTAMP(timestamp.date.year, timestamp.date.month, timestamp.date.day, timestamp.time.hour,
