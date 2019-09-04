@@ -149,7 +149,7 @@ enum ConfigurationError {None, BenchmarkNotFound, InfoWithoutBenchmarkName};
 /**
  * Builds a configuration based on the passed arguments.
  */
-BenchmarkConfiguration parse_arguments(int arg_counter, char **arg_values) {
+BenchmarkConfiguration parse_arguments(const int arg_counter, char const* const* arg_values) {
 	auto &instance = BenchmarkRunner::GetInstance();
 	auto &benchmarks = instance.benchmarks;
 	BenchmarkConfiguration configuration;
@@ -208,7 +208,7 @@ ConfigurationError run_benchmarks(const BenchmarkConfiguration& configuration) {
 			// run only specific benchmark
 			// check if the benchmark exists
 			auto benchmark_index = -1;
-			for (uint32_t index = 0; index < benchmarks.size(); ++index) {
+			for (auto index = 0; index < benchmarks.size(); ++index) {
 				if (benchmarks[index]->name == configuration.name) {
 					benchmark_index = index;
 					break;
