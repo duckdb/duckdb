@@ -99,7 +99,9 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 				break;
 			default:
 				UNPROTECT(1); // retlist
-				Rf_error("duckdb_query_R: Unknown column type %s/%s", SQLTypeToString(result->sql_types[col_idx]).c_str(),  TypeIdToString(result->types[col_idx]).c_str());
+				Rf_error("duckdb_query_R: Unknown column type %s/%s",
+				         SQLTypeToString(result->sql_types[col_idx]).c_str(),
+				         TypeIdToString(result->types[col_idx]).c_str());
 			}
 			if (!varvalue) {
 				UNPROTECT(2); // varvalue, retlist
@@ -143,7 +145,7 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 					for (size_t row_idx = 0; row_idx < src_vec.count; row_idx++) {
 						dest_ptr[row_idx] = src_vec.nullmask[row_idx]
 						                        ? NA_REAL
-						                        : (double) Timestamp::GetEpoch(((int64_t *)src_vec.data)[row_idx]);
+						                        : (double)Timestamp::GetEpoch(((int64_t *)src_vec.data)[row_idx]);
 					}
 
 					// some dresssup for R
@@ -159,9 +161,8 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 					auto &src_vec = chunk->data[col_idx];
 					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 					for (size_t row_idx = 0; row_idx < src_vec.count; row_idx++) {
-						dest_ptr[row_idx] = src_vec.nullmask[row_idx]
-												? NA_REAL
-												: (double) (((int32_t *)src_vec.data)[row_idx]) - 719528;
+						dest_ptr[row_idx] =
+						    src_vec.nullmask[row_idx] ? NA_REAL : (double)(((int32_t *)src_vec.data)[row_idx]) - 719528;
 					}
 
 					// some dresssup for R
@@ -182,8 +183,8 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 							double frac;
 							h = n / 3600000;
 							n -= h * 3600000;
-							frac = (n / 60000.0)/60.0;
-							dest_ptr[row_idx]  = h + frac;
+							frac = (n / 60000.0) / 60.0;
+							dest_ptr[row_idx] = h + frac;
 						}
 					}
 
@@ -370,7 +371,7 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 
 				// date
 				else if (TYPEOF(coldata) == REALSXP && TYPEOF(GET_CLASS(coldata)) == STRSXP &&
-				    strcmp("Date", CHAR(STRING_ELT(GET_CLASS(coldata), 0))) == 0) {
+				         strcmp("Date", CHAR(STRING_ELT(GET_CLASS(coldata), 0))) == 0) {
 					// TODO some say there are dates that are stored as integers
 					double val = NUMERIC_POINTER(coldata)[row_idx];
 					if (ISNA(val)) {
@@ -379,7 +380,6 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 						appender->AppendInteger((int32_t)val + 719528); // MAGIC!
 					}
 				}
-
 
 				else if (isFactor(coldata) && TYPEOF(coldata) == INTSXP) {
 					int val = INTEGER_POINTER(coldata)[row_idx];
