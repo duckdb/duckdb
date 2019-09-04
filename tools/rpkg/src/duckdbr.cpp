@@ -380,17 +380,6 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 					}
 				}
 
-				// time
-				else if (TYPEOF(coldata) == REALSXP && TYPEOF(GET_CLASS(coldata)) == STRSXP &&
-					strcmp("Date", CHAR(STRING_ELT(GET_CLASS(coldata), 0))) == 0) {
-					// TODO some say there are dates that are stored as integers
-					double val = NUMERIC_POINTER(coldata)[row_idx];
-					if (ISNA(val)) {
-						appender->AppendValue(Value());
-					} else {
-						appender->AppendInteger((int32_t)val + 719528); // MAGIC!
-					}
-				}
 
 				else if (isFactor(coldata) && TYPEOF(coldata) == INTSXP) {
 					int val = INTEGER_POINTER(coldata)[row_idx];
