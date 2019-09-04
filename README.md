@@ -22,7 +22,7 @@ As DuckDB is an embedded database, there is no database server to launch or clie
 
 For examples on how to embed DuckDB into your application, see the [examples](https://github.com/cwida/duckdb/tree/master/examples) folder.
 
-# Executing Benchchmarks
+## Benchchmarks
 After compiling, benchmarks can be executed from the root directory by executing `./build/release/benchmark/benchmark_runner`.
 
 ## Standing on the Shoulders of Giants
