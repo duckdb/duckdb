@@ -5,6 +5,7 @@
 #include "common/exception.hpp"
 
 #include <iomanip>
+#include <cstring>
 #include <iostream>
 #include <sstream>
 
