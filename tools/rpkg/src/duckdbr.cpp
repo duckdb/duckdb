@@ -317,8 +317,11 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 				// timestamp
 				if (TYPEOF(coldata) == REALSXP && TYPEOF(GET_CLASS(coldata)) == STRSXP &&
 				    strcmp("POSIXct", CHAR(STRING_ELT(GET_CLASS(coldata), 0))) == 0) {
+
+					// TODO enforce that ts is in UTC
+
 					double val = NUMERIC_POINTER(coldata)[row_idx];
-					if (val == NA_REAL) {
+					if (ISNA(val)) {
 						appender->AppendValue(Value());
 					} else {
 						auto date = Date::EpochToDate((int64_t)val);

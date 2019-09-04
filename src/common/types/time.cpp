@@ -8,6 +8,7 @@
 #include <cstring>
 #include <iostream>
 #include <sstream>
+#include <cctype>
 
 using namespace duckdb;
 using namespace std;
