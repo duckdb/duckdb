@@ -62,7 +62,8 @@ static bool TryConvertTime(const char *buf, dtime_t &result) {
 	int sep;
 
 	// skip leading spaces
-	while (std::isspace(buf[pos++])) {
+	while (std::isspace(buf[pos])) {
+		pos++;
 	}
 
 	if (!std::isdigit(buf[pos])) {
