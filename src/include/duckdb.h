@@ -40,6 +40,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_TIMESTAMP,
 	// duckdb_date
 	DUCKDB_TYPE_DATE,
+	// duckdb_time
+	DUCKDB_TYPE_TIME,
 	// const char*
 	DUCKDB_TYPE_VARCHAR
 } duckdb_type;

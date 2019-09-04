@@ -212,7 +212,7 @@ date_t Date::EpochToDate(int64_t epoch) {
 }
 
 int64_t Date::Epoch(date_t date) {
-	return (date - EPOCH_DATE) * SECONDS_PER_DAY;
+	return ((int64_t)date - EPOCH_DATE) * SECONDS_PER_DAY;
 }
 int32_t Date::ExtractYear(date_t date) {
 	int32_t out_year, out_month, out_day;

@@ -19,38 +19,20 @@ const SQLType SQLType::FLOAT = SQLType(SQLTypeId::FLOAT);
 const SQLType SQLType::DOUBLE = SQLType(SQLTypeId::DOUBLE);
 const SQLType SQLType::DATE = SQLType(SQLTypeId::DATE);
 const SQLType SQLType::TIMESTAMP = SQLType(SQLTypeId::TIMESTAMP);
+const SQLType SQLType::TIME = SQLType(SQLTypeId::TIME);
+
 const SQLType SQLType::VARCHAR = SQLType(SQLTypeId::VARCHAR);
 
 const vector<SQLType> SQLType::NUMERIC = {
-	SQLType::TINYINT,
-	SQLType::SMALLINT,
-	SQLType::INTEGER,
-	SQLType::BIGINT,
-	SQLType::FLOAT,
-	SQLType::DOUBLE,
-	SQLType(SQLTypeId::DECIMAL)
-};
+    SQLType::TINYINT, SQLType::SMALLINT, SQLType::INTEGER,           SQLType::BIGINT,
+    SQLType::FLOAT,   SQLType::DOUBLE,   SQLType(SQLTypeId::DECIMAL)};
 
-const vector<SQLType> SQLType::INTEGRAL = {
-	SQLType::TINYINT,
-	SQLType::SMALLINT,
-	SQLType::INTEGER,
-	SQLType::BIGINT
-};
+const vector<SQLType> SQLType::INTEGRAL = {SQLType::TINYINT, SQLType::SMALLINT, SQLType::INTEGER, SQLType::BIGINT};
 
 const vector<SQLType> SQLType::ALL_TYPES = {
-	SQLType::BOOLEAN,
-	SQLType::TINYINT,
-	SQLType::SMALLINT,
-	SQLType::INTEGER,
-	SQLType::BIGINT,
-	SQLType::DATE,
-	SQLType::TIMESTAMP,
-	SQLType::DOUBLE,
-	SQLType::FLOAT,
-	SQLType(SQLTypeId::DECIMAL),
-	SQLType::VARCHAR
-};
+    SQLType::BOOLEAN, SQLType::TINYINT,   SQLType::SMALLINT, SQLType::INTEGER, SQLType::BIGINT,
+    SQLType::DATE,    SQLType::TIMESTAMP, SQLType::DOUBLE,   SQLType::FLOAT,   SQLType(SQLTypeId::DECIMAL),
+    SQLType::VARCHAR};
 
 const TypeId ROW_TYPE = TypeId::BIGINT;
 
@@ -177,6 +159,8 @@ string SQLTypeIdToString(SQLTypeId id) {
 		return "BIGINT";
 	case SQLTypeId::DATE:
 		return "DATE";
+	case SQLTypeId::TIME:
+		return "TIME";
 	case SQLTypeId::TIMESTAMP:
 		return "TIMESTAMP";
 	case SQLTypeId::FLOAT:
@@ -230,6 +214,7 @@ TypeId GetInternalType(SQLType type) {
 		return TypeId::SMALLINT;
 	case SQLTypeId::SQLNULL:
 	case SQLTypeId::DATE:
+	case SQLTypeId::TIME:
 	case SQLTypeId::INTEGER:
 		return TypeId::INTEGER;
 	case SQLTypeId::BIGINT:

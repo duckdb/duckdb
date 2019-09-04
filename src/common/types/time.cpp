@@ -1,11 +1,14 @@
 #include "common/types/time.hpp"
+#include "common/types/timestamp.hpp"
 
 #include "common/string_util.hpp"
 #include "common/exception.hpp"
 
 #include <iomanip>
+#include <cstring>
 #include <iostream>
 #include <sstream>
+#include <cctype>
 
 using namespace duckdb;
 using namespace std;
@@ -42,23 +45,96 @@ static void number_to_time(dtime_t n, int32_t &hour, int32_t &min, int32_t &sec,
 	msec = ms;
 }
 
-dtime_t Time::FromString(string str) {
-	int32_t hour, minute, second;
-	char sep, sep2;
-	istringstream ss(str);
-	ss >> hour;
-	ss >> sep;
-	ss >> minute;
-	ss >> sep2;
-	ss >> second;
-
-	if (ss.fail() || !IsValidTime(hour, minute, second) || sep != sep2 || sep != ':') {
-		throw ConversionException("time field value out of range: \"%s\", "
-		                          "expected format is (hh-mm-ss)",
-		                          str.c_str());
+// TODO this is duplicated in date.cpp
+static bool ParseDoubleDigit(const char *buf, index_t &pos, int32_t &result) {
+	if (std::isdigit(buf[pos])) {
+		result = buf[pos++] - '0';
+		if (std::isdigit(buf[pos])) {
+			result = (buf[pos++] - '0') + result * 10;
+		}
+		return true;
 	}
-	return FromTime(hour, minute, second);
+	return false;
 }
+
+
+static bool TryConvertTime(const char *buf, dtime_t &result) {
+	int32_t hour = -1, min = -1, sec = -1, msec = -1;
+	index_t pos = 0;
+	int sep;
+
+	// skip leading spaces
+	while (std::isspace(buf[pos])) {
+		pos++;
+	}
+
+	if (!std::isdigit(buf[pos])) {
+		return false;
+	}
+
+	if (!ParseDoubleDigit(buf, pos, hour)) {
+		return false;
+	}
+	if (hour < 0 || hour > 24) {
+		return false;
+	}
+
+	// fetch the separator
+	sep = buf[pos++];
+	if (sep != ':') {
+		// invalid separator
+		return false;
+	}
+
+	if (!ParseDoubleDigit(buf, pos, min)) {
+		return false;
+	}
+	if (min < 0 || min > 60) {
+		return false;
+	}
+
+	if (buf[pos++] != sep) {
+		return false;
+	}
+
+	if (!ParseDoubleDigit(buf, pos, sec)) {
+		return false;
+	}
+	if (sec < 0 || sec > 60) {
+		return false;
+	}
+
+
+	// TODO
+	msec = 0;
+
+	if (msec < 0) {
+		return false;
+	}
+
+	result = Time::FromTime(hour, min, sec, msec);
+	return true;
+}
+
+
+dtime_t Time::FromCString(const char *buf) {
+	dtime_t result;
+	if (!TryConvertTime(buf, result)) {
+		// last chance, check if we can parse as timestamp
+		if (strlen(buf) > 10) {
+			return Timestamp::GetTime(Timestamp::FromString(buf));
+		}
+		throw ConversionException("time field value out of range: \"%s\", "
+		                          "expected format is ([YYY-MM-DD ]HH:MM:SS[.MS])",
+		                          buf);
+	}
+	return result;
+}
+
+dtime_t Time::FromString(string str) {
+	return Time::FromCString(str.c_str());
+}
+
 
 string Time::ToString(dtime_t time) {
 	int32_t hour, min, sec, msec;
