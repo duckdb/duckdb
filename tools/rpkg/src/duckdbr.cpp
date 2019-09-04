@@ -90,6 +90,8 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 			case SQLTypeId::DOUBLE:
 			case SQLTypeId::DECIMAL:
 			case SQLTypeId::TIMESTAMP:
+			case SQLTypeId::DATE:
+			case SQLTypeId::TIME:
 				varvalue = PROTECT(NEW_NUMERIC(nrows));
 				break;
 			case SQLTypeId::VARCHAR:
@@ -151,6 +153,44 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 					SET_CLASS(dest, cl);
 					setAttrib(dest, install("tzone"), PROTECT(mkString("UTC")));
 					UNPROTECT(4);
+					break;
+				}
+				case SQLTypeId::DATE: {
+					auto &src_vec = chunk->data[col_idx];
+					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
+					for (size_t row_idx = 0; row_idx < src_vec.count; row_idx++) {
+						dest_ptr[row_idx] = src_vec.nullmask[row_idx]
+												? NA_REAL
+												: (double) (((int32_t *)src_vec.data)[row_idx]) - 719528;
+					}
+
+					// some dresssup for R
+					SET_CLASS(dest, PROTECT(mkString("Date")));
+					UNPROTECT(1);
+					break;
+				}
+				case SQLTypeId::TIME: {
+					auto &src_vec = chunk->data[col_idx];
+					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
+					for (size_t row_idx = 0; row_idx < src_vec.count; row_idx++) {
+
+						if (src_vec.nullmask[row_idx]) {
+							dest_ptr[row_idx] = NA_REAL;
+						} else {
+							time_t n = ((int32_t *)src_vec.data)[row_idx];
+							int h;
+							double frac;
+							h = n / 3600000;
+							n -= h * 3600000;
+							frac = (n / 60000.0)/60.0;
+							dest_ptr[row_idx]  = h + frac;
+						}
+					}
+
+					// some dresssup for R
+					SET_CLASS(dest, PROTECT(mkString("difftime")));
+					setAttrib(dest, install("units"), PROTECT(mkString("hours")));
+					UNPROTECT(2);
 					break;
 				}
 				case SQLTypeId::BIGINT:
@@ -318,8 +358,6 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 				if (TYPEOF(coldata) == REALSXP && TYPEOF(GET_CLASS(coldata)) == STRSXP &&
 				    strcmp("POSIXct", CHAR(STRING_ELT(GET_CLASS(coldata), 0))) == 0) {
 
-					// TODO enforce that ts is in UTC
-
 					double val = NUMERIC_POINTER(coldata)[row_idx];
 					if (ISNA(val)) {
 						appender->AppendValue(Value());
@@ -327,6 +365,30 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 						auto date = Date::EpochToDate((int64_t)val);
 						auto time = (int32_t)(((int64_t)val % (60 * 60 * 24)) * 1000);
 						appender->AppendBigInt(Timestamp::FromDatetime(date, time));
+					}
+				}
+
+				// date
+				else if (TYPEOF(coldata) == REALSXP && TYPEOF(GET_CLASS(coldata)) == STRSXP &&
+				    strcmp("Date", CHAR(STRING_ELT(GET_CLASS(coldata), 0))) == 0) {
+					// TODO some say there are dates that are stored as integers
+					double val = NUMERIC_POINTER(coldata)[row_idx];
+					if (ISNA(val)) {
+						appender->AppendValue(Value());
+					} else {
+						appender->AppendInteger((int32_t)val + 719528); // MAGIC!
+					}
+				}
+
+				// time
+				else if (TYPEOF(coldata) == REALSXP && TYPEOF(GET_CLASS(coldata)) == STRSXP &&
+					strcmp("Date", CHAR(STRING_ELT(GET_CLASS(coldata), 0))) == 0) {
+					// TODO some say there are dates that are stored as integers
+					double val = NUMERIC_POINTER(coldata)[row_idx];
+					if (ISNA(val)) {
+						appender->AppendValue(Value());
+					} else {
+						appender->AppendInteger((int32_t)val + 719528); // MAGIC!
 					}
 				}
 
@@ -341,7 +403,7 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 				} else if (TYPEOF(coldata) == LGLSXP) {
 					int val = INTEGER_POINTER(coldata)[row_idx];
 					if (val == NA_INTEGER) {
-						appender->AppendValue(Value()); // TODO add AppendNull to appender
+						appender->AppendValue(Value());
 					} else {
 						appender->AppendBoolean(val);
 					}
