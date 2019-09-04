@@ -16,7 +16,7 @@
 namespace duckdb {
 class FileBuffer;
 
-//! SingleFileBlockManager is a implementation for a BlockManager which manages blocks in a single file
+//! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file
 class SingleFileBlockManager : public BlockManager {
 	//! The location in the file where the block writing starts
 	static constexpr uint64_t BLOCK_START = HEADER_SIZE * 3;

@@ -20,7 +20,7 @@ class PersistentSegment : public ColumnSegment {
 public:
 	PersistentSegment(BufferManager &manager, block_id_t id, index_t offset, TypeId type, index_t start, index_t count);
 
-	//! The block manager
+	//! The buffer manager
 	BufferManager &manager;
 	//! The block id that this segment relates to
 	block_id_t block_id;

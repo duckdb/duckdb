@@ -174,10 +174,10 @@ void FileSystem::CreateDirectory(const string &directory) {
 	if (stat(directory.c_str(), &st) != 0) {
 		/* Directory does not exist. EEXIST for race condition */
 		if (mkdir(directory.c_str(), 0755) != 0 && errno != EEXIST) {
-			throw IOException("Failed create directory!");
+			throw IOException("Failed to create directory \"%s\"!", directory.c_str());
 		}
 	} else if (!S_ISDIR(st.st_mode)) {
-		throw IOException("Could not create directory!");
+		throw IOException("Failed to create directory \"%s\": path exists but is not a directory!", directory.c_str());
 	}
 }
 

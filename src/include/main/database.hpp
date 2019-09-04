@@ -39,6 +39,10 @@ public:
 	unique_ptr<FileSystem> file_system;
 	//! The maximum memory used by the database system (in bytes). Default: 1GB
 	index_t maximum_memory = 1 << 30;
+	//! Whether or not to create and use a temporary directory to store intermediates that do not fit in memory
+	bool use_temporary_directory = true;
+	//! Directory to store temporary structures that do not fit in memory
+	string temporary_directory;
 private:
 	// FIXME: don't set this as a user: used internally (only for now)
 	bool checkpoint_only = false;
@@ -65,6 +69,7 @@ public:
 	bool checkpoint_only;
 	index_t checkpoint_wal_size;
 	index_t maximum_memory;
+	string temporary_directory;
 
 private:
 	void Configure(DBConfig &config);

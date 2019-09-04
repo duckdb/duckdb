@@ -8,8 +8,6 @@ ManagedBuffer::ManagedBuffer(BufferManager &manager, index_t size, bool can_dest
 	Buffer(BufferType::MANAGED_BUFFER), manager(manager), size(size), can_destroy(can_destroy), id(id) {
 	assert(id >= MAXIMUM_BLOCK);
 	assert(size >= BLOCK_SIZE);
-	if (!can_destroy) {
-		throw Exception("Temporary managed buffers not supported yet!");
-	}
+
 	data = unique_ptr<data_t[]>(new data_t[size]);
 }

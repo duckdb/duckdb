@@ -35,7 +35,7 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 
 	// now initialize the transient segments and the transient version chunk
 	for (index_t i = 0; i < types.size(); i++) {
-		columns[i].AppendSegment(make_unique<TransientSegment>(types[i], current_row));
+		columns[i].AppendSegment(make_unique<TransientSegment>(*storage.buffer_manager, types[i], current_row));
 	}
 	// initialize the table with an empty storage chunk
 	AppendVersionChunk(current_row);
@@ -130,7 +130,7 @@ void DataTable::AppendVector(index_t column_index, Vector &data, index_t offset,
 	if (copied_elements < count) {
 		// we couldn't fit everything we wanted in the original column segment
 		// create a new one
-		auto column_segment = make_unique<TransientSegment>(segment->type, segment->start + segment->count);
+		auto column_segment = make_unique<TransientSegment>(*storage.buffer_manager, segment->type, segment->start + segment->count);
 		columns[column_index].AppendSegment(move(column_segment));
 		// now try again
 		AppendVector(column_index, data, offset + copied_elements, count - copied_elements);

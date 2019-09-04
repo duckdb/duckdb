@@ -44,6 +44,7 @@ TEST_CASE("Test read only storage", "[storage]") {
 		DBConfig config;
 		config.file_system = make_unique_base<FileSystem, ReadOnlyFileSystem>();
 		config.access_mode = AccessMode::READ_ONLY;
+		config.use_temporary_directory = false;
 		DuckDB db(storage_database, &config);
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("SELECT * FROM test ORDER BY a"));

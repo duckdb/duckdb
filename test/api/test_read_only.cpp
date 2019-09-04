@@ -13,6 +13,7 @@ TEST_CASE("Test connection using a read only database", "[readonly]") {
 	DeleteDatabase(dbdir);
 
 	DBConfig readonly_config;
+	readonly_config.use_temporary_directory = false;
 	readonly_config.access_mode = AccessMode::READ_ONLY;
 
 	// cannot create read-only memory database

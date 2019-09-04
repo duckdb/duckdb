@@ -6,9 +6,18 @@ using namespace duckdb;
 using namespace std;
 
 
-BufferManager::BufferManager(BlockManager &manager, index_t maximum_memory) :
-	current_memory(0), maximum_memory(maximum_memory), manager(manager), temporary_id(MAXIMUM_BLOCK) {
+BufferManager::BufferManager(FileSystem &fs, BlockManager &manager, string tmp, index_t maximum_memory) :
+	fs(fs), manager(manager), current_memory(0), maximum_memory(maximum_memory), temp_directory(move(tmp)), temporary_id(MAXIMUM_BLOCK) {
+	if (!temp_directory.empty()) {
+		fs.CreateDirectory(temp_directory);
+	}
+}
 
+
+BufferManager::~BufferManager() {
+	if (!temp_directory.empty()) {
+		fs.RemoveDirectory(temp_directory);
+	}
 }
 
 unique_ptr<BlockHandle> BufferManager::Pin(block_id_t block_id) {
@@ -65,55 +74,6 @@ void BufferManager::AddReference(BufferEntry *entry) {
 	}
 }
 
-unique_ptr<ManagedBufferHandle> BufferManager::Allocate(index_t alloc_size, bool can_destroy) {
-	lock_guard<mutex> lock(block_lock);
-	// first evict blocks until we have enough memory to store this buffer
-	while(current_memory + alloc_size > maximum_memory) {
-		EvictBlock();
-	}
-	// now allocate the buffer with a new temporary id
-	auto temp_id = ++temporary_id;
-	auto buffer = make_unique<ManagedBuffer>(*this, alloc_size, can_destroy, temp_id);
-	auto managed_buffer = buffer.get();
-	current_memory += alloc_size;
-	// create a new entry and append it to the used list
-	auto buffer_entry = make_unique<BufferEntry>(move(buffer));
-	blocks.insert(make_pair(temp_id, buffer_entry.get()));
-	used_list.Append(move(buffer_entry));
-	// now return a handle to the entry
-	return make_unique<ManagedBufferHandle>(*this, managed_buffer, temp_id);
-}
-
-unique_ptr<ManagedBufferHandle> BufferManager::PinBuffer(block_id_t buffer_id) {
-	assert(buffer_id >= MAXIMUM_BLOCK);
-	lock_guard<mutex> lock(block_lock);
-	// check if we have this buffer here
-	auto entry = blocks.find(buffer_id);
-	if (entry == blocks.end()) {
-		// buffer was already destroyed: return nullptr
-		return nullptr;
-	}
-	// we still have the buffer, add a reference to it
-	auto buffer = entry->second->buffer.get();
-	AddReference(entry->second);
-	// now return it
-	assert(buffer->type == BufferType::MANAGED_BUFFER);
-	auto managed = (ManagedBuffer*) buffer;
-	assert(managed->id == buffer_id);
-	return make_unique<ManagedBufferHandle>(*this, managed, buffer_id);
-}
-
-
-void BufferManager::DestroyBuffer(block_id_t buffer_id) {
-	assert(buffer_id >= MAXIMUM_BLOCK);
-	// this is like unpin, except we just destroy the entry entirely instead of adding it to the LRU list
-	// first find the block in the set of blocks
-	auto entry = blocks.find(buffer_id);
-	assert(entry != blocks.end());
-	blocks.erase(buffer_id);
-	used_list.Erase(entry->second);
-}
-
 void BufferManager::Unpin(block_id_t block_id) {
 	lock_guard<mutex> lock(block_lock);
 	// first find the block in the set of blocks
@@ -152,11 +112,108 @@ unique_ptr<Block> BufferManager::EvictBlock() {
 		// managed buffer: cannot return a block here
 		auto managed = (ManagedBuffer*) buffer;
 		if (!managed->can_destroy) {
-			throw Exception("FIXME: cannot destroy this managed buffer yet! need to write to temporary file");
+			// cannot destroy this buffer: write it to disk first so it can be reloaded later
+			WriteTemporaryBuffer(*managed);
 		}
 		blocks.erase(managed->id);
 		// free up the memory
 		current_memory -= managed->size;
 		return nullptr;
 	}
+}
+
+unique_ptr<ManagedBufferHandle> BufferManager::Allocate(index_t alloc_size, bool can_destroy) {
+	lock_guard<mutex> lock(block_lock);
+	// first evict blocks until we have enough memory to store this buffer
+	while(current_memory + alloc_size > maximum_memory) {
+		EvictBlock();
+	}
+	// now allocate the buffer with a new temporary id
+	auto temp_id = ++temporary_id;
+	auto buffer = make_unique<ManagedBuffer>(*this, alloc_size, can_destroy, temp_id);
+	auto managed_buffer = buffer.get();
+	current_memory += alloc_size;
+	// create a new entry and append it to the used list
+	auto buffer_entry = make_unique<BufferEntry>(move(buffer));
+	blocks.insert(make_pair(temp_id, buffer_entry.get()));
+	used_list.Append(move(buffer_entry));
+	// now return a handle to the entry
+	return make_unique<ManagedBufferHandle>(*this, managed_buffer, temp_id);
+}
+
+unique_ptr<ManagedBufferHandle> BufferManager::PinBuffer(block_id_t buffer_id, bool can_destroy) {
+	assert(buffer_id >= MAXIMUM_BLOCK);
+	lock_guard<mutex> lock(block_lock);
+	// check if we have this buffer here
+	auto entry = blocks.find(buffer_id);
+	if (entry == blocks.end()) {
+		if (can_destroy) {
+			// buffer was destroyed: return nullptr
+			return nullptr;
+		} else {
+			// buffer was unloaded but not destroyed: read from disk
+			return ReadTemporaryBuffer(buffer_id);
+		}
+	}
+	// we still have the buffer, add a reference to it
+	auto buffer = entry->second->buffer.get();
+	AddReference(entry->second);
+	// now return it
+	assert(buffer->type == BufferType::MANAGED_BUFFER);
+	auto managed = (ManagedBuffer*) buffer;
+	assert(managed->id == buffer_id);
+	return make_unique<ManagedBufferHandle>(*this, managed, buffer_id);
+}
+
+void BufferManager::DestroyBuffer(block_id_t buffer_id) {
+	assert(buffer_id >= MAXIMUM_BLOCK);
+	// this is like unpin, except we just destroy the entry entirely instead of adding it to the LRU list
+	// first find the block in the set of blocks
+	auto entry = blocks.find(buffer_id);
+	assert(entry != blocks.end());
+	blocks.erase(buffer_id);
+	used_list.Erase(entry->second);
+}
+
+string BufferManager::GetTemporaryPath(block_id_t id) {
+	return fs.JoinPath(temp_directory, to_string(id) + ".block");
+}
+
+void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
+	if (temp_directory.empty()) {
+		throw Exception("Out-of-memory: cannot evict buffer because no temporary directory is specified!\nTo enable temporary buffer eviction set a temporary directory in the configuration");
+	}
+	// get the path to write to
+	auto path = GetTemporaryPath(buffer.id);
+	// create the file and write the size followed by the buffer contents
+	auto handle = fs.OpenFile(path, FileFlags::WRITE | FileFlags::CREATE);
+	handle->Write(&buffer.size, sizeof(index_t), 0);
+	handle->Write(buffer.data.get(), buffer.size, sizeof(index_t));
+}
+
+unique_ptr<ManagedBufferHandle> BufferManager::ReadTemporaryBuffer(block_id_t id) {
+	if (temp_directory.empty()) {
+		throw Exception("Out-of-memory: cannot read buffer because no temporary directory is specified!\nTo enable temporary buffer eviction set a temporary directory in the configuration");
+	}
+	index_t alloc_size;
+	// open the temporary file and read the size
+	auto path = GetTemporaryPath(id);
+	auto handle = fs.OpenFile(path, FileFlags::READ);
+	handle->Read(&alloc_size, sizeof(index_t), 0);
+	// first evict blocks until we can handle the size
+	while(current_memory + alloc_size > maximum_memory) {
+		EvictBlock();
+	}
+	// now allocate a buffer of this size and read the data into that buffer
+	auto buffer = make_unique<ManagedBuffer>(*this, alloc_size, false, id);
+	handle->Read(buffer->data.get(), alloc_size, sizeof(index_t));
+
+	auto managed_buffer = buffer.get();
+	current_memory += alloc_size;
+	// create a new entry and append it to the used list
+	auto buffer_entry = make_unique<BufferEntry>(move(buffer));
+	blocks.insert(make_pair(id, buffer_entry.get()));
+	used_list.Append(move(buffer_entry));
+	// now return a handle to the entry
+	return make_unique<ManagedBufferHandle>(*this, managed_buffer, id);
 }

@@ -10,16 +10,20 @@
 
 #include "storage/table/column_segment.hpp"
 #include "storage/block.hpp"
-
+#include "storage/buffer_manager.hpp"
 namespace duckdb {
+
 
 class TransientSegment : public ColumnSegment {
 public:
-	TransientSegment(TypeId type, index_t start);
+	TransientSegment(BufferManager &manager, TypeId type, index_t start);
 
-	//! The block that is used to store the data of the transient segment
-	Block block;
-
+	//! The buffer manager
+	BufferManager &manager;
+	//! The block id that this segment relates to
+	block_id_t block_id;
+	//! The amount of vectors stored in this transient segment
+	index_t vector_count;
 public:
 	void Scan(ColumnPointer &pointer, Vector &result, index_t count) override;
 	void Scan(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector, index_t sel_count) override;

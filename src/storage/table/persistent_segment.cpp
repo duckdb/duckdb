@@ -150,7 +150,7 @@ const char *PersistentSegment::GetBigString(ColumnPointer &pointer, block_id_t b
 	auto entry = big_strings.find(block_id);
 	if (entry != big_strings.end()) {
 		// the big string was already loaded: pin the buffer
-		auto handle = manager.PinBuffer(entry->second);
+		auto handle = manager.PinBuffer(entry->second, true);
 		if (handle) {
 			// fetch the string from the buffer and add the handle to the set of handles maintained by the column pointer
 			auto str = (const char*) handle->buffer->data.get();
