@@ -141,7 +141,7 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 					for (size_t row_idx = 0; row_idx < src_vec.count; row_idx++) {
 						dest_ptr[row_idx] = src_vec.nullmask[row_idx]
 						                        ? NA_REAL
-						                        : Timestamp::GetEpoch(((int64_t *)src_vec.data)[row_idx]);
+						                        : (double) Timestamp::GetEpoch(((int64_t *)src_vec.data)[row_idx]);
 					}
 
 					// some dresssup for R
