@@ -117,31 +117,44 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 	benchmark->Finalize();
 }
 
-void BenchmarkRunner::RunBenchmarks() {
+void BenchmarkRunner::RunBenchmarks(std::string benchmark_prefix) {
 	LogLine("Starting benchmark run.");
 	for (auto &benchmark : benchmarks) {
+		if(!benchmark_prefix.empty() && !StringUtil::StartsWith(benchmark->name, benchmark_prefix)) {
+			continue;
+		}
 		RunBenchmark(benchmark);
 	}
 }
 
 void print_help() {
 	fprintf(stderr, "Usage: benchmark_runner\n");
-	fprintf(stderr, "              --list       Show a list of all benchmarks\n");
-	fprintf(stderr, "              --out=[file] Move benchmark output to file\n");
-	fprintf(stderr, "              --log=[file] Move log output to file\n");
-	fprintf(stderr, "              --info       Prints info about the benchmark\n");
-	fprintf(stderr, "              [name]       Run only the benchmark of the "
+	fprintf(stderr, "              --list        Show a list of all benchmarks\n");
+	fprintf(stderr, "              --out=[file]  Move benchmark output to file\n");
+	fprintf(stderr, "              --log=[file]  Move log output to file\n");
+	fprintf(stderr, "              --info        Prints info about the benchmark\n");
+	fprintf(stderr, "              --starts_with Run only the benchmarks that start with the passed name, e.g., DS for TPC-DS queries\n");
+	fprintf(stderr, "              [name]        Run only the benchmark of the "
 	                "specified name\n");
 }
 
-int main(int argc, char **argv) {
+struct BenchmarkConfiguration {
+	std::string name{};
+	bool info{false};
+	bool name_is_prefix{false};
+};
+
+enum ConfigurationError {None, BenchmarkNotFound, InfoWithoutBenchmarkName};
+
+/**
+ * Builds a configuration based on the passed arguments.
+ */
+BenchmarkConfiguration parse_arguments(int arg_counter, char **arg_values) {
 	auto &instance = BenchmarkRunner::GetInstance();
 	auto &benchmarks = instance.benchmarks;
-	int benchmark_index = -1;
-	bool info = false;
-
-	for (int i = 1; i < argc; i++) {
-		string arg = argv[i];
+	BenchmarkConfiguration configuration;
+	for (int arg_index = 1; arg_index < arg_counter; ++arg_index) {
+		string arg = arg_values[arg_index];
 		if (arg == "--list") {
 			// list names of all benchmarks
 			for (auto &benchmark : benchmarks) {
@@ -153,7 +166,10 @@ int main(int argc, char **argv) {
 			exit(0);
 		} else if (arg == "--info") {
 			// write info of benchmark
-			info = true;
+			configuration.info = true;
+		} else if (arg == "--starts_with") {
+			// use the passed name parameter as prefix of the benchmark name
+			configuration.name_is_prefix = true;
 		} else if (StringUtil::StartsWith(arg, "--out=") || StringUtil::StartsWith(arg, "--log=")) {
 			auto splits = StringUtil::Split(arg, '=');
 			if (splits.size() != 2) {
@@ -167,41 +183,77 @@ int main(int argc, char **argv) {
 				exit(1);
 			}
 		} else {
-			if (benchmark_index >= 0) {
-				fprintf(stderr, "ERROR: Can only specify one benchmark.\n");
+			if (!configuration.name.empty()) {
+				fprintf(stderr, "Only one benchmark can be specified.\n");
 				print_help();
 				exit(1);
 			}
+			configuration.name = arg;
+		}
+	}
+	return configuration;
+}
+
+/** 
+ * Runs the benchmarks specified by the configuration if possible.
+ * Returns an configuration error code.
+ */
+ConfigurationError run_benchmarks(const BenchmarkConfiguration& configuration) {
+	auto &instance = BenchmarkRunner::GetInstance();
+	auto &benchmarks = instance.benchmarks;
+	if (!configuration.name.empty()) {
+	  if(configuration.name_is_prefix){
+			instance.RunBenchmarks(configuration.name);
+		} else {
 			// run only specific benchmark
 			// check if the benchmark exists
-			for (size_t i = 0; i < benchmarks.size(); i++) {
-				if (benchmarks[i]->name == arg) {
-					benchmark_index = i;
+			auto benchmark_index = -1;
+			for (uint32_t index = 0; index < benchmarks.size(); ++index) {
+				if (benchmarks[index]->name == configuration.name) {
+					benchmark_index = index;
 					break;
 				}
 			}
 			if (benchmark_index < 0) {
-				// benchmark to run could not be found
-				print_help();
-				exit(1);
+				return ConfigurationError::BenchmarkNotFound;		
+			}
+			if (configuration.info) {
+				// print info of benchmark
+				auto info = benchmarks[benchmark_index]->GetInfo();
+				fprintf(stdout, "%s\n", info.c_str());
+			} else {
+				instance.RunBenchmark(benchmarks[benchmark_index]);
 			}
 		}
-	}
-	if (benchmark_index < 0) {
-		if (info) {
-			fprintf(stderr, "ERROR: Info requires benchmark name.\n");
-			print_help();
-			exit(1);
+	} else {
+		if (configuration.info) {
+			return ConfigurationError::InfoWithoutBenchmarkName;
 		}
 		// default: run all benchmarks
 		instance.RunBenchmarks();
-	} else {
-		if (info) {
-			// print info of benchmark
-			auto info = benchmarks[benchmark_index]->GetInfo();
-			fprintf(stdout, "%s\n", info.c_str());
-		} else {
-			instance.RunBenchmark(benchmarks[benchmark_index]);
-		}
+	}
+	return ConfigurationError::None;
+}
+
+void print_error_message(const ConfigurationError& error){
+	switch (error) {
+		case ConfigurationError::BenchmarkNotFound:
+		  fprintf(stderr, "Benchmark to run could not be found.\n");
+		  break;
+		case ConfigurationError::InfoWithoutBenchmarkName:
+			fprintf(stderr, "Info requires benchmark name.\n");
+			break;
+		case ConfigurationError::None:
+			break;
+	}
+	print_help();
+}
+
+int main(int argc, char **argv) {
+	BenchmarkConfiguration configuration = parse_arguments(argc, argv);
+	const auto configuration_error = run_benchmarks(configuration);
+	if(configuration_error != ConfigurationError::None){
+		print_error_message(configuration_error);
+		exit(1);
 	}
 }
