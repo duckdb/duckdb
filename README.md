@@ -22,6 +22,9 @@ As DuckDB is an embedded database, there is no database server to launch or clie
 
 For examples on how to embed DuckDB into your application, see the [examples](https://github.com/cwida/duckdb/tree/master/examples) folder.
 
+## Benchchmarks
+After compiling, benchmarks can be executed from the root directory by executing `./build/release/benchmark/benchmark_runner`.
+
 ## Standing on the Shoulders of Giants
 DuckDB is implemented in C++ 11, should compile with GCC and clang, uses CMake to build and [Catch2](https://github.com/catchorg/Catch2) for testing. In addition, we use [Jenkins](https://jenkins.io) as a CI platform. DuckDB uses some components from various Open-Source databases and draws inspiration from scientific publications. Here is an overview:
 
