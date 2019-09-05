@@ -37,7 +37,7 @@ public:
 	void LogOutput(string message);
 
 	void RunBenchmark(Benchmark *benchmark);
-	void RunBenchmarks(std::string benchmark_prefix = "");
+	void RunBenchmarks();
 
 	vector<Benchmark *> benchmarks;
 	ofstream out_file;
