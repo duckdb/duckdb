@@ -203,6 +203,7 @@ ConfigurationError run_benchmarks(const BenchmarkConfiguration& configuration) {
 				benchmark_indices.emplace_back(index);
 			}
 		}
+		benchmark_indices.shrink_to_fit();
 		if (benchmark_indices.empty()) {
 			return ConfigurationError::BenchmarkNotFound;		
 		}
