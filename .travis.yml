@@ -18,12 +18,12 @@ matrix:
 
     - os: osx
       name: Xcode 11.0 Debug
-      osx_image: xcode11.0
+      osx_image: xcode11
 
 
     - os: osx
       name: Xcode 11.0
-      osx_image: xcode11.0
+      osx_image: xcode11
 
       before_install:
         - pip install --user boto3
@@ -209,7 +209,7 @@ matrix:
 
 
     - os: osx
-      osx_image: xcode11.0
+      osx_image: xcode11
       name: R Package
 
       language: r
@@ -281,7 +281,7 @@ matrix:
     - os: osx
       name: Python Package
       language: generic
-      osx_image: xcode11.0
+      osx_image: xcode11
 
       script:
         - pip install cibuildwheel==0.10.2 boto3
