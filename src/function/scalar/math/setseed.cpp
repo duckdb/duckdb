@@ -23,14 +23,18 @@ struct SetseedBindData : public FunctionData {
 static void setseed_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                      Vector &result) {
 	auto &info = (SetseedBindData &) *expr.bind_info;
-	assert(input_count == 1 && inputs[0].type == TypeId::INTEGER);
+	assert(input_count == 1 && inputs[0].type == TypeId::DOUBLE);
 	result.Initialize(TypeId::INTEGER);
 	result.count = 1;
 
-	int32_t seed = ((int32_t *)inputs[0].data)[0];
-	info.context.random_engine.seed(seed);
+	double input_seed = ((double *)inputs[0].data)[0];
+	if (input_seed < -1.0 || input_seed > 1.0) {
+		throw Exception("SETSEED accepts seed values between -1.0 and 1.0, inclusive");
+	}
+	std::uint32_t norm_seed = (input_seed + 1.0) * std::numeric_limits<std::uint32_t>::max()/2;
+	info.context.random_engine.seed(norm_seed);
 
-	VectorOperations::Set(result, Value(seed));
+	VectorOperations::Set(result, Value());
 }
 
 unique_ptr<FunctionData> setseed_bind(BoundFunctionExpression &expr, ClientContext &context) {
@@ -38,5 +42,5 @@ unique_ptr<FunctionData> setseed_bind(BoundFunctionExpression &expr, ClientConte
 }
 
 void Setseed::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("setseed", { SQLType::INTEGER }, SQLType::INTEGER, setseed_function, true, setseed_bind));
+	set.AddFunction(ScalarFunction("setseed", { SQLType::DOUBLE }, SQLType::SQLNULL, setseed_function, true, setseed_bind));
 }
