@@ -202,7 +202,7 @@ ConfigurationError run_benchmarks(const BenchmarkConfiguration& configuration) {
 	auto &instance = BenchmarkRunner::GetInstance();
 	auto &benchmarks = instance.benchmarks;
 	if (!configuration.name.empty()) {
-	  if(configuration.name_is_prefix){
+		if(configuration.name_is_prefix){
 			instance.RunBenchmarks(configuration.name);
 		} else {
 			// run only specific benchmark
@@ -238,8 +238,8 @@ ConfigurationError run_benchmarks(const BenchmarkConfiguration& configuration) {
 void print_error_message(const ConfigurationError& error){
 	switch (error) {
 		case ConfigurationError::BenchmarkNotFound:
-		  fprintf(stderr, "Benchmark to run could not be found.\n");
-		  break;
+			fprintf(stderr, "Benchmark to run could not be found.\n");
+			break;
 		case ConfigurationError::InfoWithoutBenchmarkName:
 			fprintf(stderr, "Info requires benchmark name.\n");
 			break;
