@@ -24,6 +24,8 @@ using namespace std;
 ClientContext::ClientContext(DuckDB &database)
     : db(database), transaction(*database.transaction_manager), interrupted(false), catalog(*database.catalog),
       prepared_statements(make_unique<CatalogSet>(*db.catalog)), open_result(nullptr) {
+	random_device rd;
+	random_engine.seed(rd());
 }
 
 void ClientContext::Cleanup() {

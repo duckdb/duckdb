@@ -70,11 +70,10 @@ TEST_CASE("Rounding test", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {42.123}));
 }
 
-TEST_CASE("Test random() function", "[function]") {
+TEST_CASE("Test random & setseed functions", "[function]") {
 	unique_ptr<QueryResult> result, result1, result2;
 	DuckDB db(nullptr);
 	Connection con(db);
-	vector<string> splits1, splits2;
 
 	// random() is evaluated twice here
 	result = con.Query("select case when random() between 0 and 0.99999 then 1 else 0 end");
@@ -83,6 +82,15 @@ TEST_CASE("Test random() function", "[function]") {
 	result1 = con.Query("select random()");
 	result2 = con.Query("select random()");
 	REQUIRE(!result1->Equals(*result2));
+
+	REQUIRE_NO_FAIL(con.Query("select setseed(42)"));
+	result1 = con.Query("select random(), random(), random()");
+	REQUIRE(CHECK_COLUMN(result1, 0, {0.796543}));
+	REQUIRE(CHECK_COLUMN(result1, 1, {0.183435}));
+	REQUIRE(CHECK_COLUMN(result1, 2, {0.779691}));
+	REQUIRE_NO_FAIL(con.Query("select setseed(42)"));
+	result2 = con.Query("select random(), random(), random()");
+	REQUIRE(result1->Equals(*result2));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(a INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10)"));
