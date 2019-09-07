@@ -85,15 +85,26 @@ TEST_CASE("Test random & setseed functions", "[function]") {
 
 	REQUIRE_NO_FAIL(con.Query("select setseed(0.1)"));
 	result1 = con.Query("select random(), random(), random()");
-	REQUIRE(CHECK_COLUMN(result1, 0, {0.171597}));
-	REQUIRE(CHECK_COLUMN(result1, 1, {0.384717}));
-	REQUIRE(CHECK_COLUMN(result1, 2, {0.072175}));
+	REQUIRE(CHECK_COLUMN(result1, 0, {0.612055}));
+	REQUIRE(CHECK_COLUMN(result1, 1, {0.384141}));
+	REQUIRE(CHECK_COLUMN(result1, 2, {0.288025}));
 	REQUIRE_NO_FAIL(con.Query("select setseed(0.1)"));
 	result2 = con.Query("select random(), random(), random()");
 	REQUIRE(result1->Equals(*result2));
 
 	REQUIRE_FAIL(con.Query("select setseed(1.1)"));
 	REQUIRE_FAIL(con.Query("select setseed(-1.1)"));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE seeds(a DOUBLE)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO seeds VALUES (-0.1), (0.0), (0.1)"));
+	result2 = con.Query("select setseed(a), a from seeds;");
+	REQUIRE(CHECK_COLUMN(result2, 0, {Value(), Value(), Value()}));
+	REQUIRE(CHECK_COLUMN(result2, 1, {-0.1, 0.0, 0.1}));
+	// Make sure last seed (0.1) is in effect
+	result1 = con.Query("select random(), random(), random()");
+	REQUIRE_NO_FAIL(con.Query("select setseed(0.1)"));
+	result2 = con.Query("select random(), random(), random()");
+	REQUIRE(result1->Equals(*result2));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(a INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10)"));

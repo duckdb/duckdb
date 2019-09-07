@@ -25,16 +25,19 @@ static void setseed_function(ExpressionExecutor &exec, Vector inputs[], index_t 
 	auto &info = (SetseedBindData &) *expr.bind_info;
 	assert(input_count == 1 && inputs[0].type == TypeId::DOUBLE);
 	result.Initialize(TypeId::INTEGER);
-	result.count = 1;
+	result.nullmask.set();
+	result.sel_vector = inputs[0].sel_vector;
+	result.count = inputs[0].count;
 
-	double input_seed = ((double *)inputs[0].data)[0];
-	if (input_seed < -1.0 || input_seed > 1.0) {
-		throw Exception("SETSEED accepts seed values between -1.0 and 1.0, inclusive");
-	}
-	std::uint32_t norm_seed = (input_seed + 1.0) * std::numeric_limits<std::uint32_t>::max()/2;
-	info.context.random_engine.seed(norm_seed);
-
-	VectorOperations::Set(result, Value());
+	auto input_seeds = ((double *)inputs[0].data);
+ 	uint32_t half_max = numeric_limits<uint32_t>::max() / 2;
+	VectorOperations::Exec(result, [&](index_t i, index_t k) {
+		if (input_seeds[i] < -1.0 || input_seeds[i] > 1.0) {
+			throw Exception("SETSEED accepts seed values between -1.0 and 1.0, inclusive");
+		}
+		uint32_t norm_seed = (input_seeds[i] + 1.0) * half_max;
+		info.context.random_engine.seed(norm_seed);
+	});
 }
 
 unique_ptr<FunctionData> setseed_bind(BoundFunctionExpression &expr, ClientContext &context) {
