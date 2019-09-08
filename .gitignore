@@ -291,6 +291,10 @@ test/test.sql
 # SQLite logic tests
 test/evidence/
 third_party/sqllogictest
+
+#imdb dataset
+third_party/imdb/data
+
 # Format timer
 .last_format
 # Benchmarks
