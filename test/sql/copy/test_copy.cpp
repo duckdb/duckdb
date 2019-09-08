@@ -673,7 +673,7 @@ TEST_CASE("Test imdb escapes", "[copy]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE movie_info (id integer NOT NULL PRIMARY KEY, movie_id integer NOT NULL, "
 	                          "info_type_id integer NOT NULL, info text NOT NULL, note text)"));
 
-	result = con.Query("COPY movie_info FROM '" + imdb_movie_info + "' DELIMITER ','");
+	result = con.Query("COPY movie_info FROM '" + imdb_movie_info + "' DELIMITER ',' ESCAPE '\\'");
 	REQUIRE(result->success);
 	REQUIRE(CHECK_COLUMN(result, 0, {201}));
 	// TODO actually check results

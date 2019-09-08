@@ -55,7 +55,7 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 			return;
 		}
 		if (in_quotes) {
-			if (buffer[position] == '\\') {
+			if (buffer[position] == info.escape) {
 				seen_escape = true;
 				// FIXME this is only part of the deal, we also need to zap the escapes below
 			}

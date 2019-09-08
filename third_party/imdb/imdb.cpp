@@ -19,7 +19,7 @@ void dbgen(DuckDB &db) {
 		if (!file_system->FileExists(data_file_name)) {
 			throw Exception("IMDB data file missing, try `make imdb` to download.");
 		}
-		con.Query("COPY "+table_name+" FROM '"+data_file_name+"' DELIMITER ',';");
+		con.Query("COPY "+table_name+" FROM '"+data_file_name+"' DELIMITER ',' ESCAPE '\\';");
 	}
 	con.Query("COMMIT");
 }

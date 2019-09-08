@@ -40,7 +40,7 @@ struct CopyInfo {
 	vector<string> select_list;
 
 	CopyInfo()
-	    : schema(DEFAULT_SCHEMA), is_from(false), delimiter(','), quote('"'), escape('"'), header(false),
+	    : schema(DEFAULT_SCHEMA), is_from(false), delimiter(','), quote('"'), escape('\0'), header(false),
 	      format(ExternalFileFormat::CSV) {
 	}
 };
