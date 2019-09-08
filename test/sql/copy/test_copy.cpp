@@ -674,10 +674,8 @@ TEST_CASE("Test imdb escapes", "[copy]") {
 	                          "info_type_id integer NOT NULL, info text NOT NULL, note text)"));
 
 	result = con.Query("COPY movie_info FROM '" + imdb_movie_info + "' DELIMITER ','");
-	//result = con.Query("COPY movie_info FROM '/Users/hannes/source/duckdb/test/sql/copy/imdb_movie_info_escaped.csv' DELIMITER ','");
-	// REQUIRE(result->success);
+	REQUIRE(result->success);
 	REQUIRE(CHECK_COLUMN(result, 0, {201}));
-
+	// TODO actually check results
 	result = con.Query("SELECT * FROM movie_info");
-	result->Print();
 }
