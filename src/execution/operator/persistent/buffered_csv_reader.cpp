@@ -41,6 +41,7 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 	index_t offset = 0;
 	bool in_quotes = false;
 	bool finished_chunk = false;
+	bool seen_escape = true;
 
 	if (position >= buffer_size) {
 		if (!ReadBuffer(start)) {
@@ -54,11 +55,20 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 			return;
 		}
 		if (in_quotes) {
-			if (buffer[position] == info.quote) {
-				// end quote
-				offset = 1;
-				in_quotes = false;
+			if (buffer[position] == info.escape) {
+				seen_escape = true;
+				// FIXME this is only part of the deal, we also need to zap the escapes below
 			}
+			else if (!seen_escape) {
+				if (buffer[position] == info.quote) {
+					// end quote
+					offset = 1;
+					in_quotes = false;
+				}
+			} else {
+				seen_escape = false;
+			}
+
 		} else {
 			if (buffer[position] == info.quote) {
 				// start quotes can only occur at the start of a field

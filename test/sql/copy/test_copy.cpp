@@ -660,3 +660,22 @@ TEST_CASE("Test cranlogs broken gzip copy", "[copy]") {
 	result = con.Query("COPY cranlogs FROM '" + cranlogs_csv + "' DELIMITER ',' HEADER");
 	REQUIRE(CHECK_COLUMN(result, 0, {37459}));
 }
+
+TEST_CASE("Test imdb escapes", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+	auto imdb_movie_info = fs.JoinPath(csv_path, "imdb_movie_info.csv");
+	WriteBinary(imdb_movie_info, imdb_movie_info_escaped, sizeof(imdb_movie_info_escaped));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE movie_info (id integer NOT NULL PRIMARY KEY, movie_id integer NOT NULL, "
+	                          "info_type_id integer NOT NULL, info text NOT NULL, note text)"));
+
+	result = con.Query("COPY movie_info FROM '" + imdb_movie_info + "' DELIMITER ',' ESCAPE '\\'");
+	REQUIRE(result->success);
+	REQUIRE(CHECK_COLUMN(result, 0, {201}));
+	// TODO actually check results
+	result = con.Query("SELECT * FROM movie_info");
+}
