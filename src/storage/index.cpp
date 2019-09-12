@@ -43,3 +43,31 @@ bool Index::IndexIsUpdated(vector<column_t> &column_ids) {
 	}
 	return false;
 }
+
+void Index::AppendToIndexes(vector<unique_ptr<Index>> &indexes, DataChunk &chunk, row_t row_start) {
+	if (indexes.size() == 0) {
+		return;
+	}
+	// first generate the vector of row identifiers
+	StaticVector<row_t> row_identifiers;
+	row_identifiers.sel_vector = chunk.sel_vector;
+	row_identifiers.count = chunk.size();
+	VectorOperations::GenerateSequence(row_identifiers, row_start);
+
+	index_t failed_index = INVALID_INDEX;
+	// now append the entries to the indices
+	for (index_t i = 0; i < indexes.size(); i++) {
+		if (!indexes[i]->Append(chunk, row_identifiers)) {
+			failed_index = i;
+			break;
+		}
+	}
+	if (failed_index != INVALID_INDEX) {
+		// constraint violation!
+		// remove any appended entries from previous indexes (if any)
+		for (index_t i = 0; i < failed_index; i++) {
+			indexes[i]->Delete(chunk, row_identifiers);
+		}
+		throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
+	}
+}

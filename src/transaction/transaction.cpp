@@ -27,18 +27,24 @@ void Transaction::PushQuery(string query) {
 	strcpy(blob, query.c_str());
 }
 
-void Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) {
+void Transaction::CheckCommit() {
+	storage.CheckCommit();
+}
+
+void Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept {
 	this->commit_id = commit_id;
+
 	// commit the undo buffer
-	bool changes_made = undo_buffer.ChangesMade();
+	bool changes_made = undo_buffer.ChangesMade() || storage.ChangesMade() || sequence_usage.size() > 0;
 	undo_buffer.Commit(log, commit_id);
+	storage.Commit(*this, log, commit_id);
 	if (log) {
 		// commit any sequences that were used to the WAL
 		for (auto &entry : sequence_usage) {
 			log->WriteSequenceValue(entry.first, entry.second);
 		}
 		// flush the WAL
-		if (changes_made || sequence_usage.size() > 0) {
+		if (changes_made) {
 			log->Flush();
 		}
 	}

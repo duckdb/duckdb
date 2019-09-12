@@ -16,6 +16,7 @@
 #include "planner/operator/logical_execute.hpp"
 #include "planner/planner.hpp"
 #include "transaction/transaction_manager.hpp"
+#include "transaction/transaction.hpp"
 #include "parser/statement/deallocate_statement.hpp"
 
 using namespace duckdb;

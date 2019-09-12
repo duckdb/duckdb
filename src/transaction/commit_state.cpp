@@ -24,9 +24,6 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::Flush(UndoFlags new_op) {
 	}
 
 	switch (prev_op) {
-	case UndoFlags::INSERT_TUPLE:
-		log->WriteInsert(*chunk);
-		break;
 	case UndoFlags::DELETE_TUPLE:
 		log->WriteDelete(*chunk);
 		break;
@@ -103,9 +100,6 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::PrepareAppend(UndoFlags op) {
 	if (!chunk) {
 		chunk = make_unique<DataChunk>();
 		switch (op) {
-		case UndoFlags::INSERT_TUPLE:
-			chunk->Initialize(current_table->types);
-			break;
 		case UndoFlags::DELETE_TUPLE: {
 			vector<TypeId> delete_types = {ROW_TYPE};
 			chunk->Initialize(delete_types);
@@ -156,22 +150,6 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteUpdate(VersionInfo *info
 	AppendRowId(info);
 }
 
-template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteInsert(VersionInfo *info) {
-	assert(log);
-	assert(!info->tuple_data);
-	// get the data for the insertion
-	VersionChunkInfo *storage = info->vinfo;
-
-	// switch to the current table, if necessary
-	SwitchTable(&storage->chunk.table, UndoFlags::INSERT_TUPLE);
-
-	// prepare the insert chunk for appending
-	PrepareAppend(UndoFlags::INSERT_TUPLE);
-
-	// append the insert data for an insert
-	AppendInfoData(info);
-}
-
 template <bool HAS_LOG> void CommitState<HAS_LOG>::AppendInfoData(VersionInfo *info) {
 	info->vinfo->chunk.AppendToChunk(*chunk, info);
 }
@@ -202,8 +180,7 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::CommitEntry(UndoFlags type, d
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE:
-	case UndoFlags::UPDATE_TUPLE:
-	case UndoFlags::INSERT_TUPLE: {
+	case UndoFlags::UPDATE_TUPLE: {
 		auto info = (VersionInfo *)data;
 		// Before we set the commit timestamp we write the entry to the WAL. When we set the commit timestamp it enables
 		// other transactions to overwrite the data, but BEFORE we set the commit timestamp the other transactions will
@@ -215,18 +192,10 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::CommitEntry(UndoFlags type, d
 				WriteUpdate(info);
 			}
 			break;
-		case UndoFlags::DELETE_TUPLE:
+		default: // UndoFlags::DELETE_TUPLE:
 			info->GetTable().cardinality--;
 			if (HAS_LOG) {
 				WriteDelete(info);
-			}
-			break;
-		default: // UndoFlags::INSERT_TUPLE
-			assert(type == UndoFlags::INSERT_TUPLE);
-			info->GetTable().cardinality++;
-			if (HAS_LOG) {
-				// push the tuple insert to the WAL
-				WriteInsert(info);
 			}
 			break;
 		}

@@ -54,7 +54,7 @@ public:
 	void SetDeleted(index_t index);
 	//! Push a number of deleted entries to the undo buffer of the transaction. Requires write lock of the chunk to be
 	//! held.
-	void PushDeletedEntries(Transaction &transaction, index_t amount);
+	void PushDeletedEntries(Transaction &transaction, transaction_t commit_id, index_t amount);
 	//! Push a specific tuple into the undo buffer of the transaction. Requires write lock of the chunk to be held.
 	void PushTuple(Transaction &transaction, UndoFlags flag, index_t offset);
 	//! Retrieve the tuple data for a specific row identifier. Requires shared lock of the chunk to be held.

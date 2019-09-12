@@ -3,6 +3,7 @@
 #include "catalog/catalog.hpp"
 #include "common/exception.hpp"
 #include "transaction/transaction_manager.hpp"
+#include "transaction/transaction.hpp"
 #include "main/client_context.hpp"
 
 using namespace duckdb;

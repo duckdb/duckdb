@@ -12,6 +12,7 @@
 #include "common/types/data_chunk.hpp"
 #include "common/unordered_map.hpp"
 #include "transaction/undo_buffer.hpp"
+#include "transaction/local_storage.hpp"
 
 namespace duckdb {
 class SequenceCatalogEntry;
@@ -48,22 +49,23 @@ public:
 	transaction_t active_query;
 	//! The timestamp when the transaction started
 	timestamp_t start_timestamp;
+	//! The set of uncommitted appends for the transaction
+	LocalStorage storage;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	unordered_map<SequenceCatalogEntry *, SequenceValue> sequence_usage;
-
 public:
 	void PushCatalogEntry(CatalogEntry *entry);
-	//! Create deleted entries in the undo buffer
-	void PushDeletedEntries(index_t offset, index_t count, VersionChunk *storage, VersionInfo *version_pointers[]);
 	//! Push an old tuple version in the undo buffer
 	void PushTuple(UndoFlags flag, index_t offset, VersionChunk *storage);
 	//! Push a query into the undo buffer
 	void PushQuery(string query);
 
+	//! Checks whether or not the transaction can be successfully committed,
+	void CheckCommit();
 	//! Commit the current transaction with the given commit identifier
-	void Commit(WriteAheadLog *log, transaction_t commit_id);
+	void Commit(WriteAheadLog *log, transaction_t commit_id) noexcept;
 	//! Rollback
-	void Rollback() {
+	void Rollback() noexcept {
 		undo_buffer.Rollback();
 	}
 	//! Cleanup the undo buffer
@@ -71,7 +73,6 @@ public:
 		undo_buffer.Cleanup();
 	}
 
-	//
 	timestamp_t GetCurrentTransactionStartTimestamp() {
 		return start_timestamp;
 	}

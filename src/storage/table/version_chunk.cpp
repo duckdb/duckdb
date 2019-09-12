@@ -44,7 +44,7 @@ VersionChunkInfo *VersionChunk::GetOrCreateVersionInfo(index_t version_index) {
 	return version_data[version_index].get();
 }
 
-void VersionChunk::PushDeletedEntries(Transaction &transaction, index_t amount) {
+void VersionChunk::PushDeletedEntries(Transaction &transaction, transaction_t commit_id, index_t amount) {
 	index_t version_index = GetVersionIndex(this->count);
 	index_t offset_in_version = this->count % STANDARD_VECTOR_SIZE;
 
@@ -53,7 +53,7 @@ void VersionChunk::PushDeletedEntries(Transaction &transaction, index_t amount) 
 		auto ptr = transaction.PushTuple(UndoFlags::INSERT_TUPLE, 0);
 		auto meta = (VersionInfo *)ptr;
 		meta->tuple_data = nullptr;
-		meta->version_number = transaction.transaction_id;
+		meta->version_number = commit_id;
 		meta->entry = offset_in_version;
 		meta->vinfo = version;
 		meta->prev = nullptr;

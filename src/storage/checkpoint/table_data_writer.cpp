@@ -26,7 +26,7 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 
 	// initialize scan structures to prepare for the scan
 	TableScanState state;
-	table.storage->InitializeScan(state);
+	table.storage->InitializeScan(transaction, state);
 	vector<column_t> column_ids;
 	for (auto &column : table.columns) {
 		column_ids.push_back(column.oid);

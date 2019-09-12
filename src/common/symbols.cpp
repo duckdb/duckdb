@@ -33,6 +33,7 @@
 #include "planner/tableref/list.hpp"
 #include "storage/data_table.hpp"
 #include "storage/write_ahead_log.hpp"
+#include "transaction/transaction.hpp"
 
 using namespace duckdb;
 using namespace std;

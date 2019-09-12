@@ -23,6 +23,7 @@ struct CreateTableFunctionInfo;
 struct CreateFunctionInfo;
 struct CreateViewInfo;
 struct CreateSequenceInfo;
+class Transaction;
 
 class FunctionExpression;
 class SchemaCatalogEntry;

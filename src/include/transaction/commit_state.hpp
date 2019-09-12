@@ -40,7 +40,6 @@ private:
 	void WriteCatalogEntry(CatalogEntry *entry);
 	void WriteDelete(VersionInfo *info);
 	void WriteUpdate(VersionInfo *info);
-	void WriteInsert(VersionInfo *info);
 
 	void AppendInfoData(VersionInfo *info);
 	void AppendRowId(VersionInfo *info);

@@ -9,6 +9,7 @@ add_library_unity(duckdb_storage
                   block.cpp
                   data_table.cpp
                   index.cpp
+                  local_storage.cpp
                   meta_block_reader.cpp
                   meta_block_writer.cpp
                   storage_manager.cpp

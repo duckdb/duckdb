@@ -76,6 +76,8 @@ public:
 	//! Returns true if the index is affected by updates on the specified column ids, and false otherwise
 	bool IndexIsUpdated(vector<column_t> &column_ids);
 
+	//! Append a DataChunk to a set of indexes
+	static void AppendToIndexes(vector<unique_ptr<Index>> &indexes, DataChunk &chunk, row_t row_start);
 protected:
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);
 

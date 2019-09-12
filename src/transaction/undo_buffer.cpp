@@ -122,7 +122,7 @@ void UndoBuffer::Cleanup() {
 	IterateEntries([&](UndoFlags type, data_ptr_t data) { state.CleanupEntry(type, data); });
 }
 
-void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
+void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept {
 	if (log) {
 		CommitState<true> state(commit_id, log);
 		// commit WITH write ahead log
@@ -136,7 +136,7 @@ void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
 	}
 }
 
-void UndoBuffer::Rollback() {
+void UndoBuffer::Rollback() noexcept {
 	// rollback needs to be performed in reverse
 	RollbackState state;
 	ReverseIterateEntries([&](UndoFlags type, data_ptr_t data) { state.RollbackEntry(type, data); });

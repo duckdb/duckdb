@@ -6,12 +6,29 @@
 using namespace duckdb;
 using namespace std;
 
+class PhysicalTableScanOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalTableScanOperatorState() : PhysicalOperatorState(nullptr), initialized(false) {
+	}
+
+	//! Whether or not the scan has been initialized
+	bool initialized;
+	//! The current position in the scan
+	TableScanState scan_offset;
+};
+
 void PhysicalTableScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalTableScanOperatorState *>(state_);
-	if (column_ids.size() == 0)
+	if (column_ids.size() == 0) {
 		return;
+	}
+	auto &transaction = context.ActiveTransaction();
+	if (!state->initialized) {
+		table.InitializeScan(transaction, state->scan_offset);
+		state->initialized = true;
+	}
 
-	table.Scan(context.ActiveTransaction(), chunk, column_ids, state->scan_offset);
+	table.Scan(transaction, chunk, column_ids, state->scan_offset);
 }
 
 string PhysicalTableScan::ExtraRenderInformation() const {
@@ -19,5 +36,5 @@ string PhysicalTableScan::ExtraRenderInformation() const {
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {
-	return make_unique<PhysicalTableScanOperatorState>(table);
+	return make_unique<PhysicalTableScanOperatorState>();
 }

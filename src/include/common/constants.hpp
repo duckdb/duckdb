@@ -65,9 +65,12 @@ typedef index_t column_t;
 //! Special value used to signify the ROW ID of a table
 extern const column_t COLUMN_IDENTIFIER_ROW_ID;
 
+//! The maximum row identifier used in tables
+extern const row_t MAX_ROW_ID;
+
 //! Zero selection vector: completely filled with the value 0 [READ ONLY]
 extern const sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
 
-constexpr double PI = 3.141592653589793;
+extern const double PI;
 
 } // namespace duckdb

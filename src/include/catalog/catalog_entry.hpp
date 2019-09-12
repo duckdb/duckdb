@@ -17,7 +17,6 @@ struct AlterInfo;
 class Catalog;
 class CatalogSet;
 class ClientContext;
-class Transaction;
 
 //! Abstract base class of an entry in the catalog
 class CatalogEntry {

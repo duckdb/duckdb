@@ -29,6 +29,11 @@ TransactionManager::TransactionManager(StorageManager &storage) : storage(storag
 	current_query_number = 1;
 }
 
+
+TransactionManager::~TransactionManager() {
+
+}
+
 Transaction *TransactionManager::StartTransaction() {
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
@@ -55,6 +60,16 @@ Transaction *TransactionManager::StartTransaction() {
 void TransactionManager::CommitTransaction(Transaction *transaction) {
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
+
+	// first check whether we can commit this transaction
+	try {
+		transaction->CheckCommit();
+	} catch(Exception &ex) {
+		// cannot commit transaction! roll it back instead of committing it
+		transaction->Rollback();
+		RemoveTransaction(transaction);
+		throw ex;
+	}
 
 	// obtain a commit id for the transaction
 	transaction_t commit_id = current_start_timestamp++;
