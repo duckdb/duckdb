@@ -20,17 +20,14 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 		info->vinfo->deleted[info->row_id] = DELETED_ID;
 		break;
 	}
-	case UndoFlags::UPDATE_TUPLE:
-	case UndoFlags::INSERT_TUPLE: {
+	case UndoFlags::UPDATE_TUPLE: {
 		// undo this entry
 		auto info = (VersionInfo *)data;
-		if (type == UndoFlags::UPDATE_TUPLE || type == UndoFlags::INSERT_TUPLE) {
-			// update or insert rolled back
-			// delete base table entry from index
-			assert(!info->prev);
-			if (info->GetTable().indexes.size() > 0) {
-				RollbackIndexInsert(info);
-			}
+		// update rolled back
+		// delete base table entry from index
+		assert(!info->prev);
+		if (info->GetTable().indexes.size() > 0) {
+			RollbackIndexInsert(info);
 		}
 		// parent needs to refer to a storage chunk because of our transactional model
 		// the current entry is still dirty, hence no other transaction can have modified it

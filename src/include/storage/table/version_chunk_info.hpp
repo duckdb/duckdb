@@ -25,6 +25,8 @@ public:
 
 	//! The transaction ids of the transactions that deleted the tuples (if any)
 	transaction_t deleted[STANDARD_VECTOR_SIZE];
+	//! The transaction ids of the transactions that inserted the tuples (if any)
+	transaction_t inserted[STANDARD_VECTOR_SIZE];
 	//! The version pointers
 	VersionInfo *version_pointers[STANDARD_VECTOR_SIZE];
 	//! The chunk this info belongs to

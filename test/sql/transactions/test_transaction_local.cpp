@@ -63,11 +63,46 @@ TEST_CASE("Test appends on transaction local data with unique indices", "[transa
 	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 2)"));
 
-	// delete + append in same transaction should work as well
+	// // delete + append in same transaction should work as well
+	// FIXME: should this work? or can we get away with this not working?
+	// REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	// REQUIRE_NO_FAIL(con.Query("DELETE FROM integers"));
+	// REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 2)"));
+	// REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+}
+
+TEST_CASE("Test appends with multiple transactions", "[transactions]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER)"));
+
+	// begin two transactions
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 2)"));
-	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
+
+	// append a tuple, con2 cannot see this tuple yet
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 3)"));
+	result = con2.Query("SELECT COUNT(*) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	result = con2.Query("SELECT COUNT(*) FROM integers WHERE i=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	// after committing, con2 still cannot see this tuple
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+	result = con2.Query("SELECT COUNT(*) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	result = con2.Query("SELECT COUNT(*) FROM integers WHERE i=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	// after con2 commits, it can see this tuple
+	REQUIRE_NO_FAIL(con2.Query("COMMIT"));
+	result = con2.Query("SELECT COUNT(*) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con2.Query("SELECT COUNT(*) FROM integers WHERE i=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
 
 TEST_CASE("Test operations on transaction local data with unique indices", "[transactions]") {

@@ -31,7 +31,6 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 		CleanupDelete(info);
 		break;
 	}
-	case UndoFlags::INSERT_TUPLE:
 	case UndoFlags::UPDATE_TUPLE: {
 		// undo this entry
 		auto info = (VersionInfo *)data;
@@ -124,7 +123,6 @@ void CleanupState::Flush() {
 		// delete the tuples from all the indexes
 		current_table->RemoveFromIndexes(row_identifiers);
 	}
-
 
 	count = 0;
 }

@@ -48,16 +48,7 @@ void VersionChunk::PushDeletedEntries(Transaction &transaction, transaction_t co
 
 	auto version = GetOrCreateVersionInfo(version_index);
 	for (index_t i = 0; i < amount; i++) {
-		auto ptr = transaction.PushTuple(UndoFlags::INSERT_TUPLE, 0);
-		auto meta = (VersionInfo *)ptr;
-		meta->tuple_data = nullptr;
-		meta->version_number = commit_id;
-		meta->entry = offset_in_version;
-		meta->vinfo = version;
-		meta->prev = nullptr;
-		meta->next = nullptr;
-
-		version->version_pointers[offset_in_version] = meta;
+		version->inserted[offset_in_version] = commit_id;
 		offset_in_version++;
 		if (offset_in_version == STANDARD_VECTOR_SIZE) {
 			offset_in_version = 0;
@@ -200,7 +191,9 @@ void VersionChunk::RetrieveTupleData(Transaction &transaction, DataChunk &result
 			table.RetrieveVersionedData(result, column_ids, &alternate_version_pointer, &alternate_version_index, 1);
 		}
 	} else {
-		if (!version->deleted[index_in_version]) {
+		bool is_inserted = VersionInfo::UseVersion(transaction, version->inserted[index_in_version]);
+		bool is_deleted = VersionInfo::UseVersion(transaction, version->deleted[index_in_version]);
+		if (is_inserted && !is_deleted) {
 			// not versioned: retrieve info from base table
 			RetrieveTupleFromBaseTable(result, column_ids, start + offset);
 		}
@@ -271,9 +264,10 @@ bool VersionChunk::Scan(TableScanState &state, Transaction &transaction, DataChu
 		for (index_t i = 0; i < scan_count; i++) {
 			version_entries[version_count] = regular_entries[regular_count] = i;
 			bool has_version = vdata->version_pointers[i];
-			bool is_deleted = vdata->deleted[i] < transaction.start_time || vdata->deleted[i] == transaction.transaction_id;
+			bool is_inserted = VersionInfo::UseVersion(transaction, vdata->inserted[i]);
+			bool is_deleted = VersionInfo::UseVersion(transaction, vdata->deleted[i]);
 			version_count += has_version;
-			regular_count += !(is_deleted || has_version);
+			regular_count += is_inserted && !(is_deleted || has_version);
 		}
 	} else {
 		// no deleted entries or version information: just scan everything
