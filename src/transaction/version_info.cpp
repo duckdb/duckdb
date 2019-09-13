@@ -12,44 +12,7 @@ index_t DeleteInfo::GetRowId() {
 	return vinfo->chunk.start + vinfo->start + row_id;
 }
 
-DataTable &VersionInfo::GetTable() {
-	return vinfo->chunk.table;
-}
-
-index_t VersionInfo::GetRowId() {
-	return vinfo->chunk.start + vinfo->start + entry;
-}
-
-VersionInfo *VersionInfo::GetVersionForTransaction(Transaction &transaction, VersionInfo *version) {
-	if (!version ||
-	    (version->version_number == transaction.transaction_id || version->version_number < transaction.start_time)) {
-		// either (1) there is no version anymore as it was cleaned up,
-		// or (2) the base table data belongs to the current transaction
-		// in this case use the data in the original table
-		return nullptr;
-	} else {
-		// follow the version pointers
-		while (true) {
-			auto next = version->next;
-			if (!next) {
-				// use this version: no predecessor
-				break;
-			}
-			if (next->version_number == transaction.transaction_id) {
-				// use this version: it was created by us
-				break;
-			}
-			if (next->version_number < transaction.start_time) {
-				// use this version: it was committed by us
-				break;
-			}
-			version = next;
-		}
-		return version;
-	}
-}
-
-bool VersionInfo::HasConflict(transaction_t version_number, transaction_t transaction_id) {
+bool Versioning::HasConflict(transaction_t version_number, transaction_t transaction_id) {
 	if (version_number < TRANSACTION_ID_START) {
 		// version was committed: no conflict
 		return false;
@@ -62,13 +25,6 @@ bool VersionInfo::HasConflict(transaction_t version_number, transaction_t transa
 	return true;
 }
 
-bool VersionInfo::HasConflict(VersionInfo *version, transaction_t transaction_id) {
-	if (!version) {
-		return false;
-	}
-	return VersionInfo::HasConflict(version->version_number, transaction_id);
-}
-
-bool VersionInfo::UseVersion(Transaction &transaction, transaction_t id) {
+bool Versioning::UseVersion(Transaction &transaction, transaction_t id) {
 	return id < transaction.start_time || id == transaction.transaction_id;
 }

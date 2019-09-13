@@ -17,28 +17,24 @@
 namespace duckdb {
 
 class VersionChunk;
-struct VersionInfo;
 
 class VersionChunkInfo {
 public:
-	VersionChunkInfo(VersionChunk &chunk, index_t start);
+	VersionChunkInfo(VersionChunk &chunk, index_t start) : chunk(chunk), start(start) {
+		for(index_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+			deleted[i] = NOT_DELETED_ID;
+			inserted[i] = 0;
+		}
+	}
 
 	//! The transaction ids of the transactions that deleted the tuples (if any)
 	transaction_t deleted[STANDARD_VECTOR_SIZE];
 	//! The transaction ids of the transactions that inserted the tuples (if any)
 	transaction_t inserted[STANDARD_VECTOR_SIZE];
-	//! The version pointers
-	VersionInfo *version_pointers[STANDARD_VECTOR_SIZE];
 	//! The chunk this info belongs to
 	VersionChunk &chunk;
 	//! The start index
 	index_t start;
-
-public:
-	// Cleanup the version information of a tuple
-	void Cleanup(VersionInfo *info);
-	// Undo the changes made by a tuple
-	void Undo(VersionInfo *info);
 };
 
 } // namespace duckdb

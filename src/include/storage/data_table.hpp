@@ -29,8 +29,6 @@ class StorageManager;
 class TableCatalogEntry;
 class Transaction;
 
-struct VersionInfo;
-
 struct TableScanState {
 	virtual ~TableScanState() {
 	}
@@ -38,15 +36,12 @@ struct TableScanState {
 	VersionChunk *chunk;
 	unique_ptr<ColumnPointer[]> columns;
 	index_t offset;
-	VersionInfo *version_chain;
 	LocalScanState local_state;
 	VersionChunk *last_chunk;
 	index_t last_chunk_count;
 };
 
 struct IndexTableScanState : public TableScanState {
-	index_t version_index;
-	index_t version_offset;
 	vector<unique_ptr<StorageLockKey>> locks;
 };
 
@@ -110,15 +105,6 @@ public:
 	void CreateIndexScan(IndexTableScanState &structure, vector<column_t> &column_ids, DataChunk &result);
 
 	VersionChunk *GetChunk(index_t row_number);
-
-	//! Retrieve versioned data for all column_ids of the table
-	void RetrieveVersionedData(DataChunk &result, data_ptr_t alternate_version_pointers[],
-	                           index_t alternate_version_count);
-
-	//! Retrieves versioned data for a specific set of column_ids of the table
-	void RetrieveVersionedData(DataChunk &result, const vector<column_t> &column_ids,
-	                           data_ptr_t alternate_version_pointers[], index_t alternate_version_index[],
-	                           index_t alternate_version_count);
 
 	//! Add an index to the DataTable
 	void AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>> &expressions);

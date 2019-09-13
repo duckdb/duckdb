@@ -18,10 +18,6 @@ void Transaction::PushCatalogEntry(CatalogEntry *entry) {
 	*blob = entry;
 }
 
-data_ptr_t Transaction::PushTuple(UndoFlags flags, index_t data_size) {
-	return undo_buffer.CreateEntry(flags, sizeof(VersionInfo) + data_size);
-}
-
 void Transaction::PushDelete(VersionChunkInfo *vinfo, row_t row) {
 	auto delete_info = (DeleteInfo*) undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo));
 	delete_info->vinfo = vinfo;

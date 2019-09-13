@@ -372,7 +372,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 		assert((index_t) ids[i] < version->start + STANDARD_VECTOR_SIZE);
 		auto id = ids[i] - version->start;
 		// check for conflicts
-		if (version->deleted[id] != DELETED_ID) {
+		if (version->deleted[id] != NOT_DELETED_ID) {
 			// tuple was already deleted by another transaction
 			throw TransactionException("Conflict on tuple deletion!");
 		}
@@ -520,100 +520,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		transaction.storage.Update(this, row_identifiers, column_ids, updates);
 		return;
 	}
-
-	if (true) {
-		// persistent chunk, we can't do an in-place update here
-		// first fetch the existing columns for any non-updated columns
-		updates.Flatten();
-		row_identifiers.Flatten();
-
-		unordered_map<column_t, column_t> update_ids;
-		vector<column_t> fetch_ids;
-		vector<TypeId> fetch_types;
-		for (index_t i = 0; i < types.size(); i++) {
-			auto entry = std::find(column_ids.begin(), column_ids.end(), i);
-			if (entry == column_ids.end()) {
-				// column is not present in update list: fetch from base table
-				fetch_ids.push_back(i);
-				fetch_types.push_back(types[i]);
-			} else {
-				// column is present in update list: get value from update
-				update_ids[i] = entry - column_ids.begin();
-			}
-		}
-		DataChunk append_chunk, fetched_chunk;
-		append_chunk.Initialize(types);
-		if (fetch_ids.size() > 0) {
-			// need to fetch entries from the base table
-			fetched_chunk.Initialize(fetch_types);
-			Fetch(context.ActiveTransaction(), fetched_chunk, fetch_ids, row_identifiers);
-		}
-
-		// now create the append chunk
-		for (index_t i = 0; i < types.size(); i++) {
-			auto entry = update_ids.find(i);
-			if (entry != update_ids.end()) {
-				// fetch vector from updates
-				append_chunk.data[i].Reference(updates.data[entry->second]);
-			} else {
-				// fetch vector from fetched chunk
-				auto entry = std::find(fetch_ids.begin(), fetch_ids.end(), i);
-				append_chunk.data[i].Reference(fetched_chunk.data[entry - fetch_ids.begin()]);
-			}
-		}
-
-		// append the new set of rows
-		Append(table, context, append_chunk);
-
-		// finally delete the current set of rows
-		Delete(table, context, row_identifiers);
-		return;
-	}
-
-	// first find the chunk the row ids belong to
-	// auto chunk = GetChunk(first_id);
-
-	// // move strings to a temporary heap
-	// StringHeap heap;
-	// updates.MoveStringsToHeap(heap);
-
-	// // get an exclusive lock on the chunk
-	// auto lock = chunk->lock.GetExclusiveLock();
-
-	// // now update the entries
-	// // first check for any conflicts before we insert anything into the undo buffer
-	// // we check for any conflicts in ALL tuples first before inserting anything into the undo buffer
-	// // to make sure that we complete our entire update transaction after we do
-	// // this prevents inconsistencies after rollbacks, etc...
-	// VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
-	// 	auto id = ids[i] - chunk->start;
-	// 	// assert that all ids in the vector belong to the same chunk
-	// 	assert(id < chunk->count);
-	// 	// check for version conflicts
-	// 	auto version = chunk->GetVersionInfo(id);
-	// 	if (VersionInfo::HasConflict(version, transaction.transaction_id)) {
-	// 		throw TransactionException("Conflict on tuple update!");
-	// 	}
-	// });
-
-	// // now we update any indexes, we do this before inserting anything into the undo buffer
-	// UpdateIndexes(table, column_ids, updates, row_identifiers);
-
-	// // now we know there are no conflicts, move the tuples into the undo buffer and mark the chunk as dirty
-	// VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
-	// 	auto id = ids[i] - chunk->start;
-	// 	// move the current tuple data into the undo buffer
-	// 	chunk->PushTuple(transaction, UndoFlags::UPDATE_TUPLE, id);
-	// });
-
-	// // now update the columns in the base table
-	// for (index_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-	// 	auto column_id = column_ids[col_idx];
-
-	// 	chunk->Update(row_identifiers, updates.data[col_idx], column_id);
-	// }
-	// // after a successful update move the strings into the chunk
-	// chunk->string_heap.MergeHeap(heap);
+	throw Exception("Update on base table not supported currently");
 }
 
 //===--------------------------------------------------------------------===//
@@ -629,7 +536,6 @@ void DataTable::InitializeScan(TableScanState &state) {
 		state.columns[i].offset = 0;
 	}
 	state.offset = 0;
-	state.version_chain = nullptr;
 }
 
 void DataTable::InitializeScan(Transaction &transaction, TableScanState &state) {
@@ -687,65 +593,11 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 }
 
 void DataTable::InitializeIndexScan(IndexTableScanState &state) {
-	InitializeScan(state);
-	state.version_index = 0;
-	state.version_offset = 0;
+	throw Exception("FIXME: index scan not supported");
 }
 
 void DataTable::CreateIndexScan(IndexTableScanState &state, vector<column_t> &column_ids, DataChunk &result) {
-	while (state.chunk) {
-		auto current_chunk = state.chunk;
-
-		bool chunk_exhausted = current_chunk->CreateIndexScan(state, column_ids, result);
-
-		if (chunk_exhausted) {
-			// exceeded this chunk, move to next one
-			state.chunk = (VersionChunk *)state.chunk->next.get();
-			state.offset = 0;
-			state.version_index = 0;
-			state.version_offset = 0;
-			state.version_chain = nullptr;
-		}
-		if (result.size() > 0) {
-			return;
-		}
-	}
-}
-
-void DataTable::RetrieveVersionedData(DataChunk &result, data_ptr_t alternate_version_pointers[],
-                                      index_t alternate_version_count) {
-	assert(alternate_version_count > 0);
-	Vector version_pointers(TypeId::POINTER, (data_ptr_t)alternate_version_pointers);
-	version_pointers.count = alternate_version_count;
-	// get data from the alternate versions for each column
-	for (index_t j = 0; j < result.column_count; j++) {
-		VectorOperations::Gather::Append(version_pointers, result.data[j], accumulative_tuple_size[j]);
-	}
-}
-
-void DataTable::RetrieveVersionedData(DataChunk &result, const vector<column_t> &column_ids,
-                                      data_ptr_t alternate_version_pointers[], index_t alternate_version_index[],
-                                      index_t alternate_version_count) {
-	assert(alternate_version_count > 0);
-	// create a vector of the version pointers
-	Vector version_pointers(TypeId::POINTER, (data_ptr_t)alternate_version_pointers);
-	version_pointers.count = alternate_version_count;
-	// get data from the alternate versions for each column
-	for (index_t j = 0; j < column_ids.size(); j++) {
-		if (column_ids[j] == COLUMN_IDENTIFIER_ROW_ID) {
-			assert(result.data[j].type == ROW_TYPE);
-			// assign the row identifiers
-			auto data = ((row_t *)result.data[j].data) + result.data[j].count;
-			for (index_t k = 0; k < alternate_version_count; k++) {
-				data[k] = alternate_version_index[k];
-			}
-			result.data[j].count += alternate_version_count;
-		} else {
-			// grab data from the stored tuple for each column
-			index_t offset = accumulative_tuple_size[column_ids[j]];
-			VectorOperations::Gather::Append(version_pointers, result.data[j], offset);
-		}
-	}
+	throw Exception("FIXME: index scan not supported");
 }
 
 void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>> &expressions) {

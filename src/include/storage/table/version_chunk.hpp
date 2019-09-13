@@ -46,7 +46,7 @@ public:
 	StringHeap string_heap;
 
 public:
-	//! Get the VersionInfo index for a specific entry
+	//! Get the VersionChunkInfo index for a specific entry
 	index_t GetVersionIndex(index_t index);
 	//! Get the version chunk info belonging to a specific entry
 	VersionChunkInfo *GetVersionInfo(index_t index);
@@ -67,9 +67,6 @@ public:
 	//! Scan used for creating an index, scans ALL tuples in the table (including all versions of a tuple). Returns true
 	//! if the chunk is exhausted
 	bool CreateIndexScan(IndexTableScanState &state, vector<column_t> &column_ids, DataChunk &result);
-
-	//! Appends the data of a VersionInfo entry to a chunk
-	void AppendToChunk(DataChunk &chunk, VersionInfo *info);
 
 	void Update(Vector &row_identifiers, Vector &update_vector, index_t col_idx);
 

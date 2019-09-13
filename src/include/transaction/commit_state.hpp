@@ -41,9 +41,7 @@ private:
 
 	void WriteCatalogEntry(CatalogEntry *entry);
 	void WriteDelete(DeleteInfo *info);
-	void WriteUpdate(VersionInfo *info);
 
-	void AppendInfoData(VersionInfo *info);
 	void AppendRowId(row_t rowid);
 };
 

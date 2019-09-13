@@ -24,7 +24,6 @@ class VersionChunkInfo;
 class WriteAheadLog;
 
 struct DeleteInfo;
-struct VersionInfo;
 
 //! The transaction object holds information about a currently running or past
 //! transaction
@@ -55,8 +54,6 @@ public:
 	unordered_map<SequenceCatalogEntry *, SequenceValue> sequence_usage;
 public:
 	void PushCatalogEntry(CatalogEntry *entry);
-	//! Push an old tuple version in the undo buffer
-	void PushTuple(UndoFlags flag, index_t offset, VersionChunk *storage);
 	//! Push a query into the undo buffer
 	void PushQuery(string query);
 

@@ -24,16 +24,6 @@ VersionChunkInfo *VersionChunk::GetVersionInfo(index_t index) {
 	return GetOrCreateVersionInfo(version_index);
 }
 
-// VersionInfo *VersionChunk::GetVersionInfo(index_t index) {
-// 	index_t version_index = GetVersionIndex(index);
-// 	auto version = version_data[version_index];
-// 	if (!version) {
-// 		return nullptr;
-// 	}
-// 	assert(index >= version->start && index < version->start + STANDARD_VECTOR_SIZE);
-// 	return version->version_pointers[index - version->start];
-// }
-
 VersionChunkInfo *VersionChunk::GetOrCreateVersionInfo(index_t version_index) {
 	assert(version_index < STORAGE_CHUNK_VECTORS);
 	if (!version_data[version_index]) {
@@ -62,49 +52,6 @@ void VersionChunk::PushDeletedEntries(Transaction &transaction, transaction_t co
 	}
 }
 
-void VersionChunk::PushTuple(Transaction &transaction, UndoFlags flag, index_t offset) {
-	// push the tuple into the undo buffer
-	auto ptr = transaction.PushTuple(flag, table.tuple_size);
-
-	auto meta = (VersionInfo *)ptr;
-	auto tuple_data = ptr + sizeof(VersionInfo);
-
-	// get the version info meta chunk
-	index_t version_index = GetVersionIndex(offset);
-	index_t offset_in_version = offset % STANDARD_VECTOR_SIZE;
-	auto version = GetOrCreateVersionInfo(version_index);
-
-	// fill in the meta data for the tuple
-	meta->tuple_data = tuple_data;
-	meta->version_number = transaction.transaction_id;
-	meta->entry = offset_in_version;
-	meta->vinfo = version;
-
-	meta->prev = nullptr;
-	meta->next = version->version_pointers[offset_in_version];
-	version->version_pointers[offset_in_version] = meta;
-
-	if (meta->next) {
-		meta->next->prev = meta;
-	}
-
-	DataChunk chunk;
-	chunk.Initialize(table.types);
-
-	for (index_t i = 0; i < table.types.size(); i++) {
-		columns[i].segment->Fetch(chunk.data[i], start + offset);
-	}
-
-	data_ptr_t target_locations[1];
-	target_locations[0] = tuple_data;
-	Vector target(TypeId::POINTER, (data_ptr_t)target_locations);
-	target.count = 1;
-	for (index_t i = 0; i < chunk.column_count; i++) {
-		VectorOperations::Scatter::SetAll(chunk.data[i], target);
-		target_locations[0] += columns[i].segment->type_size;
-	}
-}
-
 void VersionChunk::RetrieveTupleFromBaseTable(DataChunk &result, vector<column_t> &column_ids, row_t row_id) {
 	assert(result.size() < STANDARD_VECTOR_SIZE);
 	assert(column_ids.size() == result.column_count);
@@ -115,29 +62,6 @@ void VersionChunk::RetrieveTupleFromBaseTable(DataChunk &result, vector<column_t
 		} else {
 			assert(column_ids[col_idx] < table.types.size());
 			columns[column_ids[col_idx]].segment->Fetch(result.data[col_idx], row_id);
-		}
-	}
-}
-
-void VersionChunk::AppendToChunk(DataChunk &chunk, VersionInfo *info) {
-	if (!info->prev) {
-		// fetch from base table
-		auto id = info->GetRowId();
-		for (index_t i = 0; i < table.types.size(); i++) {
-			assert(columns[i].segment->segment_type == ColumnSegmentType::TRANSIENT);
-			columns[i].segment->Fetch(chunk.data[i], id);
-		}
-	} else {
-		// fetch from tuple data
-		assert(info->prev->tuple_data);
-		auto tuple_data = info->prev->tuple_data;
-		index_t current_offset = chunk.size();
-		for (index_t i = 0; i < table.types.size(); i++) {
-			auto type = chunk.data[i].type;
-			index_t value_size = GetTypeIdSize(type);
-			memcpy(chunk.data[i].data + value_size * current_offset, tuple_data, value_size);
-			tuple_data += value_size;
-			chunk.data[i].count++;
 		}
 	}
 }
@@ -180,23 +104,12 @@ void VersionChunk::RetrieveTupleData(Transaction &transaction, DataChunk &result
 		return;
 	}
 	index_t index_in_version = offset % STANDARD_VECTOR_SIZE;
-	auto root_info = version->version_pointers[index_in_version];
-	auto version_info = VersionInfo::GetVersionForTransaction(transaction, root_info);
-	if (version_info) {
-		if (version_info->tuple_data) {
-			// tuple is versioned: retrieve the versioned data
-			data_ptr_t alternate_version_pointer = version_info->tuple_data;
-			index_t alternate_version_index = start + offset;
 
-			table.RetrieveVersionedData(result, column_ids, &alternate_version_pointer, &alternate_version_index, 1);
-		}
-	} else {
-		bool is_inserted = VersionInfo::UseVersion(transaction, version->inserted[index_in_version]);
-		bool is_deleted = VersionInfo::UseVersion(transaction, version->deleted[index_in_version]);
-		if (is_inserted && !is_deleted) {
-			// not versioned: retrieve info from base table
-			RetrieveTupleFromBaseTable(result, column_ids, start + offset);
-		}
+	bool is_inserted = Versioning::UseVersion(transaction, version->inserted[index_in_version]);
+	bool is_deleted = Versioning::UseVersion(transaction, version->deleted[index_in_version]);
+	if (is_inserted && !is_deleted) {
+		// not versioned: retrieve info from base table
+		RetrieveTupleFromBaseTable(result, column_ids, start + offset);
 	}
 }
 
@@ -254,20 +167,18 @@ bool VersionChunk::Scan(TableScanState &state, Transaction &transaction, DataChu
 		// exhausted this chunk already
 		return true;
 	}
-	sel_t regular_entries[STANDARD_VECTOR_SIZE], version_entries[STANDARD_VECTOR_SIZE];
-	index_t regular_count = 0, version_count = 0;
+	sel_t regular_entries[STANDARD_VECTOR_SIZE];
+	index_t regular_count = 0;
 
 	// if the segment is dirty we need to scan the version pointers and deleted flags
 	auto vdata = version_data[version_index];
 	if (vdata) {
 		// start scanning the chunk to check for deleted and version pointers
 		for (index_t i = 0; i < scan_count; i++) {
-			version_entries[version_count] = regular_entries[regular_count] = i;
-			bool has_version = vdata->version_pointers[i];
-			bool is_inserted = VersionInfo::UseVersion(transaction, vdata->inserted[i]);
-			bool is_deleted = VersionInfo::UseVersion(transaction, vdata->deleted[i]);
-			version_count += has_version;
-			regular_count += is_inserted && !(is_deleted || has_version);
+			regular_entries[regular_count] = i;
+			bool is_inserted = Versioning::UseVersion(transaction, vdata->inserted[i]);
+			bool is_deleted = Versioning::UseVersion(transaction, vdata->deleted[i]);
+			regular_count += is_inserted && !is_deleted;
 		}
 	} else {
 		// no deleted entries or version information: just scan everything
@@ -275,35 +186,6 @@ bool VersionChunk::Scan(TableScanState &state, Transaction &transaction, DataChu
 	}
 
 	if (regular_count < scan_count) {
-		// there are versions! chase the version pointers
-		data_ptr_t alternate_version_pointers[STANDARD_VECTOR_SIZE];
-		index_t alternate_version_index[STANDARD_VECTOR_SIZE];
-		index_t alternate_version_count = 0;
-
-		for (index_t i = 0; i < version_count; i++) {
-			auto root_info = vdata->version_pointers[version_entries[i]];
-			// follow the version chain for this version
-			auto version_info = VersionInfo::GetVersionForTransaction(transaction, root_info);
-			if (!version_info) {
-				// no version info available for this transaction: use base table data
-				// check if entry was not deleted, if it was not deleted use the base table data
-				if (!vdata->deleted[version_entries[i]]) {
-					regular_entries[regular_count++] = version_entries[i];
-				}
-			} else {
-				// version info available: use the version info
-				if (version_info->tuple_data) {
-					alternate_version_pointers[alternate_version_count] = version_info->tuple_data;
-					alternate_version_index[alternate_version_count] = scan_start + version_entries[i];
-					alternate_version_count++;
-				}
-			}
-		}
-		if (alternate_version_count > 0) {
-			// retrieve alternate versions, if any
-			table.RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index,
-			                            alternate_version_count);
-		}
 		// retrieve entries from the base table with the selection vector
 		FetchColumnData(state, result, column_ids, scan_start, scan_count, regular_entries, regular_count);
 	} else {
@@ -345,83 +227,5 @@ void VersionChunk::FetchColumnData(TableScanState &state, DataChunk &result, con
 }
 
 bool VersionChunk::CreateIndexScan(IndexTableScanState &state, vector<column_t> &column_ids, DataChunk &result) {
-	if (state.offset == 0 && state.version_index == 0 && state.version_offset == 0 && !state.version_chain) {
-		// first obtain a shared lock on the chunk, if we don't have it already
-		state.locks.push_back(lock.GetSharedLock());
-	}
-
-	// first scan the base values
-	while (state.offset < this->count) {
-		sel_t regular_entries[STANDARD_VECTOR_SIZE];
-		index_t regular_count = 0;
-		index_t scan_count = min((index_t)STANDARD_VECTOR_SIZE, this->count - state.offset);
-		index_t version_index = GetVersionIndex(state.offset);
-		auto version = version_data[version_index];
-		if (version) {
-			// this chunk is versioned, scan to see which tuples are deleted
-			for (index_t i = 0; i < scan_count; i++) {
-				if (!version->deleted[i]) {
-					regular_entries[regular_count++] = i;
-				}
-			}
-		} else {
-			regular_count = scan_count;
-		}
-		if (regular_count > 0) {
-			if (regular_count == scan_count) {
-				// no deleted tuples,get all data from the base columns
-				FetchColumnData(state, result, column_ids, state.offset, regular_count);
-			} else {
-				FetchColumnData(state, result, column_ids, state.offset, scan_count, regular_entries, regular_count);
-			}
-		}
-		state.offset += STANDARD_VECTOR_SIZE;
-		if (result.size() > 0) {
-			return false;
-		}
-	}
-	index_t max_version_index = std::min((index_t)STORAGE_CHUNK_VECTORS, 1 + (this->count / STANDARD_VECTOR_SIZE));
-	data_ptr_t alternate_version_pointers[STANDARD_VECTOR_SIZE];
-	index_t alternate_version_index[STANDARD_VECTOR_SIZE];
-	index_t result_count = 0;
-	// the base table was exhausted, now scan any remaining version chunks
-	while (state.version_index < max_version_index && result_count < STANDARD_VECTOR_SIZE) {
-		auto version = version_data[state.version_index];
-		if (!version) {
-			state.version_index++;
-			continue;
-		}
-		index_t remaining_count =
-		    std::min((index_t)STANDARD_VECTOR_SIZE, this->count - state.version_index * STANDARD_VECTOR_SIZE);
-
-		while (state.version_offset < remaining_count && result_count < STANDARD_VECTOR_SIZE) {
-			if (!state.version_chain) {
-				state.version_chain = version->version_pointers[state.version_offset];
-			}
-
-			// now chase the version pointer, if any
-			while (state.version_chain && result_count < STANDARD_VECTOR_SIZE) {
-				if (state.version_chain->tuple_data) {
-					alternate_version_pointers[result_count] = state.version_chain->tuple_data;
-					alternate_version_index[result_count] = state.version_chain->GetRowId();
-					result_count++;
-				}
-				state.version_chain = state.version_chain->next;
-			}
-			if (!state.version_chain) {
-				state.version_offset++;
-			}
-		}
-		if (state.version_offset == remaining_count) {
-			state.version_index++;
-			state.version_offset = 0;
-			state.version_chain = nullptr;
-		}
-	}
-	if (result_count > 0) {
-		table.RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index,
-		                            result_count);
-		return false;
-	}
-	return true;
+	throw Exception("FIXME: create index scan");
 }

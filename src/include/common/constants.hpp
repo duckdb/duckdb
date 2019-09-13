@@ -71,7 +71,7 @@ extern const sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
 
 extern const transaction_t TRANSACTION_ID_START;
 extern const transaction_t MAXIMUM_QUERY_ID;
-extern const transaction_t DELETED_ID;
+extern const transaction_t NOT_DELETED_ID;
 
 extern const double PI;
 

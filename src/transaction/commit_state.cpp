@@ -132,27 +132,6 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteDelete(DeleteInfo *info)
 	AppendRowId(info->GetRowId());
 }
 
-template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteUpdate(VersionInfo *info) {
-	assert(log);
-	if (info->prev) {
-		// tuple was deleted or updated after this tuple update; no need to write anything
-		return;
-	}
-	// switch to the current table, if necessary
-	SwitchTable(&info->GetTable(), UndoFlags::UPDATE_TUPLE);
-
-	// prepare the update chunk for appending
-	PrepareAppend(UndoFlags::UPDATE_TUPLE);
-
-	// append the info data and the row id for an update
-	AppendInfoData(info);
-	AppendRowId(info->GetRowId());
-}
-
-template <bool HAS_LOG> void CommitState<HAS_LOG>::AppendInfoData(VersionInfo *info) {
-	info->vinfo->chunk.AppendToChunk(*chunk, info);
-}
-
 template <bool HAS_LOG> void CommitState<HAS_LOG>::AppendRowId(row_t rowid) {
 	auto &row_id_vector = chunk->data[chunk->column_count - 1];
 	auto row_ids = (row_t *)row_id_vector.data;
@@ -189,17 +168,7 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::CommitEntry(UndoFlags type, d
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
-		auto info = (VersionInfo *)data;
-		// Before we set the commit timestamp we write the entry to the WAL. When we set the commit timestamp it enables
-		// other transactions to overwrite the data, but BEFORE we set the commit timestamp the other transactions will
-		// get a concurrency conflict error if they attempt ot modify these tuples. Hence BEFORE we set the commit
-		// timestamp we can safely access the data in the base table without needing any locks.
-		if (HAS_LOG) {
-			WriteUpdate(info);
-		}
-		// set the commit timestamp of the entry
-		info->version_number = commit_id;
-		break;
+		throw Exception("FIXME: update not supported!");
 	}
 	case UndoFlags::QUERY: {
 		if (HAS_LOG) {
