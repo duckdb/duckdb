@@ -67,6 +67,9 @@ public:
 	//! Called when data is appended to the index
 	virtual bool Append(DataChunk &entries, Vector &row_identifiers) = 0;
 
+	//! Verify that data can be appended to the index
+	virtual void VerifyAppend(DataChunk &chunk) {}
+
 	//! Called when data inside the index is Deleted
 	virtual void Delete(DataChunk &entries, Vector &row_identifiers) = 0;
 

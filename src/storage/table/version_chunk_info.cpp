@@ -4,6 +4,10 @@ using namespace duckdb;
 using namespace std;
 
 VersionChunkInfo::VersionChunkInfo(VersionChunk &chunk, index_t start) : chunk(chunk), start(start) {
+	for(index_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+		deleted[i] = DELETED_ID;
+		version_pointers[i] = nullptr;
+	}
 }
 
 void VersionChunkInfo::Cleanup(VersionInfo *info) {

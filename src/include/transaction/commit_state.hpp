@@ -15,6 +15,8 @@ class DataChunk;
 class DataTable;
 class WriteAheadLog;
 
+struct DeleteInfo;
+
 template <bool HAS_LOG> class CommitState {
 public:
 	CommitState(transaction_t commit_id, WriteAheadLog *log = nullptr);
@@ -38,11 +40,11 @@ private:
 	void PrepareAppend(UndoFlags op);
 
 	void WriteCatalogEntry(CatalogEntry *entry);
-	void WriteDelete(VersionInfo *info);
+	void WriteDelete(DeleteInfo *info);
 	void WriteUpdate(VersionInfo *info);
 
 	void AppendInfoData(VersionInfo *info);
-	void AppendRowId(VersionInfo *info);
+	void AppendRowId(row_t rowid);
 };
 
 } // namespace duckdb

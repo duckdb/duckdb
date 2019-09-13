@@ -201,6 +201,10 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chu
 			throw NotImplementedException("Constraint type not implemented!");
 		}
 	}
+	// check whether or not the chunk can be inserted into the indexes
+	for (auto &index : indexes) {
+		index->VerifyAppend(chunk);
+	}
 }
 
 void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
@@ -331,22 +335,23 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 
 	// get an exclusive lock on the chunk
 	auto lock = chunk->lock.GetExclusiveLock();
-	// no constraints are violated
-	// now delete the entries
+
+	// fetch the version chunk info for this tuple
+	auto version = chunk->GetVersionInfo(first_id - chunk->start);
+
 	VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
-		auto id = ids[i] - chunk->start;
-		// assert that all ids in the vector belong to the same storage
-		// chunk
-		assert(id < chunk->count);
+		assert((index_t) ids[i] >= version->start);
+		assert((index_t) ids[i] < version->start + STANDARD_VECTOR_SIZE);
+		auto id = ids[i] - version->start;
 		// check for conflicts
-		auto version = chunk->GetVersionInfo(id);
-		if (VersionInfo::HasConflict(version, transaction.transaction_id)) {
+		if (version->deleted[id] != DELETED_ID) {
+			// tuple was already deleted by another transaction
 			throw TransactionException("Conflict on tuple deletion!");
 		}
-		// no conflict, move the current tuple data into the undo buffer
-		chunk->PushTuple(transaction, UndoFlags::DELETE_TUPLE, id);
-		// and set the deleted flag
-		chunk->SetDeleted(id);
+		// no conflict, push the delete info into the undo buffer
+		transaction.PushDelete(version, id);
+		// and set the deleted flag to this transaction id
+		version->deleted[id] = transaction.transaction_id;
 	});
 }
 
@@ -488,9 +493,6 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		return;
 	}
 
-	// first find the chunk the row ids belong to
-	auto chunk = GetChunk(first_id);
-
 	if (true) {
 		// persistent chunk, we can't do an in-place update here
 		// first fetch the existing columns for any non-updated columns
@@ -539,6 +541,9 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		Delete(table, context, row_identifiers);
 		return;
 	}
+
+	// first find the chunk the row ids belong to
+	// auto chunk = GetChunk(first_id);
 
 	// // move strings to a temporary heap
 	// StringHeap heap;

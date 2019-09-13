@@ -14,7 +14,12 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 		catalog_entry->set->Undo(catalog_entry);
 		break;
 	}
-	case UndoFlags::DELETE_TUPLE:
+	case UndoFlags::DELETE_TUPLE: {
+		auto info = (DeleteInfo *)data;
+		// reset the deleted flag on rollback
+		info->vinfo->deleted[info->row_id] = DELETED_ID;
+		break;
+	}
 	case UndoFlags::UPDATE_TUPLE:
 	case UndoFlags::INSERT_TUPLE: {
 		// undo this entry

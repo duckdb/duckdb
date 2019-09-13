@@ -17,14 +17,14 @@
 namespace duckdb {
 class SequenceCatalogEntry;
 
-extern transaction_t TRANSACTION_ID_START;
-extern transaction_t MAXIMUM_QUERY_ID;
-
 class CatalogEntry;
 class DataTable;
 class VersionChunk;
-struct VersionInfo;
+class VersionChunkInfo;
 class WriteAheadLog;
+
+struct DeleteInfo;
+struct VersionInfo;
 
 //! The transaction object holds information about a currently running or past
 //! transaction
@@ -78,6 +78,8 @@ public:
 	}
 
 	data_ptr_t PushTuple(UndoFlags flag, index_t data_size);
+
+	void PushDelete(VersionChunkInfo *vinfo, row_t row);
 
 private:
 	//! The undo buffer is used to store old versions of rows that are updated

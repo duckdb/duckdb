@@ -23,10 +23,10 @@ class VersionChunkInfo {
 public:
 	VersionChunkInfo(VersionChunk &chunk, index_t start);
 
-	//! Whether or not the tuples are deleted
-	bool deleted[STANDARD_VECTOR_SIZE] = {0};
+	//! The transaction ids of the transactions that deleted the tuples (if any)
+	transaction_t deleted[STANDARD_VECTOR_SIZE];
 	//! The version pointers
-	VersionInfo *version_pointers[STANDARD_VECTOR_SIZE] = {nullptr};
+	VersionInfo *version_pointers[STANDARD_VECTOR_SIZE];
 	//! The chunk this info belongs to
 	VersionChunk &chunk;
 	//! The start index

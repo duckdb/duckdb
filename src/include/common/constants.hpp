@@ -56,8 +56,6 @@ typedef int64_t timestamp_t;
 //! Type used for the selection vector
 typedef uint16_t sel_t;
 //! Type used for transaction timestamps
-//! FIXME: this should be a 128-bit integer
-//! With 64-bit, the database only supports up to 2^32 transactions
 typedef index_t transaction_t;
 
 //! Type used for column identifiers
@@ -70,6 +68,10 @@ extern const row_t MAX_ROW_ID;
 
 //! Zero selection vector: completely filled with the value 0 [READ ONLY]
 extern const sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
+
+extern const transaction_t TRANSACTION_ID_START;
+extern const transaction_t MAXIMUM_QUERY_ID;
+extern const transaction_t DELETED_ID;
 
 extern const double PI;
 

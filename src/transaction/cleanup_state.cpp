@@ -25,7 +25,6 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 		}
 		break;
 	}
-	case UndoFlags::DELETE_TUPLE:
 	case UndoFlags::UPDATE_TUPLE:
 	case UndoFlags::INSERT_TUPLE: {
 		// undo this entry
@@ -50,7 +49,6 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::QUERY:
 		break;
 	default:
-		assert(type == UndoFlags::EMPTY_ENTRY);
 		break;
 	}
 }

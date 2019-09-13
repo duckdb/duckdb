@@ -16,6 +16,11 @@ class DataTable;
 class Transaction;
 class VersionChunkInfo;
 
+struct DeleteInfo {
+	VersionChunkInfo *vinfo;
+	index_t row_id;
+};
+
 struct VersionInfo {
 	VersionChunkInfo *vinfo;
 	index_t entry;
@@ -32,6 +37,8 @@ struct VersionInfo {
 	static VersionInfo *GetVersionForTransaction(Transaction &transaction, VersionInfo *version);
 	//! Returns true if the specified version info has a conflict with the specified transaction id
 	static bool HasConflict(VersionInfo *info, transaction_t transaction_id);
+	//! Returns true if the specified version number has a conflict with the specified transaction id
+	static bool HasConflict(transaction_t version_number, transaction_t transaction_id);
 };
 
 } // namespace duckdb

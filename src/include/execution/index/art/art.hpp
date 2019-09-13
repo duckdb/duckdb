@@ -87,6 +87,8 @@ public:
 	void Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) override;
 	//! Append entries to the index
 	bool Append(DataChunk &entries, Vector &row_identifiers) override;
+	//! Verify that data can be appended to the index
+	void VerifyAppend(DataChunk &chunk) override;
 	//! Delete entries in the index
 	void Delete(DataChunk &entries, Vector &row_identifiers) override;
 

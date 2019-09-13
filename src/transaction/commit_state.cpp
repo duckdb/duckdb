@@ -120,17 +120,16 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::PrepareAppend(UndoFlags op) {
 	}
 }
 
-template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteDelete(VersionInfo *info) {
+template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteDelete(DeleteInfo *info) {
 	assert(log);
-	assert(!info->prev);
 	// switch to the current table, if necessary
-	SwitchTable(&info->GetTable(), UndoFlags::DELETE_TUPLE);
+	SwitchTable(&info->vinfo->chunk.table, UndoFlags::DELETE_TUPLE);
 
 	// prepare the delete chunk for appending
 	PrepareAppend(UndoFlags::DELETE_TUPLE);
 
 	// append only the row id for a delete
-	AppendRowId(info);
+	AppendRowId(info->vinfo->start + info->row_id);
 }
 
 template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteUpdate(VersionInfo *info) {
@@ -147,15 +146,14 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteUpdate(VersionInfo *info
 
 	// append the info data and the row id for an update
 	AppendInfoData(info);
-	AppendRowId(info);
+	AppendRowId(info->GetRowId());
 }
 
 template <bool HAS_LOG> void CommitState<HAS_LOG>::AppendInfoData(VersionInfo *info) {
 	info->vinfo->chunk.AppendToChunk(*chunk, info);
 }
 
-template <bool HAS_LOG> void CommitState<HAS_LOG>::AppendRowId(VersionInfo *info) {
-	row_t rowid = info->GetRowId();
+template <bool HAS_LOG> void CommitState<HAS_LOG>::AppendRowId(row_t rowid) {
 	auto &row_id_vector = chunk->data[chunk->column_count - 1];
 	auto row_ids = (row_t *)row_id_vector.data;
 	row_ids[row_id_vector.count++] = rowid;
@@ -179,25 +177,25 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::CommitEntry(UndoFlags type, d
 		}
 		break;
 	}
-	case UndoFlags::DELETE_TUPLE:
+	case UndoFlags::DELETE_TUPLE: {
+		// deletion:
+		auto info = (DeleteInfo *)data;
+		info->vinfo->chunk.table.cardinality--;
+		if (HAS_LOG) {
+			WriteDelete(info);
+		}
+		// mark the tuple as committed
+		info->vinfo->deleted[info->row_id] = commit_id;
+		break;
+	}
 	case UndoFlags::UPDATE_TUPLE: {
 		auto info = (VersionInfo *)data;
 		// Before we set the commit timestamp we write the entry to the WAL. When we set the commit timestamp it enables
 		// other transactions to overwrite the data, but BEFORE we set the commit timestamp the other transactions will
 		// get a concurrency conflict error if they attempt ot modify these tuples. Hence BEFORE we set the commit
 		// timestamp we can safely access the data in the base table without needing any locks.
-		switch (type) {
-		case UndoFlags::UPDATE_TUPLE:
-			if (HAS_LOG) {
-				WriteUpdate(info);
-			}
-			break;
-		default: // UndoFlags::DELETE_TUPLE:
-			info->GetTable().cardinality--;
-			if (HAS_LOG) {
-				WriteDelete(info);
-			}
-			break;
+		if (HAS_LOG) {
+			WriteUpdate(info);
 		}
 		// set the commit timestamp of the entry
 		info->version_number = commit_id;

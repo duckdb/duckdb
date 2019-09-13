@@ -19,22 +19,20 @@ index_t VersionChunk::GetVersionIndex(index_t index) {
 	return index / STANDARD_VECTOR_SIZE;
 }
 
-VersionInfo *VersionChunk::GetVersionInfo(index_t index) {
+VersionChunkInfo *VersionChunk::GetVersionInfo(index_t index) {
 	index_t version_index = GetVersionIndex(index);
-	auto version = version_data[version_index];
-	if (!version) {
-		return nullptr;
-	}
-	assert(index >= version->start && index < version->start + STANDARD_VECTOR_SIZE);
-	return version->version_pointers[index - version->start];
+	return GetOrCreateVersionInfo(version_index);
 }
 
-void VersionChunk::SetDeleted(index_t index) {
-	// FIXME: assert that StorageLock is held here
-	index_t version_index = GetVersionIndex(index);
-	auto version = GetOrCreateVersionInfo(version_index);
-	version->deleted[index - version->start] = true;
-}
+// VersionInfo *VersionChunk::GetVersionInfo(index_t index) {
+// 	index_t version_index = GetVersionIndex(index);
+// 	auto version = version_data[version_index];
+// 	if (!version) {
+// 		return nullptr;
+// 	}
+// 	assert(index >= version->start && index < version->start + STANDARD_VECTOR_SIZE);
+// 	return version->version_pointers[index - version->start];
+// }
 
 VersionChunkInfo *VersionChunk::GetOrCreateVersionInfo(index_t version_index) {
 	assert(version_index < STORAGE_CHUNK_VECTORS);
@@ -273,13 +271,9 @@ bool VersionChunk::Scan(TableScanState &state, Transaction &transaction, DataChu
 		for (index_t i = 0; i < scan_count; i++) {
 			version_entries[version_count] = regular_entries[regular_count] = i;
 			bool has_version = vdata->version_pointers[i];
-			bool is_deleted = vdata->deleted[i];
+			bool is_deleted = vdata->deleted[i] < transaction.start_time || vdata->deleted[i] == transaction.transaction_id;
 			version_count += has_version;
 			regular_count += !(is_deleted || has_version);
-		}
-		if (regular_count == scan_count && (scan_count == STANDARD_VECTOR_SIZE || end == this->count)) {
-			// the scan was clean: delete the version_data
-			version_data[version_index] = nullptr;
 		}
 	} else {
 		// no deleted entries or version information: just scan everything

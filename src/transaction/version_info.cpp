@@ -41,18 +41,22 @@ VersionInfo *VersionInfo::GetVersionForTransaction(Transaction &transaction, Ver
 	}
 }
 
-bool VersionInfo::HasConflict(VersionInfo *version, transaction_t transaction_id) {
-	if (!version) {
-		return false;
-	}
-	if (version->version_number < TRANSACTION_ID_START) {
+bool VersionInfo::HasConflict(transaction_t version_number, transaction_t transaction_id) {
+	if (version_number < TRANSACTION_ID_START) {
 		// version was committed: no conflict
 		return false;
 	}
-	if (version->version_number == transaction_id) {
+	if (version_number == transaction_id) {
 		// version belongs to this transaction: no conflict
 		return false;
 	}
 	// version was not committed but belongs to other transaction: conflict
 	return true;
+}
+
+bool VersionInfo::HasConflict(VersionInfo *version, transaction_t transaction_id) {
+	if (!version) {
+		return false;
+	}
+	return VersionInfo::HasConflict(version->version_number, transaction_id);
 }

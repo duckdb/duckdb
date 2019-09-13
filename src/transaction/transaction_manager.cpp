@@ -12,11 +12,6 @@
 using namespace duckdb;
 using namespace std;
 
-namespace duckdb {
-transaction_t TRANSACTION_ID_START = 4611686018427388000ULL;                // 2^62
-transaction_t MAXIMUM_QUERY_ID = std::numeric_limits<transaction_t>::max(); // 2^64
-} // namespace duckdb
-
 TransactionManager::TransactionManager(StorageManager &storage) : storage(storage) {
 	// start timestamp starts at zero
 	current_start_timestamp = 0;

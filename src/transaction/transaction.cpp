@@ -22,6 +22,12 @@ data_ptr_t Transaction::PushTuple(UndoFlags flags, index_t data_size) {
 	return undo_buffer.CreateEntry(flags, sizeof(VersionInfo) + data_size);
 }
 
+void Transaction::PushDelete(VersionChunkInfo *vinfo, row_t row) {
+	auto delete_info = (DeleteInfo*) undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo));
+	delete_info->vinfo = vinfo;
+	delete_info->row_id = row;
+}
+
 void Transaction::PushQuery(string query) {
 	char *blob = (char *)undo_buffer.CreateEntry(UndoFlags::QUERY, query.size() + 1);
 	strcpy(blob, query.c_str());

@@ -162,6 +162,35 @@ bool ART::Append(DataChunk &appended_data, Vector &row_identifiers) {
 	return Insert(expression_result, row_identifiers);
 }
 
+
+void ART::VerifyAppend(DataChunk &chunk) {
+	if (!is_unique) {
+		return;
+	}
+
+	// unique index, check
+	lock_guard<mutex> l(lock);
+
+	// first resolve the expressions for the index
+	ExecuteExpressions(chunk, expression_result);
+
+	// generate the keys for the given input
+	vector<unique_ptr<Key>> keys;
+	GenerateKeys(expression_result, keys);
+
+	// now insert the elements into the index
+	for (index_t i = 0; i < expression_result.size(); i++) {
+		if (!keys[i]) {
+			continue;
+		}
+		if (Lookup(tree, *keys[i], 0) != nullptr) {
+			// node already exists in tree
+			throw ConstraintException("duplicate key value violates primary key or unique constraint");
+		}
+	}
+}
+
+
 bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
 	if (is_unique && leaf.num_elements != 0) {
 		return false;

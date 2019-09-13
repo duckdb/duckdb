@@ -48,8 +48,8 @@ public:
 public:
 	//! Get the VersionInfo index for a specific entry
 	index_t GetVersionIndex(index_t index);
-	//! Get the version info for a specific entry
-	VersionInfo *GetVersionInfo(index_t index);
+	//! Get the version chunk info belonging to a specific entry
+	VersionChunkInfo *GetVersionInfo(index_t index);
 	//! Mark a specified entry in the version chunk as deleted. Requires write lock of the chunk to be held.
 	void SetDeleted(index_t index);
 	//! Push a number of deleted entries to the undo buffer of the transaction. Requires write lock of the chunk to be
