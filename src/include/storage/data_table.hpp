@@ -132,6 +132,10 @@ public:
 	bool AppendToIndexes(DataChunk &chunk, row_t row_start);
 	//! Remove a chunk with the row ids [row_start, ..., row_start + chunk.size()] from all indexes of the table
 	void RemoveFromIndexes(DataChunk &chunk, row_t row_start);
+	//! Remove the chunk with the specified set of row identifiers from all indexes of the table
+	void RemoveFromIndexes(DataChunk &chunk, Vector &row_identifiers);
+	//! Remove the row identifiers from all the indexes of the table
+	void RemoveFromIndexes(Vector &row_identifiers);
 private:
 	index_t InitializeTable(persistent_data_t data);
 	//! Append a storage chunk with the given start index to the data table. Returns a pointer to the newly created

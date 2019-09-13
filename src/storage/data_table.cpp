@@ -224,51 +224,6 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 	transaction.storage.Append(this, chunk);
 }
 
-bool DataTable::AppendToIndexes(DataChunk &chunk, row_t row_start) {
-	if (indexes.size() == 0) {
-		return true;
-	}
-	// first generate the vector of row identifiers
-	StaticVector<row_t> row_identifiers;
-	row_identifiers.sel_vector = chunk.sel_vector;
-	row_identifiers.count = chunk.size();
-	VectorOperations::GenerateSequence(row_identifiers, row_start);
-
-	index_t failed_index = INVALID_INDEX;
-	// now append the entries to the indices
-	for (index_t i = 0; i < indexes.size(); i++) {
-		if (!indexes[i]->Append(chunk, row_identifiers)) {
-			failed_index = i;
-			break;
-		}
-	}
-	if (failed_index != INVALID_INDEX) {
-		// constraint violation!
-		// remove any appended entries from previous indexes (if any)
-		for (index_t i = 0; i < failed_index; i++) {
-			indexes[i]->Delete(chunk, row_identifiers);
-		}
-		return false;
-	}
-	return true;
-}
-
-void DataTable::RemoveFromIndexes(DataChunk &chunk, row_t row_start) {
-	if (indexes.size() == 0) {
-		return;
-	}
-	// first generate the vector of row identifiers
-	StaticVector<row_t> row_identifiers;
-	row_identifiers.sel_vector = chunk.sel_vector;
-	row_identifiers.count = chunk.size();
-	VectorOperations::GenerateSequence(row_identifiers, row_start);
-
-	// now remove the entries from the indices
-	for (index_t i = 0; i < indexes.size(); i++) {
-		indexes[i]->Delete(chunk, row_identifiers);
-	}
-}
-
 unique_ptr<AppendState> DataTable::BeginAppend() {
 	auto append = make_unique<AppendState>(append_lock);
 
@@ -310,6 +265,78 @@ void DataTable::Append(Transaction &transaction, transaction_t commit_id, DataCh
 }
 
 //===--------------------------------------------------------------------===//
+// Indexes
+//===--------------------------------------------------------------------===//
+bool DataTable::AppendToIndexes(DataChunk &chunk, row_t row_start) {
+	if (indexes.size() == 0) {
+		return true;
+	}
+	// first generate the vector of row identifiers
+	StaticVector<row_t> row_identifiers;
+	row_identifiers.sel_vector = chunk.sel_vector;
+	row_identifiers.count = chunk.size();
+	VectorOperations::GenerateSequence(row_identifiers, row_start);
+
+	index_t failed_index = INVALID_INDEX;
+	// now append the entries to the indices
+	for (index_t i = 0; i < indexes.size(); i++) {
+		if (!indexes[i]->Append(chunk, row_identifiers)) {
+			failed_index = i;
+			break;
+		}
+	}
+	if (failed_index != INVALID_INDEX) {
+		// constraint violation!
+		// remove any appended entries from previous indexes (if any)
+		for (index_t i = 0; i < failed_index; i++) {
+			indexes[i]->Delete(chunk, row_identifiers);
+		}
+		return false;
+	}
+	return true;
+}
+
+void DataTable::RemoveFromIndexes(DataChunk &chunk, row_t row_start) {
+	if (indexes.size() == 0) {
+		return;
+	}
+	// first generate the vector of row identifiers
+	StaticVector<row_t> row_identifiers;
+	row_identifiers.sel_vector = chunk.sel_vector;
+	row_identifiers.count = chunk.size();
+	VectorOperations::GenerateSequence(row_identifiers, row_start);
+
+	// now remove the entries from the indices
+	RemoveFromIndexes(chunk, row_identifiers);
+}
+
+void DataTable::RemoveFromIndexes(DataChunk &chunk, Vector &row_identifiers) {
+	for (index_t i = 0; i < indexes.size(); i++) {
+		indexes[i]->Delete(chunk, row_identifiers);
+	}
+}
+
+void DataTable::RemoveFromIndexes(Vector &row_identifiers) {
+	// FIXME: we do not need to fetch all columns, only those required by the index!
+	vector<column_t> columns;
+	for(index_t i = 0; i < types.size(); i++) {
+		columns.push_back(i);
+	}
+	DataChunk result;
+	result.Initialize(types);
+
+	auto row_ids = (row_t *)row_identifiers.data;
+	VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
+		auto row_id = row_ids[i];
+		auto chunk = GetChunk(row_id);
+		chunk->RetrieveTupleFromBaseTable(result, columns, row_id);
+	});
+	for (index_t i = 0; i < indexes.size(); i++) {
+		indexes[i]->Delete(result, row_identifiers);
+	}
+}
+
+//===--------------------------------------------------------------------===//
 // Delete
 //===--------------------------------------------------------------------===//
 void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers) {
@@ -330,6 +357,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 		return;
 	}
 
+	// deletion is in the main table
 	// first find the chunk the row ids belong to
 	auto chunk = GetChunk(first_id);
 
@@ -358,10 +386,9 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-static void CreateMockChunk(TableCatalogEntry &table, vector<column_t> &column_ids, DataChunk &chunk,
+static void CreateMockChunk(vector<TypeId> &types, vector<column_t> &column_ids, DataChunk &chunk,
                             DataChunk &mock_chunk) {
 	// construct a mock DataChunk
-	auto types = table.GetTypes();
 	mock_chunk.InitializeEmpty(types);
 	for (column_t i = 0; i < column_ids.size(); i++) {
 		mock_chunk.data[column_ids[i]].Reference(chunk.data[i]);
@@ -390,7 +417,8 @@ static bool CreateMockChunk(TableCatalogEntry &table, vector<column_t> &column_i
 		    "Not all columns required for the CHECK constraint are present in the UPDATED chunk!");
 	}
 	// construct a mock DataChunk
-	CreateMockChunk(table, column_ids, chunk, mock_chunk);
+	auto types = table.GetTypes();
+	CreateMockChunk(types, column_ids, chunk, mock_chunk);
 	return true;
 }
 
@@ -442,7 +470,7 @@ void DataTable::UpdateIndexes(TableCatalogEntry &table, vector<column_t> &column
 	}
 	// first create a mock chunk to be used in the index appends
 	DataChunk mock_chunk;
-	CreateMockChunk(table, column_ids, updates, mock_chunk);
+	CreateMockChunk(types, column_ids, updates, mock_chunk);
 
 	index_t failed_index = INVALID_INDEX;
 	// now insert the updated values into the index

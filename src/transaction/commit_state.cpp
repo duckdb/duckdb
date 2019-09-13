@@ -123,13 +123,13 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::PrepareAppend(UndoFlags op) {
 template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteDelete(DeleteInfo *info) {
 	assert(log);
 	// switch to the current table, if necessary
-	SwitchTable(&info->vinfo->chunk.table, UndoFlags::DELETE_TUPLE);
+	SwitchTable(&info->GetTable(), UndoFlags::DELETE_TUPLE);
 
 	// prepare the delete chunk for appending
 	PrepareAppend(UndoFlags::DELETE_TUPLE);
 
 	// append only the row id for a delete
-	AppendRowId(info->vinfo->start + info->row_id);
+	AppendRowId(info->GetRowId());
 }
 
 template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteUpdate(VersionInfo *info) {

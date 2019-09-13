@@ -19,6 +19,9 @@ class VersionChunkInfo;
 struct DeleteInfo {
 	VersionChunkInfo *vinfo;
 	index_t row_id;
+
+	DataTable &GetTable();
+	index_t GetRowId();
 };
 
 struct VersionInfo {

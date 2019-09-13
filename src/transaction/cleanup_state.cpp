@@ -1,4 +1,5 @@
 #include "transaction/cleanup_state.hpp"
+#include "transaction/version_info.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -7,7 +8,7 @@ CleanupState::CleanupState() : current_table(nullptr), count(0) {
 }
 
 CleanupState::~CleanupState() {
-	FlushIndexCleanup();
+	Flush();
 }
 
 void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
@@ -25,12 +26,17 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 		}
 		break;
 	}
-	case UndoFlags::UPDATE_TUPLE:
-	case UndoFlags::INSERT_TUPLE: {
+	case UndoFlags::DELETE_TUPLE: {
+		auto info = (DeleteInfo *)data;
+		CleanupDelete(info);
+		break;
+	}
+	case UndoFlags::INSERT_TUPLE:
+	case UndoFlags::UPDATE_TUPLE: {
 		// undo this entry
 		auto info = (VersionInfo *)data;
-		if (type == UndoFlags::DELETE_TUPLE || type == UndoFlags::UPDATE_TUPLE) {
-			CleanupIndexInsert(info);
+		if (type == UndoFlags::UPDATE_TUPLE) {
+			CleanupUpdate(info);
 		}
 		if (!info->prev) {
 			// parent refers to a storage chunk
@@ -53,22 +59,23 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 	}
 }
 
-void CleanupState::CleanupIndexInsert(VersionInfo *info) {
+void CleanupState::CleanupUpdate(VersionInfo *info) {
 	assert(info->tuple_data);
 	auto version_table = &info->GetTable();
 	if (version_table->indexes.size() == 0) {
 		// this table has no indexes: no cleanup to be done
 		return;
 	}
-	if (current_table != version_table) {
+	if (current_table != version_table || flag != UndoFlags::UPDATE_TUPLE) {
 		// table for this entry differs from previous table: flush and switch to the new table
-		FlushIndexCleanup();
+		Flush();
+		flag = UndoFlags::UPDATE_TUPLE;
 		current_table = version_table;
 		chunk.Initialize(current_table->types);
 	}
 	if (count == STANDARD_VECTOR_SIZE) {
 		// current vector is filled up: flush
-		FlushIndexCleanup();
+		Flush();
 	}
 
 	// store the row identifiers and tuple data
@@ -77,7 +84,28 @@ void CleanupState::CleanupIndexInsert(VersionInfo *info) {
 	count++;
 }
 
-void CleanupState::FlushIndexCleanup() {
+void CleanupState::CleanupDelete(DeleteInfo *info) {
+	auto version_table = &info->GetTable();
+	if (version_table->indexes.size() == 0) {
+		// this table has no indexes: no cleanup to be done
+		return;
+	}
+	if (current_table != version_table || flag != UndoFlags::DELETE_TUPLE) {
+		// table for this entry differs from previous table: flush and switch to the new table
+		Flush();
+		flag = UndoFlags::DELETE_TUPLE;
+		current_table = version_table;
+	}
+	if (count == STANDARD_VECTOR_SIZE) {
+		// current vector is filled up: flush
+		Flush();
+	}
+
+	row_numbers[count] = info->GetRowId();
+	count++;
+}
+
+void CleanupState::Flush() {
 	if (count == 0) {
 		return;
 	}
@@ -86,13 +114,17 @@ void CleanupState::FlushIndexCleanup() {
 	Vector row_identifiers(ROW_TYPE, (data_ptr_t)row_numbers);
 	row_identifiers.count = count;
 
-	// now retrieve data from the version info
-	current_table->RetrieveVersionedData(chunk, data, count);
-	for (auto &index : current_table->indexes) {
-		index->Delete(chunk, row_identifiers);
+	if (flag == UndoFlags::UPDATE_TUPLE) {
+		// retrieve data from the version info
+		current_table->RetrieveVersionedData(chunk, data, count);
+		// delete it from all the indexes
+		current_table->RemoveFromIndexes(chunk, row_identifiers);
+		chunk.Reset();
+	} else {
+		// delete the tuples from all the indexes
+		current_table->RemoveFromIndexes(row_identifiers);
 	}
 
-	chunk.Reset();
 
 	count = 0;
 }

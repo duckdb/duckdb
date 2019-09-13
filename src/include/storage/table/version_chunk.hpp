@@ -73,9 +73,9 @@ public:
 
 	void Update(Vector &row_identifiers, Vector &update_vector, index_t col_idx);
 
-private:
 	//! Fetches a single tuple from the base table at rowid row_id, and appends that tuple to the "result" DataChunk
 	void RetrieveTupleFromBaseTable(DataChunk &result, vector<column_t> &column_ids, row_t row_id);
+private:
 
 	VersionChunkInfo *GetOrCreateVersionInfo(index_t version_index);
 	//! Fetch "count" entries from the specified column pointer, and place them in the result vector. The column pointer

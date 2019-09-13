@@ -4,6 +4,14 @@
 using namespace duckdb;
 using namespace std;
 
+DataTable &DeleteInfo::GetTable() {
+	return vinfo->chunk.table;
+}
+
+index_t DeleteInfo::GetRowId() {
+	return vinfo->chunk.start + vinfo->start + row_id;
+}
+
 DataTable &VersionInfo::GetTable() {
 	return vinfo->chunk.table;
 }
