@@ -59,12 +59,12 @@ public:
 
 	//! Creates a view with the given name in the schema
 	void CreateView(Transaction &transaction, CreateViewInfo *info);
-	//! Creates a view with the given name in the schema
+	//! Drops a view with the given name in the schema
 	void DropView(Transaction &transaction, DropInfo *info);
 
 	//! Creates a sequence with the given name in the schema
 	void CreateSequence(Transaction &transaction, CreateSequenceInfo *info);
-	//! Creates a sequence with the given name in the schema
+	//! Drops a sequence with the given name in the schema
 	void DropSequence(Transaction &transaction, DropInfo *info);
 
 	//! Creates an index with the given name in the schema
