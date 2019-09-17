@@ -1,5 +1,7 @@
 #include "transaction/local_storage.hpp"
 #include "execution/index/art/art.hpp"
+#include "storage/table/append_state.hpp"
+#include "storage/write_ahead_log.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -36,7 +38,7 @@ void LocalTableStorage::Clear() {
 	collection.chunks.clear();
 	indexes.clear();
 	deleted_entries.clear();
-	info = nullptr;
+	state = nullptr;
 }
 
 
@@ -251,13 +253,14 @@ void LocalStorage::CheckCommit() {
 		auto table = entry.first;
 		auto storage = entry.second.get();
 
-		storage->info = table->BeginAppend();
+		storage->state = make_unique<TableAppendState>();
+		table->InitializeAppend(*storage->state);
 
 		if (table->indexes.size() == 0) {
 			continue;
 		}
 
-		row_t current_row = storage->info->row_start;
+		row_t current_row = storage->state->row_start;
 		ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
 			// append this chunk to the indexes of the table
 			if (!table->AppendToIndexes(chunk, current_row)) {
@@ -283,7 +286,7 @@ void LocalStorage::CheckCommit() {
 				continue;
 			}
 
-			row_t current_row = storage->info->row_start;
+			row_t current_row = storage->state->row_start;
 			ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
 				table->RemoveFromIndexes(chunk, current_row);
 				current_row += chunk.size();
@@ -312,7 +315,7 @@ void LocalStorage::Commit(Transaction &transaction, WriteAheadLog *log, transact
 		// scan all chunks in this storage
 		ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
 			// append to base table
-			table->Append(transaction, commit_id, chunk, *storage->info);
+			table->Append(transaction, commit_id, chunk, *storage->state);
 			// if there is a WAL, write the chunk to there as well
 			if (log) {
 				log->WriteInsert(chunk);

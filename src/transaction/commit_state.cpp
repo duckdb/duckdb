@@ -1,7 +1,6 @@
 #include "transaction/commit_state.hpp"
 
 #include "storage/data_table.hpp"
-#include "storage/table/version_chunk.hpp"
 #include "storage/write_ahead_log.hpp"
 
 using namespace duckdb;
@@ -125,11 +124,13 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteDelete(DeleteInfo *info)
 	// switch to the current table, if necessary
 	SwitchTable(&info->GetTable(), UndoFlags::DELETE_TUPLE);
 
-	// prepare the delete chunk for appending
-	PrepareAppend(UndoFlags::DELETE_TUPLE);
+	for(index_t i = 0; i < info->count; i++) {
+		// prepare the delete chunk for appending
+		PrepareAppend(UndoFlags::DELETE_TUPLE);
 
-	// append only the row id for a delete
-	AppendRowId(info->GetRowId());
+		// append only the row id for a delete
+		AppendRowId(info->vinfo->start + info->rows[i]);
+	}
 }
 
 template <bool HAS_LOG> void CommitState<HAS_LOG>::AppendRowId(row_t rowid) {
@@ -159,12 +160,12 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::CommitEntry(UndoFlags type, d
 	case UndoFlags::DELETE_TUPLE: {
 		// deletion:
 		auto info = (DeleteInfo *)data;
-		info->vinfo->chunk.table.cardinality--;
+		info->GetTable().cardinality -= info->count;
 		if (HAS_LOG) {
 			WriteDelete(info);
 		}
-		// mark the tuple as committed
-		info->vinfo->deleted[info->row_id] = commit_id;
+		// mark the tuples as committed
+		info->vinfo->CommitDelete(commit_id, info->rows, info->count);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {

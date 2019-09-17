@@ -6,6 +6,7 @@ add_library_unity(duckdb_storage
                   OBJECT
                   buffer_manager.cpp
                   checkpoint_manager.cpp
+                  column_data.cpp
                   block.cpp
                   data_table.cpp
                   index.cpp

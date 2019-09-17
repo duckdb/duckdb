@@ -9,24 +9,13 @@
 #pragma once
 
 #include "common/types/chunk_collection.hpp"
+#include "storage/table/scan_state.hpp"
 #include "storage/index.hpp"
 
 namespace duckdb {
 class DataTable;
-class LocalTableStorage;
 class WriteAheadLog;
-struct AppendState;
-
-//! Local storage scan state
-struct LocalScanState {
-	LocalTableStorage *storage = nullptr;
-
-	index_t chunk_index;
-	index_t max_index;
-	index_t last_chunk_count;
-
-	sel_t sel_vector_data[STANDARD_VECTOR_SIZE];
-};
+struct TableAppendState;
 
 class LocalTableStorage {
 public:
@@ -40,7 +29,7 @@ public:
 	//! The set of deleted entries
 	unordered_map<index_t, unique_ptr<bool[]>> deleted_entries;
 	//! The append struct, used during the final append of the LocalTableStorage to the base DataTable
-	unique_ptr<AppendState> info;
+	unique_ptr<TableAppendState> state;
 	//! The max row
 	row_t max_row;
 public:

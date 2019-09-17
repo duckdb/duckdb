@@ -53,13 +53,12 @@ void CleanupState::CleanupDelete(DeleteInfo *info) {
 		flag = UndoFlags::DELETE_TUPLE;
 		current_table = version_table;
 	}
-	if (count == STANDARD_VECTOR_SIZE) {
-		// current vector is filled up: flush
-		Flush();
+	for(index_t i = 0; i < info->count; i++) {
+		if (count == STANDARD_VECTOR_SIZE) {
+			Flush();
+		}
+		row_numbers[count++] = info->rows[i];
 	}
-
-	row_numbers[count] = info->GetRowId();
-	count++;
 }
 
 void CleanupState::Flush() {

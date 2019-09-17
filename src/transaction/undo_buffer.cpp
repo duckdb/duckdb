@@ -5,7 +5,6 @@
 #include "catalog/catalog_set.hpp"
 #include "common/exception.hpp"
 #include "storage/data_table.hpp"
-#include "storage/table/version_chunk.hpp"
 #include "storage/write_ahead_log.hpp"
 #include "transaction/cleanup_state.hpp"
 #include "transaction/commit_state.hpp"

@@ -15,11 +15,11 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::DELETE_TUPLE: {
 		auto info = (DeleteInfo *)data;
 		// reset the deleted flag on rollback
-		info->vinfo->deleted[info->row_id] = NOT_DELETED_ID;
+		info->vinfo->CommitDelete(NOT_DELETED_ID, info->rows, info->count);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
-		throw Exception("FIXME: rollback insert not supported");
+		throw Exception("FIXME: rollback update not supported");
 	}
 	case UndoFlags::QUERY:
 		break;

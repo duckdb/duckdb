@@ -24,13 +24,13 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 	// we scan the underlying table structure and write to the blocks
 	// then flush the blocks to disk when they are full
 
-	// initialize scan structures to prepare for the scan
-	TableScanState state;
-	table.storage->InitializeScan(transaction, state);
 	vector<column_t> column_ids;
 	for (auto &column : table.columns) {
 		column_ids.push_back(column.oid);
 	}
+	// initialize scan structures to prepare for the scan
+	TableScanState state;
+	table.storage->InitializeScan(transaction, state, column_ids);
 	//! get all types of the table and initialize the chunk
 	auto types = table.GetTypes();
 	DataChunk chunk;
@@ -52,7 +52,7 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 	while (true) {
 		chunk.Reset();
 		// now scan the table to construct the blocks
-		table.storage->Scan(transaction, chunk, column_ids, state);
+		table.storage->Scan(transaction, chunk, state);
 		if (chunk.size() == 0) {
 			break;
 		}

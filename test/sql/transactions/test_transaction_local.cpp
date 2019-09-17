@@ -77,7 +77,7 @@ TEST_CASE("Test appends with multiple transactions", "[transactions]") {
 	Connection con(db), con2(db);
 	con.EnableQueryVerification();
 
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)"));
 
 	// begin two transactions
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));

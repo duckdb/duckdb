@@ -5,12 +5,12 @@ using namespace duckdb;
 using namespace std;
 
 DataTable &DeleteInfo::GetTable() {
-	return vinfo->chunk.table;
+	return vinfo->manager.table;
 }
 
-index_t DeleteInfo::GetRowId() {
-	return vinfo->chunk.start + vinfo->start + row_id;
-}
+// index_t DeleteInfo::GetRowId() {
+// 	return vinfo->chunk.start + vinfo->start + row_id;
+// }
 
 bool Versioning::HasConflict(transaction_t version_number, transaction_t transaction_id) {
 	if (version_number < TRANSACTION_ID_START) {

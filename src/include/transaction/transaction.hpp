@@ -19,10 +19,9 @@ class SequenceCatalogEntry;
 
 class CatalogEntry;
 class DataTable;
-class VersionChunk;
-class VersionChunkInfo;
 class WriteAheadLog;
 
+class ChunkInfo;
 struct DeleteInfo;
 
 //! The transaction object holds information about a currently running or past
@@ -76,8 +75,7 @@ public:
 
 	data_ptr_t PushTuple(UndoFlags flag, index_t data_size);
 
-	void PushDelete(VersionChunkInfo *vinfo, row_t row);
-
+	void PushDelete(ChunkInfo *vinfo, row_t rows[], index_t count);
 private:
 	//! The undo buffer is used to store old versions of rows that are updated
 	//! or deleted

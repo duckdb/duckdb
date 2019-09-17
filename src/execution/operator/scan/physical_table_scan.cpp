@@ -24,11 +24,11 @@ void PhysicalTableScan::GetChunkInternal(ClientContext &context, DataChunk &chun
 	}
 	auto &transaction = context.ActiveTransaction();
 	if (!state->initialized) {
-		table.InitializeScan(transaction, state->scan_offset);
+		table.InitializeScan(transaction, state->scan_offset, column_ids);
 		state->initialized = true;
 	}
 
-	table.Scan(transaction, chunk, column_ids, state->scan_offset);
+	table.Scan(transaction, chunk, state->scan_offset);
 }
 
 string PhysicalTableScan::ExtraRenderInformation() const {

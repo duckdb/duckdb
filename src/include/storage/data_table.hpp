@@ -11,11 +11,12 @@
 #include "common/enums/index_type.hpp"
 #include "common/types/data_chunk.hpp"
 #include "storage/index.hpp"
-#include "storage/table/version_chunk.hpp"
 #include "storage/table_statistics.hpp"
 #include "storage/block.hpp"
+#include "storage/column_data.hpp"
 #include "storage/table/column_segment.hpp"
 #include "storage/table/persistent_segment.hpp"
+#include "storage/table/version_manager.hpp"
 #include "transaction/local_storage.hpp"
 
 #include <atomic>
@@ -29,31 +30,6 @@ class StorageManager;
 class TableCatalogEntry;
 class Transaction;
 
-struct TableScanState {
-	virtual ~TableScanState() {
-	}
-
-	VersionChunk *chunk;
-	unique_ptr<ColumnPointer[]> columns;
-	index_t offset;
-	LocalScanState local_state;
-	VersionChunk *last_chunk;
-	index_t last_chunk_count;
-};
-
-struct IndexTableScanState : public TableScanState {
-	vector<unique_ptr<StorageLockKey>> locks;
-};
-
-struct AppendState {
-	AppendState(std::mutex &append_lock) : append_lock(append_lock) {}
-
-	std::lock_guard<std::mutex> append_lock;
-	VersionChunk *current;
-	unique_ptr<StorageLockKey> lock;
-	row_t row_start;
-};
-
 typedef unique_ptr<vector<unique_ptr<PersistentSegment>>[]> persistent_data_t;
 
 //! DataTable represents a physical table on disk
@@ -65,10 +41,6 @@ public:
 	//! The amount of elements in the table. Note that this number signifies the amount of COMMITTED entries in the
 	//! table. It can be inaccurate inside of transactions. More work is needed to properly support that.
 	std::atomic<index_t> cardinality;
-	//! Total per-tuple size of the table
-	index_t tuple_size;
-	//! Accumulative per-tuple size
-	vector<index_t> accumulative_tuple_size;
 	// schema of the table
 	string schema;
 	// name of the table
@@ -81,13 +53,12 @@ public:
 	vector<unique_ptr<Index>> indexes;
 
 public:
-	void InitializeScan(TableScanState &state);
-	void InitializeScan(Transaction &transaction, TableScanState &state);
+	void InitializeScan(TableScanState &state, vector<column_t> column_ids);
+	void InitializeScan(Transaction &transaction, TableScanState &state, vector<column_t> column_ids);
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	// from offset and store them in result. Offset is incremented with how many
 	// elements were returned.
-	void Scan(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids,
-	          TableScanState &structure);
+	void Scan(Transaction &transaction, DataChunk &result, TableScanState &structure);
 	//! Fetch data from the specific row identifiers from the base table
 	void Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, Vector &row_ids);
 	//! Append a DataChunk to the table. Throws an exception if the columns
@@ -99,20 +70,18 @@ public:
 	void Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, vector<column_t> &column_ids,
 	            DataChunk &data);
 
-	void InitializeIndexScan(IndexTableScanState &state);
+	void InitializeIndexScan(IndexTableScanState &state, vector<column_t> column_ids);
 	//! Scan used for creating an index, incrementally locks all storage chunks and scans ALL tuples in the table
 	//! (including all versions of a tuple)
-	void CreateIndexScan(IndexTableScanState &structure, vector<column_t> &column_ids, DataChunk &result);
-
-	VersionChunk *GetChunk(index_t row_number);
+	void CreateIndexScan(IndexTableScanState &structure, DataChunk &result);
 
 	//! Add an index to the DataTable
 	void AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>> &expressions);
 public:
 	//! Begin appending structs to this table, obtaining necessary locks, etc
-	unique_ptr<AppendState> BeginAppend();
+	void InitializeAppend(TableAppendState &state);
 	//! Append a chunk to the table using the AppendState obtained from BeginAppend
-	void Append(Transaction &transaction, transaction_t commit_id, DataChunk &chunk, AppendState &info);
+	void Append(Transaction &transaction, transaction_t commit_id, DataChunk &chunk, TableAppendState &state);
 
 	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table, returns whether or not the append succeeded
 	bool AppendToIndexes(DataChunk &chunk, row_t row_start);
@@ -123,13 +92,6 @@ public:
 	//! Remove the row identifiers from all the indexes of the table
 	void RemoveFromIndexes(Vector &row_identifiers);
 private:
-	index_t InitializeTable(persistent_data_t data);
-	//! Append a storage chunk with the given start index to the data table. Returns a pointer to the newly created
-	//! storage chunk.
-	VersionChunk *AppendVersionChunk(index_t start);
-	//! Append a subset of a vector to the specified column of the table
-	void AppendVector(index_t column, Vector &data, index_t offset, index_t count);
-
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
@@ -142,9 +104,9 @@ private:
 private:
 	//! Lock for appending entries to the table
 	std::mutex append_lock;
-	//! The stored data of the table
-	SegmentTree storage_tree;
+	//! The version manager of the tree
+	VersionManager version_manager;
 	//! The physical columns of the table
-	unique_ptr<SegmentTree[]> columns;
+	unique_ptr<ColumnData[]> columns;
 };
 } // namespace duckdb

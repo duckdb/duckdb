@@ -12,16 +12,17 @@
 
 namespace duckdb {
 
+class ChunkInfo;
 class DataTable;
 class Transaction;
 class VersionChunkInfo;
 
 struct DeleteInfo {
-	VersionChunkInfo *vinfo;
-	index_t row_id;
+	ChunkInfo *vinfo;
+	index_t count;
+	row_t rows[1];
 
 	DataTable &GetTable();
-	index_t GetRowId();
 };
 
 struct Versioning {
