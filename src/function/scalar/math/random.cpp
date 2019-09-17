@@ -1,6 +1,7 @@
 #include "function/scalar/math_functions.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
+#include "main/client_context.hpp"
 #include "planner/expression/bound_function_expression.hpp"
 #include <random>
 
@@ -8,14 +9,14 @@ using namespace duckdb;
 using namespace std;
 
 struct RandomBindData : public FunctionData {
-	default_random_engine gen;
+	ClientContext &context;
 	uniform_real_distribution<double> dist;
 
-	RandomBindData(default_random_engine gen, uniform_real_distribution<double> dist) : gen(gen), dist(dist) {
+	RandomBindData(ClientContext &context, uniform_real_distribution<double> dist) : context(context), dist(dist) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {
-		return make_unique<RandomBindData>(gen, dist);
+		return make_unique<RandomBindData>(context, dist);
 	}
 };
 
@@ -33,15 +34,13 @@ static void random_function(ExpressionExecutor &exec, Vector inputs[], index_t i
 
 	double *result_data = (double *) result.data;
 	VectorOperations::Exec(result, [&](index_t i, index_t k) {
-		result_data[i] = info.dist(info.gen);
+		result_data[i] = info.dist(info.context.random_engine);
 	});
 }
 
 unique_ptr<FunctionData> random_bind(BoundFunctionExpression &expr, ClientContext &context) {
-	random_device rd;
-	default_random_engine gen(rd());
 	uniform_real_distribution<double> dist(0, 1);
-	return make_unique<RandomBindData>(move(gen), move(dist));
+	return make_unique<RandomBindData>(context, move(dist));
 }
 
 void Random::RegisterFunction(BuiltinFunctions &set) {
