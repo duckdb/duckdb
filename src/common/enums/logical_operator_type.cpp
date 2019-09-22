@@ -35,6 +35,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "LIMIT";
 	case LogicalOperatorType::ORDER_BY:
 		return "ORDER_BY";
+	case LogicalOperatorType::ORDER_BY_LIMIT:
+		return "ORDER_BY_LIMIT";
 	case LogicalOperatorType::COPY_TO_FILE:
 		return "COPY_TO_FILE";
 	case LogicalOperatorType::COPY_FROM_FILE:

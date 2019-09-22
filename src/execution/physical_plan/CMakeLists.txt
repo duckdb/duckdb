@@ -22,6 +22,7 @@ add_library_unity(duckdb_physical_plan
                   plan_insert.cpp
                   plan_limit.cpp
                   plan_order.cpp
+                  plan_order_limit.cpp
                   plan_prepare.cpp
                   plan_projection.cpp
                   plan_prune_columns.cpp

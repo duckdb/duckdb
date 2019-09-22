@@ -20,6 +20,7 @@ enum class PhysicalOperatorType : uint8_t {
 	LEAF,
 	ORDER_BY,
 	LIMIT,
+	ORDER_BY_LIMIT,
 	AGGREGATE,
 	WINDOW,
 	DISTINCT,
