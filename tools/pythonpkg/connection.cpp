@@ -23,7 +23,6 @@ int duckdb_connection_init(duckdb_Connection *self, PyObject *args, PyObject *kw
 	}
 
 	database = PyBytes_AsString(database_obj);
-	Py_DECREF(database_obj);
 
 	Py_BEGIN_ALLOW_THREADS;
 	try {
