@@ -299,6 +299,9 @@ matrix:
       name: Python Package
       language: cpp
       filter_secrets: false
+      # no python 27 because no C++11 support in its windows toolchain
+      env:
+        - CIBW_BUILD='cp37-*'
 
       before_install:
         - choco install python3 --version 3.7.3 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python37"
@@ -308,8 +311,6 @@ matrix:
         - choco install python2 --version 2.7.16 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python27"
         - choco install python2 --version 2.7.16 --sidebyside -y --force --params "/InstallDir:C:\Python27-x64"
         - choco install curl -y --force
-        - choco install vcredist2008 -y --force
-        - choco install --ignore-dependencies vcpython27 -y --force
         - C:/Python37-x64/python.exe -m pip install --upgrade pip
         - C:/Python37-x64/python.exe -m pip install "cibuildwheel==0.10.2"
         - C:/Python37-x64/python.exe -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
