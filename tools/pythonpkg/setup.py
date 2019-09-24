@@ -129,9 +129,9 @@ setup(
     keywords = 'DuckDB Database SQL OLAP',
     url="https://github.com/cwida/duckdb",
     long_description = '',
-    install_requires=[
-         'numpy>=1.16',
-         'pandas>=0.24'
+    install_requires=[ # these versions are still available for Python 2, newer ones aren't
+         'numpy>=1.14', 
+         'pandas>=0.23'
     ],
     packages=['duckdb_query_graph'],
     include_package_data=True,
