@@ -9,15 +9,25 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "storage/storage_lock.hpp"
+#include "storage/buffer/buffer_handle.hpp"
+
 
 namespace duckdb {
 class TransientSegment;
 
+struct TransientAppendState {
+	//! The write lock that is held by the append
+	unique_ptr<StorageLockKey> lock;
+	//! The handle to the current buffer that is held by the append
+	unique_ptr<ManagedBufferHandle> handle;
+};
+
 struct ColumnAppendState {
 	//! The current segment of the append
 	TransientSegment *current;
-	//! The current row
-	row_t row_start;
+	//! The append state
+	TransientAppendState state;
 };
 
 struct TableAppendState {

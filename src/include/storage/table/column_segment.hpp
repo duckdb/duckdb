@@ -16,7 +16,6 @@
 namespace duckdb {
 class BlockManager;
 class ColumnSegment;
-class Vector;
 
 enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 
@@ -55,13 +54,6 @@ public:
 	ColumnSegmentType segment_type;
 	//! The statistics for the segment
 	SegmentStatistics stats;
-
-public:
-	virtual void InitializeScan(ColumnPointer &pointer) {}
-	virtual void Scan(ColumnPointer &pointer, Vector &result, index_t count) = 0;
-	virtual void Scan(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector, index_t sel_count) = 0;
-	//! Fetch an individual value and append it to a vector, row_id must be >= start
-	virtual void Fetch(Vector &result, index_t row_id) = 0;
 };
 
 } // namespace duckdb

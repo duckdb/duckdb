@@ -6,57 +6,84 @@
 using namespace duckdb;
 using namespace std;
 
+ColumnData::ColumnData() : persistent_rows(0) {
 
-index_t ColumnData::Initialize(vector<unique_ptr<PersistentSegment>>& segments) {
-	index_t count = 0;
+}
+
+void ColumnData::Initialize(vector<unique_ptr<PersistentSegment>>& segments) {
 	for (auto &segment : segments) {
-		count += segment->count;
-		data.AppendSegment(move(segment));
-	}
-	return count;
-}
-
-
-void ColumnData::InitializeScan(ColumnScanState &state) {
-	state.pointer.segment = (ColumnSegment*) data.GetRootSegment();
-	state.pointer.offset = 0;
-}
-
-
-void ColumnData::Scan(Transaction &transaction, Vector &result, ColumnScanState &state, index_t count) {
-	// copy data from the column storage
-	while (count > 0) {
-		// check how much we can copy from this column segment
-		index_t to_copy = std::min(count, state.pointer.segment->count - state.pointer.offset);
-		if (to_copy > 0) {
-			// copy elements from the column segment
-			state.pointer.segment->Scan(state.pointer, result, to_copy);
-			count -= to_copy;
-		}
-		if (count > 0) {
-			// there is still chunks to copy
-			// move to the next segment
-			assert(state.pointer.segment->next);
-			state.pointer.segment = (ColumnSegment *)state.pointer.segment->next.get();
-			state.pointer.offset = 0;
-		}
+		persistent_rows += segment->count;
+		persistent.AppendSegment(move(segment));
 	}
 }
+
+
+void ColumnData::InitializeTransientScan(TransientScanState &state) {
+	state.transient = (TransientSegment*) transient.GetRootSegment();
+	state.vector_index = 0;
+}
+
+void ColumnData::TransientScan(Transaction &transaction, TransientScanState &state, Vector &result) {
+	if (state.vector_index == 0) {
+		// first vector of this segment: initialize the scan for this segment
+		state.transient->InitializeScan(state);
+	}
+	// perform a scan of this segment
+	state.transient->Scan(transaction, state, result);
+	// move over to the next vector
+	SkipTransientScan(state);
+}
+
+void ColumnData::SkipTransientScan(TransientScanState &state) {
+	state.vector_index++;
+	if (state.vector_index == state.transient->data.max_vector_count) {
+		state.transient = (TransientSegment*) state.transient->next.get();
+		state.vector_index = 0;
+	}
+}
+
+// void ColumnData::InitializeScan(ColumnScanState &state) {
+// 	state.persistent = (PersistentSegment*) persistent.GetRootSegment();
+// 	state.transient = (TransientSegment*) transient.GetRootSegment();
+// }
+
+// void ColumnData::Scan(Transaction &transaction, Vector &result, ColumnScanState &state, index_t count) {
+// 	// copy data from the column storage
+// 	while (count > 0) {
+// 		// check how much we can copy from this column segment
+// 		index_t to_copy = std::min(count, state.pointer.segment->count - state.pointer.offset);
+// 		if (to_copy > 0) {
+// 			// copy elements from the column segment
+// 			state.pointer.segment->Scan(state.pointer, result, to_copy);
+// 			count -= to_copy;
+// 		}
+// 		if (count > 0) {
+// 			// there is still chunks to copy
+// 			// move to the next segment
+// 			assert(state.pointer.segment->next);
+// 			state.pointer.segment = (ColumnSegment *)state.pointer.segment->next.get();
+// 			state.pointer.offset = 0;
+// 		}
+// 	}
+// }
 
 void ColumnData::InitializeAppend(ColumnAppendState &state) {
-	lock_guard<mutex> tree_lock(data.node_lock);
-	state.current = (TransientSegment*) data.GetLastSegment();
-	state.row_start = state.current->start + state.current->count;
+	lock_guard<mutex> tree_lock(transient.node_lock);
+	if (transient.nodes.size() == 0) {
+		// no transient segments yet, append one
+		AppendTransientSegment(persistent_rows);
+	}
+	state.current = (TransientSegment*) transient.GetLastSegment();
+	state.current->InitializeAppend(state.state);
 	assert(state.current->segment_type == ColumnSegmentType::TRANSIENT);
 }
 
 void ColumnData::Append(ColumnAppendState &state, Vector &vector) {
-	// FIXME: this loop should not be necessary once we rework the transient segments
 	index_t offset = 0;
 	index_t count = vector.count;
 	while(true) {
 		// append the data from the vector
-		index_t copied_elements = state.current->Append(vector, offset, count);
+		index_t copied_elements = state.current->Append(state.state, vector, offset, count);
 		if (copied_elements == count) {
 			// finished copying everything
 			break;
@@ -64,18 +91,17 @@ void ColumnData::Append(ColumnAppendState &state, Vector &vector) {
 
 		// we couldn't fit everything we wanted in the current column segment, create a new one
 		{
-			lock_guard<mutex> tree_lock(data.node_lock);
+			lock_guard<mutex> tree_lock(transient.node_lock);
 			AppendTransientSegment(state.current->start + state.current->count);
-			state.current = (TransientSegment*) data.GetLastSegment();
+			state.current = (TransientSegment*) transient.GetLastSegment();
+			state.current->InitializeAppend(state.state);
 		}
 		offset += copied_elements;
 		count -= copied_elements;
 	}
 }
 
-
-
 void ColumnData::AppendTransientSegment(index_t start_row) {
 	auto new_segment = make_unique<TransientSegment>(*table->storage.buffer_manager, type, start_row);
-	data.AppendSegment(move(new_segment));
+	transient.AppendSegment(move(new_segment));
 }

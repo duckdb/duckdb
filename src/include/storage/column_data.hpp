@@ -20,20 +20,27 @@ class Transaction;
 
 class ColumnData {
 public:
+	ColumnData();
 	//! Set up the column data with the set of persistent segments, returns the amount of rows
-	index_t Initialize(vector<unique_ptr<PersistentSegment>>& segments);
+	void Initialize(vector<unique_ptr<PersistentSegment>>& segments);
 
 	//! The type of the column
 	TypeId type;
 	//! The table of the column
 	DataTable *table;
-	//! The data of the column
-	SegmentTree data;
+	//! The persistent data of the column
+	SegmentTree persistent;
+	//! The transient data of the column
+	SegmentTree transient;
+	//! The amount of persistent rows
+	index_t persistent_rows;
 public:
 	//! Initialize a scan of the column
-	void InitializeScan(ColumnScanState &state);
-	//! Scan the next STANDARD_VECTOR_SIZE entries from the column, and place them in "result"
-	void Scan(Transaction &transaction, Vector &result, ColumnScanState &state, index_t count);
+	void InitializeTransientScan(TransientScanState &state);
+	//! Scan the next vector from the transient part of the column
+	void TransientScan(Transaction &transaction, TransientScanState &state, Vector &result);
+	//! Skip a single vector in the transient scan, moving on to the next one
+	void SkipTransientScan(TransientScanState &state);
 
 	//! Initialize an appending phase to this column
 	void InitializeAppend(ColumnAppendState &state);

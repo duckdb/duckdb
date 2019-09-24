@@ -10,12 +10,28 @@
 
 #include "common/common.hpp"
 #include "storage/table/column_segment.hpp"
+#include "storage/storage_lock.hpp"
+#include "storage/buffer/buffer_handle.hpp"
 
 namespace duckdb {
 class LocalTableStorage;
+class PersistentSegment;
+class TransientSegment;
 
-struct ColumnScanState {
-	ColumnPointer pointer;
+struct UncompressedSegmentScanState {
+	//! The shared lock that is held by the scan
+	unique_ptr<StorageLockKey> lock;
+	//! The handle to the current buffer that is held by the scan
+	unique_ptr<ManagedBufferHandle> handle;
+};
+
+struct TransientScanState {
+	//! The transient segment that is currently being scanned
+	TransientSegment *transient;
+	//! The vector index of the transient segment
+	index_t vector_index;
+	//! The scan state of the uncompressed segment
+	UncompressedSegmentScanState state;
 };
 
 struct LocalScanState {
@@ -32,10 +48,12 @@ struct TableScanState {
 	virtual ~TableScanState() {
 	}
 
-	index_t offset, current_row, max_row;
+	index_t current_persistent_row, max_persistent_row;
+	index_t current_transient_row, max_transient_row;
+	unique_ptr<TransientScanState[]> transient_states;
+	index_t offset;
 	sel_t sel_vector[STANDARD_VECTOR_SIZE];
 	vector<column_t> column_ids;
-	unique_ptr<ColumnScanState[]> column_scans;
 	LocalScanState local_state;
 };
 

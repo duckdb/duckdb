@@ -104,8 +104,10 @@ private:
 private:
 	//! Lock for appending entries to the table
 	std::mutex append_lock;
-	//! The version manager of the tree
-	VersionManager version_manager;
+	//! The version manager of the persistent segments of the tree
+	VersionManager persistent_manager;
+	//! The version manager of the transient segments of the tree
+	VersionManager transient_manager;
 	//! The physical columns of the table
 	unique_ptr<ColumnData[]> columns;
 };

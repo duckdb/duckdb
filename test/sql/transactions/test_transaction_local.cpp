@@ -103,6 +103,32 @@ TEST_CASE("Test appends with multiple transactions", "[transactions]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	result = con2.Query("SELECT COUNT(*) FROM integers WHERE i=1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	// now both transactions append one tuple
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
+
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 3)"));
+	REQUIRE_NO_FAIL(con2.Query("INSERT INTO integers VALUES (1, 3)"));
+
+	// they cannot see each others tuple yet
+	result = con.Query("SELECT COUNT(*) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	result = con2.Query("SELECT COUNT(*) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+
+	// until they both commit
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+	REQUIRE_NO_FAIL(con2.Query("COMMIT"));
+
+	result = con.Query("SELECT COUNT(*) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	result = con2.Query("SELECT COUNT(*) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+	result = con.Query("SELECT * FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3, 3, 3}));
 }
 
 TEST_CASE("Test operations on transaction local data with unique indices", "[transactions]") {

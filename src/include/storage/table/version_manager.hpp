@@ -30,7 +30,7 @@ public:
 	StorageLock lock;
 	//! The info for each of the chunks
 	unordered_map<index_t, unique_ptr<ChunkInfo>> info;
-	//! The maximum row index in the version manager
+	//! The maximum amount of rows managed by the version manager
 	index_t max_row;
 public:
 	//! For a given chunk index, fills the selection vector with the relevant tuples for a given transaction. If count == max_count, all tuples are relevant and the selection vector is not set
