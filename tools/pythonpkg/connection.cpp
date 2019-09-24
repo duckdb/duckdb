@@ -6,16 +6,19 @@
 #include "pythread.h"
 
 int duckdb_connection_init(duckdb_Connection *self, PyObject *args, PyObject *kwargs) {
-	static char *kwlist[] = {"database", NULL};
+	static char *kwlist[] = {"database", NULL, NULL};
 
 	char *database;
 	PyObject *database_obj;
-
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O&|", kwlist,
 #if PY_MAJOR_VERSION >= 3
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O&|", kwlist,
 	                                 PyUnicode_FSConverter,
-#endif
 	                                 &database_obj)) {
+#else
+		if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|", kwlist,
+		                                 &database_obj)) {
+		#endif
+
 		return -1;
 	}
 
