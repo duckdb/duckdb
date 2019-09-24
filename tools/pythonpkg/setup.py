@@ -13,10 +13,6 @@ from setuptools import setup, Extension
 from setuptools.command.sdist import sdist
 from distutils.command.build_ext import build_ext
 
-# some paranoia to start with
-
-# if platform.architecture()[0] != '64bit':
-#     raise Exception('DuckDB only supports 64 bit at this point')
 
 # make sure we are in the right directory
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
