@@ -242,7 +242,4 @@ TEST_CASE("Test milliseconds with timestamps", "[timestamp]") {
 	result = con.Query("SELECT CAST('2001-04-20 14:42:11.123' AS TIMESTAMP) a, CAST('2001-04-20 14:42:11.0' AS TIMESTAMP) b;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(Timestamp::FromString("2001-04-20 14:42:11.123"))}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(Timestamp::FromString("2001-04-20 14:42:11"))}));
-
-
-
 }

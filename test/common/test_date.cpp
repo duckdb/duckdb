@@ -101,5 +101,4 @@ TEST_CASE("Time parsing works", "[date]") {
 
 	REQUIRE(Time::ToString(Time::FromString("14:42:04.2")) == "14:42:04.2");
 	REQUIRE(Time::ToString(Time::FromString("14:42:04.03")) == "14:42:04.03");
-
 }
