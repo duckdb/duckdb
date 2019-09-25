@@ -47,7 +47,7 @@ timestamp_t Timestamp::FromString(string str) {
 	// Character length	19 positions minimum to 23 maximum
 	if (str.size() < STD_TIMESTAMP_LENGTH) {
 		throw ConversionException("timestamp field value out of range: \"%s\", "
-		                          "expected format is (YYYY-MM-DD hh:mm:ss)",
+		                          "expected format is (YYYY-MM-DD HH:MM:SS[.MS])",
 		                          str.c_str());
 	}
 

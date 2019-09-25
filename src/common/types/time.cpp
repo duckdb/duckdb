@@ -57,7 +57,6 @@ static bool ParseDoubleDigit(const char *buf, index_t &pos, int32_t &result) {
 	return false;
 }
 
-
 static bool TryConvertTime(const char *buf, dtime_t &result) {
 	int32_t hour = -1, min = -1, sec = -1, msec = -1;
 	index_t pos = 0;
@@ -104,18 +103,18 @@ static bool TryConvertTime(const char *buf, dtime_t &result) {
 		return false;
 	}
 
-
-	// TODO
 	msec = 0;
-
-	if (msec < 0) {
-		return false;
+	sep = buf[pos++];
+	if (sep == '.') { // we expect some milliseconds
+		uint8_t mult = 100;
+		for (; std::isdigit(buf[pos]) && mult > 0; pos++, mult /= 10) {
+			msec += (buf[pos] - '0') * mult;
+		}
 	}
 
 	result = Time::FromTime(hour, min, sec, msec);
 	return true;
 }
-
 
 dtime_t Time::FromCString(const char *buf) {
 	dtime_t result;
@@ -135,24 +134,35 @@ dtime_t Time::FromString(string str) {
 	return Time::FromCString(str.c_str());
 }
 
-
 string Time::ToString(dtime_t time) {
 	int32_t hour, min, sec, msec;
 	number_to_time(time, hour, min, sec, msec);
-	assert(msec == 0); // TODO add support for milliseconds
-	return StringUtil::Format("%02d:%02d:%02d", hour, min, sec);
+
+	auto ret = StringUtil::Format("%02d:%02d:%02d", hour, min, sec);
+
+	if (msec > 0) {
+		ret.push_back('.');
+		// don't write out trailing '0's for msec
+		uint8_t mod = 100;
+		while (msec > 0) {
+			ret.push_back('0' + msec / mod);
+			msec %= mod;
+			mod /= 10;
+		}
+	}
+	return ret;
 }
 
-string Time::Format(int32_t hour, int32_t minute, int32_t second) {
-	return ToString(Time::FromTime(hour, minute, second));
+string Time::Format(int32_t hour, int32_t minute, int32_t second, int32_t milisecond) {
+	return ToString(Time::FromTime(hour, minute, second, milisecond));
 }
 
 dtime_t Time::FromTime(int32_t hour, int32_t minute, int32_t second, int32_t milisecond) {
 	return time_to_number(hour, minute, second, milisecond);
 }
 
-bool Time::IsValidTime(int32_t hour, int32_t minute, int32_t second) {
-	return TIME(hour, minute, second, 0);
+bool Time::IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t milisecond) {
+	return TIME(hour, minute, second, milisecond);
 }
 
 void Time::Convert(dtime_t time, int32_t &out_hour, int32_t &out_min, int32_t &out_sec, int32_t &out_msec) {

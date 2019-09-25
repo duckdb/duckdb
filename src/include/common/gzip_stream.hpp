@@ -37,7 +37,7 @@ private:
 	data_ptr_t in_buff = nullptr, in_buff_start, in_buff_end, out_buff = nullptr; // various buffers & pointers
 	bool is_initialized = false;
 	std::string filename;
-	const index_t BUFFER_SIZE = 1024;
+	index_t BUFFER_SIZE = 1024;
 };
 
 class GzipStream : public std::istream {
