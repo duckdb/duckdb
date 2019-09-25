@@ -236,10 +236,15 @@ void UncompressedSegment::CleanupUpdate(UpdateInfo *info) {
 		// there is a prev info: remove from the chain
 		auto prev = info->prev;
 		prev->next = info->next;
-		prev->next->prev = prev;
+		if (prev->next) {
+			prev->next->prev = prev;
+		}
 	} else {
 		// there is no prev info: remove from base segment
 		info->segment->versions[info->vector_index] = info->next;
+		if (info->next) {
+			info->next->prev = nullptr;
+		}
 	}
 }
 
