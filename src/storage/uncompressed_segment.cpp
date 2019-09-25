@@ -13,6 +13,7 @@ static UncompressedSegment::update_function_t GetUpdateFunction(TypeId type);
 static UncompressedSegment::base_table_fetch_function_t GetBaseTableFetchFunction(TypeId type);
 static UncompressedSegment::update_info_fetch_function_t GetUpdateInfoFetchFunction(TypeId type);
 static UncompressedSegment::rollback_update_function_t GetRollbackUpdateFunction(TypeId type);
+static UncompressedSegment::merge_update_function_t GetMergeUpdateFunction(TypeId type);
 
 
 UncompressedSegment::UncompressedSegment(BufferManager &manager, TypeId type) :
@@ -24,6 +25,7 @@ UncompressedSegment::UncompressedSegment(BufferManager &manager, TypeId type) :
 	this->fetch_from_base_table = GetBaseTableFetchFunction(type);
 	this->fetch_from_update_info = GetUpdateInfoFetchFunction(type);
 	this->rollback_update = GetRollbackUpdateFunction(type);
+	this->merge_update_function = GetMergeUpdateFunction(type);
 
 	this->type_size = GetTypeIdSize(type);
 	this->vector_size = sizeof(nullmask_t) + type_size * STANDARD_VECTOR_SIZE;
@@ -167,6 +169,12 @@ static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector
 
 void UncompressedSegment::Update(SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, row_t offset) {
 	assert(!update.sel_vector);
+#ifdef DEBUG
+	// verify that the ids are sorted and there are no duplicates
+	for(index_t i = 1; i < update.count; i++) {
+		assert(ids[i] > ids[i - 1]);
+	}
+#endif
 
 	// obtain an exclusive lock
 	auto handle = lock.GetExclusiveLock();
@@ -196,6 +204,7 @@ void UncompressedSegment::Update(SegmentStatistics &stats, Transaction &transact
 	}
 	if (!node) {
 		// create a new node in the undo buffer for this update
+		// 4 -> 16 -> 128 -> 1024?
 		node = transaction.CreateUpdateInfo(type_size, STANDARD_VECTOR_SIZE);
 		node->segment = this;
 		node->vector_index = vector_index;
@@ -208,15 +217,18 @@ void UncompressedSegment::Update(SegmentStatistics &stats, Transaction &transact
 
 		// set up the tuple ids
 		node->N = update.count;
-		VectorOperations::Exec(update, [&](index_t i, index_t k) {
+		for(index_t i = 0; i < update.count; i++) {
 			assert((index_t) ids[i] >= vector_offset && (index_t) ids[i] < vector_offset + STANDARD_VECTOR_SIZE);
-			node->tuples[k] = ids[i] - vector_offset;
-		});
+			node->tuples[i] = ids[i] - vector_offset;
+		};
 		// now move the original data into the UpdateInfo
 		auto handle = manager.PinBuffer(block_id);
 		update_function(stats, node, handle->buffer->data.get() + vector_index * vector_size, update);
 	} else {
-		throw Exception("FIXME: update existing node");
+		// node already exists for this transaction, we need to merge the new updates with the existing updates
+		// first check if the updates entirely overlap
+		auto handle = manager.PinBuffer(block_id);
+		merge_update_function(stats, node, handle->buffer->data.get() + vector_index * vector_size, update, ids, vector_offset);
 	}
 }
 
@@ -395,6 +407,101 @@ static UncompressedSegment::update_function_t GetUpdateFunction(TypeId type) {
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Merge Update
+//===--------------------------------------------------------------------===//
+template<class T>
+static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_ptr_t base, Vector &update, row_t *ids, index_t vector_offset) {
+	auto &base_nullmask = *((nullmask_t *) base);
+	auto base_data = (T*) (base + sizeof(nullmask_t));
+	auto info_data = (T*) node->tuple_data;
+	auto update_data = (T*) update.data;
+
+	// first we copy the old update info into a temporary structure
+	sel_t old_ids[STANDARD_VECTOR_SIZE];
+	T old_data[STANDARD_VECTOR_SIZE];
+
+	memcpy(old_ids, node->tuples, node->N * sizeof(sel_t));
+	memcpy(old_data, node->tuple_data, node->N * sizeof(T));
+
+	// now we perform a merge of the new ids with the old ids
+	index_t new_idx = 0, old_idx = 0;
+	index_t new_count = 0;
+	while(new_idx < update.count && old_idx < node->N) {
+		auto new_id = ids[new_idx] - vector_offset;
+		if (new_id == old_ids[old_idx]) {
+			// new_id and old_id are the same:
+			// insert the new data into the base table
+			base_nullmask[new_id] = update.nullmask[new_idx];
+			base_data[new_id] = update_data[new_idx];
+			// insert the old data in the UpdateInfo
+			info_data[new_count] = old_data[old_idx];
+			node->tuples[new_count] = new_id;
+
+			new_count++;
+			new_idx++;
+			old_idx++;
+		} else if (new_id < old_ids[old_idx]) {
+			// new_id comes before the old id
+			// insert the base table data into the update info
+			info_data[new_count] = base_data[new_id];
+			node->nullmask[new_id] = base_nullmask[new_id];
+
+			// and insert the update info into the base table
+			base_nullmask[new_id] = update.nullmask[new_idx];
+			base_data[new_id] = update_data[new_idx];
+
+			node->tuples[new_count] = new_id;
+
+			new_count++;
+			new_idx++;
+		} else {
+			// old_id comes before new_id, insert the old data
+			info_data[new_count] = old_data[old_idx];
+			node->tuples[new_count] = old_ids[old_idx];
+			new_count++;
+			old_idx++;
+		}
+	}
+	// finished merging, insert the remainder of either the old_idx or the new_idx (if any)
+	for(; new_idx < update.count; new_idx++, new_count++) {
+		auto new_id = ids[new_idx] - vector_offset;
+		// insert the base table data into the update info
+		info_data[new_count] = base_data[new_id];
+		node->nullmask[new_id] = base_nullmask[new_id];
+
+		// and insert the update info into the base table
+		base_nullmask[new_id] = update.nullmask[new_idx];
+		base_data[new_id] = update_data[new_idx];
+
+		node->tuples[new_count] = new_id;
+	}
+	for(; old_idx < node->N; old_idx++, new_count++) {
+		info_data[new_count] = old_data[old_idx];
+		node->tuples[new_count] = old_ids[old_idx];
+	}
+	node->N = new_count;
+}
+
+static UncompressedSegment::merge_update_function_t GetMergeUpdateFunction(TypeId type) {
+	switch (type) {
+	case TypeId::BOOLEAN:
+	case TypeId::TINYINT:
+		return merge_update_loop<int8_t>;
+	case TypeId::SMALLINT:
+		return merge_update_loop<int16_t>;
+	case TypeId::INTEGER:
+		return merge_update_loop<int32_t>;
+	case TypeId::BIGINT:
+		return merge_update_loop<int64_t>;
+	case TypeId::FLOAT:
+		return merge_update_loop<float>;
+	case TypeId::DOUBLE:
+		return merge_update_loop<double>;
+	default:
+		throw NotImplementedException("Unimplemented type for uncompressed segment");
+	}
+}
 //===--------------------------------------------------------------------===//
 // Update Fetch
 //===--------------------------------------------------------------------===//

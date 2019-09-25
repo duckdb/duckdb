@@ -52,6 +52,82 @@ TEST_CASE("Test standard update behavior", "[update]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
 
+TEST_CASE("Update the same value multiple times in one transaction", "[update]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db);
+
+	// create a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1), (2), (3)"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+
+	// update entire table
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=a+1"));
+
+	// not seen yet by con2, only by con1
+	result = con.Query("SELECT * FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
+	result = con2.Query("SELECT * FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+
+	// update the entire table again
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=a+1"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 4, 5}));
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+
+	// now commit
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 4, 5}));
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 4, 5}));
+
+	// now perform updates one by one
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	// 5 => 9
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=9 WHERE a=5"));
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 4, 9}));
+	// test concurrent update in con2, it should fail now
+	REQUIRE_FAIL(con2.Query("UPDATE test SET a=a+1"));
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 4, 5}));
+
+	// 3 => 7
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=7 WHERE a=3"));
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 7, 9}));
+	// test concurrent update in con2, it should fail now
+	REQUIRE_FAIL(con2.Query("UPDATE test SET a=a+1"));
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 4, 5}));
+
+	// 4 => 8
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=8 WHERE a=4"));
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {7, 8, 9}));
+	// test concurrent update in con2, it should fail now
+	REQUIRE_FAIL(con2.Query("UPDATE test SET a=a+1"));
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 4, 5}));
+
+	// commit
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {7, 8, 9}));
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {7, 8, 9}));
+}
+
 TEST_CASE("Test update behavior with multiple updaters", "[update]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
