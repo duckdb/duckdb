@@ -48,6 +48,7 @@ protected:
 	void Visit(LogicalGet &op);
 	void Visit(LogicalIndexScan &op);
 	void Visit(LogicalProjection &op);
+	void Visit(LogicalPruneColumns &op);
 	void Visit(LogicalSetOperation &op);
 	void Visit(LogicalSubquery &op);
 	void Visit(LogicalTableFunction &op);
