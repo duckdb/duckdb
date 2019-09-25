@@ -156,5 +156,5 @@ TEST_CASE("Extract timestamp function", "[timestamp]") {
 	result = con.Query("SELECT EXTRACT(hour FROM i) FROM timestamps");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(8), Value()}));
 	result = con.Query("SELECT EXTRACT(milliseconds FROM i) FROM timestamps");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(33000), Value()}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(33000), Value()})); // questionable
 }
