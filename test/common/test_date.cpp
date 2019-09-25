@@ -84,14 +84,12 @@ TEST_CASE("Time parsing works", "[date]") {
 		}
 	}
 
-
 	int hour = 14;
-	int min= 42;
+	int min = 42;
 	int sec = 11;
 
 	for (int ms = 0; ms < 1000; ms++) {
-		REQUIRE(Time::ToString(Time::FromString(Time::Format(hour, min, sec, ms))) ==
-				Time::Format(hour, min, sec, ms));
+		REQUIRE(Time::ToString(Time::FromString(Time::Format(hour, min, sec, ms))) == Time::Format(hour, min, sec, ms));
 	}
 
 	// some corner cases without trailing 0

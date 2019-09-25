@@ -57,7 +57,6 @@ static bool ParseDoubleDigit(const char *buf, index_t &pos, int32_t &result) {
 	return false;
 }
 
-
 static bool TryConvertTime(const char *buf, dtime_t &result) {
 	int32_t hour = -1, min = -1, sec = -1, msec = -1;
 	index_t pos = 0;
@@ -108,15 +107,14 @@ static bool TryConvertTime(const char *buf, dtime_t &result) {
 	sep = buf[pos++];
 	if (sep == '.') { // we expect some milliseconds
 		uint8_t mult = 100;
-		for (; std::isdigit(buf[pos]) && mult > 0; pos++, mult/=10) {
-			msec += (buf[pos] - '0')*mult;
+		for (; std::isdigit(buf[pos]) && mult > 0; pos++, mult /= 10) {
+			msec += (buf[pos] - '0') * mult;
 		}
 	}
 
 	result = Time::FromTime(hour, min, sec, msec);
 	return true;
 }
-
 
 dtime_t Time::FromCString(const char *buf) {
 	dtime_t result;
@@ -136,12 +134,11 @@ dtime_t Time::FromString(string str) {
 	return Time::FromCString(str.c_str());
 }
 
-
 string Time::ToString(dtime_t time) {
 	int32_t hour, min, sec, msec;
 	number_to_time(time, hour, min, sec, msec);
 
-	auto ret =  StringUtil::Format("%02d:%02d:%02d", hour, min, sec);
+	auto ret = StringUtil::Format("%02d:%02d:%02d", hour, min, sec);
 
 	if (msec > 0) {
 		ret.push_back('.');
