@@ -337,7 +337,7 @@ static void update_loop_null(T *__restrict undo_data, T *__restrict base_data, T
 	for(index_t i = 0; i < count; i++) {
 		// first move the base data into the undo buffer info
 		undo_data[i] = base_data[base_sel[i]];
-		undo_nullmask[i] = base_nullmask[base_sel[i]];
+		undo_nullmask[base_sel[i]] = base_nullmask[base_sel[i]];
 		// now move the new data in-place into the base table
 		base_data[base_sel[i]] = new_data[i];
 		base_nullmask[base_sel[i]] = new_nullmask[i];

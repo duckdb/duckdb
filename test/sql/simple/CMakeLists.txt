@@ -30,7 +30,6 @@ add_library_unity(test_sql_simple
                   test_subquery.cpp
                   test_table_subquery.cpp
                   test_unicode.cpp
-                  test_update.cpp
                   test_window.cpp
                   test_sequence.cpp
                   test_default.cpp
