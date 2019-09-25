@@ -9,7 +9,6 @@ add_library_unity(test_sql_simple
                   test_conjunctions.cpp
                   test_cse.cpp
                   test_cte.cpp
-                  test_delete.cpp
                   test_distinct.cpp
                   test_expressions.cpp
                   test_groupby.cpp

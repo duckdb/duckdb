@@ -22,9 +22,8 @@ void Transaction::PushDelete(ChunkInfo *vinfo, row_t rows[], index_t count) {
 	auto delete_info = (DeleteInfo*) undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo) + sizeof(row_t) * count);
 	delete_info->vinfo = vinfo;
 	delete_info->count = count;
-	memcpy(delete_info->rows, rows, count * STANDARD_VECTOR_SIZE);
+	memcpy(delete_info->rows, rows, count * sizeof(row_t));
 }
-
 
 UpdateInfo *Transaction::CreateUpdateInfo(index_t type_size, index_t entries) {
 	auto update_info = (UpdateInfo*) undo_buffer.CreateEntry(UndoFlags::UPDATE_TUPLE, sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * entries);

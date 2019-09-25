@@ -625,5 +625,4 @@ static UncompressedSegment::rollback_update_function_t GetRollbackUpdateFunction
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}
-
 }
