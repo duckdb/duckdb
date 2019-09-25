@@ -1,4 +1,5 @@
 #include "transaction/rollback_state.hpp"
+#include "storage/uncompressed_segment.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -19,7 +20,9 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
-		throw Exception("FIXME: rollback update not supported");
+		auto info = (UpdateInfo *)data;
+		info->segment->RollbackUpdate(info);
+		break;
 	}
 	case UndoFlags::QUERY:
 		break;

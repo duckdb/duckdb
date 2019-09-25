@@ -24,6 +24,8 @@ void PhysicalUpdate::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		if (state->child_chunk.size() == 0) {
 			break;
 		}
+		state->child_chunk.Flatten();
+
 		ExpressionExecutor executor(state->child_chunk);
 		// update data in the base table
 		// the row ids are given to us as the last column of the child chunk

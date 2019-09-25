@@ -169,7 +169,13 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::CommitEntry(UndoFlags type, d
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
-		throw Exception("FIXME: update not supported!");
+		// update:
+		auto info = (UpdateInfo *)data;
+		if (HAS_LOG) {
+			throw Exception("FIXME: write update in log");
+		}
+		info->version_number = commit_id;
+		break;
 	}
 	case UndoFlags::QUERY: {
 		if (HAS_LOG) {

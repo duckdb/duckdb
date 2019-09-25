@@ -42,11 +42,14 @@ public:
 	//! Skip a single vector in the transient scan, moving on to the next one
 	void SkipTransientScan(TransientScanState &state);
 
-	//! Initialize an appending phase to this column
+	//! Initialize an appending phase for this column
 	void InitializeAppend(ColumnAppendState &state);
 	//! Append a vector of type [type] to the end of the column
 	void Append(ColumnAppendState &state, Vector &vector);
 
+	//! Update the specified row identifiers
+	void Update(Transaction &transaction, Vector &updates, row_t *ids);
+private:
 	//! Append a transient segment
 	void AppendTransientSegment(index_t start_row);
 };

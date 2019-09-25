@@ -24,6 +24,7 @@ add_subdirectory(subquery)
 add_subdirectory(transactions)
 add_subdirectory(views)
 add_subdirectory(storage)
+add_subdirectory(update)
 
 if(NOT WIN32)
   add_subdirectory(tpch)

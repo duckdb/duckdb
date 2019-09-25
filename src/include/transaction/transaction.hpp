@@ -22,7 +22,9 @@ class DataTable;
 class WriteAheadLog;
 
 class ChunkInfo;
+
 struct DeleteInfo;
+struct UpdateInfo;
 
 //! The transaction object holds information about a currently running or past
 //! transaction
@@ -73,9 +75,9 @@ public:
 		return start_timestamp;
 	}
 
-	data_ptr_t PushTuple(UndoFlags flag, index_t data_size);
-
 	void PushDelete(ChunkInfo *vinfo, row_t rows[], index_t count);
+
+	UpdateInfo *CreateUpdateInfo(index_t type_size, index_t entries);
 private:
 	//! The undo buffer is used to store old versions of rows that are updated
 	//! or deleted

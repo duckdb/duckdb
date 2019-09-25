@@ -13,6 +13,7 @@
 namespace duckdb {
 
 struct DeleteInfo;
+struct UpdateInfo;
 
 class CleanupState {
 public:
@@ -31,6 +32,7 @@ private:
 	index_t count;
 private:
 	void CleanupDelete(DeleteInfo *info);
+	void CleanupUpdate(UpdateInfo *info);
 
 	void Flush();
 };

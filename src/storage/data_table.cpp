@@ -496,6 +496,9 @@ void DataTable::UpdateIndexes(TableCatalogEntry &table, vector<column_t> &column
 void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers,
                        vector<column_t> &column_ids, DataChunk &updates) {
 	assert(row_identifiers.type == ROW_TYPE);
+	assert(updates.sel_vector == row_identifiers.sel_vector);
+	assert(updates.size() == row_identifiers.count);
+
 	updates.Verify();
 	if (row_identifiers.count == 0) {
 		return;
@@ -516,7 +519,13 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		transaction.storage.Update(this, row_identifiers, column_ids, updates);
 		return;
 	}
-	throw Exception("Update on base table not supported currently");
+	// base table update
+	for(index_t i = 0; i < column_ids.size(); i++) {
+		auto column = column_ids[i];
+		assert(column != COLUMN_IDENTIFIER_ROW_ID);
+
+		columns[column].Update(transaction, updates.data[i], ids);
+	}
 }
 
 //===--------------------------------------------------------------------===//

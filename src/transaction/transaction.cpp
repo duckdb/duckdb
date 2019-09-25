@@ -25,6 +25,17 @@ void Transaction::PushDelete(ChunkInfo *vinfo, row_t rows[], index_t count) {
 	memcpy(delete_info->rows, rows, count * STANDARD_VECTOR_SIZE);
 }
 
+
+UpdateInfo *Transaction::CreateUpdateInfo(index_t type_size, index_t entries) {
+	auto update_info = (UpdateInfo*) undo_buffer.CreateEntry(UndoFlags::UPDATE_TUPLE, sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * entries);
+	update_info->max = entries;
+	update_info->tuples = (sel_t*) (((data_ptr_t) update_info) + sizeof(UpdateInfo));
+	update_info->tuple_data = ((data_ptr_t) update_info) + sizeof(UpdateInfo) + sizeof(sel_t) * entries;
+	update_info->version_number = transaction_id;
+	update_info->nullmask.reset();
+	return update_info;
+}
+
 void Transaction::PushQuery(string query) {
 	char *blob = (char *)undo_buffer.CreateEntry(UndoFlags::QUERY, query.size() + 1);
 	strcpy(blob, query.c_str());

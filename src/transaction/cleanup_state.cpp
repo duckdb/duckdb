@@ -1,5 +1,6 @@
 #include "transaction/cleanup_state.hpp"
 #include "transaction/version_info.hpp"
+#include "storage/uncompressed_segment.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -32,7 +33,9 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
-		throw Exception("FIXME: cleanup update");
+		auto info = (UpdateInfo*) data;
+		CleanupUpdate(info);
+		break;
 	}
 	case UndoFlags::QUERY:
 		break;
@@ -59,6 +62,13 @@ void CleanupState::CleanupDelete(DeleteInfo *info) {
 		}
 		row_numbers[count++] = info->rows[i];
 	}
+}
+
+void CleanupState::CleanupUpdate(UpdateInfo *info) {
+	// remove the update info from the update chain
+	// first obtain an exclusive lock on the segment
+	auto lock = info->segment->lock.GetExclusiveLock();
+	info->segment->CleanupUpdate(info);
 }
 
 void CleanupState::Flush() {

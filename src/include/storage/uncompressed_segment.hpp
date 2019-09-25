@@ -18,11 +18,15 @@ class BufferManager;
 class Transaction;
 
 struct TransientAppendState;
-struct VersionChain;
+struct UpdateInfo;
 
 class UncompressedSegment {
 public:
 	typedef void (*append_function_t)(SegmentStatistics &stats, data_ptr_t target, index_t target_offset, Vector &source, index_t offset, index_t count);
+	typedef void (*update_function_t)(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t base_data, Vector &update);
+	typedef void (*base_table_fetch_function_t)(data_ptr_t base_data, sel_t tuples[], sel_t count, Vector &result);
+	typedef void (*update_info_fetch_function_t)(UpdateInfo *info, sel_t tuples[], sel_t count, Vector &result);
+	typedef void (*rollback_update_function_t)(UpdateInfo *info, data_ptr_t base_data);
 public:
 	//! Initialize a transient uncompressed segment, vector_count will be automatically chosen based on the type of the segment
 	UncompressedSegment(BufferManager &manager, TypeId type);
@@ -42,7 +46,7 @@ public:
 	//! The current amount of tuples that are stored in this segment
 	index_t tuple_count;
 	//! Version chains for each of the vectors
-	unique_ptr<VersionChain*[]> versions;
+	unique_ptr<UpdateInfo*[]> versions;
 	//! The lock for the uncompressed segment
 	StorageLock lock;
 	//! Whether or not this uncompressed segment is dirty
@@ -57,9 +61,18 @@ public:
 	index_t Append(SegmentStatistics &stats, TransientAppendState &state, Vector &data, index_t offset, index_t count);
 
 	//! Update a set of row identifiers to the specified set of updated values
-	void Update(Transaction &transaction, Vector &update, Vector &row_ids);
+	void Update(SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, row_t offset);
+
+	//! Rollback a previous update
+	void RollbackUpdate(UpdateInfo *info);
+	//! Cleanup an update, removing it from the version chain. This should only be called if an exclusive lock is held on the segment
+	void CleanupUpdate(UpdateInfo *info);
 private:
 	append_function_t append_function;
+	update_function_t update_function;
+	base_table_fetch_function_t fetch_from_base_table;
+	update_info_fetch_function_t fetch_from_update_info;
+	rollback_update_function_t rollback_update;
 };
 
 } // namespace duckdb

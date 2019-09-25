@@ -35,7 +35,8 @@ public:
 	//! Appends a (part of) vector to the transient segment, returns the amount of entries successfully appended
 	index_t Append(TransientAppendState &state, Vector &data, index_t offset, index_t count);
 
-
+	//! Perform an update within the transient segment
+	void Update(Transaction &transaction, Vector &updates, row_t *ids);
 	// void Fetch(Vector &result, index_t row_id) override;
 	// //! Updates the value of the segment at the specified row_id
 	// void Update(index_t row_id, data_ptr_t data);

@@ -26,8 +26,12 @@ void TransientSegment::InitializeAppend(TransientAppendState &state) {
 
 index_t TransientSegment::Append(TransientAppendState &state, Vector &append_data, index_t offset, index_t count) {
 	index_t appended = data.Append(stats, state, append_data, offset, count);
-	count += appended;
+	this->count += appended;
 	return appended;
+}
+
+void TransientSegment::Update(Transaction &transaction, Vector &updates, row_t *ids) {
+	data.Update(stats, transaction, updates, ids, this->start);
 }
 
 // void TransientSegment::Scan(ColumnPointer &pointer, Vector &result, index_t count) {

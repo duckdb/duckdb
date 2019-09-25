@@ -42,31 +42,6 @@ void ColumnData::SkipTransientScan(TransientScanState &state) {
 	}
 }
 
-// void ColumnData::InitializeScan(ColumnScanState &state) {
-// 	state.persistent = (PersistentSegment*) persistent.GetRootSegment();
-// 	state.transient = (TransientSegment*) transient.GetRootSegment();
-// }
-
-// void ColumnData::Scan(Transaction &transaction, Vector &result, ColumnScanState &state, index_t count) {
-// 	// copy data from the column storage
-// 	while (count > 0) {
-// 		// check how much we can copy from this column segment
-// 		index_t to_copy = std::min(count, state.pointer.segment->count - state.pointer.offset);
-// 		if (to_copy > 0) {
-// 			// copy elements from the column segment
-// 			state.pointer.segment->Scan(state.pointer, result, to_copy);
-// 			count -= to_copy;
-// 		}
-// 		if (count > 0) {
-// 			// there is still chunks to copy
-// 			// move to the next segment
-// 			assert(state.pointer.segment->next);
-// 			state.pointer.segment = (ColumnSegment *)state.pointer.segment->next.get();
-// 			state.pointer.offset = 0;
-// 		}
-// 	}
-// }
-
 void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	lock_guard<mutex> tree_lock(transient.node_lock);
 	if (transient.nodes.size() == 0) {
@@ -98,6 +73,21 @@ void ColumnData::Append(ColumnAppendState &state, Vector &vector) {
 		}
 		offset += copied_elements;
 		count -= copied_elements;
+	}
+}
+
+void ColumnData::Update(Transaction &transaction, Vector &updates, row_t *ids) {
+	// check if the update is in the persistent segments or in the transient segments
+	index_t first_id = ids[updates.sel_vector ? updates.sel_vector[0] : 0];
+
+	if (first_id < persistent_rows) {
+		// persistent segment update
+		throw Exception("FIXME: persistent update");
+	} else {
+		// transient segment update, first find the segment that it belongs to
+		auto segment = (TransientSegment *) transient.GetSegment(first_id);
+		// now perform the update within the segment
+		segment->Update(transaction, updates, ids);
 	}
 }
 
