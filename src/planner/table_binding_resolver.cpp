@@ -73,6 +73,9 @@ void TableBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::UNION:
 		Visit((LogicalSetOperation &)op);
 		break;
+	case LogicalOperatorType::PRUNE_COLUMNS:
+		Visit((LogicalPruneColumns &) op);
+		break;
 	case LogicalOperatorType::CREATE_INDEX:
 		Visit((LogicalCreateIndex &)op);
 		break;
@@ -172,6 +175,21 @@ void TableBindingResolver::Visit(LogicalProjection &op) {
 	binding.table_index = op.table_index;
 	binding.column_count = op.expressions.size();
 	PushBinding(binding);
+}
+
+void TableBindingResolver::Visit(LogicalPruneColumns &op) {
+	LogicalOperatorVisitor::VisitOperator(op);
+
+	// prune all columns but the column limit
+	for(index_t idx = 0; idx < bound_tables.size(); idx++) {
+		auto &binding = bound_tables[idx];
+		if (binding.column_offset >= op.column_limit) {
+			bound_tables.erase(bound_tables.begin() + idx);
+			idx--;
+		} else if (binding.column_offset + binding.column_count > op.column_limit) {
+			binding.column_count = op.column_limit - binding.column_offset;
+		}
+	}
 }
 
 void TableBindingResolver::Visit(LogicalWindow &op) {
