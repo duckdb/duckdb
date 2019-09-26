@@ -265,10 +265,10 @@ matrix:
 
       dist: xenial
       language: python
-      python: 3.7
       cache: pip
       env:
         - CIBW_BUILD='cp37-*'
+      python: 3.7
 
       script:
         - pip install cibuildwheel==0.10.2 boto3
@@ -280,15 +280,15 @@ matrix:
       after_success:
         python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
 
-  - os: linux
+    - os: linux
       name: Python 2 Package
 
       dist: xenial
       language: python
-      python: 3.7
       cache: pip
       env:
         - CIBW_BUILD='cp27-*'
+      python: 3.7
 
       script:
         - pip install cibuildwheel==0.10.2 boto3
