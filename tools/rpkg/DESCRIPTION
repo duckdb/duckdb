@@ -15,7 +15,8 @@ Imports:
     methods,
     utils
 Suggests: 
-    DBItest
+    DBItest, 
+    dbplyr
 GitHub: https://github.com/cwida/duckdb
 Collate: 
     'duckdb.R'
