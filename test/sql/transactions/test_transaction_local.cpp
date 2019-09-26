@@ -62,13 +62,6 @@ TEST_CASE("Test appends on transaction local data with unique indices", "[transa
 	// if we delete we can insert that value again
 	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 2)"));
-
-	// // delete + append in same transaction should work as well
-	// FIXME: should this work? or can we get away with this not working?
-	// REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-	// REQUIRE_NO_FAIL(con.Query("DELETE FROM integers"));
-	// REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 2)"));
-	// REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
 }
 
 TEST_CASE("Test appends with multiple transactions", "[transactions]") {
