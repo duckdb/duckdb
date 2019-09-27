@@ -60,7 +60,8 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 		return;
 	}
 	auto &chunk = *state.storage->collection.chunks[state.chunk_index];
-	index_t count = state.chunk_index == state.max_index ? state.last_chunk_count : chunk.size();
+	index_t chunk_count = state.chunk_index == state.max_index ? state.last_chunk_count : chunk.size();
+	index_t count = chunk_count;
 
 	// first create a selection vector from the deleted entries (if any)
 	sel_t *sel_vector = nullptr;
@@ -82,11 +83,9 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 	for(index_t i = 0; i < column_ids.size(); i++) {
 		auto id = column_ids[i];
 		if (id == COLUMN_IDENTIFIER_ROW_ID) {
-			// row identifier: return MAX_ROW_ID plus the row offset in the
-			auto data = (row_t *)result.data[i].data;
-			for (index_t k = 0; k < count; k++) {
-				data[k] = MAX_ROW_ID + state.chunk_index * STANDARD_VECTOR_SIZE + k;
-			}
+			// row identifier: return MAX_ROW_ID plus the row offset in the chunk
+			result.data[i].count = chunk_count;
+			VectorOperations::GenerateSequence(result.data[i], MAX_ROW_ID + state.chunk_index * STANDARD_VECTOR_SIZE);
 		} else {
 			result.data[i].Reference(chunk.data[id]);
 		}

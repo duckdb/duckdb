@@ -291,7 +291,7 @@ TEST_CASE("Test ART index with multiple updates on the same value", "[art]") {
 	// update the same tuple a bunch of times in the same transaction and then rollback
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	for (int32_t i = 0; i < 10; i++) {
-		REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=$1 WHERE i=$2", i + 2, i + 1));
+		REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=" + to_string(i + 2) + " WHERE i=" + to_string(i + 1)));
 
 		result = con.Query("SELECT * FROM integers WHERE i > 0");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(i + 2)}));
