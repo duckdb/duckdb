@@ -165,6 +165,9 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::PREPARE: {
 		auto &stmt = *reinterpret_cast<PrepareStatement *>(statement.get());
 		auto statement_type = stmt.statement->type;
+		if (statement_type == StatementType::EXPLAIN) {
+			throw NotImplementedException("Cannot explain prepared statements");
+		}
 		// first create the plan for the to-be-prepared statement
 		vector<BoundParameterExpression *> bound_parameters;
 		CreatePlan(*stmt.statement, &bound_parameters);
