@@ -524,12 +524,12 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 			throw NotImplementedException("Constraint type not implemented!");
 		}
 	}
+	// update should not be called for indexed columns!
+#ifdef DEBUG
 	for (index_t i = 0; i < indexes.size(); i++) {
-		// first check if the index is affected by the update
-		if (indexes[i]->IndexIsUpdated(column_ids)) {
-			throw NotImplementedException("Updating an indexed column is not supported!");
-		}
+		assert(!indexes[i]->IndexIsUpdated(column_ids));
 	}
+#endif
 }
 
 void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers,

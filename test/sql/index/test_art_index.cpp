@@ -472,10 +472,9 @@ TEST_CASE("Test ART index creation with many versions", "[art]") {
 	REQUIRE_NO_FAIL(r3.Query("BEGIN TRANSACTION"));
 	// increment values by 1 again
 	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=i+1"));
-	// create an index
-	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+	// create an index, this fails because we have outstanding updates
+	REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
 
-	// now perform the sums, with and without an index scan
 	// r1
 	result = r1.Query("SELECT SUM(i) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(expected_sum_r1)}));

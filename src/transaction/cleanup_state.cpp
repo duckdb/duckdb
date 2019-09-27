@@ -44,6 +44,13 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 	}
 }
 
+void CleanupState::CleanupUpdate(UpdateInfo *info) {
+	// remove the update info from the update chain
+	// first obtain an exclusive lock on the segment
+	auto lock = info->segment->lock.GetExclusiveLock();
+	info->segment->CleanupUpdate(info);
+}
+
 void CleanupState::CleanupDelete(DeleteInfo *info) {
 	auto version_table = &info->GetTable();
 	if (version_table->indexes.size() == 0) {
@@ -61,13 +68,6 @@ void CleanupState::CleanupDelete(DeleteInfo *info) {
 		}
 		row_numbers[count++] = info->rows[i];
 	}
-}
-
-void CleanupState::CleanupUpdate(UpdateInfo *info) {
-	// remove the update info from the update chain
-	// first obtain an exclusive lock on the segment
-	auto lock = info->segment->lock.GetExclusiveLock();
-	info->segment->CleanupUpdate(info);
 }
 
 void CleanupState::Flush() {

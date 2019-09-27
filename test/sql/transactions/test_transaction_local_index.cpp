@@ -18,14 +18,15 @@ TEST_CASE("Test index with transaction local commits", "[transactions]") {
 	// inserting a non-duplicate value works
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (4)"));
 
-	// updating primary keys is disallowed
+	// updating a primary key to an existing value fails
 	REQUIRE_FAIL(con.Query("UPDATE integers SET i=1 WHERE i=4"));
-	REQUIRE_FAIL(con.Query("UPDATE integers SET i=5 WHERE i=4"));
+	// but updating to a non-existing value works
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=5 WHERE i=4"));
 
 	// if we first delete a value, we can insert that value again
 	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=1"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1)"));
-	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=4"));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i >= 4"));
 
 	result = con.Query("SELECT COUNT(*) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
@@ -70,13 +71,31 @@ TEST_CASE("Test index with transaction local updates", "[transactions]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
 
-	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	// inserting a conflicting value directly fails
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES (3)"));
-	// we can insert a non-conflicting value
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+
+	// we can insert a non-conflicting value, but then updating it fails
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (4)"));
-	// but then updating it again fails
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4}));
 	REQUIRE_FAIL(con.Query("UPDATE integers SET i=3 WHERE i=4"));
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+
+	// we can insert a non-conflicting value, and then update it to another non-conflicting value
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (4)"));
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4}));
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=5 WHERE i=4"));
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 5}));
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 5}));
 }
 
 TEST_CASE("Test index with pending insertions", "[transactions]") {
@@ -160,4 +179,3 @@ TEST_CASE("Test index with pending deletes", "[transactions]") {
 	result = con2.Query("SELECT COUNT(*) FROM integers WHERE i=1");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 }
-
