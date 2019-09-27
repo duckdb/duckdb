@@ -13,21 +13,13 @@
 #include "common/types/data_chunk.hpp"
 #include "parser/parsed_expression.hpp"
 #include "planner/expression.hpp"
+#include "storage/table/scan_state.hpp"
 
 namespace duckdb {
 
 class ClientContext;
 class DataTable;
 class Transaction;
-
-struct IndexScanState {
-	vector<column_t> column_ids;
-
-	IndexScanState(vector<column_t> column_ids) : column_ids(column_ids) {
-	}
-	virtual ~IndexScanState() {
-	}
-};
 
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
@@ -62,7 +54,7 @@ public:
 	                                                               ExpressionType low_expression_type, Value high_value,
 	                                                               ExpressionType high_expression_type) = 0;
 	//! Perform a lookup on the index
-	virtual void Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) = 0;
+	virtual void Scan(Transaction &transaction, IndexScanState *state, DataChunk &result) = 0;
 
 	//! Called when data is appended to the index
 	virtual bool Append(DataChunk &entries, Vector &row_identifiers) = 0;

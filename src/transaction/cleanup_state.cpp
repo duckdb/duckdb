@@ -50,10 +50,9 @@ void CleanupState::CleanupDelete(DeleteInfo *info) {
 		// this table has no indexes: no cleanup to be done
 		return;
 	}
-	if (current_table != version_table || flag != UndoFlags::DELETE_TUPLE) {
+	if (current_table != version_table) {
 		// table for this entry differs from previous table: flush and switch to the new table
 		Flush();
-		flag = UndoFlags::DELETE_TUPLE;
 		current_table = version_table;
 	}
 	for(index_t i = 0; i < info->count; i++) {
@@ -80,16 +79,8 @@ void CleanupState::Flush() {
 	Vector row_identifiers(ROW_TYPE, (data_ptr_t)row_numbers);
 	row_identifiers.count = count;
 
-	if (flag == UndoFlags::UPDATE_TUPLE) {
-		// // retrieve data from the version info
-		// current_table->RetrieveVersionedData(chunk, data, count);
-		// // delete it from all the indexes
-		// current_table->RemoveFromIndexes(chunk, row_identifiers);
-		// chunk.Reset();
-	} else {
-		// delete the tuples from all the indexes
-		current_table->RemoveFromIndexes(row_identifiers);
-	}
+	// delete the tuples from all the indexes
+	current_table->RemoveFromIndexes(row_identifiers);
 
 	count = 0;
 }

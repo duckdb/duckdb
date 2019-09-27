@@ -462,6 +462,7 @@ static string LineitemSchema(string schema, string suffix) {
 }
 
 void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
+	unique_ptr<QueryResult> result;
 	Connection con(db);
 	con.Query("BEGIN TRANSACTION");
 

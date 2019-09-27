@@ -39,6 +39,8 @@ public:
 	void InitializeTransientScan(TransientScanState &state);
 	//! Scan the next vector from the transient part of the column
 	void TransientScan(Transaction &transaction, TransientScanState &state, Vector &result);
+	//! Scan the next vector from the transient part of the column, throwing an exception if there are any outstanding updates
+	void IndexScan(TransientScanState &state, Vector &result);
 	//! Skip a single vector in the transient scan, moving on to the next one
 	void SkipTransientScan(TransientScanState &state);
 
@@ -49,6 +51,11 @@ public:
 
 	//! Update the specified row identifiers
 	void Update(Transaction &transaction, Vector &updates, row_t *ids);
+
+	//! Fetch the vector from the column data that belongs to this specific row
+	void Fetch(row_t row_id, Vector &result);
+	//! Fetch a specific row id and append it to the vector
+	void FetchRow(Transaction &transaction, row_t row_id, Vector &result);
 private:
 	//! Append a transient segment
 	void AppendTransientSegment(index_t start_row);

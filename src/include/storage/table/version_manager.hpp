@@ -35,6 +35,12 @@ public:
 public:
 	//! For a given chunk index, fills the selection vector with the relevant tuples for a given transaction. If count == max_count, all tuples are relevant and the selection vector is not set
 	index_t GetSelVector(Transaction &transaction, index_t index, sel_t sel_vector[], index_t max_count);
+	//! For a given chunk index, fills the selection vector with the committed tuples. If there are any pending deletions, an exception is thrown.
+	index_t GetCommittedVector(index_t index, sel_t sel_vector[], index_t max_count);
+
+	//! Fetch a specific row from the VersionManager, returns true if the row should be used for the transaction and false otherwise.
+	bool Fetch(Transaction &transaction, index_t row);
+
 	//! Delete the given set of rows in the version manager
 	void Delete(Transaction &transaction, Vector &row_ids);
 	//! Append a set of rows to the version manager, setting their inserted id to the given commit_id

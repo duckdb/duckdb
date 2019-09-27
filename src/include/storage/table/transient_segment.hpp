@@ -28,7 +28,14 @@ public:
 	//! Initialize a scan of this transient segment
 	void InitializeScan(TransientScanState &state);
 	//! Scan one vector from this transient segment
-	void Scan(Transaction &transaction, TransientScanState &state, Vector &result);
+	void Scan(Transaction &transaction, index_t vector_index, Vector &result);
+	//! Scan one vector from this transient segment, throwing an exception if there are any outstanding updates
+	void IndexScan(TransientScanState &state, Vector &result);
+
+	//! Fetch the base table vector index that belongs to this row
+	void Fetch(index_t vector_index, Vector &result);
+	//! Fetch a value of the specific row id and append it to the result
+	void FetchRow(Transaction &transaction, row_t row_id, Vector &result);
 
 	//! Initialize an append of this transient segment
 	void InitializeAppend(TransientAppendState &state);
@@ -37,9 +44,6 @@ public:
 
 	//! Perform an update within the transient segment
 	void Update(Transaction &transaction, Vector &updates, row_t *ids);
-	// void Fetch(Vector &result, index_t row_id) override;
-	// //! Updates the value of the segment at the specified row_id
-	// void Update(index_t row_id, data_ptr_t data);
 };
 
 } // namespace duckdb

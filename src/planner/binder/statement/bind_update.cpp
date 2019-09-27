@@ -60,10 +60,6 @@ static void BindUpdateConstraints(TableCatalogEntry &table, Binder &binder, Clie
 			BindExtraColumns(table, binder, context, result, check.bound_columns);
 		}
 	}
-	// do the same for all the indexes with multiple columns
-	for (auto &index : table.storage->indexes) {
-		BindExtraColumns(table, binder, context, result, index->column_id_set);
-	}
 }
 
 unique_ptr<BoundSQLStatement> Binder::Bind(UpdateStatement &stmt) {

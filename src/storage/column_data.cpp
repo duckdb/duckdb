@@ -29,7 +29,18 @@ void ColumnData::TransientScan(Transaction &transaction, TransientScanState &sta
 		state.transient->InitializeScan(state);
 	}
 	// perform a scan of this segment
-	state.transient->Scan(transaction, state, result);
+	state.transient->Scan(transaction, state.vector_index, result);
+	// move over to the next vector
+	SkipTransientScan(state);
+}
+
+void ColumnData::IndexScan(TransientScanState &state, Vector &result) {
+	if (state.vector_index == 0) {
+		// first vector of this segment: initialize the scan for this segment
+		state.transient->InitializeScan(state);
+	}
+	// perform a scan of this segment
+	state.transient->IndexScan(state, result);
 	// move over to the next vector
 	SkipTransientScan(state);
 }
@@ -88,6 +99,30 @@ void ColumnData::Update(Transaction &transaction, Vector &updates, row_t *ids) {
 		auto segment = (TransientSegment *) transient.GetSegment(first_id);
 		// now perform the update within the segment
 		segment->Update(transaction, updates, ids);
+	}
+}
+
+void ColumnData::Fetch(row_t row_id, Vector &result) {
+	// fetch the vector that belongs to this specific row
+	if ((index_t) row_id < persistent_rows) {
+		throw Exception("FIXME: persistent fetch");
+	} else {
+		// transient segment fetch, first find the segment that it belongs to
+		auto segment = (TransientSegment *) transient.GetSegment(row_id);
+		auto vector_index = (row_id - segment->start) / STANDARD_VECTOR_SIZE;
+		// now perform the fetch within the segment
+		segment->Fetch(vector_index, result);
+	}
+}
+
+void ColumnData::FetchRow(Transaction &transaction, row_t row_id, Vector &result) {
+	if ((index_t) row_id < persistent_rows) {
+		throw Exception("FIXME: persistent fetch");
+	} else {
+		// transient segment fetch, first find the segment that it belongs to
+		auto segment = (TransientSegment *) transient.GetSegment(row_id);
+		// now perform the fetch within the segment
+		segment->FetchRow(transaction, row_id, result);
 	}
 }
 

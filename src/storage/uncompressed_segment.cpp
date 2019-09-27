@@ -41,19 +41,17 @@ UncompressedSegment::UncompressedSegment(BufferManager &manager, TypeId type) :
 	this->versions = nullptr;
 }
 
-
-void UncompressedSegment::InitializeScan(UncompressedSegmentScanState &state) {
-	// obtain a read lock and pin the buffer for this segment
-	state.handle = manager.PinBuffer(block_id);
-}
-
-void UncompressedSegment::Scan(Transaction &transaction, UncompressedSegmentScanState &state, index_t vector_index, Vector &result) {
-	auto handle = lock.GetSharedLock();
+//===--------------------------------------------------------------------===//
+// Scan
+//===--------------------------------------------------------------------===//
+void UncompressedSegment::Scan(Transaction &transaction, index_t vector_index, Vector &result) {
+	auto read_lock = lock.GetSharedLock();
+	auto handle = manager.PinBuffer(block_id);
 
 	assert(vector_index < max_vector_count);
 	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 
-	auto data = state.handle->buffer->data.get();
+	auto data = handle->buffer->data.get();
 
 	auto offset = vector_index * vector_size;
 
@@ -112,6 +110,83 @@ void UncompressedSegment::Scan(Transaction &transaction, UncompressedSegmentScan
 	}
 }
 
+void UncompressedSegment::Fetch(index_t vector_index, Vector &result) {
+	auto read_lock = lock.GetSharedLock();
+	auto handle = manager.PinBuffer(block_id);
+	assert(vector_index < max_vector_count);
+	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
+	assert(!versions);
+
+	auto data = handle->buffer->data.get();
+
+	auto offset = vector_index * vector_size;
+
+	index_t count = std::min((index_t) STANDARD_VECTOR_SIZE, tuple_count - vector_index * STANDARD_VECTOR_SIZE);
+
+	// no version information: simply set up the data pointer and read the nullmask
+	result.nullmask = *((nullmask_t*) (data + offset));
+	memcpy(result.data, data + offset + sizeof(nullmask_t), count * type_size);
+	result.count = count;
+}
+
+//===--------------------------------------------------------------------===//
+// Index Scan
+//===--------------------------------------------------------------------===//
+void UncompressedSegment::IndexScan(UncompressedSegmentScanState &state, index_t vector_index, Vector &result) {
+	if (vector_index == 0) {
+		// vector_index = 0, obtain a shared lock on the segment that we keep until the index scan is complete
+		state.locks.push_back(lock.GetSharedLock());
+	}
+	if (versions && versions[vector_index]) {
+		throw TransactionException("Cannot create index with outstanding updates");
+	}
+	auto handle = manager.PinBuffer(block_id);
+
+	assert(vector_index < max_vector_count);
+	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
+
+	auto data = handle->buffer->data.get();
+
+	auto offset = vector_index * vector_size;
+
+	index_t count = std::min((index_t) STANDARD_VECTOR_SIZE, tuple_count - vector_index * STANDARD_VECTOR_SIZE);
+
+	// no version information: simply set up the data pointer and read the nullmask
+	result.nullmask = *((nullmask_t*) (data + offset));
+	memcpy(result.data, data + offset + sizeof(nullmask_t), count * type_size);
+	result.count = count;
+}
+
+//===--------------------------------------------------------------------===//
+// Fetch
+//===--------------------------------------------------------------------===//
+void UncompressedSegment::Fetch(Transaction &transaction, row_t row_id, Vector &result) {
+	auto read_lock = lock.GetSharedLock();
+	auto handle = manager.PinBuffer(block_id);
+
+	// get the vector index
+	index_t vector_index = row_id / STANDARD_VECTOR_SIZE;
+	index_t id_in_vector = row_id - vector_index * STANDARD_VECTOR_SIZE;
+
+	assert(vector_index < max_vector_count);
+
+	if (!versions || !versions[vector_index]) {
+		// no version information: simply fetch the data and append it
+		auto data = handle->buffer->data.get() + vector_index * vector_size;
+		auto &nullmask = *((nullmask_t*) (data));
+		auto vector_ptr = data + sizeof(nullmask_t);
+
+		result.nullmask[result.count] = nullmask[id_in_vector];
+		memcpy(result.data + result.count * type_size, vector_ptr + id_in_vector * type_size, type_size);
+		result.count++;
+	} else {
+		throw Exception("FIXME: fetch from version");
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Append
+//===--------------------------------------------------------------------===//
 index_t UncompressedSegment::Append(SegmentStatistics &stats, TransientAppendState &state, Vector &data, index_t offset, index_t count) {
 	assert(data.type == type);
 
@@ -135,6 +210,9 @@ index_t UncompressedSegment::Append(SegmentStatistics &stats, TransientAppendSta
 	return tuple_count - initial_count;
 }
 
+//===--------------------------------------------------------------------===//
+// Update
+//===--------------------------------------------------------------------===//
 static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector &update, row_t *ids, row_t offset, UpdateInfo *& node) {
 	if (info->version_number == transaction.transaction_id) {
 		// this UpdateInfo belongs to the current transaction, set it in the node
@@ -146,7 +224,7 @@ static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector
 		while(true) {
 			auto id = ids[i] - offset;
 			if (id == info->tuples[j]) {
-				throw Exception("Conflict on update!");
+				throw TransactionException("Conflict on update!");
 			} else if (id < info->tuples[j]) {
 				// id < the current tuple in info, move to next id
 				i++;
@@ -168,6 +246,9 @@ static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector
 }
 
 void UncompressedSegment::Update(SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, row_t offset) {
+	// obtain an exclusive lock
+	auto handle = lock.GetExclusiveLock();
+
 	assert(!update.sel_vector);
 #ifdef DEBUG
 	// verify that the ids are sorted and there are no duplicates
@@ -175,9 +256,6 @@ void UncompressedSegment::Update(SegmentStatistics &stats, Transaction &transact
 		assert(ids[i] > ids[i - 1]);
 	}
 #endif
-
-	// obtain an exclusive lock
-	auto handle = lock.GetExclusiveLock();
 
 	// create the versions for this segment, if there are none yet
 	if (!versions) {

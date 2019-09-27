@@ -27,7 +27,6 @@ private:
 	// data for index cleanup
 	DataTable *current_table;
 	DataChunk chunk;
-	UndoFlags flag;
 	row_t row_numbers[STANDARD_VECTOR_SIZE];
 	index_t count;
 private:

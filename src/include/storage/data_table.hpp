@@ -58,22 +58,25 @@ public:
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	// from offset and store them in result. Offset is incremented with how many
 	// elements were returned.
-	void Scan(Transaction &transaction, DataChunk &result, TableScanState &structure);
+	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state);
+
+	//! Initialize an index scan with a single predicate and a comparison type (= <= < > >=)
+	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index, Value value, ExpressionType expr_type, vector<column_t> column_ids);
+	//! Initialize an index scan with two predicates and two comparison types (> >= < <=)
+	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index, Value low_value, ExpressionType low_type, Value high_value, ExpressionType high_type, vector<column_t> column_ids);
+	//! Scans up to STANDARD_VECTOR_SIZE elements from the table from the given index structure
+	void IndexScan(Transaction &transaction, DataChunk &result, TableIndexScanState &state);
+
 	//! Fetch data from the specific row identifiers from the base table
 	void Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, Vector &row_ids);
-	//! Append a DataChunk to the table. Throws an exception if the columns
-	// don't match the tables' columns.
+
+	//! Append a DataChunk to the table. Throws an exception if the columns don't match the tables' columns.
 	void Append(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
 	//! Delete the entries with the specified row identifier from the table
 	void Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_ids);
 	//! Update the entries with the specified row identifier from the table
 	void Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, vector<column_t> &column_ids,
 	            DataChunk &data);
-
-	void InitializeIndexScan(IndexTableScanState &state, vector<column_t> column_ids);
-	//! Scan used for creating an index, incrementally locks all storage chunks and scans ALL tuples in the table
-	//! (including all versions of a tuple)
-	void CreateIndexScan(IndexTableScanState &structure, DataChunk &result);
 
 	//! Add an index to the DataTable
 	void AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>> &expressions);
@@ -97,10 +100,12 @@ private:
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
 	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, vector<column_t> &column_ids);
 
-	//! Issue the specified update to the set of indexes
-	void UpdateIndexes(TableCatalogEntry &table, vector<column_t> &column_ids, DataChunk &updates,
-	                   Vector &row_identifiers);
+	//! Figure out which of the row ids to use for the given transaction by looking at inserted/deleted data. Returns the amount of rows to use and places the row_ids in the result_rows array.
+	index_t FetchRows(Transaction &transaction, Vector &row_identifiers, row_t result_rows[]);
 
+	//! The CreateIndexScan is a special scan that is used to create an index on the table, it keeps locks on the table
+	void InitializeCreateIndexScan(CreateIndexScanState &state, vector<column_t> column_ids);
+	void CreateIndexScan(CreateIndexScanState &structure, DataChunk &result);
 private:
 	//! Lock for appending entries to the table
 	std::mutex append_lock;

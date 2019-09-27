@@ -31,6 +31,23 @@ index_t ChunkDeleteInfo::GetSelVector(Transaction &transaction, sel_t sel_vector
 	return count;
 }
 
+bool ChunkDeleteInfo::Fetch(Transaction &transaction, row_t row) {
+	return !Versioning::UseVersion(transaction, deleted[row]);
+}
+
+index_t ChunkDeleteInfo::GetCommittedVector(sel_t sel_vector[], index_t max_count) {
+	index_t count = 0;
+	for(index_t i = 0; i < max_count; i++) {
+		if (deleted[i] == NOT_DELETED_ID) {
+			sel_vector[count++] = i;
+		} else if (deleted[i] >= TRANSACTION_ID_START) {
+			throw TransactionException("Cannot create index with outstanding uncommitted deletes");
+		}
+	}
+	return count;
+}
+
+
 void ChunkDeleteInfo::Delete(Transaction &transaction, row_t rows[], index_t count) {
 	// first check the chunk for conflicts
 	for(index_t i = 0; i < count; i++) {
@@ -75,4 +92,9 @@ index_t ChunkInsertInfo::GetSelVector(Transaction &transaction, sel_t sel_vector
 		}
 	}
 	return count;
+}
+
+bool ChunkInsertInfo::Fetch(Transaction &transaction, row_t row) {
+	return Versioning::UseVersion(transaction, inserted[row]) &&
+		   !Versioning::UseVersion(transaction, deleted[row]);
 }

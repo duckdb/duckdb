@@ -20,6 +20,30 @@ index_t VersionManager::GetSelVector(Transaction &transaction, index_t index, se
 	}
 }
 
+index_t VersionManager::GetCommittedVector(index_t index, sel_t sel_vector[], index_t max_count) {
+	auto entry = info.find(index);
+	if (entry == info.end()) {
+		// no info, use everything
+		return max_count;
+	} else {
+		// get committed entries from the version info
+		return entry->second->GetCommittedVector(sel_vector, max_count);
+	}
+}
+
+bool VersionManager::Fetch(Transaction &transaction, index_t row) {
+	index_t vector_index = row / STANDARD_VECTOR_SIZE;
+
+	auto entry = info.find(vector_index);
+	if (entry == info.end()) {
+		// no info, use the row
+		return true;
+	} else {
+		// there is an info: need to figure out if we want to use the row or not
+		return entry->second->Fetch(transaction, row - vector_index * STANDARD_VECTOR_SIZE);
+	}
+}
+
 class VersionDeleteState {
 public:
 	VersionDeleteState(VersionManager &manager, Transaction &transaction) : manager(manager), transaction(transaction), current_info(nullptr), current_chunk((index_t) -1), count(0) {}

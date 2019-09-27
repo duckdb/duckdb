@@ -15,14 +15,22 @@
 
 namespace duckdb {
 class LocalTableStorage;
+class Index;
 class PersistentSegment;
 class TransientSegment;
 
+struct IndexScanState {
+	vector<column_t> column_ids;
+
+	IndexScanState(vector<column_t> column_ids) : column_ids(column_ids) {
+	}
+	virtual ~IndexScanState() {
+	}
+};
+
 struct UncompressedSegmentScanState {
-	//! The shared lock that is held by the scan
-	unique_ptr<StorageLockKey> lock;
-	//! The handle to the current buffer that is held by the scan
-	unique_ptr<ManagedBufferHandle> handle;
+	//! The locks that are held during the scan, only used by the index scan
+	vector<unique_ptr<StorageLockKey>> locks;
 };
 
 struct TransientScanState {
@@ -57,8 +65,16 @@ struct TableScanState {
 	LocalScanState local_state;
 };
 
-struct IndexTableScanState : public TableScanState {
+struct CreateIndexScanState : public TableScanState {
 	vector<unique_ptr<StorageLockKey>> locks;
+	unique_ptr<std::lock_guard<std::mutex>> append_lock;
+};
+
+struct TableIndexScanState {
+	Index *index;
+	unique_ptr<IndexScanState> index_state;
+	LocalScanState local_state;
+	vector<column_t> column_ids;
 };
 
 }
