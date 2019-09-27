@@ -69,15 +69,15 @@ public:
 public:
 	typedef void (*append_function_t)(SegmentStatistics &stats, data_ptr_t target, index_t target_offset, Vector &source, index_t offset, index_t count);
 	typedef void (*update_function_t)(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t base_data, Vector &update);
-	typedef void (*base_table_fetch_function_t)(data_ptr_t base_data, sel_t tuples[], sel_t count, Vector &result);
-	typedef void (*update_info_fetch_function_t)(UpdateInfo *info, sel_t tuples[], sel_t count, Vector &result);
+	typedef void (*update_info_fetch_function_t)(Transaction &transaction, UpdateInfo *info, Vector &result, index_t count);
+	typedef void (*update_info_append_function_t)(Transaction &transaction, UpdateInfo *info, Vector &result, row_t row_id);
 	typedef void (*rollback_update_function_t)(UpdateInfo *info, data_ptr_t base_data);
 	typedef void (*merge_update_function_t)(SegmentStatistics &stats, UpdateInfo *node, data_ptr_t target, Vector &update, row_t *ids, index_t vector_offset);
 private:
 	append_function_t append_function;
 	update_function_t update_function;
-	base_table_fetch_function_t fetch_from_base_table;
 	update_info_fetch_function_t fetch_from_update_info;
+	update_info_append_function_t append_from_update_info;
 	rollback_update_function_t rollback_update;
 	merge_update_function_t merge_update_function;
 };

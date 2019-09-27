@@ -235,3 +235,49 @@ TEST_CASE("Test update behavior with multiple updaters", "[update]") {
 	result = con.Query("SELECT * FROM test ORDER BY a");
 	REQUIRE(CHECK_COLUMN(result, 0, {7, 8, 9}));
 }
+
+
+TEST_CASE("Test update behavior with multiple updaters and NULL values", "[update]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db), con3(db), con4(db), con5(db);
+	Connection u(db);
+
+	// create a table, filled with 3 values (1), (2), (3)
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1), (2), (3)"));
+
+	// now we start updating specific values and reading different versions
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(u.Query("UPDATE test SET a=NULL WHERE a=1"));
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(u.Query("UPDATE test SET a=NULL WHERE a=2"));
+	REQUIRE_NO_FAIL(con3.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(u.Query("UPDATE test SET a=NULL WHERE a=3"));
+	REQUIRE_NO_FAIL(con4.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(u.Query("UPDATE test SET a=99 WHERE a IS NULL"));
+	REQUIRE_NO_FAIL(con5.Query("BEGIN TRANSACTION"));
+
+	// now read the different states
+	// con sees {1, 2, 3}
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	// con2 sees {NULL, 2, 3}
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 3}));
+	// con3 sees {NULL, NULL, 3}
+	result = con3.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), 3}));
+	// con4 sees {NULL, NULL, NULL}
+	result = con4.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value()}));
+	// con5 sees {99, 99, 99}
+	result = con5.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {99, 99, 99}));
+
+	// now verify that we get conflicts when we update values that have been updated AFTER we started
+	REQUIRE_FAIL(con.Query("UPDATE test SET a=99 WHERE a=1"));
+	REQUIRE_FAIL(con2.Query("UPDATE test SET a=99 WHERE a=2"));
+	REQUIRE_FAIL(con3.Query("UPDATE test SET a=99 WHERE a=3"));
+	REQUIRE_FAIL(con4.Query("UPDATE test SET a=99 WHERE a IS NULL"));
+}

@@ -10,10 +10,10 @@ using namespace std;
 
 static UncompressedSegment::append_function_t GetAppendFunction(TypeId type);
 static UncompressedSegment::update_function_t GetUpdateFunction(TypeId type);
-static UncompressedSegment::base_table_fetch_function_t GetBaseTableFetchFunction(TypeId type);
 static UncompressedSegment::update_info_fetch_function_t GetUpdateInfoFetchFunction(TypeId type);
 static UncompressedSegment::rollback_update_function_t GetRollbackUpdateFunction(TypeId type);
 static UncompressedSegment::merge_update_function_t GetMergeUpdateFunction(TypeId type);
+static UncompressedSegment::update_info_append_function_t GetUpdateInfoAppendFunction(TypeId type);
 
 
 UncompressedSegment::UncompressedSegment(BufferManager &manager, TypeId type) :
@@ -22,8 +22,8 @@ UncompressedSegment::UncompressedSegment(BufferManager &manager, TypeId type) :
 	// figure out how many vectors we want to store in this block
 	this->append_function = GetAppendFunction(type);
 	this->update_function = GetUpdateFunction(type);
-	this->fetch_from_base_table = GetBaseTableFetchFunction(type);
 	this->fetch_from_update_info = GetUpdateInfoFetchFunction(type);
+	this->append_from_update_info = GetUpdateInfoAppendFunction(type);
 	this->rollback_update = GetRollbackUpdateFunction(type);
 	this->merge_update_function = GetMergeUpdateFunction(type);
 
@@ -56,58 +56,14 @@ void UncompressedSegment::Scan(Transaction &transaction, index_t vector_index, V
 	auto offset = vector_index * vector_size;
 
 	index_t count = std::min((index_t) STANDARD_VECTOR_SIZE, tuple_count - vector_index * STANDARD_VECTOR_SIZE);
-	if (!versions || !versions[vector_index]) {
-		// no version information: simply set up the data pointer and read the nullmask
-		result.nullmask = *((nullmask_t*) (data + offset));
-		memcpy(result.data, data + offset + sizeof(nullmask_t), count * type_size);
-		result.count = count;
-	} else {
-		// version information: need to follow version chain to figure out which versions to use for each tuple
-		UpdateInfo *info[STANDARD_VECTOR_SIZE];
-		sel_t remaining[STANDARD_VECTOR_SIZE];
-		for(index_t i = 0; i < count; i++) {
-			info[i] = nullptr;
-			remaining[i] = i;
-		}
-		// follow the version chain
-		UpdateInfo *current = versions[vector_index];
-		while(current) {
-			if (current->version_number > transaction.start_time && current->version_number != transaction.transaction_id) {
-				// these tuples were either committed AFTER this transaction started or are not committed yet, use tuples stored in this version
-				for(index_t i = 0; i < current->N; i++) {
-					info[current->tuples[i]] = current;
-				}
-			}
-			current = current->next;
-		}
-		// now fetch the entries from the different UpdateInfo's we have collected
-		index_t remaining_count = count;
-		while(remaining_count > 0) {
-			sel_t current_tuples[STANDARD_VECTOR_SIZE];
-			index_t current_count = 1, next_remaining_count = 0;
-
-			// select the first UpdateInfo, and select all entries that belong together with that UpdateInfo
-			current = info[remaining[0]];
-			current_tuples[0] = remaining[0];
-			for(index_t i = 1; i < remaining_count; i++) {
-				if (info[remaining[i]] == current) {
-					current_tuples[current_count++] = remaining[i];
-				} else {
-					remaining[next_remaining_count++] = remaining[i];
-				}
-			}
-			// now fetch the tuples from the current update info and place them in the result vector
-			if (!current) {
-				// fetch from base table
-				fetch_from_base_table(data + offset, current_tuples, current_count, result);
-			} else {
-				// fetch from update info
-				fetch_from_update_info(current, current_tuples, current_count, result);
-			}
-			remaining_count = next_remaining_count;
-		}
-		result.count = count;
+	// first fetch the data from the base table
+	result.nullmask = *((nullmask_t*) (data + offset));
+	memcpy(result.data, data + offset + sizeof(nullmask_t), count * type_size);
+	if (versions && versions[vector_index]) {
+		// if there are any versions, check if we need to overwrite the data with the versioned data
+		fetch_from_update_info(transaction, versions[vector_index], result, count);
 	}
+	result.count = count;
 }
 
 void UncompressedSegment::Fetch(index_t vector_index, Vector &result) {
@@ -170,18 +126,18 @@ void UncompressedSegment::Fetch(Transaction &transaction, row_t row_id, Vector &
 
 	assert(vector_index < max_vector_count);
 
-	if (!versions || !versions[vector_index]) {
-		// no version information: simply fetch the data and append it
-		auto data = handle->buffer->data.get() + vector_index * vector_size;
-		auto &nullmask = *((nullmask_t*) (data));
-		auto vector_ptr = data + sizeof(nullmask_t);
+	// first fetch the data from the base table
+	auto data = handle->buffer->data.get() + vector_index * vector_size;
+	auto &nullmask = *((nullmask_t*) (data));
+	auto vector_ptr = data + sizeof(nullmask_t);
 
-		result.nullmask[result.count] = nullmask[id_in_vector];
-		memcpy(result.data + result.count * type_size, vector_ptr + id_in_vector * type_size, type_size);
-		result.count++;
-	} else {
-		throw Exception("FIXME: fetch from version");
+	result.nullmask[result.count] = nullmask[id_in_vector];
+	memcpy(result.data + result.count * type_size, vector_ptr + id_in_vector * type_size, type_size);
+	if (versions && versions[vector_index]) {
+		// version information: follow the version chain to find out if we need to load this tuple data from any other version
+		append_from_update_info(transaction, versions[vector_index], result, id_in_vector);
 	}
+	result.count++;
 }
 
 //===--------------------------------------------------------------------===//
@@ -584,70 +540,19 @@ static UncompressedSegment::merge_update_function_t GetMergeUpdateFunction(TypeI
 // Update Fetch
 //===--------------------------------------------------------------------===//
 template <class T>
-static void base_table_fetch_loop(T *__restrict base_data, T *__restrict result_data, nullmask_t &base_nullmask, nullmask_t &result_nullmask, sel_t tuples[], sel_t count) {
-	if (base_nullmask.any()) {
-		for(index_t i = 0; i < count; i++) {
-			result_nullmask[tuples[i]] = base_nullmask[tuples[i]];
-			result_data[tuples[i]] = base_data[tuples[i]];
-		}
-	} else {
-		for(index_t i = 0; i < count; i++) {
-			result_data[tuples[i]] = base_data[tuples[i]];
-		}
-	}
-}
-
-template <class T>
-static void base_table_fetch(data_ptr_t base, sel_t tuples[], sel_t count, Vector &result) {
-	auto nullmask = (nullmask_t *) base;
-	auto base_data = (T*) (base + sizeof(nullmask_t));
+static void update_info_fetch(Transaction &transaction, UpdateInfo *current, Vector &result, index_t count) {
 	auto result_data = (T*) result.data;
-
-	base_table_fetch_loop(base_data, result_data, *nullmask, result.nullmask, tuples, count);
-}
-
-static UncompressedSegment::base_table_fetch_function_t GetBaseTableFetchFunction(TypeId type) {
-	switch (type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
-		return base_table_fetch<int8_t>;
-	case TypeId::SMALLINT:
-		return base_table_fetch<int16_t>;
-	case TypeId::INTEGER:
-		return base_table_fetch<int32_t>;
-	case TypeId::BIGINT:
-		return base_table_fetch<int64_t>;
-	case TypeId::FLOAT:
-		return base_table_fetch<float>;
-	case TypeId::DOUBLE:
-		return base_table_fetch<double>;
-	default:
-		throw NotImplementedException("Unimplemented type for uncompressed segment");
-	}
-}
-
-template <class T>
-static void update_info_fetch_loop(UpdateInfo &info, T *__restrict info_data, T *__restrict result_data, nullmask_t &info_nullmask, nullmask_t &result_nullmask, sel_t tuples[], sel_t count) {
-	index_t idx = 0;
-	for(index_t i = 0; i < info.N; i++) {
-		if (info.tuples[i] == tuples[idx]) {
-			result_data[tuples[idx]] = info_data[i];
-			result_nullmask[tuples[idx]] = info_nullmask[tuples[idx]];
-			idx++;
-			if (idx == count) {
-				break;
+	while(current) {
+		if (current->version_number > transaction.start_time && current->version_number != transaction.transaction_id) {
+			// these tuples were either committed AFTER this transaction started or are not committed yet, use tuples stored in this version
+			auto info_data = (T*) current->tuple_data;
+			for(index_t i = 0; i < current->N; i++) {
+				result_data[current->tuples[i]] = info_data[i];
+				result.nullmask[current->tuples[i]] = current->nullmask[current->tuples[i]];
 			}
 		}
+		current = current->next;
 	}
-	assert(idx == count);
-}
-
-template <class T>
-static void update_info_fetch(UpdateInfo *info, sel_t tuples[], sel_t count, Vector &result) {
-	auto info_data = (T*) info->tuple_data;
-	auto result_data = (T*) result.data;
-
-	update_info_fetch_loop(*info, info_data, result_data, info->nullmask, result.nullmask, tuples, count);
 }
 
 static UncompressedSegment::update_info_fetch_function_t GetUpdateInfoFetchFunction(TypeId type) {
@@ -665,6 +570,50 @@ static UncompressedSegment::update_info_fetch_function_t GetUpdateInfoFetchFunct
 		return update_info_fetch<float>;
 	case TypeId::DOUBLE:
 		return update_info_fetch<double>;
+	default:
+		throw NotImplementedException("Unimplemented type for uncompressed segment");
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Update Append
+//===--------------------------------------------------------------------===//
+template <class T>
+static void update_info_append(Transaction &transaction, UpdateInfo *current, Vector &result, row_t row_id) {
+	auto result_data = (T*) result.data;
+	while(current) {
+		if (current->version_number > transaction.start_time && current->version_number != transaction.transaction_id) {
+			// these tuples were either committed AFTER this transaction started or are not committed yet, use tuples stored in this version
+			auto info_data = (T*) current->tuple_data;
+			for(index_t i = 0; i < current->N; i++) {
+				if (current->tuples[i] == row_id) {
+					result_data[result.count] = info_data[i];
+					result.nullmask[result.count] = current->nullmask[current->tuples[i]];
+					break;
+				} else if (current->tuples[i] > row_id) {
+					break;
+				}
+			}
+		}
+		current = current->next;
+	}
+}
+
+static UncompressedSegment::update_info_append_function_t GetUpdateInfoAppendFunction(TypeId type) {
+	switch (type) {
+	case TypeId::BOOLEAN:
+	case TypeId::TINYINT:
+		return update_info_append<int8_t>;
+	case TypeId::SMALLINT:
+		return update_info_append<int16_t>;
+	case TypeId::INTEGER:
+		return update_info_append<int32_t>;
+	case TypeId::BIGINT:
+		return update_info_append<int64_t>;
+	case TypeId::FLOAT:
+		return update_info_append<float>;
+	case TypeId::DOUBLE:
+		return update_info_append<double>;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}

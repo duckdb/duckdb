@@ -179,3 +179,103 @@ TEST_CASE("Test index with pending deletes", "[transactions]") {
 	result = con2.Query("SELECT COUNT(*) FROM integers WHERE i=1");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 }
+
+TEST_CASE("Test index with versioned data from deletes", "[transactions]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
+
+	// local delete
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+
+	// "1" exists for both transactions
+	result = con.Query("SELECT i FROM integers WHERE i=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con2.Query("SELECT i FROM integers WHERE i=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=1"));
+
+	// "1" only exists for con2
+	result = con.Query("SELECT i FROM integers WHERE i=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con2.Query("SELECT i FROM integers WHERE i=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	// rollback
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=1"));
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+
+	result = con.Query("SELECT i FROM integers WHERE i=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con2.Query("SELECT i FROM integers WHERE i=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	// local update of primary key column
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+
+	// 1 => 4
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=4 WHERE i=1"));
+
+	result = con.Query("SELECT i FROM integers WHERE i=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con2.Query("SELECT i FROM integers WHERE i=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result = con.Query("SELECT i FROM integers WHERE i=4");
+	REQUIRE(CHECK_COLUMN(result, 0, {4}));
+	result = con2.Query("SELECT i FROM integers WHERE i=4");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+
+	// delete 4
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=4"));
+
+	result = con.Query("SELECT i FROM integers WHERE i=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con2.Query("SELECT i FROM integers WHERE i=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result = con.Query("SELECT i FROM integers WHERE i=4");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con2.Query("SELECT i FROM integers WHERE i=4");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+
+	// commit
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
+	result = con.Query("SELECT i FROM integers WHERE i=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con2.Query("SELECT i FROM integers WHERE i=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT i FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
+	result = con2.Query("SELECT i FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
+}
+
+TEST_CASE("Test index with versioned data from updates in secondary columns", "[transactions]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3)"));
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET j=4 WHERE i=1"));
+
+	result = con.Query("SELECT j FROM integers WHERE i=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {4}));
+	result = con2.Query("SELECT j FROM integers WHERE i=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+
+	result = con.Query("SELECT j FROM integers WHERE i=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con2.Query("SELECT j FROM integers WHERE i=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+}
