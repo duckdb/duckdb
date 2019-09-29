@@ -436,9 +436,10 @@ TEST_CASE("Test ART index with random insertions and deletes", "[art]") {
 			REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=$1", (int32_t)element));
 			table_count--;
 			// verify that the deletion worked
+			result = con.Query("SELECT COUNT(*) FROM integers");
+			REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(table_count)}));
 			result = con.Query("SELECT COUNT(*) FROM integers WHERE i >= 0");
-			bool check = CHECK_COLUMN(result, 0, {Value::BIGINT(table_count)});
-			REQUIRE(check);
+			REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(table_count)}));
 		}
 	}
 }
