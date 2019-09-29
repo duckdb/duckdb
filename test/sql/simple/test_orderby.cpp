@@ -153,27 +153,6 @@ TEST_CASE("Test ORDER BY exceptions", "[order]") {
 
 	// and union itself fails if amount of entries is wrong
 	REQUIRE_FAIL(con.Query("SELECT a % 2, b FROM test UNION SELECT a % 2 AS k FROM test ORDER BY -1"));
-
-	// Top N queries that use ORDER_BY_LIMIT Optimization.
-	// Uses the new ORDER_BY_LIMIT optimization
-	result = con.Query("EXPLAIN SELECT a FROM test ORDER BY a LIMIT 1;");
-	REQUIRE(
-	    CHECK_COLUMN(result, 1,
-	                 {"ORDER_BY_LIMIT\nPROJECTION[a]\n    GET(test)", "ORDER_BY_LIMIT\nPROJECTION[a]\n    GET(test)",
-	                  "ORDER_BY_LIMIT\nPROJECTION[a]\n    SEQ_SCAN[test]"}));
-
-	result = con.Query("EXPLAIN SELECT a FROM test ORDER BY a DESC LIMIT 1 OFFSET 1;");
-	REQUIRE(
-	    CHECK_COLUMN(result, 1,
-	                 {"ORDER_BY_LIMIT\nPROJECTION[a]\n    GET(test)", "ORDER_BY_LIMIT\nPROJECTION[a]\n    GET(test)",
-	                  "ORDER_BY_LIMIT\nPROJECTION[a]\n    SEQ_SCAN[test]"}));
-
-	// offset without limit will use the regular ORDER BY + LIMIT operator.
-	result = con.Query("EXPLAIN SELECT a FROM test ORDER BY a OFFSET 1;");
-	REQUIRE(CHECK_COLUMN(result, 1,
-	                     {"LIMIT\nORDER_BY\n    PROJECTION[a]\n        GET(test)",
-	                      "LIMIT\nORDER_BY\n    PROJECTION[a]\n        GET(test)",
-	                      "LIMIT\nORDER_BY\n    PROJECTION[a]\n        SEQ_SCAN[test]"}));
 }
 
 TEST_CASE("Test ORDER BY with large table", "[order]") {

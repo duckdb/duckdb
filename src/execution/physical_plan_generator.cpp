@@ -70,8 +70,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalLimit &)op);
 	case LogicalOperatorType::ORDER_BY:
 		return CreatePlan((LogicalOrder &)op);
-	case LogicalOperatorType::ORDER_BY_LIMIT:
-		return CreatePlan((LogicalOrderAndLimit &)op);
+	case LogicalOperatorType::TOP_N:
+		return CreatePlan((LogicalTopN &)op);
 	case LogicalOperatorType::COPY_FROM_FILE:
 		return CreatePlan((LogicalCopyFromFile &)op);
 	case LogicalOperatorType::COPY_TO_FILE:

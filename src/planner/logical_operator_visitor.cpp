@@ -36,8 +36,8 @@ void LogicalOperatorVisitor::VisitOperatorExpressions(LogicalOperator &op) {
 		}
 		break;
 	}
-	case LogicalOperatorType::ORDER_BY_LIMIT: {
-		auto &order = (LogicalOrderAndLimit &)op;
+	case LogicalOperatorType::TOP_N: {
+		auto &order = (LogicalTopN &)op;
 		for (auto &node : order.orders) {
 			VisitExpression(&node.expression);
 		}

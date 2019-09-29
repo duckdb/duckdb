@@ -347,7 +347,6 @@ bool ChunkCollection::Equals(ChunkCollection &other) {
 }
 static void _heapify(ChunkCollection *input, vector<OrderType> &desc, index_t *heap, index_t heap_size,
                      index_t current_index) {
-
 	if (current_index >= heap_size) {
 		return;
 	}
@@ -372,7 +371,6 @@ static void _heapify(ChunkCollection *input, vector<OrderType> &desc, index_t *h
 }
 
 static void _heap_create(ChunkCollection *input, vector<OrderType> &desc, index_t *heap, index_t heap_size) {
-
 	for (index_t i = 0; i < heap_size; i++) {
 		heap[i] = i;
 	}

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/order/physical_order_limit.hpp
+// execution/operator/order/physical_top_n.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -16,10 +16,10 @@ namespace duckdb {
 
 //! Represents a physical ordering of the data. Note that this will not change
 //! the data but only add a selection vector.
-class PhysicalOrderAndLimit : public PhysicalOperator {
+class PhysicalTopN : public PhysicalOperator {
 public:
-	PhysicalOrderAndLimit(LogicalOperator &op, vector<BoundOrderByNode> orders, index_t limit, index_t offset)
-	    : PhysicalOperator(PhysicalOperatorType::ORDER_BY_LIMIT, op.types), orders(move(orders)), limit(limit),
+	PhysicalTopN(LogicalOperator &op, vector<BoundOrderByNode> orders, index_t limit, index_t offset)
+	    : PhysicalOperator(PhysicalOperatorType::TOP_N, op.types), orders(move(orders)), limit(limit),
 	      offset(offset), heap_size(0) {
 	}
 
@@ -34,9 +34,9 @@ public:
 	void CalculateHeapSize(index_t rows);
 };
 
-class PhysicalOrderAndLimitOperatorState : public PhysicalOperatorState {
+class PhysicalTopNOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalOrderAndLimitOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
+	PhysicalTopNOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
 	}
 
 	index_t position;

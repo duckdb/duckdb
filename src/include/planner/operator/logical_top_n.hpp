@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/operator/logical_order_limit.hpp
+// planner/operator/logical_top_n.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,11 +13,11 @@
 
 namespace duckdb {
 
-//! LogicalOrder represents a comibination of ORDER BY and LIMIT clause, using Min/Max Heap
-class LogicalOrderAndLimit : public LogicalOperator {
+//! LogicalTopN represents a comibination of ORDER BY and LIMIT clause, using Min/Max Heap
+class LogicalTopN : public LogicalOperator {
 public:
-	LogicalOrderAndLimit(vector<BoundOrderByNode> orders, int64_t limit, int64_t offset)
-	    : LogicalOperator(LogicalOperatorType::ORDER_BY_LIMIT), orders(move(orders)), limit(limit), offset(offset) {
+	LogicalTopN(vector<BoundOrderByNode> orders, int64_t limit, int64_t offset)
+	    : LogicalOperator(LogicalOperatorType::TOP_N), orders(move(orders)), limit(limit), offset(offset) {
 	}
 
 	vector<BoundOrderByNode> orders;

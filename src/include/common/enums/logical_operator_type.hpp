@@ -23,7 +23,7 @@ enum class LogicalOperatorType : uint8_t {
 	WINDOW,
 	LIMIT,
 	ORDER_BY,
-	ORDER_BY_LIMIT,
+	TOP_N,
 	COPY_FROM_FILE,
 	COPY_TO_FILE,
 	DISTINCT,

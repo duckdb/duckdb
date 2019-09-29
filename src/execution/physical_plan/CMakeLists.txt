@@ -22,12 +22,12 @@ add_library_unity(duckdb_physical_plan
                   plan_insert.cpp
                   plan_limit.cpp
                   plan_order.cpp
-                  plan_order_limit.cpp
                   plan_prepare.cpp
                   plan_projection.cpp
                   plan_prune_columns.cpp
                   plan_set_operation.cpp
                   plan_table_function.cpp
+                  plan_top_n.cpp
                   plan_update.cpp
                   plan_window.cpp
                   plan_expression_get.cpp)

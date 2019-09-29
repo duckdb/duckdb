@@ -14,7 +14,7 @@
 #include "execution/operator/join/physical_nested_loop_join.hpp"
 #include "execution/operator/join/physical_piecewise_merge_join.hpp"
 #include "execution/operator/order/physical_order.hpp"
-#include "execution/operator/order/physical_order_limit.hpp"
+#include "execution/operator/order/physical_top_n.hpp"
 #include "execution/operator/persistent/buffered_csv_reader.hpp"
 #include "execution/operator/persistent/physical_copy_from_file.hpp"
 #include "execution/operator/persistent/physical_copy_to_file.hpp"

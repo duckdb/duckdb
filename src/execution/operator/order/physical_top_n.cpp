@@ -1,4 +1,4 @@
-#include "execution/operator/order/physical_order_limit.hpp"
+#include "execution/operator/order/physical_top_n.hpp"
 
 #include "common/assert.hpp"
 #include "common/value_operations/value_operations.hpp"
@@ -9,8 +9,8 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalOrderAndLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalOrderAndLimitOperatorState *>(state_);
+void PhysicalTopN::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+	auto state = reinterpret_cast<PhysicalTopNOperatorState *>(state_);
 	ChunkCollection &big_data = state->sorted_data;
 
 	if (state->position == 0) {
@@ -59,10 +59,10 @@ void PhysicalOrderAndLimit::GetChunkInternal(ClientContext &context, DataChunk &
 	state->position += big_data.MaterializeHeapChunk(chunk, state->heap.get(), state->position, heap_size);
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalOrderAndLimit::GetOperatorState() {
-	return make_unique<PhysicalOrderAndLimitOperatorState>(children[0].get());
+unique_ptr<PhysicalOperatorState> PhysicalTopN::GetOperatorState() {
+	return make_unique<PhysicalTopNOperatorState>(children[0].get());
 }
 
-void PhysicalOrderAndLimit::CalculateHeapSize(index_t rows) {
+void PhysicalTopN::CalculateHeapSize(index_t rows) {
 	heap_size = (rows > offset) ? min(limit + offset, rows) : 0;
 }

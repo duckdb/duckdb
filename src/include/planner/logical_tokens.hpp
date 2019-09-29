@@ -31,7 +31,7 @@ class LogicalIndexScan;
 class LogicalJoin;
 class LogicalLimit;
 class LogicalOrder;
-class LogicalOrderAndLimit;
+class LogicalTopN;
 class LogicalProjection;
 class LogicalInsert;
 class LogicalCopyFromFile;
