@@ -834,10 +834,9 @@ TEST_CASE("ART Integer Types", "[art]") {
 	}
 }
 
-TEST_CASE("ART Big Range", "[art]") {
+TEST_CASE("ART Simple Big Range", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
@@ -868,6 +867,18 @@ TEST_CASE("ART Big Range", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(6000)}));
 	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+}
+
+TEST_CASE("ART Big Range with deletions", "[art]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	index_t n = 4;
+	auto keys = unique_ptr<int32_t[]>(new int32_t[n + 1]);
+	for (index_t i = 0; i < n + 1; i++) {
+		keys[i] = i + 1;
+	}
 
 	// now perform a an index creation and scan with deletions with a second transaction
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));

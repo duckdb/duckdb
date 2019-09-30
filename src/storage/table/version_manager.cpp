@@ -20,17 +20,6 @@ index_t VersionManager::GetSelVector(Transaction &transaction, index_t index, se
 	}
 }
 
-index_t VersionManager::GetCommittedVector(index_t index, sel_t sel_vector[], index_t max_count) {
-	auto entry = info.find(index);
-	if (entry == info.end()) {
-		// no info, use everything
-		return max_count;
-	} else {
-		// get committed entries from the version info
-		return entry->second->GetCommittedVector(sel_vector, max_count);
-	}
-}
-
 bool VersionManager::Fetch(Transaction &transaction, index_t row) {
 	index_t vector_index = row / STANDARD_VECTOR_SIZE;
 

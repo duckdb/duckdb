@@ -32,7 +32,6 @@ public:
 	ChunkInfoType type;
 public:
 	virtual index_t GetSelVector(Transaction &transaction, sel_t sel_vector[], index_t max_count) = 0;
-	virtual index_t GetCommittedVector(sel_t sel_vector[], index_t max_count) = 0;
 	//! Returns whether or not a single row in the ChunkInfo should be used or not for the given transaction
 	virtual bool Fetch(Transaction &transaction, row_t row) = 0;
 	//! Marks the set of tuples inside the chunk as deleted
@@ -50,7 +49,6 @@ public:
 	transaction_t deleted[STANDARD_VECTOR_SIZE];
 public:
 	index_t GetSelVector(Transaction &transaction, sel_t sel_vector[], index_t max_count) override;
-	index_t GetCommittedVector(sel_t sel_vector[], index_t max_count) override;
 	bool Fetch(Transaction &transaction, row_t row) override;
 
 	void Delete(Transaction &transaction, row_t rows[], index_t count) override;

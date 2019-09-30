@@ -584,39 +584,24 @@ void DataTable::CreateIndexScan(CreateIndexScanState &state, DataChunk &result) 
 	}
 	// scan the transient segments
 	while (state.current_transient_row < state.max_transient_row) {
-		index_t max_count = std::min((index_t) STANDARD_VECTOR_SIZE, state.max_transient_row - state.current_transient_row);
-		index_t vector_offset = state.current_transient_row / STANDARD_VECTOR_SIZE;
-		// first scan the version chunk manager to figure out which tuples to load for this transaction
-		index_t count = transient_manager.GetCommittedVector(vector_offset, state.sel_vector, max_count);
-		if (count == 0) {
-			// nothing to scan for this vector, skip the entire vector
-			for(index_t i = 0; i < state.column_ids.size(); i++) {
-				auto column = state.column_ids[i];
-				if (column != COLUMN_IDENTIFIER_ROW_ID) {
-					columns[column].SkipTransientScan(state.transient_states[i]);
-				}
-			}
-			state.current_transient_row += STANDARD_VECTOR_SIZE;
-			continue;
-		}
+		index_t count = std::min((index_t) STANDARD_VECTOR_SIZE, state.max_transient_row - state.current_transient_row);
 
-		sel_t *sel_vector = count == max_count ? nullptr : state.sel_vector;
-		// now scan the base columns to fetch the actual data
+		// scan the base columns to fetch the actual data
+		// note that we insert all data into the index, even if it is marked as deleted
+		// FIXME: tuples that are already "cleaned up" does not need to be inserted into the index!
 		for(index_t i = 0; i < state.column_ids.size(); i++) {
 			auto column = state.column_ids[i];
 			if (column == COLUMN_IDENTIFIER_ROW_ID) {
 				// scan row id
 				assert(result.data[i].type == TypeId::BIGINT);
-				result.data[i].count = max_count;
+				result.data[i].count = count;
 				VectorOperations::GenerateSequence(result.data[i], state.max_persistent_row + state.current_transient_row);
 			} else {
 				// scan actual base column
 				columns[column].IndexScan(state.transient_states[i], result.data[i]);
 			}
-			result.data[i].sel_vector = sel_vector;
 			result.data[i].count = count;
 		}
-		result.sel_vector = sel_vector;
 
 		state.current_transient_row += STANDARD_VECTOR_SIZE;
 		return;
