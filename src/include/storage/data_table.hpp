@@ -52,6 +52,8 @@ public:
 	//! Indexes
 	vector<unique_ptr<Index>> indexes;
 
+	bool temporary;
+
 public:
 	void InitializeScan(TableScanState &state, vector<column_t> column_ids);
 	void InitializeScan(Transaction &transaction, TableScanState &state, vector<column_t> column_ids);

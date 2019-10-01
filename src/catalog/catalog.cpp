@@ -23,6 +23,11 @@ Catalog::Catalog(StorageManager &storage) : storage(storage), schemas(*this), de
 }
 
 void Catalog::CreateSchema(Transaction &transaction, CreateSchemaInfo *info) {
+	if (info->schema == TEMP_SCHEMA) {
+		throw CatalogException("Cannot create built-in schema \"%s\"",
+		                       info->schema.c_str());
+	}
+
 	unordered_set<CatalogEntry *> dependencies;
 	auto entry = make_unique_base<CatalogEntry, SchemaCatalogEntry>(this, info->schema);
 	if (!schemas.CreateEntry(transaction, info->schema, move(entry), dependencies)) {
@@ -33,7 +38,7 @@ void Catalog::CreateSchema(Transaction &transaction, CreateSchemaInfo *info) {
 }
 
 void Catalog::DropSchema(Transaction &transaction, DropInfo *info) {
-	if (info->name == DEFAULT_SCHEMA) {
+	if (info->name == DEFAULT_SCHEMA || info->name == TEMP_SCHEMA) {
 		throw CatalogException("Cannot drop schema \"%s\" because it is required by the database system",
 		                       info->name.c_str());
 	}

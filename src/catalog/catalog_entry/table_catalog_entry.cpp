@@ -37,12 +37,16 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 		// create the physical storage
 		string schema_name;
 		if (info->base->temporary) {
-			schema_name = "__temporary";
+			schema_name = "XXX"; // TODO this needs to be handled upstairs
 		}
 		else {
 			schema_name = schema->name;
 		}
 		storage = make_shared<DataTable>(catalog->storage, schema_name, name, GetTypes(), move(info->data));
+
+		if (info->base->temporary) { // FIXME
+			storage->temporary = true;
+		}
 		// create the unique indexes for the UNIQUE and PRIMARY KEY constraints
 		for (index_t i = 0; i < bound_constraints.size(); i++) {
 			auto &constraint = bound_constraints[i];

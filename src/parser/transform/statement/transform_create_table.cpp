@@ -17,12 +17,29 @@ unique_ptr<CreateTableStatement> Transformer::TransformCreateTable(Node *node) {
 	}
 	assert(stmt->relation);
 
+	info.schema = "";
 	if (stmt->relation->schemaname) {
 		info.schema = stmt->relation->schemaname;
 	}
 	info.table = stmt->relation->relname;
 	info.if_not_exists = stmt->if_not_exists;
 	info.temporary = stmt->relation->relpersistence == PostgresRelPersistence::RELPERSISTENCE_TEMP;
+
+	if (info.temporary && stmt->oncommit != OnCommitAction::ONCOMMIT_PRESERVE_ROWS && stmt->oncommit != OnCommitAction::ONCOMMIT_NOOP) {
+		throw NotImplementedException("Only ON COMMIT PRESERVE ROWS is supported");
+	}
+
+
+	if (info.temporary) {
+		if (info.schema.length() > 0 && info.schema != TEMP_SCHEMA) {
+			throw ParserException("Temporary table names can only use the \"temp\" schema");
+		}
+		info.schema = TEMP_SCHEMA;
+	} else {
+		if (info.schema.length()  == 0) {
+			info.schema = DEFAULT_SCHEMA;
+		}
+	}
 
 	assert(stmt->tableElts);
 

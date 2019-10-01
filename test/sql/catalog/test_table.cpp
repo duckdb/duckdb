@@ -19,18 +19,95 @@ TEST_CASE("Test failure cases in table creation/deletion", "[catalog]") {
 }
 
 TEST_CASE("Test temporary table creation", "[catalog]") {
+
 	unique_ptr<QueryResult> result;
+
+
+	// see if temp tables survive restart
+	FileSystem fs;
+	string db_folder = TestCreatePath("temptbls");
+
+	{
+		DuckDB db_p(db_folder);
+		Connection con_p(db_p);
+		REQUIRE_NO_FAIL(con_p.Query("CREATE TEMPORARY TABLE a (i INTEGER)"));
+		REQUIRE_NO_FAIL(con_p.Query("INSERT INTO a VALUES (42)"));
+		// TODO also update, delete and drop here, we want to make sure none of this ends up in WAL
+	}
+
+	{
+		DuckDB db_p(db_folder);
+		Connection con_p(db_p);
+		REQUIRE_FAIL(con_p.Query("SELECT * FROM a"));
+		REQUIRE_NO_FAIL(con_p.Query("CREATE TEMPORARY TABLE a (i INTEGER)"));
+	}
+
+
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY TABLE integers(i INTEGER)"));
+
+
+	// basic temp table creation works
+	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY TABLE integers(i INTEGER) ON COMMIT PRESERVE ROWS"));
+	// we can (but never are required to) prefix temp tables with "temp" schema
+	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY TABLE integersx(i INTEGER)"));
+	// we can't prefix temp tables with a schema that is not "temp"
+	REQUIRE_FAIL(con.Query("CREATE TEMPORARY TABLE asdf.integersy(i INTEGER)"));
+	REQUIRE_FAIL(con.Query("CREATE SCHEMA temp"));
+
+	//REQUIRE_FAIL(con.Query("DROP TABLE main.integersx"));
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integersx"));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY TABLE temp.integersx(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE temp.integersx"));
+
+
+	// unsupported because stupid
+	REQUIRE_FAIL(con.Query("CREATE TEMPORARY TABLE integers2(i INTEGER) ON COMMIT DELETE ROWS"));
+
+	// temp table already exists
+	REQUIRE_FAIL(con.Query("CREATE TEMPORARY TABLE integers(i INTEGER)"));
+
+
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (42)"));
 	result = con.Query("SELECT i from integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	// temp table survives commit
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY TABLE integers2(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers2 VALUES (42)"));
+	result = con.Query("SELECT i from integers2");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
+	result = con.Query("SELECT i from integers2");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	// temp table does not survive rollback
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY TABLE integers3(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers3 VALUES (42)"));
+	result = con.Query("SELECT i from integers3");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+
+	REQUIRE_FAIL(con.Query("SELECT i from integers3"));
+
+	Connection con2(db);
+	// table is not visible to other cons
+	REQUIRE_FAIL(con2.Query("INSERT INTO integers VALUES (42)"));
+
+
+
 }
 
 
-// todo temp tables survive commit but not rollback
-// todo on commit preserve rows default
+// TODO sequences?
+// TODO constraints on temp tables??
 // todo temp tables override normal tables (?)
 // todo temp tables create/delete/alter/contents are not persisted nor logged
+// todo temp table updates/deletes
+// TODO COPY into needs to work too
+// todo schema prefixes

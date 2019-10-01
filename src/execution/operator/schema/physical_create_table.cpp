@@ -15,6 +15,7 @@ void PhysicalCreateTable::GetChunkInternal(ClientContext &context, DataChunk &ch
 	TableCatalogEntry* t_entry = nullptr;
 	if (info->base->temporary) { // FIXME duplicated from schema_catalog_entry
 		auto table = make_unique_base<CatalogEntry, TableCatalogEntry>(&context.catalog, nullptr, info.get());
+		table->temporary = true;
 		if (!context.temporary_tables->CreateEntry(context.ActiveTransaction(), info->base->table, move(table), info->dependencies)) {
 			if (!info->base->if_not_exists) {
 				throw CatalogException("Table or view with name \"%s\" already exists!", info->base->table.c_str());

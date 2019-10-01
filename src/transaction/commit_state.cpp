@@ -56,6 +56,9 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteCatalogEntry(CatalogEntr
 			// ALTER TABLE statement, skip it
 			return;
 		}
+		if (parent->temporary) {
+			return;
+		}
 		log->WriteCreateTable((TableCatalogEntry *)parent);
 		break;
 	case CatalogType::SCHEMA:
