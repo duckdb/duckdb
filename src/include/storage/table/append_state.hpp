@@ -19,8 +19,6 @@ class TransientSegment;
 struct TransientAppendState {
 	//! The write lock that is held by the append
 	unique_ptr<StorageLockKey> lock;
-	//! The handle to the current buffer that is held by the append
-	unique_ptr<ManagedBufferHandle> handle;
 };
 
 struct ColumnAppendState {

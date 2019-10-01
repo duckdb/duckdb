@@ -25,18 +25,16 @@ void ColumnData::InitializeTransientScan(TransientScanState &state) {
 
 void ColumnData::TransientScan(Transaction &transaction, TransientScanState &state, Vector &result) {
 	if (state.vector_index == 0) {
-		// first vector of this segment: initialize the scan for this segment
 		state.transient->InitializeScan(state);
 	}
 	// perform a scan of this segment
-	state.transient->Scan(transaction, state.vector_index, result);
+	state.transient->Scan(transaction, state, state.vector_index, result);
 	// move over to the next vector
 	SkipTransientScan(state);
 }
 
 void ColumnData::IndexScan(TransientScanState &state, Vector &result) {
 	if (state.vector_index == 0) {
-		// first vector of this segment: initialize the scan for this segment
 		state.transient->InitializeScan(state);
 	}
 	// perform a scan of this segment
@@ -47,7 +45,7 @@ void ColumnData::IndexScan(TransientScanState &state, Vector &result) {
 
 void ColumnData::SkipTransientScan(TransientScanState &state) {
 	state.vector_index++;
-	if (state.vector_index == state.transient->data.max_vector_count) {
+	if (state.vector_index == state.transient->data->max_vector_count) {
 		state.transient = (TransientSegment*) state.transient->next.get();
 		state.vector_index = 0;
 	}

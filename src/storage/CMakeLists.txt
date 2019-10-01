@@ -13,10 +13,12 @@ add_library_unity(duckdb_storage
                   local_storage.cpp
                   meta_block_reader.cpp
                   meta_block_writer.cpp
+                  numeric_segment.cpp
                   storage_manager.cpp
                   write_ahead_log.cpp
                   uncompressed_segment.cpp
                   single_file_block_manager.cpp
+                  string_segment.cpp
                   storage_info.cpp
                   storage_lock.cpp
                   wal_replay.cpp)

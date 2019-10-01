@@ -23,12 +23,11 @@ public:
 	//! The buffer manager
 	BufferManager &manager;
 	//! The uncompressed segment holding the data
-	UncompressedSegment data;
+	unique_ptr<UncompressedSegment> data;
 public:
-	//! Initialize a scan of this transient segment
 	void InitializeScan(TransientScanState &state);
 	//! Scan one vector from this transient segment
-	void Scan(Transaction &transaction, index_t vector_index, Vector &result);
+	void Scan(Transaction &transaction, TransientScanState &state, index_t vector_index, Vector &result);
 	//! Scan one vector from this transient segment, throwing an exception if there are any outstanding updates
 	void IndexScan(TransientScanState &state, Vector &result);
 

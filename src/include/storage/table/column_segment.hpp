@@ -25,8 +25,6 @@ struct ColumnPointer {
 	ColumnSegment *segment;
 	//! The offset inside the column segment
 	index_t offset;
-	//! The set of pinned block handles for this scan
-	unordered_map<block_id_t, unique_ptr<BufferHandle>> handles;
 };
 
 struct SegmentStatistics {
