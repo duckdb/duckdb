@@ -28,18 +28,17 @@ struct IndexScanState {
 	}
 };
 
-struct UncompressedSegmentScanState {
-	//! The locks that are held during the scan, only used by the index scan
-	vector<unique_ptr<StorageLockKey>> locks;
-};
-
 struct TransientScanState {
 	//! The transient segment that is currently being scanned
 	TransientSegment *transient;
 	//! The vector index of the transient segment
 	index_t vector_index;
-	//! The scan state of the uncompressed segment
-	UncompressedSegmentScanState state;
+	//! The primary buffer handle
+	unique_ptr<BufferHandle> primary_handle;
+	//! The set of pinned block handles for this scan
+	unordered_map<block_id_t, unique_ptr<BufferHandle>> handles;
+	//! The locks that are held during the scan, only used by the index scan
+	vector<unique_ptr<StorageLockKey>> locks;
 };
 
 struct LocalScanState {

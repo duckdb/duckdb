@@ -588,7 +588,7 @@ void DataTable::CreateIndexScan(CreateIndexScanState &state, DataChunk &result) 
 
 		// scan the base columns to fetch the actual data
 		// note that we insert all data into the index, even if it is marked as deleted
-		// FIXME: tuples that are already "cleaned up" does not need to be inserted into the index!
+		// FIXME: tuples that are already "cleaned up" do not need to be inserted into the index!
 		for(index_t i = 0; i < state.column_ids.size(); i++) {
 			auto column = state.column_ids[i];
 			if (column == COLUMN_IDENTIFIER_ROW_ID) {
