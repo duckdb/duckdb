@@ -34,7 +34,9 @@ TEST_CASE("Test temporary table creation", "[catalog]") {
 		REQUIRE_NO_FAIL(con_p.Query("INSERT INTO a VALUES (42)"));
 		REQUIRE_NO_FAIL(con_p.Query("DELETE FROM a"));
 		REQUIRE_NO_FAIL(con_p.Query("INSERT INTO a VALUES (43)"));
-		// TODO also update, delete and drop here, we want to make sure none of this ends up in WAL
+		// TODO also update here
+		result = con_p.Query("SELECT COUNT(*) from a");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	}
 
 	{
@@ -43,8 +45,8 @@ TEST_CASE("Test temporary table creation", "[catalog]") {
 		REQUIRE_FAIL(con_p.Query("SELECT * FROM a"));
 		result = con_p.Query("CREATE TEMPORARY TABLE a (i INTEGER)");
 		REQUIRE_NO_FAIL(con_p.Query("SELECT * FROM a"));
-
-
+		result = con_p.Query("SELECT COUNT(*) from a");
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	}
 
 
