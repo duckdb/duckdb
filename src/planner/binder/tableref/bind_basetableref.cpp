@@ -22,7 +22,11 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &expr) {
 	}
 	// not a CTE
 	// extract a table or view from the catalog
-	auto table_or_view = context.catalog.GetTableOrView(context.ActiveTransaction(), expr.schema_name, expr.table_name);
+	CatalogEntry* table_or_view;
+	table_or_view = context.temporary_tables->GetEntry(context.ActiveTransaction(), expr.table_name);
+	if (!table_or_view) {
+		table_or_view = context.catalog.GetTableOrView(context.ActiveTransaction(), expr.schema_name, expr.table_name);
+	}
 	switch (table_or_view->type) {
 	case CatalogType::TABLE: {
 		// base table: create the BoundBaseTableRef node

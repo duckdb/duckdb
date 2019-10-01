@@ -11,9 +11,6 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundCreateTableSta
 		// create table from query
 		root = CreatePlan(*stmt.query);
 	}
-	if (stmt.info->base->temporary) {
-		throw NotImplementedException("TEMPORARY tables are not yet supported");
-	}
 	// create the logical operator
 	auto create_table = make_unique<LogicalCreateTable>(stmt.schema, move(stmt.info));
 	if (root) {

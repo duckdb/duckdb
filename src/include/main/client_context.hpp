@@ -42,7 +42,7 @@ public:
 	ExecutionContext execution_context;
 
 	Catalog &catalog;
-	//	unique_ptr<CatalogSet> temporary_tables;
+	unique_ptr<CatalogSet> temporary_tables;
 	unique_ptr<CatalogSet> prepared_statements;
 
 	// Whether or not aggressive query verification is enabled

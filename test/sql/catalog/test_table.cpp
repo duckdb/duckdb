@@ -23,6 +23,14 @@ TEST_CASE("Test temporary table creation", "[catalog]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	// temp tables are not supported yet
-	REQUIRE_FAIL(con.Query("CREATE TEMPORARY TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (42)"));
+	result = con.Query("SELECT i from integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 }
+
+
+// todo temp tables survive commit but not rollback
+// todo on commit preserve rows default
+// todo temp tables override normal tables (?)
+// todo temp tables create/delete/alter/contents are not persisted nor logged
