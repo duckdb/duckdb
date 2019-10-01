@@ -164,7 +164,7 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::CommitEntry(UndoFlags type, d
 		// deletion:
 		auto info = (DeleteInfo *)data;
 		info->GetTable().cardinality -= info->count;
-		if (HAS_LOG) {
+		if (HAS_LOG && !info->GetTable().temporary) {
 			WriteDelete(info);
 		}
 		// mark the tuples as committed

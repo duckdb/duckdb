@@ -32,6 +32,8 @@ TEST_CASE("Test temporary table creation", "[catalog]") {
 		Connection con_p(db_p);
 		REQUIRE_NO_FAIL(con_p.Query("CREATE TEMPORARY TABLE a (i INTEGER)"));
 		REQUIRE_NO_FAIL(con_p.Query("INSERT INTO a VALUES (42)"));
+		REQUIRE_NO_FAIL(con_p.Query("DELETE FROM a"));
+		REQUIRE_NO_FAIL(con_p.Query("INSERT INTO a VALUES (43)"));
 		// TODO also update, delete and drop here, we want to make sure none of this ends up in WAL
 	}
 
@@ -39,7 +41,10 @@ TEST_CASE("Test temporary table creation", "[catalog]") {
 		DuckDB db_p(db_folder);
 		Connection con_p(db_p);
 		REQUIRE_FAIL(con_p.Query("SELECT * FROM a"));
-		REQUIRE_NO_FAIL(con_p.Query("CREATE TEMPORARY TABLE a (i INTEGER)"));
+		result = con_p.Query("CREATE TEMPORARY TABLE a (i INTEGER)");
+		REQUIRE_NO_FAIL(con_p.Query("SELECT * FROM a"));
+
+
 	}
 
 
