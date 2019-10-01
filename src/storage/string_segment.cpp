@@ -214,7 +214,7 @@ void StringSegment::WriteString(const char *str, index_t string_length, block_id
 	result_offset = head->offset;
 
 	// copy the string and the length there
-	auto ptr = handle->buffer->data.get();
+	auto ptr = handle->buffer->data.get() + head->offset;
 	memcpy(ptr, &total_length, sizeof(uint32_t));
 	ptr += sizeof(uint32_t);
 	memcpy(ptr, str, string_length);
