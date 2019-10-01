@@ -26,14 +26,21 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 	const string kQuoteTok = "quote";
 	const string kEscapeTok = "escape";
 	const string kHeaderTok = "header";
+	const string kNullTok = "null";
+	const string kForceQuoteTok = "force_quote";
+	const string kForceNotNullTok = "force_not_null";
+	const string kEncodingTok = "encoding";
 
 	CopyStmt *stmt = reinterpret_cast<CopyStmt *>(node);
 	assert(stmt);
 	auto result = make_unique<CopyStatement>();
 	auto &info = *result->info;
+
+	// get file_path and is_from
 	info.file_path = stmt->filename;
 	info.is_from = stmt->is_from;
 
+	// get select_list
 	if (stmt->attlist) {
 		for (auto n = stmt->attlist->head; n != nullptr; n = n->next) {
 			auto target = reinterpret_cast<ResTarget *>(n->data.ptr_value);
@@ -48,6 +55,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 		if (info.is_from) {
 			// copy file into table
 			auto &table = *reinterpret_cast<BaseTableRef *>(ref.get());
+			// get table and schema
 			info.table = table.table_name;
 			info.schema = table.schema_name;
 		} else {
@@ -55,8 +63,9 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			auto statement = make_unique<SelectNode>();
 			statement->from_table = move(ref);
 			if (stmt->attlist) {
-				for (index_t i = 0; i < info.select_list.size(); i++)
+				for (index_t i = 0; i < info.select_list.size(); i++) {
 					statement->select_list.push_back(make_unique<ColumnRefExpression>(info.select_list[i]));
+				}
 			} else {
 				statement->select_list.push_back(make_unique<StarExpression>());
 			}
@@ -66,7 +75,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 		result->select_statement = TransformSelectNode((SelectStmt *)stmt->query);
 	}
 
-	// Handle options
+	// handle options
 	if (stmt->options) {
 		ListCell *cell = nullptr;
 		for_each_cell(cell, stmt->options->head) {
@@ -74,7 +83,9 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 
 			if (StringUtil::StartsWith(def_elem->defname, "delim") ||
 			    StringUtil::StartsWith(def_elem->defname, "sep")) {
+
 				// delimiter
+				// TODO: allow multi-character delimiters
 				auto *delimiter_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
 				if (!delimiter_val || delimiter_val->type != T_String) {
 					throw ParserException("Unsupported parameter type for DELIMITER: expected e.g. DELIMITER ','");
@@ -82,37 +93,53 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 				index_t delim_len = strlen(delimiter_val->val.str);
 				info.delimiter = '\0';
 				char *delim_cstr = delimiter_val->val.str;
+
+				//for delimiters that are of length 1
 				if (delim_len == 1) {
 					info.delimiter = delim_cstr[0];
 				}
 				if (delim_len == 2 && delim_cstr[0] == '\\' && delim_cstr[1] == 't') {
+					//tab
 					info.delimiter = '\t';
 				}
+				//if neither tab nor other character, throw error, TODO: allow multi-character delimiters
 				if (info.delimiter == '\0') {
 					throw Exception("Could not interpret DELIMITER option");
 				}
+
 			} else if (def_elem->defname == kFormatTok) {
+
 				// format
 				auto *format_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
 				if (!format_val || format_val->type != T_String) {
 					throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv'");
 				}
+				if (StringUtil::Upper(format_val->val.str) != "CSV") {
+					throw Exception("Copy is only supported for .CSV-files, e.g. FORMAT 'csv'");
+				}
 				info.format = StringToExternalFileFormat(format_val->val.str);
+
 			} else if (def_elem->defname == kQuoteTok) {
+
 				// quote
 				auto *quote_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
 				if (!quote_val || quote_val->type != T_String) {
 					throw ParserException("Unsupported parameter type for QUOTE: expected e.g. QUOTE '\"'");
 				}
 				info.quote = *quote_val->val.str;
+
 			} else if (def_elem->defname == kEscapeTok) {
+
 				// escape
 				auto *escape_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
 				if (!escape_val || escape_val->type != T_String) {
-					throw ParserException("Unsupported parameter type for ESCAPE: expected e.g. ESCAPE '\\'");
+					throw ParserException("Unsupported parameter type for ESCAPE: expected e.g. ESCAPE '\"'");
 				}
 				info.escape = *escape_val->val.str;
+
 			} else if (def_elem->defname == kHeaderTok) {
+
+				// header
 				auto *header_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
 				if (!header_val) {
 					info.header = true;
@@ -128,9 +155,73 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 					break;
 				}
 				default:
-					throw ParserException("Unsupported parameter type for HEADER");
+					throw ParserException("Unsupported parameter type for HEADER: expected e.g. HEADER 1");
 				}
-			} else {
+
+			} else if (def_elem->defname == kNullTok) {
+
+				// null
+				auto *null_val = (postgres::Value *)(def_elem->arg);
+				if (!null_val || null_val->type != T_String) {
+					throw ParserException("Unsupported parameter type for NULL: expected e.g. NULL 'null'");
+				}
+				info.null_cstr = null_val->val.str;
+
+			} else if (def_elem->defname == kForceQuoteTok) {
+
+				// force quote
+				auto *quote_val = def_elem->arg;
+				if (!quote_val->type || (quote_val->type != T_A_Star && quote_val->type != T_List)) {
+					throw ParserException("Unsupported parameter type for FORCE_QUOTE: expected e.g. FORCE_QUOTE *");
+				}
+
+				// * option (all columns)
+				if (quote_val->type == T_A_Star) {
+					info.quote_all = true;
+				}
+
+				// list of columns
+				if (quote_val->type == T_List) {
+					auto column_list = (postgres::List*)(quote_val);
+					for (ListCell *c = column_list->head; c != NULL; c = lnext(c)) {
+						ResTarget *target = (ResTarget *)(c->data.ptr_value);
+						info.force_quote_list.push_back(string(target->name));
+					}
+				}
+
+			} else if (def_elem->defname == kForceNotNullTok) {
+
+				// force not null
+				// only allow in COPY ... FROM ...
+				if (!info.is_from) {
+					throw Exception("The FORCE_NOT_NULL option is only allowed in COPY ... FROM ...");
+				}
+
+				auto *force_not_null_val = def_elem->arg;
+				if (!force_not_null_val->type || force_not_null_val->type != T_List) {
+					throw ParserException("Unsupported parameter type for FORCE_NOT_NULL: expected e.g. FORCE_NOT_NULL *");
+				}
+
+				auto column_list = (postgres::List*)(force_not_null_val);
+				for (ListCell *c = column_list->head; c != NULL; c = lnext(c)) {
+					ResTarget *target = (ResTarget *)(c->data.ptr_value);
+					info.force_not_null_list.push_back(string(target->name));
+				}
+
+			} else if (def_elem->defname == kEncodingTok) {
+
+				// encoding
+				auto *encoding_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
+				if (!encoding_val || encoding_val->type != T_String) {
+					throw ParserException("Unsupported parameter type for ENCODING: expected e.g. ENCODING 'UTF-8'");
+				}
+				if (StringUtil::Upper(encoding_val->val.str) != "UTF8" && StringUtil::Upper(encoding_val->val.str) != "UTF-8") {
+					throw Exception("Copy is only supported for UTF-8 encoded files, e.g. ENCODING 'UTF-8'");
+				}
+
+			}
+			
+			else {
 				throw ParserException("Unsupported COPY option: %s", def_elem->defname);
 			}
 		}
