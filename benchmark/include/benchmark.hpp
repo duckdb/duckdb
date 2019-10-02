@@ -71,6 +71,12 @@ public:
 	virtual bool RequireReinit() {
 		return false;
 	}
+
+	// does not call reinit for entire group when set. implies requirereinit = false
+	virtual bool GroupCacheState() {
+		return false;
+	}
+
 	//! The amount of runs to do for this benchmark
 	virtual size_t NRuns() {
 		return DEFAULT_NRUNS;
