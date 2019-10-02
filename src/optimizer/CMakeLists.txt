@@ -13,7 +13,8 @@ add_library_unity(duckdb_optimizer
                   optimizer.cpp
                   expression_rewriter.cpp
                   regex_range_filter.cpp
-                  index_scan.cpp)
+                  index_scan.cpp
+                  topn_optimizer.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer>
     PARENT_SCOPE)

@@ -9,6 +9,7 @@
 #include "optimizer/join_order_optimizer.hpp"
 #include "optimizer/regex_range_filter.hpp"
 #include "optimizer/rule/list.hpp"
+#include "optimizer/topn_optimizer.hpp"
 #include "planner/binder.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/expression/bound_operator_expression.hpp"
@@ -109,6 +110,13 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	InClauseRewriter rewriter(*this);
 	plan = rewriter.Rewrite(move(plan));
 	context.profiler.EndPhase();
+
+	// transform ORDER BY + LIMIT to TopN
+	context.profiler.StartPhase("top_n");
+	TopN topn;
+	plan = topn.Optimize(move(plan));
+	context.profiler.EndPhase();
+
 	return plan;
 }
 
