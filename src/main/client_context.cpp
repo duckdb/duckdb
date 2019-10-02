@@ -24,7 +24,7 @@ using namespace std;
 
 ClientContext::ClientContext(DuckDB &database)
     : db(database), transaction(*database.transaction_manager), interrupted(false), catalog(*database.catalog),
-	  temporary_tables(make_unique<CatalogSet>(*db.catalog)), prepared_statements(make_unique<CatalogSet>(*db.catalog)),  open_result(nullptr) {
+	  temporary_objects(make_unique<SchemaCatalogEntry>(db.catalog.get(), TEMP_SCHEMA)), prepared_statements(make_unique<CatalogSet>(*db.catalog)),  open_result(nullptr) {
 }
 
 void ClientContext::Cleanup() {

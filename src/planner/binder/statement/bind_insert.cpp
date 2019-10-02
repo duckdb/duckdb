@@ -10,11 +10,11 @@ using namespace std;
 
 unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 	auto result = make_unique<BoundInsertStatement>();
-	TableCatalogEntry* table = (TableCatalogEntry*) context.temporary_tables->GetEntry(context.ActiveTransaction(), stmt.table);
-	// first find temp table if present
+	TableCatalogEntry* table = context.temporary_objects->GetTableOrNull(context.ActiveTransaction(), stmt.table);
 	if (!table) {
 		table = context.catalog.GetTable(context.ActiveTransaction(), stmt.schema, stmt.table);
 	}
+	assert(table);
 
 	result->table = table;
 

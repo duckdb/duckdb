@@ -22,11 +22,25 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &expr) {
 	}
 	// not a CTE
 	// extract a table or view from the catalog
-	CatalogEntry* table_or_view;
-	table_or_view = context.temporary_tables->GetEntry(context.ActiveTransaction(), expr.table_name);
-	if (!table_or_view) {
+	// TODO check the schema name!
+	// expr.schema_name
+
+	CatalogEntry* table_or_view = nullptr;
+
+	// we need to figure out where this table lives, this ensures we can't do stuff like CREATE TEMPORARY TABLE asdf.a ...
+	if (expr.schema_name == INVALID_SCHEMA) {
+		table_or_view = context.temporary_objects->GetTableOrNull(context.ActiveTransaction(), expr.table_name);
+		if (!table_or_view) {
+			table_or_view = context.catalog.GetTableOrView(context.ActiveTransaction(), expr.schema_name, expr.table_name);
+		}
+	} else if (expr.schema_name == TEMP_SCHEMA) {
+		table_or_view = context.temporary_objects->GetTable(context.ActiveTransaction(), expr.table_name);
+	} else  {
 		table_or_view = context.catalog.GetTableOrView(context.ActiveTransaction(), expr.schema_name, expr.table_name);
 	}
+
+	assert(table_or_view);
+
 	switch (table_or_view->type) {
 	case CatalogType::TABLE: {
 		// base table: create the BoundBaseTableRef node

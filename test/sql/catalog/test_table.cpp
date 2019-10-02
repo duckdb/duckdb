@@ -30,11 +30,15 @@ TEST_CASE("Test temporary table creation", "[catalog]") {
 	{
 		DuckDB db_p(db_folder);
 		Connection con_p(db_p);
-		REQUIRE_NO_FAIL(con_p.Query("CREATE TEMPORARY TABLE a (i INTEGER)"));
+		REQUIRE_NO_FAIL(con_p.Query("CREATE TEMPORARY TABLE temp.a (i INTEGER)"));
 		REQUIRE_NO_FAIL(con_p.Query("INSERT INTO a VALUES (42)"));
 		REQUIRE_NO_FAIL(con_p.Query("DELETE FROM a"));
-		REQUIRE_NO_FAIL(con_p.Query("INSERT INTO a VALUES (43)"));
-		// TODO also update here
+		REQUIRE_NO_FAIL(con_p.Query("DELETE FROM temp.a"));
+		REQUIRE_FAIL(con_p.Query("DELETE FROM asdf.a"));
+
+		REQUIRE_NO_FAIL(con_p.Query("INSERT INTO temp.a VALUES (43)"));
+		// TODO also update here, but no code for this yet in this branch
+
 		result = con_p.Query("SELECT COUNT(*) from a");
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	}
@@ -61,9 +65,11 @@ TEST_CASE("Test temporary table creation", "[catalog]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY TABLE integersx(i INTEGER)"));
 	// we can't prefix temp tables with a schema that is not "temp"
 	REQUIRE_FAIL(con.Query("CREATE TEMPORARY TABLE asdf.integersy(i INTEGER)"));
+	REQUIRE_FAIL(con.Query("CREATE TABLE temp.integersy(i INTEGER)"));
+
 	REQUIRE_FAIL(con.Query("CREATE SCHEMA temp"));
 
-	//REQUIRE_FAIL(con.Query("DROP TABLE main.integersx"));
+	REQUIRE_FAIL(con.Query("DROP TABLE main.integersx"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integersx"));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY TABLE temp.integersx(i INTEGER)"));
@@ -106,15 +112,9 @@ TEST_CASE("Test temporary table creation", "[catalog]") {
 	// table is not visible to other cons
 	REQUIRE_FAIL(con2.Query("INSERT INTO integers VALUES (42)"));
 
-
-
 }
 
-
 // TODO sequences?
-// TODO constraints on temp tables??
-// todo temp tables override normal tables (?)
+// TODO constraints on temp tables? nooo
 // todo temp tables create/delete/alter/contents are not persisted nor logged
-// todo temp table updates/deletes
-// TODO COPY into needs to work too
-// todo schema prefixes
+// todo temp table updates

@@ -15,6 +15,7 @@
 #include "transaction/transaction_context.hpp"
 #include "common/unordered_set.hpp"
 #include "main/prepared_statement.hpp"
+#include "catalog/catalog_entry/schema_catalog_entry.hpp"
 
 namespace duckdb {
 class Catalog;
@@ -42,7 +43,7 @@ public:
 	ExecutionContext execution_context;
 
 	Catalog &catalog;
-	unique_ptr<CatalogSet> temporary_tables;
+	unique_ptr<SchemaCatalogEntry> temporary_objects;
 	unique_ptr<CatalogSet> prepared_statements;
 
 	// Whether or not aggressive query verification is enabled

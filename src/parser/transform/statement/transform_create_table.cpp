@@ -17,7 +17,7 @@ unique_ptr<CreateTableStatement> Transformer::TransformCreateTable(Node *node) {
 	}
 	assert(stmt->relation);
 
-	info.schema = "";
+	info.schema = INVALID_SCHEMA;
 	if (stmt->relation->schemaname) {
 		info.schema = stmt->relation->schemaname;
 	}
@@ -29,13 +29,15 @@ unique_ptr<CreateTableStatement> Transformer::TransformCreateTable(Node *node) {
 		throw NotImplementedException("Only ON COMMIT PRESERVE ROWS is supported");
 	}
 
-
 	if (info.temporary) {
 		if (info.schema.length() > 0 && info.schema != TEMP_SCHEMA) {
-			throw ParserException("Temporary table names can only use the \"temp\" schema");
+			throw ParserException("TEMPORARY table names can only use the \"temp\" schema");
 		}
 		info.schema = TEMP_SCHEMA;
 	} else {
+		if (info.schema == TEMP_SCHEMA) {
+			throw ParserException("Only TEMPORARY table names can use the \"temp\" schema");
+		}
 		if (info.schema.length()  == 0) {
 			info.schema = DEFAULT_SCHEMA;
 		}

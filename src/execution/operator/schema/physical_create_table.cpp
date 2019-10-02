@@ -12,23 +12,15 @@ using namespace std;
 void PhysicalCreateTable::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	int64_t inserted_count = 0;
 
-	TableCatalogEntry* t_entry = nullptr;
-	if (info->base->temporary) { // FIXME duplicated from schema_catalog_entry
-		auto table = make_unique_base<CatalogEntry, TableCatalogEntry>(&context.catalog, nullptr, info.get());
-		table->temporary = true;
-		if (!context.temporary_tables->CreateEntry(context.ActiveTransaction(), info->base->table, move(table), info->dependencies)) {
-			if (!info->base->if_not_exists) {
-				throw CatalogException("Table or view with name \"%s\" already exists!", info->base->table.c_str());
-			}
-		}
-		t_entry = (TableCatalogEntry*)context.temporary_tables->GetEntry(context.ActiveTransaction(), info->base->table);
-
-	} else {
-		schema->CreateTable(context.ActiveTransaction(), info.get());
-		t_entry = schema->GetTable(context.ActiveTransaction(), info->base->table);
+	// FIXME this should happen earlier
+	if (info->base->temporary) {
+		schema = context.temporary_objects.get();
 	}
 
-	assert(t_entry);
+	schema->CreateTable(context.ActiveTransaction(), info.get());
+	auto table = schema->GetTable(context.ActiveTransaction(), info->base->table);
+
+	assert(table);
 
 	if (children.size() > 0) {
 		while (true) {
@@ -37,7 +29,7 @@ void PhysicalCreateTable::GetChunkInternal(ClientContext &context, DataChunk &ch
 				break;
 			}
 			inserted_count += state->child_chunk.size();
-			t_entry->storage->Append(*t_entry, context, state->child_chunk);
+			table->storage->Append(*table, context, state->child_chunk);
 		}
 	}
 

@@ -307,7 +307,7 @@ void LocalStorage::Commit(Transaction &transaction, WriteAheadLog *log, transact
 		auto table = entry.first;
 		auto storage = entry.second.get();
 
-		if (log && !table->temporary) {
+		if (log && !table->IsTemporary()) {
 			log->WriteSetTable(table->schema, table->table);
 		}
 
@@ -316,7 +316,7 @@ void LocalStorage::Commit(Transaction &transaction, WriteAheadLog *log, transact
 			// append to base table
 			table->Append(transaction, commit_id, chunk, *storage->state);
 			// if there is a WAL, write the chunk to there as well
-			if (log && !table->temporary) {
+			if (log && !table->IsTemporary()) {
 				log->WriteInsert(chunk);
 			}
 			return true;

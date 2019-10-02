@@ -52,8 +52,6 @@ public:
 	//! Indexes
 	vector<unique_ptr<Index>> indexes;
 
-	bool temporary;
-
 public:
 	void InitializeScan(TableScanState &state, vector<column_t> column_ids);
 	void InitializeScan(Transaction &transaction, TableScanState &state, vector<column_t> column_ids);
@@ -82,7 +80,7 @@ public:
 
 	//! Add an index to the DataTable
 	void AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>> &expressions);
-public:
+
 	//! Begin appending structs to this table, obtaining necessary locks, etc
 	void InitializeAppend(TableAppendState &state);
 	//! Append a chunk to the table using the AppendState obtained from BeginAppend
@@ -96,6 +94,9 @@ public:
 	void RemoveFromIndexes(DataChunk &chunk, Vector &row_identifiers);
 	//! Remove the row identifiers from all the indexes of the table
 	void RemoveFromIndexes(Vector &row_identifiers);
+	//! Is this a temporary table?
+	bool IsTemporary();
+
 private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);
@@ -108,7 +109,6 @@ private:
 	//! The CreateIndexScan is a special scan that is used to create an index on the table, it keeps locks on the table
 	void InitializeCreateIndexScan(CreateIndexScanState &state, vector<column_t> column_ids);
 	void CreateIndexScan(CreateIndexScanState &structure, DataChunk &result);
-private:
 	//! Lock for appending entries to the table
 	std::mutex append_lock;
 	//! The version manager of the persistent segments of the tree

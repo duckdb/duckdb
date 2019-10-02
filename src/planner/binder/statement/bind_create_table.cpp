@@ -123,8 +123,12 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateTa
 
 unique_ptr<BoundSQLStatement> Binder::Bind(CreateTableStatement &stmt) {
 	auto result = make_unique<BoundCreateTableStatement>();
-	// bind the schema
-	if (!stmt.info->temporary) {
+
+	if (stmt.info->temporary) {
+		assert(stmt.info->schema == TEMP_SCHEMA);
+		result->schema = context.temporary_objects.get();
+	} else {
+		assert(stmt.info->schema != TEMP_SCHEMA && stmt.info->schema != INVALID_SCHEMA);
 		result->schema = context.catalog.GetSchema(context.ActiveTransaction(), stmt.info->schema);
 	}
 	if (stmt.query) {

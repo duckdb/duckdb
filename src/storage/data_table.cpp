@@ -19,7 +19,7 @@ using namespace std;
 
 DataTable::DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types_,
                      unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data)
-    : cardinality(0), schema(schema), table(table), types(types_), storage(storage), persistent_manager(*this), transient_manager(*this), temporary(false) {
+    : cardinality(0), schema(schema), table(table), types(types_), storage(storage), persistent_manager(*this), transient_manager(*this) {
 	// set up the segment trees for the column segments
 	columns = unique_ptr<ColumnData[]>(new ColumnData[types.size()]);
 	for (index_t i = 0; i < types.size(); i++) {
@@ -643,4 +643,9 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 		index->Insert(result, intermediate.data[intermediate.column_count - 1]);
 	}
 	indexes.push_back(move(index));
+}
+
+
+bool DataTable::IsTemporary() {
+	return schema.compare(TEMP_SCHEMA) == 0;
 }
