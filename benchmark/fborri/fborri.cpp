@@ -11,7 +11,7 @@ using namespace std;
 #define FBORRI(NAME, QUERY)                                                                                            \
 	DUCKDB_BENCHMARK(NAME, "[fborri]")                                                                                 \
 	void Load(DuckDBBenchmarkState *state) override {                                                                  \
-		tpch::dbgen(SF, state->db, DEFAULT_SCHEMA, "", true);                                                          \
+		tpch::dbgen(SF, state->db, DEFAULT_SCHEMA, "");                                                          \
 	}                                                                                                                  \
 	string GetQuery() override {                                                                                       \
 		return QUERY;                                                                                                  \
@@ -28,6 +28,9 @@ using namespace std;
 	bool GroupCacheState() override {                                                                                  \
 		return true;                                                                                                   \
 	}                                                                                                                  \
+	virtual size_t Timeout() override { \
+		return 600; \
+	} \
 	FINISH_BENCHMARK(NAME)
 
 FBORRI(FBOrri01, "select count(*) from lineitem where l_partkey between 2000000 and 4000000 and l_suppkey between "
@@ -44,6 +47,7 @@ FBORRI(FBOrri05,
 FBORRI(FBOrri07,
        "select l_partkey, count(*), sum(l_extendedprice) from lineitem group by l_partkey order by 3 desc limit 20")
 FBORRI(FBOrri08, "select l_orderkey, sum(l_extendedprice) from lineitem group by l_orderkey order by 2 desc limit 20")
-FBORRI(FBOrri09, tpch::get_query(4));
-FBORRI(FBOrri10, tpch::get_query(6));
-FBORRI(FBOrri11, tpch::get_query(9));
+FBORRI(FBOrri09, "select count(*) from lineitem l, orders o where l.l_orderkey = o.o_orderkey and o.o_orderstatus = 'O' and l.l_returnflag = 'N'")
+FBORRI(FBOrri10, tpch::get_query(4));
+FBORRI(FBOrri11, tpch::get_query(6));
+FBORRI(FBOrri12, tpch::get_query(9));
