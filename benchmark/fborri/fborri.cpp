@@ -11,7 +11,7 @@ using namespace std;
 #define FBORRI(NAME, QUERY)                                                                                            \
 	DUCKDB_BENCHMARK(NAME, "[fborri]")                                                                                 \
 	void Load(DuckDBBenchmarkState *state) override {                                                                  \
-		tpch::dbgen(SF, state->db);                                                                                    \
+		tpch::dbgen(SF, state->db, DEFAULT_SCHEMA, "", true);                                                          \
 	}                                                                                                                  \
 	string GetQuery() override {                                                                                       \
 		return QUERY;                                                                                                  \
