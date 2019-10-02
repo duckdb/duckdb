@@ -8,12 +8,12 @@
 using namespace duckdb;
 using namespace std;
 
-TransientSegment::TransientSegment(BufferManager &manager, TypeId type, index_t start)
-    : ColumnSegment(type, ColumnSegmentType::TRANSIENT, start), manager(manager) {
+TransientSegment::TransientSegment(ColumnData &column_data, BufferManager &manager, TypeId type, index_t start)
+    : ColumnSegment(type, ColumnSegmentType::TRANSIENT, start), column_data(column_data), manager(manager)  {
 	if (type == TypeId::VARCHAR) {
-		data = make_unique<StringSegment>(manager);
+		data = make_unique<StringSegment>(column_data, manager);
 	} else {
-		data = make_unique<NumericSegment>(manager, type);
+		data = make_unique<NumericSegment>(column_data, manager, type);
 	}
 }
 

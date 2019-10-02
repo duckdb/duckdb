@@ -3,8 +3,8 @@
 using namespace duckdb;
 using namespace std;
 
-UncompressedSegment::UncompressedSegment(BufferManager &manager, TypeId type) :
-	manager(manager), type(type), block_id(INVALID_BLOCK), max_vector_count(0), tuple_count(0), versions(nullptr) {
+UncompressedSegment::UncompressedSegment(ColumnData &column_data, BufferManager &manager, TypeId type) :
+	column_data(column_data), manager(manager), type(type), block_id(INVALID_BLOCK), max_vector_count(0), tuple_count(0), versions(nullptr) {
 }
 
 static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector &update, row_t *ids, row_t offset, UpdateInfo *& node) {

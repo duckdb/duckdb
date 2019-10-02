@@ -15,8 +15,8 @@ static NumericSegment::rollback_update_function_t GetRollbackUpdateFunction(Type
 static NumericSegment::merge_update_function_t GetMergeUpdateFunction(TypeId type);
 static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction(TypeId type);
 
-NumericSegment::NumericSegment(BufferManager &manager, TypeId type) :
-	UncompressedSegment(manager, type) {
+NumericSegment::NumericSegment(ColumnData &column_data, BufferManager &manager, TypeId type) :
+	UncompressedSegment(column_data, manager, type) {
 	// transient segment
 	// figure out how many vectors we want to store in this block
 	this->append_function = GetAppendFunction(type);

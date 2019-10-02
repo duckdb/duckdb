@@ -37,6 +37,10 @@ TEST_CASE("Test temporary table creation", "[catalog]") {
 		REQUIRE_FAIL(con_p.Query("DELETE FROM asdf.a"));
 
 		REQUIRE_NO_FAIL(con_p.Query("INSERT INTO temp.a VALUES (43)"));
+
+		REQUIRE_NO_FAIL(con_p.Query("UPDATE temp.a SET i = 44"));
+		REQUIRE_NO_FAIL(con_p.Query("UPDATE a SET i = 45"));
+
 		// TODO also update here, but no code for this yet in this branch
 
 		result = con_p.Query("SELECT COUNT(*) from a");
@@ -66,6 +70,10 @@ TEST_CASE("Test temporary table creation", "[catalog]") {
 	// we can't prefix temp tables with a schema that is not "temp"
 	REQUIRE_FAIL(con.Query("CREATE TEMPORARY TABLE asdf.integersy(i INTEGER)"));
 	REQUIRE_FAIL(con.Query("CREATE TABLE temp.integersy(i INTEGER)"));
+
+	// no indexes on temp tables
+	REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
+
 
 	REQUIRE_FAIL(con.Query("CREATE SCHEMA temp"));
 
@@ -115,6 +123,3 @@ TEST_CASE("Test temporary table creation", "[catalog]") {
 }
 
 // TODO sequences?
-// TODO constraints on temp tables? nooo
-// todo temp tables create/delete/alter/contents are not persisted nor logged
-// todo temp table updates

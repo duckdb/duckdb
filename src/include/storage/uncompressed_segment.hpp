@@ -23,9 +23,10 @@ struct UpdateInfo;
 //! An uncompressed segment represents an uncompressed segment of a column residing in a block
 class UncompressedSegment {
 public:
-	UncompressedSegment(BufferManager &manager, TypeId type);
+	UncompressedSegment(ColumnData& column_data, BufferManager &manager, TypeId type);
 	virtual ~UncompressedSegment() = default;
-
+	//! The column this segment belongs to
+	ColumnData &column_data;
 	//! The buffer manager
 	BufferManager &manager;
 	//! Type of the uncompressed segment
