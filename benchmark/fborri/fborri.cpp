@@ -39,9 +39,11 @@ FBORRI(FBOrri04, "select avg(l_extendedprice * (1e0 - l_discount) * l_tax / l_qu
                  "'TRUCK' then 0.9e0 when l_shipmode = 'REG-AIR' then 1.1e0 else 1e0 end)) from lineitem")
 FBORRI(FBOrri05,
        "select max(l_extendedprice), max(l_discount), max(l_tax), max(l_quantity), max (l_shipmode) from lineitem")
-FBORRI(FBOrri06,
+	   FBORRI(FBOrri06,
+			   tpch::get_query(1))
+FBORRI(FBOrri07,
        "select l_partkey, count(*), sum(l_extendedprice) from lineitem group by l_partkey order by 3 desc limit 20")
-FBORRI(FBOrri07, "select l_orderkey, sum(l_extendedprice) from lineitem group by l_orderkey order by 2 desc limit 20")
-FBORRI(FBOrri08, tpch::get_query(4));
-FBORRI(FBOrri09, tpch::get_query(6));
-FBORRI(FBOrri10, tpch::get_query(9));
+FBORRI(FBOrri08, "select l_orderkey, sum(l_extendedprice) from lineitem group by l_orderkey order by 2 desc limit 20")
+FBORRI(FBOrri09, tpch::get_query(4));
+FBORRI(FBOrri10, tpch::get_query(6));
+FBORRI(FBOrri11, tpch::get_query(9));
