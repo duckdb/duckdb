@@ -33,6 +33,10 @@ void PhysicalTopN::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 		}
 
 		CalculateHeapSize(big_data.count);
+		if (heap_size == 0) {
+			return;
+		}
+
 		ChunkCollection heap_collection;
 		for (index_t i = 0; i < big_data.chunks.size(); i++) {
 			DataChunk heap_chunk;
