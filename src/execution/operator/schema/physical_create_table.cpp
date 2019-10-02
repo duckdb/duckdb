@@ -11,9 +11,18 @@ using namespace std;
 
 void PhysicalCreateTable::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	int64_t inserted_count = 0;
+
+	// FIXME this should happen earlier
+	if (info->base->temporary) {
+		schema = context.temporary_objects.get();
+	}
+
 	schema->CreateTable(context.ActiveTransaction(), info.get());
+	auto table = schema->GetTable(context.ActiveTransaction(), info->base->table);
+
+	assert(table);
+
 	if (children.size() > 0) {
-		auto table = schema->GetTable(context.ActiveTransaction(), info->base->table);
 		while (true) {
 			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 			if (state->child_chunk.size() == 0) {

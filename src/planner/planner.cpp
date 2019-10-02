@@ -89,9 +89,19 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		case CatalogType::VIEW:
 			context.catalog.DropView(context.ActiveTransaction(), stmt.info.get());
 			break;
-		case CatalogType::TABLE:
-			context.catalog.DropTable(context.ActiveTransaction(), stmt.info.get());
+		case CatalogType::TABLE: {
+			// handle temporary tables, they take name precedence, but only if no non-temp schema is set
+			if (stmt.info->schema == INVALID_SCHEMA || stmt.info->schema == TEMP_SCHEMA) {
+				auto temp = context.temporary_objects->GetTableOrNull(context.ActiveTransaction(), stmt.info->name);
+				if (temp) {
+					context.temporary_objects->DropTable(context.ActiveTransaction(),  stmt.info.get());
+				}
+			}
+			else {
+				context.catalog.DropTable(context.ActiveTransaction(), stmt.info.get());
+			}
 			break;
+		}
 		case CatalogType::INDEX:
 			context.catalog.DropIndex(context.ActiveTransaction(), stmt.info.get());
 			break;

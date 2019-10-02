@@ -2,6 +2,7 @@
 
 #include "storage/data_table.hpp"
 #include "storage/write_ahead_log.hpp"
+#include "storage/uncompressed_segment.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -54,6 +55,9 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteCatalogEntry(CatalogEntr
 	case CatalogType::TABLE:
 		if (entry->type == CatalogType::TABLE) {
 			// ALTER TABLE statement, skip it
+			return;
+		}
+		if (parent->temporary) {
 			return;
 		}
 		log->WriteCreateTable((TableCatalogEntry *)parent);
@@ -161,7 +165,7 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::CommitEntry(UndoFlags type, d
 		// deletion:
 		auto info = (DeleteInfo *)data;
 		info->GetTable().cardinality -= info->count;
-		if (HAS_LOG) {
+		if (HAS_LOG && !info->GetTable().IsTemporary()) {
 			WriteDelete(info);
 		}
 		// mark the tuples as committed
@@ -171,7 +175,7 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::CommitEntry(UndoFlags type, d
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = (UpdateInfo *)data;
-		if (HAS_LOG) {
+		if (HAS_LOG && !info->segment->column_data.table->IsTemporary()) {
 			throw Exception("FIXME: write update in log");
 		}
 		info->version_number = commit_id;

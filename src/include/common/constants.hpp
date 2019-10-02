@@ -25,6 +25,9 @@ using std::vector;
 
 // NOTE: there is a copy of this in the Postgres' parser grammar (gram.y)
 #define DEFAULT_SCHEMA "main"
+#define TEMP_SCHEMA "temp"
+#define INVALID_SCHEMA ""
+
 
 //! The vector size used in the execution engine
 #define STANDARD_VECTOR_SIZE 1024

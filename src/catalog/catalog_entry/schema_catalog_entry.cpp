@@ -31,9 +31,14 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
 }
 
 void SchemaCatalogEntry::CreateTable(Transaction &transaction, BoundCreateTableInfo *info) {
-	info->dependencies.insert(this);
+
 
 	auto table = make_unique_base<CatalogEntry, TableCatalogEntry>(catalog, this, info);
+	if (!info->base->temporary) {
+		info->dependencies.insert(this);
+	} else {
+		table->temporary = true;
+	}
 	if (!tables.CreateEntry(transaction, info->base->table, move(table), info->dependencies)) {
 		if (!info->base->if_not_exists) {
 			throw CatalogException("Table or view with name \"%s\" already exists!", info->base->table.c_str());
@@ -140,6 +145,18 @@ CatalogEntry *SchemaCatalogEntry::GetTableOrView(Transaction &transaction, const
 	}
 	return entry;
 }
+
+TableCatalogEntry *SchemaCatalogEntry::GetTableOrNull(Transaction &transaction, const string &table_name) {
+	auto entry = tables.GetEntry(transaction, table_name);
+	if (!entry) {
+		return nullptr;
+	}
+	if (entry->type != CatalogType::TABLE) {
+		return nullptr;
+	}
+	return (TableCatalogEntry *)entry;
+}
+
 
 TableFunctionCatalogEntry *SchemaCatalogEntry::GetTableFunction(Transaction &transaction,
                                                                 FunctionExpression *expression) {

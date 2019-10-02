@@ -252,6 +252,7 @@ io_file
 # Eclipse Project settings
 *.*project
 .settings
+.csettings
 
 # Visual Studio
 .vs
