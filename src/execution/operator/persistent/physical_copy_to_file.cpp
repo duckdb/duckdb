@@ -90,7 +90,7 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 		}
 		writer.Write(newline);
 	}
-	// cerate a chunk with VARCHAR columns
+	// create a chunk with VARCHAR columns
 	vector<TypeId> types;
 	for (index_t col_idx = 0; col_idx < state->child_chunk.column_count; col_idx++) {
 		types.push_back(TypeId::VARCHAR);
@@ -116,16 +116,22 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 		}
 		// now loop over the vectors and output the values
 		VectorOperations::Exec(cast_chunk.data[0], [&](index_t i, index_t k) {
+			// necessary for all null values, done outside loop for efficiency
+			const char * null_cstr = info.null_str.c_str();
+
+			// write values
 			for (index_t col_idx = 0; col_idx < state->child_chunk.column_count; col_idx++) {
 				if (col_idx != 0) {
 					writer.Write(&info.delimiter, 1);
 				}
 				if (cast_chunk.data[col_idx].nullmask[i]) {
-					continue;
+					// write null value
+					writer.Write(null_cstr, info.null_str.length());
+				} else {
+					// non-null value, fetch the string value from the cast chunk
+					auto str_value = ((const char **)cast_chunk.data[col_idx].data)[i];
+					WriteQuotedString(writer, str_value, info.delimiter, info.quote);
 				}
-				// non-null value, fetch the string value from the cast chunk
-				auto str_value = ((const char **)cast_chunk.data[col_idx].data)[i];
-				WriteQuotedString(writer, str_value, info.delimiter, info.quote);
 			}
 			writer.Write(newline);
 		});

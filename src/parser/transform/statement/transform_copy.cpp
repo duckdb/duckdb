@@ -84,9 +84,9 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			if (StringUtil::StartsWith(def_elem->defname, "delim") ||
 			    StringUtil::StartsWith(def_elem->defname, "sep")) {
 
+				// FIXME: support for multi-character delimiters
 				// delimiter
-				// TODO: allow multi-character delimiters
-				auto *delimiter_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
+				auto *delimiter_val = (postgres::Value *)(def_elem->arg);
 				if (!delimiter_val || delimiter_val->type != T_String) {
 					throw ParserException("Unsupported parameter type for DELIMITER: expected e.g. DELIMITER ','");
 				}
@@ -98,11 +98,11 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 				if (delim_len == 1) {
 					info.delimiter = delim_cstr[0];
 				}
+				//tab
 				if (delim_len == 2 && delim_cstr[0] == '\\' && delim_cstr[1] == 't') {
-					//tab
 					info.delimiter = '\t';
 				}
-				//if neither tab nor other character, throw error, TODO: allow multi-character delimiters
+				//if neither tab nor other character, throw error
 				if (info.delimiter == '\0') {
 					throw Exception("Could not interpret DELIMITER option");
 				}
@@ -110,19 +110,19 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			} else if (def_elem->defname == kFormatTok) {
 
 				// format
-				auto *format_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
+				auto *format_val = (postgres::Value *)(def_elem->arg);
 				if (!format_val || format_val->type != T_String) {
 					throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv'");
 				}
 				if (StringUtil::Upper(format_val->val.str) != "CSV") {
-					throw Exception("Copy is only supported for .CSV-files, e.g. FORMAT 'csv'");
+					throw Exception("Copy is only supported for .CSV-files, FORMAT 'csv'");
 				}
 				info.format = StringToExternalFileFormat(format_val->val.str);
 
 			} else if (def_elem->defname == kQuoteTok) {
 
 				// quote
-				auto *quote_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
+				auto *quote_val = (postgres::Value *)(def_elem->arg);
 				if (!quote_val || quote_val->type != T_String) {
 					throw ParserException("Unsupported parameter type for QUOTE: expected e.g. QUOTE '\"'");
 				}
@@ -131,7 +131,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			} else if (def_elem->defname == kEscapeTok) {
 
 				// escape
-				auto *escape_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
+				auto *escape_val = (postgres::Value *)(def_elem->arg);
 				if (!escape_val || escape_val->type != T_String) {
 					throw ParserException("Unsupported parameter type for ESCAPE: expected e.g. ESCAPE '\"'");
 				}
@@ -140,7 +140,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			} else if (def_elem->defname == kHeaderTok) {
 
 				// header
-				auto *header_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
+				auto *header_val = (postgres::Value *)(def_elem->arg);
 				if (!header_val) {
 					info.header = true;
 					continue;
@@ -165,13 +165,24 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 				if (!null_val || null_val->type != T_String) {
 					throw ParserException("Unsupported parameter type for NULL: expected e.g. NULL 'null'");
 				}
-				info.null_cstr = null_val->val.str;
+				// the null string must not contain the delimiter
+				for (const char *val = null_val->val.str; *val; val++) {
+					if (*val == info.delimiter) {
+						throw Exception("COPY delimiter must not appear in the NULL specification");
+					}
+				}
+				info.null_str = null_val->val.str;
 
 			} else if (def_elem->defname == kForceQuoteTok) {
 
 				// force quote
+				// only for COPY ... TO ...
+				if(info.is_from) {
+					throw Exception("The FORCE_QUOTE option is only for COPY ... TO ...");
+				}
+
 				auto *quote_val = def_elem->arg;
-				if (!quote_val->type || (quote_val->type != T_A_Star && quote_val->type != T_List)) {
+				if (!quote_val || (quote_val->type != T_A_Star && quote_val->type != T_List)) {
 					throw ParserException("Unsupported parameter type for FORCE_QUOTE: expected e.g. FORCE_QUOTE *");
 				}
 
@@ -192,9 +203,9 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			} else if (def_elem->defname == kForceNotNullTok) {
 
 				// force not null
-				// only allow in COPY ... FROM ...
+				// only for COPY ... FROM ...
 				if (!info.is_from) {
-					throw Exception("The FORCE_NOT_NULL option is only allowed in COPY ... FROM ...");
+					throw Exception("The FORCE_NOT_NULL option is only for COPY ... FROM ...");
 				}
 
 				auto *force_not_null_val = def_elem->arg;
@@ -211,20 +222,25 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			} else if (def_elem->defname == kEncodingTok) {
 
 				// encoding
-				auto *encoding_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
+				auto *encoding_val = (postgres::Value *)(def_elem->arg);
 				if (!encoding_val || encoding_val->type != T_String) {
 					throw ParserException("Unsupported parameter type for ENCODING: expected e.g. ENCODING 'UTF-8'");
 				}
 				if (StringUtil::Upper(encoding_val->val.str) != "UTF8" && StringUtil::Upper(encoding_val->val.str) != "UTF-8") {
-					throw Exception("Copy is only supported for UTF-8 encoded files, e.g. ENCODING 'UTF-8'");
+					throw Exception("Copy is only supported for UTF-8 encoded files, ENCODING 'UTF-8'");
 				}
 
 			}
-			
+
 			else {
 				throw ParserException("Unsupported COPY option: %s", def_elem->defname);
 			}
 		}
+	}
+
+	// the default character of the ESCAPE option is the same as the QUOTE character
+	if (!info.escape) {
+		info.escape = info.quote;
 	}
 
 	return result;

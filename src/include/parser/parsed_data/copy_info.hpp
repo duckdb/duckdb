@@ -39,7 +39,7 @@ struct CopyInfo {
 	//! The file format of the external file
 	ExternalFileFormat format;
 	//! Specifies the string that represents a null value
-	string null_cstr;
+	string null_str;
 	//! Determines whether all columns must be quoted
 	bool quote_all;
 	//! Forces quoting to be used for all non-NULL values in each specified column
@@ -48,8 +48,8 @@ struct CopyInfo {
 	vector<string> force_not_null_list;
 
 	CopyInfo()
-	    : schema(DEFAULT_SCHEMA), is_from(false), delimiter(','), quote('"'), escape('"'), header(false),
-	      format(ExternalFileFormat::CSV), quote_all(false) {
+	    : schema(DEFAULT_SCHEMA), is_from(false), delimiter(','), quote('"'), header(false),
+	      format(ExternalFileFormat::CSV), null_str(""), quote_all(false) {
 	}
 };
 

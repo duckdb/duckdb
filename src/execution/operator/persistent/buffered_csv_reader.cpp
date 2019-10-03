@@ -173,16 +173,20 @@ void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column)
 	}
 	// insert the line number into the chunk
 	index_t row_entry = parse_chunk.data[column].count++;
-	if (length == 0) {
+
+	// test against null string
+	str_val[length] = '\0';
+	if (info.null_str == str_val) {
 		parse_chunk.data[column].nullmask[row_entry] = true;
 	} else {
-		auto data = (const char **)parse_chunk.data[column].data;
-		data[row_entry] = str_val;
-		str_val[length] = '\0';
+		// no null value
 		if (!Value::IsUTF8String(str_val)) {
 			throw ParserException("Error on line %lld: file is not valid UTF8", linenr);
 		}
+		auto data = (const char **)parse_chunk.data[column].data;
+		data[row_entry] = str_val;
 	}
+
 	// move to the next column
 	column++;
 }
