@@ -642,3 +642,8 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 	}
 	indexes.push_back(move(index));
 }
+
+
+bool DataTable::IsTemporary() {
+	return schema.compare(TEMP_SCHEMA) == 0;
+}

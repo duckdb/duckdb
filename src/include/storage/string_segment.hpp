@@ -31,7 +31,7 @@ typedef unique_ptr<StringUpdateInfo> string_update_info_t;
 
 class StringSegment : public UncompressedSegment {
 public:
-	StringSegment(BufferManager &manager);
+	StringSegment(ColumnData &column_data, BufferManager &manager);
 
 	//! The current dictionary offset
 	index_t dictionary_offset;

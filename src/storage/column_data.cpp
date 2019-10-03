@@ -125,6 +125,6 @@ void ColumnData::FetchRow(Transaction &transaction, row_t row_id, Vector &result
 }
 
 void ColumnData::AppendTransientSegment(index_t start_row) {
-	auto new_segment = make_unique<TransientSegment>(*table->storage.buffer_manager, type, start_row);
+	auto new_segment = make_unique<TransientSegment>(*this, *table->storage.buffer_manager, type, start_row);
 	transient.AppendSegment(move(new_segment));
 }

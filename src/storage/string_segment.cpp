@@ -8,8 +8,8 @@
 using namespace duckdb;
 using namespace std;
 
-StringSegment::StringSegment(BufferManager &manager) :
-	UncompressedSegment(manager, TypeId::VARCHAR) {
+StringSegment::StringSegment(ColumnData &column_data, BufferManager &manager) :
+	UncompressedSegment(column_data, manager, TypeId::VARCHAR) {
 	this->max_vector_count = 0;
 	this->dictionary_offset = 0;
 	// the vector_size is given in the size of the dictionary offsets
