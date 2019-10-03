@@ -6,8 +6,8 @@
 #include "storage/data_table.hpp"
 #include "storage/write_ahead_log.hpp"
 
-#include "transaction/version_info.hpp"
-#include <cstring>
+#include "transaction/delete_info.hpp"
+#include "transaction/update_info.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -2,7 +2,7 @@
 #include "storage/buffer_manager.hpp"
 #include "common/types/vector.hpp"
 #include "storage/table/append_state.hpp"
-#include "transaction/version_info.hpp"
+#include "transaction/update_info.hpp"
 #include "transaction/transaction.hpp"
 
 using namespace duckdb;

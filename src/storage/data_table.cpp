@@ -12,8 +12,6 @@
 #include "transaction/transaction_manager.hpp"
 #include "storage/table/transient_segment.hpp"
 
-#include "transaction/version_info.hpp"
-
 using namespace duckdb;
 using namespace std;
 
