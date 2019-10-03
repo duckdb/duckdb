@@ -19,16 +19,27 @@ struct StringBlock {
 	unique_ptr<StringBlock> next;
 };
 
+struct StringUpdateInfo {
+	sel_t count;
+	nullmask_t nullmask;
+	sel_t ids[STANDARD_VECTOR_SIZE];
+	block_id_t block_ids[STANDARD_VECTOR_SIZE];
+	int32_t offsets[STANDARD_VECTOR_SIZE];
+};
+
+typedef unique_ptr<StringUpdateInfo> string_update_info_t;
+
 class StringSegment : public UncompressedSegment {
 public:
 	StringSegment(BufferManager &manager);
 
 	//! The current dictionary offset
 	index_t dictionary_offset;
-	//! The main string block
+	//! The string block holding strings that do not fit in the main block
+	//! FIXME: this should be replaced by a heap that also allows freeing of unused strings
 	unique_ptr<StringBlock> head;
-	//! Whether or not the block has any big strings
-	bool has_big_strings;
+	//! Blocks that hold string updates (if any)
+	unique_ptr<string_update_info_t[]> string_updates;
 public:
 	void InitializeScan(TransientScanState &state) override;
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, storing it in the result vector
@@ -46,19 +57,30 @@ public:
 
 	//! Rollback a previous update
 	void RollbackUpdate(UpdateInfo *info) override;
-	//! Cleanup an update, removing it from the version chain. This should only be called if an exclusive lock is held on the segment
-	void CleanupUpdate(UpdateInfo *info) override;
 protected:
 	void Update(SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) override;
 private:
 	void AppendData(SegmentStatistics &stats, data_ptr_t target, data_ptr_t end, index_t target_offset, Vector &source, index_t offset, index_t count);
 
+	void FetchBaseData(row_t *ids, index_t vector_index, index_t vector_offset, index_t count, Vector &result);
+	//! Fetch all the strings of a vector from the base table and place them in the result vector
 	void FetchBaseData(TransientScanState &state, data_ptr_t base_data, index_t vector_index, Vector &result, index_t count);
+	//! Fetch subset of strings of a vector from the base table and place them in the result vector
+	void FetchBaseData(TransientScanState &state, data_ptr_t baseptr, row_t *ids, index_t vector_index, index_t vector_offset, Vector &result, index_t count);
+	//! Fetch a single string from the dictionary and returns it, potentially pins a buffer manager page and adds it to the set of pinned pages
+	string_t FetchStringFromDict(TransientScanState &state, data_ptr_t baseptr, int32_t dict_offset);
 
-	void WriteString(const char *str, index_t string_length, block_id_t &result_block, int32_t &result_offset);
+	void WriteString(string_t string, block_id_t &result_block, int32_t &result_offset);
+	string_t ReadString(TransientScanState &state, block_id_t block, int32_t offset);
+	string_t ReadString(data_ptr_t target, int32_t offset);
 
 	void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 	void ReadStringMarker(data_ptr_t target, block_id_t &block_id, int32_t &offset);
+
+	//! Expand the string segment, adding an additional maximum vector to the segment
+	void ExpandStringSegment(data_ptr_t baseptr);
+
+	string_update_info_t CreateStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, index_t vector_offset);
 private:
 	//! The max string size that is allowed within a block. Strings bigger than this will be labeled as a BIG STRING and offloaded to the overflow blocks.
 	static constexpr uint16_t STRING_BLOCK_LIMIT = 4096;

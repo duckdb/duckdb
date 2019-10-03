@@ -53,7 +53,7 @@ void NumericSegment::Scan(Transaction &transaction, TransientScanState &state, i
 
 	auto offset = vector_index * vector_size;
 
-	index_t count = std::min((index_t) STANDARD_VECTOR_SIZE, tuple_count - vector_index * STANDARD_VECTOR_SIZE);
+	index_t count = GetVectorCount(vector_index);
 	// first fetch the data from the base table
 	result.nullmask = *((nullmask_t*) (data + offset));
 	memcpy(result.data, data + offset + sizeof(nullmask_t), count * type_size);
@@ -170,31 +170,17 @@ index_t NumericSegment::Append(SegmentStatistics &stats, TransientAppendState &s
 //===--------------------------------------------------------------------===//
 void NumericSegment::Update(SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) {
 	if (!node) {
-		// create a new node in the undo buffer for this update
-		// 4 -> 16 -> 128 -> 1024?
-		node = transaction.CreateUpdateInfo(type_size, STANDARD_VECTOR_SIZE);
-		node->segment = this;
-		node->vector_index = vector_index;
-		node->prev = nullptr;
-		node->next = versions[vector_index];
-		if (node->next) {
-			node->next->prev = node;
-		}
-		versions[vector_index] = node;
-
-		// set up the tuple ids
-		node->N = update.count;
-		for(index_t i = 0; i < update.count; i++) {
-			assert((index_t) ids[i] >= vector_offset && (index_t) ids[i] < vector_offset + STANDARD_VECTOR_SIZE);
-			node->tuples[i] = ids[i] - vector_offset;
-		};
-		// now move the original data into the UpdateInfo
 		auto handle = manager.PinBuffer(block_id);
+
+		// create a new node in the undo buffer for this update
+		node = CreateUpdateInfo(transaction, ids, update.count, vector_index, vector_offset, type_size);
+		// now move the original data into the UpdateInfo
 		update_function(stats, node, handle->buffer->data.get() + vector_index * vector_size, update);
 	} else {
 		// node already exists for this transaction, we need to merge the new updates with the existing updates
 		// first check if the updates entirely overlap
 		auto handle = manager.PinBuffer(block_id);
+
 		merge_update_function(stats, node, handle->buffer->data.get() + vector_index * vector_size, update, ids, vector_offset);
 	}
 }
@@ -208,23 +194,6 @@ void NumericSegment::RollbackUpdate(UpdateInfo *info) {
 	rollback_update(info, handle->buffer->data.get() + info->vector_index * vector_size);
 
 	CleanupUpdate(info);
-}
-
-void NumericSegment::CleanupUpdate(UpdateInfo *info) {
-	if (info->prev) {
-		// there is a prev info: remove from the chain
-		auto prev = info->prev;
-		prev->next = info->next;
-		if (prev->next) {
-			prev->next->prev = prev;
-		}
-	} else {
-		// there is no prev info: remove from base segment
-		info->segment->versions[info->vector_index] = info->next;
-		if (info->next) {
-			info->next->prev = nullptr;
-		}
-	}
 }
 
 //===--------------------------------------------------------------------===//

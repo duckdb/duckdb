@@ -36,6 +36,8 @@ struct SegmentStatistics {
 	unique_ptr<data_t[]> maximum;
 	//! Whether or not the segment has NULL values
 	bool has_null;
+	//! The maximum string length, only used for string columns
+	index_t max_string_length;
 };
 
 class ColumnSegment : public SegmentBase {

@@ -63,9 +63,18 @@ public:
 	//! Rollback a previous update
 	virtual void RollbackUpdate(UpdateInfo *info) = 0;
 	//! Cleanup an update, removing it from the version chain. This should only be called if an exclusive lock is held on the segment
-	virtual void CleanupUpdate(UpdateInfo *info) = 0;
+	void CleanupUpdate(UpdateInfo *info);
+
+	//! Get the amount of tuples in a vector
+	index_t GetVectorCount(index_t vector_index) {
+		assert(vector_index < max_vector_count);
+		assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
+		return std::min((index_t) STANDARD_VECTOR_SIZE, tuple_count - vector_index * STANDARD_VECTOR_SIZE);
+	}
 protected:
 	virtual void Update(SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) = 0;
+
+	UpdateInfo *CreateUpdateInfo(Transaction &transaction, row_t *ids, index_t count, index_t vector_index, index_t vector_offset, index_t type_size);
 };
 
 } // namespace duckdb

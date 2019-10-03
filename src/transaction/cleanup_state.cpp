@@ -37,6 +37,7 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 		CleanupUpdate(info);
 		break;
 	}
+	case UndoFlags::DATA:
 	case UndoFlags::QUERY:
 		break;
 	default:
