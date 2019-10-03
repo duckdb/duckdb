@@ -7,6 +7,7 @@ add_subdirectory(re2)
 add_subdirectory(miniz)
 
 if(NOT WIN32 AND NOT LEAN)
+  add_subdirectory(imdb)
   add_subdirectory(dbgen)
   add_subdirectory(dsdgen)
   add_subdirectory(sqlsmith)

@@ -1,18 +1,16 @@
 #include "parser/expression/window_expression.hpp"
 
 #include "common/serializer.hpp"
+#include "common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-WindowExpression::WindowExpression(ExpressionType type, unique_ptr<ParsedExpression> child)
-    : ParsedExpression(type, ExpressionClass::WINDOW) {
+WindowExpression::WindowExpression(ExpressionType type, string schema, string function_name)
+    : ParsedExpression(type, ExpressionClass::WINDOW), schema(schema),
+      function_name(StringUtil::Lower(function_name)) {
 	switch (type) {
-	case ExpressionType::WINDOW_SUM:
-	case ExpressionType::WINDOW_COUNT_STAR:
-	case ExpressionType::WINDOW_MIN:
-	case ExpressionType::WINDOW_MAX:
-	case ExpressionType::WINDOW_AVG:
+	case ExpressionType::WINDOW_AGGREGATE:
 	case ExpressionType::WINDOW_ROW_NUMBER:
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_LAST_VALUE:
@@ -27,9 +25,6 @@ WindowExpression::WindowExpression(ExpressionType type, unique_ptr<ParsedExpress
 	default:
 		throw NotImplementedException("Window aggregate type %s not supported", ExpressionTypeToString(type).c_str());
 	}
-	if (child) {
-		this->child = move(child);
-	}
 }
 
 string WindowExpression::ToString() const {
@@ -42,12 +37,20 @@ bool WindowExpression::Equals(const BaseExpression *other_) const {
 	}
 	auto other = (WindowExpression *)other_;
 
+	// check if the child expressions are equivalent
+	if (other->children.size() != children.size()) {
+		return false;
+	}
+	for (index_t i = 0; i < children.size(); i++) {
+		if (!children[i]->Equals(other->children[i].get())) {
+			return false;
+		}
+	}
 	if (start != other->start || end != other->end) {
 		return false;
 	}
-	// check if the child expressions are equivalent
-	if (!BaseExpression::Equals(child.get(), other->child.get()) ||
-	    !BaseExpression::Equals(start_expr.get(), other->start_expr.get()) ||
+	// check if the framing expressions are equivalent
+	if (!BaseExpression::Equals(start_expr.get(), other->start_expr.get()) ||
 	    !BaseExpression::Equals(end_expr.get(), other->end_expr.get()) ||
 	    !BaseExpression::Equals(offset_expr.get(), other->offset_expr.get()) ||
 	    !BaseExpression::Equals(default_expr.get(), other->default_expr.get())) {
@@ -79,9 +82,12 @@ bool WindowExpression::Equals(const BaseExpression *other_) const {
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Copy() const {
-	auto child_copy = child ? child->Copy() : nullptr;
-	auto new_window = make_unique<WindowExpression>(type, move(child_copy));
+	auto new_window = make_unique<WindowExpression>(type, schema, function_name);
 	new_window->CopyProperties(*this);
+
+	for (auto &child : children) {
+		new_window->children.push_back(child->Copy());
+	}
 
 	for (auto &e : partitions) {
 		new_window->partitions.push_back(e->Copy());
@@ -106,7 +112,9 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 
 void WindowExpression::Serialize(Serializer &serializer) {
 	ParsedExpression::Serialize(serializer);
-	serializer.WriteOptional(child);
+	serializer.WriteString(function_name);
+	serializer.WriteString(schema);
+	serializer.WriteList(children);
 	serializer.WriteList(partitions);
 	assert(orders.size() <= numeric_limits<uint32_t>::max());
 	serializer.Write<uint32_t>((uint32_t)orders.size());
@@ -124,8 +132,10 @@ void WindowExpression::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, Deserializer &source) {
-	auto child = source.ReadOptional<ParsedExpression>();
-	auto expr = make_unique<WindowExpression>(type, move(child));
+	auto function_name = source.Read<string>();
+	auto schema = source.Read<string>();
+	auto expr = make_unique<WindowExpression>(type, schema, function_name);
+	source.ReadList<ParsedExpression>(expr->children);
 	source.ReadList<ParsedExpression>(expr->partitions);
 
 	auto order_count = source.Read<uint32_t>();

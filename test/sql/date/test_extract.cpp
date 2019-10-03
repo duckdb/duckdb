@@ -158,3 +158,21 @@ TEST_CASE("Extract timestamp function", "[timestamp]") {
 	result = con.Query("SELECT EXTRACT(milliseconds FROM i) FROM timestamps");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(33000), Value()}));
 }
+
+TEST_CASE("Extract milliseconds from timestamp", "[timestamp]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// create and insert into table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE timestamps(i TIMESTAMP)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO timestamps VALUES ('1993-08-14 08:22:33.42'), (NULL)"));
+
+	result = con.Query("SELECT EXTRACT(second FROM i) FROM timestamps");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DOUBLE(33), Value()})); // postgres returns 33.42 here
+	result = con.Query("SELECT EXTRACT(minute FROM i) FROM timestamps");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(22), Value()}));
+	result = con.Query("SELECT EXTRACT(milliseconds FROM i) FROM timestamps");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(33420), Value()}));
+}

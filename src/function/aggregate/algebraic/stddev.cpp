@@ -8,20 +8,20 @@ using namespace duckdb;
 using namespace std;
 
 struct stddev_state_t {
-    uint64_t    count;
-    double      mean;
-    double      dsquared;
+    uint64_t    count;          //  n
+    double      mean;           //  M1
+    double      dsquared;       //  M2
 };
 
 static index_t stddev_state_size(TypeId return_type) {
 	return sizeof(stddev_state_t);
 }
 
-static void stddevsamp_initialize(data_ptr_t payload, TypeId return_type) {
+static void stddev_initialize(data_ptr_t payload, TypeId return_type) {
 	memset(payload, 0, stddev_state_size(return_type));
 }
 
-static void stddevsamp_update(Vector inputs[], index_t input_count, Vector &state) {
+static void stddev_update(Vector inputs[], index_t input_count, Vector &state) {
 	assert(input_count == 1);
 	// Streaming approximate standard deviation using Welford's
 	// method, DOI: 10.2307/1266577
@@ -44,6 +44,29 @@ static void stddevsamp_update(Vector inputs[], index_t input_count, Vector &stat
 		state_ptr->mean = new_mean;
 		state_ptr->dsquared = new_dsquared;
 		// see Finalize() method below for final step
+	});
+}
+
+
+static void stddev_combine(Vector &state, Vector &combined) {
+	// combine streaming stddev states
+	auto combined_data = (stddev_state_t**) combined.data;
+	auto state_data = (stddev_state_t*) state.data;
+
+	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+		auto combined_ptr = combined_data[i];
+		auto state_ptr = state_data + i;
+
+		if (0 == combined_ptr->count) {
+			*combined_ptr = *state_ptr;
+		} else if (state_ptr->count) {
+			const auto count = combined_ptr->count + state_ptr->count;
+			const auto mean = ( state_ptr->count * state_ptr->mean + combined_ptr->count * combined_ptr->mean ) / count;
+			const auto delta = state_ptr->mean - combined_ptr->mean;
+			combined_ptr->dsquared = state_ptr->dsquared + combined_ptr->dsquared + delta * delta * state_ptr->count * combined_ptr->count / count;
+			combined_ptr->mean = mean;
+			combined_ptr->count = count;
+		}
 	});
 }
 
@@ -108,17 +131,17 @@ static void stddevpop_finalize(Vector &state, Vector &result) {
 }
 
 void StdDevSamp::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(AggregateFunction("stddev_samp", {SQLType::DOUBLE}, SQLType::DOUBLE, stddev_state_size, stddevsamp_initialize, stddevsamp_update, stddevsamp_finalize));
+	set.AddFunction(AggregateFunction("stddev_samp", {SQLType::DOUBLE}, SQLType::DOUBLE, stddev_state_size, stddev_initialize, stddev_update, stddev_combine, stddevsamp_finalize));
 }
 
 void StdDevPop::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(AggregateFunction("stddev_pop", {SQLType::DOUBLE}, SQLType::DOUBLE, stddev_state_size, stddevsamp_initialize, stddevsamp_update, stddevpop_finalize));
+	set.AddFunction(AggregateFunction("stddev_pop", {SQLType::DOUBLE}, SQLType::DOUBLE, stddev_state_size, stddev_initialize, stddev_update, stddev_combine, stddevpop_finalize));
 }
 
 void VarPop::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(AggregateFunction("var_samp", {SQLType::DOUBLE}, SQLType::DOUBLE, stddev_state_size, stddevsamp_initialize, stddevsamp_update, varsamp_finalize));
+	set.AddFunction(AggregateFunction("var_samp", {SQLType::DOUBLE}, SQLType::DOUBLE, stddev_state_size, stddev_initialize, stddev_update, stddev_combine, varsamp_finalize));
 }
 
 void VarSamp::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(AggregateFunction("var_pop", {SQLType::DOUBLE}, SQLType::DOUBLE, stddev_state_size, stddevsamp_initialize, stddevsamp_update, varpop_finalize));
+	set.AddFunction(AggregateFunction("var_pop", {SQLType::DOUBLE}, SQLType::DOUBLE, stddev_state_size, stddev_initialize, stddev_update, stddev_combine, varpop_finalize));
 }

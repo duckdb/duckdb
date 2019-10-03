@@ -46,6 +46,10 @@ struct Random {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct Setseed {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct Cbrt {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

@@ -30,11 +30,6 @@ static void covar_update(Vector inputs[], index_t input_count, Vector &state) {
 		if (inputs[0].nullmask[i] || inputs[1].nullmask[i]) {
 			return;
 		}
-		// Layout of state for online covariance:
-		//  uint64_t    count
-		//  double      meanx
-		//  double      meany
-		//  double      co-moment
 
 		auto state_ptr = (covar_state_t*) ((data_ptr_t *)state.data)[i];
 
@@ -55,6 +50,33 @@ static void covar_update(Vector inputs[], index_t input_count, Vector &state) {
 		state_ptr->meany = meany;
 		state_ptr->co_moment = C;
 		// see Finalize() methods below for final step
+	});
+}
+
+static void covar_combine(Vector &state, Vector &combined) {
+	// combine streaming covar states
+	auto combined_data = (covar_state_t**) combined.data;
+	auto state_data = (covar_state_t*) state.data;
+
+	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+		auto combined_ptr = combined_data[i];
+		auto state_ptr = state_data + i;
+
+		if (0 == combined_ptr->count) {
+			*combined_ptr = *state_ptr;
+		} else if (state_ptr->count) {
+			const auto count = combined_ptr->count + state_ptr->count;
+			const auto meanx = ( state_ptr->count * state_ptr->meanx + combined_ptr->count * combined_ptr->meanx ) / count;
+			const auto meany = ( state_ptr->count * state_ptr->meany + combined_ptr->count * combined_ptr->meany ) / count;
+
+			//  Schubert and Gertz SSDBM 2018, equation 21
+			const auto deltax = combined_ptr->meanx - state_ptr->meanx;
+			const auto deltay = combined_ptr->meany - state_ptr->meany;
+			combined_ptr->co_moment = state_ptr->co_moment + combined_ptr->co_moment + deltax * deltay * state_ptr->count * combined_ptr->count / count;
+			combined_ptr->meanx = meanx;
+			combined_ptr->meany = meany;
+			combined_ptr->count = count;
+		}
 	});
 }
 
@@ -89,9 +111,9 @@ static void covarsamp_finalize(Vector &state, Vector &result) {
 }
 
 void CovarSamp::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(AggregateFunction("covar_samp", {SQLType::DOUBLE, SQLType::DOUBLE}, SQLType::DOUBLE, covar_state_size, covar_initialize, covar_update, covarsamp_finalize));
+	set.AddFunction(AggregateFunction("covar_samp", {SQLType::DOUBLE, SQLType::DOUBLE}, SQLType::DOUBLE, covar_state_size, covar_initialize, covar_update, covar_combine, covarsamp_finalize));
 }
 
 void CovarPop::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(AggregateFunction("covar_pop", {SQLType::DOUBLE, SQLType::DOUBLE}, SQLType::DOUBLE, covar_state_size, covar_initialize, covar_update, covarpop_finalize));
+	set.AddFunction(AggregateFunction("covar_pop", {SQLType::DOUBLE, SQLType::DOUBLE}, SQLType::DOUBLE, covar_state_size, covar_initialize, covar_update, covar_combine, covarpop_finalize));
 }

@@ -12,17 +12,7 @@ using namespace postgres;
 using namespace std;
 
 static ExpressionType WindowToExpressionType(string &fun_name) {
-	if (fun_name == "sum") {
-		return ExpressionType::WINDOW_SUM;
-	} else if (fun_name == "count") {
-		return ExpressionType::WINDOW_COUNT_STAR;
-	} else if (fun_name == "min") {
-		return ExpressionType::WINDOW_MIN;
-	} else if (fun_name == "max") {
-		return ExpressionType::WINDOW_MAX;
-	} else if (fun_name == "avg") {
-		return ExpressionType::WINDOW_AVG;
-	} else if (fun_name == "rank") {
+	if (fun_name == "rank") {
 		return ExpressionType::WINDOW_RANK;
 	} else if (fun_name == "rank_dense" || fun_name == "dense_rank") {
 		return ExpressionType::WINDOW_RANK_DENSE;
@@ -44,7 +34,7 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 		return ExpressionType::WINDOW_NTILE;
 	}
 
-	return ExpressionType::INVALID;
+	return ExpressionType::WINDOW_AGGREGATE;
 }
 
 void Transformer::TransformWindowDef(WindowDef *window_spec, WindowExpression *expr) {
@@ -124,7 +114,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
 			throw Exception("Unknown/unsupported window function");
 		}
 
-		auto expr = make_unique<WindowExpression>(win_fun_type, nullptr);
+		auto expr = make_unique<WindowExpression>(win_fun_type, schema, lowercase_name);
 
 		if (root->args) {
 			vector<unique_ptr<ParsedExpression>> function_list;
@@ -132,18 +122,24 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
 			if (!res) {
 				throw Exception("Failed to transform window function children");
 			}
-			if (function_list.size() > 0) {
-				expr->child = move(function_list[0]);
-			}
-			if (function_list.size() > 1) {
-				assert(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);
+			if (win_fun_type == ExpressionType::WINDOW_AGGREGATE) {
+				for (auto& child : function_list ) {
+					expr->children.push_back(move(child));
+				}
+			} else {
+				if (function_list.size() > 0) {
+					expr->children.push_back(move(function_list[0]));
+				}
+				if (function_list.size() > 1) {
+					assert(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);
 				expr->offset_expr = move(function_list[1]);
-			}
-			if (function_list.size() > 2) {
-				assert(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);
+				}
+				if (function_list.size() > 2) {
+					assert(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);
 				expr->default_expr = move(function_list[2]);
+				}
+				assert(function_list.size() <= 3);
 			}
-			assert(function_list.size() <= 3);
 		}
 		auto window_spec = reinterpret_cast<WindowDef *>(root->over);
 

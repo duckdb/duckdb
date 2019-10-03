@@ -52,15 +52,25 @@ static index_t BinarySearchRightmost(ChunkCollection &input, vector<Value> row, 
 	return l - 1;
 }
 
-static void MaterializeExpression(ClientContext &context, Expression *expr, ChunkCollection &input,
+static void MaterializeExpressions(ClientContext &context, Expression** exprs, index_t expr_count, ChunkCollection &input,
                                   ChunkCollection &output, bool scalar = false) {
-	ChunkCollection boundary_start_collection;
-	vector<TypeId> types = {expr->return_type};
+	if (expr_count == 0 ) {
+		return;
+	}
+
+	vector<TypeId> types;
+	for ( index_t expr_idx = 0; expr_idx < expr_count; ++expr_idx ) {
+		types.push_back(exprs[expr_idx]->return_type);
+	}
+
 	for (index_t i = 0; i < input.chunks.size(); i++) {
 		DataChunk chunk;
 		chunk.Initialize(types);
 		ExpressionExecutor executor(*input.chunks[i]);
-		executor.ExecuteExpression(*expr, chunk.data[0]);
+		for ( index_t expr_idx = 0; expr_idx < expr_count; ++expr_idx ) {
+			auto expr = exprs[expr_idx];
+			executor.ExecuteExpression(*expr, chunk.data[expr_idx]);
+		}
 
 		chunk.Verify();
 		output.Append(chunk);
@@ -69,6 +79,11 @@ static void MaterializeExpression(ClientContext &context, Expression *expr, Chun
 			break;
 		}
 	}
+}
+
+static void MaterializeExpression(ClientContext &context, Expression* expr, ChunkCollection &input,
+                                  ChunkCollection &output, bool scalar = false) {
+	MaterializeExpressions(context, &expr, 1, input, output, scalar);
 }
 
 static void SortCollectionForWindow(ClientContext &context, BoundWindowExpression *wexpr, ChunkCollection &input,
@@ -260,10 +275,12 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 
 	// evaluate inner expressions of window functions, could be more complex
 	ChunkCollection payload_collection;
-	if (wexpr->child) {
-		// TODO: child[0] may be a scalar, don't need to materialize the whole collection then
-		MaterializeExpression(context, wexpr->child.get(), input, payload_collection);
+	vector<Expression*> exprs;
+	for (auto& child : wexpr->children)  {
+		exprs.push_back(child.get());
 	}
+	// TODO: child may be a scalar, don't need to materialize the whole collection then
+	MaterializeExpressions(context, exprs.data(), exprs.size(), input, payload_collection);
 
 	ChunkCollection leadlag_offset_collection;
 	ChunkCollection leadlag_default_collection;
@@ -296,16 +313,8 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
 	unique_ptr<WindowSegmentTree> segment_tree = nullptr;
 
-	switch (wexpr->type) {
-	case ExpressionType::WINDOW_SUM:
-	case ExpressionType::WINDOW_MIN:
-	case ExpressionType::WINDOW_MAX:
-	case ExpressionType::WINDOW_AVG:
-		segment_tree = make_unique<WindowSegmentTree>(wexpr->type, wexpr->return_type, &payload_collection);
-		break;
-	default:
-		break;
-		// nothing
+	if (wexpr->aggregate) {
+		segment_tree = make_unique<WindowSegmentTree>(*(wexpr->aggregate), wexpr->return_type, &payload_collection);
 	}
 
 	WindowBoundariesState bounds;
@@ -342,16 +351,8 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 		}
 
 		switch (wexpr->type) {
-		case ExpressionType::WINDOW_SUM:
-		case ExpressionType::WINDOW_MIN:
-		case ExpressionType::WINDOW_MAX:
-		case ExpressionType::WINDOW_AVG: {
-			assert(segment_tree);
+		case ExpressionType::WINDOW_AGGREGATE: {
 			res = segment_tree->Compute(bounds.window_start, bounds.window_end);
-			break;
-		}
-		case ExpressionType::WINDOW_COUNT_STAR: {
-			res = Value::Numeric(wexpr->return_type, bounds.window_end - bounds.window_start);
 			break;
 		}
 		case ExpressionType::WINDOW_ROW_NUMBER: {

@@ -26,7 +26,7 @@ def pull_new_changes():
 
 def build_optimized():
     log("Starting optimized build")
-    proc = subprocess.Popen(['make', 'opt', '-j'], stdout=FNULL, stderr=subprocess.PIPE)
+    proc = subprocess.Popen(['make', 'opt', 'imdb','-j'], stdout=FNULL, stderr=subprocess.PIPE)
     proc.wait()
     if proc.returncode != 0:
         print("Failed to compile, moving on to next commit")

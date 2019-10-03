@@ -16,6 +16,7 @@
 #include "common/unordered_set.hpp"
 #include "main/prepared_statement.hpp"
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
+#include <random>
 
 namespace duckdb {
 class Catalog;
@@ -50,6 +51,9 @@ public:
 	bool query_verification_enabled = false;
 	//! Enable the running of optimizers
 	bool enable_optimizer = true;
+
+	//! The random generator used by random(). Its seed value can be set by setseed().
+	std::mt19937 random_engine;
 
 public:
 	Transaction &ActiveTransaction() {

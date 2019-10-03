@@ -21,10 +21,8 @@ static int duckdb_cursor_init(duckdb_Cursor *self, PyObject *args, PyObject *kwa
 	}
 
 	Py_INCREF(connection);
-// TODO do we need this?
-#if PY_MAJOR_VERSION >= 3
+	// unclear but works
 	Py_XSETREF(self->connection, connection);
-#endif
 	self->closed = 0;
 	self->reset = 0;
 	self->rowcount = -1L;
@@ -71,12 +69,11 @@ PyObject *duckdb_cursor_execute(duckdb_Cursor *self, PyObject *args) {
 
 	duckdb_cursor_close(self, NULL);
 	self->reset = 0;
-
-	if (!PyArg_ParseTuple(args, "O&|",
 #if PY_MAJOR_VERSION >= 3
-	                      PyUnicode_FSConverter,
+	if (!PyArg_ParseTuple(args, "O&|", PyUnicode_FSConverter, &operation)) {
+#else
+		if (!PyArg_ParseTuple(args, "O|", &operation)) {
 #endif
-	                      &operation)) {
 		return NULL;
 	}
 

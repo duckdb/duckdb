@@ -7,7 +7,7 @@ before_install:
 
 env:
   global:
-    - CIBW_BUILD='cp37-*'
+    - CIBW_BUILD='cp37-* cp27-*'
     - CIBW_TEST_REQUIRES='pytest'
     - CIBW_BEFORE_BUILD='pip install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3" && pip install cmake==3.13.3'
     - CIBW_TEST_COMMAND='python -m pytest {project}/tests'
@@ -17,13 +17,13 @@ matrix:
   include:
 
     - os: osx
-      name: Xcode 10.2 Debug
-      osx_image: xcode10.2
+      name: Xcode 11.0 Debug
+      osx_image: xcode11
 
 
     - os: osx
-      name: Xcode 10.2
-      osx_image: xcode10.2
+      name: Xcode 11.0
+      osx_image: xcode11
 
       before_install:
         - pip install --user boto3
@@ -209,7 +209,7 @@ matrix:
 
 
     - os: osx
-      osx_image: xcode10.1
+      osx_image: xcode11
       name: R Package
 
       language: r
@@ -261,10 +261,33 @@ matrix:
 
 
     - os: linux
-      name: Python Package
+      name: Python 3 Package
 
       dist: xenial
       language: python
+      cache: pip
+      env:
+        - CIBW_BUILD='cp37-*'
+      python: 3.7
+
+      script:
+        - pip install cibuildwheel==0.10.2 boto3
+        - cd tools/pythonpkg
+        - python setup.py sdist
+        - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        - cibuildwheel --output-dir wheelhouse duckdb_tarball
+        - cd ../..
+      after_success:
+        python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
+
+    - os: linux
+      name: Python 2 Package
+
+      dist: xenial
+      language: python
+      cache: pip
+      env:
+        - CIBW_BUILD='cp27-*'
       python: 3.7
 
       script:
@@ -281,7 +304,7 @@ matrix:
     - os: osx
       name: Python Package
       language: generic
-      osx_image: xcode10.2
+      osx_image: xcode11
 
       script:
         - pip install cibuildwheel==0.10.2 boto3
@@ -299,6 +322,9 @@ matrix:
       name: Python Package
       language: cpp
       filter_secrets: false
+      # no python 27 because no C++11 support in its windows toolchain
+      env:
+        - CIBW_BUILD='cp37-*'
 
       before_install:
         - choco install python3 --version 3.7.3 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python37"
@@ -308,7 +334,6 @@ matrix:
         - choco install python2 --version 2.7.16 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python27"
         - choco install python2 --version 2.7.16 --sidebyside -y --force --params "/InstallDir:C:\Python27-x64"
         - choco install curl -y --force
-
         - C:/Python37-x64/python.exe -m pip install --upgrade pip
         - C:/Python37-x64/python.exe -m pip install "cibuildwheel==0.10.2"
         - C:/Python37-x64/python.exe -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
