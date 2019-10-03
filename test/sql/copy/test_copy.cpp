@@ -178,6 +178,106 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1024}));
 }
 
+TEST_CASE("Test NULL option of copy statement", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+
+	// Generate CSV file with default delimiter
+	ofstream from_csv_file(fs.JoinPath(csv_path, "test_null_option.csv"));
+	for (int i = 0; i < 3; i++) {
+		from_csv_file << i << ",,test,null" << endl;
+	}
+	from_csv_file.close();
+
+	// create a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_null_option (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10))"));
+	
+	// test COPY ... FROM ... 
+
+	// implicitly using default NULL value
+	result = con.Query("COPY test_null_option FROM '" + fs.JoinPath(csv_path, "test_null_option.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	result = con.Query("SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"test", "test", "test"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"null", "null", "null"}));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test_null_option;"));
+
+	// explicitly using default NULL value
+	result = con.Query("COPY test_null_option FROM '" + fs.JoinPath(csv_path, "test_null_option.csv") + "' (NULL '');");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	result = con.Query("SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"test", "test", "test"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"null", "null", "null"}));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test_null_option;"));
+
+	// setting specific NULL value
+	result = con.Query("COPY test_null_option FROM '" + fs.JoinPath(csv_path, "test_null_option.csv") + "' (NULL 'null');");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	result = con.Query("SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"", "", ""}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"test", "test", "test"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value(), Value(), Value()}));
+
+	// invalid parameter type
+	REQUIRE_FAIL(con.Query("COPY test_null_option FROM '" + fs.JoinPath(csv_path, "test_null_option.csv") + "' (NULL null);"));
+	
+	// delimiter must not appear in the NULL specification
+	REQUIRE_FAIL(con.Query("COPY test_null_option FROM '" + fs.JoinPath(csv_path, "test_null_option.csv") + "' (NULL 'null,');"));
+
+	// no parameter type
+	REQUIRE_FAIL(con.Query("COPY test_null_option FROM '" + fs.JoinPath(csv_path, "test_null_option.csv") + "' (NULL);"));
+
+	// empty integer column with non-default NULL string
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_null_option_2 (col_a INTEGER, col_b INTEGER, col_c VARCHAR(10), col_d VARCHAR(10))"));
+	REQUIRE_FAIL(con.Query("COPY test_null_option_2 FROM '" + fs.JoinPath(csv_path, "test_null_option.csv") + "' (NULL 'null');"));
+
+	// test COPY ... TO ...
+
+	// implicitly using default NULL value
+	result = con.Query("COPY test_null_option TO '" + fs.JoinPath(csv_path, "test_null_option_2.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test_null_option;"));
+	result = con.Query("COPY test_null_option FROM '" + fs.JoinPath(csv_path, "test_null_option_2.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	result = con.Query("SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"", "", ""}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"test", "test", "test"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value(), Value(), Value()}));
+
+	// explicitly using default NULL value
+	result = con.Query("COPY test_null_option TO '" + fs.JoinPath(csv_path, "test_null_option_3.csv") + "' (NULL '');");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test_null_option;"));
+	result = con.Query("COPY test_null_option FROM '" + fs.JoinPath(csv_path, "test_null_option_3.csv") + "' (NULL '');");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	result = con.Query("SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"", "", ""}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"test", "test", "test"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value(), Value(), Value()}));
+
+	// setting specific NULL value
+	result = con.Query("COPY test_null_option TO '" + fs.JoinPath(csv_path, "test_null_option_4.csv") + "' (NULL 'null');");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test_null_option;"));
+	result = con.Query("COPY test_null_option FROM '" + fs.JoinPath(csv_path, "test_null_option_4.csv") + "' (NULL 'null');");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	result = con.Query("SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"", "", ""}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"test", "test", "test"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value(), Value(), Value()}));
+}
+
 TEST_CASE("Test copy statement with file overwrite", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
