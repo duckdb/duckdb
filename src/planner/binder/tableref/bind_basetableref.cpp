@@ -31,7 +31,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &expr) {
 	if (expr.schema_name == INVALID_SCHEMA) {
 		table_or_view = context.temporary_objects->GetTableOrNull(context.ActiveTransaction(), expr.table_name);
 		if (!table_or_view) {
-			table_or_view = context.catalog.GetTableOrView(context.ActiveTransaction(), expr.schema_name, expr.table_name);
+			table_or_view = context.catalog.GetTableOrView(context.ActiveTransaction(), DEFAULT_SCHEMA, expr.table_name);
 		}
 	} else if (expr.schema_name == TEMP_SCHEMA) {
 		table_or_view = context.temporary_objects->GetTable(context.ActiveTransaction(), expr.table_name);
