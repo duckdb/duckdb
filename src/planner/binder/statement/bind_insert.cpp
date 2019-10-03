@@ -10,11 +10,19 @@ using namespace std;
 
 unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 	auto result = make_unique<BoundInsertStatement>();
-	TableCatalogEntry* table = context.temporary_objects->GetTableOrNull(context.ActiveTransaction(), stmt.table);
-	if (!table) {
+	TableCatalogEntry* table = nullptr;
+	if (stmt.schema == INVALID_SCHEMA) {
+		table = context.temporary_objects->GetTableOrNull(context.ActiveTransaction(), stmt.table);
+		if (!table) {
+			table = context.catalog.GetTable(context.ActiveTransaction(), DEFAULT_SCHEMA, stmt.table);
+		}
+	} else if (stmt.schema == TEMP_SCHEMA) {
+		table = context.temporary_objects->GetTableOrNull(context.ActiveTransaction(), stmt.table);
+	} else {
 		table = context.catalog.GetTable(context.ActiveTransaction(), stmt.schema, stmt.table);
 	}
 	assert(table);
+
 
 	result->table = table;
 
