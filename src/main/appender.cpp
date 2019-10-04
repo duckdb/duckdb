@@ -10,8 +10,21 @@ using namespace duckdb;
 using namespace std;
 
 Appender::Appender(Connection &con, string schema_name, string table_name) : con(con), table_entry(nullptr), column(0) {
+	table_entry = nullptr;
 
-	table_entry = con.db.catalog->GetTable(con.context->transaction.ActiveTransaction(), schema_name, table_name);
+	if (schema_name == INVALID_SCHEMA) {
+		table_entry = con.context->temporary_objects->GetTableOrNull(con.context->transaction.ActiveTransaction(), table_name);
+		if (!table_entry) {
+			table_entry = con.db.catalog->GetTable(con.context->transaction.ActiveTransaction(), DEFAULT_SCHEMA, table_name);
+		}
+	} else if (schema_name == TEMP_SCHEMA) {
+		table_entry = con.context->temporary_objects->GetTable(con.context->transaction.ActiveTransaction(), table_name);
+	} else {
+		table_entry = con.db.catalog->GetTable(con.context->transaction.ActiveTransaction(), schema_name, table_name);
+
+	}
+
+	assert(table_entry);
 
 	// get the table entry
 	auto types = table_entry->GetTypes();
