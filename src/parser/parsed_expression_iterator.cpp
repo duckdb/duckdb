@@ -61,8 +61,8 @@ void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expr,
 		for (auto &order : window_expr.orders) {
 			callback(*order.expression);
 		}
-		if (window_expr.child) {
-			callback(*window_expr.child);
+		for (auto &child : window_expr.children) {
+			callback(*child);
 		}
 		if (window_expr.offset_expr) {
 			callback(*window_expr.offset_expr);

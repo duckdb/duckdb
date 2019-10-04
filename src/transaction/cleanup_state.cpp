@@ -1,5 +1,6 @@
 #include "transaction/cleanup_state.hpp"
-#include "transaction/version_info.hpp"
+#include "transaction/delete_info.hpp"
+#include "transaction/update_info.hpp"
 #include "storage/uncompressed_segment.hpp"
 
 using namespace duckdb;
@@ -37,6 +38,7 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 		CleanupUpdate(info);
 		break;
 	}
+	case UndoFlags::DATA:
 	case UndoFlags::QUERY:
 		break;
 	default:

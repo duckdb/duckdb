@@ -77,7 +77,8 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 
 	// flush any incomplete chunks
 	for (int table_id = tmin; table_id < tmax; table_id++) {
-		append_info[table_id]->appender.Commit();
+		append_info[table_id]->appender.Flush();
+		append_info[table_id]->connection.CloseAppender();
 	}
 }
 

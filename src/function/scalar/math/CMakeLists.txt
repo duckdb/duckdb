@@ -14,6 +14,7 @@ add_library_unity(duckdb_func_math
 				radians.cpp
 				random.cpp
 				round.cpp
+				setseed.cpp
 				sign.cpp
 				sqrt.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES}

@@ -23,6 +23,14 @@ struct blob_t {
 	index_t size;
 };
 
+struct string_t {
+	string_t() = default;
+	string_t(char *data, uint32_t length) : data(data), length(length) {}
+
+	char *data;
+	uint32_t length;
+};
+
 //===--------------------------------------------------------------------===//
 // Internal Types
 //===--------------------------------------------------------------------===//
@@ -56,9 +64,10 @@ enum class SQLTypeId : uint8_t {
 	INTEGER = 13,
 	BIGINT = 14,
 	DATE = 15,
-	TIMESTAMP = 16,
-	FLOAT = 17,
-	DOUBLE = 18,
+	TIME = 16,
+	TIMESTAMP = 17,
+	FLOAT = 18,
+	DOUBLE = 19,
 	DECIMAL = 20,
 	CHAR = 21,
 	VARCHAR = 22,
@@ -97,6 +106,7 @@ public:
 	static const SQLType DOUBLE;
 	static const SQLType DATE;
 	static const SQLType TIMESTAMP;
+	static const SQLType TIME;
 	static const SQLType VARCHAR;
 
 	//! A list of all NUMERIC types (integral and floating point types)

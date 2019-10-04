@@ -6,8 +6,8 @@
 #include "storage/data_table.hpp"
 #include "storage/write_ahead_log.hpp"
 
-#include "transaction/version_info.hpp"
-#include <cstring>
+#include "transaction/delete_info.hpp"
+#include "transaction/update_info.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -23,6 +23,16 @@ void Transaction::PushDelete(ChunkInfo *vinfo, row_t rows[], index_t count) {
 	delete_info->vinfo = vinfo;
 	delete_info->count = count;
 	memcpy(delete_info->rows, rows, count * sizeof(row_t));
+}
+
+data_ptr_t Transaction::PushData(index_t len) {
+	return undo_buffer.CreateEntry(UndoFlags::DATA, len);
+}
+
+data_ptr_t Transaction::PushString(string_t str) {
+	auto entry = PushData(str.length + 1);
+	memcpy(entry, str.data, str.length + 1);
+	return entry;
 }
 
 UpdateInfo *Transaction::CreateUpdateInfo(index_t type_size, index_t entries) {

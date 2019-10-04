@@ -188,6 +188,8 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::CommitEntry(UndoFlags type, d
 		}
 		break;
 	}
+	case UndoFlags::DATA:
+		break;
 	default:
 		throw NotImplementedException("UndoBuffer - don't know how to commit this type!");
 	}

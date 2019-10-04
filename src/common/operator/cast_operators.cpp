@@ -3,6 +3,7 @@
 #include "common/exception.hpp"
 #include "common/limits.hpp"
 #include "common/types/date.hpp"
+#include "common/types/time.hpp"
 #include "common/types/timestamp.hpp"
 
 #include <cstdlib>
@@ -429,6 +430,37 @@ template <> date_t CastToDate::Operation(int32_t left) {
 
 template <> date_t CastToDate::Operation(int64_t left) {
 	return (date_t)left;
+}
+
+
+//===--------------------------------------------------------------------===//
+// Cast From Time
+//===--------------------------------------------------------------------===//
+template <> string CastFromTime::Operation(dtime_t left) {
+	return Time::ToString(left);
+}
+
+template <> int32_t CastFromTime::Operation(dtime_t left) {
+	return (int32_t)left;
+}
+
+template <> int64_t CastFromTime::Operation(dtime_t left) {
+	return (int64_t)left;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast To Time
+//===--------------------------------------------------------------------===//
+template <> dtime_t CastToTime::Operation(const char *left) {
+	return Time::FromCString(left);
+}
+
+template <> dtime_t CastToTime::Operation(int32_t left) {
+	return (dtime_t)left;
+}
+
+template <> dtime_t CastToTime::Operation(int64_t left) {
+	return (dtime_t)left;
 }
 
 //===--------------------------------------------------------------------===//

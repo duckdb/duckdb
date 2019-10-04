@@ -13,10 +13,6 @@ from setuptools import setup, Extension
 from setuptools.command.sdist import sdist
 from distutils.command.build_ext import build_ext
 
-# some paranoia to start with
-
-# if platform.architecture()[0] != '64bit':
-#     raise Exception('DuckDB only supports 64 bit at this point')
 
 # make sure we are in the right directory
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
@@ -125,18 +121,18 @@ else:
 
 setup(
     name = "duckdb",
-    version = '0.1.0',
     description = 'DuckDB embedded database',
     keywords = 'DuckDB Database SQL OLAP',
     url="https://github.com/cwida/duckdb",
     long_description = '',
-    install_requires=[
-         'numpy>=1.16',
-         'pandas>=0.24'
+    install_requires=[ # these versions are still available for Python 2, newer ones aren't
+         'numpy>=1.14', 
+         'pandas>=0.23'
     ],
     packages=['duckdb_query_graph'],
     include_package_data=True,
-    setup_requires=setup_requires,
+    setup_requires=setup_requires + ["setuptools_scm"],
+    use_scm_version = {"root": "../..", "relative_to": __file__},
     tests_require=['pytest'],
     classifiers = [
         'Topic :: Database :: Database Engines/Servers',

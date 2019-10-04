@@ -76,3 +76,41 @@ void UncompressedSegment::Update(SegmentStatistics &stats, Transaction &transact
 	}
 	Update(stats, transaction, update, ids, vector_index, vector_offset, node);
 }
+
+UpdateInfo *UncompressedSegment::CreateUpdateInfo(Transaction &transaction, row_t *ids, index_t count, index_t vector_index, index_t vector_offset, index_t type_size) {
+	auto node = transaction.CreateUpdateInfo(type_size, STANDARD_VECTOR_SIZE);
+	node->segment = this;
+	node->vector_index = vector_index;
+	node->prev = nullptr;
+	node->next = versions[vector_index];
+	if (node->next) {
+		node->next->prev = node;
+	}
+	versions[vector_index] = node;
+
+	// set up the tuple ids
+	node->N = count;
+	for(index_t i = 0; i < count; i++) {
+		assert((index_t) ids[i] >= vector_offset && (index_t) ids[i] < vector_offset + STANDARD_VECTOR_SIZE);
+		node->tuples[i] = ids[i] - vector_offset;
+	};
+	return node;
+}
+
+
+void UncompressedSegment::CleanupUpdate(UpdateInfo *info) {
+	if (info->prev) {
+		// there is a prev info: remove from the chain
+		auto prev = info->prev;
+		prev->next = info->next;
+		if (prev->next) {
+			prev->next->prev = prev;
+		}
+	} else {
+		// there is no prev info: remove from base segment
+		info->segment->versions[info->vector_index] = info->next;
+		if (info->next) {
+			info->next->prev = nullptr;
+		}
+	}
+}

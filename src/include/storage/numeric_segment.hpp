@@ -34,8 +34,6 @@ public:
 
 	//! Rollback a previous update
 	void RollbackUpdate(UpdateInfo *info) override;
-	//! Cleanup an update, removing it from the version chain. This should only be called if an exclusive lock is held on the segment
-	void CleanupUpdate(UpdateInfo *info) override;
 protected:
 	void Update(SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) override;
 public:

@@ -126,7 +126,7 @@ csv_dir = 'test/sql/copy'
 # create header file from test CSVs
 def write_csv(csv_dir, fname):
 	with open(os.path.join(csv_dir, fname), 'rb') as f:
-		text = f.read()
+		text = bytearray(f.read())
 	result_text = ""
 	first = True
 	for byte in text:
@@ -140,7 +140,7 @@ def write_csv(csv_dir, fname):
 
 def write_binary(csv_dir, fname):
 	with open(os.path.join(csv_dir, fname), 'rb') as f:
-		text = f.read()
+		text = bytearray(f.read())
 	result_text = ""
 	first = True
 	for byte in text:

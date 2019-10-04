@@ -8,12 +8,14 @@ add_subdirectory(dbwrapper)
 add_subdirectory(micro)
 add_subdirectory(tpch)
 add_subdirectory(tpcds)
+add_subdirectory(imdb)
 
 add_executable(benchmark_runner benchmark_runner.cpp ${BENCHMARK_OBJECT_FILES})
 target_link_libraries(benchmark_runner
                       duckdb
                       dbgen
                       dsdgen
+                      imdb
                       test_helpers
                       tpce
                       sqlite_transfer)

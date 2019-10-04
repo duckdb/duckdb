@@ -1,9 +1,12 @@
 #include "storage/table/chunk_info.hpp"
 #include "transaction/transaction.hpp"
-#include "transaction/version_info.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+static bool UseVersion(Transaction &transaction, transaction_t id) {
+	return id < transaction.start_time || id == transaction.transaction_id;
+}
 
 //===--------------------------------------------------------------------===//
 // Delete info
@@ -24,7 +27,7 @@ ChunkDeleteInfo::ChunkDeleteInfo(ChunkDeleteInfo &info, ChunkInfoType type) :
 index_t ChunkDeleteInfo::GetSelVector(Transaction &transaction, sel_t sel_vector[], index_t max_count) {
 	index_t count = 0;
 	for(index_t i = 0; i < max_count; i++) {
-		if (!Versioning::UseVersion(transaction, deleted[i])) {
+		if (!UseVersion(transaction, deleted[i])) {
 			sel_vector[count++] = i;
 		}
 	}
@@ -32,7 +35,7 @@ index_t ChunkDeleteInfo::GetSelVector(Transaction &transaction, sel_t sel_vector
 }
 
 bool ChunkDeleteInfo::Fetch(Transaction &transaction, row_t row) {
-	return !Versioning::UseVersion(transaction, deleted[row]);
+	return !UseVersion(transaction, deleted[row]);
 }
 
 void ChunkDeleteInfo::Delete(Transaction &transaction, row_t rows[], index_t count) {
@@ -73,8 +76,8 @@ ChunkInsertInfo::ChunkInsertInfo(ChunkDeleteInfo &info) : ChunkDeleteInfo(info, 
 index_t ChunkInsertInfo::GetSelVector(Transaction &transaction, sel_t sel_vector[], index_t max_count) {
 	index_t count = 0;
 	for(index_t i = 0; i < max_count; i++) {
-		if (Versioning::UseVersion(transaction, inserted[i]) &&
-		   !Versioning::UseVersion(transaction, deleted[i])) {
+		if (UseVersion(transaction, inserted[i]) &&
+		   !UseVersion(transaction, deleted[i])) {
 			sel_vector[count++] = i;
 		}
 	}
@@ -82,6 +85,6 @@ index_t ChunkInsertInfo::GetSelVector(Transaction &transaction, sel_t sel_vector
 }
 
 bool ChunkInsertInfo::Fetch(Transaction &transaction, row_t row) {
-	return Versioning::UseVersion(transaction, inserted[row]) &&
-		   !Versioning::UseVersion(transaction, deleted[row]);
+	return UseVersion(transaction, inserted[row]) &&
+		   !UseVersion(transaction, deleted[row]);
 }

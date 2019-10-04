@@ -9,7 +9,6 @@
 #include "transaction/cleanup_state.hpp"
 #include "transaction/commit_state.hpp"
 #include "transaction/rollback_state.hpp"
-#include "transaction/version_info.hpp"
 
 #include <unordered_map>
 
