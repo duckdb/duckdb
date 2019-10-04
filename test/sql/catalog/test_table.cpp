@@ -69,6 +69,8 @@ TEST_CASE("Test temporary table creation", "[catalog]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY TABLE integersx(i INTEGER)"));
 	// we can't prefix temp tables with a schema that is not "temp"
 	REQUIRE_FAIL(con.Query("CREATE TEMPORARY TABLE asdf.integersy(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY TABLE s1 AS SELECT 42"));
+
 	REQUIRE_FAIL(con.Query("CREATE TABLE temp.integersy(i INTEGER)"));
 
 	// no indexes on temp tables

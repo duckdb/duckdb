@@ -23,6 +23,9 @@ Catalog::Catalog(StorageManager &storage) : storage(storage), schemas(*this), de
 }
 
 void Catalog::CreateSchema(Transaction &transaction, CreateSchemaInfo *info) {
+	if (info->schema == INVALID_SCHEMA) {
+		throw CatalogException("Schema not specified");
+	}
 	if (info->schema == TEMP_SCHEMA) {
 		throw CatalogException("Cannot create built-in schema \"%s\"",
 		                       info->schema.c_str());
@@ -38,6 +41,9 @@ void Catalog::CreateSchema(Transaction &transaction, CreateSchemaInfo *info) {
 }
 
 void Catalog::DropSchema(Transaction &transaction, DropInfo *info) {
+	if (info->name == INVALID_SCHEMA) {
+		throw CatalogException("Schema not specified");
+	}
 	if (info->name == DEFAULT_SCHEMA || info->name == TEMP_SCHEMA) {
 		throw CatalogException("Cannot drop schema \"%s\" because it is required by the database system",
 		                       info->name.c_str());
@@ -50,6 +56,9 @@ void Catalog::DropSchema(Transaction &transaction, DropInfo *info) {
 }
 
 SchemaCatalogEntry *Catalog::GetSchema(Transaction &transaction, const string &schema_name) {
+	if (schema_name == INVALID_SCHEMA) {
+		throw CatalogException("Schema not specified");
+	}
 	auto entry = schemas.GetEntry(transaction, schema_name);
 	if (!entry) {
 		throw CatalogException("Schema with name %s does not exist!", schema_name.c_str());
