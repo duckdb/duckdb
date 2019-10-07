@@ -54,29 +54,41 @@ private:
 	ofstream to_csv;
 };
 
-static void WriteQuotedString(BufferedWriter &writer, const char *str_value, char delimiter, char quote) {
-	// scan the string for the delimiter
+static void WriteQuotedString(BufferedWriter &writer, const char *str_value, string delimiter, string quote) {
+	// scan the string for the delimiter and for a newline
 	bool write_quoted = false;
+
+	// FIXME: check for delimiter in string
 	index_t len = 0;
+	// check for newline in string
 	for (const char *val = str_value; *val; val++) {
 		len++;
-		if (*val == delimiter || *val == '\n' || *val == '\r') {
-			// delimiter or newline, write a quoted string
+		if (*val == '\n' || *val == '\r') {
+			// newline, write a quoted string
 			write_quoted = true;
 		}
 	}
+
 	if (!write_quoted) {
 		writer.Write(str_value, len);
 	} else {
-		writer.Write(&quote, 1);
+		const char *quote_cstr = quote.c_str();
+		index_t quote_l = quote.length();
+		writer.Write(quote_cstr, quote_l);
 		writer.Write(str_value, len);
-		writer.Write(&quote, 1);
+		writer.Write(quote_cstr, quote_l);
 	}
+
+	// FIXME: add escapes!
 }
 
 void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	auto &info = *this->info;
 	index_t total = 0;
+
+	// delimiter as cstr and its length
+	const char *delimiter_cstr = info.delimiter.c_str();
+	index_t delimiter_l = info.delimiter.length();
 
 	string newline = "\n";
 	BufferedWriter writer(info.file_path);
@@ -84,7 +96,8 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 		// write the header line
 		for (index_t i = 0; i < names.size(); i++) {
 			if (i != 0) {
-				writer.Write(&info.delimiter, 1);
+				
+				writer.Write(delimiter_cstr, delimiter_l);
 			}
 			WriteQuotedString(writer, names[i].c_str(), info.delimiter, info.quote);
 		}
@@ -122,7 +135,7 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 			// write values
 			for (index_t col_idx = 0; col_idx < state->child_chunk.column_count; col_idx++) {
 				if (col_idx != 0) {
-					writer.Write(&info.delimiter, 1);
+					writer.Write(delimiter_cstr, delimiter_l);
 				}
 				if (cast_chunk.data[col_idx].nullmask[i]) {
 					// write null value

@@ -11,6 +11,8 @@
 #include "execution/physical_operator.hpp"
 #include "parser/parsed_data/copy_info.hpp"
 
+#include <queue>
+
 namespace duckdb {
 struct CopyInfo;
 
@@ -44,13 +46,15 @@ public:
 
 private:
 	//! Adds a value to the current row
-	void AddValue(char *str_val, index_t length, index_t &column);
+	void AddValue(char *str_val, index_t length, index_t &column, std::queue<index_t> &escape_positions);
 	//! Adds a row to the insert_chunk, returns true if the chunk is filled as a result of this row being added
 	bool AddRow(DataChunk &insert_chunk, index_t &column);
 	//! Finalizes a chunk, parsing all values that have been added so far and adding them to the insert_chunk
 	void Flush(DataChunk &insert_chunk);
 	//! Reads a new buffer from the CSV file if the current one has been exhausted
 	bool ReadBuffer(index_t &start);
+	//! Sets the control strings starting at the current buffer position, returns false if the buffer was exhausted
+	bool MatchControlString(bool &delim_str, bool &quote_str, bool &escape_str, index_t &delim_l, index_t &quote_l, index_t & escape_l);
 };
 
 } // namespace duckdb

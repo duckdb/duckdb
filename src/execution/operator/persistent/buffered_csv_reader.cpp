@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <queue>
 
 using namespace duckdb;
 using namespace std;
@@ -34,6 +35,66 @@ BufferedCSVReader::BufferedCSVReader(CopyInfo &info, vector<SQLType> sql_types, 
 	}
 }
 
+bool BufferedCSVReader::MatchControlString(bool &delim_str, bool &quote_str, bool &escape_str, index_t &delim_l, index_t &quote_l, index_t & escape_l) {
+	index_t tmp_position = position;
+	index_t control_string_offset = 0;
+
+	bool delim = true;
+	bool quote = true;
+	bool escape = true;
+
+	while (true) {
+
+		// check if the delimiter string matches
+		if (delim && control_string_offset < delim_l) {
+			if (buffer[tmp_position] != info.delimiter[control_string_offset]) {
+				delim = false;
+			} else {
+				if (control_string_offset == delim_l - 1) {
+					delim = false;
+					delim_str = true;
+				}
+			}
+		}
+
+		// check if the quote string matches
+		if (quote && control_string_offset < quote_l) {
+			if (buffer[tmp_position] != info.quote[control_string_offset]) {
+				quote = false;
+			} else {
+				if (control_string_offset == quote_l - 1) {
+					quote = false;
+					quote_str = true;
+				}
+			}
+		}
+
+		// check if the escape matches
+		if (escape && control_string_offset < escape_l) {
+			if (buffer[tmp_position] != info.escape[control_string_offset]) {
+				escape = false;
+			} else {
+				if (control_string_offset == escape_l - 1) {
+					escape = false;
+					escape_str = true;
+				}
+			}
+		}
+
+		if (!delim && !quote && !escape) {
+			return false;
+		}
+
+		tmp_position++;
+		control_string_offset++;
+
+		// make sure not to exceed buffer size, and return if there cannot be any further control strings
+		if (tmp_position >= buffer_size) {
+			return true;
+		}
+	}
+}
+
 void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 	cached_buffers.clear();
 
@@ -42,6 +103,16 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 	bool in_quotes = false;
 	bool finished_chunk = false;
 	bool seen_escape = true;
+
+	// used for fast control sequence detection
+	bool delimiter = false;
+	bool quote = false;
+	bool escape = false;
+	index_t delim_l = info.delimiter.length();
+	index_t quote_l = info.quote.length();
+	index_t escape_l = info.escape.length();
+	std::queue<index_t> escape_positions;
+	bool read_whole_buffer;
 
 	if (position >= buffer_size) {
 		if (!ReadBuffer(start)) {
@@ -54,40 +125,49 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 		if (finished_chunk) {
 			return;
 		}
+
+		MatchControlString(delimiter, quote, escape, delim_l, quote_l, escape_l);
+
 		if (in_quotes) {
-			if (buffer[position] == info.escape) {
+			if (escape) {
 				seen_escape = true;
-				// FIXME this is only part of the deal, we also need to zap the escapes below
+				position += escape_l - 1;
 			}
 			else if (!seen_escape) {
-				if (buffer[position] == info.quote) {
-					// end quote
-					offset = 1;
+				if (quote) {
+					// found quote without escape, end quote
+					offset = quote_l;
+					position += quote_l - 1;
 					in_quotes = false;
 				}
+			} else if (seen_escape && quote) {
+				escape_positions.push(position);
+				seen_escape = false;
 			} else {
 				seen_escape = false;
 			}
 
 		} else {
-			if (buffer[position] == info.quote) {
+			if (quote) {
 				// start quotes can only occur at the start of a field
 				if (position == start) {
-					// increment start by 1
-					start++;
+					// increment start by quote length
+					start += quote_l;
+					position += quote_l - 1;
 					// read until we encounter a quote again
 					in_quotes = true;
 				}
-			} else if (buffer[position] == info.delimiter) {
+			} else if (delimiter) {
 				// encountered delimiter
-				AddValue(buffer.get() + start, position - start - offset, column);
-				start = position + 1;
+				AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
+				start = position + delim_l;
+				position += delim_l - 1;
 				offset = 0;
 			}
 			if (is_newline(buffer[position]) || (source.eof() && position + 1 == buffer_size)) {
 				char newline = buffer[position];
 				// encountered a newline, add the current value and push the row
-				AddValue(buffer.get() + start, position - start - offset, column);
+				AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
 				finished_chunk = AddRow(insert_chunk, column);
 
 				// move to the next character
@@ -117,13 +197,25 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 		}
 
 		position++;
-		if (position >= buffer_size) {
+		if (position >= buffer_size && !read_whole_buffer) {
 			// exhausted the buffer
 			if (!ReadBuffer(start)) {
 				break;
 			}
-		}
+		} else if (position >= buffer_size && read_whole_buffer) {
+			break;
+		} /* else if (position >= buffer_size - delim_l || position >= buffer_size - quote_l || position >= buffer_size - escape_l) {
+			if (!ReadBuffer(start)) {
+				read_whole_buffer = true;
+			}
+		} */
+
+		// reset values
+		delimiter = false;
+		quote = false;
+		escape = false;
 	}
+
 	if (in_quotes) {
 		throw ParserException("Error on line %lld: unterminated quotes", linenr);
 	}
@@ -161,7 +253,11 @@ bool BufferedCSVReader::ReadBuffer(index_t &start) {
 	return read_count > 0;
 }
 
-void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column) {
+void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column, std::queue<index_t> &escape_positions) {
+	// used to remove escape characters
+	index_t pos = start;
+	bool in_escape = false;
+
 	if (column == sql_types.size() && length == 0) {
 		// skip a single trailing delimiter
 		column++;
@@ -179,7 +275,26 @@ void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column)
 	if (info.null_str == str_val) {
 		parse_chunk.data[column].nullmask[row_entry] = true;
 	} else {
-		// no null value
+		// remove escape(s)
+		if (!escape_positions.empty()) {
+			string new_val = "";
+			for (const char *val = str_val; *val; val++) {
+				if (escape_positions.front() == pos) {
+					in_escape = false;
+					escape_positions.pop();
+				}
+				if (escape_positions.front() - info.escape.length() == pos) {
+					in_escape = true;
+				}
+				if (!in_escape) {
+					new_val += *val;
+				}
+				pos++;
+			}
+			strcpy(str_val, new_val.c_str());
+		}
+
+		// test for valid utf-8 string
 		if (!Value::IsUTF8String(str_val)) {
 			throw ParserException("Error on line %lld: file is not valid UTF8", linenr);
 		}

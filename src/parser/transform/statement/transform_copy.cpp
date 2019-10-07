@@ -84,28 +84,12 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			if (StringUtil::StartsWith(def_elem->defname, "delim") ||
 			    StringUtil::StartsWith(def_elem->defname, "sep")) {
 
-				// FIXME: support for multi-character delimiters
 				// delimiter
 				auto *delimiter_val = (postgres::Value *)(def_elem->arg);
 				if (!delimiter_val || delimiter_val->type != T_String) {
 					throw ParserException("Unsupported parameter type for DELIMITER: expected e.g. DELIMITER ','");
 				}
-				index_t delim_len = strlen(delimiter_val->val.str);
-				info.delimiter = '\0';
-				char *delim_cstr = delimiter_val->val.str;
-
-				//for delimiters that are of length 1
-				if (delim_len == 1) {
-					info.delimiter = delim_cstr[0];
-				}
-				//tab
-				if (delim_len == 2 && delim_cstr[0] == '\\' && delim_cstr[1] == 't') {
-					info.delimiter = '\t';
-				}
-				//if neither tab nor other character, throw error
-				if (info.delimiter == '\0') {
-					throw Exception("Could not interpret DELIMITER option");
-				}
+				info.delimiter = delimiter_val->val.str;
 
 			} else if (def_elem->defname == kFormatTok) {
 
@@ -126,7 +110,11 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 				if (!quote_val || quote_val->type != T_String) {
 					throw ParserException("Unsupported parameter type for QUOTE: expected e.g. QUOTE '\"'");
 				}
-				info.quote = *quote_val->val.str;
+				info.quote = quote_val->val.str;
+
+				if (info.quote.length() == 0) {
+					throw Exception("QUOTE must not be empty");
+				}
 
 			} else if (def_elem->defname == kEscapeTok) {
 
@@ -135,7 +123,12 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 				if (!escape_val || escape_val->type != T_String) {
 					throw ParserException("Unsupported parameter type for ESCAPE: expected e.g. ESCAPE '\"'");
 				}
-				info.escape = *escape_val->val.str;
+
+				info.escape = escape_val->val.str;
+
+				if (info.escape.length() == 0) {
+					throw Exception("ESCAPE must not be empty");
+				}
 
 			} else if (def_elem->defname == kHeaderTok) {
 
@@ -164,12 +157,6 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 				auto *null_val = (postgres::Value *)(def_elem->arg);
 				if (!null_val || null_val->type != T_String) {
 					throw ParserException("Unsupported parameter type for NULL: expected e.g. NULL 'null'");
-				}
-				// the null string must not contain the delimiter
-				for (const char *val = null_val->val.str; *val; val++) {
-					if (*val == info.delimiter) {
-						throw Exception("COPY delimiter must not appear in the NULL specification");
-					}
 				}
 				info.null_str = null_val->val.str;
 
@@ -239,8 +226,18 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 	}
 
 	// the default character of the ESCAPE option is the same as the QUOTE character
-	if (!info.escape) {
+	if (info.escape == "") {
 		info.escape = info.quote;
+	}
+
+	// dependencies must be checked afterwards
+	// the null string must not contain the delimiter
+	if (info.null_str.find(info.delimiter) != string::npos) {
+		throw Exception("COPY delimiter must not appear in the NULL specification");
+	}
+	// delimiter and quote must be different
+	if (info.delimiter == info.quote) {
+		throw Exception("COPY delimiter and quote must be different");
 	}
 
 	return result;

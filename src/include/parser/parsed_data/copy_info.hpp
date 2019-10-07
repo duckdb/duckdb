@@ -29,11 +29,11 @@ struct CopyInfo {
 	//! Whether or not this is a copy to file (false) or copy from a file (true)
 	bool is_from;
 	//! Delimiter to separate columns within each line
-	char delimiter;
+	string delimiter;
 	//! Quote used for columns that contain reserved characters, e.g., delimiter
-	char quote;
+	string quote;
 	//! Escape character to escape quote character
-	char escape;
+	string escape;
 	//! Whether or not the file has a header line
 	bool header;
 	//! The file format of the external file
@@ -48,7 +48,7 @@ struct CopyInfo {
 	vector<string> force_not_null_list;
 
 	CopyInfo()
-	    : schema(DEFAULT_SCHEMA), is_from(false), delimiter(','), quote('"'), header(false),
+	    : schema(DEFAULT_SCHEMA), is_from(false), delimiter(","), quote("\""), escape(""), header(false),
 	      format(ExternalFileFormat::CSV), null_str(""), quote_all(false) {
 	}
 };
