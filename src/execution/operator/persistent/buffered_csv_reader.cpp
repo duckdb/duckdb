@@ -81,6 +81,7 @@ bool BufferedCSVReader::MatchControlString(bool &delim_str, bool &quote_str, boo
 			}
 		}
 
+		// return if matching is not possible any longer
 		if (!delim && !quote && !escape) {
 			return false;
 		}
@@ -98,11 +99,14 @@ bool BufferedCSVReader::MatchControlString(bool &delim_str, bool &quote_str, boo
 void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 	cached_buffers.clear();
 
-	index_t column = 0;
-	index_t offset = 0;
+	// used for parsing algorithm
 	bool in_quotes = false;
 	bool finished_chunk = false;
 	bool seen_escape = true;
+	bool seen_quotes = false;
+	index_t column = 0;
+	index_t offset = 0;
+	std::queue<index_t> escape_positions;
 
 	// used for fast control sequence detection
 	bool delimiter = false;
@@ -111,8 +115,6 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 	index_t delim_l = info.delimiter.length();
 	index_t quote_l = info.quote.length();
 	index_t escape_l = info.escape.length();
-	std::queue<index_t> escape_positions;
-	bool read_whole_buffer;
 
 	if (position >= buffer_size) {
 		if (!ReadBuffer(start)) {
@@ -126,6 +128,7 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 			return;
 		}
 
+		// detect control strings
 		MatchControlString(delimiter, quote, escape, delim_l, quote_l, escape_l);
 
 		if (in_quotes) {
@@ -141,6 +144,7 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 					in_quotes = false;
 				}
 			} else if (seen_escape && quote) {
+				// we store the position of the escape so we can skip it when adding the value
 				escape_positions.push(position);
 				seen_escape = false;
 			} else {
@@ -151,19 +155,21 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 			if (quote) {
 				// start quotes can only occur at the start of a field
 				if (position == start) {
+					in_quotes = true;
 					// increment start by quote length
 					start += quote_l;
+					seen_quotes = in_quotes;
 					position += quote_l - 1;
-					// read until we encounter a quote again
-					in_quotes = true;
 				}
 			} else if (delimiter) {
 				// encountered delimiter
 				AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
 				start = position + delim_l;
+				seen_quotes = in_quotes;
 				position += delim_l - 1;
 				offset = 0;
 			}
+			// FIXME: test newlines in quotes
 			if (is_newline(buffer[position]) || (source.eof() && position + 1 == buffer_size)) {
 				char newline = buffer[position];
 				// encountered a newline, add the current value and push the row
@@ -172,6 +178,7 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 
 				// move to the next character
 				start = position + 1;
+				seen_quotes = in_quotes;
 				offset = 0;
 				if (newline == '\r') {
 					// \r, skip subsequent \n
@@ -197,20 +204,20 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 		}
 
 		position++;
-		if (position >= buffer_size && !read_whole_buffer) {
+		if (position >= buffer_size) {
 			// exhausted the buffer
 			if (!ReadBuffer(start)) {
 				break;
 			}
-		} else if (position >= buffer_size && read_whole_buffer) {
-			break;
-		} /* else if (position >= buffer_size - delim_l || position >= buffer_size - quote_l || position >= buffer_size - escape_l) {
-			if (!ReadBuffer(start)) {
-				read_whole_buffer = true;
+			// restore the current state after reading from the buffer
+			in_quotes = seen_quotes;
+			position = start;
+			while (!escape_positions.empty()) {
+				escape_positions.pop();
 			}
-		} */
+		}
 
-		// reset values
+		// reset values for control string matching
 		delimiter = false;
 		quote = false;
 		escape = false;

@@ -296,7 +296,11 @@ TEST_CASE("Test copy statement with unicode delimiter/quote/escape", "[copy]") {
 	// generate CSV file with unicode (> one-byte) delimiter/quote/escape that exceeds the buffer size a few times
 	ofstream from_csv_file2(fs.JoinPath(csv_path, "multi_char_buffer_exhausted.csv"));
 	for (int i = 0; i < 16384; i++) {
-		from_csv_file2 << i << "🦆ˮ🦆dˮ🦆ˮd˧ˮ🦆ˮ🦆d˧" << endl;
+		if (i % 2 == 0) {
+			from_csv_file2 << i << "🦆ˮ🦆dˮ🦆ˮd˧ˮ🦆ˮ🦆d˧" << endl;
+		} else {
+			from_csv_file2 << i << "🦆ˮ˧ˮ˧ˮ˧ˮˮ🦆˧˧🦆	test test	🦆" << endl;
+		}
 	}
 	from_csv_file2.close();
 
@@ -321,14 +325,23 @@ TEST_CASE("Test copy statement with unicode delimiter/quote/escape", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {"du˧🦆ck", "douˮble", Value(), "duck inv˧asion"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"dˮˮu🦆ck", Value(), Value(), Value()}));
 	REQUIRE(CHECK_COLUMN(result, 3, {"duck", "duck", Value(), Value()}));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test_unicode;"));
 
 	// test unicode delimiter/quote/escape that exceeds the buffer size a few times
 	result = con.Query("COPY test_unicode FROM '" + fs.JoinPath(csv_path, "multi_char_buffer_exhausted.csv") + "' (DELIMITER '🦆', QUOTE 'ˮ', ESCAPE '˧');");
 	REQUIRE(CHECK_COLUMN(result, 0, {16384}));
+	result = con.Query("SELECT * FROM test_unicode ORDER BY 1 LIMIT 4;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"🦆d", "ˮˮˮ", "🦆d", "ˮˮˮ"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"dˮ🦆", "˧˧", "dˮ🦆", "˧˧"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"d˧", "	test test	", "d˧", "	test test	"}));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test_unicode;"));
 
 	// test same string for delimiter and quote
 
 	// test delimiter is substring of quote & delimiter is substring of row value
+
+	// test default values, which means escape must be the same as quote
 }
 
 TEST_CASE("Test copy statement with file overwrite", "[copy]") {
