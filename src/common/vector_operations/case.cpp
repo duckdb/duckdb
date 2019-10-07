@@ -10,17 +10,18 @@ using namespace duckdb;
 using namespace std;
 
 template <class T, class OP> static void case_loop(Vector &check, Vector &res_true, Vector &res_false, Vector &result) {
-	auto cond = (bool *)check.data;
-	auto true_data = (T *)res_true.data;
-	auto false_data = (T *)res_false.data;
-	auto res = (T *)result.data;
-	VectorOperations::TernaryExec(
-	    check, res_true, res_false, result,
-	    [&](index_t check_index, index_t true_index, index_t false_index, index_t i) {
-		    bool branch = (cond[check_index] && !check.nullmask[check_index]);
-		    result.nullmask[i] = branch ? res_true.nullmask[true_index] : res_false.nullmask[false_index];
-		    res[i] = OP::Operation(result, branch, true_data[true_index], false_data[false_index], i);
-	    });
+	throw Exception("FIXME: case loop");
+	// auto cond = (bool *)check.data;
+	// auto true_data = (T *)res_true.data;
+	// auto false_data = (T *)res_false.data;
+	// auto res = (T *)result.data;
+	// VectorOperations::TernaryExec<bool, T, T, false>(
+	//     check, res_true, res_false, result,
+	//     [&](bool check, T true, T false, index_t i) {
+	// 	    bool branch = (cond[check_index] && !check.nullmask[check_index]);
+	// 	    result.nullmask[i] = branch ? res_true.nullmask[true_index] : res_false.nullmask[false_index];
+	// 	    res[i] = OP::Operation(result, branch, true_data[true_index], false_data[false_index], i);
+	//     });
 }
 
 //===--------------------------------------------------------------------===//

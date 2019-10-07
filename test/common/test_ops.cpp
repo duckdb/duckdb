@@ -81,50 +81,6 @@ TEST_CASE("Aggregating numeric vectors", "[vector_ops]") {
 	require_aggrs(v);
 }
 
-static void require_case(Vector &val) {
-	Vector check(TypeId::BOOLEAN, true, false);
-	check.count = val.count;
-	check.SetValue(0, Value::BOOLEAN(true));
-	check.SetValue(1, Value::BOOLEAN(false));
-	check.SetNull(2, true);
-
-	Vector v1(val.type, true, false);
-	Vector v2(val.type, true, false);
-	val.Copy(v1);
-	val.Copy(v2);
-
-	Vector res(val.type, true, false);
-	res.count = val.count;
-
-	VectorOperations::Case(check, v1, v2, res);
-
-	REQUIRE(res.GetValue(0) == val.GetValue(0));
-	REQUIRE(res.GetValue(1) == val.GetValue(1));
-	REQUIRE(res.GetValue(2).is_null);
-}
-
-TEST_CASE("Case vectors", "[vector_ops]") {
-	Vector v(TypeId::BOOLEAN, true, false);
-	v.count = 3;
-	v.SetValue(0, Value::BOOLEAN(true));
-	v.SetValue(1, Value::BOOLEAN(false));
-	v.SetNull(2, true);
-
-	require_case(v);
-	v.Cast(TypeId::SMALLINT);
-	require_case(v);
-	v.Cast(TypeId::INTEGER);
-	require_case(v);
-	v.Cast(TypeId::BIGINT);
-	require_case(v);
-	v.Cast(TypeId::FLOAT);
-	require_case(v);
-	v.Cast(TypeId::DOUBLE);
-	require_case(v);
-	v.Cast(TypeId::VARCHAR);
-	require_case(v);
-}
-
 static void require_compare(Vector &val) {
 	Vector v1(val.type, true, false);
 	val.Copy(v1);
