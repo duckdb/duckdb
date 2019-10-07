@@ -100,14 +100,13 @@ static void regexp_replace_function(ExpressionExecutor &exec, Vector inputs[], i
 	RE2::Options options;
 	options.set_log_errors(false);
 
-	std::string sstring;
 	VectorOperations::TernaryExec<const char*, const char*, const char*, const char*>(
 	    strings, patterns, replaces, result,
 	    [&](const char* string, const char *pattern, const char *replace, index_t result_index) {
 		    RE2 re(pattern, options);
-			sstring = string;
+			std::string sstring(string);
 		    RE2::Replace(&sstring, re, replace);
-			return sstring.c_str();
+			return result.string_heap.AddString(sstring);
 	    });
 }
 

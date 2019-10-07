@@ -64,7 +64,7 @@ static void age_function(ExpressionExecutor &exec, Vector inputs[], index_t inpu
 	string output_buffer;
 	VectorOperations::BinaryExec<timestamp_t, timestamp_t, const char*>(input1, input2, result,
 		[&](timestamp_t input1, timestamp_t input2, index_t result_index) {
-			return age_scalar_function(input1, input2, result_index, output_buffer);
+			return result.string_heap.AddString(age_scalar_function(input1, input2, result_index, output_buffer));
 	});
 }
 

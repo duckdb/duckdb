@@ -312,9 +312,6 @@ struct VectorOperations {
 				return;
 			}
 			rdata[i] = fun(adata[multipliers[0] * i], bdata[multipliers[1] * i], i);
-			if (std::is_same<TR, const char *>() || std::is_same<TR, char *>()) {
-				rdata[i] = result.string_heap.AddString((const char*) rdata[i]);
-			}
 		});
 	}
 	template <typename TA, typename TB, typename TC, typename TR, class FUNC, bool SKIP_NULLS = true, bool HANDLE_NULLS=true> static void TernaryExec(Vector &a, Vector &b, Vector &c, Vector &result, FUNC &&fun) {
@@ -331,9 +328,6 @@ struct VectorOperations {
 				return;
 			}
 			rdata[i] = fun(adata[multipliers[0] * i], bdata[multipliers[1] * i], cdata[multipliers[2] * i], i);
-			if (std::is_same<TR, const char *>() || std::is_same<TR, char *>()) {
-				rdata[i] = result.string_heap.AddString((const char*) rdata[i]);
-			}
 		});
 	}
 

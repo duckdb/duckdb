@@ -56,7 +56,7 @@ static void substring_function(ExpressionExecutor &exec, Vector inputs[], index_
 	VectorOperations::TernaryExec<const char*, int, int, const char*>(
 	    input_vector, offset_vector, length_vector, result,
 	    [&](const char *input_string, int offset, int length, index_t result_index) {
-			return substring_scalar_function(input_string, offset, length, output, current_len);
+			return result.string_heap.AddString(substring_scalar_function(input_string, offset, length, output, current_len));
 	    });
 }
 
