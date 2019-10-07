@@ -1,5 +1,7 @@
 #include "common/constants.hpp"
 
+#include <limits>
+
 using namespace duckdb;
 using namespace std;
 
