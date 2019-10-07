@@ -22,6 +22,7 @@
 #include "planner/operator/logical_join.hpp"
 #include "planner/operator/logical_limit.hpp"
 #include "planner/operator/logical_order.hpp"
+#include "planner/operator/logical_top_n.hpp"
 #include "planner/operator/logical_prepare.hpp"
 #include "planner/operator/logical_projection.hpp"
 #include "planner/operator/logical_prune_columns.hpp"
