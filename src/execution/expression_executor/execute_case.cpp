@@ -44,13 +44,9 @@ void ExpressionExecutor::Execute(BoundCaseExpression &expr, Vector &result) {
 			Vector res_true, res_false;
 			Execute(*expr.result_if_true, res_true);
 			Execute(*expr.result_if_false, res_false);
-			if (res_true.IsConstant()) {
-				result.sel_vector = res_false.sel_vector;
-				result.count = res_false.count;
-			} else {
-				result.sel_vector = res_true.sel_vector;
-				result.count = res_true.count;
-			}
+
+			result.sel_vector = check.sel_vector;
+			result.count = check.count;
 
 			result.Initialize(expr.return_type);
 			Case(res_true, res_false, result, tside, tcount, fside, fcount);

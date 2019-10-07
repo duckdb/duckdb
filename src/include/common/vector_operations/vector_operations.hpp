@@ -151,10 +151,6 @@ struct VectorOperations {
 	static Value Min(Vector &A);
 	// Returns whether or not a vector has a NULL value
 	static bool HasNull(Vector &A);
-
-	//! CASE expressions, ternary op
-	//! result = check ? A : B
-	static void Case(Vector &check, Vector &A, Vector &B, Vector &result);
 	//===--------------------------------------------------------------------===//
 	// Scatter methods
 	//===--------------------------------------------------------------------===//
