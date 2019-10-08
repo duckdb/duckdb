@@ -299,6 +299,25 @@ struct VectorOperations {
 		}
 	}
 
+	template <typename TA, typename TR, class FUNC, bool SKIP_NULLS = std::is_same<TR, const char*>()> static void UnaryExec(Vector &a, Vector &result, FUNC &&fun) {
+		auto adata = (TA*) a.data;
+		auto rdata = (TR*) result.data;
+		result.sel_vector = a.sel_vector;
+		result.count = a.count;
+		result.nullmask = a.nullmask;
+		if (SKIP_NULLS) {
+			VectorOperations::Exec(result, [&](index_t i, index_t k) {
+				if (result.nullmask[i]) {
+					return;
+				}
+				rdata[i] = fun(adata[i]);
+			});
+		} else {
+			VectorOperations::Exec(result, [&](index_t i, index_t k) {
+				rdata[i] = fun(adata[i]);
+			});
+		}
+	}
 	template <typename TA, typename TB, typename TR, class FUNC, bool SKIP_NULLS = true, bool HANDLE_NULLS=true> static void BinaryExec(Vector &a, Vector &b, Vector &result, FUNC &&fun) {
 		Vector *vectors[2] = {&a, &b};
 		index_t multipliers[2];
