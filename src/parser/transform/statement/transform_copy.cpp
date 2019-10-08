@@ -231,13 +231,17 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 	}
 
 	// dependencies must be checked afterwards
-	// the null string must not contain the delimiter
+	// null string and delimiter must not be substrings of each other
 	if (info.null_str.find(info.delimiter) != string::npos) {
-		throw Exception("COPY delimiter must not appear in the NULL specification");
+		throw Exception("COPY delimiter must not appear in the NULL specification and vice versa");
 	}
-	// delimiter and quote must be different
-	if (info.delimiter == info.quote) {
-		throw Exception("COPY delimiter and quote must be different");
+	// delimiter and quote must not be substrings of each other
+	if (info.quote.find(info.delimiter) != std::string::npos || info.delimiter.find(info.quote) != std::string::npos) {
+		throw Exception("COPY delimiter must not appear in the QUOTE specification and vice versa");
+	}
+	// escape and quote must not be substrings of each other (but can be the same)
+	if ((info.quote.find(info.escape) != std::string::npos || info.escape.find(info.quote) != std::string::npos) && (info.quote != info.escape)) {
+		throw Exception("COPY ESCAPE must not appear in the QUOTE specification and vice versa");
 	}
 
 	return result;

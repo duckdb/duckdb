@@ -231,6 +231,8 @@ TEST_CASE("Test NULL option of copy statement", "[copy]") {
 	
 	// delimiter must not appear in the NULL specification
 	REQUIRE_FAIL(con.Query("COPY test_null_option FROM '" + fs.JoinPath(csv_path, "test_null_option.csv") + "' (NULL 'null,');"));
+	REQUIRE_FAIL(con.Query("COPY test_null_option FROM '" + fs.JoinPath(csv_path, "test_null_option.csv") + "' (DELIMITER 'null', NULL 'null');"));
+	REQUIRE_FAIL(con.Query("COPY test_null_option FROM '" + fs.JoinPath(csv_path, "test_null_option.csv") + "' (DELIMITER 'null', NULL 'nu');"));
 
 	// no parameter type
 	REQUIRE_FAIL(con.Query("COPY test_null_option FROM '" + fs.JoinPath(csv_path, "test_null_option.csv") + "' (NULL);"));
@@ -287,12 +289,13 @@ TEST_CASE("Test copy statement with unicode delimiter/quote/escape", "[copy]") {
 
 	// generate CSV file with unicode (> one-byte) delimiter/quote/escape
 	ofstream from_csv_file1(fs.JoinPath(csv_path, "multi_char.csv"));
-	from_csv_file1 << 0 << "🦆ˮdu˧🦆ckˮ🦆ˮd˧ˮ˧ˮu🦆ckˮ🦆duck" << endl;
+	from_csv_file1 << 0 << "🦆ˮdu˧˧🦆ckˮ🦆ˮd˧ˮ˧ˮu🦆ckˮ🦆duck" << endl;
 	from_csv_file1 << 1 << "🦆ˮdou˧ˮbleˮ🦆🦆duck" << endl;
 	from_csv_file1 << 2 << "🦆🦆🦆" << endl;
 	from_csv_file1 << 3 << "🦆duck inv˧asion🦆🦆" << endl;
 	from_csv_file1.close();
 
+	// FIXME: add fancy sum stuff
 	// generate CSV file with unicode (> one-byte) delimiter/quote/escape that exceeds the buffer size a few times
 	ofstream from_csv_file2(fs.JoinPath(csv_path, "multi_char_buffer_exhausted.csv"));
 	for (int i = 0; i < 16384; i++) {
@@ -307,14 +310,13 @@ TEST_CASE("Test copy statement with unicode delimiter/quote/escape", "[copy]") {
 	// generate CSV file with one-byte delimiter/quote/escape
 	ofstream from_csv_file3(fs.JoinPath(csv_path, "one_byte_char.csv"));
 	for (int i = 0; i < 3; i++) {
-		from_csv_file3 << i << ",'du''ck','d''u,ck',duck" << endl;
+		from_csv_file3 << i << ",'du''ck','''''du,ck',duck" << endl;
 	}
 	from_csv_file3.close();
 
 	// create a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_unicode (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10));"));
 
-	// FIXME: add all required test cases
 	// test COPY ... FROM ...
 
 	// test unicode delimiter/quote/escape
@@ -337,11 +339,30 @@ TEST_CASE("Test copy statement with unicode delimiter/quote/escape", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {"d˧", "	test test	", "d˧", "	test test	"}));
 	REQUIRE_NO_FAIL(con.Query("DELETE FROM test_unicode;"));
 
+	// test one-byte delimiter/quote/escape
+	result = con.Query("COPY test_unicode FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (QUOTE '''');");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	result = con.Query("SELECT * FROM test_unicode ORDER BY 1 LIMIT 3;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"du'ck", "du'ck", "du'ck"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"''du,ck", "''du,ck", "''du,ck"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"duck", "duck", "duck"}));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test_unicode;"));
+
 	// test same string for delimiter and quote
+	REQUIRE_FAIL(con.Query("COPY test_unicode FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (DELIMITER '🦆', QUOTE '🦆');"));
 
-	// test delimiter is substring of quote & delimiter is substring of row value
+	// escape and quote cannot be substrings of each other
+	REQUIRE_FAIL(con.Query("COPY test_unicode FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (ESCAPE 'du', QUOTE 'duck');"));
+	REQUIRE_FAIL(con.Query("COPY test_unicode FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (ESCAPE 'duck', QUOTE 'du');"));
 
-	// test default values, which means escape must be the same as quote
+	// delimiter and quote cannot be substrings of each other
+	REQUIRE_FAIL(con.Query("COPY test_unicode FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (DELIMITER 'du', QUOTE 'duck');"));
+	REQUIRE_FAIL(con.Query("COPY test_unicode FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (DELIMITER 'duck', QUOTE 'du');"));
+
+	// FIXME: test newlines in quotes (fix existing test case)
+
+	// FIXME: COPY ... TO ...
 }
 
 TEST_CASE("Test copy statement with file overwrite", "[copy]") {

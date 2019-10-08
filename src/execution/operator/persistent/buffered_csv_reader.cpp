@@ -102,8 +102,10 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 	// used for parsing algorithm
 	bool in_quotes = false;
 	bool finished_chunk = false;
-	bool seen_escape = true;
-	bool seen_quotes = false;
+	bool seen_escape = false;
+	bool reset_quotes = false;
+	bool quote_or_escape = false;
+	bool exhausted_buffer = false;
 	index_t column = 0;
 	index_t offset = 0;
 	std::queue<index_t> escape_positions;
@@ -129,77 +131,113 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 		}
 
 		// detect control strings
-		MatchControlString(delimiter, quote, escape, delim_l, quote_l, escape_l);
+		exhausted_buffer = MatchControlString(delimiter, quote, escape, delim_l, quote_l, escape_l);
 
-		if (in_quotes) {
-			if (escape) {
-				seen_escape = true;
-				position += escape_l - 1;
+		if (!exhausted_buffer) {
+
+			// if QUOTE equals ESCAPE we might need to determine which one we detected in the previous loop
+			if (quote_or_escape) {
+				if (delimiter) {
+					// found quote without escape, end quote
+					offset = quote_l;
+					in_quotes = false;
+				} else {
+					// found escape
+					seen_escape = true;
+				}
+				quote_or_escape = false;
 			}
-			else if (!seen_escape) {
-				if (quote) {
+
+			if (in_quotes) {
+				if (!quote && !escape && !seen_escape) {
+					// plain value character
+					seen_escape = false;
+				} else if (!quote && !escape && seen_escape) {
+					throw ParserException("Error on line %lld: neither QUOTE nor ESCAPE is proceeded by ESCAPE", linenr);
+				} else if (!quote && escape && !seen_escape) {
+					// escape
+					seen_escape = true;
+					position += escape_l - 1;
+				} else if (!quote && escape && seen_escape) {
+					// escaped escape
+					// we store the position of the escape so we can skip it when adding the value
+					escape_positions.push(position);
+					position += escape_l - 1;
+					seen_escape = false;
+				} else if (quote && !escape && !seen_escape) {
 					// found quote without escape, end quote
 					offset = quote_l;
 					position += quote_l - 1;
 					in_quotes = false;
-				}
-			} else if (seen_escape && quote) {
-				// we store the position of the escape so we can skip it when adding the value
-				escape_positions.push(position);
-				seen_escape = false;
-			} else {
-				seen_escape = false;
-			}
-
-		} else {
-			if (quote) {
-				// start quotes can only occur at the start of a field
-				if (position == start) {
-					in_quotes = true;
-					// increment start by quote length
-					start += quote_l;
-					seen_quotes = in_quotes;
+				} else if (quote && !escape && seen_escape) {
+					// escaped quote
+					// we store the position of the escape so we can skip it when adding the value
+					escape_positions.push(position);
 					position += quote_l - 1;
+					seen_escape = false;
+				} else if (quote && escape && !seen_escape) {
+					// either escape or end of quote, decide depending on next character
+					// NOTE: QUOTE and ESCAPE cannot be subsets of each other
+					position += escape_l - 1;
+					quote_or_escape = true;
+				} else if (quote && escape && seen_escape) {
+					// we store the position of the escape so we can skip it when adding the value
+					escape_positions.push(position);
+					position += escape_l - 1;
+					seen_escape = false;
 				}
-			} else if (delimiter) {
-				// encountered delimiter
-				AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
-				start = position + delim_l;
-				seen_quotes = in_quotes;
-				position += delim_l - 1;
-				offset = 0;
-			}
-			// FIXME: test newlines in quotes
-			if (is_newline(buffer[position]) || (source.eof() && position + 1 == buffer_size)) {
-				char newline = buffer[position];
-				// encountered a newline, add the current value and push the row
-				AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
-				finished_chunk = AddRow(insert_chunk, column);
+			} else {
+				if (quote) {
+					// start quotes can only occur at the start of a field
+					if (position == start) {
+						in_quotes = true;
+						// increment start by quote length
+						start += quote_l;
+						reset_quotes = in_quotes;
+						position += quote_l - 1;
+					} else {
+						throw ParserException("Error on line %lld: unterminated quotes", linenr);
+					}
+				} else if (delimiter) {
+					// encountered delimiter
+					AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
+					start = position + delim_l;
+					reset_quotes = in_quotes;
+					position += delim_l - 1;
+					offset = 0;
+				}
 
-				// move to the next character
-				start = position + 1;
-				seen_quotes = in_quotes;
-				offset = 0;
-				if (newline == '\r') {
-					// \r, skip subsequent \n
-					if (position + 1 >= buffer_size) {
-						if (!ReadBuffer(start)) {
-							break;
+				if (is_newline(buffer[position]) || (source.eof() && position + 1 == buffer_size)) {
+					char newline = buffer[position];
+					// encountered a newline, add the current value and push the row
+					AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
+					finished_chunk = AddRow(insert_chunk, column);
+
+					// move to the next character
+					start = position + 1;
+					reset_quotes = in_quotes;
+					offset = 0;
+					if (newline == '\r') {
+						// \r, skip subsequent \n
+						if (position + 1 >= buffer_size) {
+							if (!ReadBuffer(start)) {
+								break;
+							}
+							if (buffer[position] == '\n') {
+								start++;
+								position++;
+							}
+							continue;
 						}
-						if (buffer[position] == '\n') {
+						if (buffer[position + 1] == '\n') {
 							start++;
 							position++;
 						}
-						continue;
-					}
-					if (buffer[position + 1] == '\n') {
-						start++;
-						position++;
 					}
 				}
-			}
-			if (offset != 0) {
-				in_quotes = true;
+				if (offset != 0) {
+					in_quotes = true;
+				}
 			}
 		}
 
@@ -210,8 +248,10 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 				break;
 			}
 			// restore the current state after reading from the buffer
-			in_quotes = seen_quotes;
+			in_quotes = reset_quotes;
+			seen_escape = false;
 			position = start;
+			quote_or_escape = false;
 			while (!escape_positions.empty()) {
 				escape_positions.pop();
 			}
