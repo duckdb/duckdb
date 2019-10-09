@@ -34,7 +34,7 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	bool Equals(const BaseExpression *other) const override;
+	static bool Equals(const FunctionExpression *a, const FunctionExpression *b);
 	uint64_t Hash() const override;
 
 	//! Serializes a FunctionExpression to a stand-alone binary blob

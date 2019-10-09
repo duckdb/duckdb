@@ -31,50 +31,45 @@ string WindowExpression::ToString() const {
 	return "WINDOW";
 }
 
-bool WindowExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
-		return false;
-	}
-	auto other = (WindowExpression *)other_;
-
+bool WindowExpression::Equals(const WindowExpression *a, const WindowExpression *b) {
 	// check if the child expressions are equivalent
-	if (other->children.size() != children.size()) {
+	if (b->children.size() != a->children.size()) {
 		return false;
 	}
-	for (index_t i = 0; i < children.size(); i++) {
-		if (!children[i]->Equals(other->children[i].get())) {
+	for (index_t i = 0; i < a->children.size(); i++) {
+		if (!a->children[i]->Equals(b->children[i].get())) {
 			return false;
 		}
 	}
-	if (start != other->start || end != other->end) {
+	if (a->start != b->start || a->end != b->end) {
 		return false;
 	}
 	// check if the framing expressions are equivalent
-	if (!BaseExpression::Equals(start_expr.get(), other->start_expr.get()) ||
-	    !BaseExpression::Equals(end_expr.get(), other->end_expr.get()) ||
-	    !BaseExpression::Equals(offset_expr.get(), other->offset_expr.get()) ||
-	    !BaseExpression::Equals(default_expr.get(), other->default_expr.get())) {
+	if (!BaseExpression::Equals(a->start_expr.get(), b->start_expr.get()) ||
+	    !BaseExpression::Equals(a->end_expr.get(), b->end_expr.get()) ||
+	    !BaseExpression::Equals(a->offset_expr.get(), b->offset_expr.get()) ||
+	    !BaseExpression::Equals(a->default_expr.get(), b->default_expr.get())) {
 		return false;
 	}
 
 	// check if the partitions are equivalent
-	if (partitions.size() != other->partitions.size()) {
+	if (a->partitions.size() != b->partitions.size()) {
 		return false;
 	}
-	for (index_t i = 0; i < partitions.size(); i++) {
-		if (!partitions[i]->Equals(other->partitions[i].get())) {
+	for (index_t i = 0; i < a->partitions.size(); i++) {
+		if (!a->partitions[i]->Equals(b->partitions[i].get())) {
 			return false;
 		}
 	}
 	// check if the orderings are equivalent
-	if (orders.size() != other->orders.size()) {
+	if (a->orders.size() != b->orders.size()) {
 		return false;
 	}
-	for (index_t i = 0; i < orders.size(); i++) {
-		if (orders[i].type != other->orders[i].type) {
+	for (index_t i = 0; i < a->orders.size(); i++) {
+		if (a->orders[i].type != b->orders[i].type) {
 			return false;
 		}
-		if (!orders[i].expression->Equals(other->orders[i].expression.get())) {
+		if (!a->orders[i].expression->Equals(b->orders[i].expression.get())) {
 			return false;
 		}
 	}

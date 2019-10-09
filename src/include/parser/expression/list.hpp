@@ -1,3 +1,4 @@
+#include "parser/expression/bound_expression.hpp"
 #include "parser/expression/case_expression.hpp"
 #include "parser/expression/cast_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
