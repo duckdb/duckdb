@@ -41,19 +41,15 @@ string FunctionExpression::ToString() const {
 	return result + ")";
 }
 
-bool FunctionExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
+bool FunctionExpression::Equals(const FunctionExpression *a, const FunctionExpression *b) {
+	if (a->schema != b->schema || a->function_name != b->function_name || b->distinct != a->distinct) {
 		return false;
 	}
-	auto other = (FunctionExpression *)other_;
-	if (schema != other->schema || function_name != other->function_name || other->distinct != distinct) {
+	if (b->children.size() != a->children.size()) {
 		return false;
 	}
-	if (other->children.size() != children.size()) {
-		return false;
-	}
-	for (index_t i = 0; i < children.size(); i++) {
-		if (!children[i]->Equals(other->children[i].get())) {
+	for (index_t i = 0; i < a->children.size(); i++) {
+		if (!a->children[i]->Equals(b->children[i].get())) {
 			return false;
 		}
 	}

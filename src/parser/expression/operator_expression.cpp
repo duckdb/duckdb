@@ -40,16 +40,12 @@ string OperatorExpression::ToString() const {
 	return result;
 }
 
-bool OperatorExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
+bool OperatorExpression::Equals(const OperatorExpression *a, const OperatorExpression *b) {
+	if (a->children.size() != b->children.size()) {
 		return false;
 	}
-	auto other = (OperatorExpression *)other_;
-	if (children.size() != other->children.size()) {
-		return false;
-	}
-	for (index_t i = 0; i < children.size(); i++) {
-		if (!children[i]->Equals(other->children[i].get())) {
+	for (index_t i = 0; i < a->children.size(); i++) {
+		if (!a->children[i]->Equals(b->children[i].get())) {
 			return false;
 		}
 	}

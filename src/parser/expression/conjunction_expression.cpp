@@ -15,16 +15,12 @@ string ConjunctionExpression::ToString() const {
 	return left->ToString() + " " + ExpressionTypeToOperator(type) + " " + right->ToString();
 }
 
-bool ConjunctionExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
-		return false;
-	}
-	auto other = (ConjunctionExpression *)other_;
+bool ConjunctionExpression::Equals(const ConjunctionExpression *a, const ConjunctionExpression *b) {
 	// conjunctions are Commutative
-	if (left->Equals(other->left.get()) && right->Equals(other->right.get())) {
+	if (a->left->Equals(b->left.get()) && a->right->Equals(b->right.get())) {
 		return true;
 	}
-	if (right->Equals(other->left.get()) && left->Equals(other->right.get())) {
+	if (a->right->Equals(b->left.get()) && a->left->Equals(b->right.get())) {
 		return true;
 	}
 	return false;

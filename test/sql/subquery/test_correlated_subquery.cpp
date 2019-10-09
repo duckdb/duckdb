@@ -918,3 +918,35 @@ TEST_CASE("Test correlated subqueries based on TPC-DS", "[subquery]") {
 	    "SELECT * FROM item i1 WHERE (SELECT count(*) AS item_cnt FROM item WHERE (i_manufact = i1.i_manufact AND "
 	    "i_manufact=3) OR (i_manufact = i1.i_manufact AND i_manufact=3)) ORDER BY 1 LIMIT 100;"));
 }
+
+
+TEST_CASE("Test correlated subquery with grouping columns", "[subquery]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl_ProductSales (ColID int, Product_Category  varchar(64), Product_Name  varchar(64), TotalSales int); "));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE another_T (col1 INT, col2 INT, col3 INT, col4 INT, col5 INT, col6 INT, col7 INT, col8 INT);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO tbl_ProductSales VALUES (1,'Game','Mobo Game',200),(2,'Game','PKO Game',400),(3,'Fashion','Shirt',500),(4,'Fashion','Shorts',100);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO another_T VALUES (1,2,3,4,5,6,7,8), (11,22,33,44,55,66,77,88), (111,222,333,444,555,666,777,888), (1111,2222,3333,4444,5555,6666,7777,8888);"));
+
+	result = con.Query("SELECT col1 IN (SELECT ColID FROM tbl_ProductSales) FROM another_T;");
+	REQUIRE(CHECK_COLUMN(result, 0, {true, false, false, false}));
+	result = con.Query("SELECT col1 IN (SELECT ColID + col1 FROM tbl_ProductSales) FROM another_T;");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, false, false, false}));
+	result = con.Query("SELECT col1 IN (SELECT ColID + col1 FROM tbl_ProductSales) FROM another_T GROUP BY col1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, false, false, false}));
+	result = con.Query("SELECT col1 IN (SELECT ColID + another_T.col1 FROM tbl_ProductSales) FROM another_T GROUP BY col1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, false, false, false}));
+	result = con.Query("SELECT (col1 + 1) AS k, k IN (SELECT ColID + k FROM tbl_ProductSales) FROM another_T GROUP BY k ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 12, 112, 1112}));
+	REQUIRE(CHECK_COLUMN(result, 1, {false, false, false, false}));
+	result = con.Query("SELECT (col1 + 1) IN (SELECT ColID + (col1 + 1) FROM tbl_ProductSales) FROM another_T GROUP BY (col1 + 1);");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, false, false, false}));
+
+	// this should fail, col1 + 42 is not a grouping column
+	REQUIRE_FAIL(con.Query("SELECT col1+1, col1+42 FROM another_T GROUP BY col1+1;"));
+	// this should also fail, col1 + 42 is not a grouping column
+	REQUIRE_FAIL(con.Query("SELECT (col1 + 1) IN (SELECT ColID + (col1 + 42) FROM tbl_ProductSales) FROM another_T GROUP BY (col1 + 1);"));
+}
