@@ -137,7 +137,7 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 
 			// if QUOTE equals ESCAPE we might need to determine which one we detected in the previous loop
 			if (quote_or_escape) {
-				if (delimiter) {
+				if (delimiter || is_newline(buffer[position]) || (source.eof() && position + 1 == buffer_size)) {
 					// found quote without escape, end quote
 					offset = quote_l;
 					in_quotes = false;

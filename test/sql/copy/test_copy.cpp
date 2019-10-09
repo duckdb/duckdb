@@ -39,15 +39,15 @@ TEST_CASE("Test copy statement", "[copy]") {
 
 	auto csv_path = GetCSVPath();
 
-	// Generate CSV file With ; as delimiter and complex strings
+	// generate CSV file with ',' as delimiter and complex strings
 	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
 	for (int i = 0; i < 5000; i++) {
 		from_csv_file << i << "," << i << ", test" << endl;
 	}
 	from_csv_file.close();
 
-	// Loading CSV into a table
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER,c VARCHAR(10));"));
+	// load CSV file into a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER, c VARCHAR(10));"));
 	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 
@@ -55,69 +55,69 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 	REQUIRE(CHECK_COLUMN(result, 1, {12497500}));
 
-	result = con.Query("SELECT * FROM test ORDER BY 1 LIMIT 3 ");
+	result = con.Query("SELECT * FROM test ORDER BY 1 LIMIT 3;");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 2, {" test", " test", " test"}));
 
-	//  Creating CSV from table
-	result = con.Query("COPY test to '" + fs.JoinPath(csv_path, "test2.csv") + "';");
+	// create CSV file from table
+	result = con.Query("COPY test TO '" + fs.JoinPath(csv_path, "test2.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
-	// load the same CSV back again
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2(a INTEGER, b INTEGER, c VARCHAR(10));"));
+	// load the same CSV file back again
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2 (a INTEGER, b INTEGER, c VARCHAR(10));"));
 	result = con.Query("COPY test2 FROM '" + fs.JoinPath(csv_path, "test2.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
-	result = con.Query("SELECT * FROM test2 ORDER BY 1 LIMIT 3 ");
+	result = con.Query("SELECT * FROM test2 ORDER BY 1 LIMIT 3;");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 2, {" test", " test", " test"}));
 
 	// test too few rows
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_too_few_rows(a INTEGER, b INTEGER, c VARCHAR, d INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_too_few_rows (a INTEGER, b INTEGER, c VARCHAR, d INTEGER);"));
 	REQUIRE_FAIL(con.Query("COPY test_too_few_rows FROM '" + fs.JoinPath(csv_path, "test2.csv") + "';"));
 
-	//  Creating CSV from Query
-	result = con.Query("COPY (select a,b from test where a < 4000) to '" + fs.JoinPath(csv_path, "test3.csv") + "';");
+	// create CSV file from query
+	result = con.Query("COPY (SELECT a,b FROM test WHERE a < 4000) TO '" + fs.JoinPath(csv_path, "test3.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {4000}));
-	// load the same CSV back again
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test3(a INTEGER, b INTEGER);"));
+	// load the same CSV file back again
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test3 (a INTEGER, b INTEGER);"));
 	result = con.Query("COPY test3 FROM '" + fs.JoinPath(csv_path, "test3.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {4000}));
-	result = con.Query("SELECT * FROM test3 ORDER BY 1 LIMIT 3 ");
+	result = con.Query("SELECT * FROM test3 ORDER BY 1 LIMIT 3;");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 1, 2}));
 
-	// Exporting selected columns from a table to a CSV.
-	result = con.Query("COPY test(a,c) to '" + fs.JoinPath(csv_path, "test4.csv") + "' (DELIMITER ',', HEADER false);");
+	// export selected columns from a table to a CSV file
+	result = con.Query("COPY test (a,c) TO '" + fs.JoinPath(csv_path, "test4.csv") + "' (DELIMITER ',', HEADER false);");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 
-	// Importing CSV to Selected Columns
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test4 (a INTEGER, b INTEGER,c VARCHAR(10));"));
-	result = con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + "' (DELIM ',', HEADER 0);");
+	// import selected columns from CSV file
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test4 (a INTEGER, b INTEGER, c VARCHAR(10));"));
+	result = con.Query("COPY test4 (a,c) FROM '" + fs.JoinPath(csv_path, "test4.csv") + "' (DELIM ',', HEADER 0);");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
-	result = con.Query("SELECT * FROM test4 ORDER BY 1 LIMIT 3 ");
+	result = con.Query("SELECT * FROM test4 ORDER BY 1 LIMIT 3;");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value()}));
 	REQUIRE(CHECK_COLUMN(result, 2, {" test", " test", " test"}));
 
 	// unsupported type for HEADER
-	REQUIRE_FAIL(
-	    con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (SEP ',', HEADER 0.2);"));
-	// empty sep
-	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (SEP);"));
-	// number as separator
-	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (SEP 1);"));
+	REQUIRE_FAIL(con.Query("COPY test4 (a,c) FROM '" + fs.JoinPath(csv_path, "test4.csv") + "' (SEP ',', HEADER 0.2);"));
+	// empty delimiter
+	REQUIRE_FAIL(con.Query("COPY test4 (a,c) FROM '" + fs.JoinPath(csv_path, "test4.csv") + "' (SEP);"));
+	// number as delimiter
+	REQUIRE_FAIL(con.Query("COPY test4 (a,c) FROM '" + fs.JoinPath(csv_path, "test4.csv") + "' (SEP 1);"));
 	// multiple format options
-	REQUIRE_FAIL(
-	    con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + "' (FORMAT 'csv', FORMAT 'json');"));
-	// number as escape character
-	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (ESCAPE 1);"));
-	// no escape character
-	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (ESCAPE);"));
-	// no quote character
-	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (QUOTE);"));
-	// no format character
-	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (FORMAT);"));
+	REQUIRE_FAIL(con.Query("COPY test4 (a,c) FROM '" + fs.JoinPath(csv_path, "test4.csv") + "' (FORMAT 'csv', FORMAT 'json');"));
+	// number as escape string
+	REQUIRE_FAIL(con.Query("COPY test4 (a,c) FROM '" + fs.JoinPath(csv_path, "test4.csv") + "' (ESCAPE 1);"));
+	// no escape string
+	REQUIRE_FAIL(con.Query("COPY test4 (a,c) FROM '" + fs.JoinPath(csv_path, "test4.csv") + "' (ESCAPE);"));
+	// number as quote string
+	REQUIRE_FAIL(con.Query("COPY test4 (a,c) FROM '" + fs.JoinPath(csv_path, "test4.csv") + "' (QUOTE 1);"));
+	// no quote string
+	REQUIRE_FAIL(con.Query("COPY test4 (a,c) FROM '" + fs.JoinPath(csv_path, "test4.csv") + "' (QUOTE);"));
+	// no format string
+	REQUIRE_FAIL(con.Query("COPY test4 (a,c) FROM '" + fs.JoinPath(csv_path, "test4.csv") + "' (FORMAT);"));
 
 	// use a different delimiter
 	auto pipe_csv = fs.JoinPath(csv_path, "test_pipe.csv");
@@ -127,12 +127,13 @@ TEST_CASE("Test copy statement", "[copy]") {
 	}
 	from_csv_file_pipe.close();
 
+	// create new table
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER,c VARCHAR(10));"));
-	result = con.Query("COPY test FROM '" + pipe_csv + "' (SEPARATOR '|')");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER, c VARCHAR(10));"));
+	result = con.Query("COPY test FROM '" + pipe_csv + "' (SEPARATOR '|');");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
-	// test null
+	// test default null string
 	auto null_csv = fs.JoinPath(csv_path, "null.csv");
 	ofstream from_csv_file_null(null_csv);
 	for (int i = 0; i < 1; i++)
@@ -141,7 +142,7 @@ TEST_CASE("Test copy statement", "[copy]") {
 	result = con.Query("COPY test FROM '" + null_csv + "' DELIMITER '|';");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
-	// test invalid UTF8
+	// test invalid UTF-8
 	auto invalid_utf_csv = fs.JoinPath(csv_path, "invalid_utf.csv");
 	ofstream from_csv_file_utf(invalid_utf_csv);
 	for (int i = 0; i < 1; i++)
@@ -153,7 +154,7 @@ TEST_CASE("Test copy statement", "[copy]") {
 	ofstream empty_file(fs.JoinPath(csv_path, "empty.csv"));
 	empty_file.close();
 
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE empty_table (a INTEGER, b INTEGER,c VARCHAR(10));"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE empty_table (a INTEGER, b INTEGER, c VARCHAR(10));"));
 	result = con.Query("COPY empty_table FROM '" + fs.JoinPath(csv_path, "empty.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 
@@ -161,19 +162,18 @@ TEST_CASE("Test copy statement", "[copy]") {
 	ofstream unterminated_quotes_file(fs.JoinPath(csv_path, "unterminated.csv"));
 	unterminated_quotes_file << "\"hello\n\n world\n";
 	unterminated_quotes_file.close();
-
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE unterminated (a VARCHAR);"));
 	REQUIRE_FAIL(con.Query("COPY unterminated FROM '" + fs.JoinPath(csv_path, "unterminated.csv") + "';"));
 
-	// 1024 rows
+	// 1024 rows (vector size)
 	ofstream csv_vector_size(fs.JoinPath(csv_path, "vsize.csv"));
 	for (int i = 0; i < 1024; i++) {
 		csv_vector_size << i << "," << i << ", test" << endl;
 	}
 	csv_vector_size.close();
 
-	// Loading CSV into a table
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE vsize (a INTEGER, b INTEGER,c VARCHAR(10));"));
+	// load CSV file into a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE vsize (a INTEGER, b INTEGER, c VARCHAR(10));"));
 	result = con.Query("COPY vsize FROM '" + fs.JoinPath(csv_path, "vsize.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {1024}));
 }
@@ -193,7 +193,7 @@ TEST_CASE("Test NULL option of copy statement", "[copy]") {
 	from_csv_file.close();
 
 	// create a table
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_null_option (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10))"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_null_option (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10));"));
 	
 	// test COPY ... FROM ... 
 
@@ -238,7 +238,7 @@ TEST_CASE("Test NULL option of copy statement", "[copy]") {
 	REQUIRE_FAIL(con.Query("COPY test_null_option FROM '" + fs.JoinPath(csv_path, "test_null_option.csv") + "' (NULL);"));
 
 	// empty integer column with non-default NULL string
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_null_option_2 (col_a INTEGER, col_b INTEGER, col_c VARCHAR(10), col_d VARCHAR(10))"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_null_option_2 (col_a INTEGER, col_b INTEGER, col_c VARCHAR(10), col_d VARCHAR(10));"));
 	REQUIRE_FAIL(con.Query("COPY test_null_option_2 FROM '" + fs.JoinPath(csv_path, "test_null_option.csv") + "' (NULL 'null');"));
 
 	// test COPY ... TO ...
@@ -418,7 +418,7 @@ TEST_CASE("Test copy statement with file overwrite", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "world ", " xx"}));
 
-	// copy to the file
+	// copy to the CSV file
 	result = con.Query("COPY test TO '" + fs.JoinPath(csv_path, "test.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 
@@ -427,7 +427,7 @@ TEST_CASE("Test copy statement with file overwrite", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 
 	// reload the data from the file: it should only have three rows
-	REQUIRE_NO_FAIL(con.Query("DELETE FROM test"));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test;"));
 
 	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
@@ -444,6 +444,7 @@ TEST_CASE("Test copy statement with default values", "[copy]") {
 
 	auto csv_path = GetCSVPath();
 
+	// create a file only consisting of integers
 	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
 	int64_t expected_sum_a = 0;
 	int64_t expected_sum_c = 0;
@@ -455,15 +456,14 @@ TEST_CASE("Test copy statement with default values", "[copy]") {
 	}
 	from_csv_file.close();
 
-	// Loading CSV into a table
+	// load CSV file into a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR DEFAULT('hello'), c INTEGER DEFAULT(3+4));"));
 	result = con.Query("COPY test (a) FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 	result = con.Query("COPY test (c) FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 
-	result =
-	    con.Query("SELECT COUNT(a), COUNT(b), COUNT(c), MIN(LENGTH(b)), MAX(LENGTH(b)), SUM(a), SUM(c) FROM test;");
+	result = con.Query("SELECT COUNT(a), COUNT(b), COUNT(c), MIN(LENGTH(b)), MAX(LENGTH(b)), SUM(a), SUM(c) FROM test;");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10000}));
 	REQUIRE(CHECK_COLUMN(result, 2, {10000}));
@@ -480,7 +480,7 @@ TEST_CASE("Test copy statement with long lines", "[copy]") {
 
 	auto csv_path = GetCSVPath();
 
-	// Generate CSV file with a very long string
+	// generate a CSV file with a very long string
 	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
 	string big_string_a(100000, 'a');
 	string big_string_b(200000, 'b');
@@ -488,7 +488,7 @@ TEST_CASE("Test copy statement with long lines", "[copy]") {
 	from_csv_file << 20 << "," << big_string_b << "," << 30 << endl;
 	from_csv_file.close();
 
-	// loading CSV into a table
+	// load CSV file into a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);"));
 	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
@@ -508,13 +508,13 @@ TEST_CASE("Test copy statement with quotes and newlines", "[copy]") {
 
 	auto csv_path = GetCSVPath();
 
-	// Generate CSV file with quotes and newlines in the quotes
+	// generate a CSV file with newlines enclosed by quotes
 	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
-	from_csv_file << "\"hello\nworld\",\"5\"" << endl;
-	from_csv_file << "\"what,\n brings, you here\n, today\",\"6\"" << endl;
+	from_csv_file << "\"hello\\nworld\",\"5\"" << endl;
+	from_csv_file << "\"what,\\n brings, you here\\n, today\",\"6\"" << endl;
 	from_csv_file.close();
 
-	// loading CSV into a table
+	// load CSV file into a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR, b INTEGER);"));
 	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
@@ -523,35 +523,43 @@ TEST_CASE("Test copy statement with quotes and newlines", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {11}));
 
 	result = con.Query("SELECT a FROM test ORDER BY a;");
-	REQUIRE(CHECK_COLUMN(result, 0, {"hello\nworld", "what,\n brings, you here\n, today"}));
-
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello\\nworld", "what,\\n brings, you here\\n, today"}));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
 
-	// quotes in the middle of a quoted string are ignored
+	// quotes in the middle of a quoted string cause an exception if they are not escaped
 	from_csv_file.open(fs.JoinPath(csv_path, "test.csv"));
-	from_csv_file << "\"hello\n\"w\"o\"rld\",\"5\"" << endl;
-	from_csv_file << "\"what,\n brings, you here\n, today\",\"6\"" << endl;
-	from_csv_file.close();
-
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR, b INTEGER);"));
-	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
-	REQUIRE(CHECK_COLUMN(result, 0, {2}));
-
-	result = con.Query("SELECT SUM(b) FROM test;");
-	REQUIRE(CHECK_COLUMN(result, 0, {11}));
-	result = con.Query("SELECT a FROM test ORDER BY a;");
-	REQUIRE(CHECK_COLUMN(result, 0, {"hello\n\"w\"o\"rld", "what,\n brings, you here\n, today"}));
-
-	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
-
-	// unclosed quotes results in failure
-	from_csv_file.open(fs.JoinPath(csv_path, "test.csv"));
-	from_csv_file << "\"hello\nworld\",\"5" << endl;
-	from_csv_file << "\"what,\n brings, you here\n, today\",\"6\"" << endl;
+	from_csv_file << "\"hello\\n\"w\"o\"rld\",\"5\"" << endl;
+	from_csv_file << "\"what,\\n brings, you here\\n, today\",\"6\"" << endl;
 	from_csv_file.close();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR, b INTEGER);"));
 	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';"));
+
+	// now the same quotes are escaped
+	from_csv_file.open(fs.JoinPath(csv_path, "test.csv"));
+	from_csv_file << "\"hello\\n\"\"w\"\"o\"\"rld\",\"5\"" << endl;
+	from_csv_file << "\"what,\\n brings, you here\\n, today\",\"6\"" << endl;
+	from_csv_file.close();
+
+	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+
+	result = con.Query("SELECT SUM(b) FROM test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {11}));
+	result = con.Query("SELECT a,b FROM test ORDER BY b;");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello\\n\"w\"o\"rld", "what,\\n brings, you here\\n, today"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5, 6}));
+
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
+
+	// not escaped escape string in quotes throws an exception
+	from_csv_file.open(fs.JoinPath(csv_path, "test.csv"));
+	from_csv_file << "\"\\\"escaped\\\",\"5\"" << endl;
+	from_csv_file << "yea,6" << endl;
+	from_csv_file.close();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR, b INTEGER);"));
+	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "' (ESCAPE '\\');"));
 }
 
 TEST_CASE("Test copy statement with many empty lines", "[copy]") {
@@ -561,7 +569,7 @@ TEST_CASE("Test copy statement with many empty lines", "[copy]") {
 
 	auto csv_path = GetCSVPath();
 
-	// Generate CSV file with a very long string
+	// generate CSV file with a very long string
 	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
 	from_csv_file << "1\n";
 	for (index_t i = 0; i < 19999; i++) {
@@ -569,7 +577,7 @@ TEST_CASE("Test copy statement with many empty lines", "[copy]") {
 	}
 	from_csv_file.close();
 
-	// loading CSV into a table
+	// load CSV file into a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER);"));
 	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {20000}));
@@ -578,27 +586,21 @@ TEST_CASE("Test copy statement with many empty lines", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
 
-TEST_CASE("Test line endings", "[copy]") {
+TEST_CASE("Test different line endings", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
 	auto csv_path = GetCSVPath();
 
-	// Generate CSV file with different line endings
+	// generate CSV file with different line endings
 	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
-	from_csv_file << 10 << ","
-	              << "hello"
-	              << "," << 20 << "\r\n";
-	from_csv_file << 20 << ","
-	              << "world"
-	              << "," << 30 << '\n';
-	from_csv_file << 30 << ","
-	              << "test"
-	              << "," << 30 << '\r';
+	from_csv_file << 10 << "," << "hello" << "," << 20 << "\r\n";
+	from_csv_file << 20 << "," << "world" << "," << 30 << '\n';
+	from_csv_file << 30 << "," << "test" << "," << 30 << '\r';
 	from_csv_file.close();
 
-	// loading CSV into a table
+	// load CSV file into a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);"));
 	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
@@ -620,18 +622,18 @@ TEST_CASE("Test Windows Newlines with a long file", "[copy]") {
 
 	index_t line_count = 20000;
 	int64_t sum_a = 0, sum_c = 0;
-	// Generate CSV file with many strings
+
+	// generate a CSV file with many strings
 	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
 	for (index_t i = 0; i < line_count; i++) {
-		from_csv_file << i << ","
-		              << "hello"
-		              << "," << i + 2 << "\r\n";
+		from_csv_file << i << "," << "hello" << "," << i + 2 << "\r\n";
+
 		sum_a += i;
 		sum_c += i + 2;
 	}
 	from_csv_file.close();
 
-	// loading CSV into a table
+	// load CSV file into a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);"));
 	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(line_count)}));
@@ -653,7 +655,7 @@ TEST_CASE("Test Windows Newlines with a long file", "[copy]") {
 	}
 	from_csv_file_empty.close();
 
-	// loading CSV into a table
+	// load CSV file into a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER);"));
 	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test2.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(line_count)}));
@@ -662,26 +664,25 @@ TEST_CASE("Test Windows Newlines with a long file", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(1)}));
 }
 
-TEST_CASE("Test lines that exceed the maximum allowed line size", "[copy]") {
+TEST_CASE("Test lines that exceed the maximum line size", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
 	auto csv_path = GetCSVPath();
 
-	// Generate CSV file with many strings
+	// generate CSV file with 20 MB string
 	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
-	// 20 MB string
 	string big_string(2048576, 'a');
 	from_csv_file << 10 << "," << big_string << "," << 20 << endl;
 	from_csv_file.close();
 
-	// the load fails because the value is too big
+	// value is too big for loading
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);"));
 	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';"));
 }
 
-TEST_CASE("Test copy into from on-time dataset", "[copy]") {
+TEST_CASE("Test copy from/to on-time dataset", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -719,35 +720,31 @@ TEST_CASE("Test copy into from on-time dataset", "[copy]") {
 	    "div5airportseqid INTEGER, div5wheelson VARCHAR(10), div5totalgtime VARCHAR(10), div5longestgtime VARCHAR(10), "
 	    "div5wheelsoff VARCHAR(10), div5tailnum VARCHAR(10));"));
 
-	result = con.Query("COPY ontime FROM '" + ontime_csv + "' DELIMITER ',' HEADER");
+	result = con.Query("COPY ontime FROM '" + ontime_csv + "' DELIMITER ',' HEADER;");
 	REQUIRE(CHECK_COLUMN(result, 0, {9}));
 
-	result = con.Query("SELECT year, uniquecarrier, origin, origincityname, div5longestgtime FROM ontime");
+	result = con.Query("SELECT year, uniquecarrier, origin, origincityname, div5longestgtime FROM ontime;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1988, 1988, 1988, 1988, 1988, 1988, 1988, 1988, 1988}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"AA", "AA", "AA", "AA", "AA", "AA", "AA", "AA", "AA"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"JFK", "JFK", "JFK", "JFK", "JFK", "JFK", "JFK", "JFK", "JFK"}));
-	REQUIRE(CHECK_COLUMN(result, 3,
-	                     {"New York, NY", "New York, NY", "New York, NY", "New York, NY", "New York, NY",
-	                      "New York, NY", "New York, NY", "New York, NY", "New York, NY"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"New York, NY", "New York, NY", "New York, NY", "New York, NY", "New York, NY", "New York, NY", "New York, NY", "New York, NY", "New York, NY"}));
 	REQUIRE(CHECK_COLUMN(result, 4, {Value(), Value(), Value(), Value(), Value(), Value(), Value(), Value(), Value()}));
 
-	result = con.Query("COPY ontime TO '" + ontime_csv + "' DELIMITER ',' HEADER");
+	result = con.Query("COPY ontime TO '" + ontime_csv + "' DELIMITER ',' HEADER;");
 	REQUIRE(CHECK_COLUMN(result, 0, {9}));
-	REQUIRE_NO_FAIL(con.Query("DELETE FROM ontime"));
-	result = con.Query("COPY ontime FROM '" + ontime_csv + "' DELIMITER ',' HEADER");
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM ontime;"));
+	result = con.Query("COPY ontime FROM '" + ontime_csv + "' DELIMITER ',' HEADER;");
 	REQUIRE(CHECK_COLUMN(result, 0, {9}));
 
-	result = con.Query("SELECT year, uniquecarrier, origin, origincityname, div5longestgtime FROM ontime");
+	result = con.Query("SELECT year, uniquecarrier, origin, origincityname, div5longestgtime FROM ontime;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1988, 1988, 1988, 1988, 1988, 1988, 1988, 1988, 1988}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"AA", "AA", "AA", "AA", "AA", "AA", "AA", "AA", "AA"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"JFK", "JFK", "JFK", "JFK", "JFK", "JFK", "JFK", "JFK", "JFK"}));
-	REQUIRE(CHECK_COLUMN(result, 3,
-	                     {"New York, NY", "New York, NY", "New York, NY", "New York, NY", "New York, NY",
-	                      "New York, NY", "New York, NY", "New York, NY", "New York, NY"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"New York, NY", "New York, NY", "New York, NY", "New York, NY", "New York, NY", "New York, NY", "New York, NY", "New York, NY", "New York, NY"}));
 	REQUIRE(CHECK_COLUMN(result, 4, {Value(), Value(), Value(), Value(), Value(), Value(), Value(), Value(), Value()}));
 }
 
-TEST_CASE("Test copy from lineitem csv", "[copy]") {
+TEST_CASE("Test copy from/to lineitem csv", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -765,27 +762,27 @@ TEST_CASE("Test copy from lineitem csv", "[copy]") {
 	result = con.Query("COPY lineitem FROM '" + lineitem_csv + "' DELIMITER '|'");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
-	result = con.Query("SELECT l_partkey, l_comment FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumber");
+	result = con.Query("SELECT l_partkey, l_comment FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumber;");
 	REQUIRE(CHECK_COLUMN(result, 0, {15519, 6731, 6370, 214, 2403, 1564}));
 	REQUIRE(
 	    CHECK_COLUMN(result, 1,
 	                 {"egular courts above the", "ly final dependencies: slyly bold ", "riously. regular, express dep",
 	                  "lites. fluffily even de", " pending foxes. slyly re", "arefully slyly ex"}));
 
-	// test COPY TO with HEADER
-	result = con.Query("COPY lineitem TO '" + lineitem_csv + "' (DELIMITER ' ', HEADER)");
+	// test COPY ... TO ... with HEADER
+	result = con.Query("COPY lineitem TO '" + lineitem_csv + "' (DELIMITER ' ', HEADER);");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
-	// clear out the table
-	REQUIRE_NO_FAIL(con.Query("DELETE FROM lineitem"));
-	result = con.Query("SELECT * FROM lineitem");
+	// clear the table
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM lineitem;"));
+	result = con.Query("SELECT * FROM lineitem;");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 
 	// now copy back into the table
-	result = con.Query("COPY lineitem FROM '" + lineitem_csv + "' DELIMITER ' ' HEADER");
+	result = con.Query("COPY lineitem FROM '" + lineitem_csv + "' DELIMITER ' ' HEADER;");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
-	result = con.Query("SELECT l_partkey, l_comment FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumber");
+	result = con.Query("SELECT l_partkey, l_comment FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumber;");
 	REQUIRE(CHECK_COLUMN(result, 0, {15519, 6731, 6370, 214, 2403, 1564}));
 	REQUIRE(
 	    CHECK_COLUMN(result, 1,
@@ -806,12 +803,12 @@ TEST_CASE("Test copy from web_page csv", "[copy]") {
 	    "CREATE TABLE web_page(wp_web_page_sk integer not null, wp_web_page_id char(16) not null, wp_rec_start_date "
 	    "date, wp_rec_end_date date, wp_creation_date_sk integer, wp_access_date_sk integer, wp_autogen_flag char(1), "
 	    "wp_customer_sk integer, wp_url varchar(100), wp_type char(50), wp_char_count integer, wp_link_count integer, "
-	    "wp_image_count integer, wp_max_ad_count integer, primary key (wp_web_page_sk))"));
+	    "wp_image_count integer, wp_max_ad_count integer, primary key (wp_web_page_sk));"));
 
-	result = con.Query("COPY web_page FROM '" + webpage_csv + "' DELIMITER '|'");
+	result = con.Query("COPY web_page FROM '" + webpage_csv + "' DELIMITER '|';");
 	REQUIRE(CHECK_COLUMN(result, 0, {60}));
 
-	result = con.Query("SELECT * FROM web_page ORDER BY wp_web_page_sk LIMIT 3");
+	result = con.Query("SELECT * FROM web_page ORDER BY wp_web_page_sk LIMIT 3;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"AAAAAAAABAAAAAAA", "AAAAAAAACAAAAAAA", "AAAAAAAACAAAAAAA"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value::DATE(1997, 9, 3), Value::DATE(1997, 9, 3), Value::DATE(2000, 9, 3)}));
@@ -837,12 +834,12 @@ TEST_CASE("Test copy from greek-utf8 csv", "[copy]") {
 	auto csv_file = fs.JoinPath(csv_path, "greek_utf8.csv");
 	WriteBinary(csv_file, greek_utf8, sizeof(greek_utf8));
 
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE greek_utf8(i INTEGER, j VARCHAR, k INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE greek_utf8(i INTEGER, j VARCHAR, k INTEGER);"));
 
-	result = con.Query("COPY greek_utf8 FROM '" + csv_file + "' DELIMITER '|'");
+	result = con.Query("COPY greek_utf8 FROM '" + csv_file + "' DELIMITER '|';");
 	REQUIRE(CHECK_COLUMN(result, 0, {8}));
 
-	result = con.Query("SELECT * FROM greek_utf8 ORDER BY 1");
+	result = con.Query("SELECT * FROM greek_utf8 ORDER BY 1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1689, 1690, 41561, 45804, 51981, 171067, 182773, 607808}));
 	REQUIRE(CHECK_COLUMN(result, 1,
 	                     {"\x30\x30\x69\\047\x6d", "\x30\x30\x69\\047\x76", "\x32\x30\x31\x35\xe2\x80\x8e",
@@ -863,10 +860,10 @@ TEST_CASE("Test copy from ncvoter csv", "[copy]") {
 
 	REQUIRE_NO_FAIL(con.Query(
 	    "CREATE TABLE IF NOT EXISTS ncvoters(county_id INTEGER, county_desc STRING, voter_reg_num STRING,status_cd STRING, voter_status_desc STRING, reason_cd STRING, voter_status_reason_desc STRING, absent_ind STRING, name_prefx_cd STRING,last_name STRING, first_name STRING, midl_name STRING, name_sufx_cd STRING, full_name_rep STRING,full_name_mail STRING, house_num STRING, half_code STRING, street_dir STRING, street_name STRING, street_type_cd STRING, street_sufx_cd STRING, unit_designator STRING, unit_num STRING, res_city_desc STRING,state_cd STRING, zip_code STRING, res_street_address STRING, res_city_state_zip STRING, mail_addr1 STRING, mail_addr2 STRING, mail_addr3 STRING, mail_addr4 STRING, mail_city STRING, mail_state STRING, mail_zipcode STRING, mail_city_state_zip STRING, area_cd STRING, phone_num STRING, full_phone_number STRING, drivers_lic STRING, race_code STRING, race_desc STRING, ethnic_code STRING, ethnic_desc STRING, party_cd STRING, party_desc STRING, sex_code STRING, sex STRING, birth_age STRING, birth_place STRING, registr_dt STRING, precinct_abbrv STRING, precinct_desc STRING,municipality_abbrv STRING, municipality_desc STRING, ward_abbrv STRING, ward_desc STRING, cong_dist_abbrv STRING, cong_dist_desc STRING, super_court_abbrv STRING, super_court_desc STRING, judic_dist_abbrv STRING, judic_dist_desc STRING, nc_senate_abbrv STRING, nc_senate_desc STRING, nc_house_abbrv STRING, nc_house_desc STRING,county_commiss_abbrv STRING, county_commiss_desc STRING, township_abbrv STRING, township_desc STRING,school_dist_abbrv STRING, school_dist_desc STRING, fire_dist_abbrv STRING, fire_dist_desc STRING, water_dist_abbrv STRING, water_dist_desc STRING, sewer_dist_abbrv STRING, sewer_dist_desc STRING, sanit_dist_abbrv STRING, sanit_dist_desc STRING, rescue_dist_abbrv STRING, rescue_dist_desc STRING, munic_dist_abbrv STRING, munic_dist_desc STRING, dist_1_abbrv STRING, dist_1_desc STRING, dist_2_abbrv STRING, dist_2_desc STRING, confidential_ind STRING, age STRING, ncid STRING, vtd_abbrv STRING, vtd_desc STRING);"));
-	result = con.Query("COPY ncvoters FROM '" + ncvoter_csv + "' DELIMITER '\t'");
+	result = con.Query("COPY ncvoters FROM '" + ncvoter_csv + "' DELIMITER '\t';");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
-	result = con.Query("SELECT county_id, county_desc, vtd_desc, name_prefx_cd FROM ncvoters");
+	result = con.Query("SELECT county_id, county_desc, vtd_desc, name_prefx_cd FROM ncvoters;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"ALAMANCE", "ALAMANCE", "ALAMANCE", "ALAMANCE", "ALAMANCE", "ALAMANCE", "ALAMANCE", "ALAMANCE", "ALAMANCE", "ALAMANCE"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"09S", "09S", "03W", "09S", "1210", "035", "124", "06E", "035", "064"}));
@@ -878,16 +875,16 @@ TEST_CASE("Test date copy", "[copy]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE date_test(d date)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE date_test(d date);"));
 
 	auto csv_path = GetCSVPath();
 	auto date_csv = fs.JoinPath(csv_path, "date.csv");
 	WriteCSV(date_csv, "2019-06-05\n");
 
-	result = con.Query("COPY date_test FROM '" + date_csv + "'");
+	result = con.Query("COPY date_test FROM '" + date_csv + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
-	result = con.Query("SELECT cast(d as string) FROM date_test");
+	result = con.Query("SELECT cast(d as string) FROM date_test;");
 	REQUIRE(CHECK_COLUMN(result, 0, {"2019-06-05"}));
 }
 
@@ -901,9 +898,9 @@ TEST_CASE("Test cranlogs broken gzip copy", "[copy]") {
 	WriteBinary(cranlogs_csv, tmp2013_06_15, sizeof(tmp2013_06_15));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE cranlogs (date date,time string,size int,r_version string,r_arch "
-	                          "string,r_os string,package string,version string,country string,ip_id int)"));
+	                          "string,r_os string,package string,version string,country string,ip_id int);"));
 
-	result = con.Query("COPY cranlogs FROM '" + cranlogs_csv + "' DELIMITER ',' HEADER");
+	result = con.Query("COPY cranlogs FROM '" + cranlogs_csv + "' DELIMITER ',' HEADER;");
 	REQUIRE(CHECK_COLUMN(result, 0, {37459}));
 }
 
@@ -917,11 +914,12 @@ TEST_CASE("Test imdb escapes", "[copy]") {
 	WriteBinary(imdb_movie_info, imdb_movie_info_escaped, sizeof(imdb_movie_info_escaped));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE movie_info (id integer NOT NULL PRIMARY KEY, movie_id integer NOT NULL, "
-	                          "info_type_id integer NOT NULL, info text NOT NULL, note text)"));
+	                          "info_type_id integer NOT NULL, info text NOT NULL, note text);"));
 
-	result = con.Query("COPY movie_info FROM '" + imdb_movie_info + "' DELIMITER ',' ESCAPE '\\'");
+	result = con.Query("COPY movie_info FROM '" + imdb_movie_info + "' DELIMITER ',' ESCAPE '\\';");
 	REQUIRE(result->success);
 	REQUIRE(CHECK_COLUMN(result, 0, {201}));
-	// TODO actually check results
-	result = con.Query("SELECT * FROM movie_info");
+
+	// TODO: actually check results
+	result = con.Query("SELECT * FROM movie_info;");
 }
