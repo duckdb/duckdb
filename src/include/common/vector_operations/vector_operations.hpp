@@ -151,10 +151,6 @@ struct VectorOperations {
 	static Value Min(Vector &A);
 	// Returns whether or not a vector has a NULL value
 	static bool HasNull(Vector &A);
-
-	//! CASE expressions, ternary op
-	//! result = check ? A : B
-	static void Case(Vector &check, Vector &A, Vector &B, Vector &result);
 	//===--------------------------------------------------------------------===//
 	// Scatter methods
 	//===--------------------------------------------------------------------===//
@@ -273,62 +269,85 @@ struct VectorOperations {
 		VectorOperations::Exec(
 		    vector, [&](index_t i, index_t k) { fun(data[i], i, k); }, offset, limit);
 	}
-	template <class FUNC> static void BinaryExec(Vector &a, Vector &b, Vector &result, FUNC &&fun) {
-		// it might be the case that not everything has a selection vector
-		// as constants do not need a selection vector
-		// check if we are using a selection vector
-		if (!a.IsConstant()) {
-			result.sel_vector = a.sel_vector;
-			result.count = a.count;
-		} else if (!b.IsConstant()) {
-			result.sel_vector = b.sel_vector;
-			result.count = b.count;
-		} else {
-			result.sel_vector = nullptr;
-			result.count = 1;
+	//! NAryExec handles NULL values, sel_vector and count in the presence of potential constants
+	template<bool HANDLE_NULLS>
+	static void NAryExec(index_t N, Vector *vectors[], index_t multipliers[], Vector &result) {
+		// initialize result to a constant (no sel_vector, count = 1)
+		result.sel_vector = nullptr;
+		result.count = 1;
+		for(index_t i = 0; i < N; i++) {
+			// for every vector, check if it is a constant
+			if (vectors[i]->IsConstant()) {
+				// if it is a constant, we set the index multiplier to 0
+				// this ensures we always fetch the first element
+				multipliers[i] = 0;
+				if (HANDLE_NULLS && vectors[i]->nullmask[0]) {
+					// if there is a constant NULL, we set the entire result to NULL
+					result.nullmask.set();
+				}
+			} else {
+				// if it is not a constant, we set the multiplier to 1
+				// we set the result sel_vector/count to the count of this vector
+				multipliers[i] = 1;
+				result.sel_vector = vectors[i]->sel_vector;
+				result.count = vectors[i]->count;
+				if (HANDLE_NULLS) {
+					// if we are handling nulls here, we OR this nullmask together with the result
+					result.nullmask |= vectors[i]->nullmask;
+				}
+			}
 		}
-
-		// now check for constants
-		// we handle constants by multiplying the index access by 0 to avoid 2^3
-		// branches in the code
-		index_t a_mul = a.IsConstant() ? 0 : 1;
-		index_t b_mul = b.IsConstant() ? 0 : 1;
-
-		assert(a.IsConstant() || a.count == result.count);
-		assert(b.IsConstant() || b.count == result.count);
-
-		VectorOperations::Exec(result, [&](index_t i, index_t k) { fun(a_mul * i, b_mul * i, i); });
 	}
-	template <class FUNC> static void TernaryExec(Vector &a, Vector &b, Vector &c, Vector &result, FUNC &&fun) {
-		// it might be the case that not everything has a selection vector
-		// as constants do not need a selection vector
-		// check if we are using a selection vector
-		if (!a.IsConstant()) {
-			result.sel_vector = a.sel_vector;
-			result.count = a.count;
-		} else if (!b.IsConstant()) {
-			result.sel_vector = b.sel_vector;
-			result.count = b.count;
-		} else if (!c.IsConstant()) {
-			result.sel_vector = c.sel_vector;
-			result.count = c.count;
+
+	template <typename TA, typename TR, class FUNC, bool SKIP_NULLS = std::is_same<TR, const char*>()> static void UnaryExec(Vector &a, Vector &result, FUNC &&fun) {
+		auto adata = (TA*) a.data;
+		auto rdata = (TR*) result.data;
+		result.sel_vector = a.sel_vector;
+		result.count = a.count;
+		result.nullmask = a.nullmask;
+		if (SKIP_NULLS) {
+			VectorOperations::Exec(result, [&](index_t i, index_t k) {
+				if (result.nullmask[i]) {
+					return;
+				}
+				rdata[i] = fun(adata[i]);
+			});
 		} else {
-			result.sel_vector = nullptr;
-			result.count = 1;
+			VectorOperations::Exec(result, [&](index_t i, index_t k) {
+				rdata[i] = fun(adata[i]);
+			});
 		}
+	}
+	template <typename TA, typename TB, typename TR, class FUNC, bool SKIP_NULLS = true, bool HANDLE_NULLS=true> static void BinaryExec(Vector &a, Vector &b, Vector &result, FUNC &&fun) {
+		Vector *vectors[2] = {&a, &b};
+		index_t multipliers[2];
+		VectorOperations::NAryExec<HANDLE_NULLS>(2, vectors, multipliers, result);
 
-		// now check for constants
-		// we handle constants by multiplying the index access by 0 to avoid 2^3
-		// branches in the code
-		index_t a_mul = a.IsConstant() ? 0 : 1;
-		index_t b_mul = b.IsConstant() ? 0 : 1;
-		index_t c_mul = c.IsConstant() ? 0 : 1;
+		auto adata = (TA*) a.data;
+		auto bdata = (TB*) b.data;
+		auto rdata = (TR*) result.data;
+		VectorOperations::Exec(result, [&](index_t i, index_t k) {
+			if (SKIP_NULLS && result.nullmask[i]) {
+				return;
+			}
+			rdata[i] = fun(adata[multipliers[0] * i], bdata[multipliers[1] * i], i);
+		});
+	}
+	template <typename TA, typename TB, typename TC, typename TR, class FUNC, bool SKIP_NULLS = true, bool HANDLE_NULLS=true> static void TernaryExec(Vector &a, Vector &b, Vector &c, Vector &result, FUNC &&fun) {
+		Vector *vectors[3] = {&a, &b, &c};
+		index_t multipliers[3];
+		VectorOperations::NAryExec<HANDLE_NULLS>(3, vectors, multipliers, result);
 
-		assert(a.IsConstant() || a.count == result.count);
-		assert(b.IsConstant() || b.count == result.count);
-		assert(c.IsConstant() || c.count == result.count);
-
-		VectorOperations::Exec(result, [&](index_t i, index_t k) { fun(a_mul * i, b_mul * i, c_mul * i, i); });
+		auto adata = (TA*) a.data;
+		auto bdata = (TB*) b.data;
+		auto cdata = (TC*) c.data;
+		auto rdata = (TR*) result.data;
+		VectorOperations::Exec(result, [&](index_t i, index_t k) {
+			if (SKIP_NULLS && result.nullmask[i]) {
+				return;
+			}
+			rdata[i] = fun(adata[multipliers[0] * i], bdata[multipliers[1] * i], cdata[multipliers[2] * i], i);
+		});
 	}
 
 	template <class FUNC> static void MultiaryExec(Vector inputs[], int input_count, Vector &result, FUNC &&fun) {

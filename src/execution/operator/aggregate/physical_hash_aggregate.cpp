@@ -49,6 +49,7 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 		DataChunk &group_chunk = state->group_chunk;
 		DataChunk &payload_chunk = state->payload_chunk;
 		executor.Execute(groups, group_chunk);
+		payload_chunk.Reset();
 		for (index_t i = 0; i < aggregates.size(); i++) {
 			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
 			if (aggr.children.size()) {

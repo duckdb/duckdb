@@ -25,7 +25,7 @@ public:
 public:
 	string ToString() const override;
 
-	bool Equals(const BaseExpression *other_) const override;
+	static bool Equals(const ConstantExpression *a, const ConstantExpression *b);
 	uint64_t Hash() const override;
 
 	unique_ptr<ParsedExpression> Copy() const override;

@@ -56,7 +56,7 @@ public:
 
 	string ToString() const override;
 
-	bool Equals(const BaseExpression *other) const override;
+	static bool Equals(const WindowExpression *a, const WindowExpression *b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 

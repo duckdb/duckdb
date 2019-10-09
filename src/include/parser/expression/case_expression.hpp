@@ -26,7 +26,7 @@ public:
 public:
 	string ToString() const override;
 
-	bool Equals(const BaseExpression *other) const override;
+	static bool Equals(const CaseExpression *a, const CaseExpression *b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 

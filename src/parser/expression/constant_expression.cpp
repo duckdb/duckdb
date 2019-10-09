@@ -15,12 +15,8 @@ string ConstantExpression::ToString() const {
 	return value.ToString();
 }
 
-bool ConstantExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
-		return false;
-	}
-	auto other = (ConstantExpression *)other_;
-	return value == other->value;
+bool ConstantExpression::Equals(const ConstantExpression *a, const ConstantExpression *b) {
+	return a->value == b->value;
 }
 
 uint64_t ConstantExpression::Hash() const {

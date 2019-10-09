@@ -31,7 +31,7 @@ dbplyr_ns[["db_copy_to.duckdb_connection"]] <- no_temp_copy_to
 
 
 options(duckdb.debug=T)
-test_register_con("duckdb", duckdb::duckdb())
+test_register_src("duckdb", duckdb::src_duckdb())
 
 # TODO fix excluded test cases
 test_check("dbplyr", stop_on_failure=TRUE, filter="(verb-joins|verb-mutate)", invert=T)

@@ -7,6 +7,38 @@ using namespace std;
 
 namespace duckdb {
 
+static const char* age_scalar_function(timestamp_t input1, timestamp_t input2, index_t result_index, string &output) {
+	auto interval = Timestamp::GetDifference(input1, input2);
+	auto timestamp = Timestamp::IntervalToTimestamp(interval);
+	auto years = timestamp.year;
+	auto months = timestamp.month;
+	auto days = timestamp.day;
+	auto time = interval.time;
+
+	output = "";
+	if (years == 0 && months == 0 && days == 0) {
+		output += "00:00:00";
+	} else {
+		if (years != 0) {
+			output = std::to_string(years);
+			output += " years ";
+		}
+		if (months != 0) {
+			output += std::to_string(months);
+			output += " mons ";
+		}
+		if (days != 0) {
+			output += std::to_string(days);
+			output += " days";
+		}
+		if (time != 0) {
+			output += " ";
+			output += Time::ToString(time);
+		}
+	}
+	return output.c_str();
+}
+
 static void age_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
                   Vector &result) {
 	assert(input_count == 2 || input_count == 1);
@@ -26,54 +58,14 @@ static void age_function(ExpressionExecutor &exec, Vector inputs[], index_t inpu
 	assert(input2.type == TypeId::BIGINT);
 
 	result.Initialize(TypeId::VARCHAR);
-	result.nullmask = input1.nullmask | input2.nullmask;
 	result.count = input1.count;
 	result.sel_vector = input1.sel_vector;
 
-	auto result_data = (const char **)result.data;
-	auto input1_data = (timestamp_t *)input1.data;
-	auto input2_data = (timestamp_t *)input2.data;
-
-	VectorOperations::BinaryExec(input1, input2, result,
-	                             [&](index_t input1_index, index_t input2_index, index_t result_index) {
-		                             // One of them is NULL
-		                             if (result.nullmask[result_index]) {
-			                             return;
-		                             }
-		                             auto input1 = input1_data[input1_index];
-		                             auto input2 = input2_data[input2_index];
-
-		                             auto interval = Timestamp::GetDifference(input1, input2);
-		                             auto timestamp = Timestamp::IntervalToTimestamp(interval);
-		                             auto years = timestamp.year;
-		                             auto months = timestamp.month;
-		                             auto days = timestamp.day;
-		                             auto time = interval.time;
-
-		                             std::string output{""};
-		                             if (years == 0 && months == 0 && days == 0) {
-			                             output += "00:00:00";
-		                             } else {
-			                             if (years != 0) {
-				                             output = std::to_string(years);
-				                             output += " years ";
-			                             }
-			                             if (months != 0) {
-				                             output += std::to_string(months);
-				                             output += " mons ";
-			                             }
-			                             if (days != 0) {
-				                             output += std::to_string(days);
-				                             output += " days";
-			                             }
-			                             if (time != 0) {
-				                             output += " ";
-				                             output += Time::ToString(time);
-			                             }
-		                             }
-
-		                             result_data[result_index] = result.string_heap.AddString(output.c_str());
-	                             });
+	string output_buffer;
+	VectorOperations::BinaryExec<timestamp_t, timestamp_t, const char*>(input1, input2, result,
+		[&](timestamp_t input1, timestamp_t input2, index_t result_index) {
+			return result.string_heap.AddString(age_scalar_function(input1, input2, result_index, output_buffer));
+	});
 }
 
 void Age::RegisterFunction(BuiltinFunctions &set) {
