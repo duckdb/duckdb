@@ -2,6 +2,7 @@
 
 export(duckdb)
 export(duckdb_shutdown)
+export(src_duckdb)
 exportClasses(duckdb_connection)
 exportClasses(duckdb_driver)
 exportClasses(duckdb_result)

@@ -37,33 +37,24 @@ static void regexp_matches_function(ExpressionExecutor &exec, Vector inputs[], i
 	result.Initialize(TypeId::BOOLEAN);
 	result.nullmask = strings.nullmask | patterns.nullmask;
 
-	auto strings_data = (const char **)strings.data;
-	auto patterns_data = (const char **)patterns.data;
-	auto result_data = (bool *)result.data;
-
 	RE2::Options options;
 	options.set_log_errors(false);
 
-	VectorOperations::BinaryExec(strings, patterns, result,
-	                             [&](index_t strings_index, index_t patterns_index, index_t result_index) {
-		                             if (result.nullmask[result_index]) {
-			                             return;
-		                             }
-		                             auto string = strings_data[strings_index];
-
-		                             if (info.constant_pattern) {
-			                             result_data[result_index] = RE2::PartialMatch(string, *info.constant_pattern);
-
-		                             } else {
-			                             auto pattern = patterns_data[patterns_index];
-			                             RE2 re(pattern, options);
-
-			                             if (!re.ok()) {
-				                             throw Exception(re.error());
-			                             }
-			                             result_data[result_index] = RE2::PartialMatch(string, re);
-		                             }
-	                             });
+	if (info.constant_pattern) {
+		VectorOperations::BinaryExec<const char*, const char*, bool>(strings, patterns, result,
+			[&](const char *string, const char *pattern, index_t result_index) {
+				return RE2::PartialMatch(string, *info.constant_pattern);
+			});
+	} else {
+		VectorOperations::BinaryExec<const char*, const char*, bool>(strings, patterns, result,
+			[&](const char *string, const char *pattern, index_t result_index) {
+				RE2 re(pattern, options);
+				if (!re.ok()) {
+					throw Exception(re.error());
+				}
+				return RE2::PartialMatch(string, re);
+			});
+	}
 }
 
 static unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionExpression &expr, ClientContext &context) {
@@ -105,32 +96,17 @@ static void regexp_replace_function(ExpressionExecutor &exec, Vector inputs[], i
 	assert(replaces.type == TypeId::VARCHAR);
 
 	result.Initialize(TypeId::VARCHAR);
-	result.nullmask =
-	    strings.nullmask | patterns.nullmask | replaces.nullmask; // TODO what would jesus, err postgres do
-
-	auto strings_data = (const char **)strings.data;
-	auto patterns_data = (const char **)patterns.data;
-	auto replaces_data = (const char **)replaces.data;
-	auto result_data = (const char **)result.data;
 
 	RE2::Options options;
 	options.set_log_errors(false);
 
-	VectorOperations::TernaryExec(
+	VectorOperations::TernaryExec<const char*, const char*, const char*, const char*>(
 	    strings, patterns, replaces, result,
-	    [&](index_t strings_index, index_t patterns_index, index_t replaces_index, index_t result_index) {
-		    if (result.nullmask[strings_index]) {
-			    return;
-		    }
-
-		    auto string = strings_data[strings_index];
-		    auto pattern = patterns_data[patterns_index];
-		    auto replace = replaces_data[replaces_index];
-
+	    [&](const char* string, const char *pattern, const char *replace, index_t result_index) {
 		    RE2 re(pattern, options);
-		    std::string sstring(string);
+			std::string sstring(string);
 		    RE2::Replace(&sstring, re, replace);
-		    result_data[result_index] = result.string_heap.AddString(sstring.c_str());
+			return result.string_heap.AddString(sstring);
 	    });
 }
 

@@ -345,3 +345,99 @@ bool ChunkCollection::Equals(ChunkCollection &other) {
 	}
 	return true;
 }
+static void _heapify(ChunkCollection *input, vector<OrderType> &desc, index_t *heap, index_t heap_size,
+                     index_t current_index) {
+	if (current_index >= heap_size) {
+		return;
+	}
+	index_t left_child_index = current_index * 2 + 1;
+	index_t right_child_index = current_index * 2 + 2;
+	index_t swap_index = current_index;
+
+	if (left_child_index < heap_size) {
+		swap_index =
+		    compare_tuple(input, desc, heap[swap_index], heap[left_child_index]) <= 0 ? left_child_index : swap_index;
+	}
+
+	if (right_child_index < heap_size) {
+		swap_index =
+		    compare_tuple(input, desc, heap[swap_index], heap[right_child_index]) <= 0 ? right_child_index : swap_index;
+	}
+
+	if (swap_index != current_index) {
+		std::swap(heap[current_index], heap[swap_index]);
+		_heapify(input, desc, heap, heap_size, swap_index);
+	}
+}
+
+static void _heap_create(ChunkCollection *input, vector<OrderType> &desc, index_t *heap, index_t heap_size) {
+	for (index_t i = 0; i < heap_size; i++) {
+		heap[i] = i;
+	}
+
+	// build heap
+	for (int64_t i = heap_size / 2 - 1; i >= 0; i--) {
+		_heapify(input, desc, heap, heap_size, i);
+	}
+
+	// Run through all the rows.
+	for (index_t i = heap_size; i < input->count; i++) {
+		if (compare_tuple(input, desc, i, heap[0]) <= 0) {
+			heap[0] = i;
+			_heapify(input, desc, heap, heap_size, 0);
+		}
+	}
+}
+
+void ChunkCollection::Heap(vector<OrderType> &desc, index_t heap[], index_t heap_size) {
+	assert(heap);
+	if (count == 0)
+		return;
+
+	_heap_create(this, desc, heap, heap_size);
+
+	// Heap is ready. Now do a heapsort
+	for (int64_t i = heap_size - 1; i >= 0; i--) {
+		std::swap(heap[i], heap[0]);
+		_heapify(this, desc, heap, i, 0);
+	}
+}
+
+index_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, index_t order[], index_t start_offset,
+                                              index_t heap_size) {
+	index_t remaining_data = min((index_t)STANDARD_VECTOR_SIZE, heap_size - start_offset);
+	assert(target.GetTypes() == types);
+
+	for (index_t col_idx = 0; col_idx < column_count(); col_idx++) {
+		target.data[col_idx].count = remaining_data;
+
+		switch (types[col_idx]) {
+		case TypeId::BOOLEAN:
+		case TypeId::TINYINT:
+			templated_set_values<int8_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::SMALLINT:
+			templated_set_values<int16_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::INTEGER:
+			templated_set_values<int32_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::BIGINT:
+			templated_set_values<int64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::FLOAT:
+			templated_set_values<float>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::DOUBLE:
+			templated_set_values<double>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::VARCHAR:
+			templated_set_values<char *>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		default:
+			throw NotImplementedException("Type for setting");
+		}
+	}
+	target.Verify();
+	return remaining_data;
+}

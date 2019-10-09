@@ -116,3 +116,20 @@ duckdb_shutdown <- function(drv) {
   .Call(duckdb_shutdown_R, drv@database_ref)
   invisible(TRUE)
 }
+
+is_installed <- function (pkg) {
+    as.logical(requireNamespace(pkg, quietly = TRUE)) == TRUE
+}
+
+
+#' @export
+src_duckdb <- function (path=":memory:", create = FALSE) {
+    if (!is_installed("dbplyr")) {
+      stop("Need package `dbplyr` installed.")
+    }
+    if (path != ":memory:" && !create && !file.exists(path)) {
+        stop("`path` '",path,"' must already exist, unless `create` = TRUE")
+    }
+    con <- DBI::dbConnect(duckdb::duckdb(), path)
+    dbplyr::src_dbi(con, auto_disconnect = TRUE)
+}

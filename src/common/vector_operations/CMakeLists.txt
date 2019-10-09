@@ -3,7 +3,6 @@ add_library_unity(duckdb_vector_operations
                   aggregate_operators.cpp
                   append.cpp
                   boolean_operators.cpp
-                  case.cpp
                   cast_operators.cpp
                   comparison_operators.cpp
                   copy.cpp
