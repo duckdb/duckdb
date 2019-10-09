@@ -54,41 +54,102 @@ private:
 	ofstream to_csv;
 };
 
-static void WriteQuotedString(BufferedWriter &writer, const char *str_value, string delimiter, string quote) {
-	// scan the string for the delimiter and for a newline
-	bool write_quoted = false;
+static void WriteQuotedString(BufferedWriter &writer, const char *str_value, string delimiter, string quote, string escape, string null_str, bool write_quoted) {
+	// used for adding escapes
+	bool add_escapes = false;
+	string new_val = str_value;
+	string new_val_escapes = "";
+	string new_val_quotes = "";
+	index_t i = 0;
+	index_t found = new_val.find(escape);
 
-	// FIXME: check for delimiter in string
-	index_t len = 0;
-	// check for newline in string
-	for (const char *val = str_value; *val; val++) {
-		len++;
-		if (*val == '\n' || *val == '\r') {
-			// newline, write a quoted string
+	// check for \n, \r, \n\r in string
+	if (!write_quoted) {
+		for (const char *val = str_value; *val; val++) {
+			if (*val == '\n' || *val == '\r') {
+				// newline, write a quoted string
+				write_quoted = true;
+			}
+		}
+	}
+
+	// check if value is null string
+	if (!write_quoted) {
+		if (new_val == null_str) {
 			write_quoted = true;
 		}
 	}
 
+	// check for delimiter
 	if (!write_quoted) {
-		writer.Write(str_value, len);
-	} else {
-		const char *quote_cstr = quote.c_str();
-		index_t quote_l = quote.length();
-		writer.Write(quote_cstr, quote_l);
-		writer.Write(str_value, len);
-		writer.Write(quote_cstr, quote_l);
+		if (new_val.find(delimiter) != string::npos) {
+			write_quoted = true;
+		}
 	}
 
-	// FIXME: add escapes!
+	// check for quote
+	if (new_val.find(quote) != string::npos) {
+		write_quoted = true;
+		add_escapes = true;
+	}
+
+	// check for escapes in quoted string
+	if (write_quoted && !add_escapes) {
+		if (new_val.find(escape) != string::npos) {
+			add_escapes = true;
+		}
+	}
+
+	if (add_escapes) {
+		// escape escapes
+		while (found != string::npos) {
+			while (i < found) {
+				new_val_escapes += new_val[i];
+				i++;
+			}
+			new_val_escapes += escape;
+			found = new_val.find(escape, found + escape.length());
+		}
+		while (i < new_val.length()) {
+			new_val_escapes += new_val[i];
+			i++;
+		}
+		new_val = new_val_escapes;
+
+		// also escape quotes
+		if (escape != quote) {
+			i = 0;
+			found = new_val.find(quote);
+
+			// escape quotes
+			while (found != string::npos) {
+				while (i < found) {
+					new_val_quotes += new_val[i];
+					i++;
+				}
+				new_val_quotes += escape;
+				found = new_val.find(quote, found + quote.length());
+			}
+			while (i < new_val.length()) {
+				new_val_quotes += new_val[i];
+				i++;
+			}
+			new_val = new_val_quotes;
+		}
+	}
+
+	if (!write_quoted) {
+		writer.Write(new_val);
+	} else {
+		writer.Write(quote);
+		writer.Write(new_val);
+		writer.Write(quote);
+	}
 }
 
 void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	auto &info = *this->info;
 	index_t total = 0;
-
-	// delimiter as cstr and its length
-	const char *delimiter_cstr = info.delimiter.c_str();
-	index_t delimiter_l = info.delimiter.length();
 
 	string newline = "\n";
 	BufferedWriter writer(info.file_path);
@@ -96,10 +157,9 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 		// write the header line
 		for (index_t i = 0; i < names.size(); i++) {
 			if (i != 0) {
-				
-				writer.Write(delimiter_cstr, delimiter_l);
+				writer.Write(info.delimiter);
 			}
-			WriteQuotedString(writer, names[i].c_str(), info.delimiter, info.quote);
+			WriteQuotedString(writer, names[i].c_str(), info.delimiter, info.quote, info.escape, info.null_str, false);
 		}
 		writer.Write(newline);
 	}
@@ -129,22 +189,20 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 		}
 		// now loop over the vectors and output the values
 		VectorOperations::Exec(cast_chunk.data[0], [&](index_t i, index_t k) {
-			// necessary for all null values, done outside loop for efficiency
-			const char * null_cstr = info.null_str.c_str();
-
 			// write values
 			for (index_t col_idx = 0; col_idx < state->child_chunk.column_count; col_idx++) {
 				if (col_idx != 0) {
-					writer.Write(delimiter_cstr, delimiter_l);
+					writer.Write(info.delimiter);
 				}
 				if (cast_chunk.data[col_idx].nullmask[i]) {
 					// write null value
-					writer.Write(null_cstr, info.null_str.length());
-				} else {
-					// non-null value, fetch the string value from the cast chunk
-					auto str_value = ((const char **)cast_chunk.data[col_idx].data)[i];
-					WriteQuotedString(writer, str_value, info.delimiter, info.quote);
+					writer.Write(info.null_str);
+					continue;
 				}
+
+				// non-null value, fetch the string value from the cast chunk
+				auto str_value = ((const char **)cast_chunk.data[col_idx].data)[i];
+				WriteQuotedString(writer, str_value, info.delimiter, info.quote, info.escape, info.null_str, false);
 			}
 			writer.Write(newline);
 		});

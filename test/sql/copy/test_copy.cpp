@@ -295,15 +295,16 @@ TEST_CASE("Test copy statement with unicode delimiter/quote/escape", "[copy]") {
 	from_csv_file1 << 3 << "🦆duck inv˧asion🦆🦆" << endl;
 	from_csv_file1.close();
 
-	// FIXME: add fancy sum stuff
 	// generate CSV file with unicode (> one-byte) delimiter/quote/escape that exceeds the buffer size a few times
 	ofstream from_csv_file2(fs.JoinPath(csv_path, "multi_char_buffer_exhausted.csv"));
+	int64_t sum = 0;
 	for (int i = 0; i < 16384; i++) {
 		if (i % 2 == 0) {
 			from_csv_file2 << i << "🦆ˮ🦆dˮ🦆ˮd˧ˮ🦆ˮ🦆d˧" << endl;
 		} else {
 			from_csv_file2 << i << "🦆ˮ˧ˮ˧ˮ˧ˮˮ🦆˧˧🦆	test test	🦆" << endl;
 		}
+		sum += i;
 	}
 	from_csv_file2.close();
 
@@ -314,55 +315,92 @@ TEST_CASE("Test copy statement with unicode delimiter/quote/escape", "[copy]") {
 	}
 	from_csv_file3.close();
 
-	// create a table
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_unicode (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10));"));
+	// create three tables for testing
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_unicode_1 (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10));"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_unicode_2 (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10));"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_unicode_3 (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10));"));
 
 	// test COPY ... FROM ...
 
 	// test unicode delimiter/quote/escape
-	result = con.Query("COPY test_unicode FROM '" + fs.JoinPath(csv_path, "multi_char.csv") + "' (DELIMITER '🦆', QUOTE 'ˮ', ESCAPE '˧');");
+	result = con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "multi_char.csv") + "' (DELIMITER '🦆', QUOTE 'ˮ', ESCAPE '˧');");
 	REQUIRE(CHECK_COLUMN(result, 0, {4}));
-	result = con.Query("SELECT * FROM test_unicode ORDER BY 1 LIMIT 4;");
+	result = con.Query("SELECT * FROM test_unicode_1 ORDER BY 1 LIMIT 4;");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"du˧🦆ck", "douˮble", Value(), "duck inv˧asion"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"dˮˮu🦆ck", Value(), Value(), Value()}));
 	REQUIRE(CHECK_COLUMN(result, 3, {"duck", "duck", Value(), Value()}));
-	REQUIRE_NO_FAIL(con.Query("DELETE FROM test_unicode;"));
 
 	// test unicode delimiter/quote/escape that exceeds the buffer size a few times
-	result = con.Query("COPY test_unicode FROM '" + fs.JoinPath(csv_path, "multi_char_buffer_exhausted.csv") + "' (DELIMITER '🦆', QUOTE 'ˮ', ESCAPE '˧');");
+	result = con.Query("COPY test_unicode_2 FROM '" + fs.JoinPath(csv_path, "multi_char_buffer_exhausted.csv") + "' (DELIMITER '🦆', QUOTE 'ˮ', ESCAPE '˧');");
 	REQUIRE(CHECK_COLUMN(result, 0, {16384}));
-	result = con.Query("SELECT * FROM test_unicode ORDER BY 1 LIMIT 4;");
+	result = con.Query("SELECT * FROM test_unicode_2 ORDER BY 1 LIMIT 4;");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"🦆d", "ˮˮˮ", "🦆d", "ˮˮˮ"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"dˮ🦆", "˧˧", "dˮ🦆", "˧˧"}));
 	REQUIRE(CHECK_COLUMN(result, 3, {"d˧", "	test test	", "d˧", "	test test	"}));
-	REQUIRE_NO_FAIL(con.Query("DELETE FROM test_unicode;"));
+	result = con.Query("SELECT SUM(col_a) FROM test_unicode_2;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(sum)}));
 
 	// test one-byte delimiter/quote/escape
-	result = con.Query("COPY test_unicode FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (QUOTE '''');");
+	result = con.Query("COPY test_unicode_3 FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (QUOTE '''');");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
-	result = con.Query("SELECT * FROM test_unicode ORDER BY 1 LIMIT 3;");
+	result = con.Query("SELECT * FROM test_unicode_3 ORDER BY 1 LIMIT 3;");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"du'ck", "du'ck", "du'ck"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"''du,ck", "''du,ck", "''du,ck"}));
 	REQUIRE(CHECK_COLUMN(result, 3, {"duck", "duck", "duck"}));
-	REQUIRE_NO_FAIL(con.Query("DELETE FROM test_unicode;"));
 
 	// test same string for delimiter and quote
-	REQUIRE_FAIL(con.Query("COPY test_unicode FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (DELIMITER '🦆', QUOTE '🦆');"));
+	REQUIRE_FAIL(con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (DELIMITER '🦆', QUOTE '🦆');"));
 
 	// escape and quote cannot be substrings of each other
-	REQUIRE_FAIL(con.Query("COPY test_unicode FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (ESCAPE 'du', QUOTE 'duck');"));
-	REQUIRE_FAIL(con.Query("COPY test_unicode FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (ESCAPE 'duck', QUOTE 'du');"));
+	REQUIRE_FAIL(con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (ESCAPE 'du', QUOTE 'duck');"));
+	REQUIRE_FAIL(con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (ESCAPE 'duck', QUOTE 'du');"));
 
 	// delimiter and quote cannot be substrings of each other
-	REQUIRE_FAIL(con.Query("COPY test_unicode FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (DELIMITER 'du', QUOTE 'duck');"));
-	REQUIRE_FAIL(con.Query("COPY test_unicode FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (DELIMITER 'duck', QUOTE 'du');"));
+	REQUIRE_FAIL(con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (DELIMITER 'du', QUOTE 'duck');"));
+	REQUIRE_FAIL(con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (DELIMITER 'duck', QUOTE 'du');"));
 
-	// FIXME: test newlines in quotes (fix existing test case)
+	// COPY ... TO ...
 
-	// FIXME: COPY ... TO ...
+	// test unicode delimiter/quote/escape
+	result = con.Query("COPY test_unicode_1 TO '" + fs.JoinPath(csv_path, "test_unicode_1.csv") + "' (DELIMITER '🦆', QUOTE 'ˮ', ESCAPE '˧');");
+	REQUIRE(CHECK_COLUMN(result, 0, {4}));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test_unicode_1;"));
+	result = con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "test_unicode_1.csv") + "' (DELIMITER '🦆', QUOTE 'ˮ', ESCAPE '˧');");
+	REQUIRE(CHECK_COLUMN(result, 0, {4}));
+	result = con.Query("SELECT * FROM test_unicode_1 ORDER BY 1 LIMIT 4;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"du˧🦆ck", "douˮble", Value(), "duck inv˧asion"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"dˮˮu🦆ck", Value(), Value(), Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"duck", "duck", Value(), Value()}));
+
+	// test unicode delimiter/quote/escape
+	result = con.Query("COPY test_unicode_2 TO '" + fs.JoinPath(csv_path, "test_unicode_2.csv") + "' (DELIMITER '🦆', QUOTE 'ˮ', ESCAPE '˧');");
+	REQUIRE(CHECK_COLUMN(result, 0, {16384}));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test_unicode_2;"));
+	result = con.Query("COPY test_unicode_2 FROM '" + fs.JoinPath(csv_path, "test_unicode_2.csv") + "' (DELIMITER '🦆', QUOTE 'ˮ', ESCAPE '˧');");
+	REQUIRE(CHECK_COLUMN(result, 0, {16384}));
+	result = con.Query("SELECT * FROM test_unicode_2 ORDER BY 1 LIMIT 4;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"🦆d", "ˮˮˮ", "🦆d", "ˮˮˮ"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"dˮ🦆", "˧˧", "dˮ🦆", "˧˧"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"d˧", "	test test	", "d˧", "	test test	"}));
+	result = con.Query("SELECT SUM(col_a) FROM test_unicode_2;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(sum)}));
+
+	// test one-byte delimiter/quote/escape
+	result = con.Query("COPY test_unicode_3 TO '" + fs.JoinPath(csv_path, "test_unicode_3.csv") + "' (QUOTE '''');");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test_unicode_3;"));
+	result = con.Query("COPY test_unicode_3 FROM '" + fs.JoinPath(csv_path, "test_unicode_3.csv") + "' (QUOTE '''');");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	result = con.Query("SELECT * FROM test_unicode_3 ORDER BY 1 LIMIT 3;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"du'ck", "du'ck", "du'ck"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"''du,ck", "''du,ck", "''du,ck"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"duck", "duck", "duck"}));
 }
 
 TEST_CASE("Test copy statement with file overwrite", "[copy]") {
