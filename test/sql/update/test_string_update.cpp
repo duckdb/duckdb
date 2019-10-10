@@ -43,6 +43,31 @@ TEST_CASE("Test update of string columns", "[update]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
 }
 
+TEST_CASE("Test update of string columns with NULLs", "[update]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db);
+
+	// create a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('hello'), ('world')"));
+
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION;"));
+
+	// update a string to NULL
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=NULL where a='world';"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "hello"}));
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello", "world"}));
+
+	REQUIRE_NO_FAIL(con2.Query("COMMIT;"));
+
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "hello"}));
+}
+
 TEST_CASE("Test repeated update of string in same segment", "[update]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

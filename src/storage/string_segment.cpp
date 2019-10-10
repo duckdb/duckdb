@@ -333,6 +333,9 @@ void StringSegment::WriteString(string_t string, block_id_t &result_block, int32
 }
 
 string_t StringSegment::ReadString(TransientScanState &state, block_id_t block, int32_t offset) {
+	if (block == INVALID_BLOCK) {
+		return string_t(nullptr, 0);
+	}
 	// now pin the handle, if it is not pinned yet
 	ManagedBufferHandle *handle;
 	auto entry = state.handles.find(block);
@@ -375,27 +378,15 @@ void StringSegment::ReadStringMarker(data_ptr_t target, block_id_t &block_id, in
 // Update
 //===--------------------------------------------------------------------===//
 string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, index_t vector_offset) {
-	// first figure out how big the block needs to be by iterating over the updates
-	int32_t lengths[STANDARD_VECTOR_SIZE];
-	index_t total_length = 0;
-	auto strings = (char**) update.data;
-	for(index_t i = 0; i < update.count; i++) {
-		if (!update.nullmask[i]) {
-			lengths[i] = strlen(strings[i]) + 1;
-			total_length += lengths[i];
-		} else {
-			lengths[i] = 0;
-		}
-	}
-
 	auto info = make_unique<StringUpdateInfo>();
 	info->count = update.count;
+	auto strings = (char**) update.data;
 	for(index_t i = 0; i < update.count; i++) {
 		info->ids[i] = ids[i] - vector_offset;
 		info->nullmask[info->ids[i]] = update.nullmask[i];
 		// copy the string into the block
-		if (lengths[i] > 0) {
-			WriteString(string_t(strings[i], lengths[i]), info->block_ids[i], info->offsets[i]);
+		if (!update.nullmask[i]) {
+			WriteString(string_t(strings[i], strlen(strings[i]) + 1), info->block_ids[i], info->offsets[i]);
 		} else {
 			info->block_ids[i] = INVALID_BLOCK;
 			info->offsets[i] = 0;
@@ -452,7 +443,6 @@ void StringSegment::RollbackUpdate(UpdateInfo *info) {
 	} else {
 		throw Exception("FIXME: only remove part of the update");
 	}
-
 	// auto &update_info = *string_updates[info->vector_index];
 	// auto string_locations = (string_location_t*) info->tuple_data;
 	// for(index_t i = 0; i < info->N; i++) {
