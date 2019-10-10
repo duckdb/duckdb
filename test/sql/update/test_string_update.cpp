@@ -42,3 +42,65 @@ TEST_CASE("Test update of string columns", "[update]") {
 	result = con2.Query("SELECT * FROM test ORDER BY a");
 	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
 }
+
+TEST_CASE("Test repeated update of string in same segment", "[update]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db);
+
+	// create a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('hello'), ('world')"));
+
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION;"));
+
+	// scan the table
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello", "world"}));
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello", "world"}));
+
+	// test a number of repeated updates
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a='test' WHERE a='hello';"));
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"test", "world"}));
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a='test2' WHERE a='world';"));
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"test", "test2"}));
+
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello", "world"}));
+
+	REQUIRE_NO_FAIL(con2.Query("COMMIT;"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"test", "test2"}));
+}
+
+TEST_CASE("Test rollback of string update", "[update]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db);
+
+	// create a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('hello'), ('world')"));
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
+
+	// perform an update within the transaction
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a='test' WHERE a='hello';"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"test", "world"}));
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello", "world"}));
+
+	// now rollback the update
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK;"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello", "world"}));
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello", "world"}));
+}

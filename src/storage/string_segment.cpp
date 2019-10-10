@@ -72,9 +72,10 @@ void StringSegment::Scan(Transaction &transaction, TransientScanState &state, in
 		while(current) {
 			if (current->version_number > transaction.start_time && current->version_number != transaction.transaction_id) {
 				// these tuples were either committed AFTER this transaction started or are not committed yet, use tuples stored in this version
-				auto info_data = (char**) current->tuple_data;
+				auto info_data = (string_location_t*) current->tuple_data;
 				for(index_t i = 0; i < current->N; i++) {
-					result_data[current->tuples[i]] = info_data[i];
+					auto string = FetchString(state, handle->buffer->data.get(), info_data[i]);
+					result_data[current->tuples[i]] = string.data;
 					result.nullmask[current->tuples[i]] = current->nullmask[current->tuples[i]];
 				}
 			}
@@ -83,20 +84,14 @@ void StringSegment::Scan(Transaction &transaction, TransientScanState &state, in
 	}
 }
 
-void StringSegment::FetchBaseData(row_t *ids, index_t vector_index, index_t vector_offset, index_t count, Vector &result) {
-	TransientScanState state;
-	InitializeScan(state);
+void StringSegment::FetchStringLocations(row_t *ids, index_t vector_index, index_t vector_offset, index_t count, string_location_t result[], nullmask_t &result_nullmask) {
+	// first pin the base block
+	auto handle = manager.PinBuffer(block_id);
 
-	auto handle = (ManagedBufferHandle*) state.primary_handle.get();
-	FetchBaseData(state, handle->buffer->data.get(), ids, vector_index, vector_offset, result, count);
-}
-
-void StringSegment::FetchBaseData(TransientScanState &state, data_ptr_t baseptr, row_t *ids, index_t vector_index, index_t vector_offset, Vector &result, index_t count) {
+	auto baseptr = handle->buffer->data.get();
 	auto base = baseptr + vector_index * vector_size;
-
 	auto &base_nullmask = *((nullmask_t*) base);
 	auto base_data = (int32_t *) (base + sizeof(nullmask_t));
-	auto result_data = (char**) result.data;
 
 	if (string_updates && string_updates[vector_index]) {
 		// there are updates: merge them in
@@ -109,24 +104,24 @@ void StringSegment::FetchBaseData(TransientScanState &state, data_ptr_t baseptr,
 			}
 			if (update_idx < info.count && info.ids[update_idx] == id) {
 				// use update info
-				result_data[i] = ReadString(state, info.block_ids[update_idx], info.offsets[update_idx]).data;
-				result.nullmask[id] = info.nullmask[info.ids[update_idx]];
+				result[i].block_id = info.block_ids[update_idx];
+				result[i].offset = info.offsets[update_idx];
+				result_nullmask[id] = info.nullmask[info.ids[update_idx]];
 				update_idx++;
 			} else {
 				// use base table info
-				result_data[i] = FetchStringFromDict(state, baseptr, base_data[id]).data;
-				result.nullmask[i] = base_nullmask[i];
+				result[i] = FetchStringLocation(baseptr, base_data[id]);
+				result_nullmask[id] = base_nullmask[id];
 			}
 		}
 	} else {
 		// no updates: fetch strings from base vector
 		for(index_t i = 0; i < count; i++) {
 			auto id = ids[i] - vector_offset;
-			result_data[i] = FetchStringFromDict(state, baseptr, base_data[id]).data;
+			result[i] = FetchStringLocation(baseptr, base_data[id]);
+			result_nullmask[id] = base_nullmask[id];
 		}
-		result.nullmask = base_nullmask;
 	}
-	result.count = count;
 }
 
 void StringSegment::FetchBaseData(TransientScanState &state, data_ptr_t baseptr, index_t vector_index, Vector &result, index_t count) {
@@ -162,22 +157,43 @@ void StringSegment::FetchBaseData(TransientScanState &state, data_ptr_t baseptr,
 	result.count = count;
 }
 
-string_t StringSegment::FetchStringFromDict(TransientScanState &state, data_ptr_t baseptr, int32_t dict_offset) {
+string_location_t StringSegment::FetchStringLocation(data_ptr_t baseptr, int32_t dict_offset) {
 	if (dict_offset == 0) {
-		// no offset provided: return nullptr
-		return string_t(nullptr, 0);
+		return string_location_t(INVALID_BLOCK, 0);
 	}
 	// look up result in dictionary
 	auto dict_end = baseptr + BLOCK_SIZE;
 	auto dict_pos = dict_end - dict_offset;
 	auto string_length = *((uint16_t*) dict_pos);
+	string_location_t result;
 	if (string_length == BIG_STRING_MARKER) {
-		// big string marker, read the block id and offset
-		block_id_t block;
-		int32_t offset;
-		ReadStringMarker(dict_pos, block, offset);
-		return ReadString(state, block, offset);
+		ReadStringMarker(dict_pos, result.block_id, result.offset);
 	} else {
+		result.block_id = INVALID_BLOCK;
+		result.offset = dict_offset;
+	}
+	return result;
+}
+
+string_t StringSegment::FetchStringFromDict(TransientScanState &state, data_ptr_t baseptr, int32_t dict_offset) {
+	// fetch base data
+	string_location_t location = FetchStringLocation(baseptr, dict_offset);
+	return FetchString(state, baseptr, location);
+}
+
+string_t StringSegment::FetchString(TransientScanState &state, data_ptr_t baseptr, string_location_t location) {
+	if (location.block_id != INVALID_BLOCK) {
+		// big string marker: read from separate block
+		return ReadString(state, location.block_id, location.offset);
+	} else {
+		if (location.offset == 0) {
+			return string_t(nullptr, 0);
+		}
+		// normal string: read string from this block
+		auto dict_end = baseptr + BLOCK_SIZE;
+		auto dict_pos = dict_end - location.offset;
+		auto string_length = *((uint16_t*) dict_pos);
+
 		string_t result;
 		result.length = string_length;
 		result.data = (char*) (dict_pos + sizeof(uint16_t));
@@ -393,19 +409,10 @@ void StringSegment::Update(SegmentStatistics &stats, Transaction &transaction, V
 		string_updates = unique_ptr<string_update_info_t[]>(new string_update_info_t[max_vector_count]);
 	}
 
-	// move the original strings into the undo buffer
-	// first fetch the strings
-	Vector original_data;
-	original_data.Initialize(TypeId::VARCHAR);
-
-	FetchBaseData(ids, vector_index, vector_offset, update.count, original_data);
-	assert(update.count == original_data.count);
-
-	// now copy them into the undo buffer
-	auto strings = (char**) original_data.data;
-	for(index_t i = 0; i < original_data.count; i++) {
-		strings[i] = (char*) transaction.PushString(string_t(strings[i], strlen(strings[i])));
-	}
+	// fetch the original string locations
+	string_location_t string_locations[STANDARD_VECTOR_SIZE];
+	nullmask_t original_nullmask;
+	FetchStringLocations(ids, vector_index, vector_offset, update.count, string_locations, original_nullmask);
 
 	string_update_info_t new_update_info;
 	// next up: create the updates
@@ -420,11 +427,11 @@ void StringSegment::Update(SegmentStatistics &stats, Transaction &transaction, V
 	// create the update node
 	if (!node) {
 		// create a new node in the undo buffer for this update
-		node = CreateUpdateInfo(transaction, ids, update.count, vector_index, vector_offset, sizeof(char*));
+		node = CreateUpdateInfo(transaction, ids, update.count, vector_index, vector_offset, sizeof(string_location_t));
 
-		// copy the nullmask and data into the UpdateInfo
-		node->nullmask = original_data.nullmask;
-		memcpy(node->tuple_data, strings, sizeof(char*) * original_data.count);
+		// copy the string location data into the undo buffer
+		node->nullmask = original_nullmask;
+		memcpy(node->tuple_data, string_locations, sizeof(string_location_t) * update.count);
 	} else {
 		throw Exception("FIXME: merge update");
 	}
@@ -433,5 +440,24 @@ void StringSegment::Update(SegmentStatistics &stats, Transaction &transaction, V
 }
 
 void StringSegment::RollbackUpdate(UpdateInfo *info) {
-	throw Exception("FIXME");
+	auto lock_handle = lock.GetExclusiveLock();
+
+	if (string_updates[info->vector_index]->count == info->N) {
+#ifdef DEBUG
+		for(index_t i = 0; i < info->N; i++) {
+			assert(info->tuples[i] == string_updates[info->vector_index]->ids[i]);
+		}
+#endif
+		string_updates[info->vector_index].reset();
+	} else {
+		throw Exception("FIXME: only remove part of the update");
+	}
+
+	// auto &update_info = *string_updates[info->vector_index];
+	// auto string_locations = (string_location_t*) info->tuple_data;
+	// for(index_t i = 0; i < info->N; i++) {
+	// 	update_info.block_ids[info->tuples[i]] = string_locations[i].block_id;
+	// 	update_info.offsets[info->tuples[i]] = string_locations[i].offset;
+	// }
+	CleanupUpdate(info);
 }

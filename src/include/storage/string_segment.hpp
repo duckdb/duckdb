@@ -19,6 +19,14 @@ struct StringBlock {
 	unique_ptr<StringBlock> next;
 };
 
+struct string_location_t {
+	string_location_t(block_id_t block_id, int32_t offset) : block_id(block_id), offset(offset) {}
+	string_location_t(){}
+
+	block_id_t block_id;
+	int32_t offset;
+};
+
 struct StringUpdateInfo {
 	sel_t count;
 	nullmask_t nullmask;
@@ -62,13 +70,16 @@ protected:
 private:
 	void AppendData(SegmentStatistics &stats, data_ptr_t target, data_ptr_t end, index_t target_offset, Vector &source, index_t offset, index_t count);
 
-	void FetchBaseData(row_t *ids, index_t vector_index, index_t vector_offset, index_t count, Vector &result);
-	//! Fetch all the strings of a vector from the base table and place them in the result vector
+	//! Fetch all the strings of a vector from the base table and place their locations in the result vector
 	void FetchBaseData(TransientScanState &state, data_ptr_t base_data, index_t vector_index, Vector &result, index_t count);
-	//! Fetch subset of strings of a vector from the base table and place them in the result vector
-	void FetchBaseData(TransientScanState &state, data_ptr_t baseptr, row_t *ids, index_t vector_index, index_t vector_offset, Vector &result, index_t count);
+
+	string_location_t FetchStringLocation(data_ptr_t baseptr, int32_t dict_offset);
+	string_t FetchString(TransientScanState &state, data_ptr_t baseptr, string_location_t location);
 	//! Fetch a single string from the dictionary and returns it, potentially pins a buffer manager page and adds it to the set of pinned pages
 	string_t FetchStringFromDict(TransientScanState &state, data_ptr_t baseptr, int32_t dict_offset);
+
+	//! Fetch string locations for a subset of the strings
+	void FetchStringLocations(row_t *ids, index_t vector_index, index_t vector_offset, index_t count, string_location_t result[], nullmask_t &result_nullmask);
 
 	void WriteString(string_t string, block_id_t &result_block, int32_t &result_offset);
 	string_t ReadString(TransientScanState &state, block_id_t block, int32_t offset);
