@@ -84,13 +84,8 @@ void StringSegment::Scan(Transaction &transaction, TransientScanState &state, in
 	}
 }
 
-void StringSegment::FetchStringLocations(row_t *ids, index_t vector_index, index_t vector_offset, index_t count, string_location_t result[], nullmask_t &result_nullmask) {
-	// first pin the base block
-	auto handle = manager.PinBuffer(block_id);
-
-	auto baseptr = handle->buffer->data.get();
+void StringSegment::FetchStringLocations(data_ptr_t baseptr, row_t *ids, index_t vector_index, index_t vector_offset, index_t count, string_location_t result[]) {
 	auto base = baseptr + vector_index * vector_size;
-	auto &base_nullmask = *((nullmask_t*) base);
 	auto base_data = (int32_t *) (base + sizeof(nullmask_t));
 
 	if (string_updates && string_updates[vector_index]) {
@@ -106,12 +101,10 @@ void StringSegment::FetchStringLocations(row_t *ids, index_t vector_index, index
 				// use update info
 				result[i].block_id = info.block_ids[update_idx];
 				result[i].offset = info.offsets[update_idx];
-				result_nullmask[id] = info.nullmask[info.ids[update_idx]];
 				update_idx++;
 			} else {
 				// use base table info
 				result[i] = FetchStringLocation(baseptr, base_data[id]);
-				result_nullmask[id] = base_nullmask[id];
 			}
 		}
 	} else {
@@ -119,7 +112,6 @@ void StringSegment::FetchStringLocations(row_t *ids, index_t vector_index, index
 		for(index_t i = 0; i < count; i++) {
 			auto id = ids[i] - vector_offset;
 			result[i] = FetchStringLocation(baseptr, base_data[id]);
-			result_nullmask[id] = base_nullmask[id];
 		}
 	}
 }
@@ -139,12 +131,10 @@ void StringSegment::FetchBaseData(TransientScanState &state, data_ptr_t baseptr,
 			if (update_idx < info.count && info.ids[update_idx] == i) {
 				// use update info
 				result_data[i] = ReadString(state, info.block_ids[update_idx], info.offsets[update_idx]).data;
-				result.nullmask[i] = info.nullmask[info.ids[update_idx]];
 				update_idx++;
 			} else {
 				// use base table info
 				result_data[i] = FetchStringFromDict(state, baseptr, base_data[i]).data;
-				result.nullmask[i] = base_nullmask[i];
 			}
 		}
 	} else {
@@ -152,8 +142,8 @@ void StringSegment::FetchBaseData(TransientScanState &state, data_ptr_t baseptr,
 		for(index_t i = 0; i < count; i++) {
 			result_data[i] = FetchStringFromDict(state, baseptr, base_data[i]).data;
 		}
-		result.nullmask = base_nullmask;
 	}
+	result.nullmask = base_nullmask;
 	result.count = count;
 }
 
@@ -383,7 +373,6 @@ string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats,
 	auto strings = (char**) update.data;
 	for(index_t i = 0; i < update.count; i++) {
 		info->ids[i] = ids[i] - vector_offset;
-		info->nullmask[info->ids[i]] = update.nullmask[i];
 		// copy the string into the block
 		if (!update.nullmask[i]) {
 			WriteString(string_t(strings[i], strlen(strings[i]) + 1), info->block_ids[i], info->offsets[i]);
@@ -399,11 +388,9 @@ string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, 
 	auto info = make_unique<StringUpdateInfo>();
 
 	// perform a merge between the new and old indexes
-	info->nullmask = update_info.nullmask;
 	auto strings = (char**) update.data;
 	auto pick_new = [&](index_t id, index_t idx, index_t count) {
 		info->ids[count] = id;
-		info->nullmask[id] = update.nullmask[idx];
 		if (!update.nullmask[idx]) {
 			WriteString(string_t(strings[idx], strlen(strings[idx]) + 1), info->block_ids[count], info->offsets[count]);
 		} else {
@@ -470,10 +457,16 @@ void StringSegment::Update(SegmentStatistics &stats, Transaction &transaction, V
 		string_updates = unique_ptr<string_update_info_t[]>(new string_update_info_t[max_vector_count]);
 	}
 
-	// fetch the original string locations
+	// first pin the base block
+	auto handle = manager.PinBuffer(block_id);
+	auto baseptr = handle->buffer->data.get();
+	auto base = baseptr + vector_index * vector_size;
+	auto &base_nullmask = *((nullmask_t*) base);
+
+	// fetch the original string locations and copy the original nullmask
 	string_location_t string_locations[STANDARD_VECTOR_SIZE];
-	nullmask_t original_nullmask;
-	FetchStringLocations(ids, vector_index, vector_offset, update.count, string_locations, original_nullmask);
+	nullmask_t original_nullmask = base_nullmask;
+	FetchStringLocations(baseptr, ids, vector_index, vector_offset, update.count, string_locations);
 
 	string_update_info_t new_update_info;
 	// next up: create the updates
@@ -483,6 +476,11 @@ void StringSegment::Update(SegmentStatistics &stats, Transaction &transaction, V
 	} else {
 		// string updates already exist, merge the string updates together
 		new_update_info = MergeStringUpdate(stats, update, ids, vector_offset, *string_updates[vector_index]);
+	}
+
+	// now update the original nullmask
+	for(index_t i = 0; i < update.count; i++) {
+		base_nullmask[ids[i] - vector_offset] = update.nullmask[i];
 	}
 
 	// now that the original strings are placed in the undo buffer and the updated strings are placed in the base table
@@ -505,21 +503,49 @@ void StringSegment::Update(SegmentStatistics &stats, Transaction &transaction, V
 void StringSegment::RollbackUpdate(UpdateInfo *info) {
 	auto lock_handle = lock.GetExclusiveLock();
 
-	if (string_updates[info->vector_index]->count == info->N) {
-#ifdef DEBUG
-		for(index_t i = 0; i < info->N; i++) {
-			assert(info->tuples[i] == string_updates[info->vector_index]->ids[i]);
+	index_t new_count = 0;
+	auto &update_info = *string_updates[info->vector_index];
+	auto string_locations = (string_location_t*) info->tuple_data;
+
+	// put the previous NULL values back
+	auto handle = manager.PinBuffer(block_id);
+	auto baseptr = handle->buffer->data.get();
+	auto base = baseptr + info->vector_index * vector_size;
+	auto &base_nullmask = *((nullmask_t*) base);
+	for(index_t i = 0; i < info->N; i++) {
+		base_nullmask[info->tuples[i]] = info->nullmask[info->tuples[i]];
+	}
+
+	// now put the original values back into the update info
+	index_t old_idx = 0;
+	for(index_t i = 0; i < update_info.count; i++) {
+		if (old_idx >= info->N || update_info.ids[i] != info->tuples[old_idx]) {
+			assert(old_idx >= info->N || update_info.ids[i] < info->tuples[old_idx]);
+			// this entry is not rolled back: insert entry directly
+			update_info.ids[new_count] = update_info.ids[i];
+			update_info.block_ids[new_count] = update_info.block_ids[i];
+			update_info.offsets[new_count] = update_info.offsets[i];
+			new_count++;
+		} else {
+			// this entry is being rolled back
+			auto &old_location = string_locations[old_idx];
+			if (old_location.block_id != INVALID_BLOCK) {
+				// not rolled back to base table: insert entry again
+				update_info.ids[new_count] = update_info.ids[i];
+				update_info.block_ids[new_count] = old_location.block_id;
+				update_info.offsets[new_count] = old_location.offset;
+				new_count++;
+			}
+			old_idx++;
 		}
-#endif
+	}
+
+	if (new_count == 0) {
+		// all updates are rolled back: delete the string update vector
 		string_updates[info->vector_index].reset();
 	} else {
-		throw Exception("FIXME: only remove part of the update");
+		// set the count of the new string update vector
+		update_info.count = new_count;
 	}
-	// auto &update_info = *string_updates[info->vector_index];
-	// auto string_locations = (string_location_t*) info->tuple_data;
-	// for(index_t i = 0; i < info->N; i++) {
-	// 	update_info.block_ids[info->tuples[i]] = string_locations[i].block_id;
-	// 	update_info.offsets[info->tuples[i]] = string_locations[i].offset;
-	// }
 	CleanupUpdate(info);
 }

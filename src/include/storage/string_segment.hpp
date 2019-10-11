@@ -29,7 +29,6 @@ struct string_location_t {
 
 struct StringUpdateInfo {
 	sel_t count;
-	nullmask_t nullmask;
 	sel_t ids[STANDARD_VECTOR_SIZE];
 	block_id_t block_ids[STANDARD_VECTOR_SIZE];
 	int32_t offsets[STANDARD_VECTOR_SIZE];
@@ -79,7 +78,7 @@ private:
 	string_t FetchStringFromDict(TransientScanState &state, data_ptr_t baseptr, int32_t dict_offset);
 
 	//! Fetch string locations for a subset of the strings
-	void FetchStringLocations(row_t *ids, index_t vector_index, index_t vector_offset, index_t count, string_location_t result[], nullmask_t &result_nullmask);
+	void FetchStringLocations(data_ptr_t baseptr, row_t *ids, index_t vector_index, index_t vector_offset, index_t count, string_location_t result[]);
 
 	void WriteString(string_t string, block_id_t &result_block, int32_t &result_offset);
 	string_t ReadString(TransientScanState &state, block_id_t block, int32_t offset);

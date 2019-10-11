@@ -152,4 +152,84 @@ TEST_CASE("Test rollback of string update", "[update]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"hello", "world"}));
 	result = con2.Query("SELECT * FROM test ORDER BY a");
 	REQUIRE(CHECK_COLUMN(result, 0, {"hello", "world"}));
+
+	// rollback of a value that is updated twice
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a='test' WHERE a='hello';"));
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a='test2' WHERE a='test';"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"test2", "world"}));
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"test", "world"}));
+
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK;"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"test", "world"}));
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"test", "world"}));
+
+	// test rollback of string update in different part
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a='test2' WHERE a='world';"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"test", "test2"}));
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"test", "world"}));
+
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK;"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"test", "world"}));
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"test", "world"}));
+}
+
+TEST_CASE("Test rollback of string update with NULL", "[update]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db);
+
+	// create a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('test'), ('world')"));
+
+	// test rollback of value -> NULL update
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=NULL WHERE a='world';"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "test"}));
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"test", "world"}));
+
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK;"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"test", "world"}));
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"test", "world"}));
+
+	// test rollback of NULL -> value update
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=NULL WHERE a='world';"));
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "test"}));
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a='world' WHERE a IS NULL;"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"test", "world"}));
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "test"}));
+
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK;"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "test"}));
+	result = con2.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "test"}));
 }
