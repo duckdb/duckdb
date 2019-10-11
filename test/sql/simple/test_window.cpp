@@ -4,6 +4,25 @@
 using namespace duckdb;
 using namespace std;
 
+TEST_CASE("Most scalar window functions", "[window]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// test scalar window functions
+	result = con.Query("SELECT row_number() OVER ()");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result = con.Query("SELECT avg(42) OVER ()");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	// nested window functions are not allowed
+	REQUIRE_FAIL(con.Query("SELECT avg(row_number() over ()) over ()"));
+	REQUIRE_FAIL(con.Query("SELECT avg(42) over (partition by row_number() over ())"));
+	REQUIRE_FAIL(con.Query("SELECT avg(42) over (order by row_number() over ())"));
+}
+
 TEST_CASE("Most basic window function", "[window]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

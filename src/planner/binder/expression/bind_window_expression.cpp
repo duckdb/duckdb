@@ -40,10 +40,10 @@ static unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression> &expr) 
 
 BindResult SelectBinder::BindWindow(WindowExpression &window, index_t depth) {
 	if (inside_window) {
-		return BindResult("window function calls cannot be nested");
+		throw BinderException("window function calls cannot be nested");
 	}
 	if (depth > 0) {
-		return BindResult("correlated columns in window functions not supported");
+		throw BinderException("correlated columns in window functions not supported");
 	}
 	// bind inside the children of the window function
 	// we set the inside_window flag to true to prevent binding nested window functions
@@ -81,7 +81,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, index_t depth) {
 		//  Look up the aggregate function in the catalog
 		auto func = (AggregateFunctionCatalogEntry *) context.catalog.GetFunction(context.ActiveTransaction(), window.schema, window.function_name);
 		if (func->type != CatalogType::AGGREGATE_FUNCTION) {
-		    return BindResult("Unknown windowed aggregate");
+		    throw BinderException("Unknown windowed aggregate");
 		}
 		// bind the aggregate
 		auto best_function = Function::BindFunction(func->name, func->functions, types);
