@@ -39,7 +39,7 @@ public:
 
 	string ToString() const override;
 
-	bool Equals(const BaseExpression *other) const override;
+	static bool Equals(const SubqueryExpression *a, const SubqueryExpression *b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 

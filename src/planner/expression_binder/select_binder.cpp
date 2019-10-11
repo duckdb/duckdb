@@ -49,6 +49,12 @@ index_t SelectBinder::TryBindGroup(ParsedExpression &expr, index_t depth) {
 	if (entry != info.map.end()) {
 		return entry->second;
 	}
+#ifdef DEBUG
+	for(auto entry : info.map) {
+		assert(!entry.first->Equals(&expr));
+		assert(!expr.Equals(entry.first));
+	}
+#endif
 	return INVALID_INDEX;
 }
 

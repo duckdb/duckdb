@@ -19,10 +19,10 @@ bool QueryNode::Equals(const QueryNode *other) const {
 	if (select_distinct != other->select_distinct) {
 		return false;
 	}
-	if (!ParsedExpression::Equals(limit.get(), other->limit.get())) {
+	if (!BaseExpression::Equals(limit.get(), other->limit.get())) {
 		return false;
 	}
-	if (!ParsedExpression::Equals(offset.get(), other->offset.get())) {
+	if (!BaseExpression::Equals(offset.get(), other->offset.get())) {
 		return false;
 	}
 	if (orders.size() != other->orders.size()) {

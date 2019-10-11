@@ -10,6 +10,7 @@
 
 #include "common/exception.hpp"
 #include "parser/parsed_expression.hpp"
+#include "parser/expression/bound_expression.hpp"
 #include "parser/tokens.hpp"
 #include "planner/expression.hpp"
 
@@ -36,29 +37,6 @@ struct BindResult {
 	unique_ptr<Expression> expression;
 	SQLType sql_type;
 	string error;
-};
-
-//! BoundExpression is an intermediate dummy class used by the binder. It is a ParsedExpression but holds an Expression.
-//! It represents a successfully bound expression. It is used in the Binder to prevent re-binding of already bound parts
-//! when dealing with subqueries.
-class BoundExpression : public ParsedExpression {
-public:
-	BoundExpression(unique_ptr<Expression> expr, SQLType sql_type)
-	    : ParsedExpression(ExpressionType::INVALID, ExpressionClass::BOUND_EXPRESSION), expr(move(expr)),
-	      sql_type(sql_type) {
-	}
-
-	unique_ptr<Expression> expr;
-	SQLType sql_type;
-
-public:
-	string ToString() const override {
-		return expr->ToString();
-	}
-
-	unique_ptr<ParsedExpression> Copy() const override {
-		throw SerializationException("Cannot copy or serialize bound expression");
-	}
 };
 
 class ExpressionBinder {

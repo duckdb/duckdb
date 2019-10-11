@@ -52,7 +52,7 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 		return false;
 	}
 	// WHERE
-	if (!ParsedExpression::Equals(where_clause.get(), other->where_clause.get())) {
+	if (!BaseExpression::Equals(where_clause.get(), other->where_clause.get())) {
 		return false;
 	}
 	// GROUP BY
@@ -63,7 +63,7 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 	}
 
 	// HAVING
-	if (!ParsedExpression::Equals(having.get(), other->having.get())) {
+	if (!BaseExpression::Equals(having.get(), other->having.get())) {
 		return false;
 	}
 	return true;
