@@ -68,7 +68,16 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CopyStatement &stmt) {
 				if (entry == table->name_map.end()) {
 					throw BinderException("Column %s not found in table %s", column.c_str(), table->name.c_str());
 				}
-				stmt.info->force_not_null[entry->second] = true;
+				if (bound_insert.column_index_map.size() > 0) {
+					auto it = find(bound_insert.column_index_map.begin(), bound_insert.column_index_map.end(), entry->second);
+					if (it != bound_insert.column_index_map.end()) {
+						stmt.info->force_not_null[entry->second] = true;
+					} else {
+						throw BinderException("Column %s in FORCE_NOT_NULL is not used in COPY", column.c_str());
+					}
+				} else {
+					stmt.info->force_not_null[entry->second] = true;
+				}
 			}
 		}
 	}

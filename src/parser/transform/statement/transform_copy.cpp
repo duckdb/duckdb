@@ -14,10 +14,7 @@ using namespace std;
 
 static ExternalFileFormat StringToExternalFileFormat(const string &str) {
 	auto upper = StringUtil::Upper(str);
-	if (upper == "CSV") {
-		return ExternalFileFormat::CSV;
-	}
-	throw ConversionException("No ExternalFileFormat for input '%s'", upper.c_str());
+	return ExternalFileFormat::CSV;
 }
 
 unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
@@ -166,19 +163,19 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 					throw Exception("The FORCE_QUOTE option is only for COPY ... TO ...");
 				}
 
-				auto *quote_val = def_elem->arg;
-				if (!quote_val || (quote_val->type != T_A_Star && quote_val->type != T_List)) {
+				auto *force_quote_val = def_elem->arg;
+				if (!force_quote_val || (force_quote_val->type != T_A_Star && force_quote_val->type != T_List)) {
 					throw ParserException("Unsupported parameter type for FORCE_QUOTE: expected e.g. FORCE_QUOTE *");
 				}
 
 				// * option (all columns)
-				if (quote_val->type == T_A_Star) {
+				if (force_quote_val->type == T_A_Star) {
 					info.quote_all = true;
 				}
 
 				// list of columns
-				if (quote_val->type == T_List) {
-					auto column_list = (postgres::List*)(quote_val);
+				if (force_quote_val->type == T_List) {
+					auto column_list = (postgres::List*)(force_quote_val);
 					for (ListCell *c = column_list->head; c != NULL; c = lnext(c)) {
 						ResTarget *target = (ResTarget *)(c->data.ptr_value);
 						info.force_quote_list.push_back(string(target->name));
@@ -194,7 +191,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 				}
 
 				auto *force_not_null_val = def_elem->arg;
-				if (!force_not_null_val->type || force_not_null_val->type != T_List) {
+				if (!force_not_null_val || force_not_null_val->type != T_List) {
 					throw ParserException("Unsupported parameter type for FORCE_NOT_NULL: expected e.g. FORCE_NOT_NULL *");
 				}
 

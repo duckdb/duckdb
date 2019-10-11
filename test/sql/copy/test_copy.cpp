@@ -118,6 +118,12 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE_FAIL(con.Query("COPY test4 (a,c) FROM '" + fs.JoinPath(csv_path, "test4.csv") + "' (QUOTE);"));
 	// no format string
 	REQUIRE_FAIL(con.Query("COPY test4 (a,c) FROM '" + fs.JoinPath(csv_path, "test4.csv") + "' (FORMAT);"));
+	// encoding must not be empty and must have the correct parameter type and value
+	REQUIRE_FAIL(con.Query("COPY test4 (a,c) FROM '" + fs.JoinPath(csv_path, "test4.csv") + "' (ENCODING);"));
+	REQUIRE_FAIL(con.Query("COPY test4 (a,c) FROM '" + fs.JoinPath(csv_path, "test4.csv") + "' (ENCODING 42);"));
+	REQUIRE_FAIL(con.Query("COPY test4 (a,c) FROM '" + fs.JoinPath(csv_path, "test4.csv") + "' (ENCODING 'utf-42');"));
+	// don't allow for non-existant copy options
+	REQUIRE_FAIL(con.Query("COPY test4 (a,c) FROM '" + fs.JoinPath(csv_path, "test4.csv") + "' (MAGIC '42');"));
 
 	// use a different delimiter
 	auto pipe_csv = fs.JoinPath(csv_path, "test_pipe.csv");
@@ -132,6 +138,12 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER, c VARCHAR(10));"));
 	result = con.Query("COPY test FROM '" + pipe_csv + "' (SEPARATOR '|');");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+
+	// throw exception if a line contains too many values
+	ofstream csv_too_many_values_file(fs.JoinPath(csv_path, "too_many_values.csv"));
+	csv_too_many_values_file << "1,2,3,4" << endl;
+	csv_too_many_values_file.close();
+	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "too_many_values.csv") + "';"));
 
 	// test default null string
 	auto null_csv = fs.JoinPath(csv_path, "null.csv");
@@ -296,6 +308,14 @@ TEST_CASE("Test force_quote and force_not_null", "[copy]") {
 	}
 	from_csv_file.close();
 
+	// generate another CSV file
+	ofstream from_csv_file_2(fs.JoinPath(csv_path, "test_2.csv"));
+	from_csv_file_2 << ",test,tea" << endl;
+	for (int i = 0; i < 2; i++) {
+		from_csv_file_2 << i << ",,test" << endl;
+	}
+	from_csv_file_2.close();
+
 	// create a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10));"));
 
@@ -359,6 +379,11 @@ TEST_CASE("Test force_quote and force_not_null", "[copy]") {
 	REQUIRE_FAIL(con.Query("COPY test (col_b, col_a) TO '" + fs.JoinPath(csv_path, "test_reorder.csv") + "' (FORCE_QUOTE (col_c, col_b));"));
 	// test using a column in FORCE_QUOTE that is not a column of the table
 	REQUIRE_FAIL(con.Query("COPY test TO '" + fs.JoinPath(csv_path, "test_reorder.csv") + "' (FORCE_QUOTE (col_c, col_d));"));
+	// FORCE_QUOTE is only supported in COPY ... TO ...
+	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test_reorder.csv") + "' (FORCE_QUOTE (col_c, col_d));"));
+	// FORCE_QUOTE must not be empty and must have the correct parameter type
+	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test_reorder.csv") + "' (FORCE_QUOTE);"));
+	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test_reorder.csv") + "' (FORCE_QUOTE 42);"));
 
 	REQUIRE_NO_FAIL(con.Query("DELETE FROM test;"));
 
@@ -371,20 +396,29 @@ TEST_CASE("Test force_quote and force_not_null", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 8}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"", "", "test"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value(), "tea"}));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test;"));
+
+	// test if null value is correctly converted into string if explicit columns are used
+	result = con.Query("COPY test (col_a, col_b, col_c) FROM '" + fs.JoinPath(csv_path, "test_star.csv") + "' (FORCE_NOT_NULL (col_b), NULL 'test');");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	result = con.Query("SELECT * FROM test ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 8}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"", "", "test"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value(), "tea"}));
+
+	// FORCE_NOT_NULL is only supported in COPY ... FROM ...
+	REQUIRE_FAIL(result = con.Query("COPY test TO '" + fs.JoinPath(csv_path, "test_star.csv") + "' (FORCE_NOT_NULL (col_b), NULL 'test');"));
+	// FORCE_NOT_NULL must not be empty and must have the correct parameter type
+	REQUIRE_FAIL(result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test_star.csv") + "' (FORCE_NOT_NULL, NULL 'test');"));
+	REQUIRE_FAIL(result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test_star.csv") + "' (FORCE_NOT_NULL 42, NULL 'test');"));
+	// test using a column in FORCE_NOT_NULL that is not set as output, but that is a column of the table
+	REQUIRE_FAIL(con.Query("COPY test (col_b, col_a) FROM '" + fs.JoinPath(csv_path, "test_reorder.csv") + "' (FORCE_NOT_NULL (col_c, col_b));"));
+	// test using a column in FORCE_NOT_NULL that is not a column of the table
+	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test_reorder.csv") + "' (FORCE_NOT_NULL (col_c, col_d));"));
 
 	// FORCE_NOT_NULL fails on integer columns
-
-	/*
-	// generate CSV file
-	ofstream from_csv_file_2(fs.JoinPath(csv_path, "test_2.csv"));
-	from_csv_file_2 << ",test,tea" << endl;
-	for (int i = 0; i < 2; i++) {
-		from_csv_file_2 << i << ",,test" << endl;
-	}
-	from_csv_file_2.close();
+	// FIXME: only working if test cases are run individually, not working if whole [copy] test cases are run at once
 	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test_2.csv") + "' (FORCE_NOT_NULL (col_a));"));
-	TestDeleteFile(fs.JoinPath(csv_path, "test_2.csv"));
-	*/
 }
 
 TEST_CASE("Test copy statement with unicode delimiter/quote/escape", "[copy]") {
@@ -422,10 +456,20 @@ TEST_CASE("Test copy statement with unicode delimiter/quote/escape", "[copy]") {
 	}
 	from_csv_file3.close();
 
+	// generate CSV file with unterminated quotes
+	ofstream from_csv_file4(fs.JoinPath(csv_path, "unterminated_quotes.csv"));
+	for (int i = 0; i < 3; i++) {
+		from_csv_file4 << i << ",duck,\"duck" << endl;
+	}
+	from_csv_file4.close();
+
 	// create three tables for testing
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_unicode_1 (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10));"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_unicode_2 (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10));"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_unicode_3 (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10));"));
+
+	// throw error if unterminated quotes are detected
+	REQUIRE_FAIL(con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "unterminated_quotes.csv") + "';"));
 
 	// test COPY ... FROM ...
 
@@ -457,6 +501,10 @@ TEST_CASE("Test copy statement with unicode delimiter/quote/escape", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {"du'ck", "du'ck", "du'ck"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"''du,ck", "''du,ck", "''du,ck"}));
 	REQUIRE(CHECK_COLUMN(result, 3, {"duck", "duck", "duck"}));
+
+	// quote and escape must not be empty
+	REQUIRE_FAIL(con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (DELIMITER '🦆', QUOTE '');"));
+	REQUIRE_FAIL(con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (DELIMITER '🦆', ESCAPE '');"));
 
 	// test same string for delimiter and quote
 	REQUIRE_FAIL(con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (DELIMITER '🦆', QUOTE '🦆');"));
