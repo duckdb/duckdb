@@ -319,7 +319,7 @@ void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column,
 
 	// test against null string
 	str_val[length] = '\0';
-	if (info.null_str == str_val) {
+	if (info.null_str == str_val && !info.force_not_null[column]) {
 		parse_chunk.data[column].nullmask[row_entry] = true;
 	} else {
 		// remove escape(s)

@@ -280,6 +280,113 @@ TEST_CASE("Test NULL option of copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {Value(), Value(), Value()}));
 }
 
+TEST_CASE("Test force_quote and force_not_null", "[copy]") {
+
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+
+	// generate CSV file with default delimiter
+	ofstream from_csv_file(fs.JoinPath(csv_path, "test.csv"));
+	from_csv_file << 8 << ",test,tea" << endl;
+	for (int i = 0; i < 2; i++) {
+		from_csv_file << i << ",,test" << endl;
+	}
+	from_csv_file.close();
+
+	// create a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10));"));
+
+	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+	// test FORCE_QUOTE *
+	result = con.Query("COPY test TO '" + fs.JoinPath(csv_path, "test_star.csv") + "' (FORCE_QUOTE *);");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+	vector<string> lines;
+	string line;
+	ifstream test_star_file (fs.JoinPath(csv_path, "test_star.csv"));
+	if (test_star_file.is_open()) {
+		while (getline(test_star_file,line)) {
+			lines.push_back(line);
+		}
+		test_star_file.close();
+	} else {
+		throw Exception("Unable to open file: " + fs.JoinPath(csv_path, "test_star.csv"));
+	};
+	REQUIRE(lines[0] == "\"8\",\"test\",\"tea\"");
+	REQUIRE(lines[1] == "\"0\",,\"test\"");
+	REQUIRE(lines[2] == "\"1\",,\"test\"");
+
+	// test FORCE_QUOTE with specific columns and non-default quote character and non-default null character
+	result = con.Query("COPY test TO '" + fs.JoinPath(csv_path, "test_chosen_columns.csv") + "' (FORCE_QUOTE (col_a, col_c), QUOTE 't', NULL 'tea');");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+	ifstream test_columns_file (fs.JoinPath(csv_path, "test_chosen_columns.csv"));
+	if (test_columns_file.is_open()) {
+		while (getline(test_columns_file,line)) {
+			lines.push_back(line);
+		}
+		test_columns_file.close();
+	} else {
+		throw Exception("Unable to open file: " + fs.JoinPath(csv_path, "test_chosen_columns.csv"));
+	};
+	REQUIRE(lines[3] == "t8t,tttesttt,ttteat");
+	REQUIRE(lines[4] == "t0t,tea,tttesttt");
+	REQUIRE(lines[5] == "t1t,tea,tttesttt");
+
+	// test FORCE_QUOTE with reordered columns
+	result = con.Query("COPY test (col_b, col_c, col_a) TO '" + fs.JoinPath(csv_path, "test_reorder.csv") + "' (FORCE_QUOTE (col_c, col_b), NULL 'test');");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+	ifstream test_reorder_file (fs.JoinPath(csv_path, "test_reorder.csv"));
+	if (test_reorder_file.is_open()) {
+		while (getline(test_reorder_file,line)) {
+			lines.push_back(line);
+		}
+		test_reorder_file.close();
+	} else {
+		throw Exception("Unable to open file: " + fs.JoinPath(csv_path, "test_reorder.csv"));
+	};
+	REQUIRE(lines[6] == "\"test\",\"tea\",8");
+	REQUIRE(lines[7] == "test,\"test\",0");
+	REQUIRE(lines[8] == "test,\"test\",1");
+
+	// test using a column in FORCE_QUOTE that is not set as output, but that is a column of the table
+	REQUIRE_FAIL(con.Query("COPY test (col_b, col_a) TO '" + fs.JoinPath(csv_path, "test_reorder.csv") + "' (FORCE_QUOTE (col_c, col_b));"));
+	// test using a column in FORCE_QUOTE that is not a column of the table
+	REQUIRE_FAIL(con.Query("COPY test TO '" + fs.JoinPath(csv_path, "test_reorder.csv") + "' (FORCE_QUOTE (col_c, col_d));"));
+
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test;"));
+
+	// test FORCE_NOT_NULL
+
+	// test if null value is correctly converted into string
+	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test_star.csv") + "' (FORCE_NOT_NULL (col_b), NULL 'test');");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	result = con.Query("SELECT * FROM test ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 8}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"", "", "test"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value(), "tea"}));
+
+	// FORCE_NOT_NULL fails on integer columns
+
+	/*
+	// generate CSV file
+	ofstream from_csv_file_2(fs.JoinPath(csv_path, "test_2.csv"));
+	from_csv_file_2 << ",test,tea" << endl;
+	for (int i = 0; i < 2; i++) {
+		from_csv_file_2 << i << ",,test" << endl;
+	}
+	from_csv_file_2.close();
+	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test_2.csv") + "' (FORCE_NOT_NULL (col_a));"));
+	TestDeleteFile(fs.JoinPath(csv_path, "test_2.csv"));
+	*/
+}
+
 TEST_CASE("Test copy statement with unicode delimiter/quote/escape", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

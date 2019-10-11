@@ -55,7 +55,6 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 		if (info.is_from) {
 			// copy file into table
 			auto &table = *reinterpret_cast<BaseTableRef *>(ref.get());
-			// get table and schema
 			info.table = table.table_name;
 			info.schema = table.schema_name;
 		} else {
@@ -63,9 +62,8 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			auto statement = make_unique<SelectNode>();
 			statement->from_table = move(ref);
 			if (stmt->attlist) {
-				for (index_t i = 0; i < info.select_list.size(); i++) {
+				for (index_t i = 0; i < info.select_list.size(); i++)
 					statement->select_list.push_back(make_unique<ColumnRefExpression>(info.select_list[i]));
-				}
 			} else {
 				statement->select_list.push_back(make_unique<StarExpression>());
 			}

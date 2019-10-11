@@ -8,7 +8,7 @@ using namespace std;
 
 unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundCopyStatement &stmt) {
 	if (stmt.select_statement) {
-		// COPY from a query
+		// COPY TO a file
 		auto names = stmt.select_statement->names;
 		auto types = stmt.select_statement->types;
 
@@ -22,7 +22,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundCopyStatement 
 
 		return move(copy);
 	} else {
-		// COPY to a table
+		// COPY FROM a file
 		assert(!stmt.info->table.empty());
 		// first create a plan for the insert statement
 		auto insert = CreatePlan(*stmt.bound_insert);

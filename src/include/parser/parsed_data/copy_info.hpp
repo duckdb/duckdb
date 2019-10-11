@@ -44,8 +44,12 @@ struct CopyInfo {
 	bool quote_all;
 	//! Forces quoting to be used for all non-NULL values in each specified column
 	vector<string> force_quote_list;
+	//! True, if column with that index must be quoted
+	vector<bool> force_quote;
 	//! Null values will be read as zero-length strings in each specified column
 	vector<string> force_not_null_list;
+	//! True, if column with that index must skip null check
+	vector<bool> force_not_null;
 
 	CopyInfo()
 	    : schema(DEFAULT_SCHEMA), is_from(false), delimiter(","), quote("\""), escape(""), header(false),
