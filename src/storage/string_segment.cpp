@@ -375,7 +375,7 @@ void StringSegment::ReadStringMarker(data_ptr_t target, block_id_t &block_id, in
 }
 
 //===--------------------------------------------------------------------===//
-// Update
+// String Update
 //===--------------------------------------------------------------------===//
 string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, index_t vector_offset) {
 	auto info = make_unique<StringUpdateInfo>();
@@ -395,6 +395,76 @@ string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats,
 	return info;
 }
 
+string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, index_t vector_offset, StringUpdateInfo &update_info) {
+	auto info = make_unique<StringUpdateInfo>();
+
+	// perform a merge between the new and old indexes
+	info->nullmask = update_info.nullmask;
+	auto strings = (char**) update.data;
+	auto pick_new = [&](index_t id, index_t idx, index_t count) {
+		info->ids[count] = id;
+		info->nullmask[id] = update.nullmask[idx];
+		if (!update.nullmask[idx]) {
+			WriteString(string_t(strings[idx], strlen(strings[idx]) + 1), info->block_ids[count], info->offsets[count]);
+		} else {
+			info->block_ids[count] = INVALID_BLOCK;
+			info->offsets[count] = 0;
+		}
+
+	};
+	auto merge = [&](index_t id, index_t aidx, index_t bidx, index_t count) {
+		// merge: only pick new entry
+		pick_new(id, aidx, count);
+	};
+	auto pick_old = [&](index_t id, index_t bidx, index_t count) {
+		// pick old entry
+		info->ids[count] = id;
+		info->block_ids[count] = update_info.block_ids[bidx];
+		info->offsets[count] = update_info.offsets[bidx];
+	};
+
+	info->count = merge_loop(ids, update_info.ids, update.count, update_info.count, vector_offset, merge, pick_new, pick_old);
+	return info;
+}
+
+//===--------------------------------------------------------------------===//
+// Update Info
+//===--------------------------------------------------------------------===//
+void StringSegment::MergeUpdateInfo(UpdateInfo *node, Vector &update, row_t *ids, index_t vector_offset, string_location_t base_data[], nullmask_t base_nullmask) {
+	auto info_data = (string_location_t*) node->tuple_data;
+
+	// first we copy the old update info into a temporary structure
+	sel_t old_ids[STANDARD_VECTOR_SIZE];
+	string_location_t old_data[STANDARD_VECTOR_SIZE];
+
+	memcpy(old_ids, node->tuples, node->N * sizeof(sel_t));
+	memcpy(old_data, node->tuple_data, node->N * sizeof(string_location_t));
+
+	// now we perform a merge of the new ids with the old ids
+	auto merge = [&](index_t id, index_t aidx, index_t bidx, index_t count) {
+		// new_id and old_id are the same, insert the old data in the UpdateInfo
+		info_data[count] = old_data[bidx];
+		node->tuples[count] = id;
+	};
+	auto pick_new = [&](index_t id, index_t aidx, index_t count) {
+		// new_id comes before the old id, insert the base table data into the update info
+		info_data[count] = base_data[id];
+		node->nullmask[id] = base_nullmask[id];
+
+		node->tuples[count] = id;
+	};
+	auto pick_old = [&](index_t id, index_t bidx, index_t count) {
+		// old_id comes before new_id, insert the old data
+		info_data[count] = old_data[bidx];
+		node->tuples[count] = id;
+	};
+	// perform the merge
+	node->N = merge_loop(ids, old_ids, update.count, node->N, vector_offset, merge, pick_new, pick_old);
+}
+
+//===--------------------------------------------------------------------===//
+// Update
+//===--------------------------------------------------------------------===//
 void StringSegment::Update(SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) {
 	if (!string_updates) {
 		string_updates = unique_ptr<string_update_info_t[]>(new string_update_info_t[max_vector_count]);
@@ -411,7 +481,8 @@ void StringSegment::Update(SegmentStatistics &stats, Transaction &transaction, V
 		// no string updates yet, allocate a block and place the updates there
 		new_update_info = CreateStringUpdate(stats, update, ids, vector_offset);
 	} else {
-		throw Exception("FIXME: merge string update");
+		// string updates already exist, merge the string updates together
+		new_update_info = MergeStringUpdate(stats, update, ids, vector_offset, *string_updates[vector_index]);
 	}
 
 	// now that the original strings are placed in the undo buffer and the updated strings are placed in the base table
@@ -424,7 +495,8 @@ void StringSegment::Update(SegmentStatistics &stats, Transaction &transaction, V
 		node->nullmask = original_nullmask;
 		memcpy(node->tuple_data, string_locations, sizeof(string_location_t) * update.count);
 	} else {
-		throw Exception("FIXME: merge update");
+		// node in the update info already exists, merge the new updates in
+		MergeUpdateInfo(node, update, ids, vector_offset, string_locations, original_nullmask);
 	}
 	// finally move the string updates in place
 	string_updates[vector_index] = move(new_update_info);

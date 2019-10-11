@@ -52,4 +52,37 @@ private:
 	merge_update_function_t merge_update_function;
 };
 
+template<class F1, class F2, class F3>
+static index_t merge_loop(row_t a[], sel_t b[], index_t acount, index_t bcount, index_t aoffset, F1 merge, F2 pick_a, F3 pick_b) {
+	index_t aidx = 0, bidx = 0;
+	index_t count = 0;
+	while(aidx < acount && bidx < bcount) {
+		auto a_id = a[aidx] - aoffset;
+		auto b_id = b[bidx];
+		if (a_id == b_id) {
+			merge(a_id, aidx, bidx, count);
+			aidx++;
+			bidx++;
+			count++;
+		} else if (a_id < b_id) {
+			pick_a(a_id, aidx, count);
+			aidx++;
+			count++;
+		} else {
+			pick_b(b_id, bidx, count);
+			bidx++;
+			count++;
+		}
+	}
+	for(; aidx < acount; aidx++) {
+		pick_a(a[aidx] - aoffset, aidx, count);
+		count++;
+	}
+	for(; bidx < bcount; bidx++) {
+		pick_b(b[bidx], bidx, count);
+		count++;
+	}
+	return count;
+}
+
 }

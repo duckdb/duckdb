@@ -92,6 +92,9 @@ private:
 	void ExpandStringSegment(data_ptr_t baseptr);
 
 	string_update_info_t CreateStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, index_t vector_offset);
+	string_update_info_t MergeStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, index_t vector_offset, StringUpdateInfo &update_info);
+
+	void MergeUpdateInfo(UpdateInfo *node, Vector &update, row_t *ids, index_t vector_offset, string_location_t string_locations[], nullmask_t original_nullmask);
 private:
 	//! The max string size that is allowed within a block. Strings bigger than this will be labeled as a BIG STRING and offloaded to the overflow blocks.
 	static constexpr uint16_t STRING_BLOCK_LIMIT = 4096;

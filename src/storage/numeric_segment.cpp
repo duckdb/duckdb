@@ -178,7 +178,6 @@ void NumericSegment::Update(SegmentStatistics &stats, Transaction &transaction, 
 		update_function(stats, node, handle->buffer->data.get() + vector_index * vector_size, update);
 	} else {
 		// node already exists for this transaction, we need to merge the new updates with the existing updates
-		// first check if the updates entirely overlap
 		auto handle = manager.PinBuffer(block_id);
 
 		merge_update_function(stats, node, handle->buffer->data.get() + vector_index * vector_size, update, ids, vector_offset);
@@ -361,62 +360,34 @@ static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_p
 	memcpy(old_data, node->tuple_data, node->N * sizeof(T));
 
 	// now we perform a merge of the new ids with the old ids
-	index_t new_idx = 0, old_idx = 0;
-	index_t new_count = 0;
-	while(new_idx < update.count && old_idx < node->N) {
-		auto new_id = ids[new_idx] - vector_offset;
-		if (new_id == old_ids[old_idx]) {
-			// new_id and old_id are the same:
-			// insert the new data into the base table
-			base_nullmask[new_id] = update.nullmask[new_idx];
-			base_data[new_id] = update_data[new_idx];
-			// insert the old data in the UpdateInfo
-			info_data[new_count] = old_data[old_idx];
-			node->tuples[new_count] = new_id;
-
-			new_count++;
-			new_idx++;
-			old_idx++;
-		} else if (new_id < old_ids[old_idx]) {
-			// new_id comes before the old id
-			// insert the base table data into the update info
-			info_data[new_count] = base_data[new_id];
-			node->nullmask[new_id] = base_nullmask[new_id];
-
-			// and insert the update info into the base table
-			base_nullmask[new_id] = update.nullmask[new_idx];
-			base_data[new_id] = update_data[new_idx];
-
-			node->tuples[new_count] = new_id;
-
-			new_count++;
-			new_idx++;
-		} else {
-			// old_id comes before new_id, insert the old data
-			info_data[new_count] = old_data[old_idx];
-			node->tuples[new_count] = old_ids[old_idx];
-			new_count++;
-			old_idx++;
-		}
-	}
-	// finished merging, insert the remainder of either the old_idx or the new_idx (if any)
-	for(; new_idx < update.count; new_idx++, new_count++) {
-		auto new_id = ids[new_idx] - vector_offset;
+	auto merge = [&](index_t id, index_t aidx, index_t bidx, index_t count) {
+		// new_id and old_id are the same:
+		// insert the new data into the base table
+		base_nullmask[id] = update.nullmask[aidx];
+		base_data[id] = update_data[aidx];
+		// insert the old data in the UpdateInfo
+		info_data[count] = old_data[bidx];
+		node->tuples[count] = id;
+	};
+	auto pick_new = [&](index_t id, index_t aidx, index_t count) {
+		// new_id comes before the old id
 		// insert the base table data into the update info
-		info_data[new_count] = base_data[new_id];
-		node->nullmask[new_id] = base_nullmask[new_id];
+		info_data[count] = base_data[id];
+		node->nullmask[id] = base_nullmask[id];
 
 		// and insert the update info into the base table
-		base_nullmask[new_id] = update.nullmask[new_idx];
-		base_data[new_id] = update_data[new_idx];
+		base_nullmask[id] = update.nullmask[aidx];
+		base_data[id] = update_data[aidx];
 
-		node->tuples[new_count] = new_id;
-	}
-	for(; old_idx < node->N; old_idx++, new_count++) {
-		info_data[new_count] = old_data[old_idx];
-		node->tuples[new_count] = old_ids[old_idx];
-	}
-	node->N = new_count;
+		node->tuples[count] = id;
+	};
+	auto pick_old = [&](index_t id, index_t bidx, index_t count) {
+		// old_id comes before new_id, insert the old data
+		info_data[count] = old_data[bidx];
+		node->tuples[count] = id;
+	};
+	// perform the merge
+	node->N = merge_loop(ids, old_ids, update.count, node->N, vector_offset, merge, pick_new, pick_old);
 }
 
 static NumericSegment::merge_update_function_t GetMergeUpdateFunction(TypeId type) {

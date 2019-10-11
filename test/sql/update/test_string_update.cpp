@@ -102,6 +102,30 @@ TEST_CASE("Test repeated update of string in same segment", "[update]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"test", "test2"}));
 }
 
+TEST_CASE("Test repeated update of string in same transaction", "[update]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// create a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('hello'), ('world')"));
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
+
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a='test' WHERE a='hello';"));
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"test", "world"}));
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a='test2' WHERE a='world';"));
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"test", "test2"}));
+
+	REQUIRE_NO_FAIL(con.Query("COMMIT;"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"test", "test2"}));
+}
+
 TEST_CASE("Test rollback of string update", "[update]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
