@@ -949,4 +949,8 @@ TEST_CASE("Test correlated subquery with grouping columns", "[subquery]") {
 	REQUIRE_FAIL(con.Query("SELECT col1+1, col1+42 FROM another_T GROUP BY col1+1;"));
 	// this should also fail, col1 + 42 is not a grouping column
 	REQUIRE_FAIL(con.Query("SELECT (col1 + 1) IN (SELECT ColID + (col1 + 42) FROM tbl_ProductSales) FROM another_T GROUP BY (col1 + 1);"));
+
+	// having without GROUP BY in subquery
+	result = con.Query("SELECT col5 = ALL (SELECT 1 FROM tbl_ProductSales HAVING MIN(col8) IS NULL) FROM another_T GROUP BY col1, col2, col5, col8;");
+	REQUIRE(CHECK_COLUMN(result, 0, {true, true, true, true}));
 }
