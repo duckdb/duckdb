@@ -35,7 +35,7 @@ BufferedCSVReader::BufferedCSVReader(CopyInfo &info, vector<SQLType> sql_types, 
 	}
 }
 
-bool BufferedCSVReader::MatchControlString(bool &delim_str, bool &quote_str, bool &escape_str, index_t &delim_l, index_t &quote_l, index_t & escape_l) {
+bool BufferedCSVReader::MatchControlString(bool &delim_match, bool &quote_match, bool &escape_match) {
 	index_t tmp_position = position;
 	index_t control_string_offset = 0;
 
@@ -46,37 +46,37 @@ bool BufferedCSVReader::MatchControlString(bool &delim_str, bool &quote_str, boo
 	while (true) {
 
 		// check if the delimiter string matches
-		if (delim && control_string_offset < delim_l) {
+		if (delim && control_string_offset < info.delimiter.length()) {
 			if (buffer[tmp_position] != info.delimiter[control_string_offset]) {
 				delim = false;
 			} else {
-				if (control_string_offset == delim_l - 1) {
+				if (control_string_offset == info.delimiter.length() - 1) {
 					delim = false;
-					delim_str = true;
+					delim_match = true;
 				}
 			}
 		}
 
 		// check if the quote string matches
-		if (quote && control_string_offset < quote_l) {
+		if (quote && control_string_offset < info.quote.length()) {
 			if (buffer[tmp_position] != info.quote[control_string_offset]) {
 				quote = false;
 			} else {
-				if (control_string_offset == quote_l - 1) {
+				if (control_string_offset == info.quote.length() - 1) {
 					quote = false;
-					quote_str = true;
+					quote_match = true;
 				}
 			}
 		}
 
-		// check if the escape matches
-		if (escape && control_string_offset < escape_l) {
+		// check if the escape string matches
+		if (escape && control_string_offset < info.escape.length()) {
 			if (buffer[tmp_position] != info.escape[control_string_offset]) {
 				escape = false;
 			} else {
-				if (control_string_offset == escape_l - 1) {
+				if (control_string_offset == info.escape.length() - 1) {
 					escape = false;
-					escape_str = true;
+					escape_match = true;
 				}
 			}
 		}
@@ -114,9 +114,6 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 	bool delimiter = false;
 	bool quote = false;
 	bool escape = false;
-	index_t delim_l = info.delimiter.length();
-	index_t quote_l = info.quote.length();
-	index_t escape_l = info.escape.length();
 
 	if (position >= buffer_size) {
 		if (!ReadBuffer(start)) {
@@ -131,7 +128,7 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 		}
 
 		// detect control strings
-		exhausted_buffer = MatchControlString(delimiter, quote, escape, delim_l, quote_l, escape_l);
+		exhausted_buffer = MatchControlString(delimiter, quote, escape);
 
 		if (!exhausted_buffer) {
 
@@ -139,7 +136,7 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 			if (quote_or_escape) {
 				if (delimiter || is_newline(buffer[position]) || (source.eof() && position + 1 == buffer_size)) {
 					// found quote without escape, end quote
-					offset = quote_l;
+					offset = info.quote.length();
 					in_quotes = false;
 				} else {
 					// found escape
@@ -157,33 +154,33 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 				} else if (!quote && escape && !seen_escape) {
 					// escape
 					seen_escape = true;
-					position += escape_l - 1;
+					position += info.escape.length() - 1;
 				} else if (!quote && escape && seen_escape) {
 					// escaped escape
 					// we store the position of the escape so we can skip it when adding the value
 					escape_positions.push(position);
-					position += escape_l - 1;
+					position += info.escape.length() - 1;
 					seen_escape = false;
 				} else if (quote && !escape && !seen_escape) {
 					// found quote without escape, end quote
-					offset = quote_l;
-					position += quote_l - 1;
+					offset = info.quote.length();
+					position += info.quote.length() - 1;
 					in_quotes = false;
 				} else if (quote && !escape && seen_escape) {
 					// escaped quote
 					// we store the position of the escape so we can skip it when adding the value
 					escape_positions.push(position);
-					position += quote_l - 1;
+					position += info.quote.length() - 1;
 					seen_escape = false;
 				} else if (quote && escape && !seen_escape) {
 					// either escape or end of quote, decide depending on next character
 					// NOTE: QUOTE and ESCAPE cannot be subsets of each other
-					position += escape_l - 1;
+					position += info.escape.length() - 1;
 					quote_or_escape = true;
 				} else if (quote && escape && seen_escape) {
 					// we store the position of the escape so we can skip it when adding the value
 					escape_positions.push(position);
-					position += escape_l - 1;
+					position += info.escape.length() - 1;
 					seen_escape = false;
 				}
 			} else {
@@ -192,18 +189,18 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 					if (position == start) {
 						in_quotes = true;
 						// increment start by quote length
-						start += quote_l;
+						start += info.quote.length();
 						reset_quotes = in_quotes;
-						position += quote_l - 1;
+						position += info.quote.length() - 1;
 					} else {
 						throw ParserException("Error on line %lld: unterminated quotes", linenr);
 					}
 				} else if (delimiter) {
 					// encountered delimiter
 					AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
-					start = position + delim_l;
+					start = position + info.delimiter.length();
 					reset_quotes = in_quotes;
-					position += delim_l - 1;
+					position += info.delimiter.length() - 1;
 					offset = 0;
 				}
 
@@ -339,6 +336,9 @@ void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column,
 				pos++;
 			}
 			strcpy(str_val, new_val.c_str());
+			while (!escape_positions.empty()) {
+				escape_positions.pop();
+			}
 		}
 
 		// test for valid utf-8 string

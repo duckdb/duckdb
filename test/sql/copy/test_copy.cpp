@@ -382,8 +382,8 @@ TEST_CASE("Test force_quote and force_not_null", "[copy]") {
 	// FORCE_QUOTE is only supported in COPY ... TO ...
 	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test_reorder.csv") + "' (FORCE_QUOTE (col_c, col_d));"));
 	// FORCE_QUOTE must not be empty and must have the correct parameter type
-	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test_reorder.csv") + "' (FORCE_QUOTE);"));
-	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test_reorder.csv") + "' (FORCE_QUOTE 42);"));
+	REQUIRE_FAIL(con.Query("COPY test TO '" + fs.JoinPath(csv_path, "test_reorder.csv") + "' (FORCE_QUOTE);"));
+	REQUIRE_FAIL(con.Query("COPY test TO '" + fs.JoinPath(csv_path, "test_reorder.csv") + "' (FORCE_QUOTE 42);"));
 
 	REQUIRE_NO_FAIL(con.Query("DELETE FROM test;"));
 
@@ -463,6 +463,13 @@ TEST_CASE("Test copy statement with unicode delimiter/quote/escape", "[copy]") {
 	}
 	from_csv_file4.close();
 
+	// generate CSV file with quotes that start midway in the value
+	ofstream from_csv_file5(fs.JoinPath(csv_path, "unterminated_quotes_2.csv"));
+	for (int i = 0; i < 3; i++) {
+		from_csv_file5 << i << ",du\"ck,duck" << endl;
+	}
+	from_csv_file5.close();
+
 	// create three tables for testing
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_unicode_1 (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10));"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_unicode_2 (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10));"));
@@ -470,6 +477,7 @@ TEST_CASE("Test copy statement with unicode delimiter/quote/escape", "[copy]") {
 
 	// throw error if unterminated quotes are detected
 	REQUIRE_FAIL(con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "unterminated_quotes.csv") + "';"));
+	REQUIRE_FAIL(con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "unterminated_quotes_2.csv") + "';"));
 
 	// test COPY ... FROM ...
 

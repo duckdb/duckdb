@@ -54,7 +54,7 @@ private:
 	//! Reads a new buffer from the CSV file if the current one has been exhausted
 	bool ReadBuffer(index_t &start);
 	//! Sets the control strings starting at the current buffer position, returns false if the buffer was exhausted
-	bool MatchControlString(bool &delim_str, bool &quote_str, bool &escape_str, index_t &delim_l, index_t &quote_l, index_t & escape_l);
+	bool MatchControlString(bool &delim_str, bool &quote_str, bool &escape_str);
 };
 
 } // namespace duckdb
