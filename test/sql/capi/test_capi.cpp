@@ -256,12 +256,12 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(date.year == 1992);
 	REQUIRE(date.month == 9);
 	REQUIRE(date.day == 20);
-	REQUIRE(result->Fetch<string>(0, 1) == Value::DATE(1992, 9, 20).ToString(SQLType(SQLTypeId::DATE)));
+	REQUIRE(result->Fetch<string>(0, 1) == Value::DATE(1992, 9, 20).ToString(SQLType::DATE));
 	date = result->Fetch<duckdb_date>(0, 2);
 	REQUIRE(date.year == 1000000);
 	REQUIRE(date.month == 9);
 	REQUIRE(date.day == 20);
-	REQUIRE(result->Fetch<string>(0, 2) == Value::DATE(1000000, 9, 20).ToString(SQLType(SQLTypeId::DATE)));
+	REQUIRE(result->Fetch<string>(0, 2) == Value::DATE(1000000, 9, 20).ToString(SQLType::DATE));
 
 	// timestamp columns
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE timestamps(t TIMESTAMP)"));
@@ -279,7 +279,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(stamp.time.sec == 30);
 	REQUIRE(stamp.time.msec == 0);
 	REQUIRE(result->Fetch<string>(0, 1) ==
-	        Value::TIMESTAMP(1992, 9, 20, 12, 1, 30, 0).ToString(SQLType(SQLTypeId::TIMESTAMP)));
+	        Value::TIMESTAMP(1992, 9, 20, 12, 1, 30, 0).ToString(SQLType::TIMESTAMP));
 
 	// boolean columns
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE booleans(b BOOLEAN)"));
@@ -331,7 +331,11 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(stmt != NULL);
 
-	duckdb_bind_boolean(stmt, 1, 1);
+	status = duckdb_bind_boolean(stmt, 1, 1);
+	REQUIRE(status == DuckDBSuccess);
+	status = duckdb_bind_boolean(stmt, 2, 1);
+	REQUIRE(status == DuckDBError);
+
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 1);
@@ -390,6 +394,9 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	status = duckdb_prepare(tester.connection, "INSERT INTO a VALUES (?)", &stmt);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(stmt != NULL);
+	index_t nparams;
+	REQUIRE(duckdb_nparams(stmt, &nparams) == DuckDBSuccess);
+	REQUIRE(nparams == 1);
 
 	for (int32_t i = 1; i <= 1000; i++) {
 		duckdb_bind_int32(stmt, 1, i);

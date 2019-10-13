@@ -23,6 +23,7 @@ void TestDeleteDirectory(string path);
 void TestCreateDirectory(string path);
 void TestDeleteFile(string path);
 string TestCreatePath(string suffix);
+unique_ptr<DBConfig> GetTestConfig();
 
 bool NO_FAIL(QueryResult &result);
 bool NO_FAIL(unique_ptr<QueryResult> result);

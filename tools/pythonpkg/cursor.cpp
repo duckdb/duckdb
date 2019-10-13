@@ -1,5 +1,6 @@
 #include "cursor.h"
 
+#include "common/types/timestamp.hpp"
 #include "module.h"
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION // motherfucker
@@ -20,10 +21,8 @@ static int duckdb_cursor_init(duckdb_Cursor *self, PyObject *args, PyObject *kwa
 	}
 
 	Py_INCREF(connection);
-// TODO do we need this?
-#if PY_MAJOR_VERSION >= 3
+	// unclear but works
 	Py_XSETREF(self->connection, connection);
-#endif
 	self->closed = 0;
 	self->reset = 0;
 	self->rowcount = -1L;
@@ -70,12 +69,11 @@ PyObject *duckdb_cursor_execute(duckdb_Cursor *self, PyObject *args) {
 
 	duckdb_cursor_close(self, NULL);
 	self->reset = 0;
-
-	if (!PyArg_ParseTuple(args, "O&|",
 #if PY_MAJOR_VERSION >= 3
-	                      PyUnicode_FSConverter,
+	if (!PyArg_ParseTuple(args, "O&|", PyUnicode_FSConverter, &operation)) {
+#else
+		if (!PyArg_ParseTuple(args, "O|", &operation)) {
 #endif
-	                      &operation)) {
 		return NULL;
 	}
 
@@ -145,7 +143,7 @@ PyObject *duckdb_cursor_fetchall(duckdb_Cursor *self) {
 static PyObject *fromdict_ref = NULL;
 static PyObject *mafunc_ref = NULL;
 
-static uint8_t duckdb_type_to_numpy_type(duckdb::TypeId type) {
+static uint8_t duckdb_type_to_numpy_type(duckdb::TypeId type, duckdb::SQLTypeId sql_type) {
 	switch (type) {
 	case duckdb::TypeId::BOOLEAN:
 	case duckdb::TypeId::TINYINT:
@@ -155,7 +153,11 @@ static uint8_t duckdb_type_to_numpy_type(duckdb::TypeId type) {
 	case duckdb::TypeId::INTEGER:
 		return NPY_INT32;
 	case duckdb::TypeId::BIGINT:
-		return NPY_INT64;
+        if (sql_type == duckdb::SQLTypeId::TIMESTAMP) {
+            return NPY_DATETIME;
+        } else {
+            return NPY_INT64;
+        }
 	case duckdb::TypeId::FLOAT:
 		return NPY_FLOAT32;
 	case duckdb::TypeId::DOUBLE:
@@ -192,7 +194,13 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 	for (size_t col_idx = 0; col_idx < ncol; col_idx++) {
 
 		// two owned references for each column, .array and .nullmask
-		cols[col_idx].array = PyArray_EMPTY(1, dims, duckdb_type_to_numpy_type(result->types[col_idx]), 0);
+        PyArray_Descr* descr = PyArray_DescrNewFromType(duckdb_type_to_numpy_type(result->types[col_idx], result->sql_types[col_idx].id));
+        // In the case of timestamps, we need to set the datetime64 unit explicitly.
+        if (result->sql_types[col_idx].id == duckdb::SQLTypeId::TIMESTAMP) {
+            auto dtype = reinterpret_cast<PyArray_DatetimeDTypeMetaData*>(descr->c_metadata);
+            dtype->meta.base = NPY_FR_ms;
+        }
+		cols[col_idx].array = PyArray_Empty(1, dims, descr, 0);
 		cols[col_idx].nullmask = PyArray_EMPTY(1, dims, NPY_BOOL, 0);
 		if (!cols[col_idx].array || !cols[col_idx].nullmask) {
 			PyErr_SetString(duckdb_DatabaseError, "memory allocation error");
@@ -236,6 +244,15 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 					((PyObject **)array_data)[offset + chunk_idx] = str_obj;
 				}
 				break;
+            case duckdb::TypeId::BIGINT:
+                if (result->sql_types[col_idx].id == duckdb::SQLTypeId::TIMESTAMP) {
+                    int64_t* array_data_ptr = reinterpret_cast<int64_t*>(array_data + (offset * duckdb_type_size));
+                    duckdb::timestamp_t* chunk_data_ptr = reinterpret_cast<int64_t*>(chunk->data[col_idx].data);
+                    for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
+                        array_data_ptr[chunk_idx] = duckdb::Timestamp::GetEpoch(chunk_data_ptr[chunk_idx]) * 1000;
+                    }
+                    break;
+                }  // else fall-through-to-default
 			default: // direct mapping types
 				// TODO need to assert the types
 				assert(duckdb::TypeIsConstantSize(duckdb_type));
@@ -245,7 +262,6 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 		}
 		offset += chunk->size();
 	}
-
 
 	// step 4: convert to masked arrays
 	PyObject *col_dict = PyDict_New();
@@ -278,7 +294,7 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 			return NULL;
 		}
 		auto name = PyUnicode_FromString(self->result->names[col_idx].c_str());
-		PyDict_SetItem(col_dict, name , mask);
+		PyDict_SetItem(col_dict, name, mask);
 		Py_DECREF(name);
 		Py_DECREF(mask);
 	}
@@ -386,6 +402,25 @@ PyObject *duckdb_cursor_close(duckdb_Cursor *self, PyObject *args) {
 	Py_RETURN_NONE;
 }
 
+PyObject *duckdb_cursor_profile(duckdb_Cursor *self, PyObject *args) {
+	int check = PyObject_IsTrue(args);
+	if (check == -1) {
+		PyErr_SetString(PyExc_TypeError,
+		                "expected a boolean corresponding to either true (json) or false (query graph)");
+		return NULL;
+	}
+	if (!self->connection) {
+		PyErr_SetString(duckdb_DatabaseError, "Base Cursor.__init__ not called.");
+		return NULL;
+	}
+	if (!duckdb_check_connection(self->connection)) {
+		return NULL;
+	}
+	duckdb::ProfilerPrintFormat format =
+	    check ? duckdb::ProfilerPrintFormat::JSON : duckdb::ProfilerPrintFormat::QUERY_TREE;
+	return PyUnicode_FromString(self->connection->conn->GetProfilingInformation(format).c_str());
+}
+
 static PyMethodDef cursor_methods[] = {
     {"execute", (PyCFunction)duckdb_cursor_execute, METH_VARARGS, PyDoc_STR("Executes a SQL statement.")},
     {"fetchone", (PyCFunction)duckdb_cursor_fetchone, METH_NOARGS, PyDoc_STR("Fetches one row from the resultset.")},
@@ -395,10 +430,9 @@ static PyMethodDef cursor_methods[] = {
     {"fetchdf", (PyCFunction)duckdb_cursor_fetchdf, METH_NOARGS,
      PyDoc_STR("Fetches all rows from the result set as a pandas DataFrame.")},
     {"close", (PyCFunction)duckdb_cursor_close, METH_NOARGS, PyDoc_STR("Closes the cursor.")},
+    {"profile_info", (PyCFunction)duckdb_cursor_profile, METH_O,
+     PyDoc_STR("Returns the profile information of the last running query.")},
     {NULL, NULL}};
-
-//      {"fetchall", (PyCFunction)duckdb_cursor_fetchall, METH_NOARGS, PyDoc_STR("Fetches all rows from the
-//      resultset.")},
 
 static struct PyMemberDef cursor_members[] = {
     {"connection", T_OBJECT, offsetof(duckdb_Cursor, connection), READONLY},

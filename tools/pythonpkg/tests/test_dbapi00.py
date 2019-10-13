@@ -17,6 +17,13 @@ class TestSimpleDBAPI(object):
         arr.mask = [False] * 10 + [True]
         numpy.testing.assert_array_equal(result['i'], arr, "Incorrect result returned")
 
+        duckdb_cursor.execute('SELECT * FROM timestamps')
+        result = duckdb_cursor.fetchnumpy()
+        arr = numpy.array(['1992-10-03 18:34:45', '2010-01-01 00:00:01', None], dtype="datetime64[ms]")
+        arr = numpy.ma.masked_array(arr)
+        arr.mask = [False, False, True]
+        numpy.testing.assert_array_equal(result['t'], arr, "Incorrect result returned")
+
     def test_pandas_selection(self, duckdb_cursor):
         duckdb_cursor.execute('SELECT * FROM integers')
         result = duckdb_cursor.fetchdf()
@@ -26,6 +33,13 @@ class TestSimpleDBAPI(object):
         arr = pandas.DataFrame.from_dict(arr)
         # assert str(result) == str(arr), "Incorrect result returned"
         pandas.testing.assert_frame_equal(result, arr)
+
+        duckdb_cursor.execute('SELECT * FROM timestamps')
+        result = duckdb_cursor.fetchdf()
+        df = pandas.DataFrame({
+            't': pandas.to_datetime(['1992-10-03 18:34:45', '2010-01-01 00:00:01', None])
+        })
+        pandas.testing.assert_frame_equal(result, df)
 
     # def test_numpy_creation(self, duckdb_cursor):
     #     # numpyarray = {'i': numpy.arange(10), 'v': numpy.random.randint(100, size=(1, 10))}  # segfaults

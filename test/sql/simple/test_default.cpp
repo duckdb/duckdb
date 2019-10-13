@@ -80,4 +80,15 @@ TEST_CASE("Test DEFAULT in tables", "[default]") {
 	REQUIRE_FAIL(con.Query("CREATE TABLE test (a INTEGER DEFAULT row_number() OVER (), b INTEGER);"));
 	// default value must be scalar expression
 	REQUIRE_FAIL(con.Query("CREATE TABLE test (a INTEGER DEFAULT b+1, b INTEGER);"));
+
+	// test default with random
+	unique_ptr<MaterializedQueryResult> result_tmp;
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE test"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a DOUBLE DEFAULT random(), b INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test (b) VALUES (1);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test (b) VALUES (2);"));
+	result = con.Query("SELECT a FROM test WHERE b = 1;");
+	result_tmp = move(result);
+	result = con.Query("SELECT a FROM test WHERE b = 2;");
+	REQUIRE(!result->Equals(*result_tmp));
 }

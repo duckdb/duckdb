@@ -9,15 +9,17 @@
 using namespace duckdb;
 using namespace std;
 
-DuckDB::DuckDB(const char *path, DBConfig *config) {
-	if (config && config->access_mode != AccessMode::UNDEFINED) {
-		access_mode = config->access_mode;
-	}
+DBConfig::~DBConfig() {
+}
 
-	if (config && config->file_system) {
-		file_system = move(config->file_system);
+DuckDB::DuckDB(const char *path, DBConfig *config) {
+	if (config) {
+		// user-supplied configuration
+		Configure(*config);
 	} else {
-		file_system = make_unique<FileSystem>();
+		// default configuration
+		DBConfig config;
+		Configure(config);
 	}
 
 	storage = make_unique<StorageManager>(*this, path ? string(path) : string(), access_mode == AccessMode::READ_ONLY);
@@ -32,4 +34,20 @@ DuckDB::DuckDB(const string &path, DBConfig *config) : DuckDB(path.c_str(), conf
 }
 
 DuckDB::~DuckDB() {
+}
+
+void DuckDB::Configure(DBConfig &config) {
+	if (config.access_mode != AccessMode::UNDEFINED) {
+		access_mode = config.access_mode;
+	} else {
+		access_mode = AccessMode::READ_WRITE;
+	}
+	if (config.file_system) {
+		file_system = move(config.file_system);
+	} else {
+		file_system = make_unique<FileSystem>();
+	}
+	checkpoint_only = config.checkpoint_only;
+	checkpoint_wal_size = config.checkpoint_wal_size;
+	use_direct_io = config.use_direct_io;
 }

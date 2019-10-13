@@ -26,6 +26,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "ORDER_BY";
 	case PhysicalOperatorType::LIMIT:
 		return "LIMIT";
+	case PhysicalOperatorType::TOP_N:
+		return "TOP_N";
 	case PhysicalOperatorType::AGGREGATE:
 		return "AGGREGATE";
 	case PhysicalOperatorType::WINDOW:

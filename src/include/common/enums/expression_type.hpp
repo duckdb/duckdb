@@ -18,35 +18,6 @@ namespace duckdb {
 enum class ExpressionType : uint8_t {
 	INVALID = 0,
 
-	// -----------------------------
-	// Arithmetic Operators
-	// -----------------------------
-	// left + right (both must be number. implicitly casted)
-	OPERATOR_ADD = 1,
-	// start of binary add
-	BINOP_BOUNDARY_START = OPERATOR_ADD,
-	// left - right (both must be number. implicitly casted)
-	OPERATOR_SUBTRACT = 2,
-	// left * right (both must be number. implicitly casted)
-	OPERATOR_MULTIPLY = 3,
-	// left / right (both must be number. implicitly casted)
-	OPERATOR_DIVIDE = 4,
-	// left || right (both must be char/varchar)
-	OPERATOR_CONCAT = 5,
-	// left % right (both must be integer)
-	OPERATOR_MOD = 6,
-	// left << right (both must be integer)
-	OPERATOR_LSHIFT = 7,
-	// left >> right (both must be integer)
-	OPERATOR_RSHIFT = 8,
-	// left & right (both must be integer)
-	OPERATOR_BITWISE_AND = 9,
-	// left & right (both must be integer)
-	OPERATOR_BITWISE_OR = 10,
-	// left & right (both must be integer)
-	OPERATOR_BITWISE_XOR = 11,
-	// binary arithmetic operator boundary, used for quick comparisons
-	BINOP_BOUNDARY_END = OPERATOR_BITWISE_XOR,
 	// explicitly cast left as right (right is integer in ValueType enum)
 	OPERATOR_CAST = 12,
 	// logical not operator
@@ -73,14 +44,6 @@ enum class ExpressionType : uint8_t {
 	COMPARE_LESSTHANOREQUALTO = 29,
 	// greater than equal operator between left and right
 	COMPARE_GREATERTHANOREQUALTO = 30,
-	// LIKE operator (left LIKE right). Both children must be string.
-	COMPARE_LIKE = 31,
-	// NOT LIKE operator (left NOT LIKE right). Both children must be string.
-	COMPARE_NOTLIKE = 32,
-	// SIMILAR TO operator (left SIMILAR TO right). Both children must be string.
-	COMPARE_SIMILAR = 33,
-	// NOT SIMILAR TO operator (left NOT SIMILAR TO right). Both children must be string.
-	COMPARE_NOTSIMILAR = 34,
 	// IN operator [left IN (right1, right2, ...)]
 	COMPARE_IN = 35,
 	// NOT IN operator [left NOT IN (right1, right2, ...)]
@@ -114,22 +77,13 @@ enum class ExpressionType : uint8_t {
 	// -----------------------------
 	// Aggregates
 	// -----------------------------
-	AGGREGATE_COUNT = 100,
-	AGGREGATE_COUNT_STAR = 101,
-	AGGREGATE_COUNT_DISTINCT = 102,
-	AGGREGATE_SUM = 103,
-	AGGREGATE_SUM_DISTINCT = 104,
-	AGGREGATE_MIN = 105,
-	AGGREGATE_MAX = 106,
-	AGGREGATE_AVG = 107,
-	AGGREGATE_FIRST = 108,
-	AGGREGATE_STDDEV_SAMP = 109,
+	AGGREGATE = 100,
+	BOUND_AGGREGATE = 101,
 
-	WINDOW_SUM = 115,
-	WINDOW_COUNT_STAR = 116,
-	WINDOW_MIN = 117,
-	WINDOW_MAX = 118,
-	WINDOW_AVG = 119,
+	// -----------------------------
+	// Window Functions
+	// -----------------------------
+	WINDOW_AGGREGATE = 110,
 
 	WINDOW_RANK = 120,
 	WINDOW_RANK_DENSE = 121,
@@ -152,7 +106,7 @@ enum class ExpressionType : uint8_t {
 	// -----------------------------
 	// Operators
 	// -----------------------------
-	OPERATOR_CASE_EXPR = 150,
+	CASE_EXPR = 150,
 	OPERATOR_NULLIF = 151,
 	OPERATOR_COALESCE = 152,
 

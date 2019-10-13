@@ -81,6 +81,20 @@ bool OperatorExpressionMatcher::Match(Expression *expr_, vector<Expression *> &b
 	return SetMatcher::Match(matchers, expr->children, bindings, policy);
 }
 
+bool FunctionExpressionMatcher::Match(Expression *expr_, vector<Expression *> &bindings) {
+	if (!ExpressionMatcher::Match(expr_, bindings)) {
+		return false;
+	}
+	auto expr = (BoundFunctionExpression *)expr_;
+	if (!FunctionMatcher::Match(function, expr->function.name)) {
+		return false;
+	}
+	if (!SetMatcher::Match(matchers, expr->children, bindings, policy)) {
+		return false;
+	}
+	return true;
+}
+
 bool FoldableConstantMatcher::Match(Expression *expr, vector<Expression *> &bindings) {
 	// we match on ANY expression that is a scalar expression
 	if (!expr->IsFoldable()) {

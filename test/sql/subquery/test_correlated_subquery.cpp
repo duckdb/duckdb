@@ -288,6 +288,16 @@ TEST_CASE("Test correlated aggregate subqueries", "[subquery]") {
 	                   "IS NOT NULL)) FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), false, true, true}));
+
+	// aggregates with multiple parameters
+	result = con.Query("SELECT (SELECT COVAR_POP(i1.i, i2.i) FROM integers i2) FROM integers i1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0, 0, 0}));
+
+	result = con.Query("SELECT (SELECT COVAR_POP(i2.i, i1.i) FROM integers i2) FROM integers i1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0, 0, 0}));
+
+	result = con.Query("SELECT (SELECT COVAR_POP(i1.i+i2.i, i1.i+i2.i) FROM integers i2) FROM integers i1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0.666667, 0.666667, 0.666667}));
 }
 
 TEST_CASE("Test correlated EXISTS subqueries", "[subquery]") {
@@ -338,6 +348,22 @@ TEST_CASE("Test correlated EXISTS subqueries", "[subquery]") {
 	result = con.Query(
 	    "SELECT SUM(CASE WHEN EXISTS(SELECT i FROM integers WHERE i=i1.i) THEN 1 ELSE 0 END) FROM integers i1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+	// aggregates with multiple parameters
+	result = con.Query("SELECT (SELECT COVAR_POP(i1.i, i2.i) FROM integers i2) FROM integers i1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0, 0, 0}));
+
+	result = con.Query("SELECT (SELECT COVAR_POP(i2.i, i1.i) FROM integers i2) FROM integers i1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0, 0, 0}));
+
+	result = con.Query("SELECT (SELECT COVAR_POP(i1.i+i2.i, i1.i+i2.i) FROM integers i2) FROM integers i1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0.666667, 0.666667, 0.666667}));
+
+	result = con.Query("SELECT (SELECT COVAR_POP(i2.i, i2.i) FROM integers i2) FROM integers i1 ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0.666667, 0.666667, 0.666667, 0.666667}));
+
+	result = con.Query("SELECT (SELECT COVAR_POP(i1.i, i1.i) FROM integers i2 LIMIT 1) FROM integers i1 ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0.666667}));
 }
 
 TEST_CASE("Test correlated ANY/ALL subqueries", "[subquery]") {
@@ -676,6 +702,10 @@ TEST_CASE("Test nested correlated subqueries", "[subquery]") {
 	                   "WHERE i2.i=i1.i))) AS j FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 6, 12, 18}));
+	result = con.Query("SELECT (SELECT (SELECT SUM(i1.i)+SUM(i2.i)+SUM(i3.i) FROM integers i3) FROM integers i2) FROM "
+	                   "integers i1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {18}));
+
 	// explicit join on subquery
 	result = con.Query("SELECT i, (SELECT SUM(s1.i) FROM integers s1 INNER JOIN integers s2 ON (SELECT "
 	                   "i1.i+s1.i)=(SELECT i1.i+s2.i)) AS j FROM integers i1 ORDER BY i;");
@@ -822,6 +852,15 @@ TEST_CASE("Test nested correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT i, (SELECT i1.i IN (1, 2, 3, 4, 5, 6, 7, 8)) AS j FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, true, true}));
+
+	// nested correlated subqueries with multiple aggregate parameters
+	result = con.Query("SELECT (SELECT (SELECT COVAR_POP(i1.i, i3.i) FROM integers i3) FROM integers i2 LIMIT 1) FROM "
+	                   "integers i1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0, 0, 0}));
+
+	result = con.Query("SELECT (SELECT (SELECT COVAR_POP(i2.i, i3.i) FROM integers i3) FROM integers i2 LIMIT 1) FROM "
+	                   "integers i1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, 0}));
 }
 
 TEST_CASE("Test varchar correlated subqueries", "[subquery]") {
@@ -878,4 +917,40 @@ TEST_CASE("Test correlated subqueries based on TPC-DS", "[subquery]") {
 	REQUIRE_NO_FAIL(con.Query(
 	    "SELECT * FROM item i1 WHERE (SELECT count(*) AS item_cnt FROM item WHERE (i_manufact = i1.i_manufact AND "
 	    "i_manufact=3) OR (i_manufact = i1.i_manufact AND i_manufact=3)) ORDER BY 1 LIMIT 100;"));
+}
+
+
+TEST_CASE("Test correlated subquery with grouping columns", "[subquery]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl_ProductSales (ColID int, Product_Category  varchar(64), Product_Name  varchar(64), TotalSales int); "));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE another_T (col1 INT, col2 INT, col3 INT, col4 INT, col5 INT, col6 INT, col7 INT, col8 INT);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO tbl_ProductSales VALUES (1,'Game','Mobo Game',200),(2,'Game','PKO Game',400),(3,'Fashion','Shirt',500),(4,'Fashion','Shorts',100);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO another_T VALUES (1,2,3,4,5,6,7,8), (11,22,33,44,55,66,77,88), (111,222,333,444,555,666,777,888), (1111,2222,3333,4444,5555,6666,7777,8888);"));
+
+	result = con.Query("SELECT col1 IN (SELECT ColID FROM tbl_ProductSales) FROM another_T;");
+	REQUIRE(CHECK_COLUMN(result, 0, {true, false, false, false}));
+	result = con.Query("SELECT col1 IN (SELECT ColID + col1 FROM tbl_ProductSales) FROM another_T;");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, false, false, false}));
+	result = con.Query("SELECT col1 IN (SELECT ColID + col1 FROM tbl_ProductSales) FROM another_T GROUP BY col1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, false, false, false}));
+	result = con.Query("SELECT col1 IN (SELECT ColID + another_T.col1 FROM tbl_ProductSales) FROM another_T GROUP BY col1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, false, false, false}));
+	result = con.Query("SELECT (col1 + 1) AS k, k IN (SELECT ColID + k FROM tbl_ProductSales) FROM another_T GROUP BY k ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 12, 112, 1112}));
+	REQUIRE(CHECK_COLUMN(result, 1, {false, false, false, false}));
+	result = con.Query("SELECT (col1 + 1) IN (SELECT ColID + (col1 + 1) FROM tbl_ProductSales) FROM another_T GROUP BY (col1 + 1);");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, false, false, false}));
+
+	// this should fail, col1 + 42 is not a grouping column
+	REQUIRE_FAIL(con.Query("SELECT col1+1, col1+42 FROM another_T GROUP BY col1+1;"));
+	// this should also fail, col1 + 42 is not a grouping column
+	REQUIRE_FAIL(con.Query("SELECT (col1 + 1) IN (SELECT ColID + (col1 + 42) FROM tbl_ProductSales) FROM another_T GROUP BY (col1 + 1);"));
+
+	// having without GROUP BY in subquery
+	result = con.Query("SELECT col5 = ALL (SELECT 1 FROM tbl_ProductSales HAVING MIN(col8) IS NULL) FROM another_T GROUP BY col1, col2, col5, col8;");
+	REQUIRE(CHECK_COLUMN(result, 0, {true, true, true, true}));
 }

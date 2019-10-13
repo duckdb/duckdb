@@ -4,15 +4,18 @@
 #include "execution/expression_executor.hpp"
 #include "planner/expression/bound_aggregate_expression.hpp"
 #include "planner/expression/bound_constant_expression.hpp"
+#include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions, PhysicalOperatorType type )
+PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
+                                             PhysicalOperatorType type)
     : PhysicalHashAggregate(types, move(expressions), {}, type) {
 }
 
-PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> groups, PhysicalOperatorType type )
+PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
+                                             vector<unique_ptr<Expression>> groups, PhysicalOperatorType type)
     : PhysicalOperator(type, types), groups(move(groups)) {
 	// get a list of all aggregates to be computed
 	// fake a single group with a constant value for aggregation without groups
@@ -40,20 +43,25 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 				break;
 			}
 		}
-
+		index_t payload_idx = 0;
 		ExpressionExecutor executor(state->child_chunk);
 		// aggregation with groups
 		DataChunk &group_chunk = state->group_chunk;
 		DataChunk &payload_chunk = state->payload_chunk;
 		executor.Execute(groups, group_chunk);
+		payload_chunk.Reset();
 		for (index_t i = 0; i < aggregates.size(); i++) {
 			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
-			if (aggr.child) {
-				executor.ExecuteExpression(*aggr.child, payload_chunk.data[i]);
-				payload_chunk.heap.MergeHeap(payload_chunk.data[i].string_heap);
+			if (aggr.children.size()) {
+				for (index_t j = 0; j < aggr.children.size(); ++j) {
+					executor.ExecuteExpression(*aggr.children[j], payload_chunk.data[payload_idx]);
+					payload_chunk.heap.MergeHeap(payload_chunk.data[payload_idx].string_heap);
+					++payload_idx;
+				}
 			} else {
-				payload_chunk.data[i].count = group_chunk.size();
-				payload_chunk.data[i].sel_vector = group_chunk.sel_vector;
+				payload_chunk.data[payload_idx].count = group_chunk.size();
+				payload_chunk.data[payload_idx].sel_vector = group_chunk.sel_vector;
+				++payload_idx;
 			}
 		}
 		payload_chunk.sel_vector = group_chunk.sel_vector;
@@ -81,16 +89,10 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 		// for each column in the aggregates, seit either to NULL or 0
 		for (index_t i = 0; i < state->aggregate_chunk.column_count; i++) {
 			state->aggregate_chunk.data[i].count = 1;
-			switch (aggregates[i]->type) {
-			case ExpressionType::AGGREGATE_COUNT_STAR:
-			case ExpressionType::AGGREGATE_COUNT:
-			case ExpressionType::AGGREGATE_COUNT_DISTINCT:
-				state->aggregate_chunk.data[i].SetValue(0, 0);
-				break;
-			default:
-				state->aggregate_chunk.data[i].SetValue(0, Value());
-				break;
-			}
+			assert(aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
+			auto aggr = (BoundAggregateExpression *)(&*aggregates[i]);
+			state->aggregate_chunk.data[i].SetValue(
+			    0, aggr->function.simple_initialize ? aggr->function.simple_initialize() : Value());
 		}
 		state->finished = true;
 	}
@@ -119,16 +121,18 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 	    make_unique<PhysicalHashAggregateOperatorState>(this, children.size() == 0 ? nullptr : children[0].get());
 	state->tuples_scanned = 0;
 	vector<TypeId> group_types, payload_types;
-	vector<ExpressionType> aggregate_kind;
+	vector<BoundAggregateExpression *> aggregate_kind;
 	for (auto &expr : groups) {
 		group_types.push_back(expr->return_type);
 	}
 	for (auto &expr : aggregates) {
 		assert(expr->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 		auto &aggr = (BoundAggregateExpression &)*expr;
-		aggregate_kind.push_back(expr->type);
-		if (aggr.child) {
-			payload_types.push_back(aggr.child->return_type);
+		aggregate_kind.push_back(&aggr);
+		if (aggr.children.size()) {
+			for (index_t i = 0; i < aggr.children.size(); ++i) {
+				payload_types.push_back(aggr.children[i]->return_type);
+			}
 		} else {
 			// COUNT(*)
 			payload_types.push_back(TypeId::BIGINT);
@@ -142,8 +146,9 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 	return move(state);
 }
 
-PhysicalHashAggregateOperatorState::PhysicalHashAggregateOperatorState(PhysicalHashAggregate *parent, PhysicalOperator *child)
-	: PhysicalOperatorState(child), ht_scan_position(0), tuples_scanned(0) {
+PhysicalHashAggregateOperatorState::PhysicalHashAggregateOperatorState(PhysicalHashAggregate *parent,
+                                                                       PhysicalOperator *child)
+    : PhysicalOperatorState(child), ht_scan_position(0), tuples_scanned(0) {
 	vector<TypeId> group_types, aggregate_types;
 	for (auto &expr : parent->groups) {
 		group_types.push_back(expr->return_type);

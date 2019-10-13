@@ -115,6 +115,7 @@ tmp/
 .pydevproject
 .settings
 .autotools
+.csettings
 
 /Debug/
 /misc/
@@ -291,8 +292,13 @@ test/test.sql
 # SQLite logic tests
 test/evidence/
 third_party/sqllogictest
+
+#imdb dataset
+third_party/imdb/data
+
 # Format timer
 .last_format
 # Benchmarks
 .last_benchmarked_commit
 benchmark_results/
+duckdb_unittest_tempdir/

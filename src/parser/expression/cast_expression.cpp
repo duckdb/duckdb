@@ -15,12 +15,11 @@ string CastExpression::ToString() const {
 	return "CAST[" + SQLTypeToString(cast_type) + "](" + child->ToString() + ")";
 }
 
-bool CastExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
+bool CastExpression::Equals(const CastExpression *a, const CastExpression *b) {
+	if (!a->child->Equals(b->child.get())) {
 		return false;
 	}
-	auto other = (CastExpression *)other_;
-	if (!child->Equals(other->child.get())) {
+	if (a->cast_type != b->cast_type) {
 		return false;
 	}
 	return true;

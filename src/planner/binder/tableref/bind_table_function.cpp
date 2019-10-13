@@ -1,7 +1,7 @@
 #include "main/client_context.hpp"
 #include "main/database.hpp"
 #include "parser/expression/function_expression.hpp"
-#include "parser/tableref/table_function.hpp"
+#include "parser/tableref/table_function_ref.hpp"
 #include "planner/binder.hpp"
 #include "planner/expression_binder/constant_binder.hpp"
 #include "planner/tableref/bound_table_function.hpp"
@@ -9,7 +9,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<BoundTableRef> Binder::Bind(TableFunction &ref) {
+unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	auto bind_index = GenerateTableIndex();
 
 	assert(ref.function->type == ExpressionType::FUNCTION);

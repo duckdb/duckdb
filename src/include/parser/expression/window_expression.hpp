@@ -27,10 +27,14 @@ enum class WindowBoundary : uint8_t {
 //! they inherit from them.
 class WindowExpression : public ParsedExpression {
 public:
-	WindowExpression(ExpressionType type, unique_ptr<ParsedExpression> child);
+	WindowExpression(ExpressionType type, string schema_name, string function_name);
 
+	//! Schema of the aggregate function
+	string schema;
+	//! Name of the aggregate function
+	string function_name;
 	//! The child expression of the main window aggregate
-	unique_ptr<ParsedExpression> child;
+	vector<unique_ptr<ParsedExpression>> children;
 	//! The set of expressions to partition by
 	vector<unique_ptr<ParsedExpression>> partitions;
 	//! The set of ordering clauses
@@ -52,7 +56,7 @@ public:
 
 	string ToString() const override;
 
-	bool Equals(const BaseExpression *other) const override;
+	static bool Equals(const WindowExpression *a, const WindowExpression *b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 

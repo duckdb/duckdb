@@ -34,7 +34,7 @@ public:
 	string GetName() const override;
 	string ToString() const override;
 
-	bool Equals(const BaseExpression *other) const override;
+	static bool Equals(const ColumnRefExpression *a, const ColumnRefExpression *b);
 	uint64_t Hash() const override;
 
 	unique_ptr<ParsedExpression> Copy() const override;

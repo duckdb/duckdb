@@ -27,6 +27,10 @@ public:
 	//! Returns true if the reader has finished reading the entire file
 	bool Finished();
 
+	index_t FileSize() {
+		return file_size;
+	}
+
 private:
 	index_t file_size;
 	index_t total_read;

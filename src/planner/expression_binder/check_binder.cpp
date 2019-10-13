@@ -9,13 +9,11 @@ using namespace std;
 CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table, vector<ColumnDefinition> &columns,
                          unordered_set<column_t> &bound_columns)
     : ExpressionBinder(binder, context), table(table), columns(columns), bound_columns(bound_columns) {
-	target_type = SQLType(SQLTypeId::INTEGER);
+	target_type = SQLType::INTEGER;
 }
 
 BindResult CheckBinder::BindExpression(ParsedExpression &expr, index_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
-	case ExpressionClass::AGGREGATE:
-		return BindResult("aggregate functions are not allowed in check constraints");
 	case ExpressionClass::WINDOW:
 		return BindResult("window functions are not allowed in check constraints");
 	case ExpressionClass::SUBQUERY:
@@ -25,6 +23,10 @@ BindResult CheckBinder::BindExpression(ParsedExpression &expr, index_t depth, bo
 	default:
 		return ExpressionBinder::BindExpression(expr, depth);
 	}
+}
+
+string CheckBinder::UnsupportedAggregateMessage() {
+	return "aggregate functions are not allowed in check constraints";
 }
 
 BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {

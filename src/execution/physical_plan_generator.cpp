@@ -18,8 +18,8 @@ public:
 protected:
 	unique_ptr<Expression> VisitReplace(BoundFunctionExpression &expr, unique_ptr<Expression> *expr_ptr) override {
 		// extract dependencies from the bound function expression
-		if (expr.bound_function->dependency) {
-			expr.bound_function->dependency(expr, dependencies);
+		if (expr.function.dependency) {
+			expr.function.dependency(expr, dependencies);
 		}
 		return nullptr;
 	}
@@ -70,6 +70,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalLimit &)op);
 	case LogicalOperatorType::ORDER_BY:
 		return CreatePlan((LogicalOrder &)op);
+	case LogicalOperatorType::TOP_N:
+		return CreatePlan((LogicalTopN &)op);
 	case LogicalOperatorType::COPY_FROM_FILE:
 		return CreatePlan((LogicalCopyFromFile &)op);
 	case LogicalOperatorType::COPY_TO_FILE:

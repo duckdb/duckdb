@@ -26,7 +26,7 @@ def pull_new_changes():
 
 def build_optimized():
     log("Starting optimized build")
-    proc = subprocess.Popen(['make', 'opt', '-j'], stdout=FNULL, stderr=subprocess.PIPE)
+    proc = subprocess.Popen(['make', 'opt', 'imdb','-j'], stdout=FNULL, stderr=subprocess.PIPE)
     proc.wait()
     if proc.returncode != 0:
         print("Failed to compile, moving on to next commit")
@@ -170,6 +170,7 @@ pull_new_changes()
 # get a list of all commits to benchmark
 list = get_list_of_commits(default_start_commit)
 list.reverse()
+list = list[0:1]
 
 if len(list) == 0:
     exit(1)

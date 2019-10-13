@@ -13,6 +13,9 @@ using namespace std;
 
 Binder::Binder(ClientContext &context, Binder *parent)
     : context(context), parent(!parent ? nullptr : (parent->parent ? parent->parent : parent)), bound_tables(0) {
+	if (parent) {
+		parameters = parent->parameters;
+	}
 }
 
 unique_ptr<BoundSQLStatement> Binder::Bind(SQLStatement &statement) {
@@ -94,7 +97,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 		return Bind((SubqueryRef &)ref);
 	default:
 		assert(ref.type == TableReferenceType::TABLE_FUNCTION);
-		return Bind((TableFunction &)ref);
+		return Bind((TableFunctionRef &)ref);
 	}
 }
 

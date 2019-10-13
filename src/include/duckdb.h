@@ -19,7 +19,6 @@ extern "C" {
 #endif
 
 typedef uint64_t index_t;
-typedef uint64_t count_t;
 
 typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_INVALID = 0,
@@ -41,6 +40,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_TIMESTAMP,
 	// duckdb_date
 	DUCKDB_TYPE_DATE,
+	// duckdb_time
+	DUCKDB_TYPE_TIME,
 	// const char*
 	DUCKDB_TYPE_VARCHAR
 } duckdb_type;
@@ -71,8 +72,8 @@ typedef struct {
 } duckdb_column;
 
 typedef struct {
-	count_t column_count;
-	count_t row_count;
+	index_t column_count;
+	index_t row_count;
 	duckdb_column *columns;
 	char *error_message;
 } duckdb_result;
@@ -136,6 +137,9 @@ char *duckdb_value_varchar(duckdb_result *result, index_t col, index_t row);
 //! prepares the specified SQL query in the specified connection handle. [OUT: prepared statement descriptor]
 duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
                             duckdb_prepared_statement *out_prepared_statement);
+
+duckdb_state duckdb_nparams(duckdb_prepared_statement prepared_statement, index_t *nparams_out);
+
 //! binds parameters to prepared statement
 duckdb_state duckdb_bind_boolean(duckdb_prepared_statement prepared_statement, index_t param_idx, bool val);
 duckdb_state duckdb_bind_int8(duckdb_prepared_statement prepared_statement, index_t param_idx, int8_t val);

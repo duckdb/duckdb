@@ -50,8 +50,6 @@ TEST_CASE("Aggregating boolean vectors", "[vector_ops]") {
 	v.SetValue(1, Value::BOOLEAN(true));
 	v.SetValue(2, Value::BOOLEAN(false));
 
-	REQUIRE(VectorOperations::AnyTrue(v));
-	REQUIRE(!VectorOperations::AllTrue(v));
 	REQUIRE(VectorOperations::HasNull(v));
 }
 
@@ -81,60 +79,6 @@ TEST_CASE("Aggregating numeric vectors", "[vector_ops]") {
 	require_aggrs(v);
 	v.Cast(TypeId::DOUBLE);
 	require_aggrs(v);
-}
-
-TEST_CASE("Aggregating string vectors", "[vector_ops]") {
-	Vector v(TypeId::VARCHAR, true, false);
-	v.count = 3;
-	v.SetStringValue(0, "Das Pferd");
-	v.SetStringValue(1, "frisst keinen Gurkensalat");
-	v.SetNull(2, true);
-
-	REQUIRE(VectorOperations::MaximumStringLength(v).CastAs(TypeId::BIGINT) == Value::BIGINT(25));
-}
-
-static void require_case(Vector &val) {
-	Vector check(TypeId::BOOLEAN, true, false);
-	check.count = val.count;
-	check.SetValue(0, Value::BOOLEAN(true));
-	check.SetValue(1, Value::BOOLEAN(false));
-	check.SetNull(2, true);
-
-	Vector v1(val.type, true, false);
-	Vector v2(val.type, true, false);
-	val.Copy(v1);
-	val.Copy(v2);
-
-	Vector res(val.type, true, false);
-	res.count = val.count;
-
-	VectorOperations::Case(check, v1, v2, res);
-
-	REQUIRE(res.GetValue(0) == val.GetValue(0));
-	REQUIRE(res.GetValue(1) == val.GetValue(1));
-	REQUIRE(res.GetValue(2).is_null);
-}
-
-TEST_CASE("Case vectors", "[vector_ops]") {
-	Vector v(TypeId::BOOLEAN, true, false);
-	v.count = 3;
-	v.SetValue(0, Value::BOOLEAN(true));
-	v.SetValue(1, Value::BOOLEAN(false));
-	v.SetNull(2, true);
-
-	require_case(v);
-	v.Cast(TypeId::SMALLINT);
-	require_case(v);
-	v.Cast(TypeId::INTEGER);
-	require_case(v);
-	v.Cast(TypeId::BIGINT);
-	require_case(v);
-	v.Cast(TypeId::FLOAT);
-	require_case(v);
-	v.Cast(TypeId::DOUBLE);
-	require_case(v);
-	v.Cast(TypeId::VARCHAR);
-	require_case(v);
 }
 
 static void require_compare(Vector &val) {
@@ -437,6 +381,35 @@ static void require_mod(TypeId t) {
 	REQUIRE(v2.GetValue(6).is_null);
 }
 
+static void require_mod_double() {
+	Vector v1(TypeId::DOUBLE, true, false);
+	v1.count = 2;
+
+	Vector v2(TypeId::DOUBLE, true, false);
+	v2.count = v1.count;
+
+	v1.SetValue(0, Value::DOUBLE(10));
+	v1.SetValue(1, Value::DOUBLE(10));
+
+	v2.SetValue(0, Value::DOUBLE(2));
+	v2.SetValue(1, Value::DOUBLE(4));
+
+	Vector r(TypeId::DOUBLE, true, false);
+	r.count = v1.count;
+
+	VectorOperations::Modulo(v1, v2, r);
+	REQUIRE(r.GetValue(0).CastAs(TypeId::DOUBLE) == Value::DOUBLE(0));
+	REQUIRE(r.GetValue(1).CastAs(TypeId::DOUBLE) == Value::DOUBLE(2));
+
+	VectorOperations::ModuloInPlace(v1, v2);
+	REQUIRE(v1.GetValue(0).CastAs(TypeId::DOUBLE) == Value::DOUBLE(0));
+	REQUIRE(v1.GetValue(1).CastAs(TypeId::DOUBLE) == Value::DOUBLE(2));
+
+	VectorOperations::ModuloInPlace(v1, 2);
+	REQUIRE(v1.GetValue(0).CastAs(TypeId::DOUBLE) == Value::DOUBLE(0));
+	REQUIRE(v1.GetValue(1).CastAs(TypeId::DOUBLE) == Value::DOUBLE(0));
+}
+
 TEST_CASE("Arithmetic operations on vectors", "[vector_ops]") {
 	require_arith(TypeId::SMALLINT);
 	require_arith(TypeId::INTEGER);
@@ -447,4 +420,5 @@ TEST_CASE("Arithmetic operations on vectors", "[vector_ops]") {
 	require_mod(TypeId::SMALLINT);
 	require_mod(TypeId::INTEGER);
 	require_mod(TypeId::BIGINT);
+	require_mod_double();
 }

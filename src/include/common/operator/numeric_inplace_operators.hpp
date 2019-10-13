@@ -35,10 +35,17 @@ struct DivideInPlace {
 	}
 };
 
-struct ModuloInPlace {
+struct ModuloIntInPlace {
 	template <class T> static inline void Operation(T &left, T right) {
 		assert(right != 0);
 		left %= right;
+	}
+};
+
+struct ModuloRealInPlace {
+	template <class T> static inline void Operation(T &left, T right) {
+		assert(right != 0);
+		left = fmod(left, right);
 	}
 };
 

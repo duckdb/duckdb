@@ -17,6 +17,8 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 		if (stmt->valuesLists) {
 			TransformValuesList(stmt->valuesLists, result->values);
 			return node;
+		} else if (!stmt->targetList) {
+			throw ParserException("SELECT clause without selection list");
 		}
 		// checks distinct clause
 		if (stmt->distinctClause != NULL) {
@@ -35,9 +37,6 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 		// group by
 		TransformGroupBy(stmt->groupClause, result->groups);
 		result->having = TransformExpression(stmt->havingClause);
-		if (result->groups.size() == 0 && result->having) {
-			throw ParserException("a GROUP BY clause is required before HAVING");
-		}
 		// where
 		result->where_clause = TransformExpression(stmt->whereClause);
 		// select list

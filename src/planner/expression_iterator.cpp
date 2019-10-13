@@ -28,8 +28,8 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_AGGREGATE: {
 		auto &aggr_expr = (BoundAggregateExpression &)expr;
-		if (aggr_expr.child) {
-			aggr_expr.child = callback(move(aggr_expr.child));
+		for (auto &child : aggr_expr.children) {
+			child = callback(move(child));
 		}
 		break;
 	}
@@ -86,8 +86,8 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		for (auto &order : window_expr.orders) {
 			order.expression = callback(move(order.expression));
 		}
-		if (window_expr.child) {
-			window_expr.child = callback(move(window_expr.child));
+		for (auto &child : window_expr.children) {
+			child = callback(move(child));
 		}
 		if (window_expr.offset_expr) {
 			window_expr.offset_expr = callback(move(window_expr.offset_expr));

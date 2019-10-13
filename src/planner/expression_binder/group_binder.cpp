@@ -26,8 +26,6 @@ BindResult GroupBinder::BindExpression(ParsedExpression &expr, index_t depth, bo
 		}
 	}
 	switch (expr.expression_class) {
-	case ExpressionClass::AGGREGATE:
-		return BindResult("GROUP BY clause cannot contain aggregates!");
 	case ExpressionClass::DEFAULT:
 		return BindResult("GROUP BY clause cannot contain DEFAULT clause");
 	case ExpressionClass::WINDOW:
@@ -37,6 +35,10 @@ BindResult GroupBinder::BindExpression(ParsedExpression &expr, index_t depth, bo
 	}
 }
 
+string GroupBinder::UnsupportedAggregateMessage() {
+	return "GROUP BY clause cannot contain aggregates!";
+}
+
 BindResult GroupBinder::BindSelectRef(index_t entry) {
 	if (used_aliases.find(entry) != used_aliases.end()) {
 		// the alias has already been bound to before!
@@ -44,7 +46,7 @@ BindResult GroupBinder::BindSelectRef(index_t entry) {
 		// e.g. GROUP BY k, k or GROUP BY 1, 1
 		// in this case, we can just replace the grouping with a constant since the second grouping has no effect
 		// (the constant grouping will be optimized out later)
-		return BindResult(make_unique<BoundConstantExpression>(Value(42)), SQLType(SQLTypeId::INTEGER));
+		return BindResult(make_unique<BoundConstantExpression>(Value(42)), SQLType::INTEGER);
 	}
 	if (entry >= node.select_list.size()) {
 		throw BinderException("GROUP BY term out of range - should be between 1 and %d", (int)node.select_list.size());

@@ -8,18 +8,6 @@ namespace duckdb {
 
 string ExpressionTypeToString(ExpressionType type) {
 	switch (type) {
-	case ExpressionType::OPERATOR_ADD:
-		return "ADD";
-	case ExpressionType::OPERATOR_SUBTRACT:
-		return "SUBTRACT";
-	case ExpressionType::OPERATOR_MULTIPLY:
-		return "MULTIPLY";
-	case ExpressionType::OPERATOR_DIVIDE:
-		return "DIVIDE";
-	case ExpressionType::OPERATOR_CONCAT:
-		return "CONCAT";
-	case ExpressionType::OPERATOR_MOD:
-		return "MOD";
 	case ExpressionType::OPERATOR_CAST:
 		return "CAST";
 	case ExpressionType::OPERATOR_NOT:
@@ -40,14 +28,6 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "LESSTHANOREQUALTO";
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		return "GREATERTHANOREQUALTO";
-	case ExpressionType::COMPARE_LIKE:
-		return "LIKE";
-	case ExpressionType::COMPARE_NOTLIKE:
-		return "NOTLIKE";
-	case ExpressionType::COMPARE_SIMILAR:
-		return "SIMILAR";
-	case ExpressionType::COMPARE_NOTSIMILAR:
-		return "NOTSIMILAR";
 	case ExpressionType::COMPARE_IN:
 		return "IN";
 	case ExpressionType::COMPARE_DISTINCT_FROM:
@@ -70,36 +50,10 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "VECTOR";
 	case ExpressionType::VALUE_SCALAR:
 		return "SCALAR";
-	case ExpressionType::AGGREGATE_COUNT:
-		return "COUNT";
-	case ExpressionType::AGGREGATE_COUNT_STAR:
-		return "COUNT_STAR";
-	case ExpressionType::AGGREGATE_COUNT_DISTINCT:
-		return "COUNT_DISTINCT";
-	case ExpressionType::AGGREGATE_SUM:
-		return "SUM";
-	case ExpressionType::AGGREGATE_SUM_DISTINCT:
-		return "SUM_DISTINCT";
-	case ExpressionType::AGGREGATE_MIN:
-		return "MIN";
-	case ExpressionType::AGGREGATE_MAX:
-		return "MAX";
-	case ExpressionType::AGGREGATE_AVG:
-		return "AVG";
-	case ExpressionType::AGGREGATE_FIRST:
-		return "FIRST";
-	case ExpressionType::AGGREGATE_STDDEV_SAMP:
-		return "AGGREGATE_STDDEV_SAMP";
-	case ExpressionType::WINDOW_SUM:
-		return "SUM";
-	case ExpressionType::WINDOW_COUNT_STAR:
-		return "COUNT_STAR";
-	case ExpressionType::WINDOW_MIN:
-		return "MIN";
-	case ExpressionType::WINDOW_MAX:
-		return "MAX";
-	case ExpressionType::WINDOW_AVG:
-		return "AVG";
+	case ExpressionType::AGGREGATE:
+		return "AGGREGATE";
+	case ExpressionType::WINDOW_AGGREGATE:
+		return "WINDOW_AGGREGATE";
 	case ExpressionType::WINDOW_RANK:
 		return "RANK";
 	case ExpressionType::WINDOW_RANK_DENSE:
@@ -122,7 +76,7 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "NTILE";
 	case ExpressionType::FUNCTION:
 		return "FUNCTION";
-	case ExpressionType::OPERATOR_CASE_EXPR:
+	case ExpressionType::CASE_EXPR:
 		return "CASE";
 	case ExpressionType::OPERATOR_NULLIF:
 		return "NULLIF";
@@ -158,6 +112,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "BOUND_COLUMN_REF";
 	case ExpressionType::BOUND_FUNCTION:
 		return "BOUND_FUNCTION";
+	case ExpressionType::BOUND_AGGREGATE:
+		return "BOUND_AGGREGATE";
 	case ExpressionType::INVALID:
 	default:
 		return "INVALID";
@@ -166,18 +122,6 @@ string ExpressionTypeToString(ExpressionType type) {
 
 string ExpressionTypeToOperator(ExpressionType type) {
 	switch (type) {
-	case ExpressionType::OPERATOR_ADD:
-		return "+";
-	case ExpressionType::OPERATOR_SUBTRACT:
-		return "-";
-	case ExpressionType::OPERATOR_MULTIPLY:
-		return "*";
-	case ExpressionType::OPERATOR_DIVIDE:
-		return "/";
-	case ExpressionType::OPERATOR_CONCAT:
-		return "||";
-	case ExpressionType::OPERATOR_MOD:
-		return "%";
 	case ExpressionType::OPERATOR_NOT:
 		return "!";
 	case ExpressionType::COMPARE_EQUAL:

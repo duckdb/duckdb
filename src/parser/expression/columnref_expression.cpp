@@ -28,12 +28,8 @@ string ColumnRefExpression::ToString() const {
 	}
 }
 
-bool ColumnRefExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
-		return false;
-	}
-	auto other = (ColumnRefExpression *)other_;
-	return column_name == other->column_name && table_name == other->table_name;
+bool ColumnRefExpression::Equals(const ColumnRefExpression *a, const ColumnRefExpression *b) {
+	return a->column_name == b->column_name && a->table_name == b->table_name;
 }
 
 uint64_t ColumnRefExpression::Hash() const {

@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <string>
+#include <stdlib.h>
 
 using namespace std;
 
@@ -31,6 +32,19 @@ struct sqlite3 {
 	duckdb_connection pCon;
 	string last_error;
 };
+
+void sqlite3_randomness(int N, void *pBuf) {
+	static bool init = false;
+	if (!init) {
+		srand(time(NULL));
+		init = true;
+	}
+	unsigned char *zBuf = (unsigned char *)pBuf;
+	while (N--) {
+		unsigned char nextByte = rand() % 255;
+		zBuf[N] = nextByte;
+	}
+}
 
 int sqlite3_open(const char *filename, /* Database filename (UTF-8) */
                  sqlite3 **ppDb        /* OUT: SQLite db handle */

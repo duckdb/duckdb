@@ -10,6 +10,8 @@
 #include "planner/logical_plan_generator.hpp"
 #include "planner/operator/list.hpp"
 #include "planner/subquery/flatten_dependent_join.hpp"
+#include "main/client_context.hpp"
+#include "function/aggregate/distributive_functions.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -27,8 +29,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		plan = move(limit);
 
 		// now we push a COUNT(*) aggregate onto the limit, this will be either 0 or 1 (EXISTS or NOT EXISTS)
-		auto count_star =
-		    make_unique<BoundAggregateExpression>(TypeId::BIGINT, ExpressionType::AGGREGATE_COUNT_STAR, nullptr);
+		auto count_star = make_unique<BoundAggregateExpression>(TypeId::BIGINT, CountStar::GetFunction(), false);
 		auto index_type = count_star->return_type;
 		vector<unique_ptr<Expression>> aggregate_list;
 		aggregate_list.push_back(move(count_star));
@@ -72,8 +73,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// we push an aggregate that returns the FIRST element
 		vector<unique_ptr<Expression>> expressions;
 		auto bound = make_unique<BoundReferenceExpression>(expr.return_type, 0);
-		auto first_agg =
-		    make_unique<BoundAggregateExpression>(expr.return_type, ExpressionType::AGGREGATE_FIRST, move(bound));
+		auto first_agg = make_unique<BoundAggregateExpression>(expr.return_type, First::GetFunction(SQLTypeFromInternalType(expr.return_type)), false);
+		first_agg->children.push_back(move(bound));
 		expressions.push_back(move(first_agg));
 		auto aggr_index = binder.GenerateTableIndex();
 		auto aggr = make_unique<LogicalAggregate>(binder.GenerateTableIndex(), aggr_index, move(expressions));

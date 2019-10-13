@@ -8,19 +8,20 @@ using namespace std;
 TEST_CASE("Test serialization of CHECK constraint", "[storage]") {
 	unique_ptr<QueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
+	auto config = GetTestConfig();
 
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);
 	{
 		// create a database and insert values
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(a INTEGER CHECK (a<10), b INTEGER CHECK(CASE "
 		                          "WHEN b < 10 THEN a < b ELSE a + b < 100 END));"));
 	}
 	// reload the database from disk
 	{
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		// matching tuple
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (3, 7);"));
@@ -39,23 +40,24 @@ TEST_CASE("Test serialization of CHECK constraint", "[storage]") {
 TEST_CASE("Test serialization of NOT NULL constraint", "[storage]") {
 	unique_ptr<QueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
+	auto config = GetTestConfig();
 
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);
 	{
 		// create a database and insert values
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(a INTEGER NOT NULL);"));
 	}
 	// reload the database from disk
 	{
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		REQUIRE_FAIL(con.Query("INSERT INTO test VALUES (NULL)"));
 	}
 	{
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		REQUIRE_FAIL(con.Query("INSERT INTO test VALUES (NULL)"));
 	}

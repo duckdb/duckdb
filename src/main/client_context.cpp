@@ -24,6 +24,8 @@ using namespace std;
 ClientContext::ClientContext(DuckDB &database)
     : db(database), transaction(*database.transaction_manager), interrupted(false), catalog(*database.catalog),
       prepared_statements(make_unique<CatalogSet>(*db.catalog)), open_result(nullptr) {
+	random_device rd;
+	random_engine.seed(rd());
 }
 
 void ClientContext::Cleanup() {
@@ -128,34 +130,23 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
                                                                 bool allow_stream_result) {
 	StatementType statement_type = statement->type;
 	bool create_stream_result = statement_type == StatementType::SELECT && allow_stream_result;
-	// for many statements, we log the literal query string in the WAL
-	// also note the exception for EXECUTE below
-	bool log_query_string = false;
-	switch (statement_type) {
-	case StatementType::UPDATE:
-	case StatementType::DELETE:
-	case StatementType::ALTER:
-	case StatementType::CREATE_INDEX:
-	case StatementType::PREPARE:
-	case StatementType::DEALLOCATE:
-		log_query_string = true;
-		break;
-	default:
-		break;
-	}
+	// for some statements, we log the literal query string in the WAL
+	bool log_query_string = statement_type == StatementType::ALTER;
 
 	profiler.StartPhase("planner");
 	Planner planner(*this);
 	planner.CreatePlan(move(statement));
 	if (!planner.plan) {
 		// we have to log here because some queries are executed in the planner
+		// return an empty result
 		if (log_query_string) {
 			ActiveTransaction().PushQuery(query);
 		}
-		// return an empty result
 		return make_unique<MaterializedQueryResult>(statement_type);
 	}
 	profiler.EndPhase();
+
+	assert(!log_query_string);
 
 	auto plan = move(planner.plan);
 	// extract the result column names from the plan
@@ -177,10 +168,6 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 	// special case with logging EXECUTE with prepared statements that do not scan the table
 	if (plan->type == LogicalOperatorType::EXECUTE) {
 		auto exec = (LogicalExecute *)plan.get();
-		if (exec->prep->statement_type == StatementType::UPDATE ||
-		    exec->prep->statement_type == StatementType::DELETE) {
-			log_query_string = true;
-		}
 		statement_type = exec->prep->statement_type;
 	}
 
@@ -200,12 +187,7 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 	if (create_stream_result) {
 		// successfully compiled SELECT clause and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
-		assert(!log_query_string);
 		return make_unique<StreamQueryResult>(statement_type, *this, sql_types, types, names);
-	}
-	// check if we need to log the query string
-	if (log_query_string) {
-		ActiveTransaction().PushQuery(query);
 	}
 	// create a materialized result by continuously fetching
 	auto result = make_unique<MaterializedQueryResult>(statement_type, sql_types, types, names);
@@ -275,7 +257,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 		if (!result->success) {
 			throw Exception(result->error);
 		}
-		auto prepared_object = make_unique<PreparedStatement>(this, prepare_name);
+		auto prepared_object = make_unique<PreparedStatement>(this, prepare_name, parser.n_prepared_parameters);
 		prepared_statement_objects.insert(prepared_object.get());
 		return prepared_object;
 	} catch (Exception &ex) {
@@ -348,6 +330,8 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementsInternal(string query,
 			auto copied_statement = ((SelectStatement &)*statement).Copy();
 			string error = VerifyQuery(query, move(statement));
 			if (!error.empty()) {
+				// query failed: abort now
+				FinalizeQuery(false);
 				// error in verifying query
 				return make_unique<MaterializedQueryResult>(error);
 			}
@@ -360,12 +344,8 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementsInternal(string query,
 			current_result = ExecuteStatementInternal(query, move(statement), allow_stream_result && is_last_statement);
 			// only the last result can be STREAM_RESULT
 			assert(is_last_statement || current_result->type != QueryResultType::STREAM_RESULT);
-		} catch (Exception &ex) {
+		} catch (std::exception &ex) {
 			current_result = make_unique<MaterializedQueryResult>(ex.what());
-		} catch (std::bad_alloc &ex) {
-			current_result = make_unique<MaterializedQueryResult>("Out of memory!");
-		} catch (...) {
-			current_result = make_unique<MaterializedQueryResult>("Unhandled exception thrown in query execution");
 		}
 		if (!current_result->success) {
 			// initial failures should always be reported as MaterializedResult
@@ -415,12 +395,8 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 	try {
 		// parse the query and transform it into a set of statements
 		parser.ParseQuery(query.c_str());
-	} catch (Exception &ex) {
+	} catch (std::exception &ex) {
 		return make_unique<MaterializedQueryResult>(ex.what());
-	} catch (std::bad_alloc &ex) {
-		return make_unique<MaterializedQueryResult>("Out of memory!");
-	} catch (...) {
-		return make_unique<MaterializedQueryResult>("Unhandled exception thrown in parser");
 	}
 
 	if (parser.statements.size() == 0) {

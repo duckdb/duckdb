@@ -1,10 +1,12 @@
 #include "execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "execution/operator/projection/physical_projection.hpp"
 #include "execution/physical_plan_generator.hpp"
+#include "function/aggregate/distributive_functions.hpp"
 #include "planner/expression/bound_aggregate_expression.hpp"
 #include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/expression/bound_reference_expression.hpp"
 #include "planner/operator/logical_distinct.hpp"
+#include "main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -41,8 +43,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 	for (index_t i = 0; i < child_projection.select_list.size(); ++i) {
 		// first we create an aggregate that returns the FIRST element
 		auto bound = make_unique<BoundReferenceExpression>(types[i], i);
-		auto first_aggregate =
-		    make_unique<BoundAggregateExpression>(types[i], ExpressionType::AGGREGATE_FIRST, move(bound));
+		auto first_aggregate = make_unique<BoundAggregateExpression>(types[i], First::GetFunction(SQLTypeFromInternalType(types[i])), false);
+		first_aggregate->children.push_back(move(bound));
 		// and push it to the list of aggregates
 		aggregates.push_back(move(first_aggregate));
 		projections.push_back(make_unique<BoundReferenceExpression>(types[i], i));

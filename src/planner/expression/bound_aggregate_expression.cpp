@@ -1,15 +1,33 @@
 #include "planner/expression/bound_aggregate_expression.hpp"
+#include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-BoundAggregateExpression::BoundAggregateExpression(TypeId return_type, ExpressionType type,
-                                                   unique_ptr<Expression> child)
-    : Expression(type, ExpressionClass::BOUND_AGGREGATE, return_type), child(move(child)) {
+BoundAggregateExpression::BoundAggregateExpression(TypeId return_type, AggregateFunction function, bool distinct)
+    : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, return_type),
+      function(function), distinct(distinct) {
 }
 
 string BoundAggregateExpression::ToString() const {
-	return ExpressionTypeToString(type) + "(" + (child ? child->GetName() : string()) + ")";
+	string str = function.name + "(";
+	if (distinct) {
+		str += "DISTINCT ";
+	}
+	for (index_t i = 0; i < children.size(); i++) {
+		if (i > 0) {
+			str += ", ";
+		}
+		str += children[i]->GetName();
+	}
+	str += ")";
+	return str;
+}
+uint64_t BoundAggregateExpression::Hash() const {
+	uint64_t result = Expression::Hash();
+	result = CombineHash(result, duckdb::Hash(function.name.c_str()));
+	result = CombineHash(result, duckdb::Hash(distinct));
+	return result;
 }
 
 bool BoundAggregateExpression::Equals(const BaseExpression *other_) const {
@@ -17,12 +35,28 @@ bool BoundAggregateExpression::Equals(const BaseExpression *other_) const {
 		return false;
 	}
 	auto other = (BoundAggregateExpression *)other_;
-	return Expression::Equals(child.get(), other->child.get());
+	if (other->distinct != distinct) {
+		return false;
+	}
+	if (other->function != function) {
+		return false;
+	}
+	if (children.size() != other->children.size()) {
+		return false;
+	}
+	for (index_t i = 0; i < children.size(); i++) {
+		if (!Expression::Equals(children[i].get(), other->children[i].get())) {
+			return false;
+		}
+	}
+	return true;
 }
 
 unique_ptr<Expression> BoundAggregateExpression::Copy() {
-	auto new_child = child ? child->Copy() : nullptr;
-	auto new_aggregate = make_unique<BoundAggregateExpression>(return_type, type, move(new_child));
-	new_aggregate->CopyProperties(*this);
-	return move(new_aggregate);
+	auto copy = make_unique<BoundAggregateExpression>(return_type, function, distinct);
+	for (auto &child : children) {
+		copy->children.push_back(child->Copy());
+	}
+	copy->CopyProperties(*this);
+	return move(copy);
 }

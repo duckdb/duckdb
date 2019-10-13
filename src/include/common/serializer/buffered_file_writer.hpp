@@ -19,7 +19,7 @@ class BufferedFileWriter : public Serializer {
 public:
 	//! Serializes to a buffer allocated by the serializer, will expand when
 	//! writing past the initial threshold
-	BufferedFileWriter(FileSystem &fs, const char *path);
+	BufferedFileWriter(FileSystem &fs, const char *path, bool append = false);
 
 	FileSystem &fs;
 	unique_ptr<data_t[]> data;

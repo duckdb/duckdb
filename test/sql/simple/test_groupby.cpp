@@ -235,7 +235,8 @@ TEST_CASE("Group by multiple columns", "[aggregations]") {
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER);"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 1, 2), (1, 2, 2), (1, 1, 2), (2, 1, 2), (1, 2, 4), (1, 2, NULL);"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO integers VALUES (1, 1, 2), (1, 2, 2), (1, 1, 2), (2, 1, 2), (1, 2, 4), (1, 2, NULL);"));
 
 	result = con.Query("SELECT i, j, SUM(k), COUNT(*), COUNT(k) FROM integers GROUP BY i, j ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2}));
@@ -325,7 +326,7 @@ TEST_CASE("DISTINCT aggregations", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {1, 3}));
 }
 
-TEST_CASE("STDDEV_SAMP aggregations", "[aggregations]") {
+TEST_CASE("STDDEV aggregations", "[aggregations]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -334,6 +335,7 @@ TEST_CASE("STDDEV_SAMP aggregations", "[aggregations]") {
 	REQUIRE_NO_FAIL(con.Query("insert into stddev_test values (42, 1), (43, "
 	                          "1), (42, 2), (1000, 2), (NULL, 1), (NULL, 3)"));
 
+	// stddev_samp
 	result = con.Query("select round(stddev_samp(val), 1) from stddev_test");
 	REQUIRE(CHECK_COLUMN(result, 0, {478.8}));
 
@@ -353,6 +355,72 @@ TEST_CASE("STDDEV_SAMP aggregations", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {85, 1042}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0.7, 677.4}));
+	REQUIRE(CHECK_COLUMN(result, 3, {42, 42}));
+
+	// stddev_pop
+	result = con.Query("select round(stddev_pop(val), 1) from stddev_test");
+	REQUIRE(CHECK_COLUMN(result, 0, {414.7}));
+
+	result = con.Query("select round(stddev_pop(val), 1) from stddev_test  "
+	                   "where val is not null");
+	REQUIRE(CHECK_COLUMN(result, 0, {414.7}));
+
+	result = con.Query("select grp, sum(val), round(stddev_pop(val), 1), "
+	                   "min(val) from stddev_test group by grp order by grp");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {85, 1042, Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0.5, 479.0, Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {42, 42, Value()}));
+
+	result = con.Query("select grp, sum(val), round(stddev_pop(val), 1), min(val) from "
+	                   "stddev_test where val is not null group by grp order by grp");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {85, 1042}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0.5, 479.0}));
+	REQUIRE(CHECK_COLUMN(result, 3, {42, 42}));
+
+	// var_samp
+	result = con.Query("select round(var_samp(val), 1) from stddev_test");
+	REQUIRE(CHECK_COLUMN(result, 0, {229281.6}));
+
+	result = con.Query("select round(var_samp(val), 1) from stddev_test  "
+	                   "where val is not null");
+	REQUIRE(CHECK_COLUMN(result, 0, {229281.6}));
+
+	result = con.Query("select grp, sum(val), round(var_samp(val), 1), "
+	                   "min(val) from stddev_test group by grp order by grp");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {85, 1042, Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0.5, 458882.0, Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {42, 42, Value()}));
+
+	result = con.Query("select grp, sum(val), round(var_samp(val), 1), min(val) from "
+	                   "stddev_test where val is not null group by grp order by grp");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {85, 1042}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0.5, 458882.0}));
+	REQUIRE(CHECK_COLUMN(result, 3, {42, 42}));
+
+	// var_pop
+	result = con.Query("select round(var_pop(val), 1) from stddev_test");
+	REQUIRE(CHECK_COLUMN(result, 0, {171961.2}));
+
+	result = con.Query("select round(var_pop(val), 1) from stddev_test  "
+	                   "where val is not null");
+	REQUIRE(CHECK_COLUMN(result, 0, {171961.2}));
+
+	result = con.Query("select grp, sum(val), round(var_pop(val), 2), "
+	                   "min(val) from stddev_test group by grp order by grp");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {85, 1042, Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0.25, 229441.0, Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {42, 42, Value()}));
+
+	result = con.Query("select grp, sum(val), round(var_pop(val), 2), min(val) from "
+	                   "stddev_test where val is not null group by grp order by grp");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {85, 1042}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0.25, 229441.0}));
 	REQUIRE(CHECK_COLUMN(result, 3, {42, 42}));
 }
 

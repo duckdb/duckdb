@@ -42,8 +42,9 @@ TEST_CASE("Basic prepared statements", "[prepared]") {
 	REQUIRE_FAIL(con.Query("PREPARE CREATE TABLE a(i INTEGER)"));
 	REQUIRE_FAIL(con.Query("SELECT * FROM a;"));
 
-	// cannot resolve type
-	REQUIRE_FAIL(con.Query("PREPARE s1 AS SELECT $1+$2"));
+	// type will be resolved to "double"
+	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS SELECT $1+$2"));
+	REQUIRE_NO_FAIL(con.Query("DEALLOCATE s1"));
 
 	// but this works
 	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS SELECT NOT($1), 10+$2, $3+20, 4 IN (2, 3, $4), $5 IN (2, 3, 4)"));
@@ -54,6 +55,42 @@ TEST_CASE("Basic prepared statements", "[prepared]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {23}));
 	REQUIRE(CHECK_COLUMN(result, 3, {true}));
 	REQUIRE(CHECK_COLUMN(result, 4, {true}));
+
+	// cannot resolve these types
+	REQUIRE_FAIL(con.Query("PREPARE s1 AS SELECT $1"));
+	REQUIRE_FAIL(con.Query("PREPARE s1 AS SELECT (SELECT $1)"));
+	REQUIRE_FAIL(con.Query("PREPARE s1 AS SELECT $1=$2"));
+}
+
+TEST_CASE("Prepared statements and subqueries", "[prepared]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// simple subquery
+	REQUIRE_NO_FAIL(con.Query("PREPARE v1 AS SELECT * FROM (SELECT $1::INTEGER) sq1;"));
+
+	result = con.Query("EXECUTE v1(42)");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	// subquery with non-fulfillable predicate
+	REQUIRE_NO_FAIL(con.Query("PREPARE v2 AS SELECT * FROM (SELECT $1::INTEGER WHERE 1=0) sq1;"));
+
+	result = con.Query("EXECUTE v2(42)");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+
+	// prepared statement in correlated scalar subquery
+	REQUIRE_NO_FAIL(con.Query("PREPARE v3 AS SELECT (SELECT $1::INT+sq1.i) FROM (SELECT 42 AS i) sq1;"));
+
+	result = con.Query("EXECUTE v3(42)");
+	REQUIRE(CHECK_COLUMN(result, 0, {84}));
+
+	// prepared statement in nested correlated scalar subquery
+	REQUIRE_NO_FAIL(
+	    con.Query("PREPARE v4 AS SELECT (SELECT (SELECT $1::INT+sq1.i)+$2::INT+sq1.i) FROM (SELECT 42 AS i) sq1;"));
+
+	result = con.Query("EXECUTE v4(20, 20)");
+	REQUIRE(CHECK_COLUMN(result, 0, {124}));
 }
 
 TEST_CASE("PREPARE for SELECT clause", "[prepared]") {

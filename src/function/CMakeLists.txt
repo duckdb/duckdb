@@ -1,6 +1,8 @@
+add_subdirectory(aggregate)
+add_subdirectory(scalar)
+add_subdirectory(table)
 
-add_subdirectory(scalar_function)
-add_subdirectory(table_function)
-
-add_library(duckdb_function OBJECT function.cpp)
-set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_function> PARENT_SCOPE)
+add_library(duckdb_function OBJECT cast_rules.cpp function.cpp)
+set(ALL_OBJECT_FILES
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_function>
+    PARENT_SCOPE)

@@ -178,6 +178,26 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			}
 			break;
 		}
+		case SQLTypeId::TIME: {
+					index_t row = 0;
+					duckdb_time *target = (duckdb_time *)out->columns[col].data;
+					for (auto &chunk : result->collection.chunks) {
+						dtime_t *source = (dtime_t *)chunk->data[col].data;
+						for (index_t k = 0; k < chunk->data[col].count; k++) {
+							if (!chunk->data[col].nullmask[k]) {
+								int32_t hour, min, sec, msec;
+								Time::Convert(source[k], hour, min, sec, msec);
+								target[row].hour = hour;
+								target[row].min = min;
+								target[row].sec = sec;
+								target[row].msec = msec;
+
+							}
+							row++;
+						}
+					}
+					break;
+				}
 		case SQLTypeId::TIMESTAMP: {
 			index_t row = 0;
 			duckdb_timestamp *target = (duckdb_timestamp *)out->columns[col].data;
@@ -278,12 +298,23 @@ duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
 	return wrapper->statement->success ? DuckDBSuccess : DuckDBError;
 }
 
+duckdb_state duckdb_nparams(duckdb_prepared_statement prepared_statement, index_t *nparams_out) {
+	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
+	if (!wrapper || !wrapper->statement || !wrapper->statement->success || wrapper->statement->is_invalidated) {
+		return DuckDBError;
+	}
+	*nparams_out = wrapper->statement->n_param;
+	return DuckDBSuccess;
+}
+
 static duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, index_t param_idx, Value val) {
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
 	if (!wrapper || !wrapper->statement || !wrapper->statement->success || wrapper->statement->is_invalidated) {
 		return DuckDBError;
 	}
-	// TODO we need to know how many params this query has and fail if idx > param_count
+	if (param_idx > wrapper->statement->n_param) {
+		return DuckDBError;
+	}
 	if (param_idx > wrapper->values.size()) {
 		wrapper->values.resize(param_idx);
 	}
@@ -366,6 +397,8 @@ duckdb_type ConvertCPPTypeToC(SQLType sql_type) {
 		return DUCKDB_TYPE_TIMESTAMP;
 	case SQLTypeId::DATE:
 		return DUCKDB_TYPE_DATE;
+	case SQLTypeId::TIME:
+		return DUCKDB_TYPE_TIME;
 	case SQLTypeId::VARCHAR:
 		return DUCKDB_TYPE_VARCHAR;
 	default:
@@ -378,23 +411,25 @@ SQLType ConvertCTypeToCPP(duckdb_type type) {
 	case DUCKDB_TYPE_BOOLEAN:
 		return SQLType(SQLTypeId::BOOLEAN);
 	case DUCKDB_TYPE_TINYINT:
-		return SQLType(SQLTypeId::TINYINT);
+		return SQLType::TINYINT;
 	case DUCKDB_TYPE_SMALLINT:
-		return SQLType(SQLTypeId::SMALLINT);
+		return SQLType::SMALLINT;
 	case DUCKDB_TYPE_INTEGER:
-		return SQLType(SQLTypeId::INTEGER);
+		return SQLType::INTEGER;
 	case DUCKDB_TYPE_BIGINT:
-		return SQLType(SQLTypeId::BIGINT);
+		return SQLType::BIGINT;
 	case DUCKDB_TYPE_FLOAT:
-		return SQLType(SQLTypeId::FLOAT);
+		return SQLType::FLOAT;
 	case DUCKDB_TYPE_DOUBLE:
-		return SQLType(SQLTypeId::DOUBLE);
+		return SQLType::DOUBLE;
 	case DUCKDB_TYPE_TIMESTAMP:
-		return SQLType(SQLTypeId::TIMESTAMP);
+		return SQLType::TIMESTAMP;
 	case DUCKDB_TYPE_DATE:
-		return SQLType(SQLTypeId::DATE);
+		return SQLType::DATE;
+	case DUCKDB_TYPE_TIME:
+		return SQLType::TIME;
 	case DUCKDB_TYPE_VARCHAR:
-		return SQLType(SQLTypeId::VARCHAR);
+		return SQLType::VARCHAR;
 	default:
 		return SQLType(SQLTypeId::INVALID);
 	}
@@ -418,6 +453,8 @@ index_t GetCTypeSize(duckdb_type type) {
 		return sizeof(double);
 	case DUCKDB_TYPE_DATE:
 		return sizeof(duckdb_date);
+	case DUCKDB_TYPE_TIME:
+		return sizeof(duckdb_time);
 	case DUCKDB_TYPE_TIMESTAMP:
 		return sizeof(duckdb_timestamp);
 	case DUCKDB_TYPE_VARCHAR:
@@ -463,6 +500,10 @@ static Value GetCValue(duckdb_result *result, index_t col, index_t row) {
 		auto date = UnsafeFetch<duckdb_date>(result, col, row);
 		return Value::DATE(date.year, date.month, date.day);
 	}
+	case DUCKDB_TYPE_TIME: {
+			auto time = UnsafeFetch<duckdb_time>(result, col, row);
+			return Value::TIME(time.hour, time.min, time.sec, time.msec);
+		}
 	case DUCKDB_TYPE_TIMESTAMP: {
 		auto timestamp = UnsafeFetch<duckdb_timestamp>(result, col, row);
 		return Value::TIMESTAMP(timestamp.date.year, timestamp.date.month, timestamp.date.day, timestamp.time.hour,

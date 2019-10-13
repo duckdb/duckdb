@@ -11,7 +11,6 @@
 #include "common/unordered_set.hpp"
 #include "common/enums/index_type.hpp"
 #include "common/types/data_chunk.hpp"
-#include "common/types/tuple.hpp"
 #include "parser/parsed_expression.hpp"
 #include "planner/expression.hpp"
 
@@ -70,6 +69,9 @@ public:
 
 	//! Called when data inside the index is Deleted
 	virtual void Delete(DataChunk &entries, Vector &row_identifiers) = 0;
+
+	//! Insert data into the index. Does not lock the index.
+	virtual bool Insert(DataChunk &input, Vector &row_identifiers) = 0;
 
 	//! Returns true if the index is affected by updates on the specified column ids, and false otherwise
 	bool IndexIsUpdated(vector<column_t> &column_ids);

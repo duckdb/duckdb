@@ -3,12 +3,13 @@
 NULL
 
 duckdb_connection <- function(duckdb_driver, dbdir, debug) {
+  dbdir <- path.expand(dbdir)
     if (debug) {
-        message("CONNECT_START ", dbdir)
+        cat("CONNECT_START ", dbdir, "\n")
       }
   database_ref = .Call(duckdb_startup_R, dbdir)
   if (debug) {
-        message("CONNECT_END ", dbdir)
+        cat("CONNECT_END ", dbdir, "\n")
       }
   new(
     "duckdb_connection",
@@ -68,7 +69,7 @@ setMethod("dbDisconnect", "duckdb_connection",
 setMethod("dbSendQuery", c("duckdb_connection", "character"),
           function(conn, statement, ...) {
             if (conn@debug) {
-              message("Q ", statement)
+              cat("Q ", statement, "\n")
             }
 		    statement <- enc2utf8(statement)
             resultset <- .Call(duckdb_query_R, conn@conn_ref, statement)
@@ -89,7 +90,7 @@ setMethod("dbSendQuery", c("duckdb_connection", "character"),
 setMethod("dbSendStatement", c("duckdb_connection", "character"),
           function(conn, statement, ...) {
             if (conn@debug) {
-              message("S ", statement)
+              cat("S ", statement, "\n")
             }
 		    statement <- enc2utf8(statement)
             resultset <- .Call(duckdb_query_R, conn@conn_ref, statement)

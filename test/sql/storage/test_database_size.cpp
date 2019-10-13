@@ -10,6 +10,7 @@ TEST_CASE("Test that database size does not grow after many checkpoints", "[stor
 	index_t expected_sum = 0;
 
 	FileSystem fs;
+	auto config = GetTestConfig();
 	unique_ptr<DuckDB> database;
 	unique_ptr<QueryResult> result;
 	auto storage_database = TestCreatePath("dbsize_test");
@@ -32,7 +33,7 @@ TEST_CASE("Test that database size does not grow after many checkpoints", "[stor
 	}
 	// force a checkpoint by reloading
 	{
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, config.get());
 		Connection con(db);
 	}
 
@@ -45,7 +46,7 @@ TEST_CASE("Test that database size does not grow after many checkpoints", "[stor
 	}
 	// now reload the database a bunch of times, and everytime we reload update all the values
 	for (index_t i = 0; i < 20; i++) {
-		DuckDB db(storage_database);
+		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		// verify the current count
 		result = con.Query("SELECT SUM(a) FROM test");

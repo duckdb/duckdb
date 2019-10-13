@@ -17,8 +17,8 @@ class ClientContext;
 class PreparedStatement {
 public:
 	//! Create a successfully prepared prepared statement object with the given name
-	PreparedStatement(ClientContext *context, string name)
-	    : context(context), name(name), success(true), is_invalidated(false) {
+	PreparedStatement(ClientContext *context, string name, index_t n_param = 0)
+	    : context(context), name(name), success(true), is_invalidated(false), n_param(n_param) {
 	}
 	//! Create a prepared statement that was not successfully prepared
 	PreparedStatement(string error) : context(nullptr), success(false), error(error), is_invalidated(false) {
@@ -37,6 +37,8 @@ public:
 	string error;
 	//! Whether or not the prepared statement has been invalidated because the underlying connection has been destroyed
 	bool is_invalidated;
+
+	index_t n_param;
 
 public:
 	//! Execute the prepared statement with the given set of arguments

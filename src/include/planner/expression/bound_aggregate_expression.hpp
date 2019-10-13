@@ -9,15 +9,19 @@
 #pragma once
 
 #include "planner/expression.hpp"
+#include "function/aggregate_function.hpp"
 
 namespace duckdb {
-
 class BoundAggregateExpression : public Expression {
 public:
-	BoundAggregateExpression(TypeId return_type, ExpressionType type, unique_ptr<Expression> child);
+	BoundAggregateExpression(TypeId return_type, AggregateFunction function, bool distinct);
 
-	//! The child of the aggregate expression
-	unique_ptr<Expression> child;
+	//! The bound function expression
+	AggregateFunction function;
+	//! True to aggregate on distinct values
+	bool distinct;
+	//! List of arguments to the function
+	vector<unique_ptr<Expression>> children;
 
 public:
 	bool IsAggregate() const override {
@@ -29,6 +33,7 @@ public:
 
 	string ToString() const override;
 
+	uint64_t Hash() const override;
 	bool Equals(const BaseExpression *other) const override;
 
 	unique_ptr<Expression> Copy() override;

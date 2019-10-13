@@ -3,6 +3,7 @@
 #include "main/client_context.hpp"
 #include "main/connection_manager.hpp"
 #include "main/database.hpp"
+#include "main/appender.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -17,6 +18,7 @@ Connection::Connection(DuckDB &database) : db(database), context(make_unique<Cli
 Connection::~Connection() {
 	if (!context->is_invalidated) {
 		context->Cleanup();
+		CloseAppender();
 		db.connection_manager->RemoveConnection(this);
 	}
 }
@@ -70,4 +72,29 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(string query, vector<Va
 		return make_unique<MaterializedQueryResult>(statement->error);
 	}
 	return statement->Execute(values);
+}
+
+Appender *Connection::OpenAppender(string schema_name, string table_name) {
+	if (context->is_invalidated) {
+		throw Exception("Database that this connection belongs to has been closed!");
+	}
+	if (appender) {
+		throw Exception("Active appender already exists for this connection");
+	}
+	context->context_lock.lock();
+	if (!context->transaction.HasActiveTransaction()) {
+		context->transaction.BeginTransaction();
+	}
+	appender = make_unique<Appender>(*this, schema_name, table_name);
+	return appender.get();
+}
+void Connection::CloseAppender() {
+	if (appender) {
+		appender->Flush();
+		if (context->transaction.IsAutoCommit()) {
+			context->transaction.Commit();
+		}
+		appender = nullptr;
+		this->context->context_lock.unlock(); // TODO what about exceptions in appender?
+	}
 }

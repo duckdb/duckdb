@@ -6,9 +6,13 @@
 using namespace duckdb;
 using namespace std;
 
-BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const char *path)
+BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const char *path, bool append)
     : fs(fs), data(unique_ptr<data_t[]>(new data_t[FILE_BUFFER_SIZE])), offset(0) {
-	handle = fs.OpenFile(path, FileFlags::WRITE | FileFlags::CREATE, FileLockType::WRITE_LOCK);
+	uint8_t flags = FileFlags::WRITE | FileFlags::CREATE;
+	if (append) {
+		flags |= FileFlags::APPEND;
+	}
+	handle = fs.OpenFile(path, flags, FileLockType::WRITE_LOCK);
 }
 
 void BufferedFileWriter::WriteData(const_data_ptr_t buffer, uint64_t write_size) {

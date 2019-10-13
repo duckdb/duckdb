@@ -70,6 +70,54 @@ TEST_CASE("Rounding test", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {42.123}));
 }
 
+TEST_CASE("Test random & setseed functions", "[function]") {
+	unique_ptr<QueryResult> result, result1, result2;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// random() is evaluated twice here
+	result = con.Query("select case when random() between 0 and 0.99999 then 1 else 0 end");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result1 = con.Query("select random()");
+	result2 = con.Query("select random()");
+	REQUIRE(!result1->Equals(*result2));
+
+	REQUIRE_NO_FAIL(con.Query("select setseed(0.1)"));
+	result1 = con.Query("select random(), random(), random()");
+	REQUIRE(CHECK_COLUMN(result1, 0, {0.612055}));
+	REQUIRE(CHECK_COLUMN(result1, 1, {0.384141}));
+	REQUIRE(CHECK_COLUMN(result1, 2, {0.288025}));
+	REQUIRE_NO_FAIL(con.Query("select setseed(0.1)"));
+	result2 = con.Query("select random(), random(), random()");
+	REQUIRE(result1->Equals(*result2));
+
+	REQUIRE_FAIL(con.Query("select setseed(1.1)"));
+	REQUIRE_FAIL(con.Query("select setseed(-1.1)"));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE seeds(a DOUBLE)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO seeds VALUES (-0.1), (0.0), (0.1)"));
+	result2 = con.Query("select setseed(a), a from seeds;");
+	REQUIRE(CHECK_COLUMN(result2, 0, {Value(), Value(), Value()}));
+	REQUIRE(CHECK_COLUMN(result2, 1, {-0.1, 0.0, 0.1}));
+	// Make sure last seed (0.1) is in effect
+	result1 = con.Query("select random(), random(), random()");
+	REQUIRE_NO_FAIL(con.Query("select setseed(0.1)"));
+	result2 = con.Query("select random(), random(), random()");
+	REQUIRE(result1->Equals(*result2));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(a INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10)"));
+
+	result = con.Query("select case when min(random()) >= 0 then 1 else 0 end from numbers;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con.Query("select case when max(random()) < 1 then 1 else 0 end from numbers;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	REQUIRE_NO_FAIL(con.Query("select * from numbers order by random()"));
+	REQUIRE_NO_FAIL(con.Query("select random() from numbers"));
+}
+
 // see https://www.postgresql.org/docs/10/functions-math.html
 
 TEST_CASE("Function test cases from PG docs", "[function]") {
@@ -105,6 +153,9 @@ TEST_CASE("Function test cases from PG docs", "[function]") {
 	result = con.Query("select log10(100.0)");
 	REQUIRE(CHECK_COLUMN(result, 0, {2.0}));
 
+	result = con.Query("select log2(4.0)");
+	REQUIRE(CHECK_COLUMN(result, 0, {2.0}));
+
 	result = con.Query("select pi()");
 	REQUIRE(CHECK_COLUMN(result, 0, {3.14159265358979}));
 
@@ -116,4 +167,66 @@ TEST_CASE("Function test cases from PG docs", "[function]") {
 
 	result = con.Query("select degrees(0.5)");
 	REQUIRE(CHECK_COLUMN(result, 0, {28.6478897565412}));
+
+	result = con.Query("select sign(4.1)");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result = con.Query("select sign(-4.1)");
+	REQUIRE(CHECK_COLUMN(result, 0, {-1}));
+
+	result = con.Query("select sign(0)");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	result = con.Query("select sign(3)");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+}
+
+TEST_CASE("Mod test", "[function]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE modme(a DOUBLE, b INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO modme VALUES (42.123456, 3)"));
+
+	// input is real, divisor is an integer
+	result = con.Query("select mod(a, 40) from modme");
+	REQUIRE(CHECK_COLUMN(result, 0, {2.123456}));
+
+	// Mod with 0 should be null
+	result = con.Query("select mod(42, 0)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+
+	// input is real, divisor is a real
+	result = con.Query("select mod(a, 2) from modme");
+	REQUIRE(CHECK_COLUMN(result, 0, {.123456}));
+
+	// input is an integer, divisor is a real
+	result = con.Query("select mod(b, 2.1) from modme");
+	REQUIRE(CHECK_COLUMN(result, 0, {0.9}));
+}
+TEST_CASE("Power test", "[function]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE powerme(a DOUBLE, b INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO powerme VALUES (2.1, 3)"));
+
+	result = con.Query("select pow(a, 0) from powerme");
+	REQUIRE(CHECK_COLUMN(result, 0, {1.0}));
+
+	result = con.Query("select pow(b, -2) from powerme");
+	REQUIRE(CHECK_COLUMN(result, 0, {.1111}));
+
+	result = con.Query("select pow(a, b) from powerme");
+	REQUIRE(CHECK_COLUMN(result, 0, {9.261}));
+
+	result = con.Query("select pow(b, a) from powerme");
+	REQUIRE(CHECK_COLUMN(result, 0, {10.045}));
+
+	result = con.Query("select power(b, a) from powerme");
+	REQUIRE(CHECK_COLUMN(result, 0, {10.045}));
 }

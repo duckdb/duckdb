@@ -1,6 +1,8 @@
 #include "execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "execution/operator/aggregate/physical_simple_aggregate.hpp"
 #include "execution/physical_plan_generator.hpp"
+#include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "planner/expression/bound_aggregate_expression.hpp"
 #include "planner/operator/logical_aggregate.hpp"
 
 using namespace duckdb;
@@ -14,15 +16,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 		// no groups, check if we can use a simple aggregation
 		// special case: aggregate entire columns together
 		bool use_simple_aggregation = true;
-		for(index_t i = 0; i < op.expressions.size(); i++) {
-			switch(op.expressions[i]->type) {
-			case ExpressionType::AGGREGATE_COUNT_STAR:
-			case ExpressionType::AGGREGATE_COUNT:
-			case ExpressionType::AGGREGATE_SUM:
-			case ExpressionType::AGGREGATE_MIN:
-			case ExpressionType::AGGREGATE_MAX:
-				break;
-			default:
+		for (index_t i = 0; i < op.expressions.size(); i++) {
+			auto &aggregate = (BoundAggregateExpression &)*op.expressions[i];
+			if (!aggregate.function.simple_update || aggregate.distinct) {
 				// unsupported aggregate for simple aggregation: use hash aggregation
 				use_simple_aggregation = false;
 				break;

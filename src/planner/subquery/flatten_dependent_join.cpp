@@ -7,6 +7,9 @@
 #include "planner/operator/list.hpp"
 #include "planner/subquery/has_correlated_expressions.hpp"
 #include "planner/subquery/rewrite_correlated_expressions.hpp"
+#include "planner/expression/bound_aggregate_expression.hpp"
+#include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "function/aggregate/distributive_functions.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -132,9 +135,10 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			// ELSE COUNT(*) END
 			for (index_t i = 0; i < aggr.expressions.size(); i++) {
 				assert(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-				if (aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT ||
-				    aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT_STAR ||
-				    aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT_DISTINCT) {
+				auto bound = (BoundAggregateExpression *)&*aggr.expressions[i];
+				vector<SQLType> arguments;
+				if (bound->function == Count::GetFunction()||
+					bound->function == CountStar::GetFunction()) {
 					// have to replace this ColumnBinding with the CASE expression
 					replacement_map[ColumnBinding(aggr.aggregate_index, i)] = i;
 				}

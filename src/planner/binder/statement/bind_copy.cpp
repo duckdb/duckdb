@@ -13,7 +13,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CopyStatement &stmt) {
 		// COPY from a query
 		result->select_statement = Bind(*stmt.select_statement);
 		result->names = {"Count"};
-		result->sql_types = {SQLType(SQLTypeId::BIGINT)};
+		result->sql_types = {SQLType::BIGINT};
 	} else {
 		assert(!stmt.info->table.empty());
 		// COPY to a table

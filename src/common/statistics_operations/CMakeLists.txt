@@ -1,2 +1,0 @@
-add_library_unity(duckdb_statistics_operations OBJECT statistics_aggregate_operators.cpp statistics_case.cpp statistics_cast_operators.cpp statistics_numeric_operators.cpp statistics_string_operators.cpp)
-set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_statistics_operations> PARENT_SCOPE)

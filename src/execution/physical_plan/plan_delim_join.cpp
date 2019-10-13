@@ -4,7 +4,10 @@
 #include "execution/operator/projection/physical_projection.hpp"
 #include "execution/operator/scan/physical_chunk_scan.hpp"
 #include "execution/physical_plan_generator.hpp"
+#include "function/aggregate/distributive_functions.hpp"
 #include "planner/operator/logical_delim_join.hpp"
+#include "planner/expression/bound_aggregate_expression.hpp"
+#include "main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -54,11 +57,15 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 			auto &info = hash_join.hash_table->correlated_mark_join_info;
 
 			vector<TypeId> payload_types = {TypeId::BIGINT, TypeId::BIGINT}; // COUNT types
-			vector<ExpressionType> aggregate_types = {ExpressionType::AGGREGATE_COUNT_STAR,
-			                                          ExpressionType::AGGREGATE_COUNT};
-
+			vector<AggregateFunction> aggregate_functions = {CountStar::GetFunction(), Count::GetFunction()};
+			vector<BoundAggregateExpression *> correlated_aggregates;
+			for (index_t i = 0; i < aggregate_functions.size(); ++i) {
+				auto aggr = make_unique<BoundAggregateExpression>(payload_types[i], aggregate_functions[i], false);
+				correlated_aggregates.push_back(&*aggr);
+				info.correlated_aggregates.push_back(move(aggr));
+			}
 			info.correlated_counts =
-			    make_unique<SuperLargeHashTable>(1024, delim_types, payload_types, aggregate_types);
+			    make_unique<SuperLargeHashTable>(1024, delim_types, payload_types, correlated_aggregates);
 			info.correlated_types = delim_types;
 			// FIXME: these can be initialized "empty" (without allocating empty vectors)
 			info.group_chunk.Initialize(delim_types);

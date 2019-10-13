@@ -1,4 +1,3 @@
-#include "parser/expression/aggregate_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "parser/query_node/select_node.hpp"
@@ -173,7 +172,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	// i.e. in the query [SELECT i, SUM(i) FROM integers;] the "i" will be bound as a normal column
 	// since we have an aggregation, we need to either (1) throw an error, or (2) wrap the column in a FIRST() aggregate
 	// we choose the former one [CONTROVERSIAL: this is the PostgreSQL behavior]
-	if (result->aggregates.size() > 0) {
+	if (result->groups.size() > 0 || result->aggregates.size() > 0 || statement.having) {
 		if (select_binder.BoundColumns()) {
 			throw BinderException("column must appear in the GROUP BY clause or be used in an aggregate function");
 		}

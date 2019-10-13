@@ -26,6 +26,12 @@ static void WriteCSV(string path, const char *csv) {
 	csv_writer.close();
 }
 
+static void WriteBinary(string path, const uint8_t *data, uint64_t length) {
+	ofstream binary_writer(path, ios::binary);
+	binary_writer.write((const char *)data, length);
+	binary_writer.close();
+}
+
 TEST_CASE("Test copy statement", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -87,7 +93,7 @@ TEST_CASE("Test copy statement", "[copy]") {
 
 	// Importing CSV to Selected Columns
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test4 (a INTEGER, b INTEGER,c VARCHAR(10));"));
-	result = con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + "' (DELIMITER ',', HEADER 0);");
+	result = con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + "' (DELIM ',', HEADER 0);");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 	result = con.Query("SELECT * FROM test4 ORDER BY 1 LIMIT 3 ");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
@@ -95,7 +101,23 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {" test", " test", " test"}));
 
 	// unsupported type for HEADER
-	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (DELIMITER ',', HEADER 0.2);"));
+	REQUIRE_FAIL(
+	    con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (SEP ',', HEADER 0.2);"));
+	// empty sep
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (SEP);"));
+	// number as separator
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (SEP 1);"));
+	// multiple format options
+	REQUIRE_FAIL(
+	    con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + "' (FORMAT 'csv', FORMAT 'json');"));
+	// number as escape character
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (ESCAPE 1);"));
+	// no escape character
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (ESCAPE);"));
+	// no quote character
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (QUOTE);"));
+	// no format character
+	REQUIRE_FAIL(con.Query("COPY test4(a,c) from '" + fs.JoinPath(csv_path, "test4.csv") + " ' (FORMAT);"));
 
 	// use a different delimiter
 	auto pipe_csv = fs.JoinPath(csv_path, "test_pipe.csv");
@@ -105,8 +127,9 @@ TEST_CASE("Test copy statement", "[copy]") {
 	}
 	from_csv_file_pipe.close();
 
-	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER,c VARCHAR(10));");
-	result = con.Query("COPY test FROM '" + pipe_csv + "' DELIMITER '|';");
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER,c VARCHAR(10));"));
+	result = con.Query("COPY test FROM '" + pipe_csv + "' (SEPARATOR '|')");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
 	// test null
@@ -153,6 +176,40 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE vsize (a INTEGER, b INTEGER,c VARCHAR(10));"));
 	result = con.Query("COPY vsize FROM '" + fs.JoinPath(csv_path, "vsize.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {1024}));
+}
+
+TEST_CASE("Test copy statement with file overwrite", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+
+	// create a table and insert some values
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR(10));"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 'hello'), (2, 'world '), (3, ' xx');"));
+
+	result = con.Query("SELECT * FROM test ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "world ", " xx"}));
+
+	// copy to the file
+	result = con.Query("COPY test TO '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+	// now copy to the file again
+	result = con.Query("COPY test TO '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+	// reload the data from the file: it should only have three rows
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test"));
+
+	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+	result = con.Query("SELECT * FROM test ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "world ", " xx"}));
 }
 
 TEST_CASE("Test copy statement with default values", "[copy]") {
@@ -406,7 +463,7 @@ TEST_CASE("Test copy into from on-time dataset", "[copy]") {
 
 	auto csv_path = GetCSVPath();
 	auto ontime_csv = fs.JoinPath(csv_path, "ontime.csv");
-	WriteCSV(ontime_csv, ontime_sample);
+	WriteBinary(ontime_csv, ontime_sample, sizeof(ontime_sample));
 
 	REQUIRE_NO_FAIL(con.Query(
 	    "CREATE TABLE ontime(year SMALLINT, quarter SMALLINT, month SMALLINT, dayofmonth SMALLINT, dayofweek SMALLINT, "
@@ -472,7 +529,7 @@ TEST_CASE("Test copy from lineitem csv", "[copy]") {
 
 	auto csv_path = GetCSVPath();
 	auto lineitem_csv = fs.JoinPath(csv_path, "lineitem.csv");
-	WriteCSV(lineitem_csv, lineitem_sample);
+	WriteBinary(lineitem_csv, lineitem_sample, sizeof(lineitem_sample));
 
 	REQUIRE_NO_FAIL(con.Query(
 	    "CREATE TABLE lineitem(l_orderkey INT NOT NULL, l_partkey INT NOT NULL, l_suppkey INT NOT NULL, l_linenumber "
@@ -491,7 +548,7 @@ TEST_CASE("Test copy from lineitem csv", "[copy]") {
 	                  "lites. fluffily even de", " pending foxes. slyly re", "arefully slyly ex"}));
 
 	// test COPY TO with HEADER
-	result = con.Query("COPY lineitem TO '" + lineitem_csv + "' DELIMITER ' ' HEADER");
+	result = con.Query("COPY lineitem TO '" + lineitem_csv + "' (DELIMITER ' ', HEADER)");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
 	// clear out the table
@@ -518,7 +575,7 @@ TEST_CASE("Test copy from web_page csv", "[copy]") {
 
 	auto csv_path = GetCSVPath();
 	auto webpage_csv = fs.JoinPath(csv_path, "web_page.csv");
-	WriteCSV(webpage_csv, web_page);
+	WriteBinary(webpage_csv, web_page, sizeof(web_page));
 
 	REQUIRE_NO_FAIL(con.Query(
 	    "CREATE TABLE web_page(wp_web_page_sk integer not null, wp_web_page_id char(16) not null, wp_rec_start_date "
@@ -546,6 +603,51 @@ TEST_CASE("Test copy from web_page csv", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 13, {4, 1, 4}));
 }
 
+TEST_CASE("Test copy from greek-utf8 csv", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+	auto csv_file = fs.JoinPath(csv_path, "greek_utf8.csv");
+	WriteBinary(csv_file, greek_utf8, sizeof(greek_utf8));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE greek_utf8(i INTEGER, j VARCHAR, k INTEGER)"));
+
+	result = con.Query("COPY greek_utf8 FROM '" + csv_file + "' DELIMITER '|'");
+	REQUIRE(CHECK_COLUMN(result, 0, {8}));
+
+	result = con.Query("SELECT * FROM greek_utf8 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1689, 1690, 41561, 45804, 51981, 171067, 182773, 607808}));
+	REQUIRE(CHECK_COLUMN(result, 1,
+	                     {"\x30\x30\x69\\047\x6d", "\x30\x30\x69\\047\x76", "\x32\x30\x31\x35\xe2\x80\x8e",
+	                      "\x32\x31\xcf\x80", "\x32\x34\x68\x6f\x75\x72\x73\xe2\x80\xac",
+	                      "\x61\x72\x64\x65\xcc\x80\x63\x68", "\x61\xef\xac\x81",
+	                      "\x70\x6f\x76\x65\x72\x74\x79\xe2\x80\xaa"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {2, 2, 1, 1, 1, 2, 1, 1}));
+}
+
+TEST_CASE("Test copy from ncvoter csv", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+	auto ncvoter_csv = fs.JoinPath(csv_path, "ncvoter.csv");
+	WriteBinary(ncvoter_csv, ncvoter, sizeof(ncvoter));
+
+	REQUIRE_NO_FAIL(con.Query(
+	    "CREATE TABLE IF NOT EXISTS ncvoters(county_id INTEGER, county_desc STRING, voter_reg_num STRING,status_cd STRING, voter_status_desc STRING, reason_cd STRING, voter_status_reason_desc STRING, absent_ind STRING, name_prefx_cd STRING,last_name STRING, first_name STRING, midl_name STRING, name_sufx_cd STRING, full_name_rep STRING,full_name_mail STRING, house_num STRING, half_code STRING, street_dir STRING, street_name STRING, street_type_cd STRING, street_sufx_cd STRING, unit_designator STRING, unit_num STRING, res_city_desc STRING,state_cd STRING, zip_code STRING, res_street_address STRING, res_city_state_zip STRING, mail_addr1 STRING, mail_addr2 STRING, mail_addr3 STRING, mail_addr4 STRING, mail_city STRING, mail_state STRING, mail_zipcode STRING, mail_city_state_zip STRING, area_cd STRING, phone_num STRING, full_phone_number STRING, drivers_lic STRING, race_code STRING, race_desc STRING, ethnic_code STRING, ethnic_desc STRING, party_cd STRING, party_desc STRING, sex_code STRING, sex STRING, birth_age STRING, birth_place STRING, registr_dt STRING, precinct_abbrv STRING, precinct_desc STRING,municipality_abbrv STRING, municipality_desc STRING, ward_abbrv STRING, ward_desc STRING, cong_dist_abbrv STRING, cong_dist_desc STRING, super_court_abbrv STRING, super_court_desc STRING, judic_dist_abbrv STRING, judic_dist_desc STRING, nc_senate_abbrv STRING, nc_senate_desc STRING, nc_house_abbrv STRING, nc_house_desc STRING,county_commiss_abbrv STRING, county_commiss_desc STRING, township_abbrv STRING, township_desc STRING,school_dist_abbrv STRING, school_dist_desc STRING, fire_dist_abbrv STRING, fire_dist_desc STRING, water_dist_abbrv STRING, water_dist_desc STRING, sewer_dist_abbrv STRING, sewer_dist_desc STRING, sanit_dist_abbrv STRING, sanit_dist_desc STRING, rescue_dist_abbrv STRING, rescue_dist_desc STRING, munic_dist_abbrv STRING, munic_dist_desc STRING, dist_1_abbrv STRING, dist_1_desc STRING, dist_2_abbrv STRING, dist_2_desc STRING, confidential_ind STRING, age STRING, ncid STRING, vtd_abbrv STRING, vtd_desc STRING);"));
+	result = con.Query("COPY ncvoters FROM '" + ncvoter_csv + "' DELIMITER '\t'");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+
+	result = con.Query("SELECT county_id, county_desc, vtd_desc, name_prefx_cd FROM ncvoters");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"ALAMANCE", "ALAMANCE", "ALAMANCE", "ALAMANCE", "ALAMANCE", "ALAMANCE", "ALAMANCE", "ALAMANCE", "ALAMANCE", "ALAMANCE"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"09S", "09S", "03W", "09S", "1210", "035", "124", "06E", "035", "064"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value(), Value(), Value(), Value(), Value(), Value(), Value(), Value(), Value(), Value()}));
+}
+
 TEST_CASE("Test date copy", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -569,10 +671,32 @@ TEST_CASE("Test cranlogs broken gzip copy", "[copy]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE cranlogs (date date,time string,size int,r_version string,r_arch string,r_os string,package string,version string,country string,ip_id int)"));
+	auto csv_path = GetCSVPath();
+	auto cranlogs_csv = fs.JoinPath(csv_path, "cranlogs.csv.gz");
+	WriteBinary(cranlogs_csv, tmp2013_06_15, sizeof(tmp2013_06_15));
 
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE cranlogs (date date,time string,size int,r_version string,r_arch "
+	                          "string,r_os string,package string,version string,country string,ip_id int)"));
 
-	result = con.Query("COPY cranlogs FROM 'test/sql/copy/tmp2013-06-15.csv.gz' DELIMITER ',' HEADER");
+	result = con.Query("COPY cranlogs FROM '" + cranlogs_csv + "' DELIMITER ',' HEADER");
 	REQUIRE(CHECK_COLUMN(result, 0, {37459}));
+}
 
+TEST_CASE("Test imdb escapes", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+	auto imdb_movie_info = fs.JoinPath(csv_path, "imdb_movie_info.csv");
+	WriteBinary(imdb_movie_info, imdb_movie_info_escaped, sizeof(imdb_movie_info_escaped));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE movie_info (id integer NOT NULL PRIMARY KEY, movie_id integer NOT NULL, "
+	                          "info_type_id integer NOT NULL, info text NOT NULL, note text)"));
+
+	result = con.Query("COPY movie_info FROM '" + imdb_movie_info + "' DELIMITER ',' ESCAPE '\\'");
+	REQUIRE(result->success);
+	REQUIRE(CHECK_COLUMN(result, 0, {201}));
+	// TODO actually check results
+	result = con.Query("SELECT * FROM movie_info");
 }

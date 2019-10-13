@@ -30,6 +30,8 @@ public:
 protected:
 	BindResult BindExpression(ParsedExpression &expr, index_t depth, bool root_expression) override;
 
+	string UnsupportedAggregateMessage() override;
+
 	BindResult BindSelectRef(index_t entry);
 	BindResult BindColumnRef(ColumnRefExpression &expr);
 	BindResult BindConstant(ConstantExpression &expr);

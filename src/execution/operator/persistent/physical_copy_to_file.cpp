@@ -8,10 +8,10 @@ using namespace duckdb;
 using namespace std;
 
 class BufferedWriter {
-	constexpr static index_t BUFFER_SIZE = 4096*4;
+	constexpr static index_t BUFFER_SIZE = 4096 * 4;
+
 public:
-	BufferedWriter(string &path) :
-		pos(0) {
+	BufferedWriter(string &path) : pos(0) {
 		to_csv.open(path);
 		if (to_csv.fail()) {
 			throw IOException("Could not open CSV file");
@@ -46,6 +46,7 @@ public:
 	void Write(string &value) {
 		Write(value.c_str(), value.size());
 	}
+
 private:
 	char buffer[BUFFER_SIZE];
 	index_t pos = 0;
@@ -53,11 +54,11 @@ private:
 	ofstream to_csv;
 };
 
-static void WriteQuotedString(BufferedWriter &writer, const char* str_value, char delimiter, char quote) {
+static void WriteQuotedString(BufferedWriter &writer, const char *str_value, char delimiter, char quote) {
 	// scan the string for the delimiter
 	bool write_quoted = false;
 	index_t len = 0;
-	for(const char *val = str_value; *val; val++) {
+	for (const char *val = str_value; *val; val++) {
 		len++;
 		if (*val == delimiter || *val == '\n' || *val == '\r') {
 			// delimiter or newline, write a quoted string
@@ -91,7 +92,7 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 	}
 	// cerate a chunk with VARCHAR columns
 	vector<TypeId> types;
-	for(index_t col_idx = 0; col_idx < state->child_chunk.column_count; col_idx++) {
+	for (index_t col_idx = 0; col_idx < state->child_chunk.column_count; col_idx++) {
 		types.push_back(TypeId::VARCHAR);
 	}
 	DataChunk cast_chunk;
@@ -103,13 +104,14 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 			break;
 		}
 		// cast the columns of the chunk to varchar
-		for(index_t col_idx = 0; col_idx < state->child_chunk.column_count; col_idx++) {
+		for (index_t col_idx = 0; col_idx < state->child_chunk.column_count; col_idx++) {
 			if (sql_types[col_idx].id == SQLTypeId::VARCHAR) {
 				// VARCHAR, just create a reference
 				cast_chunk.data[col_idx].Reference(state->child_chunk.data[col_idx]);
 			} else {
 				// non varchar column, perform the cast
-				VectorOperations::Cast(state->child_chunk.data[col_idx], cast_chunk.data[col_idx], sql_types[col_idx], SQLType(SQLTypeId::VARCHAR));
+				VectorOperations::Cast(state->child_chunk.data[col_idx], cast_chunk.data[col_idx], sql_types[col_idx],
+				                       SQLType::VARCHAR);
 			}
 		}
 		// now loop over the vectors and output the values
@@ -122,7 +124,7 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 					continue;
 				}
 				// non-null value, fetch the string value from the cast chunk
-				auto str_value = ((const char**) cast_chunk.data[col_idx].data)[i];
+				auto str_value = ((const char **)cast_chunk.data[col_idx].data)[i];
 				WriteQuotedString(writer, str_value, info.delimiter, info.quote);
 			}
 			writer.Write(newline);

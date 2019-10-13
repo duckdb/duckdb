@@ -10,7 +10,6 @@
 
 #include "common/common.hpp"
 #include "common/types/data_chunk.hpp"
-#include "common/types/tuple.hpp"
 #include "common/types/vector.hpp"
 #include "execution/aggregate_hashtable.hpp"
 #include "planner/operator/logical_comparison_join.hpp"
@@ -42,7 +41,6 @@ public:
 		Vector pointers;
 		Vector build_pointer_vector;
 		sel_t sel_vector[STANDARD_VECTOR_SIZE];
-		Tuple serialized_keys[STANDARD_VECTOR_SIZE];
 		// whether or not the given tuple has found a match, used for LeftJoin
 		bool found_match[STANDARD_VECTOR_SIZE];
 		JoinHashTable &ht;
@@ -118,12 +116,6 @@ public:
 		return count;
 	}
 
-	//! Serializer for the keys used in equality comparison
-	TupleSerializer equality_serializer;
-	//! Serializer for all conditions
-	TupleSerializer condition_serializer;
-	//! Serializer for the build side
-	TupleSerializer build_serializer;
 	//! The types of the keys used in equality comparison
 	vector<TypeId> equality_types;
 	//! The types of the keys
@@ -146,11 +138,15 @@ public:
 	JoinType join_type;
 	//! Whether or not any of the key elements contain NULL
 	bool has_null;
+	//! Bitmask for getting relevant bits from the hashes to determine the position
+	uint64_t bitmask;
 
 	struct {
 		//! The types of the duplicate eliminated columns, only used in correlated MARK JOIN for flattening ANY()/ALL()
 		//! expressions
 		vector<TypeId> correlated_types;
+		//! The aggregate expression nodes used by the HT
+		vector<unique_ptr<Expression>> correlated_aggregates;
 		//! The HT that holds the group counts for every correlated column
 		unique_ptr<SuperLargeHashTable> correlated_counts;
 		//! Group chunk used for aggregating into correlated_counts
@@ -162,6 +158,8 @@ public:
 	} correlated_mark_join_info;
 
 private:
+	//! Apply a bitmask to the hashes
+	void ApplyBitmask(Vector &hashes);
 	//! Insert the given set of locations into the HT with the given set of
 	//! hashes. Caller should hold lock in parallel HT.
 	void InsertHashes(Vector &hashes, data_ptr_t key_locations[]);

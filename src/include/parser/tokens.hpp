@@ -44,7 +44,6 @@ class SetOperationNode;
 //===--------------------------------------------------------------------===//
 class ParsedExpression;
 
-class AggregateExpression;
 class CaseExpression;
 class CastExpression;
 class ColumnRefExpression;
@@ -77,6 +76,6 @@ class BaseTableRef;
 class CrossProductRef;
 class JoinRef;
 class SubqueryRef;
-class TableFunction;
+class TableFunctionRef;
 
 } // namespace duckdb

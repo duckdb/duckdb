@@ -1,6 +1,5 @@
 #include "planner/expression_binder/select_binder.hpp"
 
-#include "parser/expression/aggregate_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/window_expression.hpp"
 #include "parser/parsed_expression_iterator.hpp"
@@ -25,8 +24,6 @@ BindResult SelectBinder::BindExpression(ParsedExpression &expr, index_t depth, b
 	switch (expr.expression_class) {
 	case ExpressionClass::DEFAULT:
 		return BindResult("SELECT clause cannot contain DEFAULT clause");
-	case ExpressionClass::AGGREGATE:
-		return BindAggregate((AggregateExpression &)expr, depth);
 	case ExpressionClass::WINDOW:
 		return BindWindow((WindowExpression &)expr, depth);
 	default:
@@ -52,6 +49,12 @@ index_t SelectBinder::TryBindGroup(ParsedExpression &expr, index_t depth) {
 	if (entry != info.map.end()) {
 		return entry->second;
 	}
+#ifdef DEBUG
+	for(auto entry : info.map) {
+		assert(!entry.first->Equals(&expr));
+		assert(!expr.Equals(entry.first));
+	}
+#endif
 	return INVALID_INDEX;
 }
 

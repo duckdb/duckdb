@@ -28,6 +28,9 @@ Value Value::MinimumValue(TypeId type) {
 	result.type = type;
 	result.is_null = false;
 	switch (type) {
+	case TypeId::BOOLEAN:
+		result.value_.boolean = false;
+		break;
 	case TypeId::TINYINT:
 		result.value_.tinyint = std::numeric_limits<int8_t>::min();
 		break;
@@ -60,6 +63,9 @@ Value Value::MaximumValue(TypeId type) {
 	result.type = type;
 	result.is_null = false;
 	switch (type) {
+	case TypeId::BOOLEAN:
+		result.value_.boolean = true;
+		break;
 	case TypeId::TINYINT:
 		result.value_.tinyint = std::numeric_limits<int8_t>::max();
 		break;
@@ -122,6 +128,20 @@ Value Value::BIGINT(int64_t value) {
 	return result;
 }
 
+Value Value::FLOAT(float value) {
+	Value result(TypeId::FLOAT);
+	result.value_.float_ = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::DOUBLE(double value) {
+	Value result(TypeId::DOUBLE);
+	result.value_.double_ = value;
+	result.is_null = false;
+	return result;
+}
+
 Value Value::HASH(uint64_t value) {
 	Value result(TypeId::HASH);
 	result.value_.hash = value;
@@ -138,6 +158,11 @@ Value Value::POINTER(uintptr_t value) {
 
 Value Value::DATE(int32_t year, int32_t month, int32_t day) {
 	return Value::INTEGER(Date::FromDate(year, month, day));
+}
+
+Value Value::TIME(int32_t hour, int32_t min, int32_t sec,
+        int32_t msec) {
+	return Value::INTEGER(Time::FromTime(hour, min, sec, msec));
 }
 
 Value Value::TIMESTAMP(timestamp_t timestamp) {
@@ -176,9 +201,17 @@ template <> Value Value::CreateValue(string value) {
 	return Value(value);
 }
 
+template <> Value Value::CreateValue(float value) {
+	return Value::FLOAT(value);
+}
+
+template <> Value Value::CreateValue(double value) {
+	return Value::DOUBLE(value);
+}
+
 Value Value::Numeric(TypeId type, int64_t value) {
 	assert(!TypeIsIntegral(type) ||
-	       (value >= duckdb::MinimumValue(type) && (uint64_t)value <= duckdb::MaximumValue(type)));
+	       (value >= duckdb::MinimumValue(type) && (value < 0 || (uint64_t)value <= duckdb::MaximumValue(type))));
 	Value val(type);
 	val.is_null = false;
 	switch (type) {
@@ -249,6 +282,8 @@ string Value::ToString(SQLType sql_type) const {
 		return to_string(value_.double_);
 	case SQLTypeId::DATE:
 		return Date::ToString(value_.integer);
+	case SQLTypeId::TIME:
+		return Time::ToString(value_.integer);
 	case SQLTypeId::TIMESTAMP:
 		return Timestamp::ToString(value_.bigint);
 	case SQLTypeId::VARCHAR:
@@ -479,22 +514,25 @@ bool Value::ValuesAreEqual(Value result_value, Value value) {
 	}
 	switch (value.type) {
 	case TypeId::FLOAT: {
+		auto other = result_value.CastAs(TypeId::FLOAT);
 		float ldecimal = value.value_.float_;
-		float rdecimal = result_value.value_.float_;
+		float rdecimal = other.value_.float_;
 		return ApproxEqual(ldecimal, rdecimal);
 	}
 	case TypeId::DOUBLE: {
+		auto other = result_value.CastAs(TypeId::DOUBLE);
 		double ldecimal = value.value_.double_;
-		double rdecimal = result_value.value_.double_;
+		double rdecimal = other.value_.double_;
 		return ApproxEqual(ldecimal, rdecimal);
 	}
 	case TypeId::VARCHAR: {
+		auto other = result_value.CastAs(TypeId::VARCHAR);
 		// some results might contain padding spaces, e.g. when rendering
 		// VARCHAR(10) and the string only has 6 characters, they will be padded
 		// with spaces to 10 in the rendering. We don't do that here yet as we
 		// are looking at internal structures. So just ignore any extra spaces
 		// on the right
-		string left = result_value.str_value;
+		string left = other.str_value;
 		string right = value.str_value;
 		StringUtil::RTrim(left);
 		StringUtil::RTrim(right);

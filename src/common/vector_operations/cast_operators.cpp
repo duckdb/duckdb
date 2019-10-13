@@ -63,6 +63,10 @@ static void result_cast_switch(Vector &source, Vector &result, SQLType source_ty
 		assert(result.type == TypeId::INTEGER);
 		templated_cast_loop<SRC, int32_t, duckdb::CastToDate, true>(source, result);
 		break;
+	case SQLTypeId::TIME:
+			assert(result.type == TypeId::INTEGER);
+			templated_cast_loop<SRC, int32_t, duckdb::CastToTime, true>(source, result);
+			break;
 	case SQLTypeId::TIMESTAMP:
 		assert(result.type == TypeId::BIGINT);
 		templated_cast_loop<SRC, int64_t, duckdb::CastToTimestamp, true>(source, result);

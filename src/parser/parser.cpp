@@ -28,8 +28,7 @@ void Parser::ParseQuery(string query) {
 	parser.Parse(query);
 
 	if (!parser.success) {
-		throw ParserException(parser.error_message + "[" + to_string(parser.error_location) + "]");
-		return;
+		throw ParserException("%s [%d]", parser.error_message.c_str(), parser.error_location);
 	}
 
 	if (!parser.parse_tree) {
@@ -41,6 +40,7 @@ void Parser::ParseQuery(string query) {
 	// SQLStatements
 	Transformer transformer;
 	transformer.TransformParseTree(parser.parse_tree, statements);
+	n_prepared_parameters = transformer.prepared_statement_parameter_index;
 }
 
 enum class PragmaType : uint8_t { NOTHING, ASSIGNMENT, CALL };

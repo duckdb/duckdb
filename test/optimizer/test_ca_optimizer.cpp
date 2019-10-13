@@ -1,8 +1,9 @@
 #include "catch.hpp"
 #include "expression_helper.hpp"
 #include "optimizer/ca_optimizer.hpp"
+#include "planner/expression/bound_cast_expression.hpp"
 #include "planner/expression/bound_comparison_expression.hpp"
-#include "planner/expression/bound_operator_expression.hpp"
+#include "planner/expression/bound_function_expression.hpp"
 #include "planner/expression/bound_window_expression.hpp"
 #include "planner/operator/logical_window.hpp"
 #include "test_helpers.hpp"
@@ -83,7 +84,7 @@ TEST_CASE("Test common aggregate optimizer", "[aggregations]") {
 	*/
 	REQUIRE(aggregate->expressions.size() == 1);
 
-	auto &op_expression = (BoundOperatorExpression &)*tree->expressions[0];
+	auto &op_expression = (BoundFunctionExpression &)*tree->expressions[0];
 	// Left SUM expression of addition operator expression.
 	auto &sum_expression_l = (BoundColumnRefExpression &)*op_expression.children[0];
 	// Right SUM expression of addition operator expression.
@@ -127,7 +128,12 @@ TEST_CASE("Test common aggregate optimizer", "[aggregations]") {
 
 	// sum expression corresponding to the partition in the over clause.
 	auto &window_expression = (BoundWindowExpression &)*window->expressions[0];
-	auto &bound_op = (BoundOperatorExpression &)*window_expression.child;
+	REQUIRE(window_expression.children.size() == 1);
+	REQUIRE(window_expression.children[0]->type == ExpressionType::OPERATOR_CAST);
+	auto &cast_op = (BoundCastExpression &)*window_expression.children[0];
+	REQUIRE(cast_op.child->type == ExpressionType::BOUND_FUNCTION);
+	auto &bound_op = (BoundFunctionExpression &)*cast_op.child;
+	REQUIRE(bound_op.children.size() == 2);
 	auto &sum_expression_left = (BoundColumnRefExpression &)*bound_op.children[0];
 	auto &sum_expression_right = (BoundColumnRefExpression &)*bound_op.children[1];
 	REQUIRE(sum_expression_left.binding.column_index == 0);
