@@ -73,6 +73,38 @@ PyObject *duckdb_connection_close(duckdb_Connection *self, PyObject *args) {
 	Py_RETURN_NONE;
 }
 
+static PyObject * _duckdb_internal_cmd(duckdb_Connection *self, const char* q) {
+	if (!duckdb_check_connection(self)) {
+		return NULL;
+	}
+	std::unique_ptr<duckdb::MaterializedQueryResult> result;
+    Py_BEGIN_ALLOW_THREADS
+	result = self->conn->Query(q);
+    Py_END_ALLOW_THREADS
+	if (!result->success) {
+		PyErr_SetString(duckdb_DatabaseError, result->error.c_str());
+		return NULL;
+	}
+	Py_INCREF(self);
+	return (PyObject *)self;
+}
+
+
+// confused details here: https://docs.python.org/3.7/library/sqlite3.html#sqlite3-controlling-transactions
+// TODO support this weird isolation level param
+
+PyObject *duckdb_connection_begin(duckdb_Connection *self) {
+	return _duckdb_internal_cmd(self, "BEGIN TRANSACTION");
+}
+
+PyObject *duckdb_connection_commit(duckdb_Connection *self) {
+	return _duckdb_internal_cmd(self, "COMMIT");
+}
+
+PyObject *duckdb_connection_rollback(duckdb_Connection *self) {
+	return _duckdb_internal_cmd(self, "ROLLBACK");
+}
+
 /*
  * Checks if a connection object is usable (i. e. not closed).
  *
@@ -102,9 +134,9 @@ static PyMethodDef connection_methods[] = {
     {"cursor", (PyCFunction)(void (*)(void))duckdb_connection_cursor, METH_VARARGS | METH_KEYWORDS,
      PyDoc_STR("Return a cursor for the connection.")},
     {"close", (PyCFunction)duckdb_connection_close, METH_NOARGS, PyDoc_STR("Closes the connection.")},
-    //    {"commit", (PyCFunction)duckdb_connection_commit, METH_NOARGS, PyDoc_STR("Commit the current transaction.")},
-    //    {"rollback", (PyCFunction)duckdb_connection_rollback, METH_NOARGS, PyDoc_STR("Roll back the current
-    //    transaction.")},
+    {"begin", (PyCFunction)duckdb_connection_begin, METH_NOARGS, PyDoc_STR("Start a new transaction (exit autocommit mode).")},
+	{"commit", (PyCFunction)duckdb_connection_commit, METH_NOARGS, PyDoc_STR("Commit the current transaction.")},
+    {"rollback", (PyCFunction)duckdb_connection_rollback, METH_NOARGS, PyDoc_STR("Roll back the current transaction.")},
     {NULL, NULL}};
 
 static struct PyMemberDef connection_members[] = {

@@ -61,6 +61,7 @@ static int check_cursor(duckdb_Cursor *cur) {
 
 PyObject *duckdb_cursor_execute(duckdb_Cursor *self, PyObject *args) {
 	PyObject *operation;
+    PyObject* second_argument = NULL;
 
 	if (!self->initialized) {
 		PyErr_SetString(duckdb_DatabaseError, "Base Cursor.__init__ not called.");
@@ -70,9 +71,9 @@ PyObject *duckdb_cursor_execute(duckdb_Cursor *self, PyObject *args) {
 	duckdb_cursor_close(self, NULL);
 	self->reset = 0;
 #if PY_MAJOR_VERSION >= 3
-	if (!PyArg_ParseTuple(args, "O&|", PyUnicode_FSConverter, &operation)) {
+	if (!PyArg_ParseTuple(args, "O&|O", PyUnicode_FSConverter, &operation, &second_argument)) {
 #else
-		if (!PyArg_ParseTuple(args, "O|", &operation)) {
+		if (!PyArg_ParseTuple(args, "O|O", &operation, &second_argument)) {
 #endif
 		return NULL;
 	}
@@ -84,10 +85,23 @@ PyObject *duckdb_cursor_execute(duckdb_Cursor *self, PyObject *args) {
 		goto error;
 	}
 
-	self->result = self->connection->conn->Query(sql);
-	if (!self->result->success) {
-		PyErr_SetString(duckdb_DatabaseError, self->result->error.c_str());
-		goto error;
+	if (second_argument) { // habemus prepared statement
+		// if the arg is a list, treat it as such
+		 auto prep = self->connection->conn->Prepare(sql);
+		 // just fucking stringify the bastard
+		 // TODO deal with lists/tuples as second_argument
+		 std::vector<duckdb::Value> params;
+		 // ugh
+		 params.push_back(duckdb::Value(PyBytes_AsString(second_argument)));
+		 auto res = prep->Execute(params, false);
+		 assert(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
+		 self->result = std::unique_ptr<duckdb::MaterializedQueryResult>(static_cast<duckdb::MaterializedQueryResult*>(res.release()));
+	} else { // normal ops
+		self->result = self->connection->conn->Query(sql);
+		if (!self->result->success) {
+			PyErr_SetString(duckdb_DatabaseError, self->result->error.c_str());
+			goto error;
+		}
 	}
 
 	self->closed = 0;
