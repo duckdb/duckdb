@@ -78,7 +78,6 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 
 			if (StringUtil::StartsWith(def_elem->defname, "delim") ||
 			    StringUtil::StartsWith(def_elem->defname, "sep")) {
-
 				// delimiter
 				auto *delimiter_val = (postgres::Value *)(def_elem->arg);
 				if (!delimiter_val || delimiter_val->type != T_String) {
@@ -87,7 +86,6 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 				info.delimiter = delimiter_val->val.str;
 
 			} else if (def_elem->defname == kFormatTok) {
-
 				// format
 				auto *format_val = (postgres::Value *)(def_elem->arg);
 				if (!format_val || format_val->type != T_String) {
@@ -99,7 +97,6 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 				info.format = StringToExternalFileFormat(format_val->val.str);
 
 			} else if (def_elem->defname == kQuoteTok) {
-
 				// quote
 				auto *quote_val = (postgres::Value *)(def_elem->arg);
 				if (!quote_val || quote_val->type != T_String) {
@@ -112,7 +109,6 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 				}
 
 			} else if (def_elem->defname == kEscapeTok) {
-
 				// escape
 				auto *escape_val = (postgres::Value *)(def_elem->arg);
 				if (!escape_val || escape_val->type != T_String) {
@@ -126,7 +122,6 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 				}
 
 			} else if (def_elem->defname == kHeaderTok) {
-
 				// header
 				auto *header_val = (postgres::Value *)(def_elem->arg);
 				if (!header_val) {
@@ -147,7 +142,6 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 				}
 
 			} else if (def_elem->defname == kNullTok) {
-
 				// null
 				auto *null_val = (postgres::Value *)(def_elem->arg);
 				if (!null_val || null_val->type != T_String) {
@@ -156,7 +150,6 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 				info.null_str = null_val->val.str;
 
 			} else if (def_elem->defname == kForceQuoteTok) {
-
 				// force quote
 				// only for COPY ... TO ...
 				if(info.is_from) {
@@ -183,7 +176,6 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 				}
 
 			} else if (def_elem->defname == kForceNotNullTok) {
-
 				// force not null
 				// only for COPY ... FROM ...
 				if (!info.is_from) {
@@ -202,7 +194,6 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 				}
 
 			} else if (def_elem->defname == kEncodingTok) {
-
 				// encoding
 				auto *encoding_val = (postgres::Value *)(def_elem->arg);
 				if (!encoding_val || encoding_val->type != T_String) {

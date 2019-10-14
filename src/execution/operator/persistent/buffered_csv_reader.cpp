@@ -44,7 +44,6 @@ bool BufferedCSVReader::MatchControlString(bool &delim_match, bool &quote_match,
 	bool escape = true;
 
 	while (true) {
-
 		// check if the delimiter string matches
 		if (delim && control_string_offset < info.delimiter.length()) {
 			if (buffer[tmp_position] != info.delimiter[control_string_offset]) {
@@ -131,7 +130,6 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 		exhausted_buffer = MatchControlString(delimiter, quote, escape);
 
 		if (!exhausted_buffer) {
-
 			// if QUOTE equals ESCAPE we might need to determine which one we detected in the previous loop
 			if (quote_or_escape) {
 				if (delimiter || is_newline(buffer[position]) || (source.eof() && position + 1 == buffer_size)) {

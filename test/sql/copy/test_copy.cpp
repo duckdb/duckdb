@@ -293,7 +293,6 @@ TEST_CASE("Test NULL option of copy statement", "[copy]") {
 }
 
 TEST_CASE("Test force_quote and force_not_null", "[copy]") {
-
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
