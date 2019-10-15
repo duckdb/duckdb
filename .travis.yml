@@ -100,28 +100,13 @@ matrix:
 
     - os: linux
       dist: xenial
-      name: GCC 9 (ARM64)
+      name: GCC 7 (ARM64)
       arch: arm64
 
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-9
-            - python3-pip 
-      env:
-        - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
-      before_install:
-        - eval "${MATRIX_EVAL}"
-        - pip install --user boto3
       script:
         - mkdir -p build/release
         - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest "*"
-
-      after_success:
-        - python tools/upload-s3.py lib-linux-arm64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a
 
 
     - os: linux
