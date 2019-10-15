@@ -11,13 +11,10 @@ int duckdb_connection_init(duckdb_Connection *self, PyObject *args, PyObject *kw
 	char *database;
 	PyObject *database_obj;
 #if PY_MAJOR_VERSION >= 3
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O&|", kwlist,
-	                                 PyUnicode_FSConverter,
-	                                 &database_obj)) {
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O&|", kwlist, PyUnicode_FSConverter, &database_obj)) {
 #else
-		if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|", kwlist,
-		                                 &database_obj)) {
-		#endif
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|", kwlist, &database_obj)) {
+#endif
 
 		return -1;
 	}
@@ -73,22 +70,19 @@ PyObject *duckdb_connection_close(duckdb_Connection *self, PyObject *args) {
 	Py_RETURN_NONE;
 }
 
-static PyObject * _duckdb_internal_cmd(duckdb_Connection *self, const char* q) {
+static PyObject *_duckdb_internal_cmd(duckdb_Connection *self, const char *q) {
 	if (!duckdb_check_connection(self)) {
 		return NULL;
 	}
 	std::unique_ptr<duckdb::MaterializedQueryResult> result;
-    Py_BEGIN_ALLOW_THREADS
-	result = self->conn->Query(q);
-    Py_END_ALLOW_THREADS
-	if (!result->success) {
+	Py_BEGIN_ALLOW_THREADS result = self->conn->Query(q);
+	Py_END_ALLOW_THREADS if (!result->success) {
 		PyErr_SetString(duckdb_DatabaseError, result->error.c_str());
 		return NULL;
 	}
 	Py_INCREF(self);
 	return (PyObject *)self;
 }
-
 
 // confused details here: https://docs.python.org/3.7/library/sqlite3.html#sqlite3-controlling-transactions
 // TODO support this weird isolation level param
@@ -134,8 +128,9 @@ static PyMethodDef connection_methods[] = {
     {"cursor", (PyCFunction)(void (*)(void))duckdb_connection_cursor, METH_VARARGS | METH_KEYWORDS,
      PyDoc_STR("Return a cursor for the connection.")},
     {"close", (PyCFunction)duckdb_connection_close, METH_NOARGS, PyDoc_STR("Closes the connection.")},
-    {"begin", (PyCFunction)duckdb_connection_begin, METH_NOARGS, PyDoc_STR("Start a new transaction (exit autocommit mode).")},
-	{"commit", (PyCFunction)duckdb_connection_commit, METH_NOARGS, PyDoc_STR("Commit the current transaction.")},
+    {"begin", (PyCFunction)duckdb_connection_begin, METH_NOARGS,
+     PyDoc_STR("Start a new transaction (exit autocommit mode).")},
+    {"commit", (PyCFunction)duckdb_connection_commit, METH_NOARGS, PyDoc_STR("Commit the current transaction.")},
     {"rollback", (PyCFunction)duckdb_connection_rollback, METH_NOARGS, PyDoc_STR("Roll back the current transaction.")},
     {NULL, NULL}};
 
