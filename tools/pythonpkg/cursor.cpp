@@ -1,5 +1,5 @@
 #include "cursor.h"
-
+#include <vector>
 #include "common/types/timestamp.hpp"
 #include "module.h"
 
@@ -8,12 +8,13 @@
 #include <numpy/arrayobject.h>
 #include <numpy/npy_common.h>
 
-PyObject *duckdb_cursor_iternext(duckdb_Cursor *self);
+PyObject* duckdb_cursor_iternext(duckdb_Cursor *self);
 
 static const char errmsg_fetch_across_rollback[] =
-    "Cursor needed to be reset because of commit/rollback and can no longer be fetched from.";
+		"Cursor needed to be reset because of commit/rollback and can no longer be fetched from.";
 
-static int duckdb_cursor_init(duckdb_Cursor *self, PyObject *args, PyObject *kwargs) {
+static int duckdb_cursor_init(duckdb_Cursor *self, PyObject *args,
+		PyObject *kwargs) {
 	duckdb_Connection *connection;
 
 	if (!PyArg_ParseTuple(args, "O!", &duckdb_ConnectionType, &connection)) {
@@ -37,7 +38,7 @@ static void duckdb_cursor_dealloc(duckdb_Cursor *self) {
 	duckdb_cursor_close(self, NULL);
 
 	Py_XDECREF(self->connection);
-	Py_TYPE(self)->tp_free((PyObject *)self);
+	Py_TYPE(self)->tp_free((PyObject*) self);
 }
 
 /*
@@ -47,76 +48,340 @@ static void duckdb_cursor_dealloc(duckdb_Cursor *self) {
  */
 static int check_cursor(duckdb_Cursor *cur) {
 	if (!cur->initialized) {
-		PyErr_SetString(duckdb_DatabaseError, "Base Cursor.__init__ not called.");
+		PyErr_SetString(duckdb_DatabaseError,
+				"Base Cursor.__init__ not called.");
 		return 0;
 	}
 
 	if (cur->closed) {
-		PyErr_SetString(duckdb_DatabaseError, "Cannot operate on a closed cursor.");
+		PyErr_SetString(duckdb_DatabaseError,
+				"Cannot operate on a closed cursor.");
 		return 0;
 	}
 
 	return duckdb_check_connection(cur->connection);
 }
 
-PyObject *duckdb_cursor_execute(duckdb_Cursor *self, PyObject *args) {
-	PyObject *operation;
-    PyObject* second_argument = NULL;
+typedef enum {
+	TYPE_LONG, TYPE_FLOAT, TYPE_UNICODE, TYPE_BUFFER, TYPE_UNKNOWN
+} parameter_type;
 
-	if (!self->initialized) {
-		PyErr_SetString(duckdb_DatabaseError, "Base Cursor.__init__ not called.");
-		return 0;
-	}
-
-	duckdb_cursor_close(self, NULL);
-	self->reset = 0;
-#if PY_MAJOR_VERSION >= 3
-	if (!PyArg_ParseTuple(args, "O&|O", PyUnicode_FSConverter, &operation, &second_argument)) {
+#ifdef WORDS_BIGENDIAN
+# define IS_LITTLE_ENDIAN 0
 #else
-		if (!PyArg_ParseTuple(args, "O|O", &operation, &second_argument)) {
+# define IS_LITTLE_ENDIAN 1
 #endif
-		return NULL;
+
+// ?! wtf do we need this?
+int64_t _pysqlite_long_as_int64(PyObject *py_val) {
+	int overflow;
+	long long value = PyLong_AsLongLongAndOverflow(py_val, &overflow);
+	if (value == -1 && PyErr_Occurred())
+		return -1;
+	if (!overflow) {
+# if SIZEOF_LONG_LONG > 8
+        if (-0x8000000000000000LL <= value && value <= 0x7FFFFFFFFFFFFFFFLL)
+# endif
+		return value;
+	} else if (sizeof(value) < sizeof(int64_t)) {
+		int64_t int64val;
+		if (_PyLong_AsByteArray((PyLongObject*) py_val,
+				(unsigned char*) &int64val, sizeof(int64val),
+				IS_LITTLE_ENDIAN, 1 /* signed */) >= 0) {
+			return int64val;
+		}
+	}
+	PyErr_SetString(PyExc_OverflowError,
+			"Python int too large to convert to SQLite INTEGER");
+	return -1;
+}
+
+duckdb::Value _duckdb_bind_parameter(PyObject *parameter) {
+	const char *string;
+	Py_ssize_t buflen;
+	parameter_type paramtype;
+
+	auto dnull = duckdb::Value();
+
+	if (parameter == Py_None) {
+		return dnull;
 	}
 
-	self->rowcount = 0L;
+	if (PyLong_CheckExact(parameter)) {
+		paramtype = TYPE_LONG;
+	} else if (PyFloat_CheckExact(parameter)) {
+		paramtype = TYPE_FLOAT;
+	} else if (PyUnicode_CheckExact(parameter)) {
+		paramtype = TYPE_UNICODE;
+	} else if (PyLong_Check(parameter)) {
+		paramtype = TYPE_LONG;
+	} else if (PyFloat_Check(parameter)) {
+		paramtype = TYPE_FLOAT;
+	} else if (PyUnicode_Check(parameter)) {
+		paramtype = TYPE_UNICODE;
+	} else if (PyObject_CheckBuffer(parameter)) {
+		paramtype = TYPE_BUFFER;
+	} else {
+		paramtype = TYPE_UNKNOWN;
+	}
 
-	char *sql = PyBytes_AsString(operation);
-	if (!sql) {
+	switch (paramtype) {
+	case TYPE_LONG: {
+
+		int64_t value = _pysqlite_long_as_int64(parameter);
+		if (value != -1 && !PyErr_Occurred())
+			return dnull;
+		else
+			return duckdb::Value::BIGINT(value);
+		break;
+	}
+	case TYPE_FLOAT:
+		return duckdb::Value::DOUBLE(PyFloat_AsDouble(parameter));
+		break;
+	case TYPE_UNICODE:
+		string = PyUnicode_AsUTF8AndSize(parameter, &buflen);
+		if (string == NULL)
+			return dnull;
+		if (buflen > INT_MAX) {
+			PyErr_SetString(PyExc_OverflowError,
+					"string longer than INT_MAX bytes");
+			return -1;
+		}
+		return duckdb::Value(string);
+		break;
+	case TYPE_BUFFER: { /*
+	 Py_buffer view;
+	 if (PyObject_GetBuffer(parameter, &view, PyBUF_SIMPLE) != 0) {
+	 PyErr_SetString(PyExc_ValueError, "could not convert BLOB to buffer");
+	 return -1;
+	 }
+	 if (view.len > INT_MAX) {
+	 PyErr_SetString(PyExc_OverflowError,
+	 "BLOB longer than INT_MAX bytes");
+	 PyBuffer_Release(&view);
+	 return -1;
+	 }
+	 rc = sqlite3_bind_blob(self->st, pos, view.buf, (int)view.len, SQLITE_TRANSIENT);
+	 PyBuffer_Release(&view); */
+		PyErr_SetString(PyExc_OverflowError, "unsupported blob type");
+		break;
+	}
+	default:
+		PyErr_SetString(PyExc_OverflowError, "unknown type");
+		break;
+
+	}
+
+	return dnull;
+}
+
+// this parameter binding mess is inherited from pysqlite
+
+void _duckdb_bind_parameters(PyObject *parameters,
+		std::vector<duckdb::Value> &params) {
+	PyObject *current_param;
+	const char *binding_name;
+	int i;
+	int num_params_needed = params.size();
+	Py_ssize_t num_params = 0;
+
+	if (PyTuple_CheckExact(parameters) || PyList_CheckExact(parameters)
+			|| (!PyDict_Check(parameters) && PySequence_Check(parameters))) {
+		/* parameters passed as sequence */
+		if (PyTuple_CheckExact(parameters)) {
+			num_params = PyTuple_GET_SIZE(parameters);
+		} else if (PyList_CheckExact(parameters)) {
+			num_params = PyList_GET_SIZE(parameters);
+		} else {
+			num_params = PySequence_Size(parameters);
+		}
+		if (num_params != num_params_needed) {
+			PyErr_Format(duckdb_DatabaseError,
+					"Incorrect number of bindings supplied. The current "
+							"statement uses %d, and there are %zd supplied.",
+					num_params_needed, num_params);
+			return;
+		}
+		for (i = 0; i < num_params; i++) {
+			if (PyTuple_CheckExact(parameters)) {
+				current_param = PyTuple_GET_ITEM(parameters, i);
+				Py_XINCREF(current_param);
+			} else if (PyList_CheckExact(parameters)) {
+				current_param = PyList_GET_ITEM(parameters, i);
+				Py_XINCREF(current_param);
+			} else {
+				current_param = PySequence_GetItem(parameters, i);
+			}
+			if (!current_param) {
+				return;
+			}
+
+			params[i] = _duckdb_bind_parameter(current_param);
+			if (PyErr_Occurred()) {
+				PyErr_Format(duckdb_DatabaseError,
+						"Error binding parameter %d - probably unsupported type.",
+						i);
+				return;
+			}
+
+		}
+	} else if (PyDict_Check(parameters)) {
+		PyErr_Format(duckdb_DatabaseError,
+				"Can't bind named parameters from dict", binding_name);
+	} else {
+		PyErr_SetString(duckdb_DatabaseError,
+				"parameters are of unsupported type");
+	}
+}
+
+// borrowed from the sqlite module
+static PyObject*
+_duckdb_query_execute(duckdb_Cursor *self, int multiple, PyObject *args) {
+	PyObject *operation;
+	PyObject *parameters_list = NULL;
+	PyObject *parameters_iter = NULL;
+	PyObject *parameters = NULL;
+	PyObject *second_argument = NULL;
+
+	std::vector<duckdb::Value> params;
+	std::unique_ptr<duckdb::PreparedStatement> prep;
+	const char *sql_cstr;
+
+	if (!check_cursor(self)) {
 		goto error;
 	}
 
-	if (second_argument) { // habemus prepared statement
-		// if the arg is a list, treat it as such
-		 auto prep = self->connection->conn->Prepare(sql);
-		 // just fucking stringify the bastard
-		 // TODO deal with lists/tuples as second_argument
-		 std::vector<duckdb::Value> params;
-		 // ugh
-		 params.push_back(duckdb::Value(PyBytes_AsString(second_argument)));
-		 auto res = prep->Execute(params, false);
-		 assert(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
-		 self->result = std::unique_ptr<duckdb::MaterializedQueryResult>(static_cast<duckdb::MaterializedQueryResult*>(res.release()));
-	} else { // normal ops
-		self->result = self->connection->conn->Query(sql);
-		if (!self->result->success) {
-			PyErr_SetString(duckdb_DatabaseError, self->result->error.c_str());
+	self->reset = 0;
+
+	// PART 1: A NEW HOPE (collect parameters and unify)
+
+	if (multiple) {
+		/* executemany() */
+		if (!PyArg_ParseTuple(args, "UO", &operation, &second_argument)) {
+			goto error;
+		}
+
+		if (PyIter_Check(second_argument)) {
+			/* iterator */
+			Py_INCREF(second_argument);
+			parameters_iter = second_argument;
+		} else {
+			/* sequence */
+			parameters_iter = PyObject_GetIter(second_argument);
+			if (!parameters_iter) {
+				goto error;
+			}
+		}
+	} else {
+		/* execute() */
+		if (!PyArg_ParseTuple(args, "U|O", &operation, &second_argument)) {
+			goto error;
+		}
+
+		parameters_list = PyList_New(0);
+		if (!parameters_list) {
+			goto error;
+		}
+
+		if (second_argument == NULL) {
+			second_argument = PyTuple_New(0);
+			if (!second_argument) {
+				goto error;
+			}
+		} else {
+			Py_INCREF(second_argument);
+		}
+		if (PyList_Append(parameters_list, second_argument) != 0) {
+			Py_DECREF(second_argument);
+			goto error;
+		}
+		Py_DECREF(second_argument);
+
+		parameters_iter = PyObject_GetIter(parameters_list);
+		if (!parameters_iter) {
 			goto error;
 		}
 	}
 
-	self->closed = 0;
-	self->rowcount = self->result->collection.count;
+	self->rowcount = 0L;
 
-error:
+	// PART 2: THE EMPIRE STRIKES BACK (prepare the actual query)
+
+	assert(PyUnicode_Check(operation));
+	Py_ssize_t sql_cstr_len;
+	sql_cstr = PyUnicode_AsUTF8AndSize(operation, &sql_cstr_len);
+
+	if (sql_cstr == NULL) {
+		PyErr_SetString(duckdb_DatabaseError, "SQL statement is not a string");
+		goto error;
+	}
+	if (strlen(sql_cstr) != (size_t) sql_cstr_len) {
+		PyErr_SetString(duckdb_DatabaseError,
+				"SQL statement contains an embedded NULL");
+		goto error;
+	}
+
+	fprintf(stderr, "X %s\n", sql_cstr);
+
+	prep = self->connection->conn->Prepare(sql_cstr);
+	if (!prep->success) {
+		PyErr_SetString(duckdb_DatabaseError, prep->error.c_str());
+		goto error;
+	}
+
+	// PART 3: THE RETURN OF THE JEDI (execute)
+	params.resize(prep->n_param);
+
+	while (1) {
+		parameters = PyIter_Next(parameters_iter);
+		if (!parameters) {
+			break;
+		}
+
+		// bind aprameters if any
+		_duckdb_bind_parameters(parameters, params);
+		if (PyErr_Occurred()) {
+			goto error;
+		}
+
+		// fire!
+		auto res = prep->Execute(params, false); // TODO we could do streaming results here
+		if (!res->success) {
+			PyErr_SetString(duckdb_DatabaseError, res->error.c_str());
+			goto error;
+		}
+		assert(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
+		self->result = std::unique_ptr<duckdb::MaterializedQueryResult>(
+				static_cast<duckdb::MaterializedQueryResult*>(res.release()));
+		Py_XDECREF(parameters);
+		self->rowcount = self->result->collection.count;
+		self->closed = 0;
+		self->offset = 0;
+
+	}
+
+	error: Py_XDECREF(parameters);
+	Py_XDECREF(parameters_iter);
+	Py_XDECREF(parameters_list);
+
 	if (PyErr_Occurred()) {
+		self->rowcount = -1L;
 		return NULL;
 	} else {
 		Py_INCREF(self);
-		return (PyObject *)self;
+		return (PyObject*) self;
 	}
 }
 
-PyObject *duckdb_cursor_fetchone(duckdb_Cursor *self) {
+PyObject* duckdb_cursor_execute(duckdb_Cursor *self, PyObject *args) {
+	return _duckdb_query_execute(self, 0, args);
+}
+
+PyObject* duckdb_cursor_executemany(duckdb_Cursor *self, PyObject *args) {
+	return _duckdb_query_execute(self, 1, args);
+}
+
+PyObject* duckdb_cursor_fetchone(duckdb_Cursor *self) {
 	PyObject *row;
 
 	row = duckdb_cursor_iternext(self);
@@ -127,7 +392,7 @@ PyObject *duckdb_cursor_fetchone(duckdb_Cursor *self) {
 	return row;
 }
 
-PyObject *duckdb_cursor_fetchall(duckdb_Cursor *self) {
+PyObject* duckdb_cursor_fetchall(duckdb_Cursor *self) {
 	PyObject *row;
 	PyObject *list;
 
@@ -137,7 +402,7 @@ PyObject *duckdb_cursor_fetchall(duckdb_Cursor *self) {
 	}
 
 	/* just make sure we enter the loop */
-	row = (PyObject *)Py_None;
+	row = (PyObject*) Py_None;
 	while (row) {
 		row = duckdb_cursor_iternext(self);
 		if (row) {
@@ -157,7 +422,8 @@ PyObject *duckdb_cursor_fetchall(duckdb_Cursor *self) {
 static PyObject *fromdict_ref = NULL;
 static PyObject *mafunc_ref = NULL;
 
-static uint8_t duckdb_type_to_numpy_type(duckdb::TypeId type, duckdb::SQLTypeId sql_type) {
+static uint8_t duckdb_type_to_numpy_type(duckdb::TypeId type,
+		duckdb::SQLTypeId sql_type) {
 	switch (type) {
 	case duckdb::TypeId::BOOLEAN:
 	case duckdb::TypeId::TINYINT:
@@ -167,11 +433,11 @@ static uint8_t duckdb_type_to_numpy_type(duckdb::TypeId type, duckdb::SQLTypeId 
 	case duckdb::TypeId::INTEGER:
 		return NPY_INT32;
 	case duckdb::TypeId::BIGINT:
-        if (sql_type == duckdb::SQLTypeId::TIMESTAMP) {
-            return NPY_DATETIME;
-        } else {
-            return NPY_INT64;
-        }
+		if (sql_type == duckdb::SQLTypeId::TIMESTAMP) {
+			return NPY_DATETIME;
+		} else {
+			return NPY_INT64;
+		}
 	case duckdb::TypeId::FLOAT:
 		return NPY_FLOAT32;
 	case duckdb::TypeId::DOUBLE:
@@ -190,7 +456,7 @@ typedef struct {
 	bool found_nil = false;
 } duckdb_numpy_result;
 
-PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
+PyObject* duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 	if (!check_cursor(self)) {
 		return NULL;
 	}
@@ -202,18 +468,21 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 	auto nrow = result->collection.count;
 
 	auto cols = new duckdb_numpy_result[ncol];
-	npy_intp dims[1] = {static_cast<npy_intp>(nrow)};
+	npy_intp dims[1] = { static_cast<npy_intp>(nrow) };
 
 	// step 1: allocate data and nullmasks for columns
 	for (size_t col_idx = 0; col_idx < ncol; col_idx++) {
 
 		// two owned references for each column, .array and .nullmask
-        PyArray_Descr* descr = PyArray_DescrNewFromType(duckdb_type_to_numpy_type(result->types[col_idx], result->sql_types[col_idx].id));
-        // In the case of timestamps, we need to set the datetime64 unit explicitly.
-        if (result->sql_types[col_idx].id == duckdb::SQLTypeId::TIMESTAMP) {
-            auto dtype = reinterpret_cast<PyArray_DatetimeDTypeMetaData*>(descr->c_metadata);
-            dtype->meta.base = NPY_FR_ms;
-        }
+		PyArray_Descr *descr = PyArray_DescrNewFromType(
+				duckdb_type_to_numpy_type(result->types[col_idx],
+						result->sql_types[col_idx].id));
+		// In the case of timestamps, we need to set the datetime64 unit explicitly.
+		if (result->sql_types[col_idx].id == duckdb::SQLTypeId::TIMESTAMP) {
+			auto dtype =
+					reinterpret_cast<PyArray_DatetimeDTypeMetaData*>(descr->c_metadata);
+			dtype->meta.base = NPY_FR_ms;
+		}
 		cols[col_idx].array = PyArray_Empty(1, dims, descr, 0);
 		cols[col_idx].nullmask = PyArray_EMPTY(1, dims, NPY_BOOL, 0);
 		if (!cols[col_idx].array || !cols[col_idx].nullmask) {
@@ -234,44 +503,58 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 			auto duckdb_type = result->types[col_idx];
 			auto duckdb_type_size = duckdb::GetTypeIdSize(duckdb_type);
 
-			char *array_data = (char *)PyArray_DATA((PyArrayObject *)cols[col_idx].array);
-			bool *mask_data = (bool *)PyArray_DATA((PyArrayObject *)cols[col_idx].nullmask);
+			char *array_data = (char*) PyArray_DATA(
+					(PyArrayObject*) cols[col_idx].array);
+			bool *mask_data = (bool*) PyArray_DATA(
+					(PyArrayObject*) cols[col_idx].nullmask);
 
 			// collect null mask into numpy array for masked arrays
 			for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
-				mask_data[chunk_idx + offset] = chunk->data[col_idx].nullmask[chunk_idx];
-				cols[col_idx].found_nil = cols[col_idx].found_nil || mask_data[chunk_idx + offset];
+				mask_data[chunk_idx + offset] =
+						chunk->data[col_idx].nullmask[chunk_idx];
+				cols[col_idx].found_nil = cols[col_idx].found_nil
+						|| mask_data[chunk_idx + offset];
 			}
 
 			switch (duckdb_type) {
 			case duckdb::TypeId::VARCHAR:
-				for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
+				for (size_t chunk_idx = 0; chunk_idx < chunk->size();
+						chunk_idx++) {
 					assert(!chunk->data[col_idx].sel_vector);
 					PyObject *str_obj;
 					if (!mask_data[chunk_idx + offset]) {
-						str_obj = PyUnicode_FromString(((const char **)chunk->data[col_idx].data)[chunk_idx]);
+						str_obj =
+								PyUnicode_FromString(
+										((const char**) chunk->data[col_idx].data)[chunk_idx]);
 					} else {
 						assert(cols[col_idx].found_nil);
 						str_obj = Py_None;
 						Py_INCREF(str_obj);
 					}
-					((PyObject **)array_data)[offset + chunk_idx] = str_obj;
+					((PyObject**) array_data)[offset + chunk_idx] = str_obj;
 				}
 				break;
-            case duckdb::TypeId::BIGINT:
-                if (result->sql_types[col_idx].id == duckdb::SQLTypeId::TIMESTAMP) {
-                    int64_t* array_data_ptr = reinterpret_cast<int64_t*>(array_data + (offset * duckdb_type_size));
-                    duckdb::timestamp_t* chunk_data_ptr = reinterpret_cast<int64_t*>(chunk->data[col_idx].data);
-                    for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
-                        array_data_ptr[chunk_idx] = duckdb::Timestamp::GetEpoch(chunk_data_ptr[chunk_idx]) * 1000;
-                    }
-                    break;
-                }  // else fall-through-to-default
+			case duckdb::TypeId::BIGINT:
+				if (result->sql_types[col_idx].id
+						== duckdb::SQLTypeId::TIMESTAMP) {
+					int64_t *array_data_ptr =
+							reinterpret_cast<int64_t*>(array_data
+									+ (offset * duckdb_type_size));
+					duckdb::timestamp_t *chunk_data_ptr =
+							reinterpret_cast<int64_t*>(chunk->data[col_idx].data);
+					for (size_t chunk_idx = 0; chunk_idx < chunk->size();
+							chunk_idx++) {
+						array_data_ptr[chunk_idx] = duckdb::Timestamp::GetEpoch(
+								chunk_data_ptr[chunk_idx]) * 1000;
+					}
+					break;
+				}  // else fall-through-to-default
 			default: // direct mapping types
 				// TODO need to assert the types
 				assert(duckdb::TypeIsConstantSize(duckdb_type));
-				memcpy(array_data + (offset * duckdb_type_size), chunk->data[col_idx].data,
-				       duckdb_type_size * chunk->size());
+				memcpy(array_data + (offset * duckdb_type_size),
+						chunk->data[col_idx].data,
+						duckdb_type_size * chunk->size());
 			}
 		}
 		offset += chunk->size();
@@ -319,9 +602,10 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 	return col_dict;
 }
 
-PyObject *duckdb_cursor_fetchdf(duckdb_Cursor *self) {
+PyObject* duckdb_cursor_fetchdf(duckdb_Cursor *self) {
 
-	PyObject *res = PyObject_CallFunctionObjArgs(fromdict_ref, duckdb_cursor_fetchnumpy(self), NULL);
+	PyObject *res = PyObject_CallFunctionObjArgs(fromdict_ref,
+			duckdb_cursor_fetchnumpy(self), NULL);
 	if (!res) {
 		return NULL;
 	}
@@ -329,7 +613,7 @@ PyObject *duckdb_cursor_fetchdf(duckdb_Cursor *self) {
 	return res;
 }
 
-PyObject *duckdb_cursor_iternext(duckdb_Cursor *self) {
+PyObject* duckdb_cursor_iternext(duckdb_Cursor *self) {
 
 	if (!check_cursor(self)) {
 		return NULL;
@@ -399,9 +683,10 @@ PyObject *duckdb_cursor_iternext(duckdb_Cursor *self) {
 	return row;
 }
 
-PyObject *duckdb_cursor_close(duckdb_Cursor *self, PyObject *args) {
+PyObject* duckdb_cursor_close(duckdb_Cursor *self, PyObject *args) {
 	if (!self->connection) {
-		PyErr_SetString(duckdb_DatabaseError, "Base Cursor.__init__ not called.");
+		PyErr_SetString(duckdb_DatabaseError,
+				"Base Cursor.__init__ not called.");
 		return NULL;
 	}
 	if (!duckdb_check_connection(self->connection)) {
@@ -416,85 +701,97 @@ PyObject *duckdb_cursor_close(duckdb_Cursor *self, PyObject *args) {
 	Py_RETURN_NONE;
 }
 
-PyObject *duckdb_cursor_profile(duckdb_Cursor *self, PyObject *args) {
+PyObject* duckdb_cursor_profile(duckdb_Cursor *self, PyObject *args) {
 	int check = PyObject_IsTrue(args);
 	if (check == -1) {
 		PyErr_SetString(PyExc_TypeError,
-		                "expected a boolean corresponding to either true (json) or false (query graph)");
+				"expected a boolean corresponding to either true (json) or false (query graph)");
 		return NULL;
 	}
 	if (!self->connection) {
-		PyErr_SetString(duckdb_DatabaseError, "Base Cursor.__init__ not called.");
+		PyErr_SetString(duckdb_DatabaseError,
+				"Base Cursor.__init__ not called.");
 		return NULL;
 	}
 	if (!duckdb_check_connection(self->connection)) {
 		return NULL;
 	}
 	duckdb::ProfilerPrintFormat format =
-	    check ? duckdb::ProfilerPrintFormat::JSON : duckdb::ProfilerPrintFormat::QUERY_TREE;
-	return PyUnicode_FromString(self->connection->conn->GetProfilingInformation(format).c_str());
+			check ? duckdb::ProfilerPrintFormat::JSON : duckdb::ProfilerPrintFormat::QUERY_TREE;
+	return PyUnicode_FromString(
+			self->connection->conn->GetProfilingInformation(format).c_str());
 }
 
-static PyMethodDef cursor_methods[] = {
-    {"execute", (PyCFunction)duckdb_cursor_execute, METH_VARARGS, PyDoc_STR("Executes a SQL statement.")},
-    {"fetchone", (PyCFunction)duckdb_cursor_fetchone, METH_NOARGS, PyDoc_STR("Fetches one row from the resultset.")},
-    {"fetchall", (PyCFunction)duckdb_cursor_fetchall, METH_NOARGS, PyDoc_STR("Fetches all rows from the resultset.")},
-    {"fetchnumpy", (PyCFunction)duckdb_cursor_fetchnumpy, METH_NOARGS,
-     PyDoc_STR("Fetches all rows from the  resultset as a dict of numpy arrays.")},
-    {"fetchdf", (PyCFunction)duckdb_cursor_fetchdf, METH_NOARGS,
-     PyDoc_STR("Fetches all rows from the result set as a pandas DataFrame.")},
-    {"close", (PyCFunction)duckdb_cursor_close, METH_NOARGS, PyDoc_STR("Closes the cursor.")},
-    {"profile_info", (PyCFunction)duckdb_cursor_profile, METH_O,
-     PyDoc_STR("Returns the profile information of the last running query.")},
-    {NULL, NULL}};
+static PyMethodDef cursor_methods[] =
+		{ { "execute", (PyCFunction) duckdb_cursor_execute, METH_VARARGS,
+				PyDoc_STR("Executes a SQL statement.") }, { "executemany",
+				(PyCFunction) duckdb_cursor_executemany, METH_VARARGS,
+				PyDoc_STR("Repeatedly executes a SQL statement.") }, {
+				"fetchone", (PyCFunction) duckdb_cursor_fetchone, METH_NOARGS,
+				PyDoc_STR("Fetches one row from the resultset.") }, {
+				"fetchall", (PyCFunction) duckdb_cursor_fetchall, METH_NOARGS,
+				PyDoc_STR("Fetches all rows from the resultset.") },
+				{ "fetchnumpy", (PyCFunction) duckdb_cursor_fetchnumpy,
+						METH_NOARGS,
+						PyDoc_STR(
+								"Fetches all rows from the  resultset as a dict of numpy arrays.") },
+				{ "fetchdf", (PyCFunction) duckdb_cursor_fetchdf, METH_NOARGS,
+						PyDoc_STR(
+								"Fetches all rows from the result set as a pandas DataFrame.") },
+				{ "close", (PyCFunction) duckdb_cursor_close, METH_NOARGS,
+						PyDoc_STR("Closes the cursor.") },
+				{ "profile_info", (PyCFunction) duckdb_cursor_profile, METH_O,
+						PyDoc_STR(
+								"Returns the profile information of the last running query.") },
+				{ NULL, NULL } };
 
-static struct PyMemberDef cursor_members[] = {
-    {"connection", T_OBJECT, offsetof(duckdb_Cursor, connection), READONLY},
-    //    {"lastrowid", T_OBJECT, offsetof(pysqlite_Cursor, lastrowid), READONLY},
-    {"rowcount", T_LONG, offsetof(duckdb_Cursor, rowcount), READONLY},
-    {NULL}};
+static struct PyMemberDef cursor_members[] = { { "connection", T_OBJECT,
+		offsetof(duckdb_Cursor, connection), READONLY },
+//    {"lastrowid", T_OBJECT, offsetof(pysqlite_Cursor, lastrowid), READONLY},
+		{ "rowcount", T_LONG, offsetof(duckdb_Cursor, rowcount), READONLY }, {
+				NULL } };
 
 static const char cursor_doc[] = PyDoc_STR("DuckDB database cursor class.");
 
 PyTypeObject duckdb_CursorType = {
-    PyVarObject_HEAD_INIT(NULL, 0) "" MODULE_NAME ".Cursor", /* tp_name */
-    sizeof(duckdb_Cursor),                                   /* tp_basicsize */
-    0,                                                       /* tp_itemsize */
-    (destructor)duckdb_cursor_dealloc,                       /* tp_dealloc */
-    0,                                                       /* tp_print */
-    0,                                                       /* tp_getattr */
-    0,                                                       /* tp_setattr */
-    0,                                                       /* tp_reserved */
-    0,                                                       /* tp_repr */
-    0,                                                       /* tp_as_number */
-    0,                                                       /* tp_as_sequence */
-    0,                                                       /* tp_as_mapping */
-    0,                                                       /* tp_hash */
-    0,                                                       /* tp_call */
-    0,                                                       /* tp_str */
-    0,                                                       /* tp_getattro */
-    0,                                                       /* tp_setattro */
-    0,                                                       /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,                /* tp_flags */
-    cursor_doc,                                              /* tp_doc */
-    0,                                                       /* tp_traverse */
-    0,                                                       /* tp_clear */
-    0,                                                       /* tp_richcompare */
-    0,                 // offsetof(duckdb_Cursor, in_weakreflist),              /* tp_weaklistoffset */
-    PyObject_SelfIter, /* tp_iter */
-    (iternextfunc)duckdb_cursor_iternext, /* tp_iternext */
-    cursor_methods,                       /* tp_methods */
-    cursor_members,                       /* tp_members */
-    0,                                    /* tp_getset */
-    0,                                    /* tp_base */
-    0,                                    /* tp_dict */
-    0,                                    /* tp_descr_get */
-    0,                                    /* tp_descr_set */
-    0,                                    /* tp_dictoffset */
-    (initproc)duckdb_cursor_init,         /* tp_init */
-    0,                                    /* tp_alloc */
-    0,                                    /* tp_new */
-    0                                     /* tp_free */
+	PyVarObject_HEAD_INIT(NULL, 0) "" MODULE_NAME ".Cursor", /* tp_name */
+	sizeof(duckdb_Cursor), /* tp_basicsize */
+	0, /* tp_itemsize */
+	(destructor)duckdb_cursor_dealloc, /* tp_dealloc */
+	0, /* tp_print */
+	0, /* tp_getattr */
+	0, /* tp_setattr */
+	0, /* tp_reserved */
+	0, /* tp_repr */
+	0, /* tp_as_number */
+	0, /* tp_as_sequence */
+	0, /* tp_as_mapping */
+	0, /* tp_hash */
+	0, /* tp_call */
+	0, /* tp_str */
+	0, /* tp_getattro */
+	0, /* tp_setattro */
+	0, /* tp_as_buffer */
+	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags */
+	cursor_doc, /* tp_doc */
+	0, /* tp_traverse */
+	0, /* tp_clear */
+	0, /* tp_richcompare */
+	0, // offsetof(duckdb_Cursor, in_weakreflist),              /* tp_weaklistoffset */
+	PyObject_SelfIter, /* tp_iter */
+	(iternextfunc)duckdb_cursor_iternext, /* tp_iternext */
+	cursor_methods, /* tp_methods */
+	cursor_members, /* tp_members */
+	0, /* tp_getset */
+	0, /* tp_base */
+	0, /* tp_dict */
+	0, /* tp_descr_get */
+	0, /* tp_descr_set */
+	0, /* tp_dictoffset */
+	(initproc)duckdb_cursor_init, /* tp_init */
+	0, /* tp_alloc */
+	0, /* tp_new */
+	0 /* tp_free */
 };
 
 #if PY_MAJOR_VERSION >= 3
@@ -528,7 +825,8 @@ extern int duckdb_cursor_setup_types(void) {
 		return -1;
 	}
 
-	mafunc_ref = PyObject_GetAttrString(PyImport_Import(PyUnicode_FromString("numpy.ma")), "masked_array");
+	mafunc_ref = PyObject_GetAttrString(
+			PyImport_Import(PyUnicode_FromString("numpy.ma")), "masked_array");
 	if (!mafunc_ref) {
 		return -1;
 	}
