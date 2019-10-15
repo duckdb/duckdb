@@ -33,6 +33,43 @@ static int duckdb_cursor_init(duckdb_Cursor *self, PyObject *args,
 	return 0;
 }
 
+static const char* _duckdb_stringconvert(PyObject* pystr) {
+	const char* cstr;
+	// PART 2: THE EMPIRE STRIKES BACK (prepare the actual query)
+#if PY_MAJOR_VERSION >= 3
+	assert(PyUnicode_Check(pystr));
+	Py_ssize_t cstr_len;
+	cstr = PyUnicode_AsUTF8AndSize(pystr, &cstr_len);
+
+	if (cstr == NULL) {
+		PyErr_SetString(duckdb_DatabaseError, "not a string");
+		return NULL;
+	}
+	if (strlen(cstr) != (size_t) cstr_len) {
+		PyErr_SetString(duckdb_DatabaseError,
+				"string contains an embedded NULL");
+		return NULL;
+	}
+#else
+    if (PyString_Check(pystr)) {
+    	cstr = PyString_AsString(pystr);
+    } else {
+        auto bytestr = PyUnicode_AsUTF8String(pystr);
+        if (!bytestr) {
+    		PyErr_SetString(duckdb_DatabaseError, "not a string");
+            return NULL;
+        }
+
+        cstr = PyString_AsString(bytestr);
+    }
+	if (cstr == NULL) {
+		PyErr_SetString(duckdb_DatabaseError, "not a string");
+		return NULL;
+	}
+#endif
+	return cstr;
+}
+
 static void duckdb_cursor_dealloc(duckdb_Cursor *self) {
 	/* Reset the statement if the user has not closed the cursor */
 	duckdb_cursor_close(self, NULL);
@@ -98,7 +135,6 @@ int64_t _pysqlite_long_as_int64(PyObject *py_val) {
 
 duckdb::Value _duckdb_bind_parameter(PyObject *parameter) {
 	const char *string;
-	Py_ssize_t buflen;
 	parameter_type paramtype;
 
 	auto dnull = duckdb::Value();
@@ -139,14 +175,9 @@ duckdb::Value _duckdb_bind_parameter(PyObject *parameter) {
 		return duckdb::Value::DOUBLE(PyFloat_AsDouble(parameter));
 		break;
 	case TYPE_UNICODE:
-		string = PyUnicode_AsUTF8AndSize(parameter, &buflen);
+		string = _duckdb_stringconvert(parameter);
 		if (string == NULL)
 			return dnull;
-		if (buflen > INT_MAX) {
-			PyErr_SetString(PyExc_OverflowError,
-					"string longer than INT_MAX bytes");
-			return -1;
-		}
 		return duckdb::Value(string);
 		break;
 	case TYPE_BUFFER: { /*
@@ -234,6 +265,14 @@ void _duckdb_bind_parameters(PyObject *parameters,
 	}
 }
 
+// many hatred
+#if PY_MAJOR_VERSION >= 3
+#define STRING_PARSE_FLAG "U"
+#else
+#define STRING_PARSE_FLAG "O"
+#endif
+
+
 // borrowed from the sqlite module
 static PyObject*
 _duckdb_query_execute(duckdb_Cursor *self, int multiple, PyObject *args) {
@@ -257,7 +296,7 @@ _duckdb_query_execute(duckdb_Cursor *self, int multiple, PyObject *args) {
 
 	if (multiple) {
 		/* executemany() */
-		if (!PyArg_ParseTuple(args, "UO", &operation, &second_argument)) {
+		if (!PyArg_ParseTuple(args, STRING_PARSE_FLAG"O", &operation, &second_argument)) {
 			goto error;
 		}
 
@@ -274,7 +313,7 @@ _duckdb_query_execute(duckdb_Cursor *self, int multiple, PyObject *args) {
 		}
 	} else {
 		/* execute() */
-		if (!PyArg_ParseTuple(args, "U|O", &operation, &second_argument)) {
+		if (!PyArg_ParseTuple(args, STRING_PARSE_FLAG"|O", &operation, &second_argument)) {
 			goto error;
 		}
 
@@ -305,23 +344,9 @@ _duckdb_query_execute(duckdb_Cursor *self, int multiple, PyObject *args) {
 
 	self->rowcount = 0L;
 
-	// PART 2: THE EMPIRE STRIKES BACK (prepare the actual query)
+	sql_cstr = _duckdb_stringconvert(operation);
 
-	assert(PyUnicode_Check(operation));
-	Py_ssize_t sql_cstr_len;
-	sql_cstr = PyUnicode_AsUTF8AndSize(operation, &sql_cstr_len);
-
-	if (sql_cstr == NULL) {
-		PyErr_SetString(duckdb_DatabaseError, "SQL statement is not a string");
-		goto error;
-	}
-	if (strlen(sql_cstr) != (size_t) sql_cstr_len) {
-		PyErr_SetString(duckdb_DatabaseError,
-				"SQL statement contains an embedded NULL");
-		goto error;
-	}
-
-	fprintf(stderr, "X %s\n", sql_cstr);
+	assert(sql_cstr);
 
 	prep = self->connection->conn->Prepare(sql_cstr);
 	if (!prep->success) {
