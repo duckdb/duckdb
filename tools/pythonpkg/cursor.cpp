@@ -95,7 +95,7 @@ static int check_cursor(duckdb_Cursor *cur) {
 	return duckdb_check_connection(cur->connection);
 }
 
-typedef enum { TYPE_LONG, TYPE_FLOAT, TYPE_STRING, TYPE_BUFFER, TYPE_UNKNOWN } parameter_type;
+typedef enum {TYPE_INT, TYPE_LONG, TYPE_FLOAT, TYPE_STRING, TYPE_BUFFER, TYPE_UNKNOWN } parameter_type;
 
 #ifdef WORDS_BIGENDIAN
 #define IS_LITTLE_ENDIAN 0
@@ -134,8 +134,12 @@ duckdb::Value _duckdb_bind_parameter(PyObject *parameter) {
 	if (parameter == Py_None) {
 		return dnull;
 	}
-
-	if (PyLong_CheckExact(parameter)) {
+#if PY_MAJOR_VERSION < 3
+    if (PyInt_CheckExact(parameter)) {
+        paramtype = TYPE_INT;
+    } else
+#endif
+    if (PyLong_CheckExact(parameter)) {
 		paramtype = TYPE_LONG;
 	} else if (PyFloat_CheckExact(parameter)) {
 		paramtype = TYPE_FLOAT;
@@ -158,8 +162,14 @@ duckdb::Value _duckdb_bind_parameter(PyObject *parameter) {
 	}
 
 	switch (paramtype) {
+#if PY_MAJOR_VERSION < 3
+    case TYPE_INT: {
+        long longval = PyInt_AsLong(parameter);
+		return duckdb::Value::BIGINT(longval);
+        break;
+    }
+#endif
 	case TYPE_LONG: {
-
 		int64_t value = _pysqlite_long_as_int64(parameter);
 		if (value != -1 && !PyErr_Occurred())
 			return dnull;
