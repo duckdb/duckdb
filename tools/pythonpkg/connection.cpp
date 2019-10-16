@@ -26,9 +26,13 @@ int duckdb_connection_init(duckdb_Connection *self, PyObject *args, PyObject *kw
 		self->db = duckdb::make_unique<duckdb::DuckDB>(database);
 		self->conn = duckdb::make_unique<duckdb::Connection>(*self->db.get());
 		self->conn->EnableProfiling();
+		// pandas compatibility, bit ugly
+		self->conn->Query("CREATE VIEW sqlite_master AS SELECT * FROM sqlite_master()");
+
 	} catch (...) {
 		return -1;
 	}
+
 	Py_END_ALLOW_THREADS;
 
 	self->initialized = 1;
@@ -92,6 +96,13 @@ PyObject *duckdb_connection_begin(duckdb_Connection *self) {
 }
 
 PyObject *duckdb_connection_commit(duckdb_Connection *self) {
+	if (!duckdb_check_connection(self)) {
+		return NULL;
+	}
+	if (self->conn->context->transaction.IsAutoCommit()) {
+		Py_INCREF(self);
+		return (PyObject *)self;
+	}
 	return _duckdb_internal_cmd(self, "COMMIT");
 }
 

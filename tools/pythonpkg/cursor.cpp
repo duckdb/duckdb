@@ -32,41 +32,6 @@ static int duckdb_cursor_init(duckdb_Cursor *self, PyObject *args, PyObject *kwa
 	return 0;
 }
 
-static const char *_duckdb_stringconvert(PyObject *pystr) {
-	const char *cstr;
-	// PART 2: THE EMPIRE STRIKES BACK (prepare the actual query)
-#if PY_MAJOR_VERSION >= 3
-	assert(PyUnicode_Check(pystr));
-	Py_ssize_t cstr_len;
-	cstr = PyUnicode_AsUTF8AndSize(pystr, &cstr_len);
-
-	if (cstr == NULL) {
-		PyErr_SetString(duckdb_DatabaseError, "not a string");
-		return NULL;
-	}
-	if (strlen(cstr) != (size_t)cstr_len) {
-		PyErr_SetString(duckdb_DatabaseError, "string contains an embedded NULL");
-		return NULL;
-	}
-#else
-	if (PyString_Check(pystr)) {
-		cstr = PyString_AsString(pystr);
-	} else {
-		auto bytestr = PyUnicode_AsUTF8String(pystr);
-		if (!bytestr) {
-			PyErr_SetString(duckdb_DatabaseError, "not a string");
-			return NULL;
-		}
-
-		cstr = PyString_AsString(bytestr);
-	}
-	if (cstr == NULL) {
-		PyErr_SetString(duckdb_DatabaseError, "not a string");
-		return NULL;
-	}
-#endif
-	return cstr;
-}
 
 static void duckdb_cursor_dealloc(duckdb_Cursor *self) {
 	/* Reset the statement if the user has not closed the cursor */
@@ -95,6 +60,38 @@ static int check_cursor(duckdb_Cursor *cur) {
 	return duckdb_check_connection(cur->connection);
 }
 
+
+static const char *_duckdb_stringconvert(PyObject *pystr) {
+	const char *cstr;
+#if PY_MAJOR_VERSION >= 3
+	assert(PyUnicode_Check(pystr));
+	Py_ssize_t cstr_len;
+	cstr = PyUnicode_AsUTF8AndSize(pystr, &cstr_len);
+
+	if (cstr == NULL) {
+		throw std::runtime_error("Got NULL pointer from string object");
+	}
+	if (strlen(cstr) != (size_t)cstr_len) {
+		throw std::runtime_error("String object has embedded NULL");
+	}
+#else
+	if (PyString_Check(pystr)) {
+		cstr = PyString_AsString(pystr);
+	} else {
+		auto bytestr = PyUnicode_AsUTF8String(pystr);
+		if (!bytestr) {
+			throw std::runtime_error("Can't convert string object to unicode");
+		}
+		cstr = PyString_AsString(bytestr);
+	}
+	if (cstr == NULL) {
+		throw std::runtime_error("Got NULL pointer from string object");
+	}
+#endif
+	return cstr;
+}
+
+
 typedef enum {TYPE_INT, TYPE_LONG, TYPE_FLOAT, TYPE_STRING, TYPE_BUFFER, TYPE_UNKNOWN } parameter_type;
 
 #ifdef WORDS_BIGENDIAN
@@ -103,36 +100,12 @@ typedef enum {TYPE_INT, TYPE_LONG, TYPE_FLOAT, TYPE_STRING, TYPE_BUFFER, TYPE_UN
 #define IS_LITTLE_ENDIAN 1
 #endif
 
-// ?! wtf do we need this?
-int64_t _pysqlite_long_as_int64(PyObject *py_val) {
-	int overflow;
-	long long value = PyLong_AsLongLongAndOverflow(py_val, &overflow);
-	if (value == -1 && PyErr_Occurred())
-		return -1;
-	if (!overflow) {
-#if SIZEOF_LONG_LONG > 8
-		if (-0x8000000000000000LL <= value && value <= 0x7FFFFFFFFFFFFFFFLL)
-#endif
-			return value;
-	} else if (sizeof(value) < sizeof(int64_t)) {
-		int64_t int64val;
-		if (_PyLong_AsByteArray((PyLongObject *)py_val, (unsigned char *)&int64val, sizeof(int64val), IS_LITTLE_ENDIAN,
-		                        1 /* signed */) >= 0) {
-			return int64val;
-		}
-	}
-	PyErr_SetString(PyExc_OverflowError, "Python int too large to convert to SQLite INTEGER");
-	return -1;
-}
 
-duckdb::Value _duckdb_bind_parameter(PyObject *parameter) {
-	const char *string;
-	parameter_type paramtype;
-
-	auto dnull = duckdb::Value();
+duckdb::Value _duckdb_pyobject_to_value(PyObject *parameter) {
+	parameter_type paramtype = TYPE_UNKNOWN;
 
 	if (parameter == Py_None) {
-		return dnull;
+		return duckdb::Value();
 	}
 #if PY_MAJOR_VERSION < 3
     if (PyInt_CheckExact(parameter)) {
@@ -164,58 +137,32 @@ duckdb::Value _duckdb_bind_parameter(PyObject *parameter) {
 	switch (paramtype) {
 #if PY_MAJOR_VERSION < 3
     case TYPE_INT: {
-        long longval = PyInt_AsLong(parameter);
-		return duckdb::Value::BIGINT(longval);
-        break;
+		return duckdb::Value::BIGINT(PyInt_AsLong(parameter));
     }
 #endif
 	case TYPE_LONG: {
-		int64_t value = _pysqlite_long_as_int64(parameter);
-		if (value != -1 && !PyErr_Occurred())
-			return dnull;
-		else
-			return duckdb::Value::BIGINT(value);
-		break;
+		int overflow;
+		int64_t value = PyLong_AsLongLongAndOverflow(parameter, &overflow);
+		if (overflow) {
+			throw std::runtime_error("Overflow in long object");
+		}
+		return duckdb::Value::BIGINT(value);
 	}
 	case TYPE_FLOAT:
 		return duckdb::Value::DOUBLE(PyFloat_AsDouble(parameter));
-		break;
 	case TYPE_STRING:
-		string = _duckdb_stringconvert(parameter);
-		if (string == NULL)
-			return dnull;
-		return duckdb::Value(string);
-		break;
-	case TYPE_BUFFER: { /*
-	 Py_buffer view;
-	 if (PyObject_GetBuffer(parameter, &view, PyBUF_SIMPLE) != 0) {
-	 PyErr_SetString(PyExc_ValueError, "could not convert BLOB to buffer");
-	 return -1;
-	 }
-	 if (view.len > INT_MAX) {
-	 PyErr_SetString(PyExc_OverflowError,
-	 "BLOB longer than INT_MAX bytes");
-	 PyBuffer_Release(&view);
-	 return -1;
-	 }
-	 rc = sqlite3_bind_blob(self->st, pos, view.buf, (int)view.len, SQLITE_TRANSIENT);
-	 PyBuffer_Release(&view); */
-		PyErr_SetString(PyExc_OverflowError, "unsupported blob type");
-		break;
-	}
+		return duckdb::Value( _duckdb_stringconvert(parameter));
 	default:
-		PyErr_SetString(PyExc_OverflowError, "unknown type");
 		break;
 	}
-
-	return dnull;
+	// TODO complain
+	throw std::runtime_error("Failed to convert object");
 }
 
 // this parameter binding mess is inherited from pysqlite
 
 void _duckdb_bind_parameters(PyObject *parameters, std::vector<duckdb::Value> &params) {
 	PyObject *current_param;
-	const char *binding_name;
 	int i;
 	int num_params_needed = params.size();
 	Py_ssize_t num_params = 0;
@@ -251,14 +198,14 @@ void _duckdb_bind_parameters(PyObject *parameters, std::vector<duckdb::Value> &p
 				return;
 			}
 
-			params[i] = _duckdb_bind_parameter(current_param);
-			if (PyErr_Occurred()) {
-				PyErr_Format(duckdb_DatabaseError, "Error binding parameter %d - probably unsupported type.", i);
+			try {
+				params[i] = _duckdb_pyobject_to_value(current_param);
+			} catch (std::exception& e) {
+				PyErr_Format(duckdb_DatabaseError, "Error binding parameter %d - %s", i, e.what());
 				return;
+
 			}
 		}
-	} else if (PyDict_Check(parameters)) {
-		PyErr_Format(duckdb_DatabaseError, "Can't bind named parameters from dict", binding_name);
 	} else {
 		PyErr_SetString(duckdb_DatabaseError, "parameters are of unsupported type");
 	}
@@ -279,6 +226,8 @@ static PyObject *_duckdb_query_execute(duckdb_Cursor *self, int multiple, PyObje
 	PyObject *parameters = NULL;
 	PyObject *second_argument = NULL;
 
+	bool need_transaction;
+
 	std::vector<duckdb::Value> params;
 	std::unique_ptr<duckdb::PreparedStatement> prep;
 	const char *sql_cstr;
@@ -287,10 +236,13 @@ static PyObject *_duckdb_query_execute(duckdb_Cursor *self, int multiple, PyObje
 		goto error;
 	}
 
-	self->reset = 0;
+	need_transaction = multiple && self->connection->conn->context->transaction.IsAutoCommit();
 
-	// PART 1: A NEW HOPE (collect parameters and unify)
+	if (need_transaction) {
+		self->connection->conn->Query("BEGIN TRANSACTION");
+	}
 
+	// unify the various possible parameters from `args` into `parameters_iter`
 	if (multiple) {
 		/* executemany() */
 		if (!PyArg_ParseTuple(args, STRING_PARSE_FLAG "O", &operation, &second_argument)) {
@@ -320,7 +272,7 @@ static PyObject *_duckdb_query_execute(duckdb_Cursor *self, int multiple, PyObje
 		}
 
 		if (second_argument == NULL) {
-			second_argument = PyTuple_New(0);
+			second_argument = PyTuple_New(0); // push an empty tuple so we have an entry in parameters_list
 			if (!second_argument) {
 				goto error;
 			}
@@ -338,12 +290,14 @@ static PyObject *_duckdb_query_execute(duckdb_Cursor *self, int multiple, PyObje
 			goto error;
 		}
 	}
-
 	self->rowcount = 0L;
+	self->reset = 0;
 
 	sql_cstr = _duckdb_stringconvert(operation);
-
-	assert(sql_cstr);
+	if (!sql_cstr) {
+		PyErr_SetString(duckdb_DatabaseError, "Can't convert query to string");
+		goto error;
+	}
 
 	prep = self->connection->conn->Prepare(sql_cstr);
 	if (!prep->success) {
@@ -351,7 +305,6 @@ static PyObject *_duckdb_query_execute(duckdb_Cursor *self, int multiple, PyObje
 		goto error;
 	}
 
-	// PART 3: THE RETURN OF THE JEDI (execute)
 	params.resize(prep->n_param);
 
 	while (1) {
@@ -387,9 +340,15 @@ error:
 	Py_XDECREF(parameters_list);
 
 	if (PyErr_Occurred()) {
+		if (need_transaction) {
+			self->connection->conn->Query("ROLLBACK");
+		}
 		self->rowcount = -1L;
 		return NULL;
 	} else {
+		if (need_transaction) {
+			self->connection->conn->Query("COMMIT");
+		}
 		Py_INCREF(self);
 		return (PyObject *)self;
 	}
