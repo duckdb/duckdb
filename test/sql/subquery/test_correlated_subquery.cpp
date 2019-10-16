@@ -953,4 +953,13 @@ TEST_CASE("Test correlated subquery with grouping columns", "[subquery]") {
 	// having without GROUP BY in subquery
 	result = con.Query("SELECT col5 = ALL (SELECT 1 FROM tbl_ProductSales HAVING MIN(col8) IS NULL) FROM another_T GROUP BY col1, col2, col5, col8;");
 	REQUIRE(CHECK_COLUMN(result, 0, {true, true, true, true}));
+	result = con.Query("SELECT CASE WHEN 1 IN (SELECT MAX(col7) UNION ALL (SELECT MIN(ColID) FROM tbl_ProductSales INNER JOIN another_T t2 ON t2.col5 = t2.col1)) THEN 2 ELSE NULL END FROM another_T t1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	result = con.Query("SELECT CASE WHEN 1 IN (SELECT (SELECT MAX(col7))) THEN 2 ELSE NULL END FROM another_T t1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	// UNION ALL with correlated subquery on either side
+	result = con.Query("SELECT CASE WHEN 1 IN (SELECT (SELECT MAX(col7)) UNION ALL (SELECT MIN(ColID) FROM tbl_ProductSales INNER JOIN another_T t2 ON t2.col5 = t2.col1)) THEN 2 ELSE NULL END FROM another_T t1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	result = con.Query("SELECT CASE WHEN 1 IN (SELECT (SELECT MIN(ColID) FROM tbl_ProductSales INNER JOIN another_T t2 ON t2.col5 = t2.col1) UNION ALL (SELECT MAX(col7))) THEN 2 ELSE NULL END FROM another_T t1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 }
