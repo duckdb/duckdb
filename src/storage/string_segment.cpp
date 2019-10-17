@@ -265,7 +265,7 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 				block_id_t block;
 				int32_t offset;
 				// write the string into the current string block
-				WriteString(string_t(ldata[i], string_length + 1), block, offset);
+				WriteString(string_t(ldata[i], string_length), block, offset);
 
 				dictionary_offset += BIG_STRING_MARKER_SIZE;
 				auto dict_pos = end - dictionary_offset;
@@ -291,6 +291,7 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 }
 
 void StringSegment::WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) {
+	assert(strlen(string.data) == string.length);
 	uint32_t total_length = string.length + 1 + sizeof(uint32_t);
 	unique_ptr<ManagedBufferHandle> handle;
 	// check if the string fits in the current block
@@ -375,7 +376,7 @@ string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats,
 		info->ids[i] = ids[i] - vector_offset;
 		// copy the string into the block
 		if (!update.nullmask[i]) {
-			WriteString(string_t(strings[i], strlen(strings[i]) + 1), info->block_ids[i], info->offsets[i]);
+			WriteString(string_t(strings[i], strlen(strings[i])), info->block_ids[i], info->offsets[i]);
 		} else {
 			info->block_ids[i] = INVALID_BLOCK;
 			info->offsets[i] = 0;

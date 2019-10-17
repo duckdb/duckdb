@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "storage/storage_info.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -232,4 +233,98 @@ TEST_CASE("Test rollback of string update with NULL", "[update]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "test"}));
 	result = con2.Query("SELECT * FROM test ORDER BY a");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "test"}));
+}
+
+TEST_CASE("Test string updates with many strings", "[update][.]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db);
+
+	// create a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('a'), ('b'), ('c'), (NULL)"));
+
+	// insert the same strings many times
+	index_t size = 4 * sizeof(int32_t);
+	while(size < BLOCK_SIZE * 2) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM test"));
+		size *= 4;
+	}
+
+	// verify that the distinct values are correct
+	result = con.Query("SELECT DISTINCT a FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "a", "b", "c"}));
+	result = con2.Query("SELECT DISTINCT a FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "a", "b", "c"}));
+
+	// test update of string column in another transaction
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a='aa' WHERE a='a';"));
+
+	// verify that the values were updated
+	result = con.Query("SELECT DISTINCT a FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "aa", "b", "c"}));
+	result = con2.Query("SELECT DISTINCT a FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "a", "b", "c"}));
+
+	// now roll it back
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK;"));
+
+	// the values should be back to normal
+	result = con.Query("SELECT DISTINCT a FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "a", "b", "c"}));
+	result = con2.Query("SELECT DISTINCT a FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "a", "b", "c"}));
+
+	// this time do the same but commit it
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a='aa' WHERE a='a';"));
+
+	// now both connections have the updated value
+	result = con.Query("SELECT DISTINCT a FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "aa", "b", "c"}));
+	result = con2.Query("SELECT DISTINCT a FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "aa", "b", "c"}));
+}
+
+TEST_CASE("Test update of big string", "[update][.]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db);
+
+	// create a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('abcdefghijklmnopqrstuvwxyz')"));
+
+	// increase the size of the string until it is bigger than a block
+	index_t size = 26;
+	while(size < BLOCK_SIZE * 2) {
+		// concat the string 10x and insert it
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test"));
+		// delete the old value
+		REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE length(a) = (SELECT MIN(length(a)) FROM test)"));
+		size *= 10;
+	}
+
+	// verify that the string length is correct
+	result = con.Query("SELECT LENGTH(a) FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(size)}));
+
+	// now update the big string in a separate transaction
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a='a'"));
+
+	// verify the lengths
+	result = con.Query("SELECT LENGTH(a) FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(1)}));
+	result = con2.Query("SELECT LENGTH(a) FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(size)}));
+
+	// now commit
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
+	// the big string is gone now
+	result = con.Query("SELECT LENGTH(a) FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(1)}));
+	result = con2.Query("SELECT LENGTH(a) FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(1)}));
 }
