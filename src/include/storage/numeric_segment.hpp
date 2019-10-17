@@ -19,9 +19,6 @@ public:
 	//! The size of this type
 	index_t type_size;
 public:
-	//! Fetch the vector at index "vector_index" from the uncompressed segment, storing it in the result vector
-	void Scan(Transaction &transaction, TransientScanState &state, index_t vector_index, Vector &result) override;
-
 	//! Fetch a single value and append it to the vector
 	void Fetch(Transaction &transaction, row_t row_id, Vector &result) override;
 
@@ -34,6 +31,7 @@ protected:
 	void Update(SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) override;
 
 	index_t FetchBaseData(TransientScanState &state, index_t vector_index, Vector &result) override;
+	void FetchUpdateData(TransientScanState &state, Transaction &transaction, UpdateInfo *versions, Vector &result, index_t count) override;
 public:
 	typedef void (*append_function_t)(SegmentStatistics &stats, data_ptr_t target, index_t target_offset, Vector &source, index_t offset, index_t count);
 	typedef void (*update_function_t)(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t base_data, Vector &update);

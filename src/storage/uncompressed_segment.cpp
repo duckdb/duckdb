@@ -106,6 +106,20 @@ void UncompressedSegment::Fetch(TransientScanState &state, index_t vector_index,
 	FetchBaseData(state, vector_index, result);
 }
 
+//===--------------------------------------------------------------------===//
+// Scan
+//===--------------------------------------------------------------------===//
+void UncompressedSegment::Scan(Transaction &transaction, TransientScanState &state, index_t vector_index, Vector &result) {
+	auto read_lock = lock.GetSharedLock();
+
+	// first fetch the data from the base table
+	index_t count = FetchBaseData(state, vector_index, result);
+	if (versions && versions[vector_index]) {
+		// if there are any versions, check if we need to overwrite the data with the versioned data
+		FetchUpdateData(state, transaction, versions[vector_index], result, count);
+	}
+}
+
 void UncompressedSegment::IndexScan(TransientScanState &state, index_t vector_index, Vector &result) {
 	if (vector_index == 0) {
 		// vector_index = 0, obtain a shared lock on the segment that we keep until the index scan is complete

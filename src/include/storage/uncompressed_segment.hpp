@@ -46,7 +46,7 @@ public:
 public:
 	virtual void InitializeScan(TransientScanState &state) {}
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, storing it in the result vector
-	virtual void Scan(Transaction &transaction, TransientScanState &state, index_t vector_index, Vector &result) = 0;
+	void Scan(Transaction &transaction, TransientScanState &state, index_t vector_index, Vector &result);
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, throwing an exception if there are any outstanding updates
 	void IndexScan(TransientScanState &state, index_t vector_index, Vector &result);
 
@@ -76,6 +76,8 @@ protected:
 	virtual void Update(SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) = 0;
 	//! Fetch base table data
 	virtual index_t FetchBaseData(TransientScanState &state, index_t vector_index, Vector &result) = 0;
+	//! Fetch update data from an UpdateInfo version
+	virtual void FetchUpdateData(TransientScanState &state, Transaction &transaction, UpdateInfo *version, Vector &result, index_t count) = 0;
 
 	UpdateInfo *CreateUpdateInfo(Transaction &transaction, row_t *ids, index_t count, index_t vector_index, index_t vector_offset, index_t type_size);
 };

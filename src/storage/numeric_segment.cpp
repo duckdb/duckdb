@@ -40,20 +40,6 @@ NumericSegment::NumericSegment(ColumnData &column_data, BufferManager &manager, 
 }
 
 //===--------------------------------------------------------------------===//
-// Scan
-//===--------------------------------------------------------------------===//
-void NumericSegment::Scan(Transaction &transaction, TransientScanState &state, index_t vector_index, Vector &result) {
-	auto read_lock = lock.GetSharedLock();
-
-	// first fetch the data from the base table
-	index_t count = FetchBaseData(state, vector_index, result);
-	if (versions && versions[vector_index]) {
-		// if there are any versions, check if we need to overwrite the data with the versioned data
-		fetch_from_update_info(transaction, versions[vector_index], result, count);
-	}
-}
-
-//===--------------------------------------------------------------------===//
 // Fetch base data
 //===--------------------------------------------------------------------===//
 index_t NumericSegment::FetchBaseData(TransientScanState &state, index_t vector_index, Vector &result) {
@@ -72,6 +58,10 @@ index_t NumericSegment::FetchBaseData(TransientScanState &state, index_t vector_
 	memcpy(result.data, data + offset + sizeof(nullmask_t), count * type_size);
 	result.count = count;
 	return count;
+}
+
+void NumericSegment::FetchUpdateData(TransientScanState &state, Transaction &transaction, UpdateInfo *version, Vector &result, index_t count) {
+	fetch_from_update_info(transaction, version, result, count);
 }
 
 //===--------------------------------------------------------------------===//

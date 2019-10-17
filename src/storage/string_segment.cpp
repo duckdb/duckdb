@@ -54,31 +54,6 @@ void StringSegment::InitializeScan(TransientScanState &state) {
 	state.primary_handle = manager.PinBuffer(block_id);
 }
 
-void StringSegment::Scan(Transaction &transaction, TransientScanState &state, index_t vector_index, Vector &result) {
-	auto read_lock = lock.GetSharedLock();
-
-	FetchBaseData(state, vector_index, result);
-	if (versions && versions[vector_index]) {
-		// fetch data from updates
-		auto handle = (ManagedBufferHandle*) state.primary_handle.get();
-
-		auto result_data = (char**) result.data;
-		auto current = versions[vector_index];
-		while(current) {
-			if (current->version_number > transaction.start_time && current->version_number != transaction.transaction_id) {
-				// these tuples were either committed AFTER this transaction started or are not committed yet, use tuples stored in this version
-				auto info_data = (string_location_t*) current->tuple_data;
-				for(index_t i = 0; i < current->N; i++) {
-					auto string = FetchString(state, handle->buffer->data.get(), info_data[i]);
-					result_data[current->tuples[i]] = string.data;
-					result.nullmask[current->tuples[i]] = current->nullmask[current->tuples[i]];
-				}
-			}
-			current = current->next;
-		}
-	}
-}
-
 //===--------------------------------------------------------------------===//
 // Fetch base data
 //===--------------------------------------------------------------------===//
@@ -92,6 +67,28 @@ index_t StringSegment::FetchBaseData(TransientScanState &state, index_t vector_i
 	// fetch the data from the base segment
 	FetchBaseData(state, handle->buffer->data.get(), vector_index, result, count);
 	return count;
+}
+
+//===--------------------------------------------------------------------===//
+// Fetch update data
+//===--------------------------------------------------------------------===//
+void StringSegment::FetchUpdateData(TransientScanState &state, Transaction &transaction, UpdateInfo *current, Vector &result, index_t count) {
+	// fetch data from updates
+	auto handle = (ManagedBufferHandle*) state.primary_handle.get();
+
+	auto result_data = (char**) result.data;
+	while(current) {
+		if (current->version_number > transaction.start_time && current->version_number != transaction.transaction_id) {
+			// these tuples were either committed AFTER this transaction started or are not committed yet, use tuples stored in this version
+			auto info_data = (string_location_t*) current->tuple_data;
+			for(index_t i = 0; i < current->N; i++) {
+				auto string = FetchString(state, handle->buffer->data.get(), info_data[i]);
+				result_data[current->tuples[i]] = string.data;
+				result.nullmask[current->tuples[i]] = current->nullmask[current->tuples[i]];
+			}
+		}
+		current = current->next;
+	}
 }
 
 void StringSegment::FetchStringLocations(data_ptr_t baseptr, row_t *ids, index_t vector_index, index_t vector_offset, index_t count, string_location_t result[]) {
