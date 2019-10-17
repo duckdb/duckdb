@@ -1,4 +1,6 @@
 #include "storage/uncompressed_segment.hpp"
+#include "common/exception.hpp"
+#include "common/types/vector.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -97,6 +99,23 @@ UpdateInfo *UncompressedSegment::CreateUpdateInfo(Transaction &transaction, row_
 	return node;
 }
 
+void UncompressedSegment::Fetch(TransientScanState &state, index_t vector_index, Vector &result) {
+	auto read_lock = lock.GetSharedLock();
+	assert(!versions);
+
+	FetchBaseData(state, vector_index, result);
+}
+
+void UncompressedSegment::IndexScan(TransientScanState &state, index_t vector_index, Vector &result) {
+	if (vector_index == 0) {
+		// vector_index = 0, obtain a shared lock on the segment that we keep until the index scan is complete
+		state.locks.push_back(lock.GetSharedLock());
+	}
+	if (versions && versions[vector_index]) {
+		throw TransactionException("Cannot create index with outstanding updates");
+	}
+	FetchBaseData(state, vector_index, result);
+}
 
 void UncompressedSegment::CleanupUpdate(UpdateInfo *info) {
 	if (info->prev) {

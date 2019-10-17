@@ -414,8 +414,10 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers) {
 	DataChunk result;
 	result.Initialize(types);
 	// FIXME: we do not need to fetch all columns, only the columns required by the indices!
+	auto states = unique_ptr<TransientScanState[]>(new TransientScanState[types.size()]);
 	for(index_t i = 0; i < types.size(); i++) {
-		columns[i].Fetch(row_ids[0], result.data[i]);
+		columns[i].InitializeTransientScan(states[i]);
+		columns[i].Fetch(states[i], row_ids[0], result.data[i]);
 		result.data[i].count = row_identifiers.count;
 		result.data[i].sel_vector = sel;
 	}

@@ -46,21 +46,17 @@ void NumericSegment::Scan(Transaction &transaction, TransientScanState &state, i
 	auto read_lock = lock.GetSharedLock();
 
 	// first fetch the data from the base table
-	index_t count = FetchBaseData(vector_index, result);
+	index_t count = FetchBaseData(state, vector_index, result);
 	if (versions && versions[vector_index]) {
 		// if there are any versions, check if we need to overwrite the data with the versioned data
 		fetch_from_update_info(transaction, versions[vector_index], result, count);
 	}
 }
 
-void NumericSegment::Fetch(index_t vector_index, Vector &result) {
-	auto read_lock = lock.GetSharedLock();
-	assert(!versions);
-
-	FetchBaseData(vector_index, result);
-}
-
-index_t NumericSegment::FetchBaseData(index_t vector_index, Vector &result) {
+//===--------------------------------------------------------------------===//
+// Fetch base data
+//===--------------------------------------------------------------------===//
+index_t NumericSegment::FetchBaseData(TransientScanState &state, index_t vector_index, Vector &result) {
 	assert(vector_index < max_vector_count);
 	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 
@@ -76,20 +72,6 @@ index_t NumericSegment::FetchBaseData(index_t vector_index, Vector &result) {
 	memcpy(result.data, data + offset + sizeof(nullmask_t), count * type_size);
 	result.count = count;
 	return count;
-}
-
-//===--------------------------------------------------------------------===//
-// Index Scan
-//===--------------------------------------------------------------------===//
-void NumericSegment::IndexScan(TransientScanState &state, index_t vector_index, Vector &result) {
-	if (vector_index == 0) {
-		// vector_index = 0, obtain a shared lock on the segment that we keep until the index scan is complete
-		state.locks.push_back(lock.GetSharedLock());
-	}
-	if (versions && versions[vector_index]) {
-		throw TransactionException("Cannot create index with outstanding updates");
-	}
-	FetchBaseData(vector_index, result);
 }
 
 //===--------------------------------------------------------------------===//

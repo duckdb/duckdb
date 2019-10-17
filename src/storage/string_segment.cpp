@@ -57,16 +57,11 @@ void StringSegment::InitializeScan(TransientScanState &state) {
 void StringSegment::Scan(Transaction &transaction, TransientScanState &state, index_t vector_index, Vector &result) {
 	auto read_lock = lock.GetSharedLock();
 
-	// clear any previously locked buffers and get the primary buffer handle
-	auto handle = (ManagedBufferHandle*) state.primary_handle.get();
-	state.handles.clear();
-
-	index_t count = GetVectorCount(vector_index);
-
-	// fetch the data from the base segment
-	FetchBaseData(state, handle->buffer->data.get(), vector_index, result, count);
+	FetchBaseData(state, vector_index, result);
 	if (versions && versions[vector_index]) {
 		// fetch data from updates
+		auto handle = (ManagedBufferHandle*) state.primary_handle.get();
+
 		auto result_data = (char**) result.data;
 		auto current = versions[vector_index];
 		while(current) {
@@ -82,6 +77,21 @@ void StringSegment::Scan(Transaction &transaction, TransientScanState &state, in
 			current = current->next;
 		}
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// Fetch base data
+//===--------------------------------------------------------------------===//
+index_t StringSegment::FetchBaseData(TransientScanState &state, index_t vector_index, Vector &result) {
+	// clear any previously locked buffers and get the primary buffer handle
+	auto handle = (ManagedBufferHandle*) state.primary_handle.get();
+	state.handles.clear();
+
+	index_t count = GetVectorCount(vector_index);
+
+	// fetch the data from the base segment
+	FetchBaseData(state, handle->buffer->data.get(), vector_index, result, count);
+	return count;
 }
 
 void StringSegment::FetchStringLocations(data_ptr_t baseptr, row_t *ids, index_t vector_index, index_t vector_offset, index_t count, string_location_t result[]) {
@@ -190,14 +200,6 @@ string_t StringSegment::FetchString(TransientScanState &state, data_ptr_t basept
 		return result;
 	}
 
-}
-
-void StringSegment::IndexScan(TransientScanState &state, index_t vector_index, Vector &result) {
-	throw Exception("FIXME");
-}
-
-void StringSegment::Fetch(index_t vector_index, Vector &result) {
-	throw Exception("FIXME");
 }
 
 void StringSegment::Fetch(Transaction &transaction, row_t row_id, Vector &result) {

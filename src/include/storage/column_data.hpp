@@ -53,7 +53,7 @@ public:
 	void Update(Transaction &transaction, Vector &updates, row_t *ids);
 
 	//! Fetch the vector from the column data that belongs to this specific row
-	void Fetch(row_t row_id, Vector &result);
+	void Fetch(TransientScanState &state, row_t row_id, Vector &result);
 	//! Fetch a specific row id and append it to the vector
 	void FetchRow(Transaction &transaction, row_t row_id, Vector &result);
 private:

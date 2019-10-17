@@ -34,7 +34,7 @@ public:
 	void IndexScan(TransientScanState &state, Vector &result);
 
 	//! Fetch the base table vector index that belongs to this row
-	void Fetch(index_t vector_index, Vector &result);
+	void Fetch(TransientScanState &state, index_t vector_index, Vector &result);
 	//! Fetch a value of the specific row id and append it to the result
 	void FetchRow(Transaction &transaction, row_t row_id, Vector &result);
 

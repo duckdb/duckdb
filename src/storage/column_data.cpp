@@ -100,7 +100,7 @@ void ColumnData::Update(Transaction &transaction, Vector &updates, row_t *ids) {
 	}
 }
 
-void ColumnData::Fetch(row_t row_id, Vector &result) {
+void ColumnData::Fetch(TransientScanState &state, row_t row_id, Vector &result) {
 	// fetch the vector that belongs to this specific row
 	if ((index_t) row_id < persistent_rows) {
 		throw Exception("FIXME: persistent fetch");
@@ -109,7 +109,7 @@ void ColumnData::Fetch(row_t row_id, Vector &result) {
 		auto segment = (TransientSegment *) transient.GetSegment(row_id);
 		auto vector_index = (row_id - segment->start) / STANDARD_VECTOR_SIZE;
 		// now perform the fetch within the segment
-		segment->Fetch(vector_index, result);
+		segment->Fetch(state, vector_index, result);
 	}
 }
 

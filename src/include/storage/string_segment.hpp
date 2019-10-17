@@ -51,11 +51,7 @@ public:
 	void InitializeScan(TransientScanState &state) override;
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, storing it in the result vector
 	void Scan(Transaction &transaction, TransientScanState &state, index_t vector_index, Vector &result) override;
-	//! Fetch the vector at index "vector_index" from the uncompressed segment, throwing an exception if there are any outstanding updates
-	void IndexScan(TransientScanState &state, index_t vector_index, Vector &result) override;
 
-	//! Fetch a single vector from the base table
-	void Fetch(index_t vector_index, Vector &result) override;
 	//! Fetch a single value and append it to the vector
 	void Fetch(Transaction &transaction, row_t row_id, Vector &result) override;
 
@@ -66,6 +62,7 @@ public:
 	void RollbackUpdate(UpdateInfo *info) override;
 protected:
 	void Update(SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) override;
+	index_t FetchBaseData(TransientScanState &state, index_t vector_index, Vector &result) override;
 private:
 	void AppendData(SegmentStatistics &stats, data_ptr_t target, data_ptr_t end, index_t target_offset, Vector &source, index_t offset, index_t count);
 

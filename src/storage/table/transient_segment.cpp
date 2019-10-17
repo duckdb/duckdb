@@ -43,8 +43,8 @@ void TransientSegment::Update(Transaction &transaction, Vector &updates, row_t *
 	data->Update(stats, transaction, updates, ids, this->start);
 }
 
-void TransientSegment::Fetch(index_t vector_index, Vector &result) {
-	data->Fetch(vector_index, result);
+void TransientSegment::Fetch(TransientScanState &state, index_t vector_index, Vector &result) {
+	data->Fetch(state, vector_index, result);
 }
 
 void TransientSegment::FetchRow(Transaction &transaction, row_t row_id, Vector &result) {
