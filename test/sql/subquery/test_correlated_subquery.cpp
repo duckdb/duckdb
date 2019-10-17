@@ -962,4 +962,19 @@ TEST_CASE("Test correlated subquery with grouping columns", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	result = con.Query("SELECT CASE WHEN 1 IN (SELECT (SELECT MIN(ColID) FROM tbl_ProductSales INNER JOIN another_T t2 ON t2.col5 = t2.col1) UNION ALL (SELECT MAX(col7))) THEN 2 ELSE NULL END FROM another_T t1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+
+	// correlated column comparison with correlated subquery
+	result = con.Query("SELECT (SELECT MIN(ColID) FROM tbl_ProductSales INNER JOIN another_T t2 ON t1.col7 <> (SELECT MAX(t1.col1 + t3.col4) FROM another_T t3)) FROM another_T t1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 1}));
+	result = con.Query("SELECT (SELECT MIN(ColID) FROM tbl_ProductSales INNER JOIN another_T t2 ON t1.col7 <> ANY(SELECT MAX(t1.col1 + t3.col4) FROM another_T t3)) FROM another_T t1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 1}));
+
+	// LEFT JOIN between correlated columns not supported for now
+	REQUIRE_FAIL(con.Query("SELECT CASE WHEN NOT col1 NOT IN (SELECT (SELECT MAX(col7)) UNION (SELECT MIN(ColID) FROM tbl_ProductSales LEFT JOIN another_T t2 ON t2.col5 = t1.col1)) THEN 1 ELSE 2 END FROM another_T t1 GROUP BY col1 ORDER BY 1;"));
+	//REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 2, 2}));
+
+	// correlated columns in window functions not supported yet
+	REQUIRE_FAIL(con.Query("SELECT EXISTS (SELECT RANK() OVER (PARTITION BY SUM(DISTINCT col5))) FROM another_T t1;"));
+	// REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	REQUIRE_FAIL(con.Query("SELECT (SELECT SUM(col2) OVER (PARTITION BY SUM(col2) ORDER BY MAX(col1 + ColID) ROWS UNBOUNDED PRECEDING) FROM tbl_ProductSales) FROM another_T t1 GROUP BY col1"));
 }
