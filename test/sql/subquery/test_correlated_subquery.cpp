@@ -962,4 +962,9 @@ TEST_CASE("Test correlated subquery with grouping columns", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	result = con.Query("SELECT CASE WHEN 1 IN (SELECT (SELECT MIN(ColID) FROM tbl_ProductSales INNER JOIN another_T t2 ON t2.col5 = t2.col1) UNION ALL (SELECT MAX(col7))) THEN 2 ELSE NULL END FROM another_T t1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+
+	result = con.Query("SELECT (SELECT MIN(ColID) FROM tbl_ProductSales INNER JOIN another_T t2 ON t1.col7 <> (SELECT MAX(t1.col1 + t3.col4) FROM another_T t3)) FROM another_T t1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 1}));
+	result = con.Query("SELECT (SELECT MIN(ColID) FROM tbl_ProductSales INNER JOIN another_T t2 ON t1.col7 <> ANY(SELECT MAX(t1.col1 + t3.col4) FROM another_T t3)) FROM another_T t1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 1}));
 }
