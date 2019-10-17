@@ -44,43 +44,38 @@ NumericSegment::NumericSegment(ColumnData &column_data, BufferManager &manager, 
 //===--------------------------------------------------------------------===//
 void NumericSegment::Scan(Transaction &transaction, TransientScanState &state, index_t vector_index, Vector &result) {
 	auto read_lock = lock.GetSharedLock();
-	auto handle = manager.PinBuffer(block_id);
 
+	// first fetch the data from the base table
+	index_t count = FetchBaseData(vector_index, result);
+	if (versions && versions[vector_index]) {
+		// if there are any versions, check if we need to overwrite the data with the versioned data
+		fetch_from_update_info(transaction, versions[vector_index], result, count);
+	}
+}
+
+void NumericSegment::Fetch(index_t vector_index, Vector &result) {
+	auto read_lock = lock.GetSharedLock();
+	assert(!versions);
+
+	FetchBaseData(vector_index, result);
+}
+
+index_t NumericSegment::FetchBaseData(index_t vector_index, Vector &result) {
 	assert(vector_index < max_vector_count);
 	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 
+	// pin the buffer for this segment
+	auto handle = manager.PinBuffer(block_id);
 	auto data = handle->buffer->data.get();
 
 	auto offset = vector_index * vector_size;
 
 	index_t count = GetVectorCount(vector_index);
-	// first fetch the data from the base table
-	result.nullmask = *((nullmask_t*) (data + offset));
-	memcpy(result.data, data + offset + sizeof(nullmask_t), count * type_size);
-	if (versions && versions[vector_index]) {
-		// if there are any versions, check if we need to overwrite the data with the versioned data
-		fetch_from_update_info(transaction, versions[vector_index], result, count);
-	}
-	result.count = count;
-}
-
-void NumericSegment::Fetch(index_t vector_index, Vector &result) {
-	auto read_lock = lock.GetSharedLock();
-	auto handle = manager.PinBuffer(block_id);
-	assert(vector_index < max_vector_count);
-	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
-	assert(!versions);
-
-	auto data = handle->buffer->data.get();
-
-	auto offset = vector_index * vector_size;
-
-	index_t count = std::min((index_t) STANDARD_VECTOR_SIZE, tuple_count - vector_index * STANDARD_VECTOR_SIZE);
-
-	// no version information: simply set up the data pointer and read the nullmask
+	// fetch the nullmask and copy the data from the base table
 	result.nullmask = *((nullmask_t*) (data + offset));
 	memcpy(result.data, data + offset + sizeof(nullmask_t), count * type_size);
 	result.count = count;
+	return count;
 }
 
 //===--------------------------------------------------------------------===//
@@ -94,21 +89,7 @@ void NumericSegment::IndexScan(TransientScanState &state, index_t vector_index, 
 	if (versions && versions[vector_index]) {
 		throw TransactionException("Cannot create index with outstanding updates");
 	}
-	auto handle = manager.PinBuffer(block_id);
-
-	assert(vector_index < max_vector_count);
-	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
-
-	auto data = handle->buffer->data.get();
-
-	auto offset = vector_index * vector_size;
-
-	index_t count = std::min((index_t) STANDARD_VECTOR_SIZE, tuple_count - vector_index * STANDARD_VECTOR_SIZE);
-
-	// no version information: simply set up the data pointer and read the nullmask
-	result.nullmask = *((nullmask_t*) (data + offset));
-	memcpy(result.data, data + offset + sizeof(nullmask_t), count * type_size);
-	result.count = count;
+	FetchBaseData(vector_index, result);
 }
 
 //===--------------------------------------------------------------------===//

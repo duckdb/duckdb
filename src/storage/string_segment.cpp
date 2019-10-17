@@ -393,7 +393,7 @@ string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, 
 	auto pick_new = [&](index_t id, index_t idx, index_t count) {
 		info->ids[count] = id;
 		if (!update.nullmask[idx]) {
-			WriteString(string_t(strings[idx], strlen(strings[idx]) + 1), info->block_ids[count], info->offsets[count]);
+			WriteString(string_t(strings[idx], strlen(strings[idx])), info->block_ids[count], info->offsets[count]);
 		} else {
 			info->block_ids[count] = INVALID_BLOCK;
 			info->offsets[count] = 0;
