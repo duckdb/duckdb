@@ -216,25 +216,42 @@ void StringSegment::FetchRow(FetchState &state, Transaction &transaction, row_t 
 	auto result_data = (char**) result.data;
 
 	result_data[result.count] = nullptr;
+	// first see if there is any updated version of this tuple we must fetch
 	if (versions && versions[vector_index]) {
-		throw Exception("FIXME: fetch updated version");
-	}
-	if (string_updates && string_updates[vector_index]) {
-		// there are updates: check if we should use them
-		auto &info = *string_updates[vector_index];
-		for(index_t i = 0; i < info.count; i++) {
-			if (info.ids[i] == id_in_vector) {
-				// use the update
-				result_data[result.count] = ReadString(state.handles, info.block_ids[i], info.offsets[i]).data;
-				break;
-			} else if (info.ids[i] > id_in_vector) {
-				break;
+		auto current = versions[vector_index];
+		while(current) {
+			if (current->version_number > transaction.start_time && current->version_number != transaction.transaction_id) {
+				// these tuples were either committed AFTER this transaction started or are not committed yet, use tuples stored in this version
+				auto info_data = (string_location_t*) current->tuple_data;
+				for(index_t i = 0; i < current->N; i++) {
+					if (current->tuples[i] == id_in_vector) {
+						auto string = FetchString(state.handles, handle->buffer->data.get(), info_data[i]);
+						result_data[result.count] = string.data;
+						result.nullmask[result.count] = current->nullmask[current->tuples[i]];
+					}
+				}
 			}
+			current = current->next;
 		}
 	}
 	if (!result_data[result.count]) {
-		// no version was found yet: fetch base table version
-		result_data[result.count] = FetchStringFromDict(state.handles, baseptr, base_data[id_in_vector]).data;
+		// there was no updated version to be fetched: fetch the base version instead
+		if (string_updates && string_updates[vector_index]) {
+			// there are updates: check if we should use them
+			auto &info = *string_updates[vector_index];
+			for(index_t i = 0; i < info.count; i++) {
+				if (info.ids[i] == id_in_vector) {
+					// use the update
+					result_data[result.count] = ReadString(state.handles, info.block_ids[i], info.offsets[i]).data;
+					break;
+				} else if (info.ids[i] > id_in_vector) {
+					break;
+				}
+			}
+		} else {
+			// no version was found yet: fetch base table version
+			result_data[result.count] = FetchStringFromDict(state.handles, baseptr, base_data[id_in_vector]).data;
+		}
 	}
 	result.nullmask[result.count] = base_nullmask[id_in_vector];
 	result.count++;

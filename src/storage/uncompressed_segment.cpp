@@ -103,6 +103,7 @@ void UncompressedSegment::Fetch(TransientScanState &state, index_t vector_index,
 	auto read_lock = lock.GetSharedLock();
 	assert(!versions);
 
+	InitializeScan(state);
 	FetchBaseData(state, vector_index, result);
 }
 

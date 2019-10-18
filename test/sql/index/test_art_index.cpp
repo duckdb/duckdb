@@ -96,6 +96,49 @@ TEST_CASE("Test ART index on table with multiple columns", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {"hello"}));
 }
 
+TEST_CASE("Test ART index on table with updates to other columns", "[art]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i BIGINT, j INTEGER, k VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(j)"));
+
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (10, 1, 'hello'), (11, 2, 'world')"));
+
+	// condition on "j"
+	result = con.Query("SELECT * FROM integers WHERE j=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"hello"}));
+
+	// now update the column
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con2.Query("UPDATE integers SET i=100, k='update' WHERE j=1"));
+
+	// con sees the old state, con2 sees the new state
+	result = con.Query("SELECT * FROM integers WHERE j=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"hello"}));
+	result = con2.Query("SELECT * FROM integers WHERE j=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {100}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"update"}));
+
+	// after a commit, both see the new state
+	REQUIRE_NO_FAIL(con2.Query("COMMIT"));
+
+	result = con.Query("SELECT * FROM integers WHERE j=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {100}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"update"}));
+	result = con2.Query("SELECT * FROM integers WHERE j=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {100}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"update"}));
+}
+
 TEST_CASE("Test ART index that requires multiple columns for expression", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
