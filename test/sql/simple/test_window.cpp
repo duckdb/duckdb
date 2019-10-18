@@ -4,6 +4,25 @@
 using namespace duckdb;
 using namespace std;
 
+TEST_CASE("Most scalar window functions", "[window]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// test scalar window functions
+	result = con.Query("SELECT row_number() OVER ()");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result = con.Query("SELECT avg(42) OVER ()");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	// nested window functions are not allowed
+	REQUIRE_FAIL(con.Query("SELECT avg(row_number() over ()) over ()"));
+	REQUIRE_FAIL(con.Query("SELECT avg(42) over (partition by row_number() over ())"));
+	REQUIRE_FAIL(con.Query("SELECT avg(42) over (order by row_number() over ())"));
+}
+
 TEST_CASE("Most basic window function", "[window]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -511,4 +530,24 @@ TEST_CASE("Ensure dbplyr crash with ORDER BY under window stays fixed", "[window
 
 	REQUIRE(CHECK_COLUMN(result, 0, {3,3,4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1.0,2.0,2.0}));
+}
+
+TEST_CASE("Test errors in binding window functions", "[window]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+
+	// we use columns here that are not part of the table
+	REQUIRE_FAIL(con.Query("SELECT MIN(a) OVER (PARTITION BY i ORDER BY i) FROM integers"));
+	REQUIRE_FAIL(con.Query("SELECT MIN(i) OVER (PARTITION BY a ORDER BY i) FROM integers"));
+	REQUIRE_FAIL(con.Query("SELECT MIN(i) OVER (PARTITION BY i ORDER BY a) FROM integers"));
+	REQUIRE_FAIL(con.Query("SELECT MIN(i) OVER (PARTITION BY i, a ORDER BY i) FROM integers"));
+	REQUIRE_FAIL(con.Query("SELECT MIN(i) OVER (PARTITION BY i ORDER BY i, a) FROM integers"));
+
+	// now we only use the "proper" columns
+	result = con.Query("SELECT MIN(i) OVER (PARTITION BY i ORDER BY i) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
 }

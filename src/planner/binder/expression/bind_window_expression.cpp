@@ -40,24 +40,17 @@ static unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression> &expr) 
 
 BindResult SelectBinder::BindWindow(WindowExpression &window, index_t depth) {
 	if (inside_window) {
-		return BindResult("window function calls cannot be nested");
+		throw BinderException("window function calls cannot be nested");
 	}
 	if (depth > 0) {
-		return BindResult("correlated columns in window functions not supported");
+		throw BinderException("correlated columns in window functions not supported");
 	}
 	// bind inside the children of the window function
 	// we set the inside_window flag to true to prevent binding nested window functions
 	this->inside_window = true;
 	string error;
-	vector<SQLType> types;
-	vector<unique_ptr<Expression>> children;
 	for (auto &child : window.children) {
 		BindChild(child, depth, error);
-		assert(child.get());
-		assert(child->expression_class == ExpressionClass::BOUND_EXPRESSION);
-		auto& bound = (BoundExpression &) *child;
-		types.push_back(bound.sql_type);
-		children.push_back(GetExpression(child));
 	}
 	for (auto &child : window.partitions) {
 		BindChild(child, depth, error);
@@ -74,6 +67,16 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, index_t depth) {
 		// failed to bind children of window function
 		return BindResult(error);
 	}
+	// successfully bound all children: create bound window function
+	vector<SQLType> types;
+	vector<unique_ptr<Expression>> children;
+	for (auto &child : window.children) {
+		assert(child.get());
+		assert(child->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		auto& bound = (BoundExpression &) *child;
+		types.push_back(bound.sql_type);
+		children.push_back(GetExpression(child));
+	}
 	//  Determine the function type.
 	SQLType sql_type;
 	unique_ptr<AggregateFunction> aggregate;
@@ -81,7 +84,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, index_t depth) {
 		//  Look up the aggregate function in the catalog
 		auto func = (AggregateFunctionCatalogEntry *) context.catalog.GetFunction(context.ActiveTransaction(), window.schema, window.function_name);
 		if (func->type != CatalogType::AGGREGATE_FUNCTION) {
-		    return BindResult("Unknown windowed aggregate");
+		    throw BinderException("Unknown windowed aggregate");
 		}
 		// bind the aggregate
 		auto best_function = Function::BindFunction(func->name, func->functions, types);
