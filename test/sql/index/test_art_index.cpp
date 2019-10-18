@@ -137,6 +137,60 @@ TEST_CASE("Test ART index on table with updates to other columns", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {100}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"update"}));
+
+	// now do the same but with two outstanding updates
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=20, k='t1' WHERE j=1"));
+	REQUIRE_NO_FAIL(con2.Query("UPDATE integers SET i=21, k='t2' WHERE j=2"));
+
+	// con1 sees the updated state for the first tuple, but the old state for the new tuple
+	result = con.Query("SELECT * FROM integers WHERE j=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {20}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"t1"}));
+	result = con.Query("SELECT * FROM integers WHERE j=2");
+	REQUIRE(CHECK_COLUMN(result, 0, {11}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"world"}));
+	result = con.Query("SELECT * FROM integers ORDER BY j");
+	REQUIRE(CHECK_COLUMN(result, 0, {20, 11}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"t1", "world"}));
+	// con2 sees the updated state for the second tuple, but the old state for the new tuple
+	result = con2.Query("SELECT * FROM integers WHERE j=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {100}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"update"}));
+	result = con2.Query("SELECT * FROM integers WHERE j=2");
+	REQUIRE(CHECK_COLUMN(result, 0, {21}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"t2"}));
+	result = con2.Query("SELECT * FROM integers ORDER BY j");
+	REQUIRE(CHECK_COLUMN(result, 0, {100, 21}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"update", "t2"}));
+
+	// after commit, both see the updated state
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+	REQUIRE_NO_FAIL(con2.Query("COMMIT"));
+
+	result = con.Query("SELECT * FROM integers WHERE j=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {20}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"t1"}));
+	result = con.Query("SELECT * FROM integers WHERE j=2");
+	REQUIRE(CHECK_COLUMN(result, 0, {21}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"t2"}));
+	result = con.Query("SELECT * FROM integers ORDER BY j");
+	REQUIRE(CHECK_COLUMN(result, 0, {20, 21}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"t1", "t2"}));
+	result = con2.Query("SELECT * FROM integers ORDER BY j");
+	REQUIRE(CHECK_COLUMN(result, 0, {20, 21}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"t1", "t2"}));
 }
 
 TEST_CASE("Test ART index that requires multiple columns for expression", "[art]") {
