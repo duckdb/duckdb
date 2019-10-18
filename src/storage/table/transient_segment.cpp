@@ -47,6 +47,6 @@ void TransientSegment::Fetch(TransientScanState &state, index_t vector_index, Ve
 	data->Fetch(state, vector_index, result);
 }
 
-void TransientSegment::FetchRow(Transaction &transaction, row_t row_id, Vector &result) {
-	data->Fetch(transaction, row_id - this->start, result);
+void TransientSegment::FetchRow(FetchState &state, Transaction &transaction, row_t row_id, Vector &result) {
+	data->FetchRow(state, transaction, row_id - this->start, result);
 }

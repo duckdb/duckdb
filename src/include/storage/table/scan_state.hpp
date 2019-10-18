@@ -28,6 +28,8 @@ struct IndexScanState {
 	}
 };
 
+typedef unordered_map<block_id_t, unique_ptr<BufferHandle>> buffer_handle_set_t;
+
 struct TransientScanState {
 	//! The transient segment that is currently being scanned
 	TransientSegment *transient;
@@ -36,9 +38,14 @@ struct TransientScanState {
 	//! The primary buffer handle
 	unique_ptr<BufferHandle> primary_handle;
 	//! The set of pinned block handles for this scan
-	unordered_map<block_id_t, unique_ptr<BufferHandle>> handles;
+	buffer_handle_set_t handles;
 	//! The locks that are held during the scan, only used by the index scan
 	vector<unique_ptr<StorageLockKey>> locks;
+};
+
+struct FetchState {
+	//! The set of pinned block handles for this set of fetches
+	buffer_handle_set_t handles;
 };
 
 struct LocalScanState {
@@ -72,6 +79,7 @@ struct CreateIndexScanState : public TableScanState {
 struct TableIndexScanState {
 	Index *index;
 	unique_ptr<IndexScanState> index_state;
+	FetchState fetch_state;
 	LocalScanState local_state;
 	vector<column_t> column_ids;
 };

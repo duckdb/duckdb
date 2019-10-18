@@ -113,14 +113,14 @@ void ColumnData::Fetch(TransientScanState &state, row_t row_id, Vector &result) 
 	}
 }
 
-void ColumnData::FetchRow(Transaction &transaction, row_t row_id, Vector &result) {
+void ColumnData::FetchRow(FetchState &state, Transaction &transaction, row_t row_id, Vector &result) {
 	if ((index_t) row_id < persistent_rows) {
 		throw Exception("FIXME: persistent fetch");
 	} else {
 		// transient segment fetch, first find the segment that it belongs to
 		auto segment = (TransientSegment *) transient.GetSegment(row_id);
 		// now perform the fetch within the segment
-		segment->FetchRow(transaction, row_id, result);
+		segment->FetchRow(state, transaction, row_id, result);
 	}
 }
 

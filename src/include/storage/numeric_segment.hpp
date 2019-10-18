@@ -20,7 +20,7 @@ public:
 	index_t type_size;
 public:
 	//! Fetch a single value and append it to the vector
-	void Fetch(Transaction &transaction, row_t row_id, Vector &result) override;
+	void FetchRow(FetchState &state, Transaction &transaction, row_t row_id, Vector &result) override;
 
 	//! Append a part of a vector to the uncompressed segment with the given append state, updating the provided stats in the process. Returns the amount of tuples appended. If this is less than `count`, the uncompressed segment is full.
 	index_t Append(SegmentStatistics &stats, TransientAppendState &state, Vector &data, index_t offset, index_t count) override;

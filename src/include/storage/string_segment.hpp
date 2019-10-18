@@ -51,7 +51,7 @@ public:
 	void InitializeScan(TransientScanState &state) override;
 
 	//! Fetch a single value and append it to the vector
-	void Fetch(Transaction &transaction, row_t row_id, Vector &result) override;
+	void FetchRow(FetchState &state, Transaction &transaction, row_t row_id, Vector &result) override;
 
 	//! Append a part of a vector to the uncompressed segment with the given append state, updating the provided stats in the process. Returns the amount of tuples appended. If this is less than `count`, the uncompressed segment is full.
 	index_t Append(SegmentStatistics &stats, TransientAppendState &state, Vector &data, index_t offset, index_t count) override;
@@ -69,15 +69,15 @@ private:
 	void FetchBaseData(TransientScanState &state, data_ptr_t base_data, index_t vector_index, Vector &result, index_t count);
 
 	string_location_t FetchStringLocation(data_ptr_t baseptr, int32_t dict_offset);
-	string_t FetchString(TransientScanState &state, data_ptr_t baseptr, string_location_t location);
+	string_t FetchString(buffer_handle_set_t &handles, data_ptr_t baseptr, string_location_t location);
 	//! Fetch a single string from the dictionary and returns it, potentially pins a buffer manager page and adds it to the set of pinned pages
-	string_t FetchStringFromDict(TransientScanState &state, data_ptr_t baseptr, int32_t dict_offset);
+	string_t FetchStringFromDict(buffer_handle_set_t &handles, data_ptr_t baseptr, int32_t dict_offset);
 
 	//! Fetch string locations for a subset of the strings
 	void FetchStringLocations(data_ptr_t baseptr, row_t *ids, index_t vector_index, index_t vector_offset, index_t count, string_location_t result[]);
 
 	void WriteString(string_t string, block_id_t &result_block, int32_t &result_offset);
-	string_t ReadString(TransientScanState &state, block_id_t block, int32_t offset);
+	string_t ReadString(buffer_handle_set_t &handles, block_id_t block, int32_t offset);
 	string_t ReadString(data_ptr_t target, int32_t offset);
 
 	void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);

@@ -82,7 +82,7 @@ void StringSegment::FetchUpdateData(TransientScanState &state, Transaction &tran
 			// these tuples were either committed AFTER this transaction started or are not committed yet, use tuples stored in this version
 			auto info_data = (string_location_t*) current->tuple_data;
 			for(index_t i = 0; i < current->N; i++) {
-				auto string = FetchString(state, handle->buffer->data.get(), info_data[i]);
+				auto string = FetchString(state.handles, handle->buffer->data.get(), info_data[i]);
 				result_data[current->tuples[i]] = string.data;
 				result.nullmask[current->tuples[i]] = current->nullmask[current->tuples[i]];
 			}
@@ -137,17 +137,17 @@ void StringSegment::FetchBaseData(TransientScanState &state, data_ptr_t baseptr,
 		for(index_t i = 0; i < count; i++) {
 			if (update_idx < info.count && info.ids[update_idx] == i) {
 				// use update info
-				result_data[i] = ReadString(state, info.block_ids[update_idx], info.offsets[update_idx]).data;
+				result_data[i] = ReadString(state.handles, info.block_ids[update_idx], info.offsets[update_idx]).data;
 				update_idx++;
 			} else {
 				// use base table info
-				result_data[i] = FetchStringFromDict(state, baseptr, base_data[i]).data;
+				result_data[i] = FetchStringFromDict(state.handles, baseptr, base_data[i]).data;
 			}
 		}
 	} else {
 		// no updates: fetch only from the string dictionary
 		for(index_t i = 0; i < count; i++) {
-			result_data[i] = FetchStringFromDict(state, baseptr, base_data[i]).data;
+			result_data[i] = FetchStringFromDict(state.handles, baseptr, base_data[i]).data;
 		}
 	}
 	result.nullmask = base_nullmask;
@@ -172,16 +172,16 @@ string_location_t StringSegment::FetchStringLocation(data_ptr_t baseptr, int32_t
 	return result;
 }
 
-string_t StringSegment::FetchStringFromDict(TransientScanState &state, data_ptr_t baseptr, int32_t dict_offset) {
+string_t StringSegment::FetchStringFromDict(buffer_handle_set_t &handles, data_ptr_t baseptr, int32_t dict_offset) {
 	// fetch base data
 	string_location_t location = FetchStringLocation(baseptr, dict_offset);
-	return FetchString(state, baseptr, location);
+	return FetchString(handles, baseptr, location);
 }
 
-string_t StringSegment::FetchString(TransientScanState &state, data_ptr_t baseptr, string_location_t location) {
+string_t StringSegment::FetchString(buffer_handle_set_t &handles, data_ptr_t baseptr, string_location_t location) {
 	if (location.block_id != INVALID_BLOCK) {
 		// big string marker: read from separate block
-		return ReadString(state, location.block_id, location.offset);
+		return ReadString(handles, location.block_id, location.offset);
 	} else {
 		if (location.offset == 0) {
 			return string_t(nullptr, 0);
@@ -199,8 +199,47 @@ string_t StringSegment::FetchString(TransientScanState &state, data_ptr_t basept
 
 }
 
-void StringSegment::Fetch(Transaction &transaction, row_t row_id, Vector &result) {
-	throw Exception("FIXME");
+void StringSegment::FetchRow(FetchState &state, Transaction &transaction, row_t row_id, Vector &result) {
+	auto read_lock = lock.GetSharedLock();
+
+	index_t vector_index = row_id / STANDARD_VECTOR_SIZE;
+	index_t id_in_vector = row_id - vector_index * STANDARD_VECTOR_SIZE;
+	assert(vector_index < max_vector_count);
+
+	// fetch a single row from the string segment
+	auto handle = manager.PinBuffer(block_id);
+
+	auto baseptr = handle->buffer->data.get();
+	auto base = baseptr + vector_index * vector_size;
+	auto &base_nullmask = *((nullmask_t*) base);
+	auto base_data = (int32_t *) (base + sizeof(nullmask_t));
+	auto result_data = (char**) result.data;
+
+	result_data[result.count] = nullptr;
+	if (versions && versions[vector_index]) {
+		throw Exception("FIXME: fetch updated version");
+	}
+	if (string_updates && string_updates[vector_index]) {
+		// there are updates: check if we should use them
+		auto &info = *string_updates[vector_index];
+		for(index_t i = 0; i < info.count; i++) {
+			if (info.ids[i] == id_in_vector) {
+				// use the update
+				result_data[result.count] = ReadString(state.handles, info.block_ids[i], info.offsets[i]).data;
+				break;
+			} else if (info.ids[i] > id_in_vector) {
+				break;
+			}
+		}
+	}
+	if (!result_data[result.count]) {
+		// no version was found yet: fetch base table version
+		result_data[result.count] = FetchStringFromDict(state.handles, baseptr, base_data[id_in_vector]).data;
+	}
+	result.nullmask[result.count] = base_nullmask[id_in_vector];
+	result.count++;
+
+	state.handles[block_id] = move(handle);
 }
 
 //===--------------------------------------------------------------------===//
@@ -322,18 +361,18 @@ void StringSegment::WriteString(string_t string, block_id_t &result_block, int32
 	head->offset += total_length;
 }
 
-string_t StringSegment::ReadString(TransientScanState &state, block_id_t block, int32_t offset) {
+string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t block, int32_t offset) {
 	if (block == INVALID_BLOCK) {
 		return string_t(nullptr, 0);
 	}
 	// now pin the handle, if it is not pinned yet
 	ManagedBufferHandle *handle;
-	auto entry = state.handles.find(block);
-	if (entry == state.handles.end()) {
+	auto entry = handles.find(block);
+	if (entry == handles.end()) {
 		auto pinned_handle = manager.PinBuffer(block);
 		handle = pinned_handle.get();
 
-		state.handles.insert(make_pair(block, move(pinned_handle)));
+		handles.insert(make_pair(block, move(pinned_handle)));
 	} else {
 		handle = (ManagedBufferHandle*) entry->second.get();
 	}

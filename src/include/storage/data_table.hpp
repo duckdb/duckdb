@@ -68,7 +68,7 @@ public:
 	void IndexScan(Transaction &transaction, DataChunk &result, TableIndexScanState &state);
 
 	//! Fetch data from the specific row identifiers from the base table
-	void Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, Vector &row_ids);
+	void Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, Vector &row_ids, TableIndexScanState &state);
 
 	//! Append a DataChunk to the table. Throws an exception if the columns don't match the tables' columns.
 	void Append(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
@@ -102,6 +102,8 @@ private:
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
 	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, vector<column_t> &column_ids);
+
+	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index, vector<column_t> column_ids);
 
 	//! Figure out which of the row ids to use for the given transaction by looking at inserted/deleted data. Returns the amount of rows to use and places the row_ids in the result_rows array.
 	index_t FetchRows(Transaction &transaction, Vector &row_identifiers, row_t result_rows[]);

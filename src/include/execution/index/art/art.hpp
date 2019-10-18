@@ -84,7 +84,7 @@ public:
 	                                                       ExpressionType high_expression_type) override;
 
 	//! Perform a lookup on the index
-	void Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) override;
+	void Scan(Transaction &transaction, TableIndexScanState &state, DataChunk &result) override;
 	//! Append entries to the index
 	bool Append(DataChunk &entries, Vector &row_identifiers) override;
 	//! Verify that data can be appended to the index

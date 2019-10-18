@@ -54,7 +54,7 @@ public:
 	                                                               ExpressionType low_expression_type, Value high_value,
 	                                                               ExpressionType high_expression_type) = 0;
 	//! Perform a lookup on the index
-	virtual void Scan(Transaction &transaction, IndexScanState *state, DataChunk &result) = 0;
+	virtual void Scan(Transaction &transaction, TableIndexScanState &state, DataChunk &result) = 0;
 
 	//! Called when data is appended to the index
 	virtual bool Append(DataChunk &entries, Vector &row_identifiers) = 0;

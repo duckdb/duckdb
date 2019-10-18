@@ -645,8 +645,8 @@ void ART::SearchCloseRange(vector<row_t> &result_ids, ARTIndexScanState *state, 
 	}
 }
 
-void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) {
-	auto state = (ARTIndexScanState *)ss;
+void ART::Scan(Transaction &transaction, TableIndexScanState &table_state, DataChunk &result) {
+	auto state = (ARTIndexScanState *)table_state.index_state.get();
 
 	// scan the index
 	if (!state->checked) {
@@ -713,7 +713,7 @@ void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) 
 	    std::min((index_t)STANDARD_VECTOR_SIZE, (index_t)state->result_ids.size() - state->result_index);
 
 	// fetch the actual values from the base table
-	table.Fetch(transaction, result, state->column_ids, row_identifiers);
+	table.Fetch(transaction, result, state->column_ids, row_identifiers, table_state);
 
 	// move to the next set of row ids
 	state->result_index += row_identifiers.count;

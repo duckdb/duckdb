@@ -67,14 +67,13 @@ void NumericSegment::FetchUpdateData(TransientScanState &state, Transaction &tra
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void NumericSegment::Fetch(Transaction &transaction, row_t row_id, Vector &result) {
+void NumericSegment::FetchRow(FetchState &state, Transaction &transaction, row_t row_id, Vector &result) {
 	auto read_lock = lock.GetSharedLock();
 	auto handle = manager.PinBuffer(block_id);
 
 	// get the vector index
 	index_t vector_index = row_id / STANDARD_VECTOR_SIZE;
 	index_t id_in_vector = row_id - vector_index * STANDARD_VECTOR_SIZE;
-
 	assert(vector_index < max_vector_count);
 
 	// first fetch the data from the base table

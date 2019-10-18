@@ -146,24 +146,27 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState
 //===--------------------------------------------------------------------===//
 // Index Scan
 //===--------------------------------------------------------------------===//
-
-void DataTable::InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index, Value value, ExpressionType expr_type, vector<column_t> column_ids) {
+void DataTable::InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index, vector<column_t> column_ids) {
 	state.index = &index;
 	state.column_ids = move(column_ids);
-	state.index_state = index.InitializeScanSinglePredicate(transaction, state.column_ids, value, expr_type);
 	transaction.storage.InitializeScan(this, state.local_state);
+}
+
+void DataTable::InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index, Value value, ExpressionType expr_type, vector<column_t> column_ids) {
+	InitializeIndexScan(transaction, state, index, move(column_ids));
+	state.index_state = index.InitializeScanSinglePredicate(transaction, state.column_ids, value, expr_type);
 }
 
 void DataTable::InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index, Value low_value, ExpressionType low_type, Value high_value, ExpressionType high_type, vector<column_t> column_ids) {
-	state.index = &index;
-	state.column_ids = move(column_ids);
+	InitializeIndexScan(transaction, state, index, move(column_ids));
 	state.index_state = index.InitializeScanTwoPredicates(transaction, state.column_ids, low_value, low_type, high_value, high_type);
-	transaction.storage.InitializeScan(this, state.local_state);
 }
 
 void DataTable::IndexScan(Transaction &transaction, DataChunk &result, TableIndexScanState &state) {
+	// clear any previously pinned blocks
+	state.fetch_state.handles.clear();
 	// scan the index
-	state.index->Scan(transaction, state.index_state.get(), result);
+	state.index->Scan(transaction, state, result);
 	if (result.size() > 0) {
 		return;
 	}
@@ -175,7 +178,7 @@ void DataTable::IndexScan(Transaction &transaction, DataChunk &result, TableInde
 // Fetch
 //===--------------------------------------------------------------------===//
 void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids,
-                      Vector &row_identifiers) {
+                      Vector &row_identifiers, TableIndexScanState &state) {
 	// first figure out which row identifiers we should use for this transaction by looking at the VersionManagers
 	row_t rows[STANDARD_VECTOR_SIZE];
 	index_t count = FetchRows(transaction, row_identifiers, rows);
@@ -199,7 +202,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 			// regular column: fetch data from the base column
 			for(index_t i = 0; i < count; i++) {
 				auto row_id = rows[i];
-				columns[column].FetchRow(transaction, row_id, result.data[col_idx]);
+				columns[column].FetchRow(state.fetch_state, transaction, row_id, result.data[col_idx]);
 			}
 		}
 	}
