@@ -17,8 +17,7 @@ static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction
 
 NumericSegment::NumericSegment(ColumnData &column_data, BufferManager &manager, TypeId type) :
 	UncompressedSegment(column_data, manager, type) {
-	// transient segment
-	// figure out how many vectors we want to store in this block
+	// set up the different functions for this type of segment
 	this->append_function = GetAppendFunction(type);
 	this->update_function = GetUpdateFunction(type);
 	this->fetch_from_update_info = GetUpdateInfoFetchFunction(type);
@@ -26,11 +25,12 @@ NumericSegment::NumericSegment(ColumnData &column_data, BufferManager &manager, 
 	this->rollback_update = GetRollbackUpdateFunction(type);
 	this->merge_update_function = GetMergeUpdateFunction(type);
 
+	// figure out how many vectors we want to store in this block
 	this->type_size = GetTypeIdSize(type);
 	this->vector_size = sizeof(nullmask_t) + type_size * STANDARD_VECTOR_SIZE;
-	this->max_vector_count = (BLOCK_SIZE / vector_size) + 1;
+	this->max_vector_count = BLOCK_SIZE / vector_size;
 	// allocate space for the vectors
-	auto block = manager.Allocate(max_vector_count * vector_size);
+	auto block = manager.Allocate(BLOCK_SIZE);
 	this->block_id = block->block_id;
 	// initialize nullmasks to 0 for all vectors
 	for(index_t i = 0; i < max_vector_count; i++) {
