@@ -8,6 +8,10 @@
 using namespace duckdb;
 using namespace std;
 
+static bool IsValidStringLocation(string_location_t location) {
+	return location.offset < BLOCK_SIZE && (location.block_id == INVALID_BLOCK || location.block_id >= MAXIMUM_BLOCK);
+}
+
 StringSegment::StringSegment(ColumnData &column_data, BufferManager &manager) :
 	UncompressedSegment(column_data, manager, TypeId::VARCHAR) {
 	this->max_vector_count = 0;
@@ -379,6 +383,7 @@ void StringSegment::WriteString(string_t string, block_id_t &result_block, int32
 }
 
 string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t block, int32_t offset) {
+	assert(offset < BLOCK_SIZE);
 	if (block == INVALID_BLOCK) {
 		return string_t(nullptr, 0);
 	}
@@ -479,6 +484,7 @@ void StringSegment::MergeUpdateInfo(UpdateInfo *node, Vector &update, row_t *ids
 	// first we copy the old update info into a temporary structure
 	sel_t old_ids[STANDARD_VECTOR_SIZE];
 	string_location_t old_data[STANDARD_VECTOR_SIZE];
+	string_location_t stored_data[STANDARD_VECTOR_SIZE];
 
 	memcpy(old_ids, node->tuples, node->N * sizeof(sel_t));
 	memcpy(old_data, node->tuple_data, node->N * sizeof(string_location_t));
@@ -486,18 +492,21 @@ void StringSegment::MergeUpdateInfo(UpdateInfo *node, Vector &update, row_t *ids
 	// now we perform a merge of the new ids with the old ids
 	auto merge = [&](index_t id, index_t aidx, index_t bidx, index_t count) {
 		// new_id and old_id are the same, insert the old data in the UpdateInfo
+		assert(IsValidStringLocation(old_data[bidx]));
 		info_data[count] = old_data[bidx];
 		node->tuples[count] = id;
 	};
 	auto pick_new = [&](index_t id, index_t aidx, index_t count) {
 		// new_id comes before the old id, insert the base table data into the update info
-		info_data[count] = base_data[id];
-		node->nullmask[id] = base_nullmask[id];
+		assert(IsValidStringLocation(base_data[aidx]));
+		info_data[count] = base_data[aidx];
+		node->nullmask[id] = base_nullmask[aidx];
 
 		node->tuples[count] = id;
 	};
 	auto pick_old = [&](index_t id, index_t bidx, index_t count) {
 		// old_id comes before new_id, insert the old data
+		assert(IsValidStringLocation(old_data[bidx]));
 		info_data[count] = old_data[bidx];
 		node->tuples[count] = id;
 	};
