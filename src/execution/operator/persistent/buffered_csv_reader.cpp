@@ -36,9 +36,22 @@ BufferedCSVReader::BufferedCSVReader(CopyInfo &info, vector<SQLType> sql_types, 
 	}
 }
 
+void BufferedCSVReader::MatchBufferPosition(bool &prev_pos_matches, index_t &control_str_offset, index_t &tmp_position, bool &match, string &control_str) {
+	if (prev_pos_matches && control_str_offset < control_str.length()) {
+		if (buffer[tmp_position] != control_str[control_str_offset]) {
+			prev_pos_matches = false;
+		} else {
+			if (control_str_offset == control_str.length() - 1) {
+				prev_pos_matches = false;
+				match = true;
+			}
+		}
+	}
+}
+
 bool BufferedCSVReader::MatchControlString(bool &delim_match, bool &quote_match, bool &escape_match) {
 	index_t tmp_position = position;
-	index_t control_string_offset = 0;
+	index_t control_str_offset = 0;
 
 	bool delim = true;
 	bool quote = true;
@@ -46,40 +59,11 @@ bool BufferedCSVReader::MatchControlString(bool &delim_match, bool &quote_match,
 
 	while (true) {
 		// check if the delimiter string matches
-		if (delim && control_string_offset < info.delimiter.length()) {
-			if (buffer[tmp_position] != info.delimiter[control_string_offset]) {
-				delim = false;
-			} else {
-				if (control_string_offset == info.delimiter.length() - 1) {
-					delim = false;
-					delim_match = true;
-				}
-			}
-		}
-
+		MatchBufferPosition(delim, control_str_offset, tmp_position, delim_match, info.delimiter);
 		// check if the quote string matches
-		if (quote && control_string_offset < info.quote.length()) {
-			if (buffer[tmp_position] != info.quote[control_string_offset]) {
-				quote = false;
-			} else {
-				if (control_string_offset == info.quote.length() - 1) {
-					quote = false;
-					quote_match = true;
-				}
-			}
-		}
-
+		MatchBufferPosition(quote, control_str_offset, tmp_position, quote_match, info.quote);
 		// check if the escape string matches
-		if (escape && control_string_offset < info.escape.length()) {
-			if (buffer[tmp_position] != info.escape[control_string_offset]) {
-				escape = false;
-			} else {
-				if (control_string_offset == info.escape.length() - 1) {
-					escape = false;
-					escape_match = true;
-				}
-			}
-		}
+		MatchBufferPosition(escape, control_str_offset, tmp_position, escape_match, info.escape);
 
 		// return if matching is not possible any longer
 		if (!delim && !quote && !escape) {
@@ -87,7 +71,7 @@ bool BufferedCSVReader::MatchControlString(bool &delim_match, bool &quote_match,
 		}
 
 		tmp_position++;
-		control_string_offset++;
+		control_str_offset++;
 
 		// make sure not to exceed buffer size, and return if there cannot be any further control strings
 		if (tmp_position >= buffer_size) {

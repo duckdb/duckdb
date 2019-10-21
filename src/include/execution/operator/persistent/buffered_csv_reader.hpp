@@ -55,6 +55,8 @@ private:
 	bool ReadBuffer(index_t &start);
 	//! Sets the control strings starting at the current buffer position, returns false if the buffer was exhausted
 	bool MatchControlString(bool &delim_str, bool &quote_str, bool &escape_str);
+	//! Matches one position of the buffer against a corresponding char in a control string
+	void MatchBufferPosition(bool &prev_pos_matches, index_t &control_str_offset, index_t &tmp_position, bool &match, string &control_str);
 };
 
 } // namespace duckdb

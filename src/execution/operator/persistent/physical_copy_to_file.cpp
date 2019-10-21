@@ -54,14 +54,30 @@ private:
 	ofstream to_csv;
 };
 
-static void WriteQuotedString(BufferedWriter &writer, const char *str_value, string delimiter, string quote, string escape, string null_str, bool write_quoted) {
+void AddEscapes(string& to_be_escaped, string &escape, string &val) {
+	index_t i = 0;
+	string new_val = "";
+	index_t found = val.find(to_be_escaped);
+
+	while (found != string::npos) {
+		while (i < found) {
+			new_val += val[i];
+			i++;
+		}
+		new_val += escape;
+		found = val.find(to_be_escaped, found + escape.length());
+	}
+	while (i < val.length()) {
+		new_val += val[i];
+		i++;
+	}
+	val = new_val;
+}
+
+static void WriteQuotedString(BufferedWriter &writer, const char *str_value, string &delimiter, string &quote, string &escape, string &null_str, bool write_quoted) {
 	// used for adding escapes
 	bool add_escapes = false;
 	string new_val = str_value;
-	string new_val_escapes = "";
-	string new_val_quotes = "";
-	index_t i = 0;
-	index_t found = new_val.find(escape);
 
 	// check for \n, \r, \n\r in string
 	if (!write_quoted) {
@@ -101,40 +117,10 @@ static void WriteQuotedString(BufferedWriter &writer, const char *str_value, str
 	}
 
 	if (add_escapes) {
-		// escape escapes
-		while (found != string::npos) {
-			while (i < found) {
-				new_val_escapes += new_val[i];
-				i++;
-			}
-			new_val_escapes += escape;
-			found = new_val.find(escape, found + escape.length());
-		}
-		while (i < new_val.length()) {
-			new_val_escapes += new_val[i];
-			i++;
-		}
-		new_val = new_val_escapes;
-
+		AddEscapes(escape, escape, new_val);
 		// also escape quotes
 		if (escape != quote) {
-			i = 0;
-			found = new_val.find(quote);
-
-			// escape quotes
-			while (found != string::npos) {
-				while (i < found) {
-					new_val_quotes += new_val[i];
-					i++;
-				}
-				new_val_quotes += escape;
-				found = new_val.find(quote, found + quote.length());
-			}
-			while (i < new_val.length()) {
-				new_val_quotes += new_val[i];
-				i++;
-			}
-			new_val = new_val_quotes;
+			AddEscapes(quote, escape, new_val);
 		}
 	}
 
