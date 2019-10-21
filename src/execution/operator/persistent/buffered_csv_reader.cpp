@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <fstream>
 #include <queue>
+#include <cstring>
 
 using namespace duckdb;
 using namespace std;

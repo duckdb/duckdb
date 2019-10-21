@@ -200,7 +200,7 @@ TEST_CASE("Test NULL option of copy statement", "[copy]") {
 	// generate CSV file with default delimiter
 	ofstream from_csv_file(fs.JoinPath(csv_path, "test_null_option.csv"));
 	for (int i = 0; i < 3; i++) {
-		from_csv_file << i << ",,test,null" << endl;
+		from_csv_file << i << ",,\"test\",null" << endl;
 	}
 	from_csv_file.close();
 
@@ -226,6 +226,16 @@ TEST_CASE("Test NULL option of copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value()}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"test", "test", "test"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"null", "null", "null"}));
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test_null_option;"));
+
+	// make sure a quoted null string is interpreted as a null value
+	result = con.Query("COPY test_null_option FROM '" + fs.JoinPath(csv_path, "test_null_option.csv") + "' (NULL 'test');");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	result = con.Query("SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"", "", ""}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value(), Value()}));
 	REQUIRE(CHECK_COLUMN(result, 3, {"null", "null", "null"}));
 	REQUIRE_NO_FAIL(con.Query("DELETE FROM test_null_option;"));
 
@@ -469,10 +479,17 @@ TEST_CASE("Test copy statement with unicode delimiter/quote/escape", "[copy]") {
 	}
 	from_csv_file5.close();
 
+	// generate a CSV file with a very long string exceeding the buffer midway in an escape sequence (delimiter and escape share substrings)
+	ofstream from_csv_file6(fs.JoinPath(csv_path, "shared_substrings.csv"));
+	string big_string_a(16370, 'a');
+	from_csv_file6 << big_string_a << "AAA\"aaaaaaaaAAB\"\"" << endl;
+	from_csv_file6.close();
+
 	// create three tables for testing
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_unicode_1 (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10));"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_unicode_2 (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10));"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_unicode_3 (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10));"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_unicode_4 (col_a VARCHAR, col_b VARCHAR);"));
 
 	// throw error if unterminated quotes are detected
 	REQUIRE_FAIL(con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "unterminated_quotes.csv") + "';"));
@@ -509,6 +526,13 @@ TEST_CASE("Test copy statement with unicode delimiter/quote/escape", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {"''du,ck", "''du,ck", "''du,ck"}));
 	REQUIRE(CHECK_COLUMN(result, 3, {"duck", "duck", "duck"}));
 
+	// test correct shared substring behavior at buffer borders
+	result = con.Query("COPY test_unicode_4 FROM '" + fs.JoinPath(csv_path, "shared_substrings.csv") + "' (DELIMITER 'AAA', ESCAPE 'AAB');");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con.Query("SELECT * FROM test_unicode_4;");
+	REQUIRE(CHECK_COLUMN(result, 0, {big_string_a}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"aaaaaaaa\""}));
+
 	// quote and escape must not be empty
 	REQUIRE_FAIL(con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (DELIMITER '🦆', QUOTE '');"));
 	REQUIRE_FAIL(con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (DELIMITER '🦆', ESCAPE '');"));
@@ -523,6 +547,10 @@ TEST_CASE("Test copy statement with unicode delimiter/quote/escape", "[copy]") {
 	// delimiter and quote cannot be substrings of each other
 	REQUIRE_FAIL(con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (DELIMITER 'du', QUOTE 'duck');"));
 	REQUIRE_FAIL(con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (DELIMITER 'duck', QUOTE 'du');"));
+
+	// delimiter and escape cannot be substrings of each other
+	REQUIRE_FAIL(con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (DELIMITER 'AA', ESCAPE 'AAAA');"));
+	REQUIRE_FAIL(con.Query("COPY test_unicode_1 FROM '" + fs.JoinPath(csv_path, "one_byte_char.csv") + "' (DELIMITER 'AAAA', ESCAPE 'AA');"));
 
 	// COPY ... TO ...
 

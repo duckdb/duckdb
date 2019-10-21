@@ -76,8 +76,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 		for_each_cell(cell, stmt->options->head) {
 			auto *def_elem = reinterpret_cast<DefElem *>(cell->data.ptr_value);
 
-			if (StringUtil::StartsWith(def_elem->defname, "delim") ||
-			    StringUtil::StartsWith(def_elem->defname, "sep")) {
+			if (StringUtil::StartsWith(def_elem->defname, "delim") || StringUtil::StartsWith(def_elem->defname, "sep")) {
 				// delimiter
 				auto *delimiter_val = (postgres::Value *)(def_elem->arg);
 				if (!delimiter_val || delimiter_val->type != T_String) {
@@ -219,15 +218,19 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 	// dependencies must be checked afterwards
 	// null string and delimiter must not be substrings of each other
 	if (info.null_str.find(info.delimiter) != string::npos) {
-		throw Exception("COPY delimiter must not appear in the NULL specification and vice versa");
+		throw Exception("COPY DELIMITER must not appear in the NULL specification and vice versa");
 	}
 	// delimiter and quote must not be substrings of each other
 	if (info.quote.find(info.delimiter) != std::string::npos || info.delimiter.find(info.quote) != std::string::npos) {
-		throw Exception("COPY delimiter must not appear in the QUOTE specification and vice versa");
+		throw Exception("COPY DELIMITER must not appear in the QUOTE specification and vice versa");
 	}
 	// escape and quote must not be substrings of each other (but can be the same)
 	if ((info.quote.find(info.escape) != std::string::npos || info.escape.find(info.quote) != std::string::npos) && (info.quote != info.escape)) {
-		throw Exception("COPY ESCAPE must not appear in the QUOTE specification and vice versa");
+		throw Exception("COPY ESCAPE must not appear in the QUOTE specification and vice versa, though ESCAPE and QUOTE can be equal");
+	}
+	// escape and delimiter must not be substrings of each other
+	if ((info.delimiter.find(info.escape) != std::string::npos || info.escape.find(info.delimiter) != std::string::npos)) {
+		throw Exception("COPY ESCAPE must not appear in the DELIMITER specification and vice versa");
 	}
 
 	return result;
