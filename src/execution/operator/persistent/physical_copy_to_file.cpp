@@ -54,7 +54,7 @@ private:
 	ofstream to_csv;
 };
 
-void AddEscapes(string& to_be_escaped, string &escape, string &val) {
+string AddEscapes(string &to_be_escaped, string escape, string val) {
 	index_t i = 0;
 	string new_val = "";
 	index_t found = val.find(to_be_escaped);
@@ -71,7 +71,7 @@ void AddEscapes(string& to_be_escaped, string &escape, string &val) {
 		new_val += val[i];
 		i++;
 	}
-	val = new_val;
+	return new_val;
 }
 
 static void WriteQuotedString(BufferedWriter &writer, const char *str_value, string &delimiter, string &quote, string &escape, string &null_str, bool write_quoted) {
@@ -117,10 +117,10 @@ static void WriteQuotedString(BufferedWriter &writer, const char *str_value, str
 	}
 
 	if (add_escapes) {
-		AddEscapes(escape, escape, new_val);
+		new_val = AddEscapes(escape, escape, new_val);
 		// also escape quotes
 		if (escape != quote) {
-			AddEscapes(quote, escape, new_val);
+			new_val = AddEscapes(quote, escape, new_val);
 		}
 	}
 
