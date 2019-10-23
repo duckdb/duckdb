@@ -240,3 +240,16 @@ TEST_CASE("Test milliseconds with timestamps", "[timestamp]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(Timestamp::FromString("2001-04-20 14:42:11.123"))}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(Timestamp::FromString("2001-04-20 14:42:11"))}));
 }
+
+
+
+
+TEST_CASE("Test more timestamp functions", "[timestamp]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	result = con.Query("SELECT CURRENT_TIME");
+	REQUIRE(result->success);
+
+}

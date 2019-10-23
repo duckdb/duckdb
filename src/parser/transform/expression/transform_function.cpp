@@ -166,3 +166,50 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
 
 	return make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children, root->agg_distinct);
 }
+
+static string SQLValueOpToString(SQLValueFunctionOp op) {
+	switch (op) {
+
+	case SVFOP_CURRENT_DATE:
+		return "current_date";
+	case 	SVFOP_CURRENT_TIME:
+		return "current_time";
+	case	SVFOP_CURRENT_TIME_N:
+		return "current_time_n";
+	case	SVFOP_CURRENT_TIMESTAMP:
+		return "current_timestamp";
+	case	SVFOP_CURRENT_TIMESTAMP_N:
+		return "current_timestamp_n";
+	case	SVFOP_LOCALTIME:
+		return "current_localtime";
+	case	SVFOP_LOCALTIME_N:
+		return "current_localtime_n";
+	case	SVFOP_LOCALTIMESTAMP:
+		return "current_localtimestamp";
+	case	SVFOP_LOCALTIMESTAMP_N:
+		return "current_localtimestamp_n";
+	case	SVFOP_CURRENT_ROLE:
+		return "current_role";
+	case	SVFOP_CURRENT_USER:
+		return "current_user";
+	case	SVFOP_USER:
+		return "user";
+	case	SVFOP_SESSION_USER:
+		return "session_user";
+	case	SVFOP_CURRENT_CATALOG:
+		return "current_catalog";
+	case	SVFOP_CURRENT_SCHEMA:
+		return "current_schema";
+	default:
+		throw Exception("Could not find named SQL value function specification " + to_string((int)op));
+	}
+}
+
+unique_ptr<ParsedExpression> Transformer::TransformSQLValueFunction(SQLValueFunction *node) {
+	if (!node) {
+		return nullptr;
+	}
+	vector<unique_ptr<ParsedExpression>> children;
+	auto fname = SQLValueOpToString(node->op);
+	return make_unique<FunctionExpression>(DEFAULT_SCHEMA, fname, children);
+}
