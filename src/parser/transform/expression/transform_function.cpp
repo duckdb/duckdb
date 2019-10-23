@@ -169,7 +169,6 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
 
 static string SQLValueOpToString(SQLValueFunctionOp op) {
 	switch (op) {
-
 	case SVFOP_CURRENT_DATE:
 		return "current_date";
 	case 	SVFOP_CURRENT_TIME:

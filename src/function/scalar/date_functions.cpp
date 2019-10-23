@@ -10,6 +10,4 @@ void BuiltinFunctions::RegisterDateFunctions() {
 	Register<CurrentTime>();
 	Register<CurrentDate>();
 	Register<CurrentTimestamp>();
-
-
 }

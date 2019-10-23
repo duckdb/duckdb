@@ -268,5 +268,4 @@ TEST_CASE("Test more timestamp functions", "[timestamp]") {
 
 	auto ts2 = Timestamp::FromString(ds->GetVector(3).GetValue(0).str_value);
 	REQUIRE(ts2 > 0);
-
 }
