@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "common/types/timestamp.hpp"
 #include "test_helpers.hpp"
+#include "common/types/time.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -249,7 +250,23 @@ TEST_CASE("Test more timestamp functions", "[timestamp]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	result = con.Query("SELECT CURRENT_TIME");
+	result = con.Query("SELECT CAST(CURRENT_TIME AS STRING), CAST(CURRENT_DATE AS STRING), CAST(CURRENT_TIMESTAMP AS STRING), CAST(NOW() AS STRING)");
 	REQUIRE(result->success);
+
+	auto ds = result->Fetch();
+	REQUIRE(ds->size() == 1);
+	REQUIRE(ds->column_count == 4);
+
+	auto time = Time::FromString(ds->GetVector(0).GetValue(0).str_value);
+	REQUIRE(time > 0);
+
+	auto date = Date::FromString(ds->GetVector(1).GetValue(0).str_value);
+	REQUIRE(date > 0);
+
+	auto ts = Timestamp::FromString(ds->GetVector(2).GetValue(0).str_value);
+	REQUIRE(ts > 0);
+
+	auto ts2 = Timestamp::FromString(ds->GetVector(3).GetValue(0).str_value);
+	REQUIRE(ts2 > 0);
 
 }

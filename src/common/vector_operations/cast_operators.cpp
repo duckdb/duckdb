@@ -134,6 +134,10 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 		assert(source.type == TypeId::INTEGER);
 		result_cast_switch<int32_t, duckdb::CastFromDate, true>(source, result, source_type, target_type);
 		break;
+	case SQLTypeId::TIME:
+		assert(source.type == TypeId::INTEGER);
+		result_cast_switch<int32_t, duckdb::CastFromTime, true>(source, result, source_type, target_type);
+		break;
 	case SQLTypeId::TIMESTAMP:
 		assert(source.type == TypeId::BIGINT);
 		result_cast_switch<int64_t, duckdb::CastFromTimestamp, true>(source, result, source_type, target_type);

@@ -7,4 +7,9 @@ void BuiltinFunctions::RegisterDateFunctions() {
 	Register<Age>();
 	Register<DatePart>();
 	Register<Year>();
+	Register<CurrentTime>();
+	Register<CurrentDate>();
+	Register<CurrentTimestamp>();
+
+
 }
