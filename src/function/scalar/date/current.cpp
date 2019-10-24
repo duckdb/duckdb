@@ -14,7 +14,9 @@ static void current_time_function(ExpressionExecutor &exec, Vector inputs[], ind
 	assert(input_count == 0);
 
 	auto val = Value::INTEGER(Timestamp::GetTime(Timestamp::GetCurrentTimestamp()));
-	result.Reference(val);
+    result.Initialize(TypeId::INTEGER, false);
+	result.count = 1;
+	result.SetValue(0, val);
 }
 
 static void current_date_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
@@ -22,7 +24,9 @@ static void current_date_function(ExpressionExecutor &exec, Vector inputs[], ind
 	assert(input_count == 0);
 
 	auto val = Value::INTEGER(Timestamp::GetDate(Timestamp::GetCurrentTimestamp()));
-	result.Reference(val);
+    result.Initialize(TypeId::INTEGER, false);
+	result.count = 1;
+	result.SetValue(0, val);
 }
 
 static void current_timestamp_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
@@ -30,30 +34,31 @@ static void current_timestamp_function(ExpressionExecutor &exec, Vector inputs[]
 	assert(input_count == 0);
 
 	auto val = Value::TIMESTAMP(Timestamp::GetCurrentTimestamp());
-	result.Reference(val);
-}
+    result.Initialize(TypeId::BIGINT, false);
+	result.count = 1;
+	result.SetValue(0, val);
 
-// these are created with side_effects because of its non-constant return value
+}
 
 void CurrentTime::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet current_time("current_time");
-	current_time.AddFunction(ScalarFunction({}, SQLType::TIME, current_time_function, true));
+	current_time.AddFunction(ScalarFunction({}, SQLType::TIME, current_time_function));
 	set.AddFunction(current_time);
 }
 
 void CurrentDate::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet current_date("current_date");
-	current_date.AddFunction(ScalarFunction({}, SQLType::DATE, current_date_function, true));
+	current_date.AddFunction(ScalarFunction({}, SQLType::DATE, current_date_function));
 	set.AddFunction(current_date);
 }
 
 void CurrentTimestamp::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet current_timestamp("current_timestamp");
-	current_timestamp.AddFunction(ScalarFunction({}, SQLType::TIMESTAMP, current_timestamp_function, true));
+	current_timestamp.AddFunction(ScalarFunction({}, SQLType::TIMESTAMP, current_timestamp_function));
 	set.AddFunction(current_timestamp);
 
 	ScalarFunctionSet now("now");
-	now.AddFunction(ScalarFunction({}, SQLType::TIMESTAMP, current_timestamp_function, true));
+	now.AddFunction(ScalarFunction({}, SQLType::TIMESTAMP, current_timestamp_function));
 	set.AddFunction(now);
 }
 
