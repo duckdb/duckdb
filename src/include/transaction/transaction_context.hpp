@@ -20,7 +20,7 @@ class TransactionManager;
 class TransactionContext {
 public:
 	TransactionContext(TransactionManager &transaction_manager)
-	    : transaction_manager(transaction_manager), auto_commit(true), current_transaction(nullptr) {
+	    : transaction_manager(transaction_manager) {
 	}
 	~TransactionContext();
 
@@ -51,10 +51,10 @@ public:
 
 private:
 	TransactionManager &transaction_manager;
-	bool auto_commit;
-	bool is_invalidated;
+	bool auto_commit = true;
+	bool is_invalidated = false;
 
-	Transaction *current_transaction;
+	Transaction *current_transaction = nullptr;
 
 	TransactionContext(const TransactionContext &) = delete;
 };
