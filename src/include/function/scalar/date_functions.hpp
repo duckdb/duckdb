@@ -25,4 +25,16 @@ struct Year {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct CurrentTime {
+    static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct CurrentDate {
+    static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct CurrentTimestamp {
+    static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb

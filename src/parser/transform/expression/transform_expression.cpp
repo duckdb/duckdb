@@ -50,6 +50,8 @@ unique_ptr<ParsedExpression> Transformer::TransformExpression(Node *node) {
 		return TransformResTarget(reinterpret_cast<ResTarget *>(node));
 	case T_ParamRef:
 		return TransformParamRef(reinterpret_cast<ParamRef *>(node));
+	case T_SQLValueFunction:
+		return TransformSQLValueFunction(reinterpret_cast<SQLValueFunction *>(node));
 	case T_SetToDefault:
 		return make_unique<DefaultExpression>();
 
