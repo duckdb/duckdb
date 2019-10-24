@@ -325,8 +325,9 @@ void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column,
 		if (!Value::IsUTF8String(new_val.c_str())) {
 			throw ParserException("Error on line %lld: file is not valid UTF8", linenr);
 		}
-		auto data = (const char **)parse_chunk.data[column].data;
-		data[row_entry] = strdup(new_val.c_str());
+
+		auto& v = parse_chunk.data[column];
+		((const char **)v.data)[row_entry] = v.string_heap.AddString(new_val.c_str());
 	}
 
 	// move to the next column
