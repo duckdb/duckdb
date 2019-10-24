@@ -297,39 +297,36 @@ void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column,
 	// insert the line number into the chunk
 	index_t row_entry = parse_chunk.data[column].count++;
 
-	// test against null string
 	str_val[length] = '\0';
+	// test against null string
 	if (info.null_str == str_val && !info.force_not_null[column]) {
 		parse_chunk.data[column].nullmask[row_entry] = true;
 	} else {
-		// remove escape(s)
-		if (!escape_positions.empty()) {
-			string new_val = "";
-			for (const char *val = str_val; *val; val++) {
+		// optionally remove escape(s)
+		string new_val = "";
+		for (const char *val = str_val; *val; val++) {
+			if (!escape_positions.empty()){
 				if (escape_positions.front() == pos) {
 					in_escape = false;
 					escape_positions.pop();
-				}
-				if (escape_positions.front() - info.escape.length() == pos) {
+				} else if (escape_positions.front() - info.escape.length() == pos) {
 					in_escape = true;
 				}
-				if (!in_escape) {
-					new_val += *val;
-				}
-				pos++;
 			}
-			strcpy(str_val, new_val.c_str());
-			while (!escape_positions.empty()) {
-				escape_positions.pop();
+			if (!in_escape) {
+				new_val += *val;
 			}
+			pos++;
 		}
-
+		while (!escape_positions.empty()) {
+			escape_positions.pop();
+		}
 		// test for valid utf-8 string
-		if (!Value::IsUTF8String(str_val)) {
+		if (!Value::IsUTF8String(new_val.c_str())) {
 			throw ParserException("Error on line %lld: file is not valid UTF8", linenr);
 		}
 		auto data = (const char **)parse_chunk.data[column].data;
-		data[row_entry] = str_val;
+		data[row_entry] = strdup(new_val.c_str());
 	}
 
 	// move to the next column
