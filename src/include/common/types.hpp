@@ -112,12 +112,12 @@ public:
 bool IsNumericType(SQLTypeId type);
 
 string SQLTypeIdToString(SQLTypeId type);
-string SQLTypeToString(SQLType type);
+string SQLTypeToString(const SQLType& type);
 
 SQLType MaxSQLType(SQLType left, SQLType right);
 
 //! Gets the internal type associated with the given SQL type
-TypeId GetInternalType(SQLType type);
+TypeId GetInternalType(const SQLType& type);
 //! Returns the "simplest" SQL type corresponding to the given type id (e.g. TypeId::INTEGER -> SQLTypeId::INTEGER)
 SQLType SQLTypeFromInternalType(TypeId type);
 

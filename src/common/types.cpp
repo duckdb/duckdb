@@ -184,7 +184,7 @@ string SQLTypeIdToString(SQLTypeId id) {
 	}
 }
 
-string SQLTypeToString(SQLType type) {
+string SQLTypeToString(const SQLType& type) {
 	// FIXME: display width/scale
 	return SQLTypeIdToString(type.id);
 }
@@ -204,7 +204,7 @@ bool IsNumericType(SQLTypeId type) {
 	}
 }
 
-TypeId GetInternalType(SQLType type) {
+TypeId GetInternalType(const SQLType& type) {
 	switch (type.id) {
 	case SQLTypeId::BOOLEAN:
 		return TypeId::BOOLEAN;

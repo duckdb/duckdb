@@ -127,9 +127,7 @@ ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
 
 vector<TypeId> TableCatalogEntry::GetTypes() {
 	vector<TypeId> types;
-	for (auto &it : columns) {
-		types.push_back(GetInternalType(it.type));
-	}
+	transform(columns.begin(), columns.end(), std::back_inserter(types), [](const ColumnDefinition& column){ return GetInternalType(column.type); });
 	return types;
 }
 

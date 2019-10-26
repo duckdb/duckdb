@@ -30,8 +30,6 @@ bool TableFunctionCatalogEntry::ColumnExists(const string &name) {
 
 vector<TypeId> TableFunctionCatalogEntry::GetTypes() {
 	vector<TypeId> types;
-	for (auto &type : function.types) {
-		types.push_back(GetInternalType(type));
-	}
+	transform(function.types.begin(), function.types.end(), std::back_inserter(types), [](const SQLType& type) { return GetInternalType(type); });
 	return types;
 }
