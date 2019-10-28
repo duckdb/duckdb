@@ -175,7 +175,7 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::CommitEntry(UndoFlags type, d
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = (UpdateInfo *)data;
-		if (HAS_LOG && !info->segment->column_data.table->IsTemporary()) {
+		if (HAS_LOG && !info->table->IsTemporary()) {
 			throw Exception("FIXME: write update in log");
 		}
 		info->version_number = commit_id;

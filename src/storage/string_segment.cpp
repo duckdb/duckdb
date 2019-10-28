@@ -12,8 +12,8 @@ static bool IsValidStringLocation(string_location_t location) {
 	return location.offset < BLOCK_SIZE && (location.block_id == INVALID_BLOCK || location.block_id >= MAXIMUM_BLOCK);
 }
 
-StringSegment::StringSegment(ColumnData &column_data, BufferManager &manager) :
-	UncompressedSegment(column_data, manager, TypeId::VARCHAR) {
+StringSegment::StringSegment(BufferManager &manager) :
+	UncompressedSegment(manager, TypeId::VARCHAR) {
 	this->max_vector_count = 0;
 	this->dictionary_offset = 0;
 	// the vector_size is given in the size of the dictionary offsets
@@ -517,7 +517,7 @@ void StringSegment::MergeUpdateInfo(UpdateInfo *node, Vector &update, row_t *ids
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-void StringSegment::Update(SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) {
+void StringSegment::Update(DataTable &table, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) {
 	if (!string_updates) {
 		string_updates = unique_ptr<string_update_info_t[]>(new string_update_info_t[max_vector_count]);
 	}
@@ -552,7 +552,7 @@ void StringSegment::Update(SegmentStatistics &stats, Transaction &transaction, V
 	// create the update node
 	if (!node) {
 		// create a new node in the undo buffer for this update
-		node = CreateUpdateInfo(transaction, ids, update.count, vector_index, vector_offset, sizeof(string_location_t));
+		node = CreateUpdateInfo(table, transaction, ids, update.count, vector_index, vector_offset, sizeof(string_location_t));
 
 		// copy the string location data into the undo buffer
 		node->nullmask = original_nullmask;

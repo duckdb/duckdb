@@ -11,9 +11,12 @@
 #include "common/constants.hpp"
 
 namespace duckdb {
+class DataTable;
 class UncompressedSegment;
 
 struct UpdateInfo {
+	//! The table that this update info affects
+	DataTable *table;
 	//! The uncompressed segment that this update info affects
 	UncompressedSegment *segment;
 	//! The version number

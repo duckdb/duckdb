@@ -38,7 +38,7 @@ typedef unique_ptr<StringUpdateInfo> string_update_info_t;
 
 class StringSegment : public UncompressedSegment {
 public:
-	StringSegment(ColumnData &column_data, BufferManager &manager);
+	StringSegment(BufferManager &manager);
 
 	//! The current dictionary offset
 	index_t dictionary_offset;
@@ -59,7 +59,7 @@ public:
 	//! Rollback a previous update
 	void RollbackUpdate(UpdateInfo *info) override;
 protected:
-	void Update(SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) override;
+	void Update(DataTable &table, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) override;
 	index_t FetchBaseData(TransientScanState &state, index_t vector_index, Vector &result) override;
 	void FetchUpdateData(TransientScanState &state, Transaction &transaction, UpdateInfo *versions, Vector &result, index_t count) override;
 private:

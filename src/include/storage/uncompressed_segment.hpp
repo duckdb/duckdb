@@ -23,10 +23,8 @@ struct UpdateInfo;
 //! An uncompressed segment represents an uncompressed segment of a column residing in a block
 class UncompressedSegment {
 public:
-	UncompressedSegment(ColumnData& column_data, BufferManager &manager, TypeId type);
+	UncompressedSegment(BufferManager &manager, TypeId type);
 	virtual ~UncompressedSegment() = default;
-	//! The column this segment belongs to
-	ColumnData &column_data;
 	//! The buffer manager
 	BufferManager &manager;
 	//! Type of the uncompressed segment
@@ -59,7 +57,7 @@ public:
 	virtual index_t Append(SegmentStatistics &stats, TransientAppendState &state, Vector &data, index_t offset, index_t count) = 0;
 
 	//! Update a set of row identifiers to the specified set of updated values
-	void Update(SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, row_t offset);
+	void Update(DataTable &table, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, row_t offset);
 
 	//! Rollback a previous update
 	virtual void RollbackUpdate(UpdateInfo *info) = 0;
@@ -73,13 +71,13 @@ public:
 		return std::min((index_t) STANDARD_VECTOR_SIZE, tuple_count - vector_index * STANDARD_VECTOR_SIZE);
 	}
 protected:
-	virtual void Update(SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) = 0;
+	virtual void Update(DataTable &table, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) = 0;
 	//! Fetch base table data
 	virtual index_t FetchBaseData(TransientScanState &state, index_t vector_index, Vector &result) = 0;
 	//! Fetch update data from an UpdateInfo version
 	virtual void FetchUpdateData(TransientScanState &state, Transaction &transaction, UpdateInfo *version, Vector &result, index_t count) = 0;
 
-	UpdateInfo *CreateUpdateInfo(Transaction &transaction, row_t *ids, index_t count, index_t vector_index, index_t vector_offset, index_t type_size);
+	UpdateInfo *CreateUpdateInfo(DataTable &table, Transaction &transaction, row_t *ids, index_t count, index_t vector_index, index_t vector_offset, index_t type_size);
 };
 
 } // namespace duckdb

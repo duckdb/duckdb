@@ -55,8 +55,8 @@ public:
 private:
 	void WriteSchema(Transaction &transaction, SchemaCatalogEntry &schema);
 	void WriteTable(Transaction &transaction, TableCatalogEntry &table);
-	void WriteView(Transaction &transaction, ViewCatalogEntry &table);
-	void WriteSequence(Transaction &transaction, SequenceCatalogEntry &table);
+	void WriteView(ViewCatalogEntry &table);
+	void WriteSequence(SequenceCatalogEntry &table);
 
 	void ReadSchema(ClientContext &context, MetaBlockReader &reader);
 	void ReadTable(ClientContext &context, MetaBlockReader &reader);

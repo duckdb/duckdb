@@ -112,7 +112,7 @@ void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry
 	// write the sequences
 	metadata_writer->Write<uint32_t>(sequences.size());
 	for (auto &seq : sequences) {
-		WriteSequence(transaction, *seq);
+		WriteSequence(*seq);
 	}
 	// now write the tables
 	metadata_writer->Write<uint32_t>(tables.size());
@@ -122,7 +122,7 @@ void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry
 	// finally write the views
 	metadata_writer->Write<uint32_t>(views.size());
 	for (auto &view : views) {
-		WriteView(transaction, *view);
+		WriteView(*view);
 	}
 }
 
@@ -153,7 +153,7 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 //===--------------------------------------------------------------------===//
 // Views
 //===--------------------------------------------------------------------===//
-void CheckpointManager::WriteView(Transaction &transaction, ViewCatalogEntry &view) {
+void CheckpointManager::WriteView(ViewCatalogEntry &view) {
 	view.Serialize(*metadata_writer);
 }
 
@@ -166,7 +166,7 @@ void CheckpointManager::ReadView(ClientContext &context, MetaBlockReader &reader
 //===--------------------------------------------------------------------===//
 // Sequences
 //===--------------------------------------------------------------------===//
-void CheckpointManager::WriteSequence(Transaction &transaction, SequenceCatalogEntry &seq) {
+void CheckpointManager::WriteSequence(SequenceCatalogEntry &seq) {
 	seq.Serialize(*metadata_writer);
 }
 

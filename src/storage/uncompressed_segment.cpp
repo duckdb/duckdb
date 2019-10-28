@@ -5,8 +5,8 @@
 using namespace duckdb;
 using namespace std;
 
-UncompressedSegment::UncompressedSegment(ColumnData &column_data, BufferManager &manager, TypeId type) :
-	column_data(column_data), manager(manager), type(type), block_id(INVALID_BLOCK), max_vector_count(0), tuple_count(0), versions(nullptr) {
+UncompressedSegment::UncompressedSegment(BufferManager &manager, TypeId type) :
+	manager(manager), type(type), block_id(INVALID_BLOCK), max_vector_count(0), tuple_count(0), versions(nullptr) {
 }
 
 static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector &update, row_t *ids, row_t offset, UpdateInfo *& node) {
@@ -41,7 +41,7 @@ static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector
 	}
 }
 
-void UncompressedSegment::Update(SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, row_t offset) {
+void UncompressedSegment::Update(DataTable &table, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, row_t offset) {
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
 
@@ -76,11 +76,12 @@ void UncompressedSegment::Update(SegmentStatistics &stats, Transaction &transact
 		// there is already a version here, check if there are any conflicts and search for the node that belongs to this transaction in the version chain
 		CheckForConflicts(versions[vector_index], transaction, update, ids, vector_offset, node);
 	}
-	Update(stats, transaction, update, ids, vector_index, vector_offset, node);
+	Update(table, stats, transaction, update, ids, vector_index, vector_offset, node);
 }
 
-UpdateInfo *UncompressedSegment::CreateUpdateInfo(Transaction &transaction, row_t *ids, index_t count, index_t vector_index, index_t vector_offset, index_t type_size) {
+UpdateInfo *UncompressedSegment::CreateUpdateInfo(DataTable &table, Transaction &transaction, row_t *ids, index_t count, index_t vector_index, index_t vector_offset, index_t type_size) {
 	auto node = transaction.CreateUpdateInfo(type_size, STANDARD_VECTOR_SIZE);
+	node->table = &table;
 	node->segment = this;
 	node->vector_index = vector_index;
 	node->prev = nullptr;

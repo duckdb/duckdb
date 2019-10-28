@@ -15,8 +15,8 @@ static NumericSegment::rollback_update_function_t GetRollbackUpdateFunction(Type
 static NumericSegment::merge_update_function_t GetMergeUpdateFunction(TypeId type);
 static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction(TypeId type);
 
-NumericSegment::NumericSegment(ColumnData &column_data, BufferManager &manager, TypeId type) :
-	UncompressedSegment(column_data, manager, type) {
+NumericSegment::NumericSegment(BufferManager &manager, TypeId type) :
+	UncompressedSegment(manager, type) {
 	// set up the different functions for this type of segment
 	this->append_function = GetAppendFunction(type);
 	this->update_function = GetUpdateFunction(type);
@@ -120,12 +120,12 @@ index_t NumericSegment::Append(SegmentStatistics &stats, TransientAppendState &s
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-void NumericSegment::Update(SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) {
+void NumericSegment::Update(DataTable &table, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) {
 	if (!node) {
 		auto handle = manager.PinBuffer(block_id);
 
 		// create a new node in the undo buffer for this update
-		node = CreateUpdateInfo(transaction, ids, update.count, vector_index, vector_offset, type_size);
+		node = CreateUpdateInfo(table, transaction, ids, update.count, vector_index, vector_offset, type_size);
 		// now move the original data into the UpdateInfo
 		update_function(stats, node, handle->buffer->data.get() + vector_index * vector_size, update);
 	} else {

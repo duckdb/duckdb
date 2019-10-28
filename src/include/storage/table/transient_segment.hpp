@@ -15,13 +15,10 @@
 
 namespace duckdb {
 struct TransientAppendState;
-class ColumnData;
 
 class TransientSegment : public ColumnSegment {
 public:
-	TransientSegment(ColumnData& column_data, BufferManager &manager, TypeId type, index_t start);
-	//! The column this segment belongs to
-	ColumnData &column_data;
+	TransientSegment(BufferManager &manager, TypeId type, index_t start);
 	//! The buffer manager
 	BufferManager &manager;
 	//! The uncompressed segment holding the data
@@ -44,7 +41,7 @@ public:
 	index_t Append(TransientAppendState &state, Vector &data, index_t offset, index_t count);
 
 	//! Perform an update within the transient segment
-	void Update(Transaction &transaction, Vector &updates, row_t *ids);
+	void Update(DataTable &table, Transaction &transaction, Vector &updates, row_t *ids);
 };
 
 } // namespace duckdb

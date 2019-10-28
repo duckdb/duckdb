@@ -96,7 +96,7 @@ void ColumnData::Update(Transaction &transaction, Vector &updates, row_t *ids) {
 		// transient segment update, first find the segment that it belongs to
 		auto segment = (TransientSegment *) transient.GetSegment(first_id);
 		// now perform the update within the segment
-		segment->Update(transaction, updates, ids);
+		segment->Update(*table, transaction, updates, ids);
 	}
 }
 
@@ -125,6 +125,6 @@ void ColumnData::FetchRow(FetchState &state, Transaction &transaction, row_t row
 }
 
 void ColumnData::AppendTransientSegment(index_t start_row) {
-	auto new_segment = make_unique<TransientSegment>(*this, *table->storage.buffer_manager, type, start_row);
+	auto new_segment = make_unique<TransientSegment>(*table->storage.buffer_manager, type, start_row);
 	transient.AppendSegment(move(new_segment));
 }
