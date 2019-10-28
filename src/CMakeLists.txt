@@ -25,7 +25,6 @@ set(DUCKDB_LINK_LIBS
 
 add_library(duckdb SHARED ${ALL_OBJECT_FILES})
 target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})
-set_property(TARGET duckdb APPEND_STRING PROPERTY LINK_FLAGS "-Wl,--exclude-libs,libgcc_real.a")
 
 add_library(duckdb_static ${ALL_OBJECT_FILES})
 target_link_libraries(duckdb_static ${DUCKDB_LINK_LIBS})

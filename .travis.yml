@@ -104,9 +104,9 @@ matrix:
       arch: arm64
 
       script:
-        - mkdir -p build/release
-        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
-        - build/release/test/unittest "*"
+        - mkdir -p build/debug
+        - (cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
+        - build/debug/test/unittest "*"
 
 
     - os: linux
