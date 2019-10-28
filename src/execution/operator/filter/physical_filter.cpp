@@ -15,17 +15,23 @@ void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 
 		assert(expressions.size() > 0);
 
-		Vector result(TypeId::BOOLEAN, true, false);
 		ExpressionExecutor executor(state->child_chunk);
-		executor.Merge(expressions, result);
+		executor.Merge(expressions);
 
-		// now generate the selection vector
-		chunk.sel_vector = state->child_chunk.sel_vector;
-		for (index_t i = 0; i < chunk.column_count; i++) {
-			// create a reference to the vector of the child chunk
-			chunk.data[i].Reference(state->child_chunk.data[i]);
+		if (state->child_chunk.size() != 0) {
+			// chunk gets the same selection vector as its child chunk
+			chunk.sel_vector = state->child_chunk.sel_vector;
+			for (index_t i = 0; i < chunk.column_count; i++) {
+				// create a reference to the vector of the child chunk, same number of columns
+				chunk.data[i].Reference(state->child_chunk.data[i]);
+			}
+			// chunk gets the same data as child chunk
+			for (index_t i = 0; i < chunk.column_count; i++) {
+				chunk.data[i].count = state->child_chunk.data[i].count;
+				chunk.data[i].sel_vector = state->child_chunk.sel_vector;
+			}
 		}
-		chunk.SetSelectionVector(result);
+
 	} while (chunk.size() == 0);
 }
 

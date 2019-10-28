@@ -14,7 +14,7 @@ void Load(DuckDBBenchmarkState *state) override {
 	tpch::dbgen(SF, state->db);
 }
 string GetQuery() override {
-	return "SELECT l_orderkey, l_comment FROM lineitem WHERE l_orderkey % 5 == 0 AND l_comment LIKE '%str%';";
+	return "SELECT l_orderkey, l_comment FROM lineitem WHERE l_orderkey % 50 == 0 AND l_comment LIKE '%str%';";
 }
 string VerifyResult(QueryResult *result) override {
 	if (!result->success) {
@@ -23,7 +23,7 @@ string VerifyResult(QueryResult *result) override {
 	return string();
 }
 string BenchmarkInfo() override {
-	return "Execute the query \"SELECT l_orderkey, l_comment FROM lineitem WHERE l_orderkey % 5 == 0 AND l_comment LIKE '%str%'\"";
+	return "Execute the query \"SELECT l_orderkey, l_comment FROM lineitem WHERE l_orderkey % 50 == 0 AND l_comment LIKE '%str%'\"";
 }
 FINISH_BENCHMARK(PredicateOptimizationModAndLike)
 
@@ -34,7 +34,7 @@ void Load(DuckDBBenchmarkState *state) override {
 	tpch::dbgen(SF, state->db);
 }
 string GetQuery() override {
-	return "SELECT l_orderkey, l_comment FROM lineitem WHERE l_comment LIKE '%str%' AND l_orderkey % 5 == 0;";
+	return "SELECT l_orderkey, l_comment FROM lineitem WHERE l_comment LIKE '%str%' AND l_orderkey % 50 == 0;";
 }
 string VerifyResult(QueryResult *result) override {
 	if (!result->success) {
@@ -43,7 +43,7 @@ string VerifyResult(QueryResult *result) override {
 	return string();
 }
 string BenchmarkInfo() override {
-	return "Execute the query \"SELECT l_orderkey, l_comment FROM lineitem WHERE l_orderkey % 5 == 0 AND l_comment LIKE '%str%'\"";
+	return "Execute the query \"SELECT l_orderkey, l_comment FROM lineitem WHERE l_orderkey % 50 == 0 AND l_comment LIKE '%str%'\"";
 }
 FINISH_BENCHMARK(PredicateOptimizationLikeAndMod)
 
@@ -54,7 +54,7 @@ void Load(DuckDBBenchmarkState *state) override {
 	tpch::dbgen(SF, state->db);
 }
 string GetQuery() override {
-	return "SELECT l_orderkey, l_comment FROM lineitem WHERE l_orderkey % 5 == 0;";
+	return "SELECT l_orderkey, l_comment FROM lineitem WHERE l_orderkey % 50 == 0;";
 }
 string VerifyResult(QueryResult *result) override {
 	if (!result->success) {
@@ -63,7 +63,7 @@ string VerifyResult(QueryResult *result) override {
 	return string();
 }
 string BenchmarkInfo() override {
-	return "Execute the query \"SELECT l_orderkey, l_comment FROM lineitem WHERE l_orderkey % 5 == 0'\"";
+	return "Execute the query \"SELECT l_orderkey, l_comment FROM lineitem WHERE l_orderkey % 50 == 0'\"";
 }
 FINISH_BENCHMARK(PredicateOptimizationMod)
 
