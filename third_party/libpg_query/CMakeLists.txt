@@ -29,3 +29,5 @@ endif()
 
 set_target_properties(pg_query PROPERTIES LINKER_LANGUAGE C)
 set_target_properties(pg_query PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+set_property(TARGET pg_query APPEND_STRING PROPERTY LINK_FLAGS "-Wl,--exclude-libs,libgcc.a -Wl,--exclude-libs,libunwind.a")
