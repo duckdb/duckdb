@@ -11,6 +11,8 @@
 #include "common/types/data_chunk.hpp"
 #include "main/client_context.hpp"
 
+#include <mutex>
+
 namespace duckdb {
 
 class ClientContext;
@@ -28,9 +30,10 @@ class Appender {
 	DataChunk chunk;
 	//! The current column to append to
 	index_t column = 0;
-
+	//! Internal lock for appends
+	std::unique_lock<std::mutex> lock;
 public:
-	Appender(Connection &con, string schema_name, string table_name);
+	Appender(Connection &con, string schema_name, string table_name, std::unique_lock<std::mutex> lock);
 
 	~Appender();
 
