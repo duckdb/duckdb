@@ -3,15 +3,14 @@
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<ParsedExpression> Transformer::TransformSubquery(SubLink *root) {
+unique_ptr<ParsedExpression> Transformer::TransformSubquery(postgres::SubLink *root) {
 	if (!root) {
 		return nullptr;
 	}
 	auto subquery_expr = make_unique<SubqueryExpression>();
-	subquery_expr->subquery = TransformSelectNode((SelectStmt *)root->subselect);
+	subquery_expr->subquery = TransformSelectNode((postgres::SelectStmt *)root->subselect);
 	if (!subquery_expr->subquery) {
 		return nullptr;
 	}
@@ -19,12 +18,12 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(SubLink *root) {
 	assert(select_list.size() > 0);
 
 	switch (root->subLinkType) {
-	case EXISTS_SUBLINK: {
+	case postgres::EXISTS_SUBLINK: {
 		subquery_expr->subquery_type = SubqueryType::EXISTS;
 		break;
 	}
-	case ANY_SUBLINK:
-	case ALL_SUBLINK: {
+	case postgres::ANY_SUBLINK:
+	case postgres::ALL_SUBLINK: {
 		// comparison with ANY() or ALL()
 		subquery_expr->subquery_type = SubqueryType::ANY;
 		subquery_expr->child = TransformExpression(root->testexpr);
@@ -43,7 +42,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(SubLink *root) {
 		       subquery_expr->comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
 		       subquery_expr->comparison_type == ExpressionType::COMPARE_LESSTHAN ||
 		       subquery_expr->comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
-		if (root->subLinkType == ALL_SUBLINK) {
+		if (root->subLinkType == postgres::ALL_SUBLINK) {
 			// ALL sublink is equivalent to NOT(ANY) with inverted comparison
 			// e.g. [= ALL()] is equivalent to [NOT(<> ANY())]
 			// first invert the comparison type
@@ -52,7 +51,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(SubLink *root) {
 		}
 		break;
 	}
-	case EXPR_SUBLINK: {
+	case postgres::EXPR_SUBLINK: {
 		// return a single scalar value from the subquery
 		// no child expression to compare to
 		subquery_expr->subquery_type = SubqueryType::SCALAR;

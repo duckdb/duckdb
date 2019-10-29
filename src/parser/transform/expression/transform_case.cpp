@@ -4,10 +4,9 @@
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<ParsedExpression> Transformer::TransformCase(CaseExpr *root) {
+unique_ptr<ParsedExpression> Transformer::TransformCase(postgres::CaseExpr *root) {
 	if (!root) {
 		return nullptr;
 	}
@@ -17,7 +16,7 @@ unique_ptr<ParsedExpression> Transformer::TransformCase(CaseExpr *root) {
 
 	unique_ptr<ParsedExpression> def_res;
 	if (root->defresult) {
-		def_res = TransformExpression(reinterpret_cast<Node *>(root->defresult));
+		def_res = TransformExpression(reinterpret_cast<postgres::Node *>(root->defresult));
 	} else {
 		def_res = make_unique<ConstantExpression>(SQLType::SQLNULL, Value());
 	}
@@ -29,11 +28,10 @@ unique_ptr<ParsedExpression> Transformer::TransformCase(CaseExpr *root) {
 	auto exp_root = make_unique<CaseExpression>();
 	auto cur_root = exp_root.get();
 	for (auto cell = root->args->head; cell != nullptr; cell = cell->next) {
-		CaseWhen *w = reinterpret_cast<CaseWhen *>(cell->data.ptr_value);
-
-		auto test_raw = TransformExpression(reinterpret_cast<Node *>(w->expr));
+		auto w = reinterpret_cast<postgres::CaseWhen *>(cell->data.ptr_value);
+		auto test_raw = TransformExpression(reinterpret_cast<postgres::Node *>(w->expr));
 		unique_ptr<ParsedExpression> test;
-		auto arg = TransformExpression(reinterpret_cast<Node *>(root->arg));
+		auto arg = TransformExpression(reinterpret_cast<postgres::Node *>(root->arg));
 		if (arg) {
 			test = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(arg), move(test_raw));
 		} else {
@@ -41,7 +39,7 @@ unique_ptr<ParsedExpression> Transformer::TransformCase(CaseExpr *root) {
 		}
 
 		cur_root->check = move(test);
-		cur_root->result_if_true = TransformExpression(reinterpret_cast<Node *>(w->result));
+		cur_root->result_if_true = TransformExpression(reinterpret_cast<postgres::Node *>(w->result));
 		if (cell->next == nullptr) {
 			// finished all cases
 			// res_false is the default result

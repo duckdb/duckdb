@@ -4,11 +4,10 @@
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<PrepareStatement> Transformer::TransformPrepare(Node *node) {
-	PrepareStmt *stmt = reinterpret_cast<PrepareStmt *>(node);
+unique_ptr<PrepareStatement> Transformer::TransformPrepare(postgres::Node *node) {
+	auto stmt = reinterpret_cast<postgres::PrepareStmt *>(node);
 	assert(stmt);
 
 	if (stmt->argtypes && stmt->argtypes->length > 0) {
@@ -22,8 +21,8 @@ unique_ptr<PrepareStatement> Transformer::TransformPrepare(Node *node) {
 	return result;
 }
 
-unique_ptr<ExecuteStatement> Transformer::TransformExecute(Node *node) {
-	ExecuteStmt *stmt = reinterpret_cast<ExecuteStmt *>(node);
+unique_ptr<ExecuteStatement> Transformer::TransformExecute(postgres::Node *node) {
+	auto stmt = reinterpret_cast<postgres::ExecuteStmt *>(node);
 	assert(stmt);
 
 	auto result = make_unique<ExecuteStatement>();
@@ -40,8 +39,8 @@ unique_ptr<ExecuteStatement> Transformer::TransformExecute(Node *node) {
 	return result;
 }
 
-unique_ptr<DeallocateStatement> Transformer::TransformDeallocate(Node *node) {
-	DeallocateStmt *stmt = reinterpret_cast<DeallocateStmt *>(node);
+unique_ptr<DeallocateStatement> Transformer::TransformDeallocate(postgres::Node *node) {
+	auto stmt = reinterpret_cast<postgres::DeallocateStmt *>(node);
 	assert(stmt);
 
 	// TODO empty name means all are removed

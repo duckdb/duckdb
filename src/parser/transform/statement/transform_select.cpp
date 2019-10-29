@@ -3,16 +3,15 @@
 #include "common/string_util.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<SelectStatement> Transformer::TransformSelect(Node *node) {
-	SelectStmt *stmt = reinterpret_cast<SelectStmt *>(node);
+unique_ptr<SelectStatement> Transformer::TransformSelect(postgres::Node *node) {
+	auto stmt = reinterpret_cast<postgres::SelectStmt *>(node);
 	auto result = make_unique<SelectStatement>();
 
 	if (stmt->windowClause) {
 		for (auto window_ele = stmt->windowClause->head; window_ele != NULL; window_ele = window_ele->next) {
-			auto window_def = reinterpret_cast<WindowDef *>(window_ele->data.ptr_value);
+			auto window_def = reinterpret_cast<postgres::WindowDef *>(window_ele->data.ptr_value);
 			assert(window_def);
 			assert(window_def->name);
 			auto window_name = StringUtil::Lower(string(window_def->name));
@@ -27,7 +26,7 @@ unique_ptr<SelectStatement> Transformer::TransformSelect(Node *node) {
 
 	// may contain windows so second
 	if (stmt->withClause) {
-		TransformCTE(reinterpret_cast<WithClause *>(stmt->withClause), *result);
+		TransformCTE(reinterpret_cast<postgres::WithClause *>(stmt->withClause), *result);
 	}
 
 	result->node = TransformSelectNode(stmt);

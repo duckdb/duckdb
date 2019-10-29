@@ -3,11 +3,10 @@
 #include "parser/constraint.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<CreateTableStatement> Transformer::TransformCreateTable(Node *node) {
-	auto stmt = reinterpret_cast<CreateStmt *>(node);
+unique_ptr<CreateTableStatement> Transformer::TransformCreateTable(postgres::Node *node) {
+	auto stmt = reinterpret_cast<postgres::CreateStmt *>(node);
 	assert(stmt);
 	auto result = make_unique<CreateTableStatement>();
 	auto &info = *result->info.get();
@@ -22,15 +21,15 @@ unique_ptr<CreateTableStatement> Transformer::TransformCreateTable(Node *node) {
 	}
 	info.table = stmt->relation->relname;
 	info.if_not_exists = stmt->if_not_exists;
-	info.temporary = stmt->relation->relpersistence == PostgresRelPersistence::RELPERSISTENCE_TEMP;
+	info.temporary = stmt->relation->relpersistence == postgres::PostgresRelPersistence::RELPERSISTENCE_TEMP;
 
 	assert(stmt->tableElts);
 
 	for (auto c = stmt->tableElts->head; c != NULL; c = lnext(c)) {
-		auto node = reinterpret_cast<Node *>(c->data.ptr_value);
+		auto node = reinterpret_cast<postgres::Node *>(c->data.ptr_value);
 		switch (node->type) {
-		case T_ColumnDef: {
-			auto cdef = (ColumnDef *)c->data.ptr_value;
+		case postgres::T_ColumnDef: {
+			auto cdef = (postgres::ColumnDef *)c->data.ptr_value;
 			SQLType target_type = TransformTypeName(cdef->typeName);
 			auto centry = ColumnDefinition(cdef->colname, target_type);
 
@@ -45,7 +44,7 @@ unique_ptr<CreateTableStatement> Transformer::TransformCreateTable(Node *node) {
 			info.columns.push_back(move(centry));
 			break;
 		}
-		case T_Constraint: {
+		case postgres::T_Constraint: {
 			info.constraints.push_back(TransformConstraint(c));
 			break;
 		}

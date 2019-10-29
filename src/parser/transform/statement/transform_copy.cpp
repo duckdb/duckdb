@@ -9,7 +9,6 @@
 #include <cstring>
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
 static ExternalFileFormat StringToExternalFileFormat(const string &str) {
@@ -17,9 +16,9 @@ static ExternalFileFormat StringToExternalFileFormat(const string &str) {
 	return ExternalFileFormat::CSV;
 }
 
-void SetControlString(DefElem *def_elem, string option, string option_example, string &info_str) {
+void SetControlString(postgres::DefElem *def_elem, string option, string option_example, string &info_str) {
 	auto *val = (postgres::Value *)(def_elem->arg);
-	if (!val || val->type != T_String) {
+	if (!val || val->type != postgres::T_String) {
 		throw ParserException("Unsupported parameter type for " + option + ": expected e.g. " + option_example);
 	}
 	info_str = val->val.str;
@@ -31,7 +30,7 @@ void SubstringDetection(string &str_1, string &str_2, string name_str_1, string 
 	}
 }
 
-void HandleOptions(CopyStmt *stmt, CopyInfo &info) {
+void HandleOptions(postgres::CopyStmt *stmt, CopyInfo &info) {
 	// option names
 	const string kDelimiterTok = "delimiter";
 	const string kFormatTok = "format";
@@ -43,11 +42,11 @@ void HandleOptions(CopyStmt *stmt, CopyInfo &info) {
 	const string kForceNotNullTok = "force_not_null";
 	const string kEncodingTok = "encoding";
 
-	ListCell *cell = nullptr;
+	postgres::ListCell *cell = nullptr;
 
 	// iterate over each option
 	for_each_cell(cell, stmt->options->head) {
-		auto *def_elem = reinterpret_cast<DefElem *>(cell->data.ptr_value);
+		auto *def_elem = reinterpret_cast<postgres::DefElem *>(cell->data.ptr_value);
 
 		if (StringUtil::StartsWith(def_elem->defname, "delim") || StringUtil::StartsWith(def_elem->defname, "sep")) {
 			// delimiter
@@ -56,7 +55,7 @@ void HandleOptions(CopyStmt *stmt, CopyInfo &info) {
 		} else if (def_elem->defname == kFormatTok) {
 			// format
 			auto *format_val = (postgres::Value *)(def_elem->arg);
-			if (!format_val || format_val->type != T_String) {
+			if (!format_val || format_val->type != postgres::T_String) {
 				throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv'");
 			}
 			if (StringUtil::Upper(format_val->val.str) != "CSV") {
@@ -86,10 +85,10 @@ void HandleOptions(CopyStmt *stmt, CopyInfo &info) {
 				continue;
 			}
 			switch (header_val->type) {
-			case T_Integer:
+			case postgres::T_Integer:
 				info.header = header_val->val.ival == 1 ? true : false;
 				break;
-			case T_String: {
+			case postgres::T_String: {
 				auto val = duckdb::Value(string(header_val->val.str));
 				info.header = val.CastAs(TypeId::BOOLEAN).value_.boolean;
 				break;
@@ -110,20 +109,20 @@ void HandleOptions(CopyStmt *stmt, CopyInfo &info) {
 			}
 
 			auto *force_quote_val = def_elem->arg;
-			if (!force_quote_val || (force_quote_val->type != T_A_Star && force_quote_val->type != T_List)) {
+			if (!force_quote_val || (force_quote_val->type != postgres::T_A_Star && force_quote_val->type != postgres::T_List)) {
 				throw ParserException("Unsupported parameter type for FORCE_QUOTE: expected e.g. FORCE_QUOTE *");
 			}
 
 			// * option (all columns)
-			if (force_quote_val->type == T_A_Star) {
+			if (force_quote_val->type == postgres::T_A_Star) {
 				info.quote_all = true;
 			}
 
 			// list of columns
-			if (force_quote_val->type == T_List) {
+			if (force_quote_val->type == postgres::T_List) {
 				auto column_list = (postgres::List*)(force_quote_val);
-				for (ListCell *c = column_list->head; c != NULL; c = lnext(c)) {
-					ResTarget *target = (ResTarget *)(c->data.ptr_value);
+				for (auto c = column_list->head; c != NULL; c = lnext(c)) {
+					auto target = (postgres::ResTarget *)(c->data.ptr_value);
 					info.force_quote_list.push_back(string(target->name));
 				}
 			}
@@ -136,20 +135,20 @@ void HandleOptions(CopyStmt *stmt, CopyInfo &info) {
 			}
 
 			auto *force_not_null_val = def_elem->arg;
-			if (!force_not_null_val || force_not_null_val->type != T_List) {
+			if (!force_not_null_val || force_not_null_val->type != postgres::T_List) {
 				throw ParserException("Unsupported parameter type for FORCE_NOT_NULL: expected e.g. FORCE_NOT_NULL *");
 			}
 
 			auto column_list = (postgres::List*)(force_not_null_val);
-			for (ListCell *c = column_list->head; c != NULL; c = lnext(c)) {
-				ResTarget *target = (ResTarget *)(c->data.ptr_value);
+			for (auto c = column_list->head; c != NULL; c = lnext(c)) {
+				auto target = (postgres::ResTarget *)(c->data.ptr_value);
 				info.force_not_null_list.push_back(string(target->name));
 			}
 
 		} else if (def_elem->defname == kEncodingTok) {
 			// encoding
 			auto *encoding_val = (postgres::Value *)(def_elem->arg);
-			if (!encoding_val || encoding_val->type != T_String) {
+			if (!encoding_val || encoding_val->type != postgres::T_String) {
 				throw ParserException("Unsupported parameter type for ENCODING: expected e.g. ENCODING 'UTF-8'");
 			}
 			if (StringUtil::Upper(encoding_val->val.str) != "UTF8" && StringUtil::Upper(encoding_val->val.str) != "UTF-8") {
@@ -162,8 +161,8 @@ void HandleOptions(CopyStmt *stmt, CopyInfo &info) {
 	}
 }
 
-unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
-	CopyStmt *stmt = reinterpret_cast<CopyStmt *>(node);
+unique_ptr<CopyStatement> Transformer::TransformCopy(postgres::Node *node) {
+	auto stmt = reinterpret_cast<postgres::CopyStmt *>(node);
 	assert(stmt);
 	auto result = make_unique<CopyStatement>();
 	auto &info = *result->info;
@@ -175,7 +174,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 	// get select_list
 	if (stmt->attlist) {
 		for (auto n = stmt->attlist->head; n != nullptr; n = n->next) {
-			auto target = reinterpret_cast<ResTarget *>(n->data.ptr_value);
+			auto target = reinterpret_cast<postgres::ResTarget *>(n->data.ptr_value);
 			if (target->name) {
 				info.select_list.push_back(string(target->name));
 			}
@@ -202,7 +201,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			result->select_statement = move(statement);
 		}
 	} else {
-		result->select_statement = TransformSelectNode((SelectStmt *)stmt->query);
+		result->select_statement = TransformSelectNode((postgres::SelectStmt *)stmt->query);
 	}
 
 	// handle options

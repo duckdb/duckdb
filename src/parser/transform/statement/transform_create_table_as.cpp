@@ -3,13 +3,12 @@
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
 unique_ptr<CreateTableStatement> Transformer::TransformCreateTableAs(postgres::Node *node) {
-	auto stmt = reinterpret_cast<CreateTableAsStmt *>(node);
+	auto stmt = reinterpret_cast<postgres::CreateTableAsStmt *>(node);
 	assert(stmt);
-	if (stmt->relkind == OBJECT_MATVIEW) {
+	if (stmt->relkind == postgres::OBJECT_MATVIEW) {
 		throw NotImplementedException("Materialized view not implemented");
 	}
 	if (stmt->is_select_into || stmt->into->colNames || stmt->into->options) {
