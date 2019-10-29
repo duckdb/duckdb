@@ -57,4 +57,72 @@ TEST_CASE("Test strcmp() to ensure platform sanity", "[comparison]") {
 
 	res = strcmp("NUT", "NUT");
 	REQUIRE(res == 0);
+
+	Value zzz ("ZZZ");
+	Value hxr ("HXR");
+	Value nut ("NUT");
+
+	REQUIRE_FALSE(zzz > zzz);
+	REQUIRE(zzz > hxr);
+	REQUIRE(zzz > nut);
+
+	REQUIRE(zzz >= zzz);
+	REQUIRE(zzz >= hxr);
+	REQUIRE(zzz >= nut);
+
+	REQUIRE(zzz <= zzz);
+	REQUIRE_FALSE(zzz <= hxr);
+	REQUIRE_FALSE(zzz <= nut);
+
+	REQUIRE(zzz == zzz);
+	REQUIRE_FALSE(zzz == hxr);
+	REQUIRE_FALSE(zzz == nut);
+
+	REQUIRE_FALSE(zzz != zzz);
+	REQUIRE(zzz != hxr);
+	REQUIRE(zzz != nut);
+
+
+	REQUIRE_FALSE(hxr > zzz);
+	REQUIRE_FALSE(hxr > hxr);
+	REQUIRE_FALSE(hxr > nut);
+
+	REQUIRE_FALSE(hxr >= zzz);
+	REQUIRE(hxr >= hxr);
+	REQUIRE_FALSE(hxr >= nut);
+
+	REQUIRE(hxr <= zzz);
+	REQUIRE(hxr <= hxr);
+	REQUIRE(hxr <= nut);
+
+	REQUIRE_FALSE(hxr == zzz);
+	REQUIRE(hxr == hxr);
+	REQUIRE_FALSE(hxr == nut);
+
+	REQUIRE(hxr != zzz);
+	REQUIRE_FALSE(hxr != hxr);
+	REQUIRE(hxr != nut);
+
+
+
+
+	REQUIRE_FALSE(nut > zzz);
+	REQUIRE(nut > hxr);
+	REQUIRE_FALSE(nut > nut);
+
+	REQUIRE_FALSE(nut >= zzz);
+	REQUIRE(nut >= hxr);
+	REQUIRE(nut >= nut);
+
+	REQUIRE(nut <= zzz);
+	REQUIRE_FALSE(nut <= hxr);
+	REQUIRE(nut <= nut);
+
+	REQUIRE_FALSE(nut == zzz);
+	REQUIRE_FALSE(nut == hxr);
+	REQUIRE(nut == nut);
+
+	REQUIRE(nut != zzz);
+	REQUIRE(nut != hxr);
+	REQUIRE_FALSE(nut != nut);
 }
