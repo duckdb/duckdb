@@ -95,9 +95,6 @@ set(RE2_SOURCES
 add_library(re2 STATIC ${RE2_SOURCES})
 add_library(re2::re2 ALIAS re2)
 
-
-set_property(TARGET re2 APPEND_STRING PROPERTY LINK_FLAGS "-Wl,--exclude-libs,libgcc.a -Wl,--exclude-libs,libunwind.a")
-
 # if(RE2_BUILD_TESTING) set(TESTING_SOURCES re2/testing/backtrack.cc
 # re2/testing/dump.cc re2/testing/exhaustive_tester.cc
 # re2/testing/null_walker.cc re2/testing/regexp_generator.cc

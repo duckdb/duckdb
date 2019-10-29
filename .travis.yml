@@ -19,7 +19,7 @@ matrix:
 
     - os: linux
       dist: xenial
-      name: GCC 7 (ARM64)
+      name: GCC 5 (ARM64)
       arch: arm64
 
       script:
