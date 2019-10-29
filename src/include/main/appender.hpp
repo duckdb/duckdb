@@ -30,7 +30,7 @@ class Appender {
 	DataChunk chunk;
 	//! The current column to append to
 	index_t column = 0;
-	//! Internal lock for appends
+	//! Lock holder for appends
 	std::unique_lock<std::mutex> lock;
 
 public:
