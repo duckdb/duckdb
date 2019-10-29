@@ -83,7 +83,6 @@ template <class T, class OP> static index_t merge_join_mark_lt(ScalarMergeInfo &
 
 template <class T> index_t MergeJoinMark::LessThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	return merge_join_mark_lt<T, duckdb::LessThan>(l, r);
-	throw NotImplementedException("Not implemented");
 }
 
 template <class T> index_t MergeJoinMark::LessThanEquals::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
