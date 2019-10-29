@@ -26,3 +26,35 @@ TEST_CASE("Test basic comparison statements", "[comparison]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {true}));
 	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
 }
+
+
+
+TEST_CASE("Test strcmp() to ensure platform sanity", "[comparison]") {
+	int res;
+	res = strcmp("ZZZ", "ZZZ");
+	REQUIRE(res == 0);
+
+	res = strcmp("ZZZ", "HXR");
+	REQUIRE(res > 0);
+
+	res = strcmp("ZZZ", "NUT");
+	REQUIRE(res > 0);
+
+	res = strcmp("HXR", "ZZZ");
+	REQUIRE(res < 0);
+
+	res = strcmp("HXR", "HXR");
+	REQUIRE(res == 0);
+
+	res = strcmp("HXR", "NUT");
+	REQUIRE(res < 0);
+
+	res = strcmp("NUT", "ZZZ");
+	REQUIRE(res < 0);
+
+	res = strcmp("NUT", "HXR");
+	REQUIRE(res > 0);
+
+	res = strcmp("NUT", "NUT");
+	REQUIRE(res == 0);
+}

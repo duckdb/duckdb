@@ -1,4 +1,5 @@
 #include "transaction/rollback_state.hpp"
+#include "storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;
