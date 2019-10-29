@@ -10,7 +10,7 @@ static void bitwise_lshift_function(ExpressionExecutor &exec, Vector inputs[], i
 	VectorOperations::BitwiseShiftLeft(inputs[0], inputs[1], result);
 }
 
-void LeftShift::RegisterFunction(BuiltinFunctions &set) {
+void LeftShiftFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("<<");
 	for(auto &type : SQLType::INTEGRAL) {
 		functions.AddFunction(ScalarFunction({ type, type }, type, bitwise_lshift_function));

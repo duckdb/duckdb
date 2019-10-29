@@ -19,7 +19,7 @@ static void cot_function(ExpressionExecutor &exec, Vector inputs[], index_t inpu
 	VectorOperations::Divide(one, tan_res, result);
 }
 
-void Cot::RegisterFunction(BuiltinFunctions &set) {
+void CotFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("cot", { SQLType::DOUBLE }, SQLType::DOUBLE, cot_function));
 }
 

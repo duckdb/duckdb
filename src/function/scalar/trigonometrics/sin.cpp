@@ -14,7 +14,7 @@ static void sin_function(ExpressionExecutor &exec, Vector inputs[], index_t inpu
 	VectorOperations::Sin(inputs[0], result);
 }
 
-void Sin::RegisterFunction(BuiltinFunctions &set) {
+void SinFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("sin", { SQLType::DOUBLE }, SQLType::DOUBLE, sin_function));
 }
 

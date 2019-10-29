@@ -13,7 +13,7 @@ static void pi_function(ExpressionExecutor &exec, Vector inputs[], index_t input
 	result.Reference(pi_value);
 }
 
-void Pi::RegisterFunction(BuiltinFunctions &set) {
+void PiFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("pi", { }, SQLType::DOUBLE, pi_function));
 }
 

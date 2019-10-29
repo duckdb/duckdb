@@ -12,7 +12,7 @@ static void exp_function(ExpressionExecutor &exec, Vector inputs[], index_t inpu
 	VectorOperations::Exp(inputs[0], result);
 }
 
-void Exp::RegisterFunction(BuiltinFunctions &set) {
+void ExpFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("exp", { SQLType::DOUBLE }, SQLType::DOUBLE, exp_function));
 }
 

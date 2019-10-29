@@ -14,7 +14,7 @@ static void cos_function(ExpressionExecutor &exec, Vector inputs[], index_t inpu
 	VectorOperations::Cos(inputs[0], result);
 }
 
-void Cos::RegisterFunction(BuiltinFunctions &set) {
+void CosFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("cos", { SQLType::DOUBLE }, SQLType::DOUBLE, cos_function));
 }
 

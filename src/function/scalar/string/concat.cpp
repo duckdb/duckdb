@@ -65,7 +65,7 @@ static void concat_function(ExpressionExecutor &exec, Vector inputs[], index_t i
 	});
 }
 
-void Concat::RegisterFunction(BuiltinFunctions &set) {
+void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction concat = ScalarFunction("concat", { SQLType::VARCHAR, SQLType::VARCHAR }, SQLType::VARCHAR, concat_function);
 	concat.varargs = SQLType::VARCHAR;
 	set.AddFunction(concat);

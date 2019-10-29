@@ -35,7 +35,7 @@ static void year_function(ExpressionExecutor &exec, Vector inputs[], index_t inp
 	}
 }
 
-void Year::RegisterFunction(BuiltinFunctions &set) {
+void YearFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet year("year");
 	year.AddFunction(ScalarFunction({ SQLType::DATE }, SQLType::INTEGER, year_function));
 	year.AddFunction(ScalarFunction({ SQLType::TIMESTAMP }, SQLType::INTEGER, year_function));

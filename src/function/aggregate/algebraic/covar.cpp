@@ -110,10 +110,10 @@ static void covarsamp_finalize(Vector &state, Vector &result) {
 	});
 }
 
-void CovarSamp::RegisterFunction(BuiltinFunctions &set) {
+void CovarSampFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(AggregateFunction("covar_samp", {SQLType::DOUBLE, SQLType::DOUBLE}, SQLType::DOUBLE, covar_state_size, covar_initialize, covar_update, covar_combine, covarsamp_finalize));
 }
 
-void CovarPop::RegisterFunction(BuiltinFunctions &set) {
+void CovarPopFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(AggregateFunction("covar_pop", {SQLType::DOUBLE, SQLType::DOUBLE}, SQLType::DOUBLE, covar_state_size, covar_initialize, covar_update, covar_combine, covarpop_finalize));
 }

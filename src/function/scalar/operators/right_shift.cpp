@@ -10,7 +10,7 @@ static void bitwise_rshift_function(ExpressionExecutor &exec, Vector inputs[], i
 	VectorOperations::BitwiseShiftRight(inputs[0], inputs[1], result);
 }
 
-void RightShift::RegisterFunction(BuiltinFunctions &set) {
+void RightShiftFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions(">>");
 	for(auto &type : SQLType::INTEGRAL) {
 		functions.AddFunction(ScalarFunction({ type, type }, type, bitwise_rshift_function));

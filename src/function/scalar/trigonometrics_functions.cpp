@@ -7,14 +7,14 @@ using namespace std;
 namespace duckdb {
 
 void BuiltinFunctions::RegisterTrigonometricsFunctions() {
-	Register<Sin>();
-	Register<Cos>();
-	Register<Tan>();
-	Register<Asin>();
-	Register<Acos>();
-	Register<Atan>();
-	Register<Cot>();
-	Register<Atan2>();
+	Register<SinFun>();
+	Register<CosFun>();
+	Register<TanFun>();
+	Register<AsinFun>();
+	Register<AcosFun>();
+	Register<AtanFun>();
+	Register<CotFun>();
+	Register<Atan2Fun>();
 }
 
 } // namespace duckdb

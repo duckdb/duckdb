@@ -12,7 +12,7 @@ static void cbrt_function(ExpressionExecutor &exec, Vector inputs[], index_t inp
 	VectorOperations::CbRt(inputs[0], result);
 }
 
-void Cbrt::RegisterFunction(BuiltinFunctions &set) {
+void CbrtFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("cbrt", { SQLType::DOUBLE }, SQLType::DOUBLE, cbrt_function));
 }
 

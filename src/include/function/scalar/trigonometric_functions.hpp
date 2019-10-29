@@ -13,35 +13,35 @@
 
 namespace duckdb {
 
-struct Sin {
+struct SinFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Cos {
+struct CosFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Tan {
+struct TanFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Asin {
+struct AsinFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Acos {
+struct AcosFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Atan {
+struct AtanFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Cot {
+struct CotFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Atan2 {
+struct Atan2Fun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 

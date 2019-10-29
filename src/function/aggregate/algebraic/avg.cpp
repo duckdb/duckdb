@@ -68,6 +68,6 @@ static void avg_finalize(Vector &state, Vector &result) {
 	});
 }
 
-void Avg::RegisterFunction(BuiltinFunctions &set) {
+void AvgFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(AggregateFunction("avg", {SQLType::DOUBLE}, SQLType::DOUBLE, avg_payload_size, avg_initialize, avg_update, avg_combine, avg_finalize));
 }

@@ -60,7 +60,7 @@ static void substring_function(ExpressionExecutor &exec, Vector inputs[], index_
 	    });
 }
 
-void Substring::RegisterFunction(BuiltinFunctions &set) {
+void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction(
 		"substring",          // name of function
 		{ SQLType::VARCHAR,   // argument list

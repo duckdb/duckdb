@@ -14,7 +14,7 @@ static void acos_function(ExpressionExecutor &exec, Vector inputs[], index_t inp
 	VectorOperations::ACos(inputs[0], result);
 }
 
-void Acos::RegisterFunction(BuiltinFunctions &set) {
+void AcosFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("acos", { SQLType::DOUBLE }, SQLType::DOUBLE, acos_function));
 }
 

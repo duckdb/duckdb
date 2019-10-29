@@ -10,7 +10,7 @@ static void round_function(ExpressionExecutor &exec, Vector inputs[], index_t in
 	VectorOperations::Round(inputs[0], inputs[1], result);
 }
 
-void Round::RegisterFunction(BuiltinFunctions &set) {
+void RoundFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet round("round");
 	for(auto &type : SQLType::NUMERIC) {
 		round.AddFunction(ScalarFunction({ type, SQLType::INTEGER }, type, round_function));

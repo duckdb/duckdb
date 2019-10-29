@@ -12,7 +12,7 @@ static void ln_function(ExpressionExecutor &exec, Vector inputs[], index_t input
 	VectorOperations::Ln(inputs[0], result);
 }
 
-void Ln::RegisterFunction(BuiltinFunctions &set) {
+void LnFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("ln", { SQLType::DOUBLE }, SQLType::DOUBLE, ln_function));
 }
 

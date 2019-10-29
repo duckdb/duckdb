@@ -5,7 +5,7 @@ using namespace std;
 namespace duckdb {
 
 void BuiltinFunctions::RegisterSequenceFunctions() {
-	Register<Nextval>();
+	Register<NextvalFun>();
 }
 
 }

@@ -12,7 +12,7 @@ static void log10_function(ExpressionExecutor &exec, Vector inputs[], index_t in
 	VectorOperations::Log10(inputs[0], result);
 }
 
-void Log10::RegisterFunction(BuiltinFunctions &set) {
+void Log10Fun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction log_function("log10", { SQLType::DOUBLE }, SQLType::DOUBLE, log10_function);
 	set.AddFunction(log_function);
 	// "log" is an alias for "log10"

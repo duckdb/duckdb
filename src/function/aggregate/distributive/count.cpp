@@ -35,16 +35,16 @@ static void count_simple_update(Vector inputs[], index_t input_count, Value &res
 
 namespace duckdb {
 
-AggregateFunction Count::GetFunction() {
+AggregateFunction CountFun::GetFunction() {
 	return AggregateFunction({SQLType(SQLTypeId::ANY)}, SQLType::BIGINT, get_bigint_type_size, bigint_payload_initialize, count_update, count_combine, gather_finalize, bigint_simple_initialize, count_simple_update);
 }
 
-AggregateFunction CountStar::GetFunction() {
+AggregateFunction CountStarFun::GetFunction() {
 	return AggregateFunction("count_star", {SQLType(SQLTypeId::ANY)}, SQLType::BIGINT, get_bigint_type_size, bigint_payload_initialize, countstar_update, count_combine, gather_finalize, bigint_simple_initialize, countstar_simple_update);
 }
 
-void Count::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunction count_function = Count::GetFunction();
+void CountFun::RegisterFunction(BuiltinFunctions &set) {
+	AggregateFunction count_function = CountFun::GetFunction();
 	AggregateFunctionSet count("count");
 	count.AddFunction(count_function);
 	// the count function can also be called without arguments
@@ -53,8 +53,8 @@ void Count::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(count);
 }
 
-void CountStar::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(CountStar::GetFunction());
+void CountStarFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(CountStarFun::GetFunction());
 }
 
 } // namespace duckdb
