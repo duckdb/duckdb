@@ -13,14 +13,14 @@ static void first_update(Vector inputs[], index_t input_count, Vector &result) {
 
 namespace duckdb {
 
-AggregateFunction First::GetFunction(SQLType type) {
+AggregateFunction FirstFun::GetFunction(SQLType type) {
 	return AggregateFunction({ type }, type, get_return_type_size, null_state_initialize, first_update, nullptr, gather_finalize);
 }
 
-void First::RegisterFunction(BuiltinFunctions &set) {
+void FirstFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet first("first");
 	for(auto type : SQLType::ALL_TYPES) {
-		first.AddFunction(First::GetFunction(type));
+		first.AddFunction(FirstFun::GetFunction(type));
 	}
 	set.AddFunction(first);
 }

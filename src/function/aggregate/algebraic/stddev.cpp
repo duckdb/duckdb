@@ -130,18 +130,18 @@ static void stddevpop_finalize(Vector &state, Vector &result) {
 	});
 }
 
-void StdDevSamp::RegisterFunction(BuiltinFunctions &set) {
+void StdDevSampFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(AggregateFunction("stddev_samp", {SQLType::DOUBLE}, SQLType::DOUBLE, stddev_state_size, stddev_initialize, stddev_update, stddev_combine, stddevsamp_finalize));
 }
 
-void StdDevPop::RegisterFunction(BuiltinFunctions &set) {
+void StdDevPopFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(AggregateFunction("stddev_pop", {SQLType::DOUBLE}, SQLType::DOUBLE, stddev_state_size, stddev_initialize, stddev_update, stddev_combine, stddevpop_finalize));
 }
 
-void VarPop::RegisterFunction(BuiltinFunctions &set) {
+void VarPopFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(AggregateFunction("var_samp", {SQLType::DOUBLE}, SQLType::DOUBLE, stddev_state_size, stddev_initialize, stddev_update, stddev_combine, varsamp_finalize));
 }
 
-void VarSamp::RegisterFunction(BuiltinFunctions &set) {
+void VarSampFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(AggregateFunction("var_pop", {SQLType::DOUBLE}, SQLType::DOUBLE, stddev_state_size, stddev_initialize, stddev_update, stddev_combine, varpop_finalize));
 }

@@ -5,13 +5,12 @@
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
 unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stmt) {
 	unique_ptr<QueryNode> node;
 	switch (stmt->op) {
-	case SETOP_NONE: {
+	case postgres::SETOP_NONE: {
 		node = make_unique<SelectNode>();
 		auto result = (SelectNode *)node.get();
 		if (stmt->valuesLists) {
@@ -24,7 +23,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 		if (stmt->distinctClause != NULL) {
 			result->select_distinct = true;
 			// checks distinct on clause
-			auto target = reinterpret_cast<Node *>(stmt->distinctClause->head->data.ptr_value);
+			auto target = reinterpret_cast<postgres::Node *>(stmt->distinctClause->head->data.ptr_value);
 			if (target) {
 				//  add the columns defined in the ON clause to the select list
 				if (!TransformExpressionList(stmt->distinctClause, result->distinct_on_targets)) {
@@ -45,9 +44,9 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 		}
 		break;
 	}
-	case SETOP_UNION:
-	case SETOP_EXCEPT:
-	case SETOP_INTERSECT: {
+	case postgres::SETOP_UNION:
+	case postgres::SETOP_EXCEPT:
+	case postgres::SETOP_INTERSECT: {
 		node = make_unique<SetOperationNode>();
 		auto result = (SetOperationNode *)node.get();
 		result->left = TransformSelectNode(stmt->larg);
@@ -58,14 +57,14 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 
 		result->select_distinct = true;
 		switch (stmt->op) {
-		case SETOP_UNION:
+		case postgres::SETOP_UNION:
 			result->select_distinct = !stmt->all;
 			result->setop_type = SetOperationType::UNION;
 			break;
-		case SETOP_EXCEPT:
+		case postgres::SETOP_EXCEPT:
 			result->setop_type = SetOperationType::EXCEPT;
 			break;
-		case SETOP_INTERSECT:
+		case postgres::SETOP_INTERSECT:
 			result->setop_type = SetOperationType::INTERSECT;
 			break;
 		default:

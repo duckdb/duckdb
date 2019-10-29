@@ -32,7 +32,7 @@ static void length_function(ExpressionExecutor &exec, Vector inputs[], index_t i
 	});
 }
 
-void Length::RegisterFunction(BuiltinFunctions &set) {
+void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 	// TODO: extend to support arbitrary number of arguments, not only two
 	set.AddFunction(ScalarFunction("length", { SQLType::VARCHAR }, SQLType::BIGINT, length_function));
 }

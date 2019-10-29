@@ -13,73 +13,71 @@
 
 namespace duckdb {
 
-struct Abs {
+struct AbsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Sign {
+struct SignFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-
-struct Ceil {
+struct CeilFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Floor {
+struct FloorFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Round {
+struct RoundFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Degrees {
+struct DegreesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Radians {
+struct RadiansFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Random {
+struct RandomFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Setseed {
+struct SetseedFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Cbrt {
+struct CbrtFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Exp {
+struct ExpFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Log2 {
+struct Log2Fun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Log10 {
+struct Log10Fun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Ln {
+struct LnFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Pow {
+struct PowFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Sqrt {
+struct SqrtFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-
-struct Pi {
+struct PiFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

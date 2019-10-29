@@ -6,15 +6,15 @@ using namespace std;
 namespace duckdb {
 
 void BuiltinFunctions::RegisterAlgebraicAggregates() {
-	Register<Avg>();
+	Register<AvgFun>();
 
-	Register<CovarSamp>();
-	Register<CovarPop>();
+	Register<CovarSampFun>();
+	Register<CovarPopFun>();
 
-	Register<StdDevSamp>();
-	Register<StdDevPop>();
-	Register<VarPop>();
-	Register<VarSamp>();
+	Register<StdDevSampFun>();
+	Register<StdDevPopFun>();
+	Register<VarPopFun>();
+	Register<VarSampFun>();
 }
 
 } // namespace duckdb

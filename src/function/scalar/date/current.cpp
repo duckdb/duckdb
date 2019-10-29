@@ -40,19 +40,19 @@ static void current_timestamp_function(ExpressionExecutor &exec, Vector inputs[]
 
 }
 
-void CurrentTime::RegisterFunction(BuiltinFunctions &set) {
+void CurrentTimeFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet current_time("current_time");
 	current_time.AddFunction(ScalarFunction({}, SQLType::TIME, current_time_function));
 	set.AddFunction(current_time);
 }
 
-void CurrentDate::RegisterFunction(BuiltinFunctions &set) {
+void CurrentDateFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet current_date("current_date");
 	current_date.AddFunction(ScalarFunction({}, SQLType::DATE, current_date_function));
 	set.AddFunction(current_date);
 }
 
-void CurrentTimestamp::RegisterFunction(BuiltinFunctions &set) {
+void CurrentTimestampFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet current_timestamp("current_timestamp");
 	current_timestamp.AddFunction(ScalarFunction({}, SQLType::TIMESTAMP, current_timestamp_function));
 	set.AddFunction(current_timestamp);

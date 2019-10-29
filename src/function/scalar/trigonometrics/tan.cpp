@@ -14,7 +14,7 @@ static void tan_function(ExpressionExecutor &exec, Vector inputs[], index_t inpu
 	VectorOperations::Tan(inputs[0], result);
 }
 
-void Tan::RegisterFunction(BuiltinFunctions &set) {
+void TanFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("tan", { SQLType::DOUBLE }, SQLType::DOUBLE, tan_function));
 }
 

@@ -44,6 +44,6 @@ unique_ptr<FunctionData> setseed_bind(BoundFunctionExpression &expr, ClientConte
 	return make_unique<SetseedBindData>(context);
 }
 
-void Setseed::RegisterFunction(BuiltinFunctions &set) {
+void SetseedFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("setseed", { SQLType::DOUBLE }, SQLType::SQLNULL, setseed_function, true, setseed_bind));
 }

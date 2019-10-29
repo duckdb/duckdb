@@ -10,7 +10,7 @@ static void bitwise_and_function(ExpressionExecutor &exec, Vector inputs[], inde
 	VectorOperations::BitwiseAND(inputs[0], inputs[1], result);
 }
 
-void BitwiseAnd::RegisterFunction(BuiltinFunctions &set) {
+void BitwiseAndFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("&");
 	for(auto &type : SQLType::INTEGRAL) {
 		functions.AddFunction(ScalarFunction({ type, type }, type, bitwise_and_function));

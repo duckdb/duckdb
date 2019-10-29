@@ -4,10 +4,10 @@ using namespace duckdb;
 using namespace std;
 
 void BuiltinFunctions::RegisterDateFunctions() {
-	Register<Age>();
-	Register<DatePart>();
-	Register<Year>();
-	Register<CurrentTime>();
-	Register<CurrentDate>();
-	Register<CurrentTimestamp>();
+	Register<AgeFun>();
+	Register<DatePartFun>();
+	Register<YearFun>();
+	Register<CurrentTimeFun>();
+	Register<CurrentDateFun>();
+	Register<CurrentTimestampFun>();
 }

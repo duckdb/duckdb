@@ -8,7 +8,6 @@
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
 static string get_tablename_union(TableRef *ref) {
@@ -26,26 +25,26 @@ static string get_tablename_union(TableRef *ref) {
 	}
 }
 
-unique_ptr<TableRef> Transformer::TransformJoin(JoinExpr *root) {
+unique_ptr<TableRef> Transformer::TransformJoin(postgres::JoinExpr *root) {
 	auto result = make_unique<JoinRef>();
 	switch (root->jointype) {
-	case JOIN_INNER: {
+	case postgres::JOIN_INNER: {
 		result->type = JoinType::INNER;
 		break;
 	}
-	case JOIN_LEFT: {
+	case postgres::JOIN_LEFT: {
 		result->type = JoinType::LEFT;
 		break;
 	}
-	case JOIN_FULL: {
+	case postgres::JOIN_FULL: {
 		result->type = JoinType::OUTER;
 		break;
 	}
-	case JOIN_RIGHT: {
+	case postgres::JOIN_RIGHT: {
 		result->type = JoinType::RIGHT;
 		break;
 	}
-	case JOIN_SEMI: {
+	case postgres::JOIN_SEMI: {
 		result->type = JoinType::SEMI;
 		break;
 	}
@@ -62,8 +61,8 @@ unique_ptr<TableRef> Transformer::TransformJoin(JoinExpr *root) {
 		// usingClause is a list of strings
 		vector<string> using_column_names;
 		for (auto node = root->usingClause->head; node != nullptr; node = node->next) {
-			auto target = reinterpret_cast<Node *>(node->data.ptr_value);
-			assert(target->type == T_String);
+			auto target = reinterpret_cast<postgres::Node *>(node->data.ptr_value);
+			assert(target->type == postgres::T_String);
 			auto column_name = string(reinterpret_cast<postgres::Value *>(target)->val.str);
 			using_column_names.push_back(column_name);
 		}

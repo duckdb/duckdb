@@ -24,37 +24,37 @@ index_t get_return_type_size(TypeId return_type);
 void null_state_initialize(data_ptr_t state, TypeId return_type);
 Value null_simple_initialize();
 
-struct CountStar {
+struct CountStarFun {
 	static AggregateFunction GetFunction();
 
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Count {
+struct CountFun {
 	static AggregateFunction GetFunction();
 
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct First {
+struct FirstFun {
 	static AggregateFunction GetFunction(SQLType type);
 
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Max {
+struct MaxFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Min {
+struct MinFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Sum {
+struct SumFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct StringAgg {
+struct StringAggFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

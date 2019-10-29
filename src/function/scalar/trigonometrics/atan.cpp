@@ -14,7 +14,7 @@ static void atan_function(ExpressionExecutor &exec, Vector inputs[], index_t inp
 	VectorOperations::ATan(inputs[0], result);
 }
 
-void Atan::RegisterFunction(BuiltinFunctions &set) {
+void AtanFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("atan", { SQLType::DOUBLE }, SQLType::DOUBLE, atan_function));
 }
 

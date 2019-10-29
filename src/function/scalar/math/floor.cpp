@@ -12,7 +12,7 @@ static void floor_function(ExpressionExecutor &exec, Vector inputs[], index_t in
 	VectorOperations::Floor(inputs[0], result);
 }
 
-void Floor::RegisterFunction(BuiltinFunctions &set) {
+void FloorFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet floor("floor");
 	for(auto &type : SQLType::NUMERIC) {
 		floor.AddFunction(ScalarFunction({ type }, type, floor_function));

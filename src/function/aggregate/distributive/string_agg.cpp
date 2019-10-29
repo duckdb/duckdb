@@ -42,7 +42,7 @@ void string_agg_update(Vector inputs[], index_t input_count, Vector &state) {
     });
 }
 
-void StringAgg::RegisterFunction(BuiltinFunctions &set) {
+void StringAggFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(AggregateFunction("string_agg", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR, get_return_type_size, null_state_initialize, string_agg_update, nullptr, gather_finalize));
 }
 

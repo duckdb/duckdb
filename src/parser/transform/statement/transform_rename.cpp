@@ -2,11 +2,10 @@
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<AlterTableStatement> Transformer::TransformRename(Node *node) {
-	auto stmt = reinterpret_cast<RenameStmt *>(node);
+unique_ptr<AlterTableStatement> Transformer::TransformRename(postgres::Node *node) {
+	auto stmt = reinterpret_cast<postgres::RenameStmt *>(node);
 	assert(stmt);
 	assert(stmt->relation);
 
@@ -14,7 +13,7 @@ unique_ptr<AlterTableStatement> Transformer::TransformRename(Node *node) {
 
 	// first we check the type of ALTER
 	switch (stmt->renameType) {
-	case OBJECT_COLUMN: {
+	case postgres::OBJECT_COLUMN: {
 		// change column name
 
 		// get the table and schema
@@ -33,7 +32,7 @@ unique_ptr<AlterTableStatement> Transformer::TransformRename(Node *node) {
 		info = make_unique<RenameColumnInfo>(schema, table, old_name, new_name);
 		break;
 	}
-	case OBJECT_DATABASE:
+	case postgres::OBJECT_DATABASE:
 	default:
 		throw NotImplementedException("Schema element not supported yet!");
 	}

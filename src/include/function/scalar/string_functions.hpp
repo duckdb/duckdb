@@ -17,35 +17,35 @@ namespace re2 {
 
 namespace duckdb {
 
-struct Lower {
+struct LowerFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Upper {
+struct UpperFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Concat {
+struct ConcatFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct ConcatWS {
+struct ConcatWSFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Length {
+struct LengthFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Like {
+struct LikeFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Regexp {
+struct RegexpFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Substring {
+struct SubstringFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
