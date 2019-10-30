@@ -36,12 +36,10 @@ if(${ENABLE_SANITIZER})
 endif()
 
 if(NOT MSVC)
-  set(EXCEPTIONS_FLAG "-fexceptions -frtti")
-
   set(CMAKE_CXX_FLAGS_DEBUG
-      "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG -Wall ${M32_FLAG} ${EXCEPTIONS_FLAG}")
+      "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG -Wall ${M32_FLAG}")
   set(CMAKE_CXX_FLAGS_RELEASE
-      "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ${M32_FLAG} ${EXCEPTIONS_FLAG}")
+      "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ${M32_FLAG}")
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -g")
 
   set(
@@ -133,6 +131,6 @@ if(NOT LEAN)
   add_subdirectory(test)
   if(NOT WIN32)
     add_subdirectory(tools)
-   # add_subdirectory(benchmark)
+    add_subdirectory(benchmark)
   endif()
 endif()
