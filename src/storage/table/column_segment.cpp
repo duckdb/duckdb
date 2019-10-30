@@ -1,4 +1,5 @@
 #include "storage/table/column_segment.hpp"
+#include <cstring>
 
 using namespace duckdb;
 using namespace std;
@@ -11,5 +12,7 @@ ColumnSegment::ColumnSegment(TypeId type, ColumnSegmentType segment_type, index_
 SegmentStatistics::SegmentStatistics(TypeId type, index_t type_size) {
 	minimum = unique_ptr<data_t[]>(new data_t[type_size]);
 	maximum = unique_ptr<data_t[]>(new data_t[type_size]);
+	memset(minimum.get(), 0, type_size);
+	memset(maximum.get(), 0, type_size);
 	has_null = false;
 }
