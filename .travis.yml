@@ -90,7 +90,7 @@ matrix:
         - eval "${MATRIX_EVAL}"
       script:
         - mkdir -p build/debug
-        - (cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
+        - (cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_SANITIZER=FALSE ../.. && cmake --build .)
         - valgrind --suppressions=valgrind-suppressions ./build/debug/test/unittest
 
 
