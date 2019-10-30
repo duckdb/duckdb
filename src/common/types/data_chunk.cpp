@@ -189,10 +189,10 @@ void DataChunk::Serialize(Serializer &serializer) {
 			// strings are inlined into the blob
 			// we use null-padding to store them
 			auto strings = (const char **)data[i].data;
-			for (index_t j = 0; j < size(); j++) {
+			VectorOperations::Exec(sel_vector, size(), [&](index_t j, index_t k) {
 				auto source = strings[j] ? strings[j] : NullValue<const char *>();
 				serializer.WriteString(source);
-			}
+			});
 		}
 	}
 }

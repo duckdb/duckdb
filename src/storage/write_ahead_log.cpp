@@ -97,7 +97,6 @@ void WriteAheadLog::WriteSetTable(string &schema, string &table) {
 void WriteAheadLog::WriteInsert(DataChunk &chunk) {
 	assert(chunk.size() > 0);
 	chunk.Verify();
-	assert(!chunk.sel_vector); // "Cannot insert into WAL from chunk with SEL vector"
 
 	writer->Write<WALType>(WALType::INSERT_TUPLE);
 	chunk.Serialize(*writer);
