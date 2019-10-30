@@ -98,7 +98,7 @@ void TableDataWriter::FlushSegment(index_t col_idx) {
 		return;
 	}
 	// get the buffer of the segment and pin it
-	auto handle = manager.buffer_manager.PinBuffer(segments[col_idx]->block_id);
+	auto handle = manager.buffer_manager.Pin(segments[col_idx]->block_id);
 
 	// get a free block id to write to
 	auto block_id = manager.block_manager.GetFreeBlockId();
@@ -115,7 +115,7 @@ void TableDataWriter::FlushSegment(index_t col_idx) {
 	data_pointer.tuple_count = tuple_count;
 	data_pointers[col_idx].push_back(data_pointer);
 	// write the block to disk
-	manager.block_manager.Write(*handle->buffer, block_id);
+	manager.block_manager.Write(*handle->node, block_id);
 }
 
 void TableDataWriter::WriteDataPointers() {

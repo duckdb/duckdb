@@ -9,12 +9,12 @@ MetaBlockReader::MetaBlockReader(BufferManager &manager, block_id_t block_id)
 }
 
 void MetaBlockReader::ReadData(data_ptr_t buffer, index_t read_size) {
-	while (offset + read_size > handle->block->size) {
+	while (offset + read_size > handle->node->size) {
 		// cannot read entire entry from block
 		// first read what we can from this block
-		index_t to_read = handle->block->size - offset;
+		index_t to_read = handle->node->size - offset;
 		if (to_read > 0) {
-			memcpy(buffer, handle->block->buffer + offset, to_read);
+			memcpy(buffer, handle->node->buffer + offset, to_read);
 			read_size -= to_read;
 			buffer += to_read;
 		}
@@ -22,13 +22,13 @@ void MetaBlockReader::ReadData(data_ptr_t buffer, index_t read_size) {
 		ReadNewBlock(next_block);
 	}
 	// we have enough left in this block to read from the buffer
-	memcpy(buffer, handle->block->buffer + offset, read_size);
+	memcpy(buffer, handle->node->buffer + offset, read_size);
 	offset += read_size;
 }
 
 void MetaBlockReader::ReadNewBlock(block_id_t id) {
 	handle = manager.Pin(id);
 
-	next_block = *((block_id_t *)handle->block->buffer);
+	next_block = *((block_id_t *)handle->node->buffer);
 	offset = sizeof(block_id_t);
 }

@@ -24,7 +24,7 @@ StringSegment::StringSegment(BufferManager &manager) :
 	// we allocate one block to hold the majority of the
 	this->block_id = handle->block_id;
 
-	ExpandStringSegment(handle->buffer->buffer);
+	ExpandStringSegment(handle->node->buffer);
 }
 
 void StringSegment::ExpandStringSegment(data_ptr_t baseptr) {
@@ -55,7 +55,7 @@ void StringSegment::ExpandStringSegment(data_ptr_t baseptr) {
 //===--------------------------------------------------------------------===//
 void StringSegment::InitializeScan(ColumnScanState &state) {
 	// pin the primary buffer
-	state.primary_handle = manager.PinBuffer(block_id);
+	state.primary_handle = manager.Pin(block_id);
 }
 
 //===--------------------------------------------------------------------===//
@@ -63,13 +63,13 @@ void StringSegment::InitializeScan(ColumnScanState &state) {
 //===--------------------------------------------------------------------===//
 index_t StringSegment::FetchBaseData(ColumnScanState &state, index_t vector_index, Vector &result) {
 	// clear any previously locked buffers and get the primary buffer handle
-	auto handle = (ManagedBufferHandle*) state.primary_handle.get();
+	auto handle = state.primary_handle.get();
 	state.handles.clear();
 
 	index_t count = GetVectorCount(vector_index);
 
 	// fetch the data from the base segment
-	FetchBaseData(state, handle->buffer->buffer, vector_index, result, count);
+	FetchBaseData(state, handle->node->buffer, vector_index, result, count);
 	return count;
 }
 
@@ -78,7 +78,7 @@ index_t StringSegment::FetchBaseData(ColumnScanState &state, index_t vector_inde
 //===--------------------------------------------------------------------===//
 void StringSegment::FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *current, Vector &result, index_t count) {
 	// fetch data from updates
-	auto handle = (ManagedBufferHandle*) state.primary_handle.get();
+	auto handle = state.primary_handle.get();
 
 	auto result_data = (char**) result.data;
 	while(current) {
@@ -86,7 +86,7 @@ void StringSegment::FetchUpdateData(ColumnScanState &state, Transaction &transac
 			// these tuples were either committed AFTER this transaction started or are not committed yet, use tuples stored in this version
 			auto info_data = (string_location_t*) current->tuple_data;
 			for(index_t i = 0; i < current->N; i++) {
-				auto string = FetchString(state.handles, handle->buffer->buffer, info_data[i]);
+				auto string = FetchString(state.handles, handle->node->buffer, info_data[i]);
 				result_data[current->tuples[i]] = string.data;
 				result.nullmask[current->tuples[i]] = current->nullmask[current->tuples[i]];
 			}
@@ -211,9 +211,9 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 	assert(vector_index < max_vector_count);
 
 	// fetch a single row from the string segment
-	auto handle = manager.PinBuffer(block_id);
+	auto handle = manager.Pin(block_id);
 
-	auto baseptr = handle->buffer->buffer;
+	auto baseptr = handle->node->buffer;
 	auto base = baseptr + vector_index * vector_size;
 	auto &base_nullmask = *((nullmask_t*) base);
 	auto base_data = (int32_t *) (base + sizeof(nullmask_t));
@@ -229,7 +229,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 				auto info_data = (string_location_t*) current->tuple_data;
 				for(index_t i = 0; i < current->N; i++) {
 					if (current->tuples[i] == id_in_vector) {
-						auto string = FetchString(state.handles, handle->buffer->buffer, info_data[i]);
+						auto string = FetchString(state.handles, handle->node->buffer, info_data[i]);
 						result_data[result.count] = string.data;
 						result.nullmask[result.count] = current->nullmask[current->tuples[i]];
 					}
@@ -268,7 +268,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 //===--------------------------------------------------------------------===//
 index_t StringSegment::Append(SegmentStatistics &stats, Vector &data, index_t offset, index_t count) {
 	assert(data.type == TypeId::VARCHAR);
-	auto handle = manager.PinBuffer(block_id);
+	auto handle = manager.Pin(block_id);
 
 	index_t initial_count = tuple_count;
 	while(count > 0) {
@@ -280,7 +280,7 @@ index_t StringSegment::Append(SegmentStatistics &stats, Vector &data, index_t of
 			index_t remaining_space = BLOCK_SIZE - dictionary_offset - max_vector_count * vector_size;
 			if (remaining_space >= STANDARD_VECTOR_SIZE * 32) {
 				// we have enough remaining space to add another vector
-				ExpandStringSegment(handle->buffer->buffer);
+				ExpandStringSegment(handle->node->buffer);
 			} else {
 				break;
 			}
@@ -289,7 +289,7 @@ index_t StringSegment::Append(SegmentStatistics &stats, Vector &data, index_t of
 		index_t append_count = std::min(STANDARD_VECTOR_SIZE - current_tuple_count, count);
 
 		// now perform the actual append
-		AppendData(stats, handle->buffer->buffer + vector_size * vector_index, handle->buffer->buffer + BLOCK_SIZE, current_tuple_count, data, offset, append_count);
+		AppendData(stats, handle->node->buffer + vector_size * vector_index, handle->node->buffer + BLOCK_SIZE, current_tuple_count, data, offset, append_count);
 
 		count -= append_count;
 		offset += append_count;
@@ -352,7 +352,7 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 void StringSegment::WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) {
 	assert(strlen(string.data) == string.length);
 	uint32_t total_length = string.length + 1 + sizeof(uint32_t);
-	unique_ptr<ManagedBufferHandle> handle;
+	unique_ptr<BufferHandle> handle;
 	// check if the string fits in the current block
 	if (!head || head->offset + total_length >= head->size) {
 		// string does not fit, allocate space for it
@@ -368,14 +368,14 @@ void StringSegment::WriteString(string_t string, block_id_t &result_block, int32
 		head = move(new_block);
 	} else {
 		// string fits, copy it into the current block
-		handle = manager.PinBuffer(head->block_id);
+		handle = manager.Pin(head->block_id);
 	}
 
 	result_block = head->block_id;
 	result_offset = head->offset;
 
 	// copy the string and the length there
-	auto ptr = handle->buffer->buffer + head->offset;
+	auto ptr = handle->node->buffer + head->offset;
 	memcpy(ptr, &string.length, sizeof(uint32_t));
 	ptr += sizeof(uint32_t);
 	memcpy(ptr, string.data, string.length + 1);
@@ -388,17 +388,17 @@ string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t bloc
 		return string_t(nullptr, 0);
 	}
 	// now pin the handle, if it is not pinned yet
-	ManagedBufferHandle *handle;
+	BufferHandle *handle;
 	auto entry = handles.find(block);
 	if (entry == handles.end()) {
-		auto pinned_handle = manager.PinBuffer(block);
+		auto pinned_handle = manager.Pin(block);
 		handle = pinned_handle.get();
 
 		handles.insert(make_pair(block, move(pinned_handle)));
 	} else {
-		handle = (ManagedBufferHandle*) entry->second.get();
+		handle = entry->second.get();
 	}
-	return ReadString(handle->buffer->buffer, offset);
+	return ReadString(handle->node->buffer, offset);
 }
 
 string_t StringSegment::ReadString(data_ptr_t target, int32_t offset) {
@@ -523,8 +523,8 @@ void StringSegment::Update(DataTable &table, SegmentStatistics &stats, Transacti
 	}
 
 	// first pin the base block
-	auto handle = manager.PinBuffer(block_id);
-	auto baseptr = handle->buffer->buffer;
+	auto handle = manager.Pin(block_id);
+	auto baseptr = handle->node->buffer;
 	auto base = baseptr + vector_index * vector_size;
 	auto &base_nullmask = *((nullmask_t*) base);
 
@@ -573,8 +573,8 @@ void StringSegment::RollbackUpdate(UpdateInfo *info) {
 	auto string_locations = (string_location_t*) info->tuple_data;
 
 	// put the previous NULL values back
-	auto handle = manager.PinBuffer(block_id);
-	auto baseptr = handle->buffer->buffer;
+	auto handle = manager.Pin(block_id);
+	auto baseptr = handle->node->buffer;
 	auto base = baseptr + info->vector_index * vector_size;
 	auto &base_nullmask = *((nullmask_t*) base);
 	for(index_t i = 0; i < info->N; i++) {

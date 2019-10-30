@@ -27,15 +27,16 @@ public:
 	~BufferManager();
 
 	//! Pin a block id, returning a block handle holding a pointer to the block
-	unique_ptr<BlockHandle> Pin(block_id_t block);
+	unique_ptr<BufferHandle> Pin(block_id_t block, bool can_destroy = false);
 
 	//! Allocate a buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or not the buffer can be freely destroyed when unpinned, or whether or not it needs to be written to a temporary file so it can be reloaded.
-	unique_ptr<ManagedBufferHandle> Allocate(index_t alloc_size, bool can_destroy = false);
-	//! Pin a managed buffer handle, returning the buffer handle or nullptr if the buffer handle could not be found (because it was destroyed)
-	unique_ptr<ManagedBufferHandle> PinBuffer(block_id_t buffer_id, bool can_destroy = false);
+	unique_ptr<BufferHandle> Allocate(index_t alloc_size, bool can_destroy = false);
 	//! Destroy the managed buffer with the specified buffer_id, freeing its memory
 	void DestroyBuffer(block_id_t buffer_id);
 private:
+	unique_ptr<BufferHandle> PinBlock(block_id_t block_id);
+	unique_ptr<BufferHandle> PinBuffer(block_id_t block_id, bool can_destroy = false);
+
 	//! Unpin a block id, decreasing its reference count and potentially allowing it to be freed.
 	void Unpin(block_id_t block);
 
@@ -48,7 +49,7 @@ private:
 	//! Write a temporary buffer to disk
 	void WriteTemporaryBuffer(ManagedBuffer &buffer);
 	//! Read a temporary buffer from disk
-	unique_ptr<ManagedBufferHandle> ReadTemporaryBuffer(block_id_t id);
+	unique_ptr<BufferHandle> ReadTemporaryBuffer(block_id_t id);
 	//! Get the path of the temporary buffer
 	string GetTemporaryPath(block_id_t id);
 private:

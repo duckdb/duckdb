@@ -66,13 +66,13 @@ void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, 
 
 void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state) {
 	// scan the persistent segments
-	while (ScanBaseTable(transaction, result, state, state.current_persistent_row, state.max_persistent_row, persistent_manager)) {
+	while (ScanBaseTable(transaction, result, state, state.current_persistent_row, state.max_persistent_row, 0, persistent_manager)) {
 		if (result.size() > 0) {
 			return;
 		}
 	}
 	// scan the transient segments
-	while (ScanBaseTable(transaction, result, state, state.current_transient_row, state.max_transient_row, transient_manager)) {
+	while (ScanBaseTable(transaction, result, state, state.current_transient_row, state.max_transient_row, persistent_manager.max_row, transient_manager)) {
 		if (result.size() > 0) {
 			return;
 		}
@@ -82,7 +82,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState
 	transaction.storage.Scan(state.local_state, state.column_ids, result);
 }
 
-bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, index_t &current_row, index_t max_row, VersionManager &manager) {
+bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, index_t &current_row, index_t max_row, index_t base_row, VersionManager &manager) {
 	if (current_row >= max_row) {
 		// exceeded the amount of rows to scan
 		return false;
@@ -111,7 +111,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 			// scan row id
 			assert(result.data[i].type == TypeId::BIGINT);
 			result.data[i].count = max_count;
-			VectorOperations::GenerateSequence(result.data[i], state.max_persistent_row + state.current_transient_row);
+			VectorOperations::GenerateSequence(result.data[i], base_row + current_row);
 		} else {
 			// scan actual base column
 			columns[column].Scan(transaction, state.column_scans[i], result.data[i]);

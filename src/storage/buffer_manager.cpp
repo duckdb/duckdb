@@ -13,20 +13,27 @@ BufferManager::BufferManager(FileSystem &fs, BlockManager &manager, string tmp, 
 	}
 }
 
-
 BufferManager::~BufferManager() {
 	if (!temp_directory.empty()) {
 		fs.RemoveDirectory(temp_directory);
 	}
 }
 
-unique_ptr<BlockHandle> BufferManager::Pin(block_id_t block_id) {
+unique_ptr<BufferHandle> BufferManager::Pin(block_id_t block_id, bool can_destroy) {
+	// first obtain a lock on the set of blocks
+	lock_guard<mutex> lock(block_lock);
+	if (block_id < MAXIMUM_BLOCK) {
+		return PinBlock(block_id);
+	} else {
+		return PinBuffer(block_id, can_destroy);
+	}
+}
+
+unique_ptr<BufferHandle> BufferManager::PinBlock(block_id_t block_id) {
 	// this method should only be used to pin blocks that exist in the file
 	assert(block_id < MAXIMUM_BLOCK);
 
-	// first obtain a lock on the set of blocks
-	lock_guard<mutex> lock(block_lock);
-	// now check if the block is already loaded
+	// check if the block is already loaded
 	Block *result_block;
 	auto entry = blocks.find(block_id);
 	if (entry == blocks.end()) {
@@ -61,7 +68,8 @@ unique_ptr<BlockHandle> BufferManager::Pin(block_id_t block_id) {
 		// add one to the reference count
 		AddReference(entry->second);
 	}
-	return make_unique<BlockHandle>(*this, result_block, block_id);
+	return make_unique<BufferHandle>(*this, block_id, result_block);
+
 }
 
 void BufferManager::AddReference(BufferEntry *entry) {
@@ -122,7 +130,7 @@ unique_ptr<Block> BufferManager::EvictBlock() {
 	}
 }
 
-unique_ptr<ManagedBufferHandle> BufferManager::Allocate(index_t alloc_size, bool can_destroy) {
+unique_ptr<BufferHandle> BufferManager::Allocate(index_t alloc_size, bool can_destroy) {
 	lock_guard<mutex> lock(block_lock);
 	// first evict blocks until we have enough memory to store this buffer
 	while(current_memory + alloc_size > maximum_memory) {
@@ -138,12 +146,12 @@ unique_ptr<ManagedBufferHandle> BufferManager::Allocate(index_t alloc_size, bool
 	blocks.insert(make_pair(temp_id, buffer_entry.get()));
 	used_list.Append(move(buffer_entry));
 	// now return a handle to the entry
-	return make_unique<ManagedBufferHandle>(*this, managed_buffer, temp_id);
+	return make_unique<BufferHandle>(*this, temp_id, managed_buffer);
 }
 
-unique_ptr<ManagedBufferHandle> BufferManager::PinBuffer(block_id_t buffer_id, bool can_destroy) {
+
+unique_ptr<BufferHandle> BufferManager::PinBuffer(block_id_t buffer_id, bool can_destroy) {
 	assert(buffer_id >= MAXIMUM_BLOCK);
-	lock_guard<mutex> lock(block_lock);
 	// check if we have this buffer here
 	auto entry = blocks.find(buffer_id);
 	if (entry == blocks.end()) {
@@ -162,7 +170,7 @@ unique_ptr<ManagedBufferHandle> BufferManager::PinBuffer(block_id_t buffer_id, b
 	assert(buffer->type == FileBufferType::MANAGED_BUFFER);
 	auto managed = (ManagedBuffer*) buffer;
 	assert(managed->id == buffer_id);
-	return make_unique<ManagedBufferHandle>(*this, managed, buffer_id);
+	return make_unique<BufferHandle>(*this, buffer_id, managed);
 }
 
 void BufferManager::DestroyBuffer(block_id_t buffer_id) {
@@ -191,7 +199,7 @@ void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
 	buffer.Write(*handle, sizeof(index_t));
 }
 
-unique_ptr<ManagedBufferHandle> BufferManager::ReadTemporaryBuffer(block_id_t id) {
+unique_ptr<BufferHandle> BufferManager::ReadTemporaryBuffer(block_id_t id) {
 	if (temp_directory.empty()) {
 		throw Exception("Out-of-memory: cannot read buffer because no temporary directory is specified!\nTo enable temporary buffer eviction set a temporary directory in the configuration");
 	}
@@ -215,5 +223,5 @@ unique_ptr<ManagedBufferHandle> BufferManager::ReadTemporaryBuffer(block_id_t id
 	blocks.insert(make_pair(id, buffer_entry.get()));
 	used_list.Append(move(buffer_entry));
 	// now return a handle to the entry
-	return make_unique<ManagedBufferHandle>(*this, managed_buffer, id);
+	return make_unique<BufferHandle>(*this, id, managed_buffer);
 }

@@ -34,7 +34,7 @@ NumericSegment::NumericSegment(BufferManager &manager, TypeId type) :
 	this->block_id = handle->block_id;
 	// initialize nullmasks to 0 for all vectors
 	for(index_t i = 0; i < max_vector_count; i++) {
-		auto mask = (nullmask_t*) (handle->buffer->buffer + (i * vector_size));
+		auto mask = (nullmask_t*) (handle->node->buffer + (i * vector_size));
 		mask->reset();
 	}
 }
@@ -47,8 +47,8 @@ index_t NumericSegment::FetchBaseData(ColumnScanState &state, index_t vector_ind
 	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 
 	// pin the buffer for this segment
-	auto handle = manager.PinBuffer(block_id);
-	auto data = handle->buffer->buffer;
+	auto handle = manager.Pin(block_id);
+	auto data = handle->node->buffer;
 
 	auto offset = vector_index * vector_size;
 
@@ -69,7 +69,7 @@ void NumericSegment::FetchUpdateData(ColumnScanState &state, Transaction &transa
 //===--------------------------------------------------------------------===//
 void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) {
 	auto read_lock = lock.GetSharedLock();
-	auto handle = manager.PinBuffer(block_id);
+	auto handle = manager.Pin(block_id);
 
 	// get the vector index
 	index_t vector_index = row_id / STANDARD_VECTOR_SIZE;
@@ -77,7 +77,7 @@ void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction,
 	assert(vector_index < max_vector_count);
 
 	// first fetch the data from the base table
-	auto data = handle->buffer->buffer + vector_index * vector_size;
+	auto data = handle->node->buffer + vector_index * vector_size;
 	auto &nullmask = *((nullmask_t*) (data));
 	auto vector_ptr = data + sizeof(nullmask_t);
 
@@ -95,7 +95,7 @@ void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction,
 //===--------------------------------------------------------------------===//
 index_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, index_t offset, index_t count) {
 	assert(data.type == type);
-	auto handle = manager.PinBuffer(block_id);
+	auto handle = manager.Pin(block_id);
 
 	index_t initial_count = tuple_count;
 	while(count > 0) {
@@ -108,7 +108,7 @@ index_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, index_t o
 		index_t append_count = std::min(STANDARD_VECTOR_SIZE - current_tuple_count, count);
 
 		// now perform the actual append
-		append_function(stats, handle->buffer->buffer + vector_size * vector_index, current_tuple_count, data, offset, append_count);
+		append_function(stats, handle->node->buffer + vector_size * vector_index, current_tuple_count, data, offset, append_count);
 
 		count -= append_count;
 		offset += append_count;
@@ -122,27 +122,27 @@ index_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, index_t o
 //===--------------------------------------------------------------------===//
 void NumericSegment::Update(DataTable &table, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) {
 	if (!node) {
-		auto handle = manager.PinBuffer(block_id);
+		auto handle = manager.Pin(block_id);
 
 		// create a new node in the undo buffer for this update
 		node = CreateUpdateInfo(table, transaction, ids, update.count, vector_index, vector_offset, type_size);
 		// now move the original data into the UpdateInfo
-		update_function(stats, node, handle->buffer->buffer + vector_index * vector_size, update);
+		update_function(stats, node, handle->node->buffer + vector_index * vector_size, update);
 	} else {
 		// node already exists for this transaction, we need to merge the new updates with the existing updates
-		auto handle = manager.PinBuffer(block_id);
+		auto handle = manager.Pin(block_id);
 
-		merge_update_function(stats, node, handle->buffer->buffer + vector_index * vector_size, update, ids, vector_offset);
+		merge_update_function(stats, node, handle->node->buffer + vector_index * vector_size, update, ids, vector_offset);
 	}
 }
 
 void NumericSegment::RollbackUpdate(UpdateInfo *info) {
 	// obtain an exclusive lock
 	auto lock_handle = lock.GetExclusiveLock();
-	auto handle = manager.PinBuffer(block_id);
+	auto handle = manager.Pin(block_id);
 
 	// move the data from the UpdateInfo back into the base table
-	rollback_update(info, handle->buffer->buffer + info->vector_index * vector_size);
+	rollback_update(info, handle->node->buffer + info->vector_index * vector_size);
 
 	CleanupUpdate(info);
 }

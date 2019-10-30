@@ -12,7 +12,6 @@
 #include "common/unordered_map.hpp"
 
 namespace duckdb {
-class ManagedBufferHandle;
 class UncompressedSegment;
 class SegmentStatistics;
 

@@ -20,7 +20,7 @@ public:
 	MetaBlockReader(BufferManager &manager, block_id_t block);
 
 	BufferManager &manager;
-	unique_ptr<BlockHandle> handle;
+	unique_ptr<BufferHandle> handle;
 	index_t offset;
 	block_id_t next_block;
 
