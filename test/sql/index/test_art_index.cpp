@@ -931,6 +931,73 @@ TEST_CASE("ART Big Range", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(1500)}));
 }
 
+TEST_CASE("ART Negative Range", "[art-neg]") {
+    unique_ptr<QueryResult> result;
+    DuckDB db(nullptr);
+
+    Connection con(db);
+
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
+    index_t n = 1000;
+    auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
+    for (index_t i = 0; i < n; i++) {
+        keys[i] = i -500 ;
+    }
+
+    REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+    for (index_t i = 0; i < n; i++) {
+        REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", keys[i]));
+    }
+    REQUIRE_NO_FAIL(con.Query("COMMIT"));
+    REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
+
+    result = con.Query("SELECT sum(i) FROM integers WHERE i >= -500 AND i <= -498");
+    REQUIRE(CHECK_COLUMN(result, 0, {Value(-1497)}));
+    result = con.Query("SELECT sum(i) FROM integers WHERE i >= -10 AND i <= 5");
+    REQUIRE(CHECK_COLUMN(result, 0, {Value(-40)}));
+    result = con.Query("SELECT sum(i) FROM integers WHERE i >= 10 AND i <= 15");
+    REQUIRE(CHECK_COLUMN(result, 0, {Value(75)}));
+    REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
+    REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+}
+
+TEST_CASE("ART Floating Point", "[art-float]") {
+    unique_ptr<QueryResult> result;
+    DuckDB db(nullptr);
+
+    Connection con(db);
+
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i real)"));
+    index_t n = 5;
+    auto keys = unique_ptr<float[]>(new float[n]);
+    keys[0] = -1.7;
+    keys[1] = -3.5;
+    keys[2] = -2.2;
+    keys[3] = 5.7;
+    keys[4] = 2.9;
+    //! Insert values and create index
+    REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+    for (index_t i = 0; i < n; i++) {
+        REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES ($1)", keys[i]));
+    }
+    REQUIRE_NO_FAIL(con.Query("COMMIT"));
+    REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
+    //! Check if all elements are in
+    for (index_t i = 0; i < n; i++) {
+        result = con.Query("SELECT COUNT(*) FROM integers WHERE i = $1", keys[i]);
+        REQUIRE(CHECK_COLUMN(result, 0, {1}));
+    }
+    //! Check Ranges
+//    result = con.Query("SELECT sum(i) FROM numbers WHERE i >= -2 AND i <= 0");
+//    REQUIRE(CHECK_COLUMN(result, 0, {Value(-1.7)}));
+//    result = con.Query("SELECT sum(i) FROM integers WHERE i >= -10 AND i <= 5");
+//    REQUIRE(CHECK_COLUMN(result, 0, {Value(-40)}));
+//    result = con.Query("SELECT sum(i) FROM integers WHERE i >= 10 AND i <= 15");
+//    REQUIRE(CHECK_COLUMN(result, 0, {Value(75)}));
+    REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
+    REQUIRE_NO_FAIL(con.Query("DROP TABLE numbers"));
+}
+
 TEST_CASE("Test updates resulting from big index scans", "[art][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

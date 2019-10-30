@@ -20,6 +20,43 @@ static uint8_t FlipSign(uint8_t key_byte) {
 	return key_byte ^ 128;
 }
 
+uint32_t encode_fp32(float f){
+    uint32_t value = reinterpret_cast<uint32_t*>(&f)[0];
+
+    if(value == (1u<<31)){
+        //! transform -0 into +0
+    } else if ((value & (1u<<31)) == 0){
+        //! +0 and positive numbers
+        value |= (1<<31);
+    } else {
+        //! negative numbers
+        value = ~value;
+        //! complement 1
+    }
+
+    return value;
+}
+
+
+uint64_t encode_fp64(double f){
+    uint64_t value = reinterpret_cast<uint64_t*>(&f)[0];
+
+    if(value == (1ull<<63)){
+        //! transform -0 into +0
+        /* nop */
+    } else if (value < (1ull<<63)){
+        //! +0 and positive numbers
+        value += (1ull<<63);
+    } else {
+        //! negative numbers
+        value = ~value;
+        //! complement 1
+    }
+
+    return value;
+}
+
+
 Key::Key(unique_ptr<data_t[]> data, index_t len) : len(len), data(move(data)) {
 }
 
@@ -50,6 +87,23 @@ template <> unique_ptr<data_t[]> Key::CreateData(int64_t value, bool is_little_e
 	data[0] = FlipSign(data[0]);
 	return data;
 }
+
+template <> unique_ptr<data_t[]> Key::CreateData(float value, bool is_little_endian) {
+    value = encode_fp32(value);
+    auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
+    reinterpret_cast<uint32_t *>(data.get())[0] = is_little_endian ? BSWAP32(value) : value;
+//    data[0] = FlipSign(data[0]);
+    return data;
+}
+template <> unique_ptr<data_t[]> Key::CreateData(double value, bool is_little_endian) {
+    value = encode_fp64(value);
+    auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
+    reinterpret_cast<uint64_t *>(data.get())[0] = is_little_endian ? BSWAP64(value) : value;
+//    data[0] = FlipSign(data[0]);
+    return data;
+}
+
+
 
 template <> unique_ptr<Key> Key::CreateKey(string value, bool is_little_endian) {
 	index_t len = value.size() + 1;
