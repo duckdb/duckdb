@@ -76,6 +76,26 @@ matrix:
 
     - os: linux
       dist: xenial
+      name: GCC 9 Valgrind
+
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-9
+      env:
+        - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
+      before_install:
+        - eval "${MATRIX_EVAL}"
+      script:
+        - mkdir -p build/debug
+        - (cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
+        - valgrind ./build/debug/test/unittest "*"
+
+
+    - os: linux
+      dist: xenial
       name: GCC 9
 
       addons:
