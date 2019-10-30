@@ -123,7 +123,7 @@ matrix:
         - python tools/upload-s3.py lib-linux-i386 build/release/src/libduckdb*.so build/release/src/libduckdb*.a
 
 
-- os: linux
+    - os: linux
       dist: xenial
       name: GCC 5 (ARM64)
       arch: arm64
