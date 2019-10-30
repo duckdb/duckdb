@@ -91,7 +91,7 @@ matrix:
       script:
         - mkdir -p build/debug
         - (cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
-        - valgrind ./build/debug/test/unittest
+        - valgrind --suppressions=valgrind-suppressions ./build/debug/test/unittest
 
 
     - os: linux

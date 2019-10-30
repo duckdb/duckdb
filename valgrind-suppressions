@@ -1,0 +1,44 @@
+{
+   <atan2>
+   Memcheck:Cond
+   fun:__ieee754_atan2_fma
+   fun:atan2
+}
+
+{
+   <atan1>
+   Memcheck:Cond
+   fun:__atan_fma
+   ...
+}
+
+{
+   <cos>
+   Memcheck:Cond
+   fun:__branred
+   fun:__cos_fma
+  ...
+}
+
+{
+   <sin>
+   Memcheck:Cond
+   fun:__sin_fma
+   ...
+}
+
+
+{
+   <re2_contains>
+   Memcheck:Cond
+   fun:_ZNK3re210SparseSetTIvE8containsEi
+   ...
+}
+
+{
+   <re2_has_index>
+   Memcheck:Value8
+   fun:_ZNK3re211SparseArrayIiE9has_indexEi
+   ...
+}
+
