@@ -53,7 +53,7 @@ void StringSegment::ExpandStringSegment(data_ptr_t baseptr) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void StringSegment::InitializeScan(TransientScanState &state) {
+void StringSegment::InitializeScan(ColumnScanState &state) {
 	// pin the primary buffer
 	state.primary_handle = manager.PinBuffer(block_id);
 }
@@ -61,7 +61,7 @@ void StringSegment::InitializeScan(TransientScanState &state) {
 //===--------------------------------------------------------------------===//
 // Fetch base data
 //===--------------------------------------------------------------------===//
-index_t StringSegment::FetchBaseData(TransientScanState &state, index_t vector_index, Vector &result) {
+index_t StringSegment::FetchBaseData(ColumnScanState &state, index_t vector_index, Vector &result) {
 	// clear any previously locked buffers and get the primary buffer handle
 	auto handle = (ManagedBufferHandle*) state.primary_handle.get();
 	state.handles.clear();
@@ -76,7 +76,7 @@ index_t StringSegment::FetchBaseData(TransientScanState &state, index_t vector_i
 //===--------------------------------------------------------------------===//
 // Fetch update data
 //===--------------------------------------------------------------------===//
-void StringSegment::FetchUpdateData(TransientScanState &state, Transaction &transaction, UpdateInfo *current, Vector &result, index_t count) {
+void StringSegment::FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *current, Vector &result, index_t count) {
 	// fetch data from updates
 	auto handle = (ManagedBufferHandle*) state.primary_handle.get();
 
@@ -127,7 +127,7 @@ void StringSegment::FetchStringLocations(data_ptr_t baseptr, row_t *ids, index_t
 	}
 }
 
-void StringSegment::FetchBaseData(TransientScanState &state, data_ptr_t baseptr, index_t vector_index, Vector &result, index_t count) {
+void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, index_t vector_index, Vector &result, index_t count) {
 	auto base = baseptr + vector_index * vector_size;
 
 	auto &base_nullmask = *((nullmask_t*) base);
@@ -203,7 +203,7 @@ string_t StringSegment::FetchString(buffer_handle_set_t &handles, data_ptr_t bas
 
 }
 
-void StringSegment::FetchRow(FetchState &state, Transaction &transaction, row_t row_id, Vector &result) {
+void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) {
 	auto read_lock = lock.GetSharedLock();
 
 	index_t vector_index = row_id / STANDARD_VECTOR_SIZE;

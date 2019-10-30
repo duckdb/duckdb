@@ -16,16 +16,11 @@
 namespace duckdb {
 class TransientSegment;
 
-struct TransientAppendState {
-	//! The write lock that is held by the append
-	unique_ptr<StorageLockKey> lock;
-};
-
 struct ColumnAppendState {
 	//! The current segment of the append
 	TransientSegment *current;
-	//! The append state
-	TransientAppendState state;
+	//! The write lock that is held by the append
+	unique_ptr<StorageLockKey> lock;
 };
 
 struct TableAppendState {

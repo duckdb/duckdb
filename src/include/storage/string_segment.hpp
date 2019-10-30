@@ -48,10 +48,10 @@ public:
 	//! Blocks that hold string updates (if any)
 	unique_ptr<string_update_info_t[]> string_updates;
 public:
-	void InitializeScan(TransientScanState &state) override;
+	void InitializeScan(ColumnScanState &state) override;
 
 	//! Fetch a single value and append it to the vector
-	void FetchRow(FetchState &state, Transaction &transaction, row_t row_id, Vector &result) override;
+	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) override;
 
 	//! Append a part of a vector to the uncompressed segment with the given append state, updating the provided stats in the process. Returns the amount of tuples appended. If this is less than `count`, the uncompressed segment is full.
 	index_t Append(SegmentStatistics &stats, Vector &data, index_t offset, index_t count) override;
@@ -60,13 +60,13 @@ public:
 	void RollbackUpdate(UpdateInfo *info) override;
 protected:
 	void Update(DataTable &table, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) override;
-	index_t FetchBaseData(TransientScanState &state, index_t vector_index, Vector &result) override;
-	void FetchUpdateData(TransientScanState &state, Transaction &transaction, UpdateInfo *versions, Vector &result, index_t count) override;
+	index_t FetchBaseData(ColumnScanState &state, index_t vector_index, Vector &result) override;
+	void FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *versions, Vector &result, index_t count) override;
 private:
 	void AppendData(SegmentStatistics &stats, data_ptr_t target, data_ptr_t end, index_t target_offset, Vector &source, index_t offset, index_t count);
 
 	//! Fetch all the strings of a vector from the base table and place their locations in the result vector
-	void FetchBaseData(TransientScanState &state, data_ptr_t base_data, index_t vector_index, Vector &result, index_t count);
+	void FetchBaseData(ColumnScanState &state, data_ptr_t base_data, index_t vector_index, Vector &result, index_t count);
 
 	string_location_t FetchStringLocation(data_ptr_t baseptr, int32_t dict_offset);
 	string_t FetchString(buffer_handle_set_t &handles, data_ptr_t baseptr, string_location_t location);

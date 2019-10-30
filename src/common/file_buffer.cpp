@@ -9,6 +9,10 @@ using namespace std;
 
 FileBuffer::FileBuffer(FileBufferType type, uint64_t bufsiz) :
 	type(type) {
+	// round up to the nearest FILE_BUFFER_BLOCK_SIZE
+	if (bufsiz % FILE_BUFFER_BLOCK_SIZE != 0) {
+		bufsiz += FILE_BUFFER_BLOCK_SIZE - (bufsiz % FILE_BUFFER_BLOCK_SIZE);
+	}
 	assert(bufsiz % FILE_BUFFER_BLOCK_SIZE == 0);
 	assert(bufsiz >= FILE_BUFFER_BLOCK_SIZE);
 	// we add (FILE_BUFFER_BLOCK_SIZE - 1) to ensure that we can align the buffer to FILE_BUFFER_BLOCK_SIZE

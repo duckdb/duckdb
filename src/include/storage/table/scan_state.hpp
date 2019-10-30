@@ -30,9 +30,9 @@ struct IndexScanState {
 
 typedef unordered_map<block_id_t, unique_ptr<BufferHandle>> buffer_handle_set_t;
 
-struct TransientScanState {
-	//! The transient segment that is currently being scanned
-	TransientSegment *transient;
+struct ColumnScanState {
+	//! The column segment that is currently being scanned
+	ColumnSegment *current;
 	//! The vector index of the transient segment
 	index_t vector_index;
 	//! The primary buffer handle
@@ -41,9 +41,12 @@ struct TransientScanState {
 	buffer_handle_set_t handles;
 	//! The locks that are held during the scan, only used by the index scan
 	vector<unique_ptr<StorageLockKey>> locks;
+public:
+	//! Move on to the next vector in the scan
+	void Next();
 };
 
-struct FetchState {
+struct ColumnFetchState {
 	//! The set of pinned block handles for this set of fetches
 	buffer_handle_set_t handles;
 };
@@ -64,7 +67,7 @@ struct TableScanState {
 
 	index_t current_persistent_row, max_persistent_row;
 	index_t current_transient_row, max_transient_row;
-	unique_ptr<TransientScanState[]> transient_states;
+	unique_ptr<ColumnScanState[]> column_scans;
 	index_t offset;
 	sel_t sel_vector[STANDARD_VECTOR_SIZE];
 	vector<column_t> column_ids;
@@ -79,7 +82,7 @@ struct CreateIndexScanState : public TableScanState {
 struct TableIndexScanState {
 	Index *index;
 	unique_ptr<IndexScanState> index_state;
-	FetchState fetch_state;
+	ColumnFetchState fetch_state;
 	LocalScanState local_state;
 	vector<column_t> column_ids;
 };

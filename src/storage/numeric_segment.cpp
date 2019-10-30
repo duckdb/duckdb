@@ -42,7 +42,7 @@ NumericSegment::NumericSegment(BufferManager &manager, TypeId type) :
 //===--------------------------------------------------------------------===//
 // Fetch base data
 //===--------------------------------------------------------------------===//
-index_t NumericSegment::FetchBaseData(TransientScanState &state, index_t vector_index, Vector &result) {
+index_t NumericSegment::FetchBaseData(ColumnScanState &state, index_t vector_index, Vector &result) {
 	assert(vector_index < max_vector_count);
 	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 
@@ -60,14 +60,14 @@ index_t NumericSegment::FetchBaseData(TransientScanState &state, index_t vector_
 	return count;
 }
 
-void NumericSegment::FetchUpdateData(TransientScanState &state, Transaction &transaction, UpdateInfo *version, Vector &result, index_t count) {
+void NumericSegment::FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *version, Vector &result, index_t count) {
 	fetch_from_update_info(transaction, version, result, count);
 }
 
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void NumericSegment::FetchRow(FetchState &state, Transaction &transaction, row_t row_id, Vector &result) {
+void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) {
 	auto read_lock = lock.GetSharedLock();
 	auto handle = manager.PinBuffer(block_id);
 

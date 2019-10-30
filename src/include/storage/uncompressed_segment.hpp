@@ -17,7 +17,7 @@ namespace duckdb {
 class BufferManager;
 class Transaction;
 
-struct TransientAppendState;
+struct ColumnAppendState;
 struct UpdateInfo;
 
 //! An uncompressed segment represents an uncompressed segment of a column residing in a block
@@ -42,16 +42,16 @@ public:
 	//! The lock for the uncompressed segment
 	StorageLock lock;
 public:
-	virtual void InitializeScan(TransientScanState &state) {}
+	virtual void InitializeScan(ColumnScanState &state) {}
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, storing it in the result vector
-	void Scan(Transaction &transaction, TransientScanState &state, index_t vector_index, Vector &result);
+	void Scan(Transaction &transaction, ColumnScanState &state, index_t vector_index, Vector &result);
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, throwing an exception if there are any outstanding updates
-	void IndexScan(TransientScanState &state, index_t vector_index, Vector &result);
+	void IndexScan(ColumnScanState &state, index_t vector_index, Vector &result);
 
 	//! Fetch a single vector from the base table
-	void Fetch(TransientScanState &state, index_t vector_index, Vector &result);
+	void Fetch(ColumnScanState &state, index_t vector_index, Vector &result);
 	//! Fetch a single value and append it to the vector
-	virtual void FetchRow(FetchState &state, Transaction &transaction, row_t row_id, Vector &result) = 0;
+	virtual void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) = 0;
 
 	//! Append a part of a vector to the uncompressed segment with the given append state, updating the provided stats in the process. Returns the amount of tuples appended. If this is less than `count`, the uncompressed segment is full.
 	virtual index_t Append(SegmentStatistics &stats, Vector &data, index_t offset, index_t count) = 0;
@@ -73,9 +73,9 @@ public:
 protected:
 	virtual void Update(DataTable &table, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) = 0;
 	//! Fetch base table data
-	virtual index_t FetchBaseData(TransientScanState &state, index_t vector_index, Vector &result) = 0;
+	virtual index_t FetchBaseData(ColumnScanState &state, index_t vector_index, Vector &result) = 0;
 	//! Fetch update data from an UpdateInfo version
-	virtual void FetchUpdateData(TransientScanState &state, Transaction &transaction, UpdateInfo *version, Vector &result, index_t count) = 0;
+	virtual void FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *version, Vector &result, index_t count) = 0;
 
 	UpdateInfo *CreateUpdateInfo(DataTable &table, Transaction &transaction, row_t *ids, index_t count, index_t vector_index, index_t vector_offset, index_t type_size);
 };

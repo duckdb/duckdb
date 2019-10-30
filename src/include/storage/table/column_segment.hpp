@@ -16,18 +16,16 @@
 namespace duckdb {
 class BlockManager;
 class ColumnSegment;
+class DataTable;
+class Transaction;
+
+struct ColumnFetchState;
+struct ColumnScanState;
 
 enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 
-//! The ColumnPointer is a class used for scanning ColumnSegments
-struct ColumnPointer {
-	//! The column segment
-	ColumnSegment *segment;
-	//! The offset inside the column segment
-	index_t offset;
-};
-
-struct SegmentStatistics {
+class SegmentStatistics {
+public:
 	SegmentStatistics(TypeId type, index_t type_size);
 
 	//! The minimum value of the segment
@@ -54,6 +52,20 @@ public:
 	ColumnSegmentType segment_type;
 	//! The statistics for the segment
 	SegmentStatistics stats;
+public:
+	virtual void InitializeScan(ColumnScanState &state) = 0;
+	//! Scan one vector from this segment
+	virtual void Scan(Transaction &transaction, ColumnScanState &state, index_t vector_index, Vector &result) = 0;
+	//! Scan one vector from this segment, throwing an exception if there are any outstanding updates
+	virtual void IndexScan(ColumnScanState &state, Vector &result) = 0;
+
+	//! Fetch the base table vector index that belongs to this row
+	virtual void Fetch(ColumnScanState &state, index_t vector_index, Vector &result) = 0;
+	//! Fetch a value of the specific row id and append it to the result
+	virtual void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) = 0;
+
+	//! Perform an update within the segment
+	virtual void Update(DataTable &table, Transaction &transaction, Vector &updates, row_t *ids) = 0;
 };
 
 } // namespace duckdb

@@ -20,7 +20,7 @@ public:
 	index_t type_size;
 public:
 	//! Fetch a single value and append it to the vector
-	void FetchRow(FetchState &state, Transaction &transaction, row_t row_id, Vector &result) override;
+	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) override;
 
 	//! Append a part of a vector to the uncompressed segment with the given append state, updating the provided stats in the process. Returns the amount of tuples appended. If this is less than `count`, the uncompressed segment is full.
 	index_t Append(SegmentStatistics &stats, Vector &data, index_t offset, index_t count) override;
@@ -30,8 +30,8 @@ public:
 protected:
 	void Update(DataTable &table, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) override;
 
-	index_t FetchBaseData(TransientScanState &state, index_t vector_index, Vector &result) override;
-	void FetchUpdateData(TransientScanState &state, Transaction &transaction, UpdateInfo *versions, Vector &result, index_t count) override;
+	index_t FetchBaseData(ColumnScanState &state, index_t vector_index, Vector &result) override;
+	void FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *versions, Vector &result, index_t count) override;
 public:
 	typedef void (*append_function_t)(SegmentStatistics &stats, data_ptr_t target, index_t target_offset, Vector &source, index_t offset, index_t count);
 	typedef void (*update_function_t)(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t base_data, Vector &update);

@@ -16,10 +16,6 @@
 
 namespace duckdb {
 
-class PersistentScanState {
-
-};
-
 class PersistentSegment : public ColumnSegment {
 public:
 	PersistentSegment(BufferManager &manager, block_id_t id, index_t offset, TypeId type, index_t start, index_t count);
@@ -30,23 +26,20 @@ public:
 	block_id_t block_id;
 	//! The offset into the block
 	index_t offset;
-// public:
-// 	void InitializeScan(ColumnPointer &pointer);
-// 	void Scan(ColumnPointer &pointer, Vector &result, index_t count);
-// 	void Fetch(Vector &result, index_t row_id);
-// private:
-// 	//! Lock for big strings
-// 	std::mutex big_string_lock;
-// 	//! Big string map
-// 	unordered_map<block_id_t, block_id_t> big_strings;
+public:
+	void InitializeScan(ColumnScanState &state) override;
+	//! Scan one vector from this transient segment
+	void Scan(Transaction &transaction, ColumnScanState &state, index_t vector_index, Vector &result) override;
+	//! Scan one vector from this transient segment, throwing an exception if there are any outstanding updates
+	void IndexScan(ColumnScanState &state, Vector &result) override;
 
-// 	Block *PinHandle(ColumnPointer &pointer);
+	//! Fetch the base table vector index that belongs to this row
+	void Fetch(ColumnScanState &state, index_t vector_index, Vector &result) override;
+	//! Fetch a value of the specific row id and append it to the result
+	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) override;
 
-// 	void AppendFromStorage(ColumnPointer &pointer, Block *block, Vector &source, Vector &target, bool has_null);
-
-// 	template <bool HAS_NULL> void AppendStrings(ColumnPointer &pointer, Block *block, Vector &source, Vector &target);
-
-// 	const char *GetBigString(ColumnPointer &pointer, block_id_t block);
+	//! Perform an update within the segment
+	void Update(DataTable &table, Transaction &transaction, Vector &updates, row_t *ids) override;
 };
 
 } // namespace duckdb

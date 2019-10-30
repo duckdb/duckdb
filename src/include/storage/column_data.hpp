@@ -28,21 +28,17 @@ public:
 	TypeId type;
 	//! The table of the column
 	DataTable *table;
-	//! The persistent data of the column
-	SegmentTree persistent;
-	//! The transient data of the column
-	SegmentTree transient;
+	//! The segments holding the data of the column
+	SegmentTree data;
 	//! The amount of persistent rows
 	index_t persistent_rows;
 public:
 	//! Initialize a scan of the column
-	void InitializeTransientScan(TransientScanState &state);
-	//! Scan the next vector from the transient part of the column
-	void TransientScan(Transaction &transaction, TransientScanState &state, Vector &result);
-	//! Scan the next vector from the transient part of the column, throwing an exception if there are any outstanding updates
-	void IndexScan(TransientScanState &state, Vector &result);
-	//! Skip a single vector in the transient scan, moving on to the next one
-	void SkipTransientScan(TransientScanState &state);
+	void InitializeScan(ColumnScanState &state);
+	//! Scan the next vector from the column
+	void Scan(Transaction &transaction, ColumnScanState &state, Vector &result);
+	//! Scan the next vector from the column, throwing an exception if there are any outstanding updates
+	void IndexScan(ColumnScanState &state, Vector &result);
 
 	//! Initialize an appending phase for this column
 	void InitializeAppend(ColumnAppendState &state);
@@ -53,9 +49,9 @@ public:
 	void Update(Transaction &transaction, Vector &updates, row_t *ids);
 
 	//! Fetch the vector from the column data that belongs to this specific row
-	void Fetch(TransientScanState &state, row_t row_id, Vector &result);
+	void Fetch(ColumnScanState &state, row_t row_id, Vector &result);
 	//! Fetch a specific row id and append it to the vector
-	void FetchRow(FetchState &state, Transaction &transaction, row_t row_id, Vector &result);
+	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result);
 private:
 	//! Append a transient segment
 	void AppendTransientSegment(index_t start_row);

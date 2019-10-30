@@ -14,7 +14,7 @@
 namespace duckdb {
 class ManagedBufferHandle;
 class UncompressedSegment;
-struct SegmentStatistics;
+class SegmentStatistics;
 
 //! The table data writer is responsible for writing the data of a table to the block manager
 class TableDataWriter {

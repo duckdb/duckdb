@@ -17,23 +17,23 @@ TransientSegment::TransientSegment(BufferManager &manager, TypeId type, index_t 
 	}
 }
 
-void TransientSegment::InitializeScan(TransientScanState &state) {
+void TransientSegment::InitializeScan(ColumnScanState &state) {
 	data->InitializeScan(state);
 }
 
-void TransientSegment::Scan(Transaction &transaction, TransientScanState &state, index_t vector_index, Vector &result) {
+void TransientSegment::Scan(Transaction &transaction, ColumnScanState &state, index_t vector_index, Vector &result) {
 	data->Scan(transaction, state, vector_index, result);
 }
 
-void TransientSegment::IndexScan(TransientScanState &state, Vector &result) {
+void TransientSegment::IndexScan(ColumnScanState &state, Vector &result) {
 	data->IndexScan(state, state.vector_index, result);
 }
 
-void TransientSegment::InitializeAppend(TransientAppendState &state) {
+void TransientSegment::InitializeAppend(ColumnAppendState &state) {
 	state.lock = data->lock.GetExclusiveLock();
 }
 
-index_t TransientSegment::Append(TransientAppendState &state, Vector &append_data, index_t offset, index_t count) {
+index_t TransientSegment::Append(ColumnAppendState &state, Vector &append_data, index_t offset, index_t count) {
 	index_t appended = data->Append(stats, append_data, offset, count);
 	this->count += appended;
 	return appended;
@@ -43,10 +43,10 @@ void TransientSegment::Update(DataTable &table, Transaction &transaction, Vector
 	data->Update(table, stats, transaction, updates, ids, this->start);
 }
 
-void TransientSegment::Fetch(TransientScanState &state, index_t vector_index, Vector &result) {
+void TransientSegment::Fetch(ColumnScanState &state, index_t vector_index, Vector &result) {
 	data->Fetch(state, vector_index, result);
 }
 
-void TransientSegment::FetchRow(FetchState &state, Transaction &transaction, row_t row_id, Vector &result) {
+void TransientSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) {
 	data->FetchRow(state, transaction, row_id - this->start, result);
 }

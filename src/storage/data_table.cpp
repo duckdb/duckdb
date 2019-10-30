@@ -43,11 +43,11 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 //===--------------------------------------------------------------------===//
 void DataTable::InitializeScan(TableScanState &state, vector<column_t> column_ids) {
 	// initialize a column scan state for each column
-	state.transient_states = unique_ptr<TransientScanState[]>(new TransientScanState[column_ids.size()]);
+	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
 	for(index_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
 		if (column != COLUMN_IDENTIFIER_ROW_ID) {
-			columns[column].InitializeTransientScan(state.transient_states[i]);
+			columns[column].InitializeScan(state.column_scans[i]);
 		}
 	}
 	state.column_ids = move(column_ids);
@@ -66,81 +66,63 @@ void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, 
 
 void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state) {
 	// scan the persistent segments
-	while (state.current_persistent_row < state.max_persistent_row) {
-		throw Exception("FIXME: scan persistent data");
-		// index_t max_count = std::min((index_t) STANDARD_VECTOR_SIZE, state.max_persistent_row - state.current_persistent_row);
-		// index_t vector_offset = state.current_persistent_row / STANDARD_VECTOR_SIZE;
-		// // first scan the version chunk manager to figure out which tuples to load for this transaction
-		// index_t count = persistent_manager.GetSelVector(transaction, vector_offset, state.sel_vector, max_count);
-		// if (count == 0) {
-		// 	throw Exception("FIXME: skip empty block");
-		// 	// FIXME:
-		// 	continue;
-		// }
-
-		// sel_t *sel_vector = count == max_count ? nullptr : state.sel_vector;
-		// // now scan the base columns to fetch the actual data
-		// for(index_t i = 0; i < state.column_ids.size(); i++) {
-		// 	auto column = state.column_ids[i];
-		// 	if (column == COLUMN_IDENTIFIER_ROW_ID) {
-		// 		// scan row id
-		// 		assert(result.data[i].type == TypeId::BIGINT);
-		// 		result.data[i].count = max_count;
-		// 		VectorOperations::GenerateSequence(result.data[i], state.current_persistent_row);
-		// 	} else {
-		// 		// scan actual base column
-		// 		columns[column].Scan(transaction, result.data[i], state.column_scans[i], max_count);
-		// 	}
-		// 	result.data[i].sel_vector = sel_vector;
-		// 	result.data[i].count = count;
-		// }
-		// result.sel_vector = sel_vector;
-
-		// state.current_persistent_row += STANDARD_VECTOR_SIZE;
-		// return;
+	while (ScanBaseTable(transaction, result, state, state.current_persistent_row, state.max_persistent_row, persistent_manager)) {
+		if (result.size() > 0) {
+			return;
+		}
 	}
 	// scan the transient segments
-	while (state.current_transient_row < state.max_transient_row) {
-		index_t max_count = std::min((index_t) STANDARD_VECTOR_SIZE, state.max_transient_row - state.current_transient_row);
-		index_t vector_offset = state.current_transient_row / STANDARD_VECTOR_SIZE;
-		// first scan the version chunk manager to figure out which tuples to load for this transaction
-		index_t count = transient_manager.GetSelVector(transaction, vector_offset, state.sel_vector, max_count);
-		if (count == 0) {
-			// nothing to scan for this vector, skip the entire vector
-			for(index_t i = 0; i < state.column_ids.size(); i++) {
-				auto column = state.column_ids[i];
-				if (column != COLUMN_IDENTIFIER_ROW_ID) {
-					columns[column].SkipTransientScan(state.transient_states[i]);
-				}
-			}
-			state.current_transient_row += STANDARD_VECTOR_SIZE;
-			continue;
+	while (ScanBaseTable(transaction, result, state, state.current_transient_row, state.max_transient_row, transient_manager)) {
+		if (result.size() > 0) {
+			return;
 		}
-
-		sel_t *sel_vector = count == max_count ? nullptr : state.sel_vector;
-		// now scan the base columns to fetch the actual data
-		for(index_t i = 0; i < state.column_ids.size(); i++) {
-			auto column = state.column_ids[i];
-			if (column == COLUMN_IDENTIFIER_ROW_ID) {
-				// scan row id
-				assert(result.data[i].type == TypeId::BIGINT);
-				result.data[i].count = max_count;
-				VectorOperations::GenerateSequence(result.data[i], state.max_persistent_row + state.current_transient_row);
-			} else {
-				// scan actual base column
-				columns[column].TransientScan(transaction, state.transient_states[i], result.data[i]);
-			}
-			result.data[i].sel_vector = sel_vector;
-			result.data[i].count = count;
-		}
-		result.sel_vector = sel_vector;
-
-		state.current_transient_row += STANDARD_VECTOR_SIZE;
-		return;
 	}
 
 	// scan the transaction-local segments
 	transaction.storage.Scan(state.local_state, state.column_ids, result);
+}
+
+bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, index_t &current_row, index_t max_row, VersionManager &manager) {
+	if (current_row >= max_row) {
+		// exceeded the amount of rows to scan
+		return false;
+	}
+	index_t max_count = std::min((index_t) STANDARD_VECTOR_SIZE, max_row - state.current_transient_row);
+	index_t vector_offset = current_row / STANDARD_VECTOR_SIZE;
+	// first scan the version chunk manager to figure out which tuples to load for this transaction
+	index_t count = manager.GetSelVector(transaction, vector_offset, state.sel_vector, max_count);
+	if (count == 0) {
+		// nothing to scan for this vector, skip the entire vector
+		for(index_t i = 0; i < state.column_ids.size(); i++) {
+			auto column = state.column_ids[i];
+			if (column != COLUMN_IDENTIFIER_ROW_ID) {
+				state.column_scans[i].Next();
+			}
+		}
+		current_row += STANDARD_VECTOR_SIZE;
+		return true;
+	}
+
+	sel_t *sel_vector = count == max_count ? nullptr : state.sel_vector;
+	// now scan the base columns to fetch the actual data
+	for(index_t i = 0; i < state.column_ids.size(); i++) {
+		auto column = state.column_ids[i];
+		if (column == COLUMN_IDENTIFIER_ROW_ID) {
+			// scan row id
+			assert(result.data[i].type == TypeId::BIGINT);
+			result.data[i].count = max_count;
+			VectorOperations::GenerateSequence(result.data[i], state.max_persistent_row + state.current_transient_row);
+		} else {
+			// scan actual base column
+			columns[column].Scan(transaction, state.column_scans[i], result.data[i]);
+		}
+		result.data[i].sel_vector = sel_vector;
+		result.data[i].count = count;
+	}
+	result.sel_vector = sel_vector;
+
+	current_row += STANDARD_VECTOR_SIZE;
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
@@ -417,7 +399,7 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers) {
 	DataChunk result;
 	result.Initialize(types);
 	// FIXME: we do not need to fetch all columns, only the columns required by the indices!
-	auto states = unique_ptr<TransientScanState[]>(new TransientScanState[types.size()]);
+	auto states = unique_ptr<ColumnScanState[]>(new ColumnScanState[types.size()]);
 	for(index_t i = 0; i < types.size(); i++) {
 		columns[i].Fetch(states[i], row_ids[0], result.data[i]);
 		result.data[i].count = row_identifiers.count;
@@ -600,7 +582,7 @@ void DataTable::CreateIndexScan(CreateIndexScanState &state, DataChunk &result) 
 				VectorOperations::GenerateSequence(result.data[i], state.max_persistent_row + state.current_transient_row);
 			} else {
 				// scan actual base column
-				columns[column].IndexScan(state.transient_states[i], result.data[i]);
+				columns[column].IndexScan(state.column_scans[i], result.data[i]);
 			}
 			result.data[i].count = count;
 		}

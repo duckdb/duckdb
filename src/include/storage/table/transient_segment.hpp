@@ -14,7 +14,7 @@
 #include "storage/uncompressed_segment.hpp"
 
 namespace duckdb {
-struct TransientAppendState;
+struct ColumnAppendState;
 
 class TransientSegment : public ColumnSegment {
 public:
@@ -24,24 +24,24 @@ public:
 	//! The uncompressed segment holding the data
 	unique_ptr<UncompressedSegment> data;
 public:
-	void InitializeScan(TransientScanState &state);
+	void InitializeScan(ColumnScanState &state) override;
 	//! Scan one vector from this transient segment
-	void Scan(Transaction &transaction, TransientScanState &state, index_t vector_index, Vector &result);
+	void Scan(Transaction &transaction, ColumnScanState &state, index_t vector_index, Vector &result) override;
 	//! Scan one vector from this transient segment, throwing an exception if there are any outstanding updates
-	void IndexScan(TransientScanState &state, Vector &result);
+	void IndexScan(ColumnScanState &state, Vector &result) override;
 
 	//! Fetch the base table vector index that belongs to this row
-	void Fetch(TransientScanState &state, index_t vector_index, Vector &result);
+	void Fetch(ColumnScanState &state, index_t vector_index, Vector &result) override;
 	//! Fetch a value of the specific row id and append it to the result
-	void FetchRow(FetchState &state, Transaction &transaction, row_t row_id, Vector &result);
-
-	//! Initialize an append of this transient segment
-	void InitializeAppend(TransientAppendState &state);
-	//! Appends a (part of) vector to the transient segment, returns the amount of entries successfully appended
-	index_t Append(TransientAppendState &state, Vector &data, index_t offset, index_t count);
+	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) override;
 
 	//! Perform an update within the transient segment
-	void Update(DataTable &table, Transaction &transaction, Vector &updates, row_t *ids);
+	void Update(DataTable &table, Transaction &transaction, Vector &updates, row_t *ids) override;
+
+	//! Initialize an append of this transient segment
+	void InitializeAppend(ColumnAppendState &state);
+	//! Appends a (part of) vector to the transient segment, returns the amount of entries successfully appended
+	index_t Append(ColumnAppendState &state, Vector &data, index_t offset, index_t count);
 };
 
 } // namespace duckdb

@@ -100,7 +100,7 @@ UpdateInfo *UncompressedSegment::CreateUpdateInfo(DataTable &table, Transaction 
 	return node;
 }
 
-void UncompressedSegment::Fetch(TransientScanState &state, index_t vector_index, Vector &result) {
+void UncompressedSegment::Fetch(ColumnScanState &state, index_t vector_index, Vector &result) {
 	auto read_lock = lock.GetSharedLock();
 	assert(!versions);
 
@@ -111,7 +111,7 @@ void UncompressedSegment::Fetch(TransientScanState &state, index_t vector_index,
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void UncompressedSegment::Scan(Transaction &transaction, TransientScanState &state, index_t vector_index, Vector &result) {
+void UncompressedSegment::Scan(Transaction &transaction, ColumnScanState &state, index_t vector_index, Vector &result) {
 	auto read_lock = lock.GetSharedLock();
 
 	// first fetch the data from the base table
@@ -122,7 +122,7 @@ void UncompressedSegment::Scan(Transaction &transaction, TransientScanState &sta
 	}
 }
 
-void UncompressedSegment::IndexScan(TransientScanState &state, index_t vector_index, Vector &result) {
+void UncompressedSegment::IndexScan(ColumnScanState &state, index_t vector_index, Vector &result) {
 	if (vector_index == 0) {
 		// vector_index = 0, obtain a shared lock on the segment that we keep until the index scan is complete
 		state.locks.push_back(lock.GetSharedLock());
