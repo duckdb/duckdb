@@ -28,7 +28,7 @@ public:
 	void Read(Block &block) override {
 		throw Exception("Cannot perform IO in in-memory database!");
 	}
-	void Write(Block &block) override {
+	void Write(FileBuffer &block, block_id_t block_id) override {
 		throw Exception("Cannot perform IO in in-memory database!");
 	}
 	void WriteHeader(DatabaseHeader header) override {

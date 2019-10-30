@@ -54,7 +54,7 @@ public:
 	void FetchRow(FetchState &state, Transaction &transaction, row_t row_id, Vector &result) override;
 
 	//! Append a part of a vector to the uncompressed segment with the given append state, updating the provided stats in the process. Returns the amount of tuples appended. If this is less than `count`, the uncompressed segment is full.
-	index_t Append(SegmentStatistics &stats, TransientAppendState &state, Vector &data, index_t offset, index_t count) override;
+	index_t Append(SegmentStatistics &stats, Vector &data, index_t offset, index_t count) override;
 
 	//! Rollback a previous update
 	void RollbackUpdate(UpdateInfo *info) override;

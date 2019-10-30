@@ -19,7 +19,7 @@
 
 namespace duckdb {
 
-//! The buffer manager is a
+//! The buffer manager is in charge of handling memory management for the database. It hands out memory buffers that can be used by the database internally.
 class BufferManager {
 	friend class BufferHandle;
 public:

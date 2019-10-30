@@ -33,7 +33,7 @@ public:
 	//! Read the content of the block from disk
 	void Read(Block &block) override;
 	//! Write the given block to disk
-	void Write(Block &block) override;
+	void Write(FileBuffer &block, block_id_t block_id) override;
 	//! Write the header to disk, this is the final step of the checkpointing process
 	void WriteHeader(DatabaseHeader header) override;
 

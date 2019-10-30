@@ -8,7 +8,7 @@ using namespace std;
 
 SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool read_only, bool create_new,
                                                bool use_direct_io)
-    : path(path), header_buffer(HEADER_SIZE), read_only(read_only), use_direct_io(use_direct_io) {
+    : path(path), header_buffer(FileBufferType::MANAGED_BUFFER, HEADER_SIZE), read_only(read_only), use_direct_io(use_direct_io) {
 
 	uint8_t flags;
 	FileLockType lock;
@@ -136,9 +136,9 @@ void SingleFileBlockManager::Read(Block &block) {
 	block.Read(*handle, BLOCK_START + block.id * BLOCK_SIZE);
 }
 
-void SingleFileBlockManager::Write(Block &block) {
-	assert(block.id >= 0);
-	block.Write(*handle, BLOCK_START + block.id * BLOCK_SIZE);
+void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
+	assert(block_id >= 0);
+	buffer.Write(*handle, BLOCK_START + block_id * BLOCK_SIZE);
 }
 
 void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {

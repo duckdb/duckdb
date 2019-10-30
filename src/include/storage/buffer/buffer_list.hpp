@@ -8,16 +8,16 @@
 
 #pragma once
 
-#include "common/buffer.hpp"
+#include "common/file_buffer.hpp"
 
 namespace duckdb {
 
 struct BufferEntry {
-	BufferEntry(unique_ptr<Buffer> buffer) :
+	BufferEntry(unique_ptr<FileBuffer> buffer) :
 		buffer(move(buffer)), ref_count(1), prev(nullptr) { }
 
 	//! The actual buffer
-	unique_ptr<Buffer> buffer;
+	unique_ptr<FileBuffer> buffer;
 	//! The amount of references to this entry
 	index_t ref_count;
 	//! Next node

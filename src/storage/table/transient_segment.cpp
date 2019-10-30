@@ -34,7 +34,7 @@ void TransientSegment::InitializeAppend(TransientAppendState &state) {
 }
 
 index_t TransientSegment::Append(TransientAppendState &state, Vector &append_data, index_t offset, index_t count) {
-	index_t appended = data->Append(stats, state, append_data, offset, count);
+	index_t appended = data->Append(stats, append_data, offset, count);
 	this->count += appended;
 	return appended;
 }

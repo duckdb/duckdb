@@ -20,11 +20,11 @@ StringSegment::StringSegment(BufferManager &manager) :
 	this->vector_size = STANDARD_VECTOR_SIZE * sizeof(int32_t) + sizeof(nullmask_t);
 	this->string_updates = nullptr;
 
-	// we allocate one block to hold the majority of the
 	auto handle = manager.Allocate(BLOCK_SIZE);
+	// we allocate one block to hold the majority of the
 	this->block_id = handle->block_id;
 
-	ExpandStringSegment(handle->buffer->data.get());
+	ExpandStringSegment(handle->buffer->buffer);
 }
 
 void StringSegment::ExpandStringSegment(data_ptr_t baseptr) {
@@ -69,7 +69,7 @@ index_t StringSegment::FetchBaseData(TransientScanState &state, index_t vector_i
 	index_t count = GetVectorCount(vector_index);
 
 	// fetch the data from the base segment
-	FetchBaseData(state, handle->buffer->data.get(), vector_index, result, count);
+	FetchBaseData(state, handle->buffer->buffer, vector_index, result, count);
 	return count;
 }
 
@@ -86,7 +86,7 @@ void StringSegment::FetchUpdateData(TransientScanState &state, Transaction &tran
 			// these tuples were either committed AFTER this transaction started or are not committed yet, use tuples stored in this version
 			auto info_data = (string_location_t*) current->tuple_data;
 			for(index_t i = 0; i < current->N; i++) {
-				auto string = FetchString(state.handles, handle->buffer->data.get(), info_data[i]);
+				auto string = FetchString(state.handles, handle->buffer->buffer, info_data[i]);
 				result_data[current->tuples[i]] = string.data;
 				result.nullmask[current->tuples[i]] = current->nullmask[current->tuples[i]];
 			}
@@ -213,7 +213,7 @@ void StringSegment::FetchRow(FetchState &state, Transaction &transaction, row_t 
 	// fetch a single row from the string segment
 	auto handle = manager.PinBuffer(block_id);
 
-	auto baseptr = handle->buffer->data.get();
+	auto baseptr = handle->buffer->buffer;
 	auto base = baseptr + vector_index * vector_size;
 	auto &base_nullmask = *((nullmask_t*) base);
 	auto base_data = (int32_t *) (base + sizeof(nullmask_t));
@@ -229,7 +229,7 @@ void StringSegment::FetchRow(FetchState &state, Transaction &transaction, row_t 
 				auto info_data = (string_location_t*) current->tuple_data;
 				for(index_t i = 0; i < current->N; i++) {
 					if (current->tuples[i] == id_in_vector) {
-						auto string = FetchString(state.handles, handle->buffer->data.get(), info_data[i]);
+						auto string = FetchString(state.handles, handle->buffer->buffer, info_data[i]);
 						result_data[result.count] = string.data;
 						result.nullmask[result.count] = current->nullmask[current->tuples[i]];
 					}
@@ -266,7 +266,7 @@ void StringSegment::FetchRow(FetchState &state, Transaction &transaction, row_t 
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-index_t StringSegment::Append(SegmentStatistics &stats, TransientAppendState &state, Vector &data, index_t offset, index_t count) {
+index_t StringSegment::Append(SegmentStatistics &stats, Vector &data, index_t offset, index_t count) {
 	assert(data.type == TypeId::VARCHAR);
 	auto handle = manager.PinBuffer(block_id);
 
@@ -280,7 +280,7 @@ index_t StringSegment::Append(SegmentStatistics &stats, TransientAppendState &st
 			index_t remaining_space = BLOCK_SIZE - dictionary_offset - max_vector_count * vector_size;
 			if (remaining_space >= STANDARD_VECTOR_SIZE * 32) {
 				// we have enough remaining space to add another vector
-				ExpandStringSegment(handle->buffer->data.get());
+				ExpandStringSegment(handle->buffer->buffer);
 			} else {
 				break;
 			}
@@ -289,7 +289,7 @@ index_t StringSegment::Append(SegmentStatistics &stats, TransientAppendState &st
 		index_t append_count = std::min(STANDARD_VECTOR_SIZE - current_tuple_count, count);
 
 		// now perform the actual append
-		AppendData(stats, handle->buffer->data.get() + vector_size * vector_index, handle->buffer->data.get() + BLOCK_SIZE, current_tuple_count, data, offset, append_count);
+		AppendData(stats, handle->buffer->buffer + vector_size * vector_index, handle->buffer->buffer + BLOCK_SIZE, current_tuple_count, data, offset, append_count);
 
 		count -= append_count;
 		offset += append_count;
@@ -375,7 +375,7 @@ void StringSegment::WriteString(string_t string, block_id_t &result_block, int32
 	result_offset = head->offset;
 
 	// copy the string and the length there
-	auto ptr = handle->buffer->data.get() + head->offset;
+	auto ptr = handle->buffer->buffer + head->offset;
 	memcpy(ptr, &string.length, sizeof(uint32_t));
 	ptr += sizeof(uint32_t);
 	memcpy(ptr, string.data, string.length + 1);
@@ -398,7 +398,7 @@ string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t bloc
 	} else {
 		handle = (ManagedBufferHandle*) entry->second.get();
 	}
-	return ReadString(handle->buffer->data.get(), offset);
+	return ReadString(handle->buffer->buffer, offset);
 }
 
 string_t StringSegment::ReadString(data_ptr_t target, int32_t offset) {
@@ -524,7 +524,7 @@ void StringSegment::Update(DataTable &table, SegmentStatistics &stats, Transacti
 
 	// first pin the base block
 	auto handle = manager.PinBuffer(block_id);
-	auto baseptr = handle->buffer->data.get();
+	auto baseptr = handle->buffer->buffer;
 	auto base = baseptr + vector_index * vector_size;
 	auto &base_nullmask = *((nullmask_t*) base);
 
@@ -574,7 +574,7 @@ void StringSegment::RollbackUpdate(UpdateInfo *info) {
 
 	// put the previous NULL values back
 	auto handle = manager.PinBuffer(block_id);
-	auto baseptr = handle->buffer->data.get();
+	auto baseptr = handle->buffer->buffer;
 	auto base = baseptr + info->vector_index * vector_size;
 	auto &base_nullmask = *((nullmask_t*) base);
 	for(index_t i = 0; i < info->N; i++) {

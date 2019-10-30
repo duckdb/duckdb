@@ -21,7 +21,7 @@ BufferManager::~BufferManager() {
 }
 
 unique_ptr<BlockHandle> BufferManager::Pin(block_id_t block_id) {
-	// this method should only be used to pin blocks
+	// this method should only be used to pin blocks that exist in the file
 	assert(block_id < MAXIMUM_BLOCK);
 
 	// first obtain a lock on the set of blocks
@@ -56,7 +56,7 @@ unique_ptr<BlockHandle> BufferManager::Pin(block_id_t block_id) {
 		used_list.Append(move(buffer_entry));
 	} else {
 		auto buffer = entry->second->buffer.get();
-		assert(buffer->type == BufferType::FILE_BUFFER);
+		assert(buffer->type == FileBufferType::BLOCK);
 		result_block = (Block*) buffer;
 		// add one to the reference count
 		AddReference(entry->second);
@@ -100,14 +100,14 @@ unique_ptr<Block> BufferManager::EvictBlock() {
 	assert(entry->ref_count == 0);
 	// erase this identifier from the set of blocks
 	auto buffer = entry->buffer.get();
-	if (buffer->type == BufferType::FILE_BUFFER) {
+	if (buffer->type == FileBufferType::BLOCK) {
 		// block buffer: remove the block and reuse it
 		auto block = (Block*) buffer;
 		blocks.erase(block->id);
 		// free up the memory
 		current_memory -= BLOCK_SIZE;
 		// finally return the block obtained from the current entry
-		return unique_ptr_cast<Buffer, Block>(move(entry->buffer));
+		return unique_ptr_cast<FileBuffer, Block>(move(entry->buffer));
 	} else {
 		// managed buffer: cannot return a block here
 		auto managed = (ManagedBuffer*) buffer;
@@ -159,7 +159,7 @@ unique_ptr<ManagedBufferHandle> BufferManager::PinBuffer(block_id_t buffer_id, b
 	auto buffer = entry->second->buffer.get();
 	AddReference(entry->second);
 	// now return it
-	assert(buffer->type == BufferType::MANAGED_BUFFER);
+	assert(buffer->type == FileBufferType::MANAGED_BUFFER);
 	auto managed = (ManagedBuffer*) buffer;
 	assert(managed->id == buffer_id);
 	return make_unique<ManagedBufferHandle>(*this, managed, buffer_id);
@@ -188,7 +188,7 @@ void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
 	// create the file and write the size followed by the buffer contents
 	auto handle = fs.OpenFile(path, FileFlags::WRITE | FileFlags::CREATE);
 	handle->Write(&buffer.size, sizeof(index_t), 0);
-	handle->Write(buffer.data.get(), buffer.size, sizeof(index_t));
+	buffer.Write(*handle, sizeof(index_t));
 }
 
 unique_ptr<ManagedBufferHandle> BufferManager::ReadTemporaryBuffer(block_id_t id) {
@@ -206,7 +206,7 @@ unique_ptr<ManagedBufferHandle> BufferManager::ReadTemporaryBuffer(block_id_t id
 	}
 	// now allocate a buffer of this size and read the data into that buffer
 	auto buffer = make_unique<ManagedBuffer>(*this, alloc_size, false, id);
-	handle->Read(buffer->data.get(), alloc_size, sizeof(index_t));
+	buffer->Read(*handle, sizeof(index_t));
 
 	auto managed_buffer = buffer.get();
 	current_memory += alloc_size;

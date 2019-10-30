@@ -54,7 +54,7 @@ public:
 	virtual void FetchRow(FetchState &state, Transaction &transaction, row_t row_id, Vector &result) = 0;
 
 	//! Append a part of a vector to the uncompressed segment with the given append state, updating the provided stats in the process. Returns the amount of tuples appended. If this is less than `count`, the uncompressed segment is full.
-	virtual index_t Append(SegmentStatistics &stats, TransientAppendState &state, Vector &data, index_t offset, index_t count) = 0;
+	virtual index_t Append(SegmentStatistics &stats, Vector &data, index_t offset, index_t count) = 0;
 
 	//! Update a set of row identifiers to the specified set of updated values
 	void Update(DataTable &table, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, row_t offset);

@@ -30,11 +30,11 @@ NumericSegment::NumericSegment(BufferManager &manager, TypeId type) :
 	this->vector_size = sizeof(nullmask_t) + type_size * STANDARD_VECTOR_SIZE;
 	this->max_vector_count = BLOCK_SIZE / vector_size;
 	// allocate space for the vectors
-	auto block = manager.Allocate(BLOCK_SIZE);
-	this->block_id = block->block_id;
+	auto handle = manager.Allocate(BLOCK_SIZE);
+	this->block_id = handle->block_id;
 	// initialize nullmasks to 0 for all vectors
 	for(index_t i = 0; i < max_vector_count; i++) {
-		auto mask = (nullmask_t*) (block->buffer->data.get() + (i * vector_size));
+		auto mask = (nullmask_t*) (handle->buffer->buffer + (i * vector_size));
 		mask->reset();
 	}
 }
@@ -48,7 +48,7 @@ index_t NumericSegment::FetchBaseData(TransientScanState &state, index_t vector_
 
 	// pin the buffer for this segment
 	auto handle = manager.PinBuffer(block_id);
-	auto data = handle->buffer->data.get();
+	auto data = handle->buffer->buffer;
 
 	auto offset = vector_index * vector_size;
 
@@ -77,7 +77,7 @@ void NumericSegment::FetchRow(FetchState &state, Transaction &transaction, row_t
 	assert(vector_index < max_vector_count);
 
 	// first fetch the data from the base table
-	auto data = handle->buffer->data.get() + vector_index * vector_size;
+	auto data = handle->buffer->buffer + vector_index * vector_size;
 	auto &nullmask = *((nullmask_t*) (data));
 	auto vector_ptr = data + sizeof(nullmask_t);
 
@@ -93,7 +93,7 @@ void NumericSegment::FetchRow(FetchState &state, Transaction &transaction, row_t
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-index_t NumericSegment::Append(SegmentStatistics &stats, TransientAppendState &state, Vector &data, index_t offset, index_t count) {
+index_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, index_t offset, index_t count) {
 	assert(data.type == type);
 	auto handle = manager.PinBuffer(block_id);
 
@@ -108,7 +108,7 @@ index_t NumericSegment::Append(SegmentStatistics &stats, TransientAppendState &s
 		index_t append_count = std::min(STANDARD_VECTOR_SIZE - current_tuple_count, count);
 
 		// now perform the actual append
-		append_function(stats, handle->buffer->data.get() + vector_size * vector_index, current_tuple_count, data, offset, append_count);
+		append_function(stats, handle->buffer->buffer + vector_size * vector_index, current_tuple_count, data, offset, append_count);
 
 		count -= append_count;
 		offset += append_count;
@@ -127,12 +127,12 @@ void NumericSegment::Update(DataTable &table, SegmentStatistics &stats, Transact
 		// create a new node in the undo buffer for this update
 		node = CreateUpdateInfo(table, transaction, ids, update.count, vector_index, vector_offset, type_size);
 		// now move the original data into the UpdateInfo
-		update_function(stats, node, handle->buffer->data.get() + vector_index * vector_size, update);
+		update_function(stats, node, handle->buffer->buffer + vector_index * vector_size, update);
 	} else {
 		// node already exists for this transaction, we need to merge the new updates with the existing updates
 		auto handle = manager.PinBuffer(block_id);
 
-		merge_update_function(stats, node, handle->buffer->data.get() + vector_index * vector_size, update, ids, vector_offset);
+		merge_update_function(stats, node, handle->buffer->buffer + vector_index * vector_size, update, ids, vector_offset);
 	}
 }
 
@@ -142,7 +142,7 @@ void NumericSegment::RollbackUpdate(UpdateInfo *info) {
 	auto handle = manager.PinBuffer(block_id);
 
 	// move the data from the UpdateInfo back into the base table
-	rollback_update(info, handle->buffer->data.get() + info->vector_index * vector_size);
+	rollback_update(info, handle->buffer->buffer + info->vector_index * vector_size);
 
 	CleanupUpdate(info);
 }
