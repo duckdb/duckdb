@@ -17,13 +17,12 @@ PersistentSegment::PersistentSegment(BufferManager &manager, block_id_t id, inde
     : ColumnSegment(type, ColumnSegmentType::PERSISTENT, start, count), manager(manager), block_id(id), offset(offset) {
 	assert(offset == 0);
 	if (type == TypeId::VARCHAR) {
-		throw Exception("FIXME: not supported yet!");
+		data = make_unique<StringSegment>(manager, id);
+		data->max_vector_count = count / STANDARD_VECTOR_SIZE + (count % STANDARD_VECTOR_SIZE == 0 ? 0 : 1);
 	} else {
 		data = make_unique<NumericSegment>(manager, type, id);
 	}
 	data->tuple_count = count;
-	// FIXME
-	stats.has_null = true;
 }
 
 void PersistentSegment::InitializeScan(ColumnScanState &state) {
@@ -39,13 +38,18 @@ void PersistentSegment::IndexScan(ColumnScanState &state, Vector &result) {
 }
 
 void PersistentSegment::Fetch(ColumnScanState &state, index_t vector_index, Vector &result) {
-	throw Exception("FIXME: not implemented");
+	data->Fetch(state, vector_index, result);
 }
 
 void PersistentSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) {
-	throw Exception("FIXME: not implemented");
+	data->FetchRow(state, transaction, row_id - this->start, result);
 }
 
 void PersistentSegment::Update(DataTable &table, Transaction &transaction, Vector &updates, row_t *ids) {
-	throw Exception("FIXME: not implemented");
+	// update of persistent segment: check if the table has been updated before
+	if (block_id == data->block_id) {
+		// data has not been updated before! convert the segment from one that refers to an on-disk block to one that refers to a in-memory buffer
+		throw Exception("FIXME: uncompressed segment conversion");
+	}
+	data->Update(table, stats, transaction, updates, ids, this->start);
 }

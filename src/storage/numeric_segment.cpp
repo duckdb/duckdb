@@ -28,12 +28,12 @@ NumericSegment::NumericSegment(BufferManager &manager, TypeId type, block_id_t b
 	// figure out how many vectors we want to store in this block
 	this->type_size = GetTypeIdSize(type);
 	this->vector_size = sizeof(nullmask_t) + type_size * STANDARD_VECTOR_SIZE;
-	this->max_vector_count = BLOCK_SIZE / vector_size;
+	this->max_vector_count = Storage::BLOCK_SIZE / vector_size;
 
 	this->block_id = block;
 	if (block_id == INVALID_BLOCK) {
 		// no block id specified: allocate a buffer for the uncompressed segment
-		auto handle = manager.Allocate(BLOCK_SIZE);
+		auto handle = manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
 		this->block_id = handle->block_id;
 		// initialize nullmasks to 0 for all vectors
 		for(index_t i = 0; i < max_vector_count; i++) {

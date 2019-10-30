@@ -20,12 +20,9 @@ enum class FileBufferType : uint8_t {
 
 //! The FileBuffer represents a buffer that can be read or written to a Direct IO FileHandle.
 class FileBuffer {
-	constexpr static int FILE_BUFFER_BLOCK_SIZE = 4096;
-	constexpr static int FILE_BUFFER_HEADER_SIZE = sizeof(uint64_t);
-
 public:
 	//! Allocates a buffer of the specified size that is sector-aligned. bufsiz must be a multiple of
-	//! FILE_BUFFER_BLOCK_SIZE. The content in this buffer can be written to FileHandles that have been opened with
+	//! FileSystemConstants::FILE_BUFFER_BLOCK_SIZE. The content in this buffer can be written to FileHandles that have been opened with
 	//! DIRECT_IO on all operating systems, however, the entire buffer must be written to the file. Note that the
 	//! returned size is 8 bytes less than the allocation size to account for the checksum.
 	FileBuffer(FileBufferType type, uint64_t bufsiz);
@@ -35,7 +32,7 @@ public:
 	FileBufferType type;
 	//! The buffer that users can write to
 	data_ptr_t buffer;
-	//! The size of the portion that users can write to, this is equivalent to internal_size - FILE_BUFFER_HEADER_SIZE
+	//! The size of the portion that users can write to, this is equivalent to internal_size - BLOCK_HEADER_SIZE
 	uint64_t size;
 public:
 	//! Read into the FileBuffer from the specified location. Automatically verifies the checksum, and throws an

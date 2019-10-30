@@ -11,7 +11,7 @@ TEST_CASE("Test storage that exceeds a single block", "[storage][.]") {
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 
-	uint64_t integer_count = 3 * (BLOCK_SIZE / sizeof(int32_t));
+	uint64_t integer_count = 3 * (Storage::BLOCK_SIZE / sizeof(int32_t));
 	uint64_t expected_sum;
 	Value sum;
 
@@ -59,7 +59,7 @@ TEST_CASE("Test storage that exceeds a single block with different types", "[sto
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 
-	uint64_t integer_count = 3 * (BLOCK_SIZE / sizeof(int32_t));
+	uint64_t integer_count = 3 * (Storage::BLOCK_SIZE / sizeof(int32_t));
 	Value sum;
 
 	// make sure the database does not exist
@@ -104,7 +104,7 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 
-	uint64_t string_count = 3 * (BLOCK_SIZE / (sizeof(char) * 15));
+	uint64_t string_count = 3 * (Storage::BLOCK_SIZE / (sizeof(char) * 15));
 	Value sum;
 
 	Value count_per_group;
@@ -167,7 +167,7 @@ TEST_CASE("Test storing big strings", "[storage][.]") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR, j BIGINT);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('" + big_string + "', 1)"));
 		uint64_t iteration = 2;
-		while (string_length < BLOCK_SIZE * 2) {
+		while (string_length < Storage::BLOCK_SIZE * 2) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a, " + to_string(iteration) +
 			                          " FROM test"));
 			REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE j=" + to_string(iteration - 1)));

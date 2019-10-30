@@ -9,10 +9,10 @@ using namespace duckdb;
 using namespace std;
 
 static bool IsValidStringLocation(string_location_t location) {
-	return location.offset < BLOCK_SIZE && (location.block_id == INVALID_BLOCK || location.block_id >= MAXIMUM_BLOCK);
+	return location.offset < Storage::BLOCK_SIZE && (location.block_id == INVALID_BLOCK || location.block_id >= MAXIMUM_BLOCK);
 }
 
-StringSegment::StringSegment(BufferManager &manager) :
+StringSegment::StringSegment(BufferManager &manager, block_id_t block) :
 	UncompressedSegment(manager, TypeId::VARCHAR) {
 	this->max_vector_count = 0;
 	this->dictionary_offset = 0;
@@ -20,11 +20,14 @@ StringSegment::StringSegment(BufferManager &manager) :
 	this->vector_size = STANDARD_VECTOR_SIZE * sizeof(int32_t) + sizeof(nullmask_t);
 	this->string_updates = nullptr;
 
-	auto handle = manager.Allocate(BLOCK_SIZE);
-	// we allocate one block to hold the majority of the
-	this->block_id = handle->block_id;
+	this->block_id = block;
+	if (block_id == INVALID_BLOCK) {
+		// start off with an empty string segment: allocate space for it
+		auto handle = manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
+		this->block_id = handle->block_id;
 
-	ExpandStringSegment(handle->node->buffer);
+		ExpandStringSegment(handle->node->buffer);
+	}
 }
 
 void StringSegment::ExpandStringSegment(data_ptr_t baseptr) {
@@ -163,7 +166,7 @@ string_location_t StringSegment::FetchStringLocation(data_ptr_t baseptr, int32_t
 		return string_location_t(INVALID_BLOCK, 0);
 	}
 	// look up result in dictionary
-	auto dict_end = baseptr + BLOCK_SIZE;
+	auto dict_end = baseptr + Storage::BLOCK_SIZE;
 	auto dict_pos = dict_end - dict_offset;
 	auto string_length = *((uint16_t*) dict_pos);
 	string_location_t result;
@@ -191,7 +194,7 @@ string_t StringSegment::FetchString(buffer_handle_set_t &handles, data_ptr_t bas
 			return string_t(nullptr, 0);
 		}
 		// normal string: read string from this block
-		auto dict_end = baseptr + BLOCK_SIZE;
+		auto dict_end = baseptr + Storage::BLOCK_SIZE;
 		auto dict_pos = dict_end - location.offset;
 		auto string_length = *((uint16_t*) dict_pos);
 
@@ -277,7 +280,7 @@ index_t StringSegment::Append(SegmentStatistics &stats, Vector &data, index_t of
 		if (vector_index == max_vector_count) {
 			// we are at the maximum vector, check if there is space to increase the maximum vector count
 			// as a heuristic, we only allow another vector to be added if we have at least 32 bytes per string remaining (32KB out of a 256KB block, or around 12% empty)
-			index_t remaining_space = BLOCK_SIZE - dictionary_offset - max_vector_count * vector_size;
+			index_t remaining_space = Storage::BLOCK_SIZE - dictionary_offset - max_vector_count * vector_size;
 			if (remaining_space >= STANDARD_VECTOR_SIZE * 32) {
 				// we have enough remaining space to add another vector
 				ExpandStringSegment(handle->node->buffer);
@@ -289,7 +292,7 @@ index_t StringSegment::Append(SegmentStatistics &stats, Vector &data, index_t of
 		index_t append_count = std::min(STANDARD_VECTOR_SIZE - current_tuple_count, count);
 
 		// now perform the actual append
-		AppendData(stats, handle->node->buffer + vector_size * vector_index, handle->node->buffer + BLOCK_SIZE, current_tuple_count, data, offset, append_count);
+		AppendData(stats, handle->node->buffer + vector_size * vector_index, handle->node->buffer + Storage::BLOCK_SIZE, current_tuple_count, data, offset, append_count);
 
 		count -= append_count;
 		offset += append_count;
@@ -319,7 +322,7 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 			if (string_length > stats.max_string_length) {
 				stats.max_string_length = string_length;
 			}
-			if (total_length >= STRING_BLOCK_LIMIT || total_length > BLOCK_SIZE - dictionary_offset - max_vector_count * vector_size) {
+			if (total_length >= STRING_BLOCK_LIMIT || total_length > Storage::BLOCK_SIZE - dictionary_offset - max_vector_count * vector_size) {
 				// string is too big for block: write to overflow blocks
 				block_id_t block;
 				int32_t offset;
@@ -331,6 +334,8 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 
 				// write a big string marker into the dictionary
 				WriteStringMarker(dict_pos, block, offset);
+
+				stats.has_overflow_strings = true;
 			} else {
 				// string fits in block, append to dictionary and increment dictionary position
 				assert(string_length < std::numeric_limits<uint16_t>::max());
@@ -357,7 +362,7 @@ void StringSegment::WriteString(string_t string, block_id_t &result_block, int32
 	if (!head || head->offset + total_length >= head->size) {
 		// string does not fit, allocate space for it
 		// create a new string block
-		index_t alloc_size = std::max((index_t) total_length, (index_t) BLOCK_SIZE);
+		index_t alloc_size = std::max((index_t) total_length, (index_t) Storage::BLOCK_ALLOC_SIZE);
 		auto new_block = make_unique<StringBlock>();
 		new_block->offset = 0;
 		new_block->size = alloc_size;
@@ -383,7 +388,7 @@ void StringSegment::WriteString(string_t string, block_id_t &result_block, int32
 }
 
 string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t block, int32_t offset) {
-	assert(offset < BLOCK_SIZE);
+	assert(offset < Storage::BLOCK_SIZE);
 	if (block == INVALID_BLOCK) {
 		return string_t(nullptr, 0);
 	}

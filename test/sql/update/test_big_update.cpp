@@ -22,7 +22,7 @@ TEST_CASE("Update big table of even and odd values", "[update][.]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (?, 'hello')", (int) i));
 	}
 	// insert a bunch more values
-	while(count < BLOCK_SIZE) {
+	while(count < Storage::BLOCK_SIZE) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM test"));
 		count *= 2;
 		sum *= 2;

@@ -38,7 +38,7 @@ unique_ptr<BufferHandle> BufferManager::PinBlock(block_id_t block_id) {
 	auto entry = blocks.find(block_id);
 	if (entry == blocks.end()) {
 		// block is not loaded, load the block
-		current_memory += BLOCK_SIZE;
+		current_memory += Storage::BLOCK_ALLOC_SIZE;
 		unique_ptr<Block> block;
 		if (current_memory > maximum_memory) {
 			// not enough memory to hold the block: have to evict a block first
@@ -113,7 +113,7 @@ unique_ptr<Block> BufferManager::EvictBlock() {
 		auto block = (Block*) buffer;
 		blocks.erase(block->id);
 		// free up the memory
-		current_memory -= BLOCK_SIZE;
+		current_memory -= Storage::BLOCK_ALLOC_SIZE;
 		// finally return the block obtained from the current entry
 		return unique_ptr_cast<FileBuffer, Block>(move(entry->buffer));
 	} else {

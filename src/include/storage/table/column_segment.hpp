@@ -28,6 +28,8 @@ class SegmentStatistics {
 public:
 	SegmentStatistics(TypeId type, index_t type_size);
 
+	TypeId type;
+	index_t type_size;
 	//! The minimum value of the segment
 	unique_ptr<data_t[]> minimum;
 	//! The maximum value of the segment
@@ -36,6 +38,10 @@ public:
 	bool has_null;
 	//! The maximum string length, only used for string columns
 	index_t max_string_length;
+	//! Whether or not the segment contains any big strings in overflow blocks, only used for string columns
+	bool has_overflow_strings;
+public:
+	void Reset();
 };
 
 class ColumnSegment : public SegmentBase {

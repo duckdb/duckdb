@@ -66,8 +66,7 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 void TableDataWriter::CreateSegment(index_t col_idx) {
 	auto type_id = GetInternalType(table.columns[col_idx].type);
 	if (type_id == TypeId::VARCHAR) {
-		throw Exception("FIXME: writing varchar data to disk!");
-		// segments[i] = make_unique<StringSegment>(manager.buffer_manager);
+		segments[col_idx] = make_unique<StringSegment>(manager.buffer_manager);
 	} else {
 		segments[col_idx] = make_unique<NumericSegment>(manager.buffer_manager, type_id);
 	}
@@ -97,6 +96,11 @@ void TableDataWriter::FlushSegment(index_t col_idx) {
 	if (tuple_count == 0) {
 		return;
 	}
+
+	if (stats[col_idx]->has_overflow_strings) {
+		throw Exception("FIXME: writing of overflow strings not supported yet!");
+	}
+
 	// get the buffer of the segment and pin it
 	auto handle = manager.buffer_manager.Pin(segments[col_idx]->block_id);
 

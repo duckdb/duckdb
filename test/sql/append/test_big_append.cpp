@@ -15,7 +15,7 @@ TEST_CASE("Test big append", "[append][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
-	index_t desired_count = (BLOCK_SIZE * 2) / sizeof(int);
+	index_t desired_count = (Storage::BLOCK_SIZE * 2) / sizeof(int);
 	index_t current_count = 4;
 	while(current_count < desired_count) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers SELECT * FROM integers"));
