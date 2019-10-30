@@ -19,6 +19,7 @@ struct ColumnAppendState;
 class TransientSegment : public ColumnSegment {
 public:
 	TransientSegment(BufferManager &manager, TypeId type, index_t start);
+
 	//! The buffer manager
 	BufferManager &manager;
 	//! The uncompressed segment holding the data

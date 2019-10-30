@@ -15,7 +15,7 @@ static NumericSegment::rollback_update_function_t GetRollbackUpdateFunction(Type
 static NumericSegment::merge_update_function_t GetMergeUpdateFunction(TypeId type);
 static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction(TypeId type);
 
-NumericSegment::NumericSegment(BufferManager &manager, TypeId type) :
+NumericSegment::NumericSegment(BufferManager &manager, TypeId type, block_id_t block) :
 	UncompressedSegment(manager, type) {
 	// set up the different functions for this type of segment
 	this->append_function = GetAppendFunction(type);
@@ -29,13 +29,17 @@ NumericSegment::NumericSegment(BufferManager &manager, TypeId type) :
 	this->type_size = GetTypeIdSize(type);
 	this->vector_size = sizeof(nullmask_t) + type_size * STANDARD_VECTOR_SIZE;
 	this->max_vector_count = BLOCK_SIZE / vector_size;
-	// allocate space for the vectors
-	auto handle = manager.Allocate(BLOCK_SIZE);
-	this->block_id = handle->block_id;
-	// initialize nullmasks to 0 for all vectors
-	for(index_t i = 0; i < max_vector_count; i++) {
-		auto mask = (nullmask_t*) (handle->node->buffer + (i * vector_size));
-		mask->reset();
+
+	this->block_id = block;
+	if (block_id == INVALID_BLOCK) {
+		// no block id specified: allocate a buffer for the uncompressed segment
+		auto handle = manager.Allocate(BLOCK_SIZE);
+		this->block_id = handle->block_id;
+		// initialize nullmasks to 0 for all vectors
+		for(index_t i = 0; i < max_vector_count; i++) {
+			auto mask = (nullmask_t*) (handle->node->buffer + (i * vector_size));
+			mask->reset();
+		}
 	}
 }
 

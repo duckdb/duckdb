@@ -11,8 +11,7 @@
 #include "storage/table/column_segment.hpp"
 #include "storage/block.hpp"
 #include "storage/buffer_manager.hpp"
-
-#include "common/unordered_map.hpp"
+#include "storage/uncompressed_segment.hpp"
 
 namespace duckdb {
 
@@ -26,6 +25,8 @@ public:
 	block_id_t block_id;
 	//! The offset into the block
 	index_t offset;
+	//! The uncompressed segment that the data of the persistent segment is loaded into
+	unique_ptr<UncompressedSegment> data;
 public:
 	void InitializeScan(ColumnScanState &state) override;
 	//! Scan one vector from this transient segment
