@@ -234,9 +234,10 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
 
 	// set up the CSV reader
 	CopyInfo info;
-	info.delimiter = '|';
+	info.delimiter = "|";
 	info.header = true;
-	info.quote = '"';
+	info.quote = "\"";
+	info.escape = "\"";
 
 	// convert the CSV string into a stringstream
 	istringstream csv_stream(csv);

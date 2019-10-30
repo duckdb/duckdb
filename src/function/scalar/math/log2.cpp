@@ -12,7 +12,7 @@ static void log2_function(ExpressionExecutor &exec, Vector inputs[], index_t inp
 	VectorOperations::Log2(inputs[0], result);
 }
 
-void Log2::RegisterFunction(BuiltinFunctions &set) {
+void Log2Fun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("log2", { SQLType::DOUBLE }, SQLType::DOUBLE, log2_function));
 }
 

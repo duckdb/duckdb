@@ -2,10 +2,9 @@
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<TableRef> Transformer::TransformRangeVar(RangeVar *root) {
+unique_ptr<TableRef> Transformer::TransformRangeVar(postgres::RangeVar *root) {
 	auto result = make_unique<BaseTableRef>();
 
 	result->alias = TransformAlias(root->alias);

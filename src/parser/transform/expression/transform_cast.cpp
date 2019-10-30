@@ -4,15 +4,14 @@
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<ParsedExpression> Transformer::TransformTypeCast(TypeCast *root) {
+unique_ptr<ParsedExpression> Transformer::TransformTypeCast(postgres::TypeCast *root) {
 	if (!root) {
 		return nullptr;
 	}
 	// get the type to cast to
-	TypeName *type_name = root->typeName;
+	auto type_name = root->typeName;
 	SQLType target_type = TransformTypeName(type_name);
 
 	// transform the expression node

@@ -36,13 +36,13 @@ Value null_simple_initialize() {
 }
 
 void BuiltinFunctions::RegisterDistributiveAggregates() {
-	Register<CountStar>();
-	Register<Count>();
-	Register<First>();
-	Register<Max>();
-	Register<Min>();
-	Register<Sum>();
-	Register<StringAgg>();
+	Register<CountStarFun>();
+	Register<CountFun>();
+	Register<FirstFun>();
+	Register<MaxFun>();
+	Register<MinFun>();
+	Register<SumFun>();
+	Register<StringAggFun>();
 }
 
 } // namespace duckdb

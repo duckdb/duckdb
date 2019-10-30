@@ -43,6 +43,6 @@ unique_ptr<FunctionData> random_bind(BoundFunctionExpression &expr, ClientContex
 	return make_unique<RandomBindData>(context, move(dist));
 }
 
-void Random::RegisterFunction(BuiltinFunctions &set) {
+void RandomFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("random", { }, SQLType::DOUBLE, random_function, true, random_bind));
 }

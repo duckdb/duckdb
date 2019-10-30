@@ -84,11 +84,11 @@ static void caseconvert_lower_function(ExpressionExecutor &exec, Vector inputs[]
 }
 
 
-void Lower::RegisterFunction(BuiltinFunctions &set) {
+void LowerFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("lower", { SQLType::VARCHAR }, SQLType::VARCHAR, caseconvert_lower_function));
 }
 
-void Upper::RegisterFunction(BuiltinFunctions &set) {
+void UpperFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("upper", { SQLType::VARCHAR }, SQLType::VARCHAR, caseconvert_upper_function));
 }
 

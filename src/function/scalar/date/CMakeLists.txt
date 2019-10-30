@@ -1,6 +1,7 @@
 add_library_unity(duckdb_func_date
 				  OBJECT
 				  age.cpp
+				  current.cpp
 				  date_part.cpp
 				  year.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES}

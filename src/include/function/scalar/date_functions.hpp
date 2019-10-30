@@ -13,15 +13,27 @@
 
 namespace duckdb {
 
-struct Age {
+struct AgeFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct DatePart {
+struct DatePartFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Year {
+struct YearFun {
+    static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct CurrentTimeFun {
+    static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct CurrentDateFun {
+    static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct CurrentTimestampFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 

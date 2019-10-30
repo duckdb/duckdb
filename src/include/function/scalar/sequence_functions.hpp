@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-struct Nextval {
+struct NextvalFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 

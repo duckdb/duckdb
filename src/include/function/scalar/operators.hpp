@@ -13,43 +13,43 @@
 
 namespace duckdb {
 
-struct Add {
+struct AddFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Subtract {
+struct SubtractFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Multiply {
+struct MultiplyFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Divide {
+struct DivideFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Mod {
+struct ModFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct LeftShift {
+struct LeftShiftFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct RightShift {
+struct RightShiftFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct BitwiseAnd {
+struct BitwiseAndFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct BitwiseOr {
+struct BitwiseOrFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct BitwiseXor {
+struct BitwiseXorFun {
     static void RegisterFunction(BuiltinFunctions &set);
 };
 

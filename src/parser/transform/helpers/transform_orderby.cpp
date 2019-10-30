@@ -3,23 +3,22 @@
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-bool Transformer::TransformOrderBy(List *order, vector<OrderByNode> &result) {
+bool Transformer::TransformOrderBy(postgres::List *order, vector<OrderByNode> &result) {
 	if (!order) {
 		return false;
 	}
 
 	for (auto node = order->head; node != nullptr; node = node->next) {
-		Node *temp = reinterpret_cast<Node *>(node->data.ptr_value);
-		if (temp->type == T_SortBy) {
+		auto temp = reinterpret_cast<postgres::Node *>(node->data.ptr_value);
+		if (temp->type == postgres::T_SortBy) {
 			OrderByNode ordernode;
-			SortBy *sort = reinterpret_cast<SortBy *>(temp);
-			Node *target = sort->node;
-			if (sort->sortby_dir == SORTBY_ASC || sort->sortby_dir == SORTBY_DEFAULT) {
+			auto sort = reinterpret_cast<postgres::SortBy *>(temp);
+			auto target = sort->node;
+			if (sort->sortby_dir == postgres::SORTBY_ASC || sort->sortby_dir == postgres::SORTBY_DEFAULT) {
 				ordernode.type = OrderType::ASCENDING;
-			} else if (sort->sortby_dir == SORTBY_DESC) {
+			} else if (sort->sortby_dir == postgres::SORTBY_DESC) {
 				ordernode.type = OrderType::DESCENDING;
 			} else {
 				throw NotImplementedException("Unimplemented order by type");

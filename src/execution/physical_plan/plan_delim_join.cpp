@@ -57,7 +57,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 			auto &info = hash_join.hash_table->correlated_mark_join_info;
 
 			vector<TypeId> payload_types = {TypeId::BIGINT, TypeId::BIGINT}; // COUNT types
-			vector<AggregateFunction> aggregate_functions = {CountStar::GetFunction(), Count::GetFunction()};
+			vector<AggregateFunction> aggregate_functions = {CountStarFun::GetFunction(), CountFun::GetFunction()};
 			vector<BoundAggregateExpression *> correlated_aggregates;
 			for (index_t i = 0; i < aggregate_functions.size(); ++i) {
 				auto aggr = make_unique<BoundAggregateExpression>(payload_types[i], aggregate_functions[i], false);

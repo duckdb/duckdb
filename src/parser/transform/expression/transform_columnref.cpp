@@ -4,13 +4,12 @@
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<ParsedExpression> Transformer::TransformColumnRef(ColumnRef *root) {
-	List *fields = root->fields;
-	switch ((reinterpret_cast<Node *>(fields->head->data.ptr_value))->type) {
-	case T_String: {
+unique_ptr<ParsedExpression> Transformer::TransformColumnRef(postgres::ColumnRef *root) {
+	auto fields = root->fields;
+	switch ((reinterpret_cast<postgres::Node *>(fields->head->data.ptr_value))->type) {
+	case postgres::T_String: {
 		if (fields->length < 1 || fields->length > 2) {
 			throw ParserException("Unexpected field length");
 		}
@@ -23,7 +22,7 @@ unique_ptr<ParsedExpression> Transformer::TransformColumnRef(ColumnRef *root) {
 		}
 		return make_unique<ColumnRefExpression>(column_name, table_name);
 	}
-	case T_A_Star: {
+	case postgres::T_A_Star: {
 		return make_unique<StarExpression>();
 	}
 	default:

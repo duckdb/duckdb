@@ -3,11 +3,10 @@
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<CreateSequenceStatement> Transformer::TransformCreateSequence(Node *node) {
-	auto stmt = reinterpret_cast<CreateSeqStmt *>(node);
+unique_ptr<CreateSequenceStatement> Transformer::TransformCreateSequence(postgres::Node *node) {
+	auto stmt = reinterpret_cast<postgres::CreateSeqStmt *>(node);
 
 	auto result = make_unique<CreateSequenceStatement>();
 
@@ -18,19 +17,19 @@ unique_ptr<CreateSequenceStatement> Transformer::TransformCreateSequence(Node *n
 	info.name = sequence_ref.table_name;
 
 	if (stmt->options) {
-		ListCell *cell = nullptr;
+		postgres::ListCell *cell = nullptr;
 		for_each_cell(cell, stmt->options->head) {
-			auto *def_elem = reinterpret_cast<DefElem *>(cell->data.ptr_value);
+			auto *def_elem = reinterpret_cast<postgres::DefElem *>(cell->data.ptr_value);
 			string opt_name = string(def_elem->defname);
 
 			auto val = (postgres::Value *)def_elem->arg;
-			if (def_elem->defaction == DEFELEM_UNSPEC && !val) { // e.g. NO MINVALUE
+			if (def_elem->defaction == postgres::DEFELEM_UNSPEC && !val) { // e.g. NO MINVALUE
 				continue;
 			}
 			assert(val);
 
 			if (opt_name == "increment") {
-				assert(val->type == T_Integer);
+				assert(val->type == postgres::T_Integer);
 				info.increment = val->val.ival;
 				if (info.increment == 0) {
 					throw ParserException("Increment must not be zero");
@@ -43,22 +42,22 @@ unique_ptr<CreateSequenceStatement> Transformer::TransformCreateSequence(Node *n
 					info.max_value = numeric_limits<int64_t>::max();
 				}
 			} else if (opt_name == "minvalue") {
-				assert(val->type == T_Integer);
+				assert(val->type == postgres::T_Integer);
 				info.min_value = val->val.ival;
 				if (info.increment > 0) {
 					info.start_value = info.min_value;
 				}
 			} else if (opt_name == "maxvalue") {
-				assert(val->type == T_Integer);
+				assert(val->type == postgres::T_Integer);
 				info.max_value = val->val.ival;
 				if (info.increment < 0) {
 					info.start_value = info.max_value;
 				}
 			} else if (opt_name == "start") {
-				assert(val->type == T_Integer);
+				assert(val->type == postgres::T_Integer);
 				info.start_value = val->val.ival;
 			} else if (opt_name == "cycle") {
-				assert(val->type == T_Integer);
+				assert(val->type == postgres::T_Integer);
 				info.cycle = val->val.ival > 0;
 			} else {
 				throw ParserException("Unrecognized option \"%s\" for CREATE SEQUENCE", opt_name.c_str());

@@ -10,7 +10,7 @@ static void mod_function(ExpressionExecutor &exec, Vector inputs[], index_t inpu
 	VectorOperations::Modulo(inputs[0], inputs[1], result);
 }
 
-void Mod::RegisterFunction(BuiltinFunctions &set) {
+void ModFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("%");
 	for(auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({ type, type }, type, mod_function));

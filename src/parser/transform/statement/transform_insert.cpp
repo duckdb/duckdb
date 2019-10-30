@@ -3,12 +3,11 @@
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-void Transformer::TransformValuesList(List *list, vector<vector<unique_ptr<ParsedExpression>>> &values) {
+void Transformer::TransformValuesList(postgres::List *list, vector<vector<unique_ptr<ParsedExpression>>> &values) {
 	for (auto value_list = list->head; value_list != NULL; value_list = value_list->next) {
-		auto target = (List *)(value_list->data.ptr_value);
+		auto target = (postgres::List *)(value_list->data.ptr_value);
 
 		vector<unique_ptr<ParsedExpression>> insert_values;
 		if (!TransformExpressionList(target, insert_values)) {
@@ -23,21 +22,21 @@ void Transformer::TransformValuesList(List *list, vector<vector<unique_ptr<Parse
 	}
 }
 
-unique_ptr<InsertStatement> Transformer::TransformInsert(Node *node) {
-	InsertStmt *stmt = reinterpret_cast<InsertStmt *>(node);
+unique_ptr<InsertStatement> Transformer::TransformInsert(postgres::Node *node) {
+	auto stmt = reinterpret_cast<postgres::InsertStmt *>(node);
 	assert(stmt);
 
 	auto result = make_unique<InsertStatement>();
 
 	// first check if there are any columns specified
 	if (stmt->cols) {
-		for (ListCell *c = stmt->cols->head; c != NULL; c = lnext(c)) {
-			ResTarget *target = (ResTarget *)(c->data.ptr_value);
+		for (auto c = stmt->cols->head; c != NULL; c = lnext(c)) {
+			auto target = (postgres::ResTarget *)(c->data.ptr_value);
 			result->columns.push_back(string(target->name));
 		}
 	}
 
-	auto select_stmt = reinterpret_cast<SelectStmt *>(stmt->selectStmt);
+	auto select_stmt = reinterpret_cast<postgres::SelectStmt *>(stmt->selectStmt);
 	if (!select_stmt->valuesLists) {
 		// insert from select statement
 		result->select_statement = TransformSelect(stmt->selectStmt);

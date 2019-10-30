@@ -8,8 +8,6 @@ namespace postgres {
 #include "parser/parser.h"
 }
 
-using namespace postgres;
-
 using namespace duckdb;
 using namespace std;
 
@@ -24,7 +22,7 @@ void Parser::ParseQuery(string query) {
 		return;
 	}
 
-	PostgresParser parser;
+	postgres::PostgresParser parser;
 	parser.Parse(query);
 
 	if (!parser.success) {

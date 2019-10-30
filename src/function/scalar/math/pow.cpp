@@ -11,7 +11,7 @@ static void pow_function(ExpressionExecutor &exec, Vector inputs[], index_t inpu
 	VectorOperations::Pow(inputs[0], inputs[1], result);
 }
 
-void Pow::RegisterFunction(BuiltinFunctions &set) {
+void PowFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction power_function("pow", { SQLType::DOUBLE, SQLType::DOUBLE }, SQLType::DOUBLE, pow_function);
 	set.AddFunction(power_function);
 	power_function.name = "power";

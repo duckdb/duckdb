@@ -12,7 +12,7 @@ static void degrees_function(ExpressionExecutor &exec, Vector inputs[], index_t 
 	VectorOperations::Degrees(inputs[0], result);
 }
 
-void Degrees::RegisterFunction(BuiltinFunctions &set) {
+void DegreesFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("degrees", { SQLType::DOUBLE }, SQLType::DOUBLE, degrees_function));
 }
 
