@@ -58,7 +58,6 @@ matrix:
             - g++-4.9 binutils-2.26
       env:
          - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
-         - CXXFLAGS="-fexceptions -frtti"
 
     - os: linux
       dist: xenial
@@ -129,9 +128,8 @@ matrix:
       arch: arm64
 
       script:
-        - export CXXFLAGS="-fexceptions -frtti"
         - mkdir -p build/debug
-        - (cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
+        - (cd build/debug && cmake -DCMAKE_CXX_FLAGS"-fexceptions -frtti" -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
         - build/debug/test/unittest "exclude:file_system"
 
 
