@@ -9,14 +9,15 @@
 #pragma once
 
 #include "common/constants.hpp"
+#include "transaction/transaction.hpp"
 
 namespace duckdb {
-class DataTable;
+class ColumnData;
 class UncompressedSegment;
 
 struct UpdateInfo {
-	//! The table that this update info affects
-	DataTable *table;
+	//! The base ColumnData that this update affects
+	ColumnData *column_data;
 	//! The uncompressed segment that this update info affects
 	UncompressedSegment *segment;
 	//! The version number
@@ -37,6 +38,18 @@ struct UpdateInfo {
 	UpdateInfo *prev;
 	//! The next update info in the chain (or nullptr if it is the last)
 	UpdateInfo *next;
+
+	//! Loop over the update chain and execute the specified callback on all UpdateInfo's that are relevant for that transaction in-order of newest to oldest
+	template<class T>
+	static void UpdatesForTransaction(UpdateInfo *current, Transaction &transaction, T &&callback) {
+		while(current) {
+			if (current->version_number > transaction.start_time && current->version_number != transaction.transaction_id) {
+				// these tuples were either committed AFTER this transaction started or are not committed yet, use tuples stored in this version
+				callback(current);
+			}
+			current = current->next;
+		}
+	}
 };
 
 }

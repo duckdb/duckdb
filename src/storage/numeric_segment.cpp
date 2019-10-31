@@ -89,7 +89,7 @@ void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction,
 	memcpy(result.data + result.count * type_size, vector_ptr + id_in_vector * type_size, type_size);
 	if (versions && versions[vector_index]) {
 		// version information: follow the version chain to find out if we need to load this tuple data from any other version
-		append_from_update_info(transaction, versions[vector_index], result, id_in_vector);
+		append_from_update_info(transaction, versions[vector_index], id_in_vector, result);
 	}
 	result.count++;
 }
@@ -124,12 +124,12 @@ index_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, index_t o
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-void NumericSegment::Update(DataTable &table, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) {
+void NumericSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) {
 	if (!node) {
 		auto handle = manager.Pin(block_id);
 
 		// create a new node in the undo buffer for this update
-		node = CreateUpdateInfo(table, transaction, ids, update.count, vector_index, vector_offset, type_size);
+		node = CreateUpdateInfo(column_data, transaction, ids, update.count, vector_index, vector_offset, type_size);
 		// now move the original data into the UpdateInfo
 		update_function(stats, node, handle->node->buffer + vector_index * vector_size, update);
 	} else {
@@ -369,19 +369,15 @@ static NumericSegment::merge_update_function_t GetMergeUpdateFunction(TypeId typ
 // Update Fetch
 //===--------------------------------------------------------------------===//
 template <class T>
-static void update_info_fetch(Transaction &transaction, UpdateInfo *current, Vector &result, index_t count) {
+static void update_info_fetch(Transaction &transaction, UpdateInfo *info, Vector &result, index_t count) {
 	auto result_data = (T*) result.data;
-	while(current) {
-		if (current->version_number > transaction.start_time && current->version_number != transaction.transaction_id) {
-			// these tuples were either committed AFTER this transaction started or are not committed yet, use tuples stored in this version
-			auto info_data = (T*) current->tuple_data;
-			for(index_t i = 0; i < current->N; i++) {
-				result_data[current->tuples[i]] = info_data[i];
-				result.nullmask[current->tuples[i]] = current->nullmask[current->tuples[i]];
-			}
+	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
+		auto info_data = (T*) current->tuple_data;
+		for(index_t i = 0; i < current->N; i++) {
+			result_data[current->tuples[i]] = info_data[i];
+			result.nullmask[current->tuples[i]] = current->nullmask[current->tuples[i]];
 		}
-		current = current->next;
-	}
+	});
 }
 
 static NumericSegment::update_info_fetch_function_t GetUpdateInfoFetchFunction(TypeId type) {
@@ -408,24 +404,23 @@ static NumericSegment::update_info_fetch_function_t GetUpdateInfoFetchFunction(T
 // Update Append
 //===--------------------------------------------------------------------===//
 template <class T>
-static void update_info_append(Transaction &transaction, UpdateInfo *current, Vector &result, row_t row_id) {
+static void update_info_append(Transaction &transaction, UpdateInfo *info, index_t row_id, Vector &result) {
 	auto result_data = (T*) result.data;
-	while(current) {
-		if (current->version_number > transaction.start_time && current->version_number != transaction.transaction_id) {
-			// these tuples were either committed AFTER this transaction started or are not committed yet, use tuples stored in this version
-			auto info_data = (T*) current->tuple_data;
-			for(index_t i = 0; i < current->N; i++) {
-				if (current->tuples[i] == row_id) {
-					result_data[result.count] = info_data[i];
-					result.nullmask[result.count] = current->nullmask[current->tuples[i]];
-					break;
-				} else if (current->tuples[i] > row_id) {
-					break;
-				}
+	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
+		auto info_data = (T*) current->tuple_data;
+		// loop over the tuples in this UpdateInfo
+		for(index_t i = 0; i < current->N; i++) {
+			if (current->tuples[i] == row_id) {
+				// found the relevant tuple
+				result_data[result.count] = info_data[i];
+				result.nullmask[result.count] = current->nullmask[current->tuples[i]];
+				break;
+			} else if (current->tuples[i] > row_id) {
+				// tuples are sorted: so if the current tuple is > row_id we will not find it anymore
+				break;
 			}
 		}
-		current = current->next;
-	}
+	});
 }
 
 static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction(TypeId type) {

@@ -41,7 +41,7 @@ static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector
 	}
 }
 
-void UncompressedSegment::Update(DataTable &table, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, row_t offset) {
+void UncompressedSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, row_t offset) {
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
 
@@ -76,12 +76,12 @@ void UncompressedSegment::Update(DataTable &table, SegmentStatistics &stats, Tra
 		// there is already a version here, check if there are any conflicts and search for the node that belongs to this transaction in the version chain
 		CheckForConflicts(versions[vector_index], transaction, update, ids, vector_offset, node);
 	}
-	Update(table, stats, transaction, update, ids, vector_index, vector_offset, node);
+	Update(column_data, stats, transaction, update, ids, vector_index, vector_offset, node);
 }
 
-UpdateInfo *UncompressedSegment::CreateUpdateInfo(DataTable &table, Transaction &transaction, row_t *ids, index_t count, index_t vector_index, index_t vector_offset, index_t type_size) {
+UpdateInfo *UncompressedSegment::CreateUpdateInfo(ColumnData &column_data, Transaction &transaction, row_t *ids, index_t count, index_t vector_index, index_t vector_offset, index_t type_size) {
 	auto node = transaction.CreateUpdateInfo(type_size, STANDARD_VECTOR_SIZE);
-	node->table = &table;
+	node->column_data = &column_data;
 	node->segment = this;
 	node->vector_index = vector_index;
 	node->prev = nullptr;
@@ -133,6 +133,9 @@ void UncompressedSegment::IndexScan(ColumnScanState &state, index_t vector_index
 	FetchBaseData(state, vector_index, result);
 }
 
+//===--------------------------------------------------------------------===//
+// Update
+//===--------------------------------------------------------------------===//
 void UncompressedSegment::CleanupUpdate(UpdateInfo *info) {
 	if (info->prev) {
 		// there is a prev info: remove from the chain

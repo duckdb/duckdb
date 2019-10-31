@@ -274,6 +274,7 @@ void ReplayState::ReplayUpdate() {
 	if (!current_table) {
 		throw Exception("Corrupt WAL: update without table");
 	}
+
 	DataChunk chunk;
 	chunk.Deserialize(source);
 

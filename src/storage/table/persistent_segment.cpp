@@ -45,11 +45,11 @@ void PersistentSegment::FetchRow(ColumnFetchState &state, Transaction &transacti
 	data->FetchRow(state, transaction, row_id - this->start, result);
 }
 
-void PersistentSegment::Update(DataTable &table, Transaction &transaction, Vector &updates, row_t *ids) {
+void PersistentSegment::Update(ColumnData &column_data, Transaction &transaction, Vector &updates, row_t *ids) {
 	// update of persistent segment: check if the table has been updated before
 	if (block_id == data->block_id) {
 		// data has not been updated before! convert the segment from one that refers to an on-disk block to one that refers to a in-memory buffer
 		throw Exception("FIXME: uncompressed segment conversion");
 	}
-	data->Update(table, stats, transaction, updates, ids, this->start);
+	data->Update(column_data, stats, transaction, updates, ids, this->start);
 }

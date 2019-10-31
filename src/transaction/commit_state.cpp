@@ -9,41 +9,14 @@ using namespace std;
 
 template <bool HAS_LOG>
 CommitState<HAS_LOG>::CommitState(transaction_t commit_id, WriteAheadLog *log)
-    : log(log), commit_id(commit_id), current_op(UndoFlags::EMPTY_ENTRY), current_table(nullptr) {
-}
-
-template <bool HAS_LOG> void CommitState<HAS_LOG>::Flush(UndoFlags new_op) {
-	auto prev_op = current_op;
-	current_op = new_op;
-	if (prev_op == UndoFlags::EMPTY_ENTRY) {
-		// nothing to flush
-		return;
-	}
-	if (!chunk || chunk->size() == 0) {
-		return;
-	}
-
-	switch (prev_op) {
-	case UndoFlags::DELETE_TUPLE:
-		log->WriteDelete(*chunk);
-		break;
-	case UndoFlags::UPDATE_TUPLE:
-		log->WriteUpdate(*chunk);
-		break;
-	default:
-		break;
-	}
+    : log(log), commit_id(commit_id), current_table(nullptr) {
 }
 
 template <bool HAS_LOG> void CommitState<HAS_LOG>::SwitchTable(DataTable *table, UndoFlags new_op) {
 	if (current_table != table) {
-		// flush any previous appends/updates/deletes (if any)
-		Flush(new_op);
-
 		// write the current table to the log
 		log->WriteSetTable(table->schema, table->table);
 		current_table = table;
-		chunk = nullptr;
 	}
 }
 
@@ -99,55 +72,50 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteCatalogEntry(CatalogEntr
 	}
 }
 
-template <bool HAS_LOG> void CommitState<HAS_LOG>::PrepareAppend(UndoFlags op) {
-	if (!chunk) {
-		chunk = make_unique<DataChunk>();
-		switch (op) {
-		case UndoFlags::DELETE_TUPLE: {
-			vector<TypeId> delete_types = {ROW_TYPE};
-			chunk->Initialize(delete_types);
-			break;
-		}
-		default: {
-			assert(op == UndoFlags::UPDATE_TUPLE);
-			auto update_types = current_table->types;
-			update_types.push_back(ROW_TYPE);
-			chunk->Initialize(update_types);
-			break;
-		}
-		}
-	}
-	if (chunk->size() >= STANDARD_VECTOR_SIZE) {
-		Flush(op);
-		chunk->Reset();
-	}
-}
-
 template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteDelete(DeleteInfo *info) {
 	assert(log);
 	// switch to the current table, if necessary
 	SwitchTable(&info->GetTable(), UndoFlags::DELETE_TUPLE);
 
-	for(index_t i = 0; i < info->count; i++) {
-		// prepare the delete chunk for appending
-		PrepareAppend(UndoFlags::DELETE_TUPLE);
-
-		// append only the row id for a delete
-		AppendRowId(info->vinfo->start + info->rows[i]);
+	if (!delete_chunk) {
+		delete_chunk = make_unique<DataChunk>();
+		vector<TypeId> delete_types = {ROW_TYPE};
+		delete_chunk->InitializeEmpty(delete_types);
 	}
+	delete_chunk->data[0].data = (data_ptr_t) info->rows;
+	delete_chunk->data[0].count = info->count;
+	log->WriteDelete(*delete_chunk);
 }
 
-template <bool HAS_LOG> void CommitState<HAS_LOG>::AppendRowId(row_t rowid) {
-	auto &row_id_vector = chunk->data[chunk->column_count - 1];
-	auto row_ids = (row_t *)row_id_vector.data;
-	row_ids[row_id_vector.count++] = rowid;
+template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteUpdate(UpdateInfo *info) {
+	assert(log);
+	// switch to the current table, if necessary
+	SwitchTable(info->column_data->table, UndoFlags::UPDATE_TUPLE);
+
+	if (!update_chunk || info->column_data->type != update_chunk->data[0].type) {
+		update_chunk = make_unique<DataChunk>();
+		vector<TypeId> update_types = {info->column_data->type, ROW_TYPE};
+		update_chunk->Initialize(update_types);
+	}
+
+	throw Exception("FIXME: write update to WAL");
+	// set up the update data
+	update_chunk->data[0].data = info->tuple_data;
+	update_chunk->data[0].count = info->N;
+	update_chunk->data[1].count = info->N;
+
+	// write the row ids into the chunk
+	auto row_ids = (row_t *) update_chunk->data[1].data;
+	// FIXME: add start here
+	index_t start = /*info->segment->start + */info->vector_index * STANDARD_VECTOR_SIZE;
+	for(index_t i = 0; i < info->N; i++) {
+		row_ids[i] = start + info->tuples[i];
+	}
+
+	log->WriteUpdate(*update_chunk, info->column_data->column_idx);
 }
 
 template <bool HAS_LOG> void CommitState<HAS_LOG>::CommitEntry(UndoFlags type, data_ptr_t data) {
-	if (HAS_LOG && type != current_op) {
-		Flush(type);
-		chunk = nullptr;
-	}
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
 		// set the commit timestamp of the catalog entry to the given id
@@ -175,8 +143,8 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::CommitEntry(UndoFlags type, d
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = (UpdateInfo *)data;
-		if (HAS_LOG && !info->table->IsTemporary()) {
-			throw Exception("FIXME: write update in log");
+		if (HAS_LOG && !info->column_data->table->IsTemporary()) {
+			WriteUpdate(info);
 		}
 		info->version_number = commit_id;
 		break;

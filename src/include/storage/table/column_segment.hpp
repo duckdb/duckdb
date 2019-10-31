@@ -16,7 +16,7 @@
 namespace duckdb {
 class BlockManager;
 class ColumnSegment;
-class DataTable;
+class ColumnData;
 class Transaction;
 
 struct ColumnFetchState;
@@ -71,7 +71,7 @@ public:
 	virtual void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) = 0;
 
 	//! Perform an update within the segment
-	virtual void Update(DataTable &table, Transaction &transaction, Vector &updates, row_t *ids) = 0;
+	virtual void Update(ColumnData &column_data, Transaction &transaction, Vector &updates, row_t *ids) = 0;
 };
 
 } // namespace duckdb

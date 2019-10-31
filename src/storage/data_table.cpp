@@ -23,6 +23,7 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 	for (index_t i = 0; i < types.size(); i++) {
 		columns[i].type = types[i];
 		columns[i].table = this;
+		columns[i].column_idx = i;
 	}
 
 	// initialize the table with the existing data from disk, if any

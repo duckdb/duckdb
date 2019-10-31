@@ -16,6 +16,7 @@ class DataTable;
 class WriteAheadLog;
 
 struct DeleteInfo;
+struct UpdateInfo;
 
 template <bool HAS_LOG> class CommitState {
 public:
@@ -26,21 +27,19 @@ public:
 	UndoFlags current_op;
 
 	DataTable *current_table;
-	unique_ptr<DataChunk> chunk;
 	index_t row_identifiers[STANDARD_VECTOR_SIZE];
 
+	unique_ptr<DataChunk> delete_chunk;
+	unique_ptr<DataChunk> update_chunk;
 public:
 	void CommitEntry(UndoFlags type, data_ptr_t data);
-
-	void Flush(UndoFlags new_op);
 
 private:
 	void SwitchTable(DataTable *table, UndoFlags new_op);
 
-	void PrepareAppend(UndoFlags op);
-
 	void WriteCatalogEntry(CatalogEntry *entry);
 	void WriteDelete(DeleteInfo *info);
+	void WriteUpdate(UpdateInfo *info);
 
 	void AppendRowId(row_t rowid);
 };

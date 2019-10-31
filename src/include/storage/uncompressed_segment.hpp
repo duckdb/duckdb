@@ -15,6 +15,7 @@
 
 namespace duckdb {
 class BufferManager;
+class ColumnData;
 class Transaction;
 
 struct ColumnAppendState;
@@ -57,7 +58,7 @@ public:
 	virtual index_t Append(SegmentStatistics &stats, Vector &data, index_t offset, index_t count) = 0;
 
 	//! Update a set of row identifiers to the specified set of updated values
-	void Update(DataTable &table, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, row_t offset);
+	void Update(ColumnData &data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, row_t offset);
 
 	//! Rollback a previous update
 	virtual void RollbackUpdate(UpdateInfo *info) = 0;
@@ -71,13 +72,13 @@ public:
 		return std::min((index_t) STANDARD_VECTOR_SIZE, tuple_count - vector_index * STANDARD_VECTOR_SIZE);
 	}
 protected:
-	virtual void Update(DataTable &table, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) = 0;
+	virtual void Update(ColumnData &data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) = 0;
 	//! Fetch base table data
 	virtual index_t FetchBaseData(ColumnScanState &state, index_t vector_index, Vector &result) = 0;
 	//! Fetch update data from an UpdateInfo version
 	virtual void FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *version, Vector &result, index_t count) = 0;
 
-	UpdateInfo *CreateUpdateInfo(DataTable &table, Transaction &transaction, row_t *ids, index_t count, index_t vector_index, index_t vector_offset, index_t type_size);
+	UpdateInfo *CreateUpdateInfo(ColumnData &data, Transaction &transaction, row_t *ids, index_t count, index_t vector_index, index_t vector_offset, index_t type_size);
 };
 
 } // namespace duckdb

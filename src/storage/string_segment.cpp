@@ -79,23 +79,19 @@ index_t StringSegment::FetchBaseData(ColumnScanState &state, index_t vector_inde
 //===--------------------------------------------------------------------===//
 // Fetch update data
 //===--------------------------------------------------------------------===//
-void StringSegment::FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *current, Vector &result, index_t count) {
+void StringSegment::FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *info, Vector &result, index_t count) {
 	// fetch data from updates
 	auto handle = state.primary_handle.get();
 
 	auto result_data = (char**) result.data;
-	while(current) {
-		if (current->version_number > transaction.start_time && current->version_number != transaction.transaction_id) {
-			// these tuples were either committed AFTER this transaction started or are not committed yet, use tuples stored in this version
-			auto info_data = (string_location_t*) current->tuple_data;
-			for(index_t i = 0; i < current->N; i++) {
-				auto string = FetchString(state.handles, handle->node->buffer, info_data[i]);
-				result_data[current->tuples[i]] = string.data;
-				result.nullmask[current->tuples[i]] = current->nullmask[current->tuples[i]];
-			}
+	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
+		auto info_data = (string_location_t*) current->tuple_data;
+		for(index_t i = 0; i < current->N; i++) {
+			auto string = FetchString(state.handles, handle->node->buffer, info_data[i]);
+			result_data[current->tuples[i]] = string.data;
+			result.nullmask[current->tuples[i]] = current->nullmask[current->tuples[i]];
 		}
-		current = current->next;
-	}
+	});
 }
 
 void StringSegment::FetchStringLocations(data_ptr_t baseptr, row_t *ids, index_t vector_index, index_t vector_offset, index_t count, string_location_t result[]) {
@@ -203,7 +199,6 @@ string_t StringSegment::FetchString(buffer_handle_set_t &handles, data_ptr_t bas
 		result.data = (char*) (dict_pos + sizeof(uint16_t));
 		return result;
 	}
-
 }
 
 void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) {
@@ -213,10 +208,21 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 	index_t id_in_vector = row_id - vector_index * STANDARD_VECTOR_SIZE;
 	assert(vector_index < max_vector_count);
 
-	// fetch a single row from the string segment
-	auto handle = manager.Pin(block_id);
+	data_ptr_t baseptr;
 
-	auto baseptr = handle->node->buffer;
+	// fetch a single row from the string segment
+	// first pin the main buffer if it is not already pinned
+	auto entry = state.handles.find(block_id);
+	if (entry == state.handles.end()) {
+		// not pinned yet: pin it
+		auto handle = manager.Pin(block_id);
+		baseptr = handle->node->buffer;
+		state.handles[block_id] = move(handle);
+	} else {
+		// already pinned: use the pinned handle
+		baseptr = entry->second->node->buffer;
+	}
+
 	auto base = baseptr + vector_index * vector_size;
 	auto &base_nullmask = *((nullmask_t*) base);
 	auto base_data = (int32_t *) (base + sizeof(nullmask_t));
@@ -225,21 +231,22 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 	result_data[result.count] = nullptr;
 	// first see if there is any updated version of this tuple we must fetch
 	if (versions && versions[vector_index]) {
-		auto current = versions[vector_index];
-		while(current) {
-			if (current->version_number > transaction.start_time && current->version_number != transaction.transaction_id) {
-				// these tuples were either committed AFTER this transaction started or are not committed yet, use tuples stored in this version
-				auto info_data = (string_location_t*) current->tuple_data;
-				for(index_t i = 0; i < current->N; i++) {
-					if (current->tuples[i] == id_in_vector) {
-						auto string = FetchString(state.handles, handle->node->buffer, info_data[i]);
-						result_data[result.count] = string.data;
-						result.nullmask[result.count] = current->nullmask[current->tuples[i]];
-					}
+		UpdateInfo::UpdatesForTransaction(versions[vector_index], transaction, [&](UpdateInfo *current) {
+			auto info_data = (string_location_t*) current->tuple_data;
+			// loop over the tuples in this UpdateInfo
+			for(index_t i = 0; i < current->N; i++) {
+				if (current->tuples[i] == row_id) {
+					// found the relevant tuple
+					auto string = FetchString(state.handles, baseptr, info_data[i]);
+					result_data[result.count] = string.data;
+					result.nullmask[result.count] = current->nullmask[current->tuples[i]];
+					break;
+				} else if (current->tuples[i] > row_id) {
+					// tuples are sorted: so if the current tuple is > row_id we will not find it anymore
+					break;
 				}
 			}
-			current = current->next;
-		}
+		});
 	}
 	if (!result_data[result.count]) {
 		// there was no updated version to be fetched: fetch the base version instead
@@ -262,8 +269,6 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 	}
 	result.nullmask[result.count] = base_nullmask[id_in_vector];
 	result.count++;
-
-	state.handles[block_id] = move(handle);
 }
 
 //===--------------------------------------------------------------------===//
@@ -522,7 +527,7 @@ void StringSegment::MergeUpdateInfo(UpdateInfo *node, Vector &update, row_t *ids
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-void StringSegment::Update(DataTable &table, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) {
+void StringSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) {
 	if (!string_updates) {
 		string_updates = unique_ptr<string_update_info_t[]>(new string_update_info_t[max_vector_count]);
 	}
@@ -557,7 +562,7 @@ void StringSegment::Update(DataTable &table, SegmentStatistics &stats, Transacti
 	// create the update node
 	if (!node) {
 		// create a new node in the undo buffer for this update
-		node = CreateUpdateInfo(table, transaction, ids, update.count, vector_index, vector_offset, sizeof(string_location_t));
+		node = CreateUpdateInfo(column_data, transaction, ids, update.count, vector_index, vector_offset, sizeof(string_location_t));
 
 		// copy the string location data into the undo buffer
 		node->nullmask = original_nullmask;

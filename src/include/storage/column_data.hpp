@@ -28,6 +28,8 @@ public:
 	TypeId type;
 	//! The table of the column
 	DataTable *table;
+	//! The column index of the column
+	index_t column_idx;
 	//! The segments holding the data of the column
 	SegmentTree data;
 	//! The amount of persistent rows

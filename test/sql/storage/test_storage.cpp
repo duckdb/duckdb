@@ -71,19 +71,8 @@ TEST_CASE("Test simple storage", "[storage]") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2 (a INTEGER);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (13), (12), (11)"));
 	}
-	// reload the database from disk
-	{
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
-		result = con.Query("SELECT * FROM test ORDER BY a");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 11, 12, 13}));
-		REQUIRE(CHECK_COLUMN(result, 1, {Value(), 22, 21, 22}));
-		result = con.Query("SELECT * FROM test2 ORDER BY a");
-		REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
-	}
-	// reload the database from disk, we do this again because checkpointing at startup causes this to follow a
-	// different code path
-	{
+	// reload the database from disk a few times
+	for(index_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT * FROM test ORDER BY a");
@@ -110,24 +99,38 @@ TEST_CASE("Test storing NULLs and strings", "[storage]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (NULL, 'hello'), "
 		                          "(13, 'abcdefgh'), (12, NULL)"));
 	}
-	// reload the database from disk
-	{
+	// reload the database from disk a few times
+	for(index_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT a, b FROM test ORDER BY a");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 12, 13}));
 		REQUIRE(CHECK_COLUMN(result, 1, {"hello", Value(), "abcdefgh"}));
 	}
-	// reload the database from disk, we do this again because checkpointing at startup causes this to follow a
-	// different code path
+	DeleteDatabase(storage_database);
+}
+
+TEST_CASE("Test updates/deletes and strings", "[storage]") {
+	auto config = GetTestConfig();
+	unique_ptr<QueryResult> result;
+	auto storage_database = TestCreatePath("storage_test");
+
+	// make sure the database does not exist
+	DeleteDatabase(storage_database);
 	{
+		// create a database and insert values
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
-		result = con.Query("SELECT a, b FROM test ORDER BY a");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 12, 13}));
-		REQUIRE(CHECK_COLUMN(result, 1, {"hello", Value(), "abcdefgh"}));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b STRING);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (NULL, 'hello'), "
+		                          "(13, 'abcdefgh'), (12, NULL)"));
+		REQUIRE_NO_FAIL(con.Query("UPDATE test SET b=NULL WHERE a IS NULL"));
+		REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE a=12"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (12, NULL)"));
+		REQUIRE_NO_FAIL(con.Query("UPDATE test SET b='hello' WHERE a IS NULL"));
 	}
-	{
+	// reload the database from disk a few times
+	for(index_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT a, b FROM test ORDER BY a");
@@ -158,15 +161,7 @@ TEST_CASE("Test deletes with storage", "[storage]") {
 		REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	}
 	// reload the database from disk
-	{
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
-		result = con.Query("SELECT a, b FROM test ORDER BY a");
-		REQUIRE(CHECK_COLUMN(result, 0, {11, 13}));
-		REQUIRE(CHECK_COLUMN(result, 1, {22, 22}));
-	}
-	// reload the database from disk again
-	{
+	for(index_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT a, b FROM test ORDER BY a");
@@ -195,15 +190,7 @@ TEST_CASE("Test updates with storage", "[storage]") {
 		REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	}
 	// reload the database from disk
-	{
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
-		result = con.Query("SELECT a, b FROM test ORDER BY a");
-		REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
-		REQUIRE(CHECK_COLUMN(result, 1, {24, 21, 22}));
-	}
-	// reload the database from disk again
-	{
+	for(index_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT a, b FROM test ORDER BY a");
@@ -234,15 +221,7 @@ TEST_CASE("Test mix of updates and deletes with storage", "[storage]") {
 		REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	}
 	// reload the database from disk
-	{
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
-		result = con.Query("SELECT a, b FROM test ORDER BY a");
-		REQUIRE(CHECK_COLUMN(result, 0, {11, 13}));
-		REQUIRE(CHECK_COLUMN(result, 1, {1022, 22}));
-	}
-	// reload the database from disk again
-	{
+	for(index_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT a, b FROM test ORDER BY a");
@@ -279,15 +258,7 @@ TEST_CASE("Test large inserts in a single transaction", "[storage]") {
 		REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(expected_sum_b)}));
 	}
 	// reload the database from disk
-	{
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
-		result = con.Query("SELECT SUM(a), SUM(b) FROM test");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(expected_sum_a)}));
-		REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(expected_sum_b)}));
-	}
-	// reload the database from disk again
-	{
+	for(index_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT SUM(a), SUM(b) FROM test");
@@ -353,18 +324,7 @@ TEST_CASE("Test interleaving of insertions/updates/deletes on multiple tables", 
 		REQUIRE(CHECK_COLUMN(result, 1, {405513}));
 	}
 	// reload the database from disk
-	{
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
-		result = con.Query("SELECT SUM(a) FROM test ORDER BY 1");
-		REQUIRE(CHECK_COLUMN(result, 0, {396008}));
-
-		result = con.Query("SELECT SUM(a), SUM(b) FROM test2 ORDER BY 1");
-		REQUIRE(CHECK_COLUMN(result, 0, {403915}));
-		REQUIRE(CHECK_COLUMN(result, 1, {405513}));
-	}
-	// reload the database from disk again
-	{
+	for(index_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT SUM(a) FROM test ORDER BY 1");
@@ -413,23 +373,7 @@ TEST_CASE("Test update/deletes on big table", "[storage][.]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	}
 	// reload the database from disk
-	{
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
-		result = con.Query("SELECT SUM(a), COUNT(a) FROM test");
-		REQUIRE(CHECK_COLUMN(result, 0, {50148000}));
-		REQUIRE(CHECK_COLUMN(result, 1, {99800}));
-		result = con.Query("SELECT COUNT(a) FROM test WHERE a=0");
-		REQUIRE(CHECK_COLUMN(result, 0, {100}));
-		result = con.Query("SELECT COUNT(a) FROM test WHERE a=1");
-		REQUIRE(CHECK_COLUMN(result, 0, {0}));
-		result = con.Query("SELECT COUNT(a) FROM test WHERE a=2");
-		REQUIRE(CHECK_COLUMN(result, 0, {0}));
-		result = con.Query("SELECT COUNT(a) FROM test WHERE a=17");
-		REQUIRE(CHECK_COLUMN(result, 0, {0}));
-	}
-	// reload the database from disk again
-	{
+	for(index_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT SUM(a), COUNT(a) FROM test");

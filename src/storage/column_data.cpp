@@ -89,7 +89,7 @@ void ColumnData::Update(Transaction &transaction, Vector &updates, row_t *ids) {
 	index_t first_id = ids[updates.sel_vector ? updates.sel_vector[0] : 0];
 	auto segment = (ColumnSegment *) data.GetSegment(first_id);
 	// now perform the update within the segment
-	segment->Update(*table, transaction, updates, ids);
+	segment->Update(*this, transaction, updates, ids);
 }
 
 void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {

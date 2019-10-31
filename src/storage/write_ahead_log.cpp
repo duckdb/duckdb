@@ -112,12 +112,13 @@ void WriteAheadLog::WriteDelete(DataChunk &chunk) {
 	chunk.Serialize(*writer);
 }
 
-void WriteAheadLog::WriteUpdate(DataChunk &chunk) {
+void WriteAheadLog::WriteUpdate(DataChunk &chunk, column_t col_idx) {
 	assert(chunk.size() > 0);
 	chunk.Verify();
 	assert(!chunk.sel_vector); // "Cannot insert into WAL from chunk with SEL vector"
 
 	writer->Write<WALType>(WALType::UPDATE_TUPLE);
+	writer->Write<column_t>(col_idx);
 	chunk.Serialize(*writer);
 }
 
