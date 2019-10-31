@@ -85,8 +85,6 @@ matrix:
           packages:
             - valgrind
 
-      before_install:
-        - eval "${MATRIX_EVAL}"
       script:
         - mkdir -p build/debug
         - (cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_SANITIZER=FALSE ../.. && cmake --build .)
@@ -102,11 +100,8 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
-            - g++-9 valgrind
-      env:
-        - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
-      before_install:
-        - eval "${MATRIX_EVAL}"
+            - valgrind
+
       script:
         - mkdir -p build/debug
         - (cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_SANITIZER=FALSE ../.. && cmake --build .)
