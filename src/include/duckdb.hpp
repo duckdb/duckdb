@@ -8,8 +8,8 @@
 
 #pragma once
 
-#if !defined(__cpp_exceptions) || !defined(__cpp_rtti)
-	#error "DuckDB requires C++ Exceptions and Run-Time Type Information (-fexceptions -frtti in gcc)"
+#if !defined(__cpp_exceptions)
+	#error "DuckDB requires C++ Exception support(-fexceptions in gcc)"
 #endif
 
 #include "main/connection.hpp"
