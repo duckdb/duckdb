@@ -7,12 +7,12 @@
 using namespace duckdb;
 using namespace std;
 
-template <bool HAS_LOG>
-CommitState<HAS_LOG>::CommitState(transaction_t commit_id, WriteAheadLog *log)
+
+CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
     : log(log), commit_id(commit_id), current_table(nullptr) {
 }
 
-template <bool HAS_LOG> void CommitState<HAS_LOG>::SwitchTable(DataTable *table, UndoFlags new_op) {
+ void CommitState::SwitchTable(DataTable *table, UndoFlags new_op) {
 	if (current_table != table) {
 		// write the current table to the log
 		log->WriteSetTable(table->schema, table->table);
@@ -20,7 +20,7 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::SwitchTable(DataTable *table,
 	}
 }
 
-template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteCatalogEntry(CatalogEntry *entry) {
+ void CommitState::WriteCatalogEntry(CatalogEntry *entry) {
 	assert(log);
 	// look at the type of the parent entry
 	auto parent = entry->parent;
@@ -72,7 +72,7 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteCatalogEntry(CatalogEntr
 	}
 }
 
-template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteDelete(DeleteInfo *info) {
+ void CommitState::WriteDelete(DeleteInfo *info) {
 	assert(log);
 	// switch to the current table, if necessary
 	SwitchTable(&info->GetTable(), UndoFlags::DELETE_TUPLE);
@@ -87,7 +87,7 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteDelete(DeleteInfo *info)
 	log->WriteDelete(*delete_chunk);
 }
 
-template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteUpdate(UpdateInfo *info) {
+ void CommitState::WriteUpdate(UpdateInfo *info) {
 	assert(log);
 	// switch to the current table, if necessary
 	SwitchTable(info->column_data->table, UndoFlags::UPDATE_TUPLE);
@@ -120,7 +120,8 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteUpdate(UpdateInfo *info)
 	log->WriteUpdate(*update_chunk, info->column_data->column_idx);
 }
 
-template <bool HAS_LOG> void CommitState<HAS_LOG>::CommitEntry(UndoFlags type, data_ptr_t data) {
+template <bool HAS_LOG>
+void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
 		// set the commit timestamp of the catalog entry to the given id
@@ -167,3 +168,6 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::CommitEntry(UndoFlags type, d
 		throw NotImplementedException("UndoBuffer - don't know how to commit this type!");
 	}
 }
+
+template void CommitState::CommitEntry<true>(UndoFlags type, data_ptr_t data);
+template void CommitState::CommitEntry<false>(UndoFlags type, data_ptr_t data);

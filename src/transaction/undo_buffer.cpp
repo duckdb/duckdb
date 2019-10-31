@@ -121,14 +121,13 @@ void UndoBuffer::Cleanup() {
 }
 
 void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept {
+	CommitState state(commit_id, log);
 	if (log) {
-		CommitState<true> state(commit_id, log);
 		// commit WITH write ahead log
-		IterateEntries([&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
+		IterateEntries([&](UndoFlags type, data_ptr_t data) { state.CommitEntry<true>(type, data); });
 	} else {
-		CommitState<false> state(commit_id);
 		// comit WITHOUT write ahead log
-		IterateEntries([&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
+		IterateEntries([&](UndoFlags type, data_ptr_t data) { state.CommitEntry<false>(type, data); });
 	}
 }
 

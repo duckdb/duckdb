@@ -18,7 +18,7 @@ class WriteAheadLog;
 struct DeleteInfo;
 struct UpdateInfo;
 
-template <bool HAS_LOG> class CommitState {
+class CommitState {
 public:
 	CommitState(transaction_t commit_id, WriteAheadLog *log = nullptr);
 
@@ -32,6 +32,7 @@ public:
 	unique_ptr<DataChunk> delete_chunk;
 	unique_ptr<DataChunk> update_chunk;
 public:
+	template <bool HAS_LOG>
 	void CommitEntry(UndoFlags type, data_ptr_t data);
 
 private:
