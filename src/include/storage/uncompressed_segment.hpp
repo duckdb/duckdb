@@ -24,8 +24,9 @@ struct UpdateInfo;
 //! An uncompressed segment represents an uncompressed segment of a column residing in a block
 class UncompressedSegment {
 public:
-	UncompressedSegment(BufferManager &manager, TypeId type);
+	UncompressedSegment(BufferManager &manager, TypeId type, index_t row_start);
 	virtual ~UncompressedSegment() = default;
+
 	//! The buffer manager
 	BufferManager &manager;
 	//! Type of the uncompressed segment
@@ -38,6 +39,8 @@ public:
 	index_t max_vector_count;
 	//! The current amount of tuples that are stored in this segment
 	index_t tuple_count;
+	//! The starting row of this segment
+	index_t row_start;
 	//! Version chains for each of the vectors
 	unique_ptr<UpdateInfo*[]> versions;
 	//! The lock for the uncompressed segment
@@ -64,6 +67,9 @@ public:
 	virtual void RollbackUpdate(UpdateInfo *info) = 0;
 	//! Cleanup an update, removing it from the version chain. This should only be called if an exclusive lock is held on the segment
 	void CleanupUpdate(UpdateInfo *info);
+
+	//! Convert a persistently backed uncompressed segment (i.e. one where block_id refers to an on-disk block) to a temporary in-memory one
+	void ToTemporary();
 
 	//! Get the amount of tuples in a vector
 	index_t GetVectorCount(index_t vector_index) {

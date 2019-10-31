@@ -130,7 +130,7 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 		                     {count_per_group, count_per_group, count_per_group, count_per_group, count_per_group}));
 	}
 	// reload the database from disk
-	{
+	for(index_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT a, COUNT(*) FROM test GROUP BY a ORDER BY a");
@@ -138,16 +138,22 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 		REQUIRE(CHECK_COLUMN(result, 1,
 		                     {count_per_group, count_per_group, count_per_group, count_per_group, count_per_group}));
 	}
-	// reload the database from disk, we do this again because checkpointing at startup causes this to follow a
-	// different code path
+	// now perform an update of the database
 	{
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("UPDATE test SET a='aaa' WHERE a='a'"));
+	}
+	// reload the database from disk again
+	for(index_t i = 0; i < 2; i++) {
+		DuckDB db(storage_database, config.get());
+		Connection con(db);
 		result = con.Query("SELECT a, COUNT(*) FROM test GROUP BY a ORDER BY a");
-		REQUIRE(CHECK_COLUMN(result, 0, {"a", "bb", "ccc", "dddd", "eeeee"}));
+		REQUIRE(CHECK_COLUMN(result, 0, {"aaa", "bb", "ccc", "dddd", "eeeee"}));
 		REQUIRE(CHECK_COLUMN(result, 1,
 		                     {count_per_group, count_per_group, count_per_group, count_per_group, count_per_group}));
 	}
+
 	DeleteDatabase(storage_database);
 }
 

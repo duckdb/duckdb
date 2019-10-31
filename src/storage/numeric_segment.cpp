@@ -15,8 +15,8 @@ static NumericSegment::rollback_update_function_t GetRollbackUpdateFunction(Type
 static NumericSegment::merge_update_function_t GetMergeUpdateFunction(TypeId type);
 static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction(TypeId type);
 
-NumericSegment::NumericSegment(BufferManager &manager, TypeId type, block_id_t block) :
-	UncompressedSegment(manager, type) {
+NumericSegment::NumericSegment(BufferManager &manager, TypeId type, index_t row_start, block_id_t block) :
+	UncompressedSegment(manager, type, row_start) {
 	// set up the different functions for this type of segment
 	this->append_function = GetAppendFunction(type);
 	this->update_function = GetUpdateFunction(type);

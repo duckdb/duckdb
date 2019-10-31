@@ -17,10 +17,10 @@ PersistentSegment::PersistentSegment(BufferManager &manager, block_id_t id, inde
     : ColumnSegment(type, ColumnSegmentType::PERSISTENT, start, count), manager(manager), block_id(id), offset(offset) {
 	assert(offset == 0);
 	if (type == TypeId::VARCHAR) {
-		data = make_unique<StringSegment>(manager, id);
+		data = make_unique<StringSegment>(manager, start, id);
 		data->max_vector_count = count / STANDARD_VECTOR_SIZE + (count % STANDARD_VECTOR_SIZE == 0 ? 0 : 1);
 	} else {
-		data = make_unique<NumericSegment>(manager, type, id);
+		data = make_unique<NumericSegment>(manager, type, start, id);
 	}
 	data->tuple_count = count;
 }
@@ -49,7 +49,7 @@ void PersistentSegment::Update(ColumnData &column_data, Transaction &transaction
 	// update of persistent segment: check if the table has been updated before
 	if (block_id == data->block_id) {
 		// data has not been updated before! convert the segment from one that refers to an on-disk block to one that refers to a in-memory buffer
-		throw Exception("FIXME: uncompressed segment conversion");
+		data->ToTemporary();
 	}
 	data->Update(column_data, stats, transaction, updates, ids, this->start);
 }

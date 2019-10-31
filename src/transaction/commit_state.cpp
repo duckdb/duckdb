@@ -98,6 +98,7 @@ CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
 		update_chunk->Initialize(update_types);
 	}
 
+
 	// fetch the updated values from the base table
 	ColumnScanState state;
 	info->segment->InitializeScan(state);
@@ -107,8 +108,7 @@ CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
 
 	// write the row ids into the chunk
 	auto row_ids = (row_t *) update_chunk->data[1].data;
-	// FIXME: add start here
-	index_t start = /*info->segment->start + */info->vector_index * STANDARD_VECTOR_SIZE;
+	index_t start = info->segment->row_start + info->vector_index * STANDARD_VECTOR_SIZE;
 	for(index_t i = 0; i < info->N; i++) {
 		row_ids[info->tuples[i]] = start + info->tuples[i];
 	}

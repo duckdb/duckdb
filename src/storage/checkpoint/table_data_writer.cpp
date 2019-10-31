@@ -66,9 +66,9 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 void TableDataWriter::CreateSegment(index_t col_idx) {
 	auto type_id = GetInternalType(table.columns[col_idx].type);
 	if (type_id == TypeId::VARCHAR) {
-		segments[col_idx] = make_unique<StringSegment>(manager.buffer_manager);
+		segments[col_idx] = make_unique<StringSegment>(manager.buffer_manager, 0);
 	} else {
-		segments[col_idx] = make_unique<NumericSegment>(manager.buffer_manager, type_id);
+		segments[col_idx] = make_unique<NumericSegment>(manager.buffer_manager, type_id, 0);
 	}
 }
 

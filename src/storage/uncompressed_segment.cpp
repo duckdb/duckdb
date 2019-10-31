@@ -5,8 +5,8 @@
 using namespace duckdb;
 using namespace std;
 
-UncompressedSegment::UncompressedSegment(BufferManager &manager, TypeId type) :
-	manager(manager), type(type), block_id(INVALID_BLOCK), max_vector_count(0), tuple_count(0), versions(nullptr) {
+UncompressedSegment::UncompressedSegment(BufferManager &manager, TypeId type, index_t row_start) :
+	manager(manager), type(type), block_id(INVALID_BLOCK), max_vector_count(0), tuple_count(0), row_start(row_start), versions(nullptr) {
 }
 
 static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector &update, row_t *ids, row_t offset, UpdateInfo *& node) {
@@ -42,6 +42,9 @@ static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector
 }
 
 void UncompressedSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, row_t offset) {
+	// can only perform in-place updates on temporary blocks
+	assert(block_id >= MAXIMUM_BLOCK);
+
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
 
@@ -150,4 +153,24 @@ void UncompressedSegment::CleanupUpdate(UpdateInfo *info) {
 			info->next->prev = nullptr;
 		}
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// ToTemporary
+//===--------------------------------------------------------------------===//
+void UncompressedSegment::ToTemporary() {
+	auto write_lock = lock.GetExclusiveLock();
+
+	if (block_id >= MAXIMUM_BLOCK) {
+		// conversion has already been performed by a different thread
+		return;
+	}
+	// pin the current block
+	auto current = manager.Pin(block_id);
+
+	// now allocate a new block from the buffer manager
+	auto handle = manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
+	// now copy the data over and switch to using the new block id
+	memcpy(handle->node->buffer, current->node->buffer, Storage::BLOCK_SIZE);
+	this->block_id = handle->block_id;
 }

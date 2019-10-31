@@ -11,9 +11,9 @@ using namespace std;
 TransientSegment::TransientSegment(BufferManager &manager, TypeId type, index_t start)
     : ColumnSegment(type, ColumnSegmentType::TRANSIENT, start), manager(manager) {
 	if (type == TypeId::VARCHAR) {
-		data = make_unique<StringSegment>(manager);
+		data = make_unique<StringSegment>(manager, start);
 	} else {
-		data = make_unique<NumericSegment>(manager, type);
+		data = make_unique<NumericSegment>(manager, type, start);
 	}
 }
 

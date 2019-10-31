@@ -12,8 +12,8 @@ static bool IsValidStringLocation(string_location_t location) {
 	return location.offset < Storage::BLOCK_SIZE && (location.block_id == INVALID_BLOCK || location.block_id >= MAXIMUM_BLOCK);
 }
 
-StringSegment::StringSegment(BufferManager &manager, block_id_t block) :
-	UncompressedSegment(manager, TypeId::VARCHAR) {
+StringSegment::StringSegment(BufferManager &manager, index_t row_start, block_id_t block) :
+	UncompressedSegment(manager, TypeId::VARCHAR, row_start) {
 	this->max_vector_count = 0;
 	this->dictionary_offset = 0;
 	// the vector_size is given in the size of the dictionary offsets

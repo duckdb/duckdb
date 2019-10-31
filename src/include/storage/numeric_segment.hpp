@@ -14,7 +14,7 @@ namespace duckdb {
 
 class NumericSegment : public UncompressedSegment {
 public:
-	NumericSegment(BufferManager &manager, TypeId type, block_id_t block_id = INVALID_BLOCK);
+	NumericSegment(BufferManager &manager, TypeId type, index_t row_start, block_id_t block_id = INVALID_BLOCK);
 
 	//! The size of this type
 	index_t type_size;
