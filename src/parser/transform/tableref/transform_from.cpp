@@ -8,7 +8,7 @@ using namespace std;
 
 unique_ptr<TableRef> Transformer::TransformFrom(postgres::List *root) {
 	if (!root) {
-		return make_unique<DummyTableRef>();;
+		return make_unique<DummyTableRef>();
 	}
 
 	if (root->length > 1) {

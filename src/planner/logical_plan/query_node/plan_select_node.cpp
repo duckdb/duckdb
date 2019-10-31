@@ -8,7 +8,9 @@ using namespace std;
 
 unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSelectNode &statement) {
 	unique_ptr<LogicalOperator> root;
+	assert(statement.from_table);
 	root = CreatePlan(*statement.from_table);
+	assert(root);
 
 	if (statement.values.size() > 0) {
 		// values list, first plan any subqueries in the list
