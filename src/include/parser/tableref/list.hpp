@@ -3,3 +3,4 @@
 #include "parser/tableref/joinref.hpp"
 #include "parser/tableref/subqueryref.hpp"
 #include "parser/tableref/table_function_ref.hpp"
+#include "parser/tableref/dummytableref.hpp"

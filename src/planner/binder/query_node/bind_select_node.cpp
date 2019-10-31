@@ -48,9 +48,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 		return move(result);
 	}
 	// first bind the FROM table statement
-	if (statement.from_table) {
-		result->from_table = Bind(*statement.from_table);
-	}
+	result->from_table = Bind(*statement.from_table);
 
 	// visit the select list and expand any "*" statements
 	vector<unique_ptr<ParsedExpression>> new_select_list;

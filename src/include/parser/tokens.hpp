@@ -77,5 +77,6 @@ class CrossProductRef;
 class JoinRef;
 class SubqueryRef;
 class TableFunctionRef;
+class DummyTableRef;
 
 } // namespace duckdb

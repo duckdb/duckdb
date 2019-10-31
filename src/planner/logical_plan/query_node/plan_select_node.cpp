@@ -8,13 +8,7 @@ using namespace std;
 
 unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSelectNode &statement) {
 	unique_ptr<LogicalOperator> root;
-	if (statement.from_table) {
-		// SELECT with FROM
-		root = CreatePlan(*statement.from_table);
-	} else {
-		// SELECT without FROM, add empty GET
-		root = make_unique<LogicalGet>();
-	}
+	root = CreatePlan(*statement.from_table);
 
 	if (statement.values.size() > 0) {
 		// values list, first plan any subqueries in the list
