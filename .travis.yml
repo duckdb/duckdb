@@ -76,6 +76,25 @@ matrix:
 
     - os: linux
       dist: xenial
+      name: GCC 5 Valgrind
+
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - valgrind
+
+      before_install:
+        - eval "${MATRIX_EVAL}"
+      script:
+        - mkdir -p build/debug
+        - (cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_SANITIZER=FALSE ../.. && cmake --build .)
+        - valgrind --suppressions=valgrind-suppressions ./build/debug/test/unittest
+
+
+    - os: linux
+      dist: bionic
       name: GCC 9 Valgrind
 
       addons:
