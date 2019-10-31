@@ -74,10 +74,11 @@ public:
 protected:
 	virtual void Update(ColumnData &data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) = 0;
 	//! Fetch base table data
-	virtual index_t FetchBaseData(ColumnScanState &state, index_t vector_index, Vector &result) = 0;
+	virtual void FetchBaseData(ColumnScanState &state, index_t vector_index, Vector &result) = 0;
 	//! Fetch update data from an UpdateInfo version
-	virtual void FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *version, Vector &result, index_t count) = 0;
+	virtual void FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *version, Vector &result) = 0;
 
+	//! Create a new update info for the specified transaction reflecting an update of the specified rows
 	UpdateInfo *CreateUpdateInfo(ColumnData &data, Transaction &transaction, row_t *ids, index_t count, index_t vector_index, index_t vector_offset, index_t type_size);
 };
 

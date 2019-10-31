@@ -102,7 +102,6 @@ UpdateInfo *UncompressedSegment::CreateUpdateInfo(ColumnData &column_data, Trans
 
 void UncompressedSegment::Fetch(ColumnScanState &state, index_t vector_index, Vector &result) {
 	auto read_lock = lock.GetSharedLock();
-	assert(!versions);
 
 	InitializeScan(state);
 	FetchBaseData(state, vector_index, result);
@@ -115,10 +114,10 @@ void UncompressedSegment::Scan(Transaction &transaction, ColumnScanState &state,
 	auto read_lock = lock.GetSharedLock();
 
 	// first fetch the data from the base table
-	index_t count = FetchBaseData(state, vector_index, result);
+	FetchBaseData(state, vector_index, result);
 	if (versions && versions[vector_index]) {
 		// if there are any versions, check if we need to overwrite the data with the versioned data
-		FetchUpdateData(state, transaction, versions[vector_index], result, count);
+		FetchUpdateData(state, transaction, versions[vector_index], result);
 	}
 }
 

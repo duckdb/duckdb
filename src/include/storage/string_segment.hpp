@@ -61,9 +61,8 @@ public:
 protected:
 	void Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) override;
 
-	index_t FetchBaseData(ColumnScanState &state, index_t vector_index, Vector &result) override;
-
-	void FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *versions, Vector &result, index_t count) override;
+	void FetchBaseData(ColumnScanState &state, index_t vector_index, Vector &result) override;
+	void FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *versions, Vector &result) override;
 private:
 	void AppendData(SegmentStatistics &stats, data_ptr_t target, data_ptr_t end, index_t target_offset, Vector &source, index_t offset, index_t count);
 

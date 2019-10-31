@@ -127,15 +127,16 @@ TEST_CASE("Test updates/deletes and strings", "[storage]") {
 		REQUIRE_NO_FAIL(con.Query("UPDATE test SET b=NULL WHERE a IS NULL"));
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE a=12"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (12, NULL)"));
-		REQUIRE_NO_FAIL(con.Query("UPDATE test SET b='hello' WHERE a IS NULL"));
+		REQUIRE_NO_FAIL(con.Query("UPDATE test SET b='test123' WHERE a=12"));
+		REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=a+1"));
 	}
 	// reload the database from disk a few times
 	for(index_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT a, b FROM test ORDER BY a");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 12, 13}));
-		REQUIRE(CHECK_COLUMN(result, 1, {"hello", Value(), "abcdefgh"}));
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 13, 14}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value(), "test123", "abcdefgh"}));
 	}
 	DeleteDatabase(storage_database);
 }

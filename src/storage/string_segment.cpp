@@ -64,66 +64,13 @@ void StringSegment::InitializeScan(ColumnScanState &state) {
 //===--------------------------------------------------------------------===//
 // Fetch base data
 //===--------------------------------------------------------------------===//
-index_t StringSegment::FetchBaseData(ColumnScanState &state, index_t vector_index, Vector &result) {
+void StringSegment::FetchBaseData(ColumnScanState &state, index_t vector_index, Vector &result) {
 	// clear any previously locked buffers and get the primary buffer handle
 	auto handle = state.primary_handle.get();
 	state.handles.clear();
 
-	index_t count = GetVectorCount(vector_index);
-
 	// fetch the data from the base segment
-	FetchBaseData(state, handle->node->buffer, vector_index, result, count);
-	return count;
-}
-
-//===--------------------------------------------------------------------===//
-// Fetch update data
-//===--------------------------------------------------------------------===//
-void StringSegment::FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *info, Vector &result, index_t count) {
-	// fetch data from updates
-	auto handle = state.primary_handle.get();
-
-	auto result_data = (char**) result.data;
-	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
-		auto info_data = (string_location_t*) current->tuple_data;
-		for(index_t i = 0; i < current->N; i++) {
-			auto string = FetchString(state.handles, handle->node->buffer, info_data[i]);
-			result_data[current->tuples[i]] = string.data;
-			result.nullmask[current->tuples[i]] = current->nullmask[current->tuples[i]];
-		}
-	});
-}
-
-void StringSegment::FetchStringLocations(data_ptr_t baseptr, row_t *ids, index_t vector_index, index_t vector_offset, index_t count, string_location_t result[]) {
-	auto base = baseptr + vector_index * vector_size;
-	auto base_data = (int32_t *) (base + sizeof(nullmask_t));
-
-	if (string_updates && string_updates[vector_index]) {
-		// there are updates: merge them in
-		auto &info = *string_updates[vector_index];
-		index_t update_idx = 0;
-		for(index_t i = 0; i < count; i++) {
-			auto id = ids[i] - vector_offset;
-			while(update_idx < info.count && info.ids[update_idx] < id) {
-				update_idx++;
-			}
-			if (update_idx < info.count && info.ids[update_idx] == id) {
-				// use update info
-				result[i].block_id = info.block_ids[update_idx];
-				result[i].offset = info.offsets[update_idx];
-				update_idx++;
-			} else {
-				// use base table info
-				result[i] = FetchStringLocation(baseptr, base_data[id]);
-			}
-		}
-	} else {
-		// no updates: fetch strings from base vector
-		for(index_t i = 0; i < count; i++) {
-			auto id = ids[i] - vector_offset;
-			result[i] = FetchStringLocation(baseptr, base_data[id]);
-		}
-	}
+	FetchBaseData(state, handle->node->buffer, vector_index, result, GetVectorCount(vector_index));
 }
 
 void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, index_t vector_index, Vector &result, index_t count) {
@@ -155,6 +102,59 @@ void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, in
 	}
 	result.nullmask = base_nullmask;
 	result.count = count;
+}
+
+//===--------------------------------------------------------------------===//
+// Fetch update data
+//===--------------------------------------------------------------------===//
+void StringSegment::FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *info, Vector &result) {
+	// fetch data from updates
+	auto handle = state.primary_handle.get();
+
+	auto result_data = (char**) result.data;
+	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
+		auto info_data = (string_location_t*) current->tuple_data;
+		for(index_t i = 0; i < current->N; i++) {
+			auto string = FetchString(state.handles, handle->node->buffer, info_data[i]);
+			result_data[current->tuples[i]] = string.data;
+			result.nullmask[current->tuples[i]] = current->nullmask[current->tuples[i]];
+		}
+	});
+}
+
+//===--------------------------------------------------------------------===//
+// Fetch strings
+//===--------------------------------------------------------------------===//
+void StringSegment::FetchStringLocations(data_ptr_t baseptr, row_t *ids, index_t vector_index, index_t vector_offset, index_t count, string_location_t result[]) {
+	auto base = baseptr + vector_index * vector_size;
+	auto base_data = (int32_t *) (base + sizeof(nullmask_t));
+
+	if (string_updates && string_updates[vector_index]) {
+		// there are updates: merge them in
+		auto &info = *string_updates[vector_index];
+		index_t update_idx = 0;
+		for(index_t i = 0; i < count; i++) {
+			auto id = ids[i] - vector_offset;
+			while(update_idx < info.count && info.ids[update_idx] < id) {
+				update_idx++;
+			}
+			if (update_idx < info.count && info.ids[update_idx] == id) {
+				// use update info
+				result[i].block_id = info.block_ids[update_idx];
+				result[i].offset = info.offsets[update_idx];
+				update_idx++;
+			} else {
+				// use base table info
+				result[i] = FetchStringLocation(baseptr, base_data[id]);
+			}
+		}
+	} else {
+		// no updates: fetch strings from base vector
+		for(index_t i = 0; i < count; i++) {
+			auto id = ids[i] - vector_offset;
+			result[i] = FetchStringLocation(baseptr, base_data[id]);
+		}
+	}
 }
 
 string_location_t StringSegment::FetchStringLocation(data_ptr_t baseptr, int32_t dict_offset) {

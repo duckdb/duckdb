@@ -46,7 +46,7 @@ NumericSegment::NumericSegment(BufferManager &manager, TypeId type, block_id_t b
 //===--------------------------------------------------------------------===//
 // Fetch base data
 //===--------------------------------------------------------------------===//
-index_t NumericSegment::FetchBaseData(ColumnScanState &state, index_t vector_index, Vector &result) {
+void NumericSegment::FetchBaseData(ColumnScanState &state, index_t vector_index, Vector &result) {
 	assert(vector_index < max_vector_count);
 	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 
@@ -61,11 +61,10 @@ index_t NumericSegment::FetchBaseData(ColumnScanState &state, index_t vector_ind
 	result.nullmask = *((nullmask_t*) (data + offset));
 	memcpy(result.data, data + offset + sizeof(nullmask_t), count * type_size);
 	result.count = count;
-	return count;
 }
 
-void NumericSegment::FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *version, Vector &result, index_t count) {
-	fetch_from_update_info(transaction, version, result, count);
+void NumericSegment::FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *version, Vector &result) {
+	fetch_from_update_info(transaction, version, result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -369,7 +368,7 @@ static NumericSegment::merge_update_function_t GetMergeUpdateFunction(TypeId typ
 // Update Fetch
 //===--------------------------------------------------------------------===//
 template <class T>
-static void update_info_fetch(Transaction &transaction, UpdateInfo *info, Vector &result, index_t count) {
+static void update_info_fetch(Transaction &transaction, UpdateInfo *info, Vector &result) {
 	auto result_data = (T*) result.data;
 	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
 		auto info_data = (T*) current->tuple_data;

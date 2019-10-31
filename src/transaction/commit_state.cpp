@@ -98,19 +98,24 @@ template <bool HAS_LOG> void CommitState<HAS_LOG>::WriteUpdate(UpdateInfo *info)
 		update_chunk->Initialize(update_types);
 	}
 
-	throw Exception("FIXME: write update to WAL");
-	// set up the update data
-	update_chunk->data[0].data = info->tuple_data;
+	// fetch the updated values from the base table
+	ColumnScanState state;
+	info->segment->InitializeScan(state);
+	info->segment->Fetch(state, info->vector_index, update_chunk->data[0]);
+	update_chunk->data[0].sel_vector = info->tuples;
 	update_chunk->data[0].count = info->N;
-	update_chunk->data[1].count = info->N;
 
 	// write the row ids into the chunk
 	auto row_ids = (row_t *) update_chunk->data[1].data;
 	// FIXME: add start here
 	index_t start = /*info->segment->start + */info->vector_index * STANDARD_VECTOR_SIZE;
 	for(index_t i = 0; i < info->N; i++) {
-		row_ids[i] = start + info->tuples[i];
+		row_ids[info->tuples[i]] = start + info->tuples[i];
 	}
+	update_chunk->data[1].sel_vector = info->tuples;
+	update_chunk->data[1].count = info->N;
+
+	update_chunk->sel_vector = info->tuples;
 
 	log->WriteUpdate(*update_chunk, info->column_data->column_idx);
 }

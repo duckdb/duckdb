@@ -30,13 +30,12 @@ public:
 protected:
 	void Update(ColumnData &data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) override;
 
-	index_t FetchBaseData(ColumnScanState &state, index_t vector_index, Vector &result) override;
-
-	void FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *versions, Vector &result, index_t count) override;
+	void FetchBaseData(ColumnScanState &state, index_t vector_index, Vector &result) override;
+	void FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *versions, Vector &result) override;
 public:
 	typedef void (*append_function_t)(SegmentStatistics &stats, data_ptr_t target, index_t target_offset, Vector &source, index_t offset, index_t count);
 	typedef void (*update_function_t)(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t base_data, Vector &update);
-	typedef void (*update_info_fetch_function_t)(Transaction &transaction, UpdateInfo *info, Vector &result, index_t count);
+	typedef void (*update_info_fetch_function_t)(Transaction &transaction, UpdateInfo *info, Vector &result);
 	typedef void (*update_info_append_function_t)(Transaction &transaction, UpdateInfo *info, index_t idx, Vector &result);
 	typedef void (*rollback_update_function_t)(UpdateInfo *info, data_ptr_t base_data);
 	typedef void (*merge_update_function_t)(SegmentStatistics &stats, UpdateInfo *node, data_ptr_t target, Vector &update, row_t *ids, index_t vector_offset);
