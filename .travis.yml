@@ -57,7 +57,7 @@ matrix:
           packages:
             - g++-4.9 binutils-2.26
       env:
-         - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
+         - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9 && CXXFLAGS=\"-fexceptions -frtti\""
 
     - os: linux
       dist: xenial
