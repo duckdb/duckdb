@@ -165,14 +165,11 @@ TEST_CASE("Test index with pending deletes", "[transactions]") {
 	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con2.Query("DELETE FROM integers WHERE i=1"));
 
-	// we cannot create the index with a pending delete
-	REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+	// we can create an index with pending deletes
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
 
 	// now we commit
 	REQUIRE_NO_FAIL(con2.Query("COMMIT"));
-
-	// now we can create the index
-	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
 
 	result = con.Query("SELECT COUNT(*) FROM integers WHERE i=1");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));

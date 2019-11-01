@@ -129,6 +129,9 @@ unique_ptr<DataChunk> ClientContext::FetchInternal() {
 
 unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, unique_ptr<SQLStatement> statement,
                                                                 bool allow_stream_result) {
+	if (ActiveTransaction().is_invalidated && statement->type != StatementType::TRANSACTION) {
+		throw Exception("Current transaction is aborted (please ROLLBACK)");
+	}
 	StatementType statement_type = statement->type;
 	bool create_stream_result = statement_type == StatementType::SELECT && allow_stream_result;
 	// for some statements, we log the literal query string in the WAL
@@ -345,7 +348,18 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementsInternal(string query,
 			current_result = ExecuteStatementInternal(query, move(statement), allow_stream_result && is_last_statement);
 			// only the last result can be STREAM_RESULT
 			assert(is_last_statement || current_result->type != QueryResultType::STREAM_RESULT);
+		} catch(ParserException &ex) {
+			// parser exceptions do not invalidate the current transaction
+			current_result = make_unique<MaterializedQueryResult>(ex.what());
+		} catch(BinderException &ex) {
+			// binder exceptions also do not invalidate the current transaction
+			current_result = make_unique<MaterializedQueryResult>(ex.what());
+		} catch(CatalogException &ex) {
+			// catalog exceptions also do not invalidate the current transaction
+			current_result = make_unique<MaterializedQueryResult>(ex.what());
 		} catch (std::exception &ex) {
+			// other types of exceptions do invalidate the current transaction
+			ActiveTransaction().is_invalidated = true;
 			current_result = make_unique<MaterializedQueryResult>(ex.what());
 		}
 		if (!current_result->success) {

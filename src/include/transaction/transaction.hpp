@@ -33,7 +33,7 @@ class Transaction {
 public:
 	Transaction(transaction_t start_time, transaction_t transaction_id, timestamp_t start_timestamp)
 	    : start_time(start_time), transaction_id(transaction_id), commit_id(0), highest_active_query(0),
-	      active_query(MAXIMUM_QUERY_ID), start_timestamp(start_timestamp) {
+	      active_query(MAXIMUM_QUERY_ID), start_timestamp(start_timestamp), is_invalidated(false) {
 	}
 
 	//! The start timestamp of this transaction
@@ -53,6 +53,8 @@ public:
 	LocalStorage storage;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	unordered_map<SequenceCatalogEntry *, SequenceValue> sequence_usage;
+	//! Whether or not the transaction has been invalidated
+	bool is_invalidated;
 public:
 	void PushCatalogEntry(CatalogEntry *entry);
 	//! Push a query into the undo buffer

@@ -154,6 +154,10 @@ TEST_CASE("Test operations on transaction local data with unique indices", "[tra
 
 	// if we delete, we can insert the value again
 	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=1"));
+	result = con.Query("SELECT * FROM integers ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3}));
+
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 3)"));
 
 	result = con.Query("SELECT * FROM integers ORDER BY 1");
@@ -167,4 +171,31 @@ TEST_CASE("Test operations on transaction local data with unique indices", "[tra
 	result = con.Query("SELECT * FROM integers ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {3, 3}));
+}
+
+TEST_CASE("Test transaction aborts after failures", "[transactions]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// set up a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2)"));
+	// start a transaction
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	// parser errors do not invalidate the current transaction
+	REQUIRE_FAIL(con.Query("SELEC 42"));
+	REQUIRE_NO_FAIL(con.Query("SELECT 42"));
+	// neither do binder errors
+	REQUIRE_FAIL(con.Query("SELECT * FROM nonexistanttable"));
+	REQUIRE_NO_FAIL(con.Query("SELECT 42"));
+	// however primary key conflicts do invalidate it
+	REQUIRE_FAIL(con.Query("UPDATE integers SET i=2"));
+	REQUIRE_FAIL(con.Query("SELECT 42"));
+	// now we need to rollback
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+
+	result = con.Query("SELECT * FROM integers ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
 }
