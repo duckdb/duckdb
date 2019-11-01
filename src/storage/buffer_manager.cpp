@@ -141,6 +141,8 @@ unique_ptr<Block> BufferManager::EvictBlock() {
 }
 
 unique_ptr<BufferHandle> BufferManager::Allocate(index_t alloc_size, bool can_destroy) {
+	assert(alloc_size >= Storage::BLOCK_ALLOC_SIZE);
+
 	lock_guard<mutex> lock(block_lock);
 	// first evict blocks until we have enough memory to store this buffer
 	while(current_memory + alloc_size > maximum_memory) {
@@ -201,6 +203,7 @@ void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
 	if (temp_directory.empty()) {
 		throw Exception("Out-of-memory: cannot evict buffer because no temporary directory is specified!\nTo enable temporary buffer eviction set a temporary directory in the configuration");
 	}
+	assert(buffer.size + Storage::BLOCK_HEADER_SIZE >= Storage::BLOCK_ALLOC_SIZE);
 	// get the path to write to
 	auto path = GetTemporaryPath(buffer.id);
 	// create the file and write the size followed by the buffer contents
@@ -223,7 +226,7 @@ unique_ptr<BufferHandle> BufferManager::ReadTemporaryBuffer(block_id_t id) {
 		EvictBlock();
 	}
 	// now allocate a buffer of this size and read the data into that buffer
-	auto buffer = make_unique<ManagedBuffer>(*this, alloc_size, false, id);
+	auto buffer = make_unique<ManagedBuffer>(*this, alloc_size + Storage::BLOCK_HEADER_SIZE, false, id);
 	buffer->Read(*handle, sizeof(index_t));
 
 	auto managed_buffer = buffer.get();

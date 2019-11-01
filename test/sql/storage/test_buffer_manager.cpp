@@ -38,13 +38,7 @@ TEST_CASE("Test scanning a table and computing an aggregate over a table that ex
 		result = con.Query("SELECT SUM(a) + SUM(b) FROM test");
 		REQUIRE(CHECK_COLUMN(result, 0, {sum}));
 	}
-	{
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
-		result = con.Query("SELECT SUM(a) + SUM(b) FROM test");
-		REQUIRE(CHECK_COLUMN(result, 0, {sum}));
-	}
-	{
+	for(index_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT SUM(a) + SUM(b) FROM test");
@@ -154,7 +148,7 @@ TEST_CASE("Test appending and checkpointing a table that exceeds buffer manager 
 		REQUIRE(CHECK_COLUMN(result, 3, {Value::BIGINT(sum_b)}));
 
 	}
-	{
+	for(index_t i = 0; i < 2; i++) {
 		// reload the table and checkpoint, still with a 10MB limit
 		DuckDB db(storage_database, config.get());
 		Connection con(db);

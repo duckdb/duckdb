@@ -15,6 +15,11 @@ namespace duckdb {
 struct BufferEntry {
 	BufferEntry(unique_ptr<FileBuffer> buffer) :
 		buffer(move(buffer)), ref_count(1), prev(nullptr) { }
+	~BufferEntry() {
+		while(next) {
+			next = move(next->next);
+		}
+	}
 
 	//! The actual buffer
 	unique_ptr<FileBuffer> buffer;
