@@ -56,9 +56,16 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 		// no transient segments yet, append one
 		AppendTransientSegment(persistent_rows);
 	}
-	state.current = (TransientSegment*) data.GetLastSegment();
-	state.current->InitializeAppend(state);
+	auto segment = (ColumnSegment*) data.GetLastSegment();
+	if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
+		// cannot append to persistent segment, add a transient one
+		AppendTransientSegment(persistent_rows);
+		state.current = (TransientSegment*) data.GetLastSegment();
+	} else {
+		state.current = (TransientSegment*) segment;
+	}
 	assert(state.current->segment_type == ColumnSegmentType::TRANSIENT);
+	state.current->InitializeAppend(state);
 }
 
 void ColumnData::Append(ColumnAppendState &state, Vector &vector) {

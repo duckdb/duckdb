@@ -64,6 +64,7 @@ CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
 		}
 		break;
 
+	case CatalogType::INDEX:
 	case CatalogType::PREPARED_STATEMENT:
 		// do nothing, we log the query to recreate this
 		break;

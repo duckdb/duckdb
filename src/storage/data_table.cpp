@@ -510,6 +510,7 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 		}
 	}
 	// update should not be called for indexed columns!
+	// instead update should have been rewritten to delete + update on higher layer
 #ifdef DEBUG
 	for (index_t i = 0; i < indexes.size(); i++) {
 		assert(!indexes[i]->IndexIsUpdated(column_ids));
@@ -564,33 +565,41 @@ void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, vector<co
 }
 
 void DataTable::CreateIndexScan(CreateIndexScanState &state, DataChunk &result) {
-	while (state.current_persistent_row < state.max_persistent_row) {
-		throw Exception("FIXME: scan persistent data");
-	}
-	// scan the transient segments
-	while (state.current_transient_row < state.max_transient_row) {
-		index_t count = std::min((index_t) STANDARD_VECTOR_SIZE, state.max_transient_row - state.current_transient_row);
-
-		// scan the base columns to fetch the actual data
-		// note that we insert all data into the index, even if it is marked as deleted
-		// FIXME: tuples that are already "cleaned up" do not need to be inserted into the index!
-		for(index_t i = 0; i < state.column_ids.size(); i++) {
-			auto column = state.column_ids[i];
-			if (column == COLUMN_IDENTIFIER_ROW_ID) {
-				// scan row id
-				assert(result.data[i].type == TypeId::BIGINT);
-				result.data[i].count = count;
-				VectorOperations::GenerateSequence(result.data[i], state.max_persistent_row + state.current_transient_row);
-			} else {
-				// scan actual base column
-				columns[column].IndexScan(state.column_scans[i], result.data[i]);
-			}
-			result.data[i].count = count;
-		}
-
-		state.current_transient_row += STANDARD_VECTOR_SIZE;
+	// scan the persistent segments
+	if (ScanCreateIndex(state, result, state.current_persistent_row, state.max_persistent_row, 0)) {
 		return;
 	}
+	// scan the transient segments
+	if (ScanCreateIndex(state, result, state.current_transient_row, state.max_transient_row, state.max_persistent_row)) {
+		return;
+	}
+}
+
+bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, index_t &current_row, index_t max_row, index_t base_row) {
+	if (current_row >= max_row) {
+		return false;
+	}
+	index_t count = std::min((index_t) STANDARD_VECTOR_SIZE, max_row - current_row);
+
+	// scan the base columns to fetch the actual data
+	// note that we insert all data into the index, even if it is marked as deleted
+	// FIXME: tuples that are already "cleaned up" do not need to be inserted into the index!
+	for(index_t i = 0; i < state.column_ids.size(); i++) {
+		auto column = state.column_ids[i];
+		if (column == COLUMN_IDENTIFIER_ROW_ID) {
+			// scan row id
+			assert(result.data[i].type == TypeId::BIGINT);
+			result.data[i].count = count;
+			VectorOperations::GenerateSequence(result.data[i], base_row + current_row);
+		} else {
+			// scan actual base column
+			columns[column].IndexScan(state.column_scans[i], result.data[i]);
+		}
+		result.data[i].count = count;
+	}
+
+	current_row += STANDARD_VECTOR_SIZE;
+	return true;
 }
 
 void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>> &expressions) {
