@@ -139,37 +139,46 @@ TEST_CASE("Test update behavior with multiple updaters", "[update]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1), (2), (3)"));
 
 	// now we start updating specific values and reading different versions
-	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-	REQUIRE_NO_FAIL(u1.Query("UPDATE test SET a=4 WHERE a=1"));
-	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
-	REQUIRE_NO_FAIL(u2.Query("UPDATE test SET a=5 WHERE a=2"));
-	REQUIRE_NO_FAIL(con3.Query("BEGIN TRANSACTION"));
-	REQUIRE_NO_FAIL(u3.Query("UPDATE test SET a=6 WHERE a=3"));
-	REQUIRE_NO_FAIL(con4.Query("BEGIN TRANSACTION"));
+	for(index_t i = 0; i < 2; i++) {
+		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+		REQUIRE_NO_FAIL(u1.Query("UPDATE test SET a=4 WHERE a=1"));
+		REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
+		REQUIRE_NO_FAIL(u2.Query("UPDATE test SET a=5 WHERE a=2"));
+		REQUIRE_NO_FAIL(con3.Query("BEGIN TRANSACTION"));
+		REQUIRE_NO_FAIL(u3.Query("UPDATE test SET a=6 WHERE a=3"));
+		REQUIRE_NO_FAIL(con4.Query("BEGIN TRANSACTION"));
 
-	// now read the different states
-	// con sees {1, 2, 3}
-	result = con.Query("SELECT * FROM test ORDER BY a");
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
-	// con2 sees {2, 3, 4}
-	result = con2.Query("SELECT * FROM test ORDER BY a");
-	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
-	// con3 sees {3, 4, 5}
-	result = con3.Query("SELECT * FROM test ORDER BY a");
-	REQUIRE(CHECK_COLUMN(result, 0, {3, 4, 5}));
-	// con4 sees {4, 5, 6}
-	result = con4.Query("SELECT * FROM test ORDER BY a");
-	REQUIRE(CHECK_COLUMN(result, 0, {4, 5, 6}));
+		// now read the different states
+		// con sees {1, 2, 3}
+		result = con.Query("SELECT * FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+		// con2 sees {2, 3, 4}
+		result = con2.Query("SELECT * FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
+		// con3 sees {3, 4, 5}
+		result = con3.Query("SELECT * FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {3, 4, 5}));
+		// con4 sees {4, 5, 6}
+		result = con4.Query("SELECT * FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {4, 5, 6}));
 
-	// now verify that we get conflicts when we update values that have been updated AFTER we started
-	REQUIRE_FAIL(con.Query("UPDATE test SET a=99 WHERE a=1"));
-	REQUIRE_FAIL(con2.Query("UPDATE test SET a=99 WHERE a=2"));
-	REQUIRE_FAIL(con3.Query("UPDATE test SET a=99 WHERE a=3"));
-
-	// however we CAN update values that were committed BEFORE we started
-	REQUIRE_NO_FAIL(con2.Query("UPDATE test SET a=7 WHERE a=4"));
-	REQUIRE_NO_FAIL(con3.Query("UPDATE test SET a=8 WHERE a=5"));
-	REQUIRE_NO_FAIL(con4.Query("UPDATE test SET a=9 WHERE a=6"));
+		if (i == 0) {
+			// now verify that we get conflicts when we update values that have been updated AFTER we started
+			REQUIRE_FAIL(con.Query("UPDATE test SET a=99 WHERE a=1"));
+			REQUIRE_FAIL(con2.Query("UPDATE test SET a=99 WHERE a=2"));
+			REQUIRE_FAIL(con3.Query("UPDATE test SET a=99 WHERE a=3"));
+			REQUIRE_NO_FAIL(u1.Query("UPDATE test SET a=a-3"));
+			REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+			REQUIRE_NO_FAIL(con2.Query("ROLLBACK"));
+			REQUIRE_NO_FAIL(con3.Query("ROLLBACK"));
+			REQUIRE_NO_FAIL(con4.Query("ROLLBACK"));
+		} else {
+			// however we CAN update values that were committed BEFORE we started
+			REQUIRE_NO_FAIL(con2.Query("UPDATE test SET a=7 WHERE a=4"));
+			REQUIRE_NO_FAIL(con3.Query("UPDATE test SET a=8 WHERE a=5"));
+			REQUIRE_NO_FAIL(con4.Query("UPDATE test SET a=9 WHERE a=6"));
+		}
+	}
 
 	// now read the different states again
 	// con sees {1, 2, 3} still
