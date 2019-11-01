@@ -93,6 +93,15 @@ void BufferManager::Unpin(block_id_t block_id) {
 	assert(buffer_entry->ref_count > 0);
 	buffer_entry->ref_count--;
 	if (buffer_entry->ref_count == 0) {
+		if (buffer_entry->buffer->type == FileBufferType::MANAGED_BUFFER) {
+			auto managed = (ManagedBuffer*) buffer_entry->buffer.get();
+			if (managed->can_destroy) {
+				// this is a managed buffer that we can destroy
+				// instead of adding it to the LRU list, just deallocate the managed buffer immediately
+				current_memory -= managed->size;
+				return;
+			}
+		}
 		// no references left: move block out of used list and into lru list
 		auto entry = used_list.Erase(buffer_entry);
 		lru.Append(move(entry));
@@ -119,10 +128,11 @@ unique_ptr<Block> BufferManager::EvictBlock() {
 	} else {
 		// managed buffer: cannot return a block here
 		auto managed = (ManagedBuffer*) buffer;
-		if (!managed->can_destroy) {
-			// cannot destroy this buffer: write it to disk first so it can be reloaded later
-			WriteTemporaryBuffer(*managed);
-		}
+		assert(!managed->can_destroy);
+
+		// cannot destroy this buffer: write it to disk first so it can be reloaded later
+		WriteTemporaryBuffer(*managed);
+
 		blocks.erase(managed->id);
 		// free up the memory
 		current_memory -= managed->size;

@@ -11,6 +11,12 @@
 #include "storage/uncompressed_segment.hpp"
 
 namespace duckdb {
+class OverflowStringWriter {
+public:
+	virtual ~OverflowStringWriter() {}
+
+	virtual void WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) = 0;
+};
 
 struct StringBlock {
 	block_id_t block_id;
@@ -47,6 +53,8 @@ public:
 	unique_ptr<StringBlock> head;
 	//! Blocks that hold string updates (if any)
 	unique_ptr<string_update_info_t[]> string_updates;
+	//! Overflow string writer (if any), if not set overflow strings will be written to memory blocks
+	unique_ptr<OverflowStringWriter> overflow_writer;
 public:
 	void InitializeScan(ColumnScanState &state) override;
 
@@ -80,6 +88,8 @@ private:
 	void WriteString(string_t string, block_id_t &result_block, int32_t &result_offset);
 	string_t ReadString(buffer_handle_set_t &handles, block_id_t block, int32_t offset);
 	string_t ReadString(data_ptr_t target, int32_t offset);
+
+	void WriteStringMemory(string_t string, block_id_t &result_block, int32_t &result_offset);
 
 	void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 	void ReadStringMarker(data_ptr_t target, block_id_t &block_id, int32_t &offset);

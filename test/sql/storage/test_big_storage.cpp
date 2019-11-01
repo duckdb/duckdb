@@ -82,15 +82,7 @@ TEST_CASE("Test storage that exceeds a single block with different types", "[sto
 		sum = result->GetValue(0, 0);
 	}
 	// reload the database from disk
-	{
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
-		result = con.Query("SELECT SUM(a) + SUM(b) FROM test");
-		REQUIRE(CHECK_COLUMN(result, 0, {sum}));
-	}
-	// reload the database from disk, we do this again because checkpointing at startup causes this to follow a
-	// different code path
-	{
+	for(index_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT SUM(a) + SUM(b) FROM test");
@@ -186,17 +178,13 @@ TEST_CASE("Test storing big strings", "[storage][.]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(string_length)}));
 	}
 	// reload the database from disk
-	{
+	for(index_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT LENGTH(a) FROM test");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(string_length)}));
-	}
-	// reload the database from disk, we do this again because checkpointing at startup causes this to follow a
-	// different code path
-	{
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
+		result = con.Query("SELECT LENGTH(a) FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(string_length)}));
 		result = con.Query("SELECT LENGTH(a) FROM test");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(string_length)}));
 	}

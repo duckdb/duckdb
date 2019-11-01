@@ -361,6 +361,16 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 
 void StringSegment::WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) {
 	assert(strlen(string.data) == string.length);
+	if (overflow_writer) {
+		// overflow writer is set: write string there
+		overflow_writer->WriteString(string, result_block, result_offset);
+	} else {
+		// default overflow behavior: use in-memory buffer to store the overflow string
+		WriteStringMemory(string, result_block, result_offset);
+	}
+}
+
+void StringSegment::WriteStringMemory(string_t string, block_id_t &result_block, int32_t &result_offset) {
 	uint32_t total_length = string.length + 1 + sizeof(uint32_t);
 	unique_ptr<BufferHandle> handle;
 	// check if the string fits in the current block
@@ -397,18 +407,55 @@ string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t bloc
 	if (block == INVALID_BLOCK) {
 		return string_t(nullptr, 0);
 	}
-	// now pin the handle, if it is not pinned yet
-	BufferHandle *handle;
-	auto entry = handles.find(block);
-	if (entry == handles.end()) {
-		auto pinned_handle = manager.Pin(block);
-		handle = pinned_handle.get();
+	if (block < MAXIMUM_BLOCK) {
+		// read the overflow string from disk
+		// pin the initial handle and read the length
+		auto handle = manager.Pin(block);
+		uint32_t length = *((uint32_t*) (handle->node->buffer + offset));
+		uint32_t remaining = length + 1;
+		offset += sizeof(uint32_t);
 
-		handles.insert(make_pair(block, move(pinned_handle)));
+		// allocate a buffer to store the string
+		auto alloc_size = std::max((index_t) Storage::BLOCK_ALLOC_SIZE, (index_t) length + 1 + sizeof(uint32_t));
+		auto target_handle = manager.Allocate(alloc_size, true);
+		auto target_ptr = target_handle->node->buffer;
+		// write the length in this block as well
+		*((uint32_t*) target_ptr) = length;
+		target_ptr += sizeof(uint32_t);
+		// now append the string to the single buffer
+		while(remaining > 0) {
+			index_t to_write = std::min((index_t) remaining, (index_t)(Storage::BLOCK_SIZE - sizeof(block_id_t) - offset));
+			memcpy(target_ptr, handle->node->buffer + offset, to_write);
+
+			remaining -= to_write;
+			offset += to_write;
+			target_ptr += to_write;
+			if (remaining > 0) {
+				// read the next block
+				block_id_t next_block = *((block_id_t*)(handle->node->buffer + offset));
+				handle = manager.Pin(next_block);
+				offset = 0;
+			}
+		}
+
+		auto final_buffer = target_handle->node->buffer;
+		handles.insert(make_pair(target_handle->block_id, move(target_handle)));
+		return ReadString(final_buffer, 0);
 	} else {
-		handle = entry->second.get();
+		// read the overflow string from memory
+		// first pin the handle, if it is not pinned yet
+		BufferHandle *handle;
+		auto entry = handles.find(block);
+		if (entry == handles.end()) {
+			auto pinned_handle = manager.Pin(block);
+			handle = pinned_handle.get();
+
+			handles.insert(make_pair(block, move(pinned_handle)));
+		} else {
+			handle = entry->second.get();
+		}
+		return ReadString(handle->node->buffer, offset);
 	}
-	return ReadString(handle->node->buffer, offset);
 }
 
 string_t StringSegment::ReadString(data_ptr_t target, int32_t offset) {

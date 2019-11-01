@@ -29,7 +29,7 @@ public:
 	//! Pin a block id, returning a block handle holding a pointer to the block
 	unique_ptr<BufferHandle> Pin(block_id_t block, bool can_destroy = false);
 
-	//! Allocate a buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or not the buffer can be freely destroyed when unpinned, or whether or not it needs to be written to a temporary file so it can be reloaded.
+	//! Allocate a buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or not the buffer can be destroyed when unpinned, or whether or not it needs to be written to a temporary file so it can be reloaded.
 	unique_ptr<BufferHandle> Allocate(index_t alloc_size, bool can_destroy = false);
 	//! Destroy the managed buffer with the specified buffer_id, freeing its memory
 	void DestroyBuffer(block_id_t buffer_id);

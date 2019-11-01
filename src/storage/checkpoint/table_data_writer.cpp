@@ -13,6 +13,27 @@
 using namespace duckdb;
 using namespace std;
 
+class WriteOverflowStringsToDisk : public OverflowStringWriter {
+public:
+	WriteOverflowStringsToDisk(CheckpointManager &manager);
+	~WriteOverflowStringsToDisk();
+
+	//! The checkpoint manager
+	CheckpointManager &manager;
+	//! Block handle use for writing to
+	unique_ptr<BufferHandle> handle;
+	//! The current block we are writing to
+	block_id_t block_id;
+	//! The offset within the current block
+	index_t offset;
+
+	static constexpr index_t STRING_SPACE = Storage::BLOCK_SIZE - sizeof(block_id_t);
+public:
+	void WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) override;
+private:
+	void AllocateNewBlock(block_id_t new_block_id);
+};
+
 TableDataWriter::TableDataWriter(CheckpointManager &manager, TableCatalogEntry &table)
     : manager(manager), table(table) {
 }
@@ -66,7 +87,9 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 void TableDataWriter::CreateSegment(index_t col_idx) {
 	auto type_id = GetInternalType(table.columns[col_idx].type);
 	if (type_id == TypeId::VARCHAR) {
-		segments[col_idx] = make_unique<StringSegment>(manager.buffer_manager, 0);
+		auto string_segment = make_unique<StringSegment>(manager.buffer_manager, 0);
+		string_segment->overflow_writer = make_unique<WriteOverflowStringsToDisk>(manager);
+		segments[col_idx] = move(string_segment);
 	} else {
 		segments[col_idx] = make_unique<NumericSegment>(manager.buffer_manager, type_id, 0);
 	}
@@ -95,10 +118,6 @@ void TableDataWriter::FlushSegment(index_t col_idx) {
 	auto tuple_count = segments[col_idx]->tuple_count;
 	if (tuple_count == 0) {
 		return;
-	}
-
-	if (stats[col_idx]->has_overflow_strings) {
-		throw Exception("FIXME: writing of overflow strings not supported yet!");
 	}
 
 	// get the buffer of the segment and pin it
@@ -138,4 +157,60 @@ void TableDataWriter::WriteDataPointers() {
 			manager.tabledata_writer->Write<uint32_t>(data_pointer.offset);
 		}
 	}
+}
+
+WriteOverflowStringsToDisk::WriteOverflowStringsToDisk(CheckpointManager &manager) :
+	manager(manager), handle(nullptr), block_id(INVALID_BLOCK), offset(0) {
+}
+
+WriteOverflowStringsToDisk::~WriteOverflowStringsToDisk() {
+	if (offset > 0) {
+		manager.block_manager.Write(*handle->node, block_id);
+	}
+}
+
+void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) {
+	if (!handle) {
+		handle = manager.buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
+	}
+	// first write the length of the string
+	if (block_id == INVALID_BLOCK || offset + sizeof(uint32_t) >= STRING_SPACE) {
+		AllocateNewBlock(manager.block_manager.GetFreeBlockId());
+	}
+	result_block = block_id;
+	result_offset = offset;
+
+	// write the length field
+	*((uint32_t*)(handle->node->buffer + offset)) = string.length;
+	offset += sizeof(uint32_t);
+	// now write the remainder of the string
+	auto strptr = string.data;
+	uint32_t remaining = string.length + 1;
+	while(remaining > 0) {
+		uint32_t to_write = std::min((uint32_t) remaining, (uint32_t) (STRING_SPACE - offset));
+		if (to_write > 0) {
+			memcpy(handle->node->buffer + offset, strptr, to_write);
+
+			remaining -= to_write;
+			offset += to_write;
+			strptr += to_write;
+		}
+		if (remaining > 0) {
+			// there is still remaining stuff to write
+			// first get the new block id and write it to the end of the previous block
+			auto new_block_id = manager.block_manager.GetFreeBlockId();
+			*((block_id_t*)(handle->node->buffer + offset)) = new_block_id;
+			// now write the current block to disk and allocate a new block
+			AllocateNewBlock(new_block_id);
+		}
+	}
+}
+
+void WriteOverflowStringsToDisk::AllocateNewBlock(block_id_t new_block_id) {
+	if (block_id != INVALID_BLOCK) {
+		// there is an old block, write it first
+		manager.block_manager.Write(*handle->node, block_id);
+	}
+	offset = 0;
+	block_id = new_block_id;
 }
