@@ -88,7 +88,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		// exceeded the amount of rows to scan
 		return false;
 	}
-	index_t max_count = std::min((index_t) STANDARD_VECTOR_SIZE, max_row - state.current_transient_row);
+	index_t max_count = std::min((index_t) STANDARD_VECTOR_SIZE, max_row - current_row);
 	index_t vector_offset = current_row / STANDARD_VECTOR_SIZE;
 	// first scan the version chunk manager to figure out which tuples to load for this transaction
 	index_t count = manager.GetSelVector(transaction, vector_offset, state.sel_vector, max_count);

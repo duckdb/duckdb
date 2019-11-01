@@ -238,7 +238,7 @@ TEST_CASE("Test large inserts in a single transaction", "[storage]") {
 	auto storage_database = TestCreatePath("storage_test");
 
 	// make sure the database does not exist
-	int64_t expected_sum_a = 0, expected_sum_b = 0;
+	int64_t expected_sum_a = 0, expected_sum_b = 0, expected_count = 0;
 	DeleteDatabase(storage_database);
 	{
 		// create a database and insert values
@@ -250,21 +250,24 @@ TEST_CASE("Test large inserts in a single transaction", "[storage]") {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
 			expected_sum_a += 11 + 13;
 			expected_sum_b += 22 + 22;
+			expected_count += 2;
 		}
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE a=12"));
 		REQUIRE_NO_FAIL(con.Query("COMMIT"));
 
-		result = con.Query("SELECT SUM(a), SUM(b) FROM test");
+		result = con.Query("SELECT SUM(a), SUM(b), COUNT(*) FROM test");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(expected_sum_a)}));
 		REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(expected_sum_b)}));
+		REQUIRE(CHECK_COLUMN(result, 2, {Value::BIGINT(expected_count)}));
 	}
 	// reload the database from disk
 	for(index_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
-		result = con.Query("SELECT SUM(a), SUM(b) FROM test");
+		result = con.Query("SELECT SUM(a), SUM(b), COUNT(*) FROM test");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(expected_sum_a)}));
 		REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(expected_sum_b)}));
+		REQUIRE(CHECK_COLUMN(result, 2, {Value::BIGINT(expected_count)}));
 	}
 	DeleteDatabase(storage_database);
 }
