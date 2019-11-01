@@ -359,7 +359,9 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementsInternal(string query,
 			current_result = make_unique<MaterializedQueryResult>(ex.what());
 		} catch (std::exception &ex) {
 			// other types of exceptions do invalidate the current transaction
-			ActiveTransaction().is_invalidated = true;
+			if (transaction.HasActiveTransaction()) {
+				ActiveTransaction().is_invalidated = true;
+			}
 			current_result = make_unique<MaterializedQueryResult>(ex.what());
 		}
 		if (!current_result->success) {

@@ -268,9 +268,7 @@ TEST_CASE("PRIMARY KEY and concurency conflicts", "[constraints]") {
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=4 WHERE i=2"));
 
-	// now con2 starts a transaction
-	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
-	// it can't update the second value
+	// con2 can't update the second value
 	REQUIRE_FAIL(con2.Query("UPDATE integers SET i=4 WHERE i=2"));
 	REQUIRE_FAIL(con2.Query("UPDATE integers SET i=5 WHERE i=2"));
 	// nor can it delete it
@@ -281,7 +279,8 @@ TEST_CASE("PRIMARY KEY and concurency conflicts", "[constraints]") {
 	// rollback con1
 	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
 
-	// now we can performt he changes in con2
+	// now we can perform the changes in con2
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con2.Query("UPDATE integers SET i=4 WHERE i=2"));
 	REQUIRE_NO_FAIL(con2.Query("UPDATE integers SET i=5 WHERE i=3"));
 
