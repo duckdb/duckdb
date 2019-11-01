@@ -316,7 +316,7 @@ void DataTable::InitializeAppend(TableAppendState &state) {
 	for(index_t i = 0; i < types.size(); i++) {
 		columns[i].InitializeAppend(state.states[i]);
 	}
-	state.row_start = persistent_manager.max_row + transient_manager.max_row;
+	state.row_start = transient_manager.max_row;
 	state.current_row = state.row_start;
 }
 
@@ -599,7 +599,7 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, 
 	}
 
 	current_row += STANDARD_VECTOR_SIZE;
-	return true;
+	return count > 0;
 }
 
 void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>> &expressions) {
