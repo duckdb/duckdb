@@ -75,7 +75,7 @@ public:
 		return start_timestamp;
 	}
 
-	void PushDelete(ChunkInfo *vinfo, row_t rows[], index_t count);
+	void PushDelete(ChunkInfo *vinfo, row_t rows[], index_t count, index_t base_row);
 
 	UpdateInfo *CreateUpdateInfo(index_t type_size, index_t entries);
 

@@ -18,11 +18,13 @@ void Transaction::PushCatalogEntry(CatalogEntry *entry) {
 	*blob = entry;
 }
 
-void Transaction::PushDelete(ChunkInfo *vinfo, row_t rows[], index_t count) {
+void Transaction::PushDelete(ChunkInfo *vinfo, row_t rows[], index_t count, index_t base_row) {
+	assert(base_row % STANDARD_VECTOR_SIZE == 0);
 	auto delete_info = (DeleteInfo*) undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo) + sizeof(row_t) * count);
 	delete_info->vinfo = vinfo;
 	delete_info->count = count;
-	memcpy(delete_info->rows, rows, count * sizeof(row_t));
+	delete_info->base_row = base_row;
+	memcpy(delete_info->rows, rows, sizeof(row_t) * count);
 }
 
 data_ptr_t Transaction::PushData(index_t len) {

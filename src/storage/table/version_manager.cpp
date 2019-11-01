@@ -42,6 +42,7 @@ public:
 	index_t current_chunk;
 	row_t rows[STANDARD_VECTOR_SIZE];
 	index_t count;
+	index_t base_row;
 public:
 	void Delete(row_t row_id);
 	void Flush();
@@ -81,6 +82,7 @@ void VersionDeleteState::Delete(row_t row_id) {
 			current_info = entry->second.get();
 		}
 		current_chunk = chunk_idx;
+		base_row = chunk_idx * STANDARD_VECTOR_SIZE;
 	}
 
 	// now add the row to the set of to-be-deleted rows
@@ -94,7 +96,7 @@ void VersionDeleteState::Flush() {
 	// delete in the current info
 	current_info->Delete(transaction, rows, count);
 	// now push the delete into the undo buffer
-	transaction.PushDelete(current_info, rows, count);
+	transaction.PushDelete(current_info, rows, count, base_row);
 	count = 0;
 }
 

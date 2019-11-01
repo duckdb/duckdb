@@ -81,9 +81,12 @@ CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
 	if (!delete_chunk) {
 		delete_chunk = make_unique<DataChunk>();
 		vector<TypeId> delete_types = {ROW_TYPE};
-		delete_chunk->InitializeEmpty(delete_types);
+		delete_chunk->Initialize(delete_types);
 	}
-	delete_chunk->data[0].data = (data_ptr_t) info->rows;
+	auto rows = (row_t*) delete_chunk->data[0].data;
+	for(index_t i = 0; i < info->count; i++) {
+		rows[i] = info->base_row + info->rows[i];
+	}
 	delete_chunk->data[0].count = info->count;
 	log->WriteDelete(*delete_chunk);
 }
