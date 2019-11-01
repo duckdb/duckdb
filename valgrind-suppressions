@@ -1,44 +1,72 @@
-{
+	{
    <atan2>
    Memcheck:Cond
-   fun:__ieee754_atan2_fma
+...
    fun:atan2
+...
 }
 
+
 {
-   <atan1>
+   <atan_fma>
    Memcheck:Cond
    fun:__atan_fma
-   ...
-}
-
-{
-   <cos>
-   Memcheck:Cond
-   fun:__branred
-   fun:__cos_fma
   ...
 }
 
+
 {
-   <sin>
+   <tan_fma>
    Memcheck:Cond
+...
+   fun:__tan_fma
+ ...
+}
+
+
+{
+   <cos_fma>
+   Memcheck:Cond
+...
+   fun:__cos_fma
+ ...
+}
+
+
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Cond
+...
    fun:__sin_fma
-   ...
+  ...
 }
 
 
 {
-   <re2_contains>
-   Memcheck:Cond
-   fun:_ZNK3re210SparseSetTIvE8containsEi
-   ...
-}
-
-{
-   <re2_has_index>
+   <re21>
    Memcheck:Value8
    fun:_ZNK3re211SparseArrayIiE9has_indexEi
-   ...
+...
 }
 
+{
+   <re22>
+   Memcheck:Value8
+   fun:_ZNK3re210SparseSetTIvE8containsEi
+...
+}
+
+
+{
+   <re23>
+   Memcheck:Cond
+   fun:_ZNK3re211SparseArrayIiE9has_indexEi
+...
+}
+
+{
+   <re24>
+   Memcheck:Cond
+   fun:_ZNK3re210SparseSetTIvE8containsEi
+...
+}
