@@ -20,6 +20,7 @@ index_t VersionManager::GetSelVector(Transaction &transaction, index_t index, se
 }
 
 bool VersionManager::Fetch(Transaction &transaction, index_t row) {
+	row -= base_row;
 	index_t vector_index = row / STANDARD_VECTOR_SIZE;
 
 	auto entry = info.find(vector_index);
@@ -34,7 +35,7 @@ bool VersionManager::Fetch(Transaction &transaction, index_t row) {
 
 class VersionDeleteState {
 public:
-	VersionDeleteState(VersionManager &manager, Transaction &transaction) : manager(manager), transaction(transaction), current_info(nullptr), current_chunk((index_t) -1), count(0) {}
+	VersionDeleteState(VersionManager &manager, Transaction &transaction, index_t base_row) : manager(manager), transaction(transaction), current_info(nullptr), current_chunk((index_t) -1), count(0), base_row(base_row) {}
 
 	VersionManager &manager;
 	Transaction &transaction;
@@ -43,6 +44,7 @@ public:
 	row_t rows[STANDARD_VECTOR_SIZE];
 	index_t count;
 	index_t base_row;
+	index_t chunk_row;
 public:
 	void Delete(row_t row_id);
 	void Flush();
@@ -51,12 +53,12 @@ public:
 void VersionManager::Delete(Transaction &transaction, Vector &row_ids) {
 	auto ids = (row_t *)row_ids.data;
 
-	VersionDeleteState del_state(*this, transaction);
+	VersionDeleteState del_state(*this, transaction, base_row);
 
 	// obtain a write lock
 	auto write_lock = lock.GetExclusiveLock();
 	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) {
-		del_state.Delete(ids[i]);
+		del_state.Delete(ids[i] - base_row);
 	});
 	del_state.Flush();
 }
@@ -82,7 +84,7 @@ void VersionDeleteState::Delete(row_t row_id) {
 			current_info = entry->second.get();
 		}
 		current_chunk = chunk_idx;
-		base_row = chunk_idx * STANDARD_VECTOR_SIZE;
+		chunk_row = chunk_idx * STANDARD_VECTOR_SIZE;
 	}
 
 	// now add the row to the set of to-be-deleted rows
@@ -96,7 +98,7 @@ void VersionDeleteState::Flush() {
 	// delete in the current info
 	current_info->Delete(transaction, rows, count);
 	// now push the delete into the undo buffer
-	transaction.PushDelete(current_info, rows, count, base_row);
+	transaction.PushDelete(current_info, rows, count, base_row + chunk_row);
 	count = 0;
 }
 

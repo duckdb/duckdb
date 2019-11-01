@@ -36,6 +36,7 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 			}
 		}
 		persistent_manager.max_row = columns[0].persistent_rows;
+		transient_manager.base_row = persistent_manager.max_row;
 	}
 }
 

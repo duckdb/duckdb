@@ -19,7 +19,6 @@ void Transaction::PushCatalogEntry(CatalogEntry *entry) {
 }
 
 void Transaction::PushDelete(ChunkInfo *vinfo, row_t rows[], index_t count, index_t base_row) {
-	assert(base_row % STANDARD_VECTOR_SIZE == 0);
 	auto delete_info = (DeleteInfo*) undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo) + sizeof(row_t) * count);
 	delete_info->vinfo = vinfo;
 	delete_info->count = count;

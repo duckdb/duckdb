@@ -22,7 +22,7 @@ class VersionManager;
 
 class VersionManager {
 public:
-	VersionManager(DataTable &table) : table(table), max_row(0) {}
+	VersionManager(DataTable &table) : table(table), max_row(0), base_row(0) {}
 
 	//! The DataTable
 	DataTable &table;
@@ -32,6 +32,8 @@ public:
 	unordered_map<index_t, unique_ptr<ChunkInfo>> info;
 	//! The maximum amount of rows managed by the version manager
 	index_t max_row;
+	//! The base row of the version manager, i.e. when passing row = base_row, it will be treated as row = 0
+	index_t base_row;
 public:
 	//! For a given chunk index, fills the selection vector with the relevant tuples for a given transaction. If count == max_count, all tuples are relevant and the selection vector is not set
 	index_t GetSelVector(Transaction &transaction, index_t index, sel_t sel_vector[], index_t max_count);

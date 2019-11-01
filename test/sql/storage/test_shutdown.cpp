@@ -98,6 +98,38 @@ TEST_CASE("CREATE INDEX statement after shutdown", "[storage]") {
 		REQUIRE(CHECK_COLUMN(result, 1, {22}));
 
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE a=11 AND b=24"));
+
+		result = con.Query("SELECT * FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {11, 13}));
+		REQUIRE(CHECK_COLUMN(result, 1, {22, 22}));
+	}
+	// now with updates
+	for(index_t i = 0; i < 2; i++) {
+		DuckDB db(storage_database, config.get());
+		Connection con(db);
+
+		result = con.Query("SELECT * FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {11, 13}));
+		REQUIRE(CHECK_COLUMN(result, 1, {22, 22}));
+
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 24)"));
+
+		REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON test using art(a)"));
+
+		result = con.Query("SELECT a, b FROM test WHERE a=11 ORDER BY b");
+		REQUIRE(CHECK_COLUMN(result, 0, {11, 11}));
+		REQUIRE(CHECK_COLUMN(result, 1, {22, 24}));
+
+		result = con.Query("SELECT a, b FROM test WHERE a>11 ORDER BY b");
+		REQUIRE(CHECK_COLUMN(result, 0, {13}));
+		REQUIRE(CHECK_COLUMN(result, 1, {22}));
+
+		REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE a=11 AND b=22"));
+		REQUIRE_NO_FAIL(con.Query("UPDATE test SET b=22 WHERE a=11"));
+
+		result = con.Query("SELECT * FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {11, 13}));
+		REQUIRE(CHECK_COLUMN(result, 1, {22, 22}));
 	}
 	DeleteDatabase(storage_database);
 }
