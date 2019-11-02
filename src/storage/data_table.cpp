@@ -311,7 +311,12 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 
 void DataTable::InitializeAppend(TableAppendState &state) {
 	// obtain the append lock for this table
-	state.append_lock = make_unique<lock_guard<mutex>>(append_lock);
+	state.append_lock = unique_lock<mutex>(append_lock);
+	// obtain locks on all indexes for the table
+	state.index_locks = unique_ptr<IndexLock[]>(new IndexLock[indexes.size()]);
+	for(index_t i = 0; i < indexes.size(); i++) {
+		indexes[i]->InitializeLock(state.index_locks[i]);
+	}
 	// for each column, initialize the append state
 	state.states = unique_ptr<ColumnAppendState[]>(new ColumnAppendState[types.size()]);
 	for(index_t i = 0; i < types.size(); i++) {
@@ -339,7 +344,7 @@ void DataTable::Append(Transaction &transaction, transaction_t commit_id, DataCh
 //===--------------------------------------------------------------------===//
 // Indexes
 //===--------------------------------------------------------------------===//
-bool DataTable::AppendToIndexes(DataChunk &chunk, row_t row_start) {
+bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
 	if (indexes.size() == 0) {
 		return true;
 	}
@@ -352,7 +357,7 @@ bool DataTable::AppendToIndexes(DataChunk &chunk, row_t row_start) {
 	index_t failed_index = INVALID_INDEX;
 	// now append the entries to the indices
 	for (index_t i = 0; i < indexes.size(); i++) {
-		if (!indexes[i]->Append(chunk, row_identifiers)) {
+		if (!indexes[i]->Append(state.index_locks[i], chunk, row_identifiers)) {
 			failed_index = i;
 			break;
 		}
@@ -361,7 +366,7 @@ bool DataTable::AppendToIndexes(DataChunk &chunk, row_t row_start) {
 		// constraint violation!
 		// remove any appended entries from previous indexes (if any)
 		for (index_t i = 0; i < failed_index; i++) {
-			indexes[i]->Delete(chunk, row_identifiers);
+			indexes[i]->Delete(state.index_locks[i], chunk, row_identifiers);
 		}
 		return false;
 	}
@@ -559,7 +564,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 //===--------------------------------------------------------------------===//
 void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, vector<column_t> column_ids) {
 	// we grab the append lock to make sure nothing is appended until AFTER we finish the index scan
-	state.append_lock = make_unique<lock_guard<mutex>>(append_lock);
+	state.append_lock = unique_lock<mutex>(append_lock);
 	// get a read lock on the VersionManagers to prevent any further deletions
 	state.locks.push_back(persistent_manager.lock.GetSharedLock());
 	state.locks.push_back(transient_manager.lock.GetSharedLock());

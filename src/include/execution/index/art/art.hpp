@@ -58,8 +58,6 @@ public:
 	    bool is_unique = false);
 	~ART();
 
-	//! Lock used for updating the index
-	std::mutex lock;
 	//! Root of the tree
 	unique_ptr<Node> tree;
 	//! True if machine is little endian
@@ -86,11 +84,11 @@ public:
 	//! Perform a lookup on the index
 	void Scan(Transaction &transaction, TableIndexScanState &state, DataChunk &result) override;
 	//! Append entries to the index
-	bool Append(DataChunk &entries, Vector &row_identifiers) override;
+	bool Append(IndexLock &state, DataChunk &entries, Vector &row_identifiers) override;
 	//! Verify that data can be appended to the index
 	void VerifyAppend(DataChunk &chunk) override;
 	//! Delete entries in the index
-	void Delete(DataChunk &entries, Vector &row_identifiers) override;
+	void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) override;
 
 	//! Insert data into the index. Does not lock the index.
 	bool Insert(DataChunk &data, Vector &row_ids) override;

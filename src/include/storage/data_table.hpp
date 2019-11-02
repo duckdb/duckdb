@@ -87,7 +87,7 @@ public:
 	void Append(Transaction &transaction, transaction_t commit_id, DataChunk &chunk, TableAppendState &state);
 
 	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table, returns whether or not the append succeeded
-	bool AppendToIndexes(DataChunk &chunk, row_t row_start);
+	bool AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start);
 	//! Remove a chunk with the row ids [row_start, ..., row_start + chunk.size()] from all indexes of the table
 	void RemoveFromIndexes(DataChunk &chunk, row_t row_start);
 	//! Remove the chunk with the specified set of row identifiers from all indexes of the table

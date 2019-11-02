@@ -246,8 +246,7 @@ string append_to_primary_key(Connection &con, index_t thread_nr) {
 	}
 	auto chunk = result->Fetch();
 	Value initial_count = chunk->data[0].GetValue(0);
-
-	for (int32_t i = 0; i < 500; i++) {
+	for (int32_t i = 0; i < 50; i++) {
 		result = con.Query("INSERT INTO integers VALUES ($1)", (int32_t)(thread_nr * 1000 + i));
 		if (!result->success) {
 			return "Failed INSERT: " + result->error;
@@ -298,6 +297,6 @@ TEST_CASE("Parallel appends to table with index with transactions", "[index][.]"
 
 	// now test that the counts are correct
 	result = con.Query("SELECT COUNT(*), COUNT(DISTINCT i) FROM integers");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(THREAD_COUNT * 500)}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(THREAD_COUNT * 500)}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(THREAD_COUNT * 50)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(THREAD_COUNT * 50)}));
 }

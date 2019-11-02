@@ -107,8 +107,22 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 		storage = entry->second.get();
 	}
 	// append to unique indices (if any)
-	index_t base_id = MAX_ROW_ID + storage->collection.count;
-	Index::AppendToIndexes(storage->indexes, chunk, base_id);
+	if (storage->indexes.size() > 0) {
+		index_t base_id = MAX_ROW_ID + storage->collection.count;
+
+		// first generate the vector of row identifiers
+		StaticVector<row_t> row_identifiers;
+		row_identifiers.sel_vector = chunk.sel_vector;
+		row_identifiers.count = chunk.size();
+		VectorOperations::GenerateSequence(row_identifiers, base_id);
+
+		// now append the entries to the indices
+		for(auto &index : storage->indexes) {
+			if (!index->Append(chunk, row_identifiers)) {
+				throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
+			}
+		}
+	}
 
 	//! Append to the chunk
 	storage->collection.Append(chunk);
@@ -262,7 +276,7 @@ void LocalStorage::CheckCommit() {
 		row_t current_row = storage->state->row_start;
 		ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
 			// append this chunk to the indexes of the table
-			if (!table->AppendToIndexes(chunk, current_row)) {
+			if (!table->AppendToIndexes(*storage->state, chunk, current_row)) {
 				success = false;
 				return false;
 			}

@@ -152,8 +152,7 @@ bool ART::Insert(DataChunk &input, Vector &row_ids) {
 	return true;
 }
 
-bool ART::Append(DataChunk &appended_data, Vector &row_identifiers) {
-	lock_guard<mutex> l(lock);
+bool ART::Append(IndexLock &state, DataChunk &appended_data, Vector &row_identifiers) {
 
 	// first resolve the expressions for the index
 	ExecuteExpressions(appended_data, expression_result);
@@ -276,9 +275,7 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 //===--------------------------------------------------------------------===//
 // Delete
 //===--------------------------------------------------------------------===//
-void ART::Delete(DataChunk &input, Vector &row_ids) {
-	lock_guard<mutex> l(lock);
-
+void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	// first resolve the expressions
 	ExecuteExpressions(input, expression_result);
 

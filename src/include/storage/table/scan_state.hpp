@@ -76,7 +76,7 @@ struct TableScanState {
 
 struct CreateIndexScanState : public TableScanState {
 	vector<unique_ptr<StorageLockKey>> locks;
-	unique_ptr<std::lock_guard<std::mutex>> append_lock;
+	std::unique_lock<std::mutex> append_lock;
 };
 
 struct TableIndexScanState {

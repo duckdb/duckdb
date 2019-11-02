@@ -141,7 +141,7 @@ void CatalogSet::DropEntryInternal(Transaction &transaction, CatalogEntry &curre
 
 	// add this catalog to the lock set, if it is not there yet
 	if (lock_set.find(this) == lock_set.end()) {
-		lock_set.insert(make_pair(this, make_unique<lock_guard<mutex>>(catalog_lock)));
+		lock_set.insert(make_pair(this, unique_lock<mutex>(catalog_lock)));
 	}
 
 	// create a new entry and replace the currently stored one

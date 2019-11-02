@@ -22,7 +22,7 @@ struct AlterInfo;
 
 class Transaction;
 
-typedef unordered_map<CatalogSet *, unique_ptr<std::lock_guard<std::mutex>>> set_lock_map_t;
+typedef unordered_map<CatalogSet *, std::unique_lock<std::mutex>> set_lock_map_t;
 
 //! The Catalog Set stores (key, value) map of a set of AbstractCatalogEntries
 class CatalogSet {
