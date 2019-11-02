@@ -101,13 +101,20 @@ private:
 	string_update_info_t MergeStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, index_t vector_offset, StringUpdateInfo &update_info);
 
 	void MergeUpdateInfo(UpdateInfo *node, Vector &update, row_t *ids, index_t vector_offset, string_location_t string_locations[], nullmask_t original_nullmask);
+
+	//! The amount of bytes remaining to store in the block
+	index_t RemainingSpace() {
+		return Storage::BLOCK_SIZE - dictionary_offset - max_vector_count * vector_size;
+	}
 private:
 	//! The max string size that is allowed within a block. Strings bigger than this will be labeled as a BIG STRING and offloaded to the overflow blocks.
 	static constexpr uint16_t STRING_BLOCK_LIMIT = 4096;
 	//! Marker used in length field to indicate the presence of a big string
 	static constexpr uint16_t BIG_STRING_MARKER = (uint16_t) -1;
+	//! Base size of big string marker (block id + offset)
+	static constexpr index_t BIG_STRING_MARKER_BASE_SIZE = sizeof(block_id_t) + sizeof(int32_t);
 	//! The marker size of the big string
-	static constexpr index_t BIG_STRING_MARKER_SIZE = sizeof(block_id_t) + sizeof(int32_t) + sizeof(uint16_t);
+	static constexpr index_t BIG_STRING_MARKER_SIZE = BIG_STRING_MARKER_BASE_SIZE + sizeof(uint16_t);
 };
 
 }

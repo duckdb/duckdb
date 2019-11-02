@@ -131,22 +131,33 @@ TEST_CASE("Test operations on transaction local data with unique indices", "[tra
 	con.EnableQueryVerification();
 
 	// perform different operations on the same data within one transaction
-	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER)"));
+	for(index_t i = 0; i < 3; i++) {
+		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 3), (2, 3)"));
 
-	// append
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 3), (2, 3)"));
+		result = con.Query("SELECT * FROM integers ORDER BY 1");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {3, 3}));
 
-	result = con.Query("SELECT * FROM integers ORDER BY 1");
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
-	REQUIRE(CHECK_COLUMN(result, 1, {3, 3}));
-
-	// appending the same value again fails
-	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES (1, 2)"));
-	// updating also fails if there is a conflict
-	REQUIRE_FAIL(con.Query("UPDATE integers SET i=1 WHERE i=2"));
-	// but not if there is no conflict
-	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=3 WHERE i=2"));
+		switch(i) {
+			case 0:
+				// appending the same value again fails
+				REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES (1, 2)"));
+				REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+				break;
+			case 1:
+				// updating also fails if there is a conflict
+				REQUIRE_FAIL(con.Query("UPDATE integers SET i=1 WHERE i=2"));
+				REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+				break;
+			default:
+				// but not if there is no conflict
+				REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=3 WHERE i=2"));
+				REQUIRE_NO_FAIL(con.Query("COMMIT"));
+				break;
+		}
+	}
 
 	result = con.Query("SELECT * FROM integers ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 3}));
@@ -160,14 +171,6 @@ TEST_CASE("Test operations on transaction local data with unique indices", "[tra
 
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 3)"));
 
-	result = con.Query("SELECT * FROM integers ORDER BY 1");
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {3, 3}));
-
-	// commit
-	REQUIRE_NO_FAIL(con.Query("COMMIT"));
-
-	// we can still read the table now
 	result = con.Query("SELECT * FROM integers ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {3, 3}));

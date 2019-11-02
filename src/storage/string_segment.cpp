@@ -285,8 +285,7 @@ index_t StringSegment::Append(SegmentStatistics &stats, Vector &data, index_t of
 		if (vector_index == max_vector_count) {
 			// we are at the maximum vector, check if there is space to increase the maximum vector count
 			// as a heuristic, we only allow another vector to be added if we have at least 32 bytes per string remaining (32KB out of a 256KB block, or around 12% empty)
-			index_t remaining_space = Storage::BLOCK_SIZE - dictionary_offset - max_vector_count * vector_size;
-			if (remaining_space >= STANDARD_VECTOR_SIZE * 32) {
+			if (RemainingSpace() >= STANDARD_VECTOR_SIZE * 32) {
 				// we have enough remaining space to add another vector
 				ExpandStringSegment(handle->node->buffer);
 			} else {
@@ -312,6 +311,7 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 	auto &result_nullmask = *((nullmask_t*) target);
 	auto result_data = (int32_t *) (target + sizeof(nullmask_t));
 
+	index_t remaining_strings = STANDARD_VECTOR_SIZE - (this->tuple_count % STANDARD_VECTOR_SIZE);
 	VectorOperations::Exec(source.sel_vector, count + offset, [&](index_t i, index_t k) {
 		if (source.nullmask[i]) {
 			// null value is stored as -1
@@ -319,15 +319,22 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 			result_nullmask[k - offset + target_offset] = true;
 			stats.has_null = true;
 		} else {
+			assert(dictionary_offset < Storage::BLOCK_SIZE);
 			// non-null value, check if we can fit it within the block
-			// we also always store strings that have a size >= STRING_BLOCK_LIMIT in the overflow blocks
 			index_t string_length = strlen(ldata[i]);
 			index_t total_length = string_length + 1 + sizeof(uint16_t);
 
 			if (string_length > stats.max_string_length) {
 				stats.max_string_length = string_length;
 			}
-			if (total_length >= STRING_BLOCK_LIMIT || total_length > Storage::BLOCK_SIZE - dictionary_offset - max_vector_count * vector_size) {
+			// determine hwether or not the string needs to be stored in an overflow block
+			// we never place small strings in the overflow blocks: the pointer would take more space than the string itself
+			// we always place big strings (>= STRING_BLOCK_LIMIT) in the overflow blocks
+			// we also have to always leave enough room for BIG_STRING_MARKER_SIZE for each of the remaining strings
+			if (total_length > BIG_STRING_MARKER_BASE_SIZE &&
+			      (total_length >= STRING_BLOCK_LIMIT ||
+				   total_length + (remaining_strings * BIG_STRING_MARKER_SIZE) > RemainingSpace())) {
+				assert(RemainingSpace() >= BIG_STRING_MARKER_SIZE);
 				// string is too big for block: write to overflow blocks
 				block_id_t block;
 				int32_t offset;
@@ -356,6 +363,7 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 			// place the dictionary offset into the set of vectors
 			result_data[k - offset + target_offset] = dictionary_offset;
 		}
+		remaining_strings--;
 	}, offset);
 }
 
