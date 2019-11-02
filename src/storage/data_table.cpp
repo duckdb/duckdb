@@ -558,11 +558,13 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 // Create Index Scan
 //===--------------------------------------------------------------------===//
 void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, vector<column_t> column_ids) {
-	InitializeScan(state, column_ids);
 	// we grab the append lock to make sure nothing is appended until AFTER we finish the index scan
 	state.append_lock = make_unique<lock_guard<mutex>>(append_lock);
 	// get a read lock on the VersionManagers to prevent any further deletions
+	state.locks.push_back(persistent_manager.lock.GetSharedLock());
 	state.locks.push_back(transient_manager.lock.GetSharedLock());
+
+	InitializeScan(state, column_ids);
 }
 
 void DataTable::CreateIndexScan(CreateIndexScanState &state, DataChunk &result) {

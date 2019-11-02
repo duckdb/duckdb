@@ -66,13 +66,12 @@ TEST_CASE("Concurrent reads during index creation", "[index][.]") {
 
 static void append_to_integers(DuckDB *db, index_t threadnr) {
 	Connection con(*db);
-	auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
 	for (index_t i = 0; i < INSERT_COUNT; i++) {
-		appender->BeginRow();
-		appender->AppendInteger(1);
-		appender->EndRow();
+		auto result = con.Query("INSERT INTO integers VALUES (1)");
+		if (!result->success) {
+			FAIL();
+		}
 	}
-	con.CloseAppender();
 }
 
 TEST_CASE("Concurrent writes during index creation", "[index][.]") {
@@ -104,7 +103,12 @@ TEST_CASE("Concurrent writes during index creation", "[index][.]") {
 		threads[i].join();
 	}
 
-	// now test that we can probe the index correctly
+	// first scan the actual base table to verify the count, we avoid using a filter here to prevent the optimizer from using an index scan
+	result = con.Query("SELECT i, COUNT(*) FROM integers GROUP BY i ORDER BY i LIMIT 1 OFFSET 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1 + THREAD_COUNT * INSERT_COUNT}));
+
+	// now test that we can probe the index correctly too
 	result = con.Query("SELECT COUNT(*) FROM integers WHERE i=1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1 + THREAD_COUNT * INSERT_COUNT}));
 }
