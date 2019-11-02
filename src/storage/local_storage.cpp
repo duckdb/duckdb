@@ -281,20 +281,26 @@ void LocalStorage::CheckCommit() {
 			auto table = entry.first;
 			auto storage = entry.second.get();
 
+
 			if (table->indexes.size() == 0 || storage->max_row == 0) {
 				continue;
 			}
 
 			row_t current_row = storage->state->row_start;
 			ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
-				table->RemoveFromIndexes(chunk, current_row);
-				current_row += chunk.size();
 				if (current_row >= storage->max_row) {
 					// done
 					return false;
 				}
+				table->RemoveFromIndexes(chunk, current_row);
+				current_row += chunk.size();
 				return true;
 			});
+		}
+		// reset the storage state for each of the entries
+		for(auto &entry : table_storage) {
+			auto storage = entry.second.get();
+			storage->state = nullptr;
 		}
 		// throw a constraint violation
 		throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
