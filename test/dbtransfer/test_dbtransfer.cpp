@@ -9,28 +9,28 @@
 #include <sstream>
 
 TEST_CASE("Pass nullptr to transfer function", "[dbtransfer]") {
-	duckdb::DuckDB source_db(nullptr);
-	duckdb::Connection con(source_db);
+    duckdb::DuckDB source_db(nullptr);
+    duckdb::Connection con(source_db);
 
     REQUIRE_FALSE(sqlite::TransferDatabase(con, nullptr));
 }
 
 TEST_CASE("Check transfer from DuckDB to sqlite database", "[dbtransfer]") {
-	duckdb::DuckDB source_db(nullptr);
-	duckdb::Connection con(source_db);
+    duckdb::DuckDB source_db(nullptr);
+    duckdb::Connection con(source_db);
 
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE items(field1 VARCHAR, field2 INTEGER)"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO items VALUES ('a', 1)"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO items VALUES ('b', 2)"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO items VALUES ('c', 3)"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO items VALUES ('d', 4)"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO items VALUES ('e', 5)"));
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE items(field1 VARCHAR, field2 INTEGER)"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO items VALUES ('a', 1)"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO items VALUES ('b', 2)"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO items VALUES ('c', 3)"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO items VALUES ('d', 4)"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO items VALUES ('e', 5)"));
 
-	sqlite3 *destination_db = nullptr;
-	if (sqlite3_open(":memory:", &destination_db) != SQLITE_OK) {
+    sqlite3 *destination_db = nullptr;
+    if (sqlite3_open(":memory:", &destination_db) != SQLITE_OK) {
         REQUIRE(false);
-		return;
-	}
+        return;
+    }
     
     REQUIRE(sqlite::TransferDatabase(con, destination_db));
 
@@ -59,7 +59,7 @@ TEST_CASE("Check transfer from DuckDB to sqlite database", "[dbtransfer]") {
         sqlite3_close(destination_db);
         
         REQUIRE(false);
-		return;
+        return;
     } 
     
     sqlite3_close(destination_db);
@@ -76,10 +76,10 @@ TEST_CASE("Pass pointer to sqlite3 as nullptr to QueryDatabase", "[dbtransfer]")
 }
 
 TEST_CASE("Check getting query from sqlite database", "[dbtransfer]") {
-    sqlite3 *source_db = nullptr;
-	if (sqlite3_open(":memory:", &source_db) != SQLITE_OK) {
+     sqlite3 *source_db = nullptr;
+     if (sqlite3_open(":memory:", &source_db) != SQLITE_OK) {
         REQUIRE(false);
-		return;
+        return;
     }
 
     const char *sql_create_table = "CREATE TABLE items (field1 VARCHAR, field2 INTEGER)";
@@ -90,7 +90,7 @@ TEST_CASE("Check getting query from sqlite database", "[dbtransfer]") {
         sqlite3_close(source_db);
 
         REQUIRE(false);
-		return;
+        return;
     }
 
     // Inserting 5 rows in sqlite db
