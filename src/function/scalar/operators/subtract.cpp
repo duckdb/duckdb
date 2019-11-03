@@ -26,7 +26,8 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	for(auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({ type, type }, type, subtract_function));
 	}
-	functions.AddFunction(ScalarFunction({ SQLType::DATE, SQLType::DATE }, SQLType::INTEGER, subtract_function));
+    functions.AddFunction(ScalarFunction({ SQLType::DATE, SQLType::DATE }, SQLType::INTEGER, subtract_function));
+    functions.AddFunction(ScalarFunction({ SQLType::DATE, SQLType::INTERVAL }, SQLType::DATE, subtract_function));
 	functions.AddFunction(ScalarFunction({ SQLType::DATE, SQLType::INTEGER }, SQLType::DATE, subtract_function));
 	// unary subtract function, negates the input (i.e. multiplies by -1)
 	for(auto &type : SQLType::NUMERIC) {

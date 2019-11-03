@@ -22,7 +22,8 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 		functions.AddFunction(ScalarFunction({ type, type }, type, add_function));
 	}
 	// we can add integers to dates
-	functions.AddFunction(ScalarFunction({ SQLType::DATE, SQLType::INTEGER }, SQLType::DATE, add_function));
+    functions.AddFunction(ScalarFunction({ SQLType::DATE, SQLType::INTEGER }, SQLType::DATE, add_function));
+    functions.AddFunction(ScalarFunction({ SQLType::DATE, SQLType::INTERVAL }, SQLType::DATE, add_function));
 	functions.AddFunction(ScalarFunction({ SQLType::INTEGER, SQLType::DATE }, SQLType::DATE, add_function));
 	// unary add function is a nop, but only exists for numeric types
 	for(auto &type : SQLType::NUMERIC) {

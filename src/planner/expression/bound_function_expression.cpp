@@ -2,6 +2,7 @@
 
 #include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "common/types/hash.hpp"
+#include "planner/expression_iterator.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -13,7 +14,16 @@ BoundFunctionExpression::BoundFunctionExpression(TypeId return_type, ScalarFunct
 
 bool BoundFunctionExpression::IsFoldable() const {
 	// functions with side effects cannot be folded: they have to be executed once for every row
-	return function.has_side_effects ? false : Expression::IsFoldable();
+    if(function.has_side_effects) return false;
+
+    bool is_foldable = true;
+    ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) {
+        //TODO: Function applications that involve `Interval`s are not supported yet.
+        if (!child.IsFoldable() || child.return_type == TypeId::INTERVAL) {
+            is_foldable = false;
+        }
+    });
+    return is_foldable;
 }
 
 string BoundFunctionExpression::ToString() const {
