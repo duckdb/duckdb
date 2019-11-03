@@ -1,4 +1,5 @@
 #include "common/types.hpp"
+#include "common/types/timestamp.hpp"
 
 #include "common/exception.hpp"
 #include "common/serializer.hpp"
@@ -23,6 +24,8 @@ const SQLType SQLType::TIME = SQLType(SQLTypeId::TIME);
 
 const SQLType SQLType::VARCHAR = SQLType(SQLTypeId::VARCHAR);
 
+const SQLType SQLType::INTERVAL = SQLType(SQLTypeId::INTERVAL);
+
 const vector<SQLType> SQLType::NUMERIC = {
     SQLType::TINYINT, SQLType::SMALLINT, SQLType::INTEGER,           SQLType::BIGINT,
     SQLType::FLOAT,   SQLType::DOUBLE,   SQLType(SQLTypeId::DECIMAL)};
@@ -32,7 +35,7 @@ const vector<SQLType> SQLType::INTEGRAL = {SQLType::TINYINT, SQLType::SMALLINT, 
 const vector<SQLType> SQLType::ALL_TYPES = {
     SQLType::BOOLEAN, SQLType::TINYINT,   SQLType::SMALLINT, SQLType::INTEGER, SQLType::BIGINT,
     SQLType::DATE,    SQLType::TIMESTAMP, SQLType::DOUBLE,   SQLType::FLOAT,   SQLType(SQLTypeId::DECIMAL),
-    SQLType::VARCHAR};
+    SQLType::VARCHAR, SQLType::INTERVAL};
 
 const TypeId ROW_TYPE = TypeId::BIGINT;
 
@@ -60,6 +63,8 @@ string TypeIdToString(TypeId type) {
 		return "VARCHAR";
 	case TypeId::VARBINARY:
 		return "VARBINARY";
+    case TypeId::INTERVAL:
+        return "INTERVAL";
 	default:
 		throw ConversionException("Invalid TypeId %d", type);
 	}
@@ -89,6 +94,8 @@ index_t GetTypeIdSize(TypeId type) {
 		return sizeof(void *);
 	case TypeId::VARBINARY:
 		return sizeof(blob_t);
+    case TypeId::INTERVAL:
+        return sizeof(Interval);
 	default:
 		throw ConversionException("Invalid TypeId %d", type);
 	}
@@ -114,6 +121,8 @@ SQLType SQLTypeFromInternalType(TypeId type) {
 		return SQLType::VARCHAR;
 	case TypeId::VARBINARY:
 		return SQLType(SQLTypeId::VARBINARY);
+    case TypeId::INTERVAL:
+        return SQLType(SQLTypeId::INTERVAL);
 	default:
 		throw ConversionException("Invalid TypeId %d", type);
 	}
@@ -179,6 +188,8 @@ string SQLTypeIdToString(SQLTypeId id) {
 		return "NULL";
 	case SQLTypeId::ANY:
 		return "ANY";
+    case SQLTypeId::INTERVAL:
+        return "INTERVAL";
 	default:
 		return "INVALID";
 	}
@@ -232,6 +243,8 @@ TypeId GetInternalType(SQLType type) {
 		return TypeId::VARCHAR;
 	case SQLTypeId::VARBINARY:
 		return TypeId::VARBINARY;
+    case SQLTypeId::INTERVAL:
+        return TypeId::INTERVAL;
 	default:
 		throw ConversionException("Invalid SQLType %d", type);
 	}

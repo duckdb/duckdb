@@ -38,7 +38,8 @@ enum class TypeId : uint8_t {
 	FLOAT = 8,     /* float32_t */
 	DOUBLE = 9,    /* float64_t */
 	VARCHAR = 10,  /* char*, representing a null-terminated UTF-8 string */
-	VARBINARY = 11 /* blob_t, representing arbitrary bytes */
+    VARBINARY = 11,/* blob_t, representing arbitrary bytes */
+    INTERVAL = 12  /* interval_t, interval types */
 };
 
 //===--------------------------------------------------------------------===//
@@ -63,7 +64,8 @@ enum class SQLTypeId : uint8_t {
 	DECIMAL = 20,
 	CHAR = 21,
 	VARCHAR = 22,
-	VARBINARY = 23
+    VARBINARY = 23,
+	INTERVAL = 24
 };
 
 struct SQLType {
@@ -100,6 +102,7 @@ public:
 	static const SQLType TIMESTAMP;
 	static const SQLType TIME;
 	static const SQLType VARCHAR;
+    static const SQLType INTERVAL;
 
 	//! A list of all NUMERIC types (integral and floating point types)
 	static const vector<SQLType> NUMERIC;

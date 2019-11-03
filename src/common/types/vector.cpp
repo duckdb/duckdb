@@ -197,6 +197,9 @@ Value Vector::GetValue(uint64_t index) const {
 		char *str = ((char **)data)[entry];
 		assert(str);
 		return Value(string(str));
+    }
+	case TypeId::INTERVAL: {
+        return Value(((Interval *)data)[entry]);
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for conversion");

@@ -156,6 +156,13 @@ Value Value::POINTER(uintptr_t value) {
 	return result;
 }
 
+Value Value::INTERVAL(Interval value) {
+    Value result(TypeId::INTERVAL);
+    result.value_.interval = value;
+    result.is_null = false;
+    return result;
+}
+
 Value Value::DATE(int32_t year, int32_t month, int32_t day) {
 	return Value::INTEGER(Date::FromDate(year, month, day));
 }
@@ -207,6 +214,10 @@ template <> Value Value::CreateValue(float value) {
 
 template <> Value Value::CreateValue(double value) {
 	return Value::DOUBLE(value);
+}
+
+template <> Value Value::CreateValue(Interval value) {
+    return Value::INTERVAL(value);
 }
 
 Value Value::Numeric(TypeId type, int64_t value) {
@@ -291,6 +302,8 @@ string Value::ToString(SQLType sql_type) const {
 		return Timestamp::ToString(value_.bigint);
 	case SQLTypeId::VARCHAR:
 		return str_value;
+    case SQLTypeId::INTERVAL:
+        return to_string(value_.interval);
 	default:
 		throw NotImplementedException("Unimplemented type for printing");
 	}

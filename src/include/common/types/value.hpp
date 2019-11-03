@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "common/types/timestamp.hpp"
 #include "common/common.hpp"
 #include "common/exception.hpp"
 
@@ -36,6 +37,10 @@ public:
 	Value(float val) : type(TypeId::FLOAT), is_null(false) {
 		value_.float_ = val;
 	}
+    //! Create a INTERVAL value
+    Value(Interval val) : type(TypeId::INTERVAL), is_null(false) {
+        value_.interval = val;
+    }
 	//! Create a DOUBLE value
 	Value(double val) : type(TypeId::DOUBLE), is_null(false) {
 		value_.double_ = val;
@@ -60,7 +65,7 @@ public:
 	//! Create a Numeric value of the specified type with the specified value
 	static Value Numeric(TypeId id, int64_t value);
 
-	//! Create a tinyint Value from a specified value
+	//! Create a boolean Value from a specified value
 	static Value BOOLEAN(int8_t value);
 	//! Create a tinyint Value from a specified value
 	static Value TINYINT(int8_t value);
@@ -91,6 +96,9 @@ public:
 	static Value FLOAT(float value);
 	//! Create a double Value from a specified value
 	static Value DOUBLE(double value);
+
+    //! Create an Interval Value from a specified value
+    static Value INTERVAL(Interval value);
 
 	template <class T> static Value CreateValue(T value) {
 		throw NotImplementedException("Unimplemented template type for value creation");
@@ -129,6 +137,7 @@ public:
 		double double_;
 		uintptr_t pointer;
 		uint64_t hash;
+		Interval interval;
 	} value_;
 
 	//! The value of the object, if it is of a variable size type
@@ -196,5 +205,6 @@ template <> Value Value::CreateValue(const char *value);
 template <> Value Value::CreateValue(string value);
 template <> Value Value::CreateValue(float value);
 template <> Value Value::CreateValue(double value);
+template <> Value Value::CreateValue(Interval value);
 
 } // namespace duckdb
