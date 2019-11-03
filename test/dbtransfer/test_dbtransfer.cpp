@@ -112,6 +112,8 @@ TEST_CASE("Check getting query from sqlite database", "[dbtransfer]") {
     int interrupt = 0;
     auto result = sqlite::QueryDatabase(result_types, source_db, std::move(query), interrupt);
 
+    sqlite3_close(source_db);
+
     REQUIRE(result->success);
     REQUIRE(CHECK_COLUMN(result, 0, {"a", "b", "c", "d", "e"}));
     REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3, 4, 5}));
