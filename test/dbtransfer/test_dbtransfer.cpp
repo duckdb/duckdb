@@ -20,13 +20,13 @@ TEST_CASE("Check transfer from DuckDB to sqlite database", "[dbtransfer]") {
 	duckdb::Connection con(source_db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE items(field1 VARCHAR, field2 INTEGER)"));
-	con.Query("INSERT INTO items VALUES ('a', 1)");
-	con.Query("INSERT INTO items VALUES ('b', 2)");
-	con.Query("INSERT INTO items VALUES ('c', 3)");
-	con.Query("INSERT INTO items VALUES ('d', 4)");
-    con.Query("INSERT INTO items VALUES ('e', 5)");
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO items VALUES ('a', 1)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO items VALUES ('b', 2)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO items VALUES ('c', 3)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO items VALUES ('d', 4)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO items VALUES ('e', 5)"));
 
-    sqlite3 *destination_db = nullptr;
+	sqlite3 *destination_db = nullptr;
 	if (sqlite3_open(":memory:", &destination_db) != SQLITE_OK) {
         REQUIRE(false);
 		return;
