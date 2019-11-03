@@ -1,3 +1,6 @@
+include_directories(../../../third_party/libpg_query/include)
+include_directories(../../../third_party/libpg_query)
+
 add_library_unity(duckdb_common_operators
                   OBJECT
                   cast_operators.cpp

@@ -18,11 +18,7 @@
 
 namespace duckdb {
 
-struct Interval {
-	int64_t time;
-	int32_t days;   //! days, after time for alignment
-	int32_t months; //! months after time for alignment
-};
+struct Interval;
 
 struct timestamp_struct {
 	int32_t year;
@@ -54,7 +50,7 @@ public:
 	//! Gets the timestamp which correspondes to the difference between the given ones
 	static Interval GetDifference(timestamp_t timestamp_a, timestamp_t timestamp_b);
 
-	static timestamp_struct IntervalToTimestamp(Interval &interval);
+	static timestamp_struct IntervalToTimestamp(Interval const& interval);
 
     // Unix epoch: milliseconds since 1970
     static int64_t GetEpoch(timestamp_t timestamp);
@@ -63,5 +59,44 @@ public:
     static int64_t GetSeconds(timestamp_t timestamp);
     static int64_t GetMinutes(timestamp_t timestamp);
     static int64_t GetHours(timestamp_t timestamp);
+};
+
+struct Interval {
+    int64_t time;
+    int32_t days;   //! days, after time for alignment
+    int32_t months; //! months after time for alignment
+
+    friend std::string to_string(Interval const & value) {
+        timestamp_struct self = Timestamp::IntervalToTimestamp(value);
+        string res = "";
+        if(self.year != 0) {
+            res = std::to_string(self.year) + " year(s)";
+        }
+        if(self.month != 0) {
+            if(res.size() > 0) res += " and ";
+            res += std::to_string(self.month) + " month(s)";
+        }
+        if(self.day != 0) {
+            if(res.size() > 0) res += " and ";
+            res += std::to_string(self.day) + " day(s)";
+        }
+        if(self.hour != 0) {
+            if(res.size() > 0) res += " and ";
+            res += std::to_string(self.hour) + " hour(s)";
+        }
+        if(self.min != 0) {
+            if(res.size() > 0) res += " and ";
+            res += std::to_string(self.min) + " min(s)";
+        }
+        if(self.sec != 0) {
+            if(res.size() > 0) res += " and ";
+            res += std::to_string(self.sec) + " sec(s)";
+        }
+        if(self.msec != 0) {
+            if(res.size() > 0) res += " and ";
+            res += std::to_string(self.msec) + " msec(s)";
+        }
+        return res;
+    }
 };
 } // namespace duckdb

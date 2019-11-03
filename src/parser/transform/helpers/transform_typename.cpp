@@ -1,11 +1,13 @@
 #include "common/exception.hpp"
 #include "common/string_util.hpp"
 #include "parser/transformer.hpp"
+#include <iostream>
+#include <nodes/pg_list.h>
 
 using namespace duckdb;
 using namespace std;
 
-static SQLType TransformStringToSQLType(char *str) {
+static SQLType TransformStringToSQLType(char *str, postgres::TypeName *type_name) {
 	auto lower_str = StringUtil::Lower(string(str));
 	// Transform column type
 	if (lower_str == "int" || lower_str == "int4" || lower_str == "signed") {
@@ -32,6 +34,10 @@ static SQLType TransformStringToSQLType(char *str) {
 		return SQLType::DATE;
 	} else if (lower_str == "time") {
 		return SQLType::TIME;
+    } else if (lower_str == "interval") {
+        assert(type_name->typmods);
+        long period = reinterpret_cast<postgres::A_Const *>(type_name->typmods->head->data.ptr_value)->val.val.ival;
+        return SQLType(SQLTypeId::INTERVAL, 0 , period);
 	} else {
 		throw NotImplementedException("DataType %s not supported yet...\n", str);
 	}
@@ -40,5 +46,5 @@ static SQLType TransformStringToSQLType(char *str) {
 SQLType Transformer::TransformTypeName(postgres::TypeName *type_name) {
 	auto name = (reinterpret_cast<postgres::Value *>(type_name->names->tail->data.ptr_value)->val.str);
 	// transform it to the SQL type
-	return TransformStringToSQLType(name);
+	return TransformStringToSQLType(name, type_name);
 }

@@ -9,6 +9,18 @@
 #include <cstdlib>
 #include <cctype>
 #include <cmath>
+#include <iostream>
+
+extern "C" {
+#include "pg_definitions.h"
+// We need MONTH, DAY and YEAR definitions from "utils/datetime.h", but there
+// are other definitions that will be brought here and we don't want them.
+// That's why we have inlined those required definitions below, instead.    
+//#include "utils/datetime.h"
+#define MONTH   1
+#define YEAR    2
+#define DAY     3
+}
 
 using namespace duckdb;
 using namespace std;
@@ -50,19 +62,19 @@ template <> bool TryCast::Operation(double left, int8_t &result) {
 	return try_cast_with_overflow_check(left, result);
 }
 
-template <> int8_t Cast::Operation(int16_t left) {
+template <> int8_t Cast::Operation(int16_t left, SQLType target_type) {
 	return cast_with_overflow_check<int16_t, int8_t>(left);
 }
-template <> int8_t Cast::Operation(int32_t left) {
+template <> int8_t Cast::Operation(int32_t left, SQLType target_type) {
 	return cast_with_overflow_check<int32_t, int8_t>(left);
 }
-template <> int8_t Cast::Operation(int64_t left) {
+template <> int8_t Cast::Operation(int64_t left, SQLType target_type) {
 	return cast_with_overflow_check<int64_t, int8_t>(left);
 }
-template <> int8_t Cast::Operation(float left) {
+template <> int8_t Cast::Operation(float left, SQLType target_type) {
 	return cast_with_overflow_check<float, int8_t>(left);
 }
-template <> int8_t Cast::Operation(double left) {
+template <> int8_t Cast::Operation(double left, SQLType target_type) {
 	return cast_with_overflow_check<double, int8_t>(left);
 }
 //===--------------------------------------------------------------------===//
@@ -81,16 +93,16 @@ template <> bool TryCast::Operation(double left, int16_t &result) {
 	return try_cast_with_overflow_check(left, result);
 }
 
-template <> int16_t Cast::Operation(int32_t left) {
+template <> int16_t Cast::Operation(int32_t left, SQLType target_type) {
 	return cast_with_overflow_check<int32_t, int16_t>(left);
 }
-template <> int16_t Cast::Operation(int64_t left) {
+template <> int16_t Cast::Operation(int64_t left, SQLType target_type) {
 	return cast_with_overflow_check<int64_t, int16_t>(left);
 }
-template <> int16_t Cast::Operation(float left) {
+template <> int16_t Cast::Operation(float left, SQLType target_type) {
 	return cast_with_overflow_check<float, int16_t>(left);
 }
-template <> int16_t Cast::Operation(double left) {
+template <> int16_t Cast::Operation(double left, SQLType target_type) {
 	return cast_with_overflow_check<double, int16_t>(left);
 }
 //===--------------------------------------------------------------------===//
@@ -106,13 +118,13 @@ template <> bool TryCast::Operation(double left, int32_t &result) {
 	return try_cast_with_overflow_check(left, result);
 }
 
-template <> int32_t Cast::Operation(int64_t left) {
+template <> int32_t Cast::Operation(int64_t left, SQLType target_type) {
 	return cast_with_overflow_check<int64_t, int32_t>(left);
 }
-template <> int32_t Cast::Operation(float left) {
+template <> int32_t Cast::Operation(float left, SQLType target_type) {
 	return cast_with_overflow_check<float, int32_t>(left);
 }
-template <> int32_t Cast::Operation(double left) {
+template <> int32_t Cast::Operation(double left, SQLType target_type) {
 	return cast_with_overflow_check<double, int32_t>(left);
 }
 //===--------------------------------------------------------------------===//
@@ -125,10 +137,10 @@ template <> bool TryCast::Operation(double left, int64_t &result) {
 	return try_cast_with_overflow_check(left, result);
 }
 
-template <> int64_t Cast::Operation(float left) {
+template <> int64_t Cast::Operation(float left, SQLType target_type) {
 	return cast_with_overflow_check<float, int64_t>(left);
 }
-template <> int64_t Cast::Operation(double left) {
+template <> int64_t Cast::Operation(double left, SQLType target_type) {
 	return cast_with_overflow_check<double, int64_t>(left);
 }
 
@@ -341,32 +353,32 @@ template <> bool TryCast::Operation(const char *left, double &result) {
 	return TryDoubleCast<double>(left, result);
 }
 
-template <> bool Cast::Operation(const char *left) {
+template <> bool Cast::Operation(const char *left, SQLType target_type) {
 	return try_cast_string<bool>(left);
 }
-template <> int8_t Cast::Operation(const char *left) {
+template <> int8_t Cast::Operation(const char *left, SQLType target_type) {
 	return try_cast_string<int8_t>(left);
 }
-template <> int16_t Cast::Operation(const char *left) {
+template <> int16_t Cast::Operation(const char *left, SQLType target_type) {
 	return try_cast_string<int16_t>(left);
 }
-template <> int32_t Cast::Operation(const char *left) {
+template <> int32_t Cast::Operation(const char *left, SQLType target_type) {
 	return try_cast_string<int32_t>(left);
 }
-template <> int64_t Cast::Operation(const char *left) {
+template <> int64_t Cast::Operation(const char *left, SQLType target_type) {
 	return try_cast_string<int64_t>(left);
 }
-template <> float Cast::Operation(const char *left) {
+template <> float Cast::Operation(const char *left, SQLType target_type) {
 	return try_cast_string<float>(left);
 }
-template <> double Cast::Operation(const char *left) {
+template <> double Cast::Operation(const char *left, SQLType target_type) {
 	return try_cast_string<double>(left);
 }
 
 //===--------------------------------------------------------------------===//
 // Cast Numeric -> String
 //===--------------------------------------------------------------------===//
-template <> string Cast::Operation(bool left) {
+template <> string Cast::Operation(bool left, SQLType target_type) {
 	if (left) {
 		return "true";
 	} else {
@@ -374,61 +386,61 @@ template <> string Cast::Operation(bool left) {
 	}
 }
 
-template <> string Cast::Operation(int8_t left) {
+template <> string Cast::Operation(int8_t left, SQLType target_type) {
 	return to_string(left);
 }
 
-template <> string Cast::Operation(int16_t left) {
+template <> string Cast::Operation(int16_t left, SQLType target_type) {
 	return to_string(left);
 }
 
-template <> string Cast::Operation(int left) {
+template <> string Cast::Operation(int left, SQLType target_type) {
 	return to_string(left);
 }
 
-template <> string Cast::Operation(int64_t left) {
+template <> string Cast::Operation(int64_t left, SQLType target_type) {
 	return to_string(left);
 }
 
-template <> string Cast::Operation(uint64_t left) {
+template <> string Cast::Operation(uint64_t left, SQLType target_type) {
 	return to_string(left);
 }
 
-template <> string Cast::Operation(float left) {
+template <> string Cast::Operation(float left, SQLType target_type) {
 	return to_string(left);
 }
 
-template <> string Cast::Operation(double left) {
+template <> string Cast::Operation(double left, SQLType target_type) {
 	return to_string(left);
 }
 
 //===--------------------------------------------------------------------===//
 // Cast From Date
 //===--------------------------------------------------------------------===//
-template <> string CastFromDate::Operation(date_t left) {
+template <> string CastFromDate::Operation(date_t left, SQLType target_type) {
 	return Date::ToString(left);
 }
 
-template <> int32_t CastFromDate::Operation(date_t left) {
+template <> int32_t CastFromDate::Operation(date_t left, SQLType target_type) {
 	return (int32_t)left;
 }
 
-template <> int64_t CastFromDate::Operation(date_t left) {
+template <> int64_t CastFromDate::Operation(date_t left, SQLType target_type) {
 	return (int64_t)left;
 }
 
 //===--------------------------------------------------------------------===//
 // Cast To Date
 //===--------------------------------------------------------------------===//
-template <> date_t CastToDate::Operation(const char *left) {
+template <> date_t CastToDate::Operation(const char *left, SQLType target_type) {
 	return Date::FromCString(left);
 }
 
-template <> date_t CastToDate::Operation(int32_t left) {
+template <> date_t CastToDate::Operation(int32_t left, SQLType target_type) {
 	return (date_t)left;
 }
 
-template <> date_t CastToDate::Operation(int64_t left) {
+template <> date_t CastToDate::Operation(int64_t left, SQLType target_type) {
 	return (date_t)left;
 }
 
@@ -436,30 +448,30 @@ template <> date_t CastToDate::Operation(int64_t left) {
 //===--------------------------------------------------------------------===//
 // Cast From Time
 //===--------------------------------------------------------------------===//
-template <> string CastFromTime::Operation(dtime_t left) {
+template <> string CastFromTime::Operation(dtime_t left, SQLType target_type) {
 	return Time::ToString(left);
 }
 
-template <> int32_t CastFromTime::Operation(dtime_t left) {
+template <> int32_t CastFromTime::Operation(dtime_t left, SQLType target_type) {
 	return (int32_t)left;
 }
 
-template <> int64_t CastFromTime::Operation(dtime_t left) {
+template <> int64_t CastFromTime::Operation(dtime_t left, SQLType target_type) {
 	return (int64_t)left;
 }
 
 //===--------------------------------------------------------------------===//
 // Cast To Time
 //===--------------------------------------------------------------------===//
-template <> dtime_t CastToTime::Operation(const char *left) {
+template <> dtime_t CastToTime::Operation(const char *left, SQLType target_type) {
 	return Time::FromCString(left);
 }
 
-template <> dtime_t CastToTime::Operation(int32_t left) {
+template <> dtime_t CastToTime::Operation(int32_t left, SQLType target_type) {
 	return (dtime_t)left;
 }
 
-template <> dtime_t CastToTime::Operation(int64_t left) {
+template <> dtime_t CastToTime::Operation(int64_t left, SQLType target_type) {
 	return (dtime_t)left;
 }
 
@@ -467,23 +479,48 @@ template <> dtime_t CastToTime::Operation(int64_t left) {
 // Cast From Timestamps
 //===--------------------------------------------------------------------===//
 
-template <> string CastFromTimestamp::Operation(timestamp_t left) {
+template <> string CastFromTimestamp::Operation(timestamp_t left, SQLType target_type) {
 	return Timestamp::ToString(left);
 }
 
-template <> int64_t CastFromTimestamp::Operation(timestamp_t left) {
+template <> int64_t CastFromTimestamp::Operation(timestamp_t left, SQLType target_type) {
 	return (int64_t)left;
 }
 
 //===--------------------------------------------------------------------===//
 // Cast To Timestamp
 //===--------------------------------------------------------------------===//
-template <> timestamp_t CastToTimestamp::Operation(const char *left) {
+template <> timestamp_t CastToTimestamp::Operation(const char *left, SQLType target_type) {
 	return Timestamp::FromString(left);
 }
 
-template <> timestamp_t CastToTimestamp::Operation(int64_t left) {
-	return (timestamp_t)left;
+template <> timestamp_t CastToTimestamp::Operation(int64_t left, SQLType target_type) {
+    return (timestamp_t)left;
+}
+
+
+//===--------------------------------------------------------------------===//
+// Cast To Interval
+//===--------------------------------------------------------------------===//
+template <> Interval CastToInterval::Operation(const char * left, SQLType target_type) {
+    Interval res;
+
+    cout << "here111123423444" << endl;
+    switch(target_type.scale) {
+        case INTERVAL_MASK(DAY):
+            res.days = try_cast_string<int32_t>(left);
+            break;
+        case INTERVAL_MASK(MONTH):
+            res.months = try_cast_string<int32_t>(left);
+            break;
+        case INTERVAL_MASK(YEAR):
+            res.months = try_cast_string<int32_t>(left) * 12;
+            break;
+        default:
+            throw CastException(TypeId::INTERVAL, GetInternalType(target_type.id));
+    }
+    cout << "here1111234" << endl;
+    return res;
 }
 
 } // namespace duckdb

@@ -97,6 +97,11 @@ int64_t CastRules::ImplicitCast(SQLType from, SQLType to) {
 		// NULL expression or parameter expression can be cast to anything
 		return TargetTypeCost(to);
 	}
+
+    if (from.id == SQLTypeId::INTERVAL && to.id == SQLTypeId::INTERVAL) {
+        // Intervals might have different scales and do not actually need to be casted
+        return 0;
+    }
 	if (to.id == SQLTypeId::VARCHAR) {
 		// everything can be cast to VARCHAR, but this cast has a high cost
 		return TargetTypeCost(to);

@@ -188,7 +188,7 @@ Interval Timestamp::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp
 	return interval;
 }
 
-timestamp_struct Timestamp::IntervalToTimestamp(Interval &interval) {
+timestamp_struct Timestamp::IntervalToTimestamp(Interval const& interval) {
 	timestamp_struct timestamp;
 
 	if (interval.months != 0) {
