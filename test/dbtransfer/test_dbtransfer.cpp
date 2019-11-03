@@ -70,9 +70,7 @@ TEST_CASE("Pass pointer to sqlite3 as nullptr to QueryDatabase", "[dbtransfer]")
                                                      duckdb::SQLTypeId::INTEGER };
     std::string query = "SELECT * from items";
     int interrupt = 0;
-    auto result = sqlite::QueryDatabase(result_types, nullptr, std::move(query), interrupt);
-
-    REQUIRE_FALSE(result);
+    REQUIRE_FALSE(sqlite::QueryDatabase(result_types, nullptr, std::move(query), interrupt));
 }
 
 TEST_CASE("Check getting query from sqlite database", "[dbtransfer]") {
