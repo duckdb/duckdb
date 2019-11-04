@@ -161,3 +161,65 @@ TEST_CASE("Test appending and checkpointing a table that exceeds buffer manager 
 	}
 	DeleteDatabase(storage_database);
 }
+
+TEST_CASE("Modifying the buffer manager limit at runtime for an in-memory database", "[storage][.]") {
+	unique_ptr<MaterializedQueryResult> result;
+
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// initialize an in-memory database of size 10MB
+	uint64_t table_size = (1000 * 1000) / sizeof(int);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1), (2), (3), (NULL)"));
+
+	index_t not_null_size = 3;
+	index_t size = 4;
+	index_t sum = 6;
+	for(; size < table_size; size *= 2) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM test"));
+		not_null_size *= 2;
+		sum *= 2;
+	}
+
+	result = con.Query("SELECT COUNT(*), COUNT(a), SUM(a) FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(size)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(not_null_size)}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value::BIGINT(sum)}));
+
+	// we can set the memory limit to 1GB
+	REQUIRE_NO_FAIL(con.Query("PRAGMA memory_limit=1GB"));
+	// but we cannot set it below 10MB
+	REQUIRE_FAIL(con.Query("PRAGMA memory_limit=1MB"));
+
+	// if we make room by dropping the table, we can set it to 1MB though
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE test"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA memory_limit=1MB"));
+
+	// also test that large strings are properly deleted
+	// reset the memory limit
+	REQUIRE_NO_FAIL(con.Query("PRAGMA memory_limit=-1"));
+
+	// create a table with a large string (10MB)
+	uint64_t string_length = 64;
+	uint64_t desired_size = 10000000; // desired size is 10MB
+	uint64_t iteration = 2;
+
+	string big_string = string(string_length, 'a');
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR, j BIGINT);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('" + big_string + "', 1)"));
+	while (string_length < desired_size) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a, " + to_string(iteration) +
+									" FROM test"));
+		REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE j=" + to_string(iteration - 1)));
+		iteration++;
+		string_length *= 10;
+	}
+
+	// now we cannot set the memory limit to 1MB again
+	REQUIRE_FAIL(con.Query("PRAGMA memory_limit=1MB"));
+	// but dropping the table allows us to set the memory limit to 1MB again
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE test"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA memory_limit=1MB"));
+}

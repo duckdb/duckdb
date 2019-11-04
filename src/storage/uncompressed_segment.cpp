@@ -9,6 +9,13 @@ UncompressedSegment::UncompressedSegment(BufferManager &manager, TypeId type, in
 	manager(manager), type(type), block_id(INVALID_BLOCK), max_vector_count(0), tuple_count(0), row_start(row_start), versions(nullptr) {
 }
 
+UncompressedSegment::~UncompressedSegment() {
+	if (block_id >= MAXIMUM_BLOCK) {
+		// if the uncompressed segment had an in-memory segment, destroy it when the uncompressed segment is destroyed
+		manager.DestroyBuffer(block_id);
+	}
+}
+
 static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector &update, row_t *ids, row_t offset, UpdateInfo *& node) {
 	if (info->version_number == transaction.transaction_id) {
 		// this UpdateInfo belongs to the current transaction, set it in the node

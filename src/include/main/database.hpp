@@ -37,8 +37,8 @@ public:
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
 	//! RamFS or something similar)
 	unique_ptr<FileSystem> file_system;
-	//! The maximum memory used by the database system (in bytes). Default: 1GB
-	index_t maximum_memory = 1 << 30;
+	//! The maximum memory used by the database system (in bytes). Default: Infinite
+	index_t maximum_memory = (index_t) -1;
 	//! Whether or not to create and use a temporary directory to store intermediates that do not fit in memory
 	bool use_temporary_directory = true;
 	//! Directory to store temporary structures that do not fit in memory

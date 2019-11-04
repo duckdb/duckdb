@@ -33,6 +33,9 @@ public:
 	unique_ptr<BufferHandle> Allocate(index_t alloc_size, bool can_destroy = false);
 	//! Destroy the managed buffer with the specified buffer_id, freeing its memory
 	void DestroyBuffer(block_id_t buffer_id);
+
+	//! Set a new memory limit to the buffer manager, throws an exception if the new limit is too low and not enough blocks can be evicted
+	void SetLimit(index_t limit = (index_t) -1);
 private:
 	unique_ptr<BufferHandle> PinBlock(block_id_t block_id);
 	unique_ptr<BufferHandle> PinBuffer(block_id_t block_id, bool can_destroy = false);

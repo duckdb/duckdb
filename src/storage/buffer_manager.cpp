@@ -109,6 +109,9 @@ void BufferManager::Unpin(block_id_t block_id) {
 }
 
 unique_ptr<Block> BufferManager::EvictBlock() {
+	if (temp_directory.empty()) {
+		throw Exception("Out-of-memory: cannot evict buffer because no temporary directory is specified!\nTo enable temporary buffer eviction set a temporary directory in the configuration");
+	}
 	// pop the first entry from the lru list
 	auto entry = lru.Pop();
 	if (!entry) {
@@ -152,7 +155,7 @@ unique_ptr<BufferHandle> BufferManager::Allocate(index_t alloc_size, bool can_de
 	auto temp_id = ++temporary_id;
 	auto buffer = make_unique<ManagedBuffer>(*this, alloc_size, can_destroy, temp_id);
 	auto managed_buffer = buffer.get();
-	current_memory += alloc_size;
+	current_memory += buffer->AllocSize();
 	// create a new entry and append it to the used list
 	auto buffer_entry = make_unique<BufferEntry>(move(buffer));
 	blocks.insert(make_pair(temp_id, buffer_entry.get()));
@@ -191,8 +194,13 @@ void BufferManager::DestroyBuffer(block_id_t buffer_id) {
 	// first find the block in the set of blocks
 	auto entry = blocks.find(buffer_id);
 	assert(entry != blocks.end());
+
+	auto handle = entry->second;
+	assert(handle->ref_count == 0);
+
+	current_memory -= handle->buffer->AllocSize();
 	blocks.erase(buffer_id);
-	used_list.Erase(entry->second);
+	lru.Erase(handle);
 }
 
 string BufferManager::GetTemporaryPath(block_id_t id) {
@@ -200,9 +208,6 @@ string BufferManager::GetTemporaryPath(block_id_t id) {
 }
 
 void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
-	if (temp_directory.empty()) {
-		throw Exception("Out-of-memory: cannot evict buffer because no temporary directory is specified!\nTo enable temporary buffer eviction set a temporary directory in the configuration");
-	}
 	assert(buffer.size + Storage::BLOCK_HEADER_SIZE >= Storage::BLOCK_ALLOC_SIZE);
 	// get the path to write to
 	auto path = GetTemporaryPath(buffer.id);
@@ -230,11 +235,18 @@ unique_ptr<BufferHandle> BufferManager::ReadTemporaryBuffer(block_id_t id) {
 	buffer->Read(*handle, sizeof(index_t));
 
 	auto managed_buffer = buffer.get();
-	current_memory += alloc_size;
+	current_memory += buffer->AllocSize();
 	// create a new entry and append it to the used list
 	auto buffer_entry = make_unique<BufferEntry>(move(buffer));
 	blocks.insert(make_pair(id, buffer_entry.get()));
 	used_list.Append(move(buffer_entry));
 	// now return a handle to the entry
 	return make_unique<BufferHandle>(*this, id, managed_buffer);
+}
+
+void BufferManager::SetLimit(index_t limit) {
+	while(current_memory > limit) {
+		EvictBlock();
+	}
+	maximum_memory = limit;
 }

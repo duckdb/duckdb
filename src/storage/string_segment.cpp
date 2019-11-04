@@ -30,6 +30,13 @@ StringSegment::StringSegment(BufferManager &manager, index_t row_start, block_id
 	}
 }
 
+StringSegment::~StringSegment() {
+	while(head) {
+		manager.DestroyBuffer(head->block_id);
+		head = move(head->next);
+	}
+}
+
 void StringSegment::ExpandStringSegment(data_ptr_t baseptr) {
 	// clear the nullmask for this vector
 	auto mask = (nullmask_t*) (baseptr + (max_vector_count * vector_size));

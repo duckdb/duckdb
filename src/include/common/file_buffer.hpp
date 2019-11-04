@@ -43,6 +43,10 @@ public:
 	void Write(FileHandle &handle, uint64_t location);
 
 	void Clear();
+
+	uint64_t AllocSize() {
+		return internal_size;
+	}
 private:
 	//! The pointer to the internal buffer that will be read or written, including the buffer header
 	data_ptr_t internal_buffer;

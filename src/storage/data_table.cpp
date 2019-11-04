@@ -629,6 +629,8 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 	InitializeCreateIndexScan(state, column_ids);
 
 	// now start incrementally building the index
+	IndexLock lock;
+	index->InitializeLock(lock);
 	while (true) {
 		intermediate.Reset();
 		// scan a new chunk from the table to index
@@ -642,7 +644,7 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 		ExpressionExecutor executor(intermediate);
 		executor.Execute(expressions, result);
 		// insert into the index
-		index->Insert(result, intermediate.data[intermediate.column_count - 1]);
+		index->Insert(lock, result, intermediate.data[intermediate.column_count - 1]);
 	}
 	indexes.push_back(move(index));
 }

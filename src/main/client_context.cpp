@@ -77,7 +77,7 @@ unique_ptr<DataChunk> ClientContext::Fetch() {
 string ClientContext::FinalizeQuery(bool success) {
 	profiler.EndQuery();
 
-	execution_context.physical_plan = nullptr;
+	execution_context.Reset();
 
 	string error;
 	if (transaction.HasActiveTransaction()) {

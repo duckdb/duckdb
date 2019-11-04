@@ -25,7 +25,7 @@ struct UpdateInfo;
 class UncompressedSegment {
 public:
 	UncompressedSegment(BufferManager &manager, TypeId type, index_t row_start);
-	virtual ~UncompressedSegment() = default;
+	virtual ~UncompressedSegment();
 
 	//! The buffer manager
 	BufferManager &manager;

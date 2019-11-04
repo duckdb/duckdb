@@ -84,14 +84,14 @@ public:
 	//! Perform a lookup on the index
 	void Scan(Transaction &transaction, TableIndexScanState &state, DataChunk &result) override;
 	//! Append entries to the index
-	bool Append(IndexLock &state, DataChunk &entries, Vector &row_identifiers) override;
+	bool Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Verify that data can be appended to the index
 	void VerifyAppend(DataChunk &chunk) override;
 	//! Delete entries in the index
-	void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) override;
+	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 
-	//! Insert data into the index. Does not lock the index.
-	bool Insert(DataChunk &data, Vector &row_ids) override;
+	//! Insert data into the index.
+	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
 private:
 	DataChunk expression_result;

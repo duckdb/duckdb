@@ -45,6 +45,7 @@ typedef unique_ptr<StringUpdateInfo> string_update_info_t;
 class StringSegment : public UncompressedSegment {
 public:
 	StringSegment(BufferManager &manager, index_t row_start, block_id_t block_id = INVALID_BLOCK);
+	~StringSegment() override;
 
 	//! The current dictionary offset
 	index_t dictionary_offset;

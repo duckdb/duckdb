@@ -110,7 +110,7 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	}
 }
 
-bool ART::Insert(DataChunk &input, Vector &row_ids) {
+bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	assert(row_ids.type == TypeId::BIGINT);
 	assert(input.size() == row_ids.count);
 	assert(types[0] == input.data[0].type);
@@ -152,13 +152,12 @@ bool ART::Insert(DataChunk &input, Vector &row_ids) {
 	return true;
 }
 
-bool ART::Append(IndexLock &state, DataChunk &appended_data, Vector &row_identifiers) {
-
+bool ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifiers) {
 	// first resolve the expressions for the index
 	ExecuteExpressions(appended_data, expression_result);
 
 	// now insert into the index
-	return Insert(expression_result, row_identifiers);
+	return Insert(lock, expression_result, row_identifiers);
 }
 
 

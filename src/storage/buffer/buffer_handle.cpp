@@ -6,7 +6,6 @@ using namespace std;
 
 BufferHandle::BufferHandle(BufferManager &manager,block_id_t block_id, FileBuffer *node) :
 		manager(manager), block_id(block_id), node(node) {
-
 }
 
 BufferHandle::~BufferHandle() {

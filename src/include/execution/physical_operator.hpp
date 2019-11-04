@@ -28,8 +28,7 @@ class PhysicalOperator;
 class PhysicalOperatorState {
 public:
 	PhysicalOperatorState(PhysicalOperator *child);
-	virtual ~PhysicalOperatorState() {
-	}
+	virtual ~PhysicalOperatorState() = default;
 
 	//! Flag indicating whether or not the operator is finished [note: not all
 	//! operators use this flag]

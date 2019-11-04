@@ -62,8 +62,7 @@ struct LocalScanState {
 };
 
 struct TableScanState {
-	virtual ~TableScanState() {
-	}
+	virtual ~TableScanState() = default;
 
 	index_t current_persistent_row, max_persistent_row;
 	index_t current_transient_row, max_transient_row;
