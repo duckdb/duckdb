@@ -187,7 +187,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(postgres::Node *node) {
 			// copy file into table
 			auto &table = *reinterpret_cast<BaseTableRef *>(ref.get());
 			info.table = table.table_name;
-			info.schema = table.schema_name;
+			info.schema = table.schema_name.empty() ? DEFAULT_SCHEMA : table.schema_name;
 		} else {
 			// copy table into file, generate SELECT * FROM table;
 			auto statement = make_unique<SelectNode>();
