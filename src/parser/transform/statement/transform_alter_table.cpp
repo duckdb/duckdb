@@ -2,10 +2,9 @@
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<AlterTableStatement> Transformer::TransformAlter(Node *node) {
+unique_ptr<AlterTableStatement> Transformer::TransformAlter(postgres::Node *node) {
 	throw NotImplementedException("Alter table not supported yet!");
 	// auto stmt = reinterpret_cast<AlterTableStmt *>(node);
 	// assert(stmt);

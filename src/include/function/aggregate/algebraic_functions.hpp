@@ -12,31 +12,31 @@
 
 namespace duckdb {
 
-struct Avg {
+struct AvgFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct CovarSamp {
+struct CovarSampFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct CovarPop {
+struct CovarPopFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct StdDevSamp {
+struct StdDevSampFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct StdDevPop {
+struct StdDevPopFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct VarPop {
+struct VarPopFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct VarSamp {
+struct VarSampFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

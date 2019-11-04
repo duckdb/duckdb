@@ -2,11 +2,10 @@
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<TableRef> Transformer::TransformRangeSubselect(RangeSubselect *root) {
-	auto subquery = TransformSelectNode((SelectStmt *)root->subquery);
+unique_ptr<TableRef> Transformer::TransformRangeSubselect(postgres::RangeSubselect *root) {
+	auto subquery = TransformSelectNode((postgres::SelectStmt *)root->subquery);
 	if (!subquery) {
 		return nullptr;
 	}

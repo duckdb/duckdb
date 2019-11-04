@@ -12,7 +12,7 @@ static void sqrt_function(ExpressionExecutor &exec, Vector inputs[], index_t inp
 	VectorOperations::Sqrt(inputs[0], result);
 }
 
-void Sqrt::RegisterFunction(BuiltinFunctions &set) {
+void SqrtFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("sqrt", { SQLType::DOUBLE }, SQLType::DOUBLE, sqrt_function));
 }
 

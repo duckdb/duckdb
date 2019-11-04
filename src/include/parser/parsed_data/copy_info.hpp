@@ -22,26 +22,38 @@ struct CopyInfo {
 	string schema;
 	//! The table name to copy to/from
 	string table;
-	//! The file path to copy to or copy from
+	//! List of columns to copy to/from
+	vector<string> select_list;
+	//! The file path to copy to/from
 	string file_path;
-	//! Whether or not this is a copy to file or copy from a file
+	//! Whether or not this is a copy to file (false) or copy from a file (true)
 	bool is_from;
-	//! Delimiter to parse
-	char delimiter;
-	//! Quote to use
-	char quote;
-	//! Escape character to use
-	char escape;
+	//! Delimiter to separate columns within each line
+	string delimiter;
+	//! Quote used for columns that contain reserved characters, e.g., delimiter
+	string quote;
+	//! Escape character to escape quote character
+	string escape;
 	//! Whether or not the file has a header line
 	bool header;
 	//! The file format of the external file
 	ExternalFileFormat format;
-	// List of Columns that will be copied from/to.
-	vector<string> select_list;
+	//! Specifies the string that represents a null value
+	string null_str;
+	//! Determines whether all columns must be quoted
+	bool quote_all;
+	//! Forces quoting to be used for all non-NULL values in each specified column
+	vector<string> force_quote_list;
+	//! True, if column with that index must be quoted
+	vector<bool> force_quote;
+	//! Null values will be read as zero-length strings in each specified column
+	vector<string> force_not_null_list;
+	//! True, if column with that index must skip null check
+	vector<bool> force_not_null;
 
 	CopyInfo()
-	    : schema(DEFAULT_SCHEMA), is_from(false), delimiter(','), quote('"'), escape('\0'), header(false),
-	      format(ExternalFileFormat::CSV) {
+	    : schema(DEFAULT_SCHEMA), is_from(false), delimiter(","), quote("\""), escape(""), header(false),
+	      format(ExternalFileFormat::CSV), null_str(""), quote_all(false) {
 	}
 };
 

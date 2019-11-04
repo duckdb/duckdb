@@ -2,10 +2,9 @@
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<ParsedExpression> Transformer::TransformParamRef(ParamRef *node) {
+unique_ptr<ParsedExpression> Transformer::TransformParamRef(postgres::ParamRef *node) {
 	if (!node) {
 		return nullptr;
 	}

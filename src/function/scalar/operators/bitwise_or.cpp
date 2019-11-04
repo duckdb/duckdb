@@ -10,7 +10,7 @@ static void bitwise_or_function(ExpressionExecutor &exec, Vector inputs[], index
 	VectorOperations::BitwiseOR(inputs[0], inputs[1], result);
 }
 
-void BitwiseOr::RegisterFunction(BuiltinFunctions &set) {
+void BitwiseOrFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("|");
 	for(auto &type : SQLType::INTEGRAL) {
 		functions.AddFunction(ScalarFunction({ type, type }, type, bitwise_or_function));

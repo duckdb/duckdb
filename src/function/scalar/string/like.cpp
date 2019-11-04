@@ -19,7 +19,7 @@ static void not_like_function(ExpressionExecutor &exec, Vector inputs[], index_t
 	VectorOperations::NotLike(inputs[0], inputs[1], result);
 }
 
-void Like::RegisterFunction(BuiltinFunctions &set) {
+void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("~~", { SQLType::VARCHAR, SQLType::VARCHAR }, SQLType::BOOLEAN, like_function));
 	set.AddFunction(ScalarFunction("!~~", { SQLType::VARCHAR, SQLType::VARCHAR }, SQLType::BOOLEAN, not_like_function));
 }

@@ -196,7 +196,7 @@ static void timestamp_part_function(ExpressionExecutor &exec, Vector inputs[], i
 	}
 }
 
-void DatePart::RegisterFunction(BuiltinFunctions &set) {
+void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
     ScalarFunctionSet date_part("date_part");
 	date_part.AddFunction(ScalarFunction({ SQLType::VARCHAR, SQLType::DATE }, SQLType::BIGINT, date_part_function));
 	date_part.AddFunction(ScalarFunction({ SQLType::VARCHAR, SQLType::TIMESTAMP }, SQLType::BIGINT, timestamp_part_function));

@@ -29,7 +29,9 @@ string MaterializedQueryResult::ToString() {
 		result += "[ Rows: " + to_string(collection.count) + "]\n";
 		for (index_t j = 0; j < collection.count; j++) {
 			for (index_t i = 0; i < collection.column_count(); i++) {
-				result += collection.GetValue(i, j).ToString(sql_types[i]) + "\t";
+				auto val = collection.GetValue(i, j);
+				result += val.is_null ? "NULL" : val.ToString(sql_types[i]);
+				result += "\t";
 			}
 			result += "\n";
 		}

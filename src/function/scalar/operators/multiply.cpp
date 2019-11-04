@@ -10,7 +10,7 @@ static void multiply_function(ExpressionExecutor &exec, Vector inputs[], index_t
 	VectorOperations::Multiply(inputs[0], inputs[1], result);
 }
 
-void Multiply::RegisterFunction(BuiltinFunctions &set) {
+void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("*");
 	for(auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({ type, type }, type, multiply_function));

@@ -12,7 +12,7 @@ static void radians_function(ExpressionExecutor &exec, Vector inputs[], index_t 
 	VectorOperations::Radians(inputs[0], result);
 }
 
-void Radians::RegisterFunction(BuiltinFunctions &set) {
+void RadiansFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("radians", { SQLType::DOUBLE }, SQLType::DOUBLE, radians_function));
 }
 

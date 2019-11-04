@@ -111,6 +111,7 @@ private:
 	unique_ptr<ParsedExpression> TransformResTarget(postgres::ResTarget *root);
 	unique_ptr<ParsedExpression> TransformNullTest(postgres::NullTest *root);
 	unique_ptr<ParsedExpression> TransformParamRef(postgres::ParamRef *node);
+	unique_ptr<ParsedExpression> TransformSQLValueFunction(postgres::SQLValueFunction *node);
 
 	unique_ptr<ParsedExpression> TransformSubquery(postgres::SubLink *root);
 	//===--------------------------------------------------------------------===//

@@ -30,7 +30,7 @@ static void sum_simple_update(Vector inputs[], index_t input_count, Value &resul
 
 namespace duckdb {
 
-void Sum::RegisterFunction(BuiltinFunctions &set) {
+void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet sum("sum");
 	// integer sums to bigint
 	sum.AddFunction(AggregateFunction({ SQLType::BIGINT }, SQLType::BIGINT, get_return_type_size, null_state_initialize, sum_update, sum_combine, gather_finalize, null_simple_initialize, sum_simple_update));

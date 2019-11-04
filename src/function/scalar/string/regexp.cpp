@@ -110,7 +110,7 @@ static void regexp_replace_function(ExpressionExecutor &exec, Vector inputs[], i
 	    });
 }
 
-void Regexp::RegisterFunction(BuiltinFunctions &set) {
+void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("regexp_matches", { SQLType::VARCHAR, SQLType::VARCHAR }, SQLType::BOOLEAN, regexp_matches_function, false, regexp_matches_get_bind_function));
 	set.AddFunction(ScalarFunction("regexp_replace", { SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR }, SQLType::VARCHAR, regexp_replace_function));
 }

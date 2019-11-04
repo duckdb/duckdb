@@ -23,9 +23,9 @@ public:
 
 	//! The CopyInfo
 	unique_ptr<CopyInfo> info;
-	//! The bound insert statement (only for COPY from file -> database)
+	//! The bound insert statement (only for COPY FROM)
 	unique_ptr<BoundSQLStatement> bound_insert;
-	// The bound SQL statement (only for COPY from database -> file)
+	//! The bound SQL statement (only for COPY TO)
 	unique_ptr<BoundQueryNode> select_statement;
 
 	vector<string> names;

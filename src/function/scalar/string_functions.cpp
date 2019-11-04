@@ -5,14 +5,14 @@ using namespace std;
 namespace duckdb {
 
 void BuiltinFunctions::RegisterStringFunctions() {
-	Register<Lower>();
-	Register<Upper>();
-	Register<Concat>();
-	Register<ConcatWS>();
-	Register<Length>();
-	Register<Like>();
-	Register<Regexp>();
-	Register<Substring>();
+	Register<LowerFun>();
+	Register<UpperFun>();
+	Register<ConcatFun>();
+	Register<ConcatWSFun>();
+	Register<LengthFun>();
+	Register<LikeFun>();
+	Register<RegexpFun>();
+	Register<SubstringFun>();
 }
 
 }

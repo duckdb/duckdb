@@ -14,7 +14,7 @@ static void asin_function(ExpressionExecutor &exec, Vector inputs[], index_t inp
 	VectorOperations::ASin(inputs[0], result);
 }
 
-void Asin::RegisterFunction(BuiltinFunctions &set) {
+void AsinFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("asin", { SQLType::DOUBLE }, SQLType::DOUBLE, asin_function));
 }
 

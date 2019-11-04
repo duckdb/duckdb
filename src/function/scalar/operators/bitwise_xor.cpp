@@ -10,7 +10,7 @@ static void bitwise_xor_function(ExpressionExecutor &exec, Vector inputs[], inde
 	VectorOperations::BitwiseXOR(inputs[0], inputs[1], result);
 }
 
-void BitwiseXor::RegisterFunction(BuiltinFunctions &set) {
+void BitwiseXorFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("#");
 	for(auto &type : SQLType::INTEGRAL) {
 		functions.AddFunction(ScalarFunction({ type, type }, type, bitwise_xor_function));

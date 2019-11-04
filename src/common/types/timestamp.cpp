@@ -83,14 +83,13 @@ void Timestamp::Convert(timestamp_t date, date_t &out_date, dtime_t &out_time) {
 }
 
 timestamp_t Timestamp::GetCurrentTimestamp() {
-
 	auto in_time_t = std::time(nullptr);
-	auto local_time = std::localtime(&in_time_t);
+	auto utc = std::gmtime(&in_time_t);
 
 	// tm_year[0...] considers the amount of years since 1900 and tm_mon considers the amount of months since january
 	// tm_mon[0-11]
-	auto date = Date::FromDate(local_time->tm_year + START_YEAR, local_time->tm_mon + 1, local_time->tm_mday);
-	auto time = Time::FromTime(local_time->tm_hour, local_time->tm_min, local_time->tm_sec);
+	auto date = Date::FromDate(utc->tm_year + START_YEAR, utc->tm_mon + 1, utc->tm_mday);
+	auto time = Time::FromTime(utc->tm_hour, utc->tm_min, utc->tm_sec);
 
 	return Timestamp::FromDatetime(date, time);
 }

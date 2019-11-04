@@ -20,7 +20,7 @@ static void unary_subtract_function(ExpressionExecutor &exec, Vector inputs[], i
 	VectorOperations::Multiply(inputs[0], right, result);
 }
 
-void Subtract::RegisterFunction(BuiltinFunctions &set) {
+void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("-");
 	// binary subtract function "a - b", subtracts b from a
 	for(auto &type : SQLType::NUMERIC) {
