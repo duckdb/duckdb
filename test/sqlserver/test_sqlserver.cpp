@@ -8,7 +8,6 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA Sales;"));
 
@@ -649,6 +648,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	REQUIRE(CHECK_COLUMN(result, 1,
 	                     {125.50, 84.1346, 72.1154, 63.4615, 60.0962, 50.4808, 50.4808, 48.5577, 48.101, 48.101}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3, 4, 5, 6, 6, 7, 8, 8}));
+
 
 	result = con.Query(
 	    " SELECT p.FirstName, p.LastName ,ROW_NUMBER() OVER (ORDER BY a.PostalCode) AS \"Row Number\" ,RANK() OVER "
