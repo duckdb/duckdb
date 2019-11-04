@@ -13,8 +13,10 @@ unique_ptr<BufferEntry> BufferList::Pop() {
 	// fetch root
 	auto entry = move(root);
 	root = move(entry->next);
-	if (!root) {
-		// no root left: list is empty, last is nullptr
+	if (root) {
+		// new root no longer has prev pointer
+		root->prev = nullptr;
+	} else {
 		last = nullptr;
 	}
 	count--;
@@ -39,7 +41,10 @@ unique_ptr<BufferEntry> BufferList::Erase(BufferEntry *entry) {
 		if (root) {
 			// new root no longer has prev pointer
 			root->prev = nullptr;
+		} else {
+			last = nullptr;
 		}
+		assert(!root || !root->prev);
 	} else if (prev != last) {
 		assert(next);
 		next->prev = prev;

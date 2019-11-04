@@ -32,7 +32,7 @@ public:
 	//! Allocate a buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or not the buffer can be destroyed when unpinned, or whether or not it needs to be written to a temporary file so it can be reloaded.
 	unique_ptr<BufferHandle> Allocate(index_t alloc_size, bool can_destroy = false);
 	//! Destroy the managed buffer with the specified buffer_id, freeing its memory
-	void DestroyBuffer(block_id_t buffer_id);
+	void DestroyBuffer(block_id_t buffer_id, bool can_destroy = false);
 
 	//! Set a new memory limit to the buffer manager, throws an exception if the new limit is too low and not enough blocks can be evicted
 	void SetLimit(index_t limit = (index_t) -1);
@@ -55,6 +55,8 @@ private:
 	unique_ptr<BufferHandle> ReadTemporaryBuffer(block_id_t id);
 	//! Get the path of the temporary buffer
 	string GetTemporaryPath(block_id_t id);
+
+	void DeleteTemporaryFile(block_id_t id);
 private:
 	FileSystem &fs;
 	//! The block manager

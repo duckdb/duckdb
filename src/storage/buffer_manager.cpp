@@ -164,6 +164,39 @@ unique_ptr<BufferHandle> BufferManager::Allocate(index_t alloc_size, bool can_de
 	return make_unique<BufferHandle>(*this, temp_id, managed_buffer);
 }
 
+void BufferManager::DestroyBuffer(block_id_t buffer_id, bool can_destroy) {
+	lock_guard<mutex> lock(block_lock);
+
+	assert(buffer_id >= MAXIMUM_BLOCK);
+	// this is like unpin, except we just destroy the entry entirely instead of adding it to the LRU list
+	// first find the block in the set of blocks
+	auto entry = blocks.find(buffer_id);
+	if (entry == blocks.end()) {
+		// buffer is not currently loaded into memory
+		// check if it was offloaded to disk instead
+		if (!can_destroy) {
+			// buffer was offloaded to disk: remove the file instead
+			DeleteTemporaryFile(buffer_id);
+		}
+		return;
+	}
+
+	auto handle = entry->second;
+	assert(handle->ref_count == 0);
+
+	current_memory -= handle->buffer->AllocSize();
+	blocks.erase(buffer_id);
+	lru.Erase(handle);
+}
+
+void BufferManager::SetLimit(index_t limit) {
+	lock_guard<mutex> lock(block_lock);
+
+	while(current_memory > limit) {
+		EvictBlock();
+	}
+	maximum_memory = limit;
+}
 
 unique_ptr<BufferHandle> BufferManager::PinBuffer(block_id_t buffer_id, bool can_destroy) {
 	assert(buffer_id >= MAXIMUM_BLOCK);
@@ -186,21 +219,6 @@ unique_ptr<BufferHandle> BufferManager::PinBuffer(block_id_t buffer_id, bool can
 	auto managed = (ManagedBuffer*) buffer;
 	assert(managed->id == buffer_id);
 	return make_unique<BufferHandle>(*this, buffer_id, managed);
-}
-
-void BufferManager::DestroyBuffer(block_id_t buffer_id) {
-	assert(buffer_id >= MAXIMUM_BLOCK);
-	// this is like unpin, except we just destroy the entry entirely instead of adding it to the LRU list
-	// first find the block in the set of blocks
-	auto entry = blocks.find(buffer_id);
-	assert(entry != blocks.end());
-
-	auto handle = entry->second;
-	assert(handle->ref_count == 0);
-
-	current_memory -= handle->buffer->AllocSize();
-	blocks.erase(buffer_id);
-	lru.Erase(handle);
 }
 
 string BufferManager::GetTemporaryPath(block_id_t id) {
@@ -244,9 +262,9 @@ unique_ptr<BufferHandle> BufferManager::ReadTemporaryBuffer(block_id_t id) {
 	return make_unique<BufferHandle>(*this, id, managed_buffer);
 }
 
-void BufferManager::SetLimit(index_t limit) {
-	while(current_memory > limit) {
-		EvictBlock();
+void BufferManager::DeleteTemporaryFile(block_id_t id) {
+	auto path = GetTemporaryPath(id);
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
 	}
-	maximum_memory = limit;
 }
