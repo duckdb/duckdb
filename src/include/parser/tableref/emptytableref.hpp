@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/tableref/dummytableref.hpp
+// parser/tableref/emptytableref.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,9 +12,9 @@
 
 namespace duckdb {
 //! Represents a cross product
-class DummyTableRef : public TableRef {
+class EmptyTableRef : public TableRef {
 public:
-	DummyTableRef() : TableRef(TableReferenceType::DUMMY) {
+	EmptyTableRef() : TableRef(TableReferenceType::EMPTY) {
 	}
 
 public:

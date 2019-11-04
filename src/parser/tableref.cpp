@@ -33,8 +33,8 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source) {
 	case TableReferenceType::TABLE_FUNCTION:
 		result = TableFunctionRef::Deserialize(source);
 		break;
-	case TableReferenceType::DUMMY:
-		result = DummyTableRef::Deserialize(source);
+	case TableReferenceType::EMPTY:
+		result = EmptyTableRef::Deserialize(source);
 		break;
 	case TableReferenceType::INVALID:
 		return nullptr;

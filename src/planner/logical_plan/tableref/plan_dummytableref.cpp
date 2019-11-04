@@ -5,6 +5,6 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundDummyTableRef &ref) {
+unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundEmptyTableRef &ref) {
 	return make_unique<LogicalGet>(ref.bind_index);
 }

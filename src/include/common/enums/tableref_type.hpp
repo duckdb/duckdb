@@ -22,7 +22,7 @@ enum class TableReferenceType : uint8_t {
 	JOIN = 3,          // output of join
 	CROSS_PRODUCT = 4, // out of cartesian product
 	TABLE_FUNCTION = 5, // table producing function
-	DUMMY = 6           // placeholder for empty FROM
+	EMPTY = 6           // placeholder for empty FROM
 
 };
 

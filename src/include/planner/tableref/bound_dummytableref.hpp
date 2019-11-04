@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/tableref/bound_dummytableref.hpp
+// planner/tableref/bound_emptytableref.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,9 +13,9 @@
 namespace duckdb {
 
 //! Represents a cross product
-class BoundDummyTableRef : public BoundTableRef {
+class BoundEmptyTableRef : public BoundTableRef {
 public:
-	BoundDummyTableRef(index_t bind_index) : BoundTableRef(TableReferenceType::DUMMY), bind_index(bind_index) {
+	BoundEmptyTableRef(index_t bind_index) : BoundTableRef(TableReferenceType::EMPTY), bind_index(bind_index) {
 	}
 	index_t bind_index;
 };

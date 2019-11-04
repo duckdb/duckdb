@@ -62,6 +62,6 @@ class BoundCrossProductRef;
 class BoundJoinRef;
 class BoundSubqueryRef;
 class BoundTableFunction;
-class BoundDummyTableRef;
+class BoundEmptyTableRef;
 
 } // namespace duckdb
