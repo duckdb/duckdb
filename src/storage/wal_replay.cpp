@@ -236,7 +236,7 @@ void ReplayState::ReplaySequenceValue() {
 void ReplayState::ReplayUseTable() {
 	auto schema_name = source.Read<string>();
 	auto table_name = source.Read<string>();
-	current_table = db.catalog->GetTable(context.ActiveTransaction(), schema_name, table_name);
+	current_table = db.catalog->GetTable(context, schema_name, table_name);
 }
 
 void ReplayState::ReplayInsert() {

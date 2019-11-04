@@ -847,231 +847,231 @@ public:
 
 CBaseLoader<SECTOR_ROW> *
 DuckDBLoaderFactory::CreateSectorLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "sector" + suffix);
 	return new DuckDBSectorLoad(table, context);
 }
 
 CBaseLoader<LAST_TRADE_ROW> *
 DuckDBLoaderFactory::CreateLastTradeLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "last_trade" + suffix);
 	return new DuckDBLastTradeLoad(table, context);
 }
 
 CBaseLoader<FINANCIAL_ROW> *
 DuckDBLoaderFactory::CreateFinancialLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "financial" + suffix);
 	return new DuckDBFinancialLoad(table, context);
 }
 
 CBaseLoader<TRADE_ROW> *
 DuckDBLoaderFactory::CreateTradeLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "trade" + suffix);
 	return new DuckDBTradeLoad(table, context);
 }
 
 CBaseLoader<SETTLEMENT_ROW> *
 DuckDBLoaderFactory::CreateSettlementLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "settlement" + suffix);
 	return new DuckDBSettlementLoad(table, context);
 }
 
 CBaseLoader<COMMISSION_RATE_ROW> *
 DuckDBLoaderFactory::CreateCommissionRateLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "commission_rate" + suffix);
 	return new DuckDBCommissionRateLoad(table, context);
 }
 
 CBaseLoader<CUSTOMER_ACCOUNT_ROW> *
 DuckDBLoaderFactory::CreateCustomerAccountLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "customer_account" + suffix);
 	return new DuckDBCustomerAccountLoad(table, context);
 }
 
 CBaseLoader<CASH_TRANSACTION_ROW> *
 DuckDBLoaderFactory::CreateCashTransactionLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "cash_transaction" + suffix);
 	return new DuckDBCashTransactionLoad(table, context);
 }
 
 CBaseLoader<TAX_RATE_ROW> *
 DuckDBLoaderFactory::CreateTaxRateLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "tax_rate" + suffix);
 	return new DuckDBTaxRateLoad(table, context);
 }
 
 CBaseLoader<CUSTOMER_TAXRATE_ROW> *
 DuckDBLoaderFactory::CreateCustomerTaxrateLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "customer_taxrate" + suffix);
 	return new DuckDBCustomerTaxrateLoad(table, context);
 }
 
 CBaseLoader<NEWS_XREF_ROW> *
 DuckDBLoaderFactory::CreateNewsXRefLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "news_xref" + suffix);
 	return new DuckDBNewsXRefLoad(table, context);
 }
 
 CBaseLoader<CHARGE_ROW> *
 DuckDBLoaderFactory::CreateChargeLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "charge" + suffix);
 	return new DuckDBChargeLoad(table, context);
 }
 
 CBaseLoader<TRADE_TYPE_ROW> *
 DuckDBLoaderFactory::CreateTradeTypeLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "trade_type" + suffix);
 	return new DuckDBTradeTypeLoad(table, context);
 }
 
 CBaseLoader<HOLDING_ROW> *
 DuckDBLoaderFactory::CreateHoldingLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "holding" + suffix);
 	return new DuckDBHoldingLoad(table, context);
 }
 
 CBaseLoader<DAILY_MARKET_ROW> *
 DuckDBLoaderFactory::CreateDailyMarketLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "daily_market" + suffix);
 	return new DuckDBDailyMarketLoad(table, context);
 }
 
 CBaseLoader<EXCHANGE_ROW> *
 DuckDBLoaderFactory::CreateExchangeLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "exchange" + suffix);
 	return new DuckDBExchangeLoad(table, context);
 }
 
 CBaseLoader<COMPANY_ROW> *
 DuckDBLoaderFactory::CreateCompanyLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "company" + suffix);
 	return new DuckDBCompanyLoad(table, context);
 }
 
 CBaseLoader<COMPANY_COMPETITOR_ROW> *
 DuckDBLoaderFactory::CreateCompanyCompetitorLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "company_competitor" + suffix);
 	return new DuckDBCompanyCompetitorLoad(table, context);
 }
 
 CBaseLoader<ACCOUNT_PERMISSION_ROW> *
 DuckDBLoaderFactory::CreateAccountPermissionLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "account_permission" + suffix);
 	return new DuckDBAccountPermissionLoad(table, context);
 }
 
 CBaseLoader<BROKER_ROW> *
 DuckDBLoaderFactory::CreateBrokerLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "broker" + suffix);
 	return new DuckDBBrokerLoad(table, context);
 }
 
 CBaseLoader<TRADE_HISTORY_ROW> *
 DuckDBLoaderFactory::CreateTradeHistoryLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "trade_history" + suffix);
 	return new DuckDBTradeHistoryLoad(table, context);
 }
 
 CBaseLoader<WATCH_ITEM_ROW> *
 DuckDBLoaderFactory::CreateWatchItemLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "watch_item" + suffix);
 	return new DuckDBWatchItemLoad(table, context);
 }
 
 CBaseLoader<HOLDING_HISTORY_ROW> *
 DuckDBLoaderFactory::CreateHoldingHistoryLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "holding_history" + suffix);
 	return new DuckDBHoldingHistoryLoad(table, context);
 }
 
 CBaseLoader<ADDRESS_ROW> *
 DuckDBLoaderFactory::CreateAddressLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "address" + suffix);
 	return new DuckDBAddressLoad(table, context);
 }
 
 CBaseLoader<NEWS_ITEM_ROW> *
 DuckDBLoaderFactory::CreateNewsItemLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "news_item" + suffix);
 	return new DuckDBNewsItemLoad(table, context);
 }
 
 CBaseLoader<WATCH_LIST_ROW> *
 DuckDBLoaderFactory::CreateWatchListLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "watch_list" + suffix);
 	return new DuckDBWatchListLoad(table, context);
 }
 
 CBaseLoader<CUSTOMER_ROW> *
 DuckDBLoaderFactory::CreateCustomerLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "customer" + suffix);
 	return new DuckDBCustomerLoad(table, context);
 }
 
 CBaseLoader<HOLDING_SUMMARY_ROW> *
 DuckDBLoaderFactory::CreateHoldingSummaryLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "holding_summary" + suffix);
 	return new DuckDBHoldingSummaryLoad(table, context);
 }
 
 CBaseLoader<STATUS_TYPE_ROW> *
 DuckDBLoaderFactory::CreateStatusTypeLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "status_type" + suffix);
 	return new DuckDBStatusTypeLoad(table, context);
 }
 
 CBaseLoader<INDUSTRY_ROW> *
 DuckDBLoaderFactory::CreateIndustryLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "industry" + suffix);
 	return new DuckDBIndustryLoad(table, context);
 }
 
 CBaseLoader<ZIP_CODE_ROW> *
 DuckDBLoaderFactory::CreateZipCodeLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "zip_code" + suffix);
 	return new DuckDBZipCodeLoad(table, context);
 }
 
 CBaseLoader<TRADE_REQUEST_ROW> *
 DuckDBLoaderFactory::CreateTradeRequestLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "trade_request" + suffix);
 	return new DuckDBTradeRequestLoad(table, context);
 }
 
 CBaseLoader<SECURITY_ROW> *
 DuckDBLoaderFactory::CreateSecurityLoader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "security" + suffix);
 	return new DuckDBSecurityLoad(table, context);
 }

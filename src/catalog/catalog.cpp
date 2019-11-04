@@ -101,17 +101,29 @@ void Catalog::AlterTable(ClientContext &context, AlterTableInfo *info) {
 	schema->AlterTable(context, info);
 }
 
-TableCatalogEntry *Catalog::GetTable(Transaction &transaction, const string &schema_name, const string &table_name) {
-	auto table = GetTableOrView(transaction, schema_name, table_name);
+TableCatalogEntry *Catalog::GetTable(ClientContext &context, const string &schema_name, const string &table_name) {
+	auto table = GetTableOrView(context, schema_name, table_name);
 	if (table->type != CatalogType::TABLE) {
 		throw CatalogException("%s is not a table", table_name.c_str());
 	}
 	return (TableCatalogEntry *)table;
 }
 
-CatalogEntry *Catalog::GetTableOrView(Transaction &transaction, const string &schema_name, const string &table_name) {
-	auto schema = GetSchema(transaction, schema_name);
-	return schema->GetTableOrView(transaction, table_name);
+CatalogEntry *Catalog::GetTableOrView(ClientContext &context, string schema_name, const string &table_name) {
+	if (schema_name == INVALID_SCHEMA) {
+		// invalid schema: search both the temporary objects and the normal catalog
+		auto temp_result = context.temporary_objects->GetTableOrNull(context.ActiveTransaction(), table_name);
+		if (temp_result) {
+			return temp_result;
+		}
+		schema_name = DEFAULT_SCHEMA;
+	} else if (schema_name == TEMP_SCHEMA) {
+		// temp_schema: search only the temporary objects
+		return context.temporary_objects->GetTable(context.ActiveTransaction(), table_name);
+	}
+	// default case: first search the schema and then find the table in the schema
+	auto schema = GetSchema(context.ActiveTransaction(), schema_name);
+	return schema->GetTableOrView(context.ActiveTransaction(), table_name);
 }
 
 SequenceCatalogEntry *Catalog::GetSequence(Transaction &transaction, const string &schema_name,
