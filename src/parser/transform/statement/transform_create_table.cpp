@@ -24,7 +24,7 @@ unique_ptr<CreateTableStatement> Transformer::TransformCreateTable(postgres::Nod
 	info.if_not_exists = stmt->if_not_exists;
 	info.temporary = stmt->relation->relpersistence == postgres::PostgresRelPersistence::RELPERSISTENCE_TEMP;
 
-	if (info.temporary && stmt->oncommit != OnCommitAction::ONCOMMIT_PRESERVE_ROWS && stmt->oncommit != OnCommitAction::ONCOMMIT_NOOP) {
+	if (info.temporary && stmt->oncommit != postgres::OnCommitAction::ONCOMMIT_PRESERVE_ROWS && stmt->oncommit != postgres::OnCommitAction::ONCOMMIT_NOOP) {
 		throw NotImplementedException("Only ON COMMIT PRESERVE ROWS is supported");
 	}
 
