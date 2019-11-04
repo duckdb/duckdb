@@ -41,6 +41,8 @@ struct ColumnScanState {
 	buffer_handle_set_t handles;
 	//! The locks that are held during the scan, only used by the index scan
 	vector<unique_ptr<StorageLockKey>> locks;
+	//! Whether or not InitializeState has been called for this segment
+	bool initialized;
 public:
 	//! Move on to the next vector in the scan
 	void Next();

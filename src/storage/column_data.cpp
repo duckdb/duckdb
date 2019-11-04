@@ -20,11 +20,13 @@ void ColumnData::Initialize(vector<unique_ptr<PersistentSegment>>& segments) {
 void ColumnData::InitializeScan(ColumnScanState &state) {
 	state.current = (ColumnSegment*) data.GetRootSegment();
 	state.vector_index = 0;
+	state.initialized = false;
 }
 
 void ColumnData::Scan(Transaction &transaction, ColumnScanState &state, Vector &result) {
-	if (state.vector_index == 0) {
+	if (!state.initialized) {
 		state.current->InitializeScan(state);
+		state.initialized = true;
 	}
 	// perform a scan of this segment
 	state.current->Scan(transaction, state, state.vector_index, result);
@@ -47,6 +49,7 @@ void ColumnScanState::Next() {
 	if (vector_index * STANDARD_VECTOR_SIZE >= current->count) {
 		current = (ColumnSegment*) current->next.get();
 		vector_index = 0;
+		initialized = false;
 	}
 }
 
