@@ -14,6 +14,8 @@
 #include "common/constants.hpp"
 #include "common/fstream.hpp"
 
+#include <map>
+
 namespace duckdb {
 
 //! The benchmark runner class is responsible for running benchmarks
@@ -42,6 +44,8 @@ public:
 	vector<Benchmark *> benchmarks;
 	ofstream out_file;
 	ofstream log_file;
+
+	std::map<std::string, std::unique_ptr<BenchmarkState>> cached_state;
 };
 
 } // namespace duckdb
