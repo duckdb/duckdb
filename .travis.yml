@@ -88,7 +88,7 @@ matrix:
       script:
         - mkdir -p build/debug
         - (cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_SANITIZER=FALSE ../.. && cmake --build .)
-        - travis_wait 50 valgrind  --gen-suppressions=all ./build/debug/test/unittest
+        - travis_wait 50 valgrind --track-origins=yes ./build/debug/test/unittest -s
 
 
     - os: linux
