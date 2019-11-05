@@ -74,6 +74,23 @@ matrix:
 
 
     - os: linux
+      dist: bionic
+      name: Valgrind
+
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - valgrind
+
+      script:
+        - mkdir -p build/debug
+        - (cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_SANITIZER=FALSE ../.. && cmake --build .)
+        - valgrind ./build/debug/test/unittest -s "[tpch]"
+
+
+    - os: linux
       dist: xenial
       name: GCC 9
 

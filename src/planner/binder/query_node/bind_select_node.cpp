@@ -20,6 +20,9 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	result->aggregate_index = GenerateTableIndex();
 	result->window_index = GenerateTableIndex();
 
+	// first bind the FROM table statement
+	result->from_table = Bind(*statement.from_table);
+
 	if (statement.values.size() > 0) {
 		// bind value list
 		WhereBinder binder(*this, context);
@@ -47,10 +50,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 		}
 		return move(result);
 	}
-	// first bind the FROM table statement
-	if (statement.from_table) {
-		result->from_table = Bind(*statement.from_table);
-	}
+
 
 	// visit the select list and expand any "*" statements
 	vector<unique_ptr<ParsedExpression>> new_select_list;

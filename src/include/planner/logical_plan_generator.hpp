@@ -50,6 +50,8 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundJoinRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSubqueryRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundTableFunction &ref);
+	unique_ptr<LogicalOperator> CreatePlan(BoundEmptyTableRef &ref);
+
 
 	void PlanSubqueries(unique_ptr<Expression> *expr, unique_ptr<LogicalOperator> *root);
 
