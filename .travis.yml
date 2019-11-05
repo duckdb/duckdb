@@ -130,7 +130,7 @@ matrix:
       script:
         - mkdir -p build/debug
         - (cd build/debug && CXXFLAGS="-fexceptions" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
-        - build/debug/test/unittest "exclude:file_system"
+        - travis_wait 30 build/debug/test/unittest "exclude:file_system"
 
 
     - os: linux
