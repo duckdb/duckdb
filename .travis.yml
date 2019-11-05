@@ -58,7 +58,7 @@ matrix:
             - g++-4.9 binutils-2.26
       env:
          - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
-         - CXXFLAGS="-fexceptions -frtti"
+
 
     - os: linux
       dist: xenial
@@ -88,8 +88,7 @@ matrix:
       script:
         - mkdir -p build/debug
         - (cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_SANITIZER=FALSE ../.. && cmake --build .)
-        - travis_wait 50 valgrind --track-origins=yes ./build/debug/test/unittest -s
-
+        - valgrind ./build/debug/test/unittest -s "[tpch]"
 
     - os: linux
       dist: xenial
@@ -138,18 +137,6 @@ matrix:
 
       after_success:
         - python tools/upload-s3.py lib-linux-i386 build/release/src/libduckdb*.so build/release/src/libduckdb*.a
-
-
-    - os: linux
-      dist: xenial
-      name: GCC 5 (ARM64)
-      arch: arm64
-
-      script:
-        - export CXXFLAGS="-fexceptions -frtti"
-        - mkdir -p build/debug
-        - (cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
-        - build/debug/test/unittest "exclude:file_system"
 
 
     - os: linux

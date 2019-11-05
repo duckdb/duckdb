@@ -76,7 +76,6 @@ void ExpressionExecutor::MergeExpression(Expression &expr, Vector &result) {
 	assert(intermediate.type == TypeId::BOOLEAN);
 
 	StaticVector<bool> and_result;
-	and_result.Initialize(TypeId::BOOLEAN, true);
 	VectorOperations::And(result, intermediate, and_result);
 	and_result.Move(result);
 }
