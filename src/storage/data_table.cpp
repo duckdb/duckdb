@@ -337,7 +337,7 @@ void DataTable::Append(Transaction &transaction, transaction_t commit_id, DataCh
 	for(index_t i = 0; i < types.size(); i++) {
 		columns[i].Append(state.states[i], chunk.data[i]);
 	}
-
+	cardinality += chunk.size();
 	state.current_row += chunk.size();
 }
 
