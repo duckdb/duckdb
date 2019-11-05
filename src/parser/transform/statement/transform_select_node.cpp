@@ -13,6 +13,8 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 	case postgres::SETOP_NONE: {
 		node = make_unique<SelectNode>();
 		auto result = (SelectNode *)node.get();
+		// do this early so the value lists also have a `FROM`
+		result->from_table = TransformFrom(stmt->fromClause);
 		if (stmt->valuesLists) {
 			TransformValuesList(stmt->valuesLists, result->values);
 			return node;
@@ -32,7 +34,6 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 			}
 		}
 		// from table
-		result->from_table = TransformFrom(stmt->fromClause);
 		// group by
 		TransformGroupBy(stmt->groupClause, result->groups);
 		result->having = TransformExpression(stmt->havingClause);

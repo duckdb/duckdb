@@ -73,12 +73,10 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(postgres::A_Expr *root)
 	if (!root) {
 		return nullptr;
 	}
-	ExpressionType target_type;
 	auto name = string((reinterpret_cast<postgres::Value *>(root->name->head->data.ptr_value))->val.str);
 
 	switch (root->kind) {
 	case postgres::AEXPR_DISTINCT:
-		target_type = ExpressionType::COMPARE_DISTINCT_FROM;
 		break;
 	case postgres::AEXPR_IN: {
 		auto left_expr = TransformExpression(root->lexpr);

@@ -34,7 +34,7 @@ public:
 class PhysicalBlockwiseNLJoinState : public PhysicalOperatorState {
 public:
 	PhysicalBlockwiseNLJoinState(PhysicalOperator *left, PhysicalOperator *right)
-	    : PhysicalOperatorState(left), left_position(0), right_position(0), fill_in_rhs(false) {
+	    : PhysicalOperatorState(left), left_position(0), right_position(0), fill_in_rhs(false), checked_found_match(false) {
 		assert(left && right);
 	}
 

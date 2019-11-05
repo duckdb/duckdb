@@ -199,11 +199,11 @@ TEST_CASE("Test large IN statement with varchar", "[sql][.]") {
 	result = con.Query("SELECT * FROM strings WHERE s IN (" + in_list + ") ORDER BY s");
 	REQUIRE(CHECK_COLUMN(result, 0, {"HXR", "NUT"}));
 
-	result = con.Query("SELECT s, s IN (" + in_list + ") FROM strings ORDER BY s");
+	result = con.Query("SELECT s, s IN (" + in_list + ") AS in_list FROM strings ORDER BY s");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "HXR", "NUT", "ZZZ"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, true, false}));
 
-	result = con.Query("SELECT s, s IN (" + in_list + ", NULL) FROM strings ORDER BY s");
+	result = con.Query("SELECT s, s IN (" + in_list + ", NULL) AS in_list FROM strings ORDER BY s");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "HXR", "NUT", "ZZZ"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, true, Value()}));
 }

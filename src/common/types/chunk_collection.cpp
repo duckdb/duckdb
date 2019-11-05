@@ -81,7 +81,8 @@ static int8_t templated_compare_value(Vector &left_vec, Vector &right_vec, index
 	return 1;
 }
 
-static int8_t compare_value(Vector &left_vec, Vector &right_vec, index_t vector_idx_left, index_t vector_idx_right) {
+// return type here is int32 because strcmp() on some platforms returns rather large values
+static int32_t compare_value(Vector &left_vec, Vector &right_vec, index_t vector_idx_left, index_t vector_idx_right) {
 
 	auto left_null = left_vec.nullmask[vector_idx_left];
 	auto right_null = right_vec.nullmask[vector_idx_right];

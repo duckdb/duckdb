@@ -21,7 +21,8 @@ enum class TableReferenceType : uint8_t {
 	SUBQUERY = 2,      // output of a subquery
 	JOIN = 3,          // output of join
 	CROSS_PRODUCT = 4, // out of cartesian product
-	TABLE_FUNCTION = 5 // table producing function
+	TABLE_FUNCTION = 5, // table producing function
+	EMPTY = 6           // placeholder for empty FROM
 };
 
 } // namespace duckdb

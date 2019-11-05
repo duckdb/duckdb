@@ -1,3 +1,5 @@
+#pragma once
+
 #include "catch.hpp"
 #include "duckdb.hpp"
 #include "optimizer/expression_rewriter.hpp"
