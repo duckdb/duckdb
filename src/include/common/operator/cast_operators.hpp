@@ -112,15 +112,12 @@ struct CastToDate {
 	}
 };
 
-
-
 template <> int32_t CastFromDate::Operation(duckdb::date_t left);
 template <> int64_t CastFromDate::Operation(duckdb::date_t left);
 template <> duckdb::string CastFromDate::Operation(duckdb::date_t left);
 template <> duckdb::date_t CastToDate::Operation(const char *left);
 template <> duckdb::date_t CastToDate::Operation(int32_t left);
 template <> duckdb::date_t CastToDate::Operation(int64_t left);
-
 
 struct CastFromTime {
 	template <class SRC, class DST> static inline DST Operation(SRC left) {
@@ -138,8 +135,6 @@ template <> duckdb::string CastFromTime::Operation(duckdb::dtime_t left);
 template <> duckdb::dtime_t CastToTime::Operation(const char *left);
 template <> duckdb::dtime_t CastToTime::Operation(int32_t left);
 template <> duckdb::dtime_t CastToTime::Operation(int64_t left);
-
-
 
 struct CastToTimestamp {
 	template <class SRC, class DST> static inline DST Operation(SRC left) {

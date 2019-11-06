@@ -72,24 +72,23 @@ static void caseconvert_function(Vector inputs[], BoundFunctionExpression &expr,
 }
 
 static void caseconvert_upper_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-                                BoundFunctionExpression &expr, Vector &result) {
+                                       BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 1);
 	caseconvert_function<strtoupper>(inputs, expr, result);
 }
 
 static void caseconvert_lower_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-                                BoundFunctionExpression &expr, Vector &result) {
+                                       BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 1);
 	caseconvert_function<strtolower>(inputs, expr, result);
 }
 
-
 void LowerFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("lower", { SQLType::VARCHAR }, SQLType::VARCHAR, caseconvert_lower_function));
+	set.AddFunction(ScalarFunction("lower", {SQLType::VARCHAR}, SQLType::VARCHAR, caseconvert_lower_function));
 }
 
 void UpperFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("upper", { SQLType::VARCHAR }, SQLType::VARCHAR, caseconvert_upper_function));
+	set.AddFunction(ScalarFunction("upper", {SQLType::VARCHAR}, SQLType::VARCHAR, caseconvert_upper_function));
 }
 
 } // namespace duckdb

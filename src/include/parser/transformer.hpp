@@ -130,7 +130,8 @@ private:
 	ExpressionType OperatorToExpressionType(string &op);
 
 	unique_ptr<ParsedExpression> TransformUnaryOperator(string op, unique_ptr<ParsedExpression> child);
-	unique_ptr<ParsedExpression> TransformBinaryOperator(string op, unique_ptr<ParsedExpression> left, unique_ptr<ParsedExpression> right);
+	unique_ptr<ParsedExpression> TransformBinaryOperator(string op, unique_ptr<ParsedExpression> left,
+	                                                     unique_ptr<ParsedExpression> right);
 	//===--------------------------------------------------------------------===//
 	// TableRef transform
 	//===--------------------------------------------------------------------===//

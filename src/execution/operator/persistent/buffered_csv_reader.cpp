@@ -36,7 +36,8 @@ BufferedCSVReader::BufferedCSVReader(CopyInfo &info, vector<SQLType> sql_types, 
 	}
 }
 
-void BufferedCSVReader::MatchBufferPosition(bool &prev_pos_matches, index_t &control_str_offset, index_t &tmp_position, bool &match, string &control_str) {
+void BufferedCSVReader::MatchBufferPosition(bool &prev_pos_matches, index_t &control_str_offset, index_t &tmp_position,
+                                            bool &match, string &control_str) {
 	if (prev_pos_matches && control_str_offset < control_str.length()) {
 		if (buffer[tmp_position] != control_str[control_str_offset]) {
 			prev_pos_matches = false;
@@ -133,7 +134,8 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 					// plain value character
 					seen_escape = false;
 				} else if (!quote && !escape && seen_escape) {
-					throw ParserException("Error on line %lld: neither QUOTE nor ESCAPE is proceeded by ESCAPE", linenr);
+					throw ParserException("Error on line %lld: neither QUOTE nor ESCAPE is proceeded by ESCAPE",
+					                      linenr);
 				} else if (!quote && escape && !seen_escape) {
 					// escape
 					seen_escape = true;
@@ -280,7 +282,8 @@ bool BufferedCSVReader::ReadBuffer(index_t &start) {
 	return read_count > 0;
 }
 
-void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column, std::queue<index_t> &escape_positions) {
+void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column,
+                                 std::queue<index_t> &escape_positions) {
 	// used to remove escape characters
 	index_t pos = start;
 	bool in_escape = false;
@@ -305,7 +308,7 @@ void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column,
 		// optionally remove escape(s)
 		string new_val = "";
 		for (const char *val = str_val; *val; val++) {
-			if (!escape_positions.empty()){
+			if (!escape_positions.empty()) {
 				if (escape_positions.front() == pos) {
 					in_escape = false;
 					escape_positions.pop();
@@ -326,7 +329,7 @@ void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column,
 			throw ParserException("Error on line %lld: file is not valid UTF8", linenr);
 		}
 
-		auto& v = parse_chunk.data[column];
+		auto &v = parse_chunk.data[column];
 		((const char **)v.data)[row_entry] = v.string_heap.AddString(new_val.c_str());
 	}
 

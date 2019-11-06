@@ -10,7 +10,7 @@ using namespace std;
 FunctionExpression::FunctionExpression(string schema, string function_name,
                                        vector<unique_ptr<ParsedExpression>> &children, bool distinct, bool is_operator)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), schema(schema),
-      function_name(StringUtil::Lower(function_name)), is_operator(is_operator), distinct(distinct){
+      function_name(StringUtil::Lower(function_name)), is_operator(is_operator), distinct(distinct) {
 	for (auto &child : children) {
 		this->children.push_back(move(child));
 	}

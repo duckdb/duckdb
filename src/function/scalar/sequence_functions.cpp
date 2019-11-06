@@ -8,4 +8,4 @@ void BuiltinFunctions::RegisterSequenceFunctions() {
 	Register<NextvalFun>();
 }
 
-}
+} // namespace duckdb

@@ -20,8 +20,8 @@ namespace duckdb {
 class BoundExpression : public ParsedExpression {
 public:
 	BoundExpression(unique_ptr<Expression> expr, unique_ptr<ParsedExpression> parsed_expr, SQLType sql_type)
-	    : ParsedExpression(ExpressionType::INVALID, ExpressionClass::BOUND_EXPRESSION), expr(move(expr)), parsed_expr(move(parsed_expr)),
-	      sql_type(sql_type) {
+	    : ParsedExpression(ExpressionType::INVALID, ExpressionClass::BOUND_EXPRESSION), expr(move(expr)),
+	      parsed_expr(move(parsed_expr)), sql_type(sql_type) {
 	}
 
 	unique_ptr<Expression> expr;
@@ -45,4 +45,4 @@ public:
 	}
 };
 
-}
+} // namespace duckdb

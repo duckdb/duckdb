@@ -16,7 +16,8 @@ class FunctionExpression : public ParsedExpression {
 public:
 	FunctionExpression(string schema_name, string function_name, vector<unique_ptr<ParsedExpression>> &children,
 	                   bool distinct = false, bool is_operator = false);
-	FunctionExpression(string function_name, vector<unique_ptr<ParsedExpression>> &children, bool distinct = false, bool is_operator = false);
+	FunctionExpression(string function_name, vector<unique_ptr<ParsedExpression>> &children, bool distinct = false,
+	                   bool is_operator = false);
 
 	//! Schema of the function
 	string schema;
