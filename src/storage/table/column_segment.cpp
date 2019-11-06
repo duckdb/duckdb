@@ -1,4 +1,5 @@
 #include "storage/table/column_segment.hpp"
+#include <cstring>
 
 using namespace duckdb;
 using namespace std;
@@ -20,6 +21,8 @@ template <class T> void initialize_max_min(data_ptr_t min, data_ptr_t max) {
 void SegmentStatistics::Reset() {
 	minimum = unique_ptr<data_t[]>(new data_t[type_size]);
 	maximum = unique_ptr<data_t[]>(new data_t[type_size]);
+	memset(minimum.get(), 0, type_size);
+	memset(maximum.get(), 0, type_size);
 	has_null = false;
 	max_string_length = 0;
 	has_overflow_strings = false;

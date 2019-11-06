@@ -542,6 +542,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	tdefs[REGION].base = regions.count;
 
 	auto append_info = unique_ptr<tpch_append_information[]>(new tpch_append_information[REGION + 1]);
+	memset(append_info.get(), 0, sizeof(tpch_append_information) * REGION + 1);
 	for (size_t i = PART; i <= REGION; i++) {
 		auto tname = get_table_name(i);
 		if (!tname.empty()) {

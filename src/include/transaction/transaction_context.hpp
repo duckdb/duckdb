@@ -20,7 +20,8 @@ class TransactionManager;
 class TransactionContext {
 public:
 	TransactionContext(TransactionManager &transaction_manager)
-	    : transaction_manager(transaction_manager), auto_commit(true), current_transaction(nullptr) {
+	    : transaction_manager(transaction_manager), auto_commit(true), is_invalidated(false),
+	      current_transaction(nullptr) {
 	}
 	~TransactionContext();
 

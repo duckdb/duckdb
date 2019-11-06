@@ -25,7 +25,7 @@ void DataChunk::InitializeEmpty(vector<TypeId> &types) {
 	}
 }
 
-void DataChunk::Initialize(vector<TypeId> &types, bool zero_data) {
+void DataChunk::Initialize(vector<TypeId> &types) {
 	assert(types.size() > 0);
 	InitializeEmpty(types);
 	index_t size = 0;
@@ -34,9 +34,7 @@ void DataChunk::Initialize(vector<TypeId> &types, bool zero_data) {
 	}
 	assert(size > 0);
 	owned_data = unique_ptr<data_t[]>(new data_t[size]);
-	if (zero_data) {
-		memset(owned_data.get(), 0, size);
-	}
+	memset(owned_data.get(), 0, size);
 
 	auto ptr = owned_data.get();
 	for (index_t i = 0; i < types.size(); i++) {

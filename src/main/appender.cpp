@@ -9,9 +9,10 @@
 using namespace duckdb;
 using namespace std;
 
-Appender::Appender(Connection &con, string schema_name, string table_name) : con(con), table_entry(nullptr), column(0) {
-	table_entry = con.db.catalog->GetTable(*con.context, schema_name, table_name);
-	assert(table_entry);
+Appender::Appender(Connection &con, string schema_name, string table_name, unique_lock<mutex> lock)
+    : con(con), table_entry(nullptr), column(0), lock(std::move(lock)) {
+
+	table_entry = con.db.catalog->GetTable(con.context->transaction.ActiveTransaction(), schema_name, table_name);
 
 	// get the table entry
 	auto types = table_entry->GetTypes();

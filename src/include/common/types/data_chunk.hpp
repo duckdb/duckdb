@@ -62,8 +62,7 @@ public:
 	//! This will create one vector of the specified type for each TypeId in the
 	//! types list. The vector will be referencing vector to the data owned by
 	//! the DataChunk.
-	//! If zero_data is set to true, the data is zero-initialized.
-	void Initialize(vector<TypeId> &types, bool zero_data = false);
+	void Initialize(vector<TypeId> &types);
 	//! Initializes an empty DataChunk with the given types. The vectors will *not* have any data allocated for them.
 	void InitializeEmpty(vector<TypeId> &types);
 	//! Append the other DataChunk to this one. The column count and types of

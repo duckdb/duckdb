@@ -95,9 +95,12 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 		return Bind((JoinRef &)ref);
 	case TableReferenceType::SUBQUERY:
 		return Bind((SubqueryRef &)ref);
-	default:
-		assert(ref.type == TableReferenceType::TABLE_FUNCTION);
+	case TableReferenceType::EMPTY:
+		return Bind((EmptyTableRef &)ref);
+	case TableReferenceType::TABLE_FUNCTION:
 		return Bind((TableFunctionRef &)ref);
+	default:
+		throw Exception("Unknown table ref type");
 	}
 }
 

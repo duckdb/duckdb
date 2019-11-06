@@ -54,6 +54,9 @@ void TestCreateDirectory(string path) {
 
 string TestCreatePath(string suffix) {
 	FileSystem fs;
+	if (!fs.DirectoryExists(TESTING_DIRECTORY_NAME)) {
+		fs.CreateDirectory(TESTING_DIRECTORY_NAME);
+	}
 	return fs.JoinPath(TESTING_DIRECTORY_NAME, suffix);
 }
 

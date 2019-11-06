@@ -1,4 +1,5 @@
 #include "parser/tableref/crossproductref.hpp"
+#include "parser/tableref/emptytableref.hpp"
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
@@ -6,7 +7,7 @@ using namespace std;
 
 unique_ptr<TableRef> Transformer::TransformFrom(postgres::List *root) {
 	if (!root) {
-		return nullptr;
+		return make_unique<EmptyTableRef>();
 	}
 
 	if (root->length > 1) {
