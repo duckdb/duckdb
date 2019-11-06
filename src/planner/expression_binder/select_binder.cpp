@@ -50,7 +50,7 @@ index_t SelectBinder::TryBindGroup(ParsedExpression &expr, index_t depth) {
 		return entry->second;
 	}
 #ifdef DEBUG
-	for(auto entry : info.map) {
+	for (auto entry : info.map) {
 		assert(!entry.first->Equals(&expr));
 		assert(!expr.Equals(entry.first));
 	}

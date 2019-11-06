@@ -7,7 +7,7 @@
 using namespace duckdb;
 using namespace std;
 
-//void transformColumnList(){}
+// void transformColumnList(){}
 
 unique_ptr<BoundSQLStatement> Binder::Bind(CopyStatement &stmt) {
 	auto result = make_unique<BoundCopyStatement>();
@@ -28,7 +28,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CopyStatement &stmt) {
 
 		if (!quote_list.empty()) {
 			// validate force_quote_list entries
-			for (const auto& column : quote_list) {
+			for (const auto &column : quote_list) {
 				auto it = find(names.begin(), names.end(), column);
 				if (it != names.end()) {
 					stmt.info->force_quote[distance(names.begin(), it)] = true;
@@ -63,13 +63,14 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CopyStatement &stmt) {
 		// transform column names of force_not_null_list into force_not_null booleans
 		if (!stmt.info->force_not_null_list.empty()) {
 			// validate force_not_null_list entries
-			for (const auto& column : stmt.info->force_not_null_list) {
+			for (const auto &column : stmt.info->force_not_null_list) {
 				auto entry = table->name_map.find(column);
 				if (entry == table->name_map.end()) {
 					throw BinderException("Column %s not found in table %s", column.c_str(), table->name.c_str());
 				}
 				if (bound_insert.column_index_map.size() > 0) {
-					auto it = find(bound_insert.column_index_map.begin(), bound_insert.column_index_map.end(), entry->second);
+					auto it =
+					    find(bound_insert.column_index_map.begin(), bound_insert.column_index_map.end(), entry->second);
 					if (it != bound_insert.column_index_map.end()) {
 						stmt.info->force_not_null[entry->second] = true;
 					} else {

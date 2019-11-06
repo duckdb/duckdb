@@ -46,4 +46,3 @@ void BuiltinFunctions::RegisterDistributiveAggregates() {
 }
 
 } // namespace duckdb
-

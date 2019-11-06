@@ -18,7 +18,7 @@ using namespace std;
 // ISO 8601
 
 // Taken from MonetDB mtime.c
-#define DD_TIME(h, m, s, x)                                                                                               \
+#define DD_TIME(h, m, s, x)                                                                                            \
 	((h) >= 0 && (h) < 24 && (m) >= 0 && (m) < 60 && (s) >= 0 && (s) <= 60 && (x) >= 0 && (x) < 1000)
 
 static dtime_t time_to_number(int hour, int min, int sec, int msec) {

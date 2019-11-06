@@ -76,6 +76,6 @@ public:
 	}
 
 	void Heap(vector<OrderType> &desc, index_t heap[], index_t heap_size);
-	index_t MaterializeHeapChunk(DataChunk &target, index_t order[], index_t start_offset, index_t heap_size) ;
+	index_t MaterializeHeapChunk(DataChunk &target, index_t order[], index_t start_offset, index_t heap_size);
 };
 } // namespace duckdb

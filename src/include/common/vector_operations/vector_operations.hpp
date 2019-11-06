@@ -270,12 +270,12 @@ struct VectorOperations {
 		    vector, [&](index_t i, index_t k) { fun(data[i], i, k); }, offset, limit);
 	}
 	//! NAryExec handles NULL values, sel_vector and count in the presence of potential constants
-	template<bool HANDLE_NULLS>
+	template <bool HANDLE_NULLS>
 	static void NAryExec(index_t N, Vector *vectors[], index_t multipliers[], Vector &result) {
 		// initialize result to a constant (no sel_vector, count = 1)
 		result.sel_vector = nullptr;
 		result.count = 1;
-		for(index_t i = 0; i < N; i++) {
+		for (index_t i = 0; i < N; i++) {
 			// for every vector, check if it is a constant
 			if (vectors[i]->IsConstant()) {
 				// if it is a constant, we set the index multiplier to 0
@@ -299,9 +299,10 @@ struct VectorOperations {
 		}
 	}
 
-	template <typename TA, typename TR, class FUNC, bool SKIP_NULLS = std::is_same<TR, const char*>()> static void UnaryExec(Vector &a, Vector &result, FUNC &&fun) {
-		auto adata = (TA*) a.data;
-		auto rdata = (TR*) result.data;
+	template <typename TA, typename TR, class FUNC, bool SKIP_NULLS = std::is_same<TR, const char *>()>
+	static void UnaryExec(Vector &a, Vector &result, FUNC &&fun) {
+		auto adata = (TA *)a.data;
+		auto rdata = (TR *)result.data;
 		result.sel_vector = a.sel_vector;
 		result.count = a.count;
 		result.nullmask = a.nullmask;
@@ -313,19 +314,18 @@ struct VectorOperations {
 				rdata[i] = fun(adata[i]);
 			});
 		} else {
-			VectorOperations::Exec(result, [&](index_t i, index_t k) {
-				rdata[i] = fun(adata[i]);
-			});
+			VectorOperations::Exec(result, [&](index_t i, index_t k) { rdata[i] = fun(adata[i]); });
 		}
 	}
-	template <typename TA, typename TB, typename TR, class FUNC, bool SKIP_NULLS = true, bool HANDLE_NULLS=true> static void BinaryExec(Vector &a, Vector &b, Vector &result, FUNC &&fun) {
+	template <typename TA, typename TB, typename TR, class FUNC, bool SKIP_NULLS = true, bool HANDLE_NULLS = true>
+	static void BinaryExec(Vector &a, Vector &b, Vector &result, FUNC &&fun) {
 		Vector *vectors[2] = {&a, &b};
 		index_t multipliers[2];
 		VectorOperations::NAryExec<HANDLE_NULLS>(2, vectors, multipliers, result);
 
-		auto adata = (TA*) a.data;
-		auto bdata = (TB*) b.data;
-		auto rdata = (TR*) result.data;
+		auto adata = (TA *)a.data;
+		auto bdata = (TB *)b.data;
+		auto rdata = (TR *)result.data;
 		VectorOperations::Exec(result, [&](index_t i, index_t k) {
 			if (SKIP_NULLS && result.nullmask[i]) {
 				return;
@@ -333,15 +333,17 @@ struct VectorOperations {
 			rdata[i] = fun(adata[multipliers[0] * i], bdata[multipliers[1] * i], i);
 		});
 	}
-	template <typename TA, typename TB, typename TC, typename TR, class FUNC, bool SKIP_NULLS = true, bool HANDLE_NULLS=true> static void TernaryExec(Vector &a, Vector &b, Vector &c, Vector &result, FUNC &&fun) {
+	template <typename TA, typename TB, typename TC, typename TR, class FUNC, bool SKIP_NULLS = true,
+	          bool HANDLE_NULLS = true>
+	static void TernaryExec(Vector &a, Vector &b, Vector &c, Vector &result, FUNC &&fun) {
 		Vector *vectors[3] = {&a, &b, &c};
 		index_t multipliers[3];
 		VectorOperations::NAryExec<HANDLE_NULLS>(3, vectors, multipliers, result);
 
-		auto adata = (TA*) a.data;
-		auto bdata = (TB*) b.data;
-		auto cdata = (TC*) c.data;
-		auto rdata = (TR*) result.data;
+		auto adata = (TA *)a.data;
+		auto bdata = (TB *)b.data;
+		auto cdata = (TC *)c.data;
+		auto rdata = (TR *)result.data;
 		VectorOperations::Exec(result, [&](index_t i, index_t k) {
 			if (SKIP_NULLS && result.nullmask[i]) {
 				return;

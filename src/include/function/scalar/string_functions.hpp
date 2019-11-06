@@ -12,52 +12,53 @@
 #include "function/function_set.hpp"
 
 namespace re2 {
-	class RE2;
+class RE2;
 }
 
 namespace duckdb {
 
 struct LowerFun {
-    static void RegisterFunction(BuiltinFunctions &set);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct UpperFun {
-    static void RegisterFunction(BuiltinFunctions &set);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct ConcatFun {
-    static void RegisterFunction(BuiltinFunctions &set);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct ConcatWSFun {
-    static void RegisterFunction(BuiltinFunctions &set);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct LengthFun {
-    static void RegisterFunction(BuiltinFunctions &set);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct LikeFun {
-    static void RegisterFunction(BuiltinFunctions &set);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct RegexpFun {
-    static void RegisterFunction(BuiltinFunctions &set);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct SubstringFun {
-    static void RegisterFunction(BuiltinFunctions &set);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct RegexpMatchesBindData : public FunctionData {
-    RegexpMatchesBindData(std::unique_ptr<re2::RE2> constant_pattern, string range_min, string range_max, bool range_success);
+	RegexpMatchesBindData(std::unique_ptr<re2::RE2> constant_pattern, string range_min, string range_max,
+	                      bool range_success);
 	~RegexpMatchesBindData();
 
-    std::unique_ptr<re2::RE2> constant_pattern;
-    string range_min, range_max;
-    bool range_success;
+	std::unique_ptr<re2::RE2> constant_pattern;
+	string range_min, range_max;
+	bool range_success;
 
-    unique_ptr<FunctionData> Copy() override;
+	unique_ptr<FunctionData> Copy() override;
 };
 
 } // namespace duckdb

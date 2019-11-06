@@ -78,7 +78,8 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	              "string NOT NULL, Title string , FirstName string NOT NULL, MiddleName string, LastName string NOT "
 	              "NULL, Suffix string, EmailPromotion int NOT NULL, AdditionalContactInfo string, Demographics "
 	              "string, rowguid string, ModifiedDate datetime NOT NULL); "));
-	REQUIRE_NO_FAIL(con.Query("COPY Person.Person FROM 'test/sqlserver/data/Person.csv.gz' (DELIMITER '|', QUOTE '*');"));
+	REQUIRE_NO_FAIL(
+	    con.Query("COPY Person.Person FROM 'test/sqlserver/data/Person.csv.gz' (DELIMITER '|', QUOTE '*');"));
 
 	REQUIRE_NO_FAIL(
 	    con.Query("CREATE TABLE Person.BusinessEntityAddress( BusinessEntityID int NOT NULL, AddressID int NOT NULL, "

@@ -6,11 +6,13 @@
 using namespace duckdb;
 using namespace std;
 
-
 class BoundSubqueryNode : public QueryNode {
 public:
-	BoundSubqueryNode(unique_ptr<Binder> subquery_binder, unique_ptr<BoundQueryNode> bound_node, unique_ptr<QueryNode> subquery) :
-		QueryNode(QueryNodeType::BOUND_SUBQUERY_NODE), subquery_binder(move(subquery_binder)), bound_node(move(bound_node)), subquery(move(subquery)) {}
+	BoundSubqueryNode(unique_ptr<Binder> subquery_binder, unique_ptr<BoundQueryNode> bound_node,
+	                  unique_ptr<QueryNode> subquery)
+	    : QueryNode(QueryNodeType::BOUND_SUBQUERY_NODE), subquery_binder(move(subquery_binder)),
+	      bound_node(move(bound_node)), subquery(move(subquery)) {
+	}
 
 	unique_ptr<Binder> subquery_binder;
 	unique_ptr<BoundQueryNode> bound_node;
@@ -58,7 +60,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, index_t de
 	}
 	// both binding the child and binding the subquery was successful
 	assert(expr.subquery->type == QueryNodeType::BOUND_SUBQUERY_NODE);
-	auto bound_subquery = (BoundSubqueryNode*) expr.subquery.get();
+	auto bound_subquery = (BoundSubqueryNode *)expr.subquery.get();
 	auto child = (BoundExpression *)expr.child.get();
 	auto subquery_binder = move(bound_subquery->subquery_binder);
 	auto bound_node = move(bound_subquery->bound_node);

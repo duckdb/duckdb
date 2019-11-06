@@ -7,8 +7,8 @@ using namespace duckdb;
 using namespace std;
 
 struct avg_state_t {
-    uint64_t    count;
-    double      sum;
+	uint64_t count;
+	double sum;
 };
 
 static index_t avg_payload_size(TypeId return_type) {
@@ -27,7 +27,7 @@ static void avg_update(Vector inputs[], index_t input_count, Vector &state) {
 			return;
 		}
 
-		auto state_ptr = (avg_state_t*) ((data_ptr_t *)state.data)[i];
+		auto state_ptr = (avg_state_t *)((data_ptr_t *)state.data)[i];
 
 		// update count and running sum
 		state_ptr->count++;
@@ -39,8 +39,8 @@ static void avg_update(Vector inputs[], index_t input_count, Vector &state) {
 
 static void avg_combine(Vector &state, Vector &combined) {
 	// combine streaming avg states
-	auto combined_data = (avg_state_t**) combined.data;
-	auto state_data = (avg_state_t*) state.data;
+	auto combined_data = (avg_state_t **)combined.data;
+	auto state_data = (avg_state_t *)state.data;
 
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
 		auto combined_ptr = combined_data[i];
@@ -58,7 +58,7 @@ static void avg_combine(Vector &state, Vector &combined) {
 static void avg_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming avg
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-		auto state_ptr = (avg_state_t*) ((data_ptr_t *)state.data)[i];
+		auto state_ptr = (avg_state_t *)((data_ptr_t *)state.data)[i];
 
 		if (state_ptr->count == 0) {
 			result.nullmask[i] = true;
@@ -69,5 +69,6 @@ static void avg_finalize(Vector &state, Vector &result) {
 }
 
 void AvgFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(AggregateFunction("avg", {SQLType::DOUBLE}, SQLType::DOUBLE, avg_payload_size, avg_initialize, avg_update, avg_combine, avg_finalize));
+	set.AddFunction(AggregateFunction("avg", {SQLType::DOUBLE}, SQLType::DOUBLE, avg_payload_size, avg_initialize,
+	                                  avg_update, avg_combine, avg_finalize));
 }

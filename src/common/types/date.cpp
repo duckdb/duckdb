@@ -22,7 +22,7 @@ static int CUMLEAPDAYS[13] = {0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 
 #define YEAR_MIN (-YEAR_MAX)
 #define MONTHDAYS(m, y) ((m) != 2 ? LEAPDAYS[m] : leapyear(y) ? 29 : 28)
 #define YEARDAYS(y) (leapyear(y) ? 366 : 365)
-#define DD_DATE(d, m, y)                                                                                                  \
+#define DD_DATE(d, m, y)                                                                                               \
 	((m) > 0 && (m) <= 12 && (d) > 0 && (y) != 0 && (y) >= YEAR_MIN && (y) <= YEAR_MAX && (d) <= MONTHDAYS(m, y))
 #define LOWER(c) ((c) >= 'A' && (c) <= 'Z' ? (c) + 'a' - 'A' : (c))
 // 1970-01-01 in date_t format

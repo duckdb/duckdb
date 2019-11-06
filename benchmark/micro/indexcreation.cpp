@@ -14,8 +14,7 @@ using namespace std;
 DUCKDB_BENCHMARK(IndexCreationART, "[micro]")
 virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.Query("CREATE TABLE integers(i INTEGER);");
-	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers");                                                      \
-	// insert the elements into the database
+	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers"); // insert the elements into the database
 	for (size_t i = 0; i < ROW_COUNT; i++) {
 		appender->BeginRow();
 		appender->AppendInteger(rand() % UPPERBOUND);

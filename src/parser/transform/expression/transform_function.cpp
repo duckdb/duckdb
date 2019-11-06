@@ -122,7 +122,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(postgres::FuncCall *
 				throw Exception("Failed to transform window function children");
 			}
 			if (win_fun_type == ExpressionType::WINDOW_AGGREGATE) {
-				for (auto& child : function_list ) {
+				for (auto &child : function_list) {
 					expr->children.push_back(move(child));
 				}
 			} else {
@@ -131,11 +131,11 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(postgres::FuncCall *
 				}
 				if (function_list.size() > 1) {
 					assert(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);
-				expr->offset_expr = move(function_list[1]);
+					expr->offset_expr = move(function_list[1]);
 				}
 				if (function_list.size() > 2) {
 					assert(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);
-				expr->default_expr = move(function_list[2]);
+					expr->default_expr = move(function_list[2]);
 				}
 				assert(function_list.size() <= 3);
 			}
@@ -170,33 +170,33 @@ static string SQLValueOpToString(postgres::SQLValueFunctionOp op) {
 	switch (op) {
 	case postgres::SVFOP_CURRENT_DATE:
 		return "current_date";
-	case 	postgres::SVFOP_CURRENT_TIME:
+	case postgres::SVFOP_CURRENT_TIME:
 		return "current_time";
-	case	postgres::SVFOP_CURRENT_TIME_N:
+	case postgres::SVFOP_CURRENT_TIME_N:
 		return "current_time_n";
-	case	postgres::SVFOP_CURRENT_TIMESTAMP:
+	case postgres::SVFOP_CURRENT_TIMESTAMP:
 		return "current_timestamp";
-	case	postgres::SVFOP_CURRENT_TIMESTAMP_N:
+	case postgres::SVFOP_CURRENT_TIMESTAMP_N:
 		return "current_timestamp_n";
-	case	postgres::SVFOP_LOCALTIME:
+	case postgres::SVFOP_LOCALTIME:
 		return "current_localtime";
-	case	postgres::SVFOP_LOCALTIME_N:
+	case postgres::SVFOP_LOCALTIME_N:
 		return "current_localtime_n";
-	case	postgres::SVFOP_LOCALTIMESTAMP:
+	case postgres::SVFOP_LOCALTIMESTAMP:
 		return "current_localtimestamp";
-	case	postgres::SVFOP_LOCALTIMESTAMP_N:
+	case postgres::SVFOP_LOCALTIMESTAMP_N:
 		return "current_localtimestamp_n";
-	case	postgres::SVFOP_CURRENT_ROLE:
+	case postgres::SVFOP_CURRENT_ROLE:
 		return "current_role";
-	case	postgres::SVFOP_CURRENT_USER:
+	case postgres::SVFOP_CURRENT_USER:
 		return "current_user";
-	case	postgres::SVFOP_USER:
+	case postgres::SVFOP_USER:
 		return "user";
-	case	postgres::SVFOP_SESSION_USER:
+	case postgres::SVFOP_SESSION_USER:
 		return "session_user";
-	case	postgres::SVFOP_CURRENT_CATALOG:
+	case postgres::SVFOP_CURRENT_CATALOG:
 		return "current_catalog";
-	case	postgres::SVFOP_CURRENT_SCHEMA:
+	case postgres::SVFOP_CURRENT_SCHEMA:
 		return "current_schema";
 	default:
 		throw Exception("Could not find named SQL value function specification " + to_string((int)op));

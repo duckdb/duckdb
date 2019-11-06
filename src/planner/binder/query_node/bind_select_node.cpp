@@ -51,7 +51,6 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 		return move(result);
 	}
 
-
 	// visit the select list and expand any "*" statements
 	vector<unique_ptr<ParsedExpression>> new_select_list;
 	for (auto &select_element : statement.select_list) {

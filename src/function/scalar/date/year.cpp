@@ -10,7 +10,7 @@ using namespace std;
 namespace duckdb {
 
 static void year_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                   Vector &result) {
+                          Vector &result) {
 	assert(input_count == 1);
 	auto &input = inputs[0];
 	assert(input.type == TypeId::INTEGER || input.type == TypeId::BIGINT);
@@ -37,8 +37,8 @@ static void year_function(ExpressionExecutor &exec, Vector inputs[], index_t inp
 
 void YearFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet year("year");
-	year.AddFunction(ScalarFunction({ SQLType::DATE }, SQLType::INTEGER, year_function));
-	year.AddFunction(ScalarFunction({ SQLType::TIMESTAMP }, SQLType::INTEGER, year_function));
+	year.AddFunction(ScalarFunction({SQLType::DATE}, SQLType::INTEGER, year_function));
+	year.AddFunction(ScalarFunction({SQLType::TIMESTAMP}, SQLType::INTEGER, year_function));
 	set.AddFunction(year);
 }
 

@@ -11,8 +11,8 @@ unique_ptr<ParsedExpression> Transformer::TransformNullTest(postgres::NullTest *
 	if (root->argisrow) {
 		throw NotImplementedException("IS NULL argisrow");
 	}
-	ExpressionType expr_type =
-	    (root->nulltesttype == postgres::IS_NULL) ? ExpressionType::OPERATOR_IS_NULL : ExpressionType::OPERATOR_IS_NOT_NULL;
+	ExpressionType expr_type = (root->nulltesttype == postgres::IS_NULL) ? ExpressionType::OPERATOR_IS_NULL
+	                                                                     : ExpressionType::OPERATOR_IS_NOT_NULL;
 
 	return unique_ptr<ParsedExpression>(new OperatorExpression(expr_type, move(arg)));
 }

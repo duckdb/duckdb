@@ -13,7 +13,6 @@ string CaseExpression::ToString() const {
 	       result_if_false->ToString() + ")";
 }
 
-
 bool CaseExpression::Equals(const CaseExpression *a, const CaseExpression *b) {
 	if (!a->check->Equals(b->check.get())) {
 		return false;

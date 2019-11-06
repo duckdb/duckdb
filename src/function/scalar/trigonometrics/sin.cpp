@@ -7,7 +7,7 @@ using namespace std;
 namespace duckdb {
 
 static void sin_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                  Vector &result) {
+                         Vector &result) {
 	assert(input_count == 1);
 	inputs[0].Cast(TypeId::DOUBLE);
 	result.Initialize(TypeId::DOUBLE);
@@ -15,7 +15,7 @@ static void sin_function(ExpressionExecutor &exec, Vector inputs[], index_t inpu
 }
 
 void SinFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("sin", { SQLType::DOUBLE }, SQLType::DOUBLE, sin_function));
+	set.AddFunction(ScalarFunction("sin", {SQLType::DOUBLE}, SQLType::DOUBLE, sin_function));
 }
 
-}
+} // namespace duckdb

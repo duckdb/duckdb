@@ -73,7 +73,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, index_t depth) {
 	for (auto &child : window.children) {
 		assert(child.get());
 		assert(child->expression_class == ExpressionClass::BOUND_EXPRESSION);
-		auto& bound = (BoundExpression &) *child;
+		auto &bound = (BoundExpression &)*child;
 		types.push_back(bound.sql_type);
 		children.push_back(GetExpression(child));
 	}
@@ -82,9 +82,10 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, index_t depth) {
 	unique_ptr<AggregateFunction> aggregate;
 	if (window.type == ExpressionType::WINDOW_AGGREGATE) {
 		//  Look up the aggregate function in the catalog
-		auto func = (AggregateFunctionCatalogEntry *) context.catalog.GetFunction(context.ActiveTransaction(), window.schema, window.function_name);
+		auto func = (AggregateFunctionCatalogEntry *)context.catalog.GetFunction(context.ActiveTransaction(),
+		                                                                         window.schema, window.function_name);
 		if (func->type != CatalogType::AGGREGATE_FUNCTION) {
-		    throw BinderException("Unknown windowed aggregate");
+			throw BinderException("Unknown windowed aggregate");
 		}
 		// bind the aggregate
 		auto best_function = Function::BindFunction(func->name, func->functions, types);

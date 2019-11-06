@@ -18,4 +18,3 @@ void BuiltinFunctions::RegisterAlgebraicAggregates() {
 }
 
 } // namespace duckdb
-
