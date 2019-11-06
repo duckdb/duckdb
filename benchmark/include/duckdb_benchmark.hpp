@@ -12,7 +12,7 @@
 
 #include "benchmark.hpp"
 #include "duckdb.hpp"
-#include "main/client_context.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "test_helpers.hpp"
 
 namespace duckdb {
