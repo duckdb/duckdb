@@ -4,6 +4,7 @@
 #include "storage/storage_manager.hpp"
 #include "storage/buffer_manager.hpp"
 #include "common/operator/cast_operators.hpp"
+#include <cctype>
 
 using namespace duckdb;
 using namespace std;
