@@ -32,6 +32,7 @@ public:
 	unique_ptr<TableAppendState> state;
 	//! The max row
 	row_t max_row;
+
 public:
 	void InitializeScan(LocalScanState &state);
 
@@ -62,13 +63,14 @@ public:
 	bool ChangesMade() noexcept {
 		return table_storage.size() > 0;
 	}
-private:
-	LocalTableStorage* GetStorage(DataTable *table);
 
-	template<class T>
-	bool ScanTableStorage(DataTable *table, LocalTableStorage *storage, T &&fun);
 private:
-	unordered_map<DataTable*, unique_ptr<LocalTableStorage>> table_storage;
+	LocalTableStorage *GetStorage(DataTable *table);
+
+	template <class T> bool ScanTableStorage(DataTable *table, LocalTableStorage *storage, T &&fun);
+
+private:
+	unordered_map<DataTable *, unique_ptr<LocalTableStorage>> table_storage;
 };
 
 } // namespace duckdb

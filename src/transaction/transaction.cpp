@@ -19,7 +19,8 @@ void Transaction::PushCatalogEntry(CatalogEntry *entry) {
 }
 
 void Transaction::PushDelete(ChunkInfo *vinfo, row_t rows[], index_t count, index_t base_row) {
-	auto delete_info = (DeleteInfo*) undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo) + sizeof(row_t) * count);
+	auto delete_info =
+	    (DeleteInfo *)undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo) + sizeof(row_t) * count);
 	delete_info->vinfo = vinfo;
 	delete_info->count = count;
 	delete_info->base_row = base_row;
@@ -37,10 +38,11 @@ data_ptr_t Transaction::PushString(string_t str) {
 }
 
 UpdateInfo *Transaction::CreateUpdateInfo(index_t type_size, index_t entries) {
-	auto update_info = (UpdateInfo*) undo_buffer.CreateEntry(UndoFlags::UPDATE_TUPLE, sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * entries);
+	auto update_info = (UpdateInfo *)undo_buffer.CreateEntry(
+	    UndoFlags::UPDATE_TUPLE, sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * entries);
 	update_info->max = entries;
-	update_info->tuples = (sel_t*) (((data_ptr_t) update_info) + sizeof(UpdateInfo));
-	update_info->tuple_data = ((data_ptr_t) update_info) + sizeof(UpdateInfo) + sizeof(sel_t) * entries;
+	update_info->tuples = (sel_t *)(((data_ptr_t)update_info) + sizeof(UpdateInfo));
+	update_info->tuple_data = ((data_ptr_t)update_info) + sizeof(UpdateInfo) + sizeof(sel_t) * entries;
 	update_info->version_number = transaction_id;
 	update_info->nullmask.reset();
 	return update_info;

@@ -103,7 +103,8 @@ TEST_CASE("Concurrent writes during index creation", "[index][.]") {
 		threads[i].join();
 	}
 
-	// first scan the actual base table to verify the count, we avoid using a filter here to prevent the optimizer from using an index scan
+	// first scan the actual base table to verify the count, we avoid using a filter here to prevent the optimizer from
+	// using an index scan
 	result = con.Query("SELECT i, COUNT(*) FROM integers GROUP BY i ORDER BY i LIMIT 1 OFFSET 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1 + THREAD_COUNT * INSERT_COUNT}));

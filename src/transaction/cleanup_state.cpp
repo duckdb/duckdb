@@ -34,7 +34,7 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
-		auto info = (UpdateInfo*) data;
+		auto info = (UpdateInfo *)data;
 		CleanupUpdate(info);
 		break;
 	}
@@ -64,7 +64,7 @@ void CleanupState::CleanupDelete(DeleteInfo *info) {
 		Flush();
 		current_table = version_table;
 	}
-	for(index_t i = 0; i < info->count; i++) {
+	for (index_t i = 0; i < info->count; i++) {
 		if (count == STANDARD_VECTOR_SIZE) {
 			Flush();
 		}

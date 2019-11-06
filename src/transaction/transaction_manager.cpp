@@ -24,9 +24,7 @@ TransactionManager::TransactionManager(StorageManager &storage) : storage(storag
 	current_query_number = 1;
 }
 
-
 TransactionManager::~TransactionManager() {
-
 }
 
 Transaction *TransactionManager::StartTransaction() {
@@ -59,7 +57,7 @@ void TransactionManager::CommitTransaction(Transaction *transaction) {
 	// first check whether we can commit this transaction
 	try {
 		transaction->CheckCommit();
-	} catch(Exception &ex) {
+	} catch (Exception &ex) {
 		// cannot commit transaction! roll it back instead of committing it
 		transaction->Rollback();
 		RemoveTransaction(transaction);

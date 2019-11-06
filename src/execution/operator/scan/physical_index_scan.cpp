@@ -26,7 +26,8 @@ void PhysicalIndexScan::GetChunkInternal(ClientContext &context, DataChunk &chun
 		// initialize the scan state of the index
 		if (low_index && high_index) {
 			// two predicates
-			table.InitializeIndexScan(transaction, state->scan_state, index, low_value, low_expression_type, high_value, high_expression_type, column_ids);
+			table.InitializeIndexScan(transaction, state->scan_state, index, low_value, low_expression_type, high_value,
+			                          high_expression_type, column_ids);
 		} else {
 			// single predicate
 			Value value;

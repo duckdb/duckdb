@@ -66,7 +66,8 @@ public:
 	virtual bool Append(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
 	bool Append(DataChunk &entries, Vector &row_identifiers);
 	//! Verify that data can be appended to the index
-	virtual void VerifyAppend(DataChunk &chunk) {}
+	virtual void VerifyAppend(DataChunk &chunk) {
+	}
 
 	//! Called when data inside the index is Deleted
 	virtual void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
@@ -77,6 +78,7 @@ public:
 
 	//! Returns true if the index is affected by updates on the specified column ids, and false otherwise
 	bool IndexIsUpdated(vector<column_t> &column_ids);
+
 protected:
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);
 

@@ -8,7 +8,8 @@
 using namespace duckdb;
 using namespace std;
 
-PragmaParser::PragmaParser(ClientContext &context) : context(context) {}
+PragmaParser::PragmaParser(ClientContext &context) : context(context) {
+}
 
 bool PragmaParser::ParsePragma(string &query) {
 	// check if there is a PRAGMA statement, this is done before calling the
@@ -113,11 +114,12 @@ bool PragmaParser::ParsePragma(string &query) {
 void PragmaParser::ParseMemoryLimit(string arg) {
 	// split based on the number/non-number
 	index_t idx = 0;
-	while(std::isspace(arg[idx])) {
+	while (std::isspace(arg[idx])) {
 		idx++;
 	}
 	index_t num_start = idx;
-	while((arg[idx] >= '0' && arg[idx] <= '9') || arg[idx] == '.' || arg[idx] == 'e' || arg[idx] == 'E' || arg[idx] == '-') {
+	while ((arg[idx] >= '0' && arg[idx] <= '9') || arg[idx] == '.' || arg[idx] == 'e' || arg[idx] == 'E' ||
+	       arg[idx] == '-') {
 		idx++;
 	}
 	if (idx == num_start) {
@@ -126,14 +128,14 @@ void PragmaParser::ParseMemoryLimit(string arg) {
 	string number = arg.substr(num_start, idx - num_start);
 
 	// try to parse the number
-	double limit = Cast::Operation<const char*, double>(number.c_str());
+	double limit = Cast::Operation<const char *, double>(number.c_str());
 
 	// now parse the memory limit unit (e.g. bytes, gb, etc)
-	while(std::isspace(arg[idx])) {
+	while (std::isspace(arg[idx])) {
 		idx++;
 	}
 	index_t start = idx;
-	while(idx < arg.size() && !std::isspace(arg[idx])) {
+	while (idx < arg.size() && !std::isspace(arg[idx])) {
 		idx++;
 	}
 	if (limit < 0) {
@@ -157,5 +159,5 @@ void PragmaParser::ParseMemoryLimit(string arg) {
 		throw ParserException("Unknown unit for memory_limit: %s (expected: b, mb, gb or tb)", unit.c_str());
 	}
 	// set the new limit in the buffer manager
-	context.db.storage->buffer_manager->SetLimit((index_t) (multiplier * limit));
+	context.db.storage->buffer_manager->SetLimit((index_t)(multiplier * limit));
 }

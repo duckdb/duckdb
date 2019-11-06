@@ -7,12 +7,11 @@
 using namespace duckdb;
 using namespace std;
 
-
 CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
     : log(log), commit_id(commit_id), current_table(nullptr) {
 }
 
- void CommitState::SwitchTable(DataTable *table, UndoFlags new_op) {
+void CommitState::SwitchTable(DataTable *table, UndoFlags new_op) {
 	if (current_table != table) {
 		// write the current table to the log
 		log->WriteSetTable(table->schema, table->table);
@@ -20,7 +19,7 @@ CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
 	}
 }
 
- void CommitState::WriteCatalogEntry(CatalogEntry *entry) {
+void CommitState::WriteCatalogEntry(CatalogEntry *entry) {
 	assert(log);
 	// look at the type of the parent entry
 	auto parent = entry->parent;
@@ -73,7 +72,7 @@ CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
 	}
 }
 
- void CommitState::WriteDelete(DeleteInfo *info) {
+void CommitState::WriteDelete(DeleteInfo *info) {
 	assert(log);
 	// switch to the current table, if necessary
 	SwitchTable(&info->GetTable(), UndoFlags::DELETE_TUPLE);
@@ -83,15 +82,15 @@ CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
 		vector<TypeId> delete_types = {ROW_TYPE};
 		delete_chunk->Initialize(delete_types);
 	}
-	auto rows = (row_t*) delete_chunk->data[0].data;
-	for(index_t i = 0; i < info->count; i++) {
+	auto rows = (row_t *)delete_chunk->data[0].data;
+	for (index_t i = 0; i < info->count; i++) {
 		rows[i] = info->base_row + info->rows[i];
 	}
 	delete_chunk->data[0].count = info->count;
 	log->WriteDelete(*delete_chunk);
 }
 
- void CommitState::WriteUpdate(UpdateInfo *info) {
+void CommitState::WriteUpdate(UpdateInfo *info) {
 	assert(log);
 	// switch to the current table, if necessary
 	SwitchTable(info->column_data->table, UndoFlags::UPDATE_TUPLE);
@@ -102,7 +101,6 @@ CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
 		update_chunk->Initialize(update_types);
 	}
 
-
 	// fetch the updated values from the base table
 	ColumnScanState state;
 	info->segment->InitializeScan(state);
@@ -111,9 +109,9 @@ CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
 	update_chunk->data[0].count = info->N;
 
 	// write the row ids into the chunk
-	auto row_ids = (row_t *) update_chunk->data[1].data;
+	auto row_ids = (row_t *)update_chunk->data[1].data;
 	index_t start = info->segment->row_start + info->vector_index * STANDARD_VECTOR_SIZE;
-	for(index_t i = 0; i < info->N; i++) {
+	for (index_t i = 0; i < info->N; i++) {
 		row_ids[info->tuples[i]] = start + info->tuples[i];
 	}
 	update_chunk->data[1].sel_vector = info->tuples;
@@ -124,8 +122,7 @@ CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
 	log->WriteUpdate(*update_chunk, info->column_data->column_idx);
 }
 
-template <bool HAS_LOG>
-void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
+template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
 		// set the commit timestamp of the catalog entry to the given id

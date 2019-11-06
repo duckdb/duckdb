@@ -23,4 +23,4 @@ struct DeleteInfo {
 	DataTable &GetTable();
 };
 
-}
+} // namespace duckdb

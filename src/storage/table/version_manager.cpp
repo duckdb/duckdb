@@ -35,7 +35,10 @@ bool VersionManager::Fetch(Transaction &transaction, index_t row) {
 
 class VersionDeleteState {
 public:
-	VersionDeleteState(VersionManager &manager, Transaction &transaction, index_t base_row) : manager(manager), transaction(transaction), current_info(nullptr), current_chunk((index_t) -1), count(0), base_row(base_row) {}
+	VersionDeleteState(VersionManager &manager, Transaction &transaction, index_t base_row)
+	    : manager(manager), transaction(transaction), current_info(nullptr), current_chunk((index_t)-1), count(0),
+	      base_row(base_row) {
+	}
 
 	VersionManager &manager;
 	Transaction &transaction;
@@ -45,6 +48,7 @@ public:
 	index_t count;
 	index_t base_row;
 	index_t chunk_row;
+
 public:
 	void Delete(row_t row_id);
 	void Flush();
@@ -57,9 +61,7 @@ void VersionManager::Delete(Transaction &transaction, Vector &row_ids) {
 
 	// obtain a write lock
 	auto write_lock = lock.GetExclusiveLock();
-	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) {
-		del_state.Delete(ids[i] - base_row);
-	});
+	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) { del_state.Delete(ids[i] - base_row); });
 	del_state.Flush();
 }
 
@@ -109,7 +111,7 @@ void VersionManager::Append(Transaction &transaction, row_t row_start, index_t c
 	// obtain a write lock
 	auto write_lock = lock.GetExclusiveLock();
 	auto current_info = GetInsertInfo(chunk_idx);
-	for(index_t i = 0; i < count; i++) {
+	for (index_t i = 0; i < count; i++) {
 		current_info->inserted[idx_in_chunk] = commit_id;
 		idx_in_chunk++;
 		if (idx_in_chunk == STANDARD_VECTOR_SIZE) {
@@ -133,11 +135,11 @@ ChunkInsertInfo *VersionManager::GetInsertInfo(index_t chunk_idx) {
 		// version info already exists: check if it is insert or delete info
 		auto current_info = entry->second.get();
 		if (current_info->type == ChunkInfoType::INSERT_INFO) {
-			return (ChunkInsertInfo*) current_info;
+			return (ChunkInsertInfo *)current_info;
 		} else {
 			assert(current_info->type == ChunkInfoType::DELETE_INFO);
 			// delete info, change to insert info
-			auto new_info = make_unique<ChunkInsertInfo>((ChunkDeleteInfo&) *current_info);
+			auto new_info = make_unique<ChunkInsertInfo>((ChunkDeleteInfo &)*current_info);
 			auto result = new_info.get();
 			info[chunk_idx] = move(new_info);
 			return result;

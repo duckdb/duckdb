@@ -1,13 +1,13 @@
 #include "storage/buffer_manager.hpp"
 
-#include  "common/exception.hpp"
+#include "common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-
-BufferManager::BufferManager(FileSystem &fs, BlockManager &manager, string tmp, index_t maximum_memory) :
-	fs(fs), manager(manager), current_memory(0), maximum_memory(maximum_memory), temp_directory(move(tmp)), temporary_id(MAXIMUM_BLOCK) {
+BufferManager::BufferManager(FileSystem &fs, BlockManager &manager, string tmp, index_t maximum_memory)
+    : fs(fs), manager(manager), current_memory(0), maximum_memory(maximum_memory), temp_directory(move(tmp)),
+      temporary_id(MAXIMUM_BLOCK) {
 	if (!temp_directory.empty()) {
 		fs.CreateDirectory(temp_directory);
 	}
@@ -64,12 +64,11 @@ unique_ptr<BufferHandle> BufferManager::PinBlock(block_id_t block_id) {
 	} else {
 		auto buffer = entry->second->buffer.get();
 		assert(buffer->type == FileBufferType::BLOCK);
-		result_block = (Block*) buffer;
+		result_block = (Block *)buffer;
 		// add one to the reference count
 		AddReference(entry->second);
 	}
 	return make_unique<BufferHandle>(*this, block_id, result_block);
-
 }
 
 void BufferManager::AddReference(BufferEntry *entry) {
@@ -94,7 +93,7 @@ void BufferManager::Unpin(block_id_t block_id) {
 	buffer_entry->ref_count--;
 	if (buffer_entry->ref_count == 0) {
 		if (buffer_entry->buffer->type == FileBufferType::MANAGED_BUFFER) {
-			auto managed = (ManagedBuffer*) buffer_entry->buffer.get();
+			auto managed = (ManagedBuffer *)buffer_entry->buffer.get();
 			if (managed->can_destroy) {
 				// this is a managed buffer that we can destroy
 				// instead of adding it to the LRU list, just deallocate the managed buffer immediately
@@ -110,7 +109,8 @@ void BufferManager::Unpin(block_id_t block_id) {
 
 unique_ptr<Block> BufferManager::EvictBlock() {
 	if (temp_directory.empty()) {
-		throw Exception("Out-of-memory: cannot evict buffer because no temporary directory is specified!\nTo enable temporary buffer eviction set a temporary directory in the configuration");
+		throw Exception("Out-of-memory: cannot evict buffer because no temporary directory is specified!\nTo enable "
+		                "temporary buffer eviction set a temporary directory in the configuration");
 	}
 	// pop the first entry from the lru list
 	auto entry = lru.Pop();
@@ -122,7 +122,7 @@ unique_ptr<Block> BufferManager::EvictBlock() {
 	auto buffer = entry->buffer.get();
 	if (buffer->type == FileBufferType::BLOCK) {
 		// block buffer: remove the block and reuse it
-		auto block = (Block*) buffer;
+		auto block = (Block *)buffer;
 		blocks.erase(block->id);
 		// free up the memory
 		current_memory -= Storage::BLOCK_ALLOC_SIZE;
@@ -130,7 +130,7 @@ unique_ptr<Block> BufferManager::EvictBlock() {
 		return unique_ptr_cast<FileBuffer, Block>(move(entry->buffer));
 	} else {
 		// managed buffer: cannot return a block here
-		auto managed = (ManagedBuffer*) buffer;
+		auto managed = (ManagedBuffer *)buffer;
 		assert(!managed->can_destroy);
 
 		// cannot destroy this buffer: write it to disk first so it can be reloaded later
@@ -148,7 +148,7 @@ unique_ptr<BufferHandle> BufferManager::Allocate(index_t alloc_size, bool can_de
 
 	lock_guard<mutex> lock(block_lock);
 	// first evict blocks until we have enough memory to store this buffer
-	while(current_memory + alloc_size > maximum_memory) {
+	while (current_memory + alloc_size > maximum_memory) {
 		EvictBlock();
 	}
 	// now allocate the buffer with a new temporary id
@@ -192,7 +192,7 @@ void BufferManager::DestroyBuffer(block_id_t buffer_id, bool can_destroy) {
 void BufferManager::SetLimit(index_t limit) {
 	lock_guard<mutex> lock(block_lock);
 
-	while(current_memory > limit) {
+	while (current_memory > limit) {
 		EvictBlock();
 	}
 	maximum_memory = limit;
@@ -216,7 +216,7 @@ unique_ptr<BufferHandle> BufferManager::PinBuffer(block_id_t buffer_id, bool can
 	AddReference(entry->second);
 	// now return it
 	assert(buffer->type == FileBufferType::MANAGED_BUFFER);
-	auto managed = (ManagedBuffer*) buffer;
+	auto managed = (ManagedBuffer *)buffer;
 	assert(managed->id == buffer_id);
 	return make_unique<BufferHandle>(*this, buffer_id, managed);
 }
@@ -237,7 +237,8 @@ void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
 
 unique_ptr<BufferHandle> BufferManager::ReadTemporaryBuffer(block_id_t id) {
 	if (temp_directory.empty()) {
-		throw Exception("Out-of-memory: cannot read buffer because no temporary directory is specified!\nTo enable temporary buffer eviction set a temporary directory in the configuration");
+		throw Exception("Out-of-memory: cannot read buffer because no temporary directory is specified!\nTo enable "
+		                "temporary buffer eviction set a temporary directory in the configuration");
 	}
 	index_t alloc_size;
 	// open the temporary file and read the size
@@ -245,7 +246,7 @@ unique_ptr<BufferHandle> BufferManager::ReadTemporaryBuffer(block_id_t id) {
 	auto handle = fs.OpenFile(path, FileFlags::READ);
 	handle->Read(&alloc_size, sizeof(index_t), 0);
 	// first evict blocks until we can handle the size
-	while(current_memory + alloc_size > maximum_memory) {
+	while (current_memory + alloc_size > maximum_memory) {
 		EvictBlock();
 	}
 	// now allocate a buffer of this size and read the data into that buffer

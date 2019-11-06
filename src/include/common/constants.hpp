@@ -28,7 +28,6 @@ using std::vector;
 #define TEMP_SCHEMA "temp"
 #define INVALID_SCHEMA ""
 
-
 //! The vector size used in the execution engine
 #define STANDARD_VECTOR_SIZE 1024
 //! The amount of vectors per storage chunk
@@ -88,8 +87,8 @@ struct Storage {
 	constexpr static int BLOCK_ALLOC_SIZE = 262144;
 	//! The actual memory space that is available within the blocks
 	constexpr static int BLOCK_SIZE = BLOCK_ALLOC_SIZE - BLOCK_HEADER_SIZE;
-	//! The size of the headers. This should be small and written more or less atomically by the hard disk. We default to
-	//! the page size, which is 4KB. (1 << 12)
+	//! The size of the headers. This should be small and written more or less atomically by the hard disk. We default
+	//! to the page size, which is 4KB. (1 << 12)
 	constexpr static int FILE_HEADER_SIZE = 4096;
 };
 

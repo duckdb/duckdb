@@ -22,7 +22,8 @@ class VersionManager;
 
 class VersionManager {
 public:
-	VersionManager(DataTable &table) : table(table), max_row(0), base_row(0) {}
+	VersionManager(DataTable &table) : table(table), max_row(0), base_row(0) {
+	}
 
 	//! The DataTable
 	DataTable &table;
@@ -34,19 +35,23 @@ public:
 	index_t max_row;
 	//! The base row of the version manager, i.e. when passing row = base_row, it will be treated as row = 0
 	index_t base_row;
+
 public:
-	//! For a given chunk index, fills the selection vector with the relevant tuples for a given transaction. If count == max_count, all tuples are relevant and the selection vector is not set
+	//! For a given chunk index, fills the selection vector with the relevant tuples for a given transaction. If count
+	//! == max_count, all tuples are relevant and the selection vector is not set
 	index_t GetSelVector(Transaction &transaction, index_t index, sel_t sel_vector[], index_t max_count);
 
-	//! Fetch a specific row from the VersionManager, returns true if the row should be used for the transaction and false otherwise.
+	//! Fetch a specific row from the VersionManager, returns true if the row should be used for the transaction and
+	//! false otherwise.
 	bool Fetch(Transaction &transaction, index_t row);
 
 	//! Delete the given set of rows in the version manager
 	void Delete(Transaction &transaction, Vector &row_ids);
 	//! Append a set of rows to the version manager, setting their inserted id to the given commit_id
 	void Append(Transaction &transaction, row_t row_start, index_t count, transaction_t commit_id);
+
 private:
 	ChunkInsertInfo *GetInsertInfo(index_t chunk_idx);
 };
 
-}
+} // namespace duckdb

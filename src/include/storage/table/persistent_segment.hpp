@@ -27,6 +27,7 @@ public:
 	index_t offset;
 	//! The uncompressed segment that the data of the persistent segment is loaded into
 	unique_ptr<UncompressedSegment> data;
+
 public:
 	void InitializeScan(ColumnScanState &state) override;
 	//! Scan one vector from this transient segment

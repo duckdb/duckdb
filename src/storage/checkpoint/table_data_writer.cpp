@@ -28,8 +28,10 @@ public:
 	index_t offset;
 
 	static constexpr index_t STRING_SPACE = Storage::BLOCK_SIZE - sizeof(block_id_t);
+
 public:
 	void WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) override;
+
 private:
 	void AllocateNewBlock(block_id_t new_block_id);
 };
@@ -45,7 +47,7 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 	// allocate segments to write the table to
 	segments.resize(table.columns.size());
 	data_pointers.resize(table.columns.size());
-	for(index_t i = 0; i < table.columns.size(); i++) {
+	for (index_t i = 0; i < table.columns.size(); i++) {
 		auto type_id = GetInternalType(table.columns[i].type);
 		stats.push_back(make_unique<SegmentStatistics>(type_id, GetTypeIdSize(type_id)));
 		CreateSegment(i);
@@ -98,7 +100,7 @@ void TableDataWriter::CreateSegment(index_t col_idx) {
 void TableDataWriter::AppendData(index_t col_idx, Vector &data) {
 	index_t count = data.count;
 	index_t offset = 0;
-	while(offset < count) {
+	while (offset < count) {
 		index_t appended = segments[col_idx]->Append(*stats[col_idx], data, offset, count);
 		if (appended == count) {
 			// appended everything: finished
@@ -159,8 +161,8 @@ void TableDataWriter::WriteDataPointers() {
 	}
 }
 
-WriteOverflowStringsToDisk::WriteOverflowStringsToDisk(CheckpointManager &manager) :
-	manager(manager), handle(nullptr), block_id(INVALID_BLOCK), offset(0) {
+WriteOverflowStringsToDisk::WriteOverflowStringsToDisk(CheckpointManager &manager)
+    : manager(manager), handle(nullptr), block_id(INVALID_BLOCK), offset(0) {
 }
 
 WriteOverflowStringsToDisk::~WriteOverflowStringsToDisk() {
@@ -181,13 +183,13 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 	result_offset = offset;
 
 	// write the length field
-	*((uint32_t*)(handle->node->buffer + offset)) = string.length;
+	*((uint32_t *)(handle->node->buffer + offset)) = string.length;
 	offset += sizeof(uint32_t);
 	// now write the remainder of the string
 	auto strptr = string.data;
 	uint32_t remaining = string.length + 1;
-	while(remaining > 0) {
-		uint32_t to_write = std::min((uint32_t) remaining, (uint32_t) (STRING_SPACE - offset));
+	while (remaining > 0) {
+		uint32_t to_write = std::min((uint32_t)remaining, (uint32_t)(STRING_SPACE - offset));
 		if (to_write > 0) {
 			memcpy(handle->node->buffer + offset, strptr, to_write);
 
@@ -199,7 +201,7 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 			// there is still remaining stuff to write
 			// first get the new block id and write it to the end of the previous block
 			auto new_block_id = manager.block_manager.GetFreeBlockId();
-			*((block_id_t*)(handle->node->buffer + offset)) = new_block_id;
+			*((block_id_t *)(handle->node->buffer + offset)) = new_block_id;
 			// now write the current block to disk and allocate a new block
 			AllocateNewBlock(new_block_id);
 		}

@@ -101,7 +101,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		case CatalogType::TABLE: {
 			auto temp = context.temporary_objects->GetTableOrNull(context.ActiveTransaction(), stmt.info->name);
 			if (temp && (stmt.info->schema == INVALID_SCHEMA || stmt.info->schema == TEMP_SCHEMA)) {
-				context.temporary_objects->DropTable(context.ActiveTransaction(),  stmt.info.get());
+				context.temporary_objects->DropTable(context.ActiveTransaction(), stmt.info.get());
 			} else {
 				if (stmt.info->schema == INVALID_SCHEMA) {
 					stmt.info->schema = DEFAULT_SCHEMA;

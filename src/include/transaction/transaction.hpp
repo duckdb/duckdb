@@ -55,6 +55,7 @@ public:
 	unordered_map<SequenceCatalogEntry *, SequenceValue> sequence_usage;
 	//! Whether or not the transaction has been invalidated
 	bool is_invalidated;
+
 public:
 	void PushCatalogEntry(CatalogEntry *entry);
 	//! Push a query into the undo buffer
@@ -83,6 +84,7 @@ public:
 
 	data_ptr_t PushData(index_t len);
 	data_ptr_t PushString(string_t str);
+
 private:
 	//! The undo buffer is used to store old versions of rows that are updated
 	//! or deleted

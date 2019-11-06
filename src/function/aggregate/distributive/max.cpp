@@ -30,8 +30,9 @@ namespace duckdb {
 
 void MaxFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet max("max");
-	for(auto type : SQLType::ALL_TYPES) {
-		max.AddFunction(AggregateFunction({ type }, type, get_return_type_size, null_state_initialize, max_update, max_combine, gather_finalize, null_simple_initialize, max_simple_update));
+	for (auto type : SQLType::ALL_TYPES) {
+		max.AddFunction(AggregateFunction({type}, type, get_return_type_size, null_state_initialize, max_update,
+		                                  max_combine, gather_finalize, null_simple_initialize, max_simple_update));
 	}
 	set.AddFunction(max);
 }

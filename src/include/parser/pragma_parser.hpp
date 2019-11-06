@@ -21,10 +21,13 @@ public:
 	PragmaParser(ClientContext &context);
 
 	string new_query;
+
 public:
 	bool ParsePragma(string &query);
+
 private:
 	ClientContext &context;
+
 private:
 	void ParseMemoryLimit(string limit);
 };

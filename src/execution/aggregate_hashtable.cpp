@@ -253,8 +253,8 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 		assert(payload_types[aggr_idx] == TypeId::BIGINT);
 
 		VectorOperations::Gather::Set(addresses, result.data[aggr_idx]);
-		VectorOperations::AddInPlace(
-		    addresses, aggregates[aggr_idx]->function.state_size(aggregates[aggr_idx]->return_type));
+		VectorOperations::AddInPlace(addresses,
+		                             aggregates[aggr_idx]->function.state_size(aggregates[aggr_idx]->return_type));
 	}
 }
 

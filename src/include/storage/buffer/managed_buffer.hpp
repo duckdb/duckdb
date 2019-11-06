@@ -23,11 +23,13 @@ public:
 	//! The buffer manager this buffer belongs to
 	BufferManager &manager;
 	//! Whether or not the managed buffer can be freely destroyed when unpinned.
-	//! - If can_destroy is true, the buffer can be destroyed when unpinned and hence be unrecoverable. After being destroyed, Pin() will return false.
-	//! - If can_destroy is false, the buffer will instead be written to a temporary file on disk when unloaded from memory, and read back into memory when Pin() is called.
+	//! - If can_destroy is true, the buffer can be destroyed when unpinned and hence be unrecoverable. After being
+	//! destroyed, Pin() will return false.
+	//! - If can_destroy is false, the buffer will instead be written to a temporary file on disk when unloaded from
+	//! memory, and read back into memory when Pin() is called.
 	bool can_destroy;
 	//! The internal id of the buffer
 	block_id_t id;
 };
 
-}
+} // namespace duckdb

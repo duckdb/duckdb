@@ -98,5 +98,4 @@ TEST_CASE("Concurrent append", "[transactions][.]") {
 	result = con.Query("SELECT COUNT(*), SUM(i) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(THREAD_COUNT * INSERT_ELEMENTS)}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(3 * THREAD_COUNT * INSERT_ELEMENTS)}));
-
 }

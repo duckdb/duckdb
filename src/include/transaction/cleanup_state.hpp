@@ -29,6 +29,7 @@ private:
 	DataChunk chunk;
 	row_t row_numbers[STANDARD_VECTOR_SIZE];
 	index_t count;
+
 private:
 	void CleanupDelete(DeleteInfo *info);
 	void CleanupUpdate(UpdateInfo *info);

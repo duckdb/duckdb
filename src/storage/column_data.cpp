@@ -7,10 +7,9 @@ using namespace duckdb;
 using namespace std;
 
 ColumnData::ColumnData() : persistent_rows(0) {
-
 }
 
-void ColumnData::Initialize(vector<unique_ptr<PersistentSegment>>& segments) {
+void ColumnData::Initialize(vector<unique_ptr<PersistentSegment>> &segments) {
 	for (auto &segment : segments) {
 		persistent_rows += segment->count;
 		data.AppendSegment(move(segment));
@@ -18,7 +17,7 @@ void ColumnData::Initialize(vector<unique_ptr<PersistentSegment>>& segments) {
 }
 
 void ColumnData::InitializeScan(ColumnScanState &state) {
-	state.current = (ColumnSegment*) data.GetRootSegment();
+	state.current = (ColumnSegment *)data.GetRootSegment();
 	state.vector_index = 0;
 	state.initialized = false;
 }
@@ -47,7 +46,7 @@ void ColumnData::IndexScan(ColumnScanState &state, Vector &result) {
 void ColumnScanState::Next() {
 	vector_index++;
 	if (vector_index * STANDARD_VECTOR_SIZE >= current->count) {
-		current = (ColumnSegment*) current->next.get();
+		current = (ColumnSegment *)current->next.get();
 		vector_index = 0;
 		initialized = false;
 	}
@@ -59,13 +58,13 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 		// no transient segments yet, append one
 		AppendTransientSegment(persistent_rows);
 	}
-	auto segment = (ColumnSegment*) data.GetLastSegment();
+	auto segment = (ColumnSegment *)data.GetLastSegment();
 	if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 		// cannot append to persistent segment, add a transient one
 		AppendTransientSegment(persistent_rows);
-		state.current = (TransientSegment*) data.GetLastSegment();
+		state.current = (TransientSegment *)data.GetLastSegment();
 	} else {
-		state.current = (TransientSegment*) segment;
+		state.current = (TransientSegment *)segment;
 	}
 	assert(state.current->segment_type == ColumnSegmentType::TRANSIENT);
 	state.current->InitializeAppend(state);
@@ -74,7 +73,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 void ColumnData::Append(ColumnAppendState &state, Vector &vector) {
 	index_t offset = 0;
 	index_t count = vector.count;
-	while(true) {
+	while (true) {
 		// append the data from the vector
 		index_t copied_elements = state.current->Append(state, vector, offset, count);
 		if (copied_elements == count) {
@@ -86,7 +85,7 @@ void ColumnData::Append(ColumnAppendState &state, Vector &vector) {
 		{
 			lock_guard<mutex> tree_lock(data.node_lock);
 			AppendTransientSegment(state.current->start + state.current->count);
-			state.current = (TransientSegment*) data.GetLastSegment();
+			state.current = (TransientSegment *)data.GetLastSegment();
 			state.current->InitializeAppend(state);
 		}
 		offset += copied_elements;
@@ -97,14 +96,14 @@ void ColumnData::Append(ColumnAppendState &state, Vector &vector) {
 void ColumnData::Update(Transaction &transaction, Vector &updates, row_t *ids) {
 	// first find the segment that the update belongs to
 	index_t first_id = ids[updates.sel_vector ? updates.sel_vector[0] : 0];
-	auto segment = (ColumnSegment *) data.GetSegment(first_id);
+	auto segment = (ColumnSegment *)data.GetSegment(first_id);
 	// now perform the update within the segment
 	segment->Update(*this, transaction, updates, ids);
 }
 
 void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	// find the segment that the row belongs to
-	auto segment = (ColumnSegment *) data.GetSegment(row_id);
+	auto segment = (ColumnSegment *)data.GetSegment(row_id);
 	auto vector_index = (row_id - segment->start) / STANDARD_VECTOR_SIZE;
 	// now perform the fetch within the segment
 	segment->Fetch(state, vector_index, result);
@@ -112,7 +111,7 @@ void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 
 void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) {
 	// find the segment the row belongs to
-	auto segment = (TransientSegment *) data.GetSegment(row_id);
+	auto segment = (TransientSegment *)data.GetSegment(row_id);
 	// now perform the fetch within the segment
 	segment->FetchRow(state, transaction, row_id, result);
 }

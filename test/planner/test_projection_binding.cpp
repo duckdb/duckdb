@@ -7,7 +7,7 @@ using namespace std;
 
 TEST_CASE("Test projection bindings for ORDER BY", "[projection-binding-order-by]") {
 	ExpressionHelper helper;
-  using Op = LogicalOperatorType;
+	using Op = LogicalOperatorType;
 
 	auto projection_matches = [&](string query, vector<LogicalOperatorType> path, size_t count) -> bool {
 		auto plan = helper.ParseLogicalTree(query);

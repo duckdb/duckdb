@@ -189,7 +189,7 @@ TEST_CASE("Test Top N Optimization", "[order]") {
 
 	// Top N optimization: Limit greater than number of rows
 	result = con.Query("SELECT b FROM test ORDER BY b LIMIT 10 OFFSET 1;");
-	REQUIRE(CHECK_COLUMN(result, 0, {7,22}));
+	REQUIRE(CHECK_COLUMN(result, 0, {7, 22}));
 
 	// Top N optimization: Offset greater than total number of rows
 	result = con.Query("SELECT b FROM test ORDER BY b LIMIT 10 OFFSET 10;");

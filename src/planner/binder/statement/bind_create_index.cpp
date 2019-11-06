@@ -14,7 +14,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CreateIndexStatement &stmt) {
 	if (result->table->type != TableReferenceType::BASE_TABLE) {
 		throw BinderException("Cannot create index on a view!");
 	}
-	auto table_ref= (BoundBaseTableRef*) result->table.get();
+	auto table_ref = (BoundBaseTableRef *)result->table.get();
 	if (table_ref->table->temporary) {
 		throw BinderException("Cannot create index on a temporary table!");
 	}

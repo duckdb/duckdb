@@ -15,8 +15,8 @@ static NumericSegment::rollback_update_function_t GetRollbackUpdateFunction(Type
 static NumericSegment::merge_update_function_t GetMergeUpdateFunction(TypeId type);
 static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction(TypeId type);
 
-NumericSegment::NumericSegment(BufferManager &manager, TypeId type, index_t row_start, block_id_t block) :
-	UncompressedSegment(manager, type, row_start) {
+NumericSegment::NumericSegment(BufferManager &manager, TypeId type, index_t row_start, block_id_t block)
+    : UncompressedSegment(manager, type, row_start) {
 	// set up the different functions for this type of segment
 	this->append_function = GetAppendFunction(type);
 	this->update_function = GetUpdateFunction(type);
@@ -36,8 +36,8 @@ NumericSegment::NumericSegment(BufferManager &manager, TypeId type, index_t row_
 		auto handle = manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
 		this->block_id = handle->block_id;
 		// initialize nullmasks to 0 for all vectors
-		for(index_t i = 0; i < max_vector_count; i++) {
-			auto mask = (nullmask_t*) (handle->node->buffer + (i * vector_size));
+		for (index_t i = 0; i < max_vector_count; i++) {
+			auto mask = (nullmask_t *)(handle->node->buffer + (i * vector_size));
 			mask->reset();
 		}
 	}
@@ -58,12 +58,13 @@ void NumericSegment::FetchBaseData(ColumnScanState &state, index_t vector_index,
 
 	index_t count = GetVectorCount(vector_index);
 	// fetch the nullmask and copy the data from the base table
-	result.nullmask = *((nullmask_t*) (data + offset));
+	result.nullmask = *((nullmask_t *)(data + offset));
 	memcpy(result.data, data + offset + sizeof(nullmask_t), count * type_size);
 	result.count = count;
 }
 
-void NumericSegment::FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *version, Vector &result) {
+void NumericSegment::FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *version,
+                                     Vector &result) {
 	fetch_from_update_info(transaction, version, result);
 }
 
@@ -81,13 +82,14 @@ void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction,
 
 	// first fetch the data from the base table
 	auto data = handle->node->buffer + vector_index * vector_size;
-	auto &nullmask = *((nullmask_t*) (data));
+	auto &nullmask = *((nullmask_t *)(data));
 	auto vector_ptr = data + sizeof(nullmask_t);
 
 	result.nullmask[result.count] = nullmask[id_in_vector];
 	memcpy(result.data + result.count * type_size, vector_ptr + id_in_vector * type_size, type_size);
 	if (versions && versions[vector_index]) {
-		// version information: follow the version chain to find out if we need to load this tuple data from any other version
+		// version information: follow the version chain to find out if we need to load this tuple data from any other
+		// version
 		append_from_update_info(transaction, versions[vector_index], id_in_vector, result);
 	}
 	result.count++;
@@ -101,7 +103,7 @@ index_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, index_t o
 	auto handle = manager.Pin(block_id);
 
 	index_t initial_count = tuple_count;
-	while(count > 0) {
+	while (count > 0) {
 		// get the vector index of the vector to append to and see how many tuples we can append to that vector
 		index_t vector_index = tuple_count / STANDARD_VECTOR_SIZE;
 		if (vector_index == max_vector_count) {
@@ -111,7 +113,8 @@ index_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, index_t o
 		index_t append_count = std::min(STANDARD_VECTOR_SIZE - current_tuple_count, count);
 
 		// now perform the actual append
-		append_function(stats, handle->node->buffer + vector_size * vector_index, current_tuple_count, data, offset, append_count);
+		append_function(stats, handle->node->buffer + vector_size * vector_index, current_tuple_count, data, offset,
+		                append_count);
 
 		count -= append_count;
 		offset += append_count;
@@ -123,7 +126,8 @@ index_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, index_t o
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-void NumericSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) {
+void NumericSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update,
+                            row_t *ids, index_t vector_index, index_t vector_offset, UpdateInfo *node) {
 	if (!node) {
 		auto handle = manager.Pin(block_id);
 
@@ -135,7 +139,8 @@ void NumericSegment::Update(ColumnData &column_data, SegmentStatistics &stats, T
 		// node already exists for this transaction, we need to merge the new updates with the existing updates
 		auto handle = manager.Pin(block_id);
 
-		merge_update_function(stats, node, handle->node->buffer + vector_index * vector_size, update, ids, vector_offset);
+		merge_update_function(stats, node, handle->node->buffer + vector_index * vector_size, update, ids,
+		                      vector_offset);
 	}
 }
 
@@ -163,15 +168,15 @@ template <class T> static void update_min_max(T value, T *__restrict min, T *__r
 }
 
 template <class T>
-static void append_loop_null(T *__restrict source, nullmask_t &result_nullmask, T *__restrict target, index_t target_offset, index_t offset, index_t count,
-                             sel_t *__restrict sel_vector, nullmask_t &nullmask, T *__restrict min, T *__restrict max,
-                             bool &has_null) {
+static void append_loop_null(T *__restrict source, nullmask_t &result_nullmask, T *__restrict target,
+                             index_t target_offset, index_t offset, index_t count, sel_t *__restrict sel_vector,
+                             nullmask_t &nullmask, T *__restrict min, T *__restrict max, bool &has_null) {
 	// null values, have to check the NULL values in the mask
 	VectorOperations::Exec(
 	    sel_vector, count + offset,
 	    [&](index_t i, index_t k) {
 		    if (nullmask[i]) {
-				result_nullmask[k - offset + target_offset] = true;
+			    result_nullmask[k - offset + target_offset] = true;
 			    has_null = true;
 		    } else {
 			    update_min_max(source[i], min, max);
@@ -182,8 +187,8 @@ static void append_loop_null(T *__restrict source, nullmask_t &result_nullmask, 
 }
 
 template <class T>
-static void append_loop_no_null(T *__restrict source, T *__restrict target, index_t target_offset, index_t offset, index_t count,
-                                sel_t *__restrict sel_vector, T *__restrict min, T *__restrict max) {
+static void append_loop_no_null(T *__restrict source, T *__restrict target, index_t target_offset, index_t offset,
+                                index_t count, sel_t *__restrict sel_vector, T *__restrict min, T *__restrict max) {
 	VectorOperations::Exec(
 	    sel_vector, count + offset,
 	    [&](index_t i, index_t k) {
@@ -194,16 +199,17 @@ static void append_loop_no_null(T *__restrict source, T *__restrict target, inde
 }
 
 template <class T>
-static void append_loop(SegmentStatistics &stats, data_ptr_t target, index_t target_offset, Vector &source, index_t offset, index_t count) {
+static void append_loop(SegmentStatistics &stats, data_ptr_t target, index_t target_offset, Vector &source,
+                        index_t offset, index_t count) {
 	assert(offset + count <= source.count);
 	auto ldata = (T *)source.data;
-	auto result_data = (T *) (target + sizeof(nullmask_t));
-	auto nullmask = (nullmask_t*) target;
+	auto result_data = (T *)(target + sizeof(nullmask_t));
+	auto nullmask = (nullmask_t *)target;
 	auto min = (T *)stats.minimum.get();
 	auto max = (T *)stats.maximum.get();
 	if (source.nullmask.any()) {
-		append_loop_null<T>(ldata, *nullmask, result_data, target_offset, offset, count, source.sel_vector, source.nullmask, min, max,
-		                    stats.has_null);
+		append_loop_null<T>(ldata, *nullmask, result_data, target_offset, offset, count, source.sel_vector,
+		                    source.nullmask, min, max, stats.has_null);
 	} else {
 		append_loop_no_null<T>(ldata, result_data, target_offset, offset, count, source.sel_vector, min, max);
 	}
@@ -232,11 +238,11 @@ static NumericSegment::append_function_t GetAppendFunction(TypeId type) {
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-template<class T>
+template <class T>
 static void update_loop_null(T *__restrict undo_data, T *__restrict base_data, T *__restrict new_data,
-                             nullmask_t &undo_nullmask, nullmask_t &base_nullmask, nullmask_t &new_nullmask, index_t count,
-                                sel_t *__restrict base_sel, T *__restrict min, T *__restrict max) {
-	for(index_t i = 0; i < count; i++) {
+                             nullmask_t &undo_nullmask, nullmask_t &base_nullmask, nullmask_t &new_nullmask,
+                             index_t count, sel_t *__restrict base_sel, T *__restrict min, T *__restrict max) {
+	for (index_t i = 0; i < count; i++) {
 		// first move the base data into the undo buffer info
 		undo_data[i] = base_data[base_sel[i]];
 		undo_nullmask[base_sel[i]] = base_nullmask[base_sel[i]];
@@ -248,10 +254,10 @@ static void update_loop_null(T *__restrict undo_data, T *__restrict base_data, T
 	}
 }
 
-template<class T>
+template <class T>
 static void update_loop_no_null(T *__restrict undo_data, T *__restrict base_data, T *__restrict new_data, index_t count,
                                 sel_t *__restrict base_sel, T *__restrict min, T *__restrict max) {
-	for(index_t i = 0; i < count; i++) {
+	for (index_t i = 0; i < count; i++) {
 		// first move the base data into the undo buffer info
 		undo_data[i] = base_data[base_sel[i]];
 		// now move the new data in-place into the base table
@@ -263,15 +269,16 @@ static void update_loop_no_null(T *__restrict undo_data, T *__restrict base_data
 
 template <class T>
 static void update_loop(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t base, Vector &update) {
-	auto update_data = (T*) update.data;
-	auto nullmask = (nullmask_t *) base;
-	auto base_data = (T*) (base + sizeof(nullmask_t));
-	auto undo_data = (T*) info->tuple_data;
+	auto update_data = (T *)update.data;
+	auto nullmask = (nullmask_t *)base;
+	auto base_data = (T *)(base + sizeof(nullmask_t));
+	auto undo_data = (T *)info->tuple_data;
 	auto min = (T *)stats.minimum.get();
 	auto max = (T *)stats.maximum.get();
 
 	if (update.nullmask.any() || nullmask->any()) {
-		update_loop_null(undo_data, base_data, update_data, info->nullmask, *nullmask, update.nullmask, info->N, info->tuples, min, max);
+		update_loop_null(undo_data, base_data, update_data, info->nullmask, *nullmask, update.nullmask, info->N,
+		                 info->tuples, min, max);
 	} else {
 		update_loop_no_null(undo_data, base_data, update_data, info->N, info->tuples, min, max);
 	}
@@ -300,12 +307,13 @@ static NumericSegment::update_function_t GetUpdateFunction(TypeId type) {
 //===--------------------------------------------------------------------===//
 // Merge Update
 //===--------------------------------------------------------------------===//
-template<class T>
-static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_ptr_t base, Vector &update, row_t *ids, index_t vector_offset) {
-	auto &base_nullmask = *((nullmask_t *) base);
-	auto base_data = (T*) (base + sizeof(nullmask_t));
-	auto info_data = (T*) node->tuple_data;
-	auto update_data = (T*) update.data;
+template <class T>
+static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_ptr_t base, Vector &update, row_t *ids,
+                              index_t vector_offset) {
+	auto &base_nullmask = *((nullmask_t *)base);
+	auto base_data = (T *)(base + sizeof(nullmask_t));
+	auto info_data = (T *)node->tuple_data;
+	auto update_data = (T *)update.data;
 
 	// first we copy the old update info into a temporary structure
 	sel_t old_ids[STANDARD_VECTOR_SIZE];
@@ -367,12 +375,11 @@ static NumericSegment::merge_update_function_t GetMergeUpdateFunction(TypeId typ
 //===--------------------------------------------------------------------===//
 // Update Fetch
 //===--------------------------------------------------------------------===//
-template <class T>
-static void update_info_fetch(Transaction &transaction, UpdateInfo *info, Vector &result) {
-	auto result_data = (T*) result.data;
+template <class T> static void update_info_fetch(Transaction &transaction, UpdateInfo *info, Vector &result) {
+	auto result_data = (T *)result.data;
 	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
-		auto info_data = (T*) current->tuple_data;
-		for(index_t i = 0; i < current->N; i++) {
+		auto info_data = (T *)current->tuple_data;
+		for (index_t i = 0; i < current->N; i++) {
 			result_data[current->tuples[i]] = info_data[i];
 			result.nullmask[current->tuples[i]] = current->nullmask[current->tuples[i]];
 		}
@@ -404,11 +411,11 @@ static NumericSegment::update_info_fetch_function_t GetUpdateInfoFetchFunction(T
 //===--------------------------------------------------------------------===//
 template <class T>
 static void update_info_append(Transaction &transaction, UpdateInfo *info, index_t row_id, Vector &result) {
-	auto result_data = (T*) result.data;
+	auto result_data = (T *)result.data;
 	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
-		auto info_data = (T*) current->tuple_data;
+		auto info_data = (T *)current->tuple_data;
 		// loop over the tuples in this UpdateInfo
-		for(index_t i = 0; i < current->N; i++) {
+		for (index_t i = 0; i < current->N; i++) {
 			if (current->tuples[i] == row_id) {
 				// found the relevant tuple
 				result_data[result.count] = info_data[i];
@@ -445,13 +452,12 @@ static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction
 //===--------------------------------------------------------------------===//
 // Rollback Update
 //===--------------------------------------------------------------------===//
-template <class T>
-static void rollback_update(UpdateInfo *info, data_ptr_t base) {
-	auto &nullmask = *((nullmask_t *) base);
-	auto info_data = (T*) info->tuple_data;
-	auto base_data = (T*) (base + sizeof(nullmask_t));
+template <class T> static void rollback_update(UpdateInfo *info, data_ptr_t base) {
+	auto &nullmask = *((nullmask_t *)base);
+	auto info_data = (T *)info->tuple_data;
+	auto base_data = (T *)(base + sizeof(nullmask_t));
 
-	for(index_t i = 0; i < info->N; i++) {
+	for (index_t i = 0; i < info->N; i++) {
 		base_data[info->tuples[i]] = info_data[i];
 		nullmask[info->tuples[i]] = info->nullmask[info->tuples[i]];
 	}

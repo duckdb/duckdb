@@ -13,18 +13,15 @@
 namespace duckdb {
 struct FileHandle;
 
-enum class FileBufferType : uint8_t {
-	BLOCK = 1,
-	MANAGED_BUFFER = 2
-};
+enum class FileBufferType : uint8_t { BLOCK = 1, MANAGED_BUFFER = 2 };
 
 //! The FileBuffer represents a buffer that can be read or written to a Direct IO FileHandle.
 class FileBuffer {
 public:
 	//! Allocates a buffer of the specified size that is sector-aligned. bufsiz must be a multiple of
-	//! FileSystemConstants::FILE_BUFFER_BLOCK_SIZE. The content in this buffer can be written to FileHandles that have been opened with
-	//! DIRECT_IO on all operating systems, however, the entire buffer must be written to the file. Note that the
-	//! returned size is 8 bytes less than the allocation size to account for the checksum.
+	//! FileSystemConstants::FILE_BUFFER_BLOCK_SIZE. The content in this buffer can be written to FileHandles that have
+	//! been opened with DIRECT_IO on all operating systems, however, the entire buffer must be written to the file.
+	//! Note that the returned size is 8 bytes less than the allocation size to account for the checksum.
 	FileBuffer(FileBufferType type, uint64_t bufsiz);
 	virtual ~FileBuffer();
 
@@ -34,6 +31,7 @@ public:
 	data_ptr_t buffer;
 	//! The size of the portion that users can write to, this is equivalent to internal_size - BLOCK_HEADER_SIZE
 	uint64_t size;
+
 public:
 	//! Read into the FileBuffer from the specified location. Automatically verifies the checksum, and throws an
 	//! exception if the checksum does not match correctly.
@@ -47,6 +45,7 @@ public:
 	uint64_t AllocSize() {
 		return internal_size;
 	}
+
 private:
 	//! The pointer to the internal buffer that will be read or written, including the buffer header
 	data_ptr_t internal_buffer;

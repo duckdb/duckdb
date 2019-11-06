@@ -32,7 +32,6 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
 
 void SchemaCatalogEntry::CreateTable(Transaction &transaction, BoundCreateTableInfo *info) {
 
-
 	auto table = make_unique_base<CatalogEntry, TableCatalogEntry>(catalog, this, info);
 	if (!info->base->temporary) {
 		info->dependencies.insert(this);
@@ -156,7 +155,6 @@ TableCatalogEntry *SchemaCatalogEntry::GetTableOrNull(Transaction &transaction, 
 	}
 	return (TableCatalogEntry *)entry;
 }
-
 
 TableFunctionCatalogEntry *SchemaCatalogEntry::GetTableFunction(Transaction &transaction,
                                                                 FunctionExpression *expression) {

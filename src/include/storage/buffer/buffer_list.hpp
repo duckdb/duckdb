@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// storage/buffer_list.hpp
+// storage/buffer/buffer_list.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,10 +13,10 @@
 namespace duckdb {
 
 struct BufferEntry {
-	BufferEntry(unique_ptr<FileBuffer> buffer) :
-		buffer(move(buffer)), ref_count(1), prev(nullptr) { }
+	BufferEntry(unique_ptr<FileBuffer> buffer) : buffer(move(buffer)), ref_count(1), prev(nullptr) {
+	}
 	~BufferEntry() {
-		while(next) {
+		while (next) {
 			next = move(next->next);
 		}
 	}
@@ -33,7 +33,9 @@ struct BufferEntry {
 
 class BufferList {
 public:
-	BufferList() : last(nullptr), count(0) {}
+	BufferList() : last(nullptr), count(0) {
+	}
+
 public:
 	//! Removes the first element (root) from the buffer list and returns it, O(1)
 	unique_ptr<BufferEntry> Pop();
@@ -41,6 +43,7 @@ public:
 	unique_ptr<BufferEntry> Erase(BufferEntry *entry);
 	//! Insert an entry to the back of the list
 	void Append(unique_ptr<BufferEntry> entry);
+
 private:
 	//! Root pointer
 	unique_ptr<BufferEntry> root;
@@ -50,4 +53,4 @@ private:
 	index_t count;
 };
 
-}
+} // namespace duckdb

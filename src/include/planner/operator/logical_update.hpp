@@ -24,6 +24,7 @@ public:
 	vector<column_t> columns;
 	vector<unique_ptr<Expression>> bound_defaults;
 	bool is_index_update;
+
 protected:
 	void ResolveTypes() override {
 		types.push_back(TypeId::BIGINT);

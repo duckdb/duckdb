@@ -139,7 +139,7 @@ TEST_CASE("Test update behavior with multiple updaters", "[update]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1), (2), (3)"));
 
 	// now we start updating specific values and reading different versions
-	for(index_t i = 0; i < 2; i++) {
+	for (index_t i = 0; i < 2; i++) {
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 		REQUIRE_NO_FAIL(u1.Query("UPDATE test SET a=4 WHERE a=1"));
 		REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
@@ -244,7 +244,6 @@ TEST_CASE("Test update behavior with multiple updaters", "[update]") {
 	result = con.Query("SELECT * FROM test ORDER BY a");
 	REQUIRE(CHECK_COLUMN(result, 0, {7, 8, 9}));
 }
-
 
 TEST_CASE("Test update behavior with multiple updaters and NULL values", "[update]") {
 	unique_ptr<QueryResult> result;

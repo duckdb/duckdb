@@ -5,8 +5,9 @@
 using namespace duckdb;
 using namespace std;
 
-UncompressedSegment::UncompressedSegment(BufferManager &manager, TypeId type, index_t row_start) :
-	manager(manager), type(type), block_id(INVALID_BLOCK), max_vector_count(0), tuple_count(0), row_start(row_start), versions(nullptr) {
+UncompressedSegment::UncompressedSegment(BufferManager &manager, TypeId type, index_t row_start)
+    : manager(manager), type(type), block_id(INVALID_BLOCK), max_vector_count(0), tuple_count(0), row_start(row_start),
+      versions(nullptr) {
 }
 
 UncompressedSegment::~UncompressedSegment() {
@@ -16,7 +17,8 @@ UncompressedSegment::~UncompressedSegment() {
 	}
 }
 
-static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector &update, row_t *ids, row_t offset, UpdateInfo *& node) {
+static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector &update, row_t *ids, row_t offset,
+                              UpdateInfo *&node) {
 	if (info->version_number == transaction.transaction_id) {
 		// this UpdateInfo belongs to the current transaction, set it in the node
 		node = info;
@@ -24,7 +26,7 @@ static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector
 		// potential conflict, check that tuple ids do not conflict
 		// as both ids and info->tuples are sorted, this is similar to a merge join
 		index_t i = 0, j = 0;
-		while(true) {
+		while (true) {
 			auto id = ids[i] - offset;
 			if (id == info->tuples[j]) {
 				throw TransactionException("Conflict on update!");
@@ -48,7 +50,8 @@ static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector
 	}
 }
 
-void UncompressedSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, row_t offset) {
+void UncompressedSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction,
+                                 Vector &update, row_t *ids, row_t offset) {
 	// can only perform in-place updates on temporary blocks
 	assert(block_id >= MAXIMUM_BLOCK);
 
@@ -58,15 +61,15 @@ void UncompressedSegment::Update(ColumnData &column_data, SegmentStatistics &sta
 	assert(!update.sel_vector);
 #ifdef DEBUG
 	// verify that the ids are sorted and there are no duplicates
-	for(index_t i = 1; i < update.count; i++) {
+	for (index_t i = 1; i < update.count; i++) {
 		assert(ids[i] > ids[i - 1]);
 	}
 #endif
 
 	// create the versions for this segment, if there are none yet
 	if (!versions) {
-		this->versions = unique_ptr<UpdateInfo*[]>(new UpdateInfo*[max_vector_count]);
-		for(index_t i = 0; i < max_vector_count; i++) {
+		this->versions = unique_ptr<UpdateInfo *[]>(new UpdateInfo *[max_vector_count]);
+		for (index_t i = 0; i < max_vector_count; i++) {
 			this->versions[i] = nullptr;
 		}
 	}
@@ -83,13 +86,16 @@ void UncompressedSegment::Update(ColumnData &column_data, SegmentStatistics &sta
 	// first check the version chain
 	UpdateInfo *node = nullptr;
 	if (versions[vector_index]) {
-		// there is already a version here, check if there are any conflicts and search for the node that belongs to this transaction in the version chain
+		// there is already a version here, check if there are any conflicts and search for the node that belongs to
+		// this transaction in the version chain
 		CheckForConflicts(versions[vector_index], transaction, update, ids, vector_offset, node);
 	}
 	Update(column_data, stats, transaction, update, ids, vector_index, vector_offset, node);
 }
 
-UpdateInfo *UncompressedSegment::CreateUpdateInfo(ColumnData &column_data, Transaction &transaction, row_t *ids, index_t count, index_t vector_index, index_t vector_offset, index_t type_size) {
+UpdateInfo *UncompressedSegment::CreateUpdateInfo(ColumnData &column_data, Transaction &transaction, row_t *ids,
+                                                  index_t count, index_t vector_index, index_t vector_offset,
+                                                  index_t type_size) {
 	auto node = transaction.CreateUpdateInfo(type_size, STANDARD_VECTOR_SIZE);
 	node->column_data = &column_data;
 	node->segment = this;
@@ -103,8 +109,8 @@ UpdateInfo *UncompressedSegment::CreateUpdateInfo(ColumnData &column_data, Trans
 
 	// set up the tuple ids
 	node->N = count;
-	for(index_t i = 0; i < count; i++) {
-		assert((index_t) ids[i] >= vector_offset && (index_t) ids[i] < vector_offset + STANDARD_VECTOR_SIZE);
+	for (index_t i = 0; i < count; i++) {
+		assert((index_t)ids[i] >= vector_offset && (index_t)ids[i] < vector_offset + STANDARD_VECTOR_SIZE);
 		node->tuples[i] = ids[i] - vector_offset;
 	};
 	return node;

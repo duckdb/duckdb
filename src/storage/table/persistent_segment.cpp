@@ -48,7 +48,8 @@ void PersistentSegment::FetchRow(ColumnFetchState &state, Transaction &transacti
 void PersistentSegment::Update(ColumnData &column_data, Transaction &transaction, Vector &updates, row_t *ids) {
 	// update of persistent segment: check if the table has been updated before
 	if (block_id == data->block_id) {
-		// data has not been updated before! convert the segment from one that refers to an on-disk block to one that refers to a in-memory buffer
+		// data has not been updated before! convert the segment from one that refers to an on-disk block to one that
+		// refers to a in-memory buffer
 		data->ToTemporary();
 	}
 	data->Update(column_data, stats, transaction, updates, ids, this->start);

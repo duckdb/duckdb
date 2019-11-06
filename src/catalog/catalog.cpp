@@ -27,8 +27,7 @@ void Catalog::CreateSchema(Transaction &transaction, CreateSchemaInfo *info) {
 		throw CatalogException("Schema not specified");
 	}
 	if (info->schema == TEMP_SCHEMA) {
-		throw CatalogException("Cannot create built-in schema \"%s\"",
-		                       info->schema.c_str());
+		throw CatalogException("Cannot create built-in schema \"%s\"", info->schema.c_str());
 	}
 
 	unordered_set<CatalogEntry *> dependencies;

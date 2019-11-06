@@ -12,7 +12,6 @@
 #include "storage/storage_lock.hpp"
 #include "storage/buffer/buffer_handle.hpp"
 
-
 namespace duckdb {
 class TransientSegment;
 
@@ -35,4 +34,4 @@ struct TableAppendState {
 	row_t current_row;
 };
 
-}
+} // namespace duckdb

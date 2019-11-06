@@ -8,15 +8,13 @@ ColumnSegment::ColumnSegment(TypeId type, ColumnSegmentType segment_type, index_
       stats(type, type_size) {
 }
 
-SegmentStatistics::SegmentStatistics(TypeId type, index_t type_size) :
-	type(type), type_size(type_size) {
+SegmentStatistics::SegmentStatistics(TypeId type, index_t type_size) : type(type), type_size(type_size) {
 	Reset();
 }
 
-template<class T>
-void initialize_max_min(data_ptr_t min, data_ptr_t max) {
-	*((T*) min) = std::numeric_limits<T>::max();
-	*((T*) max) = std::numeric_limits<T>::min();
+template <class T> void initialize_max_min(data_ptr_t min, data_ptr_t max) {
+	*((T *)min) = std::numeric_limits<T>::max();
+	*((T *)max) = std::numeric_limits<T>::min();
 }
 
 void SegmentStatistics::Reset() {
@@ -25,7 +23,7 @@ void SegmentStatistics::Reset() {
 	has_null = false;
 	max_string_length = 0;
 	has_overflow_strings = false;
-	switch(type) {
+	switch (type) {
 	case TypeId::TINYINT:
 		initialize_max_min<int8_t>(minimum.get(), maximum.get());
 		break;

@@ -40,6 +40,7 @@ public:
 	index_t max_string_length;
 	//! Whether or not the segment contains any big strings in overflow blocks, only used for string columns
 	bool has_overflow_strings;
+
 public:
 	void Reset();
 };
@@ -58,6 +59,7 @@ public:
 	ColumnSegmentType segment_type;
 	//! The statistics for the segment
 	SegmentStatistics stats;
+
 public:
 	virtual void InitializeScan(ColumnScanState &state) = 0;
 	//! Scan one vector from this segment

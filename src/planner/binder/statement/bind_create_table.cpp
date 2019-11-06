@@ -129,13 +129,13 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CreateTableStatement &stmt) {
 	}
 
 	if (stmt.info->temporary) {
-		if(stmt.info->schema != TEMP_SCHEMA) {
+		if (stmt.info->schema != TEMP_SCHEMA) {
 			throw ParserException("TEMPORARY table names can *only* use the \"temp\" schema");
 		}
 		result->schema = context.temporary_objects.get();
 	} else {
 		assert(stmt.info->schema != INVALID_SCHEMA);
-		if(stmt.info->schema == TEMP_SCHEMA) {
+		if (stmt.info->schema == TEMP_SCHEMA) {
 			throw ParserException("Only TEMPORARY table names can use the \"temp\" schema");
 		}
 		result->schema = context.catalog.GetSchema(context.ActiveTransaction(), stmt.info->schema);

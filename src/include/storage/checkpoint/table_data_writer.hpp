@@ -22,6 +22,7 @@ public:
 	~TableDataWriter();
 
 	void WriteTableData(Transaction &transaction);
+
 private:
 	void AppendData(index_t col_idx, Vector &data);
 
@@ -29,6 +30,7 @@ private:
 	void FlushSegment(index_t col_idx);
 
 	void WriteDataPointers();
+
 private:
 	CheckpointManager &manager;
 	TableCatalogEntry &table;

@@ -39,12 +39,14 @@ struct UpdateInfo {
 	//! The next update info in the chain (or nullptr if it is the last)
 	UpdateInfo *next;
 
-	//! Loop over the update chain and execute the specified callback on all UpdateInfo's that are relevant for that transaction in-order of newest to oldest
-	template<class T>
-	static void UpdatesForTransaction(UpdateInfo *current, Transaction &transaction, T &&callback) {
-		while(current) {
-			if (current->version_number > transaction.start_time && current->version_number != transaction.transaction_id) {
-				// these tuples were either committed AFTER this transaction started or are not committed yet, use tuples stored in this version
+	//! Loop over the update chain and execute the specified callback on all UpdateInfo's that are relevant for that
+	//! transaction in-order of newest to oldest
+	template <class T> static void UpdatesForTransaction(UpdateInfo *current, Transaction &transaction, T &&callback) {
+		while (current) {
+			if (current->version_number > transaction.start_time &&
+			    current->version_number != transaction.transaction_id) {
+				// these tuples were either committed AFTER this transaction started or are not committed yet, use
+				// tuples stored in this version
 				callback(current);
 			}
 			current = current->next;
@@ -52,4 +54,4 @@ struct UpdateInfo {
 	}
 };
 
-}
+} // namespace duckdb

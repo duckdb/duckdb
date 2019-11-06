@@ -5,7 +5,6 @@
 using namespace duckdb;
 using namespace std;
 
-
 TEST_CASE("Update big table of even and odd values", "[update][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -17,12 +16,12 @@ TEST_CASE("Update big table of even and odd values", "[update][.]") {
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR);"));
-	for(index_t i = 0; i < count; i++) {
+	for (index_t i = 0; i < count; i++) {
 		sum += i;
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (?, 'hello')", (int) i));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (?, 'hello')", (int)i));
 	}
 	// insert a bunch more values
-	while(count < Storage::BLOCK_SIZE) {
+	while (count < Storage::BLOCK_SIZE) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM test"));
 		count *= 2;
 		sum *= 2;

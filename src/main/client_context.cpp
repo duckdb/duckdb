@@ -24,7 +24,8 @@ using namespace std;
 
 ClientContext::ClientContext(DuckDB &database)
     : db(database), transaction(*database.transaction_manager), interrupted(false), catalog(*database.catalog),
-	  temporary_objects(make_unique<SchemaCatalogEntry>(db.catalog.get(), TEMP_SCHEMA)), prepared_statements(make_unique<CatalogSet>(*db.catalog)),  open_result(nullptr) {
+      temporary_objects(make_unique<SchemaCatalogEntry>(db.catalog.get(), TEMP_SCHEMA)),
+      prepared_statements(make_unique<CatalogSet>(*db.catalog)), open_result(nullptr) {
 	random_device rd;
 	random_engine.seed(rd());
 }
@@ -348,13 +349,13 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementsInternal(string query,
 			current_result = ExecuteStatementInternal(query, move(statement), allow_stream_result && is_last_statement);
 			// only the last result can be STREAM_RESULT
 			assert(is_last_statement || current_result->type != QueryResultType::STREAM_RESULT);
-		} catch(ParserException &ex) {
+		} catch (ParserException &ex) {
 			// parser exceptions do not invalidate the current transaction
 			current_result = make_unique<MaterializedQueryResult>(ex.what());
-		} catch(BinderException &ex) {
+		} catch (BinderException &ex) {
 			// binder exceptions also do not invalidate the current transaction
 			current_result = make_unique<MaterializedQueryResult>(ex.what());
-		} catch(CatalogException &ex) {
+		} catch (CatalogException &ex) {
 			// catalog exceptions also do not invalidate the current transaction
 			current_result = make_unique<MaterializedQueryResult>(ex.what());
 		} catch (std::exception &ex) {

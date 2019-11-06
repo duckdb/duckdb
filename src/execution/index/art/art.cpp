@@ -160,7 +160,6 @@ bool ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifi
 	return Insert(lock, expression_result, row_identifiers);
 }
 
-
 void ART::VerifyAppend(DataChunk &chunk) {
 	if (!is_unique) {
 		return;
@@ -187,7 +186,6 @@ void ART::VerifyAppend(DataChunk &chunk) {
 		}
 	}
 }
-
 
 bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
 	if (is_unique && leaf.num_elements != 0) {

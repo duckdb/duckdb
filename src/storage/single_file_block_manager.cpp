@@ -8,7 +8,8 @@ using namespace std;
 
 SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool read_only, bool create_new,
                                                bool use_direct_io)
-    : path(path), header_buffer(FileBufferType::MANAGED_BUFFER, Storage::FILE_HEADER_SIZE), read_only(read_only), use_direct_io(use_direct_io) {
+    : path(path), header_buffer(FileBufferType::MANAGED_BUFFER, Storage::FILE_HEADER_SIZE), read_only(read_only),
+      use_direct_io(use_direct_io) {
 
 	uint8_t flags;
 	FileLockType lock;

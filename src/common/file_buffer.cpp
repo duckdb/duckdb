@@ -7,8 +7,7 @@
 using namespace duckdb;
 using namespace std;
 
-FileBuffer::FileBuffer(FileBufferType type, uint64_t bufsiz) :
-	type(type) {
+FileBuffer::FileBuffer(FileBufferType type, uint64_t bufsiz) : type(type) {
 	const int SECTOR_SIZE = Storage::SECTOR_SIZE;
 	// round up to the nearest SECTOR_SIZE, thi sis only really necessary if the file buffer will be used for Direct IO
 	if (bufsiz % SECTOR_SIZE != 0) {

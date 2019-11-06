@@ -25,7 +25,8 @@ struct blob_t {
 
 struct string_t {
 	string_t() = default;
-	string_t(char *data, uint32_t length) : data(data), length(length) {}
+	string_t(char *data, uint32_t length) : data(data), length(length) {
+	}
 
 	char *data;
 	uint32_t length;

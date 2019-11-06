@@ -26,7 +26,8 @@ void SetControlString(postgres::DefElem *def_elem, string option, string option_
 
 void SubstringDetection(string &str_1, string &str_2, string name_str_1, string name_str_2) {
 	if (str_1.find(str_2) != string::npos || str_2.find(str_1) != std::string::npos) {
-		throw Exception("COPY " + name_str_1 + " must not appear in the " + name_str_2 + " specification and vice versa");
+		throw Exception("COPY " + name_str_1 + " must not appear in the " + name_str_2 +
+		                " specification and vice versa");
 	}
 }
 
@@ -104,12 +105,13 @@ void HandleOptions(postgres::CopyStmt *stmt, CopyInfo &info) {
 		} else if (def_elem->defname == kForceQuoteTok) {
 			// force quote
 			// only for COPY ... TO ...
-			if(info.is_from) {
+			if (info.is_from) {
 				throw Exception("The FORCE_QUOTE option is only for COPY ... TO ...");
 			}
 
 			auto *force_quote_val = def_elem->arg;
-			if (!force_quote_val || (force_quote_val->type != postgres::T_A_Star && force_quote_val->type != postgres::T_List)) {
+			if (!force_quote_val ||
+			    (force_quote_val->type != postgres::T_A_Star && force_quote_val->type != postgres::T_List)) {
 				throw ParserException("Unsupported parameter type for FORCE_QUOTE: expected e.g. FORCE_QUOTE *");
 			}
 
@@ -120,7 +122,7 @@ void HandleOptions(postgres::CopyStmt *stmt, CopyInfo &info) {
 
 			// list of columns
 			if (force_quote_val->type == postgres::T_List) {
-				auto column_list = (postgres::List*)(force_quote_val);
+				auto column_list = (postgres::List *)(force_quote_val);
 				for (auto c = column_list->head; c != NULL; c = lnext(c)) {
 					auto target = (postgres::ResTarget *)(c->data.ptr_value);
 					info.force_quote_list.push_back(string(target->name));
@@ -139,7 +141,7 @@ void HandleOptions(postgres::CopyStmt *stmt, CopyInfo &info) {
 				throw ParserException("Unsupported parameter type for FORCE_NOT_NULL: expected e.g. FORCE_NOT_NULL *");
 			}
 
-			auto column_list = (postgres::List*)(force_not_null_val);
+			auto column_list = (postgres::List *)(force_not_null_val);
 			for (auto c = column_list->head; c != NULL; c = lnext(c)) {
 				auto target = (postgres::ResTarget *)(c->data.ptr_value);
 				info.force_not_null_list.push_back(string(target->name));
@@ -151,7 +153,8 @@ void HandleOptions(postgres::CopyStmt *stmt, CopyInfo &info) {
 			if (!encoding_val || encoding_val->type != postgres::T_String) {
 				throw ParserException("Unsupported parameter type for ENCODING: expected e.g. ENCODING 'UTF-8'");
 			}
-			if (StringUtil::Upper(encoding_val->val.str) != "UTF8" && StringUtil::Upper(encoding_val->val.str) != "UTF-8") {
+			if (StringUtil::Upper(encoding_val->val.str) != "UTF8" &&
+			    StringUtil::Upper(encoding_val->val.str) != "UTF-8") {
 				throw Exception("Copy is only supported for UTF-8 encoded files, ENCODING 'UTF-8'");
 			}
 

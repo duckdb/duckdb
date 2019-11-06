@@ -6,15 +6,14 @@
 using namespace duckdb;
 using namespace std;
 
-LocalTableStorage::LocalTableStorage(DataTable &table) :
-	max_row(0) {
-	for(auto &index : table.indexes) {
+LocalTableStorage::LocalTableStorage(DataTable &table) : max_row(0) {
+	for (auto &index : table.indexes) {
 		assert(index->type == IndexType::ART);
-		auto &art = (ART &) *index;
+		auto &art = (ART &)*index;
 		if (art.is_unique) {
 			// unique index: create a local ART index that maintains the same unique constraint
 			vector<unique_ptr<Expression>> unbound_expressions;
-			for(auto &expr : art.unbound_expressions) {
+			for (auto &expr : art.unbound_expressions) {
 				unbound_expressions.push_back(expr->Copy());
 			}
 			indexes.push_back(make_unique<ART>(table, art.column_ids, move(unbound_expressions), true));
@@ -23,7 +22,6 @@ LocalTableStorage::LocalTableStorage(DataTable &table) :
 }
 
 LocalTableStorage::~LocalTableStorage() {
-
 }
 
 void LocalTableStorage::InitializeScan(LocalScanState &state) {
@@ -40,7 +38,6 @@ void LocalTableStorage::Clear() {
 	deleted_entries.clear();
 	state = nullptr;
 }
-
 
 void LocalStorage::InitializeScan(DataTable *table, LocalScanState &state) {
 	auto entry = table_storage.find(table);
@@ -71,7 +68,7 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 		auto deleted = entry->second.get();
 		sel_vector = state.sel_vector_data;
 		index_t new_count = 0;
-		for(index_t i = 0; i < count; i++) {
+		for (index_t i = 0; i < count; i++) {
 			if (!deleted[i]) {
 				sel_vector[new_count++] = i;
 			}
@@ -80,7 +77,7 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 	}
 
 	// now scan the vectors of the chunk
-	for(index_t i = 0; i < column_ids.size(); i++) {
+	for (index_t i = 0; i < column_ids.size(); i++) {
 		auto id = column_ids[i];
 		if (id == COLUMN_IDENTIFIER_ROW_ID) {
 			// row identifier: return MAX_ROW_ID plus the row offset in the chunk
@@ -117,7 +114,7 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 		VectorOperations::GenerateSequence(row_identifiers, base_id);
 
 		// now append the entries to the indices
-		for(auto &index : storage->indexes) {
+		for (auto &index : storage->indexes) {
 			if (!index->Append(chunk, row_identifiers)) {
 				throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
 			}
@@ -128,14 +125,14 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 	storage->collection.Append(chunk);
 }
 
-LocalTableStorage* LocalStorage::GetStorage(DataTable *table) {
+LocalTableStorage *LocalStorage::GetStorage(DataTable *table) {
 	auto entry = table_storage.find(table);
 	assert(entry != table_storage.end());
 	return entry->second.get();
 }
 
 static index_t GetChunk(Vector &row_identifiers) {
-	auto ids = (row_t*) row_identifiers.data;
+	auto ids = (row_t *)row_identifiers.data;
 	auto first_id = ids[0] - MAX_ROW_ID;
 
 	index_t chunk_idx = first_id / STANDARD_VECTOR_SIZE;
@@ -171,18 +168,18 @@ void LocalStorage::Delete(DataTable *table, Vector &row_identifiers) {
 	// now actually mark the entries as deleted in the deleted vector
 	index_t base_index = MAX_ROW_ID + chunk_idx * STANDARD_VECTOR_SIZE;
 
-	auto ids = (row_t*) row_identifiers.data;
+	auto ids = (row_t *)row_identifiers.data;
 	VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
 		auto id = ids[i] - base_index;
 		deleted[id] = true;
 	});
 }
 
-template<class T>
+template <class T>
 static void update_data(Vector &data_vector, Vector &update_vector, Vector &row_identifiers, index_t base_index) {
-	auto target = (T*) data_vector.data;
-	auto updates = (T*) update_vector.data;
-	auto ids = (row_t*) row_identifiers.data;
+	auto target = (T *)data_vector.data;
+	auto updates = (T *)update_vector.data;
+	auto ids = (row_t *)row_identifiers.data;
 	VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
 		auto id = ids[i] - base_index;
 		target[id] = updates[i];
@@ -194,7 +191,7 @@ static void update_chunk(Vector &data, Vector &updates, Vector &row_identifiers,
 	assert(row_identifiers.type == ROW_TYPE);
 	assert(updates.sel_vector == row_identifiers.sel_vector);
 
-	switch(data.type) {
+	switch (data.type) {
 	case TypeId::TINYINT:
 		update_data<int8_t>(data, updates, row_identifiers, base_index);
 		break;
@@ -228,16 +225,15 @@ void LocalStorage::Update(DataTable *table, Vector &row_identifiers, vector<colu
 
 	// now perform the actual update
 	auto &chunk = *storage->collection.chunks[chunk_idx];
-	for(index_t i = 0; i < column_ids.size(); i++) {
+	for (index_t i = 0; i < column_ids.size(); i++) {
 		auto col_idx = column_ids[i];
 		update_chunk(chunk.data[col_idx], data.data[i], row_identifiers, base_index);
 	}
 }
 
-template<class T>
-bool LocalStorage::ScanTableStorage(DataTable *table, LocalTableStorage *storage, T &&fun) {
+template <class T> bool LocalStorage::ScanTableStorage(DataTable *table, LocalTableStorage *storage, T &&fun) {
 	vector<column_t> column_ids;
-	for(index_t i = 0; i < table->types.size(); i++) {
+	for (index_t i = 0; i < table->types.size(); i++) {
 		column_ids.push_back(i);
 	}
 
@@ -248,7 +244,7 @@ bool LocalStorage::ScanTableStorage(DataTable *table, LocalTableStorage *storage
 	LocalScanState state;
 	storage->InitializeScan(state);
 
-	while(true) {
+	while (true) {
 		Scan(state, column_ids, chunk);
 		if (chunk.size() == 0) {
 			return true;
@@ -262,7 +258,7 @@ bool LocalStorage::ScanTableStorage(DataTable *table, LocalTableStorage *storage
 void LocalStorage::CheckCommit() {
 	// check whether a commit can be made, we do this check by appending to all indices
 	bool success = true;
-	for(auto &entry : table_storage) {
+	for (auto &entry : table_storage) {
 		auto table = entry.first;
 		auto storage = entry.second.get();
 
@@ -291,10 +287,9 @@ void LocalStorage::CheckCommit() {
 	}
 	if (!success) {
 		// failed to insert in one of the tables: delete already inserted entries
-		for(auto &entry : table_storage) {
+		for (auto &entry : table_storage) {
 			auto table = entry.first;
 			auto storage = entry.second.get();
-
 
 			if (table->indexes.size() == 0 || storage->max_row == 0) {
 				continue;
@@ -312,7 +307,7 @@ void LocalStorage::CheckCommit() {
 			});
 		}
 		// reset the storage state for each of the entries
-		for(auto &entry : table_storage) {
+		for (auto &entry : table_storage) {
 			auto storage = entry.second.get();
 			storage->state = nullptr;
 		}
@@ -323,7 +318,7 @@ void LocalStorage::CheckCommit() {
 
 void LocalStorage::Commit(Transaction &transaction, WriteAheadLog *log, transaction_t commit_id) noexcept {
 	// commit local storage, iterate over all entries in the table storage map
-	for(auto &entry : table_storage) {
+	for (auto &entry : table_storage) {
 		auto table = entry.first;
 		auto storage = entry.second.get();
 

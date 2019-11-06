@@ -17,7 +17,7 @@ TEST_CASE("Test big append", "[append][.]") {
 
 	index_t desired_count = (Storage::BLOCK_SIZE * 2) / sizeof(int);
 	index_t current_count = 4;
-	while(current_count < desired_count) {
+	while (current_count < desired_count) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers SELECT * FROM integers"));
 		current_count *= 2;
 	}

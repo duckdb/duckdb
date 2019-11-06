@@ -7,8 +7,8 @@ using namespace std;
 
 namespace duckdb {
 
-static void length_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                     Vector &result) {
+static void length_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
+                            BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 1);
 	auto &input = inputs[0];
 	assert(input.type == TypeId::VARCHAR);
@@ -34,7 +34,7 @@ static void length_function(ExpressionExecutor &exec, Vector inputs[], index_t i
 
 void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 	// TODO: extend to support arbitrary number of arguments, not only two
-	set.AddFunction(ScalarFunction("length", { SQLType::VARCHAR }, SQLType::BIGINT, length_function));
+	set.AddFunction(ScalarFunction("length", {SQLType::VARCHAR}, SQLType::BIGINT, length_function));
 }
 
 } // namespace duckdb

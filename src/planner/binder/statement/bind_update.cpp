@@ -60,8 +60,9 @@ static void BindUpdateConstraints(TableCatalogEntry &table, Binder &binder, Clie
 			BindExtraColumns(table, binder, context, result, check.bound_columns);
 		}
 	}
-	// for index updates, we do the same, however, for index updates we always turn any update into an insert and a delete
-	// for the insert, we thus need all the columns to be available, hence we check if the update touches any index columns
+	// for index updates, we do the same, however, for index updates we always turn any update into an insert and a
+	// delete for the insert, we thus need all the columns to be available, hence we check if the update touches any
+	// index columns
 	result.is_index_update = false;
 	for (auto &index : table.storage->indexes) {
 		if (index->IndexIsUpdated(result.column_ids)) {
@@ -71,7 +72,7 @@ static void BindUpdateConstraints(TableCatalogEntry &table, Binder &binder, Clie
 	if (result.is_index_update) {
 		// the update updates a column required by an index, push projections for all columns
 		unordered_set<column_t> all_columns;
-		for(index_t i = 0; i < table.storage->types.size(); i++) {
+		for (index_t i = 0; i < table.storage->types.size(); i++) {
 			all_columns.insert(i);
 		}
 		BindExtraColumns(table, binder, context, result, all_columns);

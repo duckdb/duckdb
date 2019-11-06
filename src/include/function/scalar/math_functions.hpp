@@ -82,4 +82,3 @@ struct PiFun {
 };
 
 } // namespace duckdb
-

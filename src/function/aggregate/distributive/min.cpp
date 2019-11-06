@@ -30,8 +30,9 @@ namespace duckdb {
 
 void MinFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet min("min");
-	for(auto type : SQLType::ALL_TYPES) {
-		min.AddFunction(AggregateFunction({type}, type, get_return_type_size, null_state_initialize, min_update, min_combine, gather_finalize, null_simple_initialize, min_simple_update));
+	for (auto type : SQLType::ALL_TYPES) {
+		min.AddFunction(AggregateFunction({type}, type, get_return_type_size, null_state_initialize, min_update,
+		                                  min_combine, gather_finalize, null_simple_initialize, min_simple_update));
 	}
 	set.AddFunction(min);
 }

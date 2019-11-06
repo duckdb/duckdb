@@ -13,8 +13,9 @@ TEST_CASE("Insert big varchar strings", "[varchar]") {
 	// insert a big varchar
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('aaaaaaaaaa')"));
 	// sizes: 10, 100, 1000, 10000
-	for(index_t i = 0; i < 3; i++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test WHERE LENGTH(a)=(SELECT MAX(LENGTH(a)) FROM test)"));
+	for (index_t i = 0; i < 3; i++) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test WHERE "
+		                          "LENGTH(a)=(SELECT MAX(LENGTH(a)) FROM test)"));
 	}
 
 	result = con.Query("SELECT LENGTH(a) FROM test ORDER BY 1");
@@ -36,12 +37,14 @@ TEST_CASE("Test scanning many big varchar strings with limited memory", "[varcha
 	// create a big varchar (10K characters)
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('aaaaaaaaaa')"));
 	// sizes: 10, 100, 1000, 10000
-	for(index_t i = 0; i < 3; i++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test WHERE LENGTH(a)=(SELECT MAX(LENGTH(a)) FROM test)"));
+	for (index_t i = 0; i < 3; i++) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test WHERE "
+		                          "LENGTH(a)=(SELECT MAX(LENGTH(a)) FROM test)"));
 	}
 	// now create a second table, we only insert the big varchar string in there
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE bigtable (a VARCHAR);"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO bigtable SELECT a FROM test WHERE LENGTH(a)=(SELECT MAX(LENGTH(a)) FROM test)"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO bigtable SELECT a FROM test WHERE LENGTH(a)=(SELECT MAX(LENGTH(a)) FROM test)"));
 
 	index_t entries = 1;
 
@@ -54,7 +57,7 @@ TEST_CASE("Test scanning many big varchar strings with limited memory", "[varcha
 	// we create a total of 16K entries in the big table
 	// the total size of this table is 16K*10K = 160MB
 	// we then scan the table at every step, as our buffer pool is limited to 100MB not all strings fit in memory
-	while(entries < 10000) {
+	while (entries < 10000) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO bigtable SELECT * FROM bigtable"));
 		entries *= 2;
 

@@ -22,7 +22,7 @@ class ColumnData {
 public:
 	ColumnData();
 	//! Set up the column data with the set of persistent segments, returns the amount of rows
-	void Initialize(vector<unique_ptr<PersistentSegment>>& segments);
+	void Initialize(vector<unique_ptr<PersistentSegment>> &segments);
 
 	//! The type of the column
 	TypeId type;
@@ -34,6 +34,7 @@ public:
 	SegmentTree data;
 	//! The amount of persistent rows
 	index_t persistent_rows;
+
 public:
 	//! Initialize a scan of the column
 	void InitializeScan(ColumnScanState &state);
@@ -54,9 +55,10 @@ public:
 	void Fetch(ColumnScanState &state, row_t row_id, Vector &result);
 	//! Fetch a specific row id and append it to the vector
 	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result);
+
 private:
 	//! Append a transient segment
 	void AppendTransientSegment(index_t start_row);
 };
 
-}
+} // namespace duckdb

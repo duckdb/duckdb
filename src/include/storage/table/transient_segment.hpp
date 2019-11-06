@@ -24,6 +24,7 @@ public:
 	BufferManager &manager;
 	//! The uncompressed segment holding the data
 	unique_ptr<UncompressedSegment> data;
+
 public:
 	void InitializeScan(ColumnScanState &state) override;
 	//! Scan one vector from this transient segment

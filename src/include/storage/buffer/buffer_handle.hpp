@@ -26,4 +26,4 @@ public:
 	FileBuffer *node;
 };
 
-}
+} // namespace duckdb

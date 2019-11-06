@@ -22,7 +22,6 @@ TEST_CASE("Test temporary table creation", "[catalog]") {
 
 	unique_ptr<QueryResult> result;
 
-
 	// see if temp tables survive restart
 	FileSystem fs;
 	string db_folder = TestCreatePath("temptbls");
@@ -57,11 +56,8 @@ TEST_CASE("Test temporary table creation", "[catalog]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	}
 
-
 	DuckDB db(nullptr);
 	Connection con(db);
-
-
 
 	// basic temp table creation works
 	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY TABLE integers(i INTEGER) ON COMMIT PRESERVE ROWS"));
@@ -76,7 +72,6 @@ TEST_CASE("Test temporary table creation", "[catalog]") {
 	// no indexes on temp tables
 	REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 
-
 	REQUIRE_FAIL(con.Query("CREATE SCHEMA temp"));
 
 	REQUIRE_FAIL(con.Query("DROP TABLE main.integersx"));
@@ -85,13 +80,11 @@ TEST_CASE("Test temporary table creation", "[catalog]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY TABLE temp.integersx(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE temp.integersx"));
 
-
 	// unsupported because stupid
 	REQUIRE_FAIL(con.Query("CREATE TEMPORARY TABLE integers2(i INTEGER) ON COMMIT DELETE ROWS"));
 
 	// temp table already exists
 	REQUIRE_FAIL(con.Query("CREATE TEMPORARY TABLE integers(i INTEGER)"));
-
 
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (42)"));
 	result = con.Query("SELECT i from integers");
@@ -121,7 +114,6 @@ TEST_CASE("Test temporary table creation", "[catalog]") {
 	Connection con2(db);
 	// table is not visible to other cons
 	REQUIRE_FAIL(con2.Query("INSERT INTO integers VALUES (42)"));
-
 }
 
 // TODO sequences?
