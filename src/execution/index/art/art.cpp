@@ -10,9 +10,9 @@ using namespace std;
 ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions,
          bool is_unique)
     : Index(IndexType::ART, table, column_ids, move(unbound_expressions)), is_unique(is_unique) {
-	if (this->unbound_expressions.size() > 1) {
-		throw NotImplementedException("Multiple columns in ART index not supported");
-	}
+//	if (this->unbound_expressions.size() > 1) {
+//		throw NotImplementedException("Multiple columns in ART index not supported");
+//	}
 	tree = nullptr;
 	expression_result.Initialize(types);
 	int n = 1;
