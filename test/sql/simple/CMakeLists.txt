@@ -1,6 +1,7 @@
 add_library_unity(test_sql_simple
                   OBJECT
                   test_arithmetic.cpp
+                  test_alias.cpp
                   test_bitwise_ops.cpp
                   test_case.cpp
                   test_in.cpp
