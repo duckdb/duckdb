@@ -1,4 +1,4 @@
-#include "storage/table/column_segment.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 #include <cstring>
 
 using namespace duckdb;

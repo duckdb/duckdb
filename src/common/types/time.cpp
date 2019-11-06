@@ -1,8 +1,8 @@
-#include "common/types/time.hpp"
-#include "common/types/timestamp.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
-#include "common/string_util.hpp"
-#include "common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/exception.hpp"
 
 #include <iomanip>
 #include <cstring>

@@ -1,10 +1,10 @@
 #include "catch.hpp"
-#include "common/helper.hpp"
+#include "duckdb/common/helper.hpp"
 #include "expression_helper.hpp"
-#include "optimizer/index_scan.hpp"
-#include "planner/expression/bound_comparison_expression.hpp"
-#include "planner/expression/bound_operator_expression.hpp"
-#include "planner/expression/common_subexpression.hpp"
+#include "duckdb/optimizer/index_scan.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/common_subexpression.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;

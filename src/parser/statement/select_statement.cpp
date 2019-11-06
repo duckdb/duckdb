@@ -1,7 +1,7 @@
-#include "parser/statement/select_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 
-#include "common/assert.hpp"
-#include "common/serializer.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/serializer.hpp"
 
 using namespace duckdb;
 using namespace std;

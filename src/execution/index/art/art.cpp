@@ -1,7 +1,7 @@
-#include "execution/index/art/art.hpp"
-#include "execution/expression_executor.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "main/client_context.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/main/client_context.hpp"
 #include <algorithm>
 
 using namespace duckdb;

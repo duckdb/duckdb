@@ -1,6 +1,6 @@
-#include "execution/operator/projection/physical_projection.hpp"
+#include "duckdb/execution/operator/projection/physical_projection.hpp"
 
-#include "execution/expression_executor.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,7 +1,7 @@
-#include "parser/transformer.hpp"
+#include "duckdb/parser/transformer.hpp"
 
-#include "parser/expression/list.hpp"
-#include "parser/statement/list.hpp"
+#include "duckdb/parser/expression/list.hpp"
+#include "duckdb/parser/statement/list.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,10 +1,10 @@
-#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "main/client_context.hpp"
-#include "main/database.hpp"
-#include "parser/expression/function_expression.hpp"
-#include "planner/expression/bound_cast_expression.hpp"
-#include "planner/expression/bound_function_expression.hpp"
-#include "planner/expression_binder.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,12 +1,12 @@
 #include "dbgen.hpp"
 
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "common/exception.hpp"
-#include "common/types/date.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/date.hpp"
 #include "dbgen_gunk.hpp"
-#include "main/client_context.hpp"
-#include "parser/column_definition.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include "tpch_constants.hpp"
 
 #define DECLARER /* EXTERN references get defined here */

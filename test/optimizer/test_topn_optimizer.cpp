@@ -1,7 +1,7 @@
 #include "catch.hpp"
 #include "expression_helper.hpp"
-#include "planner/operator/logical_top_n.hpp"
-#include "optimizer/topn_optimizer.hpp"
+#include "duckdb/planner/operator/logical_top_n.hpp"
+#include "duckdb/optimizer/topn_optimizer.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;

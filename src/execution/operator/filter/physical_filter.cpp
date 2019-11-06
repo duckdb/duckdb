@@ -1,6 +1,6 @@
-#include "execution/operator/filter/physical_filter.hpp"
+#include "duckdb/execution/operator/filter/physical_filter.hpp"
 
-#include "execution/expression_executor.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 using namespace duckdb;
 using namespace std;

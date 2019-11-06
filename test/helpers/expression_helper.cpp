@@ -1,15 +1,15 @@
 #include "expression_helper.hpp"
 
 #include "duckdb.hpp"
-#include "optimizer/rule/constant_folding.hpp"
-#include "parser/parser.hpp"
-#include "planner/binder.hpp"
-#include "planner/bound_query_node.hpp"
-#include "planner/expression_iterator.hpp"
-#include "planner/operator/logical_projection.hpp"
-#include "planner/planner.hpp"
-#include "planner/statement/bound_select_statement.hpp"
-#include "planner/query_node/bound_select_node.hpp"
+#include "duckdb/optimizer/rule/constant_folding.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/planner.hpp"
+#include "duckdb/planner/statement/bound_select_statement.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 
 using namespace duckdb;
 using namespace std;

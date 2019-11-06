@@ -1,13 +1,13 @@
 // #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
 
-#include "execution/operator/persistent/buffered_csv_reader.hpp"
-#include "common/file_system.hpp"
-#include "common/value_operations/value_operations.hpp"
+#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include "compare_result.hpp"
-#include "main/query_result.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "test_helpers.hpp"
-#include "parser/parsed_data/copy_info.hpp"
+#include "duckdb/parser/parsed_data/copy_info.hpp"
 
 #include <cmath>
 

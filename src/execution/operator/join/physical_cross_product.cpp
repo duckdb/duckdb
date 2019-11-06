@@ -1,6 +1,6 @@
-#include "execution/operator/join/physical_cross_product.hpp"
+#include "duckdb/execution/operator/join/physical_cross_product.hpp"
 
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,9 +1,9 @@
-#include "storage/string_segment.hpp"
-#include "storage/buffer_manager.hpp"
-// #include "common/types/vector.hpp"
-// #include "storage/table/append_state.hpp"
-#include "transaction/update_info.hpp"
-// #include "transaction/transaction.hpp"
+#include "duckdb/storage/string_segment.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+// #include "duckdb/common/types/vector.hpp"
+// #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/transaction/update_info.hpp"
+// #include "duckdb/transaction/transaction.hpp"
 
 using namespace duckdb;
 using namespace std;

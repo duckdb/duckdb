@@ -1,13 +1,13 @@
-#include "transaction/transaction.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "common/exception.hpp"
-#include "parser/column_definition.hpp"
-#include "storage/data_table.hpp"
-#include "storage/write_ahead_log.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/write_ahead_log.hpp"
 
-#include "transaction/delete_info.hpp"
-#include "transaction/update_info.hpp"
+#include "duckdb/transaction/delete_info.hpp"
+#include "duckdb/transaction/update_info.hpp"
 
 #include <cstring>
 

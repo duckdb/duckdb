@@ -1,5 +1,5 @@
-#include "function/scalar/operators.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/scalar/operators.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;

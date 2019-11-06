@@ -1,7 +1,7 @@
 #include "catch.hpp"
-#include "common/file_system.hpp"
-#include "common/fstream_util.hpp"
-#include "common/gzip_stream.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/fstream_util.hpp"
+#include "duckdb/common/gzip_stream.hpp"
 #include "test_gzip_stream_header.hpp"
 #include "test_helpers.hpp"
 

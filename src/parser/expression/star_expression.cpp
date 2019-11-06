@@ -1,4 +1,4 @@
-#include "parser/expression/star_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

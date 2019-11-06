@@ -1,7 +1,7 @@
-#include "transaction/cleanup_state.hpp"
-#include "transaction/delete_info.hpp"
-#include "transaction/update_info.hpp"
-#include "storage/uncompressed_segment.hpp"
+#include "duckdb/transaction/cleanup_state.hpp"
+#include "duckdb/transaction/delete_info.hpp"
+#include "duckdb/transaction/update_info.hpp"
+#include "duckdb/storage/uncompressed_segment.hpp"
 
 using namespace duckdb;
 using namespace std;

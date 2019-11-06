@@ -1,6 +1,6 @@
-#include "catalog/dependency_manager.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 
-#include "catalog/catalog.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 using namespace duckdb;
 using namespace std;

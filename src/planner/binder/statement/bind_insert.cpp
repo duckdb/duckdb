@@ -1,9 +1,9 @@
-#include "main/client_context.hpp"
-#include "main/database.hpp"
-#include "parser/statement/insert_statement.hpp"
-#include "planner/binder.hpp"
-#include "planner/expression_binder/insert_binder.hpp"
-#include "planner/statement/bound_insert_statement.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/insert_binder.hpp"
+#include "duckdb/planner/statement/bound_insert_statement.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,9 +1,9 @@
-#include "optimizer/filter_pushdown.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression_iterator.hpp"
-#include "planner/operator/logical_aggregate.hpp"
-#include "planner/operator/logical_empty_result.hpp"
-#include "planner/operator/logical_join.hpp"
+#include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_empty_result.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
 
 using namespace duckdb;
 using namespace std;

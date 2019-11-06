@@ -1,9 +1,9 @@
-#include "execution/operator/aggregate/physical_hash_aggregate.hpp"
-#include "execution/operator/aggregate/physical_simple_aggregate.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "planner/expression/bound_aggregate_expression.hpp"
-#include "planner/operator/logical_aggregate.hpp"
+#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
 
 using namespace duckdb;
 using namespace std;

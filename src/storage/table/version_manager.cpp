@@ -1,6 +1,6 @@
-#include "storage/table/version_manager.hpp"
-#include "transaction/transaction.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/storage/table/version_manager.hpp"
+#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;

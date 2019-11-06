@@ -1,11 +1,11 @@
-#include "common/exception.hpp"
-#include "parser/expression/columnref_expression.hpp"
-#include "parser/expression/comparison_expression.hpp"
-#include "parser/expression/conjunction_expression.hpp"
-#include "parser/tableref/basetableref.hpp"
-#include "parser/tableref/crossproductref.hpp"
-#include "parser/tableref/joinref.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/crossproductref.hpp"
+#include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,15 +1,7 @@
-#include "execution/operator/filter/physical_filter.hpp"
-#include "execution/operator/scan/physical_index_scan.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "optimizer/matcher/expression_matcher.hpp"
-#include "parser/expression/comparison_expression.hpp"
-#include "planner/expression/bound_comparison_expression.hpp"
-#include "planner/expression/bound_constant_expression.hpp"
-#include "planner/operator/logical_filter.hpp"
-#include "planner/operator/logical_get.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/execution/operator/scan/physical_index_scan.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 
-#include <planner/operator/list.hpp>
+#include "duckdb/planner/operator/logical_index_scan.hpp"
 
 using namespace duckdb;
 using namespace std;

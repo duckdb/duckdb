@@ -1,8 +1,8 @@
-#include "transaction/commit_state.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 
-#include "storage/data_table.hpp"
-#include "storage/write_ahead_log.hpp"
-#include "storage/uncompressed_segment.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/write_ahead_log.hpp"
+#include "duckdb/storage/uncompressed_segment.hpp"
 
 using namespace duckdb;
 using namespace std;

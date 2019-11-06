@@ -1,7 +1,7 @@
 #pragma once
 
-#include "main/appender.hpp"
-#include "main/connection.hpp"
+#include "duckdb/main/appender.hpp"
+#include "duckdb/main/connection.hpp"
 
 #include <memory>
 

@@ -1,6 +1,6 @@
-#include "parser/base_expression.hpp"
+#include "duckdb/parser/base_expression.hpp"
 
-#include "common/printer.hpp"
+#include "duckdb/common/printer.hpp"
 
 using namespace duckdb;
 using namespace std;

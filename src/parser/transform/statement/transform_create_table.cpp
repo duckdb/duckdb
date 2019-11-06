@@ -1,6 +1,6 @@
-#include "parser/statement/create_table_statement.hpp"
-#include "parser/transformer.hpp"
-#include "parser/constraint.hpp"
+#include "duckdb/parser/statement/create_table_statement.hpp"
+#include "duckdb/parser/transformer.hpp"
+#include "duckdb/parser/constraint.hpp"
 
 using namespace duckdb;
 using namespace std;

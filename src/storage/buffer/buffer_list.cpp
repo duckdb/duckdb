@@ -1,6 +1,6 @@
-#include "storage/buffer/buffer_list.hpp"
+#include "duckdb/storage/buffer/buffer_list.hpp"
 
-#include "common/exception.hpp"
+#include "duckdb/common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;

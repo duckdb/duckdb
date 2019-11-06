@@ -1,7 +1,7 @@
-#include "storage/column_data.hpp"
-#include "storage/table/persistent_segment.hpp"
-#include "storage/table/transient_segment.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/storage/column_data.hpp"
+#include "duckdb/storage/table/persistent_segment.hpp"
+#include "duckdb/storage/table/transient_segment.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;

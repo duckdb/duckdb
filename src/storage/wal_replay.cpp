@@ -1,7 +1,7 @@
-#include "storage/write_ahead_log.hpp"
-#include "common/serializer/buffered_file_reader.hpp"
+#include "duckdb/storage/write_ahead_log.hpp"
+#include "duckdb/common/serializer/buffered_file_reader.hpp"
 
-#include "parser/parsed_data/drop_info.hpp"
+#include "duckdb/parser/parsed_data/drop_info.hpp"
 
 using namespace duckdb;
 using namespace std;

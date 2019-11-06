@@ -1,7 +1,7 @@
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "execution/operator/persistent/physical_update.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "planner/operator/logical_update.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/execution/operator/persistent/physical_update.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_update.hpp"
 
 using namespace duckdb;
 using namespace std;

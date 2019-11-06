@@ -1,8 +1,8 @@
-#include "common/file_buffer.hpp"
-#include "common/file_system.hpp"
-#include "common/helper.hpp"
-#include "common/checksum.hpp"
-#include "common/exception.hpp"
+#include "duckdb/common/file_buffer.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/checksum.hpp"
+#include "duckdb/common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;

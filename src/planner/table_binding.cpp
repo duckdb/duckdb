@@ -1,14 +1,14 @@
-#include "planner/table_binding.hpp"
+#include "duckdb/planner/table_binding.hpp"
 
-#include "common/string_util.hpp"
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "parser/expression/columnref_expression.hpp"
-#include "parser/tableref/subqueryref.hpp"
-#include "planner/bind_context.hpp"
-#include "planner/bound_query_node.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/tableref/bound_basetableref.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/planner/bind_context.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/tableref/bound_basetableref.hpp"
 
 using namespace duckdb;
 using namespace std;

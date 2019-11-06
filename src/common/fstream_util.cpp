@@ -1,4 +1,4 @@
-#include "common/fstream_util.hpp"
+#include "duckdb/common/fstream_util.hpp"
 
 using namespace std;
 using namespace duckdb;

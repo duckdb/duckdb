@@ -1,7 +1,7 @@
-#include "parser/expression/conjunction_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
 
-#include "common/exception.hpp"
-#include "parser/expression/cast_expression.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

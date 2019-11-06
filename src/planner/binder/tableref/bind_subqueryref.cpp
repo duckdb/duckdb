@@ -1,6 +1,6 @@
-#include "parser/tableref/subqueryref.hpp"
-#include "planner/binder.hpp"
-#include "planner/tableref/bound_subqueryref.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/tableref/bound_subqueryref.hpp"
 
 using namespace duckdb;
 using namespace std;

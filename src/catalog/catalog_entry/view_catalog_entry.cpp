@@ -1,9 +1,9 @@
-#include "catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 
-#include "catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "common/exception.hpp"
-#include "common/serializer.hpp"
-#include "parser/parsed_data/create_view_info.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
 
 #include <algorithm>
 

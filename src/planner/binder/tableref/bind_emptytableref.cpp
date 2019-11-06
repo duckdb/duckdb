@@ -1,6 +1,6 @@
-#include "parser/tableref/emptytableref.hpp"
-#include "planner/binder.hpp"
-#include "planner/tableref/bound_dummytableref.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/tableref/bound_dummytableref.hpp"
 
 using namespace duckdb;
 using namespace std;

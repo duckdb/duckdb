@@ -1,8 +1,8 @@
-#include "common/gzip_stream.hpp"
+#include "duckdb/common/gzip_stream.hpp"
 
-#include "common/exception.hpp"
-#include "common/file_system.hpp"
-#include "common/fstream_util.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/fstream_util.hpp"
 
 #define MINIZ_NO_ARCHIVE_APIS
 #define MINIZ_NO_STDIO

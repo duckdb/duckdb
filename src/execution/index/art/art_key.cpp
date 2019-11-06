@@ -1,5 +1,5 @@
-#include "execution/index/art/art_key.hpp"
-#include "execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 
 using namespace duckdb;
 

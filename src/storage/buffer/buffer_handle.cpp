@@ -1,5 +1,5 @@
-#include "storage/buffer/buffer_handle.hpp"
-#include "storage/buffer_manager.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 using namespace duckdb;
 using namespace std;

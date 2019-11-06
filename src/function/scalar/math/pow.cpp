@@ -1,6 +1,6 @@
-#include "function/scalar/math_functions.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "planner/expression/bound_function_expression.hpp"
+#include "duckdb/function/scalar/math_functions.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 using namespace std;
 

@@ -1,4 +1,4 @@
-#include "planner/operator/logical_distinct.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
 
 using namespace duckdb;
 using namespace std;

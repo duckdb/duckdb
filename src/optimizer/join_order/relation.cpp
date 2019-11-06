@@ -1,4 +1,4 @@
-#include "optimizer/join_order/relation.hpp"
+#include "duckdb/optimizer/join_order/relation.hpp"
 
 #include <algorithm>
 

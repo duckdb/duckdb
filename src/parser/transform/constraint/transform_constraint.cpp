@@ -1,7 +1,7 @@
-#include "parser/column_definition.hpp"
-#include "parser/constraint.hpp"
-#include "parser/constraints/list.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/constraint.hpp"
+#include "duckdb/parser/constraints/list.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
 using namespace std;

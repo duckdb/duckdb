@@ -1,4 +1,4 @@
-#include "storage/meta_block_reader.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
 
 using namespace duckdb;
 using namespace std;

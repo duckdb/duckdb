@@ -1,6 +1,6 @@
-#include "parser/statement/select_statement.hpp"
-#include "parser/transformer.hpp"
-#include "common/string_util.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;

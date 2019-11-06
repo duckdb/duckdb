@@ -1,9 +1,9 @@
-#include "execution/physical_plan_generator.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 
-#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "execution/column_binding_resolver.hpp"
-#include "main/client_context.hpp"
-#include "planner/expression/bound_function_expression.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/execution/column_binding_resolver.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

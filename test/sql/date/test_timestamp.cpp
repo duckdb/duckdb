@@ -1,7 +1,7 @@
 #include "catch.hpp"
-#include "common/types/timestamp.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "test_helpers.hpp"
-#include "common/types/time.hpp"
+#include "duckdb/common/types/time.hpp"
 
 using namespace duckdb;
 using namespace std;

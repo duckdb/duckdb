@@ -1,5 +1,5 @@
-#include "storage/table/chunk_info.hpp"
-#include "transaction/transaction.hpp"
+#include "duckdb/storage/table/chunk_info.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,7 +1,7 @@
-#include "common/operator/comparison_operators.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/merge_join.hpp"
-#include "parser/expression/comparison_expression.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/merge_join.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

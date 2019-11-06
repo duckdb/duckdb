@@ -1,4 +1,4 @@
-#include "planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

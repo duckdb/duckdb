@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "common/value_operations/value_operations.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include "test_helpers.hpp"
 
 #include <atomic>

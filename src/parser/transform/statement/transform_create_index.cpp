@@ -1,8 +1,8 @@
-#include "parser/expression/columnref_expression.hpp"
-#include "parser/statement/create_index_statement.hpp"
-#include "parser/tableref/basetableref.hpp"
-#include "parser/transformer.hpp"
-#include "common/string_util.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/statement/create_index_statement.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
