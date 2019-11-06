@@ -9,6 +9,9 @@
 #include "transaction/delete_info.hpp"
 #include "transaction/update_info.hpp"
 
+#include <cstring>
+
+
 using namespace duckdb;
 using namespace std;
 
