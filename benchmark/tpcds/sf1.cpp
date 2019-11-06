@@ -24,6 +24,9 @@ using namespace std;
 	}                                                                                                                  \
 	virtual string BenchmarkInfo() {                                                                                   \
 		return StringUtil::Format("TPC-DS Q%d SF%d: %s", QNR, SF, tpcds::get_query(QNR).c_str());                      \
+	} \
+	virtual bool GroupCacheState() {                                                                                   \
+		return true;                                                                                                   \
 	}
 
 DUCKDB_BENCHMARK(DSQ001, "[tpcds-sf1]")
