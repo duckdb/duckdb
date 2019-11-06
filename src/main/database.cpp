@@ -21,6 +21,14 @@ DuckDB::DuckDB(const char *path, DBConfig *config) {
 		DBConfig config;
 		Configure(config);
 	}
+	if (temporary_directory.empty() && path) {
+		// no directory specified: use default temp path
+		temporary_directory = string(path) + ".tmp";
+	}
+	if (config && !config->use_temporary_directory) {
+		// temporary directories explicitly disabled
+		temporary_directory = string();
+	}
 
 	storage = make_unique<StorageManager>(*this, path ? string(path) : string(), access_mode == AccessMode::READ_ONLY);
 	catalog = make_unique<Catalog>(*storage);
@@ -50,4 +58,6 @@ void DuckDB::Configure(DBConfig &config) {
 	checkpoint_only = config.checkpoint_only;
 	checkpoint_wal_size = config.checkpoint_wal_size;
 	use_direct_io = config.use_direct_io;
+	maximum_memory = config.maximum_memory;
+	temporary_directory = config.temporary_directory;
 }

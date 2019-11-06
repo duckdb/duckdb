@@ -96,6 +96,7 @@ void Vector::Initialize(TypeId new_type, bool zero_data) {
 	if (zero_data) {
 		memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
 	}
+	nullmask.reset();
 }
 
 void Vector::Destroy() {

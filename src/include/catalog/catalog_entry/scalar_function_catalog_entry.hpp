@@ -12,7 +12,6 @@
 #include "catalog/catalog_set.hpp"
 #include "function/function.hpp"
 #include "parser/parsed_data/create_scalar_function_info.hpp"
-#include "transaction/transaction.hpp"
 
 namespace duckdb {
 

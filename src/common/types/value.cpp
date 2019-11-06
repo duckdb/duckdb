@@ -167,8 +167,7 @@ Value Value::DATE(int32_t year, int32_t month, int32_t day) {
 	return Value::INTEGER(Date::FromDate(year, month, day));
 }
 
-Value Value::TIME(int32_t hour, int32_t min, int32_t sec,
-        int32_t msec) {
+Value Value::TIME(int32_t hour, int32_t min, int32_t sec, int32_t msec) {
 	return Value::INTEGER(Time::FromTime(hour, min, sec, msec));
 }
 

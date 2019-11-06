@@ -15,4 +15,4 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<SubstringFun>();
 }
 
-}
+} // namespace duckdb

@@ -1,5 +1,6 @@
 #include "storage/storage_manager.hpp"
 #include "storage/checkpoint_manager.hpp"
+#include "storage/in_memory_block_manager.hpp"
 #include "storage/single_file_block_manager.hpp"
 
 #include "catalog/catalog.hpp"
@@ -48,6 +49,10 @@ void StorageManager::Initialize() {
 	if (!in_memory) {
 		// create or load the database from disk, if not in-memory mode
 		LoadDatabase();
+	} else {
+		block_manager = make_unique<InMemoryBlockManager>();
+		buffer_manager = make_unique<BufferManager>(*database.file_system, *block_manager, database.temporary_directory,
+		                                            database.maximum_memory);
 	}
 }
 
@@ -95,13 +100,20 @@ void StorageManager::LoadDatabase() {
 		// initialize the block manager while creating a new db file
 		block_manager =
 		    make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, true, database.use_direct_io);
+		buffer_manager = make_unique<BufferManager>(*database.file_system, *block_manager, database.temporary_directory,
+		                                            database.maximum_memory);
 	} else {
 		if (!database.checkpoint_only) {
 			Checkpoint(wal_path);
 		}
 		// initialize the block manager while loading the current db file
-		block_manager =
+		auto sf =
 		    make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, false, database.use_direct_io);
+		buffer_manager = make_unique<BufferManager>(*database.file_system, *sf, database.temporary_directory,
+		                                            database.maximum_memory);
+		sf->LoadFreeList(*buffer_manager);
+		block_manager = move(sf);
+
 		//! Load from storage
 		CheckpointManager checkpointer(*this);
 		checkpointer.LoadFromStorage();

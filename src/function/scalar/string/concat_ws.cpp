@@ -94,7 +94,8 @@ void concat_ws_function(ExpressionExecutor &exec, Vector inputs[], index_t input
 }
 
 void ConcatWSFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction concat_ws = ScalarFunction("concat_ws", { SQLType::VARCHAR, SQLType::VARCHAR }, SQLType::VARCHAR, concat_ws_function);
+	ScalarFunction concat_ws =
+	    ScalarFunction("concat_ws", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR, concat_ws_function);
 	concat_ws.varargs = SQLType::VARCHAR;
 	set.AddFunction(concat_ws);
 }

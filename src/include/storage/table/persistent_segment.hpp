@@ -10,47 +10,38 @@
 
 #include "storage/table/column_segment.hpp"
 #include "storage/block.hpp"
-#include "storage/block_manager.hpp"
-
-#include "common/unordered_map.hpp"
+#include "storage/buffer_manager.hpp"
+#include "storage/uncompressed_segment.hpp"
 
 namespace duckdb {
 
 class PersistentSegment : public ColumnSegment {
 public:
-	PersistentSegment(BlockManager &manager, block_id_t id, index_t offset, TypeId type, index_t start, index_t count);
+	PersistentSegment(BufferManager &manager, block_id_t id, index_t offset, TypeId type, index_t start, index_t count);
 
-	//! The block manager
-	BlockManager &manager;
+	//! The buffer manager
+	BufferManager &manager;
 	//! The block id that this segment relates to
 	block_id_t block_id;
 	//! The offset into the block
 	index_t offset;
-	//! The block that holds the data for this segment (if loaded)
-	unique_ptr<Block> block;
-	//! The lock to load the block into memory (if not loaded yet)
-	std::mutex load_lock;
+	//! The uncompressed segment that the data of the persistent segment is loaded into
+	unique_ptr<UncompressedSegment> data;
 
 public:
-	void LoadBlock();
+	void InitializeScan(ColumnScanState &state) override;
+	//! Scan one vector from this transient segment
+	void Scan(Transaction &transaction, ColumnScanState &state, index_t vector_index, Vector &result) override;
+	//! Scan one vector from this transient segment, throwing an exception if there are any outstanding updates
+	void IndexScan(ColumnScanState &state, Vector &result) override;
 
-	void Scan(ColumnPointer &pointer, Vector &result, index_t count) override;
-	void Scan(ColumnPointer &pointer, Vector &result, index_t count, sel_t *sel_vector, index_t sel_count) override;
-	void Fetch(Vector &result, index_t row_id) override;
+	//! Fetch the base table vector index that belongs to this row
+	void Fetch(ColumnScanState &state, index_t vector_index, Vector &result) override;
+	//! Fetch a value of the specific row id and append it to the result
+	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) override;
 
-private:
-	//! Pointer to the dictionary, only used for string blocks
-	data_ptr_t dictionary;
-	//! Heap used for big strings
-	StringHeap heap;
-	//! Big string map
-	unordered_map<block_id_t, const char *> big_strings;
-
-	void AppendFromStorage(Vector &source, Vector &target, bool has_null);
-
-	template <bool HAS_NULL> void AppendStrings(Vector &source, Vector &target);
-
-	const char *GetBigString(block_id_t block);
+	//! Perform an update within the segment
+	void Update(ColumnData &column_data, Transaction &transaction, Vector &updates, row_t *ids) override;
 };
 
 } // namespace duckdb

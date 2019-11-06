@@ -12,18 +12,19 @@
 #include "common/types/data_chunk.hpp"
 #include "common/unordered_map.hpp"
 #include "transaction/undo_buffer.hpp"
+#include "transaction/local_storage.hpp"
 
 namespace duckdb {
 class SequenceCatalogEntry;
 
-extern transaction_t TRANSACTION_ID_START;
-extern transaction_t MAXIMUM_QUERY_ID;
-
 class CatalogEntry;
 class DataTable;
-class VersionChunk;
-struct VersionInfo;
 class WriteAheadLog;
+
+class ChunkInfo;
+
+struct DeleteInfo;
+struct UpdateInfo;
 
 //! The transaction object holds information about a currently running or past
 //! transaction
@@ -32,7 +33,7 @@ class Transaction {
 public:
 	Transaction(transaction_t start_time, transaction_t transaction_id, timestamp_t start_timestamp)
 	    : start_time(start_time), transaction_id(transaction_id), commit_id(0), highest_active_query(0),
-	      active_query(MAXIMUM_QUERY_ID), start_timestamp(start_timestamp) {
+	      active_query(MAXIMUM_QUERY_ID), start_timestamp(start_timestamp), is_invalidated(false) {
 	}
 
 	//! The start timestamp of this transaction
@@ -48,22 +49,24 @@ public:
 	transaction_t active_query;
 	//! The timestamp when the transaction started
 	timestamp_t start_timestamp;
+	//! The set of uncommitted appends for the transaction
+	LocalStorage storage;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	unordered_map<SequenceCatalogEntry *, SequenceValue> sequence_usage;
+	//! Whether or not the transaction has been invalidated
+	bool is_invalidated;
 
 public:
 	void PushCatalogEntry(CatalogEntry *entry);
-	//! Create deleted entries in the undo buffer
-	void PushDeletedEntries(index_t offset, index_t count, VersionChunk *storage, VersionInfo *version_pointers[]);
-	//! Push an old tuple version in the undo buffer
-	void PushTuple(UndoFlags flag, index_t offset, VersionChunk *storage);
 	//! Push a query into the undo buffer
 	void PushQuery(string query);
 
+	//! Checks whether or not the transaction can be successfully committed,
+	void CheckCommit();
 	//! Commit the current transaction with the given commit identifier
-	void Commit(WriteAheadLog *log, transaction_t commit_id);
+	void Commit(WriteAheadLog *log, transaction_t commit_id) noexcept;
 	//! Rollback
-	void Rollback() {
+	void Rollback() noexcept {
 		undo_buffer.Rollback();
 	}
 	//! Cleanup the undo buffer
@@ -71,12 +74,16 @@ public:
 		undo_buffer.Cleanup();
 	}
 
-	//
 	timestamp_t GetCurrentTransactionStartTimestamp() {
 		return start_timestamp;
 	}
 
-	data_ptr_t PushTuple(UndoFlags flag, index_t data_size);
+	void PushDelete(ChunkInfo *vinfo, row_t rows[], index_t count, index_t base_row);
+
+	UpdateInfo *CreateUpdateInfo(index_t type_size, index_t entries);
+
+	data_ptr_t PushData(index_t len);
+	data_ptr_t PushString(string_t str);
 
 private:
 	//! The undo buffer is used to store old versions of rows that are updated

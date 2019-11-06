@@ -444,7 +444,6 @@ template <> date_t CastToDate::Operation(int64_t left, SQLType target_type) {
 	return (date_t)left;
 }
 
-
 //===--------------------------------------------------------------------===//
 // Cast From Time
 //===--------------------------------------------------------------------===//

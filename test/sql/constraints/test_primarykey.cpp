@@ -38,6 +38,8 @@ TEST_CASE("Single PRIMARY KEY constraint", "[constraints]") {
 	REQUIRE_FAIL(con.Query("UPDATE integers SET i=NULL;"));
 
 	// insert the same value from multiple connections
+	// NOTE: this tests current behavior
+	// this can potentially change in the future
 	Connection con2(db);
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
@@ -45,13 +47,13 @@ TEST_CASE("Single PRIMARY KEY constraint", "[constraints]") {
 
 	// insert from first connection succeeds
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (7, 8);"));
-	// insert from second connection fails because of potential conflict
-	// (this test is a bit strange, because it tests current behavior more than
-	//  correct behavior; in postgres for example this would hang forever
-	//  while waiting for the other transaction to finish)
-	REQUIRE_FAIL(con2.Query("INSERT INTO integers VALUES (7, 33);"));
+	// insert from second connection also succeeds
+	REQUIRE_NO_FAIL(con2.Query("INSERT INTO integers VALUES (7, 33);"));
 
+	// now committing the first transaction works
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+	// but the second transaction results in a conflict
+	REQUIRE_FAIL(con2.Query("COMMIT"));
 }
 
 TEST_CASE("Multiple PRIMARY KEY constraint", "[constraints]") {
@@ -266,9 +268,7 @@ TEST_CASE("PRIMARY KEY and concurency conflicts", "[constraints]") {
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=4 WHERE i=2"));
 
-	// now con2 starts a transaction
-	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
-	// it can't update the second value
+	// con2 can't update the second value
 	REQUIRE_FAIL(con2.Query("UPDATE integers SET i=4 WHERE i=2"));
 	REQUIRE_FAIL(con2.Query("UPDATE integers SET i=5 WHERE i=2"));
 	// nor can it delete it
@@ -279,7 +279,8 @@ TEST_CASE("PRIMARY KEY and concurency conflicts", "[constraints]") {
 	// rollback con1
 	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
 
-	// now we can performt he changes in con2
+	// now we can perform the changes in con2
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con2.Query("UPDATE integers SET i=4 WHERE i=2"));
 	REQUIRE_NO_FAIL(con2.Query("UPDATE integers SET i=5 WHERE i=3"));
 

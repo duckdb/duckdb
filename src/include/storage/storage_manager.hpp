@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/helper.hpp"
+#include "storage/buffer_manager.hpp"
 #include "storage/data_table.hpp"
 #include "storage/write_ahead_log.hpp"
 
@@ -38,6 +39,8 @@ public:
 	}
 	//! The BlockManager to read/store meta information and data in blocks
 	unique_ptr<BlockManager> block_manager;
+	//! The BufferManager of the database
+	unique_ptr<BufferManager> buffer_manager;
 	//! The database this storagemanager belongs to
 	DuckDB &database;
 

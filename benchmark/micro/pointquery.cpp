@@ -13,8 +13,7 @@ using namespace std;
 DUCKDB_BENCHMARK(PointQueryWithoutIndex, "[micro]")
 virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.Query("CREATE TABLE integers(i INTEGER, j INTEGER);");
-	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers");                                                      \
-	// insert the elements into the database
+	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers"); // insert the elements into the database
 	for (size_t i = 0; i < POINT_QUERY_ROW_COUNT; i++) {
 		appender->BeginRow();
 		appender->AppendInteger(i);
@@ -53,8 +52,7 @@ FINISH_BENCHMARK(PointQueryWithoutIndex)
 DUCKDB_BENCHMARK(PointQueryWithIndexART, "[micro]")
 virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.Query("CREATE TABLE integers(i INTEGER, j INTEGER);");
-	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers");                                                      \
-	// insert the elements into the database
+	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers"); // insert the elements into the database
 	for (size_t i = 0; i < POINT_QUERY_ROW_COUNT; i++) {
 		appender->BeginRow();
 		appender->AppendInteger(i);

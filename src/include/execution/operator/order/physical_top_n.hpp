@@ -19,8 +19,8 @@ namespace duckdb {
 class PhysicalTopN : public PhysicalOperator {
 public:
 	PhysicalTopN(LogicalOperator &op, vector<BoundOrderByNode> orders, index_t limit, index_t offset)
-	    : PhysicalOperator(PhysicalOperatorType::TOP_N, op.types), orders(move(orders)), limit(limit),
-	      offset(offset), heap_size(0) {
+	    : PhysicalOperator(PhysicalOperatorType::TOP_N, op.types), orders(move(orders)), limit(limit), offset(offset),
+	      heap_size(0) {
 	}
 
 	vector<BoundOrderByNode> orders;

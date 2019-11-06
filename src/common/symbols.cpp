@@ -33,6 +33,7 @@
 #include "planner/tableref/list.hpp"
 #include "storage/data_table.hpp"
 #include "storage/write_ahead_log.hpp"
+#include "transaction/transaction.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -125,7 +126,6 @@ template class std::unique_ptr<LogicalOperator>;
 template class std::unique_ptr<PhysicalOperator>;
 template class std::unique_ptr<PhysicalOperatorState>;
 template class std::unique_ptr<sel_t[]>;
-template class std::unique_ptr<VersionChunk>;
 template class std::unique_ptr<StringHeap>;
 template class std::unique_ptr<SuperLargeHashTable>;
 template class std::unique_ptr<TableRef>;

@@ -28,7 +28,7 @@ struct CreateTableInfo {
 	//! Whether or not it is a temporary table
 	bool temporary = false;
 
-	CreateTableInfo() : schema(DEFAULT_SCHEMA), if_not_exists(false), temporary(false) {
+	CreateTableInfo() : schema(INVALID_SCHEMA), if_not_exists(false), temporary(false) {
 	}
 	CreateTableInfo(string schema, string name) : schema(schema), table(name), if_not_exists(false), temporary(false) {
 	}

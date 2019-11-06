@@ -12,17 +12,17 @@
 #include "common/common.hpp"
 #include "common/unordered_map.hpp"
 #include "common/unordered_set.hpp"
-#include "transaction/transaction.hpp"
 
 #include <functional>
 #include <memory>
 #include <mutex>
 
 namespace duckdb {
-
 struct AlterInfo;
 
-typedef unordered_map<CatalogSet *, unique_ptr<std::lock_guard<std::mutex>>> set_lock_map_t;
+class Transaction;
+
+typedef unordered_map<CatalogSet *, std::unique_lock<std::mutex>> set_lock_map_t;
 
 //! The Catalog Set stores (key, value) map of a set of AbstractCatalogEntries
 class CatalogSet {

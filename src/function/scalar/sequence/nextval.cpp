@@ -8,6 +8,7 @@
 #include "main/client_context.hpp"
 #include "main/database.hpp"
 #include "planner/expression/bound_function_expression.hpp"
+#include "transaction/transaction.hpp"
 
 using namespace std;
 
@@ -82,8 +83,8 @@ static int64_t next_sequence_value(Transaction &transaction, SequenceCatalogEntr
 	return result;
 }
 
-static void nextval_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                      Vector &result) {
+static void nextval_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
+                             BoundFunctionExpression &expr, Vector &result) {
 	auto &info = (NextvalBindData &)*expr.bind_info;
 	assert(input_count == 1 && inputs[0].type == TypeId::VARCHAR);
 	result.Initialize(TypeId::BIGINT);
@@ -143,7 +144,8 @@ static void nextval_dependency(BoundFunctionExpression &expr, unordered_set<Cata
 }
 
 void NextvalFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("nextval", { SQLType::VARCHAR }, SQLType::BIGINT, nextval_function, true, nextval_bind, nextval_dependency));
+	set.AddFunction(ScalarFunction("nextval", {SQLType::VARCHAR}, SQLType::BIGINT, nextval_function, true, nextval_bind,
+	                               nextval_dependency));
 }
 
 } // namespace duckdb

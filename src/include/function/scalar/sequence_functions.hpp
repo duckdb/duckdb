@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// function/scalar/nextval.hpp
+// function/scalar/sequence_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -14,7 +14,7 @@
 namespace duckdb {
 
 struct NextvalFun {
-    static void RegisterFunction(BuiltinFunctions &set);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 } // namespace duckdb
