@@ -24,6 +24,9 @@ struct CreateFunctionInfo;
 struct CreateViewInfo;
 struct CreateSequenceInfo;
 
+class ClientContext;
+class Transaction;
+
 class FunctionExpression;
 class SchemaCatalogEntry;
 class TableCatalogEntry;
@@ -78,11 +81,11 @@ public:
 	SchemaCatalogEntry *GetSchema(Transaction &transaction, const string &name = DEFAULT_SCHEMA);
 	//! Returns a pointer to the table in the specified schema. Throws an
 	//! exception if the schema or the table does not exist.
-	TableCatalogEntry *GetTable(Transaction &transaction, const string &schema, const string &table);
+	TableCatalogEntry *GetTable(ClientContext &context, const string &schema, const string &table);
 	//! Gets the sequence, if it exists
 	SequenceCatalogEntry *GetSequence(Transaction &transaction, const string &schema, const string &sequence);
 
-	CatalogEntry *GetTableOrView(Transaction &transaction, const string &schema, const string &table);
+	CatalogEntry *GetTableOrView(ClientContext &context, string schema, const string &table);
 
 	//! Returns a pointer to the table function if it exists, or throws an
 	//! exception otherwise

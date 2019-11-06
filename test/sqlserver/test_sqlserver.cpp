@@ -8,7 +8,6 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA Sales;"));
 

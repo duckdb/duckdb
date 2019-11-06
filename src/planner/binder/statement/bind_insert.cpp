@@ -10,7 +10,9 @@ using namespace std;
 
 unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 	auto result = make_unique<BoundInsertStatement>();
-	auto table = context.catalog.GetTable(context.ActiveTransaction(), stmt.schema, stmt.table);
+	auto table = context.catalog.GetTable(context, stmt.schema, stmt.table);
+	assert(table);
+
 	result->table = table;
 
 	vector<index_t> named_column_map;

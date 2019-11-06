@@ -62,7 +62,7 @@ public:
 
 	void WriteInsert(DataChunk &chunk);
 	void WriteDelete(DataChunk &chunk);
-	void WriteUpdate(DataChunk &chunk);
+	void WriteUpdate(DataChunk &chunk, column_t col_idx);
 
 	void WriteQuery(string &query);
 

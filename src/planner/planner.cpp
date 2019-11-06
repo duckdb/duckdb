@@ -77,6 +77,9 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	}
 	case StatementType::CREATE_SEQUENCE: {
 		auto &stmt = *((CreateSequenceStatement *)statement.get());
+		if (stmt.info->schema == INVALID_SCHEMA) { // no temp sequences
+			stmt.info->schema = DEFAULT_SCHEMA;
+		}
 		context.catalog.CreateSequence(context.ActiveTransaction(), stmt.info.get());
 		break;
 	}
@@ -84,15 +87,33 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		auto &stmt = *((DropStatement *)statement.get());
 		switch (stmt.info->type) {
 		case CatalogType::SEQUENCE:
+			if (stmt.info->schema == INVALID_SCHEMA) { // no temp sequences
+				stmt.info->schema = DEFAULT_SCHEMA;
+			}
 			context.catalog.DropSequence(context.ActiveTransaction(), stmt.info.get());
 			break;
 		case CatalogType::VIEW:
+			if (stmt.info->schema == INVALID_SCHEMA) { // no temp views
+				stmt.info->schema = DEFAULT_SCHEMA;
+			}
 			context.catalog.DropView(context.ActiveTransaction(), stmt.info.get());
 			break;
-		case CatalogType::TABLE:
-			context.catalog.DropTable(context.ActiveTransaction(), stmt.info.get());
+		case CatalogType::TABLE: {
+			auto temp = context.temporary_objects->GetTableOrNull(context.ActiveTransaction(), stmt.info->name);
+			if (temp && (stmt.info->schema == INVALID_SCHEMA || stmt.info->schema == TEMP_SCHEMA)) {
+				context.temporary_objects->DropTable(context.ActiveTransaction(), stmt.info.get());
+			} else {
+				if (stmt.info->schema == INVALID_SCHEMA) {
+					stmt.info->schema = DEFAULT_SCHEMA;
+				}
+				context.catalog.DropTable(context.ActiveTransaction(), stmt.info.get());
+			}
 			break;
+		}
 		case CatalogType::INDEX:
+			if (stmt.info->schema == INVALID_SCHEMA) { // no temp views
+				stmt.info->schema = DEFAULT_SCHEMA;
+			}
 			context.catalog.DropIndex(context.ActiveTransaction(), stmt.info.get());
 			break;
 		case CatalogType::SCHEMA:
@@ -165,6 +186,9 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::PREPARE: {
 		auto &stmt = *reinterpret_cast<PrepareStatement *>(statement.get());
 		auto statement_type = stmt.statement->type;
+		if (statement_type == StatementType::EXPLAIN) {
+			throw NotImplementedException("Cannot explain prepared statements");
+		}
 		// first create the plan for the to-be-prepared statement
 		vector<BoundParameterExpression *> bound_parameters;
 		CreatePlan(*stmt.statement, &bound_parameters);

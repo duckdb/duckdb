@@ -139,9 +139,6 @@ setMethod("dbWriteTable", c("duckdb_connection", "character", "data.frame"),
             
             # TODO: start a transaction if one is not already running
             
-            if (temporary) {
-              stop("Temporary tables not supported yet")
-            }
             
             if (overwrite && append) {
               stop("Setting both overwrite and append makes no sense")
@@ -197,10 +194,13 @@ setMethod("dbWriteTable", c("duckdb_connection", "character", "data.frame"),
                 }
                 column_types <- mapped_column_types
               }
+
+              temp_str <- ""
+              if (temporary) temp_str <- "TEMPORARY"
               
               schema_str <- paste(column_names, column_types, collapse = ", ")
               dbExecute(conn, SQL(sprintf(
-                "CREATE TABLE %s (%s)", table_name, schema_str
+                "CREATE %s TABLE %s (%s)", temp_str, table_name, schema_str
               )))
             }
 			

@@ -15,7 +15,10 @@ class DataChunk;
 class DataTable;
 class WriteAheadLog;
 
-template <bool HAS_LOG> class CommitState {
+struct DeleteInfo;
+struct UpdateInfo;
+
+class CommitState {
 public:
 	CommitState(transaction_t commit_id, WriteAheadLog *log = nullptr);
 
@@ -24,26 +27,22 @@ public:
 	UndoFlags current_op;
 
 	DataTable *current_table;
-	unique_ptr<DataChunk> chunk;
 	index_t row_identifiers[STANDARD_VECTOR_SIZE];
 
-public:
-	void CommitEntry(UndoFlags type, data_ptr_t data);
+	unique_ptr<DataChunk> delete_chunk;
+	unique_ptr<DataChunk> update_chunk;
 
-	void Flush(UndoFlags new_op);
+public:
+	template <bool HAS_LOG> void CommitEntry(UndoFlags type, data_ptr_t data);
 
 private:
 	void SwitchTable(DataTable *table, UndoFlags new_op);
 
-	void PrepareAppend(UndoFlags op);
-
 	void WriteCatalogEntry(CatalogEntry *entry);
-	void WriteDelete(VersionInfo *info);
-	void WriteUpdate(VersionInfo *info);
-	void WriteInsert(VersionInfo *info);
+	void WriteDelete(DeleteInfo *info);
+	void WriteUpdate(UpdateInfo *info);
 
-	void AppendInfoData(VersionInfo *info);
-	void AppendRowId(VersionInfo *info);
+	void AppendRowId(row_t rowid);
 };
 
 } // namespace duckdb

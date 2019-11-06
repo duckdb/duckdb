@@ -14,16 +14,13 @@ namespace duckdb {
 
 //! The version number of the database storage format
 extern const uint64_t VERSION_NUMBER;
-// Size of a memory slot managed by the StorageManager. This is the quantum of allocation for Blocks on DuckDB. We
-// default to 256KB. (1 << 18)
-#define BLOCK_SIZE 262144
-//! The size of the headers. This should be small and written more or less atomically by the hard disk. We default to
-//! the page size, which is 4KB. (1 << 12)
-#define HEADER_SIZE 4096
 
 using block_id_t = int64_t;
 
 #define INVALID_BLOCK -1
+
+// maximum block id, 2^62
+#define MAXIMUM_BLOCK 4611686018427388000LL
 
 //! The MainHeader is the first header in the storage file. The MainHeader is typically written only once for a database
 //! file.

@@ -202,6 +202,8 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	date_part.AddFunction(
 	    ScalarFunction({SQLType::VARCHAR, SQLType::TIMESTAMP}, SQLType::BIGINT, timestamp_part_function));
 	set.AddFunction(date_part);
+	date_part.name = "datepart";
+	set.AddFunction(date_part);
 }
 
 } // namespace duckdb

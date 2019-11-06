@@ -33,6 +33,8 @@ struct StoredCatalogSet {
 class TransactionManager {
 public:
 	TransactionManager(StorageManager &storage);
+	~TransactionManager();
+
 	//! Start a new transaction
 	Transaction *StartTransaction();
 	//! Commit the given transaction

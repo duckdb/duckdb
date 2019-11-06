@@ -8,6 +8,7 @@
 #include "main/client_context.hpp"
 #include "main/database.hpp"
 #include "planner/expression/bound_function_expression.hpp"
+#include "transaction/transaction.hpp"
 
 using namespace std;
 

@@ -12,11 +12,6 @@
 using namespace duckdb;
 using namespace std;
 
-namespace duckdb {
-transaction_t TRANSACTION_ID_START = 4294967296ULL;                         // 2^32
-transaction_t MAXIMUM_QUERY_ID = std::numeric_limits<transaction_t>::max(); // 2^64
-} // namespace duckdb
-
 TransactionManager::TransactionManager(StorageManager &storage) : storage(storage) {
 	// start timestamp starts at zero
 	current_start_timestamp = 0;
@@ -27,6 +22,9 @@ TransactionManager::TransactionManager(StorageManager &storage) : storage(storag
 	current_transaction_id = TRANSACTION_ID_START;
 	// the current active query id
 	current_query_number = 1;
+}
+
+TransactionManager::~TransactionManager() {
 }
 
 Transaction *TransactionManager::StartTransaction() {
@@ -55,6 +53,16 @@ Transaction *TransactionManager::StartTransaction() {
 void TransactionManager::CommitTransaction(Transaction *transaction) {
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
+
+	// first check whether we can commit this transaction
+	try {
+		transaction->CheckCommit();
+	} catch (Exception &ex) {
+		// cannot commit transaction! roll it back instead of committing it
+		transaction->Rollback();
+		RemoveTransaction(transaction);
+		throw ex;
+	}
 
 	// obtain a commit id for the transaction
 	transaction_t commit_id = current_start_timestamp++;

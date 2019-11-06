@@ -37,6 +37,12 @@ public:
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
 	//! RamFS or something similar)
 	unique_ptr<FileSystem> file_system;
+	//! The maximum memory used by the database system (in bytes). Default: Infinite
+	index_t maximum_memory = (index_t)-1;
+	//! Whether or not to create and use a temporary directory to store intermediates that do not fit in memory
+	bool use_temporary_directory = true;
+	//! Directory to store temporary structures that do not fit in memory
+	string temporary_directory;
 
 private:
 	// FIXME: don't set this as a user: used internally (only for now)
@@ -63,6 +69,8 @@ public:
 	bool use_direct_io;
 	bool checkpoint_only;
 	index_t checkpoint_wal_size;
+	index_t maximum_memory;
+	string temporary_directory;
 
 private:
 	void Configure(DBConfig &config);

@@ -16,7 +16,7 @@ namespace duckdb {
 //! Bound equivalent to UpdateStatement
 class BoundUpdateStatement : public BoundSQLStatement {
 public:
-	BoundUpdateStatement() : BoundSQLStatement(StatementType::UPDATE) {
+	BoundUpdateStatement() : BoundSQLStatement(StatementType::UPDATE), is_index_update(false) {
 	}
 
 	//! The condition by which to update
@@ -31,6 +31,9 @@ public:
 	vector<unique_ptr<Expression>> bound_defaults;
 	//! The projection index
 	index_t proj_index;
+	//! Whether or not the update is an index update. Index updates are translated into insert + deletes, instead of
+	//! performing an in-place update.
+	bool is_index_update;
 
 public:
 	vector<string> GetNames() override {
