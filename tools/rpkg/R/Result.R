@@ -60,6 +60,7 @@ fix_rownames <- function(df) {
 
 #' @rdname DBI
 #' @inheritParams DBI::dbFetch
+#' @importFrom utils head
 #' @export
 setMethod(
   "dbFetch", "duckdb_result",
@@ -197,5 +198,6 @@ setMethod(
 setMethod(
   "dbBind", "duckdb_result",
   function(res, params, ...) {
-    testthat::skip("Not yet implemented: dbBind(Result)")
+    message("Not yet implemented: dbBind(Result)")
+    return(invisible(NULL))
   })
