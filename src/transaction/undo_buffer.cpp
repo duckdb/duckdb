@@ -5,12 +5,10 @@
 #include "catalog/catalog_set.hpp"
 #include "common/exception.hpp"
 #include "storage/data_table.hpp"
-#include "storage/table/version_chunk.hpp"
 #include "storage/write_ahead_log.hpp"
 #include "transaction/cleanup_state.hpp"
 #include "transaction/commit_state.hpp"
 #include "transaction/rollback_state.hpp"
-#include "transaction/version_info.hpp"
 
 #include <unordered_map>
 
@@ -122,21 +120,18 @@ void UndoBuffer::Cleanup() {
 	IterateEntries([&](UndoFlags type, data_ptr_t data) { state.CleanupEntry(type, data); });
 }
 
-void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
+void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept {
+	CommitState state(commit_id, log);
 	if (log) {
-		CommitState<true> state(commit_id, log);
 		// commit WITH write ahead log
-		IterateEntries([&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
-		// final flush after writing
-		state.Flush(UndoFlags::EMPTY_ENTRY);
+		IterateEntries([&](UndoFlags type, data_ptr_t data) { state.CommitEntry<true>(type, data); });
 	} else {
-		CommitState<false> state(commit_id);
 		// comit WITHOUT write ahead log
-		IterateEntries([&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
+		IterateEntries([&](UndoFlags type, data_ptr_t data) { state.CommitEntry<false>(type, data); });
 	}
 }
 
-void UndoBuffer::Rollback() {
+void UndoBuffer::Rollback() noexcept {
 	// rollback needs to be performed in reverse
 	RollbackState state;
 	ReverseIterateEntries([&](UndoFlags type, data_ptr_t data) { state.RollbackEntry(type, data); });

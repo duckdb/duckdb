@@ -1161,7 +1161,7 @@ TEST_CASE("Test date copy", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"2019-06-05"}));
 }
 
-TEST_CASE("Test cranlogs broken gzip copy", "[copy]") {
+TEST_CASE("Test cranlogs broken gzip copy and temp table", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1170,8 +1170,8 @@ TEST_CASE("Test cranlogs broken gzip copy", "[copy]") {
 	auto cranlogs_csv = fs.JoinPath(csv_path, "cranlogs.csv.gz");
 	WriteBinary(cranlogs_csv, tmp2013_06_15, sizeof(tmp2013_06_15));
 
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE cranlogs (date date,time string,size int,r_version string,r_arch "
-	                          "string,r_os string,package string,version string,country string,ip_id int);"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY TABLE cranlogs (date date,time string,size int,r_version string,r_arch "
+	                          "string,r_os string,package string,version string,country string,ip_id int)"));
 
 	result = con.Query("COPY cranlogs FROM '" + cranlogs_csv + "' DELIMITER ',' HEADER;");
 	REQUIRE(CHECK_COLUMN(result, 0, {37459}));

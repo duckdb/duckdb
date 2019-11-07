@@ -28,7 +28,11 @@ public:
 	//! Read the content of the block from disk
 	virtual void Read(Block &block) = 0;
 	//! Writes the block to disk
-	virtual void Write(Block &block) = 0;
+	virtual void Write(FileBuffer &block, block_id_t block_id) = 0;
+	//! Writes the block to disk
+	void Write(Block &block) {
+		Write(block, block.id);
+	}
 	//! Write the header; should be the final step of a checkpoint
 	virtual void WriteHeader(DatabaseHeader header) = 0;
 };

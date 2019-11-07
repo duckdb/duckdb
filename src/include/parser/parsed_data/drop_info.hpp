@@ -26,7 +26,7 @@ struct DropInfo {
 	//! are any)
 	bool cascade = false;
 
-	DropInfo() : schema(DEFAULT_SCHEMA), if_exists(false), cascade(false) {
+	DropInfo() : schema(INVALID_SCHEMA), if_exists(false), cascade(false) {
 	}
 };
 

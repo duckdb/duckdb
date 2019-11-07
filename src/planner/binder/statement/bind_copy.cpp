@@ -54,7 +54,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CopyStatement &stmt) {
 		// get the set of expected columns from the insert statement; these types will be parsed from the CSV
 		result->sql_types = bound_insert.expected_types;
 
-		auto table = context.catalog.GetTable(context.ActiveTransaction(), stmt.info->schema, stmt.info->table);
+		auto table = context.catalog.GetTable(context, stmt.info->schema, stmt.info->table);
 		// set all columns to false
 		for (index_t i = 0; i < table->columns.size(); i++) {
 			stmt.info->force_not_null.push_back(false);

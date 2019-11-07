@@ -42,7 +42,7 @@ void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &outp
 		auto table_name = input.data[0].GetValue(0).str_value;
 		// look up the table name in the catalog
 		auto &catalog = context.catalog;
-		data.entry = catalog.GetTable(context.ActiveTransaction(), DEFAULT_SCHEMA, table_name);
+		data.entry = catalog.GetTable(context, DEFAULT_SCHEMA, table_name);
 	}
 
 	if (data.offset >= data.entry->columns.size()) {

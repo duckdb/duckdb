@@ -34,13 +34,4 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
-class PhysicalTableScanOperatorState : public PhysicalOperatorState {
-public:
-	PhysicalTableScanOperatorState(DataTable &table) : PhysicalOperatorState(nullptr) {
-		table.InitializeScan(scan_offset);
-	}
-
-	//! The current position in the scan
-	TableScanState scan_offset;
-};
 } // namespace duckdb

@@ -1,6 +1,7 @@
 add_library_unity(test_sql_simple
                   OBJECT
                   test_arithmetic.cpp
+                  test_alias.cpp
                   test_bitwise_ops.cpp
                   test_case.cpp
                   test_in.cpp
@@ -9,7 +10,6 @@ add_library_unity(test_sql_simple
                   test_conjunctions.cpp
                   test_cse.cpp
                   test_cte.cpp
-                  test_delete.cpp
                   test_distinct.cpp
                   test_expressions.cpp
                   test_groupby.cpp
@@ -30,7 +30,6 @@ add_library_unity(test_sql_simple
                   test_subquery.cpp
                   test_table_subquery.cpp
                   test_unicode.cpp
-                  test_update.cpp
                   test_window.cpp
                   test_sequence.cpp
                   test_default.cpp

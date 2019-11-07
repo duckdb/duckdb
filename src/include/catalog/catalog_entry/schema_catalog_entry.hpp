@@ -52,6 +52,7 @@ public:
 	//! Returns a pointer to a table of the given name. Throws an exception if
 	//! the table does not exist.
 	TableCatalogEntry *GetTable(Transaction &transaction, const string &table);
+	TableCatalogEntry *GetTableOrNull(Transaction &transaction, const string &table);
 	CatalogEntry *GetTableOrView(Transaction &transaction, const string &table);
 
 	//! Creates a table with the given name in the schema

@@ -47,10 +47,10 @@ public:
 	//! Cleanup the undo buffer
 	void Cleanup();
 	//! Commit the changes made in the UndoBuffer: should be called on commit
-	void Commit(WriteAheadLog *log, transaction_t commit_id);
+	void Commit(WriteAheadLog *log, transaction_t commit_id) noexcept;
 	//! Rollback the changes made in this UndoBuffer: should be called on
 	//! rollback
-	void Rollback();
+	void Rollback() noexcept;
 
 private:
 	unique_ptr<UndoChunk> head;

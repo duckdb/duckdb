@@ -556,7 +556,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix, bool only
 		auto tname = get_table_name(i);
 		if (!tname.empty()) {
 			try {
-				append_info[i].table = db.catalog->GetTable(con.context->ActiveTransaction(), schema, tname + suffix);
+				append_info[i].table = db.catalog->GetTable(*con.context, schema, tname + suffix);
 			} catch(...) {/*whatever*/}
 		}
 		append_info[i].context = con.context.get();

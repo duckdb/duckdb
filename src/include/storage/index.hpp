@@ -13,6 +13,7 @@
 #include "common/types/data_chunk.hpp"
 #include "parser/parsed_expression.hpp"
 #include "planner/expression.hpp"
+#include "storage/table/scan_state.hpp"
 
 namespace duckdb {
 
@@ -20,14 +21,7 @@ class ClientContext;
 class DataTable;
 class Transaction;
 
-struct IndexScanState {
-	vector<column_t> column_ids;
-
-	IndexScanState(vector<column_t> column_ids) : column_ids(column_ids) {
-	}
-	virtual ~IndexScanState() {
-	}
-};
+struct IndexLock;
 
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
@@ -36,6 +30,8 @@ public:
 	      vector<unique_ptr<Expression>> unbound_expressions);
 	virtual ~Index() = default;
 
+	//! Lock used for updating the index
+	std::mutex lock;
 	//! The type of the index
 	IndexType type;
 	//! The table
@@ -62,16 +58,23 @@ public:
 	                                                               ExpressionType low_expression_type, Value high_value,
 	                                                               ExpressionType high_expression_type) = 0;
 	//! Perform a lookup on the index
-	virtual void Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) = 0;
+	virtual void Scan(Transaction &transaction, TableIndexScanState &state, DataChunk &result) = 0;
 
-	//! Called when data is appended to the index
-	virtual bool Append(DataChunk &entries, Vector &row_identifiers) = 0;
+	//! Obtain a lock on the index
+	virtual void InitializeLock(IndexLock &state);
+	//! Called when data is appended to the index. The lock obtained from InitializeAppend must be held
+	virtual bool Append(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
+	bool Append(DataChunk &entries, Vector &row_identifiers);
+	//! Verify that data can be appended to the index
+	virtual void VerifyAppend(DataChunk &chunk) {
+	}
 
 	//! Called when data inside the index is Deleted
-	virtual void Delete(DataChunk &entries, Vector &row_identifiers) = 0;
+	virtual void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
+	void Delete(DataChunk &entries, Vector &row_identifiers);
 
 	//! Insert data into the index. Does not lock the index.
-	virtual bool Insert(DataChunk &input, Vector &row_identifiers) = 0;
+	virtual bool Insert(IndexLock &lock, DataChunk &input, Vector &row_identifiers) = 0;
 
 	//! Returns true if the index is affected by updates on the specified column ids, and false otherwise
 	bool IndexIsUpdated(vector<column_t> &column_ids);

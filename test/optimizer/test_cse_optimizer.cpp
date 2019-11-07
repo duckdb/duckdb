@@ -14,8 +14,7 @@ TEST_CASE("Test CSE Optimizer", "[optimizer]") {
 	ExpressionHelper helper;
 	auto &con = helper.con;
 
-	con.Query("BEGIN TRANSACTION");
-	con.Query("CREATE TABLE integers(i INTEGER)");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 
 	CommonSubExpressionOptimizer optimizer;
 

@@ -123,8 +123,23 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateTa
 
 unique_ptr<BoundSQLStatement> Binder::Bind(CreateTableStatement &stmt) {
 	auto result = make_unique<BoundCreateTableStatement>();
-	// bind the schema
-	result->schema = context.catalog.GetSchema(context.ActiveTransaction(), stmt.info->schema);
+
+	if (stmt.info->schema == INVALID_SCHEMA) {
+		stmt.info->schema = stmt.info->temporary ? TEMP_SCHEMA : DEFAULT_SCHEMA;
+	}
+
+	if (stmt.info->temporary) {
+		if (stmt.info->schema != TEMP_SCHEMA) {
+			throw ParserException("TEMPORARY table names can *only* use the \"temp\" schema");
+		}
+		result->schema = context.temporary_objects.get();
+	} else {
+		assert(stmt.info->schema != INVALID_SCHEMA);
+		if (stmt.info->schema == TEMP_SCHEMA) {
+			throw ParserException("Only TEMPORARY table names can use the \"temp\" schema");
+		}
+		result->schema = context.catalog.GetSchema(context.ActiveTransaction(), stmt.info->schema);
+	}
 	if (stmt.query) {
 		// construct the result object
 		result->query = unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*stmt.query));

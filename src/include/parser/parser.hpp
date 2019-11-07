@@ -42,8 +42,5 @@ private:
 	bool TransformList(postgres::List *tree);
 	//! Transform a single Postgres parse node into a SQL Statement.
 	unique_ptr<SQLStatement> TransformNode(postgres::Node *stmt);
-	//! Attempts to parse a PRAGMA statement, returns true if successfully
-	//! parsed
-	bool ParsePragma(string &query);
 };
 } // namespace duckdb
