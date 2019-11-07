@@ -242,8 +242,15 @@ Value Value::Numeric(TypeId type, int64_t value) {
 		return Value((double)value);
 	case TypeId::HASH:
 		return Value::HASH(value);
-	case TypeId::POINTER:
-		return Value::POINTER(value);
+    case TypeId::POINTER:
+        return Value::POINTER(value);
+    case TypeId::INTERVAL: {
+        Interval i = Interval();
+        i.time = 0;
+        i.days = 0;
+        i.months = 0;
+        return Value::INTERVAL(i);
+    }
 	default:
 		throw InvalidTypeException(type, "Numeric requires numeric type");
 	}

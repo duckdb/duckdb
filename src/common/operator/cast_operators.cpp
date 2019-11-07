@@ -9,13 +9,12 @@
 #include <cstdlib>
 #include <cctype>
 #include <cmath>
-#include <iostream>
 
 extern "C" {
 #include "pg_definitions.h"
 // We need MONTH, DAY and YEAR definitions from "utils/datetime.h", but there
 // are other definitions that will be brought here and we don't want them.
-// That's why we have inlined those required definitions below, instead.    
+// That's why we have inlined those required definitions below, instead.
 //#include "utils/datetime.h"
 #define MONTH   1
 #define YEAR    2
@@ -503,8 +502,10 @@ template <> timestamp_t CastToTimestamp::Operation(int64_t left, SQLType target_
 //===--------------------------------------------------------------------===//
 template <> Interval CastToInterval::Operation(const char * left, SQLType target_type) {
     Interval res;
+    res.time = 0;
+    res.days = 0;
+    res.months = 0;
 
-    cout << "here111123423444" << endl;
     switch(target_type.scale) {
         case INTERVAL_MASK(DAY):
             res.days = try_cast_string<int32_t>(left);
@@ -518,7 +519,6 @@ template <> Interval CastToInterval::Operation(const char * left, SQLType target
         default:
             throw CastException(TypeId::INTERVAL, GetInternalType(target_type.id));
     }
-    cout << "here1111234" << endl;
     return res;
 }
 

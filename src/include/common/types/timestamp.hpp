@@ -66,6 +66,49 @@ struct Interval {
     int32_t days;   //! days, after time for alignment
     int32_t months; //! months after time for alignment
 
+    bool operator==(const Interval& rhs) const
+    {
+        if(this->time == rhs.time && this->days == rhs.days && this->months == rhs.months) return true;
+        return false;
+    }
+
+    bool operator!=(const Interval& rhs) const
+    {
+        return !(this->operator==(rhs));
+    }
+
+    bool operator>(const Interval& rhs) const
+    {
+        if(this->months > rhs.months) return true;
+        if(this->months < rhs.months) return false;
+        if(this->days > rhs.days) return true;
+        if(this->days < rhs.days) return false;
+        if(this->time > rhs.time) return true;
+        if(this->time < rhs.time) return false;
+        return false;
+    }
+
+    bool operator>=(const Interval& rhs) const
+    {
+        return (this->operator==(rhs)) || (this->operator>(rhs));
+    }
+
+    bool operator<(const Interval& rhs) const
+    {
+        if(this->months < rhs.months) return true;
+        if(this->months > rhs.months) return false;
+        if(this->days < rhs.days) return true;
+        if(this->days > rhs.days) return false;
+        if(this->time < rhs.time) return true;
+        if(this->time > rhs.time) return false;
+        return false;
+    }
+
+    bool operator<=(const Interval& rhs) const
+    {
+        return (this->operator==(rhs)) || (this->operator<(rhs));
+    }
+
     friend std::string to_string(Interval const & value) {
         timestamp_struct self = Timestamp::IntervalToTimestamp(value);
         string res = "";
