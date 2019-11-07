@@ -1,7 +1,7 @@
 #include "catch.hpp"
-#include "common/types/timestamp.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "test_helpers.hpp"
-#include "common/types/time.hpp"
+#include "duckdb/common/types/time.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -242,15 +242,13 @@ TEST_CASE("Test milliseconds with timestamps", "[timestamp]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(Timestamp::FromString("2001-04-20 14:42:11"))}));
 }
 
-
-
-
 TEST_CASE("Test more timestamp functions", "[timestamp]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	result = con.Query("SELECT CAST(CURRENT_TIME AS STRING), CAST(CURRENT_DATE AS STRING), CAST(CURRENT_TIMESTAMP AS STRING), CAST(NOW() AS STRING)");
+	result = con.Query("SELECT CAST(CURRENT_TIME AS STRING), CAST(CURRENT_DATE AS STRING), CAST(CURRENT_TIMESTAMP AS "
+	                   "STRING), CAST(NOW() AS STRING)");
 	REQUIRE(result->success);
 
 	auto ds = result->Fetch();

@@ -105,7 +105,6 @@ TEST_CASE("Test HAVING clause without GROUP BY", "[having]") {
 	result = con.Query("SELECT SUM(42) HAVING (SELECT SUM(42)) > SUM(80)");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 
-
 	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
 	con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)");
 

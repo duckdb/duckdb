@@ -1,6 +1,6 @@
-#include "optimizer/filter_pushdown.hpp"
-#include "planner/operator/logical_comparison_join.hpp"
-#include "planner/operator/logical_cross_product.hpp"
+#include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_cross_product.hpp"
 
 using namespace duckdb;
 using namespace std;

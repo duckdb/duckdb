@@ -1,8 +1,8 @@
-#include "optimizer/rule/conjunction_simplification.hpp"
+#include "duckdb/optimizer/rule/conjunction_simplification.hpp"
 
-#include "execution/expression_executor.hpp"
-#include "planner/expression/bound_conjunction_expression.hpp"
-#include "planner/expression/bound_constant_expression.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

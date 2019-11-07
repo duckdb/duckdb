@@ -1,10 +1,10 @@
-#include "execution/operator/order/physical_order.hpp"
+#include "duckdb/execution/operator/order/physical_order.hpp"
 
-#include "common/assert.hpp"
-#include "common/value_operations/value_operations.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;

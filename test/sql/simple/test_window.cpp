@@ -107,9 +107,7 @@ TEST_CASE("Most basic window function", "[window]") {
 	REQUIRE(CHECK_COLUMN(
 	    result, 0,
 	    {"develop", "develop", "develop", "develop", "develop", "personnel", "personnel", "sales", "sales", "sales"}));
-	REQUIRE(CHECK_COLUMN(
-	    result, 1,
-	    {0.0, 627.375486, 150.0, 418.993503, 438.035387, 200, 0.0, 94.280904, 0.0, 0.0}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0.0, 627.375486, 150.0, 418.993503, 438.035387, 200, 0.0, 94.280904, 0.0, 0.0}));
 
 	// covar_pop
 	result = con.Query("SELECT depname, "
@@ -119,9 +117,7 @@ TEST_CASE("Most basic window function", "[window]") {
 	REQUIRE(CHECK_COLUMN(
 	    result, 0,
 	    {"develop", "develop", "develop", "develop", "develop", "personnel", "personnel", "sales", "sales", "sales"}));
-	REQUIRE(CHECK_COLUMN(
-	    result, 1,
-	    {0.0, 240.0, 150.0, 477.777778, 606.250000, -300.0, 0.0, -111.111111, 0.0, 0.0}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0.0, 240.0, 150.0, 477.777778, 606.250000, -300.0, 0.0, -111.111111, 0.0, 0.0}));
 }
 
 TEST_CASE("Illegal window function", "[window]") {
@@ -502,7 +498,6 @@ TEST_CASE("TPC-DS Q49 bug fix for multi-sort window functions", "[window]") {
 	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
 }
 
-
 TEST_CASE("Ensure dbplyr crash with ORDER BY under window stays fixed", "[window]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -510,26 +505,34 @@ TEST_CASE("Ensure dbplyr crash with ORDER BY under window stays fixed", "[window
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE dbplyr_052 (x INTEGER, g DOUBLE, w int)"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO dbplyr_052 VALUES (1,1, 42),(2,1, 42),(3,1, 42),(2,2, 42),(3,2, 42),(4,2, 42)"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO dbplyr_052 VALUES (1,1, 42),(2,1, 42),(3,1, 42),(2,2, 42),(3,2, 42),(4,2, 42)"));
 
 	// this works fine because we order by the already-projected column in the innermost query
-	result = con.Query("SELECT x, g FROM (SELECT x, g, SUM(x) OVER (PARTITION BY g ORDER BY x ROWS UNBOUNDED PRECEDING) AS zzz67 FROM (SELECT x, g FROM dbplyr_052 ORDER BY x) dbplyr_053) dbplyr_054 WHERE (zzz67 > 3.0)");
+	result =
+	    con.Query("SELECT x, g FROM (SELECT x, g, SUM(x) OVER (PARTITION BY g ORDER BY x ROWS UNBOUNDED PRECEDING) AS "
+	              "zzz67 FROM (SELECT x, g FROM dbplyr_052 ORDER BY x) dbplyr_053) dbplyr_054 WHERE (zzz67 > 3.0)");
 	REQUIRE(result->success);
-	REQUIRE(CHECK_COLUMN(result, 0, {3,3,4}));
-	REQUIRE(CHECK_COLUMN(result, 1, {1.0,2.0,2.0}));
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1.0, 2.0, 2.0}));
 
 	// this breaks because we add a fake projection that is not pruned
-	result = con.Query("SELECT x, g FROM (SELECT x, g, SUM(x) OVER (PARTITION BY g ORDER BY x ROWS UNBOUNDED PRECEDING) AS zzz67 FROM (SELECT x, g FROM dbplyr_052 ORDER BY w) dbplyr_053) dbplyr_054 WHERE (zzz67 > 3.0)");
+	result =
+	    con.Query("SELECT x, g FROM (SELECT x, g, SUM(x) OVER (PARTITION BY g ORDER BY x ROWS UNBOUNDED PRECEDING) AS "
+	              "zzz67 FROM (SELECT x, g FROM dbplyr_052 ORDER BY w) dbplyr_053) dbplyr_054 WHERE (zzz67 > 3.0)");
 	REQUIRE(result->success);
-	REQUIRE(CHECK_COLUMN(result, 0, {3,3,4}));
-	REQUIRE(CHECK_COLUMN(result, 1, {1.0,2.0,2.0}));
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1.0, 2.0, 2.0}));
 
-	// this also breaks because we add a fake projection that is not pruned even if we already have that projection, just with a different table name
-	result = con.Query("SELECT x, g FROM (SELECT x, g, SUM(x) OVER (PARTITION BY g ORDER BY x ROWS UNBOUNDED PRECEDING) AS zzz67 FROM (SELECT * FROM dbplyr_052 ORDER BY x) dbplyr_053) dbplyr_054 WHERE (zzz67 > 3.0)");
+	// this also breaks because we add a fake projection that is not pruned even if we already have that projection,
+	// just with a different table name
+	result =
+	    con.Query("SELECT x, g FROM (SELECT x, g, SUM(x) OVER (PARTITION BY g ORDER BY x ROWS UNBOUNDED PRECEDING) AS "
+	              "zzz67 FROM (SELECT * FROM dbplyr_052 ORDER BY x) dbplyr_053) dbplyr_054 WHERE (zzz67 > 3.0)");
 	REQUIRE(result->success);
 
-	REQUIRE(CHECK_COLUMN(result, 0, {3,3,4}));
-	REQUIRE(CHECK_COLUMN(result, 1, {1.0,2.0,2.0}));
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1.0, 2.0, 2.0}));
 }
 
 TEST_CASE("Test errors in binding window functions", "[window]") {

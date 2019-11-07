@@ -1,11 +1,11 @@
-#include "execution/aggregate_hashtable.hpp"
+#include "duckdb/execution/aggregate_hashtable.hpp"
 
-#include "common/exception.hpp"
-#include "common/types/null_value.hpp"
-#include "common/types/static_vector.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "planner/expression/bound_aggregate_expression.hpp"
-#include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/static_vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 #include <cmath>
 #include <map>
@@ -253,8 +253,8 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 		assert(payload_types[aggr_idx] == TypeId::BIGINT);
 
 		VectorOperations::Gather::Set(addresses, result.data[aggr_idx]);
-		VectorOperations::AddInPlace(
-		    addresses, aggregates[aggr_idx]->function.state_size(aggregates[aggr_idx]->return_type));
+		VectorOperations::AddInPlace(addresses,
+		                             aggregates[aggr_idx]->function.state_size(aggregates[aggr_idx]->return_type));
 	}
 }
 

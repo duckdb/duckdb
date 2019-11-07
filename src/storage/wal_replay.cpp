@@ -1,7 +1,7 @@
-#include "storage/write_ahead_log.hpp"
-#include "common/serializer/buffered_file_reader.hpp"
+#include "duckdb/storage/write_ahead_log.hpp"
+#include "duckdb/common/serializer/buffered_file_reader.hpp"
 
-#include "parser/parsed_data/drop_info.hpp"
+#include "duckdb/parser/parsed_data/drop_info.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -236,7 +236,7 @@ void ReplayState::ReplaySequenceValue() {
 void ReplayState::ReplayUseTable() {
 	auto schema_name = source.Read<string>();
 	auto table_name = source.Read<string>();
-	current_table = db.catalog->GetTable(context.ActiveTransaction(), schema_name, table_name);
+	current_table = db.catalog->GetTable(context, schema_name, table_name);
 }
 
 void ReplayState::ReplayInsert() {
@@ -274,28 +274,23 @@ void ReplayState::ReplayUpdate() {
 	if (!current_table) {
 		throw Exception("Corrupt WAL: update without table");
 	}
+
+	index_t column_index = source.Read<column_t>();
+
 	DataChunk chunk;
 	chunk.Deserialize(source);
 
-	vector<column_t> column_ids;
-	for (index_t i = 0; i < chunk.column_count - 1; i++) {
-		column_ids.push_back(i);
+	vector<column_t> column_ids{column_index};
+	if (column_index >= current_table->columns.size()) {
+		throw Exception("Corrupt WAL: column index for update out of bounds");
 	}
 
-	index_t update_count = chunk.size();
-	for (index_t i = 0; i < chunk.column_count; i++) {
-		chunk.data[i].sel_vector = chunk.owned_sel_vector;
-		chunk.data[i].count = 1;
-	}
-	chunk.sel_vector = chunk.owned_sel_vector;
+	// remove the row id vector from the chunk
+	auto &row_ids = chunk.data[chunk.column_count - 1];
 	chunk.column_count = chunk.column_count - 1;
 
-	auto &row_ids = chunk.data[chunk.column_count];
-
-	for (index_t i = 0; i < update_count; i++) {
-		chunk.owned_sel_vector[0] = i;
-		current_table->storage->Update(*current_table, context, row_ids, column_ids, chunk);
-	}
+	// now perform the update
+	current_table->storage->Update(*current_table, context, row_ids, column_ids, chunk);
 }
 
 //===--------------------------------------------------------------------===//

@@ -1,8 +1,8 @@
 #include "duckdb.hpp"
-#include "common/types/timestamp.hpp"
-#include "common/types/date.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/date.hpp"
 
-#include "main/appender.hpp"
+#include "duckdb/main/appender.hpp"
 
 #include <Rdefines.h>
 // motherfucker
@@ -346,7 +346,7 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	}
 
 	try {
-		auto appender = conn->OpenAppender(DEFAULT_SCHEMA, name);
+		auto appender = conn->OpenAppender(INVALID_SCHEMA, name);
 		auto nrows = LENGTH(VECTOR_ELT(valuesexp, 0));
 		for (uint64_t row_idx = 0; row_idx < nrows; row_idx++) {
 			appender->BeginRow();

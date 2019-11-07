@@ -1,5 +1,5 @@
-#include "function/aggregate/algebraic_functions.hpp"
-#include "function/aggregate_function.hpp"
+#include "duckdb/function/aggregate/algebraic_functions.hpp"
+#include "duckdb/function/aggregate_function.hpp"
 
 using namespace std;
 
@@ -18,4 +18,3 @@ void BuiltinFunctions::RegisterAlgebraicAggregates() {
 }
 
 } // namespace duckdb
-

@@ -1,5 +1,5 @@
-#include "parser/expression/parameter_expression.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/parser/expression/parameter_expression.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
 using namespace std;

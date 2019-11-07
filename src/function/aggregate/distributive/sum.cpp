@@ -1,7 +1,7 @@
-#include "function/aggregate/distributive_functions.hpp"
-#include "common/exception.hpp"
-#include "common/types/null_value.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace std;
 using namespace duckdb;
@@ -33,9 +33,13 @@ namespace duckdb {
 void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet sum("sum");
 	// integer sums to bigint
-	sum.AddFunction(AggregateFunction({ SQLType::BIGINT }, SQLType::BIGINT, get_return_type_size, null_state_initialize, sum_update, sum_combine, gather_finalize, null_simple_initialize, sum_simple_update));
+	sum.AddFunction(AggregateFunction({SQLType::BIGINT}, SQLType::BIGINT, get_return_type_size, null_state_initialize,
+	                                  sum_update, sum_combine, gather_finalize, null_simple_initialize,
+	                                  sum_simple_update));
 	// float sums to float
-	sum.AddFunction(AggregateFunction({ SQLType::DOUBLE }, SQLType::DOUBLE, get_return_type_size, null_state_initialize, sum_update, sum_combine, gather_finalize, null_simple_initialize, sum_simple_update));
+	sum.AddFunction(AggregateFunction({SQLType::DOUBLE}, SQLType::DOUBLE, get_return_type_size, null_state_initialize,
+	                                  sum_update, sum_combine, gather_finalize, null_simple_initialize,
+	                                  sum_simple_update));
 
 	set.AddFunction(sum);
 }

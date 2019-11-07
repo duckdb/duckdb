@@ -1,6 +1,6 @@
-#include "parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 
-#include "common/exception.hpp"
+#include "duckdb/common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -12,7 +12,6 @@ string CaseExpression::ToString() const {
 	return "CASE WHEN (" + check->ToString() + ") THEN (" + result_if_true->ToString() + ") ELSE (" +
 	       result_if_false->ToString() + ")";
 }
-
 
 bool CaseExpression::Equals(const CaseExpression *a, const CaseExpression *b) {
 	if (!a->check->Equals(b->check.get())) {

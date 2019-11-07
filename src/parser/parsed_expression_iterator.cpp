@@ -1,6 +1,6 @@
-#include "parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
-#include "parser/expression/list.hpp"
+#include "duckdb/parser/expression/list.hpp"
 
 using namespace duckdb;
 using namespace std;

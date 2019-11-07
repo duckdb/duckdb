@@ -27,8 +27,6 @@ TEST_CASE("Test basic comparison statements", "[comparison]") {
 	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
 }
 
-
-
 TEST_CASE("Test strcmp() to ensure platform sanity", "[comparison]") {
 	int res;
 	res = strcmp("ZZZ", "ZZZ");
@@ -58,9 +56,9 @@ TEST_CASE("Test strcmp() to ensure platform sanity", "[comparison]") {
 	res = strcmp("NUT", "NUT");
 	REQUIRE(res == 0);
 
-	Value zzz ("ZZZ");
-	Value hxr ("HXR");
-	Value nut ("NUT");
+	Value zzz("ZZZ");
+	Value hxr("HXR");
+	Value nut("NUT");
 
 	REQUIRE_FALSE(zzz > zzz);
 	REQUIRE(zzz > hxr);
@@ -82,7 +80,6 @@ TEST_CASE("Test strcmp() to ensure platform sanity", "[comparison]") {
 	REQUIRE(zzz != hxr);
 	REQUIRE(zzz != nut);
 
-
 	REQUIRE_FALSE(hxr > zzz);
 	REQUIRE_FALSE(hxr > hxr);
 	REQUIRE_FALSE(hxr > nut);
@@ -102,9 +99,6 @@ TEST_CASE("Test strcmp() to ensure platform sanity", "[comparison]") {
 	REQUIRE(hxr != zzz);
 	REQUIRE_FALSE(hxr != hxr);
 	REQUIRE(hxr != nut);
-
-
-
 
 	REQUIRE_FALSE(nut > zzz);
 	REQUIRE(nut > hxr);

@@ -1,7 +1,7 @@
-#include "execution/index/art/art.hpp"
-#include "execution/expression_executor.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "main/client_context.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/main/client_context.hpp"
 #include <algorithm>
 
 using namespace duckdb;
@@ -110,7 +110,7 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	}
 }
 
-bool ART::Insert(DataChunk &input, Vector &row_ids) {
+bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	assert(row_ids.type == TypeId::BIGINT);
 	assert(input.size() == row_ids.count);
 	assert(types[0] == input.data[0].type);
@@ -152,14 +152,39 @@ bool ART::Insert(DataChunk &input, Vector &row_ids) {
 	return true;
 }
 
-bool ART::Append(DataChunk &appended_data, Vector &row_identifiers) {
-	lock_guard<mutex> l(lock);
-
+bool ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifiers) {
 	// first resolve the expressions for the index
 	ExecuteExpressions(appended_data, expression_result);
 
 	// now insert into the index
-	return Insert(expression_result, row_identifiers);
+	return Insert(lock, expression_result, row_identifiers);
+}
+
+void ART::VerifyAppend(DataChunk &chunk) {
+	if (!is_unique) {
+		return;
+	}
+
+	// unique index, check
+	lock_guard<mutex> l(lock);
+
+	// first resolve the expressions for the index
+	ExecuteExpressions(chunk, expression_result);
+
+	// generate the keys for the given input
+	vector<unique_ptr<Key>> keys;
+	GenerateKeys(expression_result, keys);
+
+	// now insert the elements into the index
+	for (index_t i = 0; i < expression_result.size(); i++) {
+		if (!keys[i]) {
+			continue;
+		}
+		if (Lookup(tree, *keys[i], 0) != nullptr) {
+			// node already exists in tree
+			throw ConstraintException("duplicate key value violates primary key or unique constraint");
+		}
+	}
 }
 
 bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
@@ -247,9 +272,7 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 //===--------------------------------------------------------------------===//
 // Delete
 //===--------------------------------------------------------------------===//
-void ART::Delete(DataChunk &input, Vector &row_ids) {
-	lock_guard<mutex> l(lock);
-
+void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	// first resolve the expressions
 	ExecuteExpressions(input, expression_result);
 
@@ -616,8 +639,8 @@ void ART::SearchCloseRange(vector<row_t> &result_ids, ARTIndexScanState *state, 
 	}
 }
 
-void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) {
-	auto state = (ARTIndexScanState *)ss;
+void ART::Scan(Transaction &transaction, TableIndexScanState &table_state, DataChunk &result) {
+	auto state = (ARTIndexScanState *)table_state.index_state.get();
 
 	// scan the index
 	if (!state->checked) {
@@ -684,7 +707,7 @@ void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) 
 	    std::min((index_t)STANDARD_VECTOR_SIZE, (index_t)state->result_ids.size() - state->result_index);
 
 	// fetch the actual values from the base table
-	table.Fetch(transaction, result, state->column_ids, row_identifiers);
+	table.Fetch(transaction, result, state->column_ids, row_identifiers, table_state);
 
 	// move to the next set of row ids
 	state->result_index += row_identifiers.count;

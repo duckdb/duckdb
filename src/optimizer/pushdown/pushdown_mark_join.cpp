@@ -1,6 +1,6 @@
-#include "optimizer/filter_pushdown.hpp"
-#include "planner/expression/bound_operator_expression.hpp"
-#include "planner/operator/logical_comparison_join.hpp"
+#include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 
 using namespace duckdb;
 using namespace std;

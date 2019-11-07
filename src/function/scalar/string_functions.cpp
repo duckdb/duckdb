@@ -1,4 +1,4 @@
-#include "function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
 using namespace std;
 
@@ -15,4 +15,4 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<SubstringFun>();
 }
 
-}
+} // namespace duckdb

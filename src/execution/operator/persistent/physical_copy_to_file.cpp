@@ -1,5 +1,5 @@
-#include "execution/operator/persistent/physical_copy_to_file.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <algorithm>
 #include <fstream>
@@ -74,7 +74,8 @@ string AddEscapes(string &to_be_escaped, string escape, string val) {
 	return new_val;
 }
 
-static void WriteQuotedString(BufferedWriter &writer, const char *str_value, string &delimiter, string &quote, string &escape, string &null_str, bool write_quoted) {
+static void WriteQuotedString(BufferedWriter &writer, const char *str_value, string &delimiter, string &quote,
+                              string &escape, string &null_str, bool write_quoted) {
 	// used for adding escapes
 	bool add_escapes = false;
 	string new_val = str_value;
@@ -188,7 +189,8 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 
 				// non-null value, fetch the string value from the cast chunk
 				auto str_value = ((const char **)cast_chunk.data[col_idx].data)[i];
-				WriteQuotedString(writer, str_value, info.delimiter, info.quote, info.escape, info.null_str, info.force_quote[col_idx]);
+				WriteQuotedString(writer, str_value, info.delimiter, info.quote, info.escape, info.null_str,
+				                  info.force_quote[col_idx]);
 			}
 			writer.Write(newline);
 		});

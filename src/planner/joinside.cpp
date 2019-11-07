@@ -1,9 +1,9 @@
-#include "planner/joinside.hpp"
+#include "duckdb/planner/joinside.hpp"
 
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression/bound_comparison_expression.hpp"
-#include "planner/expression/bound_subquery_expression.hpp"
-#include "planner/expression_iterator.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 using namespace duckdb;
 using namespace std;

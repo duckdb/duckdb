@@ -1,11 +1,11 @@
-#include "execution/operator/persistent/physical_update.hpp"
+#include "duckdb/execution/operator/persistent/physical_update.hpp"
 
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "main/client_context.hpp"
-#include "planner/expression/bound_reference_expression.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -19,11 +19,19 @@ void PhysicalUpdate::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 	update_chunk.Initialize(update_types);
 
 	int64_t updated_count = 0;
+
+	DataChunk mock_chunk;
+	if (is_index_update) {
+		mock_chunk.Initialize(table.types);
+	}
+
 	while (true) {
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 		if (state->child_chunk.size() == 0) {
 			break;
 		}
+		state->child_chunk.Flatten();
+
 		ExpressionExecutor executor(state->child_chunk);
 		// update data in the base table
 		// the row ids are given to us as the last column of the child chunk
@@ -41,7 +49,16 @@ void PhysicalUpdate::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		}
 		update_chunk.sel_vector = state->child_chunk.sel_vector;
 
-		table.Update(tableref, context, row_ids, columns, update_chunk);
+		if (is_index_update) {
+			// index update, perform a delete and an append instead
+			table.Delete(tableref, context, row_ids);
+			for (index_t i = 0; i < columns.size(); i++) {
+				mock_chunk.data[columns[i]].Reference(update_chunk.data[i]);
+			}
+			table.Append(tableref, context, mock_chunk);
+		} else {
+			table.Update(tableref, context, row_ids, columns, update_chunk);
+		}
 		updated_count += state->child_chunk.size();
 	}
 

@@ -1,8 +1,8 @@
-#include "parser/query_node.hpp"
-#include "planner/logical_plan_generator.hpp"
-#include "planner/operator/logical_distinct.hpp"
-#include "planner/operator/logical_limit.hpp"
-#include "planner/operator/logical_order.hpp"
+#include "duckdb/parser/query_node.hpp"
+#include "duckdb/planner/logical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
+#include "duckdb/planner/operator/logical_order.hpp"
 
 using namespace duckdb;
 using namespace std;

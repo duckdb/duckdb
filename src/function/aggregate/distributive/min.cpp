@@ -1,7 +1,7 @@
-#include "function/aggregate/distributive_functions.hpp"
-#include "common/exception.hpp"
-#include "common/types/null_value.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace std;
 using namespace duckdb;
@@ -30,8 +30,9 @@ namespace duckdb {
 
 void MinFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet min("min");
-	for(auto type : SQLType::ALL_TYPES) {
-		min.AddFunction(AggregateFunction({type}, type, get_return_type_size, null_state_initialize, min_update, min_combine, gather_finalize, null_simple_initialize, min_simple_update));
+	for (auto type : SQLType::ALL_TYPES) {
+		min.AddFunction(AggregateFunction({type}, type, get_return_type_size, null_state_initialize, min_update,
+		                                  min_combine, gather_finalize, null_simple_initialize, min_simple_update));
 	}
 	set.AddFunction(min);
 }

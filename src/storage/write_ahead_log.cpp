@@ -1,4 +1,4 @@
-#include "storage/write_ahead_log.hpp"
+#include "duckdb/storage/write_ahead_log.hpp"
 
 #include <cstring>
 
@@ -97,7 +97,6 @@ void WriteAheadLog::WriteSetTable(string &schema, string &table) {
 void WriteAheadLog::WriteInsert(DataChunk &chunk) {
 	assert(chunk.size() > 0);
 	chunk.Verify();
-	assert(!chunk.sel_vector); // "Cannot insert into WAL from chunk with SEL vector"
 
 	writer->Write<WALType>(WALType::INSERT_TUPLE);
 	chunk.Serialize(*writer);
@@ -107,18 +106,17 @@ void WriteAheadLog::WriteDelete(DataChunk &chunk) {
 	assert(chunk.size() > 0);
 	assert(chunk.column_count == 1 && chunk.data[0].type == ROW_TYPE);
 	chunk.Verify();
-	assert(!chunk.sel_vector); // "Cannot insert into WAL from chunk with SEL vector"
 
 	writer->Write<WALType>(WALType::DELETE_TUPLE);
 	chunk.Serialize(*writer);
 }
 
-void WriteAheadLog::WriteUpdate(DataChunk &chunk) {
+void WriteAheadLog::WriteUpdate(DataChunk &chunk, column_t col_idx) {
 	assert(chunk.size() > 0);
 	chunk.Verify();
-	assert(!chunk.sel_vector); // "Cannot insert into WAL from chunk with SEL vector"
 
 	writer->Write<WALType>(WALType::UPDATE_TUPLE);
+	writer->Write<column_t>(col_idx);
 	chunk.Serialize(*writer);
 }
 

@@ -1,8 +1,8 @@
 #include "catch.hpp"
-#include "common/operator/cast_operators.hpp"
-#include "common/string_util.hpp"
-#include "common/limits.hpp"
-#include "common/types.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/types.hpp"
 #include <vector>
 
 using namespace duckdb;

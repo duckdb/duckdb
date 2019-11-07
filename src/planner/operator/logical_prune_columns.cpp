@@ -1,4 +1,4 @@
-#include "planner/operator/logical_prune_columns.hpp"
+#include "duckdb/planner/operator/logical_prune_columns.hpp"
 
 using namespace duckdb;
 using namespace std;

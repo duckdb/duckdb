@@ -1,4 +1,4 @@
-#include "execution/operator/join/physical_comparison_join.hpp"
+#include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 
 using namespace duckdb;
 using namespace std;

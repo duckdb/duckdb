@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "common/file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "dbgen.hpp"
 #include "test_helpers.hpp"
 
@@ -94,6 +94,103 @@ TEST_CASE("Test ART index on table with multiple columns", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"hello"}));
+}
+
+TEST_CASE("Test ART index on table with updates to other columns", "[art]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i BIGINT, j INTEGER, k VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(j)"));
+
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (10, 1, 'hello'), (11, 2, 'world')"));
+
+	// condition on "j"
+	result = con.Query("SELECT * FROM integers WHERE j=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"hello"}));
+
+	// now update the column
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con2.Query("UPDATE integers SET i=100, k='update' WHERE j=1"));
+
+	// con sees the old state, con2 sees the new state
+	result = con.Query("SELECT * FROM integers WHERE j=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"hello"}));
+	result = con2.Query("SELECT * FROM integers WHERE j=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {100}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"update"}));
+
+	// after a commit, both see the new state
+	REQUIRE_NO_FAIL(con2.Query("COMMIT"));
+
+	result = con.Query("SELECT * FROM integers WHERE j=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {100}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"update"}));
+	result = con2.Query("SELECT * FROM integers WHERE j=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {100}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"update"}));
+
+	// now do the same but with two outstanding updates
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=20, k='t1' WHERE j=1"));
+	REQUIRE_NO_FAIL(con2.Query("UPDATE integers SET i=21, k='t2' WHERE j=2"));
+
+	// con1 sees the updated state for the first tuple, but the old state for the new tuple
+	result = con.Query("SELECT * FROM integers WHERE j=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {20}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"t1"}));
+	result = con.Query("SELECT * FROM integers WHERE j=2");
+	REQUIRE(CHECK_COLUMN(result, 0, {11}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"world"}));
+	result = con.Query("SELECT * FROM integers ORDER BY j");
+	REQUIRE(CHECK_COLUMN(result, 0, {20, 11}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"t1", "world"}));
+	// con2 sees the updated state for the second tuple, but the old state for the new tuple
+	result = con2.Query("SELECT * FROM integers WHERE j=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {100}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"update"}));
+	result = con2.Query("SELECT * FROM integers WHERE j=2");
+	REQUIRE(CHECK_COLUMN(result, 0, {21}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"t2"}));
+	result = con2.Query("SELECT * FROM integers ORDER BY j");
+	REQUIRE(CHECK_COLUMN(result, 0, {100, 21}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"update", "t2"}));
+
+	// after commit, both see the updated state
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+	REQUIRE_NO_FAIL(con2.Query("COMMIT"));
+
+	result = con.Query("SELECT * FROM integers WHERE j=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {20}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"t1"}));
+	result = con.Query("SELECT * FROM integers WHERE j=2");
+	REQUIRE(CHECK_COLUMN(result, 0, {21}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"t2"}));
+	result = con.Query("SELECT * FROM integers ORDER BY j");
+	REQUIRE(CHECK_COLUMN(result, 0, {20, 21}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"t1", "t2"}));
+	result = con2.Query("SELECT * FROM integers ORDER BY j");
+	REQUIRE(CHECK_COLUMN(result, 0, {20, 21}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"t1", "t2"}));
 }
 
 TEST_CASE("Test ART index that requires multiple columns for expression", "[art]") {
@@ -291,7 +388,7 @@ TEST_CASE("Test ART index with multiple updates on the same value", "[art]") {
 	// update the same tuple a bunch of times in the same transaction and then rollback
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	for (int32_t i = 0; i < 10; i++) {
-		REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=$1 WHERE i=$2", i + 2, i + 1));
+		REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=" + to_string(i + 2) + " WHERE i=" + to_string(i + 1)));
 
 		result = con.Query("SELECT * FROM integers WHERE i > 0");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(i + 2)}));
@@ -436,9 +533,10 @@ TEST_CASE("Test ART index with random insertions and deletes", "[art]") {
 			REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=$1", (int32_t)element));
 			table_count--;
 			// verify that the deletion worked
+			result = con.Query("SELECT COUNT(*) FROM integers");
+			REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(table_count)}));
 			result = con.Query("SELECT COUNT(*) FROM integers WHERE i >= 0");
-			bool check = CHECK_COLUMN(result, 0, {Value::BIGINT(table_count)});
-			REQUIRE(check);
+			REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(table_count)}));
 		}
 	}
 }
@@ -472,10 +570,9 @@ TEST_CASE("Test ART index creation with many versions", "[art]") {
 	REQUIRE_NO_FAIL(r3.Query("BEGIN TRANSACTION"));
 	// increment values by 1 again
 	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=i+1"));
-	// create an index
-	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
+	// create an index, this fails because we have outstanding updates
+	REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
 
-	// now perform the sums, with and without an index scan
 	// r1
 	result = r1.Query("SELECT SUM(i) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(expected_sum_r1)}));
@@ -834,10 +931,9 @@ TEST_CASE("ART Integer Types", "[art]") {
 	}
 }
 
-TEST_CASE("ART Big Range", "[art]") {
+TEST_CASE("ART Simple Big Range", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
@@ -868,6 +964,18 @@ TEST_CASE("ART Big Range", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(6000)}));
 	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+}
+
+TEST_CASE("ART Big Range with deletions", "[art]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	index_t n = 4;
+	auto keys = unique_ptr<int32_t[]>(new int32_t[n + 1]);
+	for (index_t i = 0; i < n + 1; i++) {
+		keys[i] = i + 1;
+	}
 
 	// now perform a an index creation and scan with deletions with a second transaction
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));

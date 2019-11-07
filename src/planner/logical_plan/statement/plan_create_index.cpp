@@ -1,7 +1,7 @@
-#include "planner/logical_plan_generator.hpp"
-#include "planner/operator/logical_create_index.hpp"
-#include "planner/operator/logical_get.hpp"
-#include "planner/statement/bound_create_index_statement.hpp"
+#include "duckdb/planner/logical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_create_index.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/statement/bound_create_index_statement.hpp"
 
 using namespace duckdb;
 using namespace std;

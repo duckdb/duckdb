@@ -2,9 +2,9 @@
 // cast_operators.cpp
 // Description: This file contains the implementation of the different casts
 //===--------------------------------------------------------------------===//
-#include "common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,14 +1,14 @@
 #include "catch.hpp"
 #include "expression_helper.hpp"
-#include "planner/operator/logical_top_n.hpp"
-#include "optimizer/topn_optimizer.hpp"
+#include "duckdb/planner/operator/logical_top_n.hpp"
+#include "duckdb/optimizer/topn_optimizer.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test Top N optimization", "[topn]") {
-	//LogicalTopN *topn;
+	// LogicalTopN *topn;
 	ExpressionHelper helper;
 	helper.con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)");
 	auto tree = helper.ParseLogicalTree("SELECT i FROM integers ORDER BY i LIMIT 4");
@@ -19,10 +19,10 @@ TEST_CASE("Test Top N optimization", "[topn]") {
 	TopN topn_optimizer;
 	auto plan = topn_optimizer.Optimize(move(tree));
 
-  // ORDER BY + LIMIT is now replaced by TOP N optimization
+	// ORDER BY + LIMIT is now replaced by TOP N optimization
 	REQUIRE(plan->type == LogicalOperatorType::TOP_N);
 
-  // Same as above but with OFFSET
+	// Same as above but with OFFSET
 	tree = helper.ParseLogicalTree("SELECT i FROM integers ORDER BY i DESC LIMIT 4 OFFSET 5");
 
 	REQUIRE(tree->type == LogicalOperatorType::LIMIT);

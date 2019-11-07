@@ -1,6 +1,6 @@
-#include "execution/operator/aggregate/physical_window.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "planner/operator/logical_window.hpp"
+#include "duckdb/execution/operator/aggregate/physical_window.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
 
 using namespace duckdb;
 using namespace std;

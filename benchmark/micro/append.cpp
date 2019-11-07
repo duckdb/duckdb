@@ -1,6 +1,6 @@
 #include "benchmark_runner.hpp"
 #include "duckdb_benchmark_macro.hpp"
-#include "main/appender.hpp"
+#include "duckdb/main/appender.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -117,11 +117,11 @@ FINISH_BENCHMARK(Append100KIntegersPREPAREDPrimary)
 	void RunBenchmark(DuckDBBenchmarkState *state) override {                                                          \
 		auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers");                                          \
 		for (int32_t i = 0; i < 100000; i++) {                                                                         \
-			appender->BeginRow();                                                                                       \
-			appender->AppendInteger(i);                                                                                 \
-			appender->EndRow();                                                                                         \
+			appender->BeginRow();                                                                                      \
+			appender->AppendInteger(i);                                                                                \
+			appender->EndRow();                                                                                        \
 		}                                                                                                              \
-		 state->conn.CloseAppender();                                                                                      \
+		state->conn.CloseAppender();                                                                                   \
 	}                                                                                                                  \
 	void Cleanup(DuckDBBenchmarkState *state) override {                                                               \
 		state->conn.Query("DROP TABLE integers");                                                                      \
@@ -155,11 +155,11 @@ FINISH_BENCHMARK(Append100KIntegersAPPENDERPrimary)
 #define APPEND_BENCHMARK_COPY(CREATE_STATEMENT)                                                                        \
 	void Load(DuckDBBenchmarkState *state) override {                                                                  \
 		state->conn.Query("CREATE TABLE integers(i INTEGER)");                                                         \
-		auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers");                                                     \
+		auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers");                                          \
 		for (int32_t i = 0; i < 100000; i++) {                                                                         \
-			appender->BeginRow();                                                                                       \
-			appender->AppendInteger(i);                                                                                 \
-			appender->EndRow();                                                                                         \
+			appender->BeginRow();                                                                                      \
+			appender->AppendInteger(i);                                                                                \
+			appender->EndRow();                                                                                        \
 		}                                                                                                              \
 		state->conn.CloseAppender();                                                                                   \
 		state->conn.Query("COPY integers TO 'integers.csv' DELIMITER '|'");                                            \

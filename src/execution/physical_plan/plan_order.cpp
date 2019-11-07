@@ -1,6 +1,6 @@
-#include "execution/operator/order/physical_order.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "planner/operator/logical_order.hpp"
+#include "duckdb/execution/operator/order/physical_order.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_order.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,28 +1,30 @@
-#include "main/client_context.hpp"
+#include "duckdb/main/client_context.hpp"
 
-#include "common/serializer/buffered_deserializer.hpp"
-#include "common/serializer/buffered_serializer.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "main/database.hpp"
-#include "main/materialized_query_result.hpp"
-#include "main/query_result.hpp"
-#include "main/stream_query_result.hpp"
-#include "optimizer/optimizer.hpp"
-#include "parser/parser.hpp"
-#include "parser/expression/constant_expression.hpp"
-#include "parser/statement/execute_statement.hpp"
-#include "parser/statement/explain_statement.hpp"
-#include "parser/statement/prepare_statement.hpp"
-#include "planner/operator/logical_execute.hpp"
-#include "planner/planner.hpp"
-#include "transaction/transaction_manager.hpp"
-#include "parser/statement/deallocate_statement.hpp"
+#include "duckdb/common/serializer/buffered_deserializer.hpp"
+#include "duckdb/common/serializer/buffered_serializer.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/main/query_result.hpp"
+#include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/statement/execute_statement.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
+#include "duckdb/parser/statement/prepare_statement.hpp"
+#include "duckdb/planner/operator/logical_execute.hpp"
+#include "duckdb/planner/planner.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/parser/statement/deallocate_statement.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 ClientContext::ClientContext(DuckDB &database)
     : db(database), transaction(*database.transaction_manager), interrupted(false), catalog(*database.catalog),
+      temporary_objects(make_unique<SchemaCatalogEntry>(db.catalog.get(), TEMP_SCHEMA)),
       prepared_statements(make_unique<CatalogSet>(*db.catalog)), open_result(nullptr) {
 	random_device rd;
 	random_engine.seed(rd());
@@ -76,7 +78,7 @@ unique_ptr<DataChunk> ClientContext::Fetch() {
 string ClientContext::FinalizeQuery(bool success) {
 	profiler.EndQuery();
 
-	execution_context.physical_plan = nullptr;
+	execution_context.Reset();
 
 	string error;
 	if (transaction.HasActiveTransaction()) {
@@ -128,6 +130,9 @@ unique_ptr<DataChunk> ClientContext::FetchInternal() {
 
 unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, unique_ptr<SQLStatement> statement,
                                                                 bool allow_stream_result) {
+	if (ActiveTransaction().is_invalidated && statement->type != StatementType::TRANSACTION) {
+		throw Exception("Current transaction is aborted (please ROLLBACK)");
+	}
 	StatementType statement_type = statement->type;
 	bool create_stream_result = statement_type == StatementType::SELECT && allow_stream_result;
 	// for some statements, we log the literal query string in the WAL
@@ -344,7 +349,20 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementsInternal(string query,
 			current_result = ExecuteStatementInternal(query, move(statement), allow_stream_result && is_last_statement);
 			// only the last result can be STREAM_RESULT
 			assert(is_last_statement || current_result->type != QueryResultType::STREAM_RESULT);
+		} catch (ParserException &ex) {
+			// parser exceptions do not invalidate the current transaction
+			current_result = make_unique<MaterializedQueryResult>(ex.what());
+		} catch (BinderException &ex) {
+			// binder exceptions also do not invalidate the current transaction
+			current_result = make_unique<MaterializedQueryResult>(ex.what());
+		} catch (CatalogException &ex) {
+			// catalog exceptions also do not invalidate the current transaction
+			current_result = make_unique<MaterializedQueryResult>(ex.what());
 		} catch (std::exception &ex) {
+			// other types of exceptions do invalidate the current transaction
+			if (transaction.HasActiveTransaction()) {
+				ActiveTransaction().is_invalidated = true;
+			}
 			current_result = make_unique<MaterializedQueryResult>(ex.what());
 		}
 		if (!current_result->success) {

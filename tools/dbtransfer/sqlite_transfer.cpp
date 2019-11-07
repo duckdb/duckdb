@@ -1,6 +1,6 @@
 #include "sqlite_transfer.hpp"
 
-#include "common/types/date.hpp"
+#include "duckdb/common/types/date.hpp"
 
 using namespace duckdb;
 using namespace std;

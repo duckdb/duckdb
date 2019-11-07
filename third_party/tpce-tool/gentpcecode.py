@@ -20,12 +20,12 @@ for fp in [header, source]:
 """)
 
 header.write("""
-#include "catalog/catalog.hpp"
-#include "main/client_context.hpp"
-#include "main/connection.hpp"
-#include "main/database.hpp"
-#include "storage/data_table.hpp"
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/connection.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 #include "main/BaseLoader.h"
 #include "main/BaseLoaderFactory.h"
@@ -276,7 +276,7 @@ for table in tables.keys():
 	source.write("""
 CBaseLoader<${ROW_TYPE}> *
 DuckDBLoaderFactory::Create${TABLENAME}Loader() {
-	auto table = context->db.catalog->GetTable(context->ActiveTransaction(),
+	auto table = context->db.catalog->GetTable(*context,
 	                                          schema, "${TABLEINDB}" + suffix);
 	return new DuckDB${TABLENAME}Load(table, context);
 }

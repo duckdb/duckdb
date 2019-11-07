@@ -1,6 +1,6 @@
-#include "parser/tableref/crossproductref.hpp"
-#include "parser/tableref/emptytableref.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/parser/tableref/crossproductref.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
 using namespace std;

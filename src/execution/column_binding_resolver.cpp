@@ -1,7 +1,7 @@
-#include "execution/column_binding_resolver.hpp"
+#include "duckdb/execution/column_binding_resolver.hpp"
 
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

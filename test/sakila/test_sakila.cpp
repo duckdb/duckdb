@@ -1,6 +1,6 @@
 #include "catch.hpp"
-#include "common/fstream_util.hpp"
-#include "common/gzip_stream.hpp"
+#include "duckdb/common/fstream_util.hpp"
+#include "duckdb/common/gzip_stream.hpp"
 #include "test_helpers.hpp"
 
 #include <fstream>

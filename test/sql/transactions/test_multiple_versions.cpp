@@ -1,6 +1,6 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
-#include "storage/storage_info.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -69,7 +69,7 @@ TEST_CASE("Test multiple versions of the same data with a data set that exceeds 
 	con.EnableQueryVerification();
 
 	// set up the database
-	uint64_t integer_count = 2 * (BLOCK_SIZE / sizeof(int32_t));
+	uint64_t integer_count = 2 * (Storage::BLOCK_SIZE / sizeof(int32_t));
 	uint64_t current_count = 4;
 	uint64_t expected_sum = 10;
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));

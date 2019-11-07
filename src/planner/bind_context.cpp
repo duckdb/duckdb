@@ -1,9 +1,9 @@
-#include "planner/bind_context.hpp"
+#include "duckdb/planner/bind_context.hpp"
 
-#include "parser/expression/columnref_expression.hpp"
-#include "parser/tableref/subqueryref.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/tableref/bound_basetableref.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/tableref/bound_basetableref.hpp"
 
 #include <algorithm>
 

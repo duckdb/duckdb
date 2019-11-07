@@ -3,16 +3,16 @@
 // Description: This file contains the implementation of the append function
 //===--------------------------------------------------------------------===//
 
-#include "common/exception.hpp"
-#include "common/types/null_value.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 template <class T, bool HAS_NULL>
-static void vector_append_function(T *__restrict source, T *__restrict target, index_t count, sel_t *__restrict sel_vector,
-                            nullmask_t &nullmask, index_t right_offset) {
+static void vector_append_function(T *__restrict source, T *__restrict target, index_t count,
+                                   sel_t *__restrict sel_vector, nullmask_t &nullmask, index_t right_offset) {
 	target += right_offset;
 	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
 		target[k] = source[i];
