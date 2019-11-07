@@ -1,6 +1,6 @@
-#include "common/exception.hpp"
-#include "common/operator/comparison_operators.hpp"
-#include "common/value_operations/value_operations.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 
 using namespace duckdb;
 using namespace std;

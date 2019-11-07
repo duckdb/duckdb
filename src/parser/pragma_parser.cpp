@@ -1,9 +1,9 @@
-#include "parser/pragma_parser.hpp"
-#include "main/client_context.hpp"
-#include "main/database.hpp"
-#include "storage/storage_manager.hpp"
-#include "storage/buffer_manager.hpp"
-#include "common/operator/cast_operators.hpp"
+#include "duckdb/parser/pragma_parser.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include <cctype>
 
 using namespace duckdb;

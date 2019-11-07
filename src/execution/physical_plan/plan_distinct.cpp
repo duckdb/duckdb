@@ -1,12 +1,12 @@
-#include "execution/operator/aggregate/physical_hash_aggregate.hpp"
-#include "execution/operator/projection/physical_projection.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "function/aggregate/distributive_functions.hpp"
-#include "planner/expression/bound_aggregate_expression.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression/bound_reference_expression.hpp"
-#include "planner/operator/logical_distinct.hpp"
-#include "main/client_context.hpp"
+#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/execution/operator/projection/physical_projection.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
+#include "duckdb/main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;

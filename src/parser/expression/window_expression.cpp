@@ -1,7 +1,7 @@
-#include "parser/expression/window_expression.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 
-#include "common/serializer.hpp"
-#include "common/string_util.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;

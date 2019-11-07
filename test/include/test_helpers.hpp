@@ -11,8 +11,8 @@
 #undef RemoveDirectory
 #endif
 
-#include "common/string_util.hpp"
-#include "common/types.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types.hpp"
 #include "compare_result.hpp"
 #include "duckdb.hpp"
 

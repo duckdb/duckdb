@@ -1,9 +1,9 @@
-#include "function/scalar/date_functions.hpp"
+#include "duckdb/function/scalar/date_functions.hpp"
 
-#include "common/exception.hpp"
-#include "common/types/date.hpp"
-#include "common/types/timestamp.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace std;
 

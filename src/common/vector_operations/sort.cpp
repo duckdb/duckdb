@@ -3,9 +3,9 @@
 // Description: This file contains the implementation of the sort operator
 //===--------------------------------------------------------------------===//
 
-#include "common/exception.hpp"
-#include "common/operator/comparison_operators.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -148,7 +148,7 @@ void VectorOperations::Sort(Vector &vector, sel_t result[]) {
 	}
 }
 
-#include "common/operator/comparison_operators.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 template <class T> bool is_unique(Vector &vector, sel_t sel_vector[]) {
 	auto data = (T *)vector.data;

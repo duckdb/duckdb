@@ -1,8 +1,8 @@
-#include "planner/expression_binder/order_binder.hpp"
+#include "duckdb/planner/expression_binder/order_binder.hpp"
 
-#include "parser/expression/columnref_expression.hpp"
-#include "parser/expression/constant_expression.hpp"
-#include "parser/query_node/select_node.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 
 using namespace duckdb;
 using namespace std;

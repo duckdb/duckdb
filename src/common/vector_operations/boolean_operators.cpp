@@ -4,11 +4,11 @@
 // operations AND OR !
 //===--------------------------------------------------------------------===//
 
-#include "common/operator/boolean_operators.hpp"
+#include "duckdb/common/operator/boolean_operators.hpp"
 
-#include "common/vector_operations/binary_loops.hpp"
-#include "common/vector_operations/unary_loops.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_operations/binary_loops.hpp"
+#include "duckdb/common/vector_operations/unary_loops.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;

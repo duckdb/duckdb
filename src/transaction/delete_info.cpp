@@ -1,6 +1,6 @@
-#include "transaction/delete_info.hpp"
-#include "storage/table/chunk_info.hpp"
-#include "storage/table/version_manager.hpp"
+#include "duckdb/transaction/delete_info.hpp"
+#include "duckdb/storage/table/chunk_info.hpp"
+#include "duckdb/storage/table/version_manager.hpp"
 
 using namespace duckdb;
 using namespace std;

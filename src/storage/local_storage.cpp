@@ -1,7 +1,7 @@
-#include "transaction/local_storage.hpp"
-#include "execution/index/art/art.hpp"
-#include "storage/table/append_state.hpp"
-#include "storage/write_ahead_log.hpp"
+#include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/write_ahead_log.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,4 +1,4 @@
-#include "common/enums/statement_type.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
 
 using namespace std;
 

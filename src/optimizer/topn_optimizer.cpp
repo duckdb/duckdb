@@ -1,7 +1,7 @@
-#include "optimizer/topn_optimizer.hpp"
-#include "planner/operator/logical_order.hpp"
-#include "planner/operator/logical_limit.hpp"
-#include "planner/operator/logical_top_n.hpp"
+#include "duckdb/optimizer/topn_optimizer.hpp"
+#include "duckdb/planner/operator/logical_order.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
+#include "duckdb/planner/operator/logical_top_n.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,5 +1,5 @@
-#include "common/checksum.hpp"
-#include "common/types/hash.hpp"
+#include "duckdb/common/checksum.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 using namespace std;
 

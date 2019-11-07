@@ -1,4 +1,4 @@
-#include "common/serializer.hpp"
+#include "duckdb/common/serializer.hpp"
 
 using namespace duckdb;
 using namespace std;

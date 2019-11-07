@@ -1,11 +1,11 @@
-#include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "main/client_context.hpp"
-#include "parser/expression/function_expression.hpp"
-#include "planner/expression/bound_aggregate_expression.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression_binder/aggregate_binder.hpp"
-#include "planner/expression_binder/select_binder.hpp"
-#include "planner/query_node/bound_select_node.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression_binder/aggregate_binder.hpp"
+#include "duckdb/planner/expression_binder/select_binder.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -59,7 +59,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	aggregate->children = move(children);
 	// now create a column reference referring to this aggregate
 	auto colref = make_unique<BoundColumnRefExpression>(
-	    func->name, aggregate->return_type, ColumnBinding(node.aggregate_index, node.aggregates.size()), depth);
+	    aggr.alias.empty() ? aggregate->ToString() : aggr.alias, aggregate->return_type, ColumnBinding(node.aggregate_index, node.aggregates.size()), depth);
 	// move the aggregate expression into the set of bound aggregates
 	node.aggregates.push_back(move(aggregate));
 	return BindResult(move(colref), return_type);

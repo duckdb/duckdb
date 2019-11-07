@@ -1,7 +1,7 @@
-#include "parser/statement/deallocate_statement.hpp"
-#include "parser/statement/execute_statement.hpp"
-#include "parser/statement/prepare_statement.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/parser/statement/deallocate_statement.hpp"
+#include "duckdb/parser/statement/execute_statement.hpp"
+#include "duckdb/parser/statement/prepare_statement.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
 using namespace std;

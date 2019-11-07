@@ -1,8 +1,8 @@
-#include "parser/expression/function_expression.hpp"
-#include "common/string_util.hpp"
-#include "common/exception.hpp"
-#include "common/serializer.hpp"
-#include "common/types/hash.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,6 +1,6 @@
-#include "parser/tableref/crossproductref.hpp"
-#include "planner/binder.hpp"
-#include "planner/tableref/bound_crossproductref.hpp"
+#include "duckdb/parser/tableref/crossproductref.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/tableref/bound_crossproductref.hpp"
 
 using namespace duckdb;
 using namespace std;

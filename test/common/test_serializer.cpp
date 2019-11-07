@@ -1,8 +1,8 @@
 #include "catch.hpp"
-#include "common/serializer/buffered_deserializer.hpp"
-#include "common/serializer/buffered_serializer.hpp"
-#include "common/types/data_chunk.hpp"
-#include "common/value_operations/value_operations.hpp"
+#include "duckdb/common/serializer/buffered_deserializer.hpp"
+#include "duckdb/common/serializer/buffered_serializer.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include "expression_helper.hpp"
 
 using namespace duckdb;

@@ -1,9 +1,9 @@
-#include "storage/table/transient_segment.hpp"
-#include "common/types/null_value.hpp"
-#include "common/types/vector.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "storage/numeric_segment.hpp"
-#include "storage/string_segment.hpp"
+#include "duckdb/storage/table/transient_segment.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/storage/numeric_segment.hpp"
+#include "duckdb/storage/string_segment.hpp"
 
 using namespace duckdb;
 using namespace std;

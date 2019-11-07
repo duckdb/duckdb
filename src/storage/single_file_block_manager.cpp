@@ -1,7 +1,7 @@
-#include "storage/single_file_block_manager.hpp"
-#include "storage/meta_block_writer.hpp"
-#include "storage/meta_block_reader.hpp"
-#include "common/exception.hpp"
+#include "duckdb/storage/single_file_block_manager.hpp"
+#include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;

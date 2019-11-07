@@ -1,9 +1,9 @@
-#include "storage/index.hpp"
-#include "execution/expression_executor.hpp"
-#include "planner/expression_iterator.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression/bound_reference_expression.hpp"
-#include "storage/table/append_state.hpp"
+#include "duckdb/storage/index.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/storage/table/append_state.hpp"
 
 using namespace duckdb;
 using namespace std;

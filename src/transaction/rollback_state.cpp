@@ -1,5 +1,5 @@
-#include "transaction/rollback_state.hpp"
-#include "storage/uncompressed_segment.hpp"
+#include "duckdb/transaction/rollback_state.hpp"
+#include "duckdb/storage/uncompressed_segment.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,8 +1,8 @@
-#include "parser/tableref.hpp"
+#include "duckdb/parser/tableref.hpp"
 
-#include "common/printer.hpp"
-#include "common/serializer.hpp"
-#include "parser/tableref/list.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/parser/tableref/list.hpp"
 
 using namespace duckdb;
 using namespace std;

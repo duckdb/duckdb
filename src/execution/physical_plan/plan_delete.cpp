@@ -1,8 +1,8 @@
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "execution/operator/persistent/physical_delete.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "planner/expression/bound_reference_expression.hpp"
-#include "planner/operator/logical_delete.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/execution/operator/persistent/physical_delete.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/operator/logical_delete.hpp"
 
 using namespace duckdb;
 using namespace std;

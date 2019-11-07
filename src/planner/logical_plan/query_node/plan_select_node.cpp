@@ -1,7 +1,7 @@
-#include "planner/logical_plan_generator.hpp"
-#include "planner/operator/list.hpp"
-#include "planner/query_node/bound_select_node.hpp"
-#include "planner/operator/logical_expression_get.hpp"
+#include "duckdb/planner/logical_plan_generator.hpp"
+#include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/operator/logical_expression_get.hpp"
 
 using namespace duckdb;
 using namespace std;

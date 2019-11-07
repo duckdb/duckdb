@@ -1,5 +1,5 @@
-#include "function/scalar/operators.hpp"
-#include "common/exception.hpp"
+#include "duckdb/function/scalar/operators.hpp"
+#include "duckdb/common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;

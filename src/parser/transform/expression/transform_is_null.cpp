@@ -1,6 +1,6 @@
-#include "common/exception.hpp"
-#include "parser/expression/operator_expression.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
 using namespace std;

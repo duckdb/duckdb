@@ -1,6 +1,6 @@
-#include "parser/statement/insert_statement.hpp"
-#include "parser/tableref/basetableref.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,5 +1,5 @@
-#include "storage/buffer/managed_buffer.hpp"
-#include "common/exception.hpp"
+#include "duckdb/storage/buffer/managed_buffer.hpp"
+#include "duckdb/common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;

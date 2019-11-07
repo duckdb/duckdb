@@ -1,6 +1,6 @@
-#include "execution/index/art/node4.hpp"
-#include "execution/index/art/node16.hpp"
-#include "execution/index/art/node48.hpp"
+#include "duckdb/execution/index/art/node4.hpp"
+#include "duckdb/execution/index/art/node16.hpp"
+#include "duckdb/execution/index/art/node48.hpp"
 
 using namespace duckdb;
 

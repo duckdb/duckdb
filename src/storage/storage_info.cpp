@@ -1,4 +1,4 @@
-#include "storage/storage_info.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,4 +1,4 @@
-#include "planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -8,9 +8,9 @@ LogicalComparisonJoin::LogicalComparisonJoin(JoinType type, LogicalOperatorType 
 }
 
 string LogicalComparisonJoin::ParamsToString() const {
-	string result = "";
+	string result = "[" + JoinTypeToString(type);
 	if (conditions.size() > 0) {
-		result += "[";
+		result += " ";
 		for (index_t i = 0; i < conditions.size(); i++) {
 			auto &cond = conditions[i];
 			result += ExpressionTypeToString(cond.comparison) + "(" + cond.left->GetName() + ", " +

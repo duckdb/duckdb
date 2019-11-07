@@ -1,7 +1,7 @@
-#include "execution/operator/scan/physical_table_scan.hpp"
+#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "main/client_context.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;

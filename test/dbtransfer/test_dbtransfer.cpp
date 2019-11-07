@@ -1,5 +1,5 @@
 #include "sqlite_transfer.hpp"
-#include "common/types.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb.hpp"
 #include "sqlite3.h"
 #include "catch.hpp"

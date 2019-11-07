@@ -1,11 +1,11 @@
-#include "catalog/catalog_entry/view_catalog_entry.hpp"
-#include "main/client_context.hpp"
-#include "main/database.hpp"
-#include "parser/tableref/basetableref.hpp"
-#include "parser/tableref/subqueryref.hpp"
-#include "planner/binder.hpp"
-#include "planner/tableref/bound_basetableref.hpp"
-#include "planner/tableref/bound_subqueryref.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/tableref/bound_basetableref.hpp"
+#include "duckdb/planner/tableref/bound_subqueryref.hpp"
 
 using namespace duckdb;
 using namespace std;

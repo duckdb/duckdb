@@ -1,6 +1,6 @@
-#include "common/helper.hpp"
+#include "duckdb/common/helper.hpp"
 #include "expression_helper.hpp"
-#include "optimizer/rule/distributivity.hpp"
+#include "duckdb/optimizer/rule/distributivity.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,7 +1,7 @@
 #include "benchmark_runner.hpp"
 
-#include "common/profiler.hpp"
-#include "common/string_util.hpp"
+#include "duckdb/common/profiler.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"

@@ -1,4 +1,4 @@
-#include "function/scalar/sequence_functions.hpp"
+#include "duckdb/function/scalar/sequence_functions.hpp"
 
 using namespace std;
 

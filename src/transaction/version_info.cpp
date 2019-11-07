@@ -1,7 +1,7 @@
-#include "transaction/version_info.hpp"
-#include "transaction/transaction.hpp"
-#include "storage/table/version_chunk_info.hpp"
-#include "storage/table/version_chunk.hpp"
+#include "duckdb/transaction/version_info.hpp"
+#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/storage/table/version_chunk_info.hpp"
+#include "duckdb/storage/table/version_chunk.hpp"
 
 using namespace duckdb;
 using namespace std;

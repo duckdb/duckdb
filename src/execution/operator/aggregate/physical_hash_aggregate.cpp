@@ -1,10 +1,10 @@
-#include "execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "planner/expression/bound_aggregate_expression.hpp"
-#include "planner/expression/bound_constant_expression.hpp"
-#include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 using namespace duckdb;
 using namespace std;

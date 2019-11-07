@@ -1,11 +1,11 @@
 #include "catch.hpp"
 #include "expression_helper.hpp"
-#include "optimizer/ca_optimizer.hpp"
-#include "planner/expression/bound_cast_expression.hpp"
-#include "planner/expression/bound_comparison_expression.hpp"
-#include "planner/expression/bound_function_expression.hpp"
-#include "planner/expression/bound_window_expression.hpp"
-#include "planner/operator/logical_window.hpp"
+#include "duckdb/optimizer/ca_optimizer.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;

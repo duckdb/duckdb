@@ -1,7 +1,7 @@
-#include "function/scalar/date_functions.hpp"
-#include "common/types/time.hpp"
-#include "common/types/timestamp.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/scalar/date_functions.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace std;
 

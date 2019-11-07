@@ -1,11 +1,11 @@
-#include "execution/aggregate_hashtable.hpp"
+#include "duckdb/execution/aggregate_hashtable.hpp"
 
-#include "common/exception.hpp"
-#include "common/types/null_value.hpp"
-#include "common/types/static_vector.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "planner/expression/bound_aggregate_expression.hpp"
-#include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/static_vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 #include <cmath>
 #include <map>

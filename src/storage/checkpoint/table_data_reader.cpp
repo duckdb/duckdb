@@ -1,15 +1,15 @@
-#include "storage/checkpoint/table_data_reader.hpp"
-#include "storage/checkpoint/table_data_writer.hpp"
-#include "storage/meta_block_reader.hpp"
+#include "duckdb/storage/checkpoint/table_data_reader.hpp"
+#include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
 
-#include "storage/meta_block_reader.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
 
-#include "common/vector_operations/vector_operations.hpp"
-#include "common/types/null_value.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/null_value.hpp"
 
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
-#include "planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 
 using namespace duckdb;
 using namespace std;
