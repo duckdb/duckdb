@@ -5,6 +5,11 @@ cmake_minimum_required(VERSION 2.8.7)
 
 project(DuckDB)
 
+set(DUCKDB_MAJOR_VERSION 0)
+set(DUCKDB_MINOR_VERSION 1)
+set(DUCKDB_PATCH_VERSION 1)
+set(DUCKDB_VERSION ${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION})
+
 find_package(Threads REQUIRED)
 
 set(CMAKE_CXX_STANDARD 11)
@@ -134,3 +139,5 @@ if(NOT LEAN)
     add_subdirectory(benchmark)
   endif()
 endif()
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/DuckDBInstallation.cmake)

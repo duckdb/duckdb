@@ -26,5 +26,13 @@ set(DUCKDB_LINK_LIBS
 add_library(duckdb SHARED ${ALL_OBJECT_FILES})
 target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})
 
-add_library(duckdb_static ${ALL_OBJECT_FILES})
+add_library(duckdb_static STATIC ${ALL_OBJECT_FILES})
 target_link_libraries(duckdb_static ${DUCKDB_LINK_LIBS})
+
+target_include_directories(duckdb PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+
+target_include_directories(duckdb_static PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
