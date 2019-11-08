@@ -169,8 +169,8 @@ matrix:
       script:
         - mkdir -p build/debug
         - (cd build/debug && cmake -DEXPLICIT_EXCEPTIONS=TRUE -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
-        - build/debug/test/unittest -s
-        
+        - build/debug/test/unittest -s "[tpch]"
+
 
     - os: windows
       name: VS 2017
