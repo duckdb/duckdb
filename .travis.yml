@@ -23,5 +23,17 @@ matrix:
 
       script:
         - mkdir -p build/debug
-        - (cd build/debug && CXXFLAGS="-fexceptions" cmake -DCMAKE_BUILD_TYPE=Debug ../.. &&cmake --build .)
-        - build/debug/test/unittest -s "[tpch]"
+        - (cd build/debug && cmake -DEXPLICIT_EXCEPTIONS=TRUE -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
+        - build/debug/test/unittest -s
+
+
+    - os: linux
+      name: GCC 4.9
+      addons:
+         apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-4.9 binutils-2.26
+      env:
+         - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
