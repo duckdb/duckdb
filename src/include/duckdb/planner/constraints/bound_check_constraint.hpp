@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/exception.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/expression.hpp"
 

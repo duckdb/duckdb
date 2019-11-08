@@ -8,7 +8,10 @@
 
 #pragma once
 
+#include "duckdb/common/constants.hpp"
+
 namespace duckdb {
+class LogicalOperator;
 class Optimizer;
 
 class TopN {

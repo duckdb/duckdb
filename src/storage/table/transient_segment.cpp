@@ -4,6 +4,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/numeric_segment.hpp"
 #include "duckdb/storage/string_segment.hpp"
+#include "duckdb/storage/table/append_state.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -12,8 +12,10 @@
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
+class BufferManager;
 class FileBuffer;
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file

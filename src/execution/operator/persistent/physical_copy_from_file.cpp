@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/persistent/physical_copy_from_file.hpp"
+#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/file_system.hpp"

@@ -5,6 +5,8 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 
+#include "duckdb/common/string_util.hpp"
+
 #include <algorithm>
 
 using namespace duckdb;

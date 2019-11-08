@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/bound_sql_statement.hpp"
 #include "duckdb/planner/statement/bound_insert_statement.hpp"

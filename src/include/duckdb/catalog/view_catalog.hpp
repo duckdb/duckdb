@@ -16,6 +16,8 @@ namespace duckdb {
 class DataTable;
 class SchemaCatalogEntry;
 
+struct CreateViewInfo;
+
 //! A table catalog entry
 class ViewCatalogEntry : public CatalogEntry {
 public:

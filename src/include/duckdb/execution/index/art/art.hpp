@@ -15,13 +15,14 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/index.hpp"
 #include "duckdb/common/types/static_vector.hpp"
-#include "art_key.hpp"
-#include "leaf.hpp"
-#include "node.hpp"
-#include "node4.hpp"
-#include "node16.hpp"
-#include "node48.hpp"
-#include "node256.hpp"
+
+#include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/leaf.hpp"
+#include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/execution/index/art/node4.hpp"
+#include "duckdb/execution/index/art/node16.hpp"
+#include "duckdb/execution/index/art/node48.hpp"
+#include "duckdb/execution/index/art/node256.hpp"
 
 namespace duckdb {
 struct IteratorEntry {
