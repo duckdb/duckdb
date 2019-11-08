@@ -161,6 +161,17 @@ matrix:
         - coveralls -b build/coverage -E '.*CMakeCXXCompilerId.cpp' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --gcov-options '\-lp'
 
 
+    - os: linux
+      dist: xenial
+      name: GCC 5 (ARM64)
+      arch: arm64
+
+      script:
+        - mkdir -p build/debug
+        - (cd build/debug && cmake -DEXPLICIT_EXCEPTIONS=TRUE -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
+        - build/debug/test/unittest -s "[tpch]"
+
+
     - os: windows
       name: VS 2017
       filter_secrets: false
