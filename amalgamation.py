@@ -22,11 +22,11 @@ if not resume:
 def get_includes(fpath):
 	with open(fpath, 'r') as f:
 		text = f.read()
-	return ["src/include/" + x for x in re.findall("^[#]include [\"](duckdb/[^\"]+)", text)]
+	return ["src/include/" + x for x in re.findall("[#]include [\"](duckdb/[^\"]+)", text)]
 
-def cleanup_header(text):
+def cleanup_file(text):
 	# remove all includes of duckdb headers
-	text = re.sub("[#]include [\"]duckdb/[^\n]+", "", text)
+	text = re.sub("[#]include [\"]duckdb[^\n]+", "", text)
 	# remove all "#pragma once" notifications
 	text = re.sub('#pragma once', '', text)
 	text = re.sub('\n+', '\n', text)
@@ -35,22 +35,27 @@ def cleanup_header(text):
 # recursively get all includes and write them
 written_headers = {}
 
-def write_header(current_header, hfile):
-	if current_header in written_headers:
+excluded_files = ["duckdb-c.cpp"]
+
+def write_file(current_file, hfile):
+	if current_file.split('/')[-1] in excluded_files:
+		print(current_file)
+		return
+	if current_file in written_headers:
 		# header is already written
 		return
-	written_headers[current_header] = True
+	written_headers[current_file] = True
 
-	print(current_header)
+	print(current_file)
 
 	# find includes of this header
-	includes = get_includes(current_header)
+	includes = get_includes(current_file)
 	# now write all the dependencies of this header first
 	for include in includes:
-		write_header(include, hfile)
+		write_file(include, hfile)
 	# now read the header and write it
-	with open(current_header, 'r') as f:
-		hfile.write(cleanup_header(f.read()))
+	with open(current_file, 'r') as f:
+		hfile.write(cleanup_file(f.read()))
 
 def try_compilation(fpath, cache):
 	if fpath in cache:
@@ -72,7 +77,10 @@ def compile_dir(dir, cache):
 			compile_dir(fpath, cache)
 		elif fname.endswith('.cpp') or fname.endswith('.hpp'):
 			try_compilation(fpath, cache)
+
 if compile:
+	# compilation pass only
+	# compile all files in the src directory (including headers!) individually
 	try:
 		with open(cache_file, 'rb') as cf:
 			cache = pickle.load(cf)
@@ -81,14 +89,13 @@ if compile:
 	compile_dir('src', cache)
 	exit(0)
 
-
-
 # now construct duckdb.hpp from these headers
 print("-----------------------")
 print("-- Writing duckdb.hpp --")
 print("-----------------------")
 with open(header_file, 'w+') as hfile:
-	write_header('src/include/duckdb.hpp', hfile)
+	hfile.write("#pragma once")
+	write_file('src/include/duckdb.hpp', hfile)
 
 def write_dir(dir, sfile):
 	files = os.listdir(dir)
@@ -97,8 +104,7 @@ def write_dir(dir, sfile):
 		if os.path.isdir(fpath):
 			write_dir(fpath, sfile)
 		elif fname.endswith('.cpp'):
-			write_header(fpath, sfile)
-
+			write_file(fpath, sfile)
 
 # now construct duckdb.cpp
 print("------------------------")
