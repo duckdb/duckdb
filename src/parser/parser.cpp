@@ -26,7 +26,7 @@ void Parser::ParseQuery(string query) {
 		return;
 	}
 
-	postgres::PostgresParser parser;
+	PostgresParser parser;
 	parser.Parse(query);
 
 	if (!parser.success) {

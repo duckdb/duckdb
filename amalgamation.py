@@ -2,6 +2,21 @@
 header_file = "duckdb.hpp"
 source_file = "duckdb.cpp"
 cache_file = 'amalgamation.cache'
+include_paths = ["src/include", "third_party/hyperloglog", "third_party/re2", "third_party/miniz", "third_party/libpg_query/include", "third_party/libpg_query"]
+
+pg_substitutions = {
+	"AlterTableType": "PGAlterTableType",
+	"Constraint": "PGConstraint",
+	"Expr": "PGExpr",
+	"Index": "PGIndex",
+	"JoinType": "PGJoinType",
+	"Node": "PGNode",
+	"List": "PGList",
+	"Undefined": "PGUndefined",
+	"Oid": "PGOid",
+	"Value": "PGValue"
+}
+
 import os, re, sys, pickle
 
 compile = False
@@ -22,11 +37,32 @@ if not resume:
 def get_includes(fpath):
 	with open(fpath, 'r') as f:
 		text = f.read()
-	return ["src/include/" + x for x in re.findall("[#]include [\"](duckdb/[^\"]+)", text)]
+	# find all the includes referred to in the directory
+	include_statements = re.findall("[#]include [\"]([^\"]+)", text)
+	include_files = []
+	# figure out where they are located
+	for statement in include_statements:
+		found = False
+		for include_path in include_paths:
+			if os.path.isfile(os.path.join(include_path, statement)):
+				include_files.append(os.path.join(include_path, statement))
+				found = True
+				break
+		if not found:
+			raise Exception('Could not find include file "' + statement + '", included from file "' + fpath + '"')
+	return include_files
 
-def cleanup_file(text):
-	# remove all includes of duckdb headers
-	text = re.sub("[#]include [\"]duckdb[^\n]+", "", text)
+def cleanup_file(fpath, text):
+	if fpath.startswith("third_party/libpg_query"):
+		for sub in pg_substitutions.keys():
+			text = re.sub("([ \t\n*,(])" + sub + "([ \t\n*,;])", "\g<1>" + pg_substitutions[sub] + "\g<2>", text)
+	else:
+		for sub in pg_substitutions.keys():
+			text = re.sub("postgres::" + sub + "([ \t\n*,;])", pg_substitutions[sub] + "\g<1>", text)
+		text = re.sub("postgres::", "", text)
+
+	# remove all includes of non-system headers
+	text = re.sub("[#]include [\"][^\n]+", "", text)
 	# remove all "#pragma once" notifications
 	text = re.sub('#pragma once', '', text)
 	text = re.sub('\n+', '\n', text)
@@ -55,16 +91,17 @@ def write_file(current_file, hfile):
 		write_file(include, hfile)
 	# now read the header and write it
 	with open(current_file, 'r') as f:
-		hfile.write(cleanup_file(f.read()))
+		hfile.write(cleanup_file(current_file, f.read()))
 
 def try_compilation(fpath, cache):
 	if fpath in cache:
 		return
 	print(fpath)
-	cmd = 'clang++ -std=c++11 -S -MMD -MF dependencies.d -o deps.s ' + fpath + ' -Isrc/include -Ithird_party/hyperloglog -Ithird_party/re2 -Ithird_party/miniz -Ithird_party/libpg_query/include -Ithird_party/libpg_query'
+
+	cmd = 'clang++ -std=c++11 -S -MMD -MF dependencies.d -o deps.s ' + fpath + ' ' + ' '.join(["-I" + x for x in include_paths])
 	ret = os.system(cmd)
 	if ret != 0:
-		raise Exception('Failed compilation of file "' + fpath + '"!')
+		raise Exception('Failed compilation of file "' + fpath + '"!\n Command: ' + cmd)
 	cache[fpath] = True
 	with open(cache_file, 'wb') as cf:
 		pickle.dump(cache, cf)
@@ -115,3 +152,7 @@ print("------------------------")
 with open(source_file, 'w+') as sfile:
 	sfile.write('#include "duckdb.hpp"\n\n')
 	write_dir('src', sfile)
+	write_dir('third_party/hyperloglog', sfile)
+	write_dir('third_party/libpg_query', sfile)
+	write_dir('third_party/miniz', sfile)
+	write_dir('third_party/re2', sfile)
