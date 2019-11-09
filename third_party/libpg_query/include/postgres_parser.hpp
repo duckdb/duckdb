@@ -12,7 +12,7 @@ typedef int16_t int16;
 #include "nodes/pg_list.h"
 }
 
-namespace duckdb {
+namespace postgres {
 
 class PostgresParser {
 public:

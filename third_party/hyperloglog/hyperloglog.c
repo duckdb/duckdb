@@ -587,7 +587,7 @@ void hllDenseRegHisto(uint8_t *registers, int* reghisto) {
  * The function returns C_OK if the sparse representation was valid,
  * otherwise C_ERR is returned if the representation was corrupted. */
 int hllSparseToDense(robj *o) {
-    sds sparse = o->ptr, dense;
+    sds sparse = (sds) o->ptr, dense;
     struct hllhdr *hdr, *oldhdr = (struct hllhdr*)sparse;
     int idx = 0, runlen, regval;
     uint8_t *p = (uint8_t*)sparse, *end = p+sdslen(sparse);
@@ -635,7 +635,7 @@ int hllSparseToDense(robj *o) {
     }
 
     /* Free the old representation and set the new one. */
-    sdsfree(o->ptr);
+    sdsfree((sds) o->ptr);
     o->ptr = dense;
     return C_OK;
 }
@@ -660,6 +660,12 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
     uint8_t oldcount, *sparse, *end, *p, *prev, *next;
     long first, span;
     long is_zero = 0, is_xzero = 0, is_val = 0, runlen = 0;
+    uint8_t seq[5], *n;
+    int last;
+    int len;
+    int seqlen;
+    int oldlen;
+    int deltalen;
 
     /* If the count is too big to be representable by the sparse representation
      * switch to dense representation. */
@@ -670,12 +676,12 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
      * into XZERO-VAL-XZERO). Make sure there is enough space right now
      * so that the pointers we take during the execution of the function
      * will be valid all the time. */
-    o->ptr = sdsMakeRoomFor(o->ptr,3);
+    o->ptr = (sds) sdsMakeRoomFor((sds) o->ptr,3);
 
     /* Step 1: we need to locate the opcode we need to modify to check
      * if a value update is actually needed. */
     sparse = p = ((uint8_t*)o->ptr) + HLL_HDR_SIZE;
-    end = p + sdslen(o->ptr) - HLL_HDR_SIZE;
+    end = p + sdslen((sds) o->ptr) - HLL_HDR_SIZE;
 
     first = 0;
     prev = NULL; /* Points to previous opcode at the end of the loop. */
@@ -778,9 +784,8 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
      * with 'newlen' as length. Later the new sequence is inserted in place
      * of the old one, possibly moving what is on the right a few bytes
      * if the new sequence is longer than the older one. */
-    uint8_t seq[5], *n = seq;
-    int last = first+span-1; /* Last register covered by the sequence. */
-    int len;
+    n = seq;
+    last = first+span-1; /* Last register covered by the sequence. */
 
     if (is_zero || is_xzero) {
         /* Handle splitting of ZERO / XZERO. */
@@ -828,18 +833,18 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
      *
      * Note that we already allocated space on the sds string
      * calling sdsMakeRoomFor(). */
-     int seqlen = n-seq;
-     int oldlen = is_xzero ? 2 : 1;
-     int deltalen = seqlen-oldlen;
+     seqlen = n-seq;
+     oldlen = is_xzero ? 2 : 1;
+     deltalen = seqlen-oldlen;
 
      if (deltalen > 0 &&
-         sdslen(o->ptr)+deltalen > HLL_SPARSE_MAX_BYTES) goto promote;
+         sdslen((sds) o->ptr)+deltalen > HLL_SPARSE_MAX_BYTES) goto promote;
      if (deltalen && next) memmove(next+deltalen,next,end-next);
-     sdsIncrLen(o->ptr,deltalen);
+     sdsIncrLen((sds) o->ptr,deltalen);
      memcpy(p,seq,seqlen);
      end += deltalen;
 
-updated:
+updated: {
     /* Step 4: Merge adjacent values if possible.
      *
      * The representation was updated, however the resulting representation
@@ -865,7 +870,7 @@ updated:
                 if (len <= HLL_SPARSE_VAL_MAX_LEN) {
                     HLL_SPARSE_VAL_SET(p+1,v1,len);
                     memmove(p,p+1,end-p);
-                    sdsIncrLen(o->ptr,-1);
+                    sdsIncrLen((sds) o->ptr,-1);
                     end--;
                     /* After a merge we reiterate without incrementing 'p'
                      * in order to try to merge the just merged value with
@@ -878,13 +883,13 @@ updated:
     }
 
     /* Invalidate the cached cardinality. */
-    hdr = o->ptr;
+    hdr = (struct hllhdr *) o->ptr;
     HLL_INVALIDATE_CACHE(hdr);
     return 1;
-
+}
 promote: /* Promote to dense representation. */
     if (hllSparseToDense(o) == C_ERR) return -1; /* Corrupted HLL. */
-    hdr = o->ptr;
+    hdr = (struct hllhdr *) o->ptr;
 
     /* We need to call hllDenseAdd() to perform the operation after the
      * conversion. However the result must be 1, since if we need to
@@ -1057,7 +1062,7 @@ uint64_t hllCount(struct hllhdr *hdr, int *invalid) {
 
 /* Call hllDenseAdd() or hllSparseAdd() according to the HLL encoding. */
 int hll_add(robj *o, unsigned char *ele, size_t elesize) {
-    struct hllhdr *hdr = o->ptr;
+    struct hllhdr *hdr = (struct hllhdr *) o->ptr;
     switch(hdr->encoding) {
     case HLL_DENSE: return hllDenseAdd(hdr->registers,ele,elesize);
     case HLL_SPARSE: return hllSparseAdd(o,ele,elesize);
@@ -1074,7 +1079,7 @@ int hll_add(robj *o, unsigned char *ele, size_t elesize) {
  * If the HyperLogLog is sparse and is found to be invalid, C_ERR
  * is returned, otherwise the function always succeeds. */
 int hllMerge(uint8_t *max, robj *hll) {
-    struct hllhdr *hdr = hll->ptr;
+    struct hllhdr *hdr = (struct hllhdr *) hll->ptr;
     int i;
 
     if (hdr->encoding == HLL_DENSE) {
@@ -1085,7 +1090,7 @@ int hllMerge(uint8_t *max, robj *hll) {
             if (val > max[i]) max[i] = val;
         }
     } else {
-        uint8_t *p = hll->ptr, *end = p + sdslen(hll->ptr);
+        uint8_t *p = (uint8_t *) hll->ptr, *end = p + sdslen((sds) hll->ptr);
         long runlen, regval;
 
         p += HLL_HDR_SIZE;
@@ -1116,7 +1121,7 @@ int hllMerge(uint8_t *max, robj *hll) {
 
 /* ========================== robj creation ========================== */
 robj *createObject(void *ptr) {
-	robj *result = malloc(sizeof(robj));
+	robj *result = (robj*) malloc(sizeof(robj));
 	result->ptr = ptr;
 	return result;
 }
@@ -1155,7 +1160,7 @@ robj *hll_create(void) {
 
     /* Create the actual object. */
     o = createObject(s);
-    hdr = o->ptr;
+    hdr = (struct hllhdr *) o->ptr;
     memcpy(hdr->magic,"HYLL",4);
     hdr->encoding = HLL_SPARSE;
     return o;
@@ -1165,7 +1170,7 @@ void hll_destroy(robj *obj) {
 	if (!obj) {
 		return;
 	}
-	sdsfree(obj->ptr);
+	sdsfree((sds) obj->ptr);
 	destroyObject(obj);
 }
 
@@ -1195,7 +1200,7 @@ robj *hll_merge(robj **hlls, size_t hll_count) {
 
         /* If at least one involved HLL is dense, use the dense representation
          * as target ASAP to save time and avoid the conversion step. */
-        hdr = o->ptr;
+        hdr = (struct hllhdr *) o->ptr;
         if (hdr->encoding == HLL_DENSE) use_dense = 1;
 
         /* Merge with this HLL with our 'max' HHL by setting max[i]
@@ -1222,7 +1227,7 @@ robj *hll_merge(robj **hlls, size_t hll_count) {
      * invalidate the cached value. */
     for (j = 0; j < HLL_REGISTERS; j++) {
         if (max[j] == 0) continue;
-        hdr = result->ptr;
+        hdr = (struct hllhdr *) result->ptr;
         switch(hdr->encoding) {
         case HLL_DENSE: hllDenseSet(hdr->registers,j,max[j]); break;
         case HLL_SPARSE: hllSparseSet(result,j,max[j]); break;

@@ -14,11 +14,12 @@
 #ifndef ATTNUM_H
 #define ATTNUM_H
 
+#include <stdint.h>
 
 /*
  * user defined attribute numbers start at 1.   -ay 2/95
  */
-typedef int16 AttrNumber;
+typedef int16_t AttrNumber;
 
 #define InvalidAttrNumber		0
 #define MaxAttrNumber			32767

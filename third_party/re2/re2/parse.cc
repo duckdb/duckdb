@@ -36,11 +36,11 @@
 #include "re2/unicode_groups.h"
 #include "re2/walker-inl.h"
 
-#if defined(RE2_USE_ICU)
-#include "unicode/uniset.h"
-#include "unicode/unistr.h"
-#include "unicode/utypes.h"
-#endif
+// #if defined(RE2_USE_ICU)
+// #include "unicode/uniset.h"
+// #include "unicode/unistr.h"
+// #include "unicode/utypes.h"
+// #endif
 
 namespace re2 {
 

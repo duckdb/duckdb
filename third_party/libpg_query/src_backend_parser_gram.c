@@ -1097,22 +1097,13 @@
 #include <ctype.h>
 #include <limits.h>
 
-//#include "catalog/index.h"
-//#include "catalog/namespace.h"
-//#include "catalog/pg_am.h"
 #include "catalog/pg_trigger.h"
-//#include "commands/defrem.h"
-//#include "commands/trigger.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "parser/gramparse.h"
 #include "parser/parser.h"
 #include "parser/parse_expr.h"
-//#include "storage/lmgr.h"
-//#include "utils/date.h"
 #include "utils/datetime.h"
-//#include "utils/numeric.h"
-//#include "utils/xml.h"
 
 
 /*
@@ -1193,9 +1184,9 @@ static RawStmt *makeRawStmt(Node *stmt, int stmt_location);
 static void updateRawStmtEnd(RawStmt *rs, int end_location);
 static Node *makeColumnRef(char *colname, List *indirection,
 						   int location, core_yyscan_t yyscanner);
-static Node *makeTypeCast(Node *arg, TypeName *typename, int location);
-static Node *makeStringConst(char *str, int location);
-static Node *makeStringConstCast(char *str, int location, TypeName *typename);
+static Node *makeTypeCast(Node *arg, TypeName *tpname, int location);
+static Node *makeStringConst(const char *str, int location);
+static Node *makeStringConstCast(char *str, int location, TypeName *tpname);
 static Node *makeIntConst(int val, int location);
 static Node *makeFloatConst(char *str, int location);
 static Node *makeBitStringConst(char *str, int location);
@@ -1203,7 +1194,7 @@ static Node *makeNullAConst(int location);
 static Node *makeAConst(Value *v, int location);
 static Node *makeBoolAConst(bool state, int location);
 static Node *makeParamRef(int number, int location);
-static Node *makeParamRefCast(int number, int location, TypeName *typename);
+static Node *makeParamRefCast(int number, int location, TypeName *tpname);
 static Node *makeInterval_or_AExprOp(Node *lexpr, Node *rexpr, int location);
 static RoleSpec *makeRoleSpec(RoleSpecType type, int location);
 static void check_qualified_name(List *names, core_yyscan_t yyscanner);
@@ -31526,7 +31517,7 @@ yyreduce:
 #line 4961 "gram.y"
     {
 				ImportQual *n = (ImportQual *) palloc(sizeof(ImportQual));
-				n->type = (yyvsp[(1) - (4)].ival);
+				n->type = (ImportForeignSchemaType) (yyvsp[(1) - (4)].ival);
 				n->table_names = (yyvsp[(3) - (4)].list);
 				(yyval.importqual) = n;
 			;}
@@ -34327,7 +34318,7 @@ yyreduce:
 					n->is_grant = true;
 					n->privileges = (yyvsp[(2) - (7)].list);
 					n->targtype = ACL_TARGET_DEFAULTS;
-					n->objtype = (yyvsp[(4) - (7)].ival);
+					n->objtype = (GrantObjectType) (yyvsp[(4) - (7)].ival);
 					n->objects = NIL;
 					n->grantees = (yyvsp[(6) - (7)].list);
 					n->grant_option = (yyvsp[(7) - (7)].boolean);
@@ -34341,7 +34332,7 @@ yyreduce:
 					GrantStmt *n = makeNode(GrantStmt);
 					n->is_grant = false;
 					n->grant_option = false;
-					n->privileges = (yyvsp[(2) - (7)].list);
+					n->privileges = (GrantObjectType) (yyvsp[(2) - (7)].list);
 					n->targtype = ACL_TARGET_DEFAULTS;
 					n->objtype = (yyvsp[(4) - (7)].ival);
 					n->objects = NIL;
@@ -34357,7 +34348,7 @@ yyreduce:
 					GrantStmt *n = makeNode(GrantStmt);
 					n->is_grant = false;
 					n->grant_option = true;
-					n->privileges = (yyvsp[(5) - (10)].list);
+					n->privileges = (GrantObjectType) (yyvsp[(5) - (10)].list);
 					n->targtype = ACL_TARGET_DEFAULTS;
 					n->objtype = (yyvsp[(7) - (10)].ival);
 					n->objects = NIL;
@@ -34505,8 +34496,8 @@ yyreduce:
 					(yyval.ielem)->indexcolname = NULL;
 					(yyval.ielem)->collation = (yyvsp[(2) - (5)].list);
 					(yyval.ielem)->opclass = (yyvsp[(3) - (5)].list);
-					(yyval.ielem)->ordering = (yyvsp[(4) - (5)].ival);
-					(yyval.ielem)->nulls_ordering = (yyvsp[(5) - (5)].ival);
+					(yyval.ielem)->ordering = (SortByDir) (yyvsp[(4) - (5)].ival);
+					(yyval.ielem)->nulls_ordering = (SortByNulls) (yyvsp[(5) - (5)].ival);
 				;}
     break;
 
@@ -34519,8 +34510,8 @@ yyreduce:
 					(yyval.ielem)->indexcolname = NULL;
 					(yyval.ielem)->collation = (yyvsp[(2) - (5)].list);
 					(yyval.ielem)->opclass = (yyvsp[(3) - (5)].list);
-					(yyval.ielem)->ordering = (yyvsp[(4) - (5)].ival);
-					(yyval.ielem)->nulls_ordering = (yyvsp[(5) - (5)].ival);
+					(yyval.ielem)->ordering = (SortByDir) (yyvsp[(4) - (5)].ival);
+					(yyval.ielem)->nulls_ordering = (SortByNulls) (yyvsp[(5) - (5)].ival);
 				;}
     break;
 
@@ -34533,7 +34524,7 @@ yyreduce:
 					(yyval.ielem)->indexcolname = NULL;
 					(yyval.ielem)->collation = (yyvsp[(4) - (7)].list);
 					(yyval.ielem)->opclass = (yyvsp[(5) - (7)].list);
-					(yyval.ielem)->ordering = (yyvsp[(6) - (7)].ival);
+					(yyval.ielem)->ordering = (SortByDir) (yyvsp[(6) - (7)].ival);
 					(yyval.ielem)->nulls_ordering = (yyvsp[(7) - (7)].ival);
 				;}
     break;
@@ -35434,7 +35425,7 @@ yyreduce:
 					n->replace = (yyvsp[(2) - (10)].boolean);
 					n->type_name = (yyvsp[(5) - (10)].typnam);
 					n->lang = (yyvsp[(7) - (10)].str);
-					n->fromsql = linitial((yyvsp[(9) - (10)].list));
+					n->fromsql = (ObjectWithArgs *) linitial((yyvsp[(9) - (10)].list));
 					n->tosql = lsecond((yyvsp[(9) - (10)].list));
 					(yyval.node) = (Node *)n;
 				;}
@@ -44190,17 +44181,17 @@ makeColumnRef(char *colname, List *indirection,
 }
 
 static Node *
-makeTypeCast(Node *arg, TypeName *typename, int location)
+makeTypeCast(Node *arg, TypeName *tpname, int location)
 {
 	TypeCast *n = makeNode(TypeCast);
 	n->arg = arg;
-	n->typeName = typename;
+	n->typeName = tpname;
 	n->location = location;
 	return (Node *) n;
 }
 
 static Node *
-makeStringConst(char *str, int location)
+makeStringConst(const char *str, int location)
 {
 	A_Const *n = makeNode(A_Const);
 
@@ -44212,11 +44203,11 @@ makeStringConst(char *str, int location)
 }
 
 static Node *
-makeStringConstCast(char *str, int location, TypeName *typename)
+makeStringConstCast(char *str, int location, TypeName *tpname)
 {
 	Node *s = makeStringConst(str, location);
 
-	return makeTypeCast(s, typename, -1);
+	return makeTypeCast(s, tpname, -1);
 }
 
 static Node *
@@ -44317,10 +44308,10 @@ static Node* makeParamRef(int number, int location)
 }
 
 static Node *
-makeParamRefCast(int number, int location, TypeName *typename)
+makeParamRefCast(int number, int location, TypeName *tpname)
 {
 	Node *p = makeParamRef(number, location);
-	return makeTypeCast(p, typename, -1);
+	return makeTypeCast(p, tpname, -1);
 }
 
 /*
