@@ -49,7 +49,6 @@
 #include <limits.h>
 
 #include "duckdb/parser/expression/list.hpp"
-#include "duckdb/parser/expression/list.hpp"
 
 /*
  * Location tracking support --- simpler than bison's default, since we only
@@ -150,9 +149,6 @@ static RangeVar *makeRangeVarFromAnyName(List *names, int position, core_yyscan_
 static void SplitColQualList(List *qualList,
 							 List **constraintList, CollateClause **collClause,
 							 core_yyscan_t yyscanner);
-static void processCASbits(int cas_bits, int location, const char *constrType,
-			   bool *deferrable, bool *initdeferred, bool *not_valid,
-			   bool *no_inherit, core_yyscan_t yyscanner);
 static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 
 %}
@@ -379,7 +375,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 				Bit ConstBit BitWithLength BitWithoutLength
 %type <str>		character
 %type <str>		extract_arg
-%type <boolean> opt_varying opt_timezone opt_no_inherit
+%type <boolean> opt_varying opt_timezone
 
 %type <ival>	Iconst SignedIconst
 %type <str>		Sconst
@@ -397,7 +393,6 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 %type <list>	ColQualList
 %type <node>	ColConstraint ColConstraintElem ConstraintAttr
 %type <ival>	key_actions key_delete key_match key_update key_action
-%type <ival>	ConstraintAttributeSpec ConstraintAttributeElem
 %type <str>		ExistingIndex
 
 %type <ival>	opt_check_option
@@ -1150,21 +1145,6 @@ alter_table_cmd:
 					n->def = $2;
 					$$ = (Node *)n;
 				}
-			/* ALTER TABLE <name> ALTER CONSTRAINT ... */
-			| ALTER CONSTRAINT name ConstraintAttributeSpec
-				{
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					Constraint *c = makeNode(Constraint);
-					n->subtype = AT_AlterConstraint;
-					n->def = (Node *) c;
-					c->contype = CONSTR_FOREIGN; /* others not supported, yet */
-					c->conname = $3;
-					processCASbits($4, @4, "ALTER CONSTRAINT statement",
-									&c->deferrable,
-									&c->initdeferred,
-									NULL, NULL, yyscanner);
-					$$ = (Node *)n;
-				}
 			/* ALTER TABLE <name> DROP CONSTRAINT IF EXISTS <name> [RESTRICT|CASCADE] */
 			| DROP CONSTRAINT IF_P EXISTS name opt_drop_behavior
 				{
@@ -1777,12 +1757,11 @@ ColConstraintElem:
 					n->indexname = NULL;
 					$$ = (Node *)n;
 				}
-			| CHECK '(' a_expr ')' opt_no_inherit
+			| CHECK '(' a_expr ')'
 				{
 					Constraint *n = makeNode(Constraint);
 					n->contype = CONSTR_CHECK;
 					n->location = @1;
-					n->is_no_inherit = $5;
 					n->raw_expr = $3;
 					n->cooked_expr = NULL;
 					n->skip_validation = false;
@@ -1919,21 +1898,17 @@ TableConstraint:
 		;
 
 ConstraintElem:
-			CHECK '(' a_expr ')' ConstraintAttributeSpec
+			CHECK '(' a_expr ')'
 				{
 					Constraint *n = makeNode(Constraint);
 					n->contype = CONSTR_CHECK;
 					n->location = @1;
 					n->raw_expr = $3;
 					n->cooked_expr = NULL;
-					processCASbits($5, @5, "CHECK",
-								   NULL, NULL, &n->skip_validation,
-								   &n->is_no_inherit, yyscanner);
 					n->initially_valid = !n->skip_validation;
 					$$ = (Node *)n;
 				}
 			| UNIQUE '(' columnList ')' opt_c_include opt_definition
-				ConstraintAttributeSpec
 				{
 					Constraint *n = makeNode(Constraint);
 					n->contype = CONSTR_UNIQUE;
@@ -1942,12 +1917,9 @@ ConstraintElem:
 					n->including = $5;
 					n->options = $6;
 					n->indexname = NULL;
-					processCASbits($7, @7, "UNIQUE",
-								   &n->deferrable, &n->initdeferred, NULL,
-								   NULL, yyscanner);
 					$$ = (Node *)n;
 				}
-			| UNIQUE ExistingIndex ConstraintAttributeSpec
+			| UNIQUE ExistingIndex
 				{
 					Constraint *n = makeNode(Constraint);
 					n->contype = CONSTR_UNIQUE;
@@ -1957,13 +1929,9 @@ ConstraintElem:
 					n->options = NIL;
 					n->indexname = $2;
 					n->indexspace = NULL;
-					processCASbits($3, @3, "UNIQUE",
-								   &n->deferrable, &n->initdeferred, NULL,
-								   NULL, yyscanner);
 					$$ = (Node *)n;
 				}
 			| PRIMARY KEY '(' columnList ')' opt_c_include opt_definition
-				ConstraintAttributeSpec
 				{
 					Constraint *n = makeNode(Constraint);
 					n->contype = CONSTR_PRIMARY;
@@ -1972,12 +1940,9 @@ ConstraintElem:
 					n->including = $6;
 					n->options = $7;
 					n->indexname = NULL;
-					processCASbits($8, @8, "PRIMARY KEY",
-								   &n->deferrable, &n->initdeferred, NULL,
-								   NULL, yyscanner);
 					$$ = (Node *)n;
 				}
-			| PRIMARY KEY ExistingIndex ConstraintAttributeSpec
+			| PRIMARY KEY ExistingIndex
 				{
 					Constraint *n = makeNode(Constraint);
 					n->contype = CONSTR_PRIMARY;
@@ -1987,13 +1952,10 @@ ConstraintElem:
 					n->options = NIL;
 					n->indexname = $3;
 					n->indexspace = NULL;
-					processCASbits($4, @4, "PRIMARY KEY",
-								   &n->deferrable, &n->initdeferred, NULL,
-								   NULL, yyscanner);
 					$$ = (Node *)n;
 				}
 			| FOREIGN KEY '(' columnList ')' REFERENCES qualified_name
-				opt_column_list key_match key_actions ConstraintAttributeSpec
+				opt_column_list key_match key_actions
 				{
 					Constraint *n = makeNode(Constraint);
 					n->contype = CONSTR_FOREIGN;
@@ -2004,17 +1966,9 @@ ConstraintElem:
 					n->fk_matchtype		= $9;
 					n->fk_upd_action	= (char) ($10 >> 8);
 					n->fk_del_action	= (char) ($10 & 0xFF);
-					processCASbits($11, @11, "FOREIGN KEY",
-								   &n->deferrable, &n->initdeferred,
-								   &n->skip_validation, NULL,
-								   yyscanner);
 					n->initially_valid = !n->skip_validation;
 					$$ = (Node *)n;
 				}
-		;
-
-opt_no_inherit:	NO INHERIT							{  $$ = true; }
-			| /* EMPTY */							{  $$ = false; }
 		;
 
 opt_column_list:
@@ -2362,44 +2316,6 @@ generic_option_name:
 /* We could use def_arg here, but the spec only requires string literals */
 generic_option_arg:
 				Sconst				{ $$ = (Node *) makeString($1); }
-		;
-
-ConstraintAttributeSpec:
-			/*EMPTY*/
-				{ $$ = 0; }
-			| ConstraintAttributeSpec ConstraintAttributeElem
-				{
-					/*
-					 * We must complain about conflicting options.
-					 * We could, but choose not to, complain about redundant
-					 * options (ie, where $2's bit is already set in $1).
-					 */
-					int		newspec = $1 | $2;
-
-					/* special message for this case */
-					if ((newspec & (CAS_NOT_DEFERRABLE | CAS_INITIALLY_DEFERRED)) == (CAS_NOT_DEFERRABLE | CAS_INITIALLY_DEFERRED))
-						ereport(ERROR,
-								(errcode(ERRCODE_SYNTAX_ERROR),
-								 errmsg("constraint declared INITIALLY DEFERRED must be DEFERRABLE"),
-								 parser_errposition(@2)));
-					/* generic message for other conflicts */
-					if ((newspec & (CAS_NOT_DEFERRABLE | CAS_DEFERRABLE)) == (CAS_NOT_DEFERRABLE | CAS_DEFERRABLE) ||
-						(newspec & (CAS_INITIALLY_IMMEDIATE | CAS_INITIALLY_DEFERRED)) == (CAS_INITIALLY_IMMEDIATE | CAS_INITIALLY_DEFERRED))
-						ereport(ERROR,
-								(errcode(ERRCODE_SYNTAX_ERROR),
-								 errmsg("conflicting constraint properties"),
-								 parser_errposition(@2)));
-					$$ = newspec;
-				}
-		;
-
-ConstraintAttributeElem:
-			NOT DEFERRABLE					{ $$ = CAS_NOT_DEFERRABLE; }
-			| DEFERRABLE					{ $$ = CAS_DEFERRABLE; }
-			| INITIALLY IMMEDIATE			{ $$ = CAS_INITIALLY_IMMEDIATE; }
-			| INITIALLY DEFERRED			{ $$ = CAS_INITIALLY_DEFERRED; }
-			| NOT VALID						{ $$ = CAS_NOT_VALID; }
-			| NO INHERIT					{ $$ = CAS_NO_INHERIT; }
 		;
 
 definition: '(' def_list ')'						{ $$ = $2; }
@@ -8215,77 +8131,6 @@ SplitColQualList(List *qualList,
 		qualList = list_delete_cell(qualList, cell, prev);
 	}
 	*constraintList = qualList;
-}
-
-/*
- * Process result of ConstraintAttributeSpec, and set appropriate bool flags
- * in the output command node.  Pass NULL for any flags the particular
- * command doesn't support.
- */
-static void
-processCASbits(int cas_bits, int location, const char *constrType,
-			   bool *deferrable, bool *initdeferred, bool *not_valid,
-			   bool *no_inherit, core_yyscan_t yyscanner)
-{
-	/* defaults */
-	if (deferrable)
-		*deferrable = false;
-	if (initdeferred)
-		*initdeferred = false;
-	if (not_valid)
-		*not_valid = false;
-
-	if (cas_bits & (CAS_DEFERRABLE | CAS_INITIALLY_DEFERRED))
-	{
-		if (deferrable)
-			*deferrable = true;
-		else
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 /* translator: %s is CHECK, UNIQUE, or similar */
-					 errmsg("%s constraints cannot be marked DEFERRABLE",
-							constrType),
-					 parser_errposition(location)));
-	}
-
-	if (cas_bits & CAS_INITIALLY_DEFERRED)
-	{
-		if (initdeferred)
-			*initdeferred = true;
-		else
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 /* translator: %s is CHECK, UNIQUE, or similar */
-					 errmsg("%s constraints cannot be marked DEFERRABLE",
-							constrType),
-					 parser_errposition(location)));
-	}
-
-	if (cas_bits & CAS_NOT_VALID)
-	{
-		if (not_valid)
-			*not_valid = true;
-		else
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 /* translator: %s is CHECK, UNIQUE, or similar */
-					 errmsg("%s constraints cannot be marked NOT VALID",
-							constrType),
-					 parser_errposition(location)));
-	}
-
-	if (cas_bits & CAS_NO_INHERIT)
-	{
-		if (no_inherit)
-			*no_inherit = true;
-		else
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 /* translator: %s is CHECK, UNIQUE, or similar */
-					 errmsg("%s constraints cannot be marked NO INHERIT",
-							constrType),
-					 parser_errposition(location)));
-	}
 }
 
 /*----------
