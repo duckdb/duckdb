@@ -111,6 +111,7 @@ private:
 	using PhaseTimingItem = PhaseTimingStorage::value_type;
 	//! The stack of currently active phases
 	vector<string> phase_stack;
+
 private:
 	vector<PhaseTimingItem> GetOrderedPhaseTimings() const;
 };
