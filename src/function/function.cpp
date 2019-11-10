@@ -3,6 +3,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/cast_rules.hpp"
 
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/catalog/catalog.hpp"
 // #include "duckdb/function/aggregate/list.hpp"
 // #include "duckdb/function/scalar/list.hpp"
@@ -59,12 +60,9 @@ void BuiltinFunctions::Initialize() {
 
 string Function::CallToString(string name, vector<SQLType> arguments) {
 	string result = name + "(";
-	for (index_t i = 0; i < arguments.size(); i++) {
-		if (i != 0) {
-			result += ", ";
-		}
-		result += SQLTypeToString(arguments[i]);
-	}
+	result += StringUtil::Join(arguments, arguments.size(), ", ", [](const SQLType& argument){
+		return SQLTypeToString(argument);
+	});
 	return result + ")";
 }
 
