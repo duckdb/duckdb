@@ -385,7 +385,7 @@ vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() c
 		phases.push_back(entry.first);
 	}
 	std::sort(phases.begin(), phases.end());
-	for (auto &phase : phases) {
+	for (const auto &phase : phases) {
 		auto entry = phase_timings.find(phase);
 		assert(entry != phase_timings.end());
 		result.emplace_back(entry->first, entry->second);

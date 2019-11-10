@@ -45,8 +45,7 @@ public:
 		std::string result;
 
 		// If the input isn't empty, append the first element. We do this so we
-		// don't
-		// need to introduce an if into the loop.
+		// don't need to introduce an if into the loop.
 		if (count > 0) {
 			result += f(input[0]);
 		}
