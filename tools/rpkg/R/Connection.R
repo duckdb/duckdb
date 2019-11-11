@@ -2,22 +2,35 @@
 
 NULL
 
-duckdb_connection <- function(duckdb_driver, dbdir, debug) {
-  dbdir <- path.expand(dbdir)
+check_flag <- function(x) {
+  if (is.null(x)   || is.na(x) || !is.logical(x) || length(x) != 1) {
+    stop("flags need to be scalar logicals")
+  }
+}
+
+
+duckdb_connection <- function(duckdb_driver, dbdir, debug, read_only) {
+  dbdir <- path.expand(as.character(dbdir))
+
+  check_flag(debug)
+  check_flag(read_only)
+
     if (debug) {
         cat("CONNECT_START ", dbdir, "\n")
       }
-  database_ref = .Call(duckdb_startup_R, dbdir)
+  database_ref = .Call(duckdb_startup_R, dbdir, read_only)
   if (debug) {
         cat("CONNECT_END ", dbdir, "\n")
       }
+
   new(
     "duckdb_connection",
     dbdir=dbdir,
     database_ref = database_ref,
     conn_ref = .Call(duckdb_connect_R, database_ref),
     driver = duckdb_driver,
-    debug = debug
+    debug = debug,
+    read_only = read_only
   )
 }
 
@@ -26,7 +39,7 @@ duckdb_connection <- function(duckdb_driver, dbdir, debug) {
 setClass(
   "duckdb_connection",
   contains = "DBIConnection",
-  slots = list(dbdir= "character", database_ref = "externalptr", conn_ref = "externalptr", driver = "duckdb_driver", debug="logical")
+  slots = list(dbdir= "character", database_ref = "externalptr", conn_ref = "externalptr", driver = "duckdb_driver", debug="logical", read_only="logical")
 )
 
 #' @rdname DBI
@@ -110,11 +123,6 @@ setMethod("dbDataType", "duckdb_connection",
             dbDataType(dbObj@driver, obj, ...)
           })
 
-check_flag <- function(x) {
-  if (is.null(x) || is.na(x) || !is.logical(x) || length(x) != 1) {
-    stop("flags need to be scalar logicals")
-  }
-}
 
 #' @rdname DBI
 #' @inheritParams DBI::dbWriteTable

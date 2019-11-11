@@ -45,11 +45,11 @@ setMethod(
 #' @export
 setMethod(
   "dbConnect", "duckdb_driver",
-  function(drv, dbdir=":memory:", ..., debug=getOption("duckdb.debug", FALSE), dbname=NA) {
+  function(drv, dbdir=":memory:", ..., debug=getOption("duckdb.debug", FALSE), dbname=NA, read_only=FALSE) {
     if (!missing(dbname)) {
       dbdir <- dbname
     }
-    duckdb_connection(drv, dbdir=dbdir, debug=debug)
+    duckdb_connection(drv, dbdir=dbdir, debug=debug, read_only=read_only)
   }
 )
 

@@ -243,18 +243,30 @@ static SEXP duckdb_finalize_database_R(SEXP dbsexp) {
 	return R_NilValue;
 }
 
-SEXP duckdb_startup_R(SEXP dbdirsexp) {
+SEXP duckdb_startup_R(SEXP dbdirsexp, SEXP readonlysexp) {
 	if (TYPEOF(dbdirsexp) != STRSXP || LENGTH(dbdirsexp) != 1) {
-		Rf_error("duckdb_startup_R: Need single string parameter");
+		Rf_error("duckdb_startup_R: Need string parameter for dbdir");
 	}
 	char *dbdir = (char *)CHAR(STRING_ELT(dbdirsexp, 0));
+
+	if (TYPEOF(readonlysexp) != LGLSXP || LENGTH(readonlysexp) != 1) {
+		Rf_error("duckdb_startup_R: Need string parameter for read_only");
+	}
+	bool read_only = (bool)LOGICAL_ELT(readonlysexp, 0);
+
 	if (strlen(dbdir) == 0 || strcmp(dbdir, ":memory:") == 0) {
 		dbdir = NULL;
 	}
 
+	DBConfig config;
+	config.access_mode = AccessMode::READ_WRITE;
+	if (read_only) {
+		config.access_mode = AccessMode::READ_ONLY;
+
+	}
 	DuckDB *dbaddr;
 	try {
-		dbaddr = new DuckDB(dbdir);
+		dbaddr = new DuckDB(dbdir, &config);
 	} catch (...) {
 		Rf_error("duckdb_startup_R: Failed to open database");
 	}
@@ -451,7 +463,7 @@ SEXP duckdb_ptr_to_str(SEXP extptr) {
 // R native routine registration
 #define CALLDEF(name, n)                                                                                               \
 	{ #name, (DL_FUNC)&name, n }
-static const R_CallMethodDef R_CallDef[] = {CALLDEF(duckdb_startup_R, 1),
+static const R_CallMethodDef R_CallDef[] = {CALLDEF(duckdb_startup_R, 2),
                                             CALLDEF(duckdb_connect_R, 1),
                                             CALLDEF(duckdb_query_R, 2),
                                             CALLDEF(duckdb_append_R, 3),
