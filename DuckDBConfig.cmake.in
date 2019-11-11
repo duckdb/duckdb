@@ -9,7 +9,7 @@ get_filename_component(DuckDB_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
 set(DuckDB_INCLUDE_DIRS "@CONF_INCLUDE_DIRS@")
 
 if(NOT TARGET duckdb AND NOT DuckDB_BINARY_DIR)
-    include("${DuckDB_CMAKE_DIR}/DuckDBTargets.cmake")
+    include("${DuckDB_CMAKE_DIR}/DuckDBExports.cmake")
 endif()
 
 if(DuckDB_USE_STATIC_LIBS)

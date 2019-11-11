@@ -36,3 +36,19 @@ target_include_directories(duckdb PUBLIC
 target_include_directories(duckdb_static PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+
+install(
+    TARGETS duckdb duckdb_static
+    EXPORT DUCKDB_EXPORT_SET
+    LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+    ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
+
+install(
+    DIRECTORY "${CMAKE_SOURCE_DIR}/src/include/duckdb"
+    DESTINATION "${INSTALL_INCLUDE_DIR}"
+    FILES_MATCHING PATTERN "*.hpp")
+install(
+    FILES
+        "${CMAKE_SOURCE_DIR}/src/include/duckdb.hpp"
+        "${CMAKE_SOURCE_DIR}/src/include/duckdb.h"
+    DESTINATION "${INSTALL_INCLUDE_DIR}")

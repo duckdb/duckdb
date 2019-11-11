@@ -20,6 +20,26 @@ set(CMAKE_VERBOSE_MAKEFILE OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_MACOSX_RPATH 1)
 
+# Determine install paths
+set(INSTALL_LIB_DIR lib CACHE PATH "Installation directory for libraries")
+set(INSTALL_BIN_DIR bin CACHE PATH "Installation directory for executables")
+set(INSTALL_INCLUDE_DIR include CACHE PATH "Installation directory for header files")
+if(WIN32 AND NOT CYGWIN)
+    set(DEF_INSTALL_CMAKE_DIR cmake)
+else()
+    set(DEF_INSTALL_CMAKE_DIR lib/cmake/DuckDB)
+endif()
+set(INSTALL_CMAKE_DIR ${DEF_INSTALL_CMAKE_DIR} CACHE PATH "Installation directory for CMake files")
+set(DUCKDB_EXPORT_SET "DuckDBExports")
+
+# Make relative install paths absolute
+foreach(p LIB BIN INCLUDE CMAKE)
+    set(var INSTALL_${p}_DIR)
+    if(NOT IS_ABSOLUTE "${${var}}")
+        set(${var} "${CMAKE_INSTALL_PREFIX}/${${var}}")
+    endif()
+endforeach()
+
 set(M32_FLAG "")
 if(FORCE_32_BIT)
   set(M32_FLAG " -m32 ")
@@ -140,4 +160,28 @@ if(NOT LEAN)
   endif()
 endif()
 
-include(${CMAKE_CURRENT_SOURCE_DIR}/DuckDBInstallation.cmake)
+# Write the export set for build and install tree
+install(EXPORT "${DUCKDB_EXPORT_SET}" DESTINATION "${INSTALL_CMAKE_DIR}")
+export(EXPORT "${DUCKDB_EXPORT_SET}" FILE "${PROJECT_BINARY_DIR}/${DUCKDB_EXPORT_SET}.cmake")
+
+# Configure cmake package config for the build tree
+set(CONF_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/src/include")
+configure_file(DuckDBConfig.cmake.in "${PROJECT_BINARY_DIR}/DuckDBConfig.cmake" @ONLY)
+
+# Configure cmake package config for the install tree
+file(RELATIVE_PATH REL_INCLUDE_DIR "${INSTALL_CMAKE_DIR}" "${INSTALL_INCLUDE_DIR}")
+set(CONF_INCLUDE_DIRS "\${DuckDB_CMAKE_DIR}/${REL_INCLUDE_DIR}")
+configure_file(DuckDBConfig.cmake.in
+    "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/DuckDBConfig.cmake" @ONLY)
+
+# Configure cmake package version for build and install tree
+configure_file(DuckDBConfigVersion.cmake.in
+    "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake" @ONLY)
+
+# Install the cmake package
+install(
+    FILES
+        "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/DuckDBConfig.cmake"
+        "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake"
+    DESTINATION "${INSTALL_CMAKE_DIR}")
+

@@ -98,6 +98,12 @@ target_include_directories(re2 PUBLIC
 set_target_properties(re2 PROPERTIES
     EXPORT_NAME duckdb_re2)
 
+install(
+    TARGETS re2
+    EXPORT "${DUCKDB_EXPORT_SET}"
+    LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+    ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
+
 # if(RE2_BUILD_TESTING) set(TESTING_SOURCES re2/testing/backtrack.cc
 # re2/testing/dump.cc re2/testing/exhaustive_tester.cc
 # re2/testing/null_walker.cc re2/testing/regexp_generator.cc
