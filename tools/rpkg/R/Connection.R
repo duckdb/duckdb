@@ -2,35 +2,13 @@
 
 NULL
 
-check_flag <- function(x) {
-  if (is.null(x)   || is.na(x) || !is.logical(x) || length(x) != 1) {
-    stop("flags need to be scalar logicals")
-  }
-}
 
-
-duckdb_connection <- function(duckdb_driver, dbdir, debug, read_only) {
-  dbdir <- path.expand(as.character(dbdir))
-
-  check_flag(debug)
-  check_flag(read_only)
-
-    if (debug) {
-        cat("CONNECT_START ", dbdir, "\n")
-      }
-  database_ref = .Call(duckdb_startup_R, dbdir, read_only)
-  if (debug) {
-        cat("CONNECT_END ", dbdir, "\n")
-      }
-
+duckdb_connection <- function(duckdb_driver, debug) {
   new(
     "duckdb_connection",
-    dbdir=dbdir,
-    database_ref = database_ref,
-    conn_ref = .Call(duckdb_connect_R, database_ref),
+    conn_ref = .Call(duckdb_connect_R, duckdb_driver@database_ref),
     driver = duckdb_driver,
-    debug = debug,
-    read_only = read_only
+    debug = debug
   )
 }
 
@@ -39,7 +17,7 @@ duckdb_connection <- function(duckdb_driver, dbdir, debug, read_only) {
 setClass(
   "duckdb_connection",
   contains = "DBIConnection",
-  slots = list(dbdir= "character", database_ref = "externalptr", conn_ref = "externalptr", driver = "duckdb_driver", debug="logical", read_only="logical")
+  slots = list(dbdir= "character", conn_ref = "externalptr", driver = "duckdb_driver", debug="logical")
 )
 
 #' @rdname DBI
@@ -47,7 +25,7 @@ setClass(
 #' @export
 setMethod("show", "duckdb_connection",
           function(object) {
-            cat(sprintf("<duckdb_connection %s dbdir='%s' database_ref=%s>\n", extptr_str(object@conn_ref), object@dbdir, extptr_str(object@database_ref)))
+            cat(sprintf("<duckdb_connection %s driver=%s>\n", extptr_str(object@conn_ref), drv_to_string(object@driver)))
           })
 
 #' @rdname DBI
@@ -68,9 +46,12 @@ setMethod("dbIsValid", "duckdb_connection",
 #' @inheritParams DBI::dbDisconnect
 #' @export
 setMethod("dbDisconnect", "duckdb_connection",
-          function(conn, ...) {
+          function(conn, ..., shutdown=FALSE) {
             if (!dbIsValid(conn)) {
               warning("Connection already closed.", call. = FALSE)
+            }
+            if (shutdown) {
+              duckdb_shutdown(conn@driver)
             }
             .Call(duckdb_disconnect_R, conn@conn_ref)
             invisible(TRUE)

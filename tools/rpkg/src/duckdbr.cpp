@@ -236,7 +236,7 @@ static SEXP duckdb_finalize_database_R(SEXP dbsexp) {
 	}
 	DuckDB *dbaddr = (DuckDB *)R_ExternalPtrAddr(dbsexp);
 	if (dbaddr) {
-		warning("duckdb_finalize_database_R: Database is garbage-collected, use xxx to avoid this.");
+		warning("duckdb_finalize_database_R: Database is garbage-collected, use dbDisconnect(con, shutdown=TRUE) or duckdb::duckdb_shutdown(drv) to avoid this.");
 		R_ClearExternalPtr(dbsexp);
 		delete dbaddr;
 	}
