@@ -39,7 +39,7 @@ target_include_directories(duckdb_static PUBLIC
 
 install(
     TARGETS duckdb duckdb_static
-    EXPORT DUCKDB_EXPORT_SET
+    EXPORT "${DUCKDB_EXPORT_SET}"
     LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
     ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
 

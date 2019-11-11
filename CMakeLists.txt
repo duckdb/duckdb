@@ -164,24 +164,29 @@ endif()
 install(EXPORT "${DUCKDB_EXPORT_SET}" DESTINATION "${INSTALL_CMAKE_DIR}")
 export(EXPORT "${DUCKDB_EXPORT_SET}" FILE "${PROJECT_BINARY_DIR}/${DUCKDB_EXPORT_SET}.cmake")
 
-# Configure cmake package config for the build tree
-set(CONF_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/src/include")
-configure_file(DuckDBConfig.cmake.in "${PROJECT_BINARY_DIR}/DuckDBConfig.cmake" @ONLY)
+# Only write the cmake package configuration if the templates exist
+set(CMAKE_CONFIG_TEMPLATE "${CMAKE_SOURCE_DIR}/DuckDBConfig.cmake.in")
+set(CMAKE_CONFIG_VERSION_TEMPLATE "${CMAKE_SOURCE_DIR}/DuckDBConfigVersion.cmake.in")
+if (EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
 
-# Configure cmake package config for the install tree
-file(RELATIVE_PATH REL_INCLUDE_DIR "${INSTALL_CMAKE_DIR}" "${INSTALL_INCLUDE_DIR}")
-set(CONF_INCLUDE_DIRS "\${DuckDB_CMAKE_DIR}/${REL_INCLUDE_DIR}")
-configure_file(DuckDBConfig.cmake.in
+  # Configure cmake package config for the build tree
+  set(CONF_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/src/include")
+  configure_file(${CMAKE_CONFIG_TEMPLATE} "${PROJECT_BINARY_DIR}/DuckDBConfig.cmake" @ONLY)
+
+  # Configure cmake package config for the install tree
+  file(RELATIVE_PATH REL_INCLUDE_DIR "${INSTALL_CMAKE_DIR}" "${INSTALL_INCLUDE_DIR}")
+  set(CONF_INCLUDE_DIRS "\${DuckDB_CMAKE_DIR}/${REL_INCLUDE_DIR}")
+  configure_file(${CMAKE_CONFIG_TEMPLATE}
     "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/DuckDBConfig.cmake" @ONLY)
 
-# Configure cmake package version for build and install tree
-configure_file(DuckDBConfigVersion.cmake.in
+  # Configure cmake package version for build and install tree
+  configure_file(${CMAKE_CONFIG_VERSION_TEMPLATE}
     "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake" @ONLY)
 
-# Install the cmake package
-install(
+  # Install the cmake package
+  install(
     FILES
-        "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/DuckDBConfig.cmake"
-        "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake"
+      "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/DuckDBConfig.cmake"
+      "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake"
     DESTINATION "${INSTALL_CMAKE_DIR}")
-
+endif()
