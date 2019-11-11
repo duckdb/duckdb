@@ -383,6 +383,12 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 44);
 	duckdb_destroy_result(&res);
 
+	duckdb_bind_null(stmt, 1);
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(res.columns[0].nullmask[0] == true);
+	duckdb_destroy_result(&res);
+
 	duckdb_destroy_prepare(&stmt);
 	// again to make sure it does not crash
 	duckdb_destroy_result(&res);
