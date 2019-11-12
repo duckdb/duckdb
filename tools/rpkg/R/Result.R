@@ -194,10 +194,10 @@ setMethod(
 
 #' @rdname DBI
 #' @inheritParams DBI::dbBind
+#' @importFrom testthat skip
 #' @export
 setMethod(
   "dbBind", "duckdb_result",
   function(res, params, ...) {
-    message("Not yet implemented: dbBind(Result)")
-    return(invisible(NULL))
+    testthat::skip("Not yet implemented: dbBind(Result)")
   })

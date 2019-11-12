@@ -13,10 +13,10 @@ Imports:
     DBI,
     dbplyr,
     methods,
+    testthat,
     utils
 Suggests: 
-    DBItest,
-    testthat
+    DBItest
 GitHub: https://github.com/cwida/duckdb
 Collate: 
     'duckdb.R'
