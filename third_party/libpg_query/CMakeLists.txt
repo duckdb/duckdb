@@ -4,11 +4,6 @@ project(pg_query CXX C)
 cmake_policy(SET CMP0063 NEW)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
-# this code imitates the Makefile in /third_party/libpg_query/
-file(GLOB_RECURSE pg_query_srcs ${CMAKE_CURRENT_SOURCE_DIR}/*.c)
-
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
-
 add_library(pg_query STATIC
             postgres_parser.cpp
             pg_functions.cpp
@@ -20,6 +15,17 @@ add_library(pg_query STATIC
             src_backend_nodes_value.c
             src_backend_parser_scan.c
             src_common_keywords.c)
+
+target_include_directories(pg_query PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+set_target_properties(pg_query PROPERTIES
+    EXPORT_NAME duckdb_pg_query)
+
+install(
+    TARGETS pg_query
+    EXPORT "${DUCKDB_EXPORT_SET}"
+    LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+    ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
 
 if(NOT MSVC)
   set_target_properties(pg_query
