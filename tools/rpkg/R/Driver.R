@@ -149,6 +149,8 @@ is_installed <- function (pkg) {
 }
 
 
+#' @importFrom DBI dbConnect
+#' @importFrom dbplyr src_dbi
 #' @export
 src_duckdb <- function (path=":memory:", create = FALSE, read_only=FALSE) {
     if (!is_installed("dbplyr")) {

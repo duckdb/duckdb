@@ -353,6 +353,10 @@ duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, i
 	return duckdb_bind_value(prepared_statement, param_idx, Value(val));
 }
 
+duckdb_state duckdb_bind_null(duckdb_prepared_statement prepared_statement, index_t param_idx) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value());
+}
+
 duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statement, duckdb_result *out_result) {
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
 	if (!wrapper || !wrapper->statement || !wrapper->statement->success || wrapper->statement->is_invalidated) {
