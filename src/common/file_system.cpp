@@ -430,7 +430,7 @@ static void delete_dir_special_snowflake_windows(string directory) {
 	WIN32_FIND_DATA ffd;
 	HANDLE hFind = FindFirstFile(szDir, &ffd);
 	if (hFind == INVALID_HANDLE_VALUE) {
-		throw IOException("Could not find directory");
+		return;
 	}
 
 	do {
