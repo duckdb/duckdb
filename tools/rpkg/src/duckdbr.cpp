@@ -370,7 +370,6 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 				// timestamp
 				if (TYPEOF(coldata) == REALSXP && TYPEOF(GET_CLASS(coldata)) == STRSXP &&
 				    strcmp("POSIXct", CHAR(STRING_ELT(GET_CLASS(coldata), 0))) == 0) {
-
 					double val = NUMERIC_POINTER(coldata)[row_idx];
 					if (ISNA(val)) {
 						appender->AppendValue(Value());
