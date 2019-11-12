@@ -16,7 +16,8 @@ Imports:
     testthat,
     utils
 Suggests: 
-    DBItest
+    DBItest, 
+    callr
 GitHub: https://github.com/cwida/duckdb
 Collate: 
     'duckdb.R'
