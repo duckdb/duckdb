@@ -1,3 +1,4 @@
+#include <cfloat>
 #include "execution/index/art/art_key.hpp"
 #include "execution/index/art/art.hpp"
 
@@ -20,21 +21,83 @@ static uint8_t FlipSign(uint8_t key_byte) {
 	return key_byte ^ 128;
 }
 
-uint32_t encode_fp32(float f){
-    uint32_t value = reinterpret_cast<uint32_t*>(&f)[0];
+uint32_t encode_fp32(float x)
+{
+    int shift;
+    unsigned long sign, exp, hibits, buff;
+    double fnorm, significand;
+    int expbits = 8;
+    int significandbits = 23;
 
-    if(value == (1u<<31)){
-        //! transform -0 into +0
-    } else if ((value & (1u<<31)) == 0){
-        //! +0 and positive numbers
-        value |= (1<<31);
-    } else {
-        //! negative numbers
-        value = ~value;
-        //! complement 1
+    //! zero (can't handle signed zero)
+    if (x == 0)
+    {
+        buff = 0;
+        return buff;
+    }
+    //! infinity
+    if (x > FLT_MAX)
+    {
+        buff = 128 + ((1 << (expbits - 1)) - 1);
+        buff <<= (31 - expbits);
+        return buff;
+    }
+    //! -infinity
+    if (x < -FLT_MAX)
+    {
+        buff = 128 + ((1 << (expbits - 1)) - 1);
+        buff <<= (31 - expbits);
+        buff |= (1 << 31);
+        return buff;
+    }
+    //! NaN
+    if (x != x)
+    {
+        buff = 128 + ((1 << (expbits - 1)) - 1);
+        buff <<= (31 - expbits);
+        buff |= 1234;
+        return buff;
     }
 
-    return value;
+    //! get the sign
+    if (x < 0) { sign = 1; fnorm = -x; }
+    else { sign = 0; fnorm = x; }
+
+    //! get the normalized form of f and track the exponent
+    shift = 0;
+    while (fnorm >= 2.0) { fnorm /= 2.0; shift++; }
+    while (fnorm < 1.0) { fnorm *= 2.0; shift--; }
+
+    //! check for denormalized numbers
+    if (shift < -126)
+    {
+        while (shift < -126) { fnorm /= 2.0; shift++; }
+        shift = -1023;
+    }
+        //! out of range. Set to infinity
+    else if (shift > 128)
+    {
+        buff = 128 + ((1 << (expbits - 1)) - 1);
+        buff <<= (31 - expbits);
+        buff |= (sign << 31);
+        return buff;
+    }
+    else
+        fnorm = fnorm - 1.0; //! take the significant bit off mantissa
+
+    //! calculate the integer form of the significand
+    //! hold it in a  double for now
+
+    significand = fnorm * ((1LL << significandbits) + 0.5f);
+
+
+    //! get the biased exponent
+    exp = shift + ((1 << (expbits - 1)) - 1); //! shift + bias
+
+    hibits = (long)(significand);
+    buff = (sign << 31) | (exp << (31 - expbits)) | hibits;
+
+    return buff;
 }
 
 
@@ -89,10 +152,10 @@ template <> unique_ptr<data_t[]> Key::CreateData(int64_t value, bool is_little_e
 }
 
 template <> unique_ptr<data_t[]> Key::CreateData(float value, bool is_little_endian) {
-    value = encode_fp32(value);
-    auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
-    reinterpret_cast<uint32_t *>(data.get())[0] = is_little_endian ? BSWAP32(value) : value;
-//    data[0] = FlipSign(data[0]);
+   uint32_t converted_value = encode_fp32(value);
+    auto data = unique_ptr<data_t[]>(new data_t[sizeof(converted_value)]);
+    reinterpret_cast<uint32_t *>(data.get())[0] = is_little_endian ? BSWAP32(converted_value) : converted_value;
+    data[0] = FlipSign(data[0]);
     return data;
 }
 template <> unique_ptr<data_t[]> Key::CreateData(double value, bool is_little_endian) {
