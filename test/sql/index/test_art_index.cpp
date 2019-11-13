@@ -2,6 +2,7 @@
 #include "common/file_system.hpp"
 #include "dbgen.hpp"
 #include "test_helpers.hpp"
+#include <cfloat>
 
 using namespace duckdb;
 using namespace std;
@@ -961,25 +962,43 @@ TEST_CASE("ART Negative Range", "[art-neg]") {
     REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 }
 
-TEST_CASE("ART Floating Point", "[art-float]") {
+float generate_small_float(){
+    return static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+}
+
+float generate_float(){
+    return FLT_MIN + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(FLT_MAX-FLT_MIN)));
+}
+
+float full_scan(float* keys, index_t size, float low, float high){
+    float sum = 0;
+    for (index_t i = 0; i < size; i ++){
+        if (keys[i] >= low && keys[i]  <= high) {
+            sum += keys[i];
+        }
+    }
+
+    return sum;
+}
+
+
+TEST_CASE("ART Floating Point", "[art][.]") {
     unique_ptr<QueryResult> result;
     DuckDB db(nullptr);
 
     Connection con(db);
-
+    //! Will use 10k keys
+    auto keys = unique_ptr<float[]>(new float[10000]);
+    index_t n  = 10000;
     REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i real)"));
-    index_t n = 7;
-    auto keys = unique_ptr<float[]>(new float[n]);
-    keys[5] = -1.7;
-    keys[6] = -3.5;
-//    keys[2] = -2.2;
-//    keys[3] = 5.7;
-//    keys[4] = 2.9;
-    keys[0] = 1.7;
-    keys[1] = 3.5;
-    keys[2] = 2.2;
-    keys[3] = 5.7;
-    keys[4] = 2.9;
+    //! Generate 1000 small floats (0.0 - 1.0)
+    for (index_t i = 0; i < 1000; i ++){
+        keys[i] = generate_small_float();
+    }
+    //! Generate 9000 floats (min/max)
+    for (index_t i = 1000; i < 10000; i ++){
+        keys[i] = generate_float();
+    }
     //! Insert values and create index
     REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
     for (index_t i = 0; i < n; i++) {
@@ -989,21 +1008,52 @@ TEST_CASE("ART Floating Point", "[art-float]") {
     REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
     //! Check if all elements are in
     for (index_t i = 0; i < n; i++) {
-        result = con.Query("SELECT COUNT(*) FROM numbers WHERE i = $1", keys[i]);
-        REQUIRE(CHECK_COLUMN(result, 0, {1}));
+        result = con.Query("SELECT MIN(i) FROM numbers WHERE i = $1", keys[i]);
+        REQUIRE(CHECK_COLUMN(result, 0, {Value::FLOAT(keys[i])}));
     }
-    //! Check Ranges
-    result = con.Query("SELECT sum(i) FROM numbers WHERE i >= 3 ");
-    REQUIRE(CHECK_COLUMN(result, 0, {Value(9.2)}));
-    result = con.Query("SELECT sum(i) FROM numbers WHERE i < 1 ");
-    REQUIRE(CHECK_COLUMN(result, 0, {Value(-5.2)}));
-//    result = con.Query("SELECT sum(i) FROM integers WHERE i >= -10 AND i <= 5");
-//    REQUIRE(CHECK_COLUMN(result, 0, {Value(-40)}));
-//    result = con.Query("SELECT sum(i) FROM integers WHERE i >= 10 AND i <= 15");
-//    REQUIRE(CHECK_COLUMN(result, 0, {Value(75)}));
+    //! Generate 500 small-small range queries
+
+    for (index_t i = 0; i < n; i++) {
+        float low = generate_small_float();
+        float high = generate_small_float();
+        float answer = full_scan(keys.get(),n,low,high);
+        result = con.Query("SELECT SUM(i) FROM numbers WHERE i >= $1 and i <= $2", low,high);
+        if (answer !=0){
+            REQUIRE(CHECK_COLUMN(result, 0, {Value::FLOAT(answer)}));
+        }
+        else{
+            REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+        }
+    }
+    //! Generate 500 small-normal range queries
+    for (index_t i = 0; i < n; i++) {
+        float low = generate_small_float();
+        float high = generate_float();
+        float answer = full_scan(keys.get(),n,low,high);
+        result = con.Query("SELECT SUM(i) FROM numbers WHERE i >= $1 and i <= $2", low,high);
+        if (answer !=0){
+            REQUIRE(CHECK_COLUMN(result, 0, {Value::FLOAT(answer)}));
+        }
+        else{
+            REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+        }
+    }
+    //! Generate 500 normal-normal range queries
+    for (index_t i = 0; i < n; i++) {
+        float low = generate_float();
+        float high = generate_float();
+        float answer = full_scan(keys.get(),n,low,high);
+        result = con.Query("SELECT SUM(i) FROM numbers WHERE i >= $1 and i <= $2", low,high);
+        if (answer !=0){
+            REQUIRE(CHECK_COLUMN(result, 0, {Value::FLOAT(answer)}));
+        }
+        else{
+            REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+        }
+    }
+
     REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
     REQUIRE_NO_FAIL(con.Query("DROP TABLE numbers"));
-
 }
 
 TEST_CASE("Test updates resulting from big index scans", "[art][.]") {

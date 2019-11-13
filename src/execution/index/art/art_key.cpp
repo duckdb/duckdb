@@ -21,7 +21,7 @@ static uint8_t FlipSign(uint8_t key_byte) {
 	return key_byte ^ 128;
 }
 
-uint32_t encode_fp32(float x)
+uint32_t EncodeFloat(float x)
 {
     int shift;
     unsigned long sign, exp, hibits, buff;
@@ -101,22 +101,103 @@ uint32_t encode_fp32(float x)
 }
 
 
-uint64_t encode_fp64(double f){
-    uint64_t value = reinterpret_cast<uint64_t*>(&f)[0];
-
-    if(value == (1ull<<63)){
-        //! transform -0 into +0
-        /* nop */
-    } else if (value < (1ull<<63)){
-        //! +0 and positive numbers
-        value += (1ull<<63);
-    } else {
-        //! negative numbers
-        value = ~value;
-        //! complement 1
+uint64_t EncodeDouble(double x) {
+    int shift;
+    unsigned long sign, exp, hibits, hilong, lowlong;
+    double fnorm, significand;
+    int expbits = 11;
+    int significandbits = 52;
+    uint64_t buff;
+    //! zero (can't handle signed zero)
+    if (x == 0)
+    {
+        buff = 0;
+        return buff;
+    }
+    //! infinity
+    if (x > DBL_MAX)
+    {
+        hilong = 1024 + ((1 << (expbits - 1)) - 1);
+        hilong <<= (31 - expbits);
+        lowlong = 0;
+        buff = hilong;
+        buff <<=32;
+        buff += lowlong;
+        return buff;
+    }
+    //! -infinity
+    if (x < -DBL_MAX)
+    {
+        hilong = 1024 + ((1 << (expbits - 1)) - 1);
+        hilong <<= (31 - expbits);
+        hilong |= (1 << 31);
+        lowlong = 0;
+        buff = hilong;
+        buff <<=32;
+        buff += lowlong;
+        return buff;
+    }
+    //! NaN
+    if (x != x)
+    {
+        hilong = 1024 + ((1 << (expbits - 1)) - 1);
+        hilong <<= (31 - expbits);
+        lowlong = 1234;
+        buff = hilong;
+        buff <<=32;
+        buff += lowlong;
+        return buff;
     }
 
-    return value;
+    //! get the sign
+    if (x < 0) { sign = 1; fnorm = -x; }
+    else { sign = 0; fnorm = x; }
+
+    //! get the normalized form of f and track the exponent
+    shift = 0;
+    while (fnorm >= 2.0) { fnorm /= 2.0; shift++; }
+    while (fnorm < 1.0) { fnorm *= 2.0; shift--; }
+
+    //! check for denormalized numbers
+    if (shift < -1022)
+    {
+        while (shift < -1022) { fnorm /= 2.0; shift++; }
+        shift = -1023;
+    }
+        //! out of range. Set to infinity
+    else if (shift > 1023)
+    {
+        hilong = 1024 + ((1 << (expbits - 1)) - 1);
+        hilong <<= (31 - expbits);
+        hilong |= (sign << 31);
+        lowlong = 0;
+        buff = hilong;
+        buff <<=32;
+        buff += lowlong;
+        return buff;
+    }
+    else
+        fnorm = fnorm - 1.0; //! take the significant bit off mantissa
+
+    //! calculate the integer form of the significand
+    //! hold it in a  double for now
+
+    significand = fnorm * ((1LL << significandbits) + 0.5f);
+
+
+    //! get the biased exponent
+    exp = shift + ((1 << (expbits - 1)) - 1); //! shift + bias
+
+    //! put the data into two longs (for convenience)
+    hibits = (long)(significand / 4294967296);
+    hilong = (sign << 31) | (exp << (31 - expbits)) | hibits;
+    //x = significand - hibits * 4294967296;
+    lowlong = (unsigned long)(significand - hibits * 4294967296);
+
+    buff = hilong;
+    buff <<=32;
+    buff += lowlong;
+    return buff;
 }
 
 
@@ -152,17 +233,17 @@ template <> unique_ptr<data_t[]> Key::CreateData(int64_t value, bool is_little_e
 }
 
 template <> unique_ptr<data_t[]> Key::CreateData(float value, bool is_little_endian) {
-   uint32_t converted_value = encode_fp32(value);
+    uint32_t converted_value = EncodeFloat(value);
     auto data = unique_ptr<data_t[]>(new data_t[sizeof(converted_value)]);
     reinterpret_cast<uint32_t *>(data.get())[0] = is_little_endian ? BSWAP32(converted_value) : converted_value;
     data[0] = FlipSign(data[0]);
     return data;
 }
 template <> unique_ptr<data_t[]> Key::CreateData(double value, bool is_little_endian) {
-    value = encode_fp64(value);
-    auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
-    reinterpret_cast<uint64_t *>(data.get())[0] = is_little_endian ? BSWAP64(value) : value;
-//    data[0] = FlipSign(data[0]);
+    uint64_t converted_value = EncodeDouble(value);
+    auto data = unique_ptr<data_t[]>(new data_t[sizeof(converted_value)]);
+    reinterpret_cast<uint64_t *>(data.get())[0] = is_little_endian ? BSWAP64(converted_value) : converted_value;
+    data[0] = FlipSign(data[0]);
     return data;
 }
 
