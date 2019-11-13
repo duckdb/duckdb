@@ -198,10 +198,10 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 
 /* BEGIN TYPE LIST */
 %type <node>	stmt schema_stmt
-		AlterSeqStmt AlterTableStmt
+		AlterTableStmt
 		AnalyzeStmt
 		CreateAsStmt
-		CreateSchemaStmt CreateSeqStmt CreateStmt
+		CreateSchemaStmt CreateStmt
 		DeleteStmt
 		DropStmt
 		ExplainStmt
@@ -214,6 +214,8 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 		DeallocateStmt PrepareStmt ExecuteStmt
 		VariableSetStmt
 
+%begin_types
+
 %type <node>	select_no_parens select_with_parens select_clause
 				simple_select values_clause
 
@@ -225,10 +227,8 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 
 %type <dbehavior>	opt_drop_behavior
 
-%type <list>	copy_opt_list
-				transaction_mode_list
-%type <defelt>	copy_opt_item
-				transaction_mode_item
+%type <list>	transaction_mode_list
+%type <defelt>	transaction_mode_item
 
 %type <str>		vac_analyze_option_name
 %type <defelt>	vac_analyze_option_elem
@@ -240,8 +240,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 
 %type <list>	OptSchemaEltList
 
-%type <str>		copy_file_name
-				attr_name
+%type <str>		attr_name
 				name
 				index_name opt_index_name
 
@@ -276,7 +275,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 				TableFuncElementList opt_type_modifiers
 				prep_type_clause
 				execute_param_clause using_clause returning_clause
-				create_generic_options alter_generic_options
+				alter_generic_options
 				vacuum_relation_list opt_vacuum_relation_list
 
 %type <list>	group_by_list
@@ -307,9 +306,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 
 %type <boolean> opt_unique opt_concurrently opt_verbose opt_full
 %type <boolean> opt_freeze opt_analyze
-%type <defelt>	opt_binary copy_delimiter
 
-%type <boolean> copy_from opt_program
 
 %type <ival>	opt_column opt_set_data
 %type <objtype>	drop_type_any_name drop_type_name drop_type_name_on_any_name
@@ -318,9 +315,6 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 				offset_clause select_offset_value
 				select_fetch_first_value I_or_F_const
 %type <ival>	row_or_rows first_or_next
-
-%type <list>	OptSeqOptList SeqOptList OptParenthesizedSeqOptList
-%type <defelt>	SeqOptElem
 
 %type <istmt>	insert_rest
 %type <infer>	opt_conf_expr
@@ -354,19 +348,10 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 %type <node>	tablesample_clause opt_repeatable_clause
 %type <target>	target_el set_target insert_column_item
 
-%type <str>		generic_option_name
-%type <node>	generic_option_arg
-%type <defelt>	generic_option_elem alter_generic_option_elem
-%type <list>	generic_option_list alter_generic_option_list
 %type <str>		explain_option_name
 %type <node>	explain_option_arg
 %type <defelt>	explain_option_elem
 %type <list>	explain_option_list
-
-%type <node>	copy_generic_opt_arg copy_generic_opt_arg_list_item
-%type <defelt>	copy_generic_opt_elem
-%type <list>	copy_generic_opt_list copy_generic_opt_arg_list
-%type <list>	copy_options
 
 %type <typnam>	Typename SimpleTypename ConstTypename
 				GenericType Numeric opt_float
@@ -503,7 +488,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 	RESET RESTART RESTRICT RETURNING RETURNS REVOKE RIGHT ROLE ROLLBACK ROLLUP
 	ROUTINE ROUTINES ROW ROWS RULE
 
-	SAVEPOINT SCHEMA SCHEMAS SCROLL SEARCH SECOND_P SELECT SEQUENCE SEQUENCES
+	SAVEPOINT SCHEMA SCHEMAS SCROLL SEARCH SECOND_P SELECT
 	SERIALIZABLE SERVER SESSION SESSION_USER SET SETS SETOF SHARE SHOW
 	SIMILAR SIMPLE SKIP SMALLINT SNAPSHOT SOME SQL_P STABLE STANDALONE_P
 	START STATEMENT STATISTICS STDIN STDOUT STORAGE STORED STRICT_P STRIP_P
@@ -646,13 +631,11 @@ stmtmulti:	stmtmulti ';' stmt
 		;
 
 stmt:
-			AlterSeqStmt
-			| AlterTableStmt
+			AlterTableStmt
 			| AnalyzeStmt
 			| CheckPointStmt
 			| CreateAsStmt
 			| CreateSchemaStmt
-			| CreateSeqStmt
 			| CreateStmt
 			| DeallocateStmt
 			| DeleteStmt
@@ -1242,7 +1225,29 @@ reloption_elem:
 				}
 		;
 
-/* CopyStmt */
+/*****************************************************************************
+ *
+ *		QUERY :
+ *				COPY relname [(columnList)] FROM/TO file [WITH] [(options)]
+ *				COPY ( query ) TO file	[WITH] [(options)]
+ *
+ *				where 'query' can be one of:
+ *				{ SELECT | UPDATE | INSERT | DELETE }
+ *
+ *				and 'file' can be one of:
+ *				{ PROGRAM 'command' | STDIN | STDOUT | 'filename' }
+ *
+ *				In the preferred syntax the options are comma-separated
+ *				and use generic identifiers instead of keywords.  The pre-9.0
+ *				syntax had a hard-wired, space-separated set of options.
+ *
+ *				Really old syntax, from versions 7.2 and prior:
+ *				COPY [ BINARY ] table FROM/TO file
+ *					[ [ USING ] DELIMITERS 'delimiter' ] ]
+ *					[ WITH NULL AS 'null string' ]
+ *				This option placement is not supported with COPY (query...).
+ *
+ *****************************************************************************/
 %include copy.y
 
 /*****************************************************************************
@@ -1889,231 +1894,7 @@ opt_with_data:
  *				ALTER SEQUENCE seqname
  *
  *****************************************************************************/
-CreateSeqStmt:
-			CREATE OptTemp SEQUENCE qualified_name OptSeqOptList
-				{
-					CreateSeqStmt *n = makeNode(CreateSeqStmt);
-					$4->relpersistence = $2;
-					n->sequence = $4;
-					n->options = $5;
-					n->ownerId = InvalidOid;
-					n->if_not_exists = false;
-					$$ = (Node *)n;
-				}
-			| CREATE OptTemp SEQUENCE IF_P NOT EXISTS qualified_name OptSeqOptList
-				{
-					CreateSeqStmt *n = makeNode(CreateSeqStmt);
-					$7->relpersistence = $2;
-					n->sequence = $7;
-					n->options = $8;
-					n->ownerId = InvalidOid;
-					n->if_not_exists = true;
-					$$ = (Node *)n;
-				}
-		;
-
-AlterSeqStmt:
-			ALTER SEQUENCE qualified_name SeqOptList
-				{
-					AlterSeqStmt *n = makeNode(AlterSeqStmt);
-					n->sequence = $3;
-					n->options = $4;
-					n->missing_ok = false;
-					$$ = (Node *)n;
-				}
-			| ALTER SEQUENCE IF_P EXISTS qualified_name SeqOptList
-				{
-					AlterSeqStmt *n = makeNode(AlterSeqStmt);
-					n->sequence = $5;
-					n->options = $6;
-					n->missing_ok = true;
-					$$ = (Node *)n;
-				}
-
-		;
-
-OptSeqOptList: SeqOptList							{ $$ = $1; }
-			| /*EMPTY*/								{ $$ = NIL; }
-		;
-
-OptParenthesizedSeqOptList: '(' SeqOptList ')'		{ $$ = $2; }
-			| /*EMPTY*/								{ $$ = NIL; }
-		;
-
-SeqOptList: SeqOptElem								{ $$ = list_make1($1); }
-			| SeqOptList SeqOptElem					{ $$ = lappend($1, $2); }
-		;
-
-SeqOptElem: AS SimpleTypename
-				{
-					$$ = makeDefElem("as", (Node *)$2, @1);
-				}
-			| CACHE NumericOnly
-				{
-					$$ = makeDefElem("cache", (Node *)$2, @1);
-				}
-			| CYCLE
-				{
-					$$ = makeDefElem("cycle", (Node *)makeInteger(true), @1);
-				}
-			| NO CYCLE
-				{
-					$$ = makeDefElem("cycle", (Node *)makeInteger(false), @1);
-				}
-			| INCREMENT opt_by NumericOnly
-				{
-					$$ = makeDefElem("increment", (Node *)$3, @1);
-				}
-			| MAXVALUE NumericOnly
-				{
-					$$ = makeDefElem("maxvalue", (Node *)$2, @1);
-				}
-			| MINVALUE NumericOnly
-				{
-					$$ = makeDefElem("minvalue", (Node *)$2, @1);
-				}
-			| NO MAXVALUE
-				{
-					$$ = makeDefElem("maxvalue", NULL, @1);
-				}
-			| NO MINVALUE
-				{
-					$$ = makeDefElem("minvalue", NULL, @1);
-				}
-			| OWNED BY any_name
-				{
-					$$ = makeDefElem("owned_by", (Node *)$3, @1);
-				}
-			| SEQUENCE NAME_P any_name
-				{
-					/* not documented, only used by pg_dump */
-					$$ = makeDefElem("sequence_name", (Node *)$3, @1);
-				}
-			| START opt_with NumericOnly
-				{
-					$$ = makeDefElem("start", (Node *)$3, @1);
-				}
-			| RESTART
-				{
-					$$ = makeDefElem("restart", NULL, @1);
-				}
-			| RESTART opt_with NumericOnly
-				{
-					$$ = makeDefElem("restart", (Node *)$3, @1);
-				}
-		;
-
-opt_by:		BY				{}
-			| /* empty */	{}
-	  ;
-
-NumericOnly:
-			FCONST								{ $$ = makeFloat($1); }
-			| '+' FCONST						{ $$ = makeFloat($2); }
-			| '-' FCONST
-				{
-					$$ = makeFloat($2);
-					doNegateFloat($$);
-				}
-			| SignedIconst						{ $$ = makeInteger($1); }
-		;
-
-/* Options definition for CREATE FDW, SERVER and USER MAPPING */
-create_generic_options:
-			OPTIONS '(' generic_option_list ')'			{ $$ = $3; }
-			| /*EMPTY*/									{ $$ = NIL; }
-		;
-
-generic_option_list:
-			generic_option_elem
-				{
-					$$ = list_make1($1);
-				}
-			| generic_option_list ',' generic_option_elem
-				{
-					$$ = lappend($1, $3);
-				}
-		;
-
-/* Options definition for ALTER FDW, SERVER and USER MAPPING */
-alter_generic_options:
-			OPTIONS	'(' alter_generic_option_list ')'		{ $$ = $3; }
-		;
-
-alter_generic_option_list:
-			alter_generic_option_elem
-				{
-					$$ = list_make1($1);
-				}
-			| alter_generic_option_list ',' alter_generic_option_elem
-				{
-					$$ = lappend($1, $3);
-				}
-		;
-
-alter_generic_option_elem:
-			generic_option_elem
-				{
-					$$ = $1;
-				}
-			| SET generic_option_elem
-				{
-					$$ = $2;
-					$$->defaction = DEFELEM_SET;
-				}
-			| ADD_P generic_option_elem
-				{
-					$$ = $2;
-					$$->defaction = DEFELEM_ADD;
-				}
-			| DROP generic_option_name
-				{
-					$$ = makeDefElemExtended(NULL, $2, NULL, DEFELEM_DROP, @2);
-				}
-		;
-
-generic_option_elem:
-			generic_option_name generic_option_arg
-				{
-					$$ = makeDefElem($1, $2, @1);
-				}
-		;
-
-generic_option_name:
-				ColLabel			{ $$ = $1; }
-		;
-
-/* We could use def_arg here, but the spec only requires string literals */
-generic_option_arg:
-				Sconst				{ $$ = (Node *) makeString($1); }
-		;
-
-definition: '(' def_list ')'						{ $$ = $2; }
-		;
-
-def_list:	def_elem								{ $$ = list_make1($1); }
-			| def_list ',' def_elem					{ $$ = lappend($1, $3); }
-		;
-
-def_elem:	ColLabel '=' def_arg
-				{
-					$$ = makeDefElem($1, (Node *) $3, @1);
-				}
-			| ColLabel
-				{
-					$$ = makeDefElem($1, NULL, @1);
-				}
-		;
-
-/* Note: any simple identifier will be returned as a type name! */
-def_arg:	func_type						{ $$ = (Node *)$1; }
-			| reserved_keyword				{ $$ = (Node *)makeString(pstrdup($1)); }
-			| qual_all_Op					{ $$ = (Node *)$1; }
-			| NumericOnly					{ $$ = (Node *)$1; }
-			| Sconst						{ $$ = (Node *)makeString($1); }
-			| NONE							{ $$ = (Node *)makeString(pstrdup($1)); }
-		;
-
+%include sequence.y
 
 /*****************************************************************************
  *
@@ -6695,6 +6476,17 @@ AexprConst: Iconst
 Iconst:		ICONST									{ $$ = $1; };
 Sconst:		SCONST									{ $$ = $1; };
 
+NumericOnly:
+			FCONST								{ $$ = makeFloat($1); }
+			| '+' FCONST						{ $$ = makeFloat($2); }
+			| '-' FCONST
+				{
+					$$ = makeFloat($2);
+					doNegateFloat($$);
+				}
+			| SignedIconst						{ $$ = makeInteger($1); }
+		;
+
 SignedIconst: Iconst								{ $$ = $1; }
 			| '+' Iconst							{ $$ = + $2; }
 			| '-' Iconst							{ $$ = - $2; }
@@ -6741,6 +6533,32 @@ ColLabel:	IDENT									{ $$ = $1; }
 			| col_name_keyword						{ $$ = pstrdup($1); }
 			| type_func_name_keyword				{ $$ = pstrdup($1); }
 			| reserved_keyword						{ $$ = pstrdup($1); }
+		;
+
+definition: '(' def_list ')'						{ $$ = $2; }
+		;
+
+def_list:	def_elem								{ $$ = list_make1($1); }
+			| def_list ',' def_elem					{ $$ = lappend($1, $3); }
+		;
+
+def_elem:	ColLabel '=' def_arg
+				{
+					$$ = makeDefElem($1, (Node *) $3, @1);
+				}
+			| ColLabel
+				{
+					$$ = makeDefElem($1, NULL, @1);
+				}
+		;
+
+/* Note: any simple identifier will be returned as a type name! */
+def_arg:	func_type						{ $$ = (Node *)$1; }
+			| reserved_keyword				{ $$ = (Node *)makeString(pstrdup($1)); }
+			| qual_all_Op					{ $$ = (Node *)$1; }
+			| NumericOnly					{ $$ = (Node *)$1; }
+			| Sconst						{ $$ = (Node *)makeString($1); }
+			| NONE							{ $$ = (Node *)makeString(pstrdup($1)); }
 		;
 
 
@@ -6977,8 +6795,6 @@ unreserved_keyword:
 			| SCROLL
 			| SEARCH
 			| SECOND_P
-			| SEQUENCE
-			| SEQUENCES
 			| SERIALIZABLE
 			| SERVER
 			| SESSION

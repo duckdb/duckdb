@@ -19,20 +19,29 @@ yacc_temp_file = yacc_file + ".tmp"
 with open(yacc_file, 'r') as f:
 	text = f.read()
 
-def extract_regex(regex, text, result_list):
+def extract_regex(regex, text, result_list, split=False):
 	while True:
 		match = re.search(regex, text, re.MULTILINE)
 		if match == None:
 			return text
-		result_list.append(match.groups()[0])
+		group = match.groups()[0]
+		if split:
+			# split the inserted items before appending them to the result list
+			result_list += re.sub("[ \t\n]+", " ", group).strip().split(' ')
+		else:
+			# don't split, directly add to result list
+			result_list.append(group)
+
 		text = text[:match.start()] + text[match.end():]
 
 unreserved_keywords = []
 statements = []
+type_statements = []
 def preprocess_include(include_text):
 	# parse statements, keywords and types from the include file
-	include_text = extract_regex("^stmt: ([^\n]+)", include_text, statements)
-	include_text = extract_regex("^unreserved_keyword: ([^\n]+)", include_text, unreserved_keywords)
+	include_text = extract_regex("^stmt: ([^\n]+)", include_text, statements, split=True)
+	include_text = extract_regex("^unreserved_keyword: ([^\n]+)", include_text, unreserved_keywords, split=True)
+	include_text = extract_regex("^([%]type <[^>]+>[^\n]+)", include_text, type_statements)
 	return include_text
 
 # first perform preprocessing of all the includes
@@ -53,11 +62,6 @@ while True:
 	text = text[:start] + include_text + text[end:]
 
 # now add statements, keywords, tokens and types parsed from the include files into the main file
-# text = re.sub("^stmt:", "stmt: " + ' '.join(statements) + ' ', text, 1, re.MULTILINE)
-# text = re.sub("^[%]type <node>", "%type <node> " + ' '.join(statements) + ' ', text, 1, re.MULTILINE)
-# text = re.sub("^unreserved_keyword:", "unreserved_keyword: " + ' '.join(unreserved_keywords) + ' ', text, 1, re.MULTILINE)
-# text = re.sub("^[%]token <keyword>", "%token <keyword> " + ' '.join(unreserved_keywords) + ' ', text, 1, re.MULTILINE)
-
 def add_to_pipe_list(text, terms, list_name, concat=""):
 	regex = "^" + list_name + ":([^;]+);"
 	match = re.search(regex, text, re.MULTILINE)
@@ -88,6 +92,8 @@ text = add_to_pipe_list(text, statements, "stmt", '\n\t|/* EMPTY */\n\t{ $$ = NU
 text = add_to_pipe_list(text, unreserved_keywords, "unreserved_keyword")
 text = add_to_space_list(text, statements, "%type <node>")
 text = add_to_space_list(text, unreserved_keywords, "%token <keyword>")
+
+text = text.replace('%begin_types', '\n'.join(type_statements))
 
 # now write the concatenated file
 with open(yacc_temp_file, 'w+') as f:
