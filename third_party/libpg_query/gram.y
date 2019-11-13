@@ -197,11 +197,11 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 }
 
 /* BEGIN TYPE LIST */
-%type <node>	stmt schema_stmt
+%type <node>	stmt
 		AlterTableStmt
 		AnalyzeStmt
 		CreateAsStmt
-		CreateSchemaStmt CreateStmt
+		CreateStmt
 		DeleteStmt
 		DropStmt
 		ExplainStmt
@@ -209,10 +209,8 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 		ExplainableStmt PreparableStmt RenameStmt
 		SelectStmt TransactionStmt
 		UpdateStmt VacuumStmt
-		VariableResetStmt VariableShowStmt
 		ViewStmt CheckPointStmt
 		DeallocateStmt PrepareStmt ExecuteStmt
-		VariableSetStmt
 
 %begin_types
 
@@ -227,9 +225,6 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 
 %type <dbehavior>	opt_drop_behavior
 
-%type <list>	transaction_mode_list
-%type <defelt>	transaction_mode_item
-
 %type <str>		vac_analyze_option_name
 %type <defelt>	vac_analyze_option_elem
 %type <list>	vac_analyze_option_list
@@ -237,8 +232,6 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 %type <boolean>	opt_with_data
 				opt_transaction_chain
 %type <ival>	opt_nowait_or_skip
-
-%type <list>	OptSchemaEltList
 
 %type <str>		attr_name
 				name
@@ -252,7 +245,6 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 
 %type <str>		all_Op MathOp
 
-%type <str>		iso_level
 %type <node>	vacuum_relation
 
 %type <list>	stmtblock stmtmulti
@@ -271,7 +263,6 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 				def_list indirection opt_indirection
 				reloption_list group_clause select_limit
 				opt_select_limit
-				transaction_mode_list_or_empty
 				TableFuncElementList opt_type_modifiers
 				prep_type_clause
 				execute_param_clause using_clause returning_clause
@@ -320,7 +311,6 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 %type <infer>	opt_conf_expr
 %type <onconflict> opt_on_conflict
 
-%type <vsetstmt> generic_set set_rest generic_reset reset_rest
 
 %type <node>	TableElement TypedTableElement ConstraintElem TableFuncElement
 %type <node>	columnDef columnOptions
@@ -366,10 +356,8 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 %type <ival>	Iconst SignedIconst
 %type <str>		Sconst
 %type <str>		opt_boolean_or_string
-%type <list>	var_list
-%type <str>		ColId ColLabel var_name type_function_name param_name
+%type <str>		ColId ColLabel type_function_name param_name
 %type <str>		NonReservedWord NonReservedWord_or_Sconst
-%type <node>	var_value zone_value
 
 %type <keyword> unreserved_keyword type_func_name_keyword
 %type <keyword> col_name_keyword reserved_keyword
@@ -635,7 +623,6 @@ stmt:
 			| AnalyzeStmt
 			| CheckPointStmt
 			| CreateAsStmt
-			| CreateSchemaStmt
 			| CreateStmt
 			| DeallocateStmt
 			| DeleteStmt
@@ -650,9 +637,6 @@ stmt:
 			| TransactionStmt
 			| UpdateStmt
 			| VacuumStmt
-			| VariableSetStmt
-			| VariableResetStmt
-			| VariableShowStmt
 			| ViewStmt;
 
 opt_with:	WITH									{}
@@ -665,242 +649,14 @@ opt_with:	WITH									{}
  * Manipulate a schema
  *
  *****************************************************************************/
-CreateSchemaStmt:
-			CREATE SCHEMA ColId OptSchemaEltList
-				{
-					CreateSchemaStmt *n = makeNode(CreateSchemaStmt);
-					/* ...but not both */
-					n->schemaname = $3;
-					n->schemaElts = $4;
-					n->if_not_exists = false;
-					$$ = (Node *)n;
-				}
-			| CREATE SCHEMA IF_P NOT EXISTS ColId OptSchemaEltList
-				{
-					CreateSchemaStmt *n = makeNode(CreateSchemaStmt);
-					/* ...but not here */
-					n->schemaname = $6;
-					n->authrole = NULL;
-					if ($7 != NIL)
-						ereport(ERROR,
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								 errmsg("CREATE SCHEMA IF NOT EXISTS cannot include schema elements"),
-								 parser_errposition(@7)));
-					n->schemaElts = $7;
-					n->if_not_exists = true;
-					$$ = (Node *)n;
-				}
-		;
-
-OptSchemaEltList:
-			OptSchemaEltList schema_stmt
-				{
-					if (@$ < 0)			/* see comments for YYLLOC_DEFAULT */
-						@$ = @2;
-					$$ = lappend($1, $2);
-				}
-			| /* EMPTY */
-				{ $$ = NIL; }
-		;
-
-/*
- *	schema_stmt are the ones that can show up inside a CREATE SCHEMA
- *	statement (in addition to by themselves).
- */
-schema_stmt:
-			CreateStmt
-			| IndexStmt
-			| CreateSeqStmt
-			| ViewStmt
-		;
-
+%include create_schema.y
 
 /*****************************************************************************
  *
- * Set PG internal variable
- *	  SET name TO 'var_value'
- * Include SQL syntax (thomas 1997-10-22):
- *	  SET TIME ZONE 'var_value'
+ * Manipulate variables
  *
  *****************************************************************************/
-
-VariableSetStmt:
-			SET set_rest
-				{
-					throw ParserException("SET");
-				}
-			| SET LOCAL set_rest
-				{
-					throw ParserException("SET LOCAL");
-				}
-			| SET SESSION set_rest
-				{
-					throw ParserException("SET SESSION");
-				}
-		;
-
-generic_set:
-			var_name TO var_list
-				{
-					throw ParserException("SET VARIABLE");
-				}
-			| var_name '=' var_list
-				{
-					throw ParserException("SET VARIABLE");
-				}
-			| var_name TO DEFAULT
-				{
-					throw ParserException("SET VARIABLE");
-				}
-			| var_name '=' DEFAULT
-				{
-					throw ParserException("SET VARIABLE");
-				}
-		;
-
-set_rest:	/* Generic SET syntaxes: */
-			generic_set 						{$$ = $1;}
-			/* Special syntaxes mandated by SQL standard: */
-			| TIME ZONE zone_value
-				{
-					throw ParserException("SET TIME ZONE");
-				}
-			| SCHEMA Sconst
-				{
-					throw ParserException("SET SCHEMA");
-				}
-		;
-
-var_name:	ColId								{ $$ = $1; }
-			| var_name '.' ColId
-				{ $$ = psprintf("%s.%s", $1, $3); }
-		;
-
-var_list:	var_value								{ $$ = list_make1($1); }
-			| var_list ',' var_value				{ $$ = lappend($1, $3); }
-		;
-
-var_value:	opt_boolean_or_string
-				{ $$ = makeStringConst($1, @1); }
-			| NumericOnly
-				{ $$ = makeAConst($1, @1); }
-		;
-
-iso_level:	READ UNCOMMITTED						{ $$ = "read uncommitted"; }
-			| READ COMMITTED						{ $$ = "read committed"; }
-			| REPEATABLE READ						{ $$ = "repeatable read"; }
-			| SERIALIZABLE							{ $$ = "serializable"; }
-		;
-
-opt_boolean_or_string:
-			TRUE_P									{ $$ = "true"; }
-			| FALSE_P								{ $$ = "false"; }
-			| ON									{ $$ = "on"; }
-			/*
-			 * OFF is also accepted as a boolean value, but is handled by
-			 * the NonReservedWord rule.  The action for booleans and strings
-			 * is the same, so we don't need to distinguish them here.
-			 */
-			| NonReservedWord_or_Sconst				{ $$ = $1; }
-		;
-
-/* Timezone values can be:
- * - a string such as 'pst8pdt'
- * - an identifier such as "pst8pdt"
- * - an integer or floating point number
- * - a time interval per SQL99
- * ColId gives reduce/reduce errors against ConstInterval and LOCAL,
- * so use IDENT (meaning we reject anything that is a key word).
- */
-zone_value:
-			Sconst
-				{
-					$$ = makeStringConst($1, @1);
-				}
-			| IDENT
-				{
-					$$ = makeStringConst($1, @1);
-				}
-			| ConstInterval Sconst opt_interval
-				{
-					TypeName *t = $1;
-					if ($3 != NIL)
-					{
-						A_Const *n = (A_Const *) linitial($3);
-						if ((n->val.val.ival & ~(INTERVAL_MASK(HOUR) | INTERVAL_MASK(MINUTE))) != 0)
-							ereport(ERROR,
-									(errcode(ERRCODE_SYNTAX_ERROR),
-									 errmsg("time zone interval must be HOUR or HOUR TO MINUTE"),
-									 parser_errposition(@3)));
-					}
-					t->typmods = $3;
-					$$ = makeStringConstCast($2, @2, t);
-				}
-			| ConstInterval '(' Iconst ')' Sconst
-				{
-					TypeName *t = $1;
-					t->typmods = list_make2(makeIntConst(INTERVAL_FULL_RANGE, -1),
-											makeIntConst($3, @3));
-					$$ = makeStringConstCast($5, @5, t);
-				}
-			| NumericOnly							{ $$ = makeAConst($1, @1); }
-			| DEFAULT								{ $$ = NULL; }
-			| LOCAL									{ $$ = NULL; }
-		;
-
-NonReservedWord_or_Sconst:
-			NonReservedWord							{ $$ = $1; }
-			| Sconst								{ $$ = $1; }
-		;
-
-/*****************************************************************************
- *
- * RESET variable;
- *
- *****************************************************************************/
-VariableResetStmt:
-			RESET reset_rest						{ $$ = (Node *) $2; }
-		;
-
-reset_rest:
-			generic_reset							{ $$ = $1; }
-			| TIME ZONE
-				{
-					throw ParserException("VARIABLE RESET");
-				}
-		;
-
-generic_reset:
-			var_name
-				{
-					throw ParserException("VARIABLE RESET");
-				}
-			| ALL
-				{
-					throw ParserException("VARIABLE RESET");
-				}
-		;
-
-/*****************************************************************************
- *
- * SHOW variable;
- *
- *****************************************************************************/
-VariableShowStmt:
-			SHOW var_name
-				{
-					throw ParserException("VARIABLE SHOW");
-				}
-			| SHOW TIME ZONE
-				{
-					throw ParserException("VARIABLE SHOW");
-				}
-			| SHOW ALL
-				{
-					throw ParserException("VARIABLE SHOW");
-				}
-		;
-
+%include variable.y
 
 /*****************************************************************************
  *
@@ -2370,18 +2126,16 @@ TransactionStmt:
 					n->chain = $3;
 					$$ = (Node *)n;
 				}
-			| BEGIN_P opt_transaction transaction_mode_list_or_empty
+			| BEGIN_P opt_transaction
 				{
 					TransactionStmt *n = makeNode(TransactionStmt);
 					n->kind = TRANS_STMT_BEGIN;
-					n->options = $3;
 					$$ = (Node *)n;
 				}
-			| START TRANSACTION transaction_mode_list_or_empty
+			| START TRANSACTION
 				{
 					TransactionStmt *n = makeNode(TransactionStmt);
 					n->kind = TRANS_STMT_START;
-					n->options = $3;
 					$$ = (Node *)n;
 				}
 			| COMMIT opt_transaction opt_transaction_chain
@@ -2427,40 +2181,6 @@ TransactionStmt:
 opt_transaction:	WORK							{}
 			| TRANSACTION							{}
 			| /*EMPTY*/								{}
-		;
-
-transaction_mode_item:
-			ISOLATION LEVEL iso_level
-					{ $$ = makeDefElem("transaction_isolation",
-									   makeStringConst($3, @3), @1); }
-			| READ ONLY
-					{ $$ = makeDefElem("transaction_read_only",
-									   makeIntConst(true, @1), @1); }
-			| READ WRITE
-					{ $$ = makeDefElem("transaction_read_only",
-									   makeIntConst(false, @1), @1); }
-			| DEFERRABLE
-					{ $$ = makeDefElem("transaction_deferrable",
-									   makeIntConst(true, @1), @1); }
-			| NOT DEFERRABLE
-					{ $$ = makeDefElem("transaction_deferrable",
-									   makeIntConst(false, @1), @1); }
-		;
-
-/* Syntax with commas is SQL-spec, without commas is Postgres historical */
-transaction_mode_list:
-			transaction_mode_item
-					{ $$ = list_make1($1); }
-			| transaction_mode_list ',' transaction_mode_item
-					{ $$ = lappend($1, $3); }
-			| transaction_mode_list transaction_mode_item
-					{ $$ = lappend($1, $2); }
-		;
-
-transaction_mode_list_or_empty:
-			transaction_mode_list
-			| /* EMPTY */
-					{ $$ = NIL; }
 		;
 
 opt_transaction_chain:
@@ -6490,6 +6210,23 @@ NumericOnly:
 SignedIconst: Iconst								{ $$ = $1; }
 			| '+' Iconst							{ $$ = + $2; }
 			| '-' Iconst							{ $$ = - $2; }
+		;
+
+NonReservedWord_or_Sconst:
+			NonReservedWord							{ $$ = $1; }
+			| Sconst								{ $$ = $1; }
+		;
+
+opt_boolean_or_string:
+			TRUE_P									{ $$ = "true"; }
+			| FALSE_P								{ $$ = "false"; }
+			| ON									{ $$ = "on"; }
+			/*
+			 * OFF is also accepted as a boolean value, but is handled by
+			 * the NonReservedWord rule.  The action for booleans and strings
+			 * is the same, so we don't need to distinguish them here.
+			 */
+			| NonReservedWord_or_Sconst				{ $$ = $1; }
 		;
 
 /*
