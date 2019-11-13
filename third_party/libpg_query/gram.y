@@ -199,9 +199,8 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 /* BEGIN TYPE LIST */
 %type <node>	stmt
 		DeleteStmt
-		DropStmt
 		ExplainStmt
-		IndexStmt InsertStmt
+		InsertStmt
 		ExplainableStmt PreparableStmt RenameStmt
 		SelectStmt TransactionStmt
 		UpdateStmt
@@ -223,13 +222,10 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 				opt_transaction_chain
 %type <ival>	opt_nowait_or_skip
 
-%type <str>		attr_name
-				name
-				index_name opt_index_name
+%type <str>		attr_name name
+
 
 %type <list>	func_name qual_Op qual_all_Op subquery_Op
-				opt_class
-				opt_collate
 
 %type <range>	qualified_name insert_target
 
@@ -238,10 +234,9 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 %type <list>	stmtblock stmtmulti
 				definition
 				reloptions opt_reloptions
-				distinct_clause opt_all_clause opt_definition
+				distinct_clause opt_all_clause
 				opt_column_list columnList opt_name_list
-				sort_clause opt_sort_clause sortby_list index_params
-				opt_include index_including_params
+				sort_clause opt_sort_clause sortby_list
 				name_list from_clause from_list opt_array_bounds
 				qualified_name_list any_name any_name_list
 				any_operator expr_list attrs
@@ -280,10 +275,9 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 %type <list>	opt_interval interval_second
 %type <node>	overlay_placing substr_from substr_for
 
-%type <boolean> opt_unique opt_concurrently opt_verbose
+%type <boolean> opt_verbose
 
 %type <ival>	opt_column opt_set_data
-%type <objtype>	drop_type_any_name drop_type_name drop_type_name_on_any_name
 
 %type <node>	limit_clause select_limit_value
 				offset_clause select_offset_value
@@ -312,7 +306,6 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 %type <alias>	alias_clause opt_alias_clause
 %type <list>	func_alias_clause
 %type <sortby>	sortby
-%type <ielem>	index_elem
 %type <node>	table_ref
 %type <jexpr>	joined_table
 %type <range>	relation_expr
@@ -595,10 +588,8 @@ stmtmulti:	stmtmulti ';' stmt
 stmt:
 			DeallocateStmt
 			| DeleteStmt
-			| DropStmt
 			| ExecuteStmt
 			| ExplainStmt
-			| IndexStmt
 			| InsertStmt
 			| PrepareStmt
 			| RenameStmt
@@ -693,305 +684,14 @@ opt_with:	WITH									{}
  *           [ RESTRICT | CASCADE ]
  *
  *****************************************************************************/
-
-DropStmt:	DROP drop_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
-				{
-					DropStmt *n = makeNode(DropStmt);
-					n->removeType = $2;
-					n->missing_ok = true;
-					n->objects = $5;
-					n->behavior = $6;
-					n->concurrent = false;
-					$$ = (Node *)n;
-				}
-			| DROP drop_type_any_name any_name_list opt_drop_behavior
-				{
-					DropStmt *n = makeNode(DropStmt);
-					n->removeType = $2;
-					n->missing_ok = false;
-					n->objects = $3;
-					n->behavior = $4;
-					n->concurrent = false;
-					$$ = (Node *)n;
-				}
-			| DROP drop_type_name IF_P EXISTS name_list opt_drop_behavior
-				{
-					DropStmt *n = makeNode(DropStmt);
-					n->removeType = $2;
-					n->missing_ok = true;
-					n->objects = $5;
-					n->behavior = $6;
-					n->concurrent = false;
-					$$ = (Node *)n;
-				}
-			| DROP drop_type_name name_list opt_drop_behavior
-				{
-					DropStmt *n = makeNode(DropStmt);
-					n->removeType = $2;
-					n->missing_ok = false;
-					n->objects = $3;
-					n->behavior = $4;
-					n->concurrent = false;
-					$$ = (Node *)n;
-				}
-			| DROP drop_type_name_on_any_name name ON any_name opt_drop_behavior
-				{
-					DropStmt *n = makeNode(DropStmt);
-					n->removeType = $2;
-					n->objects = list_make1(lappend($5, makeString($3)));
-					n->behavior = $6;
-					n->missing_ok = false;
-					n->concurrent = false;
-					$$ = (Node *) n;
-				}
-			| DROP drop_type_name_on_any_name IF_P EXISTS name ON any_name opt_drop_behavior
-				{
-					DropStmt *n = makeNode(DropStmt);
-					n->removeType = $2;
-					n->objects = list_make1(lappend($7, makeString($5)));
-					n->behavior = $8;
-					n->missing_ok = true;
-					n->concurrent = false;
-					$$ = (Node *) n;
-				}
-		;
-
-/* object types taking any_name_list */
-drop_type_any_name:
-			TABLE									{ $$ = OBJECT_TABLE; }
-			| SEQUENCE								{ $$ = OBJECT_SEQUENCE; }
-			| VIEW									{ $$ = OBJECT_VIEW; }
-			| MATERIALIZED VIEW						{ $$ = OBJECT_MATVIEW; }
-			| INDEX									{ $$ = OBJECT_INDEX; }
-			| FOREIGN TABLE							{ $$ = OBJECT_FOREIGN_TABLE; }
-			| COLLATION								{ $$ = OBJECT_COLLATION; }
-			| CONVERSION_P							{ $$ = OBJECT_CONVERSION; }
-			| STATISTICS							{ $$ = OBJECT_STATISTIC_EXT; }
-			| TEXT_P SEARCH PARSER					{ $$ = OBJECT_TSPARSER; }
-			| TEXT_P SEARCH DICTIONARY				{ $$ = OBJECT_TSDICTIONARY; }
-			| TEXT_P SEARCH TEMPLATE				{ $$ = OBJECT_TSTEMPLATE; }
-			| TEXT_P SEARCH CONFIGURATION			{ $$ = OBJECT_TSCONFIGURATION; }
-		;
-
-/* object types taking name_list */
-drop_type_name:
-			SCHEMA								{ $$ = OBJECT_SCHEMA; }
-		;
-
-/* object types attached to a table */
-drop_type_name_on_any_name:
-			POLICY									{ $$ = OBJECT_POLICY; }
-			| RULE									{ $$ = OBJECT_RULE; }
-		;
-
-any_name_list:
-			any_name								{ $$ = list_make1($1); }
-			| any_name_list ',' any_name			{ $$ = lappend($1, $3); }
-		;
-
-any_name:	ColId						{ $$ = list_make1(makeString($1)); }
-			| ColId attrs				{ $$ = lcons(makeString($1), $2); }
-		;
-
-attrs:		'.' attr_name
-					{ $$ = list_make1(makeString($2)); }
-			| attrs '.' attr_name
-					{ $$ = lappend($1, makeString($3)); }
-		;
+%include drop.y
 
 /*****************************************************************************
  *
  *		QUERY: CREATE INDEX
  *
  *****************************************************************************/
-IndexStmt:	CREATE opt_unique INDEX opt_concurrently opt_index_name
-			ON relation_expr '(' index_params ')'
-			opt_include opt_reloptions where_clause
-				{
-					IndexStmt *n = makeNode(IndexStmt);
-					n->unique = $2;
-					n->concurrent = $4;
-					n->idxname = $5;
-					n->relation = $7;
-					n->indexParams = $9;
-					n->indexIncludingParams = $11;
-					n->options = $12;
-					n->whereClause = $13;
-					n->excludeOpNames = NIL;
-					n->idxcomment = NULL;
-					n->indexOid = InvalidOid;
-					n->oldNode = InvalidOid;
-					n->primary = false;
-					n->isconstraint = false;
-					n->deferrable = false;
-					n->initdeferred = false;
-					n->transformed = false;
-					n->if_not_exists = false;
-					$$ = (Node *)n;
-				}
-			| CREATE opt_unique INDEX opt_concurrently IF_P NOT EXISTS index_name
-			ON relation_expr '(' index_params ')'
-			opt_include opt_reloptions where_clause
-				{
-					IndexStmt *n = makeNode(IndexStmt);
-					n->unique = $2;
-					n->concurrent = $4;
-					n->idxname = $8;
-					n->relation = $10;
-					n->indexParams = $12;
-					n->indexIncludingParams = $14;
-					n->options = $15;
-					n->whereClause = $16;
-					n->excludeOpNames = NIL;
-					n->idxcomment = NULL;
-					n->indexOid = InvalidOid;
-					n->oldNode = InvalidOid;
-					n->primary = false;
-					n->isconstraint = false;
-					n->deferrable = false;
-					n->initdeferred = false;
-					n->transformed = false;
-					n->if_not_exists = true;
-					$$ = (Node *)n;
-				}
-		;
-
-opt_unique:
-			UNIQUE									{ $$ = true; }
-			| /*EMPTY*/								{ $$ = false; }
-		;
-
-opt_concurrently:
-			CONCURRENTLY							{ $$ = true; }
-			| /*EMPTY*/								{ $$ = false; }
-		;
-
-opt_index_name:
-			index_name								{ $$ = $1; }
-			| /*EMPTY*/								{ $$ = NULL; }
-		;
-
-index_params:	index_elem							{ $$ = list_make1($1); }
-			| index_params ',' index_elem			{ $$ = lappend($1, $3); }
-		;
-
-/*
- * Index attributes can be either simple column references, or arbitrary
- * expressions in parens.  For backwards-compatibility reasons, we allow
- * an expression that's just a function call to be written without parens.
- */
-index_elem:	ColId opt_collate opt_class opt_asc_desc opt_nulls_order
-				{
-					$$ = makeNode(IndexElem);
-					$$->name = $1;
-					$$->expr = NULL;
-					$$->indexcolname = NULL;
-					$$->collation = $2;
-					$$->opclass = $3;
-					$$->ordering = $4;
-					$$->nulls_ordering = $5;
-				}
-			| func_expr_windowless opt_collate opt_class opt_asc_desc opt_nulls_order
-				{
-					$$ = makeNode(IndexElem);
-					$$->name = NULL;
-					$$->expr = $1;
-					$$->indexcolname = NULL;
-					$$->collation = $2;
-					$$->opclass = $3;
-					$$->ordering = $4;
-					$$->nulls_ordering = $5;
-				}
-			| '(' a_expr ')' opt_collate opt_class opt_asc_desc opt_nulls_order
-				{
-					$$ = makeNode(IndexElem);
-					$$->name = NULL;
-					$$->expr = $2;
-					$$->indexcolname = NULL;
-					$$->collation = $4;
-					$$->opclass = $5;
-					$$->ordering = $6;
-					$$->nulls_ordering = $7;
-				}
-		;
-
-opt_include:		INCLUDE '(' index_including_params ')'			{ $$ = $3; }
-			 |		/* EMPTY */						{ $$ = NIL; }
-		;
-
-index_including_params:	index_elem						{ $$ = list_make1($1); }
-			| index_including_params ',' index_elem		{ $$ = lappend($1, $3); }
-		;
-
-opt_collate: COLLATE any_name						{ $$ = $2; }
-			| /*EMPTY*/								{ $$ = NIL; }
-		;
-
-opt_class:	any_name								{ $$ = $1; }
-			| /*EMPTY*/								{ $$ = NIL; }
-		;
-
-opt_asc_desc: ASC							{ $$ = SORTBY_ASC; }
-			| DESC							{ $$ = SORTBY_DESC; }
-			| /*EMPTY*/						{ $$ = SORTBY_DEFAULT; }
-		;
-
-opt_nulls_order: NULLS_LA FIRST_P			{ $$ = SORTBY_NULLS_FIRST; }
-			| NULLS_LA LAST_P				{ $$ = SORTBY_NULLS_LAST; }
-			| /*EMPTY*/						{ $$ = SORTBY_NULLS_DEFAULT; }
-		;
-
-/*
- * Ideally param_name should be ColId, but that causes too many conflicts.
- */
-param_name:	type_function_name
-		;
-
-/*
- * We would like to make the %TYPE productions here be ColId attrs etc,
- * but that causes reduce/reduce conflicts.  type_function_name
- * is next best choice.
- */
-func_type:	Typename								{ $$ = $1; }
-			| type_function_name attrs '%' TYPE_P
-				{
-					$$ = makeTypeNameFromNameList(lcons(makeString($1), $2));
-					$$->pct_type = true;
-					$$->location = @1;
-				}
-			| SETOF type_function_name attrs '%' TYPE_P
-				{
-					$$ = makeTypeNameFromNameList(lcons(makeString($2), $3));
-					$$->pct_type = true;
-					$$->setof = true;
-					$$->location = @2;
-				}
-		;
-
-opt_definition:
-			WITH definition							{ $$ = $2; }
-			| /*EMPTY*/								{ $$ = NIL; }
-		;
-
-
-/*****************************************************************************
- *
- *		QUERY:
- *
- *		DROP FUNCTION funcname (arg1, arg2, ...) [ RESTRICT | CASCADE ]
- *		DROP PROCEDURE procname (arg1, arg2, ...) [ RESTRICT | CASCADE ]
- *		DROP ROUTINE routname (arg1, arg2, ...) [ RESTRICT | CASCADE ]
- *		DROP AGGREGATE aggname (arg1, ...) [ RESTRICT | CASCADE ]
- *		DROP OPERATOR opname (leftoperand_typ, rightoperand_typ) [ RESTRICT | CASCADE ]
- *
- *****************************************************************************/
-
-any_operator:
-			all_Op
-					{ $$ = list_make1(makeString($1)); }
-			| ColId '.' any_operator
-					{ $$ = lcons(makeString($1), $3); }
-		;
+%include index.y
 
 /*****************************************************************************
  *
@@ -4521,6 +4221,13 @@ MathOp:		 '+'									{ $$ = "+"; }
 			| NOT_EQUALS							{ $$ = "<>"; }
 		;
 
+any_operator:
+			all_Op
+					{ $$ = list_make1(makeString($1)); }
+			| ColId '.' any_operator
+					{ $$ = lcons(makeString($1), $3); }
+		;
+
 qual_Op:	Op
 					{ $$ = list_make1(makeString($1)); }
 			| OPERATOR '(' any_operator ')'
@@ -4922,6 +4629,16 @@ opt_drop_behavior:
 			| /* EMPTY */				{ $$ = DROP_RESTRICT; /* default */ }
 		;
 
+opt_asc_desc: ASC							{ $$ = SORTBY_ASC; }
+			| DESC							{ $$ = SORTBY_DESC; }
+			| /*EMPTY*/						{ $$ = SORTBY_DEFAULT; }
+		;
+
+opt_nulls_order: NULLS_LA FIRST_P			{ $$ = SORTBY_NULLS_FIRST; }
+			| NULLS_LA LAST_P				{ $$ = SORTBY_NULLS_LAST; }
+			| /*EMPTY*/						{ $$ = SORTBY_NULLS_DEFAULT; }
+		;
+
 opt_collate_clause:
 			COLLATE any_name
 				{
@@ -5021,6 +4738,15 @@ qualified_name:
 				}
 		;
 
+any_name:	ColId						{ $$ = list_make1(makeString($1)); }
+			| ColId attrs				{ $$ = lcons(makeString($1), $2); }
+		;
+
+any_name_list:
+			any_name								{ $$ = list_make1($1); }
+			| any_name_list ',' any_name			{ $$ = lappend($1, $3); }
+		;
+
 name_list:	name
 					{ $$ = list_make1(makeString($1)); }
 			| name_list ',' name
@@ -5052,8 +4778,11 @@ name:		ColId									{ $$ = $1; };
 
 attr_name:	ColLabel								{ $$ = $1; };
 
-index_name: ColId									{ $$ = $1; };
-
+attrs:		'.' attr_name
+					{ $$ = list_make1(makeString($2)); }
+			| attrs '.' attr_name
+					{ $$ = lappend($1, makeString($3)); }
+		;
 
 reloptions:
 			'(' reloption_list ')'					{ $$ = $2; }
@@ -5266,6 +4995,12 @@ type_function_name:	IDENT							{ $$ = $1; }
 			| type_func_name_keyword				{ $$ = pstrdup($1); }
 		;
 
+/*
+ * Ideally param_name should be ColId, but that causes too many conflicts.
+ */
+param_name:	type_function_name
+		;
+
 /* Any not-fully-reserved word --- these names can be, eg, role names.
  */
 NonReservedWord:	IDENT							{ $$ = $1; }
@@ -5310,6 +5045,26 @@ def_arg:	func_type						{ $$ = (Node *)$1; }
 			| NONE							{ $$ = (Node *)makeString(pstrdup($1)); }
 		;
 
+/*
+ * We would like to make the %TYPE productions here be ColId attrs etc,
+ * but that causes reduce/reduce conflicts.  type_function_name
+ * is next best choice.
+ */
+func_type:	Typename								{ $$ = $1; }
+			| type_function_name attrs '%' TYPE_P
+				{
+					$$ = makeTypeNameFromNameList(lcons(makeString($1), $2));
+					$$->pct_type = true;
+					$$->location = @1;
+				}
+			| SETOF type_function_name attrs '%' TYPE_P
+				{
+					$$ = makeTypeNameFromNameList(lcons(makeString($2), $3));
+					$$->pct_type = true;
+					$$->setof = true;
+					$$->location = @2;
+				}
+		;
 
 /*
  * Keyword category lists.  Generally, every keyword present in
