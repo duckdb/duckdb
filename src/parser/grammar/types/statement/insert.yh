@@ -1,0 +1,6 @@
+%type <range> insert_target
+%type <istmt> insert_rest
+%type <list> insert_column_list
+%type <target> insert_column_item
+%type <infer>	opt_conf_expr
+%type <onconflict> opt_on_conflict

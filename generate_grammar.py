@@ -1,0 +1,127 @@
+# use bison to generate the parser files
+# the following versions were used:
+# bison (GNU Bison) 3.4.2
+# flex 2.6.4
+import os, subprocess, re
+
+bison_location     = "/usr/local/opt/bison/bin/bison"
+base_dir           = "src/parser/grammar"
+template_file      = os.path.join(base_dir, 'main.y')
+target_file        = os.path.join(base_dir, 'main.y.tmp')
+header_file        = os.path.join(base_dir, 'grammar.hpp')
+source_file        = os.path.join(base_dir, 'grammar.cpp')
+type_dir           = os.path.join(base_dir, 'types')
+rule_dir           = os.path.join(base_dir, 'rules')
+result_source      = os.path.join(base_dir, 'grammar_parser.cpp')
+result_header      = os.path.join(base_dir, 'grammar_parser.hpp')
+
+# parse the keyword lists
+def read_list_from_file(fname):
+    with open(fname, 'r') as f:
+        return f.read().split('\n')
+
+kwdir = os.path.join(base_dir, 'keywords')
+unreserved_keywords = read_list_from_file(os.path.join(kwdir, 'unreserved_keywords.list'))
+colname_keywords = read_list_from_file(os.path.join(kwdir, 'column_name_keywords.list'))
+type_func_keywords = read_list_from_file(os.path.join(kwdir, 'type_func_name_keywords.list'))
+reserved_keywords = read_list_from_file(os.path.join(kwdir, 'reserved_keywords.list'))
+
+unreserved_keywords.sort()
+colname_keywords.sort()
+type_func_keywords.sort()
+reserved_keywords.sort()
+
+statements = read_list_from_file(os.path.join(rule_dir, 'statements.list'))
+statements.sort()
+if len(statements) < 0:
+    print("Need at least one statement")
+    exit(1)
+
+# verify there are no duplicate keywords and create big sorted list of keywords
+kwdict = {}
+for kw in zip(unreserved_keywords, colname_keywords, type_func_keywords, reserved_keywords):
+    if kw in kwdict:
+        print("Duplicate keyword: " + kw)
+        exit(1)
+    kwdict[kw] = True
+
+kwlist = []
+kwlist += [(x, 'UNRESERVED_KEYWORD') for x in unreserved_keywords]
+kwlist += [(x, 'COL_NAME_KEYWORD') for x in colname_keywords]
+kwlist += [(x, 'TYPE_FUNC_NAME_KEYWORD') for x in type_func_keywords]
+kwlist += [(x, 'RESERVED_KEYWORD') for x in reserved_keywords]
+kwlist.sort(key=lambda x: x[0])
+
+# generate the final main.y.tmp file
+# first read the template file
+with open(template_file, 'r') as f:
+    text = f.read()
+
+# now perform a series of replacements in the file to construct the final yacc file
+
+# grammar.hpp
+with open(header_file, 'r') as f:
+    text = text.replace("{{{ GRAMMAR_HEADER }}}", f.read())
+# grammar.cpp
+with open(source_file, 'r') as f:
+    text = text.replace("{{{ GRAMMAR_SOURCE }}}", f.read())
+
+# keyword list
+kw_token_list = "%token <keyword> " + " ".join([x[0] for x in kwlist])
+
+text = text.replace("{{{ KEYWORDS }}}", kw_token_list)
+
+# statements
+stmt_list = "stmt: " + " | ".join(statements)
+text = text.replace("{{{ STATEMENTS }}}", stmt_list)
+
+# keywords
+kw_definitions = "unreserved_keyword: " + " | ".join(unreserved_keywords) + "\n"
+kw_definitions += "col_name_keyword: " + " | ".join(colname_keywords) + "\n"
+kw_definitions += "type_func_name_keyword: " + " | ".join(type_func_keywords) + "\n"
+kw_definitions += "reserved_keyword: " + " | ".join(reserved_keywords) + "\n"
+text = text.replace("{{{ KEYWORD_DEFINITIONS }}}", kw_definitions)
+
+# types
+def concat_dir(dname, extension):
+    result = ""
+    for fname in os.listdir(dname):
+        fpath = os.path.join(dname, fname)
+        if os.path.isdir(fpath):
+            result += concat_dir(fpath, extension)
+        else:
+            if not fname.endswith(extension):
+                continue
+            with open(fpath, 'r') as f:
+                result += f.read() + "\n"
+    return result
+
+type_definitions = concat_dir(type_dir, ".yh")
+# add statement types as well
+for stmt in statements:
+    type_definitions += "%type <node> " + stmt + "\n"
+
+text = text.replace("{{{ TYPES }}}", type_definitions)
+
+# grammar rules
+grammar_rules = concat_dir(rule_dir, ".y")
+
+text = text.replace("{{{ GRAMMAR RULES }}}", grammar_rules)
+
+# finally write the yacc file into the
+with open(target_file, 'w+') as f:
+    f.write(text)
+
+
+
+# PG_KEYWORD("character", parser::token::CHARACTER, COL_NAME_KEYWORD)
+
+
+# generate the bison
+cmd = [bison_location, "-o", result_source, "-d", target_file]
+print(' '.join(cmd))
+proc = subprocess.Popen(cmd)
+res = proc.wait()
+
+if res != 0:
+	exit(1)

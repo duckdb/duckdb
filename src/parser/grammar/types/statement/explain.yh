@@ -1,0 +1,5 @@
+%type <node> ExplainableStmt
+%type <str>		explain_option_name
+%type <node>	explain_option_arg
+%type <defelt>	explain_option_elem
+%type <list>	explain_option_list

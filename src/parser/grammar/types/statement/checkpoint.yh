@@ -1,0 +1,7 @@
+%type <str> vac_analyze_option_name
+%type <defelt> vac_analyze_option_elem
+%type <list> vac_analyze_option_list
+%type <node> vac_analyze_option_arg
+%type <node> vacuum_relation
+%type <list> vacuum_relation_list opt_vacuum_relation_list
+%type <boolean> opt_freeze opt_analyze opt_full
