@@ -1,6 +1,6 @@
-#include "execution/operator/helper/physical_prune_columns.hpp"
+#include "duckdb/execution/operator/helper/physical_prune_columns.hpp"
 
-#include "execution/expression_executor.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 using namespace duckdb;
 using namespace std;

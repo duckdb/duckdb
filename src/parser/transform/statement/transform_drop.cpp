@@ -1,5 +1,5 @@
-#include "parser/statement/drop_statement.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/parser/statement/drop_statement.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
 using namespace std;

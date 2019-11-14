@@ -1,10 +1,10 @@
 #include "catch.hpp"
-#include "common/helper.hpp"
+#include "duckdb/common/helper.hpp"
 #include "expression_helper.hpp"
-#include "optimizer/cse_optimizer.hpp"
-#include "planner/expression/bound_comparison_expression.hpp"
-#include "planner/expression/bound_function_expression.hpp"
-#include "planner/expression/common_subexpression.hpp"
+#include "duckdb/optimizer/cse_optimizer.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/common_subexpression.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -14,8 +14,7 @@ TEST_CASE("Test CSE Optimizer", "[optimizer]") {
 	ExpressionHelper helper;
 	auto &con = helper.con;
 
-	con.Query("BEGIN TRANSACTION");
-	con.Query("CREATE TABLE integers(i INTEGER)");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 
 	CommonSubExpressionOptimizer optimizer;
 

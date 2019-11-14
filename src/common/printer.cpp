@@ -1,4 +1,4 @@
-#include "common/printer.hpp"
+#include "duckdb/common/printer.hpp"
 
 #include <stdio.h>
 

@@ -10,10 +10,9 @@ TEST_CASE("Test constraints with updates", "[constraints]") {
 	Connection con(db);
 
 	// CHECK constraint
-	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER CHECK(i + j < 5), k INTEGER)"));
-	// insert a value that passes
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 2, 4)"));
+
 	// updating values that are not referenced in the CHECK should just work
 	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET k=7"));
 	// update to a passing value should work
@@ -30,10 +29,10 @@ TEST_CASE("Test constraints with updates", "[constraints]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2}));
 	REQUIRE(CHECK_COLUMN(result, 2, {7}));
-	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 
 	// NOT NULL constraint
-	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER NOT NULL, j INTEGER NOT NULL)"));
 	// insert a value that passes
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 2)"));
@@ -46,5 +45,4 @@ TEST_CASE("Test constraints with updates", "[constraints]") {
 	result = con.Query("SELECT * FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {3}));
-	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
 }

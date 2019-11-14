@@ -1,12 +1,12 @@
-#include "planner/binder.hpp"
+#include "duckdb/planner/binder.hpp"
 
-#include "execution/expression_executor.hpp"
-#include "parser/statement/list.hpp"
-#include "planner/bound_query_node.hpp"
-#include "planner/bound_sql_statement.hpp"
-#include "planner/bound_tableref.hpp"
-#include "planner/expression.hpp"
-#include "planner/expression_binder/constant_binder.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parser/statement/list.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/bound_sql_statement.hpp"
+#include "duckdb/planner/bound_tableref.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -95,9 +95,12 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 		return Bind((JoinRef &)ref);
 	case TableReferenceType::SUBQUERY:
 		return Bind((SubqueryRef &)ref);
-	default:
-		assert(ref.type == TableReferenceType::TABLE_FUNCTION);
+	case TableReferenceType::EMPTY:
+		return Bind((EmptyTableRef &)ref);
+	case TableReferenceType::TABLE_FUNCTION:
 		return Bind((TableFunctionRef &)ref);
+	default:
+		throw Exception("Unknown table ref type");
 	}
 }
 

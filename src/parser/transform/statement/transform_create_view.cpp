@@ -1,7 +1,7 @@
-#include "parser/expression/star_expression.hpp"
-#include "parser/statement/create_view_statement.hpp"
-#include "parser/tableref/subqueryref.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/statement/create_view_statement.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -66,8 +66,6 @@ if(USEPCRE)
   list(APPEND EXTRA_TARGET_LINK_LIBRARIES pcre)
 endif()
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-
 set(RE2_SOURCES
     re2/bitstate.cc
     re2/compile.cc
@@ -94,6 +92,17 @@ set(RE2_SOURCES
 
 add_library(re2 STATIC ${RE2_SOURCES})
 add_library(re2::re2 ALIAS re2)
+
+target_include_directories(re2 PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+set_target_properties(re2 PROPERTIES
+    EXPORT_NAME duckdb_re2)
+
+install(
+    TARGETS re2
+    EXPORT "${DUCKDB_EXPORT_SET}"
+    LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+    ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
 
 # if(RE2_BUILD_TESTING) set(TESTING_SOURCES re2/testing/backtrack.cc
 # re2/testing/dump.cc re2/testing/exhaustive_tester.cc

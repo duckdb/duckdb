@@ -1,12 +1,12 @@
-#include "execution/expression_executor.hpp"
-#include "optimizer/filter_pushdown.hpp"
-#include "optimizer/optimizer.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression/bound_comparison_expression.hpp"
-#include "planner/expression/bound_constant_expression.hpp"
-#include "planner/expression_iterator.hpp"
-#include "planner/operator/logical_comparison_join.hpp"
-#include "planner/operator/logical_filter.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 
 using namespace duckdb;
 using namespace std;

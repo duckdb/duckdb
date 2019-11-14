@@ -1,6 +1,6 @@
 #include "benchmark_runner.hpp"
 #include "duckdb_benchmark_macro.hpp"
-#include "main/appender.hpp"
+#include "duckdb/main/appender.hpp"
 
 #include <random>
 
@@ -17,8 +17,7 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	gen.seed(42);
 
 	state->conn.Query("CREATE TABLE integers(i INTEGER, j INTEGER);");
-	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers");                                                      \
-	// insert the elements into the database
+	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers"); // insert the elements into the database
 	for (size_t i = 0; i < ORDER_BY_ROW_COUNT; i++) {
 		appender->BeginRow();
 		appender->AppendInteger(distribution(gen));

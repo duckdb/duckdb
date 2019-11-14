@@ -1,10 +1,10 @@
-#include "parser/expression/case_expression.hpp"
-#include "parser/expression/comparison_expression.hpp"
-#include "parser/expression/conjunction_expression.hpp"
-#include "parser/expression/constant_expression.hpp"
-#include "parser/expression/function_expression.hpp"
-#include "parser/expression/operator_expression.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -38,7 +38,8 @@ unique_ptr<ParsedExpression> Transformer::TransformUnaryOperator(string op, uniq
 	return move(result);
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(string op, unique_ptr<ParsedExpression> left, unique_ptr<ParsedExpression> right) {
+unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(string op, unique_ptr<ParsedExpression> left,
+                                                                  unique_ptr<ParsedExpression> right) {
 	const auto schema = DEFAULT_SCHEMA;
 
 	vector<unique_ptr<ParsedExpression>> children;
@@ -73,12 +74,10 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(postgres::A_Expr *root)
 	if (!root) {
 		return nullptr;
 	}
-	ExpressionType target_type;
 	auto name = string((reinterpret_cast<postgres::Value *>(root->name->head->data.ptr_value))->val.str);
 
 	switch (root->kind) {
 	case postgres::AEXPR_DISTINCT:
-		target_type = ExpressionType::COMPARE_DISTINCT_FROM;
 		break;
 	case postgres::AEXPR_IN: {
 		auto left_expr = TransformExpression(root->lexpr);
@@ -119,7 +118,8 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(postgres::A_Expr *root)
 		}
 
 		auto between_left = TransformExpression(reinterpret_cast<postgres::Node *>(between_args->head->data.ptr_value));
-		auto between_right = TransformExpression(reinterpret_cast<postgres::Node *>(between_args->tail->data.ptr_value));
+		auto between_right =
+		    TransformExpression(reinterpret_cast<postgres::Node *>(between_args->tail->data.ptr_value));
 
 		auto compare_left = make_unique<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
 		                                                      TransformExpression(root->lexpr), move(between_left));

@@ -1,11 +1,11 @@
-#include "common/types/data_chunk.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 
-#include "common/exception.hpp"
-#include "common/helper.hpp"
-#include "common/printer.hpp"
-#include "common/serializer.hpp"
-#include "common/types/null_value.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -25,7 +25,7 @@ void DataChunk::InitializeEmpty(vector<TypeId> &types) {
 	}
 }
 
-void DataChunk::Initialize(vector<TypeId> &types, bool zero_data) {
+void DataChunk::Initialize(vector<TypeId> &types) {
 	assert(types.size() > 0);
 	InitializeEmpty(types);
 	index_t size = 0;
@@ -34,9 +34,7 @@ void DataChunk::Initialize(vector<TypeId> &types, bool zero_data) {
 	}
 	assert(size > 0);
 	owned_data = unique_ptr<data_t[]>(new data_t[size]);
-	if (zero_data) {
-		memset(owned_data.get(), 0, size);
-	}
+	memset(owned_data.get(), 0, size);
 
 	auto ptr = owned_data.get();
 	for (index_t i = 0; i < types.size(); i++) {
@@ -189,10 +187,10 @@ void DataChunk::Serialize(Serializer &serializer) {
 			// strings are inlined into the blob
 			// we use null-padding to store them
 			auto strings = (const char **)data[i].data;
-			for (index_t j = 0; j < size(); j++) {
+			VectorOperations::Exec(sel_vector, size(), [&](index_t j, index_t k) {
 				auto source = strings[j] ? strings[j] : NullValue<const char *>();
 				serializer.WriteString(source);
-			}
+			});
 		}
 	}
 }

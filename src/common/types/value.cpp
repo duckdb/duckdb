@@ -1,20 +1,20 @@
-#include "common/types/value.hpp"
+#include "duckdb/common/types/value.hpp"
 
-#include "common/exception.hpp"
-#include "common/limits.hpp"
-#include "common/operator/aggregate_operators.hpp"
-#include "common/operator/cast_operators.hpp"
-#include "common/operator/comparison_operators.hpp"
-#include "common/operator/numeric_binary_operators.hpp"
-#include "common/printer.hpp"
-#include "common/serializer.hpp"
-#include "common/types/date.hpp"
-#include "common/types/time.hpp"
-#include "common/types/timestamp.hpp"
-#include "common/types/vector.hpp"
-#include "common/value_operations/value_operations.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "common/string_util.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/operator/aggregate_operators.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/operator/numeric_binary_operators.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -160,8 +160,7 @@ Value Value::DATE(int32_t year, int32_t month, int32_t day) {
 	return Value::INTEGER(Date::FromDate(year, month, day));
 }
 
-Value Value::TIME(int32_t hour, int32_t min, int32_t sec,
-        int32_t msec) {
+Value Value::TIME(int32_t hour, int32_t min, int32_t sec, int32_t msec) {
 	return Value::INTEGER(Time::FromTime(hour, min, sec, msec));
 }
 

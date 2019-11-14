@@ -1,14 +1,14 @@
-#include "parser/expression/columnref_expression.hpp"
-#include "parser/expression/constant_expression.hpp"
-#include "parser/query_node/select_node.hpp"
-#include "parser/tableref/joinref.hpp"
-#include "planner/binder.hpp"
-#include "planner/expression_binder/group_binder.hpp"
-#include "planner/expression_binder/having_binder.hpp"
-#include "planner/expression_binder/order_binder.hpp"
-#include "planner/expression_binder/select_binder.hpp"
-#include "planner/expression_binder/where_binder.hpp"
-#include "planner/query_node/bound_select_node.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/group_binder.hpp"
+#include "duckdb/planner/expression_binder/having_binder.hpp"
+#include "duckdb/planner/expression_binder/order_binder.hpp"
+#include "duckdb/planner/expression_binder/select_binder.hpp"
+#include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -19,6 +19,9 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	result->group_index = GenerateTableIndex();
 	result->aggregate_index = GenerateTableIndex();
 	result->window_index = GenerateTableIndex();
+
+	// first bind the FROM table statement
+	result->from_table = Bind(*statement.from_table);
 
 	if (statement.values.size() > 0) {
 		// bind value list
@@ -46,10 +49,6 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 			result->values.push_back(move(list));
 		}
 		return move(result);
-	}
-	// first bind the FROM table statement
-	if (statement.from_table) {
-		result->from_table = Bind(*statement.from_table);
 	}
 
 	// visit the select list and expand any "*" statements

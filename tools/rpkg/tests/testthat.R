@@ -15,21 +15,6 @@ unzip(zipfile, exdir=dbplyr_src)
 tests <- Sys.glob(file.path(dbplyr_src, "dbplyr*", "tests"))
 setwd(tests)
 
-# TODO evil hack, remove when temp tables work
-dbplyr_ns <- getNamespace("dbplyr")$.__S3MethodsTable__.
-no_temp_copy_to <- function(con, table, values,
-                            overwrite = FALSE, types = NULL, temporary = TRUE,
-                            unique_indexes = NULL, indexes = NULL,
-                            analyze = TRUE, ...) {
-
-	dbplyr_ns[["db_copy_to.DBIConnection"]](con, table, values,
-                            overwrite , types , temporary = FALSE,
-                            unique_indexes , indexes ,
-                            analyze, ...)
-}
-dbplyr_ns[["db_copy_to.duckdb_connection"]] <- no_temp_copy_to
-
-
 options(duckdb.debug=T)
 test_register_src("duckdb", duckdb::src_duckdb())
 

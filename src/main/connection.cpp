@@ -1,9 +1,9 @@
-#include "main/connection.hpp"
+#include "duckdb/main/connection.hpp"
 
-#include "main/client_context.hpp"
-#include "main/connection_manager.hpp"
-#include "main/database.hpp"
-#include "main/appender.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/connection_manager.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/appender.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -81,11 +81,11 @@ Appender *Connection::OpenAppender(string schema_name, string table_name) {
 	if (appender) {
 		throw Exception("Active appender already exists for this connection");
 	}
-	context->context_lock.lock();
+	std::unique_lock<std::mutex> lock(context->context_lock);
 	if (!context->transaction.HasActiveTransaction()) {
 		context->transaction.BeginTransaction();
 	}
-	appender = make_unique<Appender>(*this, schema_name, table_name);
+	appender = make_unique<Appender>(*this, schema_name, table_name, std::move(lock));
 	return appender.get();
 }
 void Connection::CloseAppender() {
@@ -95,6 +95,5 @@ void Connection::CloseAppender() {
 			context->transaction.Commit();
 		}
 		appender = nullptr;
-		this->context->context_lock.unlock(); // TODO what about exceptions in appender?
 	}
 }

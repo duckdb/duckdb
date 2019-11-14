@@ -1,6 +1,6 @@
 #include "cursor.h"
 #include <vector>
-#include "common/types/timestamp.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "module.h"
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION // motherfucker
@@ -32,7 +32,6 @@ static int duckdb_cursor_init(duckdb_Cursor *self, PyObject *args, PyObject *kwa
 	return 0;
 }
 
-
 static void duckdb_cursor_dealloc(duckdb_Cursor *self) {
 	/* Reset the statement if the user has not closed the cursor */
 	duckdb_cursor_close(self, NULL);
@@ -59,7 +58,6 @@ static int check_cursor(duckdb_Cursor *cur) {
 
 	return duckdb_check_connection(cur->connection);
 }
-
 
 static const char *_duckdb_stringconvert(PyObject *pystr) {
 	const char *cstr;
@@ -91,15 +89,13 @@ static const char *_duckdb_stringconvert(PyObject *pystr) {
 	return cstr;
 }
 
-
-typedef enum {TYPE_INT, TYPE_LONG, TYPE_FLOAT, TYPE_STRING, TYPE_BUFFER, TYPE_UNKNOWN } parameter_type;
+typedef enum { TYPE_INT, TYPE_LONG, TYPE_FLOAT, TYPE_STRING, TYPE_BUFFER, TYPE_UNKNOWN } parameter_type;
 
 #ifdef WORDS_BIGENDIAN
 #define IS_LITTLE_ENDIAN 0
 #else
 #define IS_LITTLE_ENDIAN 1
 #endif
-
 
 duckdb::Value _duckdb_pyobject_to_value(PyObject *parameter) {
 	parameter_type paramtype = TYPE_UNKNOWN;
@@ -108,11 +104,11 @@ duckdb::Value _duckdb_pyobject_to_value(PyObject *parameter) {
 		return duckdb::Value();
 	}
 #if PY_MAJOR_VERSION < 3
-    if (PyInt_CheckExact(parameter)) {
-        paramtype = TYPE_INT;
-    } else
+	if (PyInt_CheckExact(parameter)) {
+		paramtype = TYPE_INT;
+	} else
 #endif
-    if (PyLong_CheckExact(parameter)) {
+	    if (PyLong_CheckExact(parameter)) {
 		paramtype = TYPE_LONG;
 	} else if (PyFloat_CheckExact(parameter)) {
 		paramtype = TYPE_FLOAT;
@@ -136,9 +132,9 @@ duckdb::Value _duckdb_pyobject_to_value(PyObject *parameter) {
 
 	switch (paramtype) {
 #if PY_MAJOR_VERSION < 3
-    case TYPE_INT: {
+	case TYPE_INT: {
 		return duckdb::Value::BIGINT(PyInt_AsLong(parameter));
-    }
+	}
 #endif
 	case TYPE_LONG: {
 		int overflow;
@@ -151,7 +147,7 @@ duckdb::Value _duckdb_pyobject_to_value(PyObject *parameter) {
 	case TYPE_FLOAT:
 		return duckdb::Value::DOUBLE(PyFloat_AsDouble(parameter));
 	case TYPE_STRING:
-		return duckdb::Value( _duckdb_stringconvert(parameter));
+		return duckdb::Value(_duckdb_stringconvert(parameter));
 	default:
 		break;
 	}
@@ -200,10 +196,9 @@ void _duckdb_bind_parameters(PyObject *parameters, std::vector<duckdb::Value> &p
 
 			try {
 				params[i] = _duckdb_pyobject_to_value(current_param);
-			} catch (std::exception& e) {
+			} catch (std::exception &e) {
 				PyErr_Format(duckdb_DatabaseError, "Error binding parameter %d - %s", i, e.what());
 				return;
-
 			}
 		}
 	} else {

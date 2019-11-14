@@ -1,6 +1,6 @@
-#include "execution/operator/join/physical_blockwise_nl_join.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "planner/operator/logical_any_join.hpp"
+#include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_any_join.hpp"
 
 using namespace duckdb;
 using namespace std;

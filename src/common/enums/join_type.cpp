@@ -1,4 +1,4 @@
-#include "common/enums/join_type.hpp"
+#include "duckdb/common/enums/join_type.hpp"
 
 using namespace std;
 

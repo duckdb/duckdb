@@ -1,9 +1,9 @@
-#include "common/types/vector.hpp"
+#include "duckdb/common/types/vector.hpp"
 
-#include "common/assert.hpp"
-#include "common/exception.hpp"
-#include "common/printer.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -96,6 +96,7 @@ void Vector::Initialize(TypeId new_type, bool zero_data) {
 	if (zero_data) {
 		memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
 	}
+	nullmask.reset();
 }
 
 void Vector::Destroy() {

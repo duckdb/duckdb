@@ -1,18 +1,18 @@
-#include "execution/window_segment_tree.hpp"
+#include "duckdb/execution/window_segment_tree.hpp"
 
-#include "common/types/constant_vector.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/constant_vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <cmath>
 
 using namespace duckdb;
 using namespace std;
 
-WindowSegmentTree::WindowSegmentTree(AggregateFunction& aggregate, TypeId result_type, ChunkCollection *input)
-	: aggregate(aggregate), state(aggregate.state_size(result_type)), statep(TypeId::POINTER, true, false), result_type(result_type),
-	input_ref(input) {
+WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, TypeId result_type, ChunkCollection *input)
+    : aggregate(aggregate), state(aggregate.state_size(result_type)), statep(TypeId::POINTER, true, false),
+      result_type(result_type), input_ref(input) {
 	statep.count = STANDARD_VECTOR_SIZE;
-	VectorOperations::Set(statep, Value::POINTER((index_t) state.data()));
+	VectorOperations::Set(statep, Value::POINTER((index_t)state.data()));
 
 	if (input_ref && input_ref->column_count() > 0) {
 		inputs = unique_ptr<Vector[]>(new Vector[input_ref->column_count()]);
@@ -28,7 +28,7 @@ void WindowSegmentTree::AggregateInit() {
 }
 
 Value WindowSegmentTree::AggegateFinal() {
-	ConstantVector statev(Value::POINTER((index_t) state.data()));
+	ConstantVector statev(Value::POINTER((index_t)state.data()));
 
 	Value r(result_type);
 	ConstantVector result(r);

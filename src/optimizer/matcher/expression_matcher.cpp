@@ -1,6 +1,6 @@
-#include "optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
 
-#include "planner/expression/list.hpp"
+#include "duckdb/planner/expression/list.hpp"
 
 using namespace duckdb;
 using namespace std;

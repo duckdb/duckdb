@@ -1,7 +1,7 @@
-#include "execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/execution/operator/join/physical_delim_join.hpp"
 
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/operator/scan/physical_chunk_scan.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
 
 using namespace duckdb;
 using namespace std;

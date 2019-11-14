@@ -1,6 +1,6 @@
-#include "execution/operator/scan/physical_table_function.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "planner/operator/logical_table_function.hpp"
+#include "duckdb/execution/operator/scan/physical_table_function.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_table_function.hpp"
 
 using namespace duckdb;
 using namespace std;

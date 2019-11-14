@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/art_key.hpp"
 
 using namespace duckdb;
 using namespace std;

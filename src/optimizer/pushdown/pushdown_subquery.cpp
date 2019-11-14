@@ -1,7 +1,7 @@
-#include "optimizer/filter_pushdown.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression_iterator.hpp"
-#include "planner/operator/logical_subquery.hpp"
+#include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_subquery.hpp"
 
 using namespace duckdb;
 using namespace std;

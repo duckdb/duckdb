@@ -1,6 +1,6 @@
-#include "planner/operator/logical_empty_result.hpp"
+#include "duckdb/planner/operator/logical_empty_result.hpp"
 
-#include "planner/table_binding_resolver.hpp"
+#include "duckdb/planner/table_binding_resolver.hpp"
 
 using namespace duckdb;
 using namespace std;

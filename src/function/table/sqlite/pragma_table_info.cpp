@@ -1,10 +1,10 @@
-#include "function/table/sqlite_functions.hpp"
+#include "duckdb/function/table/sqlite_functions.hpp"
 
-#include "catalog/catalog.hpp"
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "common/exception.hpp"
-#include "main/client_context.hpp"
-#include "main/database.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 
 #include <algorithm>
 
@@ -42,7 +42,7 @@ void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &outp
 		auto table_name = input.data[0].GetValue(0).str_value;
 		// look up the table name in the catalog
 		auto &catalog = context.catalog;
-		data.entry = catalog.GetTable(context.ActiveTransaction(), DEFAULT_SCHEMA, table_name);
+		data.entry = catalog.GetTable(context, DEFAULT_SCHEMA, table_name);
 	}
 
 	if (data.offset >= data.entry->columns.size()) {

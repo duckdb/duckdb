@@ -1,6 +1,6 @@
 #include "benchmark_runner.hpp"
 #include "duckdb_benchmark_macro.hpp"
-#include "main/appender.hpp"
+#include "duckdb/main/appender.hpp"
 
 #include <random>
 
@@ -15,8 +15,7 @@ using namespace std;
 DUCKDB_BENCHMARK(RangeQueryWithoutIndex, "[micro]")
 virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.Query("CREATE TABLE integers(i INTEGER, j INTEGER);");
-	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers");                                                      \
-	// insert the elements into the database
+	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers"); // insert the elements into the database
 	for (size_t i = 0; i < RANGE_QUERY_ROW_COUNT; i++) {
 		appender->BeginRow();
 		appender->AppendInteger(i);
@@ -55,8 +54,7 @@ FINISH_BENCHMARK(RangeQueryWithoutIndex)
 DUCKDB_BENCHMARK(RangeQueryWithIndexART, "[micro]")
 virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.Query("CREATE TABLE integers(i INTEGER, j INTEGER);");
-	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers");                                                      \
-	// insert the elements into the database
+	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers"); // insert the elements into the database
 	for (size_t i = 0; i < RANGE_QUERY_ROW_COUNT; i++) {
 		appender->BeginRow();
 		appender->AppendInteger(i);

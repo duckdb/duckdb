@@ -1,10 +1,10 @@
-#include "execution/expression_executor.hpp"
-#include "main/client_context.hpp"
-#include "parser/expression/constant_expression.hpp"
-#include "parser/statement/execute_statement.hpp"
-#include "planner/binder.hpp"
-#include "planner/expression_binder/constant_binder.hpp"
-#include "planner/statement/bound_execute_statement.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/statement/execute_statement.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
+#include "duckdb/planner/statement/bound_execute_statement.hpp"
 
 using namespace duckdb;
 using namespace std;

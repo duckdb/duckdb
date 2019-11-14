@@ -4,7 +4,7 @@
 \name{duckdb-package}
 \alias{duckdb}
 \alias{duckdb-package}
-\title{duckdb: DBI package for DuckDB}
+\title{duckdb: DBI Package for DuckDB}
 \description{
 TODO
 }

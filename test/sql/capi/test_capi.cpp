@@ -1,7 +1,7 @@
 #include "catch.hpp"
 #include "duckdb.h"
 #include "test_helpers.hpp"
-#include "common/exception.hpp"
+#include "duckdb/common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -381,6 +381,12 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 44);
+	duckdb_destroy_result(&res);
+
+	duckdb_bind_null(stmt, 1);
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(res.columns[0].nullmask[0] == true);
 	duckdb_destroy_result(&res);
 
 	duckdb_destroy_prepare(&stmt);

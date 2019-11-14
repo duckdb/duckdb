@@ -1,6 +1,6 @@
-#include "common/limits.hpp"
+#include "duckdb/common/limits.hpp"
 
-#include "common/exception.hpp"
+#include "duckdb/common/exception.hpp"
 
 using namespace std;
 

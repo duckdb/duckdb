@@ -1,8 +1,8 @@
-#include "common/types/timestamp.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
-#include "common/exception.hpp"
-#include "common/types/date.hpp"
-#include "common/types/time.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/time.hpp"
 
 #include <iomanip>
 #include <iostream>
@@ -224,27 +224,27 @@ Interval TimestampToInterval(timestamp_struct *timestamp) {
 }
 
 int64_t Timestamp::GetEpoch(timestamp_t timestamp) {
-    return Date::Epoch(Timestamp::GetDate(timestamp)) + (int64_t)(Timestamp::GetTime(timestamp) / 1000);
+	return Date::Epoch(Timestamp::GetDate(timestamp)) + (int64_t)(Timestamp::GetTime(timestamp) / 1000);
 }
 
 int64_t Timestamp::GetMilliseconds(timestamp_t timestamp) {
-    int n = Timestamp::GetTime(timestamp);
-    int m = n / 60000;
-    return n - m * 60000;
+	int n = Timestamp::GetTime(timestamp);
+	int m = n / 60000;
+	return n - m * 60000;
 }
 
 int64_t Timestamp::GetSeconds(timestamp_t timestamp) {
-    int n = Timestamp::GetTime(timestamp);
-    int m = n / 60000;
-    return (n - m * 60000) / 1000;
+	int n = Timestamp::GetTime(timestamp);
+	int m = n / 60000;
+	return (n - m * 60000) / 1000;
 }
 
 int64_t Timestamp::GetMinutes(timestamp_t timestamp) {
-    int n = Timestamp::GetTime(timestamp);
-    int h = n / 3600000;
-    return (n - h * 3600000) / 60000;
+	int n = Timestamp::GetTime(timestamp);
+	int h = n / 3600000;
+	return (n - h * 3600000) / 60000;
 }
 
 int64_t Timestamp::GetHours(timestamp_t timestamp) {
-    return Timestamp::GetTime(timestamp) / 3600000;
+	return Timestamp::GetTime(timestamp) / 3600000;
 }

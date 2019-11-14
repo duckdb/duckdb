@@ -1,6 +1,6 @@
-#include "execution/merge_join.hpp"
+#include "duckdb/execution/merge_join.hpp"
 
-#include "parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,4 +1,4 @@
-#include "common/operator/like_operators.hpp"
+#include "duckdb/common/operator/like_operators.hpp"
 
 namespace duckdb {
 

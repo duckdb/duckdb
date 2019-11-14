@@ -14,6 +14,7 @@ add_library(duckdb_parser OBJECT
             parsed_expression.cpp
             parsed_expression_iterator.cpp
             parser.cpp
+            pragma_parser.cpp
             query_node.cpp
             tableref.cpp
             transformer.cpp)

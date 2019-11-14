@@ -1,6 +1,6 @@
-#include "main/prepared_statement.hpp"
-#include "common/exception.hpp"
-#include "main/client_context.hpp"
+#include "duckdb/main/prepared_statement.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;

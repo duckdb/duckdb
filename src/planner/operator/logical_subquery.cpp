@@ -1,6 +1,6 @@
-#include "planner/operator/logical_subquery.hpp"
+#include "duckdb/planner/operator/logical_subquery.hpp"
 
-#include "planner/table_binding_resolver.hpp"
+#include "duckdb/planner/table_binding_resolver.hpp"
 
 using namespace duckdb;
 using namespace std;

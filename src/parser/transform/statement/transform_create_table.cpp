@@ -1,6 +1,6 @@
-#include "parser/statement/create_table_statement.hpp"
-#include "parser/transformer.hpp"
-#include "parser/constraint.hpp"
+#include "duckdb/parser/statement/create_table_statement.hpp"
+#include "duckdb/parser/transformer.hpp"
+#include "duckdb/parser/constraint.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -16,12 +16,18 @@ unique_ptr<CreateTableStatement> Transformer::TransformCreateTable(postgres::Nod
 	}
 	assert(stmt->relation);
 
+	info.schema = INVALID_SCHEMA;
 	if (stmt->relation->schemaname) {
 		info.schema = stmt->relation->schemaname;
 	}
 	info.table = stmt->relation->relname;
 	info.if_not_exists = stmt->if_not_exists;
 	info.temporary = stmt->relation->relpersistence == postgres::PostgresRelPersistence::RELPERSISTENCE_TEMP;
+
+	if (info.temporary && stmt->oncommit != postgres::OnCommitAction::ONCOMMIT_PRESERVE_ROWS &&
+	    stmt->oncommit != postgres::OnCommitAction::ONCOMMIT_NOOP) {
+		throw NotImplementedException("Only ON COMMIT PRESERVE ROWS is supported");
+	}
 
 	assert(stmt->tableElts);
 

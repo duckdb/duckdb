@@ -5,9 +5,9 @@
 #include "nulls.h"
 #include "date.h"
 
-#include "common/types/date.hpp"
-#include "common/exception.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include <cstring>
 #include <memory>
 

@@ -1,6 +1,6 @@
 #include "benchmark_runner.hpp"
 #include "duckdb_benchmark_macro.hpp"
-#include "main/appender.hpp"
+#include "duckdb/main/appender.hpp"
 
 #include <random>
 
@@ -25,13 +25,13 @@ using namespace std;
 		std::mt19937 gen;                                                                                              \
 		gen.seed(42);                                                                                                  \
 		state->conn.Query("CREATE TABLE strings(s VARCHAR);");                                                         \
-		auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "strings");                                                      \
+		auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "strings");                                           \
 		for (size_t i = 0; i < IN_LIST_ROW_COUNT; i++) {                                                               \
-			appender->BeginRow();                                                                                       \
-			appender->AppendValue(Value(GenerateString(distribution, gen)));                                            \
-			appender->EndRow();                                                                                         \
+			appender->BeginRow();                                                                                      \
+			appender->AppendValue(Value(GenerateString(distribution, gen)));                                           \
+			appender->EndRow();                                                                                        \
 		}                                                                                                              \
-		state->conn.CloseAppender();                                                                                        \
+		state->conn.CloseAppender();                                                                                   \
 		for (size_t i = 0; i < INCOUNT; i++) {                                                                         \
 			in_list += "'" + GenerateString(distribution, gen) + "'";                                                  \
 			if (i != INCOUNT - 1) {                                                                                    \

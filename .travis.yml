@@ -75,6 +75,23 @@ matrix:
 
 
     - os: linux
+      dist: bionic
+      name: Valgrind
+
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - valgrind
+
+      script:
+        - mkdir -p build/debug
+        - (cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_SANITIZER=FALSE ../.. && cmake --build .)
+        - valgrind ./build/debug/test/unittest -s "[tpch]"
+
+
+    - os: linux
       dist: xenial
       name: GCC 9
 
@@ -142,6 +159,17 @@ matrix:
 
       after_success:
         - coveralls -b build/coverage -E '.*CMakeCXXCompilerId.cpp' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --gcov-options '\-lp'
+
+
+    - os: linux
+      dist: xenial
+      name: GCC 5 (ARM64)
+      arch: arm64
+
+      script:
+        - mkdir -p build/debug
+        - (cd build/debug && cmake -DEXPLICIT_EXCEPTIONS=TRUE -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
+        - build/debug/test/unittest -s "[tpch]"
 
 
     - os: windows
@@ -347,5 +375,3 @@ matrix:
 
       after_success:
         C:/Python37-x64/python.exe tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
-
-

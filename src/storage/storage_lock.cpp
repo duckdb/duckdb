@@ -1,4 +1,4 @@
-#include "storage/storage_lock.hpp"
+#include "duckdb/storage/storage_lock.hpp"
 
 using namespace duckdb;
 using namespace std;

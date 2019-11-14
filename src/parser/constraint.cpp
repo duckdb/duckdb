@@ -1,8 +1,8 @@
-#include "parser/constraint.hpp"
+#include "duckdb/parser/constraint.hpp"
 
-#include "common/printer.hpp"
-#include "common/serializer.hpp"
-#include "parser/constraints/list.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/parser/constraints/list.hpp"
 
 using namespace duckdb;
 using namespace std;

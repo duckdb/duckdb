@@ -1,14 +1,14 @@
-#include "main/client_context.hpp"
-#include "main/database.hpp"
-#include "parser/constraints/list.hpp"
-#include "parser/expression/cast_expression.hpp"
-#include "parser/statement/create_table_statement.hpp"
-#include "planner/binder.hpp"
-#include "planner/constraints/list.hpp"
-#include "planner/expression/bound_constant_expression.hpp"
-#include "planner/expression_binder/check_binder.hpp"
-#include "planner/expression_binder/constant_binder.hpp"
-#include "planner/statement/bound_create_table_statement.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/constraints/list.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/statement/create_table_statement.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/constraints/list.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression_binder/check_binder.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
+#include "duckdb/planner/statement/bound_create_table_statement.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -123,8 +123,23 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateTa
 
 unique_ptr<BoundSQLStatement> Binder::Bind(CreateTableStatement &stmt) {
 	auto result = make_unique<BoundCreateTableStatement>();
-	// bind the schema
-	result->schema = context.catalog.GetSchema(context.ActiveTransaction(), stmt.info->schema);
+
+	if (stmt.info->schema == INVALID_SCHEMA) {
+		stmt.info->schema = stmt.info->temporary ? TEMP_SCHEMA : DEFAULT_SCHEMA;
+	}
+
+	if (stmt.info->temporary) {
+		if (stmt.info->schema != TEMP_SCHEMA) {
+			throw ParserException("TEMPORARY table names can *only* use the \"temp\" schema");
+		}
+		result->schema = context.temporary_objects.get();
+	} else {
+		assert(stmt.info->schema != INVALID_SCHEMA);
+		if (stmt.info->schema == TEMP_SCHEMA) {
+			throw ParserException("Only TEMPORARY table names can use the \"temp\" schema");
+		}
+		result->schema = context.catalog.GetSchema(context.ActiveTransaction(), stmt.info->schema);
+	}
 	if (stmt.query) {
 		// construct the result object
 		result->query = unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*stmt.query));

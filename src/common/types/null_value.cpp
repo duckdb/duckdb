@@ -1,6 +1,6 @@
-#include "common/types/null_value.hpp"
+#include "duckdb/common/types/null_value.hpp"
 
-#include "common/exception.hpp"
+#include "duckdb/common/exception.hpp"
 
 #include <cstring>
 

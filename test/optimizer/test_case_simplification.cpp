@@ -1,6 +1,6 @@
-#include "common/helper.hpp"
+#include "duckdb/common/helper.hpp"
 #include "expression_helper.hpp"
-#include "optimizer/rule/case_simplification.hpp"
+#include "duckdb/optimizer/rule/case_simplification.hpp"
 
 using namespace duckdb;
 using namespace std;
