@@ -198,14 +198,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 
 /* BEGIN TYPE LIST */
 %type <node>	stmt
-		DeleteStmt
-		ExplainStmt
-		InsertStmt
-		ExplainableStmt PreparableStmt RenameStmt
-		SelectStmt TransactionStmt
-		UpdateStmt
-		ViewStmt
-		DeallocateStmt PrepareStmt ExecuteStmt
+		SelectStmt
 
 %begin_types
 
@@ -219,7 +212,6 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 %type <dbehavior>	opt_drop_behavior
 
 %type <boolean>	opt_with_data
-				opt_transaction_chain
 %type <ival>	opt_nowait_or_skip
 
 %type <str>		attr_name name
@@ -227,7 +219,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 
 %type <list>	func_name qual_Op qual_all_Op subquery_Op
 
-%type <range>	qualified_name insert_target
+%type <range>	qualified_name
 
 %type <str>		all_Op MathOp
 
@@ -240,14 +232,12 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 				name_list from_clause from_list opt_array_bounds
 				qualified_name_list any_name any_name_list
 				any_operator expr_list attrs
-				target_list opt_target_list insert_column_list set_target_list
-				set_clause_list set_clause
+				target_list opt_target_list
 				def_list indirection opt_indirection
 				reloption_list group_clause select_limit
 				opt_select_limit
 				TableFuncElementList opt_type_modifiers
-				prep_type_clause
-				execute_param_clause using_clause returning_clause
+				returning_clause
 				alter_generic_options
 
 %type <list>	group_by_list
@@ -277,17 +267,10 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 
 %type <boolean> opt_verbose
 
-%type <ival>	opt_column opt_set_data
-
 %type <node>	limit_clause select_limit_value
 				offset_clause select_offset_value
 				select_fetch_first_value I_or_F_const
 %type <ival>	row_or_rows first_or_next
-
-%type <istmt>	insert_rest
-%type <infer>	opt_conf_expr
-%type <onconflict> opt_on_conflict
-
 
 %type <node>	TableFuncElement
 %type <defelt>	def_elem reloption_elem
@@ -311,12 +294,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 %type <range>	relation_expr
 %type <range>	relation_expr_opt_alias
 %type <node>	tablesample_clause opt_repeatable_clause
-%type <target>	target_el set_target insert_column_item
-
-%type <str>		explain_option_name
-%type <node>	explain_option_arg
-%type <defelt>	explain_option_elem
-%type <list>	explain_option_list
+%type <target>	target_el
 
 %type <typnam>	Typename SimpleTypename ConstTypename
 				GenericType Numeric opt_float
@@ -336,8 +314,6 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 
 %type <keyword> unreserved_keyword type_func_name_keyword
 %type <keyword> col_name_keyword reserved_keyword
-
-%type <ival>	opt_check_option
 
 %type <node>	func_application func_expr_common_subexpr
 %type <node>	func_expr func_expr_windowless
@@ -586,22 +562,7 @@ stmtmulti:	stmtmulti ';' stmt
 		;
 
 stmt:
-			DeallocateStmt
-			| DeleteStmt
-			| ExecuteStmt
-			| ExplainStmt
-			| InsertStmt
-			| PrepareStmt
-			| RenameStmt
-			| SelectStmt
-			| TransactionStmt
-			| UpdateStmt
-			| ViewStmt;
-
-opt_with:	WITH									{}
-			| WITH_LA								{}
-			| /*EMPTY*/								{}
-		;
+			SelectStmt;
 
 /*****************************************************************************
  *
@@ -698,148 +659,7 @@ opt_with:	WITH									{}
  * ALTER THING name RENAME TO newname
  *
  *****************************************************************************/
-
-RenameStmt: ALTER SCHEMA name RENAME TO name
-				{
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_SCHEMA;
-					n->subname = $3;
-					n->newname = $6;
-					n->missing_ok = false;
-					$$ = (Node *)n;
-				}
-			| ALTER TABLE relation_expr RENAME TO name
-				{
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_TABLE;
-					n->relation = $3;
-					n->subname = NULL;
-					n->newname = $6;
-					n->missing_ok = false;
-					$$ = (Node *)n;
-				}
-			| ALTER TABLE IF_P EXISTS relation_expr RENAME TO name
-				{
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_TABLE;
-					n->relation = $5;
-					n->subname = NULL;
-					n->newname = $8;
-					n->missing_ok = true;
-					$$ = (Node *)n;
-				}
-			| ALTER SEQUENCE qualified_name RENAME TO name
-				{
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_SEQUENCE;
-					n->relation = $3;
-					n->subname = NULL;
-					n->newname = $6;
-					n->missing_ok = false;
-					$$ = (Node *)n;
-				}
-			| ALTER SEQUENCE IF_P EXISTS qualified_name RENAME TO name
-				{
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_SEQUENCE;
-					n->relation = $5;
-					n->subname = NULL;
-					n->newname = $8;
-					n->missing_ok = true;
-					$$ = (Node *)n;
-				}
-			| ALTER VIEW qualified_name RENAME TO name
-				{
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_VIEW;
-					n->relation = $3;
-					n->subname = NULL;
-					n->newname = $6;
-					n->missing_ok = false;
-					$$ = (Node *)n;
-				}
-			| ALTER VIEW IF_P EXISTS qualified_name RENAME TO name
-				{
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_VIEW;
-					n->relation = $5;
-					n->subname = NULL;
-					n->newname = $8;
-					n->missing_ok = true;
-					$$ = (Node *)n;
-				}
-			| ALTER INDEX qualified_name RENAME TO name
-				{
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_INDEX;
-					n->relation = $3;
-					n->subname = NULL;
-					n->newname = $6;
-					n->missing_ok = false;
-					$$ = (Node *)n;
-				}
-			| ALTER INDEX IF_P EXISTS qualified_name RENAME TO name
-				{
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_INDEX;
-					n->relation = $5;
-					n->subname = NULL;
-					n->newname = $8;
-					n->missing_ok = true;
-					$$ = (Node *)n;
-				}
-			| ALTER TABLE relation_expr RENAME opt_column name TO name
-				{
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_COLUMN;
-					n->relationType = OBJECT_TABLE;
-					n->relation = $3;
-					n->subname = $6;
-					n->newname = $8;
-					n->missing_ok = false;
-					$$ = (Node *)n;
-				}
-			| ALTER TABLE IF_P EXISTS relation_expr RENAME opt_column name TO name
-				{
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_COLUMN;
-					n->relationType = OBJECT_TABLE;
-					n->relation = $5;
-					n->subname = $8;
-					n->newname = $10;
-					n->missing_ok = true;
-					$$ = (Node *)n;
-				}
-			| ALTER TABLE relation_expr RENAME CONSTRAINT name TO name
-				{
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_TABCONSTRAINT;
-					n->relation = $3;
-					n->subname = $6;
-					n->newname = $8;
-					n->missing_ok = false;
-					$$ = (Node *)n;
-				}
-			| ALTER TABLE IF_P EXISTS relation_expr RENAME CONSTRAINT name TO name
-				{
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_TABCONSTRAINT;
-					n->relation = $5;
-					n->subname = $8;
-					n->newname = $10;
-					n->missing_ok = true;
-					$$ = (Node *)n;
-				}
-		;
-
-opt_column: COLUMN									{ $$ = COLUMN; }
-			| /*EMPTY*/								{ $$ = 0; }
-		;
-
-opt_set_data: SET DATA_P							{ $$ = 1; }
-			| /*EMPTY*/								{ $$ = 0; }
-		;
-
+%include rename.y
 
 /*****************************************************************************
  *
@@ -849,79 +669,7 @@ opt_set_data: SET DATA_P							{ $$ = 1; }
  *		(also older versions END / ABORT)
  *
  *****************************************************************************/
-
-TransactionStmt:
-			ABORT_P opt_transaction opt_transaction_chain
-				{
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_ROLLBACK;
-					n->options = NIL;
-					n->chain = $3;
-					$$ = (Node *)n;
-				}
-			| BEGIN_P opt_transaction
-				{
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_BEGIN;
-					$$ = (Node *)n;
-				}
-			| START TRANSACTION
-				{
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_START;
-					$$ = (Node *)n;
-				}
-			| COMMIT opt_transaction opt_transaction_chain
-				{
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_COMMIT;
-					n->options = NIL;
-					n->chain = $3;
-					$$ = (Node *)n;
-				}
-			| END_P opt_transaction opt_transaction_chain
-				{
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_COMMIT;
-					n->options = NIL;
-					n->chain = $3;
-					$$ = (Node *)n;
-				}
-			| ROLLBACK opt_transaction opt_transaction_chain
-				{
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_ROLLBACK;
-					n->options = NIL;
-					n->chain = $3;
-					$$ = (Node *)n;
-				}
-			| ROLLBACK opt_transaction TO SAVEPOINT ColId
-				{
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_ROLLBACK_TO;
-					n->savepoint_name = $5;
-					$$ = (Node *)n;
-				}
-			| ROLLBACK opt_transaction TO ColId
-				{
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_ROLLBACK_TO;
-					n->savepoint_name = $4;
-					$$ = (Node *)n;
-				}
-		;
-
-opt_transaction:	WORK							{}
-			| TRANSACTION							{}
-			| /*EMPTY*/								{}
-		;
-
-opt_transaction_chain:
-			AND CHAIN		{ $$ = true; }
-			| AND NO CHAIN	{ $$ = false; }
-			| /* EMPTY */	{ $$ = false; }
-		;
-
+%include transaction.y
 
 /*****************************************************************************
  *
@@ -930,83 +678,7 @@ opt_transaction_chain:
  *			AS <query> [ WITH [ CASCADED | LOCAL ] CHECK OPTION ]
  *
  *****************************************************************************/
-
-ViewStmt: CREATE OptTemp VIEW qualified_name opt_column_list opt_reloptions
-				AS SelectStmt opt_check_option
-				{
-					ViewStmt *n = makeNode(ViewStmt);
-					n->view = $4;
-					n->view->relpersistence = $2;
-					n->aliases = $5;
-					n->query = $8;
-					n->replace = false;
-					n->options = $6;
-					n->withCheckOption = $9;
-					$$ = (Node *) n;
-				}
-		| CREATE OR REPLACE OptTemp VIEW qualified_name opt_column_list opt_reloptions
-				AS SelectStmt opt_check_option
-				{
-					ViewStmt *n = makeNode(ViewStmt);
-					n->view = $6;
-					n->view->relpersistence = $4;
-					n->aliases = $7;
-					n->query = $10;
-					n->replace = true;
-					n->options = $8;
-					n->withCheckOption = $11;
-					$$ = (Node *) n;
-				}
-		| CREATE OptTemp RECURSIVE VIEW qualified_name '(' columnList ')' opt_reloptions
-				AS SelectStmt opt_check_option
-				{
-					ViewStmt *n = makeNode(ViewStmt);
-					n->view = $5;
-					n->view->relpersistence = $2;
-					n->aliases = $7;
-					n->query = makeRecursiveViewSelect(n->view->relname, n->aliases, $11);
-					n->replace = false;
-					n->options = $9;
-					n->withCheckOption = $12;
-					if (n->withCheckOption != NO_CHECK_OPTION)
-						ereport(ERROR,
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								 errmsg("WITH CHECK OPTION not supported on recursive views"),
-								 parser_errposition(@12)));
-					$$ = (Node *) n;
-				}
-		| CREATE OR REPLACE OptTemp RECURSIVE VIEW qualified_name '(' columnList ')' opt_reloptions
-				AS SelectStmt opt_check_option
-				{
-					ViewStmt *n = makeNode(ViewStmt);
-					n->view = $7;
-					n->view->relpersistence = $4;
-					n->aliases = $9;
-					n->query = makeRecursiveViewSelect(n->view->relname, n->aliases, $13);
-					n->replace = true;
-					n->options = $11;
-					n->withCheckOption = $14;
-					if (n->withCheckOption != NO_CHECK_OPTION)
-						ereport(ERROR,
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								 errmsg("WITH CHECK OPTION not supported on recursive views"),
-								 parser_errposition(@14)));
-					$$ = (Node *) n;
-				}
-		;
-
-opt_check_option:
-		WITH CHECK OPTION				{ $$ = CASCADED_CHECK_OPTION; }
-		| WITH CASCADED CHECK OPTION	{ $$ = CASCADED_CHECK_OPTION; }
-		| WITH LOCAL CHECK OPTION		{ $$ = LOCAL_CHECK_OPTION; }
-		| /* EMPTY */					{ $$ = NO_CHECK_OPTION; }
-		;
-
-
-opt_as:		AS										{}
-			| /* EMPTY */							{}
-		;
-
+%include view.y
 
 /*****************************************************************************
  *
@@ -1015,193 +687,22 @@ opt_as:		AS										{}
  *				EXPLAIN ( options ) query
  *
  *****************************************************************************/
-
-ExplainStmt:
-		EXPLAIN ExplainableStmt
-				{
-					ExplainStmt *n = makeNode(ExplainStmt);
-					n->query = $2;
-					n->options = NIL;
-					$$ = (Node *) n;
-				}
-		| EXPLAIN analyze_keyword opt_verbose ExplainableStmt
-				{
-					ExplainStmt *n = makeNode(ExplainStmt);
-					n->query = $4;
-					n->options = list_make1(makeDefElem("analyze", NULL, @2));
-					if ($3)
-						n->options = lappend(n->options,
-											 makeDefElem("verbose", NULL, @3));
-					$$ = (Node *) n;
-				}
-		| EXPLAIN VERBOSE ExplainableStmt
-				{
-					ExplainStmt *n = makeNode(ExplainStmt);
-					n->query = $3;
-					n->options = list_make1(makeDefElem("verbose", NULL, @2));
-					$$ = (Node *) n;
-				}
-		| EXPLAIN '(' explain_option_list ')' ExplainableStmt
-				{
-					ExplainStmt *n = makeNode(ExplainStmt);
-					n->query = $5;
-					n->options = $3;
-					$$ = (Node *) n;
-				}
-		;
-
-ExplainableStmt:
-			SelectStmt
-			| InsertStmt
-			| UpdateStmt
-			| DeleteStmt
-			| CreateAsStmt
-			| ExecuteStmt					/* by default all are $$=$1 */
-		;
-
-explain_option_list:
-			explain_option_elem
-				{
-					$$ = list_make1($1);
-				}
-			| explain_option_list ',' explain_option_elem
-				{
-					$$ = lappend($1, $3);
-				}
-		;
-
-explain_option_elem:
-			explain_option_name explain_option_arg
-				{
-					$$ = makeDefElem($1, $2, @1);
-				}
-		;
-
-explain_option_name:
-			NonReservedWord			{ $$ = $1; }
-			| analyze_keyword		{ $$ = "analyze"; }
-		;
-
-explain_option_arg:
-			opt_boolean_or_string	{ $$ = (Node *) makeString($1); }
-			| NumericOnly			{ $$ = (Node *) $1; }
-			| /* EMPTY */			{ $$ = NULL; }
-		;
+%include explain.y
 
 /*****************************************************************************
  *
  *		QUERY:
  *				PREPARE <plan_name> [(args, ...)] AS <query>
  *
- *****************************************************************************/
-
-PrepareStmt: PREPARE name prep_type_clause AS PreparableStmt
-				{
-					PrepareStmt *n = makeNode(PrepareStmt);
-					n->name = $2;
-					n->argtypes = $3;
-					n->query = $5;
-					$$ = (Node *) n;
-				}
-		;
-
-prep_type_clause: '(' type_list ')'			{ $$ = $2; }
-				| /* EMPTY */				{ $$ = NIL; }
-		;
-
-PreparableStmt:
-			SelectStmt
-			| InsertStmt
-			| UpdateStmt
-			| DeleteStmt					/* by default all are $$=$1 */
-		;
-
-/*****************************************************************************
- *
- * EXECUTE <plan_name> [(params, ...)]
- * CREATE TABLE <name> AS EXECUTE <plan_name> [(params, ...)]
- *
- *****************************************************************************/
-
-ExecuteStmt: EXECUTE name execute_param_clause
-				{
-					ExecuteStmt *n = makeNode(ExecuteStmt);
-					n->name = $2;
-					n->params = $3;
-					$$ = (Node *) n;
-				}
-			| CREATE OptTemp TABLE create_as_target AS
-				EXECUTE name execute_param_clause opt_with_data
-				{
-					CreateTableAsStmt *ctas = makeNode(CreateTableAsStmt);
-					ExecuteStmt *n = makeNode(ExecuteStmt);
-					n->name = $7;
-					n->params = $8;
-					ctas->query = (Node *) n;
-					ctas->into = $4;
-					ctas->relkind = OBJECT_TABLE;
-					ctas->is_select_into = false;
-					ctas->if_not_exists = false;
-					/* cram additional flags into the IntoClause */
-					$4->rel->relpersistence = $2;
-					$4->skipData = !($9);
-					$$ = (Node *) ctas;
-				}
-			| CREATE OptTemp TABLE IF_P NOT EXISTS create_as_target AS
-				EXECUTE name execute_param_clause opt_with_data
-				{
-					CreateTableAsStmt *ctas = makeNode(CreateTableAsStmt);
-					ExecuteStmt *n = makeNode(ExecuteStmt);
-					n->name = $10;
-					n->params = $11;
-					ctas->query = (Node *) n;
-					ctas->into = $7;
-					ctas->relkind = OBJECT_TABLE;
-					ctas->is_select_into = false;
-					ctas->if_not_exists = true;
-					/* cram additional flags into the IntoClause */
-					$7->rel->relpersistence = $2;
-					$7->skipData = !($12);
-					$$ = (Node *) ctas;
-				}
-		;
-
-execute_param_clause: '(' expr_list ')'				{ $$ = $2; }
-					| /* EMPTY */					{ $$ = NIL; }
-					;
-
-/*****************************************************************************
+ *		QUERY:
+ * 				EXECUTE <plan_name> [(params, ...)]
+ * 				CREATE TABLE <name> AS EXECUTE <plan_name> [(params, ...)]
  *
  *		QUERY:
  *				DEALLOCATE [PREPARE] <plan_name>
  *
  *****************************************************************************/
-
-DeallocateStmt: DEALLOCATE name
-					{
-						DeallocateStmt *n = makeNode(DeallocateStmt);
-						n->name = $2;
-						$$ = (Node *) n;
-					}
-				| DEALLOCATE PREPARE name
-					{
-						DeallocateStmt *n = makeNode(DeallocateStmt);
-						n->name = $3;
-						$$ = (Node *) n;
-					}
-				| DEALLOCATE ALL
-					{
-						DeallocateStmt *n = makeNode(DeallocateStmt);
-						n->name = NULL;
-						$$ = (Node *) n;
-					}
-				| DEALLOCATE PREPARE ALL
-					{
-						DeallocateStmt *n = makeNode(DeallocateStmt);
-						n->name = NULL;
-						$$ = (Node *) n;
-					}
-		;
+%include prepare.y
 
 /*****************************************************************************
  *
@@ -1209,131 +710,7 @@ DeallocateStmt: DEALLOCATE name
  *				INSERT STATEMENTS
  *
  *****************************************************************************/
-
-InsertStmt:
-			opt_with_clause INSERT INTO insert_target insert_rest
-			opt_on_conflict returning_clause
-				{
-					$5->relation = $4;
-					$5->onConflictClause = $6;
-					$5->returningList = $7;
-					$5->withClause = $1;
-					$$ = (Node *) $5;
-				}
-		;
-
-/*
- * Can't easily make AS optional here, because VALUES in insert_rest would
- * have a shift/reduce conflict with VALUES as an optional alias.  We could
- * easily allow unreserved_keywords as optional aliases, but that'd be an odd
- * divergence from other places.  So just require AS for now.
- */
-insert_target:
-			qualified_name
-				{
-					$$ = $1;
-				}
-			| qualified_name AS ColId
-				{
-					$1->alias = makeAlias($3, NIL);
-					$$ = $1;
-				}
-		;
-
-insert_rest:
-			SelectStmt
-				{
-					$$ = makeNode(InsertStmt);
-					$$->cols = NIL;
-					$$->selectStmt = $1;
-				}
-			| '(' insert_column_list ')' SelectStmt
-				{
-					$$ = makeNode(InsertStmt);
-					$$->cols = $2;
-					$$->selectStmt = $4;
-				}
-			| DEFAULT VALUES
-				{
-					$$ = makeNode(InsertStmt);
-					$$->cols = NIL;
-					$$->selectStmt = NULL;
-				}
-		;
-
-insert_column_list:
-			insert_column_item
-					{ $$ = list_make1($1); }
-			| insert_column_list ',' insert_column_item
-					{ $$ = lappend($1, $3); }
-		;
-
-insert_column_item:
-			ColId opt_indirection
-				{
-					$$ = makeNode(ResTarget);
-					$$->name = $1;
-					$$->indirection = check_indirection($2, yyscanner);
-					$$->val = NULL;
-					$$->location = @1;
-				}
-		;
-
-opt_on_conflict:
-			ON CONFLICT opt_conf_expr DO UPDATE SET set_clause_list	where_clause
-				{
-					$$ = makeNode(OnConflictClause);
-					$$->action = ONCONFLICT_UPDATE;
-					$$->infer = $3;
-					$$->targetList = $7;
-					$$->whereClause = $8;
-					$$->location = @1;
-				}
-			|
-			ON CONFLICT opt_conf_expr DO NOTHING
-				{
-					$$ = makeNode(OnConflictClause);
-					$$->action = ONCONFLICT_NOTHING;
-					$$->infer = $3;
-					$$->targetList = NIL;
-					$$->whereClause = NULL;
-					$$->location = @1;
-				}
-			| /*EMPTY*/
-				{
-					$$ = NULL;
-				}
-		;
-
-opt_conf_expr:
-			'(' index_params ')' where_clause
-				{
-					$$ = makeNode(InferClause);
-					$$->indexElems = $2;
-					$$->whereClause = $4;
-					$$->conname = NULL;
-					$$->location = @1;
-				}
-			|
-			ON CONSTRAINT name
-				{
-					$$ = makeNode(InferClause);
-					$$->indexElems = NIL;
-					$$->whereClause = NULL;
-					$$->conname = $3;
-					$$->location = @1;
-				}
-			| /*EMPTY*/
-				{
-					$$ = NULL;
-				}
-		;
-
-returning_clause:
-			RETURNING target_list		{ $$ = $2; }
-			| /* EMPTY */				{ $$ = NIL; }
-		;
-
+%include insert.y
 
 /*****************************************************************************
  *
@@ -1341,32 +718,7 @@ returning_clause:
  *				DELETE STATEMENTS
  *
  *****************************************************************************/
-
-DeleteStmt: opt_with_clause DELETE_P FROM relation_expr_opt_alias
-			using_clause where_clause returning_clause
-				{
-					DeleteStmt *n = makeNode(DeleteStmt);
-					n->relation = $4;
-					n->usingClause = $5;
-					n->whereClause = $6;
-					n->returningList = $7;
-					n->withClause = $1;
-					$$ = (Node *)n;
-				}
-		;
-
-using_clause:
-				USING from_list						{ $$ = $2; }
-			| /*EMPTY*/								{ $$ = NIL; }
-		;
-
-
-opt_nowait_or_skip:
-			NOWAIT							{ $$ = LockWaitError; }
-			| SKIP LOCKED					{ $$ = LockWaitSkip; }
-			| /*EMPTY*/						{ $$ = LockWaitBlock; }
-		;
-
+%include delete.y
 
 /*****************************************************************************
  *
@@ -1374,73 +726,7 @@ opt_nowait_or_skip:
  *				UpdateStmt (UPDATE)
  *
  *****************************************************************************/
-
-UpdateStmt: opt_with_clause UPDATE relation_expr_opt_alias
-			SET set_clause_list
-			from_clause
-			where_clause
-			returning_clause
-				{
-					UpdateStmt *n = makeNode(UpdateStmt);
-					n->relation = $3;
-					n->targetList = $5;
-					n->fromClause = $6;
-					n->whereClause = $7;
-					n->returningList = $8;
-					n->withClause = $1;
-					$$ = (Node *)n;
-				}
-		;
-
-set_clause_list:
-			set_clause							{ $$ = $1; }
-			| set_clause_list ',' set_clause	{ $$ = list_concat($1,$3); }
-		;
-
-set_clause:
-			set_target '=' a_expr
-				{
-					$1->val = (Node *) $3;
-					$$ = list_make1($1);
-				}
-			| '(' set_target_list ')' '=' a_expr
-				{
-					int ncolumns = list_length($2);
-					int i = 1;
-					ListCell *col_cell;
-
-					/* Create a MultiAssignRef source for each target */
-					foreach(col_cell, $2)
-					{
-						ResTarget *res_col = (ResTarget *) lfirst(col_cell);
-						MultiAssignRef *r = makeNode(MultiAssignRef);
-
-						r->source = (Node *) $5;
-						r->colno = i;
-						r->ncolumns = ncolumns;
-						res_col->val = (Node *) r;
-						i++;
-					}
-
-					$$ = $2;
-				}
-		;
-
-set_target:
-			ColId opt_indirection
-				{
-					$$ = makeNode(ResTarget);
-					$$->name = $1;
-					$$->indirection = check_indirection($2, yyscanner);
-					$$->val = NULL;	/* upper production sets this */
-					$$->location = @1;
-				}
-		;
-
-set_target_list:
-			set_target								{ $$ = list_make1($1); }
-			| set_target_list ',' set_target		{ $$ = lappend($1,$3); }
-		;
+%include update.y
 
 /*****************************************************************************
  *
@@ -2041,6 +1327,13 @@ for_locking_items:
 			| for_locking_items for_locking_item	{ $$ = lappend($1, $2); }
 		;
 
+
+opt_nowait_or_skip:
+			NOWAIT							{ $$ = LockWaitError; }
+			| SKIP LOCKED					{ $$ = LockWaitSkip; }
+			| /*EMPTY*/						{ $$ = LockWaitBlock; }
+		;
+
 for_locking_item:
 			for_locking_strength locked_rels_list opt_nowait_or_skip
 				{
@@ -2556,455 +1849,7 @@ TableFuncElement:	ColId Typename opt_collate_clause
  *		- thomas 1997-10-10
  *
  *****************************************************************************/
-
-Typename:	SimpleTypename opt_array_bounds
-				{
-					$$ = $1;
-					$$->arrayBounds = $2;
-				}
-			| SETOF SimpleTypename opt_array_bounds
-				{
-					$$ = $2;
-					$$->arrayBounds = $3;
-					$$->setof = true;
-				}
-			/* SQL standard syntax, currently only one-dimensional */
-			| SimpleTypename ARRAY '[' Iconst ']'
-				{
-					$$ = $1;
-					$$->arrayBounds = list_make1(makeInteger($4));
-				}
-			| SETOF SimpleTypename ARRAY '[' Iconst ']'
-				{
-					$$ = $2;
-					$$->arrayBounds = list_make1(makeInteger($5));
-					$$->setof = true;
-				}
-			| SimpleTypename ARRAY
-				{
-					$$ = $1;
-					$$->arrayBounds = list_make1(makeInteger(-1));
-				}
-			| SETOF SimpleTypename ARRAY
-				{
-					$$ = $2;
-					$$->arrayBounds = list_make1(makeInteger(-1));
-					$$->setof = true;
-				}
-		;
-
-opt_array_bounds:
-			opt_array_bounds '[' ']'
-					{  $$ = lappend($1, makeInteger(-1)); }
-			| opt_array_bounds '[' Iconst ']'
-					{  $$ = lappend($1, makeInteger($3)); }
-			| /*EMPTY*/
-					{  $$ = NIL; }
-		;
-
-SimpleTypename:
-			GenericType								{ $$ = $1; }
-			| Numeric								{ $$ = $1; }
-			| Bit									{ $$ = $1; }
-			| Character								{ $$ = $1; }
-			| ConstDatetime							{ $$ = $1; }
-			| ConstInterval opt_interval
-				{
-					$$ = $1;
-					$$->typmods = $2;
-				}
-			| ConstInterval '(' Iconst ')'
-				{
-					$$ = $1;
-					$$->typmods = list_make2(makeIntConst(INTERVAL_FULL_RANGE, -1),
-											 makeIntConst($3, @3));
-				}
-		;
-
-/* We have a separate ConstTypename to allow defaulting fixed-length
- * types such as CHAR() and BIT() to an unspecified length.
- * SQL9x requires that these default to a length of one, but this
- * makes no sense for constructs like CHAR 'hi' and BIT '0101',
- * where there is an obvious better choice to make.
- * Note that ConstInterval is not included here since it must
- * be pushed up higher in the rules to accommodate the postfix
- * options (e.g. INTERVAL '1' YEAR). Likewise, we have to handle
- * the generic-type-name case in AexprConst to avoid premature
- * reduce/reduce conflicts against function names.
- */
-ConstTypename:
-			Numeric									{ $$ = $1; }
-			| ConstBit								{ $$ = $1; }
-			| ConstCharacter						{ $$ = $1; }
-			| ConstDatetime							{ $$ = $1; }
-		;
-
-/*
- * GenericType covers all type names that don't have special syntax mandated
- * by the standard, including qualified names.  We also allow type modifiers.
- * To avoid parsing conflicts against function invocations, the modifiers
- * have to be shown as expr_list here, but parse analysis will only accept
- * constants for them.
- */
-GenericType:
-			type_function_name opt_type_modifiers
-				{
-					$$ = makeTypeName($1);
-					$$->typmods = $2;
-					$$->location = @1;
-				}
-			| type_function_name attrs opt_type_modifiers
-				{
-					$$ = makeTypeNameFromNameList(lcons(makeString($1), $2));
-					$$->typmods = $3;
-					$$->location = @1;
-				}
-		;
-
-opt_type_modifiers: '(' expr_list ')'				{ $$ = $2; }
-					| /* EMPTY */					{ $$ = NIL; }
-		;
-
-/*
- * SQL numeric data types
- */
-Numeric:	INT_P
-				{
-					$$ = SystemTypeName("int4");
-					$$->location = @1;
-				}
-			| INTEGER
-				{
-					$$ = SystemTypeName("int4");
-					$$->location = @1;
-				}
-			| SMALLINT
-				{
-					$$ = SystemTypeName("int2");
-					$$->location = @1;
-				}
-			| BIGINT
-				{
-					$$ = SystemTypeName("int8");
-					$$->location = @1;
-				}
-			| REAL
-				{
-					$$ = SystemTypeName("float4");
-					$$->location = @1;
-				}
-			| FLOAT_P opt_float
-				{
-					$$ = $2;
-					$$->location = @1;
-				}
-			| DOUBLE_P PRECISION
-				{
-					$$ = SystemTypeName("float8");
-					$$->location = @1;
-				}
-			| DECIMAL_P opt_type_modifiers
-				{
-					$$ = SystemTypeName("numeric");
-					$$->typmods = $2;
-					$$->location = @1;
-				}
-			| DEC opt_type_modifiers
-				{
-					$$ = SystemTypeName("numeric");
-					$$->typmods = $2;
-					$$->location = @1;
-				}
-			| NUMERIC opt_type_modifiers
-				{
-					$$ = SystemTypeName("numeric");
-					$$->typmods = $2;
-					$$->location = @1;
-				}
-			| BOOLEAN_P
-				{
-					$$ = SystemTypeName("bool");
-					$$->location = @1;
-				}
-		;
-
-opt_float:	'(' Iconst ')'
-				{
-					/*
-					 * Check FLOAT() precision limits assuming IEEE floating
-					 * types - thomas 1997-09-18
-					 */
-					if ($2 < 1)
-						ereport(ERROR,
-								(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-								 errmsg("precision for type float must be at least 1 bit"),
-								 parser_errposition(@2)));
-					else if ($2 <= 24)
-						$$ = SystemTypeName("float4");
-					else if ($2 <= 53)
-						$$ = SystemTypeName("float8");
-					else
-						ereport(ERROR,
-								(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-								 errmsg("precision for type float must be less than 54 bits"),
-								 parser_errposition(@2)));
-				}
-			| /*EMPTY*/
-				{
-					$$ = SystemTypeName("float8");
-				}
-		;
-
-/*
- * SQL bit-field data types
- * The following implements BIT() and BIT VARYING().
- */
-Bit:		BitWithLength
-				{
-					$$ = $1;
-				}
-			| BitWithoutLength
-				{
-					$$ = $1;
-				}
-		;
-
-/* ConstBit is like Bit except "BIT" defaults to unspecified length */
-/* See notes for ConstCharacter, which addresses same issue for "CHAR" */
-ConstBit:	BitWithLength
-				{
-					$$ = $1;
-				}
-			| BitWithoutLength
-				{
-					$$ = $1;
-					$$->typmods = NIL;
-				}
-		;
-
-BitWithLength:
-			BIT opt_varying '(' expr_list ')'
-				{
-					char *typname;
-
-					typname = $2 ? "varbit" : "bit";
-					$$ = SystemTypeName(typname);
-					$$->typmods = $4;
-					$$->location = @1;
-				}
-		;
-
-BitWithoutLength:
-			BIT opt_varying
-				{
-					/* bit defaults to bit(1), varbit to no limit */
-					if ($2)
-					{
-						$$ = SystemTypeName("varbit");
-					}
-					else
-					{
-						$$ = SystemTypeName("bit");
-						$$->typmods = list_make1(makeIntConst(1, -1));
-					}
-					$$->location = @1;
-				}
-		;
-
-
-/*
- * SQL character data types
- * The following implements CHAR() and VARCHAR().
- */
-Character:  CharacterWithLength
-				{
-					$$ = $1;
-				}
-			| CharacterWithoutLength
-				{
-					$$ = $1;
-				}
-		;
-
-ConstCharacter:  CharacterWithLength
-				{
-					$$ = $1;
-				}
-			| CharacterWithoutLength
-				{
-					/* Length was not specified so allow to be unrestricted.
-					 * This handles problems with fixed-length (bpchar) strings
-					 * which in column definitions must default to a length
-					 * of one, but should not be constrained if the length
-					 * was not specified.
-					 */
-					$$ = $1;
-					$$->typmods = NIL;
-				}
-		;
-
-CharacterWithLength:  character '(' Iconst ')'
-				{
-					$$ = SystemTypeName($1);
-					$$->typmods = list_make1(makeIntConst($3, @3));
-					$$->location = @1;
-				}
-		;
-
-CharacterWithoutLength:	 character
-				{
-					$$ = SystemTypeName($1);
-					/* char defaults to char(1), varchar to no limit */
-					if (strcmp($1, "bpchar") == 0)
-						$$->typmods = list_make1(makeIntConst(1, -1));
-					$$->location = @1;
-				}
-		;
-
-character:	CHARACTER opt_varying
-										{ $$ = $2 ? "varchar": "bpchar"; }
-			| CHAR_P opt_varying
-										{ $$ = $2 ? "varchar": "bpchar"; }
-			| VARCHAR
-										{ $$ = "varchar"; }
-			| NATIONAL CHARACTER opt_varying
-										{ $$ = $3 ? "varchar": "bpchar"; }
-			| NATIONAL CHAR_P opt_varying
-										{ $$ = $3 ? "varchar": "bpchar"; }
-			| NCHAR opt_varying
-										{ $$ = $2 ? "varchar": "bpchar"; }
-		;
-
-opt_varying:
-			VARYING									{ $$ = true; }
-			| /*EMPTY*/								{ $$ = false; }
-		;
-
-/*
- * SQL date/time types
- */
-ConstDatetime:
-			TIMESTAMP '(' Iconst ')' opt_timezone
-				{
-					if ($5)
-						$$ = SystemTypeName("timestamptz");
-					else
-						$$ = SystemTypeName("timestamp");
-					$$->typmods = list_make1(makeIntConst($3, @3));
-					$$->location = @1;
-				}
-			| TIMESTAMP opt_timezone
-				{
-					if ($2)
-						$$ = SystemTypeName("timestamptz");
-					else
-						$$ = SystemTypeName("timestamp");
-					$$->location = @1;
-				}
-			| TIME '(' Iconst ')' opt_timezone
-				{
-					if ($5)
-						$$ = SystemTypeName("timetz");
-					else
-						$$ = SystemTypeName("time");
-					$$->typmods = list_make1(makeIntConst($3, @3));
-					$$->location = @1;
-				}
-			| TIME opt_timezone
-				{
-					if ($2)
-						$$ = SystemTypeName("timetz");
-					else
-						$$ = SystemTypeName("time");
-					$$->location = @1;
-				}
-		;
-
-ConstInterval:
-			INTERVAL
-				{
-					$$ = SystemTypeName("interval");
-					$$->location = @1;
-				}
-		;
-
-opt_timezone:
-			WITH_LA TIME ZONE						{ $$ = true; }
-			| WITHOUT TIME ZONE						{ $$ = false; }
-			| /*EMPTY*/								{ $$ = false; }
-		;
-
-opt_interval:
-			YEAR_P
-				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(YEAR), @1)); }
-			| MONTH_P
-				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MONTH), @1)); }
-			| DAY_P
-				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(DAY), @1)); }
-			| HOUR_P
-				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(HOUR), @1)); }
-			| MINUTE_P
-				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MINUTE), @1)); }
-			| interval_second
-				{ $$ = $1; }
-			| YEAR_P TO MONTH_P
-				{
-					$$ = list_make1(makeIntConst(INTERVAL_MASK(YEAR) |
-												 INTERVAL_MASK(MONTH), @1));
-				}
-			| DAY_P TO HOUR_P
-				{
-					$$ = list_make1(makeIntConst(INTERVAL_MASK(DAY) |
-												 INTERVAL_MASK(HOUR), @1));
-				}
-			| DAY_P TO MINUTE_P
-				{
-					$$ = list_make1(makeIntConst(INTERVAL_MASK(DAY) |
-												 INTERVAL_MASK(HOUR) |
-												 INTERVAL_MASK(MINUTE), @1));
-				}
-			| DAY_P TO interval_second
-				{
-					$$ = $3;
-					linitial($$) = makeIntConst(INTERVAL_MASK(DAY) |
-												INTERVAL_MASK(HOUR) |
-												INTERVAL_MASK(MINUTE) |
-												INTERVAL_MASK(SECOND), @1);
-				}
-			| HOUR_P TO MINUTE_P
-				{
-					$$ = list_make1(makeIntConst(INTERVAL_MASK(HOUR) |
-												 INTERVAL_MASK(MINUTE), @1));
-				}
-			| HOUR_P TO interval_second
-				{
-					$$ = $3;
-					linitial($$) = makeIntConst(INTERVAL_MASK(HOUR) |
-												INTERVAL_MASK(MINUTE) |
-												INTERVAL_MASK(SECOND), @1);
-				}
-			| MINUTE_P TO interval_second
-				{
-					$$ = $3;
-					linitial($$) = makeIntConst(INTERVAL_MASK(MINUTE) |
-												INTERVAL_MASK(SECOND), @1);
-				}
-			| /*EMPTY*/
-				{ $$ = NIL; }
-		;
-
-interval_second:
-			SECOND_P
-				{
-					$$ = list_make1(makeIntConst(INTERVAL_MASK(SECOND), @1));
-				}
-			| SECOND_P '(' Iconst ')'
-				{
-					$$ = list_make2(makeIntConst(INTERVAL_MASK(SECOND), @1),
-									makeIntConst($3, @3));
-				}
-		;
-
+%include types.y
 
 /*****************************************************************************
  *
@@ -4623,6 +3468,11 @@ target_el:	a_expr AS ColLabel
  * Here options are placed that are used in multiple places/multiple statements
  *
  *****************************************************************************/
+opt_with:	WITH									{}
+			| WITH_LA								{}
+			| /*EMPTY*/								{}
+		;
+
 opt_drop_behavior:
 			CASCADE						{ $$ = DROP_CASCADE; }
 			| RESTRICT					{ $$ = DROP_RESTRICT; }
@@ -4687,6 +3537,11 @@ OptTemp:	TEMPORARY					{ $$ = RELPERSISTENCE_TEMP; }
 				}
 			| UNLOGGED					{ $$ = RELPERSISTENCE_UNLOGGED; }
 			| /*EMPTY*/					{ $$ = RELPERSISTENCE_PERMANENT; }
+		;
+
+returning_clause:
+			RETURNING target_list		{ $$ = $2; }
+			| /* EMPTY */				{ $$ = NIL; }
 		;
 
 /*****************************************************************************
