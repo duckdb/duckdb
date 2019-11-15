@@ -1078,8 +1078,27 @@ float generate_float(){
     return FLT_MIN + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(FLT_MAX-FLT_MIN)));
 }
 
-float full_scan(float* keys, index_t size, float low, float high){
-    float sum = 0;
+float generate_small_double(){
+    return static_cast <double> (rand()) / static_cast <double> (RAND_MAX);
+}
+
+float generate_double(){
+    return FLT_MIN + static_cast <double> (rand()) /( static_cast <double> (RAND_MAX/(FLT_MAX-FLT_MIN)));
+}
+
+double full_scan_float(float* keys, index_t size, float low, float high){
+    double sum = 0;
+    for (index_t i = 0; i < size; i ++){
+        if (keys[i] >= low && keys[i]  <= high) {
+            sum += keys[i];
+        }
+    }
+
+    return sum;
+}
+
+double full_scan_double(double* keys, index_t size, double low, double high){
+    double sum = 0;
     for (index_t i = 0; i < size; i ++){
         if (keys[i] >= low && keys[i]  <= high) {
             sum += keys[i];
@@ -1090,7 +1109,7 @@ float full_scan(float* keys, index_t size, float low, float high){
 }
 
 
-TEST_CASE("ART Floating Point", "[art][.]") {
+TEST_CASE("ART Floating Point", "[art-float][.]") {
     unique_ptr<QueryResult> result;
     DuckDB db(nullptr);
 
@@ -1124,10 +1143,10 @@ TEST_CASE("ART Floating Point", "[art][.]") {
     for (index_t i = 0; i < n; i++) {
         float low = generate_small_float();
         float high = generate_small_float();
-        float answer = full_scan(keys.get(),n,low,high);
+        double answer = full_scan_float(keys.get(),n,low,high);
         result = con.Query("SELECT SUM(i) FROM numbers WHERE i >= $1 and i <= $2", low,high);
         if (answer !=0){
-            REQUIRE(CHECK_COLUMN(result, 0, {Value::FLOAT(answer)}));
+            REQUIRE(CHECK_COLUMN(result, 0, {Value::DOUBLE(answer)}));
         }
         else{
             REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
@@ -1137,10 +1156,10 @@ TEST_CASE("ART Floating Point", "[art][.]") {
     for (index_t i = 0; i < n; i++) {
         float low = generate_small_float();
         float high = generate_float();
-        float answer = full_scan(keys.get(),n,low,high);
+        double answer = full_scan_float(keys.get(),n,low,high);
         result = con.Query("SELECT SUM(i) FROM numbers WHERE i >= $1 and i <= $2", low,high);
         if (answer !=0){
-            REQUIRE(CHECK_COLUMN(result, 0, {Value::FLOAT(answer)}));
+            REQUIRE(CHECK_COLUMN(result, 0, {Value::DOUBLE(answer)}));
         }
         else{
             REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
@@ -1150,10 +1169,84 @@ TEST_CASE("ART Floating Point", "[art][.]") {
     for (index_t i = 0; i < n; i++) {
         float low = generate_float();
         float high = generate_float();
-        float answer = full_scan(keys.get(),n,low,high);
+        double answer = full_scan_float(keys.get(),n,low,high);
         result = con.Query("SELECT SUM(i) FROM numbers WHERE i >= $1 and i <= $2", low,high);
         if (answer !=0){
-            REQUIRE(CHECK_COLUMN(result, 0, {Value::FLOAT(answer)}));
+            REQUIRE(CHECK_COLUMN(result, 0, {Value::DOUBLE(answer)}));
+        }
+        else{
+            REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+        }
+    }
+
+    REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
+    REQUIRE_NO_FAIL(con.Query("DROP TABLE numbers"));
+}
+
+TEST_CASE("ART Floating Point Double", "[art-double][.]") {
+    unique_ptr<QueryResult> result;
+    DuckDB db(nullptr);
+
+    Connection con(db);
+    //! Will use 10k keys
+    auto keys = unique_ptr<double[]>(new double[10000]);
+    index_t n  = 10000;
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i double)"));
+    //! Generate 1000 small double (0.0 - 1.0)
+    for (index_t i = 0; i < 1000; i ++){
+        keys[i] = generate_small_double();
+    }
+    //! Generate 9000 doubles (min/max)
+    for (index_t i = 1000; i < 10000; i ++){
+        keys[i] = generate_double();
+    }
+    //! Insert values and create index
+    REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+    for (index_t i = 0; i < n; i++) {
+        REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES ($1)", keys[i]));
+    }
+    REQUIRE_NO_FAIL(con.Query("COMMIT"));
+    REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
+    //! Check if all elements are in
+    for (index_t i = 0; i < n; i++) {
+        result = con.Query("SELECT MIN(i) FROM numbers WHERE i = $1", keys[i]);
+        REQUIRE(CHECK_COLUMN(result, 0, {Value::DOUBLE(keys[i])}));
+    }
+    //! Generate 500 small-small range queries
+
+    for (index_t i = 0; i < n; i++) {
+        double low = generate_small_double();
+        double high = generate_small_double();
+        double answer = full_scan_double(keys.get(),n,low,high);
+        result = con.Query("SELECT SUM(i) FROM numbers WHERE i >= $1 and i <= $2", low,high);
+        if (answer !=0){
+            REQUIRE(CHECK_COLUMN(result, 0, {Value::DOUBLE(answer)}));
+        }
+        else{
+            REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+        }
+    }
+    //! Generate 500 small-normal range queries
+    for (index_t i = 0; i < n; i++) {
+        double low = generate_small_double();
+        double high = generate_double();
+        double answer = full_scan_double(keys.get(),n,low,high);
+        result = con.Query("SELECT SUM(i) FROM numbers WHERE i >= $1 and i <= $2", low,high);
+        if (answer !=0){
+            REQUIRE(CHECK_COLUMN(result, 0, {Value::DOUBLE(answer)}));
+        }
+        else{
+            REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+        }
+    }
+    //! Generate 500 normal-normal range queries
+    for (index_t i = 0; i < n; i++) {
+        double low = generate_double();
+        double high = generate_double();
+        double answer = full_scan_double(keys.get(),n,low,high);
+        result = con.Query("SELECT SUM(i) FROM numbers WHERE i >= $1 and i <= $2", low,high);
+        if (answer !=0){
+            REQUIRE(CHECK_COLUMN(result, 0, {Value::DOUBLE(answer)}));
         }
         else{
             REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
