@@ -43,19 +43,27 @@
  *
  *-------------------------------------------------------------------------
  */
-#include "pg_functions.h"
-#include <string.h>
+#include "postgres.h"
 
 #include <ctype.h>
 #include <limits.h>
 
+#include "catalog/index.h"
+#include "catalog/namespace.h"
+#include "catalog/pg_am.h"
 #include "catalog/pg_trigger.h"
+#include "commands/defrem.h"
+#include "commands/trigger.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "parser/gramparse.h"
 #include "parser/parser.h"
 #include "parser/parse_expr.h"
+#include "storage/lmgr.h"
+#include "utils/date.h"
 #include "utils/datetime.h"
+#include "utils/numeric.h"
+#include "utils/xml.h"
 
 
 /*
@@ -13074,6 +13082,28 @@ c_expr:		columnref								{ $$ = $1; }
 						n->indirection = check_indirection($4, yyscanner);
 						$$ = (Node *)n;
 					}
+					else if (operator_precedence_warning)
+					{
+						/*
+						 * If precedence warnings are enabled, insert
+						 * AEXPR_PAREN nodes wrapping all explicitly
+						 * parenthesized subexpressions; this prevents bogus
+						 * warnings from being issued when the ordering has
+						 * been forced by parentheses.  Take care that an
+						 * AEXPR_PAREN node has the same exprLocation as its
+						 * child, so as not to cause surprising changes in
+						 * error cursor positioning.
+						 *
+						 * In principle we should not be relying on a GUC to
+						 * decide whether to insert AEXPR_PAREN nodes.
+						 * However, since they have no effect except to
+						 * suppress warnings, it's probably safe enough; and
+						 * we'd just as soon not waste cycles on dummy parse
+						 * nodes if we don't have to.
+						 */
+						$$ = (Node *) makeA_Expr(AEXPR_PAREN, NIL, $2, NULL,
+												 exprLocation($2));
+					}
 					else
 						$$ = $2;
 				}
@@ -14493,7 +14523,7 @@ RoleSpec:	NonReservedWord
 						 * "public" and "none" are not keywords, but they must
 						 * be treated specially here.
 						 */
-						RoleSpec *n = NULL;
+						RoleSpec *n;
 						if (strcmp($1, "public") == 0)
 						{
 							n = (RoleSpec *) makeRoleSpec(ROLESPEC_PUBLIC, @1);

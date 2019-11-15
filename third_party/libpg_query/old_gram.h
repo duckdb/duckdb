@@ -952,7 +952,7 @@
 
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 typedef union YYSTYPE
-#line 194 "src/parser/grammar/main.y.tmp"
+#line 205 "gram.y"
 {
 	core_YYSTYPE		core_yystype;
 	/* these fields must match core_YYSTYPE: */
@@ -997,7 +997,7 @@ typedef union YYSTYPE
 	RoleSpec			*rolespec;
 }
 /* Line 1529 of yacc.c.  */
-#line 1001 "src/parser/grammar/grammar.h"
+#line 1001 "gram.h"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1
