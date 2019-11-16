@@ -1,31 +1,3 @@
-/*-------------------------------------------------------------------------
- *
- * kwlist.h
- *
- * The keyword list is kept in its own source file for possible use by
- * automatic tools.  The exact representation of a keyword is determined
- * by the PG_KEYWORD macro, which is not defined in this file; it can
- * be defined by the caller for special purposes.
- *
- * Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
- * Portions Copyright (c) 1994, Regents of the University of California
- *
- * IDENTIFICATION
- *	  src/include/parser/kwlist.h
- *
- *-------------------------------------------------------------------------
- */
-
-/* there is deliberately not an #ifndef KWLIST_H here */
-
-/*
- * List of keyword (name, token-value, category) entries.
- *
- * !!WARNING!!: This list must be sorted by ASCII name, because binary
- *		 search is used to locate entries.
- */
-
-/* name, value, category */
 PG_KEYWORD("abort", ABORT_P, UNRESERVED_KEYWORD)
 PG_KEYWORD("absolute", ABSOLUTE_P, UNRESERVED_KEYWORD)
 PG_KEYWORD("access", ACCESS, UNRESERVED_KEYWORD)
@@ -38,7 +10,7 @@ PG_KEYWORD("all", ALL, RESERVED_KEYWORD)
 PG_KEYWORD("also", ALSO, UNRESERVED_KEYWORD)
 PG_KEYWORD("alter", ALTER, UNRESERVED_KEYWORD)
 PG_KEYWORD("always", ALWAYS, UNRESERVED_KEYWORD)
-PG_KEYWORD("analyse", ANALYSE, RESERVED_KEYWORD)		/* British spelling */
+PG_KEYWORD("analyse", ANALYSE, RESERVED_KEYWORD)
 PG_KEYWORD("analyze", ANALYZE, RESERVED_KEYWORD)
 PG_KEYWORD("and", AND, RESERVED_KEYWORD)
 PG_KEYWORD("any", ANY, RESERVED_KEYWORD)

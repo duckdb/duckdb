@@ -2,8 +2,8 @@
 
 import subprocess, re, os, sys
 
-fpath = '/Users/myth/Programs/duckdb/third_party/libpg_query/gram.y'
-temp_path = '/Users/myth/Programs/duckdb/third_party/libpg_query/gram.y.tmp'
+fpath = 'third_party/libpg_query/gram.y'
+temp_path = 'third_party/libpg_query/gram.y.tmp'
 
 def remove_rule(text, rulename):
 	# find the rule
@@ -74,7 +74,8 @@ if len(error_text) > 0:
 
 	# remove useless %type statements
 	for i in range(10):
-		text = re.sub('%type <[^>]+>[ \t\n]+%', '%', text)
+		text = re.sub('%type <[^>]+>[ \t\n]+%', '\n%', text)
+		text = re.sub('%type <[^>]+>[ \t\n]+/', '\n/', text)
 
 	with open(temp_path, 'w+') as f:
 		f.write(text)

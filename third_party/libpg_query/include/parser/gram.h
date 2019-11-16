@@ -330,9 +330,9 @@
      POSITION = 546,
      PRECEDING = 547,
      PRECISION = 548,
-     PRESERVE = 549,
-     PREPARE = 550,
-     PREPARED = 551,
+     PREPARE = 549,
+     PREPARED = 550,
+     PRESERVE = 551,
      PRIMARY = 552,
      PRIOR = 553,
      PRIVILEGES = 554,
@@ -386,8 +386,8 @@
      SESSION = 602,
      SESSION_USER = 603,
      SET = 604,
-     SETS = 605,
-     SETOF = 606,
+     SETOF = 605,
+     SETS = 606,
      SHARE = 607,
      SHOW = 608,
      SIMILAR = 609,
@@ -785,9 +785,9 @@
 #define POSITION 546
 #define PRECEDING 547
 #define PRECISION 548
-#define PRESERVE 549
-#define PREPARE 550
-#define PREPARED 551
+#define PREPARE 549
+#define PREPARED 550
+#define PRESERVE 551
 #define PRIMARY 552
 #define PRIOR 553
 #define PRIVILEGES 554
@@ -841,8 +841,8 @@
 #define SESSION 602
 #define SESSION_USER 603
 #define SET 604
-#define SETS 605
-#define SETOF 606
+#define SETOF 605
+#define SETS 606
 #define SHARE 607
 #define SHOW 608
 #define SIMILAR 609
@@ -952,7 +952,7 @@
 
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 typedef union YYSTYPE
-#line 195 "src/parser/grammar/main.y.tmp"
+#line 179 "third_party/libpg_query/grammar/grammar.y.tmp"
 {
 	core_YYSTYPE		core_yystype;
 	/* these fields must match core_YYSTYPE: */
@@ -986,9 +986,7 @@ typedef union YYSTYPE
 	OnConflictClause	*onconflict;
 	A_Indices			*aind;
 	ResTarget			*target;
-	struct PrivTarget	*privtarget;
 	AccessPriv			*accesspriv;
-	struct ImportQual	*importqual;
 	InsertStmt			*istmt;
 	VariableSetStmt		*vsetstmt;
 	PartitionElem		*partelem;
@@ -997,7 +995,7 @@ typedef union YYSTYPE
 	RoleSpec			*rolespec;
 }
 /* Line 1529 of yacc.c.  */
-#line 1001 "src/parser/grammar/grammar.h"
+#line 999 "third_party/libpg_query/grammar/grammar.h"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1

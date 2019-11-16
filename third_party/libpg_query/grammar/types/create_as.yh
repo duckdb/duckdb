@@ -1,0 +1,2 @@
+%type <boolean> opt_with_data
+%type <into> create_as_target

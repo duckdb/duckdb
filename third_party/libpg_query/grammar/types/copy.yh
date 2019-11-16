@@ -1,0 +1,15 @@
+%type <boolean> copy_from
+%type <defelt> copy_delimiter
+%type <list> copy_generic_opt_arg_list
+%type <ival> opt_as
+%type <boolean> opt_program
+%type <list> copy_options
+%type <node> copy_generic_opt_arg
+%type <defelt> copy_generic_opt_elem
+%type <defelt> opt_oids
+%type <list> copy_opt_list
+%type <defelt> opt_binary
+%type <defelt> copy_opt_item
+%type <node> copy_generic_opt_arg_list_item
+%type <str> copy_file_name
+%type <list> copy_generic_opt_list

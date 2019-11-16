@@ -1,0 +1,6 @@
+%type <objwithargs> aggregate_with_argtypes
+%type <fun_param> aggr_arg
+%type <fun_param> func_arg
+%type <list> aggr_args_list
+%type <fun_param_mode> arg_class
+%type <list> aggr_args
