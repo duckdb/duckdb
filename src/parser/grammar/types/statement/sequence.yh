@@ -1,7 +1,0 @@
-%type <list> OptSeqOptList SeqOptList OptParenthesizedSeqOptList
-%type <defelt> SeqOptElem
-%type <list> create_generic_options
-%type <list> generic_option_list alter_generic_option_list
-%type <defelt>	generic_option_elem alter_generic_option_elem
-%type <str>		generic_option_name
-%type <node>	generic_option_arg

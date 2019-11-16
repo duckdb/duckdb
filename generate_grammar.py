@@ -4,118 +4,128 @@
 # flex 2.6.4
 import os, subprocess, re
 
-bison_location     = "/usr/local/opt/bison/bin/bison"
+bison_location     = "bison"
 base_dir           = "src/parser/grammar"
+pg_dir             = 'third_party/libpg_query'
 template_file      = os.path.join(base_dir, 'main.y')
 target_file        = os.path.join(base_dir, 'main.y.tmp')
 header_file        = os.path.join(base_dir, 'grammar.hpp')
 source_file        = os.path.join(base_dir, 'grammar.cpp')
 type_dir           = os.path.join(base_dir, 'types')
 rule_dir           = os.path.join(base_dir, 'rules')
-result_source      = os.path.join(base_dir, 'grammar_parser.cpp')
-result_header      = os.path.join(base_dir, 'grammar_parser.hpp')
+result_source      = os.path.join(base_dir, 'grammar.c')
+result_header      = os.path.join(base_dir, 'grammar.h')
+target_source_loc  = os.path.join(pg_dir, 'src_backend_parser_gram.c')
+target_header_loc  = os.path.join(pg_dir, 'include/parser/gram.h')
+kwlist_header      = os.path.join(pg_dir, 'include/parser/kwlist.h')
 
 # parse the keyword lists
-def read_list_from_file(fname):
-    with open(fname, 'r') as f:
-        return f.read().split('\n')
+# def read_list_from_file(fname):
+#     with open(fname, 'r') as f:
+#         return f.read().split('\n')
 
-kwdir = os.path.join(base_dir, 'keywords')
-unreserved_keywords = read_list_from_file(os.path.join(kwdir, 'unreserved_keywords.list'))
-colname_keywords = read_list_from_file(os.path.join(kwdir, 'column_name_keywords.list'))
-type_func_keywords = read_list_from_file(os.path.join(kwdir, 'type_func_name_keywords.list'))
-reserved_keywords = read_list_from_file(os.path.join(kwdir, 'reserved_keywords.list'))
+# kwdir = os.path.join(base_dir, 'keywords')
+# unreserved_keywords = read_list_from_file(os.path.join(kwdir, 'unreserved_keywords.list'))
+# colname_keywords = read_list_from_file(os.path.join(kwdir, 'column_name_keywords.list'))
+# type_func_keywords = read_list_from_file(os.path.join(kwdir, 'type_func_name_keywords.list'))
+# reserved_keywords = read_list_from_file(os.path.join(kwdir, 'reserved_keywords.list'))
 
-unreserved_keywords.sort()
-colname_keywords.sort()
-type_func_keywords.sort()
-reserved_keywords.sort()
+# unreserved_keywords.sort()
+# colname_keywords.sort()
+# type_func_keywords.sort()
+# reserved_keywords.sort()
 
-statements = read_list_from_file(os.path.join(rule_dir, 'statements.list'))
-statements.sort()
-if len(statements) < 0:
-    print("Need at least one statement")
-    exit(1)
+# statements = read_list_from_file(os.path.join(rule_dir, 'statements.list'))
+# statements.sort()
+# if len(statements) < 0:
+#     print("Need at least one statement")
+#     exit(1)
 
-# verify there are no duplicate keywords and create big sorted list of keywords
-kwdict = {}
-for kw in zip(unreserved_keywords, colname_keywords, type_func_keywords, reserved_keywords):
-    if kw in kwdict:
-        print("Duplicate keyword: " + kw)
-        exit(1)
-    kwdict[kw] = True
+# # verify there are no duplicate keywords and create big sorted list of keywords
+# kwdict = {}
+# for kw in zip(unreserved_keywords, colname_keywords, type_func_keywords, reserved_keywords):
+#     if kw in kwdict:
+#         print("Duplicate keyword: " + kw)
+#         exit(1)
+#     kwdict[kw] = True
 
-kwlist = []
-kwlist += [(x, 'UNRESERVED_KEYWORD') for x in unreserved_keywords]
-kwlist += [(x, 'COL_NAME_KEYWORD') for x in colname_keywords]
-kwlist += [(x, 'TYPE_FUNC_NAME_KEYWORD') for x in type_func_keywords]
-kwlist += [(x, 'RESERVED_KEYWORD') for x in reserved_keywords]
-kwlist.sort(key=lambda x: x[0])
+# kwlist = []
+# kwlist += [(x, 'UNRESERVED_KEYWORD') for x in unreserved_keywords]
+# kwlist += [(x, 'COL_NAME_KEYWORD') for x in colname_keywords]
+# kwlist += [(x, 'TYPE_FUNC_NAME_KEYWORD') for x in type_func_keywords]
+# kwlist += [(x, 'RESERVED_KEYWORD') for x in reserved_keywords]
+# kwlist.sort(key=lambda x: x[0])
 
-# generate the final main.y.tmp file
-# first read the template file
-with open(template_file, 'r') as f:
-    text = f.read()
+# # now generate kwlist.h
+# # PG_KEYWORD("abort", ABORT_P, UNRESERVED_KEYWORD)
+# kwtext = ""
+# for tpl in kwlist:
+#     kwtext += 'PG_KEYWORD("%s", %s, %s)\n' % (tpl[0].rstrip("_P").lower(), tpl[0], tpl[1])
 
-# now perform a series of replacements in the file to construct the final yacc file
+# with open(kwlist_header, 'w+') as f:
+#     f.write(kwtext)
 
-# grammar.hpp
-with open(header_file, 'r') as f:
-    text = text.replace("{{{ GRAMMAR_HEADER }}}", f.read())
-# grammar.cpp
-with open(source_file, 'r') as f:
-    text = text.replace("{{{ GRAMMAR_SOURCE }}}", f.read())
+# # generate the final main.y.tmp file
+# # first read the template file
+# with open(template_file, 'r') as f:
+#     text = f.read()
 
-# keyword list
-kw_token_list = "%token <keyword> " + " ".join([x[0] for x in kwlist])
+# # now perform a series of replacements in the file to construct the final yacc file
 
-text = text.replace("{{{ KEYWORDS }}}", kw_token_list)
+# # grammar.hpp
+# with open(header_file, 'r') as f:
+#     text = text.replace("{{{ GRAMMAR_HEADER }}}", f.read())
+# # grammar.cpp
+# with open(source_file, 'r') as f:
+#     text = text.replace("{{{ GRAMMAR_SOURCE }}}", f.read())
 
-# statements
-stmt_list = "stmt: " + " | ".join(statements)
-text = text.replace("{{{ STATEMENTS }}}", stmt_list)
+# # keyword list
+# kw_token_list = "%token <keyword> " + " ".join([x[0] for x in kwlist])
 
-# keywords
-kw_definitions = "unreserved_keyword: " + " | ".join(unreserved_keywords) + "\n"
-kw_definitions += "col_name_keyword: " + " | ".join(colname_keywords) + "\n"
-kw_definitions += "type_func_name_keyword: " + " | ".join(type_func_keywords) + "\n"
-kw_definitions += "reserved_keyword: " + " | ".join(reserved_keywords) + "\n"
-text = text.replace("{{{ KEYWORD_DEFINITIONS }}}", kw_definitions)
+# text = text.replace("{{{ KEYWORDS }}}", kw_token_list)
 
-# types
-def concat_dir(dname, extension):
-    result = ""
-    for fname in os.listdir(dname):
-        fpath = os.path.join(dname, fname)
-        if os.path.isdir(fpath):
-            result += concat_dir(fpath, extension)
-        else:
-            if not fname.endswith(extension):
-                continue
-            with open(fpath, 'r') as f:
-                result += f.read() + "\n"
-    return result
+# # statements
+# stmt_list = "stmt: " + " | ".join(statements)
+# text = text.replace("{{{ STATEMENTS }}}", stmt_list)
 
-type_definitions = concat_dir(type_dir, ".yh")
-# add statement types as well
-for stmt in statements:
-    type_definitions += "%type <node> " + stmt + "\n"
+# # keywords
+# kw_definitions = "unreserved_keyword: " + " | ".join(unreserved_keywords) + "\n"
+# kw_definitions += "col_name_keyword: " + " | ".join(colname_keywords) + "\n"
+# kw_definitions += "type_func_name_keyword: " + " | ".join(type_func_keywords) + "\n"
+# kw_definitions += "reserved_keyword: " + " | ".join(reserved_keywords) + "\n"
+# text = text.replace("{{{ KEYWORD_DEFINITIONS }}}", kw_definitions)
 
-text = text.replace("{{{ TYPES }}}", type_definitions)
+# # types
+# def concat_dir(dname, extension):
+#     result = ""
+#     for fname in os.listdir(dname):
+#         fpath = os.path.join(dname, fname)
+#         if os.path.isdir(fpath):
+#             result += concat_dir(fpath, extension)
+#         else:
+#             if not fname.endswith(extension):
+#                 continue
+#             with open(fpath, 'r') as f:
+#                 result += f.read() + "\n"
+#     return result
 
-# grammar rules
-grammar_rules = concat_dir(rule_dir, ".y")
+# type_definitions = concat_dir(type_dir, ".yh")
+# # add statement types as well
+# for stmt in statements:
+#     type_definitions += "%type <node> " + stmt + "\n"
 
-text = text.replace("{{{ GRAMMAR RULES }}}", grammar_rules)
+# text = text.replace("{{{ TYPES }}}", type_definitions)
 
-# finally write the yacc file into the
-with open(target_file, 'w+') as f:
-    f.write(text)
+# # grammar rules
+# grammar_rules = concat_dir(rule_dir, ".y")
 
+# text = text.replace("{{{ GRAMMAR RULES }}}", grammar_rules)
 
+# # finally write the yacc file into the
+# with open(target_file, 'w+') as f:
+#     f.write(text)
 
-# PG_KEYWORD("character", parser::token::CHARACTER, COL_NAME_KEYWORD)
-
+os.system('cp %s %s' % ('third_party/libpg_query/gram.y', target_file))
 
 # generate the bison
 cmd = [bison_location, "-o", result_source, "-d", target_file]
@@ -125,3 +135,6 @@ res = proc.wait()
 
 if res != 0:
 	exit(1)
+
+os.rename(result_source, target_source_loc)
+os.rename(result_header, target_header_loc)

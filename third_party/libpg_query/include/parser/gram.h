@@ -952,7 +952,7 @@
 
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 typedef union YYSTYPE
-#line 194 "src/parser/grammar/main.y.tmp"
+#line 195 "src/parser/grammar/main.y.tmp"
 {
 	core_YYSTYPE		core_yystype;
 	/* these fields must match core_YYSTYPE: */

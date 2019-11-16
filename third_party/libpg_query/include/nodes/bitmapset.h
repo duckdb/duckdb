@@ -20,8 +20,6 @@
 #ifndef BITMAPSET_H
 #define BITMAPSET_H
 
-#include <stdint.h>
-
 /*
  * Forward decl to save including pg_list.h
  */
@@ -33,13 +31,13 @@ struct List;
 
 /* The unit size can be adjusted by changing these three declarations: */
 #define BITS_PER_BITMAPWORD 32
-typedef uint32_t bitmapword;		/* must be an unsigned type */
-typedef int32_t signedbitmapword; /* must be the matching signed type */
+typedef uint32 bitmapword;		/* must be an unsigned type */
+typedef int32 signedbitmapword; /* must be the matching signed type */
 
 typedef struct Bitmapset
 {
 	int			nwords;			/* number of words in array */
-	bitmapword	words[1];	/* really [nwords] */
+	bitmapword	words[FLEXIBLE_ARRAY_MEMBER];	/* really [nwords] */
 } Bitmapset;
 
 
@@ -101,6 +99,6 @@ extern int	bms_first_member(Bitmapset *a);
 extern int	bms_next_member(const Bitmapset *a, int prevbit);
 
 /* support for hashtables using Bitmapsets as keys: */
-extern uint32_t bms_hash_value(const Bitmapset *a);
+extern uint32 bms_hash_value(const Bitmapset *a);
 
 #endif							/* BITMAPSET_H */

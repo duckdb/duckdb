@@ -182,18 +182,27 @@ TEST_CASE("Test prepared statement parameter counting", "[api]") {
 	Connection con(db);
 
 	auto p0 = con.Prepare("SELECT 42");
+	REQUIRE(p0->success);
 	REQUIRE(p0->n_param == 0);
 
-	auto p1 = con.Prepare("SELECT ?::int");
+	auto p1 = con.Prepare("SELECT $1::int");
+	REQUIRE(p1->success);
+	REQUIRE(p1->n_param == 1);
+
+	p1 = con.Prepare("SELECT ?::int");
+	REQUIRE(p1->success);
 	REQUIRE(p1->n_param == 1);
 
 	auto p2 = con.Prepare("SELECT $1::int");
+	REQUIRE(p2->success);
 	REQUIRE(p2->n_param == 1);
 
 	auto p3 = con.Prepare("SELECT ?::int, ?::string");
+	REQUIRE(p3->success);
 	REQUIRE(p3->n_param == 2);
 
 	auto p4 = con.Prepare("SELECT $1::int, $2::string");
+	REQUIRE(p4->success);
 	REQUIRE(p4->n_param == 2);
 
 	auto p5 = con.Prepare("SELECT $2::int, $2::string");

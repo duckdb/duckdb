@@ -1,3 +1,0 @@
-%type <node> alter_table_cmd
-%type <list> alter_table_cmds
-%type <node> alter_column_default alter_using
