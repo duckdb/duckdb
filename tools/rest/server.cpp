@@ -123,9 +123,16 @@ void serialize_json(const Request &req, Response &resp, json& j) {
 	}
 
     switch(return_type) {
-    case ReturnContentType::JSON:
-        resp.set_content(j.dump(), "application/json");
+    case ReturnContentType::JSON: {
+    	if (req.has_param("callback")) {
+    		auto jsonp_callback = req.get_param_value("callback");
+            resp.set_content(jsonp_callback + "(" + j.dump() + ");", "application/javascript");
+
+    	} else {
+            resp.set_content(j.dump(), "application/json");
+    	}
         break;
+    }
     case ReturnContentType::BSON:  {
     	auto bson = json::to_bson(j);
         resp.set_content((const char*)bson.data(), bson.size(), "application/bson");
@@ -217,6 +224,7 @@ int main(int argc, char **argv) {
 
 	RestClientState state;
 	state.con = make_unique<Connection>(duckdb);
+	state.con->EnableProfiling();
 	bool is_active = true;
 
 	std::thread interrupt_thread(sleep_thread, state.con.get(), &is_active, 60);
@@ -262,9 +270,9 @@ int main(int argc, char **argv) {
 			} else {
 				assert(state.res->type == QueryResultType::MATERIALIZED_RESULT);
 				j["data"] = json::array();
-
+				j["profiling"] = json::parse(state.con->GetProfilingInformation(ProfilerPrintFormat::JSON));
 				MaterializedQueryResult* mat_res = (MaterializedQueryResult*) state.res.get();
-
+				j["row_count"] =  mat_res->collection.count;
 				for (auto& chunk : mat_res->collection.chunks) {
 					serialize_chunk(chunk.get(), j);
 				}

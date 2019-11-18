@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<!-- DISCLAIMER: this code is not supposed to make Web dev hipsters happy -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta content="IE=edge" http-equiv="X-UA-Compatible">
+    <meta content="width=device-width,initial-scale=1" name="viewport">
+    <title>DuckDB Demo</title>
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/codemirror.css">
+    <style>
+      .bs-docs-sidebar .nav>.active:focus>a, .bs-docs-sidebar .nav>.active:hover>a, .bs-docs-sidebar .nav>.active>a {
+      padding-left: 18px;
+      font-weight: 700;
+      color: #337ab7;
+      background-color: transparent;
+      border-left: 2px solid #337ab7;
+      }
+      .CodeMirror {
+      height: 30em;
+      display: block;
+      }
+      .alert {
+      margin-top: 10px;
+      }
+      h2, h3 {
+      margin-top: 50px;
+      }
+      #offline-warning {
+      position: fixed;
+      bottom: 10px;
+      z-index: 100;
+      }
+      #loginstatus {
+      margin-top: 50px;
+      font-size: 13px;
+      color: #767676;
+      padding-left: 20px;
+      }
+    </style>
+    <script src="js/jquery.min.js"></script>
+    <script src="js/bootstrap.min.js"></script>
+    <script src="js/codemirror.js"></script>
+    <script src="js/codemirror-sql.js"></script>
+    <script>
+      
+      window.onload = function() {
+        $('.sql-challenge').each(function(i, e) {
+          var id = "sql-challenge-"+$.attr(e, 'data-id');
+          var ele = $.parseHTML(`<div class="panel panel-default" id="${id}">
+            <div class="panel-body">
+              <button type="button" class="btn" style="float: left; margin-top: 4px" onclick='query("${id}", ${$.attr(e, 'data-expres')})'><span class="glyphicon glyphicon-play" aria-hidden="true"></span></button>
+              <textarea class="CodeMirror">${$.attr(e, 'data-query')}</textarea>
+              <div class="alert" role="alert" style="display: none"><span class="message"></span></div>
+              <div class="tables" style="display:none">
+              </div>
+            </div>
+          </div>`)[0];
+      
+          $(e).replaceWith(ele);
+      
+          ele.editor = CodeMirror.fromTextArea($(ele).find("textarea")[0], {
+            mode: 'text/x-sql',
+            indentWithTabs: true,
+            smartIndent: true,
+            lineNumbers: true,
+            matchBrackets : true,
+            lineWrapping: true
+          });
+        });
+      
+      
+      }
+
+      function is_decimal(value) {
+        if ((undefined === value) || (null === value)) {
+            return false;
+        }
+        if (typeof value == 'number') {
+            return true;
+        }
+        return !isNaN(value - 0) && value % 1 != 0;
+      }
+
+          
+      function renderresult(res, title) {
+        if (res.length < 1) {
+          return "<div>(Empty Query Result)</div>";
+        }
+        var tdata = "<table class=\"table table-condensed table-striped\"><caption>"+title+"</caption><thead>";
+        //tdata += "<tr><th>#</th>";
+        for (c = 0; c < res.names.length; c++) {
+          tdata += "<th>" + res.names[c] + "</th>";
+        }
+        tdata += "</tr></thead><tbody>";
+        for (r = 0; r < res.data[0].length; r++) {
+         tdata += "<tr>";
+        //  if (res[0].values.length > 12 && r == 10) {
+        //   tdata += "<th></th><td colspan='"+res[0].columns.length+"'>...</td>"
+        //   r = res[0].values.length-2;
+        //   continue;
+        // }
+      //  tdata += "<th>"+(r+1)+"</th>";
+        for (c = 0; c < res.names.length; c++) {
+          var val = res.data[c][r];
+          if (val == null) {
+            val = "<span style='color: gray'>NULL</span>"
+          }
+          if (is_decimal(val)) {
+            val = Math.round(val * 100) / 100;
+          }
+          tdata += "<td>" + val + "</td>";
+        }
+        tdata += "</tr>";
+      } 
+      tdata += "</tbody></table";
+      return tdata;
+      }
+      
+    function query(id, expres) {
+      var editorEle = $("#"+id)[0]
+      // uuugly
+      var tables = $($(editorEle).find(".tables")[0]);
+      var message = $($(editorEle).find(".alert")[0]);
+      var messageCntnt = $(message.find(".message")[0]);
+      
+      
+      message.hide();
+      tables.empty().hide();
+      var query = editorEle.editor.getValue().trim();
+      
+      if (query == "") {
+        message.removeClass('alert-success').addClass('alert-warning').show();
+        messageCntnt.text("No query was entered in the text box above.")
+        return;
+      }
+      
+      try {
+
+        console.log(query);
+
+  $.ajax({
+          dataType: 'jsonp',
+          jsonp: 'callback',
+          data: {q: query},
+          url: 'http://localhost:8080/query?callback=?',
+          success: function(data) {
+          // TODO streaming! 
+            console.log(JSON.stringify(data));
+
+          tables.append(renderresult(data, "Query Result")).show();
+          
+          }
+        });
+
+      
+      }
+      catch(err) {
+        message.removeClass('alert-success').addClass('alert-warning').show();
+        messageCntnt.text("Query failed: " + err.message)
+      }
+    }
+    </script>
+    </head>
+  <body>
+    <div class="container bs-docs-container">
+      <div class="row">
+        <div class="col-md-12" role="main">
+          <div class="bs-docs-section">
+
+            <h2>Query away</h2>
+
+            <div class='sql-challenge' data-id='intro-example' data-expres='false' data-query="SELECT s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment
+FROM part, supplier, partsupp, nation, region
+WHERE p_partkey = ps_partkey
+  AND s_suppkey = ps_suppkey
+  AND p_size = 15
+  AND p_type LIKE '%BRASS'
+  AND s_nationkey = n_nationkey
+  AND n_regionkey = r_regionkey
+  AND r_name = 'EUROPE'
+  AND ps_supplycost =
+    (SELECT min(ps_supplycost)
+     FROM partsupp, supplier, nation, region
+     WHERE p_partkey = ps_partkey
+       AND s_suppkey = ps_suppkey
+       AND s_nationkey = n_nationkey
+       AND n_regionkey = r_regionkey
+       AND r_name = 'EUROPE' )
+ORDER BY s_acctbal DESC, n_name, s_name,  p_partkey 
+LIMIT 10;"></div>
+            
+          </div>
+          <!-- /bs-docs-section -->
+        </div>
+        <!-- /col -->
+
+      </div>
+      <!-- /row -->
+    </div>
+    <!-- /bs-docs-container -->
+  </body>
+</html>
