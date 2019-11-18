@@ -1,6 +1,7 @@
 #include <chrono>
 #include <cstdio>
 #include <thread>
+#include <iostream>
 
 #include "duckdb.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -17,9 +18,11 @@ using namespace nlohmann;
 
 void print_help() {
 	fprintf(stderr, "🦆 Usage: duckdb_rest_server\n");
-	fprintf(stderr, "         --database=[file] use give database file\n");
-	fprintf(stderr, "         --read_only       open database in read-only mode\n");
-	fprintf(stderr, "         --log=[file]      log queries to file\n");
+	fprintf(stderr, "         --listen=[address] listening address\n");
+	fprintf(stderr, "         --port=[no]        listening port\n");
+	fprintf(stderr, "         --database=[file]  use given database file\n");
+	fprintf(stderr, "         --read_only        open database in read-only mode\n");
+	fprintf(stderr, "         --log=[file]       log queries to file\n");
 }
 
 // https://stackoverflow.com/a/12468109/2652376
@@ -185,6 +188,8 @@ int main(int argc, char **argv) {
 
   DBConfig config;
   string dbfile;
+  string listen = "localhost";
+  int port = 1294;
 
   // parse config
   	for (int arg_index = 1; arg_index < argc; ++arg_index) {
@@ -207,7 +212,21 @@ int main(int argc, char **argv) {
   				print_help();
   				exit(1);
   			}
-  		} else {
+  		} else if (StringUtil::StartsWith(arg, "--listen=")) {
+  			auto splits = StringUtil::Split(arg, '=');
+  			if (splits.size() != 2) {
+  				print_help();
+  				exit(1);
+  			}
+  			listen = string(splits[1]);
+  		} else if (StringUtil::StartsWith(arg, "--port=")) {
+  			auto splits = StringUtil::Split(arg, '=');
+  			if (splits.size() != 2) {
+  				print_help();
+  				exit(1);
+  			}
+  			port = std::stoi(splits[1]);
+;  		} else {
   	  		fprintf(stderr, "Error: unknown argument %s\n", arg.c_str());
   	  		print_help();
   	  		exit(1);
@@ -337,8 +356,8 @@ int main(int argc, char **argv) {
 	serialize_json(req, resp, j);
   });
 
-  printf("Listening on http://localhost:8080\n");
+  std::cout << "🦆 listening on http://"+listen+":"+std::to_string(port)+"\n";
 
-  svr.listen("localhost", 8080);
+  svr.listen(listen.c_str(), port);
   return 0;
 }
