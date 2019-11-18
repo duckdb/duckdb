@@ -6,4 +6,4 @@ target_link_libraries(duckdb_rest_server duckdb_static)
 
 
 add_executable(duckdb_dbgen dbgen.cpp)
-target_link_libraries(duckdb_dbgen duckdb_static dbgen)
+target_link_libraries(duckdb_dbgen dbgen duckdb_static)
