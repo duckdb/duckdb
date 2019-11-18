@@ -21,7 +21,7 @@
 #endif
 
 #if defined(MUTEX_IS_PTHREAD_RWLOCK)
-#error We really don't want to include pthread
+#error We really dont want to include pthread
 #include <pthread.h>
 #include <stdlib.h>
 typedef pthread_rwlock_t MutexType;
