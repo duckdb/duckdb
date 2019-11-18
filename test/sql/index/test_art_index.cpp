@@ -1289,7 +1289,7 @@ TEST_CASE("ART FP Unique Constraint", "[art-float-unique]") {
     REQUIRE_FAIL(con.Query("UPDATE numbers SET i=NULL;"));
 }
 
-TEST_CASE("ART FP Corner Cases", "[art-fp-Corner]") {
+TEST_CASE("ART FP Special Cases", "[art-fp-special]") {
     unique_ptr<QueryResult> result;
     DuckDB db(nullptr);
     Connection con(db);
@@ -1315,9 +1315,9 @@ TEST_CASE("ART FP Corner Cases", "[art-fp-Corner]") {
 
     result = con.Query("SELECT COUNT(i) FROM numbers WHERE i = $1", inf_neg);
     REQUIRE(CHECK_COLUMN(result, 0, {1}));
-    //! FIXME: NaN is not being stored in base table, after fixing it uncomment assertion below:
-//    result = con.Query("SELECT COUNT(i) FROM numbers WHERE i = $1", NaN);
-//    REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+    result = con.Query("SELECT COUNT(i) FROM numbers WHERE i = $1", NaN);
+    REQUIRE(CHECK_COLUMN(result, 0, {0}));
 
     result = con.Query("SELECT COUNT(i) FROM numbers WHERE i = $1", pos_zero);
     REQUIRE(CHECK_COLUMN(result, 0, {2}));
@@ -1329,7 +1329,7 @@ TEST_CASE("ART FP Corner Cases", "[art-fp-Corner]") {
     REQUIRE(CHECK_COLUMN(result, 0, {4}));
 }
 
-TEST_CASE("ART double Corner Cases", "[art-double-Corner]") {
+TEST_CASE("ART Double Special Cases", "[art-double-special]") {
     unique_ptr<QueryResult> result;
     DuckDB db(nullptr);
     Connection con(db);
@@ -1355,9 +1355,9 @@ TEST_CASE("ART double Corner Cases", "[art-double-Corner]") {
 
     result = con.Query("SELECT COUNT(i) FROM numbers WHERE i = $1", inf_neg);
     REQUIRE(CHECK_COLUMN(result, 0, {1}));
-    //! FIXME: NaN is not being stored in base table, after fixing it uncomment assertion below:
-//    result = con.Query("SELECT COUNT(i) FROM numbers WHERE i = $1", NaN);
-//    REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+    result = con.Query("SELECT COUNT(i) FROM numbers WHERE i = $1", NaN);
+    REQUIRE(CHECK_COLUMN(result, 0, {0}));
 
     result = con.Query("SELECT COUNT(i) FROM numbers WHERE i = $1", pos_zero);
     REQUIRE(CHECK_COLUMN(result, 0, {2}));
