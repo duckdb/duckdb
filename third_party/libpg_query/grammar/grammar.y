@@ -28,8 +28,6 @@
 	Value				*value;
 	ObjectType			objtype;
 	TypeName			*typnam;
-	FunctionParameter   *fun_param;
-	FunctionParameterMode fun_param_mode;
 	ObjectWithArgs		*objwithargs;
 	DefElem				*defelt;
 	SortBy				*sortby;
@@ -44,13 +42,8 @@
 	OnConflictClause	*onconflict;
 	A_Indices			*aind;
 	ResTarget			*target;
-	AccessPriv			*accesspriv;
 	InsertStmt			*istmt;
 	VariableSetStmt		*vsetstmt;
-	PartitionElem		*partelem;
-	PartitionSpec		*partspec;
-	PartitionBoundSpec	*partboundspec;
-	RoleSpec			*rolespec;
 }
 
 %type <node> stmt

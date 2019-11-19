@@ -952,7 +952,7 @@
 
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 typedef union YYSTYPE
-#line 179 "third_party/libpg_query/grammar/grammar.y.tmp"
+#line 173 "third_party/libpg_query/grammar/grammar.y.tmp"
 {
 	core_YYSTYPE		core_yystype;
 	/* these fields must match core_YYSTYPE: */
@@ -970,8 +970,6 @@ typedef union YYSTYPE
 	Value				*value;
 	ObjectType			objtype;
 	TypeName			*typnam;
-	FunctionParameter   *fun_param;
-	FunctionParameterMode fun_param_mode;
 	ObjectWithArgs		*objwithargs;
 	DefElem				*defelt;
 	SortBy				*sortby;
@@ -986,16 +984,11 @@ typedef union YYSTYPE
 	OnConflictClause	*onconflict;
 	A_Indices			*aind;
 	ResTarget			*target;
-	AccessPriv			*accesspriv;
 	InsertStmt			*istmt;
 	VariableSetStmt		*vsetstmt;
-	PartitionElem		*partelem;
-	PartitionSpec		*partspec;
-	PartitionBoundSpec	*partboundspec;
-	RoleSpec			*rolespec;
 }
 /* Line 1529 of yacc.c.  */
-#line 999 "third_party/libpg_query/grammar/grammar.h"
+#line 992 "third_party/libpg_query/grammar/grammar.h"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1

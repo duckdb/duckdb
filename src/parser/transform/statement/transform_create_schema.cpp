@@ -14,15 +14,6 @@ unique_ptr<CreateSchemaStatement> Transformer::TransformCreateSchema(postgres::N
 	info.schema = stmt->schemaname;
 	info.if_not_exists = stmt->if_not_exists;
 
-	if (stmt->authrole) {
-		auto authrole = reinterpret_cast<postgres::Node *>(stmt->authrole);
-		switch (authrole->type) {
-		case postgres::T_RoleSpec:
-		default:
-			throw NotImplementedException("Authrole not implemented yet!");
-		}
-	}
-
 	if (stmt->schemaElts) {
 		// schema elements
 		for (auto cell = stmt->schemaElts->head; cell != nullptr; cell = cell->next) {

@@ -9,7 +9,6 @@ CreateSchemaStmt:
 					CreateSchemaStmt *n = makeNode(CreateSchemaStmt);
 					/* ...but not both */
 					n->schemaname = $3;
-					n->authrole = NULL;
 					n->schemaElts = $4;
 					n->if_not_exists = false;
 					$$ = (Node *)n;
@@ -19,7 +18,6 @@ CreateSchemaStmt:
 					CreateSchemaStmt *n = makeNode(CreateSchemaStmt);
 					/* ...but not here */
 					n->schemaname = $6;
-					n->authrole = NULL;
 					if ($7 != NIL)
 						ereport(ERROR,
 								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),

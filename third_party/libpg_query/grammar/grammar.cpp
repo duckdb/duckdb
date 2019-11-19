@@ -261,78 +261,6 @@ check_indirection(List *indirection, core_yyscan_t yyscanner)
 	return indirection;
 }
 
-/* extractArgTypes()
- * Given a list of FunctionParameter nodes, extract a list of just the
- * argument types (TypeNames) for input parameters only.  This is what
- * is needed to look up an existing function, which is what is wanted by
- * the productions that use this call.
- */
-static List *
-extractArgTypes(List *parameters)
-{
-	List	   *result = NIL;
-	ListCell   *i;
-
-	foreach(i, parameters)
-	{
-		FunctionParameter *p = (FunctionParameter *) lfirst(i);
-
-		if (p->mode != FUNC_PARAM_OUT && p->mode != FUNC_PARAM_TABLE)
-			result = lappend(result, p->argType);
-	}
-	return result;
-}
-
-/* extractAggrArgTypes()
- * As above, but work from the output of the production.
- */
-static List *
-extractAggrArgTypes(List *aggrargs)
-{
-	Assert(list_length(aggrargs) == 2);
-	return extractArgTypes((List *) linitial(aggrargs));
-}
-
-/* makeOrderedSetArgs()
- * Build the result of the production (which see the comments for).
- * This handles only the case where both given lists are nonempty, so that
- * we have to deal with multiple VARIADIC arguments.
- */
-static List *
-makeOrderedSetArgs(List *directargs, List *orderedargs,
-				   core_yyscan_t yyscanner)
-{
-	FunctionParameter *lastd = (FunctionParameter *) llast(directargs);
-	int			ndirectargs;
-
-	/* No restriction unless last direct arg is VARIADIC */
-	if (lastd->mode == FUNC_PARAM_VARIADIC)
-	{
-		FunctionParameter *firsto = (FunctionParameter *) linitial(orderedargs);
-
-		/*
-		 * We ignore the names, though the production allows them;
-		 * it doesn't allow default values, so those need not be checked.
-		 */
-		if (list_length(orderedargs) != 1 ||
-			firsto->mode != FUNC_PARAM_VARIADIC ||
-			!equal(lastd->argType, firsto->argType))
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("an ordered-set aggregate with a VARIADIC direct argument must have one VARIADIC aggregated argument of the same data type"),
-					 parser_errposition(exprLocation((Node *) firsto))));
-
-		/* OK, drop the duplicate VARIADIC argument from the internal form */
-		orderedargs = NIL;
-	}
-
-	/* don't merge into the next line, as list_concat changes directargs */
-	ndirectargs = list_length(directargs);
-
-	return list_make2(list_concat(directargs, orderedargs),
-					  makeInteger(ndirectargs));
-}
-
 /* makeParamRef
  * Creates a new ParamRef node
  */
@@ -567,51 +495,6 @@ makeSQLValueFunction(SQLValueFunctionOp op, int32 typmod, int location)
 	svf->typmod = typmod;
 	svf->location = location;
 	return (Node *) svf;
-}
-
-/*
- * Merge the input and output parameters of a table function.
- */
-static List *
-mergeTableFuncParameters(List *func_args, List *columns)
-{
-	ListCell   *lc;
-
-	/* Explicit OUT and INOUT parameters shouldn't be used in this syntax */
-	foreach(lc, func_args)
-	{
-		FunctionParameter *p = (FunctionParameter *) lfirst(lc);
-
-		if (p->mode != FUNC_PARAM_IN && p->mode != FUNC_PARAM_VARIADIC)
-			ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
-					 errmsg("OUT and INOUT arguments aren't allowed in TABLE functions")));
-	}
-
-	return list_concat(func_args, columns);
-}
-
-/*
- * Determine return type of a TABLE function.  A single result column
- * returns setof that column's type; otherwise return setof record.
- */
-static TypeName *
-TableFuncTypeName(List *columns)
-{
-	TypeName *result;
-
-	if (list_length(columns) == 1)
-	{
-		FunctionParameter *p = (FunctionParameter *) linitial(columns);
-
-		result = copyObject(p->argType);
-	}
-	else
-		result = SystemTypeName("record");
-
-	result->setof = true;
-
-	return result;
 }
 
 /*
