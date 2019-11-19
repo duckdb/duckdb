@@ -17,7 +17,7 @@
       border-left: 2px solid #337ab7;
       }
       .CodeMirror {
-      height: 30em;
+      height: 10em;
       display: block;
       }
       .alert {
@@ -31,19 +31,18 @@
       bottom: 10px;
       z-index: 100;
       }
-      #loginstatus {
-      margin-top: 50px;
-      font-size: 13px;
-      color: #767676;
-      padding-left: 20px;
-      }
+    
     </style>
     <script src="js/jquery.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
     <script src="js/codemirror.js"></script>
     <script src="js/codemirror-sql.js"></script>
     <script>
+
+      var fetching = true;
+      var ref = '';
       
+      // TODO inline this
       window.onload = function() {
         $('.sql-challenge').each(function(i, e) {
           var id = "sql-challenge-"+$.attr(e, 'data-id');
@@ -83,25 +82,23 @@
       }
 
           
-      function renderresult(res, title) {
-        if (res.length < 1) {
-          return "<div>(Empty Query Result)</div>";
-        }
-        var tdata = "<table class=\"table table-condensed table-striped\"><caption>"+title+"</caption><thead>";
-        //tdata += "<tr><th>#</th>";
+      function renderresult(res, header) {
+        // TODO
+        // if (res.length < 1) {
+        //   return "<div>(Empty Query Result)</div>";
+        // }
+        var tdata = '';
+if (header) {
+        var tdata = '<thead><tr>';
         for (c = 0; c < res.names.length; c++) {
           tdata += "<th>" + res.names[c] + "</th>";
         }
         tdata += "</tr></thead><tbody>";
+      }
         for (r = 0; r < res.data[0].length; r++) {
          tdata += "<tr>";
-        //  if (res[0].values.length > 12 && r == 10) {
-        //   tdata += "<th></th><td colspan='"+res[0].columns.length+"'>...</td>"
-        //   r = res[0].values.length-2;
-        //   continue;
-        // }
-      //  tdata += "<th>"+(r+1)+"</th>";
-        for (c = 0; c < res.names.length; c++) {
+
+        for (c = 0; c < res.data.length; c++) {
           var val = res.data[c][r];
           if (val == null) {
             val = "<span style='color: gray'>NULL</span>"
@@ -113,20 +110,22 @@
         }
         tdata += "</tr>";
       } 
-      tdata += "</tbody></table";
+      if (header) {
+      tdata += "</tbody>";
+    }
       return tdata;
       }
       
     function query(id, expres) {
       var editorEle = $("#"+id)[0]
       // uuugly
-      var tables = $($(editorEle).find(".tables")[0]);
+      var table = $("#results");
       var message = $($(editorEle).find(".alert")[0]);
       var messageCntnt = $(message.find(".message")[0]);
       
       
       message.hide();
-      tables.empty().hide();
+      table.empty().hide();
       var query = editorEle.editor.getValue().trim();
       
       if (query == "") {
@@ -143,12 +142,13 @@
           dataType: 'jsonp',
           jsonp: 'callback',
           data: {q: query},
-          url: 'http://localhost:8080/query?callback=?',
+          url: 'http://localhost:8080/query?stream_result&callback=?',
           success: function(data) {
           // TODO streaming! 
-            console.log(JSON.stringify(data));
-
-          tables.append(renderresult(data, "Query Result")).show();
+           // console.log(JSON.stringify(data));
+          table.append(renderresult(data, true)).show();
+          ref = data.ref;
+          fetching = false;
           
           }
         });
@@ -159,8 +159,44 @@
         message.removeClass('alert-success').addClass('alert-warning').show();
         messageCntnt.text("Query failed: " + err.message)
       }
+
+
+
     }
+
+
+$(window).scroll(function() {
+   if(!fetching && $(window).scrollTop() + $(window).height() > $(document).height() - 100) {
+       fetching = true;
+       $("#loading-spinner").show();
+
+$.ajax({
+          dataType: 'jsonp',
+          jsonp: 'callback',
+          data: {ref: ref},
+          url: 'http://localhost:8080/fetch?callback=?',
+          success: function(data) {
+      var table = $("#results tbody");
+      console.log(table)
+          table.append(renderresult(data, false));
+          fetching = false;
+          $("#loading-spinner").hide();
+          // TODO if data len = 0, finish
+          }
+        });
+
+
+   }
+});
+
+
     </script>
+
+    <script type="text/javascript">
+
+
+</script>
+
     </head>
   <body>
     <div class="container bs-docs-container">
@@ -170,7 +206,7 @@
 
             <h2>Query away</h2>
 
-            <div class='sql-challenge' data-id='intro-example' data-expres='false' data-query="SELECT s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment
+           <!-- <div class='sql-challenge' data-id='intro-example' data-expres='false' data-query="SELECT s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment
 FROM part, supplier, partsupp, nation, region
 WHERE p_partkey = ps_partkey
   AND s_suppkey = ps_suppkey
@@ -188,8 +224,16 @@ WHERE p_partkey = ps_partkey
        AND n_regionkey = r_regionkey
        AND r_name = 'EUROPE' )
 ORDER BY s_acctbal DESC, n_name, s_name,  p_partkey 
-LIMIT 10;"></div>
+LIMIT 10;"></div> -->
+
+<div class='sql-challenge' data-id='intro-example' data-expres='false' data-query="SELECT * FROM lineitem"></div>
             
+
+<table id="results" class="table table-condensed table-striped">
+</table>
+
+<div id="loading-spinner" style="display:none;"><center><img src="images/loading.gif" style="width:300px"/></center></div>
+
           </div>
           <!-- /bs-docs-section -->
         </div>
