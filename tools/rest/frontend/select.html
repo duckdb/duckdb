@@ -1,104 +1,146 @@
 <!DOCTYPE html>
 <!-- DISCLAIMER: this code is not supposed to make Web dev hipsters happy -->
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta content="IE=edge" http-equiv="X-UA-Compatible">
-    <meta content="width=device-width,initial-scale=1" name="viewport">
-    <title>DuckDB Demo</title>
-    <link href="css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="css/codemirror.css">
-    <style>
-      .bs-docs-sidebar .nav>.active:focus>a, .bs-docs-sidebar .nav>.active:hover>a, .bs-docs-sidebar .nav>.active>a {
-      padding-left: 18px;
-      font-weight: 700;
-      color: #337ab7;
-      background-color: transparent;
-      border-left: 2px solid #337ab7;
-      }
-      .CodeMirror {
+<head>
+  <meta charset="utf-8">
+  <meta content="IE=edge" http-equiv="X-UA-Compatible">
+  <meta content="width=device-width,initial-scale=1" name="viewport">
+  <title>DuckDB Demo</title>
+  <link href="css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/codemirror.css">
+  <style>
+
+    .CodeMirror {
       height: 10em;
       display: block;
-      }
-      .alert {
+    }
+    .alert {
       margin-top: 10px;
-      }
-      h2, h3 {
+    }
+    h2, h3 {
       margin-top: 50px;
-      }
-      #offline-warning {
-      position: fixed;
-      bottom: 10px;
-      z-index: 100;
-      }
-    
-    </style>
-    <script src="js/jquery.min.js"></script>
-    <script src="js/bootstrap.min.js"></script>
-    <script src="js/codemirror.js"></script>
-    <script src="js/codemirror-sql.js"></script>
-    <script>
+    }
 
-      var fetching = true;
-      var ref = '';
-      
-      // TODO inline this
-      window.onload = function() {
-        $('.sql-challenge').each(function(i, e) {
-          var id = "sql-challenge-"+$.attr(e, 'data-id');
-          var ele = $.parseHTML(`<div class="panel panel-default" id="${id}">
+    .CodeMirror-hints {
+      position: absolute;
+      z-index: 10;
+      overflow: hidden;
+      list-style: none;
+
+      margin: 0;
+      padding: 2px;
+
+      -webkit-box-shadow: 2px 3px 5px rgba(0,0,0,.2);
+      -moz-box-shadow: 2px 3px 5px rgba(0,0,0,.2);
+      box-shadow: 2px 3px 5px rgba(0,0,0,.2);
+      border-radius: 3px;
+      border: 1px solid silver;
+
+      background: white;
+      font-size: 90%;
+      font-family: monospace;
+
+      max-height: 20em;
+      overflow-y: auto;
+    }
+
+    .CodeMirror-hint {
+      margin: 0;
+      padding: 0 4px;
+      border-radius: 2px;
+      white-space: pre;
+      color: black;
+      cursor: pointer;
+    }
+
+    li.CodeMirror-hint-active {
+      background: #08f;
+      color: white;
+    }
+  </style>
+
+</head>
+<body>
+  <div class="container bs-docs-container">
+    <div class="row">
+      <div class="col-md-12" role="main">
+        <div class="bs-docs-section">
+
+          <h2>Query away on TPC-H with DuckDB</h2>
+          <p>Hint: Use Ctrl-Space to autocomplete keywords, table and column names.</p>
+          <div class="panel panel-default" id="query">
             <div class="panel-body">
-              <button type="button" class="btn" style="float: left; margin-top: 4px" onclick='query("${id}", ${$.attr(e, 'data-expres')})'><span class="glyphicon glyphicon-play" aria-hidden="true"></span></button>
-              <textarea class="CodeMirror">${$.attr(e, 'data-query')}</textarea>
+              <button type="button" class="btn" style="float: left; margin-top: 4px"><span class="glyphicon glyphicon-play"></span></button>
+              <textarea class="CodeMirror">SELECT * FROM lineitem</textarea>
               <div class="alert" role="alert" style="display: none"><span class="message"></span></div>
               <div class="tables" style="display:none">
               </div>
             </div>
-          </div>`)[0];
-      
-          $(e).replaceWith(ele);
-      
-          ele.editor = CodeMirror.fromTextArea($(ele).find("textarea")[0], {
-            mode: 'text/x-sql',
-            indentWithTabs: true,
-            smartIndent: true,
-            lineNumbers: true,
-            matchBrackets : true,
-            lineWrapping: true
-          });
-        });
-      
-      
-      }
+          </div>
 
-      function is_decimal(value) {
-        if ((undefined === value) || (null === value)) {
-            return false;
-        }
-        if (typeof value == 'number') {
-            return true;
-        }
-        return !isNaN(value - 0) && value % 1 != 0;
-      }
 
-          
-      function renderresult(res, header) {
-        // TODO
-        // if (res.length < 1) {
-        //   return "<div>(Empty Query Result)</div>";
-        // }
+          <table id="results" class="table table-condensed table-striped">
+          </table>
+
+          <div id="loading-spinner" style="display:none;"><center><img src="images/loading.gif" style="width:300px"/></center></div>
+
+        </div>
+        <!-- /bs-docs-section -->
+      </div>
+      <!-- /col -->
+
+    </div>
+    <!-- /row -->
+  </div>
+  <!-- /bs-docs-container -->
+
+
+
+  <script src="js/jquery.min.js"></script>
+  <script src="js/bootstrap.min.js"></script>
+  <script src="js/codemirror.js"></script>
+  <script src="js/codemirror-sql.js"></script>
+  <script src="js/show-hint.js"></script>
+  <script src="js/sql-hint.js"></script>
+
+  <script>
+
+
+
+// setup the various dynamic crap
+window.onload = function() {
+
+
+// keeping that global namespace clean
+    var fetching = true;
+    var ref = '';
+
+
+
+    function is_decimal(value) {
+      if ((undefined === value) || (null === value)) {
+        return false;
+      }
+      if (typeof value == 'number') {
+        return true;
+      }
+      return !isNaN(value - 0) && value % 1 != 0;
+    }
+
+
+    function renderresult(res, header) {
         var tdata = '';
-if (header) {
-        var tdata = '<thead><tr>';
-        for (c = 0; c < res.names.length; c++) {
-          tdata += "<th>" + res.names[c] + "</th>";
+        if (header) {
+          var tdata = '<thead><tr>';
+          for (c = 0; c < res.names.length; c++) {
+            tdata += "<th>" + res.names[c] + "</th>";
+          }
+          tdata += "</tr></thead><tbody>";
         }
-        tdata += "</tr></thead><tbody>";
-      }
         for (r = 0; r < res.data[0].length; r++) {
          tdata += "<tr>";
 
-        for (c = 0; c < res.data.length; c++) {
+         for (c = 0; c < res.data.length; c++) {
           var val = res.data[c][r];
           if (val == null) {
             val = "<span style='color: gray'>NULL</span>"
@@ -111,137 +153,175 @@ if (header) {
         tdata += "</tr>";
       } 
       if (header) {
-      tdata += "</tbody>";
-    }
-      return tdata;
+        tdata += "</tbody>";
       }
+      return tdata;
+    }
+
+
+  
+  var ele = $("#query")[0];
+  var cm = CodeMirror.fromTextArea($(ele).find("textarea")[0], {
+    mode: 'text/x-sql',
+    indentWithTabs: true,
+    smartIndent: true,
+    lineNumbers: true,
+    matchBrackets : true,
+    lineWrapping: true,    
+    autofocus: true,
+    extraKeys: {"Ctrl-Space": "autocomplete"},
+    // TODO query DB to get table and column names, hardcode for now
+    hintOptions: {tables: {
+nation : [
+    "n_nationkey",
+    "n_name",
+    "n_regionkey",
+    "n_comment"
+],
+region : [
+    "r_regionkey",
+    "r_name",
+    "r_comment"
+],
+part : [
+    "p_partkey",
+    "p_name",
+    "p_mfgr",
+    "p_brand",
+    "p_type",
+    "p_size",
+    "p_container",
+    "p_retailprice",
+    "p_comment"
+],
+supplier : [
+    "s_suppkey",
+    "s_name",
+    "s_address",
+    "s_nationkey",
+    "s_phone",
+    "s_acctbal",
+    "s_comment"
+],
+partsupp : [
+    "ps_partkey",
+    "ps_suppkey",
+    "ps_availqty",
+    "ps_supplycost",
+    "ps_comment"
+],
+customer : [
+    "c_custkey",
+    "c_name",
+    "c_address",
+    "c_nationkey",
+    "c_phone",
+    "c_acctbal",
+    "c_mktsegment",
+    "c_comment"
+],
+orders : [
+    "o_orderkey",
+    "o_custkey",
+    "o_orderstatus",
+    "o_totalprice",
+    "o_orderdate",
+    "o_orderpriority",
+    "o_clerk",
+    "o_shippriority",
+    "o_comment"
+],
+lineitem : [
+    "l_orderkey",
+    "l_partkey",
+    "l_suppkey",
+    "l_linenumber",
+    "l_quantity",
+    "l_extendedprice",
+    "l_discount",
+    "l_tax",
+    "l_returnflag",
+    "l_linestatus",
+    "l_shipdate",
+    "l_commitdate",
+    "l_receiptdate",
+    "l_shipinstruct",
+    "l_shipmode",
+    "l_comment"
+]
       
-    function query(id, expres) {
-      var editorEle = $("#"+id)[0]
-      // uuugly
+    }}
+  });
+
+  $(ele).find("button").click(function() {
       var table = $("#results");
-      var message = $($(editorEle).find(".alert")[0]);
+      var message = $($(ele).find(".alert")[0]);
       var messageCntnt = $(message.find(".message")[0]);
-      
       
       message.hide();
       table.empty().hide();
-      var query = editorEle.editor.getValue().trim();
+      var query = cm.getValue().trim();
       
       if (query == "") {
         message.removeClass('alert-success').addClass('alert-warning').show();
-        messageCntnt.text("No query was entered in the text box above.")
+        messageCntnt.text("You kind of have to provide a query.")
         return;
       }
-      
-      try {
+      $("#loading-spinner").show();
 
-        console.log(query);
-
-  $.ajax({
-          dataType: 'jsonp',
-          jsonp: 'callback',
-          data: {q: query},
-          url: 'http://localhost:8080/query?stream_result&callback=?',
-          success: function(data) {
-          // TODO streaming! 
-           // console.log(JSON.stringify(data));
-          table.append(renderresult(data, true)).show();
-          ref = data.ref;
-          fetching = false;
-          
-          }
-        });
-
-      
-      }
-      catch(err) {
+    // NB: jsonp will not allow errors to be caught, so server always returns code 200. lets hope its up
+    $.ajax({
+      dataType: 'jsonp',
+      jsonp: 'callback',
+      data: {q: query},
+      url: 'http://localhost:8080/query?stream_result&callback=?',
+      success: function(data) {
+       if (!data.success) {
         message.removeClass('alert-success').addClass('alert-warning').show();
-        messageCntnt.text("Query failed: " + err.message)
+        messageCntnt.text("Query failed: " + data.error);
+        $("#loading-spinner").hide();
+        return;
       }
-
-
+      table.append(renderresult(data, true)).show();
+      ref = data.ref;
+      fetching = false;
+      $("#loading-spinner").hide();
 
     }
+    }); // </ajax()>
+
+  }); // </click()>
 
 
-$(window).scroll(function() {
+  $(window).scroll(function() {
    if(!fetching && $(window).scrollTop() + $(window).height() > $(document).height() - 100) {
-       fetching = true;
-       $("#loading-spinner").show();
+     fetching = true;
+     $("#loading-spinner").show();
 
-$.ajax({
-          dataType: 'jsonp',
-          jsonp: 'callback',
-          data: {ref: ref},
-          url: 'http://localhost:8080/fetch?callback=?',
-          success: function(data) {
-      var table = $("#results tbody");
-      console.log(table)
-          table.append(renderresult(data, false));
-          fetching = false;
-          $("#loading-spinner").hide();
+     $.ajax({
+      dataType: 'jsonp',
+      jsonp: 'callback',
+      data: {ref: ref},
+      url: 'http://localhost:8080/fetch?callback=?',
+      success: function(data) {
+        var table = $("#results tbody");
+        console.log(table)
+        table.append(renderresult(data, false));
+        fetching = false;
+        $("#loading-spinner").hide();
           // TODO if data len = 0, finish
-          }
-        });
-
-
+          // TODO error handling here
+        }
+      });
    }
-});
+ }); // </scroll()>
 
 
-    </script>
-
-    <script type="text/javascript">
-
+} // </onload()>
 
 </script>
 
-    </head>
-  <body>
-    <div class="container bs-docs-container">
-      <div class="row">
-        <div class="col-md-12" role="main">
-          <div class="bs-docs-section">
 
-            <h2>Query away</h2>
 
-           <!-- <div class='sql-challenge' data-id='intro-example' data-expres='false' data-query="SELECT s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment
-FROM part, supplier, partsupp, nation, region
-WHERE p_partkey = ps_partkey
-  AND s_suppkey = ps_suppkey
-  AND p_size = 15
-  AND p_type LIKE '%BRASS'
-  AND s_nationkey = n_nationkey
-  AND n_regionkey = r_regionkey
-  AND r_name = 'EUROPE'
-  AND ps_supplycost =
-    (SELECT min(ps_supplycost)
-     FROM partsupp, supplier, nation, region
-     WHERE p_partkey = ps_partkey
-       AND s_suppkey = ps_suppkey
-       AND s_nationkey = n_nationkey
-       AND n_regionkey = r_regionkey
-       AND r_name = 'EUROPE' )
-ORDER BY s_acctbal DESC, n_name, s_name,  p_partkey 
-LIMIT 10;"></div> -->
-
-<div class='sql-challenge' data-id='intro-example' data-expres='false' data-query="SELECT * FROM lineitem"></div>
-            
-
-<table id="results" class="table table-condensed table-striped">
-</table>
-
-<div id="loading-spinner" style="display:none;"><center><img src="images/loading.gif" style="width:300px"/></center></div>
-
-          </div>
-          <!-- /bs-docs-section -->
-        </div>
-        <!-- /col -->
-
-      </div>
-      <!-- /row -->
-    </div>
-    <!-- /bs-docs-container -->
-  </body>
+</body>
 </html>

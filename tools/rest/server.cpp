@@ -258,7 +258,7 @@ int main(int argc, char **argv) {
 	}
 	DuckDB duckdb(dbfile.empty() ? nullptr : dbfile, &config);
 
-	svr.Get("/query", [&duckdb, &client_state_map, &out_mutex, &logfile](const Request &req, Response &resp) {
+	svr.Get("/query", [&](const Request &req, Response &resp) {
 		auto q = req.get_param_value("q");
 
 		{
@@ -316,13 +316,12 @@ int main(int argc, char **argv) {
 
 		} else {
 			j = {{"query", q}, {"success", state.res->success}, {"error", state.res->error}};
-			resp.status = 400;
 		}
 
 		serialize_json(req, resp, j);
 	});
 
-	svr.Get("/fetch", [&duckdb, &client_state_map](const Request &req, Response &resp) {
+	svr.Get("/fetch", [&](const Request &req, Response &resp) {
 		auto ref = req.get_param_value("ref");
 		Connection conn(duckdb);
 		json j;
@@ -340,13 +339,12 @@ int main(int argc, char **argv) {
 
 		} else {
 			j = {{"success", false}, {"error", "Unable to find ref."}};
-			resp.status = 400;
 		}
 
 		serialize_json(req, resp, j);
 	});
 
-	svr.Get("/close", [&duckdb, &client_state_map](const Request &req, Response &resp) {
+	svr.Get("/close", [&](const Request &req, Response &resp) {
 		auto ref = req.get_param_value("ref");
 		Connection conn(duckdb);
 		json j;
@@ -356,7 +354,6 @@ int main(int argc, char **argv) {
 			j = {{"success", true}, {"ref", ref}};
 		} else {
 			j = {{"success", false}, {"error", "Unable to find ref."}};
-			resp.status = 400;
 		}
 
 		serialize_json(req, resp, j);
