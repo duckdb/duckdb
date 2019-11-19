@@ -1295,7 +1295,7 @@ TEST_CASE("ART FP Special Cases", "[art-fp-special]") {
     Connection con(db);
 
     REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i REAL)"));
-    float inf_pos = DBL_MAX + DBL_MAX;
+    float inf_pos = pow(1000,10000);
     float inf_neg = -inf_pos;
     float NaN = inf_pos * 0;
     float pos_zero = 0.0;
@@ -1335,7 +1335,7 @@ TEST_CASE("ART Double Special Cases", "[art-double-special]") {
     Connection con(db);
 
     REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i DOUBLE)"));
-    double inf_pos = DBL_MAX + DBL_MAX;
+    double inf_pos = pow(1000,10000);
     double inf_neg = -inf_pos;
     double NaN = inf_pos * 0;
     double pos_zero = 0.0;
