@@ -76,7 +76,7 @@ select_no_parens:
 			| select_clause opt_sort_clause for_locking_clause opt_select_limit
 				{
 					insertSelectOptions((SelectStmt *) $1, $2, $3,
-										list_nth($4, 0), list_nth($4, 1),
+										(Node*) list_nth($4, 0), (Node*) list_nth($4, 1),
 										NULL,
 										yyscanner);
 					$$ = $1;
@@ -84,7 +84,7 @@ select_no_parens:
 			| select_clause opt_sort_clause select_limit opt_for_locking_clause
 				{
 					insertSelectOptions((SelectStmt *) $1, $2, $4,
-										list_nth($3, 0), list_nth($3, 1),
+										(Node*) list_nth($3, 0), (Node*) list_nth($3, 1),
 										NULL,
 										yyscanner);
 					$$ = $1;
@@ -108,7 +108,7 @@ select_no_parens:
 			| with_clause select_clause opt_sort_clause for_locking_clause opt_select_limit
 				{
 					insertSelectOptions((SelectStmt *) $2, $3, $4,
-										list_nth($5, 0), list_nth($5, 1),
+										(Node*) list_nth($5, 0), (Node*) list_nth($5, 1),
 										$1,
 										yyscanner);
 					$$ = $2;
@@ -116,7 +116,7 @@ select_no_parens:
 			| with_clause select_clause opt_sort_clause select_limit opt_for_locking_clause
 				{
 					insertSelectOptions((SelectStmt *) $2, $3, $5,
-										list_nth($4, 0), list_nth($4, 1),
+										(Node*) list_nth($4, 0), (Node*) list_nth($4, 1),
 										$1,
 										yyscanner);
 					$$ = $2;
@@ -658,16 +658,16 @@ table_ref:	relation_expr opt_alias_clause
 			| func_table func_alias_clause
 				{
 					RangeFunction *n = (RangeFunction *) $1;
-					n->alias = linitial($2);
-					n->coldeflist = lsecond($2);
+					n->alias = (Alias*) linitial($2);
+					n->coldeflist = (List*) lsecond($2);
 					$$ = (Node *) n;
 				}
 			| LATERAL_P func_table func_alias_clause
 				{
 					RangeFunction *n = (RangeFunction *) $2;
 					n->lateral = true;
-					n->alias = linitial($3);
-					n->coldeflist = lsecond($3);
+					n->alias = (Alias*) linitial($3);
+					n->coldeflist = (List*) lsecond($3);
 					$$ = (Node *) n;
 				}
 			| select_with_parens opt_alias_clause
@@ -1313,7 +1313,7 @@ ConstBit:	BitWithLength
 BitWithLength:
 			BIT opt_varying '(' expr_list ')'
 				{
-					char *typname;
+					const char *typname;
 
 					typname = $2 ? "varbit" : "bit";
 					$$ = SystemTypeName(typname);
@@ -2653,7 +2653,7 @@ sub_type:	ANY										{ $$ = ANY_SUBLINK; }
 		;
 
 all_Op:		Op										{ $$ = $1; }
-			| MathOp								{ $$ = $1; }
+			| MathOp								{ $$ = (char*) $1; }
 		;
 
 MathOp:		 '+'									{ $$ = "+"; }
@@ -2776,12 +2776,12 @@ extract_list:
  */
 extract_arg:
 			IDENT									{ $$ = $1; }
-			| YEAR_P								{ $$ = "year"; }
-			| MONTH_P								{ $$ = "month"; }
-			| DAY_P									{ $$ = "day"; }
-			| HOUR_P								{ $$ = "hour"; }
-			| MINUTE_P								{ $$ = "minute"; }
-			| SECOND_P								{ $$ = "second"; }
+			| YEAR_P								{ $$ = (char*) "year"; }
+			| MONTH_P								{ $$ = (char*) "month"; }
+			| DAY_P									{ $$ = (char*) "day"; }
+			| HOUR_P								{ $$ = (char*) "hour"; }
+			| MINUTE_P								{ $$ = (char*) "minute"; }
+			| SECOND_P								{ $$ = (char*) "second"; }
 			| Sconst								{ $$ = $1; }
 		;
 

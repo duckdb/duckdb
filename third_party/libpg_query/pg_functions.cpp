@@ -2,8 +2,8 @@
 #include <string>
 #include <thread>
 #include <mutex>
-#include "pg_functions.h"
-#include "parser/parser.h"
+#include "pg_functions.hpp"
+#include "parser/parser.hpp"
 #include <stdarg.h>
 #include <mutex>
 #include <cstring>
@@ -84,7 +84,6 @@ void pg_parser_parse(const char* query, parse_result *res) {
 
 
 void pg_parser_cleanup() {
-
 	for (size_t ptr_idx = 0; ptr_idx < pg_parser_state.malloc_ptr_idx; ptr_idx++) {
 		char *ptr = pg_parser_state.malloc_ptrs[ptr_idx];
 		if (ptr) {
@@ -98,21 +97,21 @@ int ereport(int code, ...) {
 	std::string err = "parser error : " + std::string(pg_parser_state.pg_err_msg);
     throw std::runtime_error(err);
 }
-void elog(int code, char* fmt,...) {
+void elog(int code, const char* fmt,...) {
     throw std::runtime_error("elog NOT IMPLEMENTED");
 }
 int errcode(int sqlerrcode) {
 	pg_parser_state.pg_err_code = sqlerrcode;
 	return 1;
 }
-int errmsg(char* fmt, ...) {
+int errmsg(const char* fmt, ...) {
 	 va_list argptr;
 	 va_start(argptr, fmt);
 	 vsnprintf(pg_parser_state.pg_err_msg, BUFSIZ, fmt, argptr);
 	 va_end(argptr);
 	 return 1;
 }
-int errhint(char* msg) {
+int errhint(const char* msg) {
     throw std::runtime_error("errhint NOT IMPLEMENTED");
 }
 int	errmsg_internal(const char *fmt,...) {

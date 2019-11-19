@@ -90,11 +90,11 @@ makeColumnRef(char *colname, List *indirection,
 }
 
 static Node *
-makeTypeCast(Node *arg, TypeName *typename, int location)
+makeTypeCast(Node *arg, TypeName *tpname, int location)
 {
 	TypeCast *n = makeNode(TypeCast);
 	n->arg = arg;
-	n->typeName = typename;
+	n->typeName = tpname;
 	n->location = location;
 	return (Node *) n;
 }
@@ -112,11 +112,11 @@ makeStringConst(char *str, int location)
 }
 
 static Node *
-makeStringConstCast(char *str, int location, TypeName *typename)
+makeStringConstCast(char *str, int location, TypeName *tpname)
 {
 	Node *s = makeStringConst(str, location);
 
-	return makeTypeCast(s, typename, -1);
+	return makeTypeCast(s, tpname, -1);
 }
 
 static Node *
@@ -199,7 +199,7 @@ makeBoolAConst(bool state, int location)
 	A_Const *n = makeNode(A_Const);
 
 	n->val.type = T_String;
-	n->val.val.str = (state ? "t" : "f");
+	n->val.val.str = (state ? (char*) "t" : (char*) "f");
 	n->location = location;
 
 	return makeTypeCast((Node *)n, SystemTypeName("bool"), -1);
@@ -273,10 +273,10 @@ static Node* makeParamRef(int number, int location)
 }
 
 static Node *
-makeParamRefCast(int number, int location, TypeName *typename)
+makeParamRefCast(int number, int location, TypeName *tpname)
 {
 	Node *p = makeParamRef(number, location);
-	return makeTypeCast(p, typename, -1);
+	return makeTypeCast(p, tpname, -1);
 }
 
 /* insertSelectOptions()
@@ -353,7 +353,7 @@ makeSetOp(SetOperation op, bool all, Node *larg, Node *rarg)
  * Build a properly-qualified reference to a built-in function.
  */
 List *
-SystemFuncName(char *name)
+SystemFuncName(const char *name)
 {
 	return list_make2(makeString(DEFAULT_SCHEMA), makeString(name));
 }
@@ -365,7 +365,7 @@ SystemFuncName(char *name)
  * Likewise for the location.
  */
 TypeName *
-SystemTypeName(char *name)
+SystemTypeName(const char *name)
 {
 	return makeTypeNameFromNameList(list_make2(makeString(DEFAULT_SCHEMA),
 											   makeString(name)));
@@ -486,7 +486,7 @@ makeAArrayExpr(List *elements, int location)
 }
 
 static Node *
-makeSQLValueFunction(SQLValueFunctionOp op, int32 typmod, int location)
+makeSQLValueFunction(SQLValueFunctionOp op, int32_t typmod, int location)
 {
 	SQLValueFunction *svf = makeNode(SQLValueFunction);
 

@@ -9,19 +9,19 @@ VariableShowStmt:
 			| SHOW TIME ZONE
 				{
 					VariableShowStmt *n = makeNode(VariableShowStmt);
-					n->name = "timezone";
+					n->name = (char*) "timezone";
 					$$ = (Node *) n;
 				}
 			| SHOW TRANSACTION ISOLATION LEVEL
 				{
 					VariableShowStmt *n = makeNode(VariableShowStmt);
-					n->name = "transaction_isolation";
+					n->name = (char*) "transaction_isolation";
 					$$ = (Node *) n;
 				}
 			| SHOW ALL
 				{
 					VariableShowStmt *n = makeNode(VariableShowStmt);
-					n->name = "all";
+					n->name = (char*) "all";
 					$$ = (Node *) n;
 				}
 		;

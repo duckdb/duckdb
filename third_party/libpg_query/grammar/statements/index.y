@@ -64,7 +64,7 @@ access_method:
 
 access_method_clause:
 			USING access_method						{ $$ = $2; }
-			| /*EMPTY*/								{ $$ = DEFAULT_INDEX_TYPE; }
+			| /*EMPTY*/								{ $$ = (char*) DEFAULT_INDEX_TYPE; }
 		;
 
 

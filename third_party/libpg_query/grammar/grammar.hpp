@@ -42,19 +42,18 @@
  *
  *-------------------------------------------------------------------------
  */
-#include "pg_functions.h"
+#include "pg_functions.hpp"
 #include <string.h>
 
 #include <ctype.h>
 #include <limits.h>
 
-#include "catalog/pg_trigger.h"
-#include "nodes/makefuncs.h"
-#include "nodes/nodeFuncs.h"
-#include "parser/gramparse.h"
-#include "parser/parser.h"
-#include "parser/parse_expr.h"
-#include "utils/datetime.h"
+#include "nodes/makefuncs.hpp"
+#include "nodes/nodeFuncs.hpp"
+#include "parser/gramparse.hpp"
+#include "parser/parser.hpp"
+#include "parser/parse_expr.hpp"
+#include "utils/datetime.hpp"
 
 #define DEFAULT_SCHEMA "main"
 
@@ -102,6 +101,7 @@
  */
 #define YYMALLOC palloc
 #define YYFREE   pfree
+#define YYINITDEPTH 1000
 
 /* yields an integer bitmask of these flags: */
 #define CAS_NOT_DEFERRABLE			0x01
@@ -121,9 +121,9 @@ static RawStmt *makeRawStmt(Node *stmt, int stmt_location);
 static void updateRawStmtEnd(RawStmt *rs, int end_location);
 static Node *makeColumnRef(char *colname, List *indirection,
 						   int location, core_yyscan_t yyscanner);
-static Node *makeTypeCast(Node *arg, TypeName *typename, int location);
+static Node *makeTypeCast(Node *arg, TypeName *tpname, int location);
 static Node *makeStringConst(char *str, int location);
-static Node *makeStringConstCast(char *str, int location, TypeName *typename);
+static Node *makeStringConstCast(char *str, int location, TypeName *tpname);
 static Node *makeIntConst(int val, int location);
 static Node *makeFloatConst(char *str, int location);
 static Node *makeBitStringConst(char *str, int location);
@@ -131,7 +131,7 @@ static Node *makeNullAConst(int location);
 static Node *makeAConst(Value *v, int location);
 static Node *makeBoolAConst(bool state, int location);
 static Node *makeParamRef(int number, int location);
-static Node *makeParamRefCast(int number, int location, TypeName *typename);
+static Node *makeParamRefCast(int number, int location, TypeName *tpname);
 static void check_qualified_name(List *names, core_yyscan_t yyscanner);
 static List *check_func_name(List *names, core_yyscan_t yyscanner);
 static List *check_indirection(List *indirection, core_yyscan_t yyscanner);
@@ -147,7 +147,7 @@ static Node *makeAndExpr(Node *lexpr, Node *rexpr, int location);
 static Node *makeOrExpr(Node *lexpr, Node *rexpr, int location);
 static Node *makeNotExpr(Node *expr, int location);
 static Node *makeAArrayExpr(List *elements, int location);
-static Node *makeSQLValueFunction(SQLValueFunctionOp op, int32 typmod,
+static Node *makeSQLValueFunction(SQLValueFunctionOp op, int32_t typmod,
 								  int location);
 static RangeVar *makeRangeVarFromAnyName(List *names, int position, core_yyscan_t yyscanner);
 static void SplitColQualList(List *qualList,

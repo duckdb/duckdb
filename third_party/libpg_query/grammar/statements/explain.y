@@ -94,9 +94,9 @@ analyze_keyword:
 
 
 opt_boolean_or_string:
-			TRUE_P									{ $$ = "true"; }
-			| FALSE_P								{ $$ = "false"; }
-			| ON									{ $$ = "on"; }
+			TRUE_P									{ $$ = (char*) "true"; }
+			| FALSE_P								{ $$ = (char*) "false"; }
+			| ON									{ $$ = (char*) "on"; }
 			/*
 			 * OFF is also accepted as a boolean value, but is handled by
 			 * the NonReservedWord rule.  The action for booleans and strings
@@ -116,5 +116,5 @@ explain_option_elem:
 
 explain_option_name:
 			NonReservedWord			{ $$ = $1; }
-			| analyze_keyword		{ $$ = "analyze"; }
+			| analyze_keyword		{ $$ = (char*) "analyze"; }
 		;

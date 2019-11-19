@@ -13,11 +13,11 @@ header_file        = os.path.join(base_dir, 'grammar.hpp')
 source_file        = os.path.join(base_dir, 'grammar.cpp')
 type_dir           = os.path.join(base_dir, 'types')
 rule_dir           = os.path.join(base_dir, 'statements')
-result_source      = os.path.join(base_dir, 'grammar.c')
-result_header      = os.path.join(base_dir, 'grammar.h')
-target_source_loc  = os.path.join(pg_dir, 'src_backend_parser_gram.c')
-target_header_loc  = os.path.join(pg_dir, 'include/parser/gram.h')
-kwlist_header      = os.path.join(pg_dir, 'include/parser/kwlist.h')
+result_source      = os.path.join(base_dir, 'grammar_out.cpp')
+result_header      = os.path.join(base_dir, 'grammar_out.hpp')
+target_source_loc  = os.path.join(pg_dir, 'src_backend_parser_gram.cpp')
+target_header_loc  = os.path.join(pg_dir, 'include/parser/gram.hpp')
+kwlist_header      = os.path.join(pg_dir, 'include/parser/kwlist.hpp')
 
 # parse the keyword lists
 def read_list_from_file(fname):
@@ -127,11 +127,9 @@ grammar_rules = concat_dir(rule_dir, ".y")
 
 text = text.replace("{{{ GRAMMAR RULES }}}", grammar_rules)
 
-# finally write the yacc file into the
+# finally write the yacc file into the target file
 with open(target_file, 'w+') as f:
     f.write(text)
-
-os.system('cp %s %s' % ('third_party/libpg_query/gram.y', target_file))
 
 # generate the bison
 cmd = [bison_location, "-o", result_source, "-d", target_file]

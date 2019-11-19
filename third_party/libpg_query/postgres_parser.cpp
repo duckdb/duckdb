@@ -1,9 +1,7 @@
 #include "postgres_parser.hpp"
 
-extern "C" {
-#include "pg_functions.h"
-#include "parser/parser.h"
-}
+#include "pg_functions.hpp"
+#include "parser/parser.hpp"
 
 using namespace postgres;
 using namespace std;

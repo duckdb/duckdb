@@ -1,1 +1,1 @@
-%type <ival> opt_check_option
+%type <viewcheckoption> opt_check_option

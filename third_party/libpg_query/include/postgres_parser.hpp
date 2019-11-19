@@ -1,16 +1,7 @@
 #pragma once
 
 #include <string>
-
-extern "C" {
-typedef uint32_t Oid;
-typedef int16_t int16;
-#define PGDLLIMPORT
-#ifdef _MSC_VER
-#define __thread __declspec(thread)
-#endif
-#include "nodes/pg_list.h"
-}
+#include "nodes/pg_list.hpp"
 
 namespace postgres {
 

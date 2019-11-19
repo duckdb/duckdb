@@ -2,21 +2,23 @@
 				simple_select values_clause
 
 
-%type <ival> opt_asc_desc opt_nulls_order
+%type <sortorder> opt_asc_desc
+%type <nullorder> opt_nulls_order
 
 %type <node> opt_collate_clause
 
 
 
 
-%type <ival>	opt_nowait_or_skip
+%type <lockwaitpolicy>	opt_nowait_or_skip
 
 %type <str>	 			 attr_name
 				name
 %type <list>	func_name qual_Op qual_all_Op subquery_Op
 
 %type <range>	qualified_name
-%type <str>		all_Op MathOp
+%type <str>		all_Op
+%type <conststr> MathOp
 
 
 %type <list>	distinct_clause opt_all_clause 			 			 			 			 			 			 opt_name_list
@@ -32,7 +34,7 @@
 
 
 
-%type <ival>	for_locking_strength
+%type <lockstrength>	for_locking_strength
 %type <node>	for_locking_item
 %type <list>	for_locking_clause opt_for_locking_clause for_locking_items
 %type <list>	locked_rels_list
@@ -66,7 +68,7 @@
 %type <list>	row type_list
 %type <node>	case_expr case_arg when_clause case_default
 %type <list>	when_clause_list
-%type <ival>	sub_type
+%type <subquerytype>	sub_type
 
 %type <alias>	alias_clause opt_alias_clause
 %type <list>	func_alias_clause
@@ -87,7 +89,7 @@
 				CharacterWithLength CharacterWithoutLength
 				ConstDatetime ConstInterval
 				Bit ConstBit BitWithLength BitWithoutLength
-%type <str>		character
+%type <conststr>		character
 %type <str>		extract_arg
 %type <boolean> opt_varying opt_timezone
 %type <ival>	Iconst

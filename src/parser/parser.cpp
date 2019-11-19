@@ -5,7 +5,7 @@
 #include "postgres_parser.hpp"
 
 namespace postgres {
-#include "parser/parser.h"
+#include "parser/parser.hpp"
 }
 
 using namespace duckdb;

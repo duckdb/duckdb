@@ -42,7 +42,7 @@ set_rest:	/* Generic SET syntaxes: */
 				{
 					VariableSetStmt *n = makeNode(VariableSetStmt);
 					n->kind = VAR_SET_VALUE;
-					n->name = "timezone";
+					n->name = (char*) "timezone";
 					if ($3 != NULL)
 						n->args = list_make1($3);
 					else
@@ -53,7 +53,7 @@ set_rest:	/* Generic SET syntaxes: */
 				{
 					VariableSetStmt *n = makeNode(VariableSetStmt);
 					n->kind = VAR_SET_VALUE;
-					n->name = "search_path";
+					n->name = (char*) "search_path";
 					n->args = list_make1(makeStringConst($2, @2));
 					$$ = n;
 				}

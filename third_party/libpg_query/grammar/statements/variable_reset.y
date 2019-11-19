@@ -26,14 +26,14 @@ reset_rest:
 				{
 					VariableSetStmt *n = makeNode(VariableSetStmt);
 					n->kind = VAR_RESET;
-					n->name = "timezone";
+					n->name = (char*) "timezone";
 					$$ = n;
 				}
 			| TRANSACTION ISOLATION LEVEL
 				{
 					VariableSetStmt *n = makeNode(VariableSetStmt);
 					n->kind = VAR_RESET;
-					n->name = "transaction_isolation";
+					n->name = (char*) "transaction_isolation";
 					$$ = n;
 				}
 		;

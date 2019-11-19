@@ -17,6 +17,7 @@
 	int					ival;
 	char				*str;
 	const char			*keyword;
+	const char          *conststr;
 
 	char				chr;
 	bool				boolean;
@@ -44,6 +45,13 @@
 	ResTarget			*target;
 	InsertStmt			*istmt;
 	VariableSetStmt		*vsetstmt;
+	OverridingKind       override;
+	SortByDir            sortorder;
+	SortByNulls          nullorder;
+	LockClauseStrength lockstrength;
+	LockWaitPolicy lockwaitpolicy;
+	SubLinkType subquerytype;
+	ViewCheckOption viewcheckoption;
 }
 
 %type <node> stmt
