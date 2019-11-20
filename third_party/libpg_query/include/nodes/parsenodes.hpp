@@ -582,7 +582,7 @@ typedef struct TableLikeClause
 {
 	NodeTag		type;
 	RangeVar   *relation;
-	bits32		options;		/* OR of TableLikeOption flags */
+	uint32_t		options;		/* OR of TableLikeOption flags */
 } TableLikeClause;
 
 typedef enum TableLikeOption
@@ -594,7 +594,7 @@ typedef enum TableLikeOption
 	CREATE_TABLE_LIKE_STORAGE = 1 << 4,
 	CREATE_TABLE_LIKE_COMMENTS = 1 << 5,
 	CREATE_TABLE_LIKE_STATISTICS = 1 << 6,
-	CREATE_TABLE_LIKE_ALL = PG_INT32_MAX
+	CREATE_TABLE_LIKE_ALL = INT_MAX
 } TableLikeOption;
 
 /*

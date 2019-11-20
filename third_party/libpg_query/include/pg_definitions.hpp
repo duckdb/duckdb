@@ -16,12 +16,10 @@ typedef int64_t int64;
 
 typedef uint32_t uint32;
 typedef uint32_t Index;
-typedef uint32_t bits32;
 typedef uint32_t Oid;
 
 #define InvalidOid ((Oid)0)
 
-typedef int32_t LOCKMODE;
 typedef int32_t int32;
 
 typedef int16_t int16;
@@ -40,8 +38,6 @@ typedef uint8_t uint8;
 
 #define HAVE_LONG_INT_64
 
-#define PG_INT32_MAX INT_MAX
-
 #ifndef _MSC_VER
 #include <assert.h>
 #define Assert(a) assert(a);
@@ -52,7 +48,6 @@ typedef uint8_t uint8;
 #endif
 #define _(a) (a)
 
-#define pg_attribute_noreturn()
 #define lengthof(array) (sizeof(array) / sizeof((array)[0]))
 #define CppConcat(x, y) x##y
 
@@ -63,10 +58,6 @@ typedef uint8_t uint8;
 #define FUNC_MAX_ARGS 100
 #define FLEXIBLE_ARRAY_MEMBER
 
-#define PG_USE_INLINE
-#define STATIC_IF_INLINE static inline
-
-#define AMTYPE_INDEX 'i'
 #define DEFAULT_INDEX_TYPE "art"
 #define INTERVAL_MASK(b) (1 << (b))
 
@@ -74,7 +65,7 @@ typedef uint8_t uint8;
 #define __thread __declspec(thread)
 #endif
 
-    typedef struct {
+typedef struct {
 	int32_t vl_len_;    /* these fields must match ArrayType! */
 	int ndim;         /* always 1 for int2vector */
 	int32_t dataoffset; /* always 0 for int2vector */
@@ -84,7 +75,7 @@ typedef uint8_t uint8;
 	int16_t values[];
 } int2vector;
 
-typedef struct nameData {
+typedef struct NameData {
 	char data[NAMEDATALEN];
 } NameData;
 typedef NameData *Name;
