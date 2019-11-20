@@ -219,7 +219,7 @@ int main(int argc, char **argv) {
 	srand(time(nullptr));
 
 	DBConfig config;
-	string dbfile;
+	string dbfile = "";
 	string logfile_name;
 
 	string listen = "localhost";
@@ -297,11 +297,11 @@ int main(int argc, char **argv) {
 	if (!logfile_name.empty()) {
 		logfile.open(logfile_name, std::ios_base::app);
 	}
-	DuckDB duckdb(dbfile.empty() ? nullptr : dbfile, &config);
+
+	DuckDB duckdb(dbfile.empty() ? nullptr : dbfile.c_str(), &config);
 
 	svr.Get("/query", [&](const Request &req, Response &resp) {
 		auto q = req.get_param_value("q");
-
 		{
 			std::lock_guard<std::mutex> guard(out_mutex);
 			logfile << q << " ; -- DFgoEnx9UIRgHFsVYW8K" << std::endl
@@ -354,7 +354,6 @@ int main(int argc, char **argv) {
 			string query_ref = random_string(10);
 			j["ref"] = query_ref;
 			auto chunk = state.res->Fetch();
-
 			serialize_chunk(state.res.get(), chunk.get(), j);
 			{
 				std::lock_guard<std::mutex> guard(client_state_map_mutex);
@@ -392,10 +391,7 @@ int main(int argc, char **argv) {
 
 			j = {{"success", true}, {"ref", ref}, {"count", chunk->data[0].count}, {"data", json::array()}};
 			serialize_chunk(state.res.get(), chunk.get(), j);
-			if (chunk->data[0].count == 0) {
-				client_state_map.erase(client_state_map.find(ref));
-			}
-			{
+			if (chunk->data[0].count != 0) {
 				std::lock_guard<std::mutex> guard(client_state_map_mutex);
 				client_state_map[ref] = move(state);
 			}
@@ -410,7 +406,7 @@ int main(int argc, char **argv) {
 		auto ref = req.get_param_value("ref");
 		Connection conn(duckdb);
 		json j;
-
+		std::lock_guard<std::mutex> guard(client_state_map_mutex);
 		if (client_state_map.find(ref) != client_state_map.end()) {
 			client_state_map.erase(client_state_map.find(ref));
 			j = {{"success", true}, {"ref", ref}};
