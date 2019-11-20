@@ -71,8 +71,8 @@ ViewStmt: CREATE OptTemp VIEW qualified_name opt_column_list opt_reloptions
 
 
 opt_check_option:
-		WITH CHECK OPTION				{ $$ = CASCADED_CHECK_OPTION; }
-		| WITH CASCADED CHECK OPTION	{ $$ = CASCADED_CHECK_OPTION; }
-		| WITH LOCAL CHECK OPTION		{ $$ = PG_LOCAL_CHECK_OPTION; }
+		WITH CHECK_P OPTION				{ $$ = CASCADED_CHECK_OPTION; }
+		| WITH CASCADED CHECK_P OPTION	{ $$ = CASCADED_CHECK_OPTION; }
+		| WITH LOCAL CHECK_P OPTION		{ $$ = PG_LOCAL_CHECK_OPTION; }
 		| /* EMPTY */					{ $$ = PG_NO_CHECK_OPTION; }
 		;

@@ -29,14 +29,8 @@ typedef struct PGScanKeyword
 	int16_t		category;		/* see codes above */
 } PGScanKeyword;
 
-#ifndef FRONTEND
 extern const PGScanKeyword ScanKeywords[];
 extern const int NumScanKeywords;
-#else
-extern const PGScanKeyword ScanKeywords[];
-extern const int NumScanKeywords;
-#endif
-
 
 extern const PGScanKeyword *ScanKeywordLookup(const char *text,
 				  const PGScanKeyword *keywords,

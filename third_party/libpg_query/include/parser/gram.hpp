@@ -101,7 +101,7 @@
      CHAR_P = 317,
      CHARACTER = 318,
      CHARACTERISTICS = 319,
-     CHECK = 320,
+     CHECK_P = 320,
      CHECKPOINT = 321,
      CLASS = 322,
      CLOSE = 323,
@@ -556,7 +556,7 @@
 #define CHAR_P 317
 #define CHARACTER 318
 #define CHARACTERISTICS 319
-#define CHECK 320
+#define CHECK_P 320
 #define CHECKPOINT 321
 #define CLASS 322
 #define CLOSE 323

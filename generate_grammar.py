@@ -64,12 +64,22 @@ kwlist.sort(key=lambda x: strip_p(x[0]))
 
 # now generate kwlist.h
 # PG_KEYWORD("abort", ABORT_P, UNRESERVED_KEYWORD)
-kwtext = ""
+kwtext = """
+#define PG_KEYWORD(a,b,c) {a,b,c},
+
+const PGScanKeyword ScanKeywords[] = {
+"""
 for tpl in kwlist:
     kwtext += 'PG_KEYWORD("%s", %s, %s)\n' % (strip_p(tpl[0]).lower(), tpl[0], tpl[1])
+kwtext += """
+};
+
+const int NumScanKeywords = lengthof(ScanKeywords);
+"""
 
 with open(kwlist_header, 'w+') as f:
     f.write(kwtext)
+
 
 # generate the final main.y.tmp file
 # first read the template file

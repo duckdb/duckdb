@@ -24,30 +24,9 @@
 #include "pg_functions.hpp"
 #include <string.h>
 
-#ifndef FRONTEND
-
 #include "parser/gramparse.hpp"
 
-#define PG_KEYWORD(a,b,c) {a,b,c},
-
-#else
-
-#include "common/keywords.hpp"
-
-/*
- * We don't need the token number for frontend uses, so leave it out to avoid
- * requiring backend headers that won't compile cleanly here.
- */
-#define PG_KEYWORD(a,b,c) {a,0,c},
-
-#endif							/* FRONTEND */
-
-
-const PGScanKeyword ScanKeywords[] = {
 #include "parser/kwlist.hpp"
-};
-
-const int	NumScanKeywords = lengthof(ScanKeywords);
 
 
 /*

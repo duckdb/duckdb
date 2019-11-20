@@ -3,8 +3,8 @@ header_file = "duckdb.hpp"
 source_file = "duckdb.cpp"
 cache_file = 'amalgamation.cache'
 include_paths = ["src/include", "third_party/hyperloglog", "third_party/re2", "third_party/miniz", "third_party/libpg_query/include", "third_party/libpg_query"]
-compile_directories = ['third_party/hyperloglog', 'third_party/libpg_query', 'third_party/miniz', 'third_party/re2', 'src']
-excluded_files = ["duckdb-c.cpp", 'grammar.cpp', 'grammar.hpp', 'gram.hpp', 'kwlist.hpp']
+compile_directories = ['src', 'third_party/hyperloglog', 'third_party/miniz', 'third_party/re2', 'third_party/libpg_query']
+excluded_files = ["duckdb-c.cpp", 'grammar.cpp', 'grammar.hpp', 'gram.hpp', 'kwlist.hpp', 'symbols.cpp']
 
 import os, re, sys, pickle
 
@@ -23,14 +23,12 @@ if not resume:
 	except:
 		pass
 
-def get_includes(fpath):
-	with open(fpath, 'r') as f:
-		text = f.read()
+def get_includes(fpath, text):
 	# find all the includes referred to in the directory
-	include_statements = re.findall("^[#]include[\t ]+[\"]([^\"]+)", text, flags=re.MULTILINE)
+	include_statements = re.findall("(^[#]include[\t ]+[\"]([^\"]+)[\"])", text, flags=re.MULTILINE)
 	include_files = []
 	# figure out where they are located
-	for statement in include_statements:
+	for statement in [x[1] for x in include_statements]:
 		found = False
 		for include_path in include_paths:
 			ipath = os.path.join(include_path, statement)
@@ -40,39 +38,39 @@ def get_includes(fpath):
 				break
 		if not found:
 			raise Exception('Could not find include file "' + statement + '", included from file "' + fpath + '"')
-	return include_files
+	return ([x[0] for x in include_statements], include_files)
 
-def cleanup_file(fpath, text):
-	# remove all includes of non-system headers
-	text = re.sub("^[#]include [\"][^\n]+", "", text, flags=re.MULTILINE)
+def cleanup_file(text):
 	# remove all "#pragma once" notifications
 	text = re.sub('#pragma once', '', text)
 	return text
 
 # recursively get all includes and write them
-written_headers = {}
+written_files = {}
 
-def write_file(current_file, hfile, write_line_pragma=False):
+def write_file(current_file):
+	global written_files
 	if current_file.split('/')[-1] in excluded_files:
-		print(current_file)
-		return
-	if current_file in written_headers:
-		# header is already written
-		return
-	written_headers[current_file] = True
+		# file is in ignored files set
+		return ""
+	if current_file in written_files:
+		# file is already written
+		return ""
+	written_files[current_file] = True
+
+	# first read this file
+	with open(current_file, 'r') as f:
+		text = f.read()
+
+	(statements, includes) = get_includes(current_file, text)
+	# now write all the dependencies of this header first
+	for i in range(len(includes)):
+		include_text = write_file(includes[i])
+		text = text.replace(statements[i], include_text)
 
 	print(current_file)
-
-	# find includes of this header
-	includes = get_includes(current_file)
-	# now write all the dependencies of this header first
-	for include in includes:
-		write_file(include, hfile, write_line_pragma)
 	# now read the header and write it
-	with open(current_file, 'r') as f:
-		if write_line_pragma:
-			hfile.write('#line 0 "' + current_file + '"\n')
-		hfile.write(cleanup_file(current_file, f.read()))
+	return cleanup_file(text)
 
 def try_compilation(fpath, cache):
 	if fpath in cache:
@@ -89,6 +87,7 @@ def try_compilation(fpath, cache):
 
 def compile_dir(dir, cache):
 	files = os.listdir(dir)
+	files.sort()
 	for fname in files:
 		if fname in excluded_files:
 			continue
@@ -116,16 +115,19 @@ print("-- Writing duckdb.hpp --")
 print("-----------------------")
 with open(header_file, 'w+') as hfile:
 	hfile.write("#pragma once\n")
-	write_file('src/include/duckdb.hpp', hfile)
+	hfile.write(write_file('src/include/duckdb.hpp'))
 
 def write_dir(dir, sfile):
 	files = os.listdir(dir)
+	files.sort()
 	for fname in files:
+		if fname in excluded_files:
+			continue
 		fpath = os.path.join(dir, fname)
 		if os.path.isdir(fpath):
 			write_dir(fpath, sfile)
 		elif fname.endswith('.cpp') or fname.endswith('.c') or fname.endswith('.cc'):
-			write_file(fpath, sfile, True)
+			sfile.write(write_file(fpath))
 
 # now construct duckdb.cpp
 print("------------------------")

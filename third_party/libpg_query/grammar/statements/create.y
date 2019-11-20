@@ -155,7 +155,7 @@ ColConstraintElem:
 					n->indexname = NULL;
 					$$ = (PGNode *)n;
 				}
-			| CHECK '(' a_expr ')' opt_no_inherit
+			| CHECK_P '(' a_expr ')' opt_no_inherit
 				{
 					PGConstraint *n = makeNode(PGConstraint);
 					n->contype = PG_CONSTR_CHECK;
@@ -495,7 +495,7 @@ func_type:	Typename								{ $$ = $1; }
 
 
 ConstraintElem:
-			CHECK '(' a_expr ')' ConstraintAttributeSpec
+			CHECK_P '(' a_expr ')' ConstraintAttributeSpec
 				{
 					PGConstraint *n = makeNode(PGConstraint);
 					n->contype = PG_CONSTR_CHECK;
