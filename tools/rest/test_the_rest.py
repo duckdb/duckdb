@@ -156,6 +156,26 @@ res = fetch(res['ref'])
 if not res['success']:
 	raise
 
+time.sleep(1)
+
+res = fetch(res['ref'])
+if not res['success']:
+	raise
+
+time.sleep(1)
+
+res = fetch(res['ref'])
+if not res['success']:
+	raise
+
+time.sleep(1)
+
+# still valid because the time between the individual fetch calls was less than two seconds
+res = fetch(res['ref'])
+if not res['success']:
+	raise
+
+
 time.sleep(3)
 
 # this should now fail because the timeout hit

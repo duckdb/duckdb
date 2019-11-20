@@ -393,6 +393,7 @@ int main(int argc, char **argv) {
 			serialize_chunk(state.res.get(), chunk.get(), j);
 			if (chunk->data[0].count != 0) {
 				std::lock_guard<std::mutex> guard(client_state_map_mutex);
+				state.touched = std::time(nullptr);
 				client_state_map[ref] = move(state);
 			}
 		} else {
