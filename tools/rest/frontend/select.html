@@ -67,7 +67,8 @@
         <div class="bs-docs-section">
 
           <h2>Query away on TPC-H with DuckDB</h2>
-          <p>Hint: Use Ctrl-Space to autocomplete keywords, table and column names.</p>
+          <p>This demo allows queries on a TPC-H database, scale factor 1. See <a href="images/tpch-schema.png">here</a> for a schema.</p>
+          <p>Hint: Use Ctrl-Space to autocomplete keywords, table and column names. Use Ctrl-Enter to execute the query.</p>
           <div class="panel panel-default" id="query">
             <div class="panel-body">
               <button type="button" class="btn" style="float: left; margin-top: 4px"><span class="glyphicon glyphicon-play"></span></button>
@@ -160,7 +161,6 @@ window.onload = function() {
     }
 
 
-  
   var ele = $("#query")[0];
   var cm = CodeMirror.fromTextArea($(ele).find("textarea")[0], {
     mode: 'text/x-sql',
@@ -170,7 +170,8 @@ window.onload = function() {
     matchBrackets : true,
     lineWrapping: true,    
     autofocus: true,
-    extraKeys: {"Ctrl-Space": "autocomplete"},
+    extraKeys: {"Ctrl-Space": "autocomplete", 
+    "Ctrl-Enter": function(instance) { $( "#query button" ).trigger( "click" );}},
     // TODO query DB to get table and column names, hardcode for now
     hintOptions: {tables: {
 nation : [
