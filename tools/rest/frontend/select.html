@@ -131,6 +131,9 @@ window.onload = function() {
 
 
     function renderresult(res, header) {
+      if (res.data.length == 0) {
+        return;
+      }
         var tdata = '';
         if (header) {
           var tdata = '<thead><tr>';
@@ -284,6 +287,11 @@ lineitem : [
         $("#loading-spinner").hide();
         return;
       }
+      if (data.data.length == 0) {
+                message.removeClass('alert-warning').addClass('alert-success').show();
+        messageCntnt.text("Query with empty result.")
+      }
+
       table.append(renderresult(data, true)).show();
       ref = data.ref;
       fetching = false;
