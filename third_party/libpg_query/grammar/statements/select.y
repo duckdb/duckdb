@@ -343,9 +343,9 @@ opt_table:	TABLE									{}
 		;
 
 all_or_distinct:
-			ALL										{ $$ = TRUE; }
-			| DISTINCT								{ $$ = FALSE; }
-			| /*EMPTY*/								{ $$ = FALSE; }
+			ALL										{ $$ = true; }
+			| DISTINCT								{ $$ = false; }
+			| /*EMPTY*/								{ $$ = false; }
 		;
 
 /* We use (NIL) as a placeholder to indicate that all target expressions
@@ -769,7 +769,7 @@ joined_table:
 					/* CROSS JOIN is same as unqualified inner join */
 					PGJoinExpr *n = makeNode(PGJoinExpr);
 					n->jointype = PG_JOIN_INNER;
-					n->isNatural = FALSE;
+					n->isNatural = false;
 					n->larg = $1;
 					n->rarg = $4;
 					n->usingClause = NIL;
@@ -780,7 +780,7 @@ joined_table:
 				{
 					PGJoinExpr *n = makeNode(PGJoinExpr);
 					n->jointype = $2;
-					n->isNatural = FALSE;
+					n->isNatural = false;
 					n->larg = $1;
 					n->rarg = $4;
 					if ($5 != NULL && IsA($5, PGList))
@@ -794,7 +794,7 @@ joined_table:
 					/* letting join_type reduce to empty doesn't work */
 					PGJoinExpr *n = makeNode(PGJoinExpr);
 					n->jointype = PG_JOIN_INNER;
-					n->isNatural = FALSE;
+					n->isNatural = false;
 					n->larg = $1;
 					n->rarg = $3;
 					if ($4 != NULL && IsA($4, PGList))
@@ -807,7 +807,7 @@ joined_table:
 				{
 					PGJoinExpr *n = makeNode(PGJoinExpr);
 					n->jointype = $3;
-					n->isNatural = TRUE;
+					n->isNatural = true;
 					n->larg = $1;
 					n->rarg = $5;
 					n->usingClause = NIL; /* figure out which columns later... */
@@ -819,7 +819,7 @@ joined_table:
 					/* letting join_type reduce to empty doesn't work */
 					PGJoinExpr *n = makeNode(PGJoinExpr);
 					n->jointype = PG_JOIN_INNER;
-					n->isNatural = TRUE;
+					n->isNatural = true;
 					n->larg = $1;
 					n->rarg = $4;
 					n->usingClause = NIL; /* figure out which columns later... */
@@ -1094,7 +1094,7 @@ Typename:	SimpleTypename opt_array_bounds
 				{
 					$$ = $2;
 					$$->arrayBounds = $3;
-					$$->setof = TRUE;
+					$$->setof = true;
 				}
 			/* SQL standard syntax, currently only one-dimensional */
 			| SimpleTypename ARRAY '[' Iconst ']'
@@ -1106,7 +1106,7 @@ Typename:	SimpleTypename opt_array_bounds
 				{
 					$$ = $2;
 					$$->arrayBounds = list_make1(makeInteger($5));
-					$$->setof = TRUE;
+					$$->setof = true;
 				}
 			| SimpleTypename ARRAY
 				{
@@ -1117,7 +1117,7 @@ Typename:	SimpleTypename opt_array_bounds
 				{
 					$$ = $2;
 					$$->arrayBounds = list_make1(makeInteger(-1));
-					$$->setof = TRUE;
+					$$->setof = true;
 				}
 		;
 
@@ -1404,8 +1404,8 @@ character:	CHARACTER opt_varying
 		;
 
 opt_varying:
-			VARYING									{ $$ = TRUE; }
-			| /*EMPTY*/								{ $$ = FALSE; }
+			VARYING									{ $$ = true; }
+			| /*EMPTY*/								{ $$ = false; }
 		;
 
 /*
@@ -1457,9 +1457,9 @@ ConstInterval:
 		;
 
 opt_timezone:
-			WITH_LA TIME ZONE						{ $$ = TRUE; }
-			| WITHOUT TIME ZONE						{ $$ = FALSE; }
-			| /*EMPTY*/								{ $$ = FALSE; }
+			WITH_LA TIME ZONE						{ $$ = true; }
+			| WITHOUT TIME ZONE						{ $$ = false; }
+			| /*EMPTY*/								{ $$ = false; }
 		;
 
 opt_interval:
@@ -2127,14 +2127,14 @@ func_application: func_name '(' ')'
 			| func_name '(' VARIADIC func_arg_expr opt_sort_clause ')'
 				{
 					PGFuncCall *n = makeFuncCall($1, list_make1($4), @1);
-					n->func_variadic = TRUE;
+					n->func_variadic = true;
 					n->agg_order = $5;
 					$$ = (PGNode *)n;
 				}
 			| func_name '(' func_arg_list ',' VARIADIC func_arg_expr opt_sort_clause ')'
 				{
 					PGFuncCall *n = makeFuncCall($1, lappend($3, $6), @1);
-					n->func_variadic = TRUE;
+					n->func_variadic = true;
 					n->agg_order = $7;
 					$$ = (PGNode *)n;
 				}
@@ -2152,7 +2152,7 @@ func_application: func_name '(' ')'
 				{
 					PGFuncCall *n = makeFuncCall($1, $4, @1);
 					n->agg_order = $5;
-					n->agg_distinct = TRUE;
+					n->agg_distinct = true;
 					$$ = (PGNode *)n;
 				}
 			| func_name '(' '*' ')'
@@ -2168,7 +2168,7 @@ func_application: func_name '(' ')'
 					 * really was.
 					 */
 					PGFuncCall *n = makeFuncCall($1, NIL, @1);
-					n->agg_star = TRUE;
+					n->agg_star = true;
 					$$ = (PGNode *)n;
 				}
 		;
@@ -2212,7 +2212,7 @@ func_expr: func_application within_group_clause filter_clause over_clause
 									 errmsg("cannot use VARIADIC with WITHIN GROUP"),
 									 parser_errposition(@2)));
 						n->agg_order = $2;
-						n->agg_within_group = TRUE;
+						n->agg_within_group = true;
 					}
 					n->agg_filter = $3;
 					n->over = $4;
@@ -3227,11 +3227,11 @@ AexprConst: Iconst
 				}
 			| TRUE_P
 				{
-					$$ = makeBoolAConst(TRUE, @1);
+					$$ = makeBoolAConst(true, @1);
 				}
 			| FALSE_P
 				{
-					$$ = makeBoolAConst(FALSE, @1);
+					$$ = makeBoolAConst(false, @1);
 				}
 			| NULL_P
 				{

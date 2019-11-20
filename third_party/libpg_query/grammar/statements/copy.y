@@ -50,8 +50,8 @@ CopyStmt:	COPY opt_binary qualified_name opt_column_list opt_oids
 
 
 copy_from:
-			FROM									{ $$ = TRUE; }
-			| TO									{ $$ = FALSE; }
+			FROM									{ $$ = true; }
+			| TO									{ $$ = false; }
 		;
 
 
@@ -88,8 +88,8 @@ opt_as:		AS										{}
 
 
 opt_program:
-			PROGRAM									{ $$ = TRUE; }
-			| /* EMPTY */							{ $$ = FALSE; }
+			PROGRAM									{ $$ = true; }
+			| /* EMPTY */							{ $$ = false; }
 		;
 
 
@@ -118,7 +118,7 @@ copy_generic_opt_elem:
 opt_oids:
 			WITH OIDS
 				{
-					$$ = makeDefElem("oids", (PGNode *)makeInteger(TRUE), @1);
+					$$ = makeDefElem("oids", (PGNode *)makeInteger(true), @1);
 				}
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
@@ -146,11 +146,11 @@ copy_opt_item:
 				}
 			| OIDS
 				{
-					$$ = makeDefElem("oids", (PGNode *)makeInteger(TRUE), @1);
+					$$ = makeDefElem("oids", (PGNode *)makeInteger(true), @1);
 				}
 			| FREEZE
 				{
-					$$ = makeDefElem("freeze", (PGNode *)makeInteger(TRUE), @1);
+					$$ = makeDefElem("freeze", (PGNode *)makeInteger(true), @1);
 				}
 			| DELIMITER opt_as Sconst
 				{
@@ -166,7 +166,7 @@ copy_opt_item:
 				}
 			| HEADER_P
 				{
-					$$ = makeDefElem("header", (PGNode *)makeInteger(TRUE), @1);
+					$$ = makeDefElem("header", (PGNode *)makeInteger(true), @1);
 				}
 			| QUOTE opt_as Sconst
 				{

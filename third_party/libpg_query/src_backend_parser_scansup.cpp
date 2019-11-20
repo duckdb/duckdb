@@ -140,7 +140,7 @@ truncate_identifier(char *ident, int len, bool warn)
 }
 
 /*
- * scanner_isspace() --- return TRUE if flex scanner considers char whitespace
+ * scanner_isspace() --- return true if flex scanner considers char whitespace
  *
  * This should be used instead of the potentially locale-dependent isspace()
  * function when it's important to match the lexer's behavior.

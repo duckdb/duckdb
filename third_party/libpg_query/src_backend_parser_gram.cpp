@@ -13766,7 +13766,7 @@ yyreduce:
 					n->subtype = PG_AT_DropColumn;
 					n->name = (yyvsp[(5) - (6)].str);
 					n->behavior = (yyvsp[(6) - (6)].dbehavior);
-					n->missing_ok = TRUE;
+					n->missing_ok = true;
 					(yyval.node) = (PGNode *)n;
 				;}
     break;
@@ -13778,7 +13778,7 @@ yyreduce:
 					n->subtype = PG_AT_DropColumn;
 					n->name = (yyvsp[(3) - (4)].str);
 					n->behavior = (yyvsp[(4) - (4)].dbehavior);
-					n->missing_ok = FALSE;
+					n->missing_ok = false;
 					(yyval.node) = (PGNode *)n;
 				;}
     break;
@@ -13855,7 +13855,7 @@ yyreduce:
 					n->subtype = PG_AT_DropConstraint;
 					n->name = (yyvsp[(5) - (6)].str);
 					n->behavior = (yyvsp[(6) - (6)].dbehavior);
-					n->missing_ok = TRUE;
+					n->missing_ok = true;
 					(yyval.node) = (PGNode *)n;
 				;}
     break;
@@ -13867,7 +13867,7 @@ yyreduce:
 					n->subtype = PG_AT_DropConstraint;
 					n->name = (yyvsp[(3) - (4)].str);
 					n->behavior = (yyvsp[(4) - (4)].dbehavior);
-					n->missing_ok = FALSE;
+					n->missing_ok = false;
 					(yyval.node) = (PGNode *)n;
 				;}
     break;
@@ -14701,14 +14701,14 @@ yyreduce:
   case 172:
 #line 1745 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("cycle", (PGNode *)makeInteger(TRUE), (yylsp[(1) - (1)]));
+					(yyval.defelt) = makeDefElem("cycle", (PGNode *)makeInteger(true), (yylsp[(1) - (1)]));
 				;}
     break;
 
   case 173:
 #line 1749 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("cycle", (PGNode *)makeInteger(FALSE), (yylsp[(1) - (2)]));
+					(yyval.defelt) = makeDefElem("cycle", (PGNode *)makeInteger(false), (yylsp[(1) - (2)]));
 				;}
     break;
 
@@ -15228,12 +15228,12 @@ yyreduce:
 
   case 242:
 #line 2104 "third_party/libpg_query/grammar/grammar.y.tmp"
-    {  (yyval.boolean) = TRUE; ;}
+    {  (yyval.boolean) = true; ;}
     break;
 
   case 243:
 #line 2105 "third_party/libpg_query/grammar/grammar.y.tmp"
-    {  (yyval.boolean) = FALSE; ;}
+    {  (yyval.boolean) = false; ;}
     break;
 
   case 244:
@@ -15611,7 +15611,7 @@ yyreduce:
     {
 					(yyval.typnam) = makeTypeNameFromNameList(lcons(makeString((yyvsp[(2) - (5)].str)), (yyvsp[(3) - (5)].list)));
 					(yyval.typnam)->pct_type = true;
-					(yyval.typnam)->setof = TRUE;
+					(yyval.typnam)->setof = true;
 					(yyval.typnam)->location = (yylsp[(2) - (5)]);
 				;}
     break;
@@ -15840,7 +15840,7 @@ yyreduce:
     {
 					PGDropStmt *n = makeNode(PGDropStmt);
 					n->removeType = (yyvsp[(2) - (6)].objtype);
-					n->missing_ok = TRUE;
+					n->missing_ok = true;
 					n->objects = (yyvsp[(5) - (6)].list);
 					n->behavior = (yyvsp[(6) - (6)].dbehavior);
 					n->concurrent = false;
@@ -15853,7 +15853,7 @@ yyreduce:
     {
 					PGDropStmt *n = makeNode(PGDropStmt);
 					n->removeType = (yyvsp[(2) - (4)].objtype);
-					n->missing_ok = FALSE;
+					n->missing_ok = false;
 					n->objects = (yyvsp[(3) - (4)].list);
 					n->behavior = (yyvsp[(4) - (4)].dbehavior);
 					n->concurrent = false;
@@ -15866,7 +15866,7 @@ yyreduce:
     {
 					PGDropStmt *n = makeNode(PGDropStmt);
 					n->removeType = (yyvsp[(2) - (6)].objtype);
-					n->missing_ok = TRUE;
+					n->missing_ok = true;
 					n->objects = (yyvsp[(5) - (6)].list);
 					n->behavior = (yyvsp[(6) - (6)].dbehavior);
 					n->concurrent = false;
@@ -15879,7 +15879,7 @@ yyreduce:
     {
 					PGDropStmt *n = makeNode(PGDropStmt);
 					n->removeType = (yyvsp[(2) - (4)].objtype);
-					n->missing_ok = FALSE;
+					n->missing_ok = false;
 					n->objects = (yyvsp[(3) - (4)].list);
 					n->behavior = (yyvsp[(4) - (4)].dbehavior);
 					n->concurrent = false;
@@ -16122,12 +16122,12 @@ yyreduce:
 
   case 366:
 #line 2710 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = TRUE; ;}
+    { (yyval.boolean) = true; ;}
     break;
 
   case 367:
 #line 2711 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = FALSE; ;}
+    { (yyval.boolean) = false; ;}
     break;
 
   case 368:
@@ -16178,12 +16178,12 @@ yyreduce:
 
   case 376:
 #line 2748 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = TRUE; ;}
+    { (yyval.boolean) = true; ;}
     break;
 
   case 377:
 #line 2749 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = FALSE; ;}
+    { (yyval.boolean) = false; ;}
     break;
 
   case 378:
@@ -16231,7 +16231,7 @@ yyreduce:
   case 386:
 #line 2777 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("oids", (PGNode *)makeInteger(TRUE), (yylsp[(1) - (2)]));
+					(yyval.defelt) = makeDefElem("oids", (PGNode *)makeInteger(true), (yylsp[(1) - (2)]));
 				;}
     break;
 
@@ -16272,14 +16272,14 @@ yyreduce:
   case 393:
 #line 2805 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("oids", (PGNode *)makeInteger(TRUE), (yylsp[(1) - (1)]));
+					(yyval.defelt) = makeDefElem("oids", (PGNode *)makeInteger(true), (yylsp[(1) - (1)]));
 				;}
     break;
 
   case 394:
 #line 2809 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("freeze", (PGNode *)makeInteger(TRUE), (yylsp[(1) - (1)]));
+					(yyval.defelt) = makeDefElem("freeze", (PGNode *)makeInteger(true), (yylsp[(1) - (1)]));
 				;}
     break;
 
@@ -16307,7 +16307,7 @@ yyreduce:
   case 398:
 #line 2825 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("header", (PGNode *)makeInteger(TRUE), (yylsp[(1) - (1)]));
+					(yyval.defelt) = makeDefElem("header", (PGNode *)makeInteger(true), (yylsp[(1) - (1)]));
 				;}
     break;
 
@@ -16734,17 +16734,17 @@ yyreduce:
 
   case 452:
 #line 3228 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = TRUE; ;}
+    { (yyval.boolean) = true; ;}
     break;
 
   case 453:
 #line 3229 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = FALSE; ;}
+    { (yyval.boolean) = false; ;}
     break;
 
   case 454:
 #line 3230 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = FALSE; ;}
+    { (yyval.boolean) = false; ;}
     break;
 
   case 455:
@@ -17281,7 +17281,7 @@ yyreduce:
 					/* CROSS JOIN is same as unqualified inner join */
 					PGJoinExpr *n = makeNode(PGJoinExpr);
 					n->jointype = PG_JOIN_INNER;
-					n->isNatural = FALSE;
+					n->isNatural = false;
 					n->larg = (yyvsp[(1) - (4)].node);
 					n->rarg = (yyvsp[(4) - (4)].node);
 					n->usingClause = NIL;
@@ -17295,7 +17295,7 @@ yyreduce:
     {
 					PGJoinExpr *n = makeNode(PGJoinExpr);
 					n->jointype = (yyvsp[(2) - (5)].jtype);
-					n->isNatural = FALSE;
+					n->isNatural = false;
 					n->larg = (yyvsp[(1) - (5)].node);
 					n->rarg = (yyvsp[(4) - (5)].node);
 					if ((yyvsp[(5) - (5)].node) != NULL && IsA((yyvsp[(5) - (5)].node), PGList))
@@ -17312,7 +17312,7 @@ yyreduce:
 					/* letting join_type reduce to empty doesn't work */
 					PGJoinExpr *n = makeNode(PGJoinExpr);
 					n->jointype = PG_JOIN_INNER;
-					n->isNatural = FALSE;
+					n->isNatural = false;
 					n->larg = (yyvsp[(1) - (4)].node);
 					n->rarg = (yyvsp[(3) - (4)].node);
 					if ((yyvsp[(4) - (4)].node) != NULL && IsA((yyvsp[(4) - (4)].node), PGList))
@@ -17328,7 +17328,7 @@ yyreduce:
     {
 					PGJoinExpr *n = makeNode(PGJoinExpr);
 					n->jointype = (yyvsp[(3) - (5)].jtype);
-					n->isNatural = TRUE;
+					n->isNatural = true;
 					n->larg = (yyvsp[(1) - (5)].node);
 					n->rarg = (yyvsp[(5) - (5)].node);
 					n->usingClause = NIL; /* figure out which columns later... */
@@ -17343,7 +17343,7 @@ yyreduce:
 					/* letting join_type reduce to empty doesn't work */
 					PGJoinExpr *n = makeNode(PGJoinExpr);
 					n->jointype = PG_JOIN_INNER;
-					n->isNatural = TRUE;
+					n->isNatural = true;
 					n->larg = (yyvsp[(1) - (4)].node);
 					n->rarg = (yyvsp[(4) - (4)].node);
 					n->usingClause = NIL; /* figure out which columns later... */
@@ -17673,7 +17673,7 @@ yyreduce:
     {
 					(yyval.typnam) = (yyvsp[(2) - (3)].typnam);
 					(yyval.typnam)->arrayBounds = (yyvsp[(3) - (3)].list);
-					(yyval.typnam)->setof = TRUE;
+					(yyval.typnam)->setof = true;
 				;}
     break;
 
@@ -17690,7 +17690,7 @@ yyreduce:
     {
 					(yyval.typnam) = (yyvsp[(2) - (6)].typnam);
 					(yyval.typnam)->arrayBounds = list_make1(makeInteger((yyvsp[(5) - (6)].ival)));
-					(yyval.typnam)->setof = TRUE;
+					(yyval.typnam)->setof = true;
 				;}
     break;
 
@@ -17707,7 +17707,7 @@ yyreduce:
     {
 					(yyval.typnam) = (yyvsp[(2) - (3)].typnam);
 					(yyval.typnam)->arrayBounds = list_make1(makeInteger(-1));
-					(yyval.typnam)->setof = TRUE;
+					(yyval.typnam)->setof = true;
 				;}
     break;
 
@@ -18083,12 +18083,12 @@ yyreduce:
 
   case 638:
 #line 4289 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = TRUE; ;}
+    { (yyval.boolean) = true; ;}
     break;
 
   case 639:
 #line 4290 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = FALSE; ;}
+    { (yyval.boolean) = false; ;}
     break;
 
   case 640:
@@ -18147,17 +18147,17 @@ yyreduce:
 
   case 645:
 #line 4342 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = TRUE; ;}
+    { (yyval.boolean) = true; ;}
     break;
 
   case 646:
 #line 4343 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = FALSE; ;}
+    { (yyval.boolean) = false; ;}
     break;
 
   case 647:
 #line 4344 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = FALSE; ;}
+    { (yyval.boolean) = false; ;}
     break;
 
   case 648:
@@ -19084,7 +19084,7 @@ yyreduce:
 #line 5010 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					PGFuncCall *n = makeFuncCall((yyvsp[(1) - (6)].list), list_make1((yyvsp[(4) - (6)].node)), (yylsp[(1) - (6)]));
-					n->func_variadic = TRUE;
+					n->func_variadic = true;
 					n->agg_order = (yyvsp[(5) - (6)].list);
 					(yyval.node) = (PGNode *)n;
 				;}
@@ -19094,7 +19094,7 @@ yyreduce:
 #line 5017 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					PGFuncCall *n = makeFuncCall((yyvsp[(1) - (8)].list), lappend((yyvsp[(3) - (8)].list), (yyvsp[(6) - (8)].node)), (yylsp[(1) - (8)]));
-					n->func_variadic = TRUE;
+					n->func_variadic = true;
 					n->agg_order = (yyvsp[(7) - (8)].list);
 					(yyval.node) = (PGNode *)n;
 				;}
@@ -19118,7 +19118,7 @@ yyreduce:
     {
 					PGFuncCall *n = makeFuncCall((yyvsp[(1) - (6)].list), (yyvsp[(4) - (6)].list), (yylsp[(1) - (6)]));
 					n->agg_order = (yyvsp[(5) - (6)].list);
-					n->agg_distinct = TRUE;
+					n->agg_distinct = true;
 					(yyval.node) = (PGNode *)n;
 				;}
     break;
@@ -19137,7 +19137,7 @@ yyreduce:
 					 * really was.
 					 */
 					PGFuncCall *n = makeFuncCall((yyvsp[(1) - (4)].list), NIL, (yylsp[(1) - (4)]));
-					n->agg_star = TRUE;
+					n->agg_star = true;
 					(yyval.node) = (PGNode *)n;
 				;}
     break;
@@ -19172,7 +19172,7 @@ yyreduce:
 									 errmsg("cannot use VARIADIC with WITHIN GROUP"),
 									 parser_errposition((yylsp[(2) - (4)]))));
 						n->agg_order = (yyvsp[(2) - (4)].list);
-						n->agg_within_group = TRUE;
+						n->agg_within_group = true;
 					}
 					n->agg_filter = (yyvsp[(3) - (4)].node);
 					n->over = (yyvsp[(4) - (4)].windef);
@@ -20518,14 +20518,14 @@ yyreduce:
   case 946:
 #line 6111 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeBoolAConst(TRUE, (yylsp[(1) - (1)]));
+					(yyval.node) = makeBoolAConst(true, (yylsp[(1) - (1)]));
 				;}
     break;
 
   case 947:
 #line 6115 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeBoolAConst(FALSE, (yylsp[(1) - (1)]));
+					(yyval.node) = makeBoolAConst(false, (yylsp[(1) - (1)]));
 				;}
     break;
 
@@ -20764,12 +20764,12 @@ yyreduce:
 
   case 989:
 #line 6333 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = TRUE; ;}
+    { (yyval.boolean) = true; ;}
     break;
 
   case 990:
 #line 6334 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = FALSE; ;}
+    { (yyval.boolean) = false; ;}
     break;
 
   case 991:
@@ -20794,12 +20794,12 @@ yyreduce:
 
   case 995:
 #line 6350 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = TRUE; ;}
+    { (yyval.boolean) = true; ;}
     break;
 
   case 996:
 #line 6351 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = FALSE; ;}
+    { (yyval.boolean) = false; ;}
     break;
 
   case 997:
@@ -20927,12 +20927,12 @@ yyreduce:
 
   case 1008:
 #line 6470 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = TRUE; ;}
+    { (yyval.boolean) = true; ;}
     break;
 
   case 1009:
 #line 6471 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = FALSE; ;}
+    { (yyval.boolean) = false; ;}
     break;
 
   case 1010:
@@ -21349,12 +21349,12 @@ yyreduce:
 
   case 1069:
 #line 6795 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = TRUE; ;}
+    { (yyval.boolean) = true; ;}
     break;
 
   case 1070:
 #line 6796 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = FALSE; ;}
+    { (yyval.boolean) = false; ;}
     break;
 
   case 1071:
@@ -21369,12 +21369,12 @@ yyreduce:
 
   case 1073:
 #line 6806 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = TRUE; ;}
+    { (yyval.boolean) = true; ;}
     break;
 
   case 1074:
 #line 6807 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = FALSE; ;}
+    { (yyval.boolean) = false; ;}
     break;
 
   case 1075:
@@ -21682,17 +21682,17 @@ yyreduce:
 
   case 1107:
 #line 7086 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = TRUE; ;}
+    { (yyval.boolean) = true; ;}
     break;
 
   case 1108:
 #line 7087 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = FALSE; ;}
+    { (yyval.boolean) = false; ;}
     break;
 
   case 1109:
 #line 7088 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.boolean) = TRUE; ;}
+    { (yyval.boolean) = true; ;}
     break;
 
   case 1110:

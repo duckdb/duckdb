@@ -69,8 +69,8 @@ access_method_clause:
 
 
 opt_concurrently:
-			CONCURRENTLY							{ $$ = TRUE; }
-			| /*EMPTY*/								{ $$ = FALSE; }
+			CONCURRENTLY							{ $$ = true; }
+			| /*EMPTY*/								{ $$ = false; }
 		;
 
 
@@ -86,6 +86,6 @@ opt_reloptions:		WITH reloptions					{ $$ = $2; }
 
 
 opt_unique:
-			UNIQUE									{ $$ = TRUE; }
-			| /*EMPTY*/								{ $$ = FALSE; }
+			UNIQUE									{ $$ = true; }
+			| /*EMPTY*/								{ $$ = false; }
 		;

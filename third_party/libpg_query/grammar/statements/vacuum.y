@@ -84,8 +84,8 @@ vacuum_option_elem:
 		;
 
 
-opt_full:	FULL									{ $$ = TRUE; }
-			| /*EMPTY*/								{ $$ = FALSE; }
+opt_full:	FULL									{ $$ = true; }
+			| /*EMPTY*/								{ $$ = false; }
 		;
 
 
@@ -95,6 +95,6 @@ vacuum_option_list:
 		;
 
 
-opt_freeze: FREEZE									{ $$ = TRUE; }
-			| /*EMPTY*/								{ $$ = FALSE; }
+opt_freeze: FREEZE									{ $$ = true; }
+			| /*EMPTY*/								{ $$ = false; }
 		;

@@ -59,11 +59,11 @@ SeqOptElem: AS SimpleTypename
 				}
 			| CYCLE
 				{
-					$$ = makeDefElem("cycle", (PGNode *)makeInteger(TRUE), @1);
+					$$ = makeDefElem("cycle", (PGNode *)makeInteger(true), @1);
 				}
 			| NO CYCLE
 				{
-					$$ = makeDefElem("cycle", (PGNode *)makeInteger(FALSE), @1);
+					$$ = makeDefElem("cycle", (PGNode *)makeInteger(false), @1);
 				}
 			| INCREMENT opt_by NumericOnly
 				{

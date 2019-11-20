@@ -10,7 +10,7 @@ DropStmt:	DROP drop_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 				{
 					PGDropStmt *n = makeNode(PGDropStmt);
 					n->removeType = $2;
-					n->missing_ok = TRUE;
+					n->missing_ok = true;
 					n->objects = $5;
 					n->behavior = $6;
 					n->concurrent = false;
@@ -20,7 +20,7 @@ DropStmt:	DROP drop_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 				{
 					PGDropStmt *n = makeNode(PGDropStmt);
 					n->removeType = $2;
-					n->missing_ok = FALSE;
+					n->missing_ok = false;
 					n->objects = $3;
 					n->behavior = $4;
 					n->concurrent = false;
@@ -30,7 +30,7 @@ DropStmt:	DROP drop_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 				{
 					PGDropStmt *n = makeNode(PGDropStmt);
 					n->removeType = $2;
-					n->missing_ok = TRUE;
+					n->missing_ok = true;
 					n->objects = $5;
 					n->behavior = $6;
 					n->concurrent = false;
@@ -40,7 +40,7 @@ DropStmt:	DROP drop_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 				{
 					PGDropStmt *n = makeNode(PGDropStmt);
 					n->removeType = $2;
-					n->missing_ok = FALSE;
+					n->missing_ok = false;
 					n->objects = $3;
 					n->behavior = $4;
 					n->concurrent = false;

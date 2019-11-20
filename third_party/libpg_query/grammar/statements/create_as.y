@@ -38,9 +38,9 @@ CreateAsStmt:
 
 
 opt_with_data:
-			WITH DATA_P								{ $$ = TRUE; }
-			| WITH NO DATA_P						{ $$ = FALSE; }
-			| /*EMPTY*/								{ $$ = TRUE; }
+			WITH DATA_P								{ $$ = true; }
+			| WITH NO DATA_P						{ $$ = false; }
+			| /*EMPTY*/								{ $$ = true; }
 		;
 
 

@@ -41,8 +41,8 @@ ExplainStmt:
 
 
 opt_verbose:
-			VERBOSE									{ $$ = TRUE; }
-			| /*EMPTY*/								{ $$ = FALSE; }
+			VERBOSE									{ $$ = true; }
+			| /*EMPTY*/								{ $$ = false; }
 		;
 
 

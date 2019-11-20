@@ -166,9 +166,6 @@ void* repalloc(void* ptr, size_t n) {
 char *NameListToString(PGList *names) {
     throw std::runtime_error("NameListToString NOT IMPLEMENTED");
 }
-int GetDatabaseEncoding(void) {
-    throw std::runtime_error("copyObject NOT IMPLEMENTED");
-}
 void * copyObject(const void *from) {
     throw std::runtime_error("copyObject NOT IMPLEMENTED");
 }
@@ -177,9 +174,6 @@ bool equal(const void *a, const void *b) {
 }
 int exprLocation(const PGNode *expr) {
     throw std::runtime_error("exprLocation NOT IMPLEMENTED");
-}
-int	pg_get_client_encoding(void) {
-    throw std::runtime_error("pg_get_client_encoding NOT IMPLEMENTED");
 }
 bool pg_verifymbstr(const char *mbstr, int len, bool noError) {
     throw std::runtime_error("pg_verifymbstr NOT IMPLEMENTED");

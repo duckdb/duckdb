@@ -12,31 +12,10 @@
 typedef uintptr_t PGDatum;
 typedef uint64_t PGSize;
 
-typedef int64_t int64_t;
-
-typedef uint32_t uint32_t;
 typedef uint32_t PGIndex;
 typedef uint32_t PGOid;
 
 #define InvalidOid ((PGOid)0)
-
-typedef int32_t int32_t;
-
-typedef int16_t int16_t;
-typedef uint16_t uint16_t;
-
-typedef uint8_t uint8_t;
-
-#ifndef true
-#define true 1
-#define false 0
-#endif
-#ifndef TRUE
-#define TRUE 1
-#define FALSE 0
-#endif
-
-#define HAVE_LONG_INT_64
 
 #ifndef _MSC_VER
 #include <assert.h>

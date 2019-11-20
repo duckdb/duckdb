@@ -9529,17 +9529,17 @@ case 38:
 YY_RULE_SETUP
 
 {
-					if (yytext[1] == '\'')
-					{
-						if (yyextra->backslash_quote == PG_BACKSLASH_QUOTE_OFF ||
-							(yyextra->backslash_quote == PG_BACKSLASH_QUOTE_SAFE_ENCODING &&
-							 PG_ENCODING_IS_CLIENT_ONLY(pg_get_client_encoding())))
-							ereport(ERROR,
-									(errcode(PG_ERRCODE_NONSTANDARD_USE_OF_ESCAPE_CHARACTER),
-									 errmsg("unsafe use of \\' in a string literal"),
-									 errhint("Use '' to write quotes in strings. \\' is insecure in client-only encodings."),
-									 lexer_errposition()));
-					}
+					// if (yytext[1] == '\'')
+					// {
+					// 	if (yyextra->backslash_quote == PG_BACKSLASH_QUOTE_OFF ||
+					// 		(yyextra->backslash_quote == PG_BACKSLASH_QUOTE_SAFE_ENCODING &&
+					// 		 PG_ENCODING_IS_CLIENT_ONLY(pg_get_client_encoding())))
+					// 		ereport(ERROR,
+					// 				(errcode(PG_ERRCODE_NONSTANDARD_USE_OF_ESCAPE_CHARACTER),
+					// 				 errmsg("unsafe use of \\' in a string literal"),
+					// 				 errhint("Use '' to write quotes in strings. \\' is insecure in client-only encodings."),
+					// 				 lexer_errposition()));
+					// }
 					check_string_escape_warning(yytext[1], yyscanner);
 					addlitchar(unescape_single_char(yytext[1], yyscanner),
 							   yyscanner);
@@ -11182,11 +11182,8 @@ process_integer_literal(const char *token, YYSTYPE *lval)
 	errno = 0;
 	val = strtol(token, &endptr, 10);
 	if (*endptr != '\0' || errno == ERANGE
-#ifdef HAVE_LONG_INT_64
 	/* if long > 32 bits, check for overflow of int4_t */
-		|| val != (long) ((int32_t) val)
-#endif
-		)
+		|| val != (long) ((int32_t) val) )
 	{
 		/* integer too large, treat it as a float */
 		lval->str = pstrdup(token);
@@ -11207,19 +11204,6 @@ hexval(unsigned char c)
 		return c - 'A' + 0xA;
 	elog(ERROR, "invalid hexadecimal digit");
 	return 0;					/* not reached */
-}
-
-static void
-check_unicode_value(pg_wchar c, char *loc, core_yyscan_t yyscanner)
-{
-	if (GetDatabaseEncoding() == PG_UTF8)
-		return;
-
-	if (c > 0x7F)
-	{
-		ADVANCE_YYLLOC(loc - yyextra->literalbuf + 3);	/* 3 for U&" */
-		scan_error("Unicode escape values cannot be used for code point values above 007F when the server encoding is not UTF8");
-	}
 }
 
 static bool
@@ -11249,8 +11233,8 @@ addunicode(pg_wchar c, core_yyscan_t yyscanner)
 		scan_error("invalid Unicode escape value");
 	if (c > 0x7F)
 	{
-		if (GetDatabaseEncoding() != PG_UTF8)
-			scan_error("Unicode escape values cannot be used for code point values above 007F when the server encoding is not UTF8");
+		// if (GetDatabaseEncoding() != PG_UTF8)
+		// 	scan_error("Unicode escape values cannot be used for code point values above 007F when the server encoding is not UTF8");
 		yyextra->saw_non_ascii = true;
 	}
 	unicode_to_utf8(c, (unsigned char *) buf);
@@ -11320,7 +11304,6 @@ litbuf_udeescape(unsigned char escape, core_yyscan_t yyscanner)
 					(hexval(in[2]) << 8) +
 					(hexval(in[3]) << 4) +
 					hexval(in[4]);
-				check_unicode_value(unicode, in, yyscanner);
 				if (pair_first)
 				{
 					if (is_utf16_surrogate_second(unicode))
@@ -11362,7 +11345,6 @@ litbuf_udeescape(unsigned char escape, core_yyscan_t yyscanner)
 					(hexval(in[5]) << 8) +
 					(hexval(in[6]) << 4) +
 					hexval(in[7]);
-				check_unicode_value(unicode, in, yyscanner);
 				if (pair_first)
 				{
 					if (is_utf16_surrogate_second(unicode))

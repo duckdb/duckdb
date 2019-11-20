@@ -44,11 +44,9 @@ bool equal(const void *a, const void *b);
 int exprLocation(const PGNode *expr);
 
 // string gunk
-int GetDatabaseEncoding(void);
 int pg_database_encoding_max_length(void);
 bool pg_verifymbstr(const char *mbstr, int len, bool noError);
 int	pg_mbstrlen_with_len(const char *mbstr, int len);
-int	pg_get_client_encoding(void);
 int pg_mbcliplen(const char *mbstr, int len, int limit);
 int pg_mblen(const char *mbstr);
 

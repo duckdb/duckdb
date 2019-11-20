@@ -283,7 +283,7 @@ alter_table_cmd:
 					n->subtype = PG_AT_DropColumn;
 					n->name = $5;
 					n->behavior = $6;
-					n->missing_ok = TRUE;
+					n->missing_ok = true;
 					$$ = (PGNode *)n;
 				}
 			/* ALTER TABLE <name> DROP [COLUMN] <colname> [RESTRICT|CASCADE] */
@@ -293,7 +293,7 @@ alter_table_cmd:
 					n->subtype = PG_AT_DropColumn;
 					n->name = $3;
 					n->behavior = $4;
-					n->missing_ok = FALSE;
+					n->missing_ok = false;
 					$$ = (PGNode *)n;
 				}
 			/*
@@ -361,7 +361,7 @@ alter_table_cmd:
 					n->subtype = PG_AT_DropConstraint;
 					n->name = $5;
 					n->behavior = $6;
-					n->missing_ok = TRUE;
+					n->missing_ok = true;
 					$$ = (PGNode *)n;
 				}
 			/* ALTER TABLE <name> DROP CONSTRAINT <name> [RESTRICT|CASCADE] */
@@ -371,7 +371,7 @@ alter_table_cmd:
 					n->subtype = PG_AT_DropConstraint;
 					n->name = $3;
 					n->behavior = $4;
-					n->missing_ok = FALSE;
+					n->missing_ok = false;
 					$$ = (PGNode *)n;
 				}
 			/* ALTER TABLE <name> SET LOGGED  */

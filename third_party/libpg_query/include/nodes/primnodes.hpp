@@ -301,7 +301,7 @@ typedef struct PGAggref
 	PGList	   *aggorder;		/* ORDER BY (list of PGSortGroupClause) */
 	PGList	   *aggdistinct;	/* DISTINCT (list of PGSortGroupClause) */
 	PGExpr	   *aggfilter;		/* FILTER expression, if any */
-	bool		aggstar;		/* TRUE if argument list was really '*' */
+	bool		aggstar;		/* true if argument list was really '*' */
 	bool		aggvariadic;	/* true if variadic arguments have been
 								 * combined into an array last argument */
 	char		aggkind;		/* aggregate kind (see pg_aggregate.h) */
@@ -358,7 +358,7 @@ typedef struct PGWindowFunc
 	PGList	   *args;			/* arguments to the window function */
 	PGExpr	   *aggfilter;		/* FILTER expression, if any */
 	PGIndex		winref;			/* index of associated PGWindowClause */
-	bool		winstar;		/* TRUE if argument list was really '*' */
+	bool		winstar;		/* true if argument list was really '*' */
 	bool		winagg;			/* is function a simple aggregate? */
 	int			location;		/* token location, or -1 if unknown */
 } PGWindowFunc;
@@ -696,9 +696,9 @@ typedef struct PGSubPlan
 	PGOid			firstColCollation;	/* Collation of first column of subplan
 									 * result */
 	/* Information about execution strategy: */
-	bool		useHashTable;	/* TRUE to store subselect output in a hash
+	bool		useHashTable;	/* true to store subselect output in a hash
 								 * table (implies we are doing "IN") */
-	bool		unknownEqFalse; /* TRUE if it's okay to return FALSE when the
+	bool		unknownEqFalse; /* true if it's okay to return false when the
 								 * spec result is UNKNOWN; this allows much
 								 * simpler handling of null values */
 	bool		parallel_safe;	/* is the subplan parallel-safe? */
@@ -1145,7 +1145,7 @@ typedef struct PGNullTest
  * PGBooleanTest
  *
  * PGBooleanTest represents the operation of determining whether a boolean
- * is TRUE, FALSE, or UNKNOWN (ie, NULL).  All six meaningful combinations
+ * is true, false, or UNKNOWN (ie, NULL).  All six meaningful combinations
  * are supported.  Note that a NULL input does *not* cause a NULL result.
  * The appropriate test is performed and returned as a boolean Datum.
  */

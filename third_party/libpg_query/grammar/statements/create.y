@@ -247,8 +247,8 @@ reloptions:
 		;
 
 
-opt_no_inherit:	NO INHERIT							{  $$ = TRUE; }
-			| /* EMPTY */							{  $$ = FALSE; }
+opt_no_inherit:	NO INHERIT							{  $$ = true; }
+			| /* EMPTY */							{  $$ = false; }
 		;
 
 
@@ -488,7 +488,7 @@ func_type:	Typename								{ $$ = $1; }
 				{
 					$$ = makeTypeNameFromNameList(lcons(makeString($2), $3));
 					$$->pct_type = true;
-					$$->setof = TRUE;
+					$$->setof = true;
 					$$->location = @2;
 				}
 		;
