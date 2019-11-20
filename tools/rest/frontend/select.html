@@ -10,8 +10,6 @@
   <link rel="stylesheet" href="css/codemirror.css">
   <style>
 
-
-
     .CodeMirror {
       height: 20em;
       display: block;
@@ -107,6 +105,7 @@
 
   <script>
 
+var callback_prefix = "http://localhost:1294";
 
 
 // setup the various dynamic crap
@@ -276,7 +275,7 @@ lineitem : [
       dataType: 'jsonp',
       jsonp: 'callback',
       data: {q: query},
-      url: 'http://localhost:8080/query?stream_result&callback=?',
+      url: callback_prefix + '/query?callback=?',
       success: function(data) {
        if (!data.success) {
         message.removeClass('alert-success').addClass('alert-warning').show();
@@ -304,14 +303,13 @@ lineitem : [
       dataType: 'jsonp',
       jsonp: 'callback',
       data: {ref: ref},
-      url: 'http://localhost:8080/fetch?callback=?',
+      url: callback_prefix + '/fetch?callback=?',
       success: function(data) {
         var table = $("#results tbody");
         console.log(table)
         table.append(renderresult(data, false));
         fetching = false;
         $("#loading-spinner").hide();
-          // TODO if data len = 0, finish
           // TODO error handling here
         }
       });
