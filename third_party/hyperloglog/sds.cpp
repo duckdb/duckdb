@@ -36,7 +36,7 @@
 #include <ctype.h>
 #include <assert.h>
 #include <limits.h>
-#include "sds.h"
+#include "sds.hpp"
 
 static inline int sdsHdrSize(char type) {
     switch(type&SDS_TYPE_MASK) {

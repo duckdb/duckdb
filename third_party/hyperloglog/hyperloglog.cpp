@@ -29,8 +29,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "hyperloglog.h"
-#include "sds.h"
+#include "hyperloglog.hpp"
+#include "sds.hpp"
 
 #include <assert.h>
 #include <stdint.h>
