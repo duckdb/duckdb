@@ -13,6 +13,8 @@
  */
 #pragma once
 
+#include <cstdint>
+
 /* Keyword categories --- should match lists in gram.y */
 #define UNRESERVED_KEYWORD		0
 #define COL_NAME_KEYWORD		1

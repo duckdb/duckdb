@@ -12,6 +12,8 @@
  */
 #pragma once
 
+#include <cstdint>
+
 /*
  * The API of this library is generally similar to the corresponding
  * C library functions, except that we use pg_time_t which (we hope) is
@@ -60,11 +62,6 @@ extern bool pg_interpret_timezone_abbrev(const char *abbrev,
 extern bool pg_get_timezone_offset(const pg_tz *tz, long int *gmtoff);
 extern const char *pg_get_timezone_name(pg_tz *tz);
 extern bool pg_tz_acceptable(pg_tz *tz);
-
-/* these functions are in strftime.c */
-
-extern size_t pg_strftime(char *s, size_t max, const char *format,
-			const struct pg_tm *tm);
 
 /* these functions and variables are in pgtz.c */
 

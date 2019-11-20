@@ -17,6 +17,8 @@
  */
 #pragma once
 
+#include "pg_definitions.hpp"
+
 /* We don't want to include primnodes.h here, so make some stub references */
 typedef struct PGNode *pg_fmNodePtr;
 typedef struct PGAggref *pg_fmAggrefPtr;

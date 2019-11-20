@@ -18,6 +18,8 @@
  */
 #pragma once
 
+#include <cstdint>
+
 /*
  * The pg_wchar type
  */
@@ -517,9 +519,6 @@ extern int	pg_wchar2mb_with_len(const pg_wchar *from, char *to, int len);
 extern int pg_encoding_wchar2mb_with_len(int encoding,
 							  const pg_wchar *from, char *to, int len);
 extern int	pg_char_and_wchar_strcmp(const char *s1, const pg_wchar *s2);
-extern int	pg_wchar_strncmp(const pg_wchar *s1, const pg_wchar *s2, size_t n);
-extern int	pg_char_and_wchar_strncmp(const char *s1, const pg_wchar *s2, size_t n);
-extern size_t pg_wchar_strlen(const pg_wchar *wstr);
 extern int	pg_mblen(const char *mbstr);
 extern int	pg_dsplen(const char *mbstr);
 extern int	pg_encoding_mblen(int encoding, const char *mbstr);
@@ -558,7 +557,6 @@ extern int	pg_valid_server_encoding(const char *name);
 
 extern unsigned char *unicode_to_utf8(pg_wchar c, unsigned char *utf8string);
 extern pg_wchar utf8_to_unicode(const unsigned char *c);
-extern int	pg_utf_mblen(const unsigned char *);
 extern unsigned char *pg_do_encoding_conversion(unsigned char *src, int len,
 						  int src_encoding,
 						  int dest_encoding);

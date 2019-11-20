@@ -13,6 +13,8 @@
  */
 #pragma once
 
+#include <cstdint>
+
 /*
  * user defined attribute numbers start at 1.   -ay 2/95
  */

@@ -19,6 +19,8 @@
  */
 #pragma once
 
+#include <cstdint>
+
 /*
  * Forward decl to save including pg_list.h
  */

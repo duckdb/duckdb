@@ -4,24 +4,7 @@ source_file = "duckdb.cpp"
 cache_file = 'amalgamation.cache'
 include_paths = ["src/include", "third_party/hyperloglog", "third_party/re2", "third_party/miniz", "third_party/libpg_query/include", "third_party/libpg_query"]
 compile_directories = ['third_party/hyperloglog', 'third_party/libpg_query', 'third_party/miniz', 'third_party/re2', 'src']
-excluded_files = ["duckdb-c.cpp", "scan.c"]
-
-
-pg_substitutions = {
-	"AlterTableType": "PGAlterTableType",
-	"Constraint": "PGConstraint",
-	"Date": "PGDate",
-	"Expr": "PGExpr",
-	"Index": "PGIndex",
-	"Interval": "PGInterval",
-	"JoinType": "PGJoinType",
-	"Node": "PGNode",
-	"List": "PGList",
-	"Timestamp": "PGTimestamp",
-	"Undefined": "PGUndefined",
-	"Oid": "PGOid",
-	"Value": "PGValue"
-}
+excluded_files = ["duckdb-c.cpp", 'grammar.cpp', 'grammar.hpp', 'gram.hpp', 'kwlist.hpp']
 
 import os, re, sys, pickle
 
@@ -44,7 +27,7 @@ def get_includes(fpath):
 	with open(fpath, 'r') as f:
 		text = f.read()
 	# find all the includes referred to in the directory
-	include_statements = re.findall("^[#]include [\"]([^\"]+)", text, flags=re.MULTILINE)
+	include_statements = re.findall("^[#]include[\t ]+[\"]([^\"]+)", text, flags=re.MULTILINE)
 	include_files = []
 	# figure out where they are located
 	for statement in include_statements:
@@ -60,16 +43,6 @@ def get_includes(fpath):
 	return include_files
 
 def cleanup_file(fpath, text):
-	if fpath.startswith("third_party/libpg_query"):
-		for sub in pg_substitutions.keys():
-			text = re.sub("([ \t\n*,(])" + sub + "([ \t\n*,;])", "\g<1>" + pg_substitutions[sub] + "\g<2>", text)
-	else:
-		for sub in pg_substitutions.keys():
-			text = re.sub("postgres::" + sub + "([ \t\n*,;])", pg_substitutions[sub] + "\g<1>", text)
-		text = re.sub("postgres::", "", text)
-		text = re.sub("PostgresParser", "postgres::PostgresParser", text)
-
-
 	# remove all includes of non-system headers
 	text = re.sub("^[#]include [\"][^\n]+", "", text, flags=re.MULTILINE)
 	# remove all "#pragma once" notifications

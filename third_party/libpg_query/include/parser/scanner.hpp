@@ -18,7 +18,10 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include "common/keywords.hpp"
+#include "pg_definitions.hpp"
 
 /*
  * The scanner returns extra data about scanned tokens in this union type.

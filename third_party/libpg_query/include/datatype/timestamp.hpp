@@ -14,6 +14,8 @@
  */
 #pragma once
 
+#include <cstdint>
+
 /*
  * PGTimestamp represents absolute time.
  *
