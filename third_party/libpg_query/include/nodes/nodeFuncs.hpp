@@ -1,9 +1,9 @@
 /*-------------------------------------------------------------------------
  *
  * nodeFuncs.h
- *		Various general-purpose manipulations of Node trees
+ *		Various general-purpose manipulations of PGNode trees
  *
- * Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2017, PostgreSQL Global Development PGGroup
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/nodes/nodeFuncs.h
@@ -22,54 +22,54 @@
 #define QTW_IGNORE_JOINALIASES		0x04	/* JOIN alias var lists */
 #define QTW_IGNORE_RANGE_TABLE		0x08	/* skip rangetable entirely */
 #define QTW_EXAMINE_RTES			0x10	/* examine RTEs */
-#define QTW_DONT_COPY_QUERY			0x20	/* do not copy top Query */
+#define QTW_DONT_COPY_QUERY			0x20	/* do not copy top PGQuery */
 
 /* callback function for check_functions_in_node */
-typedef bool (*check_function_callback) (Oid func_id, void *context);
+typedef bool (*check_function_callback) (PGOid func_id, void *context);
 
 
-extern Oid	exprType(const Node *expr);
-extern int32_t exprTypmod(const Node *expr);
-extern bool exprIsLengthCoercion(const Node *expr, int32_t *coercedTypmod);
-extern Node *relabel_to_typmod(Node *expr, int32_t typmod);
-extern Node *strip_implicit_coercions(Node *node);
-extern bool expression_returns_set(Node *clause);
+extern PGOid	exprType(const PGNode *expr);
+extern int32_t exprTypmod(const PGNode *expr);
+extern bool exprIsLengthCoercion(const PGNode *expr, int32_t *coercedTypmod);
+extern PGNode *relabel_to_typmod(PGNode *expr, int32_t typmod);
+extern PGNode *strip_implicit_coercions(PGNode *node);
+extern bool expression_returns_set(PGNode *clause);
 
-extern Oid	exprCollation(const Node *expr);
-extern Oid	exprInputCollation(const Node *expr);
-extern void exprSetCollation(Node *expr, Oid collation);
-extern void exprSetInputCollation(Node *expr, Oid inputcollation);
+extern PGOid	exprCollation(const PGNode *expr);
+extern PGOid	exprInputCollation(const PGNode *expr);
+extern void exprSetCollation(PGNode *expr, PGOid collation);
+extern void exprSetInputCollation(PGNode *expr, PGOid inputcollation);
 
-extern int	exprLocation(const Node *expr);
+extern int	exprLocation(const PGNode *expr);
 
-extern void fix_opfuncids(Node *node);
-extern void set_opfuncid(OpExpr *opexpr);
-extern void set_sa_opfuncid(ScalarArrayOpExpr *opexpr);
+extern void fix_opfuncids(PGNode *node);
+extern void set_opfuncid(PGOpExpr *opexpr);
+extern void set_sa_opfuncid(PGScalarArrayOpExpr *opexpr);
 
-extern bool check_functions_in_node(Node *node, check_function_callback checker,
+extern bool check_functions_in_node(PGNode *node, check_function_callback checker,
 						void *context);
 
-extern bool expression_tree_walker(Node *node, bool (*walker) (),
+extern bool expression_tree_walker(PGNode *node, bool (*walker) (),
 								   void *context);
-extern Node *expression_tree_mutator(Node *node, Node *(*mutator) (),
+extern PGNode *expression_tree_mutator(PGNode *node, PGNode *(*mutator) (),
 									 void *context);
 
-extern bool query_tree_walker(Query *query, bool (*walker) (),
+extern bool query_tree_walker(PGQuery *query, bool (*walker) (),
 							  void *context, int flags);
-extern Query *query_tree_mutator(Query *query, Node *(*mutator) (),
+extern PGQuery *query_tree_mutator(PGQuery *query, PGNode *(*mutator) (),
 								 void *context, int flags);
 
-extern bool range_table_walker(List *rtable, bool (*walker) (),
+extern bool range_table_walker(PGList *rtable, bool (*walker) (),
 							   void *context, int flags);
-extern List *range_table_mutator(List *rtable, Node *(*mutator) (),
+extern PGList *range_table_mutator(PGList *rtable, PGNode *(*mutator) (),
 								 void *context, int flags);
 
-extern bool query_or_expression_tree_walker(Node *node, bool (*walker) (),
+extern bool query_or_expression_tree_walker(PGNode *node, bool (*walker) (),
 											void *context, int flags);
-extern Node *query_or_expression_tree_mutator(Node *node, Node *(*mutator) (),
+extern PGNode *query_or_expression_tree_mutator(PGNode *node, PGNode *(*mutator) (),
 											  void *context, int flags);
 
-extern bool raw_expression_tree_walker(Node *node, bool (*walker) (),
+extern bool raw_expression_tree_walker(PGNode *node, bool (*walker) (),
 									   void *context);
 
 struct PlanState;

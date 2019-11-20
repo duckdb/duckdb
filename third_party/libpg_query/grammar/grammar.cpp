@@ -10,10 +10,10 @@ base_yyerror(YYLTYPE *yylloc, core_yyscan_t yyscanner, const char *msg)
 	parser_yyerror(msg);
 }
 
-static RawStmt *
-makeRawStmt(Node *stmt, int stmt_location)
+static PGRawStmt *
+makeRawStmt(PGNode *stmt, int stmt_location)
 {
-	RawStmt    *rs = makeNode(RawStmt);
+	PGRawStmt    *rs = makeNode(PGRawStmt);
 
 	rs->stmt = stmt;
 	rs->stmt_location = stmt_location;
@@ -21,9 +21,9 @@ makeRawStmt(Node *stmt, int stmt_location)
 	return rs;
 }
 
-/* Adjust a RawStmt to reflect that it doesn't run to the end of the string */
+/* Adjust a PGRawStmt to reflect that it doesn't run to the end of the string */
 static void
-updateRawStmtEnd(RawStmt *rs, int end_location)
+updateRawStmtEnd(PGRawStmt *rs, int end_location)
 {
 	/*
 	 * If we already set the length, don't change it.  This is for situations
@@ -33,34 +33,34 @@ updateRawStmtEnd(RawStmt *rs, int end_location)
 	if (rs->stmt_len > 0)
 		return;
 
-	/* OK, update length of RawStmt */
+	/* OK, update length of PGRawStmt */
 	rs->stmt_len = end_location - rs->stmt_location;
 }
 
-static Node *
-makeColumnRef(char *colname, List *indirection,
+static PGNode *
+makeColumnRef(char *colname, PGList *indirection,
 			  int location, core_yyscan_t yyscanner)
 {
 	/*
-	 * Generate a ColumnRef node, with an A_Indirection node added if there
+	 * Generate a PGColumnRef node, with an PGAIndirection node added if there
 	 * is any subscripting in the specified indirection list.  However,
 	 * any field selection at the start of the indirection list must be
-	 * transposed into the "fields" part of the ColumnRef node.
+	 * transposed into the "fields" part of the PGColumnRef node.
 	 */
-	ColumnRef  *c = makeNode(ColumnRef);
+	PGColumnRef  *c = makeNode(PGColumnRef);
 	int		nfields = 0;
-	ListCell *l;
+	PGListCell *l;
 
 	c->location = location;
 	foreach(l, indirection)
 	{
-		if (IsA(lfirst(l), A_Indices))
+		if (IsA(lfirst(l), PGAIndices))
 		{
-			A_Indirection *i = makeNode(A_Indirection);
+			PGAIndirection *i = makeNode(PGAIndirection);
 
 			if (nfields == 0)
 			{
-				/* easy case - all indirection goes to A_Indirection */
+				/* easy case - all indirection goes to PGAIndirection */
 				c->fields = list_make1(makeString(colname));
 				i->indirection = check_indirection(indirection, yyscanner);
 			}
@@ -73,12 +73,12 @@ makeColumnRef(char *colname, List *indirection,
 				indirection = list_truncate(indirection, nfields);
 				c->fields = lcons(makeString(colname), indirection);
 			}
-			i->arg = (Node *) c;
-			return (Node *) i;
+			i->arg = (PGNode *) c;
+			return (PGNode *) i;
 		}
-		else if (IsA(lfirst(l), A_Star))
+		else if (IsA(lfirst(l), PGAStar))
 		{
-			/* We only allow '*' at the end of a ColumnRef */
+			/* We only allow '*' at the end of a PGColumnRef */
 			if (lnext(l) != NULL)
 				parser_yyerror("improper use of \"*\"");
 		}
@@ -86,102 +86,102 @@ makeColumnRef(char *colname, List *indirection,
 	}
 	/* No subscripting, so all indirection gets added to field list */
 	c->fields = lcons(makeString(colname), indirection);
-	return (Node *) c;
+	return (PGNode *) c;
 }
 
-static Node *
-makeTypeCast(Node *arg, TypeName *tpname, int location)
+static PGNode *
+makeTypeCast(PGNode *arg, PGTypeName *tpname, int location)
 {
-	TypeCast *n = makeNode(TypeCast);
+	PGTypeCast *n = makeNode(PGTypeCast);
 	n->arg = arg;
 	n->typeName = tpname;
 	n->location = location;
-	return (Node *) n;
+	return (PGNode *) n;
 }
 
-static Node *
+static PGNode *
 makeStringConst(char *str, int location)
 {
-	A_Const *n = makeNode(A_Const);
+	PGAConst *n = makeNode(PGAConst);
 
-	n->val.type = T_String;
+	n->val.type = T_PGString;
 	n->val.val.str = str;
 	n->location = location;
 
-	return (Node *)n;
+	return (PGNode *)n;
 }
 
-static Node *
-makeStringConstCast(char *str, int location, TypeName *tpname)
+static PGNode *
+makeStringConstCast(char *str, int location, PGTypeName *tpname)
 {
-	Node *s = makeStringConst(str, location);
+	PGNode *s = makeStringConst(str, location);
 
 	return makeTypeCast(s, tpname, -1);
 }
 
-static Node *
+static PGNode *
 makeIntConst(int val, int location)
 {
-	A_Const *n = makeNode(A_Const);
+	PGAConst *n = makeNode(PGAConst);
 
-	n->val.type = T_Integer;
+	n->val.type = T_PGInteger;
 	n->val.val.ival = val;
 	n->location = location;
 
-	return (Node *)n;
+	return (PGNode *)n;
 }
 
-static Node *
+static PGNode *
 makeFloatConst(char *str, int location)
 {
-	A_Const *n = makeNode(A_Const);
+	PGAConst *n = makeNode(PGAConst);
 
-	n->val.type = T_Float;
+	n->val.type = T_PGFloat;
 	n->val.val.str = str;
 	n->location = location;
 
-	return (Node *)n;
+	return (PGNode *)n;
 }
 
-static Node *
+static PGNode *
 makeBitStringConst(char *str, int location)
 {
-	A_Const *n = makeNode(A_Const);
+	PGAConst *n = makeNode(PGAConst);
 
-	n->val.type = T_BitString;
+	n->val.type = T_PGBitString;
 	n->val.val.str = str;
 	n->location = location;
 
-	return (Node *)n;
+	return (PGNode *)n;
 }
 
-static Node *
+static PGNode *
 makeNullAConst(int location)
 {
-	A_Const *n = makeNode(A_Const);
+	PGAConst *n = makeNode(PGAConst);
 
-	n->val.type = T_Null;
+	n->val.type = T_PGNull;
 	n->location = location;
 
-	return (Node *)n;
+	return (PGNode *)n;
 }
 
-static Node *
-makeAConst(Value *v, int location)
+static PGNode *
+makeAConst(PGValue *v, int location)
 {
-	Node *n;
+	PGNode *n;
 
 	switch (v->type)
 	{
-		case T_Float:
+		case T_PGFloat:
 			n = makeFloatConst(v->val.str, location);
 			break;
 
-		case T_Integer:
+		case T_PGInteger:
 			n = makeIntConst(v->val.ival, location);
 			break;
 
-		case T_String:
+		case T_PGString:
 		default:
 			n = makeStringConst(v->val.str, location);
 			break;
@@ -191,18 +191,18 @@ makeAConst(Value *v, int location)
 }
 
 /* makeBoolAConst()
- * Create an A_Const string node and put it inside a boolean cast.
+ * Create an PGAConst string node and put it inside a boolean cast.
  */
-static Node *
+static PGNode *
 makeBoolAConst(bool state, int location)
 {
-	A_Const *n = makeNode(A_Const);
+	PGAConst *n = makeNode(PGAConst);
 
-	n->val.type = T_String;
+	n->val.type = T_PGString;
 	n->val.val.str = (state ? (char*) "t" : (char*) "f");
 	n->location = location;
 
-	return makeTypeCast((Node *)n, SystemTypeName("bool"), -1);
+	return makeTypeCast((PGNode *)n, SystemTypeName("bool"), -1);
 }
 
 /* check_qualified_name --- check the result of qualified_name production
@@ -211,13 +211,13 @@ makeBoolAConst(bool state, int location)
  * subscripts and '*', which we then must reject here.
  */
 static void
-check_qualified_name(List *names, core_yyscan_t yyscanner)
+check_qualified_name(PGList *names, core_yyscan_t yyscanner)
 {
-	ListCell   *i;
+	PGListCell   *i;
 
 	foreach(i, names)
 	{
-		if (!IsA(lfirst(i), String))
+		if (!IsA(lfirst(i), PGString))
 			parser_yyerror("syntax error");
 	}
 }
@@ -227,14 +227,14 @@ check_qualified_name(List *names, core_yyscan_t yyscanner)
  * It's easiest to let the grammar production for func_name allow subscripts
  * and '*', which we then must reject here.
  */
-static List *
-check_func_name(List *names, core_yyscan_t yyscanner)
+static PGList *
+check_func_name(PGList *names, core_yyscan_t yyscanner)
 {
-	ListCell   *i;
+	PGListCell   *i;
 
 	foreach(i, names)
 	{
-		if (!IsA(lfirst(i), String))
+		if (!IsA(lfirst(i), PGString))
 			parser_yyerror("syntax error");
 	}
 	return names;
@@ -245,14 +245,14 @@ check_func_name(List *names, core_yyscan_t yyscanner)
  * We only allow '*' at the end of the list, but it's hard to enforce that
  * in the grammar, so do it here.
  */
-static List *
-check_indirection(List *indirection, core_yyscan_t yyscanner)
+static PGList *
+check_indirection(PGList *indirection, core_yyscan_t yyscanner)
 {
-	ListCell *l;
+	PGListCell *l;
 
 	foreach(l, indirection)
 	{
-		if (IsA(lfirst(l), A_Star))
+		if (IsA(lfirst(l), PGAStar))
 		{
 			if (lnext(l) != NULL)
 				parser_yyerror("improper use of \"*\"");
@@ -262,36 +262,36 @@ check_indirection(List *indirection, core_yyscan_t yyscanner)
 }
 
 /* makeParamRef
- * Creates a new ParamRef node
+ * Creates a new PGParamRef node
  */
-static Node* makeParamRef(int number, int location)
+static PGNode* makeParamRef(int number, int location)
 {
-	ParamRef *p = makeNode(ParamRef);
+	PGParamRef *p = makeNode(PGParamRef);
 	p->number = number;
 	p->location = location;
-	return (Node *) p;
+	return (PGNode *) p;
 }
 
-static Node *
-makeParamRefCast(int number, int location, TypeName *tpname)
+static PGNode *
+makeParamRefCast(int number, int location, PGTypeName *tpname)
 {
-	Node *p = makeParamRef(number, location);
+	PGNode *p = makeParamRef(number, location);
 	return makeTypeCast(p, tpname, -1);
 }
 
 /* insertSelectOptions()
  * Insert ORDER BY, etc into an already-constructed SelectStmt.
  *
- * This routine is just to avoid duplicating code in SelectStmt productions.
+ * This routine is just to avoid duplicating code in PGSelectStmt productions.
  */
 static void
-insertSelectOptions(SelectStmt *stmt,
-					List *sortClause, List *lockingClause,
-					Node *limitOffset, Node *limitCount,
-					WithClause *withClause,
+insertSelectOptions(PGSelectStmt *stmt,
+					PGList *sortClause, PGList *lockingClause,
+					PGNode *limitOffset, PGNode *limitCount,
+					PGWithClause *withClause,
 					core_yyscan_t yyscanner)
 {
-	Assert(IsA(stmt, SelectStmt));
+	Assert(IsA(stmt, PGSelectStmt));
 
 	/*
 	 * Tests here are to reject constructs like
@@ -301,9 +301,9 @@ insertSelectOptions(SelectStmt *stmt,
 	{
 		if (stmt->sortClause)
 			ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
+					(errcode(PG_ERRCODE_SYNTAX_ERROR),
 					 errmsg("multiple ORDER BY clauses not allowed"),
-					 parser_errposition(exprLocation((Node *) sortClause))));
+					 parser_errposition(exprLocation((PGNode *) sortClause))));
 		stmt->sortClause = sortClause;
 	}
 	/* We can handle multiple locking clauses, though */
@@ -312,7 +312,7 @@ insertSelectOptions(SelectStmt *stmt,
 	{
 		if (stmt->limitOffset)
 			ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
+					(errcode(PG_ERRCODE_SYNTAX_ERROR),
 					 errmsg("multiple OFFSET clauses not allowed"),
 					 parser_errposition(exprLocation(limitOffset))));
 		stmt->limitOffset = limitOffset;
@@ -321,7 +321,7 @@ insertSelectOptions(SelectStmt *stmt,
 	{
 		if (stmt->limitCount)
 			ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
+					(errcode(PG_ERRCODE_SYNTAX_ERROR),
 					 errmsg("multiple LIMIT clauses not allowed"),
 					 parser_errposition(exprLocation(limitCount))));
 		stmt->limitCount = limitCount;
@@ -330,29 +330,29 @@ insertSelectOptions(SelectStmt *stmt,
 	{
 		if (stmt->withClause)
 			ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
+					(errcode(PG_ERRCODE_SYNTAX_ERROR),
 					 errmsg("multiple WITH clauses not allowed"),
-					 parser_errposition(exprLocation((Node *) withClause))));
+					 parser_errposition(exprLocation((PGNode *) withClause))));
 		stmt->withClause = withClause;
 	}
 }
 
-static Node *
-makeSetOp(SetOperation op, bool all, Node *larg, Node *rarg)
+static PGNode *
+makeSetOp(PGSetOperation op, bool all, PGNode *larg, PGNode *rarg)
 {
-	SelectStmt *n = makeNode(SelectStmt);
+	PGSelectStmt *n = makeNode(PGSelectStmt);
 
 	n->op = op;
 	n->all = all;
-	n->larg = (SelectStmt *) larg;
-	n->rarg = (SelectStmt *) rarg;
-	return (Node *) n;
+	n->larg = (PGSelectStmt *) larg;
+	n->rarg = (PGSelectStmt *) rarg;
+	return (PGNode *) n;
 }
 
 /* SystemFuncName()
  * Build a properly-qualified reference to a built-in function.
  */
-List *
+PGList *
 SystemFuncName(const char *name)
 {
 	return list_make2(makeString(DEFAULT_SCHEMA), makeString(name));
@@ -364,7 +364,7 @@ SystemFuncName(const char *name)
  * typmod is defaulted, but may be changed afterwards by caller.
  * Likewise for the location.
  */
-TypeName *
+PGTypeName *
 SystemTypeName(const char *name)
 {
 	return makeTypeNameFromNameList(list_make2(makeString(DEFAULT_SCHEMA),
@@ -384,37 +384,37 @@ SystemTypeName(const char *name)
  * negative constants.	It's better to leave "-123.456" in string form
  * until we know what the desired type is.
  */
-static Node *
-doNegate(Node *n, int location)
+static PGNode *
+doNegate(PGNode *n, int location)
 {
-	if (IsA(n, A_Const))
+	if (IsA(n, PGAConst))
 	{
-		A_Const *con = (A_Const *)n;
+		PGAConst *con = (PGAConst *)n;
 
 		/* report the constant's location as that of the '-' sign */
 		con->location = location;
 
-		if (con->val.type == T_Integer)
+		if (con->val.type == T_PGInteger)
 		{
 			con->val.val.ival = -con->val.val.ival;
 			return n;
 		}
-		if (con->val.type == T_Float)
+		if (con->val.type == T_PGFloat)
 		{
 			doNegateFloat(&con->val);
 			return n;
 		}
 	}
 
-	return (Node *) makeSimpleA_Expr(AEXPR_OP, "-", NULL, n, location);
+	return (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "-", NULL, n, location);
 }
 
 static void
-doNegateFloat(Value *v)
+doNegateFloat(PGValue *v)
 {
 	char   *oldval = v->val.str;
 
-	Assert(IsA(v, Float));
+	Assert(IsA(v, PGFloat));
 	if (*oldval == '+')
 		oldval++;
 	if (*oldval == '-')
@@ -423,89 +423,89 @@ doNegateFloat(Value *v)
 		v->val.str = psprintf("-%s", oldval);
 }
 
-static Node *
-makeAndExpr(Node *lexpr, Node *rexpr, int location)
+static PGNode *
+makeAndExpr(PGNode *lexpr, PGNode *rexpr, int location)
 {
-	Node	   *lexp = lexpr;
+	PGNode	   *lexp = lexpr;
 
 	/* Look through AEXPR_PAREN nodes so they don't affect flattening */
-	while (IsA(lexp, A_Expr) &&
-		   ((A_Expr *) lexp)->kind == AEXPR_PAREN)
-		lexp = ((A_Expr *) lexp)->lexpr;
-	/* Flatten "a AND b AND c ..." to a single BoolExpr on sight */
-	if (IsA(lexp, BoolExpr))
+	while (IsA(lexp, PGAExpr) &&
+		   ((PGAExpr *) lexp)->kind == AEXPR_PAREN)
+		lexp = ((PGAExpr *) lexp)->lexpr;
+	/* Flatten "a AND b AND c ..." to a single PGBoolExpr on sight */
+	if (IsA(lexp, PGBoolExpr))
 	{
-		BoolExpr *blexpr = (BoolExpr *) lexp;
+		PGBoolExpr *blexpr = (PGBoolExpr *) lexp;
 
-		if (blexpr->boolop == AND_EXPR)
+		if (blexpr->boolop == PG_AND_EXPR)
 		{
 			blexpr->args = lappend(blexpr->args, rexpr);
-			return (Node *) blexpr;
+			return (PGNode *) blexpr;
 		}
 	}
-	return (Node *) makeBoolExpr(AND_EXPR, list_make2(lexpr, rexpr), location);
+	return (PGNode *) makeBoolExpr(PG_AND_EXPR, list_make2(lexpr, rexpr), location);
 }
 
-static Node *
-makeOrExpr(Node *lexpr, Node *rexpr, int location)
+static PGNode *
+makeOrExpr(PGNode *lexpr, PGNode *rexpr, int location)
 {
-	Node	   *lexp = lexpr;
+	PGNode	   *lexp = lexpr;
 
 	/* Look through AEXPR_PAREN nodes so they don't affect flattening */
-	while (IsA(lexp, A_Expr) &&
-		   ((A_Expr *) lexp)->kind == AEXPR_PAREN)
-		lexp = ((A_Expr *) lexp)->lexpr;
-	/* Flatten "a OR b OR c ..." to a single BoolExpr on sight */
-	if (IsA(lexp, BoolExpr))
+	while (IsA(lexp, PGAExpr) &&
+		   ((PGAExpr *) lexp)->kind == AEXPR_PAREN)
+		lexp = ((PGAExpr *) lexp)->lexpr;
+	/* Flatten "a OR b OR c ..." to a single PGBoolExpr on sight */
+	if (IsA(lexp, PGBoolExpr))
 	{
-		BoolExpr *blexpr = (BoolExpr *) lexp;
+		PGBoolExpr *blexpr = (PGBoolExpr *) lexp;
 
-		if (blexpr->boolop == OR_EXPR)
+		if (blexpr->boolop == PG_OR_EXPR)
 		{
 			blexpr->args = lappend(blexpr->args, rexpr);
-			return (Node *) blexpr;
+			return (PGNode *) blexpr;
 		}
 	}
-	return (Node *) makeBoolExpr(OR_EXPR, list_make2(lexpr, rexpr), location);
+	return (PGNode *) makeBoolExpr(PG_OR_EXPR, list_make2(lexpr, rexpr), location);
 }
 
-static Node *
-makeNotExpr(Node *expr, int location)
+static PGNode *
+makeNotExpr(PGNode *expr, int location)
 {
-	return (Node *) makeBoolExpr(NOT_EXPR, list_make1(expr), location);
+	return (PGNode *) makeBoolExpr(PG_NOT_EXPR, list_make1(expr), location);
 }
 
-static Node *
-makeAArrayExpr(List *elements, int location)
+static PGNode *
+makeAArrayExpr(PGList *elements, int location)
 {
-	A_ArrayExpr *n = makeNode(A_ArrayExpr);
+	PGAArrayExpr *n = makeNode(PGAArrayExpr);
 
 	n->elements = elements;
 	n->location = location;
-	return (Node *) n;
+	return (PGNode *) n;
 }
 
-static Node *
-makeSQLValueFunction(SQLValueFunctionOp op, int32_t typmod, int location)
+static PGNode *
+makeSQLValueFunction(PGSQLValueFunctionOp op, int32_t typmod, int location)
 {
-	SQLValueFunction *svf = makeNode(SQLValueFunction);
+	PGSQLValueFunction *svf = makeNode(PGSQLValueFunction);
 
 	svf->op = op;
 	/* svf->type will be filled during parse analysis */
 	svf->typmod = typmod;
 	svf->location = location;
-	return (Node *) svf;
+	return (PGNode *) svf;
 }
 
 /*
- * Convert a list of (dotted) names to a RangeVar (like
+ * Convert a list of (dotted) names to a PGRangeVar (like
  * makeRangeVarFromNameList, but with position support).  The
  * "AnyName" refers to the any_name production in the grammar.
  */
-static RangeVar *
-makeRangeVarFromAnyName(List *names, int position, core_yyscan_t yyscanner)
+static PGRangeVar *
+makeRangeVarFromAnyName(PGList *names, int position, core_yyscan_t yyscanner)
 {
-	RangeVar *r = makeNode(RangeVar);
+	PGRangeVar *r = makeNode(PGRangeVar);
 
 	switch (list_length(names))
 	{
@@ -526,7 +526,7 @@ makeRangeVarFromAnyName(List *names, int position, core_yyscan_t yyscanner)
 			break;
 		default:
 			ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
+					(errcode(PG_ERRCODE_SYNTAX_ERROR),
 					 errmsg("improper qualified name (too many dotted names): %s",
 							NameListToString(names)),
 					 parser_errposition(position)));
@@ -539,36 +539,36 @@ makeRangeVarFromAnyName(List *names, int position, core_yyscan_t yyscanner)
 	return r;
 }
 
-/* Separate Constraint nodes from COLLATE clauses in a */
+/* Separate PGConstraint nodes from COLLATE clauses in a */
 static void
-SplitColQualList(List *qualList,
-				 List **constraintList, CollateClause **collClause,
+SplitColQualList(PGList *qualList,
+				 PGList **constraintList, PGCollateClause **collClause,
 				 core_yyscan_t yyscanner)
 {
-	ListCell   *cell;
-	ListCell   *prev;
-	ListCell   *next;
+	PGListCell   *cell;
+	PGListCell   *prev;
+	PGListCell   *next;
 
 	*collClause = NULL;
 	prev = NULL;
 	for (cell = list_head(qualList); cell; cell = next)
 	{
-		Node   *n = (Node *) lfirst(cell);
+		PGNode   *n = (PGNode *) lfirst(cell);
 
 		next = lnext(cell);
-		if (IsA(n, Constraint))
+		if (IsA(n, PGConstraint))
 		{
 			/* keep it in list */
 			prev = cell;
 			continue;
 		}
-		if (IsA(n, CollateClause))
+		if (IsA(n, PGCollateClause))
 		{
-			CollateClause *c = (CollateClause *) n;
+			PGCollateClause *c = (PGCollateClause *) n;
 
 			if (*collClause)
 				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
+						(errcode(PG_ERRCODE_SYNTAX_ERROR),
 						 errmsg("multiple COLLATE clauses not allowed"),
 						 parser_errposition(c->location)));
 			*collClause = c;
@@ -605,7 +605,7 @@ processCASbits(int cas_bits, int location, const char *constrType,
 			*deferrable = true;
 		else
 			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
 					 /* translator: %s is CHECK, UNIQUE, or similar */
 					 errmsg("%s constraints cannot be marked DEFERRABLE",
 							constrType),
@@ -618,7 +618,7 @@ processCASbits(int cas_bits, int location, const char *constrType,
 			*initdeferred = true;
 		else
 			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
 					 /* translator: %s is CHECK, UNIQUE, or similar */
 					 errmsg("%s constraints cannot be marked DEFERRABLE",
 							constrType),
@@ -631,7 +631,7 @@ processCASbits(int cas_bits, int location, const char *constrType,
 			*not_valid = true;
 		else
 			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
 					 /* translator: %s is CHECK, UNIQUE, or similar */
 					 errmsg("%s constraints cannot be marked NOT VALID",
 							constrType),
@@ -644,7 +644,7 @@ processCASbits(int cas_bits, int location, const char *constrType,
 			*no_inherit = true;
 		else
 			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
 					 /* translator: %s is CHECK, UNIQUE, or similar */
 					 errmsg("%s constraints cannot be marked NO INHERIT",
 							constrType),
@@ -669,14 +669,14 @@ processCASbits(int cas_bits, int location, const char *constrType,
  * view as the query.
  * ----------
  */
-static Node *
-makeRecursiveViewSelect(char *relname, List *aliases, Node *query)
+static PGNode *
+makeRecursiveViewSelect(char *relname, PGList *aliases, PGNode *query)
 {
-	SelectStmt *s = makeNode(SelectStmt);
-	WithClause *w = makeNode(WithClause);
-	CommonTableExpr *cte = makeNode(CommonTableExpr);
-	List	   *tl = NIL;
-	ListCell   *lc;
+	PGSelectStmt *s = makeNode(PGSelectStmt);
+	PGWithClause *w = makeNode(PGWithClause);
+	PGCommonTableExpr *cte = makeNode(PGCommonTableExpr);
+	PGList	   *tl = NIL;
+	PGListCell   *lc;
 
 	/* create common table expression */
 	cte->ctename = relname;
@@ -693,7 +693,7 @@ makeRecursiveViewSelect(char *relname, List *aliases, Node *query)
 	 * recursive view specification */
 	foreach (lc, aliases)
 	{
-		ResTarget *rt = makeNode(ResTarget);
+		PGResTarget *rt = makeNode(PGResTarget);
 
 		rt->name = NULL;
 		rt->indirection = NIL;
@@ -709,7 +709,7 @@ makeRecursiveViewSelect(char *relname, List *aliases, Node *query)
 	s->targetList = tl;
 	s->fromClause = list_make1(makeRangeVar(NULL, relname, -1));
 
-	return (Node *) s;
+	return (PGNode *) s;
 }
 
 /* parser_init()

@@ -12,7 +12,7 @@
  *	  lexical token lookup for key words in PostgreSQL
  *
  *
- * Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2017, PostgreSQL Global Development PGGroup
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -43,7 +43,7 @@
 #endif							/* FRONTEND */
 
 
-const ScanKeyword ScanKeywords[] = {
+const PGScanKeyword ScanKeywords[] = {
 #include "parser/kwlist.hpp"
 };
 
@@ -56,7 +56,7 @@ const int	NumScanKeywords = lengthof(ScanKeywords);
  * The table to be searched is passed explicitly, so that this can be used
  * to search keyword lists other than the standard list appearing above.
  *
- * Returns a pointer to the ScanKeyword table entry, or NULL if no match.
+ * Returns a pointer to the PGScanKeyword table entry, or NULL if no match.
  *
  * The match is done case-insensitively.  Note that we deliberately use a
  * dumbed-down case conversion that will only translate 'A'-'Z' into 'a'-'z',
@@ -65,16 +65,16 @@ const int	NumScanKeywords = lengthof(ScanKeywords);
  * keywords are to be matched in this way even though non-keyword identifiers
  * receive a different case-normalization mapping.
  */
-const ScanKeyword *
+const PGScanKeyword *
 ScanKeywordLookup(const char *text,
-				  const ScanKeyword *keywords,
+				  const PGScanKeyword *keywords,
 				  int num_keywords)
 {
 	int			len,
 				i;
 	char		word[NAMEDATALEN];
-	const ScanKeyword *low;
-	const ScanKeyword *high;
+	const PGScanKeyword *low;
+	const PGScanKeyword *high;
 
 	len = strlen(text);
 	/* We assume all keywords are shorter than NAMEDATALEN. */
@@ -102,7 +102,7 @@ ScanKeywordLookup(const char *text,
 	high = keywords + (num_keywords - 1);
 	while (low <= high)
 	{
-		const ScanKeyword *middle;
+		const PGScanKeyword *middle;
 		int			difference;
 
 		middle = low + (high - low) / 2;

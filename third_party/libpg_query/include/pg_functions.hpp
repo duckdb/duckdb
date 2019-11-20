@@ -10,7 +10,7 @@
 typedef struct parse_result_str parse_result;
 struct parse_result_str {
 	bool success;
-	List* parse_tree;
+	PGList* parse_tree;
 	char* error_message;
 	int error_location;
 };
@@ -38,10 +38,10 @@ void pfree(void* ptr);
 void* palloc0fast(size_t n);
 void* repalloc(void* ptr, size_t n);
 
-char *NameListToString(List *names);
+char *NameListToString(PGList *names);
 void * copyObject(const void *from);
 bool equal(const void *a, const void *b);
-int exprLocation(const Node *expr);
+int exprLocation(const PGNode *expr);
 
 // string gunk
 int GetDatabaseEncoding(void);
@@ -52,7 +52,7 @@ int	pg_get_client_encoding(void);
 int pg_mbcliplen(const char *mbstr, int len, int limit);
 int pg_mblen(const char *mbstr);
 
-DefElem * defWithOids(bool value);
+PGDefElem * defWithOids(bool value);
 
 typedef unsigned int pg_wchar;
 unsigned char *unicode_to_utf8(pg_wchar c, unsigned char *utf8string);

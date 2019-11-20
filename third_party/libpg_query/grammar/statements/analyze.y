@@ -8,22 +8,22 @@
 AnalyzeStmt:
 			analyze_keyword opt_verbose
 				{
-					VacuumStmt *n = makeNode(VacuumStmt);
-					n->options = VACOPT_ANALYZE;
+					PGVacuumStmt *n = makeNode(PGVacuumStmt);
+					n->options = PG_VACOPT_ANALYZE;
 					if ($2)
-						n->options |= VACOPT_VERBOSE;
+						n->options |= PG_VACOPT_VERBOSE;
 					n->relation = NULL;
 					n->va_cols = NIL;
-					$$ = (Node *)n;
+					$$ = (PGNode *)n;
 				}
 			| analyze_keyword opt_verbose qualified_name opt_name_list
 				{
-					VacuumStmt *n = makeNode(VacuumStmt);
-					n->options = VACOPT_ANALYZE;
+					PGVacuumStmt *n = makeNode(PGVacuumStmt);
+					n->options = PG_VACOPT_ANALYZE;
 					if ($2)
-						n->options |= VACOPT_VERBOSE;
+						n->options |= PG_VACOPT_VERBOSE;
 					n->relation = $3;
 					n->va_cols = $4;
-					$$ = (Node *)n;
+					$$ = (PGNode *)n;
 				}
 		;

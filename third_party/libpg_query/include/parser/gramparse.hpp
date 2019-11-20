@@ -8,7 +8,7 @@
  * Definitions that are needed outside the core parser should be in parser.h.
  *
  *
- * Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2017, PostgreSQL Global Development PGGroup
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/parser/gramparse.h
@@ -51,7 +51,7 @@ typedef struct base_yy_extra_type
 	/*
 	 * State variables that belong to the grammar.
 	 */
-	List	   *parsetree;		/* final parse result is delivered here */
+	PGList	   *parsetree;		/* final parse result is delivered here */
 } base_yy_extra_type;
 
 /*

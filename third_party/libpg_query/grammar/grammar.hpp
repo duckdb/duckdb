@@ -5,7 +5,7 @@
  * gram.y
  *	  POSTGRESQL BISON rules/actions
  *
- * Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2017, PostgreSQL Global Development PGGroup
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -117,43 +117,43 @@
 
 static void base_yyerror(YYLTYPE *yylloc, core_yyscan_t yyscanner,
 						 const char *msg);
-static RawStmt *makeRawStmt(Node *stmt, int stmt_location);
-static void updateRawStmtEnd(RawStmt *rs, int end_location);
-static Node *makeColumnRef(char *colname, List *indirection,
+static PGRawStmt *makeRawStmt(PGNode *stmt, int stmt_location);
+static void updateRawStmtEnd(PGRawStmt *rs, int end_location);
+static PGNode *makeColumnRef(char *colname, PGList *indirection,
 						   int location, core_yyscan_t yyscanner);
-static Node *makeTypeCast(Node *arg, TypeName *tpname, int location);
-static Node *makeStringConst(char *str, int location);
-static Node *makeStringConstCast(char *str, int location, TypeName *tpname);
-static Node *makeIntConst(int val, int location);
-static Node *makeFloatConst(char *str, int location);
-static Node *makeBitStringConst(char *str, int location);
-static Node *makeNullAConst(int location);
-static Node *makeAConst(Value *v, int location);
-static Node *makeBoolAConst(bool state, int location);
-static Node *makeParamRef(int number, int location);
-static Node *makeParamRefCast(int number, int location, TypeName *tpname);
-static void check_qualified_name(List *names, core_yyscan_t yyscanner);
-static List *check_func_name(List *names, core_yyscan_t yyscanner);
-static List *check_indirection(List *indirection, core_yyscan_t yyscanner);
-static void insertSelectOptions(SelectStmt *stmt,
-								List *sortClause, List *lockingClause,
-								Node *limitOffset, Node *limitCount,
-								WithClause *withClause,
+static PGNode *makeTypeCast(PGNode *arg, PGTypeName *tpname, int location);
+static PGNode *makeStringConst(char *str, int location);
+static PGNode *makeStringConstCast(char *str, int location, PGTypeName *tpname);
+static PGNode *makeIntConst(int val, int location);
+static PGNode *makeFloatConst(char *str, int location);
+static PGNode *makeBitStringConst(char *str, int location);
+static PGNode *makeNullAConst(int location);
+static PGNode *makeAConst(PGValue *v, int location);
+static PGNode *makeBoolAConst(bool state, int location);
+static PGNode *makeParamRef(int number, int location);
+static PGNode *makeParamRefCast(int number, int location, PGTypeName *tpname);
+static void check_qualified_name(PGList *names, core_yyscan_t yyscanner);
+static PGList *check_func_name(PGList *names, core_yyscan_t yyscanner);
+static PGList *check_indirection(PGList *indirection, core_yyscan_t yyscanner);
+static void insertSelectOptions(PGSelectStmt *stmt,
+								PGList *sortClause, PGList *lockingClause,
+								PGNode *limitOffset, PGNode *limitCount,
+								PGWithClause *withClause,
 								core_yyscan_t yyscanner);
-static Node *makeSetOp(SetOperation op, bool all, Node *larg, Node *rarg);
-static Node *doNegate(Node *n, int location);
-static void doNegateFloat(Value *v);
-static Node *makeAndExpr(Node *lexpr, Node *rexpr, int location);
-static Node *makeOrExpr(Node *lexpr, Node *rexpr, int location);
-static Node *makeNotExpr(Node *expr, int location);
-static Node *makeAArrayExpr(List *elements, int location);
-static Node *makeSQLValueFunction(SQLValueFunctionOp op, int32_t typmod,
+static PGNode *makeSetOp(PGSetOperation op, bool all, PGNode *larg, PGNode *rarg);
+static PGNode *doNegate(PGNode *n, int location);
+static void doNegateFloat(PGValue *v);
+static PGNode *makeAndExpr(PGNode *lexpr, PGNode *rexpr, int location);
+static PGNode *makeOrExpr(PGNode *lexpr, PGNode *rexpr, int location);
+static PGNode *makeNotExpr(PGNode *expr, int location);
+static PGNode *makeAArrayExpr(PGList *elements, int location);
+static PGNode *makeSQLValueFunction(PGSQLValueFunctionOp op, int32_t typmod,
 								  int location);
-static RangeVar *makeRangeVarFromAnyName(List *names, int position, core_yyscan_t yyscanner);
-static void SplitColQualList(List *qualList,
-							 List **constraintList, CollateClause **collClause,
+static PGRangeVar *makeRangeVarFromAnyName(PGList *names, int position, core_yyscan_t yyscanner);
+static void SplitColQualList(PGList *qualList,
+							 PGList **constraintList, PGCollateClause **collClause,
 							 core_yyscan_t yyscanner);
 static void processCASbits(int cas_bits, int location, const char *constrType,
 			   bool *deferrable, bool *initdeferred, bool *not_valid,
 			   bool *no_inherit, core_yyscan_t yyscanner);
-static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
+static PGNode *makeRecursiveViewSelect(char *relname, PGList *aliases, PGNode *query);

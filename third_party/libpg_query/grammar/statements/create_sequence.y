@@ -8,23 +8,23 @@
 CreateSeqStmt:
 			CREATE OptTemp SEQUENCE qualified_name OptSeqOptList
 				{
-					CreateSeqStmt *n = makeNode(CreateSeqStmt);
+					PGCreateSeqStmt *n = makeNode(PGCreateSeqStmt);
 					$4->relpersistence = $2;
 					n->sequence = $4;
 					n->options = $5;
 					n->ownerId = InvalidOid;
 					n->if_not_exists = false;
-					$$ = (Node *)n;
+					$$ = (PGNode *)n;
 				}
 			| CREATE OptTemp SEQUENCE IF_P NOT EXISTS qualified_name OptSeqOptList
 				{
-					CreateSeqStmt *n = makeNode(CreateSeqStmt);
+					PGCreateSeqStmt *n = makeNode(PGCreateSeqStmt);
 					$7->relpersistence = $2;
 					n->sequence = $7;
 					n->options = $8;
 					n->ownerId = InvalidOid;
 					n->if_not_exists = true;
-					$$ = (Node *)n;
+					$$ = (PGNode *)n;
 				}
 		;
 

@@ -2,27 +2,27 @@
 VariableShowStmt:
 			SHOW var_name
 				{
-					VariableShowStmt *n = makeNode(VariableShowStmt);
+					PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
 					n->name = $2;
-					$$ = (Node *) n;
+					$$ = (PGNode *) n;
 				}
 			| SHOW TIME ZONE
 				{
-					VariableShowStmt *n = makeNode(VariableShowStmt);
+					PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
 					n->name = (char*) "timezone";
-					$$ = (Node *) n;
+					$$ = (PGNode *) n;
 				}
 			| SHOW TRANSACTION ISOLATION LEVEL
 				{
-					VariableShowStmt *n = makeNode(VariableShowStmt);
+					PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
 					n->name = (char*) "transaction_isolation";
-					$$ = (Node *) n;
+					$$ = (PGNode *) n;
 				}
 			| SHOW ALL
 				{
-					VariableShowStmt *n = makeNode(VariableShowStmt);
+					PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
 					n->name = (char*) "all";
-					$$ = (Node *) n;
+					$$ = (PGNode *) n;
 				}
 		;
 

@@ -6,11 +6,11 @@
  *****************************************************************************/
 PrepareStmt: PREPARE name prep_type_clause AS PreparableStmt
 				{
-					PrepareStmt *n = makeNode(PrepareStmt);
+					PGPrepareStmt *n = makeNode(PGPrepareStmt);
 					n->name = $2;
 					n->argtypes = $3;
 					n->query = $5;
-					$$ = (Node *) n;
+					$$ = (PGNode *) n;
 				}
 		;
 

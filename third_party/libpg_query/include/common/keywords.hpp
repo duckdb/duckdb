@@ -4,7 +4,7 @@
  *	  lexical token lookup for key words in PostgreSQL
  *
  *
- * Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2017, PostgreSQL Global Development PGGroup
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/common/keywords.h
@@ -20,22 +20,22 @@
 #define RESERVED_KEYWORD		3
 
 
-typedef struct ScanKeyword
+typedef struct PGScanKeyword
 {
 	const char *name;			/* in lower case */
 	int16_t		value;			/* grammar's token code */
 	int16_t		category;		/* see codes above */
-} ScanKeyword;
+} PGScanKeyword;
 
 #ifndef FRONTEND
-extern const ScanKeyword ScanKeywords[];
+extern const PGScanKeyword ScanKeywords[];
 extern const int NumScanKeywords;
 #else
-extern const ScanKeyword ScanKeywords[];
+extern const PGScanKeyword ScanKeywords[];
 extern const int NumScanKeywords;
 #endif
 
 
-extern const ScanKeyword *ScanKeywordLookup(const char *text,
-				  const ScanKeyword *keywords,
+extern const PGScanKeyword *ScanKeywordLookup(const char *text,
+				  const PGScanKeyword *keywords,
 				  int num_keywords);

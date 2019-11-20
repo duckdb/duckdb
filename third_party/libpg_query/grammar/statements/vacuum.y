@@ -7,77 +7,77 @@
  *****************************************************************************/
 VacuumStmt: VACUUM opt_full opt_freeze opt_verbose
 				{
-					VacuumStmt *n = makeNode(VacuumStmt);
-					n->options = VACOPT_VACUUM;
+					PGVacuumStmt *n = makeNode(PGVacuumStmt);
+					n->options = PG_VACOPT_VACUUM;
 					if ($2)
-						n->options |= VACOPT_FULL;
+						n->options |= PG_VACOPT_FULL;
 					if ($3)
-						n->options |= VACOPT_FREEZE;
+						n->options |= PG_VACOPT_FREEZE;
 					if ($4)
-						n->options |= VACOPT_VERBOSE;
+						n->options |= PG_VACOPT_VERBOSE;
 					n->relation = NULL;
 					n->va_cols = NIL;
-					$$ = (Node *)n;
+					$$ = (PGNode *)n;
 				}
 			| VACUUM opt_full opt_freeze opt_verbose qualified_name
 				{
-					VacuumStmt *n = makeNode(VacuumStmt);
-					n->options = VACOPT_VACUUM;
+					PGVacuumStmt *n = makeNode(PGVacuumStmt);
+					n->options = PG_VACOPT_VACUUM;
 					if ($2)
-						n->options |= VACOPT_FULL;
+						n->options |= PG_VACOPT_FULL;
 					if ($3)
-						n->options |= VACOPT_FREEZE;
+						n->options |= PG_VACOPT_FREEZE;
 					if ($4)
-						n->options |= VACOPT_VERBOSE;
+						n->options |= PG_VACOPT_VERBOSE;
 					n->relation = $5;
 					n->va_cols = NIL;
-					$$ = (Node *)n;
+					$$ = (PGNode *)n;
 				}
 			| VACUUM opt_full opt_freeze opt_verbose AnalyzeStmt
 				{
-					VacuumStmt *n = (VacuumStmt *) $5;
-					n->options |= VACOPT_VACUUM;
+					PGVacuumStmt *n = (PGVacuumStmt *) $5;
+					n->options |= PG_VACOPT_VACUUM;
 					if ($2)
-						n->options |= VACOPT_FULL;
+						n->options |= PG_VACOPT_FULL;
 					if ($3)
-						n->options |= VACOPT_FREEZE;
+						n->options |= PG_VACOPT_FREEZE;
 					if ($4)
-						n->options |= VACOPT_VERBOSE;
-					$$ = (Node *)n;
+						n->options |= PG_VACOPT_VERBOSE;
+					$$ = (PGNode *)n;
 				}
 			| VACUUM '(' vacuum_option_list ')'
 				{
-					VacuumStmt *n = makeNode(VacuumStmt);
-					n->options = VACOPT_VACUUM | $3;
+					PGVacuumStmt *n = makeNode(PGVacuumStmt);
+					n->options = PG_VACOPT_VACUUM | $3;
 					n->relation = NULL;
 					n->va_cols = NIL;
-					$$ = (Node *) n;
+					$$ = (PGNode *) n;
 				}
 			| VACUUM '(' vacuum_option_list ')' qualified_name opt_name_list
 				{
-					VacuumStmt *n = makeNode(VacuumStmt);
-					n->options = VACOPT_VACUUM | $3;
+					PGVacuumStmt *n = makeNode(PGVacuumStmt);
+					n->options = PG_VACOPT_VACUUM | $3;
 					n->relation = $5;
 					n->va_cols = $6;
 					if (n->va_cols != NIL)	/* implies analyze */
-						n->options |= VACOPT_ANALYZE;
-					$$ = (Node *) n;
+						n->options |= PG_VACOPT_ANALYZE;
+					$$ = (PGNode *) n;
 				}
 		;
 
 
 vacuum_option_elem:
-			analyze_keyword		{ $$ = VACOPT_ANALYZE; }
-			| VERBOSE			{ $$ = VACOPT_VERBOSE; }
-			| FREEZE			{ $$ = VACOPT_FREEZE; }
-			| FULL				{ $$ = VACOPT_FULL; }
+			analyze_keyword		{ $$ = PG_VACOPT_ANALYZE; }
+			| VERBOSE			{ $$ = PG_VACOPT_VERBOSE; }
+			| FREEZE			{ $$ = PG_VACOPT_FREEZE; }
+			| FULL				{ $$ = PG_VACOPT_FULL; }
 			| IDENT
 				{
 					if (strcmp($1, "disable_page_skipping") == 0)
-						$$ = VACOPT_DISABLE_PAGE_SKIPPING;
+						$$ = PG_VACOPT_DISABLE_PAGE_SKIPPING;
 					else
 						ereport(ERROR,
-								(errcode(ERRCODE_SYNTAX_ERROR),
+								(errcode(PG_ERRCODE_SYNTAX_ERROR),
 							 errmsg("unrecognized VACUUM option \"%s\"", $1),
 									 parser_errposition(@1)));
 				}

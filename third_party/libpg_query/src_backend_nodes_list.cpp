@@ -23,7 +23,7 @@
  *	  implementation for PostgreSQL generic linked list package
  *
  *
- * Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2017, PostgreSQL Global Development PGGroup
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -40,16 +40,16 @@
  * Routines to simplify writing assertions about the type of a list; a
  * NIL list is considered to be an empty list of any type.
  */
-#define IsPointerList(l)		((l) == NIL || IsA((l), List))
+#define IsPointerList(l)		((l) == NIL || IsA((l), PGList))
 #define IsIntegerList(l)		((l) == NIL || IsA((l), IntList))
 #define IsOidList(l)			((l) == NIL || IsA((l), OidList))
 
 #ifdef USE_ASSERT_CHECKING
 /*
- * Check that the specified List is valid (so far as we can tell).
+ * Check that the specified PGList is valid (so far as we can tell).
  */
 static void
-check_list_invariants(const List *list)
+check_list_invariants(const PGList *list)
 {
 	if (list == NIL)
 		return;
@@ -58,9 +58,9 @@ check_list_invariants(const List *list)
 	Assert(list->head != NULL);
 	Assert(list->tail != NULL);
 
-	Assert(list->type == T_List ||
-		   list->type == T_IntList ||
-		   list->type == T_OidList);
+	Assert(list->type == T_PGList ||
+		   list->type == T_PGIntList ||
+		   list->type == T_PGOidList);
 
 	if (list->length == 1)
 		Assert(list->head == list->tail);
@@ -77,17 +77,17 @@ check_list_invariants(const List *list)
  * invalid, new_list() also allocates the head cell of the new list:
  * the caller should be sure to fill in that cell's data.
  */
-static List *
-new_list(NodeTag type)
+static PGList *
+new_list(PGNodeTag type)
 {
-	List	   *new_list;
-	ListCell   *new_head;
+	PGList	   *new_list;
+	PGListCell   *new_head;
 
-	new_head = (ListCell *) palloc(sizeof(*new_head));
+	new_head = (PGListCell *) palloc(sizeof(*new_head));
 	new_head->next = NULL;
 	/* new_head->data is left undefined! */
 
-	new_list = (List *) palloc(sizeof(*new_list));
+	new_list = (PGList *) palloc(sizeof(*new_list));
 	new_list->type = type;
 	new_list->length = 1;
 	new_list->head = new_head;
@@ -104,11 +104,11 @@ new_list(NodeTag type)
  * sure to fill it in
  */
 static void
-new_head_cell(List *list)
+new_head_cell(PGList *list)
 {
-	ListCell   *new_head;
+	PGListCell   *new_head;
 
-	new_head = (ListCell *) palloc(sizeof(*new_head));
+	new_head = (PGListCell *) palloc(sizeof(*new_head));
 	new_head->next = list->head;
 
 	list->head = new_head;
@@ -123,11 +123,11 @@ new_head_cell(List *list)
  * sure to fill it in
  */
 static void
-new_tail_cell(List *list)
+new_tail_cell(PGList *list)
 {
-	ListCell   *new_tail;
+	PGListCell   *new_tail;
 
-	new_tail = (ListCell *) palloc(sizeof(*new_tail));
+	new_tail = (PGListCell *) palloc(sizeof(*new_tail));
 	new_tail->next = NULL;
 
 	list->tail->next = new_tail;
@@ -136,19 +136,19 @@ new_tail_cell(List *list)
 }
 
 /*
- * Append a pointer to the list. A pointer to the modified list is
+ * PGAppend a pointer to the list. A pointer to the modified list is
  * returned. Note that this function may or may not destructively
  * modify the list; callers should always use this function's return
  * value, rather than continuing to use the pointer passed as the
  * first argument.
  */
-List *
-lappend(List *list, void *datum)
+PGList *
+lappend(PGList *list, void *datum)
 {
 	Assert(IsPointerList(list));
 
 	if (list == NIL)
-		list = new_list(T_List);
+		list = new_list(T_PGList);
 	else
 		new_tail_cell(list);
 
@@ -158,12 +158,12 @@ lappend(List *list, void *datum)
 }
 
 /*
- * Append an integer to the specified list. See lappend()
+ * PGAppend an integer to the specified list. See lappend()
  */
 
 
 /*
- * Append an OID to the specified list. See lappend()
+ * PGAppend an OID to the specified list. See lappend()
  */
 
 
@@ -194,17 +194,17 @@ lappend(List *list, void *datum)
  * value, rather than continuing to use the pointer passed as the
  * second argument.
  *
- * Caution: before Postgres 8.0, the original List was unmodified and
+ * Caution: before Postgres 8.0, the original PGList was unmodified and
  * could be considered to retain its separate identity.  This is no longer
  * the case.
  */
-List *
-lcons(void *datum, List *list)
+PGList *
+lcons(void *datum, PGList *list)
 {
 	Assert(IsPointerList(list));
 
 	if (list == NIL)
-		list = new_list(T_List);
+		list = new_list(T_PGList);
 	else
 		new_head_cell(list);
 
@@ -234,8 +234,8 @@ lcons(void *datum, List *list)
  * storage). Therefore, invoking list_free() on list2 will also
  * invalidate a portion of list1.
  */
-List *
-list_concat(List *list1, List *list2)
+PGList *
+list_concat(PGList *list1, PGList *list2)
 {
 	if (list1 == NIL)
 		return list2;
@@ -263,10 +263,10 @@ list_concat(List *list1, List *list2)
  *
  * Note that any cells removed by list_truncate() are NOT pfree'd.
  */
-List *
-list_truncate(List *list, int new_size)
+PGList *
+list_truncate(PGList *list, int new_size)
 {
-	ListCell   *cell;
+	PGListCell   *cell;
 	int			n;
 
 	if (new_size <= 0)
@@ -299,10 +299,10 @@ list_truncate(List *list, int new_size)
  * Locate the n'th cell (counting from 0) of the list.  It is an assertion
  * failure if there is no such cell.
  */
-ListCell *
-list_nth_cell(const List *list, int n)
+PGListCell *
+list_nth_cell(const PGList *list, int n)
 {
-	ListCell   *match;
+	PGListCell   *match;
 
 	Assert(list != NIL);
 	Assert(n >= 0);
@@ -321,10 +321,10 @@ list_nth_cell(const List *list, int n)
 
 /*
  * Return the data value contained in the n'th element of the
- * specified list. (List elements begin at 0.)
+ * specified list. (PGList elements begin at 0.)
  */
 void *
-list_nth(const List *list, int n)
+list_nth(const PGList *list, int n)
 {
 	Assert(IsPointerList(list));
 	return lfirst(list_nth_cell(list, n));
@@ -334,10 +334,10 @@ list_nth(const List *list, int n)
  * Delete 'cell' from 'list'; 'prev' is the previous element to 'cell'
  * in 'list', if any (i.e. prev == NULL iff list->head == cell)
  *
- * The cell is pfree'd, as is the List header if this was the last member.
+ * The cell is pfree'd, as is the PGList header if this was the last member.
  */
-List *
-list_delete_cell(List *list, ListCell *cell, ListCell *prev)
+PGList *
+list_delete_cell(PGList *list, PGListCell *cell, PGListCell *prev)
 {
 	check_list_invariants(list);
 	Assert(prev != NULL ? lnext(prev) == cell : list_head(list) == cell);
@@ -375,16 +375,16 @@ list_delete_cell(List *list, ListCell *cell, ListCell *prev)
  * Free all storage in a list, and optionally the pointed-to elements
  */
 static void
-list_free_private(List *list, bool deep)
+list_free_private(PGList *list, bool deep)
 {
-	ListCell   *cell;
+	PGListCell   *cell;
 
 	check_list_invariants(list);
 
 	cell = list_head(list);
 	while (cell != NULL)
 	{
-		ListCell   *tmp = cell;
+		PGListCell   *tmp = cell;
 
 		cell = lnext(cell);
 		if (deep)
@@ -405,7 +405,7 @@ list_free_private(List *list, bool deep)
  * caller would be wise to set it to NIL for safety's sake.
  */
 void
-list_free(List *list)
+list_free(PGList *list)
 {
 	list_free_private(list, false);
 }
@@ -423,12 +423,12 @@ list_free(List *list)
 /*
  * Return a shallow copy of the specified list.
  */
-List *
-list_copy(const List *oldlist)
+PGList *
+list_copy(const PGList *oldlist)
 {
-	List	   *newlist;
-	ListCell   *newlist_prev;
-	ListCell   *oldlist_cur;
+	PGList	   *newlist;
+	PGListCell   *newlist_prev;
+	PGListCell   *oldlist_cur;
 
 	if (oldlist == NIL)
 		return NIL;
@@ -446,9 +446,9 @@ list_copy(const List *oldlist)
 	oldlist_cur = oldlist->head->next;
 	while (oldlist_cur)
 	{
-		ListCell   *newlist_cur;
+		PGListCell   *newlist_cur;
 
-		newlist_cur = (ListCell *) palloc(sizeof(*newlist_cur));
+		newlist_cur = (PGListCell *) palloc(sizeof(*newlist_cur));
 		newlist_cur->data = oldlist_cur->data;
 		newlist_prev->next = newlist_cur;
 
@@ -466,12 +466,12 @@ list_copy(const List *oldlist)
 /*
  * Return a shallow copy of the specified list, without the first N elements.
  */
-List *
-list_copy_tail(const List *oldlist, int nskip)
+PGList *
+list_copy_tail(const PGList *oldlist, int nskip)
 {
-	List	   *newlist;
-	ListCell   *newlist_prev;
-	ListCell   *oldlist_cur;
+	PGList	   *newlist;
+	PGListCell   *newlist_prev;
+	PGListCell   *oldlist_cur;
 
 	if (nskip < 0)
 		nskip = 0;				/* would it be better to elog? */
@@ -499,9 +499,9 @@ list_copy_tail(const List *oldlist, int nskip)
 	oldlist_cur = oldlist_cur->next;
 	while (oldlist_cur)
 	{
-		ListCell   *newlist_cur;
+		PGListCell   *newlist_cur;
 
-		newlist_cur = (ListCell *) palloc(sizeof(*newlist_cur));
+		newlist_cur = (PGListCell *) palloc(sizeof(*newlist_cur));
 		newlist_cur->data = oldlist_cur->data;
 		newlist_prev->next = newlist_cur;
 
@@ -532,6 +532,6 @@ list_copy_tail(const List *oldlist, int nskip)
  * list_length() macro in order to avoid the overhead of a function
  * call.
  */
-int			length(const List *list);
+int			length(const PGList *list);
 
 

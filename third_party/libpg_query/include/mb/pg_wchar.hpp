@@ -3,7 +3,7 @@
  * pg_wchar.h
  *	  multibyte-character support
  *
- * Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2017, PostgreSQL Global Development PGGroup
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/mb/pg_wchar.h
@@ -220,7 +220,7 @@ typedef unsigned int pg_wchar;
 /*
  * PostgreSQL encoding identifiers
  *
- * WARNING: the order of this enum must be same as order of entries
+ * PGWARNING: the order of this enum must be same as order of entries
  *			in the pg_enc2name_tbl[] array (in mb/encnames.c), and
  *			in the pg_wchar_table[] array (in mb/wchar.c)!
  *
@@ -422,36 +422,36 @@ typedef struct
 	const uint32_t *chars32;
 
 	/* Radix tree for 1-byte inputs */
-	uint32		b1root;			/* offset of table in the chars[16|32] array */
-	uint8		b1_lower;		/* min allowed value for a single byte input */
-	uint8		b1_upper;		/* max allowed value for a single byte input */
+	uint32_t		b1root;			/* offset of table in the chars[16|32] array */
+	uint8_t		b1_lower;		/* min allowed value for a single byte input */
+	uint8_t		b1_upper;		/* max allowed value for a single byte input */
 
 	/* Radix tree for 2-byte inputs */
-	uint32		b2root;			/* offset of 1st byte's table */
-	uint8		b2_1_lower;		/* min/max allowed value for 1st input byte */
-	uint8		b2_1_upper;
-	uint8		b2_2_lower;		/* min/max allowed value for 2nd input byte */
-	uint8		b2_2_upper;
+	uint32_t		b2root;			/* offset of 1st byte's table */
+	uint8_t		b2_1_lower;		/* min/max allowed value for 1st input byte */
+	uint8_t		b2_1_upper;
+	uint8_t		b2_2_lower;		/* min/max allowed value for 2nd input byte */
+	uint8_t		b2_2_upper;
 
 	/* Radix tree for 3-byte inputs */
-	uint32		b3root;			/* offset of 1st byte's table */
-	uint8		b3_1_lower;		/* min/max allowed value for 1st input byte */
-	uint8		b3_1_upper;
-	uint8		b3_2_lower;		/* min/max allowed value for 2nd input byte */
-	uint8		b3_2_upper;
-	uint8		b3_3_lower;		/* min/max allowed value for 3rd input byte */
-	uint8		b3_3_upper;
+	uint32_t		b3root;			/* offset of 1st byte's table */
+	uint8_t		b3_1_lower;		/* min/max allowed value for 1st input byte */
+	uint8_t		b3_1_upper;
+	uint8_t		b3_2_lower;		/* min/max allowed value for 2nd input byte */
+	uint8_t		b3_2_upper;
+	uint8_t		b3_3_lower;		/* min/max allowed value for 3rd input byte */
+	uint8_t		b3_3_upper;
 
 	/* Radix tree for 4-byte inputs */
-	uint32		b4root;			/* offset of 1st byte's table */
-	uint8		b4_1_lower;		/* min/max allowed value for 1st input byte */
-	uint8		b4_1_upper;
-	uint8		b4_2_lower;		/* min/max allowed value for 2nd input byte */
-	uint8		b4_2_upper;
-	uint8		b4_3_lower;		/* min/max allowed value for 3rd input byte */
-	uint8		b4_3_upper;
-	uint8		b4_4_lower;		/* min/max allowed value for 4th input byte */
-	uint8		b4_4_upper;
+	uint32_t		b4root;			/* offset of 1st byte's table */
+	uint8_t		b4_1_lower;		/* min/max allowed value for 1st input byte */
+	uint8_t		b4_1_upper;
+	uint8_t		b4_2_lower;		/* min/max allowed value for 2nd input byte */
+	uint8_t		b4_2_upper;
+	uint8_t		b4_3_lower;		/* min/max allowed value for 3rd input byte */
+	uint8_t		b4_3_upper;
+	uint8_t		b4_4_lower;		/* min/max allowed value for 4th input byte */
+	uint8_t		b4_4_upper;
 
 } pg_mb_radix_tree;
 
@@ -460,9 +460,9 @@ typedef struct
  */
 typedef struct
 {
-	uint32		utf1;			/* UTF-8 code 1 */
-	uint32		utf2;			/* UTF-8 code 2 */
-	uint32		code;			/* local code */
+	uint32_t		utf1;			/* UTF-8 code 1 */
+	uint32_t		utf2;			/* UTF-8 code 2 */
+	uint32_t		code;			/* local code */
 } pg_utf_to_local_combined;
 
 /*
@@ -470,9 +470,9 @@ typedef struct
  */
 typedef struct
 {
-	uint32		code;			/* local code */
-	uint32		utf1;			/* UTF-8 code 1 */
-	uint32		utf2;			/* UTF-8 code 2 */
+	uint32_t		code;			/* local code */
+	uint32_t		utf1;			/* UTF-8 code 1 */
+	uint32_t		utf2;			/* UTF-8 code 2 */
 } pg_local_to_utf_combined;
 
 /*

@@ -1,7 +1,7 @@
 /*****************************************************************************
  *
  *		QUERY :
- *				CREATE TABLE relname AS SelectStmt [ WITH [NO] DATA ]
+ *				CREATE TABLE relname AS PGSelectStmt [ WITH [NO] DATA ]
  *
  *
  * Note: SELECT ... INTO is a now-deprecated alternative for this.
@@ -10,29 +10,29 @@
 CreateAsStmt:
 		CREATE OptTemp TABLE create_as_target AS SelectStmt opt_with_data
 				{
-					CreateTableAsStmt *ctas = makeNode(CreateTableAsStmt);
+					PGCreateTableAsStmt *ctas = makeNode(PGCreateTableAsStmt);
 					ctas->query = $6;
 					ctas->into = $4;
-					ctas->relkind = OBJECT_TABLE;
+					ctas->relkind = PG_OBJECT_TABLE;
 					ctas->is_select_into = false;
 					ctas->if_not_exists = false;
-					/* cram additional flags into the IntoClause */
+					/* cram additional flags into the PGIntoClause */
 					$4->rel->relpersistence = $2;
 					$4->skipData = !($7);
-					$$ = (Node *) ctas;
+					$$ = (PGNode *) ctas;
 				}
 		| CREATE OptTemp TABLE IF_P NOT EXISTS create_as_target AS SelectStmt opt_with_data
 				{
-					CreateTableAsStmt *ctas = makeNode(CreateTableAsStmt);
+					PGCreateTableAsStmt *ctas = makeNode(PGCreateTableAsStmt);
 					ctas->query = $9;
 					ctas->into = $7;
-					ctas->relkind = OBJECT_TABLE;
+					ctas->relkind = PG_OBJECT_TABLE;
 					ctas->is_select_into = false;
 					ctas->if_not_exists = true;
-					/* cram additional flags into the IntoClause */
+					/* cram additional flags into the PGIntoClause */
 					$7->rel->relpersistence = $2;
 					$7->skipData = !($10);
-					$$ = (Node *) ctas;
+					$$ = (PGNode *) ctas;
 				}
 		;
 
@@ -47,7 +47,7 @@ opt_with_data:
 create_as_target:
 			qualified_name opt_column_list OptWith OnCommitOption
 				{
-					$$ = makeNode(IntoClause);
+					$$ = makeNode(PGIntoClause);
 					$$->rel = $1;
 					$$->colNames = $2;
 					$$->options = $3;

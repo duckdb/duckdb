@@ -12,7 +12,7 @@ public:
 	~PostgresParser();
 
 	bool success;
-	List *parse_tree;
+	PGList *parse_tree;
 	std::string error_message;
 	int error_location;
 };

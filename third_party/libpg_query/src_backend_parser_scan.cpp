@@ -70,7 +70,7 @@
  * Postgres 9.2, this check is made automatically by the Makefile.)
  *
  *
- * Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2017, PostgreSQL Global Development PGGroup
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -246,7 +246,7 @@ typedef void* yyscan_t;
 
 #define YY_END_OF_BUFFER_CHAR 0
 
-/* Size of default input buffer. */
+/* PGSize of default input buffer. */
 #ifndef YY_BUF_SIZE
 #define YY_BUF_SIZE 16384
 #endif
@@ -296,7 +296,7 @@ struct yy_buffer_state
 	char *yy_ch_buf;		/* input buffer */
 	char *yy_buf_pos;		/* current position in input buffer */
 
-	/* Size of input buffer in bytes, not including room for EOB
+	/* PGSize of input buffer in bytes, not including room for EOB
 	 * characters.
 	 */
 	yy_size_t yy_buf_size;
@@ -8594,7 +8594,7 @@ fprintf_to_ereport(const char *fmt, const char *msg)
  * as such, changing their values can induce very unintuitive behavior.
  * But we shall have to live with it until we can remove these variables.
  */
-__thread int			backslash_quote = BACKSLASH_QUOTE_SAFE_ENCODING;
+__thread int			backslash_quote = PG_BACKSLASH_QUOTE_SAFE_ENCODING;
 
 __thread bool		escape_string_warning = true;
 
@@ -9295,7 +9295,7 @@ YY_RULE_SETUP
 					 * We will pass this along as a normal character string,
 					 * but preceded with an internally-generated "NCHAR".
 					 */
-					const ScanKeyword *keyword;
+					const PGScanKeyword *keyword;
 
 					SET_YYLLOC();
 					yyless(1);	/* eat only 'n' this time */
@@ -9348,7 +9348,7 @@ YY_RULE_SETUP
 					SET_YYLLOC();
 					if (!yyextra->standard_conforming_strings)
 						ereport(ERROR,
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
 								 errmsg("unsafe use of string constant with Unicode escapes"),
 								 errdetail("String constants with Unicode escapes cannot be used when standard_conforming_strings is off."),
 								 lexer_errposition()));
@@ -9513,7 +9513,7 @@ YY_RULE_SETUP
 #line 628 "scan.l"
 {
 					ereport(ERROR,
-							(errcode(ERRCODE_INVALID_ESCAPE_SEQUENCE),
+							(errcode(PG_ERRCODE_INVALID_ESCAPE_SEQUENCE),
 							 errmsg("invalid Unicode escape"),
 							 errhint("Unicode escapes must be \\uXXXX or \\UXXXXXXXX."),
 							 lexer_errposition()));
@@ -9526,11 +9526,11 @@ YY_RULE_SETUP
 {
 					if (yytext[1] == '\'')
 					{
-						if (yyextra->backslash_quote == BACKSLASH_QUOTE_OFF ||
-							(yyextra->backslash_quote == BACKSLASH_QUOTE_SAFE_ENCODING &&
+						if (yyextra->backslash_quote == PG_BACKSLASH_QUOTE_OFF ||
+							(yyextra->backslash_quote == PG_BACKSLASH_QUOTE_SAFE_ENCODING &&
 							 PG_ENCODING_IS_CLIENT_ONLY(pg_get_client_encoding())))
 							ereport(ERROR,
-									(errcode(ERRCODE_NONSTANDARD_USE_OF_ESCAPE_CHARACTER),
+									(errcode(PG_ERRCODE_NONSTANDARD_USE_OF_ESCAPE_CHARACTER),
 									 errmsg("unsafe use of \\' in a string literal"),
 									 errhint("Use '' to write quotes in strings. \\' is insecure in client-only encodings."),
 									 lexer_errposition()));
@@ -10053,7 +10053,7 @@ case 78:
 YY_RULE_SETUP
 #line 1005 "scan.l"
 {
-					const ScanKeyword *keyword;
+					const PGScanKeyword *keyword;
 					char	   *ident;
           char       *keyword_text = pstrdup(yytext);
 
@@ -11037,7 +11037,7 @@ scanner_yyerror(const char *message, core_yyscan_t yyscanner)
 	if (*loc == YY_END_OF_BUFFER_CHAR)
 	{
 		ereport(ERROR,
-				(errcode(ERRCODE_SYNTAX_ERROR),
+				(errcode(PG_ERRCODE_SYNTAX_ERROR),
 		/* translator: %s is typically the translation of "syntax error" */
 				 errmsg("%s at end of input", _(message)),
 				 lexer_errposition()));
@@ -11045,7 +11045,7 @@ scanner_yyerror(const char *message, core_yyscan_t yyscanner)
 	else
 	{
 		ereport(ERROR,
-				(errcode(ERRCODE_SYNTAX_ERROR),
+				(errcode(PG_ERRCODE_SYNTAX_ERROR),
 		/* translator: first %s is typically the translation of "syntax error" */
 				 errmsg("%s at or near \"%s\"", _(message), loc),
 				 lexer_errposition()));
@@ -11059,10 +11059,10 @@ scanner_yyerror(const char *message, core_yyscan_t yyscanner)
 core_yyscan_t
 scanner_init(const char *str,
 			 core_yy_extra_type *yyext,
-			 const ScanKeyword *keywords,
+			 const PGScanKeyword *keywords,
 			 int num_keywords)
 {
-	Size		slen = strlen(str);
+	PGSize		slen = strlen(str);
 	yyscan_t	scanner;
 
 	if (core_yylex_init(&scanner) != 0)
@@ -11179,7 +11179,7 @@ process_integer_literal(const char *token, YYSTYPE *lval)
 	if (*endptr != '\0' || errno == ERANGE
 #ifdef HAVE_LONG_INT_64
 	/* if long > 32 bits, check for overflow of int4_t */
-		|| val != (long) ((int32) val)
+		|| val != (long) ((int32_t) val)
 #endif
 		)
 	{
@@ -11448,8 +11448,8 @@ check_string_escape_warning(unsigned char ychar, core_yyscan_t yyscanner)
 	if (ychar == '\'')
 	{
 		if (yyextra->warn_on_first_escape && yyextra->escape_string_warning)
-			ereport(WARNING,
-					(errcode(ERRCODE_NONSTANDARD_USE_OF_ESCAPE_CHARACTER),
+			ereport(PGWARNING,
+					(errcode(PG_ERRCODE_NONSTANDARD_USE_OF_ESCAPE_CHARACTER),
 					 errmsg("nonstandard use of \\' in a string literal"),
 					 errhint("Use '' to write quotes in strings, or use the escape string syntax (E'...')."),
 					 lexer_errposition()));
@@ -11458,8 +11458,8 @@ check_string_escape_warning(unsigned char ychar, core_yyscan_t yyscanner)
 	else if (ychar == '\\')
 	{
 		if (yyextra->warn_on_first_escape && yyextra->escape_string_warning)
-			ereport(WARNING,
-					(errcode(ERRCODE_NONSTANDARD_USE_OF_ESCAPE_CHARACTER),
+			ereport(PGWARNING,
+					(errcode(PG_ERRCODE_NONSTANDARD_USE_OF_ESCAPE_CHARACTER),
 					 errmsg("nonstandard use of \\\\ in a string literal"),
 					 errhint("Use the escape string syntax for backslashes, e.g., E'\\\\'."),
 					 lexer_errposition()));
@@ -11473,8 +11473,8 @@ static void
 check_escape_warning(core_yyscan_t yyscanner)
 {
 	if (yyextra->warn_on_first_escape && yyextra->escape_string_warning)
-		ereport(WARNING,
-				(errcode(ERRCODE_NONSTANDARD_USE_OF_ESCAPE_CHARACTER),
+		ereport(PGWARNING,
+				(errcode(PG_ERRCODE_NONSTANDARD_USE_OF_ESCAPE_CHARACTER),
 				 errmsg("nonstandard use of escape in a string literal"),
 		errhint("Use the escape string syntax for escapes, e.g., E'\\r\\n'."),
 				 lexer_errposition()));

@@ -8,34 +8,34 @@
 ExplainStmt:
 		EXPLAIN ExplainableStmt
 				{
-					ExplainStmt *n = makeNode(ExplainStmt);
+					PGExplainStmt *n = makeNode(PGExplainStmt);
 					n->query = $2;
 					n->options = NIL;
-					$$ = (Node *) n;
+					$$ = (PGNode *) n;
 				}
 		| EXPLAIN analyze_keyword opt_verbose ExplainableStmt
 				{
-					ExplainStmt *n = makeNode(ExplainStmt);
+					PGExplainStmt *n = makeNode(PGExplainStmt);
 					n->query = $4;
 					n->options = list_make1(makeDefElem("analyze", NULL, @2));
 					if ($3)
 						n->options = lappend(n->options,
 											 makeDefElem("verbose", NULL, @3));
-					$$ = (Node *) n;
+					$$ = (PGNode *) n;
 				}
 		| EXPLAIN VERBOSE ExplainableStmt
 				{
-					ExplainStmt *n = makeNode(ExplainStmt);
+					PGExplainStmt *n = makeNode(PGExplainStmt);
 					n->query = $3;
 					n->options = list_make1(makeDefElem("verbose", NULL, @2));
-					$$ = (Node *) n;
+					$$ = (PGNode *) n;
 				}
 		| EXPLAIN '(' explain_option_list ')' ExplainableStmt
 				{
-					ExplainStmt *n = makeNode(ExplainStmt);
+					PGExplainStmt *n = makeNode(PGExplainStmt);
 					n->query = $5;
 					n->options = $3;
-					$$ = (Node *) n;
+					$$ = (PGNode *) n;
 				}
 		;
 
@@ -47,8 +47,8 @@ opt_verbose:
 
 
 explain_option_arg:
-			opt_boolean_or_string	{ $$ = (Node *) makeString($1); }
-			| NumericOnly			{ $$ = (Node *) $1; }
+			opt_boolean_or_string	{ $$ = (PGNode *) makeString($1); }
+			| NumericOnly			{ $$ = (PGNode *) $1; }
 			| /* EMPTY */			{ $$ = NULL; }
 		;
 

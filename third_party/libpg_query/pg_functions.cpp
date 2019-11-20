@@ -13,8 +13,8 @@
 #define PG_MALLOC_SIZE 10240
 #define PG_MALLOC_LIMIT 1000
 
-typedef struct parser_state_str parser_state;
-struct parser_state_str {
+typedef struct pg_parser_state_str parser_state;
+struct pg_parser_state_str {
 	int pg_err_code;
 	int pg_err_pos;
 	char pg_err_msg[BUFSIZ];
@@ -27,7 +27,7 @@ struct parser_state_str {
 static __thread parser_state pg_parser_state;
 
 #ifndef __GNUC__
-__thread Node *newNodeMacroHolder;
+__thread PGNode *newNodeMacroHolder;
 #endif
 
 static void allocate_new(parser_state* state, size_t n) {
@@ -61,7 +61,7 @@ void* palloc(size_t n) {
 
 
 void pg_parser_init() {
-	pg_parser_state.pg_err_code = UNDEFINED;
+	pg_parser_state.pg_err_code = PGUNDEFINED;
 	pg_parser_state.pg_err_msg[0] = '\0';
 
 	pg_parser_state.malloc_ptr_idx = 0;
@@ -73,7 +73,7 @@ void pg_parser_parse(const char* query, parse_result *res) {
 	res->parse_tree = nullptr;
 	try{
 		res->parse_tree = raw_parser(query);
-		res->success = pg_parser_state.pg_err_code == UNDEFINED;
+		res->success = pg_parser_state.pg_err_code == PGUNDEFINED;
 	} catch (...) {
 		res->success = false;
 
@@ -163,7 +163,7 @@ void* palloc0fast(size_t n) { // very fast
 void* repalloc(void* ptr, size_t n) {
     throw std::runtime_error("repalloc NOT IMPLEMENTED");
 }
-char *NameListToString(List *names) {
+char *NameListToString(PGList *names) {
     throw std::runtime_error("NameListToString NOT IMPLEMENTED");
 }
 int GetDatabaseEncoding(void) {
@@ -175,7 +175,7 @@ void * copyObject(const void *from) {
 bool equal(const void *a, const void *b) {
     throw std::runtime_error("equal NOT IMPLEMENTED");
 }
-int exprLocation(const Node *expr) {
+int exprLocation(const PGNode *expr) {
     throw std::runtime_error("exprLocation NOT IMPLEMENTED");
 }
 int	pg_get_client_encoding(void) {
@@ -232,7 +232,7 @@ int pg_mbcliplen(const char *mbstr, int len, int limit) {
 int pg_mblen(const char *mbstr) {
     throw std::runtime_error("pg_mblen NOT IMPLEMENTED");
 }
-DefElem * defWithOids(bool value) {
+PGDefElem * defWithOids(bool value) {
     throw std::runtime_error("defWithOids NOT IMPLEMENTED");
 }
 unsigned char *unicode_to_utf8(pg_wchar c, unsigned char *utf8string) {

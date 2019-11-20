@@ -18,7 +18,7 @@
  * analyze.c and related files.
  *
  *
- * Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2017, PostgreSQL Global Development PGGroup
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -38,9 +38,9 @@
  *		Given a query in string form, do lexical and grammatical analysis.
  *
  * Returns a list of raw (un-analyzed) parse trees.  The immediate elements
- * of the list are always RawStmt nodes.
+ * of the list are always PGRawStmt nodes.
  */
-List *
+PGList *
 raw_parser(const char *str)
 {
 	core_yyscan_t yyscanner;

@@ -17,17 +17,17 @@
  *
  * We support three types of lists:
  *
- *	T_List: lists of pointers
+ *	T_PGList: lists of pointers
  *		(in practice usually pointers to Nodes, but not always;
  *		declared as "void *" to minimize casting annoyances)
- *	T_IntList: lists of integers
- *	T_OidList: lists of Oids
+ *	T_PGIntList: lists of integers
+ *	T_PGOidList: lists of Oids
  *
  * (At the moment, ints and Oids are the same size, but they may not
  * always be so; try to be careful to maintain the distinction.)
  *
  *
- * Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2017, PostgreSQL Global Development PGGroup
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/nodes/pg_list.h
@@ -39,23 +39,23 @@
 #include "nodes/nodes.hpp"
 
 
-typedef struct ListCell ListCell;
+typedef struct PGListCell ListCell;
 
-typedef struct List {
-	NodeTag		type;			/* T_List, T_IntList, or T_OidList */
+typedef struct PGList {
+	PGNodeTag		type;			/* T_PGList, T_PGIntList, or T_PGOidList */
 	int			length;
-	ListCell   *head;
-	ListCell   *tail;
-} List;
+	PGListCell   *head;
+	PGListCell   *tail;
+} PGList;
 
-struct ListCell {
+struct PGListCell {
 	union
 	{
 		void	   *ptr_value;
 		int			int_value;
-		Oid			oid_value;
+		PGOid			oid_value;
 	}			data;
-	ListCell   *next;
+	PGListCell   *next;
 };
 
 /*
@@ -63,39 +63,39 @@ struct ListCell {
  * words, a non-NIL list is guaranteed to have length >= 1 and
  * head/tail != NULL
  */
-#define NIL						((List *) NULL)
+#define NIL						((PGList *) NULL)
 
 /*
  * These routines are used frequently. However, we can't implement
  * them as macros, since we want to avoid double-evaluation of macro
  * arguments.
  */
-static inline ListCell *
-list_head(const List *l)
+static inline PGListCell *
+list_head(const PGList *l)
 {
 	return l ? l->head : NULL;
 }
 
-static inline ListCell *
-list_tail(List *l)
+static inline PGListCell *
+list_tail(PGList *l)
 {
 	return l ? l->tail : NULL;
 }
 
 static inline int
-list_length(const List *l)
+list_length(const PGList *l)
 {
 	return l ? l->length : 0;
 }
 
 /*
  * NB: There is an unfortunate legacy from a previous incarnation of
- * the List API: the macro lfirst() was used to mean "the data in this
+ * the PGList API: the macro lfirst() was used to mean "the data in this
  * cons cell". To avoid changing every usage of lfirst(), that meaning
- * has been kept. As a result, lfirst() takes a ListCell and returns
+ * has been kept. As a result, lfirst() takes a PGListCell and returns
  * the data it contains; to get the data in the first cell of a
- * List, use linitial(). Worse, lsecond() is more closely related to
- * linitial() than lfirst(): given a List, lsecond() returns the data
+ * PGList, use linitial(). Worse, lsecond() is more closely related to
+ * linitial() than lfirst(): given a PGList, lsecond() returns the data
  * in the second cons cell.
  */
 
@@ -202,69 +202,69 @@ list_length(const List *l)
 		 (cell1) != NULL && (cell2) != NULL && (cell3) != NULL;		\
 		 (cell1) = lnext(cell1), (cell2) = lnext(cell2), (cell3) = lnext(cell3))
 
-extern List *lappend(List *list, void *datum);
-extern List *lappend_int(List *list, int datum);
-extern List *lappend_oid(List *list, Oid datum);
+extern PGList *lappend(PGList *list, void *datum);
+extern PGList *lappend_int(PGList *list, int datum);
+extern PGList *lappend_oid(PGList *list, PGOid datum);
 
-extern ListCell *lappend_cell(List *list, ListCell *prev, void *datum);
-extern ListCell *lappend_cell_int(List *list, ListCell *prev, int datum);
-extern ListCell *lappend_cell_oid(List *list, ListCell *prev, Oid datum);
+extern PGListCell *lappend_cell(PGList *list, PGListCell *prev, void *datum);
+extern PGListCell *lappend_cell_int(PGList *list, PGListCell *prev, int datum);
+extern PGListCell *lappend_cell_oid(PGList *list, PGListCell *prev, PGOid datum);
 
-extern List *lcons(void *datum, List *list);
-extern List *lcons_int(int datum, List *list);
-extern List *lcons_oid(Oid datum, List *list);
+extern PGList *lcons(void *datum, PGList *list);
+extern PGList *lcons_int(int datum, PGList *list);
+extern PGList *lcons_oid(PGOid datum, PGList *list);
 
-extern List *list_concat(List *list1, List *list2);
-extern List *list_truncate(List *list, int new_size);
+extern PGList *list_concat(PGList *list1, PGList *list2);
+extern PGList *list_truncate(PGList *list, int new_size);
 
-extern ListCell *list_nth_cell(const List *list, int n);
-extern void *list_nth(const List *list, int n);
-extern int	list_nth_int(const List *list, int n);
-extern Oid	list_nth_oid(const List *list, int n);
+extern PGListCell *list_nth_cell(const PGList *list, int n);
+extern void *list_nth(const PGList *list, int n);
+extern int	list_nth_int(const PGList *list, int n);
+extern PGOid	list_nth_oid(const PGList *list, int n);
 #define list_nth_node(type,list,n)	castNode(type, list_nth(list, n))
 
-extern bool list_member(const List *list, const void *datum);
-extern bool list_member_ptr(const List *list, const void *datum);
-extern bool list_member_int(const List *list, int datum);
-extern bool list_member_oid(const List *list, Oid datum);
+extern bool list_member(const PGList *list, const void *datum);
+extern bool list_member_ptr(const PGList *list, const void *datum);
+extern bool list_member_int(const PGList *list, int datum);
+extern bool list_member_oid(const PGList *list, PGOid datum);
 
-extern List *list_delete(List *list, void *datum);
-extern List *list_delete_ptr(List *list, void *datum);
-extern List *list_delete_int(List *list, int datum);
-extern List *list_delete_oid(List *list, Oid datum);
-extern List *list_delete_first(List *list);
-extern List *list_delete_cell(List *list, ListCell *cell, ListCell *prev);
+extern PGList *list_delete(PGList *list, void *datum);
+extern PGList *list_delete_ptr(PGList *list, void *datum);
+extern PGList *list_delete_int(PGList *list, int datum);
+extern PGList *list_delete_oid(PGList *list, PGOid datum);
+extern PGList *list_delete_first(PGList *list);
+extern PGList *list_delete_cell(PGList *list, PGListCell *cell, PGListCell *prev);
 
-extern List *list_union(const List *list1, const List *list2);
-extern List *list_union_ptr(const List *list1, const List *list2);
-extern List *list_union_int(const List *list1, const List *list2);
-extern List *list_union_oid(const List *list1, const List *list2);
+extern PGList *list_union(const PGList *list1, const PGList *list2);
+extern PGList *list_union_ptr(const PGList *list1, const PGList *list2);
+extern PGList *list_union_int(const PGList *list1, const PGList *list2);
+extern PGList *list_union_oid(const PGList *list1, const PGList *list2);
 
-extern List *list_intersection(const List *list1, const List *list2);
-extern List *list_intersection_int(const List *list1, const List *list2);
+extern PGList *list_intersection(const PGList *list1, const PGList *list2);
+extern PGList *list_intersection_int(const PGList *list1, const PGList *list2);
 
 /* currently, there's no need for list_intersection_ptr etc */
 
-extern List *list_difference(const List *list1, const List *list2);
-extern List *list_difference_ptr(const List *list1, const List *list2);
-extern List *list_difference_int(const List *list1, const List *list2);
-extern List *list_difference_oid(const List *list1, const List *list2);
+extern PGList *list_difference(const PGList *list1, const PGList *list2);
+extern PGList *list_difference_ptr(const PGList *list1, const PGList *list2);
+extern PGList *list_difference_int(const PGList *list1, const PGList *list2);
+extern PGList *list_difference_oid(const PGList *list1, const PGList *list2);
 
-extern List *list_append_unique(List *list, void *datum);
-extern List *list_append_unique_ptr(List *list, void *datum);
-extern List *list_append_unique_int(List *list, int datum);
-extern List *list_append_unique_oid(List *list, Oid datum);
+extern PGList *list_append_unique(PGList *list, void *datum);
+extern PGList *list_append_unique_ptr(PGList *list, void *datum);
+extern PGList *list_append_unique_int(PGList *list, int datum);
+extern PGList *list_append_unique_oid(PGList *list, PGOid datum);
 
-extern List *list_concat_unique(List *list1, List *list2);
-extern List *list_concat_unique_ptr(List *list1, List *list2);
-extern List *list_concat_unique_int(List *list1, List *list2);
-extern List *list_concat_unique_oid(List *list1, List *list2);
+extern PGList *list_concat_unique(PGList *list1, PGList *list2);
+extern PGList *list_concat_unique_ptr(PGList *list1, PGList *list2);
+extern PGList *list_concat_unique_int(PGList *list1, PGList *list2);
+extern PGList *list_concat_unique_oid(PGList *list1, PGList *list2);
 
-extern void list_free(List *list);
-extern void list_free_deep(List *list);
+extern void list_free(PGList *list);
+extern void list_free_deep(PGList *list);
 
-extern List *list_copy(const List *list);
-extern List *list_copy_tail(const List *list, int nskip);
+extern PGList *list_copy(const PGList *list);
+extern PGList *list_copy_tail(const PGList *list, int nskip);
 
 /*
  * To ease migration to the new list API, a set of compatibility
@@ -332,6 +332,6 @@ extern List *list_copy_tail(const List *list, int nskip);
 
 #define listCopy(list)				list_copy(list)
 
-extern int	length(List *list);
+extern int	length(PGList *list);
 #endif							/* ENABLE_LIST_COMPAT */
 

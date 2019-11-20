@@ -12,7 +12,7 @@ InsertStmt:
 					$5->onConflictClause = $6;
 					$5->returningList = $7;
 					$5->withClause = $1;
-					$$ = (Node *) $5;
+					$$ = (PGNode *) $5;
 				}
 		;
 
@@ -20,33 +20,33 @@ InsertStmt:
 insert_rest:
 			SelectStmt
 				{
-					$$ = makeNode(InsertStmt);
+					$$ = makeNode(PGInsertStmt);
 					$$->cols = NIL;
 					$$->selectStmt = $1;
 				}
 			| OVERRIDING override_kind VALUE_P SelectStmt
 				{
-					$$ = makeNode(InsertStmt);
+					$$ = makeNode(PGInsertStmt);
 					$$->cols = NIL;
 					$$->override = $2;
 					$$->selectStmt = $4;
 				}
 			| '(' insert_column_list ')' SelectStmt
 				{
-					$$ = makeNode(InsertStmt);
+					$$ = makeNode(PGInsertStmt);
 					$$->cols = $2;
 					$$->selectStmt = $4;
 				}
 			| '(' insert_column_list ')' OVERRIDING override_kind VALUE_P SelectStmt
 				{
-					$$ = makeNode(InsertStmt);
+					$$ = makeNode(PGInsertStmt);
 					$$->cols = $2;
 					$$->override = $5;
 					$$->selectStmt = $7;
 				}
 			| DEFAULT VALUES
 				{
-					$$ = makeNode(InsertStmt);
+					$$ = makeNode(PGInsertStmt);
 					$$->cols = NIL;
 					$$->selectStmt = NULL;
 				}
@@ -69,7 +69,7 @@ insert_target:
 opt_conf_expr:
 			'(' index_params ')' where_clause
 				{
-					$$ = makeNode(InferClause);
+					$$ = makeNode(PGInferClause);
 					$$->indexElems = $2;
 					$$->whereClause = $4;
 					$$->conname = NULL;
@@ -78,7 +78,7 @@ opt_conf_expr:
 			|
 			ON CONSTRAINT name
 				{
-					$$ = makeNode(InferClause);
+					$$ = makeNode(PGInferClause);
 					$$->indexElems = NIL;
 					$$->whereClause = NULL;
 					$$->conname = $3;
@@ -100,7 +100,7 @@ opt_with_clause:
 insert_column_item:
 			ColId opt_indirection
 				{
-					$$ = makeNode(ResTarget);
+					$$ = makeNode(PGResTarget);
 					$$->name = $1;
 					$$->indirection = check_indirection($2, yyscanner);
 					$$->val = NULL;
@@ -112,25 +112,25 @@ insert_column_item:
 set_clause:
 			set_target '=' a_expr
 				{
-					$1->val = (Node *) $3;
+					$1->val = (PGNode *) $3;
 					$$ = list_make1($1);
 				}
 			| '(' set_target_list ')' '=' a_expr
 				{
 					int ncolumns = list_length($2);
 					int i = 1;
-					ListCell *col_cell;
+					PGListCell *col_cell;
 
-					/* Create a MultiAssignRef source for each target */
+					/* Create a PGMultiAssignRef source for each target */
 					foreach(col_cell, $2)
 					{
-						ResTarget *res_col = (ResTarget *) lfirst(col_cell);
-						MultiAssignRef *r = makeNode(MultiAssignRef);
+						PGResTarget *res_col = (PGResTarget *) lfirst(col_cell);
+						PGMultiAssignRef *r = makeNode(PGMultiAssignRef);
 
-						r->source = (Node *) $5;
+						r->source = (PGNode *) $5;
 						r->colno = i;
 						r->ncolumns = ncolumns;
-						res_col->val = (Node *) r;
+						res_col->val = (PGNode *) r;
 						i++;
 					}
 
@@ -142,8 +142,8 @@ set_clause:
 opt_on_conflict:
 			ON CONFLICT opt_conf_expr DO UPDATE SET set_clause_list	where_clause
 				{
-					$$ = makeNode(OnConflictClause);
-					$$->action = ONCONFLICT_UPDATE;
+					$$ = makeNode(PGOnConflictClause);
+					$$->action = PG_ONCONFLICT_UPDATE;
 					$$->infer = $3;
 					$$->targetList = $7;
 					$$->whereClause = $8;
@@ -152,8 +152,8 @@ opt_on_conflict:
 			|
 			ON CONFLICT opt_conf_expr DO NOTHING
 				{
-					$$ = makeNode(OnConflictClause);
-					$$->action = ONCONFLICT_NOTHING;
+					$$ = makeNode(PGOnConflictClause);
+					$$->action = PG_ONCONFLICT_NOTHING;
 					$$->infer = $3;
 					$$->targetList = NIL;
 					$$->whereClause = NULL;
@@ -168,7 +168,7 @@ opt_on_conflict:
 
 index_elem:	ColId opt_collate opt_class opt_asc_desc opt_nulls_order
 				{
-					$$ = makeNode(IndexElem);
+					$$ = makeNode(PGIndexElem);
 					$$->name = $1;
 					$$->expr = NULL;
 					$$->indexcolname = NULL;
@@ -179,7 +179,7 @@ index_elem:	ColId opt_collate opt_class opt_asc_desc opt_nulls_order
 				}
 			| func_expr_windowless opt_collate opt_class opt_asc_desc opt_nulls_order
 				{
-					$$ = makeNode(IndexElem);
+					$$ = makeNode(PGIndexElem);
 					$$->name = NULL;
 					$$->expr = $1;
 					$$->indexcolname = NULL;
@@ -190,7 +190,7 @@ index_elem:	ColId opt_collate opt_class opt_asc_desc opt_nulls_order
 				}
 			| '(' a_expr ')' opt_collate opt_class opt_asc_desc opt_nulls_order
 				{
-					$$ = makeNode(IndexElem);
+					$$ = makeNode(PGIndexElem);
 					$$->name = NULL;
 					$$->expr = $2;
 					$$->indexcolname = NULL;
@@ -210,7 +210,7 @@ returning_clause:
 
 
 override_kind:
-			USER		{ $$ = OVERRIDING_USER_VALUE; }
+			USER		{ $$ = PG_OVERRIDING_USER_VALUE; }
 			| SYSTEM_P	{ $$ = OVERRIDING_SYSTEM_VALUE; }
 		;
 
@@ -255,7 +255,7 @@ index_params:	index_elem							{ $$ = list_make1($1); }
 set_target:
 			ColId opt_indirection
 				{
-					$$ = makeNode(ResTarget);
+					$$ = makeNode(PGResTarget);
 					$$->name = $1;
 					$$->indirection = check_indirection($2, yyscanner);
 					$$->val = NULL;	/* upper production sets this */

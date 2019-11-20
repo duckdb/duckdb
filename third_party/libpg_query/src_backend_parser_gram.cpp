@@ -995,7 +995,7 @@
  * gram.y
  *	  POSTGRESQL BISON rules/actions
  *
- * Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2017, PostgreSQL Global Development PGGroup
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1107,46 +1107,46 @@
 
 static void base_yyerror(YYLTYPE *yylloc, core_yyscan_t yyscanner,
 						 const char *msg);
-static RawStmt *makeRawStmt(Node *stmt, int stmt_location);
-static void updateRawStmtEnd(RawStmt *rs, int end_location);
-static Node *makeColumnRef(char *colname, List *indirection,
+static PGRawStmt *makeRawStmt(PGNode *stmt, int stmt_location);
+static void updateRawStmtEnd(PGRawStmt *rs, int end_location);
+static PGNode *makeColumnRef(char *colname, PGList *indirection,
 						   int location, core_yyscan_t yyscanner);
-static Node *makeTypeCast(Node *arg, TypeName *tpname, int location);
-static Node *makeStringConst(char *str, int location);
-static Node *makeStringConstCast(char *str, int location, TypeName *tpname);
-static Node *makeIntConst(int val, int location);
-static Node *makeFloatConst(char *str, int location);
-static Node *makeBitStringConst(char *str, int location);
-static Node *makeNullAConst(int location);
-static Node *makeAConst(Value *v, int location);
-static Node *makeBoolAConst(bool state, int location);
-static Node *makeParamRef(int number, int location);
-static Node *makeParamRefCast(int number, int location, TypeName *tpname);
-static void check_qualified_name(List *names, core_yyscan_t yyscanner);
-static List *check_func_name(List *names, core_yyscan_t yyscanner);
-static List *check_indirection(List *indirection, core_yyscan_t yyscanner);
-static void insertSelectOptions(SelectStmt *stmt,
-								List *sortClause, List *lockingClause,
-								Node *limitOffset, Node *limitCount,
-								WithClause *withClause,
+static PGNode *makeTypeCast(PGNode *arg, PGTypeName *tpname, int location);
+static PGNode *makeStringConst(char *str, int location);
+static PGNode *makeStringConstCast(char *str, int location, PGTypeName *tpname);
+static PGNode *makeIntConst(int val, int location);
+static PGNode *makeFloatConst(char *str, int location);
+static PGNode *makeBitStringConst(char *str, int location);
+static PGNode *makeNullAConst(int location);
+static PGNode *makeAConst(PGValue *v, int location);
+static PGNode *makeBoolAConst(bool state, int location);
+static PGNode *makeParamRef(int number, int location);
+static PGNode *makeParamRefCast(int number, int location, PGTypeName *tpname);
+static void check_qualified_name(PGList *names, core_yyscan_t yyscanner);
+static PGList *check_func_name(PGList *names, core_yyscan_t yyscanner);
+static PGList *check_indirection(PGList *indirection, core_yyscan_t yyscanner);
+static void insertSelectOptions(PGSelectStmt *stmt,
+								PGList *sortClause, PGList *lockingClause,
+								PGNode *limitOffset, PGNode *limitCount,
+								PGWithClause *withClause,
 								core_yyscan_t yyscanner);
-static Node *makeSetOp(SetOperation op, bool all, Node *larg, Node *rarg);
-static Node *doNegate(Node *n, int location);
-static void doNegateFloat(Value *v);
-static Node *makeAndExpr(Node *lexpr, Node *rexpr, int location);
-static Node *makeOrExpr(Node *lexpr, Node *rexpr, int location);
-static Node *makeNotExpr(Node *expr, int location);
-static Node *makeAArrayExpr(List *elements, int location);
-static Node *makeSQLValueFunction(SQLValueFunctionOp op, int32_t typmod,
+static PGNode *makeSetOp(PGSetOperation op, bool all, PGNode *larg, PGNode *rarg);
+static PGNode *doNegate(PGNode *n, int location);
+static void doNegateFloat(PGValue *v);
+static PGNode *makeAndExpr(PGNode *lexpr, PGNode *rexpr, int location);
+static PGNode *makeOrExpr(PGNode *lexpr, PGNode *rexpr, int location);
+static PGNode *makeNotExpr(PGNode *expr, int location);
+static PGNode *makeAArrayExpr(PGList *elements, int location);
+static PGNode *makeSQLValueFunction(PGSQLValueFunctionOp op, int32_t typmod,
 								  int location);
-static RangeVar *makeRangeVarFromAnyName(List *names, int position, core_yyscan_t yyscanner);
-static void SplitColQualList(List *qualList,
-							 List **constraintList, CollateClause **collClause,
+static PGRangeVar *makeRangeVarFromAnyName(PGList *names, int position, core_yyscan_t yyscanner);
+static void SplitColQualList(PGList *qualList,
+							 PGList **constraintList, PGCollateClause **collClause,
 							 core_yyscan_t yyscanner);
 static void processCASbits(int cas_bits, int location, const char *constrType,
 			   bool *deferrable, bool *initdeferred, bool *not_valid,
 			   bool *no_inherit, core_yyscan_t yyscanner);
-static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
+static PGNode *makeRecursiveViewSelect(char *relname, PGList *aliases, PGNode *query);
 
 
 
@@ -1181,37 +1181,37 @@ typedef union YYSTYPE
 
 	char				chr;
 	bool				boolean;
-	JoinType			jtype;
-	DropBehavior		dbehavior;
-	OnCommitAction		oncommit;
-	List				*list;
-	Node				*node;
-	Value				*value;
-	ObjectType			objtype;
-	TypeName			*typnam;
-	ObjectWithArgs		*objwithargs;
-	DefElem				*defelt;
-	SortBy				*sortby;
-	WindowDef			*windef;
-	JoinExpr			*jexpr;
-	IndexElem			*ielem;
-	Alias				*alias;
-	RangeVar			*range;
-	IntoClause			*into;
-	WithClause			*with;
-	InferClause			*infer;
-	OnConflictClause	*onconflict;
-	A_Indices			*aind;
-	ResTarget			*target;
-	InsertStmt			*istmt;
-	VariableSetStmt		*vsetstmt;
-	OverridingKind       override;
-	SortByDir            sortorder;
-	SortByNulls          nullorder;
-	LockClauseStrength lockstrength;
-	LockWaitPolicy lockwaitpolicy;
-	SubLinkType subquerytype;
-	ViewCheckOption viewcheckoption;
+	PGJoinType			jtype;
+	PGDropBehavior		dbehavior;
+	PGOnCommitAction		oncommit;
+	PGList				*list;
+	PGNode				*node;
+	PGValue				*value;
+	PGObjectType			objtype;
+	PGTypeName			*typnam;
+	PGObjectWithArgs		*objwithargs;
+	PGDefElem				*defelt;
+	PGSortBy				*sortby;
+	PGWindowDef			*windef;
+	PGJoinExpr			*jexpr;
+	PGIndexElem			*ielem;
+	PGAlias				*alias;
+	PGRangeVar			*range;
+	PGIntoClause			*into;
+	PGWithClause			*with;
+	PGInferClause			*infer;
+	PGOnConflictClause	*onconflict;
+	PGAIndices			*aind;
+	PGResTarget			*target;
+	PGInsertStmt			*istmt;
+	PGVariableSetStmt		*vsetstmt;
+	PGOverridingKind       override;
+	PGSortByDir            sortorder;
+	PGSortByNulls          nullorder;
+	PGLockClauseStrength lockstrength;
+	PGLockWaitPolicy lockwaitpolicy;
+	PGSubLinkType subquerytype;
+	PGViewCheckOption viewcheckoption;
 }
 /* Line 193 of yacc.c.  */
 #line 1218 "third_party/libpg_query/grammar/grammar_out.cpp"
@@ -13399,7 +13399,7 @@ yyreduce:
 					if ((yyvsp[(1) - (3)].list) != NIL)
 					{
 						/* update length of previous stmt */
-						updateRawStmtEnd(llast_node(RawStmt, (yyvsp[(1) - (3)].list)), (yylsp[(2) - (3)]));
+						updateRawStmtEnd(llast_node(PGRawStmt, (yyvsp[(1) - (3)].list)), (yylsp[(2) - (3)]));
 					}
 					if ((yyvsp[(3) - (3)].node) != NULL)
 						(yyval.list) = lappend((yyvsp[(1) - (3)].list), makeRawStmt((yyvsp[(3) - (3)].node), (yylsp[(2) - (3)]) + 1));
@@ -13426,96 +13426,96 @@ yyreduce:
   case 34:
 #line 706 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableStmt *n = makeNode(AlterTableStmt);
+					PGAlterTableStmt *n = makeNode(PGAlterTableStmt);
 					n->relation = (yyvsp[(3) - (4)].range);
 					n->cmds = (yyvsp[(4) - (4)].list);
-					n->relkind = OBJECT_TABLE;
+					n->relkind = PG_OBJECT_TABLE;
 					n->missing_ok = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 35:
 #line 715 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableStmt *n = makeNode(AlterTableStmt);
+					PGAlterTableStmt *n = makeNode(PGAlterTableStmt);
 					n->relation = (yyvsp[(5) - (6)].range);
 					n->cmds = (yyvsp[(6) - (6)].list);
-					n->relkind = OBJECT_TABLE;
+					n->relkind = PG_OBJECT_TABLE;
 					n->missing_ok = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 36:
 #line 724 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableStmt *n = makeNode(AlterTableStmt);
+					PGAlterTableStmt *n = makeNode(PGAlterTableStmt);
 					n->relation = (yyvsp[(3) - (4)].range);
 					n->cmds = (yyvsp[(4) - (4)].list);
-					n->relkind = OBJECT_INDEX;
+					n->relkind = PG_OBJECT_INDEX;
 					n->missing_ok = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 37:
 #line 733 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableStmt *n = makeNode(AlterTableStmt);
+					PGAlterTableStmt *n = makeNode(PGAlterTableStmt);
 					n->relation = (yyvsp[(5) - (6)].range);
 					n->cmds = (yyvsp[(6) - (6)].list);
-					n->relkind = OBJECT_INDEX;
+					n->relkind = PG_OBJECT_INDEX;
 					n->missing_ok = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 38:
 #line 742 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableStmt *n = makeNode(AlterTableStmt);
+					PGAlterTableStmt *n = makeNode(PGAlterTableStmt);
 					n->relation = (yyvsp[(3) - (4)].range);
 					n->cmds = (yyvsp[(4) - (4)].list);
-					n->relkind = OBJECT_SEQUENCE;
+					n->relkind = PG_OBJECT_SEQUENCE;
 					n->missing_ok = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 39:
 #line 751 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableStmt *n = makeNode(AlterTableStmt);
+					PGAlterTableStmt *n = makeNode(PGAlterTableStmt);
 					n->relation = (yyvsp[(5) - (6)].range);
 					n->cmds = (yyvsp[(6) - (6)].list);
-					n->relkind = OBJECT_SEQUENCE;
+					n->relkind = PG_OBJECT_SEQUENCE;
 					n->missing_ok = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 40:
 #line 760 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableStmt *n = makeNode(AlterTableStmt);
+					PGAlterTableStmt *n = makeNode(PGAlterTableStmt);
 					n->relation = (yyvsp[(3) - (4)].range);
 					n->cmds = (yyvsp[(4) - (4)].list);
-					n->relkind = OBJECT_VIEW;
+					n->relkind = PG_OBJECT_VIEW;
 					n->missing_ok = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 41:
 #line 769 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableStmt *n = makeNode(AlterTableStmt);
+					PGAlterTableStmt *n = makeNode(PGAlterTableStmt);
 					n->relation = (yyvsp[(5) - (6)].range);
 					n->cmds = (yyvsp[(6) - (6)].list);
-					n->relkind = OBJECT_VIEW;
+					n->relkind = PG_OBJECT_VIEW;
 					n->missing_ok = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -13549,7 +13549,7 @@ yyreduce:
   case 47:
 #line 800 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("restart", (Node *)(yyvsp[(3) - (3)].value), (yylsp[(1) - (3)]));
+					(yyval.defelt) = makeDefElem("restart", (PGNode *)(yyvsp[(3) - (3)].value), (yylsp[(1) - (3)]));
 				;}
     break;
 
@@ -13560,7 +13560,7 @@ yyreduce:
 						strcmp((yyvsp[(2) - (2)].defelt)->defname, "restart") == 0 ||
 						strcmp((yyvsp[(2) - (2)].defelt)->defname, "owned_by") == 0)
 						ereport(ERROR,
-								(errcode(ERRCODE_SYNTAX_ERROR),
+								(errcode(PG_ERRCODE_SYNTAX_ERROR),
 								 errmsg("sequence option \"%s\" not supported here", (yyvsp[(2) - (2)].defelt)->defname),
 								 parser_errposition((yylsp[(2) - (2)]))));
 					(yyval.defelt) = (yyvsp[(2) - (2)].defelt);
@@ -13570,7 +13570,7 @@ yyreduce:
   case 49:
 #line 815 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("generated", (Node *) makeInteger((yyvsp[(3) - (3)].ival)), (yylsp[(1) - (3)]));
+					(yyval.defelt) = makeDefElem("generated", (PGNode *) makeInteger((yyvsp[(3) - (3)].ival)), (yylsp[(1) - (3)]));
 				;}
     break;
 
@@ -13591,332 +13591,332 @@ yyreduce:
   case 52:
 #line 836 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_AddColumn;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_AddColumn;
 					n->def = (yyvsp[(2) - (2)].node);
 					n->missing_ok = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 53:
 #line 845 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_AddColumn;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_AddColumn;
 					n->def = (yyvsp[(5) - (5)].node);
 					n->missing_ok = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 54:
 #line 854 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_AddColumn;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_AddColumn;
 					n->def = (yyvsp[(3) - (3)].node);
 					n->missing_ok = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 55:
 #line 863 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_AddColumn;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_AddColumn;
 					n->def = (yyvsp[(6) - (6)].node);
 					n->missing_ok = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 56:
 #line 872 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_ColumnDefault;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_ColumnDefault;
 					n->name = (yyvsp[(3) - (4)].str);
 					n->def = (yyvsp[(4) - (4)].node);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 57:
 #line 881 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_DropNotNull;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_DropNotNull;
 					n->name = (yyvsp[(3) - (6)].str);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 58:
 #line 889 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_SetNotNull;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_SetNotNull;
 					n->name = (yyvsp[(3) - (6)].str);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 59:
 #line 897 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_SetStatistics;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_SetStatistics;
 					n->name = (yyvsp[(3) - (6)].str);
-					n->def = (Node *) makeInteger((yyvsp[(6) - (6)].ival));
-					(yyval.node) = (Node *)n;
+					n->def = (PGNode *) makeInteger((yyvsp[(6) - (6)].ival));
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 60:
 #line 906 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_SetOptions;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_SetOptions;
 					n->name = (yyvsp[(3) - (5)].str);
-					n->def = (Node *) (yyvsp[(5) - (5)].list);
-					(yyval.node) = (Node *)n;
+					n->def = (PGNode *) (yyvsp[(5) - (5)].list);
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 61:
 #line 915 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_ResetOptions;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_ResetOptions;
 					n->name = (yyvsp[(3) - (5)].str);
-					n->def = (Node *) (yyvsp[(5) - (5)].list);
-					(yyval.node) = (Node *)n;
+					n->def = (PGNode *) (yyvsp[(5) - (5)].list);
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 62:
 #line 924 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_SetStorage;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_SetStorage;
 					n->name = (yyvsp[(3) - (6)].str);
-					n->def = (Node *) makeString((yyvsp[(6) - (6)].str));
-					(yyval.node) = (Node *)n;
+					n->def = (PGNode *) makeString((yyvsp[(6) - (6)].str));
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 63:
 #line 933 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					Constraint *c = makeNode(Constraint);
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					PGConstraint *c = makeNode(PGConstraint);
 
-					c->contype = CONSTR_IDENTITY;
+					c->contype = PG_CONSTR_IDENTITY;
 					c->generated_when = (yyvsp[(6) - (9)].ival);
 					c->options = (yyvsp[(9) - (9)].list);
 					c->location = (yylsp[(5) - (9)]);
 
-					n->subtype = AT_AddIdentity;
+					n->subtype = PG_AT_AddIdentity;
 					n->name = (yyvsp[(3) - (9)].str);
-					n->def = (Node *) c;
+					n->def = (PGNode *) c;
 
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 64:
 #line 950 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_SetIdentity;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_SetIdentity;
 					n->name = (yyvsp[(3) - (4)].str);
-					n->def = (Node *) (yyvsp[(4) - (4)].list);
-					(yyval.node) = (Node *)n;
+					n->def = (PGNode *) (yyvsp[(4) - (4)].list);
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 65:
 #line 959 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
 					n->subtype = AT_DropIdentity;
 					n->name = (yyvsp[(3) - (5)].str);
 					n->missing_ok = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 66:
 #line 968 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
 					n->subtype = AT_DropIdentity;
 					n->name = (yyvsp[(3) - (7)].str);
 					n->missing_ok = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 67:
 #line 977 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_DropColumn;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_DropColumn;
 					n->name = (yyvsp[(5) - (6)].str);
 					n->behavior = (yyvsp[(6) - (6)].dbehavior);
 					n->missing_ok = TRUE;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 68:
 #line 987 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_DropColumn;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_DropColumn;
 					n->name = (yyvsp[(3) - (4)].str);
 					n->behavior = (yyvsp[(4) - (4)].dbehavior);
 					n->missing_ok = FALSE;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 69:
 #line 1000 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					ColumnDef *def = makeNode(ColumnDef);
-					n->subtype = AT_AlterColumnType;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					PGColumnDef *def = makeNode(PGColumnDef);
+					n->subtype = PG_AT_AlterColumnType;
 					n->name = (yyvsp[(3) - (8)].str);
-					n->def = (Node *) def;
-					/* We only use these fields of the ColumnDef node */
+					n->def = (PGNode *) def;
+					/* We only use these fields of the PGColumnDef node */
 					def->typeName = (yyvsp[(6) - (8)].typnam);
-					def->collClause = (CollateClause *) (yyvsp[(7) - (8)].node);
+					def->collClause = (PGCollateClause *) (yyvsp[(7) - (8)].node);
 					def->raw_default = (yyvsp[(8) - (8)].node);
 					def->location = (yylsp[(3) - (8)]);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 70:
 #line 1015 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_AlterColumnGenericOptions;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_AlterColumnGenericOptions;
 					n->name = (yyvsp[(3) - (4)].str);
-					n->def = (Node *) (yyvsp[(4) - (4)].list);
-					(yyval.node) = (Node *)n;
+					n->def = (PGNode *) (yyvsp[(4) - (4)].list);
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 71:
 #line 1024 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_AddConstraint;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_AddConstraint;
 					n->def = (yyvsp[(2) - (2)].node);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 72:
 #line 1032 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					Constraint *c = makeNode(Constraint);
-					n->subtype = AT_AlterConstraint;
-					n->def = (Node *) c;
-					c->contype = CONSTR_FOREIGN; /* others not supported, yet */
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					PGConstraint *c = makeNode(PGConstraint);
+					n->subtype = PG_AT_AlterConstraint;
+					n->def = (PGNode *) c;
+					c->contype = PG_CONSTR_FOREIGN; /* others not supported, yet */
 					c->conname = (yyvsp[(3) - (4)].str);
 					processCASbits((yyvsp[(4) - (4)].ival), (yylsp[(4) - (4)]), "ALTER CONSTRAINT statement",
 									&c->deferrable,
 									&c->initdeferred,
 									NULL, NULL, yyscanner);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 73:
 #line 1047 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_ValidateConstraint;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_ValidateConstraint;
 					n->name = (yyvsp[(3) - (3)].str);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 74:
 #line 1055 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_DropConstraint;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_DropConstraint;
 					n->name = (yyvsp[(5) - (6)].str);
 					n->behavior = (yyvsp[(6) - (6)].dbehavior);
 					n->missing_ok = TRUE;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 75:
 #line 1065 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_DropConstraint;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_DropConstraint;
 					n->name = (yyvsp[(3) - (4)].str);
 					n->behavior = (yyvsp[(4) - (4)].dbehavior);
 					n->missing_ok = FALSE;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 76:
 #line 1075 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_SetLogged;
-					(yyval.node) = (Node *)n;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_SetLogged;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 77:
 #line 1082 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_SetUnLogged;
-					(yyval.node) = (Node *)n;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_SetUnLogged;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 78:
 #line 1089 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_SetRelOptions;
-					n->def = (Node *)(yyvsp[(2) - (2)].list);
-					(yyval.node) = (Node *)n;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_SetRelOptions;
+					n->def = (PGNode *)(yyvsp[(2) - (2)].list);
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 79:
 #line 1097 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_ResetRelOptions;
-					n->def = (Node *)(yyvsp[(2) - (2)].list);
-					(yyval.node) = (Node *)n;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_ResetRelOptions;
+					n->def = (PGNode *)(yyvsp[(2) - (2)].list);
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 80:
 #line 1104 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_GenericOptions;
-					n->def = (Node *)(yyvsp[(1) - (1)].list);
-					(yyval.node) = (Node *) n;
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_GenericOptions;
+					n->def = (PGNode *)(yyvsp[(1) - (1)].list);
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
@@ -13941,7 +13941,7 @@ yyreduce:
 #line 1125 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					(yyval.defelt) = (yyvsp[(2) - (2)].defelt);
-					(yyval.defelt)->defaction = DEFELEM_SET;
+					(yyval.defelt)->defaction = PG_DEFELEM_SET;
 				;}
     break;
 
@@ -13949,7 +13949,7 @@ yyreduce:
 #line 1130 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					(yyval.defelt) = (yyvsp[(2) - (2)].defelt);
-					(yyval.defelt)->defaction = DEFELEM_ADD;
+					(yyval.defelt)->defaction = PG_DEFELEM_ADD;
 				;}
     break;
 
@@ -13988,206 +13988,206 @@ yyreduce:
   case 92:
 #line 1163 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-						DeallocateStmt *n = makeNode(DeallocateStmt);
+						PGDeallocateStmt *n = makeNode(PGDeallocateStmt);
 						n->name = (yyvsp[(2) - (2)].str);
-						(yyval.node) = (Node *) n;
+						(yyval.node) = (PGNode *) n;
 					;}
     break;
 
   case 93:
 #line 1169 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-						DeallocateStmt *n = makeNode(DeallocateStmt);
+						PGDeallocateStmt *n = makeNode(PGDeallocateStmt);
 						n->name = (yyvsp[(3) - (3)].str);
-						(yyval.node) = (Node *) n;
+						(yyval.node) = (PGNode *) n;
 					;}
     break;
 
   case 94:
 #line 1175 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-						DeallocateStmt *n = makeNode(DeallocateStmt);
+						PGDeallocateStmt *n = makeNode(PGDeallocateStmt);
 						n->name = NULL;
-						(yyval.node) = (Node *) n;
+						(yyval.node) = (PGNode *) n;
 					;}
     break;
 
   case 95:
 #line 1181 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-						DeallocateStmt *n = makeNode(DeallocateStmt);
+						PGDeallocateStmt *n = makeNode(PGDeallocateStmt);
 						n->name = NULL;
-						(yyval.node) = (Node *) n;
+						(yyval.node) = (PGNode *) n;
 					;}
     break;
 
   case 96:
 #line 1194 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_SCHEMA;
+					PGRenameStmt *n = makeNode(PGRenameStmt);
+					n->renameType = PG_OBJECT_SCHEMA;
 					n->subname = (yyvsp[(3) - (6)].str);
 					n->newname = (yyvsp[(6) - (6)].str);
 					n->missing_ok = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 97:
 #line 1203 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_TABLE;
+					PGRenameStmt *n = makeNode(PGRenameStmt);
+					n->renameType = PG_OBJECT_TABLE;
 					n->relation = (yyvsp[(3) - (6)].range);
 					n->subname = NULL;
 					n->newname = (yyvsp[(6) - (6)].str);
 					n->missing_ok = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 98:
 #line 1213 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_TABLE;
+					PGRenameStmt *n = makeNode(PGRenameStmt);
+					n->renameType = PG_OBJECT_TABLE;
 					n->relation = (yyvsp[(5) - (8)].range);
 					n->subname = NULL;
 					n->newname = (yyvsp[(8) - (8)].str);
 					n->missing_ok = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 99:
 #line 1223 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_SEQUENCE;
+					PGRenameStmt *n = makeNode(PGRenameStmt);
+					n->renameType = PG_OBJECT_SEQUENCE;
 					n->relation = (yyvsp[(3) - (6)].range);
 					n->subname = NULL;
 					n->newname = (yyvsp[(6) - (6)].str);
 					n->missing_ok = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 100:
 #line 1233 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_SEQUENCE;
+					PGRenameStmt *n = makeNode(PGRenameStmt);
+					n->renameType = PG_OBJECT_SEQUENCE;
 					n->relation = (yyvsp[(5) - (8)].range);
 					n->subname = NULL;
 					n->newname = (yyvsp[(8) - (8)].str);
 					n->missing_ok = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 101:
 #line 1243 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_VIEW;
+					PGRenameStmt *n = makeNode(PGRenameStmt);
+					n->renameType = PG_OBJECT_VIEW;
 					n->relation = (yyvsp[(3) - (6)].range);
 					n->subname = NULL;
 					n->newname = (yyvsp[(6) - (6)].str);
 					n->missing_ok = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 102:
 #line 1253 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_VIEW;
+					PGRenameStmt *n = makeNode(PGRenameStmt);
+					n->renameType = PG_OBJECT_VIEW;
 					n->relation = (yyvsp[(5) - (8)].range);
 					n->subname = NULL;
 					n->newname = (yyvsp[(8) - (8)].str);
 					n->missing_ok = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 103:
 #line 1263 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_INDEX;
+					PGRenameStmt *n = makeNode(PGRenameStmt);
+					n->renameType = PG_OBJECT_INDEX;
 					n->relation = (yyvsp[(3) - (6)].range);
 					n->subname = NULL;
 					n->newname = (yyvsp[(6) - (6)].str);
 					n->missing_ok = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 104:
 #line 1273 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_INDEX;
+					PGRenameStmt *n = makeNode(PGRenameStmt);
+					n->renameType = PG_OBJECT_INDEX;
 					n->relation = (yyvsp[(5) - (8)].range);
 					n->subname = NULL;
 					n->newname = (yyvsp[(8) - (8)].str);
 					n->missing_ok = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 105:
 #line 1283 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_COLUMN;
-					n->relationType = OBJECT_TABLE;
+					PGRenameStmt *n = makeNode(PGRenameStmt);
+					n->renameType = PG_OBJECT_COLUMN;
+					n->relationType = PG_OBJECT_TABLE;
 					n->relation = (yyvsp[(3) - (8)].range);
 					n->subname = (yyvsp[(6) - (8)].str);
 					n->newname = (yyvsp[(8) - (8)].str);
 					n->missing_ok = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 106:
 #line 1294 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_COLUMN;
-					n->relationType = OBJECT_TABLE;
+					PGRenameStmt *n = makeNode(PGRenameStmt);
+					n->renameType = PG_OBJECT_COLUMN;
+					n->relationType = PG_OBJECT_TABLE;
 					n->relation = (yyvsp[(5) - (10)].range);
 					n->subname = (yyvsp[(8) - (10)].str);
 					n->newname = (yyvsp[(10) - (10)].str);
 					n->missing_ok = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 107:
 #line 1305 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_TABCONSTRAINT;
+					PGRenameStmt *n = makeNode(PGRenameStmt);
+					n->renameType = PG_OBJECT_TABCONSTRAINT;
 					n->relation = (yyvsp[(3) - (8)].range);
 					n->subname = (yyvsp[(6) - (8)].str);
 					n->newname = (yyvsp[(8) - (8)].str);
 					n->missing_ok = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 108:
 #line 1315 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_TABCONSTRAINT;
+					PGRenameStmt *n = makeNode(PGRenameStmt);
+					n->renameType = PG_OBJECT_TABCONSTRAINT;
 					n->relation = (yyvsp[(5) - (10)].range);
 					n->subname = (yyvsp[(8) - (10)].str);
 					n->newname = (yyvsp[(10) - (10)].str);
 					n->missing_ok = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -14208,14 +14208,14 @@ yyreduce:
 					(yyvsp[(5) - (7)].istmt)->onConflictClause = (yyvsp[(6) - (7)].onconflict);
 					(yyvsp[(5) - (7)].istmt)->returningList = (yyvsp[(7) - (7)].list);
 					(yyvsp[(5) - (7)].istmt)->withClause = (yyvsp[(1) - (7)].with);
-					(yyval.node) = (Node *) (yyvsp[(5) - (7)].istmt);
+					(yyval.node) = (PGNode *) (yyvsp[(5) - (7)].istmt);
 				;}
     break;
 
   case 112:
 #line 1352 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.istmt) = makeNode(InsertStmt);
+					(yyval.istmt) = makeNode(PGInsertStmt);
 					(yyval.istmt)->cols = NIL;
 					(yyval.istmt)->selectStmt = (yyvsp[(1) - (1)].node);
 				;}
@@ -14224,7 +14224,7 @@ yyreduce:
   case 113:
 #line 1358 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.istmt) = makeNode(InsertStmt);
+					(yyval.istmt) = makeNode(PGInsertStmt);
 					(yyval.istmt)->cols = NIL;
 					(yyval.istmt)->override = (yyvsp[(2) - (4)].override);
 					(yyval.istmt)->selectStmt = (yyvsp[(4) - (4)].node);
@@ -14234,7 +14234,7 @@ yyreduce:
   case 114:
 #line 1365 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.istmt) = makeNode(InsertStmt);
+					(yyval.istmt) = makeNode(PGInsertStmt);
 					(yyval.istmt)->cols = (yyvsp[(2) - (4)].list);
 					(yyval.istmt)->selectStmt = (yyvsp[(4) - (4)].node);
 				;}
@@ -14243,7 +14243,7 @@ yyreduce:
   case 115:
 #line 1371 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.istmt) = makeNode(InsertStmt);
+					(yyval.istmt) = makeNode(PGInsertStmt);
 					(yyval.istmt)->cols = (yyvsp[(2) - (7)].list);
 					(yyval.istmt)->override = (yyvsp[(5) - (7)].override);
 					(yyval.istmt)->selectStmt = (yyvsp[(7) - (7)].node);
@@ -14253,7 +14253,7 @@ yyreduce:
   case 116:
 #line 1378 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.istmt) = makeNode(InsertStmt);
+					(yyval.istmt) = makeNode(PGInsertStmt);
 					(yyval.istmt)->cols = NIL;
 					(yyval.istmt)->selectStmt = NULL;
 				;}
@@ -14277,7 +14277,7 @@ yyreduce:
   case 119:
 #line 1401 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.infer) = makeNode(InferClause);
+					(yyval.infer) = makeNode(PGInferClause);
 					(yyval.infer)->indexElems = (yyvsp[(2) - (4)].list);
 					(yyval.infer)->whereClause = (yyvsp[(4) - (4)].node);
 					(yyval.infer)->conname = NULL;
@@ -14288,7 +14288,7 @@ yyreduce:
   case 120:
 #line 1410 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.infer) = makeNode(InferClause);
+					(yyval.infer) = makeNode(PGInferClause);
 					(yyval.infer)->indexElems = NIL;
 					(yyval.infer)->whereClause = NULL;
 					(yyval.infer)->conname = (yyvsp[(3) - (3)].str);
@@ -14316,7 +14316,7 @@ yyreduce:
   case 124:
 #line 1432 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.target) = makeNode(ResTarget);
+					(yyval.target) = makeNode(PGResTarget);
 					(yyval.target)->name = (yyvsp[(1) - (2)].str);
 					(yyval.target)->indirection = check_indirection((yyvsp[(2) - (2)].list), yyscanner);
 					(yyval.target)->val = NULL;
@@ -14327,7 +14327,7 @@ yyreduce:
   case 125:
 #line 1444 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyvsp[(1) - (3)].target)->val = (Node *) (yyvsp[(3) - (3)].node);
+					(yyvsp[(1) - (3)].target)->val = (PGNode *) (yyvsp[(3) - (3)].node);
 					(yyval.list) = list_make1((yyvsp[(1) - (3)].target));
 				;}
     break;
@@ -14337,18 +14337,18 @@ yyreduce:
     {
 					int ncolumns = list_length((yyvsp[(2) - (5)].list));
 					int i = 1;
-					ListCell *col_cell;
+					PGListCell *col_cell;
 
-					/* Create a MultiAssignRef source for each target */
+					/* Create a PGMultiAssignRef source for each target */
 					foreach(col_cell, (yyvsp[(2) - (5)].list))
 					{
-						ResTarget *res_col = (ResTarget *) lfirst(col_cell);
-						MultiAssignRef *r = makeNode(MultiAssignRef);
+						PGResTarget *res_col = (PGResTarget *) lfirst(col_cell);
+						PGMultiAssignRef *r = makeNode(PGMultiAssignRef);
 
-						r->source = (Node *) (yyvsp[(5) - (5)].node);
+						r->source = (PGNode *) (yyvsp[(5) - (5)].node);
 						r->colno = i;
 						r->ncolumns = ncolumns;
-						res_col->val = (Node *) r;
+						res_col->val = (PGNode *) r;
 						i++;
 					}
 
@@ -14359,8 +14359,8 @@ yyreduce:
   case 127:
 #line 1474 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.onconflict) = makeNode(OnConflictClause);
-					(yyval.onconflict)->action = ONCONFLICT_UPDATE;
+					(yyval.onconflict) = makeNode(PGOnConflictClause);
+					(yyval.onconflict)->action = PG_ONCONFLICT_UPDATE;
 					(yyval.onconflict)->infer = (yyvsp[(3) - (8)].infer);
 					(yyval.onconflict)->targetList = (yyvsp[(7) - (8)].list);
 					(yyval.onconflict)->whereClause = (yyvsp[(8) - (8)].node);
@@ -14371,8 +14371,8 @@ yyreduce:
   case 128:
 #line 1484 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.onconflict) = makeNode(OnConflictClause);
-					(yyval.onconflict)->action = ONCONFLICT_NOTHING;
+					(yyval.onconflict) = makeNode(PGOnConflictClause);
+					(yyval.onconflict)->action = PG_ONCONFLICT_NOTHING;
 					(yyval.onconflict)->infer = (yyvsp[(3) - (5)].infer);
 					(yyval.onconflict)->targetList = NIL;
 					(yyval.onconflict)->whereClause = NULL;
@@ -14390,7 +14390,7 @@ yyreduce:
   case 130:
 #line 1500 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.ielem) = makeNode(IndexElem);
+					(yyval.ielem) = makeNode(PGIndexElem);
 					(yyval.ielem)->name = (yyvsp[(1) - (5)].str);
 					(yyval.ielem)->expr = NULL;
 					(yyval.ielem)->indexcolname = NULL;
@@ -14404,7 +14404,7 @@ yyreduce:
   case 131:
 #line 1511 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.ielem) = makeNode(IndexElem);
+					(yyval.ielem) = makeNode(PGIndexElem);
 					(yyval.ielem)->name = NULL;
 					(yyval.ielem)->expr = (yyvsp[(1) - (5)].node);
 					(yyval.ielem)->indexcolname = NULL;
@@ -14418,7 +14418,7 @@ yyreduce:
   case 132:
 #line 1522 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.ielem) = makeNode(IndexElem);
+					(yyval.ielem) = makeNode(PGIndexElem);
 					(yyval.ielem)->name = NULL;
 					(yyval.ielem)->expr = (yyvsp[(2) - (7)].node);
 					(yyval.ielem)->indexcolname = NULL;
@@ -14441,7 +14441,7 @@ yyreduce:
 
   case 135:
 #line 1543 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.override) = OVERRIDING_USER_VALUE; ;}
+    { (yyval.override) = PG_OVERRIDING_USER_VALUE; ;}
     break;
 
   case 136:
@@ -14512,7 +14512,7 @@ yyreduce:
   case 149:
 #line 1587 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.target) = makeNode(ResTarget);
+					(yyval.target) = makeNode(PGResTarget);
 					(yyval.target)->name = (yyvsp[(1) - (2)].str);
 					(yyval.target)->indirection = check_indirection((yyvsp[(2) - (2)].list), yyscanner);
 					(yyval.target)->val = NULL;	/* upper production sets this */
@@ -14523,26 +14523,26 @@ yyreduce:
   case 150:
 #line 1605 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					CreateSeqStmt *n = makeNode(CreateSeqStmt);
+					PGCreateSeqStmt *n = makeNode(PGCreateSeqStmt);
 					(yyvsp[(4) - (5)].range)->relpersistence = (yyvsp[(2) - (5)].ival);
 					n->sequence = (yyvsp[(4) - (5)].range);
 					n->options = (yyvsp[(5) - (5)].list);
 					n->ownerId = InvalidOid;
 					n->if_not_exists = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 151:
 #line 1615 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					CreateSeqStmt *n = makeNode(CreateSeqStmt);
+					PGCreateSeqStmt *n = makeNode(PGCreateSeqStmt);
 					(yyvsp[(7) - (8)].range)->relpersistence = (yyvsp[(2) - (8)].ival);
 					n->sequence = (yyvsp[(7) - (8)].range);
 					n->options = (yyvsp[(8) - (8)].list);
 					n->ownerId = InvalidOid;
 					n->if_not_exists = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -14559,48 +14559,48 @@ yyreduce:
   case 154:
 #line 1638 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					ExecuteStmt *n = makeNode(ExecuteStmt);
+					PGExecuteStmt *n = makeNode(PGExecuteStmt);
 					n->name = (yyvsp[(2) - (3)].str);
 					n->params = (yyvsp[(3) - (3)].list);
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 155:
 #line 1646 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					CreateTableAsStmt *ctas = makeNode(CreateTableAsStmt);
-					ExecuteStmt *n = makeNode(ExecuteStmt);
+					PGCreateTableAsStmt *ctas = makeNode(PGCreateTableAsStmt);
+					PGExecuteStmt *n = makeNode(PGExecuteStmt);
 					n->name = (yyvsp[(7) - (9)].str);
 					n->params = (yyvsp[(8) - (9)].list);
-					ctas->query = (Node *) n;
+					ctas->query = (PGNode *) n;
 					ctas->into = (yyvsp[(4) - (9)].into);
-					ctas->relkind = OBJECT_TABLE;
+					ctas->relkind = PG_OBJECT_TABLE;
 					ctas->is_select_into = false;
 					ctas->if_not_exists = false;
-					/* cram additional flags into the IntoClause */
+					/* cram additional flags into the PGIntoClause */
 					(yyvsp[(4) - (9)].into)->rel->relpersistence = (yyvsp[(2) - (9)].ival);
 					(yyvsp[(4) - (9)].into)->skipData = !((yyvsp[(9) - (9)].boolean));
-					(yyval.node) = (Node *) ctas;
+					(yyval.node) = (PGNode *) ctas;
 				;}
     break;
 
   case 156:
 #line 1663 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					CreateTableAsStmt *ctas = makeNode(CreateTableAsStmt);
-					ExecuteStmt *n = makeNode(ExecuteStmt);
+					PGCreateTableAsStmt *ctas = makeNode(PGCreateTableAsStmt);
+					PGExecuteStmt *n = makeNode(PGExecuteStmt);
 					n->name = (yyvsp[(10) - (12)].str);
 					n->params = (yyvsp[(11) - (12)].list);
-					ctas->query = (Node *) n;
+					ctas->query = (PGNode *) n;
 					ctas->into = (yyvsp[(7) - (12)].into);
-					ctas->relkind = OBJECT_TABLE;
+					ctas->relkind = PG_OBJECT_TABLE;
 					ctas->is_select_into = false;
 					ctas->if_not_exists = true;
-					/* cram additional flags into the IntoClause */
+					/* cram additional flags into the PGIntoClause */
 					(yyvsp[(7) - (12)].into)->rel->relpersistence = (yyvsp[(2) - (12)].ival);
 					(yyvsp[(7) - (12)].into)->skipData = !((yyvsp[(12) - (12)].boolean));
-					(yyval.node) = (Node *) ctas;
+					(yyval.node) = (PGNode *) ctas;
 				;}
     break;
 
@@ -14617,22 +14617,22 @@ yyreduce:
   case 159:
 #line 1694 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterSeqStmt *n = makeNode(AlterSeqStmt);
+					PGAlterSeqStmt *n = makeNode(PGAlterSeqStmt);
 					n->sequence = (yyvsp[(3) - (4)].range);
 					n->options = (yyvsp[(4) - (4)].list);
 					n->missing_ok = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 160:
 #line 1702 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterSeqStmt *n = makeNode(AlterSeqStmt);
+					PGAlterSeqStmt *n = makeNode(PGAlterSeqStmt);
 					n->sequence = (yyvsp[(5) - (6)].range);
 					n->options = (yyvsp[(6) - (6)].list);
 					n->missing_ok = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -14687,49 +14687,49 @@ yyreduce:
   case 170:
 #line 1737 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("as", (Node *)(yyvsp[(2) - (2)].typnam), (yylsp[(1) - (2)]));
+					(yyval.defelt) = makeDefElem("as", (PGNode *)(yyvsp[(2) - (2)].typnam), (yylsp[(1) - (2)]));
 				;}
     break;
 
   case 171:
 #line 1741 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("cache", (Node *)(yyvsp[(2) - (2)].value), (yylsp[(1) - (2)]));
+					(yyval.defelt) = makeDefElem("cache", (PGNode *)(yyvsp[(2) - (2)].value), (yylsp[(1) - (2)]));
 				;}
     break;
 
   case 172:
 #line 1745 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("cycle", (Node *)makeInteger(TRUE), (yylsp[(1) - (1)]));
+					(yyval.defelt) = makeDefElem("cycle", (PGNode *)makeInteger(TRUE), (yylsp[(1) - (1)]));
 				;}
     break;
 
   case 173:
 #line 1749 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("cycle", (Node *)makeInteger(FALSE), (yylsp[(1) - (2)]));
+					(yyval.defelt) = makeDefElem("cycle", (PGNode *)makeInteger(FALSE), (yylsp[(1) - (2)]));
 				;}
     break;
 
   case 174:
 #line 1753 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("increment", (Node *)(yyvsp[(3) - (3)].value), (yylsp[(1) - (3)]));
+					(yyval.defelt) = makeDefElem("increment", (PGNode *)(yyvsp[(3) - (3)].value), (yylsp[(1) - (3)]));
 				;}
     break;
 
   case 175:
 #line 1757 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("maxvalue", (Node *)(yyvsp[(2) - (2)].value), (yylsp[(1) - (2)]));
+					(yyval.defelt) = makeDefElem("maxvalue", (PGNode *)(yyvsp[(2) - (2)].value), (yylsp[(1) - (2)]));
 				;}
     break;
 
   case 176:
 #line 1761 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("minvalue", (Node *)(yyvsp[(2) - (2)].value), (yylsp[(1) - (2)]));
+					(yyval.defelt) = makeDefElem("minvalue", (PGNode *)(yyvsp[(2) - (2)].value), (yylsp[(1) - (2)]));
 				;}
     break;
 
@@ -14750,7 +14750,7 @@ yyreduce:
   case 179:
 #line 1773 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("owned_by", (Node *)(yyvsp[(3) - (3)].list), (yylsp[(1) - (3)]));
+					(yyval.defelt) = makeDefElem("owned_by", (PGNode *)(yyvsp[(3) - (3)].list), (yylsp[(1) - (3)]));
 				;}
     break;
 
@@ -14758,14 +14758,14 @@ yyreduce:
 #line 1777 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					/* not documented, only used by pg_dump */
-					(yyval.defelt) = makeDefElem("sequence_name", (Node *)(yyvsp[(3) - (3)].list), (yylsp[(1) - (3)]));
+					(yyval.defelt) = makeDefElem("sequence_name", (PGNode *)(yyvsp[(3) - (3)].list), (yylsp[(1) - (3)]));
 				;}
     break;
 
   case 181:
 #line 1782 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("start", (Node *)(yyvsp[(3) - (3)].value), (yylsp[(1) - (3)]));
+					(yyval.defelt) = makeDefElem("start", (PGNode *)(yyvsp[(3) - (3)].value), (yylsp[(1) - (3)]));
 				;}
     break;
 
@@ -14779,7 +14779,7 @@ yyreduce:
   case 183:
 #line 1790 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("restart", (Node *)(yyvsp[(3) - (3)].value), (yylsp[(1) - (3)]));
+					(yyval.defelt) = makeDefElem("restart", (PGNode *)(yyvsp[(3) - (3)].value), (yylsp[(1) - (3)]));
 				;}
     break;
 
@@ -14811,58 +14811,58 @@ yyreduce:
   case 189:
 #line 1808 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_ROLLBACK;
+					PGTransactionStmt *n = makeNode(PGTransactionStmt);
+					n->kind = PG_TRANS_STMT_ROLLBACK;
 					n->options = NIL;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 190:
 #line 1815 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_BEGIN;
-					(yyval.node) = (Node *)n;
+					PGTransactionStmt *n = makeNode(PGTransactionStmt);
+					n->kind = PG_TRANS_STMT_BEGIN;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 191:
 #line 1821 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_START;
-					(yyval.node) = (Node *)n;
+					PGTransactionStmt *n = makeNode(PGTransactionStmt);
+					n->kind = PG_TRANS_STMT_START;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 192:
 #line 1827 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_COMMIT;
+					PGTransactionStmt *n = makeNode(PGTransactionStmt);
+					n->kind = PG_TRANS_STMT_COMMIT;
 					n->options = NIL;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 193:
 #line 1834 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_COMMIT;
+					PGTransactionStmt *n = makeNode(PGTransactionStmt);
+					n->kind = PG_TRANS_STMT_COMMIT;
 					n->options = NIL;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 194:
 #line 1841 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_ROLLBACK;
+					PGTransactionStmt *n = makeNode(PGTransactionStmt);
+					n->kind = PG_TRANS_STMT_ROLLBACK;
 					n->options = NIL;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -14884,7 +14884,7 @@ yyreduce:
   case 198:
 #line 1863 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					CreateStmt *n = makeNode(CreateStmt);
+					PGCreateStmt *n = makeNode(PGCreateStmt);
 					(yyvsp[(4) - (9)].range)->relpersistence = (yyvsp[(2) - (9)].ival);
 					n->relation = (yyvsp[(4) - (9)].range);
 					n->tableElts = (yyvsp[(6) - (9)].list);
@@ -14893,14 +14893,14 @@ yyreduce:
 					n->options = (yyvsp[(8) - (9)].list);
 					n->oncommit = (yyvsp[(9) - (9)].oncommit);
 					n->if_not_exists = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 199:
 #line 1878 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					CreateStmt *n = makeNode(CreateStmt);
+					PGCreateStmt *n = makeNode(PGCreateStmt);
 					(yyvsp[(7) - (12)].range)->relpersistence = (yyvsp[(2) - (12)].ival);
 					n->relation = (yyvsp[(7) - (12)].range);
 					n->tableElts = (yyvsp[(9) - (12)].list);
@@ -14909,7 +14909,7 @@ yyreduce:
 					n->options = (yyvsp[(11) - (12)].list);
 					n->oncommit = (yyvsp[(12) - (12)].oncommit);
 					n->if_not_exists = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -14931,14 +14931,14 @@ yyreduce:
 					/* special message for this case */
 					if ((newspec & (CAS_NOT_DEFERRABLE | CAS_INITIALLY_DEFERRED)) == (CAS_NOT_DEFERRABLE | CAS_INITIALLY_DEFERRED))
 						ereport(ERROR,
-								(errcode(ERRCODE_SYNTAX_ERROR),
+								(errcode(PG_ERRCODE_SYNTAX_ERROR),
 								 errmsg("constraint declared INITIALLY DEFERRED must be DEFERRABLE"),
 								 parser_errposition((yylsp[(2) - (2)]))));
 					/* generic message for other conflicts */
 					if ((newspec & (CAS_NOT_DEFERRABLE | CAS_DEFERRABLE)) == (CAS_NOT_DEFERRABLE | CAS_DEFERRABLE) ||
 						(newspec & (CAS_INITIALLY_IMMEDIATE | CAS_INITIALLY_DEFERRED)) == (CAS_INITIALLY_IMMEDIATE | CAS_INITIALLY_DEFERRED))
 						ereport(ERROR,
-								(errcode(ERRCODE_SYNTAX_ERROR),
+								(errcode(PG_ERRCODE_SYNTAX_ERROR),
 								 errmsg("conflicting constraint properties"),
 								 parser_errposition((yylsp[(2) - (2)]))));
 					(yyval.ival) = newspec;
@@ -14947,32 +14947,32 @@ yyreduce:
 
   case 202:
 #line 1923 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *)(yyvsp[(1) - (1)].typnam); ;}
+    { (yyval.node) = (PGNode *)(yyvsp[(1) - (1)].typnam); ;}
     break;
 
   case 203:
 #line 1924 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *)makeString(pstrdup((yyvsp[(1) - (1)].keyword))); ;}
+    { (yyval.node) = (PGNode *)makeString(pstrdup((yyvsp[(1) - (1)].keyword))); ;}
     break;
 
   case 204:
 #line 1925 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *)(yyvsp[(1) - (1)].list); ;}
+    { (yyval.node) = (PGNode *)(yyvsp[(1) - (1)].list); ;}
     break;
 
   case 205:
 #line 1926 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *)(yyvsp[(1) - (1)].value); ;}
+    { (yyval.node) = (PGNode *)(yyvsp[(1) - (1)].value); ;}
     break;
 
   case 206:
 #line 1927 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *)makeString((yyvsp[(1) - (1)].str)); ;}
+    { (yyval.node) = (PGNode *)makeString((yyvsp[(1) - (1)].str)); ;}
     break;
 
   case 207:
 #line 1928 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *)makeString(pstrdup((yyvsp[(1) - (1)].keyword))); ;}
+    { (yyval.node) = (PGNode *)makeString(pstrdup((yyvsp[(1) - (1)].keyword))); ;}
     break;
 
   case 208:
@@ -14987,41 +14987,41 @@ yyreduce:
 
   case 210:
 #line 1938 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeString((yyvsp[(1) - (1)].str)); ;}
+    { (yyval.node) = (PGNode *) makeString((yyvsp[(1) - (1)].str)); ;}
     break;
 
   case 211:
 #line 1943 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = FKCONSTR_ACTION_NOACTION; ;}
+    { (yyval.ival) = PG_FKCONSTR_ACTION_NOACTION; ;}
     break;
 
   case 212:
 #line 1944 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = FKCONSTR_ACTION_RESTRICT; ;}
+    { (yyval.ival) = PG_FKCONSTR_ACTION_RESTRICT; ;}
     break;
 
   case 213:
 #line 1945 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = FKCONSTR_ACTION_CASCADE; ;}
+    { (yyval.ival) = PG_FKCONSTR_ACTION_CASCADE; ;}
     break;
 
   case 214:
 #line 1946 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = FKCONSTR_ACTION_SETNULL; ;}
+    { (yyval.ival) = PG_FKCONSTR_ACTION_SETNULL; ;}
     break;
 
   case 215:
 #line 1947 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = FKCONSTR_ACTION_SETDEFAULT; ;}
+    { (yyval.ival) = PG_FKCONSTR_ACTION_SETDEFAULT; ;}
     break;
 
   case 216:
 #line 1953 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = castNode(Constraint, (yyvsp[(3) - (3)].node));
+					PGConstraint *n = castNode(PGConstraint, (yyvsp[(3) - (3)].node));
 					n->conname = (yyvsp[(2) - (3)].str);
 					n->location = (yylsp[(1) - (3)]);
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
@@ -15039,108 +15039,108 @@ yyreduce:
 #line 1962 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					/*
-					 * Note: the CollateClause is momentarily included in
+					 * Note: the PGCollateClause is momentarily included in
 					 * the list built by ColQualList, but we split it out
 					 * again in SplitColQualList.
 					 */
-					CollateClause *n = makeNode(CollateClause);
+					PGCollateClause *n = makeNode(PGCollateClause);
 					n->arg = NULL;
 					n->collname = (yyvsp[(2) - (2)].list);
 					n->location = (yylsp[(1) - (2)]);
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 220:
 #line 1979 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = makeNode(Constraint);
-					n->contype = CONSTR_NOTNULL;
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_NOTNULL;
 					n->location = (yylsp[(1) - (2)]);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 221:
 #line 1986 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = makeNode(Constraint);
-					n->contype = CONSTR_NULL;
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_NULL;
 					n->location = (yylsp[(1) - (1)]);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 222:
 #line 1993 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = makeNode(Constraint);
-					n->contype = CONSTR_UNIQUE;
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_UNIQUE;
 					n->location = (yylsp[(1) - (2)]);
 					n->keys = NULL;
 					n->options = (yyvsp[(2) - (2)].list);
 					n->indexname = NULL;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 223:
 #line 2003 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = makeNode(Constraint);
-					n->contype = CONSTR_PRIMARY;
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_PRIMARY;
 					n->location = (yylsp[(1) - (3)]);
 					n->keys = NULL;
 					n->options = (yyvsp[(3) - (3)].list);
 					n->indexname = NULL;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 224:
 #line 2013 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = makeNode(Constraint);
-					n->contype = CONSTR_CHECK;
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_CHECK;
 					n->location = (yylsp[(1) - (5)]);
 					n->is_no_inherit = (yyvsp[(5) - (5)].boolean);
 					n->raw_expr = (yyvsp[(3) - (5)].node);
 					n->cooked_expr = NULL;
 					n->skip_validation = false;
 					n->initially_valid = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 225:
 #line 2025 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = makeNode(Constraint);
-					n->contype = CONSTR_DEFAULT;
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_DEFAULT;
 					n->location = (yylsp[(1) - (2)]);
 					n->raw_expr = (yyvsp[(2) - (2)].node);
 					n->cooked_expr = NULL;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 226:
 #line 2034 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = makeNode(Constraint);
-					n->contype = CONSTR_IDENTITY;
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_IDENTITY;
 					n->generated_when = (yyvsp[(2) - (5)].ival);
 					n->options = (yyvsp[(5) - (5)].list);
 					n->location = (yylsp[(1) - (5)]);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 227:
 #line 2043 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = makeNode(Constraint);
-					n->contype = CONSTR_FOREIGN;
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_FOREIGN;
 					n->location = (yylsp[(1) - (5)]);
 					n->pktable			= (yyvsp[(2) - (5)].range);
 					n->fk_attrs			= NIL;
@@ -15150,7 +15150,7 @@ yyreduce:
 					n->fk_del_action	= (char) ((yyvsp[(5) - (5)].ival) & 0xFF);
 					n->skip_validation  = false;
 					n->initially_valid  = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -15168,12 +15168,12 @@ yyreduce:
 
   case 230:
 #line 2074 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = ((yyvsp[(1) - (1)].ival) << 8) | (FKCONSTR_ACTION_NOACTION & 0xFF); ;}
+    { (yyval.ival) = ((yyvsp[(1) - (1)].ival) << 8) | (PG_FKCONSTR_ACTION_NOACTION & 0xFF); ;}
     break;
 
   case 231:
 #line 2076 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = (FKCONSTR_ACTION_NOACTION << 8) | ((yyvsp[(1) - (1)].ival) & 0xFF); ;}
+    { (yyval.ival) = (PG_FKCONSTR_ACTION_NOACTION << 8) | ((yyvsp[(1) - (1)].ival) & 0xFF); ;}
     break;
 
   case 232:
@@ -15188,7 +15188,7 @@ yyreduce:
 
   case 234:
 #line 2082 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = (FKCONSTR_ACTION_NOACTION << 8) | (FKCONSTR_ACTION_NOACTION & 0xFF); ;}
+    { (yyval.ival) = (PG_FKCONSTR_ACTION_NOACTION << 8) | (PG_FKCONSTR_ACTION_NOACTION & 0xFF); ;}
     break;
 
   case 235:
@@ -15208,17 +15208,17 @@ yyreduce:
 
   case 238:
 #line 2093 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.oncommit) = ONCOMMIT_DELETE_ROWS; ;}
+    { (yyval.oncommit) = PG_ONCOMMIT_DELETE_ROWS; ;}
     break;
 
   case 239:
 #line 2094 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.oncommit) = ONCOMMIT_PRESERVE_ROWS; ;}
+    { (yyval.oncommit) = PG_ONCOMMIT_PRESERVE_ROWS; ;}
     break;
 
   case 240:
 #line 2095 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.oncommit) = ONCOMMIT_NOOP; ;}
+    { (yyval.oncommit) = PG_ONCOMMIT_NOOP; ;}
     break;
 
   case 241:
@@ -15239,10 +15239,10 @@ yyreduce:
   case 244:
 #line 2111 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = castNode(Constraint, (yyvsp[(3) - (3)].node));
+					PGConstraint *n = castNode(PGConstraint, (yyvsp[(3) - (3)].node));
 					n->conname = (yyvsp[(2) - (3)].str);
 					n->location = (yylsp[(1) - (3)]);
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
@@ -15253,42 +15253,42 @@ yyreduce:
 
   case 246:
 #line 2122 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = CREATE_TABLE_LIKE_COMMENTS; ;}
+    { (yyval.ival) = PG_CREATE_TABLE_LIKE_COMMENTS; ;}
     break;
 
   case 247:
 #line 2123 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = CREATE_TABLE_LIKE_CONSTRAINTS; ;}
+    { (yyval.ival) = PG_CREATE_TABLE_LIKE_CONSTRAINTS; ;}
     break;
 
   case 248:
 #line 2124 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = CREATE_TABLE_LIKE_DEFAULTS; ;}
+    { (yyval.ival) = PG_CREATE_TABLE_LIKE_DEFAULTS; ;}
     break;
 
   case 249:
 #line 2125 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = CREATE_TABLE_LIKE_IDENTITY; ;}
+    { (yyval.ival) = PG_CREATE_TABLE_LIKE_IDENTITY; ;}
     break;
 
   case 250:
 #line 2126 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = CREATE_TABLE_LIKE_INDEXES; ;}
+    { (yyval.ival) = PG_CREATE_TABLE_LIKE_INDEXES; ;}
     break;
 
   case 251:
 #line 2127 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = CREATE_TABLE_LIKE_STATISTICS; ;}
+    { (yyval.ival) = PG_CREATE_TABLE_LIKE_STATISTICS; ;}
     break;
 
   case 252:
 #line 2128 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = CREATE_TABLE_LIKE_STORAGE; ;}
+    { (yyval.ival) = PG_CREATE_TABLE_LIKE_STORAGE; ;}
     break;
 
   case 253:
 #line 2129 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = CREATE_TABLE_LIKE_ALL; ;}
+    { (yyval.ival) = PG_CREATE_TABLE_LIKE_ALL; ;}
     break;
 
   case 254:
@@ -15309,40 +15309,40 @@ yyreduce:
   case 257:
 #line 2146 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = makeNode(Constraint);
-					n->contype = CONSTR_ATTR_DEFERRABLE;
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_ATTR_DEFERRABLE;
 					n->location = (yylsp[(1) - (1)]);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 258:
 #line 2153 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = makeNode(Constraint);
-					n->contype = CONSTR_ATTR_NOT_DEFERRABLE;
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_ATTR_NOT_DEFERRABLE;
 					n->location = (yylsp[(1) - (2)]);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 259:
 #line 2160 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = makeNode(Constraint);
-					n->contype = CONSTR_ATTR_DEFERRED;
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_ATTR_DEFERRED;
 					n->location = (yylsp[(1) - (2)]);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 260:
 #line 2167 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = makeNode(Constraint);
-					n->contype = CONSTR_ATTR_IMMEDIATE;
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_ATTR_IMMEDIATE;
 					n->location = (yylsp[(1) - (2)]);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -15353,12 +15353,12 @@ yyreduce:
 
   case 262:
 #line 2179 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.list) = list_make1(makeDefElem("oids", (Node *) makeInteger(true), (yylsp[(1) - (2)]))); ;}
+    { (yyval.list) = list_make1(makeDefElem("oids", (PGNode *) makeInteger(true), (yylsp[(1) - (2)]))); ;}
     break;
 
   case 263:
 #line 2180 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.list) = list_make1(makeDefElem("oids", (Node *) makeInteger(false), (yylsp[(1) - (2)]))); ;}
+    { (yyval.list) = list_make1(makeDefElem("oids", (PGNode *) makeInteger(false), (yylsp[(1) - (2)]))); ;}
     break;
 
   case 264:
@@ -15424,7 +15424,7 @@ yyreduce:
   case 276:
 #line 2213 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					ColumnDef *n = makeNode(ColumnDef);
+					PGColumnDef *n = makeNode(PGColumnDef);
 					n->colname = (yyvsp[(1) - (4)].str);
 					n->typeName = (yyvsp[(2) - (4)].typnam);
 					n->inhcount = 0;
@@ -15439,7 +15439,7 @@ yyreduce:
 					SplitColQualList((yyvsp[(4) - (4)].list), &n->constraints, &n->collClause,
 									 yyscanner);
 					n->location = (yylsp[(1) - (4)]);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -15490,7 +15490,7 @@ yyreduce:
   case 285:
 #line 2262 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem((yyvsp[(1) - (3)].str), (Node *) (yyvsp[(3) - (3)].node), (yylsp[(1) - (3)]));
+					(yyval.defelt) = makeDefElem((yyvsp[(1) - (3)].str), (PGNode *) (yyvsp[(3) - (3)].node), (yylsp[(1) - (3)]));
 				;}
     break;
 
@@ -15524,7 +15524,7 @@ yyreduce:
   case 291:
 #line 2285 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeString((yyvsp[(1) - (1)].str));
+					(yyval.node) = (PGNode *) makeString((yyvsp[(1) - (1)].str));
 				;}
     break;
 
@@ -15556,7 +15556,7 @@ yyreduce:
   case 297:
 #line 2309 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem((yyvsp[(1) - (3)].str), (Node *) (yyvsp[(3) - (3)].node), (yylsp[(1) - (3)]));
+					(yyval.defelt) = makeDefElem((yyvsp[(1) - (3)].str), (PGNode *) (yyvsp[(3) - (3)].node), (yylsp[(1) - (3)]));
 				;}
     break;
 
@@ -15570,15 +15570,15 @@ yyreduce:
   case 299:
 #line 2317 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElemExtended((yyvsp[(1) - (5)].str), (yyvsp[(3) - (5)].str), (Node *) (yyvsp[(5) - (5)].node),
-											 DEFELEM_UNSPEC, (yylsp[(1) - (5)]));
+					(yyval.defelt) = makeDefElemExtended((yyvsp[(1) - (5)].str), (yyvsp[(3) - (5)].str), (PGNode *) (yyvsp[(5) - (5)].node),
+											 PG_DEFELEM_UNSPEC, (yylsp[(1) - (5)]));
 				;}
     break;
 
   case 300:
 #line 2322 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElemExtended((yyvsp[(1) - (3)].str), (yyvsp[(3) - (3)].str), NULL, DEFELEM_UNSPEC, (yylsp[(1) - (3)]));
+					(yyval.defelt) = makeDefElemExtended((yyvsp[(1) - (3)].str), (yyvsp[(3) - (3)].str), NULL, PG_DEFELEM_UNSPEC, (yylsp[(1) - (3)]));
 				;}
     break;
 
@@ -15619,8 +15619,8 @@ yyreduce:
   case 306:
 #line 2353 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = makeNode(Constraint);
-					n->contype = CONSTR_CHECK;
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_CHECK;
 					n->location = (yylsp[(1) - (5)]);
 					n->raw_expr = (yyvsp[(3) - (5)].node);
 					n->cooked_expr = NULL;
@@ -15628,15 +15628,15 @@ yyreduce:
 								   NULL, NULL, &n->skip_validation,
 								   &n->is_no_inherit, yyscanner);
 					n->initially_valid = !n->skip_validation;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 307:
 #line 2367 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = makeNode(Constraint);
-					n->contype = CONSTR_UNIQUE;
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_UNIQUE;
 					n->location = (yylsp[(1) - (6)]);
 					n->keys = (yyvsp[(3) - (6)].list);
 					n->options = (yyvsp[(5) - (6)].list);
@@ -15644,15 +15644,15 @@ yyreduce:
 					processCASbits((yyvsp[(6) - (6)].ival), (yylsp[(6) - (6)]), "UNIQUE",
 								   &n->deferrable, &n->initdeferred, NULL,
 								   NULL, yyscanner);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 308:
 #line 2380 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = makeNode(Constraint);
-					n->contype = CONSTR_UNIQUE;
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_UNIQUE;
 					n->location = (yylsp[(1) - (3)]);
 					n->keys = NIL;
 					n->options = NIL;
@@ -15661,15 +15661,15 @@ yyreduce:
 					processCASbits((yyvsp[(3) - (3)].ival), (yylsp[(3) - (3)]), "UNIQUE",
 								   &n->deferrable, &n->initdeferred, NULL,
 								   NULL, yyscanner);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 309:
 #line 2395 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = makeNode(Constraint);
-					n->contype = CONSTR_PRIMARY;
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_PRIMARY;
 					n->location = (yylsp[(1) - (7)]);
 					n->keys = (yyvsp[(4) - (7)].list);
 					n->options = (yyvsp[(6) - (7)].list);
@@ -15677,15 +15677,15 @@ yyreduce:
 					processCASbits((yyvsp[(7) - (7)].ival), (yylsp[(7) - (7)]), "PRIMARY KEY",
 								   &n->deferrable, &n->initdeferred, NULL,
 								   NULL, yyscanner);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 310:
 #line 2408 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = makeNode(Constraint);
-					n->contype = CONSTR_PRIMARY;
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_PRIMARY;
 					n->location = (yylsp[(1) - (4)]);
 					n->keys = NIL;
 					n->options = NIL;
@@ -15694,15 +15694,15 @@ yyreduce:
 					processCASbits((yyvsp[(4) - (4)].ival), (yylsp[(4) - (4)]), "PRIMARY KEY",
 								   &n->deferrable, &n->initdeferred, NULL,
 								   NULL, yyscanner);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 311:
 #line 2423 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Constraint *n = makeNode(Constraint);
-					n->contype = CONSTR_FOREIGN;
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_FOREIGN;
 					n->location = (yylsp[(1) - (11)]);
 					n->pktable			= (yyvsp[(7) - (11)].range);
 					n->fk_attrs			= (yyvsp[(4) - (11)].list);
@@ -15715,7 +15715,7 @@ yyreduce:
 								   &n->skip_validation, NULL,
 								   yyscanner);
 					n->initially_valid = !n->skip_validation;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -15736,7 +15736,7 @@ yyreduce:
   case 314:
 #line 2456 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-				(yyval.ival) = FKCONSTR_MATCH_FULL;
+				(yyval.ival) = PG_FKCONSTR_MATCH_FULL;
 			;}
     break;
 
@@ -15744,80 +15744,80 @@ yyreduce:
 #line 2460 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("MATCH PARTIAL not yet implemented"),
 						 parser_errposition((yylsp[(1) - (2)]))));
-				(yyval.ival) = FKCONSTR_MATCH_PARTIAL;
+				(yyval.ival) = PG_FKCONSTR_MATCH_PARTIAL;
 			;}
     break;
 
   case 316:
 #line 2468 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-				(yyval.ival) = FKCONSTR_MATCH_SIMPLE;
+				(yyval.ival) = PG_FKCONSTR_MATCH_SIMPLE;
 			;}
     break;
 
   case 317:
 #line 2472 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-				(yyval.ival) = FKCONSTR_MATCH_SIMPLE;
+				(yyval.ival) = PG_FKCONSTR_MATCH_SIMPLE;
 			;}
     break;
 
   case 318:
 #line 2480 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					TableLikeClause *n = makeNode(TableLikeClause);
+					PGTableLikeClause *n = makeNode(PGTableLikeClause);
 					n->relation = (yyvsp[(2) - (3)].range);
 					n->options = (yyvsp[(3) - (3)].ival);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 319:
 #line 2489 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = RELPERSISTENCE_TEMP; ;}
+    { (yyval.ival) = PG_RELPERSISTENCE_TEMP; ;}
     break;
 
   case 320:
 #line 2490 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = RELPERSISTENCE_TEMP; ;}
+    { (yyval.ival) = PG_RELPERSISTENCE_TEMP; ;}
     break;
 
   case 321:
 #line 2491 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = RELPERSISTENCE_TEMP; ;}
+    { (yyval.ival) = PG_RELPERSISTENCE_TEMP; ;}
     break;
 
   case 322:
 #line 2492 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = RELPERSISTENCE_TEMP; ;}
+    { (yyval.ival) = PG_RELPERSISTENCE_TEMP; ;}
     break;
 
   case 323:
 #line 2494 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					ereport(WARNING,
+					ereport(PGWARNING,
 							(errmsg("GLOBAL is deprecated in temporary table creation"),
 							 parser_errposition((yylsp[(1) - (2)]))));
-					(yyval.ival) = RELPERSISTENCE_TEMP;
+					(yyval.ival) = PG_RELPERSISTENCE_TEMP;
 				;}
     break;
 
   case 324:
 #line 2501 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					ereport(WARNING,
+					ereport(PGWARNING,
 							(errmsg("GLOBAL is deprecated in temporary table creation"),
 							 parser_errposition((yylsp[(1) - (2)]))));
-					(yyval.ival) = RELPERSISTENCE_TEMP;
+					(yyval.ival) = PG_RELPERSISTENCE_TEMP;
 				;}
     break;
 
   case 325:
 #line 2507 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = RELPERSISTENCE_UNLOGGED; ;}
+    { (yyval.ival) = PG_RELPERSISTENCE_UNLOGGED; ;}
     break;
 
   case 326:
@@ -15827,7 +15827,7 @@ yyreduce:
 
   case 327:
 #line 2513 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = ATTRIBUTE_IDENTITY_ALWAYS; ;}
+    { (yyval.ival) = PG_ATTRIBUTE_IDENTITY_ALWAYS; ;}
     break;
 
   case 328:
@@ -15838,179 +15838,179 @@ yyreduce:
   case 329:
 #line 2526 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					DropStmt *n = makeNode(DropStmt);
+					PGDropStmt *n = makeNode(PGDropStmt);
 					n->removeType = (yyvsp[(2) - (6)].objtype);
 					n->missing_ok = TRUE;
 					n->objects = (yyvsp[(5) - (6)].list);
 					n->behavior = (yyvsp[(6) - (6)].dbehavior);
 					n->concurrent = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 330:
 #line 2536 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					DropStmt *n = makeNode(DropStmt);
+					PGDropStmt *n = makeNode(PGDropStmt);
 					n->removeType = (yyvsp[(2) - (4)].objtype);
 					n->missing_ok = FALSE;
 					n->objects = (yyvsp[(3) - (4)].list);
 					n->behavior = (yyvsp[(4) - (4)].dbehavior);
 					n->concurrent = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 331:
 #line 2546 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					DropStmt *n = makeNode(DropStmt);
+					PGDropStmt *n = makeNode(PGDropStmt);
 					n->removeType = (yyvsp[(2) - (6)].objtype);
 					n->missing_ok = TRUE;
 					n->objects = (yyvsp[(5) - (6)].list);
 					n->behavior = (yyvsp[(6) - (6)].dbehavior);
 					n->concurrent = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 332:
 #line 2556 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					DropStmt *n = makeNode(DropStmt);
+					PGDropStmt *n = makeNode(PGDropStmt);
 					n->removeType = (yyvsp[(2) - (4)].objtype);
 					n->missing_ok = FALSE;
 					n->objects = (yyvsp[(3) - (4)].list);
 					n->behavior = (yyvsp[(4) - (4)].dbehavior);
 					n->concurrent = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 333:
 #line 2566 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					DropStmt *n = makeNode(DropStmt);
+					PGDropStmt *n = makeNode(PGDropStmt);
 					n->removeType = (yyvsp[(2) - (6)].objtype);
 					n->objects = list_make1(lappend((yyvsp[(5) - (6)].list), makeString((yyvsp[(3) - (6)].str))));
 					n->behavior = (yyvsp[(6) - (6)].dbehavior);
 					n->missing_ok = false;
 					n->concurrent = false;
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 334:
 #line 2576 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					DropStmt *n = makeNode(DropStmt);
+					PGDropStmt *n = makeNode(PGDropStmt);
 					n->removeType = (yyvsp[(2) - (8)].objtype);
 					n->objects = list_make1(lappend((yyvsp[(7) - (8)].list), makeString((yyvsp[(5) - (8)].str))));
 					n->behavior = (yyvsp[(8) - (8)].dbehavior);
 					n->missing_ok = true;
 					n->concurrent = false;
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 335:
 #line 2589 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_TABLE; ;}
+    { (yyval.objtype) = PG_OBJECT_TABLE; ;}
     break;
 
   case 336:
 #line 2590 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_SEQUENCE; ;}
+    { (yyval.objtype) = PG_OBJECT_SEQUENCE; ;}
     break;
 
   case 337:
 #line 2591 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_VIEW; ;}
+    { (yyval.objtype) = PG_OBJECT_VIEW; ;}
     break;
 
   case 338:
 #line 2592 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_MATVIEW; ;}
+    { (yyval.objtype) = PG_OBJECT_MATVIEW; ;}
     break;
 
   case 339:
 #line 2593 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_INDEX; ;}
+    { (yyval.objtype) = PG_OBJECT_INDEX; ;}
     break;
 
   case 340:
 #line 2594 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_FOREIGN_TABLE; ;}
+    { (yyval.objtype) = PG_OBJECT_FOREIGN_TABLE; ;}
     break;
 
   case 341:
 #line 2595 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_COLLATION; ;}
+    { (yyval.objtype) = PG_OBJECT_COLLATION; ;}
     break;
 
   case 342:
 #line 2596 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_CONVERSION; ;}
+    { (yyval.objtype) = PG_OBJECT_CONVERSION; ;}
     break;
 
   case 343:
 #line 2597 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_STATISTIC_EXT; ;}
+    { (yyval.objtype) = PG_OBJECT_STATISTIC_EXT; ;}
     break;
 
   case 344:
 #line 2598 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_TSPARSER; ;}
+    { (yyval.objtype) = PG_OBJECT_TSPARSER; ;}
     break;
 
   case 345:
 #line 2599 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_TSDICTIONARY; ;}
+    { (yyval.objtype) = PG_OBJECT_TSDICTIONARY; ;}
     break;
 
   case 346:
 #line 2600 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_TSTEMPLATE; ;}
+    { (yyval.objtype) = PG_OBJECT_TSTEMPLATE; ;}
     break;
 
   case 347:
 #line 2601 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_TSCONFIGURATION; ;}
+    { (yyval.objtype) = PG_OBJECT_TSCONFIGURATION; ;}
     break;
 
   case 348:
 #line 2606 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_ACCESS_METHOD; ;}
+    { (yyval.objtype) = PG_OBJECT_ACCESS_METHOD; ;}
     break;
 
   case 349:
 #line 2607 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_EVENT_TRIGGER; ;}
+    { (yyval.objtype) = PG_OBJECT_EVENT_TRIGGER; ;}
     break;
 
   case 350:
 #line 2608 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_EXTENSION; ;}
+    { (yyval.objtype) = PG_OBJECT_EXTENSION; ;}
     break;
 
   case 351:
 #line 2609 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_FDW; ;}
+    { (yyval.objtype) = PG_OBJECT_FDW; ;}
     break;
 
   case 352:
 #line 2610 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_PUBLICATION; ;}
+    { (yyval.objtype) = PG_OBJECT_PUBLICATION; ;}
     break;
 
   case 353:
 #line 2611 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_SCHEMA; ;}
+    { (yyval.objtype) = PG_OBJECT_SCHEMA; ;}
     break;
 
   case 354:
 #line 2612 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_FOREIGN_SERVER; ;}
+    { (yyval.objtype) = PG_OBJECT_FOREIGN_SERVER; ;}
     break;
 
   case 355:
@@ -16025,52 +16025,52 @@ yyreduce:
 
   case 357:
 #line 2623 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.dbehavior) = DROP_CASCADE; ;}
+    { (yyval.dbehavior) = PG_DROP_CASCADE; ;}
     break;
 
   case 358:
 #line 2624 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.dbehavior) = DROP_RESTRICT; ;}
+    { (yyval.dbehavior) = PG_DROP_RESTRICT; ;}
     break;
 
   case 359:
 #line 2625 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.dbehavior) = DROP_RESTRICT; /* default */ ;}
+    { (yyval.dbehavior) = PG_DROP_RESTRICT; /* default */ ;}
     break;
 
   case 360:
 #line 2630 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_POLICY; ;}
+    { (yyval.objtype) = PG_OBJECT_POLICY; ;}
     break;
 
   case 361:
 #line 2631 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_RULE; ;}
+    { (yyval.objtype) = PG_OBJECT_RULE; ;}
     break;
 
   case 362:
 #line 2632 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.objtype) = OBJECT_TRIGGER; ;}
+    { (yyval.objtype) = PG_OBJECT_TRIGGER; ;}
     break;
 
   case 363:
 #line 2646 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					UpdateStmt *n = makeNode(UpdateStmt);
+					PGUpdateStmt *n = makeNode(PGUpdateStmt);
 					n->relation = (yyvsp[(3) - (8)].range);
 					n->targetList = (yyvsp[(5) - (8)].list);
 					n->fromClause = (yyvsp[(6) - (8)].list);
 					n->whereClause = (yyvsp[(7) - (8)].node);
 					n->returningList = (yyvsp[(8) - (8)].list);
 					n->withClause = (yyvsp[(1) - (8)].with);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 364:
 #line 2660 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					CopyStmt *n = makeNode(CopyStmt);
+					PGCopyStmt *n = makeNode(PGCopyStmt);
 					n->relation = (yyvsp[(3) - (11)].range);
 					n->query = NULL;
 					n->attlist = (yyvsp[(4) - (11)].list);
@@ -16080,7 +16080,7 @@ yyreduce:
 
 					if (n->is_program && n->filename == NULL)
 						ereport(ERROR,
-								(errcode(ERRCODE_SYNTAX_ERROR),
+								(errcode(PG_ERRCODE_SYNTAX_ERROR),
 								 errmsg("STDIN/STDOUT not allowed with PROGRAM"),
 								 parser_errposition((yylsp[(8) - (11)]))));
 
@@ -16094,14 +16094,14 @@ yyreduce:
 						n->options = lappend(n->options, (yyvsp[(9) - (11)].defelt));
 					if ((yyvsp[(11) - (11)].list))
 						n->options = list_concat(n->options, (yyvsp[(11) - (11)].list));
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 365:
 #line 2688 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					CopyStmt *n = makeNode(CopyStmt);
+					PGCopyStmt *n = makeNode(PGCopyStmt);
 					n->relation = NULL;
 					n->query = (yyvsp[(3) - (9)].node);
 					n->attlist = NIL;
@@ -16112,11 +16112,11 @@ yyreduce:
 
 					if (n->is_program && n->filename == NULL)
 						ereport(ERROR,
-								(errcode(ERRCODE_SYNTAX_ERROR),
+								(errcode(PG_ERRCODE_SYNTAX_ERROR),
 								 errmsg("STDIN/STDOUT not allowed with PROGRAM"),
 								 parser_errposition((yylsp[(5) - (9)]))));
 
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -16133,7 +16133,7 @@ yyreduce:
   case 368:
 #line 2717 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("delimiter", (Node *)makeString((yyvsp[(3) - (3)].str)), (yylsp[(2) - (3)]));
+					(yyval.defelt) = makeDefElem("delimiter", (PGNode *)makeString((yyvsp[(3) - (3)].str)), (yylsp[(2) - (3)]));
 				;}
     break;
 
@@ -16198,22 +16198,22 @@ yyreduce:
 
   case 380:
 #line 2759 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeString((yyvsp[(1) - (1)].str)); ;}
+    { (yyval.node) = (PGNode *) makeString((yyvsp[(1) - (1)].str)); ;}
     break;
 
   case 381:
 #line 2760 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) (yyvsp[(1) - (1)].value); ;}
+    { (yyval.node) = (PGNode *) (yyvsp[(1) - (1)].value); ;}
     break;
 
   case 382:
 #line 2761 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeNode(A_Star); ;}
+    { (yyval.node) = (PGNode *) makeNode(PGAStar); ;}
     break;
 
   case 383:
 #line 2762 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) (yyvsp[(2) - (3)].list); ;}
+    { (yyval.node) = (PGNode *) (yyvsp[(2) - (3)].list); ;}
     break;
 
   case 384:
@@ -16231,7 +16231,7 @@ yyreduce:
   case 386:
 #line 2777 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("oids", (Node *)makeInteger(TRUE), (yylsp[(1) - (2)]));
+					(yyval.defelt) = makeDefElem("oids", (PGNode *)makeInteger(TRUE), (yylsp[(1) - (2)]));
 				;}
     break;
 
@@ -16253,7 +16253,7 @@ yyreduce:
   case 390:
 #line 2792 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("format", (Node *)makeString("binary"), (yylsp[(1) - (1)]));
+					(yyval.defelt) = makeDefElem("format", (PGNode *)makeString("binary"), (yylsp[(1) - (1)]));
 				;}
     break;
 
@@ -16265,104 +16265,104 @@ yyreduce:
   case 392:
 #line 2801 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("format", (Node *)makeString("binary"), (yylsp[(1) - (1)]));
+					(yyval.defelt) = makeDefElem("format", (PGNode *)makeString("binary"), (yylsp[(1) - (1)]));
 				;}
     break;
 
   case 393:
 #line 2805 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("oids", (Node *)makeInteger(TRUE), (yylsp[(1) - (1)]));
+					(yyval.defelt) = makeDefElem("oids", (PGNode *)makeInteger(TRUE), (yylsp[(1) - (1)]));
 				;}
     break;
 
   case 394:
 #line 2809 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("freeze", (Node *)makeInteger(TRUE), (yylsp[(1) - (1)]));
+					(yyval.defelt) = makeDefElem("freeze", (PGNode *)makeInteger(TRUE), (yylsp[(1) - (1)]));
 				;}
     break;
 
   case 395:
 #line 2813 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("delimiter", (Node *)makeString((yyvsp[(3) - (3)].str)), (yylsp[(1) - (3)]));
+					(yyval.defelt) = makeDefElem("delimiter", (PGNode *)makeString((yyvsp[(3) - (3)].str)), (yylsp[(1) - (3)]));
 				;}
     break;
 
   case 396:
 #line 2817 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("null", (Node *)makeString((yyvsp[(3) - (3)].str)), (yylsp[(1) - (3)]));
+					(yyval.defelt) = makeDefElem("null", (PGNode *)makeString((yyvsp[(3) - (3)].str)), (yylsp[(1) - (3)]));
 				;}
     break;
 
   case 397:
 #line 2821 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("format", (Node *)makeString("csv"), (yylsp[(1) - (1)]));
+					(yyval.defelt) = makeDefElem("format", (PGNode *)makeString("csv"), (yylsp[(1) - (1)]));
 				;}
     break;
 
   case 398:
 #line 2825 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("header", (Node *)makeInteger(TRUE), (yylsp[(1) - (1)]));
+					(yyval.defelt) = makeDefElem("header", (PGNode *)makeInteger(TRUE), (yylsp[(1) - (1)]));
 				;}
     break;
 
   case 399:
 #line 2829 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("quote", (Node *)makeString((yyvsp[(3) - (3)].str)), (yylsp[(1) - (3)]));
+					(yyval.defelt) = makeDefElem("quote", (PGNode *)makeString((yyvsp[(3) - (3)].str)), (yylsp[(1) - (3)]));
 				;}
     break;
 
   case 400:
 #line 2833 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("escape", (Node *)makeString((yyvsp[(3) - (3)].str)), (yylsp[(1) - (3)]));
+					(yyval.defelt) = makeDefElem("escape", (PGNode *)makeString((yyvsp[(3) - (3)].str)), (yylsp[(1) - (3)]));
 				;}
     break;
 
   case 401:
 #line 2837 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("force_quote", (Node *)(yyvsp[(3) - (3)].list), (yylsp[(1) - (3)]));
+					(yyval.defelt) = makeDefElem("force_quote", (PGNode *)(yyvsp[(3) - (3)].list), (yylsp[(1) - (3)]));
 				;}
     break;
 
   case 402:
 #line 2841 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("force_quote", (Node *)makeNode(A_Star), (yylsp[(1) - (3)]));
+					(yyval.defelt) = makeDefElem("force_quote", (PGNode *)makeNode(PGAStar), (yylsp[(1) - (3)]));
 				;}
     break;
 
   case 403:
 #line 2845 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("force_not_null", (Node *)(yyvsp[(4) - (4)].list), (yylsp[(1) - (4)]));
+					(yyval.defelt) = makeDefElem("force_not_null", (PGNode *)(yyvsp[(4) - (4)].list), (yylsp[(1) - (4)]));
 				;}
     break;
 
   case 404:
 #line 2849 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("force_null", (Node *)(yyvsp[(3) - (3)].list), (yylsp[(1) - (3)]));
+					(yyval.defelt) = makeDefElem("force_null", (PGNode *)(yyvsp[(3) - (3)].list), (yylsp[(1) - (3)]));
 				;}
     break;
 
   case 405:
 #line 2853 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.defelt) = makeDefElem("encoding", (Node *)makeString((yyvsp[(2) - (2)].str)), (yylsp[(1) - (2)]));
+					(yyval.defelt) = makeDefElem("encoding", (PGNode *)makeString((yyvsp[(2) - (2)].str)), (yylsp[(1) - (2)]));
 				;}
     break;
 
   case 406:
 #line 2860 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeString((yyvsp[(1) - (1)].str)); ;}
+    { (yyval.node) = (PGNode *) makeString((yyvsp[(1) - (1)].str)); ;}
     break;
 
   case 407:
@@ -16412,7 +16412,7 @@ yyreduce:
   case 417:
 #line 2952 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					insertSelectOptions((SelectStmt *) (yyvsp[(1) - (2)].node), (yyvsp[(2) - (2)].list), NIL,
+					insertSelectOptions((PGSelectStmt *) (yyvsp[(1) - (2)].node), (yyvsp[(2) - (2)].list), NIL,
 										NULL, NULL, NULL,
 										yyscanner);
 					(yyval.node) = (yyvsp[(1) - (2)].node);
@@ -16422,8 +16422,8 @@ yyreduce:
   case 418:
 #line 2959 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					insertSelectOptions((SelectStmt *) (yyvsp[(1) - (4)].node), (yyvsp[(2) - (4)].list), (yyvsp[(3) - (4)].list),
-										(Node*) list_nth((yyvsp[(4) - (4)].list), 0), (Node*) list_nth((yyvsp[(4) - (4)].list), 1),
+					insertSelectOptions((PGSelectStmt *) (yyvsp[(1) - (4)].node), (yyvsp[(2) - (4)].list), (yyvsp[(3) - (4)].list),
+										(PGNode*) list_nth((yyvsp[(4) - (4)].list), 0), (PGNode*) list_nth((yyvsp[(4) - (4)].list), 1),
 										NULL,
 										yyscanner);
 					(yyval.node) = (yyvsp[(1) - (4)].node);
@@ -16433,8 +16433,8 @@ yyreduce:
   case 419:
 #line 2967 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					insertSelectOptions((SelectStmt *) (yyvsp[(1) - (4)].node), (yyvsp[(2) - (4)].list), (yyvsp[(4) - (4)].list),
-										(Node*) list_nth((yyvsp[(3) - (4)].list), 0), (Node*) list_nth((yyvsp[(3) - (4)].list), 1),
+					insertSelectOptions((PGSelectStmt *) (yyvsp[(1) - (4)].node), (yyvsp[(2) - (4)].list), (yyvsp[(4) - (4)].list),
+										(PGNode*) list_nth((yyvsp[(3) - (4)].list), 0), (PGNode*) list_nth((yyvsp[(3) - (4)].list), 1),
 										NULL,
 										yyscanner);
 					(yyval.node) = (yyvsp[(1) - (4)].node);
@@ -16444,7 +16444,7 @@ yyreduce:
   case 420:
 #line 2975 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					insertSelectOptions((SelectStmt *) (yyvsp[(2) - (2)].node), NULL, NIL,
+					insertSelectOptions((PGSelectStmt *) (yyvsp[(2) - (2)].node), NULL, NIL,
 										NULL, NULL,
 										(yyvsp[(1) - (2)].with),
 										yyscanner);
@@ -16455,7 +16455,7 @@ yyreduce:
   case 421:
 #line 2983 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					insertSelectOptions((SelectStmt *) (yyvsp[(2) - (3)].node), (yyvsp[(3) - (3)].list), NIL,
+					insertSelectOptions((PGSelectStmt *) (yyvsp[(2) - (3)].node), (yyvsp[(3) - (3)].list), NIL,
 										NULL, NULL,
 										(yyvsp[(1) - (3)].with),
 										yyscanner);
@@ -16466,8 +16466,8 @@ yyreduce:
   case 422:
 #line 2991 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					insertSelectOptions((SelectStmt *) (yyvsp[(2) - (5)].node), (yyvsp[(3) - (5)].list), (yyvsp[(4) - (5)].list),
-										(Node*) list_nth((yyvsp[(5) - (5)].list), 0), (Node*) list_nth((yyvsp[(5) - (5)].list), 1),
+					insertSelectOptions((PGSelectStmt *) (yyvsp[(2) - (5)].node), (yyvsp[(3) - (5)].list), (yyvsp[(4) - (5)].list),
+										(PGNode*) list_nth((yyvsp[(5) - (5)].list), 0), (PGNode*) list_nth((yyvsp[(5) - (5)].list), 1),
 										(yyvsp[(1) - (5)].with),
 										yyscanner);
 					(yyval.node) = (yyvsp[(2) - (5)].node);
@@ -16477,8 +16477,8 @@ yyreduce:
   case 423:
 #line 2999 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					insertSelectOptions((SelectStmt *) (yyvsp[(2) - (5)].node), (yyvsp[(3) - (5)].list), (yyvsp[(5) - (5)].list),
-										(Node*) list_nth((yyvsp[(4) - (5)].list), 0), (Node*) list_nth((yyvsp[(4) - (5)].list), 1),
+					insertSelectOptions((PGSelectStmt *) (yyvsp[(2) - (5)].node), (yyvsp[(3) - (5)].list), (yyvsp[(5) - (5)].list),
+										(PGNode*) list_nth((yyvsp[(4) - (5)].list), 0), (PGNode*) list_nth((yyvsp[(4) - (5)].list), 1),
 										(yyvsp[(1) - (5)].with),
 										yyscanner);
 					(yyval.node) = (yyvsp[(2) - (5)].node);
@@ -16498,7 +16498,7 @@ yyreduce:
   case 426:
 #line 3040 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					SelectStmt *n = makeNode(SelectStmt);
+					PGSelectStmt *n = makeNode(PGSelectStmt);
 					n->targetList = (yyvsp[(3) - (9)].list);
 					n->intoClause = (yyvsp[(4) - (9)].into);
 					n->fromClause = (yyvsp[(5) - (9)].list);
@@ -16506,14 +16506,14 @@ yyreduce:
 					n->groupClause = (yyvsp[(7) - (9)].list);
 					n->havingClause = (yyvsp[(8) - (9)].node);
 					n->windowClause = (yyvsp[(9) - (9)].list);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 427:
 #line 3054 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					SelectStmt *n = makeNode(SelectStmt);
+					PGSelectStmt *n = makeNode(PGSelectStmt);
 					n->distinctClause = (yyvsp[(2) - (9)].list);
 					n->targetList = (yyvsp[(3) - (9)].list);
 					n->intoClause = (yyvsp[(4) - (9)].into);
@@ -16522,7 +16522,7 @@ yyreduce:
 					n->groupClause = (yyvsp[(7) - (9)].list);
 					n->havingClause = (yyvsp[(8) - (9)].node);
 					n->windowClause = (yyvsp[(9) - (9)].list);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -16535,49 +16535,49 @@ yyreduce:
 #line 3068 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					/* same as SELECT * FROM relation_expr */
-					ColumnRef *cr = makeNode(ColumnRef);
-					ResTarget *rt = makeNode(ResTarget);
-					SelectStmt *n = makeNode(SelectStmt);
+					PGColumnRef *cr = makeNode(PGColumnRef);
+					PGResTarget *rt = makeNode(PGResTarget);
+					PGSelectStmt *n = makeNode(PGSelectStmt);
 
-					cr->fields = list_make1(makeNode(A_Star));
+					cr->fields = list_make1(makeNode(PGAStar));
 					cr->location = -1;
 
 					rt->name = NULL;
 					rt->indirection = NIL;
-					rt->val = (Node *)cr;
+					rt->val = (PGNode *)cr;
 					rt->location = -1;
 
 					n->targetList = list_make1(rt);
 					n->fromClause = list_make1((yyvsp[(2) - (2)].range));
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 430:
 #line 3087 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeSetOp(SETOP_UNION, (yyvsp[(3) - (4)].boolean), (yyvsp[(1) - (4)].node), (yyvsp[(4) - (4)].node));
+					(yyval.node) = makeSetOp(PG_SETOP_UNION, (yyvsp[(3) - (4)].boolean), (yyvsp[(1) - (4)].node), (yyvsp[(4) - (4)].node));
 				;}
     break;
 
   case 431:
 #line 3091 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeSetOp(SETOP_INTERSECT, (yyvsp[(3) - (4)].boolean), (yyvsp[(1) - (4)].node), (yyvsp[(4) - (4)].node));
+					(yyval.node) = makeSetOp(PG_SETOP_INTERSECT, (yyvsp[(3) - (4)].boolean), (yyvsp[(1) - (4)].node), (yyvsp[(4) - (4)].node));
 				;}
     break;
 
   case 432:
 #line 3095 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeSetOp(SETOP_EXCEPT, (yyvsp[(3) - (4)].boolean), (yyvsp[(1) - (4)].node), (yyvsp[(4) - (4)].node));
+					(yyval.node) = makeSetOp(PG_SETOP_EXCEPT, (yyvsp[(3) - (4)].boolean), (yyvsp[(1) - (4)].node), (yyvsp[(4) - (4)].node));
 				;}
     break;
 
   case 433:
 #line 3112 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-				(yyval.with) = makeNode(WithClause);
+				(yyval.with) = makeNode(PGWithClause);
 				(yyval.with)->ctes = (yyvsp[(2) - (2)].list);
 				(yyval.with)->recursive = false;
 				(yyval.with)->location = (yylsp[(1) - (2)]);
@@ -16587,7 +16587,7 @@ yyreduce:
   case 434:
 #line 3119 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-				(yyval.with) = makeNode(WithClause);
+				(yyval.with) = makeNode(PGWithClause);
 				(yyval.with)->ctes = (yyvsp[(2) - (2)].list);
 				(yyval.with)->recursive = false;
 				(yyval.with)->location = (yylsp[(1) - (2)]);
@@ -16597,7 +16597,7 @@ yyreduce:
   case 435:
 #line 3126 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-				(yyval.with) = makeNode(WithClause);
+				(yyval.with) = makeNode(PGWithClause);
 				(yyval.with)->ctes = (yyvsp[(3) - (3)].list);
 				(yyval.with)->recursive = true;
 				(yyval.with)->location = (yylsp[(1) - (3)]);
@@ -16617,23 +16617,23 @@ yyreduce:
   case 438:
 #line 3140 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-				CommonTableExpr *n = makeNode(CommonTableExpr);
+				PGCommonTableExpr *n = makeNode(PGCommonTableExpr);
 				n->ctename = (yyvsp[(1) - (6)].str);
 				n->aliascolnames = (yyvsp[(2) - (6)].list);
 				n->ctequery = (yyvsp[(5) - (6)].node);
 				n->location = (yylsp[(1) - (6)]);
-				(yyval.node) = (Node *) n;
+				(yyval.node) = (PGNode *) n;
 			;}
     break;
 
   case 439:
 #line 3152 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.into) = makeNode(IntoClause);
+					(yyval.into) = makeNode(PGIntoClause);
 					(yyval.into)->rel = (yyvsp[(2) - (2)].range);
 					(yyval.into)->colNames = NIL;
 					(yyval.into)->options = NIL;
-					(yyval.into)->onCommit = ONCOMMIT_NOOP;
+					(yyval.into)->onCommit = PG_ONCOMMIT_NOOP;
 					(yyval.into)->viewQuery = NULL;
 					(yyval.into)->skipData = false;
 				;}
@@ -16648,7 +16648,7 @@ yyreduce:
 #line 3171 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					(yyval.range) = (yyvsp[(3) - (3)].range);
-					(yyval.range)->relpersistence = RELPERSISTENCE_TEMP;
+					(yyval.range)->relpersistence = PG_RELPERSISTENCE_TEMP;
 				;}
     break;
 
@@ -16656,7 +16656,7 @@ yyreduce:
 #line 3176 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					(yyval.range) = (yyvsp[(3) - (3)].range);
-					(yyval.range)->relpersistence = RELPERSISTENCE_TEMP;
+					(yyval.range)->relpersistence = PG_RELPERSISTENCE_TEMP;
 				;}
     break;
 
@@ -16664,7 +16664,7 @@ yyreduce:
 #line 3181 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					(yyval.range) = (yyvsp[(4) - (4)].range);
-					(yyval.range)->relpersistence = RELPERSISTENCE_TEMP;
+					(yyval.range)->relpersistence = PG_RELPERSISTENCE_TEMP;
 				;}
     break;
 
@@ -16672,29 +16672,29 @@ yyreduce:
 #line 3186 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					(yyval.range) = (yyvsp[(4) - (4)].range);
-					(yyval.range)->relpersistence = RELPERSISTENCE_TEMP;
+					(yyval.range)->relpersistence = PG_RELPERSISTENCE_TEMP;
 				;}
     break;
 
   case 445:
 #line 3191 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					ereport(WARNING,
+					ereport(PGWARNING,
 							(errmsg("GLOBAL is deprecated in temporary table creation"),
 							 parser_errposition((yylsp[(1) - (4)]))));
 					(yyval.range) = (yyvsp[(4) - (4)].range);
-					(yyval.range)->relpersistence = RELPERSISTENCE_TEMP;
+					(yyval.range)->relpersistence = PG_RELPERSISTENCE_TEMP;
 				;}
     break;
 
   case 446:
 #line 3199 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					ereport(WARNING,
+					ereport(PGWARNING,
 							(errmsg("GLOBAL is deprecated in temporary table creation"),
 							 parser_errposition((yylsp[(1) - (4)]))));
 					(yyval.range) = (yyvsp[(4) - (4)].range);
-					(yyval.range)->relpersistence = RELPERSISTENCE_TEMP;
+					(yyval.range)->relpersistence = PG_RELPERSISTENCE_TEMP;
 				;}
     break;
 
@@ -16702,7 +16702,7 @@ yyreduce:
 #line 3207 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					(yyval.range) = (yyvsp[(3) - (3)].range);
-					(yyval.range)->relpersistence = RELPERSISTENCE_UNLOGGED;
+					(yyval.range)->relpersistence = PG_RELPERSISTENCE_UNLOGGED;
 				;}
     break;
 
@@ -16795,7 +16795,7 @@ yyreduce:
   case 464:
 #line 3261 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.sortby) = makeNode(SortBy);
+					(yyval.sortby) = makeNode(PGSortBy);
 					(yyval.sortby)->node = (yyvsp[(1) - (4)].node);
 					(yyval.sortby)->sortby_dir = SORTBY_USING;
 					(yyval.sortby)->sortby_nulls = (yyvsp[(4) - (4)].nullorder);
@@ -16807,7 +16807,7 @@ yyreduce:
   case 465:
 #line 3270 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.sortby) = makeNode(SortBy);
+					(yyval.sortby) = makeNode(PGSortBy);
 					(yyval.sortby)->node = (yyvsp[(1) - (3)].node);
 					(yyval.sortby)->sortby_dir = (yyvsp[(2) - (3)].sortorder);
 					(yyval.sortby)->sortby_nulls = (yyvsp[(3) - (3)].nullorder);
@@ -16818,22 +16818,22 @@ yyreduce:
 
   case 466:
 #line 3280 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.sortorder) = SORTBY_ASC; ;}
+    { (yyval.sortorder) = PG_SORTBY_ASC; ;}
     break;
 
   case 467:
 #line 3281 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.sortorder) = SORTBY_DESC; ;}
+    { (yyval.sortorder) = PG_SORTBY_DESC; ;}
     break;
 
   case 468:
 #line 3282 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.sortorder) = SORTBY_DEFAULT; ;}
+    { (yyval.sortorder) = PG_SORTBY_DEFAULT; ;}
     break;
 
   case 469:
 #line 3285 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.nullorder) = SORTBY_NULLS_FIRST; ;}
+    { (yyval.nullorder) = PG_SORTBY_NULLS_FIRST; ;}
     break;
 
   case 470:
@@ -16843,7 +16843,7 @@ yyreduce:
 
   case 471:
 #line 3287 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.nullorder) = SORTBY_NULLS_DEFAULT; ;}
+    { (yyval.nullorder) = PG_SORTBY_NULLS_DEFAULT; ;}
     break;
 
   case 472:
@@ -16886,7 +16886,7 @@ yyreduce:
     {
 					/* Disabled because it was too confusing, bjm 2002-02-18 */
 					ereport(ERROR,
-							(errcode(ERRCODE_SYNTAX_ERROR),
+							(errcode(PG_ERRCODE_SYNTAX_ERROR),
 							 errmsg("LIMIT #,# syntax is not supported"),
 							 errhint("Use separate LIMIT and OFFSET clauses."),
 							 parser_errposition((yylsp[(1) - (4)]))));
@@ -16938,7 +16938,7 @@ yyreduce:
 
   case 488:
 #line 3367 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "+", NULL, (yyvsp[(2) - (2)].node), (yylsp[(1) - (2)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "+", NULL, (yyvsp[(2) - (2)].node), (yylsp[(1) - (2)])); ;}
     break;
 
   case 489:
@@ -17009,7 +17009,7 @@ yyreduce:
   case 502:
 #line 3424 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeGroupingSet(GROUPING_SET_EMPTY, NIL, (yylsp[(1) - (2)]));
+					(yyval.node) = (PGNode *) makeGroupingSet(GROUPING_SET_EMPTY, NIL, (yylsp[(1) - (2)]));
 				;}
     break;
 
@@ -17056,11 +17056,11 @@ yyreduce:
   case 511:
 #line 3457 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					LockingClause *n = makeNode(LockingClause);
+					PGLockingClause *n = makeNode(PGLockingClause);
 					n->lockedRels = (yyvsp[(2) - (3)].list);
 					n->strength = (yyvsp[(1) - (3)].lockstrength);
 					n->waitPolicy = (yyvsp[(3) - (3)].lockwaitpolicy);
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
@@ -17071,17 +17071,17 @@ yyreduce:
 
   case 513:
 #line 3468 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.lockstrength) = LCS_FORNOKEYUPDATE; ;}
+    { (yyval.lockstrength) = PG_LCS_FORNOKEYUPDATE; ;}
     break;
 
   case 514:
 #line 3469 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.lockstrength) = LCS_FORSHARE; ;}
+    { (yyval.lockstrength) = PG_LCS_FORSHARE; ;}
     break;
 
   case 515:
 #line 3470 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.lockstrength) = LCS_FORKEYSHARE; ;}
+    { (yyval.lockstrength) = PG_LCS_FORKEYSHARE; ;}
     break;
 
   case 516:
@@ -17101,29 +17101,29 @@ yyreduce:
 
   case 519:
 #line 3481 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.lockwaitpolicy) = LockWaitSkip; ;}
+    { (yyval.lockwaitpolicy) = PGLockWaitSkip; ;}
     break;
 
   case 520:
 #line 3482 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.lockwaitpolicy) = LockWaitBlock; ;}
+    { (yyval.lockwaitpolicy) = PGLockWaitBlock; ;}
     break;
 
   case 521:
 #line 3492 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					SelectStmt *n = makeNode(SelectStmt);
+					PGSelectStmt *n = makeNode(PGSelectStmt);
 					n->valuesLists = list_make1((yyvsp[(3) - (4)].list));
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 522:
 #line 3498 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					SelectStmt *n = (SelectStmt *) (yyvsp[(1) - (5)].node);
+					PGSelectStmt *n = (PGSelectStmt *) (yyvsp[(1) - (5)].node);
 					n->valuesLists = lappend(n->valuesLists, (yyvsp[(4) - (5)].list));
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
@@ -17151,46 +17151,46 @@ yyreduce:
 #line 3528 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					(yyvsp[(1) - (2)].range)->alias = (yyvsp[(2) - (2)].alias);
-					(yyval.node) = (Node *) (yyvsp[(1) - (2)].range);
+					(yyval.node) = (PGNode *) (yyvsp[(1) - (2)].range);
 				;}
     break;
 
   case 528:
 #line 3533 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RangeTableSample *n = (RangeTableSample *) (yyvsp[(3) - (3)].node);
+					PGRangeTableSample *n = (PGRangeTableSample *) (yyvsp[(3) - (3)].node);
 					(yyvsp[(1) - (3)].range)->alias = (yyvsp[(2) - (3)].alias);
-					/* relation_expr goes inside the RangeTableSample node */
-					n->relation = (Node *) (yyvsp[(1) - (3)].range);
-					(yyval.node) = (Node *) n;
+					/* relation_expr goes inside the PGRangeTableSample node */
+					n->relation = (PGNode *) (yyvsp[(1) - (3)].range);
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 529:
 #line 3541 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RangeFunction *n = (RangeFunction *) (yyvsp[(1) - (2)].node);
-					n->alias = (Alias*) linitial((yyvsp[(2) - (2)].list));
-					n->coldeflist = (List*) lsecond((yyvsp[(2) - (2)].list));
-					(yyval.node) = (Node *) n;
+					PGRangeFunction *n = (PGRangeFunction *) (yyvsp[(1) - (2)].node);
+					n->alias = (PGAlias*) linitial((yyvsp[(2) - (2)].list));
+					n->coldeflist = (PGList*) lsecond((yyvsp[(2) - (2)].list));
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 530:
 #line 3548 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RangeFunction *n = (RangeFunction *) (yyvsp[(2) - (3)].node);
+					PGRangeFunction *n = (PGRangeFunction *) (yyvsp[(2) - (3)].node);
 					n->lateral = true;
-					n->alias = (Alias*) linitial((yyvsp[(3) - (3)].list));
-					n->coldeflist = (List*) lsecond((yyvsp[(3) - (3)].list));
-					(yyval.node) = (Node *) n;
+					n->alias = (PGAlias*) linitial((yyvsp[(3) - (3)].list));
+					n->coldeflist = (PGList*) lsecond((yyvsp[(3) - (3)].list));
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 531:
 #line 3556 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RangeSubselect *n = makeNode(RangeSubselect);
+					PGRangeSubselect *n = makeNode(PGRangeSubselect);
 					n->lateral = false;
 					n->subquery = (yyvsp[(1) - (2)].node);
 					n->alias = (yyvsp[(2) - (2)].alias);
@@ -17207,56 +17207,56 @@ yyreduce:
 					 */
 					if ((yyvsp[(2) - (2)].alias) == NULL)
 					{
-						if (IsA((yyvsp[(1) - (2)].node), SelectStmt) &&
-							((SelectStmt *) (yyvsp[(1) - (2)].node))->valuesLists)
+						if (IsA((yyvsp[(1) - (2)].node), PGSelectStmt) &&
+							((PGSelectStmt *) (yyvsp[(1) - (2)].node))->valuesLists)
 							ereport(ERROR,
-									(errcode(ERRCODE_SYNTAX_ERROR),
+									(errcode(PG_ERRCODE_SYNTAX_ERROR),
 									 errmsg("VALUES in FROM must have an alias"),
 									 errhint("For example, FROM (VALUES ...) [AS] foo."),
 									 parser_errposition((yylsp[(1) - (2)]))));
 						else
 							ereport(ERROR,
-									(errcode(ERRCODE_SYNTAX_ERROR),
+									(errcode(PG_ERRCODE_SYNTAX_ERROR),
 									 errmsg("subquery in FROM must have an alias"),
 									 errhint("For example, FROM (SELECT ...) [AS] foo."),
 									 parser_errposition((yylsp[(1) - (2)]))));
 					}
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 532:
 #line 3591 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RangeSubselect *n = makeNode(RangeSubselect);
+					PGRangeSubselect *n = makeNode(PGRangeSubselect);
 					n->lateral = true;
 					n->subquery = (yyvsp[(2) - (3)].node);
 					n->alias = (yyvsp[(3) - (3)].alias);
 					/* same comment as above */
 					if ((yyvsp[(3) - (3)].alias) == NULL)
 					{
-						if (IsA((yyvsp[(2) - (3)].node), SelectStmt) &&
-							((SelectStmt *) (yyvsp[(2) - (3)].node))->valuesLists)
+						if (IsA((yyvsp[(2) - (3)].node), PGSelectStmt) &&
+							((PGSelectStmt *) (yyvsp[(2) - (3)].node))->valuesLists)
 							ereport(ERROR,
-									(errcode(ERRCODE_SYNTAX_ERROR),
+									(errcode(PG_ERRCODE_SYNTAX_ERROR),
 									 errmsg("VALUES in FROM must have an alias"),
 									 errhint("For example, FROM (VALUES ...) [AS] foo."),
 									 parser_errposition((yylsp[(2) - (3)]))));
 						else
 							ereport(ERROR,
-									(errcode(ERRCODE_SYNTAX_ERROR),
+									(errcode(PG_ERRCODE_SYNTAX_ERROR),
 									 errmsg("subquery in FROM must have an alias"),
 									 errhint("For example, FROM (SELECT ...) [AS] foo."),
 									 parser_errposition((yylsp[(2) - (3)]))));
 					}
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 533:
 #line 3616 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) (yyvsp[(1) - (1)].jexpr);
+					(yyval.node) = (PGNode *) (yyvsp[(1) - (1)].jexpr);
 				;}
     break;
 
@@ -17264,7 +17264,7 @@ yyreduce:
 #line 3620 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					(yyvsp[(2) - (4)].jexpr)->alias = (yyvsp[(4) - (4)].alias);
-					(yyval.node) = (Node *) (yyvsp[(2) - (4)].jexpr);
+					(yyval.node) = (PGNode *) (yyvsp[(2) - (4)].jexpr);
 				;}
     break;
 
@@ -17279,8 +17279,8 @@ yyreduce:
 #line 3650 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					/* CROSS JOIN is same as unqualified inner join */
-					JoinExpr *n = makeNode(JoinExpr);
-					n->jointype = JOIN_INNER;
+					PGJoinExpr *n = makeNode(PGJoinExpr);
+					n->jointype = PG_JOIN_INNER;
 					n->isNatural = FALSE;
 					n->larg = (yyvsp[(1) - (4)].node);
 					n->rarg = (yyvsp[(4) - (4)].node);
@@ -17293,13 +17293,13 @@ yyreduce:
   case 537:
 #line 3662 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					JoinExpr *n = makeNode(JoinExpr);
+					PGJoinExpr *n = makeNode(PGJoinExpr);
 					n->jointype = (yyvsp[(2) - (5)].jtype);
 					n->isNatural = FALSE;
 					n->larg = (yyvsp[(1) - (5)].node);
 					n->rarg = (yyvsp[(4) - (5)].node);
-					if ((yyvsp[(5) - (5)].node) != NULL && IsA((yyvsp[(5) - (5)].node), List))
-						n->usingClause = (List *) (yyvsp[(5) - (5)].node); /* USING clause */
+					if ((yyvsp[(5) - (5)].node) != NULL && IsA((yyvsp[(5) - (5)].node), PGList))
+						n->usingClause = (PGList *) (yyvsp[(5) - (5)].node); /* USING clause */
 					else
 						n->quals = (yyvsp[(5) - (5)].node); /* ON clause */
 					(yyval.jexpr) = n;
@@ -17310,13 +17310,13 @@ yyreduce:
 #line 3675 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					/* letting join_type reduce to empty doesn't work */
-					JoinExpr *n = makeNode(JoinExpr);
-					n->jointype = JOIN_INNER;
+					PGJoinExpr *n = makeNode(PGJoinExpr);
+					n->jointype = PG_JOIN_INNER;
 					n->isNatural = FALSE;
 					n->larg = (yyvsp[(1) - (4)].node);
 					n->rarg = (yyvsp[(3) - (4)].node);
-					if ((yyvsp[(4) - (4)].node) != NULL && IsA((yyvsp[(4) - (4)].node), List))
-						n->usingClause = (List *) (yyvsp[(4) - (4)].node); /* USING clause */
+					if ((yyvsp[(4) - (4)].node) != NULL && IsA((yyvsp[(4) - (4)].node), PGList))
+						n->usingClause = (PGList *) (yyvsp[(4) - (4)].node); /* USING clause */
 					else
 						n->quals = (yyvsp[(4) - (4)].node); /* ON clause */
 					(yyval.jexpr) = n;
@@ -17326,7 +17326,7 @@ yyreduce:
   case 539:
 #line 3689 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					JoinExpr *n = makeNode(JoinExpr);
+					PGJoinExpr *n = makeNode(PGJoinExpr);
 					n->jointype = (yyvsp[(3) - (5)].jtype);
 					n->isNatural = TRUE;
 					n->larg = (yyvsp[(1) - (5)].node);
@@ -17341,8 +17341,8 @@ yyreduce:
 #line 3700 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					/* letting join_type reduce to empty doesn't work */
-					JoinExpr *n = makeNode(JoinExpr);
-					n->jointype = JOIN_INNER;
+					PGJoinExpr *n = makeNode(PGJoinExpr);
+					n->jointype = PG_JOIN_INNER;
 					n->isNatural = TRUE;
 					n->larg = (yyvsp[(1) - (4)].node);
 					n->rarg = (yyvsp[(4) - (4)].node);
@@ -17355,7 +17355,7 @@ yyreduce:
   case 541:
 #line 3715 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.alias) = makeNode(Alias);
+					(yyval.alias) = makeNode(PGAlias);
 					(yyval.alias)->aliasname = (yyvsp[(2) - (5)].str);
 					(yyval.alias)->colnames = (yyvsp[(4) - (5)].list);
 				;}
@@ -17364,7 +17364,7 @@ yyreduce:
   case 542:
 #line 3721 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.alias) = makeNode(Alias);
+					(yyval.alias) = makeNode(PGAlias);
 					(yyval.alias)->aliasname = (yyvsp[(2) - (2)].str);
 				;}
     break;
@@ -17372,7 +17372,7 @@ yyreduce:
   case 543:
 #line 3726 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.alias) = makeNode(Alias);
+					(yyval.alias) = makeNode(PGAlias);
 					(yyval.alias)->aliasname = (yyvsp[(1) - (4)].str);
 					(yyval.alias)->colnames = (yyvsp[(3) - (4)].list);
 				;}
@@ -17381,7 +17381,7 @@ yyreduce:
   case 544:
 #line 3732 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.alias) = makeNode(Alias);
+					(yyval.alias) = makeNode(PGAlias);
 					(yyval.alias)->aliasname = (yyvsp[(1) - (1)].str);
 				;}
     break;
@@ -17413,7 +17413,7 @@ yyreduce:
   case 549:
 #line 3756 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Alias *a = makeNode(Alias);
+					PGAlias *a = makeNode(PGAlias);
 					a->aliasname = (yyvsp[(2) - (5)].str);
 					(yyval.list) = list_make2(a, (yyvsp[(4) - (5)].list));
 				;}
@@ -17422,7 +17422,7 @@ yyreduce:
   case 550:
 #line 3762 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Alias *a = makeNode(Alias);
+					PGAlias *a = makeNode(PGAlias);
 					a->aliasname = (yyvsp[(1) - (4)].str);
 					(yyval.list) = list_make2(a, (yyvsp[(3) - (4)].list));
 				;}
@@ -17437,22 +17437,22 @@ yyreduce:
 
   case 552:
 #line 3773 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.jtype) = JOIN_FULL; ;}
+    { (yyval.jtype) = PG_JOIN_FULL; ;}
     break;
 
   case 553:
 #line 3774 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.jtype) = JOIN_LEFT; ;}
+    { (yyval.jtype) = PG_JOIN_LEFT; ;}
     break;
 
   case 554:
 #line 3775 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.jtype) = JOIN_RIGHT; ;}
+    { (yyval.jtype) = PG_JOIN_RIGHT; ;}
     break;
 
   case 555:
 #line 3776 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.jtype) = JOIN_INNER; ;}
+    { (yyval.jtype) = PG_JOIN_INNER; ;}
     break;
 
   case 556:
@@ -17467,7 +17467,7 @@ yyreduce:
 
   case 558:
 #line 3793 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) (yyvsp[(3) - (4)].list); ;}
+    { (yyval.node) = (PGNode *) (yyvsp[(3) - (4)].list); ;}
     break;
 
   case 559:
@@ -17518,19 +17518,19 @@ yyreduce:
   case 564:
 #line 3844 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RangeTableSample *n = makeNode(RangeTableSample);
+					PGRangeTableSample *n = makeNode(PGRangeTableSample);
 					/* n->relation will be filled in later */
 					n->method = (yyvsp[(2) - (6)].list);
 					n->args = (yyvsp[(4) - (6)].list);
 					n->repeatable = (yyvsp[(6) - (6)].node);
 					n->location = (yylsp[(2) - (6)]);
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 565:
 #line 3856 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) (yyvsp[(3) - (4)].node); ;}
+    { (yyval.node) = (PGNode *) (yyvsp[(3) - (4)].node); ;}
     break;
 
   case 566:
@@ -17541,26 +17541,26 @@ yyreduce:
   case 567:
 #line 3873 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RangeFunction *n = makeNode(RangeFunction);
+					PGRangeFunction *n = makeNode(PGRangeFunction);
 					n->lateral = false;
 					n->ordinality = (yyvsp[(2) - (2)].boolean);
 					n->is_rowsfrom = false;
 					n->functions = list_make1(list_make2((yyvsp[(1) - (2)].node), NIL));
 					/* alias and coldeflist are set by table_ref production */
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 568:
 #line 3883 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					RangeFunction *n = makeNode(RangeFunction);
+					PGRangeFunction *n = makeNode(PGRangeFunction);
 					n->lateral = false;
 					n->ordinality = (yyvsp[(6) - (6)].boolean);
 					n->is_rowsfrom = true;
 					n->functions = (yyvsp[(4) - (6)].list);
 					/* alias and coldeflist are set by table_ref production */
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
@@ -17626,7 +17626,7 @@ yyreduce:
   case 580:
 #line 3930 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					ColumnDef *n = makeNode(ColumnDef);
+					PGColumnDef *n = makeNode(PGColumnDef);
 					n->colname = (yyvsp[(1) - (3)].str);
 					n->typeName = (yyvsp[(2) - (3)].typnam);
 					n->inhcount = 0;
@@ -17636,22 +17636,22 @@ yyreduce:
 					n->storage = 0;
 					n->raw_default = NULL;
 					n->cooked_default = NULL;
-					n->collClause = (CollateClause *) (yyvsp[(3) - (3)].node);
+					n->collClause = (PGCollateClause *) (yyvsp[(3) - (3)].node);
 					n->collOid = InvalidOid;
 					n->constraints = NIL;
 					n->location = (yylsp[(1) - (3)]);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 581:
 #line 3951 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					CollateClause *n = makeNode(CollateClause);
+					PGCollateClause *n = makeNode(PGCollateClause);
 					n->arg = NULL;
 					n->collname = (yyvsp[(2) - (2)].list);
 					n->location = (yylsp[(1) - (2)]);
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
@@ -17916,7 +17916,7 @@ yyreduce:
 					 */
 					if ((yyvsp[(2) - (3)].ival) < 1)
 						ereport(ERROR,
-								(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+								(errcode(PG_ERRCODE_INVALID_PARAMETER_VALUE),
 								 errmsg("precision for type float must be at least 1 bit"),
 								 parser_errposition((yylsp[(2) - (3)]))));
 					else if ((yyvsp[(2) - (3)].ival) <= 24)
@@ -17925,7 +17925,7 @@ yyreduce:
 						(yyval.typnam) = SystemTypeName("float8");
 					else
 						ereport(ERROR,
-								(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+								(errcode(PG_ERRCODE_INVALID_PARAMETER_VALUE),
 								 errmsg("precision for type float must be less than 54 bits"),
 								 parser_errposition((yylsp[(2) - (3)]))));
 				;}
@@ -18286,18 +18286,18 @@ yyreduce:
   case 666:
 #line 4451 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					CollateClause *n = makeNode(CollateClause);
+					PGCollateClause *n = makeNode(PGCollateClause);
 					n->arg = (yyvsp[(1) - (3)].node);
 					n->collname = (yyvsp[(3) - (3)].list);
 					n->location = (yylsp[(2) - (3)]);
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 667:
 #line 4459 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeFuncCall(SystemFuncName("timezone"),
+					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("timezone"),
 											   list_make2((yyvsp[(5) - (5)].node), (yyvsp[(1) - (5)].node)),
 											   (yylsp[(2) - (5)]));
 				;}
@@ -18305,7 +18305,7 @@ yyreduce:
 
   case 668:
 #line 4474 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "+", NULL, (yyvsp[(2) - (2)].node), (yylsp[(1) - (2)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "+", NULL, (yyvsp[(2) - (2)].node), (yylsp[(1) - (2)])); ;}
     break;
 
   case 669:
@@ -18315,77 +18315,77 @@ yyreduce:
 
   case 670:
 #line 4478 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "+", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "+", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 671:
 #line 4480 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "-", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "-", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 672:
 #line 4482 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "*", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "*", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 673:
 #line 4484 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "/", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "/", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 674:
 #line 4486 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "%", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "%", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 675:
 #line 4488 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "^", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "^", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 676:
 #line 4490 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "<", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "<", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 677:
 #line 4492 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, ">", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, ">", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 678:
 #line 4494 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "=", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "=", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 679:
 #line 4496 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "<=", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "<=", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 680:
 #line 4498 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, ">=", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, ">=", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 681:
 #line 4500 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "<>", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "<>", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 682:
 #line 4503 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeA_Expr(AEXPR_OP, (yyvsp[(2) - (3)].list), (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeAExpr(PG_AEXPR_OP, (yyvsp[(2) - (3)].list), (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 683:
 #line 4505 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeA_Expr(AEXPR_OP, (yyvsp[(1) - (2)].list), NULL, (yyvsp[(2) - (2)].node), (yylsp[(1) - (2)])); ;}
+    { (yyval.node) = (PGNode *) makeAExpr(PG_AEXPR_OP, (yyvsp[(1) - (2)].list), NULL, (yyvsp[(2) - (2)].node), (yylsp[(1) - (2)])); ;}
     break;
 
   case 684:
 #line 4507 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeA_Expr(AEXPR_OP, (yyvsp[(2) - (2)].list), (yyvsp[(1) - (2)].node), NULL, (yylsp[(2) - (2)])); ;}
+    { (yyval.node) = (PGNode *) makeAExpr(PG_AEXPR_OP, (yyvsp[(2) - (2)].list), (yyvsp[(1) - (2)].node), NULL, (yylsp[(2) - (2)])); ;}
     break;
 
   case 685:
@@ -18411,7 +18411,7 @@ yyreduce:
   case 689:
 #line 4519 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_LIKE, "~~",
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_LIKE, "~~",
 												   (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)]));
 				;}
     break;
@@ -18419,18 +18419,18 @@ yyreduce:
   case 690:
 #line 4524 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					FuncCall *n = makeFuncCall(SystemFuncName("like_escape"),
+					PGFuncCall *n = makeFuncCall(SystemFuncName("like_escape"),
 											   list_make2((yyvsp[(3) - (5)].node), (yyvsp[(5) - (5)].node)),
 											   (yylsp[(2) - (5)]));
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_LIKE, "~~",
-												   (yyvsp[(1) - (5)].node), (Node *) n, (yylsp[(2) - (5)]));
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_LIKE, "~~",
+												   (yyvsp[(1) - (5)].node), (PGNode *) n, (yylsp[(2) - (5)]));
 				;}
     break;
 
   case 691:
 #line 4532 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_LIKE, "!~~",
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_LIKE, "!~~",
 												   (yyvsp[(1) - (4)].node), (yyvsp[(4) - (4)].node), (yylsp[(2) - (4)]));
 				;}
     break;
@@ -18438,18 +18438,18 @@ yyreduce:
   case 692:
 #line 4537 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					FuncCall *n = makeFuncCall(SystemFuncName("like_escape"),
+					PGFuncCall *n = makeFuncCall(SystemFuncName("like_escape"),
 											   list_make2((yyvsp[(4) - (6)].node), (yyvsp[(6) - (6)].node)),
 											   (yylsp[(2) - (6)]));
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_LIKE, "!~~",
-												   (yyvsp[(1) - (6)].node), (Node *) n, (yylsp[(2) - (6)]));
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_LIKE, "!~~",
+												   (yyvsp[(1) - (6)].node), (PGNode *) n, (yylsp[(2) - (6)]));
 				;}
     break;
 
   case 693:
 #line 4545 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_ILIKE, "~~*",
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_ILIKE, "~~*",
 												   (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)]));
 				;}
     break;
@@ -18457,18 +18457,18 @@ yyreduce:
   case 694:
 #line 4550 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					FuncCall *n = makeFuncCall(SystemFuncName("like_escape"),
+					PGFuncCall *n = makeFuncCall(SystemFuncName("like_escape"),
 											   list_make2((yyvsp[(3) - (5)].node), (yyvsp[(5) - (5)].node)),
 											   (yylsp[(2) - (5)]));
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_ILIKE, "~~*",
-												   (yyvsp[(1) - (5)].node), (Node *) n, (yylsp[(2) - (5)]));
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_ILIKE, "~~*",
+												   (yyvsp[(1) - (5)].node), (PGNode *) n, (yylsp[(2) - (5)]));
 				;}
     break;
 
   case 695:
 #line 4558 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_ILIKE, "!~~*",
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_ILIKE, "!~~*",
 												   (yyvsp[(1) - (4)].node), (yyvsp[(4) - (4)].node), (yylsp[(2) - (4)]));
 				;}
     break;
@@ -18476,99 +18476,99 @@ yyreduce:
   case 696:
 #line 4563 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					FuncCall *n = makeFuncCall(SystemFuncName("like_escape"),
+					PGFuncCall *n = makeFuncCall(SystemFuncName("like_escape"),
 											   list_make2((yyvsp[(4) - (6)].node), (yyvsp[(6) - (6)].node)),
 											   (yylsp[(2) - (6)]));
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_ILIKE, "!~~*",
-												   (yyvsp[(1) - (6)].node), (Node *) n, (yylsp[(2) - (6)]));
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_ILIKE, "!~~*",
+												   (yyvsp[(1) - (6)].node), (PGNode *) n, (yylsp[(2) - (6)]));
 				;}
     break;
 
   case 697:
 #line 4572 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					FuncCall *n = makeFuncCall(SystemFuncName("similar_escape"),
+					PGFuncCall *n = makeFuncCall(SystemFuncName("similar_escape"),
 											   list_make2((yyvsp[(4) - (4)].node), makeNullAConst(-1)),
 											   (yylsp[(2) - (4)]));
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_SIMILAR, "~",
-												   (yyvsp[(1) - (4)].node), (Node *) n, (yylsp[(2) - (4)]));
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_SIMILAR, "~",
+												   (yyvsp[(1) - (4)].node), (PGNode *) n, (yylsp[(2) - (4)]));
 				;}
     break;
 
   case 698:
 #line 4580 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					FuncCall *n = makeFuncCall(SystemFuncName("similar_escape"),
+					PGFuncCall *n = makeFuncCall(SystemFuncName("similar_escape"),
 											   list_make2((yyvsp[(4) - (6)].node), (yyvsp[(6) - (6)].node)),
 											   (yylsp[(2) - (6)]));
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_SIMILAR, "~",
-												   (yyvsp[(1) - (6)].node), (Node *) n, (yylsp[(2) - (6)]));
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_SIMILAR, "~",
+												   (yyvsp[(1) - (6)].node), (PGNode *) n, (yylsp[(2) - (6)]));
 				;}
     break;
 
   case 699:
 #line 4588 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					FuncCall *n = makeFuncCall(SystemFuncName("similar_escape"),
+					PGFuncCall *n = makeFuncCall(SystemFuncName("similar_escape"),
 											   list_make2((yyvsp[(5) - (5)].node), makeNullAConst(-1)),
 											   (yylsp[(2) - (5)]));
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_SIMILAR, "!~",
-												   (yyvsp[(1) - (5)].node), (Node *) n, (yylsp[(2) - (5)]));
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_SIMILAR, "!~",
+												   (yyvsp[(1) - (5)].node), (PGNode *) n, (yylsp[(2) - (5)]));
 				;}
     break;
 
   case 700:
 #line 4596 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					FuncCall *n = makeFuncCall(SystemFuncName("similar_escape"),
+					PGFuncCall *n = makeFuncCall(SystemFuncName("similar_escape"),
 											   list_make2((yyvsp[(5) - (7)].node), (yyvsp[(7) - (7)].node)),
 											   (yylsp[(2) - (7)]));
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_SIMILAR, "!~",
-												   (yyvsp[(1) - (7)].node), (Node *) n, (yylsp[(2) - (7)]));
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_SIMILAR, "!~",
+												   (yyvsp[(1) - (7)].node), (PGNode *) n, (yylsp[(2) - (7)]));
 				;}
     break;
 
   case 701:
 #line 4614 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					NullTest *n = makeNode(NullTest);
-					n->arg = (Expr *) (yyvsp[(1) - (3)].node);
-					n->nulltesttype = IS_NULL;
+					PGNullTest *n = makeNode(PGNullTest);
+					n->arg = (PGExpr *) (yyvsp[(1) - (3)].node);
+					n->nulltesttype = PG_IS_NULL;
 					n->location = (yylsp[(2) - (3)]);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 702:
 #line 4622 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					NullTest *n = makeNode(NullTest);
-					n->arg = (Expr *) (yyvsp[(1) - (2)].node);
-					n->nulltesttype = IS_NULL;
+					PGNullTest *n = makeNode(PGNullTest);
+					n->arg = (PGExpr *) (yyvsp[(1) - (2)].node);
+					n->nulltesttype = PG_IS_NULL;
 					n->location = (yylsp[(2) - (2)]);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 703:
 #line 4630 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					NullTest *n = makeNode(NullTest);
-					n->arg = (Expr *) (yyvsp[(1) - (4)].node);
+					PGNullTest *n = makeNode(PGNullTest);
+					n->arg = (PGExpr *) (yyvsp[(1) - (4)].node);
 					n->nulltesttype = IS_NOT_NULL;
 					n->location = (yylsp[(2) - (4)]);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 704:
 #line 4638 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					NullTest *n = makeNode(NullTest);
-					n->arg = (Expr *) (yyvsp[(1) - (2)].node);
+					PGNullTest *n = makeNode(PGNullTest);
+					n->arg = (PGExpr *) (yyvsp[(1) - (2)].node);
 					n->nulltesttype = IS_NOT_NULL;
 					n->location = (yylsp[(2) - (2)]);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -18577,15 +18577,15 @@ yyreduce:
     {
 					if (list_length((yyvsp[(1) - (3)].list)) != 2)
 						ereport(ERROR,
-								(errcode(ERRCODE_SYNTAX_ERROR),
+								(errcode(PG_ERRCODE_SYNTAX_ERROR),
 								 errmsg("wrong number of parameters on left side of OVERLAPS expression"),
 								 parser_errposition((yylsp[(1) - (3)]))));
 					if (list_length((yyvsp[(3) - (3)].list)) != 2)
 						ereport(ERROR,
-								(errcode(ERRCODE_SYNTAX_ERROR),
+								(errcode(PG_ERRCODE_SYNTAX_ERROR),
 								 errmsg("wrong number of parameters on right side of OVERLAPS expression"),
 								 parser_errposition((yylsp[(3) - (3)]))));
-					(yyval.node) = (Node *) makeFuncCall(SystemFuncName("overlaps"),
+					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("overlaps"),
 											   list_concat((yyvsp[(1) - (3)].list), (yyvsp[(3) - (3)].list)),
 											   (yylsp[(2) - (3)]));
 				;}
@@ -18594,104 +18594,104 @@ yyreduce:
   case 706:
 #line 4662 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					BooleanTest *b = makeNode(BooleanTest);
-					b->arg = (Expr *) (yyvsp[(1) - (3)].node);
-					b->booltesttype = IS_TRUE;
+					PGBooleanTest *b = makeNode(PGBooleanTest);
+					b->arg = (PGExpr *) (yyvsp[(1) - (3)].node);
+					b->booltesttype = PG_IS_TRUE;
 					b->location = (yylsp[(2) - (3)]);
-					(yyval.node) = (Node *)b;
+					(yyval.node) = (PGNode *)b;
 				;}
     break;
 
   case 707:
 #line 4670 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					BooleanTest *b = makeNode(BooleanTest);
-					b->arg = (Expr *) (yyvsp[(1) - (4)].node);
+					PGBooleanTest *b = makeNode(PGBooleanTest);
+					b->arg = (PGExpr *) (yyvsp[(1) - (4)].node);
 					b->booltesttype = IS_NOT_TRUE;
 					b->location = (yylsp[(2) - (4)]);
-					(yyval.node) = (Node *)b;
+					(yyval.node) = (PGNode *)b;
 				;}
     break;
 
   case 708:
 #line 4678 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					BooleanTest *b = makeNode(BooleanTest);
-					b->arg = (Expr *) (yyvsp[(1) - (3)].node);
+					PGBooleanTest *b = makeNode(PGBooleanTest);
+					b->arg = (PGExpr *) (yyvsp[(1) - (3)].node);
 					b->booltesttype = IS_FALSE;
 					b->location = (yylsp[(2) - (3)]);
-					(yyval.node) = (Node *)b;
+					(yyval.node) = (PGNode *)b;
 				;}
     break;
 
   case 709:
 #line 4686 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					BooleanTest *b = makeNode(BooleanTest);
-					b->arg = (Expr *) (yyvsp[(1) - (4)].node);
+					PGBooleanTest *b = makeNode(PGBooleanTest);
+					b->arg = (PGExpr *) (yyvsp[(1) - (4)].node);
 					b->booltesttype = IS_NOT_FALSE;
 					b->location = (yylsp[(2) - (4)]);
-					(yyval.node) = (Node *)b;
+					(yyval.node) = (PGNode *)b;
 				;}
     break;
 
   case 710:
 #line 4694 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					BooleanTest *b = makeNode(BooleanTest);
-					b->arg = (Expr *) (yyvsp[(1) - (3)].node);
+					PGBooleanTest *b = makeNode(PGBooleanTest);
+					b->arg = (PGExpr *) (yyvsp[(1) - (3)].node);
 					b->booltesttype = IS_UNKNOWN;
 					b->location = (yylsp[(2) - (3)]);
-					(yyval.node) = (Node *)b;
+					(yyval.node) = (PGNode *)b;
 				;}
     break;
 
   case 711:
 #line 4702 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					BooleanTest *b = makeNode(BooleanTest);
-					b->arg = (Expr *) (yyvsp[(1) - (4)].node);
+					PGBooleanTest *b = makeNode(PGBooleanTest);
+					b->arg = (PGExpr *) (yyvsp[(1) - (4)].node);
 					b->booltesttype = IS_NOT_UNKNOWN;
 					b->location = (yylsp[(2) - (4)]);
-					(yyval.node) = (Node *)b;
+					(yyval.node) = (PGNode *)b;
 				;}
     break;
 
   case 712:
 #line 4710 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_DISTINCT, "=", (yyvsp[(1) - (5)].node), (yyvsp[(5) - (5)].node), (yylsp[(2) - (5)]));
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_DISTINCT, "=", (yyvsp[(1) - (5)].node), (yyvsp[(5) - (5)].node), (yylsp[(2) - (5)]));
 				;}
     break;
 
   case 713:
 #line 4714 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_NOT_DISTINCT, "=", (yyvsp[(1) - (6)].node), (yyvsp[(6) - (6)].node), (yylsp[(2) - (6)]));
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_NOT_DISTINCT, "=", (yyvsp[(1) - (6)].node), (yyvsp[(6) - (6)].node), (yylsp[(2) - (6)]));
 				;}
     break;
 
   case 714:
 #line 4718 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OF, "=", (yyvsp[(1) - (6)].node), (Node *) (yyvsp[(5) - (6)].list), (yylsp[(2) - (6)]));
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OF, "=", (yyvsp[(1) - (6)].node), (PGNode *) (yyvsp[(5) - (6)].list), (yylsp[(2) - (6)]));
 				;}
     break;
 
   case 715:
 #line 4722 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OF, "<>", (yyvsp[(1) - (7)].node), (Node *) (yyvsp[(6) - (7)].list), (yylsp[(2) - (7)]));
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OF, "<>", (yyvsp[(1) - (7)].node), (PGNode *) (yyvsp[(6) - (7)].list), (yylsp[(2) - (7)]));
 				;}
     break;
 
   case 716:
 #line 4726 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_BETWEEN,
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_BETWEEN,
 												   "BETWEEN",
 												   (yyvsp[(1) - (6)].node),
-												   (Node *) list_make2((yyvsp[(4) - (6)].node), (yyvsp[(6) - (6)].node)),
+												   (PGNode *) list_make2((yyvsp[(4) - (6)].node), (yyvsp[(6) - (6)].node)),
 												   (yylsp[(2) - (6)]));
 				;}
     break;
@@ -18699,10 +18699,10 @@ yyreduce:
   case 717:
 #line 4734 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_NOT_BETWEEN,
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_NOT_BETWEEN,
 												   "NOT BETWEEN",
 												   (yyvsp[(1) - (7)].node),
-												   (Node *) list_make2((yyvsp[(5) - (7)].node), (yyvsp[(7) - (7)].node)),
+												   (PGNode *) list_make2((yyvsp[(5) - (7)].node), (yyvsp[(7) - (7)].node)),
 												   (yylsp[(2) - (7)]));
 				;}
     break;
@@ -18710,10 +18710,10 @@ yyreduce:
   case 718:
 #line 4742 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_BETWEEN_SYM,
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_BETWEEN_SYM,
 												   "BETWEEN SYMMETRIC",
 												   (yyvsp[(1) - (6)].node),
-												   (Node *) list_make2((yyvsp[(4) - (6)].node), (yyvsp[(6) - (6)].node)),
+												   (PGNode *) list_make2((yyvsp[(4) - (6)].node), (yyvsp[(6) - (6)].node)),
 												   (yylsp[(2) - (6)]));
 				;}
     break;
@@ -18721,10 +18721,10 @@ yyreduce:
   case 719:
 #line 4750 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_NOT_BETWEEN_SYM,
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_NOT_BETWEEN_SYM,
 												   "NOT BETWEEN SYMMETRIC",
 												   (yyvsp[(1) - (7)].node),
-												   (Node *) list_make2((yyvsp[(5) - (7)].node), (yyvsp[(7) - (7)].node)),
+												   (PGNode *) list_make2((yyvsp[(5) - (7)].node), (yyvsp[(7) - (7)].node)),
 												   (yylsp[(2) - (7)]));
 				;}
     break;
@@ -18732,22 +18732,22 @@ yyreduce:
   case 720:
 #line 4758 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					/* in_expr returns a SubLink or a list of a_exprs */
-					if (IsA((yyvsp[(3) - (3)].node), SubLink))
+					/* in_expr returns a PGSubLink or a list of a_exprs */
+					if (IsA((yyvsp[(3) - (3)].node), PGSubLink))
 					{
 						/* generate foo = ANY (subquery) */
-						SubLink *n = (SubLink *) (yyvsp[(3) - (3)].node);
-						n->subLinkType = ANY_SUBLINK;
+						PGSubLink *n = (PGSubLink *) (yyvsp[(3) - (3)].node);
+						n->subLinkType = PG_ANY_SUBLINK;
 						n->subLinkId = 0;
 						n->testexpr = (yyvsp[(1) - (3)].node);
 						n->operName = NIL;		/* show it's IN not = ANY */
 						n->location = (yylsp[(2) - (3)]);
-						(yyval.node) = (Node *)n;
+						(yyval.node) = (PGNode *)n;
 					}
 					else
 					{
 						/* generate scalar IN expression */
-						(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_IN, "=", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)]));
+						(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_IN, "=", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)]));
 					}
 				;}
     break;
@@ -18755,24 +18755,24 @@ yyreduce:
   case 721:
 #line 4778 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					/* in_expr returns a SubLink or a list of a_exprs */
-					if (IsA((yyvsp[(4) - (4)].node), SubLink))
+					/* in_expr returns a PGSubLink or a list of a_exprs */
+					if (IsA((yyvsp[(4) - (4)].node), PGSubLink))
 					{
 						/* generate NOT (foo = ANY (subquery)) */
 						/* Make an = ANY node */
-						SubLink *n = (SubLink *) (yyvsp[(4) - (4)].node);
-						n->subLinkType = ANY_SUBLINK;
+						PGSubLink *n = (PGSubLink *) (yyvsp[(4) - (4)].node);
+						n->subLinkType = PG_ANY_SUBLINK;
 						n->subLinkId = 0;
 						n->testexpr = (yyvsp[(1) - (4)].node);
 						n->operName = NIL;		/* show it's IN not = ANY */
 						n->location = (yylsp[(2) - (4)]);
 						/* Stick a NOT on top; must have same parse location */
-						(yyval.node) = makeNotExpr((Node *) n, (yylsp[(2) - (4)]));
+						(yyval.node) = makeNotExpr((PGNode *) n, (yylsp[(2) - (4)]));
 					}
 					else
 					{
 						/* generate scalar NOT IN expression */
-						(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_IN, "<>", (yyvsp[(1) - (4)].node), (yyvsp[(4) - (4)].node), (yylsp[(2) - (4)]));
+						(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_IN, "<>", (yyvsp[(1) - (4)].node), (yyvsp[(4) - (4)].node), (yylsp[(2) - (4)]));
 					}
 				;}
     break;
@@ -18780,24 +18780,24 @@ yyreduce:
   case 722:
 #line 4800 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					SubLink *n = makeNode(SubLink);
+					PGSubLink *n = makeNode(PGSubLink);
 					n->subLinkType = (yyvsp[(3) - (4)].subquerytype);
 					n->subLinkId = 0;
 					n->testexpr = (yyvsp[(1) - (4)].node);
 					n->operName = (yyvsp[(2) - (4)].list);
 					n->subselect = (yyvsp[(4) - (4)].node);
 					n->location = (yylsp[(2) - (4)]);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 723:
 #line 4811 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					if ((yyvsp[(3) - (6)].subquerytype) == ANY_SUBLINK)
-						(yyval.node) = (Node *) makeA_Expr(AEXPR_OP_ANY, (yyvsp[(2) - (6)].list), (yyvsp[(1) - (6)].node), (yyvsp[(5) - (6)].node), (yylsp[(2) - (6)]));
+					if ((yyvsp[(3) - (6)].subquerytype) == PG_ANY_SUBLINK)
+						(yyval.node) = (PGNode *) makeAExpr(PG_AEXPR_OP_ANY, (yyvsp[(2) - (6)].list), (yyvsp[(1) - (6)].node), (yyvsp[(5) - (6)].node), (yylsp[(2) - (6)]));
 					else
-						(yyval.node) = (Node *) makeA_Expr(AEXPR_OP_ALL, (yyvsp[(2) - (6)].list), (yyvsp[(1) - (6)].node), (yyvsp[(5) - (6)].node), (yylsp[(2) - (6)]));
+						(yyval.node) = (PGNode *) makeAExpr(PG_AEXPR_OP_ALL, (yyvsp[(2) - (6)].list), (yyvsp[(1) - (6)].node), (yyvsp[(5) - (6)].node), (yylsp[(2) - (6)]));
 				;}
     break;
 
@@ -18811,10 +18811,10 @@ yyreduce:
 					 * if it's in an inappropriate context.  This way also
 					 * lets us say something smarter than "syntax error".
 					 */
-					SetToDefault *n = makeNode(SetToDefault);
+					PGSetToDefault *n = makeNode(PGSetToDefault);
 					/* parse analysis will fill in the rest */
 					n->location = (yylsp[(1) - (1)]);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -18830,7 +18830,7 @@ yyreduce:
 
   case 727:
 #line 4847 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "+", NULL, (yyvsp[(2) - (2)].node), (yylsp[(1) - (2)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "+", NULL, (yyvsp[(2) - (2)].node), (yylsp[(1) - (2)])); ;}
     break;
 
   case 728:
@@ -18840,104 +18840,104 @@ yyreduce:
 
   case 729:
 #line 4851 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "+", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "+", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 730:
 #line 4853 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "-", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "-", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 731:
 #line 4855 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "*", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "*", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 732:
 #line 4857 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "/", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "/", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 733:
 #line 4859 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "%", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "%", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 734:
 #line 4861 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "^", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "^", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 735:
 #line 4863 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "<", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "<", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 736:
 #line 4865 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, ">", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, ">", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 737:
 #line 4867 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "=", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "=", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 738:
 #line 4869 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "<=", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "<=", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 739:
 #line 4871 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, ">=", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, ">=", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 740:
 #line 4873 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OP, "<>", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "<>", (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 741:
 #line 4875 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeA_Expr(AEXPR_OP, (yyvsp[(2) - (3)].list), (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
+    { (yyval.node) = (PGNode *) makeAExpr(PG_AEXPR_OP, (yyvsp[(2) - (3)].list), (yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node), (yylsp[(2) - (3)])); ;}
     break;
 
   case 742:
 #line 4877 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeA_Expr(AEXPR_OP, (yyvsp[(1) - (2)].list), NULL, (yyvsp[(2) - (2)].node), (yylsp[(1) - (2)])); ;}
+    { (yyval.node) = (PGNode *) makeAExpr(PG_AEXPR_OP, (yyvsp[(1) - (2)].list), NULL, (yyvsp[(2) - (2)].node), (yylsp[(1) - (2)])); ;}
     break;
 
   case 743:
 #line 4879 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeA_Expr(AEXPR_OP, (yyvsp[(2) - (2)].list), (yyvsp[(1) - (2)].node), NULL, (yylsp[(2) - (2)])); ;}
+    { (yyval.node) = (PGNode *) makeAExpr(PG_AEXPR_OP, (yyvsp[(2) - (2)].list), (yyvsp[(1) - (2)].node), NULL, (yylsp[(2) - (2)])); ;}
     break;
 
   case 744:
 #line 4881 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_DISTINCT, "=", (yyvsp[(1) - (5)].node), (yyvsp[(5) - (5)].node), (yylsp[(2) - (5)]));
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_DISTINCT, "=", (yyvsp[(1) - (5)].node), (yyvsp[(5) - (5)].node), (yylsp[(2) - (5)]));
 				;}
     break;
 
   case 745:
 #line 4885 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_NOT_DISTINCT, "=", (yyvsp[(1) - (6)].node), (yyvsp[(6) - (6)].node), (yylsp[(2) - (6)]));
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_NOT_DISTINCT, "=", (yyvsp[(1) - (6)].node), (yyvsp[(6) - (6)].node), (yylsp[(2) - (6)]));
 				;}
     break;
 
   case 746:
 #line 4889 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OF, "=", (yyvsp[(1) - (6)].node), (Node *) (yyvsp[(5) - (6)].list), (yylsp[(2) - (6)]));
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OF, "=", (yyvsp[(1) - (6)].node), (PGNode *) (yyvsp[(5) - (6)].list), (yylsp[(2) - (6)]));
 				;}
     break;
 
   case 747:
 #line 4893 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_OF, "<>", (yyvsp[(1) - (7)].node), (Node *) (yyvsp[(6) - (7)].list), (yylsp[(2) - (7)]));
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_OF, "<>", (yyvsp[(1) - (7)].node), (PGNode *) (yyvsp[(6) - (7)].list), (yylsp[(2) - (7)]));
 				;}
     break;
 
@@ -18956,10 +18956,10 @@ yyreduce:
     {
 					if ((yyvsp[(2) - (2)].list))
 					{
-						A_Indirection *n = makeNode(A_Indirection);
+						PGAIndirection *n = makeNode(PGAIndirection);
 						n->arg = makeParamRef(0, (yylsp[(1) - (2)]));
 						n->indirection = check_indirection((yyvsp[(2) - (2)].list), yyscanner);
-						(yyval.node) = (Node *) n;
+						(yyval.node) = (PGNode *) n;
 					}
 					else
 						(yyval.node) = makeParamRef(0, (yylsp[(1) - (2)]));
@@ -18969,18 +18969,18 @@ yyreduce:
   case 751:
 #line 4921 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					ParamRef *p = makeNode(ParamRef);
+					PGParamRef *p = makeNode(PGParamRef);
 					p->number = (yyvsp[(1) - (2)].ival);
 					p->location = (yylsp[(1) - (2)]);
 					if ((yyvsp[(2) - (2)].list))
 					{
-						A_Indirection *n = makeNode(A_Indirection);
-						n->arg = (Node *) p;
+						PGAIndirection *n = makeNode(PGAIndirection);
+						n->arg = (PGNode *) p;
 						n->indirection = check_indirection((yyvsp[(2) - (2)].list), yyscanner);
-						(yyval.node) = (Node *) n;
+						(yyval.node) = (PGNode *) n;
 					}
 					else
-						(yyval.node) = (Node *) p;
+						(yyval.node) = (PGNode *) p;
 				;}
     break;
 
@@ -18989,10 +18989,10 @@ yyreduce:
     {
 					if ((yyvsp[(4) - (4)].list))
 					{
-						A_Indirection *n = makeNode(A_Indirection);
+						PGAIndirection *n = makeNode(PGAIndirection);
 						n->arg = (yyvsp[(2) - (4)].node);
 						n->indirection = check_indirection((yyvsp[(4) - (4)].list), yyscanner);
-						(yyval.node) = (Node *)n;
+						(yyval.node) = (PGNode *)n;
 					}
 					else
 						(yyval.node) = (yyvsp[(2) - (4)].node);
@@ -19012,14 +19012,14 @@ yyreduce:
   case 755:
 #line 4952 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					SubLink *n = makeNode(SubLink);
-					n->subLinkType = EXPR_SUBLINK;
+					PGSubLink *n = makeNode(PGSubLink);
+					n->subLinkType = PG_EXPR_SUBLINK;
 					n->subLinkId = 0;
 					n->testexpr = NULL;
 					n->operName = NIL;
 					n->subselect = (yyvsp[(1) - (1)].node);
 					n->location = (yylsp[(1) - (1)]);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -19036,90 +19036,90 @@ yyreduce:
 					 * subscripting or field selection to a sub-SELECT result,
 					 * we need this redundant-looking production.
 					 */
-					SubLink *n = makeNode(SubLink);
-					A_Indirection *a = makeNode(A_Indirection);
-					n->subLinkType = EXPR_SUBLINK;
+					PGSubLink *n = makeNode(PGSubLink);
+					PGAIndirection *a = makeNode(PGAIndirection);
+					n->subLinkType = PG_EXPR_SUBLINK;
 					n->subLinkId = 0;
 					n->testexpr = NULL;
 					n->operName = NIL;
 					n->subselect = (yyvsp[(1) - (2)].node);
 					n->location = (yylsp[(1) - (2)]);
-					a->arg = (Node *)n;
+					a->arg = (PGNode *)n;
 					a->indirection = check_indirection((yyvsp[(2) - (2)].list), yyscanner);
-					(yyval.node) = (Node *)a;
+					(yyval.node) = (PGNode *)a;
 				;}
     break;
 
   case 757:
 #line 4987 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					SubLink *n = makeNode(SubLink);
-					n->subLinkType = EXISTS_SUBLINK;
+					PGSubLink *n = makeNode(PGSubLink);
+					n->subLinkType = PG_EXISTS_SUBLINK;
 					n->subLinkId = 0;
 					n->testexpr = NULL;
 					n->operName = NIL;
 					n->subselect = (yyvsp[(2) - (2)].node);
 					n->location = (yylsp[(1) - (2)]);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 758:
 #line 5000 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeFuncCall((yyvsp[(1) - (3)].list), NIL, (yylsp[(1) - (3)]));
+					(yyval.node) = (PGNode *) makeFuncCall((yyvsp[(1) - (3)].list), NIL, (yylsp[(1) - (3)]));
 				;}
     break;
 
   case 759:
 #line 5004 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					FuncCall *n = makeFuncCall((yyvsp[(1) - (5)].list), (yyvsp[(3) - (5)].list), (yylsp[(1) - (5)]));
+					PGFuncCall *n = makeFuncCall((yyvsp[(1) - (5)].list), (yyvsp[(3) - (5)].list), (yylsp[(1) - (5)]));
 					n->agg_order = (yyvsp[(4) - (5)].list);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 760:
 #line 5010 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					FuncCall *n = makeFuncCall((yyvsp[(1) - (6)].list), list_make1((yyvsp[(4) - (6)].node)), (yylsp[(1) - (6)]));
+					PGFuncCall *n = makeFuncCall((yyvsp[(1) - (6)].list), list_make1((yyvsp[(4) - (6)].node)), (yylsp[(1) - (6)]));
 					n->func_variadic = TRUE;
 					n->agg_order = (yyvsp[(5) - (6)].list);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 761:
 #line 5017 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					FuncCall *n = makeFuncCall((yyvsp[(1) - (8)].list), lappend((yyvsp[(3) - (8)].list), (yyvsp[(6) - (8)].node)), (yylsp[(1) - (8)]));
+					PGFuncCall *n = makeFuncCall((yyvsp[(1) - (8)].list), lappend((yyvsp[(3) - (8)].list), (yyvsp[(6) - (8)].node)), (yylsp[(1) - (8)]));
 					n->func_variadic = TRUE;
 					n->agg_order = (yyvsp[(7) - (8)].list);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 762:
 #line 5024 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					FuncCall *n = makeFuncCall((yyvsp[(1) - (6)].list), (yyvsp[(4) - (6)].list), (yylsp[(1) - (6)]));
+					PGFuncCall *n = makeFuncCall((yyvsp[(1) - (6)].list), (yyvsp[(4) - (6)].list), (yylsp[(1) - (6)]));
 					n->agg_order = (yyvsp[(5) - (6)].list);
-					/* Ideally we'd mark the FuncCall node to indicate
+					/* Ideally we'd mark the PGFuncCall node to indicate
 					 * "must be an aggregate", but there's no provision
-					 * for that in FuncCall at the moment.
+					 * for that in PGFuncCall at the moment.
 					 */
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 763:
 #line 5034 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					FuncCall *n = makeFuncCall((yyvsp[(1) - (6)].list), (yyvsp[(4) - (6)].list), (yylsp[(1) - (6)]));
+					PGFuncCall *n = makeFuncCall((yyvsp[(1) - (6)].list), (yyvsp[(4) - (6)].list), (yylsp[(1) - (6)]));
 					n->agg_order = (yyvsp[(5) - (6)].list);
 					n->agg_distinct = TRUE;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -19132,20 +19132,20 @@ yyreduce:
 					 * and there are no other aggregates in SQL that accept
 					 * '*' as parameter.
 					 *
-					 * The FuncCall node is also marked agg_star = true,
+					 * The PGFuncCall node is also marked agg_star = true,
 					 * so that later processing can detect what the argument
 					 * really was.
 					 */
-					FuncCall *n = makeFuncCall((yyvsp[(1) - (4)].list), NIL, (yylsp[(1) - (4)]));
+					PGFuncCall *n = makeFuncCall((yyvsp[(1) - (4)].list), NIL, (yylsp[(1) - (4)]));
 					n->agg_star = TRUE;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 765:
 #line 5069 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					FuncCall *n = (FuncCall *) (yyvsp[(1) - (4)].node);
+					PGFuncCall *n = (PGFuncCall *) (yyvsp[(1) - (4)].node);
 					/*
 					 * The order clause for WITHIN GROUP and the one for
 					 * plain-aggregate ORDER BY share a field, so we have to
@@ -19158,17 +19158,17 @@ yyreduce:
 					{
 						if (n->agg_order != NIL)
 							ereport(ERROR,
-									(errcode(ERRCODE_SYNTAX_ERROR),
+									(errcode(PG_ERRCODE_SYNTAX_ERROR),
 									 errmsg("cannot use multiple ORDER BY clauses with WITHIN GROUP"),
 									 parser_errposition((yylsp[(2) - (4)]))));
 						if (n->agg_distinct)
 							ereport(ERROR,
-									(errcode(ERRCODE_SYNTAX_ERROR),
+									(errcode(PG_ERRCODE_SYNTAX_ERROR),
 									 errmsg("cannot use DISTINCT with WITHIN GROUP"),
 									 parser_errposition((yylsp[(2) - (4)]))));
 						if (n->func_variadic)
 							ereport(ERROR,
-									(errcode(ERRCODE_SYNTAX_ERROR),
+									(errcode(PG_ERRCODE_SYNTAX_ERROR),
 									 errmsg("cannot use VARIADIC with WITHIN GROUP"),
 									 parser_errposition((yylsp[(2) - (4)]))));
 						n->agg_order = (yyvsp[(2) - (4)].list);
@@ -19176,7 +19176,7 @@ yyreduce:
 					}
 					n->agg_filter = (yyvsp[(3) - (4)].node);
 					n->over = (yyvsp[(4) - (4)].windef);
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
@@ -19198,7 +19198,7 @@ yyreduce:
   case 769:
 #line 5123 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeFuncCall(SystemFuncName("pg_collation_for"),
+					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("pg_collation_for"),
 											   list_make1((yyvsp[(4) - (5)].node)),
 											   (yylsp[(1) - (5)]));
 				;}
@@ -19207,105 +19207,105 @@ yyreduce:
   case 770:
 #line 5129 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeSQLValueFunction(SVFOP_CURRENT_DATE, -1, (yylsp[(1) - (1)]));
+					(yyval.node) = makeSQLValueFunction(PG_SVFOP_CURRENT_DATE, -1, (yylsp[(1) - (1)]));
 				;}
     break;
 
   case 771:
 #line 5133 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeSQLValueFunction(SVFOP_CURRENT_TIME, -1, (yylsp[(1) - (1)]));
+					(yyval.node) = makeSQLValueFunction(PG_SVFOP_CURRENT_TIME, -1, (yylsp[(1) - (1)]));
 				;}
     break;
 
   case 772:
 #line 5137 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeSQLValueFunction(SVFOP_CURRENT_TIME_N, (yyvsp[(3) - (4)].ival), (yylsp[(1) - (4)]));
+					(yyval.node) = makeSQLValueFunction(PG_SVFOP_CURRENT_TIME_N, (yyvsp[(3) - (4)].ival), (yylsp[(1) - (4)]));
 				;}
     break;
 
   case 773:
 #line 5141 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeSQLValueFunction(SVFOP_CURRENT_TIMESTAMP, -1, (yylsp[(1) - (1)]));
+					(yyval.node) = makeSQLValueFunction(PG_SVFOP_CURRENT_TIMESTAMP, -1, (yylsp[(1) - (1)]));
 				;}
     break;
 
   case 774:
 #line 5145 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeSQLValueFunction(SVFOP_CURRENT_TIMESTAMP_N, (yyvsp[(3) - (4)].ival), (yylsp[(1) - (4)]));
+					(yyval.node) = makeSQLValueFunction(PG_SVFOP_CURRENT_TIMESTAMP_N, (yyvsp[(3) - (4)].ival), (yylsp[(1) - (4)]));
 				;}
     break;
 
   case 775:
 #line 5149 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeSQLValueFunction(SVFOP_LOCALTIME, -1, (yylsp[(1) - (1)]));
+					(yyval.node) = makeSQLValueFunction(PG_SVFOP_LOCALTIME, -1, (yylsp[(1) - (1)]));
 				;}
     break;
 
   case 776:
 #line 5153 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeSQLValueFunction(SVFOP_LOCALTIME_N, (yyvsp[(3) - (4)].ival), (yylsp[(1) - (4)]));
+					(yyval.node) = makeSQLValueFunction(PG_SVFOP_LOCALTIME_N, (yyvsp[(3) - (4)].ival), (yylsp[(1) - (4)]));
 				;}
     break;
 
   case 777:
 #line 5157 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeSQLValueFunction(SVFOP_LOCALTIMESTAMP, -1, (yylsp[(1) - (1)]));
+					(yyval.node) = makeSQLValueFunction(PG_SVFOP_LOCALTIMESTAMP, -1, (yylsp[(1) - (1)]));
 				;}
     break;
 
   case 778:
 #line 5161 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeSQLValueFunction(SVFOP_LOCALTIMESTAMP_N, (yyvsp[(3) - (4)].ival), (yylsp[(1) - (4)]));
+					(yyval.node) = makeSQLValueFunction(PG_SVFOP_LOCALTIMESTAMP_N, (yyvsp[(3) - (4)].ival), (yylsp[(1) - (4)]));
 				;}
     break;
 
   case 779:
 #line 5165 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeSQLValueFunction(SVFOP_CURRENT_ROLE, -1, (yylsp[(1) - (1)]));
+					(yyval.node) = makeSQLValueFunction(PG_SVFOP_CURRENT_ROLE, -1, (yylsp[(1) - (1)]));
 				;}
     break;
 
   case 780:
 #line 5169 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeSQLValueFunction(SVFOP_CURRENT_USER, -1, (yylsp[(1) - (1)]));
+					(yyval.node) = makeSQLValueFunction(PG_SVFOP_CURRENT_USER, -1, (yylsp[(1) - (1)]));
 				;}
     break;
 
   case 781:
 #line 5173 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeSQLValueFunction(SVFOP_SESSION_USER, -1, (yylsp[(1) - (1)]));
+					(yyval.node) = makeSQLValueFunction(PG_SVFOP_SESSION_USER, -1, (yylsp[(1) - (1)]));
 				;}
     break;
 
   case 782:
 #line 5177 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeSQLValueFunction(SVFOP_USER, -1, (yylsp[(1) - (1)]));
+					(yyval.node) = makeSQLValueFunction(PG_SVFOP_USER, -1, (yylsp[(1) - (1)]));
 				;}
     break;
 
   case 783:
 #line 5181 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeSQLValueFunction(SVFOP_CURRENT_CATALOG, -1, (yylsp[(1) - (1)]));
+					(yyval.node) = makeSQLValueFunction(PG_SVFOP_CURRENT_CATALOG, -1, (yylsp[(1) - (1)]));
 				;}
     break;
 
   case 784:
 #line 5185 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = makeSQLValueFunction(SVFOP_CURRENT_SCHEMA, -1, (yylsp[(1) - (1)]));
+					(yyval.node) = makeSQLValueFunction(PG_SVFOP_CURRENT_SCHEMA, -1, (yylsp[(1) - (1)]));
 				;}
     break;
 
@@ -19317,7 +19317,7 @@ yyreduce:
   case 786:
 #line 5191 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeFuncCall(SystemFuncName("date_part"), (yyvsp[(3) - (4)].list), (yylsp[(1) - (4)]));
+					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("date_part"), (yyvsp[(3) - (4)].list), (yylsp[(1) - (4)]));
 				;}
     break;
 
@@ -19329,7 +19329,7 @@ yyreduce:
 					 * overlay(A PLACING B FROM C) is converted to
 					 * overlay(A, B, C)
 					 */
-					(yyval.node) = (Node *) makeFuncCall(SystemFuncName("overlay"), (yyvsp[(3) - (4)].list), (yylsp[(1) - (4)]));
+					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("overlay"), (yyvsp[(3) - (4)].list), (yylsp[(1) - (4)]));
 				;}
     break;
 
@@ -19337,7 +19337,7 @@ yyreduce:
 #line 5204 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					/* position(A in B) is converted to position(B, A) */
-					(yyval.node) = (Node *) makeFuncCall(SystemFuncName("position"), (yyvsp[(3) - (4)].list), (yylsp[(1) - (4)]));
+					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("position"), (yyvsp[(3) - (4)].list), (yylsp[(1) - (4)]));
 				;}
     break;
 
@@ -19347,7 +19347,7 @@ yyreduce:
 					/* substring(A from B for C) is converted to
 					 * substring(A, B, C) - thomas 2000-11-28
 					 */
-					(yyval.node) = (Node *) makeFuncCall(SystemFuncName("substring"), (yyvsp[(3) - (4)].list), (yylsp[(1) - (4)]));
+					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("substring"), (yyvsp[(3) - (4)].list), (yylsp[(1) - (4)]));
 				;}
     break;
 
@@ -19363,7 +19363,7 @@ yyreduce:
 					 * Convert SystemTypeName() to SystemFuncName() even though
 					 * at the moment they result in the same thing.
 					 */
-					(yyval.node) = (Node *) makeFuncCall(SystemFuncName(((Value *)llast((yyvsp[(5) - (6)].typnam)->names))->val.str),
+					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName(((PGValue *)llast((yyvsp[(5) - (6)].typnam)->names))->val.str),
 												list_make1((yyvsp[(3) - (6)].node)),
 												(yylsp[(1) - (6)]));
 				;}
@@ -19375,67 +19375,67 @@ yyreduce:
 					/* various trim expressions are defined in SQL
 					 * - thomas 1997-07-19
 					 */
-					(yyval.node) = (Node *) makeFuncCall(SystemFuncName("btrim"), (yyvsp[(4) - (5)].list), (yylsp[(1) - (5)]));
+					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("btrim"), (yyvsp[(4) - (5)].list), (yylsp[(1) - (5)]));
 				;}
     break;
 
   case 792:
 #line 5238 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeFuncCall(SystemFuncName("ltrim"), (yyvsp[(4) - (5)].list), (yylsp[(1) - (5)]));
+					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("ltrim"), (yyvsp[(4) - (5)].list), (yylsp[(1) - (5)]));
 				;}
     break;
 
   case 793:
 #line 5242 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeFuncCall(SystemFuncName("rtrim"), (yyvsp[(4) - (5)].list), (yylsp[(1) - (5)]));
+					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("rtrim"), (yyvsp[(4) - (5)].list), (yylsp[(1) - (5)]));
 				;}
     break;
 
   case 794:
 #line 5246 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeFuncCall(SystemFuncName("btrim"), (yyvsp[(3) - (4)].list), (yylsp[(1) - (4)]));
+					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("btrim"), (yyvsp[(3) - (4)].list), (yylsp[(1) - (4)]));
 				;}
     break;
 
   case 795:
 #line 5250 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeSimpleA_Expr(AEXPR_NULLIF, "=", (yyvsp[(3) - (6)].node), (yyvsp[(5) - (6)].node), (yylsp[(1) - (6)]));
+					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_NULLIF, "=", (yyvsp[(3) - (6)].node), (yyvsp[(5) - (6)].node), (yylsp[(1) - (6)]));
 				;}
     break;
 
   case 796:
 #line 5254 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					CoalesceExpr *c = makeNode(CoalesceExpr);
+					PGCoalesceExpr *c = makeNode(PGCoalesceExpr);
 					c->args = (yyvsp[(3) - (4)].list);
 					c->location = (yylsp[(1) - (4)]);
-					(yyval.node) = (Node *)c;
+					(yyval.node) = (PGNode *)c;
 				;}
     break;
 
   case 797:
 #line 5261 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					MinMaxExpr *v = makeNode(MinMaxExpr);
+					PGMinMaxExpr *v = makeNode(PGMinMaxExpr);
 					v->args = (yyvsp[(3) - (4)].list);
-					v->op = IS_GREATEST;
+					v->op = PG_IS_GREATEST;
 					v->location = (yylsp[(1) - (4)]);
-					(yyval.node) = (Node *)v;
+					(yyval.node) = (PGNode *)v;
 				;}
     break;
 
   case 798:
 #line 5269 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					MinMaxExpr *v = makeNode(MinMaxExpr);
+					PGMinMaxExpr *v = makeNode(PGMinMaxExpr);
 					v->args = (yyvsp[(3) - (4)].list);
 					v->op = IS_LEAST;
 					v->location = (yylsp[(1) - (4)]);
-					(yyval.node) = (Node *)v;
+					(yyval.node) = (PGNode *)v;
 				;}
     break;
 
@@ -19482,7 +19482,7 @@ yyreduce:
   case 807:
 #line 5309 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					WindowDef *n = (yyvsp[(3) - (3)].windef);
+					PGWindowDef *n = (yyvsp[(3) - (3)].windef);
 					n->name = (yyvsp[(1) - (3)].str);
 					(yyval.windef) = n;
 				;}
@@ -19496,7 +19496,7 @@ yyreduce:
   case 809:
 #line 5319 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					WindowDef *n = makeNode(WindowDef);
+					PGWindowDef *n = makeNode(PGWindowDef);
 					n->name = (yyvsp[(2) - (2)].str);
 					n->refname = NULL;
 					n->partitionClause = NIL;
@@ -19517,7 +19517,7 @@ yyreduce:
   case 811:
 #line 5337 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					WindowDef *n = makeNode(WindowDef);
+					PGWindowDef *n = makeNode(PGWindowDef);
 					n->name = NULL;
 					n->refname = (yyvsp[(2) - (6)].str);
 					n->partitionClause = (yyvsp[(3) - (6)].list);
@@ -19554,18 +19554,18 @@ yyreduce:
   case 816:
 #line 5379 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					WindowDef *n = (yyvsp[(2) - (2)].windef);
+					PGWindowDef *n = (yyvsp[(2) - (2)].windef);
 					n->frameOptions |= FRAMEOPTION_NONDEFAULT | FRAMEOPTION_RANGE;
 					if (n->frameOptions & (FRAMEOPTION_START_VALUE_PRECEDING |
 										   FRAMEOPTION_END_VALUE_PRECEDING))
 						ereport(ERROR,
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
 								 errmsg("RANGE PRECEDING is only supported with UNBOUNDED"),
 								 parser_errposition((yylsp[(1) - (2)]))));
 					if (n->frameOptions & (FRAMEOPTION_START_VALUE_FOLLOWING |
 										   FRAMEOPTION_END_VALUE_FOLLOWING))
 						ereport(ERROR,
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
 								 errmsg("RANGE FOLLOWING is only supported with UNBOUNDED"),
 								 parser_errposition((yylsp[(1) - (2)]))));
 					(yyval.windef) = n;
@@ -19575,7 +19575,7 @@ yyreduce:
   case 817:
 #line 5397 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					WindowDef *n = (yyvsp[(2) - (2)].windef);
+					PGWindowDef *n = (yyvsp[(2) - (2)].windef);
 					n->frameOptions |= FRAMEOPTION_NONDEFAULT | FRAMEOPTION_ROWS;
 					(yyval.windef) = n;
 				;}
@@ -19584,7 +19584,7 @@ yyreduce:
   case 818:
 #line 5403 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					WindowDef *n = makeNode(WindowDef);
+					PGWindowDef *n = makeNode(PGWindowDef);
 					n->frameOptions = FRAMEOPTION_DEFAULTS;
 					n->startOffset = NULL;
 					n->endOffset = NULL;
@@ -19595,16 +19595,16 @@ yyreduce:
   case 819:
 #line 5413 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					WindowDef *n = (yyvsp[(1) - (1)].windef);
+					PGWindowDef *n = (yyvsp[(1) - (1)].windef);
 					/* reject invalid cases */
 					if (n->frameOptions & FRAMEOPTION_START_UNBOUNDED_FOLLOWING)
 						ereport(ERROR,
-								(errcode(ERRCODE_WINDOWING_ERROR),
+								(errcode(PG_ERRCODE_WINDOWING_ERROR),
 								 errmsg("frame start cannot be UNBOUNDED FOLLOWING"),
 								 parser_errposition((yylsp[(1) - (1)]))));
 					if (n->frameOptions & FRAMEOPTION_START_VALUE_FOLLOWING)
 						ereport(ERROR,
-								(errcode(ERRCODE_WINDOWING_ERROR),
+								(errcode(PG_ERRCODE_WINDOWING_ERROR),
 								 errmsg("frame starting from following row cannot end with current row"),
 								 parser_errposition((yylsp[(1) - (1)]))));
 					n->frameOptions |= FRAMEOPTION_END_CURRENT_ROW;
@@ -19615,8 +19615,8 @@ yyreduce:
   case 820:
 #line 5430 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					WindowDef *n1 = (yyvsp[(2) - (4)].windef);
-					WindowDef *n2 = (yyvsp[(4) - (4)].windef);
+					PGWindowDef *n1 = (yyvsp[(2) - (4)].windef);
+					PGWindowDef *n2 = (yyvsp[(4) - (4)].windef);
 					/* form merged options */
 					int		frameOptions = n1->frameOptions;
 					/* shift converts START_ options to END_ options */
@@ -19625,25 +19625,25 @@ yyreduce:
 					/* reject invalid cases */
 					if (frameOptions & FRAMEOPTION_START_UNBOUNDED_FOLLOWING)
 						ereport(ERROR,
-								(errcode(ERRCODE_WINDOWING_ERROR),
+								(errcode(PG_ERRCODE_WINDOWING_ERROR),
 								 errmsg("frame start cannot be UNBOUNDED FOLLOWING"),
 								 parser_errposition((yylsp[(2) - (4)]))));
 					if (frameOptions & FRAMEOPTION_END_UNBOUNDED_PRECEDING)
 						ereport(ERROR,
-								(errcode(ERRCODE_WINDOWING_ERROR),
+								(errcode(PG_ERRCODE_WINDOWING_ERROR),
 								 errmsg("frame end cannot be UNBOUNDED PRECEDING"),
 								 parser_errposition((yylsp[(4) - (4)]))));
 					if ((frameOptions & FRAMEOPTION_START_CURRENT_ROW) &&
 						(frameOptions & FRAMEOPTION_END_VALUE_PRECEDING))
 						ereport(ERROR,
-								(errcode(ERRCODE_WINDOWING_ERROR),
+								(errcode(PG_ERRCODE_WINDOWING_ERROR),
 								 errmsg("frame starting from current row cannot have preceding rows"),
 								 parser_errposition((yylsp[(4) - (4)]))));
 					if ((frameOptions & FRAMEOPTION_START_VALUE_FOLLOWING) &&
 						(frameOptions & (FRAMEOPTION_END_VALUE_PRECEDING |
 										 FRAMEOPTION_END_CURRENT_ROW)))
 						ereport(ERROR,
-								(errcode(ERRCODE_WINDOWING_ERROR),
+								(errcode(PG_ERRCODE_WINDOWING_ERROR),
 								 errmsg("frame starting from following row cannot have preceding rows"),
 								 parser_errposition((yylsp[(4) - (4)]))));
 					n1->frameOptions = frameOptions;
@@ -19655,7 +19655,7 @@ yyreduce:
   case 821:
 #line 5475 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					WindowDef *n = makeNode(WindowDef);
+					PGWindowDef *n = makeNode(PGWindowDef);
 					n->frameOptions = FRAMEOPTION_START_UNBOUNDED_PRECEDING;
 					n->startOffset = NULL;
 					n->endOffset = NULL;
@@ -19666,7 +19666,7 @@ yyreduce:
   case 822:
 #line 5483 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					WindowDef *n = makeNode(WindowDef);
+					PGWindowDef *n = makeNode(PGWindowDef);
 					n->frameOptions = FRAMEOPTION_START_UNBOUNDED_FOLLOWING;
 					n->startOffset = NULL;
 					n->endOffset = NULL;
@@ -19677,7 +19677,7 @@ yyreduce:
   case 823:
 #line 5491 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					WindowDef *n = makeNode(WindowDef);
+					PGWindowDef *n = makeNode(PGWindowDef);
 					n->frameOptions = FRAMEOPTION_START_CURRENT_ROW;
 					n->startOffset = NULL;
 					n->endOffset = NULL;
@@ -19688,7 +19688,7 @@ yyreduce:
   case 824:
 #line 5499 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					WindowDef *n = makeNode(WindowDef);
+					PGWindowDef *n = makeNode(PGWindowDef);
 					n->frameOptions = FRAMEOPTION_START_VALUE_PRECEDING;
 					n->startOffset = (yyvsp[(1) - (2)].node);
 					n->endOffset = NULL;
@@ -19699,7 +19699,7 @@ yyreduce:
   case 825:
 #line 5507 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					WindowDef *n = makeNode(WindowDef);
+					PGWindowDef *n = makeNode(PGWindowDef);
 					n->frameOptions = FRAMEOPTION_START_VALUE_FOLLOWING;
 					n->startOffset = (yyvsp[(1) - (2)].node);
 					n->endOffset = NULL;
@@ -19724,17 +19724,17 @@ yyreduce:
 
   case 829:
 #line 5532 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.subquerytype) = ANY_SUBLINK; ;}
+    { (yyval.subquerytype) = PG_ANY_SUBLINK; ;}
     break;
 
   case 830:
 #line 5533 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.subquerytype) = ANY_SUBLINK; ;}
+    { (yyval.subquerytype) = PG_ANY_SUBLINK; ;}
     break;
 
   case 831:
 #line 5534 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.subquerytype) = ALL_SUBLINK; ;}
+    { (yyval.subquerytype) = PG_ALL_SUBLINK; ;}
     break;
 
   case 832:
@@ -19905,24 +19905,24 @@ yyreduce:
   case 863:
 #line 5625 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					NamedArgExpr *na = makeNode(NamedArgExpr);
+					PGNamedArgExpr *na = makeNode(PGNamedArgExpr);
 					na->name = (yyvsp[(1) - (3)].str);
-					na->arg = (Expr *) (yyvsp[(3) - (3)].node);
+					na->arg = (PGExpr *) (yyvsp[(3) - (3)].node);
 					na->argnumber = -1;		/* until determined */
 					na->location = (yylsp[(1) - (3)]);
-					(yyval.node) = (Node *) na;
+					(yyval.node) = (PGNode *) na;
 				;}
     break;
 
   case 864:
 #line 5634 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					NamedArgExpr *na = makeNode(NamedArgExpr);
+					PGNamedArgExpr *na = makeNode(PGNamedArgExpr);
 					na->name = (yyvsp[(1) - (3)].str);
-					na->arg = (Expr *) (yyvsp[(3) - (3)].node);
+					na->arg = (PGExpr *) (yyvsp[(3) - (3)].node);
 					na->argnumber = -1;		/* until determined */
 					na->location = (yylsp[(1) - (3)]);
-					(yyval.node) = (Node *) na;
+					(yyval.node) = (PGNode *) na;
 				;}
     break;
 
@@ -20097,28 +20097,28 @@ yyreduce:
   case 893:
 #line 5761 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					SubLink *n = makeNode(SubLink);
+					PGSubLink *n = makeNode(PGSubLink);
 					n->subselect = (yyvsp[(1) - (1)].node);
 					/* other fields will be filled later */
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 894:
 #line 5767 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *)(yyvsp[(2) - (3)].list); ;}
+    { (yyval.node) = (PGNode *)(yyvsp[(2) - (3)].list); ;}
     break;
 
   case 895:
 #line 5778 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					CaseExpr *c = makeNode(CaseExpr);
+					PGCaseExpr *c = makeNode(PGCaseExpr);
 					c->casetype = InvalidOid; /* not analyzed yet */
-					c->arg = (Expr *) (yyvsp[(2) - (5)].node);
+					c->arg = (PGExpr *) (yyvsp[(2) - (5)].node);
 					c->args = (yyvsp[(3) - (5)].list);
-					c->defresult = (Expr *) (yyvsp[(4) - (5)].node);
+					c->defresult = (PGExpr *) (yyvsp[(4) - (5)].node);
 					c->location = (yylsp[(1) - (5)]);
-					(yyval.node) = (Node *)c;
+					(yyval.node) = (PGNode *)c;
 				;}
     break;
 
@@ -20135,11 +20135,11 @@ yyreduce:
   case 898:
 #line 5797 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					CaseWhen *w = makeNode(CaseWhen);
-					w->expr = (Expr *) (yyvsp[(2) - (4)].node);
-					w->result = (Expr *) (yyvsp[(4) - (4)].node);
+					PGCaseWhen *w = makeNode(PGCaseWhen);
+					w->expr = (PGExpr *) (yyvsp[(2) - (4)].node);
+					w->result = (PGExpr *) (yyvsp[(4) - (4)].node);
 					w->location = (yylsp[(1) - (4)]);
-					(yyval.node) = (Node *)w;
+					(yyval.node) = (PGNode *)w;
 				;}
     break;
 
@@ -20180,36 +20180,36 @@ yyreduce:
   case 905:
 #line 5827 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeString((yyvsp[(2) - (2)].str));
+					(yyval.node) = (PGNode *) makeString((yyvsp[(2) - (2)].str));
 				;}
     break;
 
   case 906:
 #line 5831 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.node) = (Node *) makeNode(A_Star);
+					(yyval.node) = (PGNode *) makeNode(PGAStar);
 				;}
     break;
 
   case 907:
 #line 5835 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					A_Indices *ai = makeNode(A_Indices);
+					PGAIndices *ai = makeNode(PGAIndices);
 					ai->is_slice = false;
 					ai->lidx = NULL;
 					ai->uidx = (yyvsp[(2) - (3)].node);
-					(yyval.node) = (Node *) ai;
+					(yyval.node) = (PGNode *) ai;
 				;}
     break;
 
   case 908:
 #line 5843 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					A_Indices *ai = makeNode(A_Indices);
+					PGAIndices *ai = makeNode(PGAIndices);
 					ai->is_slice = true;
 					ai->lidx = (yyvsp[(2) - (5)].node);
 					ai->uidx = (yyvsp[(4) - (5)].node);
-					(yyval.node) = (Node *) ai;
+					(yyval.node) = (PGNode *) ai;
 				;}
     break;
 
@@ -20266,10 +20266,10 @@ yyreduce:
   case 921:
 #line 5888 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.target) = makeNode(ResTarget);
+					(yyval.target) = makeNode(PGResTarget);
 					(yyval.target)->name = (yyvsp[(3) - (3)].str);
 					(yyval.target)->indirection = NIL;
-					(yyval.target)->val = (Node *)(yyvsp[(1) - (3)].node);
+					(yyval.target)->val = (PGNode *)(yyvsp[(1) - (3)].node);
 					(yyval.target)->location = (yylsp[(1) - (3)]);
 				;}
     break;
@@ -20277,10 +20277,10 @@ yyreduce:
   case 922:
 #line 5904 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.target) = makeNode(ResTarget);
+					(yyval.target) = makeNode(PGResTarget);
 					(yyval.target)->name = (yyvsp[(2) - (2)].str);
 					(yyval.target)->indirection = NIL;
-					(yyval.target)->val = (Node *)(yyvsp[(1) - (2)].node);
+					(yyval.target)->val = (PGNode *)(yyvsp[(1) - (2)].node);
 					(yyval.target)->location = (yylsp[(1) - (2)]);
 				;}
     break;
@@ -20288,10 +20288,10 @@ yyreduce:
   case 923:
 #line 5912 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.target) = makeNode(ResTarget);
+					(yyval.target) = makeNode(PGResTarget);
 					(yyval.target)->name = NULL;
 					(yyval.target)->indirection = NIL;
-					(yyval.target)->val = (Node *)(yyvsp[(1) - (1)].node);
+					(yyval.target)->val = (PGNode *)(yyvsp[(1) - (1)].node);
 					(yyval.target)->location = (yylsp[(1) - (1)]);
 				;}
     break;
@@ -20299,14 +20299,14 @@ yyreduce:
   case 924:
 #line 5920 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					ColumnRef *n = makeNode(ColumnRef);
-					n->fields = list_make1(makeNode(A_Star));
+					PGColumnRef *n = makeNode(PGColumnRef);
+					n->fields = list_make1(makeNode(PGAStar));
 					n->location = (yylsp[(1) - (1)]);
 
-					(yyval.target) = makeNode(ResTarget);
+					(yyval.target) = makeNode(PGResTarget);
 					(yyval.target)->name = NULL;
 					(yyval.target)->indirection = NIL;
-					(yyval.target)->val = (Node *)n;
+					(yyval.target)->val = (PGNode *)n;
 					(yyval.target)->location = (yylsp[(1) - (1)]);
 				;}
     break;
@@ -20347,7 +20347,7 @@ yyreduce:
 							break;
 						default:
 							ereport(ERROR,
-									(errcode(ERRCODE_SYNTAX_ERROR),
+									(errcode(PG_ERRCODE_SYNTAX_ERROR),
 									 errmsg("improper qualified name (too many dotted names): %s",
 											NameListToString(lcons(makeString((yyvsp[(1) - (2)].str)), (yyvsp[(2) - (2)].list)))),
 									 parser_errposition((yylsp[(1) - (2)]))));
@@ -20433,7 +20433,7 @@ yyreduce:
 #line 6042 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					/* generic type 'literal' syntax */
-					TypeName *t = makeTypeNameFromNameList((yyvsp[(1) - (2)].list));
+					PGTypeName *t = makeTypeNameFromNameList((yyvsp[(1) - (2)].list));
 					t->location = (yylsp[(1) - (2)]);
 					(yyval.node) = makeStringConstCast((yyvsp[(2) - (2)].str), (yylsp[(2) - (2)]), t);
 				;}
@@ -20443,28 +20443,28 @@ yyreduce:
 #line 6049 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					/* generic syntax with a type modifier */
-					TypeName *t = makeTypeNameFromNameList((yyvsp[(1) - (6)].list));
-					ListCell *lc;
+					PGTypeName *t = makeTypeNameFromNameList((yyvsp[(1) - (6)].list));
+					PGListCell *lc;
 
 					/*
 					 * We must use func_arg_list and opt_sort_clause in the
 					 * production to avoid reduce/reduce conflicts, but we
-					 * don't actually wish to allow NamedArgExpr in this
+					 * don't actually wish to allow PGNamedArgExpr in this
 					 * context, nor ORDER BY.
 					 */
 					foreach(lc, (yyvsp[(3) - (6)].list))
 					{
-						NamedArgExpr *arg = (NamedArgExpr *) lfirst(lc);
+						PGNamedArgExpr *arg = (PGNamedArgExpr *) lfirst(lc);
 
-						if (IsA(arg, NamedArgExpr))
+						if (IsA(arg, PGNamedArgExpr))
 							ereport(ERROR,
-									(errcode(ERRCODE_SYNTAX_ERROR),
+									(errcode(PG_ERRCODE_SYNTAX_ERROR),
 									 errmsg("type modifier cannot have parameter name"),
 									 parser_errposition(arg->location)));
 					}
 					if ((yyvsp[(4) - (6)].list) != NIL)
 							ereport(ERROR,
-									(errcode(ERRCODE_SYNTAX_ERROR),
+									(errcode(PG_ERRCODE_SYNTAX_ERROR),
 									 errmsg("type modifier cannot have ORDER BY"),
 									 parser_errposition((yylsp[(4) - (6)]))));
 
@@ -20484,7 +20484,7 @@ yyreduce:
   case 943:
 #line 6085 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					TypeName *t = (yyvsp[(1) - (3)].typnam);
+					PGTypeName *t = (yyvsp[(1) - (3)].typnam);
 					t->typmods = (yyvsp[(3) - (3)].list);
 					(yyval.node) = makeStringConstCast((yyvsp[(2) - (3)].str), (yylsp[(2) - (3)]), t);
 				;}
@@ -20493,7 +20493,7 @@ yyreduce:
   case 944:
 #line 6091 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					TypeName *t = (yyvsp[(1) - (5)].typnam);
+					PGTypeName *t = (yyvsp[(1) - (5)].typnam);
 					t->typmods = list_make2(makeIntConst(INTERVAL_FULL_RANGE, -1),
 											makeIntConst((yyvsp[(3) - (5)].ival), (yylsp[(3) - (5)])));
 					(yyval.node) = makeStringConstCast((yyvsp[(5) - (5)].str), (yylsp[(5) - (5)]), t);
@@ -20503,7 +20503,7 @@ yyreduce:
   case 945:
 #line 6099 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					TypeName *t = (yyvsp[(1) - (6)].typnam);
+					PGTypeName *t = (yyvsp[(1) - (6)].typnam);
 					if ((yyvsp[(6) - (6)].list) != NIL)
 					{
 						t->typmods = lappend((yyvsp[(6) - (6)].list), makeParamRef(0, (yylsp[(3) - (6)])));
@@ -20634,11 +20634,11 @@ yyreduce:
   case 969:
 #line 6190 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					PrepareStmt *n = makeNode(PrepareStmt);
+					PGPrepareStmt *n = makeNode(PGPrepareStmt);
 					n->name = (yyvsp[(2) - (5)].str);
 					n->argtypes = (yyvsp[(3) - (5)].list);
 					n->query = (yyvsp[(5) - (5)].node);
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
@@ -20655,29 +20655,29 @@ yyreduce:
   case 976:
 #line 6218 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					CreateSchemaStmt *n = makeNode(CreateSchemaStmt);
+					PGCreateSchemaStmt *n = makeNode(PGCreateSchemaStmt);
 					/* ...but not both */
 					n->schemaname = (yyvsp[(3) - (4)].str);
 					n->schemaElts = (yyvsp[(4) - (4)].list);
 					n->if_not_exists = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 977:
 #line 6227 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					CreateSchemaStmt *n = makeNode(CreateSchemaStmt);
+					PGCreateSchemaStmt *n = makeNode(PGCreateSchemaStmt);
 					/* ...but not here */
 					n->schemaname = (yyvsp[(6) - (7)].str);
 					if ((yyvsp[(7) - (7)].list) != NIL)
 						ereport(ERROR,
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
 								 errmsg("CREATE SCHEMA IF NOT EXISTS cannot include schema elements"),
 								 parser_errposition((yylsp[(7) - (7)]))));
 					n->schemaElts = (yyvsp[(7) - (7)].list);
 					n->if_not_exists = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -20698,7 +20698,7 @@ yyreduce:
   case 984:
 #line 6272 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					IndexStmt *n = makeNode(IndexStmt);
+					PGIndexStmt *n = makeNode(PGIndexStmt);
 					n->unique = (yyvsp[(2) - (13)].boolean);
 					n->concurrent = (yyvsp[(4) - (13)].boolean);
 					n->idxname = (yyvsp[(5) - (13)].str);
@@ -20717,14 +20717,14 @@ yyreduce:
 					n->initdeferred = false;
 					n->transformed = false;
 					n->if_not_exists = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 985:
 #line 6297 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					IndexStmt *n = makeNode(IndexStmt);
+					PGIndexStmt *n = makeNode(PGIndexStmt);
 					n->unique = (yyvsp[(2) - (16)].boolean);
 					n->concurrent = (yyvsp[(4) - (16)].boolean);
 					n->idxname = (yyvsp[(8) - (16)].str);
@@ -20743,7 +20743,7 @@ yyreduce:
 					n->initdeferred = false;
 					n->transformed = false;
 					n->if_not_exists = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -20805,123 +20805,123 @@ yyreduce:
   case 997:
 #line 6361 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterObjectSchemaStmt *n = makeNode(AlterObjectSchemaStmt);
-					n->objectType = OBJECT_TABLE;
+					PGAlterObjectSchemaStmt *n = makeNode(PGAlterObjectSchemaStmt);
+					n->objectType = PG_OBJECT_TABLE;
 					n->relation = (yyvsp[(3) - (6)].range);
 					n->newschema = (yyvsp[(6) - (6)].str);
 					n->missing_ok = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 998:
 #line 6370 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterObjectSchemaStmt *n = makeNode(AlterObjectSchemaStmt);
-					n->objectType = OBJECT_TABLE;
+					PGAlterObjectSchemaStmt *n = makeNode(PGAlterObjectSchemaStmt);
+					n->objectType = PG_OBJECT_TABLE;
 					n->relation = (yyvsp[(5) - (8)].range);
 					n->newschema = (yyvsp[(8) - (8)].str);
 					n->missing_ok = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 999:
 #line 6379 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterObjectSchemaStmt *n = makeNode(AlterObjectSchemaStmt);
-					n->objectType = OBJECT_SEQUENCE;
+					PGAlterObjectSchemaStmt *n = makeNode(PGAlterObjectSchemaStmt);
+					n->objectType = PG_OBJECT_SEQUENCE;
 					n->relation = (yyvsp[(3) - (6)].range);
 					n->newschema = (yyvsp[(6) - (6)].str);
 					n->missing_ok = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 1000:
 #line 6388 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterObjectSchemaStmt *n = makeNode(AlterObjectSchemaStmt);
-					n->objectType = OBJECT_SEQUENCE;
+					PGAlterObjectSchemaStmt *n = makeNode(PGAlterObjectSchemaStmt);
+					n->objectType = PG_OBJECT_SEQUENCE;
 					n->relation = (yyvsp[(5) - (8)].range);
 					n->newschema = (yyvsp[(8) - (8)].str);
 					n->missing_ok = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 1001:
 #line 6397 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterObjectSchemaStmt *n = makeNode(AlterObjectSchemaStmt);
-					n->objectType = OBJECT_VIEW;
+					PGAlterObjectSchemaStmt *n = makeNode(PGAlterObjectSchemaStmt);
+					n->objectType = PG_OBJECT_VIEW;
 					n->relation = (yyvsp[(3) - (6)].range);
 					n->newschema = (yyvsp[(6) - (6)].str);
 					n->missing_ok = false;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 1002:
 #line 6406 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					AlterObjectSchemaStmt *n = makeNode(AlterObjectSchemaStmt);
-					n->objectType = OBJECT_VIEW;
+					PGAlterObjectSchemaStmt *n = makeNode(PGAlterObjectSchemaStmt);
+					n->objectType = PG_OBJECT_VIEW;
 					n->relation = (yyvsp[(5) - (8)].range);
 					n->newschema = (yyvsp[(8) - (8)].str);
 					n->missing_ok = true;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 1003:
 #line 6421 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					CheckPointStmt *n = makeNode(CheckPointStmt);
-					(yyval.node) = (Node *)n;
+					PGCheckPointStmt *n = makeNode(PGCheckPointStmt);
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 1004:
 #line 6436 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					ExplainStmt *n = makeNode(ExplainStmt);
+					PGExplainStmt *n = makeNode(PGExplainStmt);
 					n->query = (yyvsp[(2) - (2)].node);
 					n->options = NIL;
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 1005:
 #line 6443 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					ExplainStmt *n = makeNode(ExplainStmt);
+					PGExplainStmt *n = makeNode(PGExplainStmt);
 					n->query = (yyvsp[(4) - (4)].node);
 					n->options = list_make1(makeDefElem("analyze", NULL, (yylsp[(2) - (4)])));
 					if ((yyvsp[(3) - (4)].boolean))
 						n->options = lappend(n->options,
 											 makeDefElem("verbose", NULL, (yylsp[(3) - (4)])));
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 1006:
 #line 6453 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					ExplainStmt *n = makeNode(ExplainStmt);
+					PGExplainStmt *n = makeNode(PGExplainStmt);
 					n->query = (yyvsp[(3) - (3)].node);
 					n->options = list_make1(makeDefElem("verbose", NULL, (yylsp[(2) - (3)])));
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 1007:
 #line 6460 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					ExplainStmt *n = makeNode(ExplainStmt);
+					PGExplainStmt *n = makeNode(PGExplainStmt);
 					n->query = (yyvsp[(5) - (5)].node);
 					n->options = (yyvsp[(3) - (5)].list);
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
@@ -20937,12 +20937,12 @@ yyreduce:
 
   case 1010:
 #line 6476 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) makeString((yyvsp[(1) - (1)].str)); ;}
+    { (yyval.node) = (PGNode *) makeString((yyvsp[(1) - (1)].str)); ;}
     break;
 
   case 1011:
 #line 6477 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) (yyvsp[(1) - (1)].value); ;}
+    { (yyval.node) = (PGNode *) (yyvsp[(1) - (1)].value); ;}
     break;
 
   case 1012:
@@ -21044,27 +21044,27 @@ yyreduce:
   case 1035:
 #line 6558 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VariableSetStmt *n = (yyvsp[(2) - (2)].vsetstmt);
+					PGVariableSetStmt *n = (yyvsp[(2) - (2)].vsetstmt);
 					n->is_local = false;
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 1036:
 #line 6564 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VariableSetStmt *n = (yyvsp[(3) - (3)].vsetstmt);
+					PGVariableSetStmt *n = (yyvsp[(3) - (3)].vsetstmt);
 					n->is_local = true;
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 1037:
 #line 6570 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VariableSetStmt *n = (yyvsp[(3) - (3)].vsetstmt);
+					PGVariableSetStmt *n = (yyvsp[(3) - (3)].vsetstmt);
 					n->is_local = false;
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
@@ -21076,7 +21076,7 @@ yyreduce:
   case 1039:
 #line 6581 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VariableSetStmt *n = makeNode(VariableSetStmt);
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_SET_CURRENT;
 					n->name = (yyvsp[(1) - (3)].str);
 					(yyval.vsetstmt) = n;
@@ -21086,7 +21086,7 @@ yyreduce:
   case 1040:
 #line 6589 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VariableSetStmt *n = makeNode(VariableSetStmt);
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_SET_VALUE;
 					n->name = (char*) "timezone";
 					if ((yyvsp[(3) - (3)].node) != NULL)
@@ -21100,7 +21100,7 @@ yyreduce:
   case 1041:
 #line 6600 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VariableSetStmt *n = makeNode(VariableSetStmt);
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_SET_VALUE;
 					n->name = (char*) "search_path";
 					n->args = list_make1(makeStringConst((yyvsp[(2) - (2)].str), (yylsp[(2) - (2)])));
@@ -21111,7 +21111,7 @@ yyreduce:
   case 1042:
 #line 6612 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VariableSetStmt *n = makeNode(VariableSetStmt);
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_SET_VALUE;
 					n->name = (yyvsp[(1) - (3)].str);
 					n->args = (yyvsp[(3) - (3)].list);
@@ -21122,7 +21122,7 @@ yyreduce:
   case 1043:
 #line 6620 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VariableSetStmt *n = makeNode(VariableSetStmt);
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_SET_VALUE;
 					n->name = (yyvsp[(1) - (3)].str);
 					n->args = (yyvsp[(3) - (3)].list);
@@ -21133,7 +21133,7 @@ yyreduce:
   case 1044:
 #line 6628 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VariableSetStmt *n = makeNode(VariableSetStmt);
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_SET_DEFAULT;
 					n->name = (yyvsp[(1) - (3)].str);
 					(yyval.vsetstmt) = n;
@@ -21143,7 +21143,7 @@ yyreduce:
   case 1045:
 #line 6635 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VariableSetStmt *n = makeNode(VariableSetStmt);
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_SET_DEFAULT;
 					n->name = (yyvsp[(1) - (3)].str);
 					(yyval.vsetstmt) = n;
@@ -21177,13 +21177,13 @@ yyreduce:
   case 1050:
 #line 6661 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					TypeName *t = (yyvsp[(1) - (3)].typnam);
+					PGTypeName *t = (yyvsp[(1) - (3)].typnam);
 					if ((yyvsp[(3) - (3)].list) != NIL)
 					{
-						A_Const *n = (A_Const *) linitial((yyvsp[(3) - (3)].list));
+						PGAConst *n = (PGAConst *) linitial((yyvsp[(3) - (3)].list));
 						if ((n->val.val.ival & ~(INTERVAL_MASK(HOUR) | INTERVAL_MASK(MINUTE))) != 0)
 							ereport(ERROR,
-									(errcode(ERRCODE_SYNTAX_ERROR),
+									(errcode(PG_ERRCODE_SYNTAX_ERROR),
 									 errmsg("time zone interval must be HOUR or HOUR TO MINUTE"),
 									 parser_errposition((yylsp[(3) - (3)]))));
 					}
@@ -21195,7 +21195,7 @@ yyreduce:
   case 1051:
 #line 6676 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					TypeName *t = (yyvsp[(1) - (5)].typnam);
+					PGTypeName *t = (yyvsp[(1) - (5)].typnam);
 					t->typmods = list_make2(makeIntConst(INTERVAL_FULL_RANGE, -1),
 											makeIntConst((yyvsp[(3) - (5)].ival), (yylsp[(3) - (5)])));
 					(yyval.node) = makeStringConstCast((yyvsp[(5) - (5)].str), (yylsp[(5) - (5)]), t);
@@ -21230,9 +21230,9 @@ yyreduce:
   case 1057:
 #line 6699 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					LoadStmt *n = makeNode(LoadStmt);
+					PGLoadStmt *n = makeNode(PGLoadStmt);
 					n->filename = (yyvsp[(2) - (2)].str);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -21244,104 +21244,104 @@ yyreduce:
   case 1059:
 #line 6717 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VacuumStmt *n = makeNode(VacuumStmt);
-					n->options = VACOPT_VACUUM;
+					PGVacuumStmt *n = makeNode(PGVacuumStmt);
+					n->options = PG_VACOPT_VACUUM;
 					if ((yyvsp[(2) - (4)].boolean))
-						n->options |= VACOPT_FULL;
+						n->options |= PG_VACOPT_FULL;
 					if ((yyvsp[(3) - (4)].boolean))
-						n->options |= VACOPT_FREEZE;
+						n->options |= PG_VACOPT_FREEZE;
 					if ((yyvsp[(4) - (4)].boolean))
-						n->options |= VACOPT_VERBOSE;
+						n->options |= PG_VACOPT_VERBOSE;
 					n->relation = NULL;
 					n->va_cols = NIL;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 1060:
 #line 6731 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VacuumStmt *n = makeNode(VacuumStmt);
-					n->options = VACOPT_VACUUM;
+					PGVacuumStmt *n = makeNode(PGVacuumStmt);
+					n->options = PG_VACOPT_VACUUM;
 					if ((yyvsp[(2) - (5)].boolean))
-						n->options |= VACOPT_FULL;
+						n->options |= PG_VACOPT_FULL;
 					if ((yyvsp[(3) - (5)].boolean))
-						n->options |= VACOPT_FREEZE;
+						n->options |= PG_VACOPT_FREEZE;
 					if ((yyvsp[(4) - (5)].boolean))
-						n->options |= VACOPT_VERBOSE;
+						n->options |= PG_VACOPT_VERBOSE;
 					n->relation = (yyvsp[(5) - (5)].range);
 					n->va_cols = NIL;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 1061:
 #line 6745 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VacuumStmt *n = (VacuumStmt *) (yyvsp[(5) - (5)].node);
-					n->options |= VACOPT_VACUUM;
+					PGVacuumStmt *n = (PGVacuumStmt *) (yyvsp[(5) - (5)].node);
+					n->options |= PG_VACOPT_VACUUM;
 					if ((yyvsp[(2) - (5)].boolean))
-						n->options |= VACOPT_FULL;
+						n->options |= PG_VACOPT_FULL;
 					if ((yyvsp[(3) - (5)].boolean))
-						n->options |= VACOPT_FREEZE;
+						n->options |= PG_VACOPT_FREEZE;
 					if ((yyvsp[(4) - (5)].boolean))
-						n->options |= VACOPT_VERBOSE;
-					(yyval.node) = (Node *)n;
+						n->options |= PG_VACOPT_VERBOSE;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 1062:
 #line 6757 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VacuumStmt *n = makeNode(VacuumStmt);
-					n->options = VACOPT_VACUUM | (yyvsp[(3) - (4)].ival);
+					PGVacuumStmt *n = makeNode(PGVacuumStmt);
+					n->options = PG_VACOPT_VACUUM | (yyvsp[(3) - (4)].ival);
 					n->relation = NULL;
 					n->va_cols = NIL;
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 1063:
 #line 6765 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VacuumStmt *n = makeNode(VacuumStmt);
-					n->options = VACOPT_VACUUM | (yyvsp[(3) - (6)].ival);
+					PGVacuumStmt *n = makeNode(PGVacuumStmt);
+					n->options = PG_VACOPT_VACUUM | (yyvsp[(3) - (6)].ival);
 					n->relation = (yyvsp[(5) - (6)].range);
 					n->va_cols = (yyvsp[(6) - (6)].list);
 					if (n->va_cols != NIL)	/* implies analyze */
-						n->options |= VACOPT_ANALYZE;
-					(yyval.node) = (Node *) n;
+						n->options |= PG_VACOPT_ANALYZE;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 1064:
 #line 6778 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = VACOPT_ANALYZE; ;}
+    { (yyval.ival) = PG_VACOPT_ANALYZE; ;}
     break;
 
   case 1065:
 #line 6779 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = VACOPT_VERBOSE; ;}
+    { (yyval.ival) = PG_VACOPT_VERBOSE; ;}
     break;
 
   case 1066:
 #line 6780 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = VACOPT_FREEZE; ;}
+    { (yyval.ival) = PG_VACOPT_FREEZE; ;}
     break;
 
   case 1067:
 #line 6781 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.ival) = VACOPT_FULL; ;}
+    { (yyval.ival) = PG_VACOPT_FULL; ;}
     break;
 
   case 1068:
 #line 6783 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
 					if (strcmp((yyvsp[(1) - (1)].str), "disable_page_skipping") == 0)
-						(yyval.ival) = VACOPT_DISABLE_PAGE_SKIPPING;
+						(yyval.ival) = PG_VACOPT_DISABLE_PAGE_SKIPPING;
 					else
 						ereport(ERROR,
-								(errcode(ERRCODE_SYNTAX_ERROR),
+								(errcode(PG_ERRCODE_SYNTAX_ERROR),
 							 errmsg("unrecognized VACUUM option \"%s\"", (yyvsp[(1) - (1)].str)),
 									 parser_errposition((yylsp[(1) - (1)]))));
 				;}
@@ -21380,13 +21380,13 @@ yyreduce:
   case 1075:
 #line 6818 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					DeleteStmt *n = makeNode(DeleteStmt);
+					PGDeleteStmt *n = makeNode(PGDeleteStmt);
 					n->relation = (yyvsp[(4) - (7)].range);
 					n->usingClause = (yyvsp[(5) - (7)].list);
 					n->whereClause = (yyvsp[(6) - (7)].node);
 					n->returningList = (yyvsp[(7) - (7)].list);
 					n->withClause = (yyvsp[(1) - (7)].with);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
@@ -21400,7 +21400,7 @@ yyreduce:
   case 1077:
 #line 6835 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Alias *alias = makeNode(Alias);
+					PGAlias *alias = makeNode(PGAlias);
 					alias->aliasname = (yyvsp[(2) - (2)].str);
 					(yyvsp[(1) - (2)].range)->alias = alias;
 					(yyval.range) = (yyvsp[(1) - (2)].range);
@@ -21410,7 +21410,7 @@ yyreduce:
   case 1078:
 #line 6842 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					Alias *alias = makeNode(Alias);
+					PGAlias *alias = makeNode(PGAlias);
 					alias->aliasname = (yyvsp[(3) - (3)].str);
 					(yyvsp[(1) - (3)].range)->alias = alias;
 					(yyval.range) = (yyvsp[(1) - (3)].range);
@@ -21440,38 +21440,38 @@ yyreduce:
   case 1083:
 #line 6872 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VacuumStmt *n = makeNode(VacuumStmt);
-					n->options = VACOPT_ANALYZE;
+					PGVacuumStmt *n = makeNode(PGVacuumStmt);
+					n->options = PG_VACOPT_ANALYZE;
 					if ((yyvsp[(2) - (2)].boolean))
-						n->options |= VACOPT_VERBOSE;
+						n->options |= PG_VACOPT_VERBOSE;
 					n->relation = NULL;
 					n->va_cols = NIL;
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 1084:
 #line 6882 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VacuumStmt *n = makeNode(VacuumStmt);
-					n->options = VACOPT_ANALYZE;
+					PGVacuumStmt *n = makeNode(PGVacuumStmt);
+					n->options = PG_VACOPT_ANALYZE;
 					if ((yyvsp[(2) - (4)].boolean))
-						n->options |= VACOPT_VERBOSE;
+						n->options |= PG_VACOPT_VERBOSE;
 					n->relation = (yyvsp[(3) - (4)].range);
 					n->va_cols = (yyvsp[(4) - (4)].list);
-					(yyval.node) = (Node *)n;
+					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 1085:
 #line 6894 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.node) = (Node *) (yyvsp[(2) - (2)].vsetstmt); ;}
+    { (yyval.node) = (PGNode *) (yyvsp[(2) - (2)].vsetstmt); ;}
     break;
 
   case 1086:
 #line 6900 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VariableSetStmt *n = makeNode(VariableSetStmt);
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_RESET;
 					n->name = (yyvsp[(1) - (1)].str);
 					(yyval.vsetstmt) = n;
@@ -21481,7 +21481,7 @@ yyreduce:
   case 1087:
 #line 6907 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VariableSetStmt *n = makeNode(VariableSetStmt);
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_RESET_ALL;
 					(yyval.vsetstmt) = n;
 				;}
@@ -21495,7 +21495,7 @@ yyreduce:
   case 1089:
 #line 6918 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VariableSetStmt *n = makeNode(VariableSetStmt);
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_RESET;
 					n->name = (char*) "timezone";
 					(yyval.vsetstmt) = n;
@@ -21505,7 +21505,7 @@ yyreduce:
   case 1090:
 #line 6925 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VariableSetStmt *n = makeNode(VariableSetStmt);
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_RESET;
 					n->name = (char*) "transaction_isolation";
 					(yyval.vsetstmt) = n;
@@ -21515,36 +21515,36 @@ yyreduce:
   case 1091:
 #line 6936 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VariableShowStmt *n = makeNode(VariableShowStmt);
+					PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
 					n->name = (yyvsp[(2) - (2)].str);
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 1092:
 #line 6942 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VariableShowStmt *n = makeNode(VariableShowStmt);
+					PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
 					n->name = (char*) "timezone";
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 1093:
 #line 6948 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VariableShowStmt *n = makeNode(VariableShowStmt);
+					PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
 					n->name = (char*) "transaction_isolation";
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 1094:
 #line 6954 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					VariableShowStmt *n = makeNode(VariableShowStmt);
+					PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
 					n->name = (char*) "all";
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
@@ -21561,7 +21561,7 @@ yyreduce:
   case 1097:
 #line 6976 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					ViewStmt *n = makeNode(ViewStmt);
+					PGViewStmt *n = makeNode(PGViewStmt);
 					n->view = (yyvsp[(4) - (9)].range);
 					n->view->relpersistence = (yyvsp[(2) - (9)].ival);
 					n->aliases = (yyvsp[(5) - (9)].list);
@@ -21569,14 +21569,14 @@ yyreduce:
 					n->replace = false;
 					n->options = (yyvsp[(6) - (9)].list);
 					n->withCheckOption = (yyvsp[(9) - (9)].viewcheckoption);
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 1098:
 #line 6989 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					ViewStmt *n = makeNode(ViewStmt);
+					PGViewStmt *n = makeNode(PGViewStmt);
 					n->view = (yyvsp[(6) - (11)].range);
 					n->view->relpersistence = (yyvsp[(4) - (11)].ival);
 					n->aliases = (yyvsp[(7) - (11)].list);
@@ -21584,14 +21584,14 @@ yyreduce:
 					n->replace = true;
 					n->options = (yyvsp[(8) - (11)].list);
 					n->withCheckOption = (yyvsp[(11) - (11)].viewcheckoption);
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 1099:
 #line 7002 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					ViewStmt *n = makeNode(ViewStmt);
+					PGViewStmt *n = makeNode(PGViewStmt);
 					n->view = (yyvsp[(5) - (12)].range);
 					n->view->relpersistence = (yyvsp[(2) - (12)].ival);
 					n->aliases = (yyvsp[(7) - (12)].list);
@@ -21599,19 +21599,19 @@ yyreduce:
 					n->replace = false;
 					n->options = (yyvsp[(9) - (12)].list);
 					n->withCheckOption = (yyvsp[(12) - (12)].viewcheckoption);
-					if (n->withCheckOption != NO_CHECK_OPTION)
+					if (n->withCheckOption != PG_NO_CHECK_OPTION)
 						ereport(ERROR,
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
 								 errmsg("WITH CHECK OPTION not supported on recursive views"),
 								 parser_errposition((yylsp[(12) - (12)]))));
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
   case 1100:
 #line 7020 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					ViewStmt *n = makeNode(ViewStmt);
+					PGViewStmt *n = makeNode(PGViewStmt);
 					n->view = (yyvsp[(7) - (14)].range);
 					n->view->relpersistence = (yyvsp[(4) - (14)].ival);
 					n->aliases = (yyvsp[(9) - (14)].list);
@@ -21619,12 +21619,12 @@ yyreduce:
 					n->replace = true;
 					n->options = (yyvsp[(11) - (14)].list);
 					n->withCheckOption = (yyvsp[(14) - (14)].viewcheckoption);
-					if (n->withCheckOption != NO_CHECK_OPTION)
+					if (n->withCheckOption != PG_NO_CHECK_OPTION)
 						ereport(ERROR,
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
 								 errmsg("WITH CHECK OPTION not supported on recursive views"),
 								 parser_errposition((yylsp[(14) - (14)]))));
-					(yyval.node) = (Node *) n;
+					(yyval.node) = (PGNode *) n;
 				;}
     break;
 
@@ -21640,43 +21640,43 @@ yyreduce:
 
   case 1103:
 #line 7042 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.viewcheckoption) = LOCAL_CHECK_OPTION; ;}
+    { (yyval.viewcheckoption) = PG_LOCAL_CHECK_OPTION; ;}
     break;
 
   case 1104:
 #line 7043 "third_party/libpg_query/grammar/grammar.y.tmp"
-    { (yyval.viewcheckoption) = NO_CHECK_OPTION; ;}
+    { (yyval.viewcheckoption) = PG_NO_CHECK_OPTION; ;}
     break;
 
   case 1105:
 #line 7057 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					CreateTableAsStmt *ctas = makeNode(CreateTableAsStmt);
+					PGCreateTableAsStmt *ctas = makeNode(PGCreateTableAsStmt);
 					ctas->query = (yyvsp[(6) - (7)].node);
 					ctas->into = (yyvsp[(4) - (7)].into);
-					ctas->relkind = OBJECT_TABLE;
+					ctas->relkind = PG_OBJECT_TABLE;
 					ctas->is_select_into = false;
 					ctas->if_not_exists = false;
-					/* cram additional flags into the IntoClause */
+					/* cram additional flags into the PGIntoClause */
 					(yyvsp[(4) - (7)].into)->rel->relpersistence = (yyvsp[(2) - (7)].ival);
 					(yyvsp[(4) - (7)].into)->skipData = !((yyvsp[(7) - (7)].boolean));
-					(yyval.node) = (Node *) ctas;
+					(yyval.node) = (PGNode *) ctas;
 				;}
     break;
 
   case 1106:
 #line 7070 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					CreateTableAsStmt *ctas = makeNode(CreateTableAsStmt);
+					PGCreateTableAsStmt *ctas = makeNode(PGCreateTableAsStmt);
 					ctas->query = (yyvsp[(9) - (10)].node);
 					ctas->into = (yyvsp[(7) - (10)].into);
-					ctas->relkind = OBJECT_TABLE;
+					ctas->relkind = PG_OBJECT_TABLE;
 					ctas->is_select_into = false;
 					ctas->if_not_exists = true;
-					/* cram additional flags into the IntoClause */
+					/* cram additional flags into the PGIntoClause */
 					(yyvsp[(7) - (10)].into)->rel->relpersistence = (yyvsp[(2) - (10)].ival);
 					(yyvsp[(7) - (10)].into)->skipData = !((yyvsp[(10) - (10)].boolean));
-					(yyval.node) = (Node *) ctas;
+					(yyval.node) = (PGNode *) ctas;
 				;}
     break;
 
@@ -21698,7 +21698,7 @@ yyreduce:
   case 1110:
 #line 7094 "third_party/libpg_query/grammar/grammar.y.tmp"
     {
-					(yyval.into) = makeNode(IntoClause);
+					(yyval.into) = makeNode(PGIntoClause);
 					(yyval.into)->rel = (yyvsp[(1) - (4)].range);
 					(yyval.into)->colNames = (yyvsp[(2) - (4)].list);
 					(yyval.into)->options = (yyvsp[(3) - (4)].list);
@@ -21945,10 +21945,10 @@ base_yyerror(YYLTYPE *yylloc, core_yyscan_t yyscanner, const char *msg)
 	parser_yyerror(msg);
 }
 
-static RawStmt *
-makeRawStmt(Node *stmt, int stmt_location)
+static PGRawStmt *
+makeRawStmt(PGNode *stmt, int stmt_location)
 {
-	RawStmt    *rs = makeNode(RawStmt);
+	PGRawStmt    *rs = makeNode(PGRawStmt);
 
 	rs->stmt = stmt;
 	rs->stmt_location = stmt_location;
@@ -21956,9 +21956,9 @@ makeRawStmt(Node *stmt, int stmt_location)
 	return rs;
 }
 
-/* Adjust a RawStmt to reflect that it doesn't run to the end of the string */
+/* Adjust a PGRawStmt to reflect that it doesn't run to the end of the string */
 static void
-updateRawStmtEnd(RawStmt *rs, int end_location)
+updateRawStmtEnd(PGRawStmt *rs, int end_location)
 {
 	/*
 	 * If we already set the length, don't change it.  This is for situations
@@ -21968,34 +21968,34 @@ updateRawStmtEnd(RawStmt *rs, int end_location)
 	if (rs->stmt_len > 0)
 		return;
 
-	/* OK, update length of RawStmt */
+	/* OK, update length of PGRawStmt */
 	rs->stmt_len = end_location - rs->stmt_location;
 }
 
-static Node *
-makeColumnRef(char *colname, List *indirection,
+static PGNode *
+makeColumnRef(char *colname, PGList *indirection,
 			  int location, core_yyscan_t yyscanner)
 {
 	/*
-	 * Generate a ColumnRef node, with an A_Indirection node added if there
+	 * Generate a PGColumnRef node, with an PGAIndirection node added if there
 	 * is any subscripting in the specified indirection list.  However,
 	 * any field selection at the start of the indirection list must be
-	 * transposed into the "fields" part of the ColumnRef node.
+	 * transposed into the "fields" part of the PGColumnRef node.
 	 */
-	ColumnRef  *c = makeNode(ColumnRef);
+	PGColumnRef  *c = makeNode(PGColumnRef);
 	int		nfields = 0;
-	ListCell *l;
+	PGListCell *l;
 
 	c->location = location;
 	foreach(l, indirection)
 	{
-		if (IsA(lfirst(l), A_Indices))
+		if (IsA(lfirst(l), PGAIndices))
 		{
-			A_Indirection *i = makeNode(A_Indirection);
+			PGAIndirection *i = makeNode(PGAIndirection);
 
 			if (nfields == 0)
 			{
-				/* easy case - all indirection goes to A_Indirection */
+				/* easy case - all indirection goes to PGAIndirection */
 				c->fields = list_make1(makeString(colname));
 				i->indirection = check_indirection(indirection, yyscanner);
 			}
@@ -22008,12 +22008,12 @@ makeColumnRef(char *colname, List *indirection,
 				indirection = list_truncate(indirection, nfields);
 				c->fields = lcons(makeString(colname), indirection);
 			}
-			i->arg = (Node *) c;
-			return (Node *) i;
+			i->arg = (PGNode *) c;
+			return (PGNode *) i;
 		}
-		else if (IsA(lfirst(l), A_Star))
+		else if (IsA(lfirst(l), PGAStar))
 		{
-			/* We only allow '*' at the end of a ColumnRef */
+			/* We only allow '*' at the end of a PGColumnRef */
 			if (lnext(l) != NULL)
 				parser_yyerror("improper use of \"*\"");
 		}
@@ -22021,102 +22021,102 @@ makeColumnRef(char *colname, List *indirection,
 	}
 	/* No subscripting, so all indirection gets added to field list */
 	c->fields = lcons(makeString(colname), indirection);
-	return (Node *) c;
+	return (PGNode *) c;
 }
 
-static Node *
-makeTypeCast(Node *arg, TypeName *tpname, int location)
+static PGNode *
+makeTypeCast(PGNode *arg, PGTypeName *tpname, int location)
 {
-	TypeCast *n = makeNode(TypeCast);
+	PGTypeCast *n = makeNode(PGTypeCast);
 	n->arg = arg;
 	n->typeName = tpname;
 	n->location = location;
-	return (Node *) n;
+	return (PGNode *) n;
 }
 
-static Node *
+static PGNode *
 makeStringConst(char *str, int location)
 {
-	A_Const *n = makeNode(A_Const);
+	PGAConst *n = makeNode(PGAConst);
 
-	n->val.type = T_String;
+	n->val.type = T_PGString;
 	n->val.val.str = str;
 	n->location = location;
 
-	return (Node *)n;
+	return (PGNode *)n;
 }
 
-static Node *
-makeStringConstCast(char *str, int location, TypeName *tpname)
+static PGNode *
+makeStringConstCast(char *str, int location, PGTypeName *tpname)
 {
-	Node *s = makeStringConst(str, location);
+	PGNode *s = makeStringConst(str, location);
 
 	return makeTypeCast(s, tpname, -1);
 }
 
-static Node *
+static PGNode *
 makeIntConst(int val, int location)
 {
-	A_Const *n = makeNode(A_Const);
+	PGAConst *n = makeNode(PGAConst);
 
-	n->val.type = T_Integer;
+	n->val.type = T_PGInteger;
 	n->val.val.ival = val;
 	n->location = location;
 
-	return (Node *)n;
+	return (PGNode *)n;
 }
 
-static Node *
+static PGNode *
 makeFloatConst(char *str, int location)
 {
-	A_Const *n = makeNode(A_Const);
+	PGAConst *n = makeNode(PGAConst);
 
-	n->val.type = T_Float;
+	n->val.type = T_PGFloat;
 	n->val.val.str = str;
 	n->location = location;
 
-	return (Node *)n;
+	return (PGNode *)n;
 }
 
-static Node *
+static PGNode *
 makeBitStringConst(char *str, int location)
 {
-	A_Const *n = makeNode(A_Const);
+	PGAConst *n = makeNode(PGAConst);
 
-	n->val.type = T_BitString;
+	n->val.type = T_PGBitString;
 	n->val.val.str = str;
 	n->location = location;
 
-	return (Node *)n;
+	return (PGNode *)n;
 }
 
-static Node *
+static PGNode *
 makeNullAConst(int location)
 {
-	A_Const *n = makeNode(A_Const);
+	PGAConst *n = makeNode(PGAConst);
 
-	n->val.type = T_Null;
+	n->val.type = T_PGNull;
 	n->location = location;
 
-	return (Node *)n;
+	return (PGNode *)n;
 }
 
-static Node *
-makeAConst(Value *v, int location)
+static PGNode *
+makeAConst(PGValue *v, int location)
 {
-	Node *n;
+	PGNode *n;
 
 	switch (v->type)
 	{
-		case T_Float:
+		case T_PGFloat:
 			n = makeFloatConst(v->val.str, location);
 			break;
 
-		case T_Integer:
+		case T_PGInteger:
 			n = makeIntConst(v->val.ival, location);
 			break;
 
-		case T_String:
+		case T_PGString:
 		default:
 			n = makeStringConst(v->val.str, location);
 			break;
@@ -22126,18 +22126,18 @@ makeAConst(Value *v, int location)
 }
 
 /* makeBoolAConst()
- * Create an A_Const string node and put it inside a boolean cast.
+ * Create an PGAConst string node and put it inside a boolean cast.
  */
-static Node *
+static PGNode *
 makeBoolAConst(bool state, int location)
 {
-	A_Const *n = makeNode(A_Const);
+	PGAConst *n = makeNode(PGAConst);
 
-	n->val.type = T_String;
+	n->val.type = T_PGString;
 	n->val.val.str = (state ? (char*) "t" : (char*) "f");
 	n->location = location;
 
-	return makeTypeCast((Node *)n, SystemTypeName("bool"), -1);
+	return makeTypeCast((PGNode *)n, SystemTypeName("bool"), -1);
 }
 
 /* check_qualified_name --- check the result of qualified_name production
@@ -22146,13 +22146,13 @@ makeBoolAConst(bool state, int location)
  * subscripts and '*', which we then must reject here.
  */
 static void
-check_qualified_name(List *names, core_yyscan_t yyscanner)
+check_qualified_name(PGList *names, core_yyscan_t yyscanner)
 {
-	ListCell   *i;
+	PGListCell   *i;
 
 	foreach(i, names)
 	{
-		if (!IsA(lfirst(i), String))
+		if (!IsA(lfirst(i), PGString))
 			parser_yyerror("syntax error");
 	}
 }
@@ -22162,14 +22162,14 @@ check_qualified_name(List *names, core_yyscan_t yyscanner)
  * It's easiest to let the grammar production for func_name allow subscripts
  * and '*', which we then must reject here.
  */
-static List *
-check_func_name(List *names, core_yyscan_t yyscanner)
+static PGList *
+check_func_name(PGList *names, core_yyscan_t yyscanner)
 {
-	ListCell   *i;
+	PGListCell   *i;
 
 	foreach(i, names)
 	{
-		if (!IsA(lfirst(i), String))
+		if (!IsA(lfirst(i), PGString))
 			parser_yyerror("syntax error");
 	}
 	return names;
@@ -22180,14 +22180,14 @@ check_func_name(List *names, core_yyscan_t yyscanner)
  * We only allow '*' at the end of the list, but it's hard to enforce that
  * in the grammar, so do it here.
  */
-static List *
-check_indirection(List *indirection, core_yyscan_t yyscanner)
+static PGList *
+check_indirection(PGList *indirection, core_yyscan_t yyscanner)
 {
-	ListCell *l;
+	PGListCell *l;
 
 	foreach(l, indirection)
 	{
-		if (IsA(lfirst(l), A_Star))
+		if (IsA(lfirst(l), PGAStar))
 		{
 			if (lnext(l) != NULL)
 				parser_yyerror("improper use of \"*\"");
@@ -22197,36 +22197,36 @@ check_indirection(List *indirection, core_yyscan_t yyscanner)
 }
 
 /* makeParamRef
- * Creates a new ParamRef node
+ * Creates a new PGParamRef node
  */
-static Node* makeParamRef(int number, int location)
+static PGNode* makeParamRef(int number, int location)
 {
-	ParamRef *p = makeNode(ParamRef);
+	PGParamRef *p = makeNode(PGParamRef);
 	p->number = number;
 	p->location = location;
-	return (Node *) p;
+	return (PGNode *) p;
 }
 
-static Node *
-makeParamRefCast(int number, int location, TypeName *tpname)
+static PGNode *
+makeParamRefCast(int number, int location, PGTypeName *tpname)
 {
-	Node *p = makeParamRef(number, location);
+	PGNode *p = makeParamRef(number, location);
 	return makeTypeCast(p, tpname, -1);
 }
 
 /* insertSelectOptions()
  * Insert ORDER BY, etc into an already-constructed SelectStmt.
  *
- * This routine is just to avoid duplicating code in SelectStmt productions.
+ * This routine is just to avoid duplicating code in PGSelectStmt productions.
  */
 static void
-insertSelectOptions(SelectStmt *stmt,
-					List *sortClause, List *lockingClause,
-					Node *limitOffset, Node *limitCount,
-					WithClause *withClause,
+insertSelectOptions(PGSelectStmt *stmt,
+					PGList *sortClause, PGList *lockingClause,
+					PGNode *limitOffset, PGNode *limitCount,
+					PGWithClause *withClause,
 					core_yyscan_t yyscanner)
 {
-	Assert(IsA(stmt, SelectStmt));
+	Assert(IsA(stmt, PGSelectStmt));
 
 	/*
 	 * Tests here are to reject constructs like
@@ -22236,9 +22236,9 @@ insertSelectOptions(SelectStmt *stmt,
 	{
 		if (stmt->sortClause)
 			ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
+					(errcode(PG_ERRCODE_SYNTAX_ERROR),
 					 errmsg("multiple ORDER BY clauses not allowed"),
-					 parser_errposition(exprLocation((Node *) sortClause))));
+					 parser_errposition(exprLocation((PGNode *) sortClause))));
 		stmt->sortClause = sortClause;
 	}
 	/* We can handle multiple locking clauses, though */
@@ -22247,7 +22247,7 @@ insertSelectOptions(SelectStmt *stmt,
 	{
 		if (stmt->limitOffset)
 			ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
+					(errcode(PG_ERRCODE_SYNTAX_ERROR),
 					 errmsg("multiple OFFSET clauses not allowed"),
 					 parser_errposition(exprLocation(limitOffset))));
 		stmt->limitOffset = limitOffset;
@@ -22256,7 +22256,7 @@ insertSelectOptions(SelectStmt *stmt,
 	{
 		if (stmt->limitCount)
 			ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
+					(errcode(PG_ERRCODE_SYNTAX_ERROR),
 					 errmsg("multiple LIMIT clauses not allowed"),
 					 parser_errposition(exprLocation(limitCount))));
 		stmt->limitCount = limitCount;
@@ -22265,29 +22265,29 @@ insertSelectOptions(SelectStmt *stmt,
 	{
 		if (stmt->withClause)
 			ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
+					(errcode(PG_ERRCODE_SYNTAX_ERROR),
 					 errmsg("multiple WITH clauses not allowed"),
-					 parser_errposition(exprLocation((Node *) withClause))));
+					 parser_errposition(exprLocation((PGNode *) withClause))));
 		stmt->withClause = withClause;
 	}
 }
 
-static Node *
-makeSetOp(SetOperation op, bool all, Node *larg, Node *rarg)
+static PGNode *
+makeSetOp(PGSetOperation op, bool all, PGNode *larg, PGNode *rarg)
 {
-	SelectStmt *n = makeNode(SelectStmt);
+	PGSelectStmt *n = makeNode(PGSelectStmt);
 
 	n->op = op;
 	n->all = all;
-	n->larg = (SelectStmt *) larg;
-	n->rarg = (SelectStmt *) rarg;
-	return (Node *) n;
+	n->larg = (PGSelectStmt *) larg;
+	n->rarg = (PGSelectStmt *) rarg;
+	return (PGNode *) n;
 }
 
 /* SystemFuncName()
  * Build a properly-qualified reference to a built-in function.
  */
-List *
+PGList *
 SystemFuncName(const char *name)
 {
 	return list_make2(makeString(DEFAULT_SCHEMA), makeString(name));
@@ -22299,7 +22299,7 @@ SystemFuncName(const char *name)
  * typmod is defaulted, but may be changed afterwards by caller.
  * Likewise for the location.
  */
-TypeName *
+PGTypeName *
 SystemTypeName(const char *name)
 {
 	return makeTypeNameFromNameList(list_make2(makeString(DEFAULT_SCHEMA),
@@ -22319,37 +22319,37 @@ SystemTypeName(const char *name)
  * negative constants.	It's better to leave "-123.456" in string form
  * until we know what the desired type is.
  */
-static Node *
-doNegate(Node *n, int location)
+static PGNode *
+doNegate(PGNode *n, int location)
 {
-	if (IsA(n, A_Const))
+	if (IsA(n, PGAConst))
 	{
-		A_Const *con = (A_Const *)n;
+		PGAConst *con = (PGAConst *)n;
 
 		/* report the constant's location as that of the '-' sign */
 		con->location = location;
 
-		if (con->val.type == T_Integer)
+		if (con->val.type == T_PGInteger)
 		{
 			con->val.val.ival = -con->val.val.ival;
 			return n;
 		}
-		if (con->val.type == T_Float)
+		if (con->val.type == T_PGFloat)
 		{
 			doNegateFloat(&con->val);
 			return n;
 		}
 	}
 
-	return (Node *) makeSimpleA_Expr(AEXPR_OP, "-", NULL, n, location);
+	return (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "-", NULL, n, location);
 }
 
 static void
-doNegateFloat(Value *v)
+doNegateFloat(PGValue *v)
 {
 	char   *oldval = v->val.str;
 
-	Assert(IsA(v, Float));
+	Assert(IsA(v, PGFloat));
 	if (*oldval == '+')
 		oldval++;
 	if (*oldval == '-')
@@ -22358,89 +22358,89 @@ doNegateFloat(Value *v)
 		v->val.str = psprintf("-%s", oldval);
 }
 
-static Node *
-makeAndExpr(Node *lexpr, Node *rexpr, int location)
+static PGNode *
+makeAndExpr(PGNode *lexpr, PGNode *rexpr, int location)
 {
-	Node	   *lexp = lexpr;
+	PGNode	   *lexp = lexpr;
 
 	/* Look through AEXPR_PAREN nodes so they don't affect flattening */
-	while (IsA(lexp, A_Expr) &&
-		   ((A_Expr *) lexp)->kind == AEXPR_PAREN)
-		lexp = ((A_Expr *) lexp)->lexpr;
-	/* Flatten "a AND b AND c ..." to a single BoolExpr on sight */
-	if (IsA(lexp, BoolExpr))
+	while (IsA(lexp, PGAExpr) &&
+		   ((PGAExpr *) lexp)->kind == AEXPR_PAREN)
+		lexp = ((PGAExpr *) lexp)->lexpr;
+	/* Flatten "a AND b AND c ..." to a single PGBoolExpr on sight */
+	if (IsA(lexp, PGBoolExpr))
 	{
-		BoolExpr *blexpr = (BoolExpr *) lexp;
+		PGBoolExpr *blexpr = (PGBoolExpr *) lexp;
 
-		if (blexpr->boolop == AND_EXPR)
+		if (blexpr->boolop == PG_AND_EXPR)
 		{
 			blexpr->args = lappend(blexpr->args, rexpr);
-			return (Node *) blexpr;
+			return (PGNode *) blexpr;
 		}
 	}
-	return (Node *) makeBoolExpr(AND_EXPR, list_make2(lexpr, rexpr), location);
+	return (PGNode *) makeBoolExpr(PG_AND_EXPR, list_make2(lexpr, rexpr), location);
 }
 
-static Node *
-makeOrExpr(Node *lexpr, Node *rexpr, int location)
+static PGNode *
+makeOrExpr(PGNode *lexpr, PGNode *rexpr, int location)
 {
-	Node	   *lexp = lexpr;
+	PGNode	   *lexp = lexpr;
 
 	/* Look through AEXPR_PAREN nodes so they don't affect flattening */
-	while (IsA(lexp, A_Expr) &&
-		   ((A_Expr *) lexp)->kind == AEXPR_PAREN)
-		lexp = ((A_Expr *) lexp)->lexpr;
-	/* Flatten "a OR b OR c ..." to a single BoolExpr on sight */
-	if (IsA(lexp, BoolExpr))
+	while (IsA(lexp, PGAExpr) &&
+		   ((PGAExpr *) lexp)->kind == AEXPR_PAREN)
+		lexp = ((PGAExpr *) lexp)->lexpr;
+	/* Flatten "a OR b OR c ..." to a single PGBoolExpr on sight */
+	if (IsA(lexp, PGBoolExpr))
 	{
-		BoolExpr *blexpr = (BoolExpr *) lexp;
+		PGBoolExpr *blexpr = (PGBoolExpr *) lexp;
 
-		if (blexpr->boolop == OR_EXPR)
+		if (blexpr->boolop == PG_OR_EXPR)
 		{
 			blexpr->args = lappend(blexpr->args, rexpr);
-			return (Node *) blexpr;
+			return (PGNode *) blexpr;
 		}
 	}
-	return (Node *) makeBoolExpr(OR_EXPR, list_make2(lexpr, rexpr), location);
+	return (PGNode *) makeBoolExpr(PG_OR_EXPR, list_make2(lexpr, rexpr), location);
 }
 
-static Node *
-makeNotExpr(Node *expr, int location)
+static PGNode *
+makeNotExpr(PGNode *expr, int location)
 {
-	return (Node *) makeBoolExpr(NOT_EXPR, list_make1(expr), location);
+	return (PGNode *) makeBoolExpr(PG_NOT_EXPR, list_make1(expr), location);
 }
 
-static Node *
-makeAArrayExpr(List *elements, int location)
+static PGNode *
+makeAArrayExpr(PGList *elements, int location)
 {
-	A_ArrayExpr *n = makeNode(A_ArrayExpr);
+	PGAArrayExpr *n = makeNode(PGAArrayExpr);
 
 	n->elements = elements;
 	n->location = location;
-	return (Node *) n;
+	return (PGNode *) n;
 }
 
-static Node *
-makeSQLValueFunction(SQLValueFunctionOp op, int32_t typmod, int location)
+static PGNode *
+makeSQLValueFunction(PGSQLValueFunctionOp op, int32_t typmod, int location)
 {
-	SQLValueFunction *svf = makeNode(SQLValueFunction);
+	PGSQLValueFunction *svf = makeNode(PGSQLValueFunction);
 
 	svf->op = op;
 	/* svf->type will be filled during parse analysis */
 	svf->typmod = typmod;
 	svf->location = location;
-	return (Node *) svf;
+	return (PGNode *) svf;
 }
 
 /*
- * Convert a list of (dotted) names to a RangeVar (like
+ * Convert a list of (dotted) names to a PGRangeVar (like
  * makeRangeVarFromNameList, but with position support).  The
  * "AnyName" refers to the any_name production in the grammar.
  */
-static RangeVar *
-makeRangeVarFromAnyName(List *names, int position, core_yyscan_t yyscanner)
+static PGRangeVar *
+makeRangeVarFromAnyName(PGList *names, int position, core_yyscan_t yyscanner)
 {
-	RangeVar *r = makeNode(RangeVar);
+	PGRangeVar *r = makeNode(PGRangeVar);
 
 	switch (list_length(names))
 	{
@@ -22461,7 +22461,7 @@ makeRangeVarFromAnyName(List *names, int position, core_yyscan_t yyscanner)
 			break;
 		default:
 			ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
+					(errcode(PG_ERRCODE_SYNTAX_ERROR),
 					 errmsg("improper qualified name (too many dotted names): %s",
 							NameListToString(names)),
 					 parser_errposition(position)));
@@ -22474,36 +22474,36 @@ makeRangeVarFromAnyName(List *names, int position, core_yyscan_t yyscanner)
 	return r;
 }
 
-/* Separate Constraint nodes from COLLATE clauses in a */
+/* Separate PGConstraint nodes from COLLATE clauses in a */
 static void
-SplitColQualList(List *qualList,
-				 List **constraintList, CollateClause **collClause,
+SplitColQualList(PGList *qualList,
+				 PGList **constraintList, PGCollateClause **collClause,
 				 core_yyscan_t yyscanner)
 {
-	ListCell   *cell;
-	ListCell   *prev;
-	ListCell   *next;
+	PGListCell   *cell;
+	PGListCell   *prev;
+	PGListCell   *next;
 
 	*collClause = NULL;
 	prev = NULL;
 	for (cell = list_head(qualList); cell; cell = next)
 	{
-		Node   *n = (Node *) lfirst(cell);
+		PGNode   *n = (PGNode *) lfirst(cell);
 
 		next = lnext(cell);
-		if (IsA(n, Constraint))
+		if (IsA(n, PGConstraint))
 		{
 			/* keep it in list */
 			prev = cell;
 			continue;
 		}
-		if (IsA(n, CollateClause))
+		if (IsA(n, PGCollateClause))
 		{
-			CollateClause *c = (CollateClause *) n;
+			PGCollateClause *c = (PGCollateClause *) n;
 
 			if (*collClause)
 				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
+						(errcode(PG_ERRCODE_SYNTAX_ERROR),
 						 errmsg("multiple COLLATE clauses not allowed"),
 						 parser_errposition(c->location)));
 			*collClause = c;
@@ -22540,7 +22540,7 @@ processCASbits(int cas_bits, int location, const char *constrType,
 			*deferrable = true;
 		else
 			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
 					 /* translator: %s is CHECK, UNIQUE, or similar */
 					 errmsg("%s constraints cannot be marked DEFERRABLE",
 							constrType),
@@ -22553,7 +22553,7 @@ processCASbits(int cas_bits, int location, const char *constrType,
 			*initdeferred = true;
 		else
 			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
 					 /* translator: %s is CHECK, UNIQUE, or similar */
 					 errmsg("%s constraints cannot be marked DEFERRABLE",
 							constrType),
@@ -22566,7 +22566,7 @@ processCASbits(int cas_bits, int location, const char *constrType,
 			*not_valid = true;
 		else
 			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
 					 /* translator: %s is CHECK, UNIQUE, or similar */
 					 errmsg("%s constraints cannot be marked NOT VALID",
 							constrType),
@@ -22579,7 +22579,7 @@ processCASbits(int cas_bits, int location, const char *constrType,
 			*no_inherit = true;
 		else
 			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
 					 /* translator: %s is CHECK, UNIQUE, or similar */
 					 errmsg("%s constraints cannot be marked NO INHERIT",
 							constrType),
@@ -22604,14 +22604,14 @@ processCASbits(int cas_bits, int location, const char *constrType,
  * view as the query.
  * ----------
  */
-static Node *
-makeRecursiveViewSelect(char *relname, List *aliases, Node *query)
+static PGNode *
+makeRecursiveViewSelect(char *relname, PGList *aliases, PGNode *query)
 {
-	SelectStmt *s = makeNode(SelectStmt);
-	WithClause *w = makeNode(WithClause);
-	CommonTableExpr *cte = makeNode(CommonTableExpr);
-	List	   *tl = NIL;
-	ListCell   *lc;
+	PGSelectStmt *s = makeNode(PGSelectStmt);
+	PGWithClause *w = makeNode(PGWithClause);
+	PGCommonTableExpr *cte = makeNode(PGCommonTableExpr);
+	PGList	   *tl = NIL;
+	PGListCell   *lc;
 
 	/* create common table expression */
 	cte->ctename = relname;
@@ -22628,7 +22628,7 @@ makeRecursiveViewSelect(char *relname, List *aliases, Node *query)
 	 * recursive view specification */
 	foreach (lc, aliases)
 	{
-		ResTarget *rt = makeNode(ResTarget);
+		PGResTarget *rt = makeNode(PGResTarget);
 
 		rt->name = NULL;
 		rt->indirection = NIL;
@@ -22644,7 +22644,7 @@ makeRecursiveViewSelect(char *relname, List *aliases, Node *query)
 	s->targetList = tl;
 	s->fromClause = list_make1(makeRangeVar(NULL, relname, -1));
 
-	return (Node *) s;
+	return (PGNode *) s;
 }
 
 /* parser_init()

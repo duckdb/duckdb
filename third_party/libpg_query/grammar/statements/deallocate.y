@@ -6,26 +6,26 @@
  *****************************************************************************/
 DeallocateStmt: DEALLOCATE name
 					{
-						DeallocateStmt *n = makeNode(DeallocateStmt);
+						PGDeallocateStmt *n = makeNode(PGDeallocateStmt);
 						n->name = $2;
-						$$ = (Node *) n;
+						$$ = (PGNode *) n;
 					}
 				| DEALLOCATE PREPARE name
 					{
-						DeallocateStmt *n = makeNode(DeallocateStmt);
+						PGDeallocateStmt *n = makeNode(PGDeallocateStmt);
 						n->name = $3;
-						$$ = (Node *) n;
+						$$ = (PGNode *) n;
 					}
 				| DEALLOCATE ALL
 					{
-						DeallocateStmt *n = makeNode(DeallocateStmt);
+						PGDeallocateStmt *n = makeNode(PGDeallocateStmt);
 						n->name = NULL;
-						$$ = (Node *) n;
+						$$ = (PGNode *) n;
 					}
 				| DEALLOCATE PREPARE ALL
 					{
-						DeallocateStmt *n = makeNode(DeallocateStmt);
+						PGDeallocateStmt *n = makeNode(PGDeallocateStmt);
 						n->name = NULL;
-						$$ = (Node *) n;
+						$$ = (PGNode *) n;
 					}
 		;

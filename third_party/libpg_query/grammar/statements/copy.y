@@ -1,7 +1,7 @@
 CopyStmt:	COPY opt_binary qualified_name opt_column_list opt_oids
 			copy_from opt_program copy_file_name copy_delimiter opt_with copy_options
 				{
-					CopyStmt *n = makeNode(CopyStmt);
+					PGCopyStmt *n = makeNode(PGCopyStmt);
 					n->relation = $3;
 					n->query = NULL;
 					n->attlist = $4;
@@ -11,7 +11,7 @@ CopyStmt:	COPY opt_binary qualified_name opt_column_list opt_oids
 
 					if (n->is_program && n->filename == NULL)
 						ereport(ERROR,
-								(errcode(ERRCODE_SYNTAX_ERROR),
+								(errcode(PG_ERRCODE_SYNTAX_ERROR),
 								 errmsg("STDIN/STDOUT not allowed with PROGRAM"),
 								 parser_errposition(@8)));
 
@@ -25,11 +25,11 @@ CopyStmt:	COPY opt_binary qualified_name opt_column_list opt_oids
 						n->options = lappend(n->options, $9);
 					if ($11)
 						n->options = list_concat(n->options, $11);
-					$$ = (Node *)n;
+					$$ = (PGNode *)n;
 				}
 			| COPY '(' PreparableStmt ')' TO opt_program copy_file_name opt_with copy_options
 				{
-					CopyStmt *n = makeNode(CopyStmt);
+					PGCopyStmt *n = makeNode(PGCopyStmt);
 					n->relation = NULL;
 					n->query = $3;
 					n->attlist = NIL;
@@ -40,11 +40,11 @@ CopyStmt:	COPY opt_binary qualified_name opt_column_list opt_oids
 
 					if (n->is_program && n->filename == NULL)
 						ereport(ERROR,
-								(errcode(ERRCODE_SYNTAX_ERROR),
+								(errcode(PG_ERRCODE_SYNTAX_ERROR),
 								 errmsg("STDIN/STDOUT not allowed with PROGRAM"),
 								 parser_errposition(@5)));
 
-					$$ = (Node *)n;
+					$$ = (PGNode *)n;
 				}
 		;
 
@@ -58,7 +58,7 @@ copy_from:
 copy_delimiter:
 			opt_using DELIMITERS Sconst
 				{
-					$$ = makeDefElem("delimiter", (Node *)makeString($3), @2);
+					$$ = makeDefElem("delimiter", (PGNode *)makeString($3), @2);
 				}
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
@@ -99,10 +99,10 @@ copy_options: copy_opt_list							{ $$ = $1; }
 
 
 copy_generic_opt_arg:
-			opt_boolean_or_string			{ $$ = (Node *) makeString($1); }
-			| NumericOnly					{ $$ = (Node *) $1; }
-			| '*'							{ $$ = (Node *) makeNode(A_Star); }
-			| '(' copy_generic_opt_arg_list ')'		{ $$ = (Node *) $2; }
+			opt_boolean_or_string			{ $$ = (PGNode *) makeString($1); }
+			| NumericOnly					{ $$ = (PGNode *) $1; }
+			| '*'							{ $$ = (PGNode *) makeNode(PGAStar); }
+			| '(' copy_generic_opt_arg_list ')'		{ $$ = (PGNode *) $2; }
 			| /* EMPTY */					{ $$ = NULL; }
 		;
 
@@ -118,7 +118,7 @@ copy_generic_opt_elem:
 opt_oids:
 			WITH OIDS
 				{
-					$$ = makeDefElem("oids", (Node *)makeInteger(TRUE), @1);
+					$$ = makeDefElem("oids", (PGNode *)makeInteger(TRUE), @1);
 				}
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
@@ -133,7 +133,7 @@ copy_opt_list:
 opt_binary:
 			BINARY
 				{
-					$$ = makeDefElem("format", (Node *)makeString("binary"), @1);
+					$$ = makeDefElem("format", (PGNode *)makeString("binary"), @1);
 				}
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
@@ -142,65 +142,65 @@ opt_binary:
 copy_opt_item:
 			BINARY
 				{
-					$$ = makeDefElem("format", (Node *)makeString("binary"), @1);
+					$$ = makeDefElem("format", (PGNode *)makeString("binary"), @1);
 				}
 			| OIDS
 				{
-					$$ = makeDefElem("oids", (Node *)makeInteger(TRUE), @1);
+					$$ = makeDefElem("oids", (PGNode *)makeInteger(TRUE), @1);
 				}
 			| FREEZE
 				{
-					$$ = makeDefElem("freeze", (Node *)makeInteger(TRUE), @1);
+					$$ = makeDefElem("freeze", (PGNode *)makeInteger(TRUE), @1);
 				}
 			| DELIMITER opt_as Sconst
 				{
-					$$ = makeDefElem("delimiter", (Node *)makeString($3), @1);
+					$$ = makeDefElem("delimiter", (PGNode *)makeString($3), @1);
 				}
 			| NULL_P opt_as Sconst
 				{
-					$$ = makeDefElem("null", (Node *)makeString($3), @1);
+					$$ = makeDefElem("null", (PGNode *)makeString($3), @1);
 				}
 			| CSV
 				{
-					$$ = makeDefElem("format", (Node *)makeString("csv"), @1);
+					$$ = makeDefElem("format", (PGNode *)makeString("csv"), @1);
 				}
 			| HEADER_P
 				{
-					$$ = makeDefElem("header", (Node *)makeInteger(TRUE), @1);
+					$$ = makeDefElem("header", (PGNode *)makeInteger(TRUE), @1);
 				}
 			| QUOTE opt_as Sconst
 				{
-					$$ = makeDefElem("quote", (Node *)makeString($3), @1);
+					$$ = makeDefElem("quote", (PGNode *)makeString($3), @1);
 				}
 			| ESCAPE opt_as Sconst
 				{
-					$$ = makeDefElem("escape", (Node *)makeString($3), @1);
+					$$ = makeDefElem("escape", (PGNode *)makeString($3), @1);
 				}
 			| FORCE QUOTE columnList
 				{
-					$$ = makeDefElem("force_quote", (Node *)$3, @1);
+					$$ = makeDefElem("force_quote", (PGNode *)$3, @1);
 				}
 			| FORCE QUOTE '*'
 				{
-					$$ = makeDefElem("force_quote", (Node *)makeNode(A_Star), @1);
+					$$ = makeDefElem("force_quote", (PGNode *)makeNode(PGAStar), @1);
 				}
 			| FORCE NOT NULL_P columnList
 				{
-					$$ = makeDefElem("force_not_null", (Node *)$4, @1);
+					$$ = makeDefElem("force_not_null", (PGNode *)$4, @1);
 				}
 			| FORCE NULL_P columnList
 				{
-					$$ = makeDefElem("force_null", (Node *)$3, @1);
+					$$ = makeDefElem("force_null", (PGNode *)$3, @1);
 				}
 			| ENCODING Sconst
 				{
-					$$ = makeDefElem("encoding", (Node *)makeString($2), @1);
+					$$ = makeDefElem("encoding", (PGNode *)makeString($2), @1);
 				}
 		;
 
 
 copy_generic_opt_arg_list_item:
-			opt_boolean_or_string	{ $$ = (Node *) makeString($1); }
+			opt_boolean_or_string	{ $$ = (PGNode *) makeString($1); }
 		;
 
 

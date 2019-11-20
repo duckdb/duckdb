@@ -1,43 +1,43 @@
 TransactionStmt:
 			ABORT_P opt_transaction
 				{
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_ROLLBACK;
+					PGTransactionStmt *n = makeNode(PGTransactionStmt);
+					n->kind = PG_TRANS_STMT_ROLLBACK;
 					n->options = NIL;
-					$$ = (Node *)n;
+					$$ = (PGNode *)n;
 				}
 			| BEGIN_P opt_transaction
 				{
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_BEGIN;
-					$$ = (Node *)n;
+					PGTransactionStmt *n = makeNode(PGTransactionStmt);
+					n->kind = PG_TRANS_STMT_BEGIN;
+					$$ = (PGNode *)n;
 				}
 			| START opt_transaction
 				{
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_START;
-					$$ = (Node *)n;
+					PGTransactionStmt *n = makeNode(PGTransactionStmt);
+					n->kind = PG_TRANS_STMT_START;
+					$$ = (PGNode *)n;
 				}
 			| COMMIT opt_transaction
 				{
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_COMMIT;
+					PGTransactionStmt *n = makeNode(PGTransactionStmt);
+					n->kind = PG_TRANS_STMT_COMMIT;
 					n->options = NIL;
-					$$ = (Node *)n;
+					$$ = (PGNode *)n;
 				}
 			| END_P opt_transaction
 				{
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_COMMIT;
+					PGTransactionStmt *n = makeNode(PGTransactionStmt);
+					n->kind = PG_TRANS_STMT_COMMIT;
 					n->options = NIL;
-					$$ = (Node *)n;
+					$$ = (PGNode *)n;
 				}
 			| ROLLBACK opt_transaction
 				{
-					TransactionStmt *n = makeNode(TransactionStmt);
-					n->kind = TRANS_STMT_ROLLBACK;
+					PGTransactionStmt *n = makeNode(PGTransactionStmt);
+					n->kind = PG_TRANS_STMT_ROLLBACK;
 					n->options = NIL;
-					$$ = (Node *)n;
+					$$ = (PGNode *)n;
 				}
 		;
 

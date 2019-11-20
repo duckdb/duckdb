@@ -4,7 +4,7 @@
  *	  Common header for some locking-related declarations.
  *
  *
- * Copyright (c) 2014-2017, PostgreSQL Global Development Group
+ * Copyright (c) 2014-2017, PostgreSQL Global Development PGGroup
  *
  * src/include/nodes/lockoptions.h
  *
@@ -17,14 +17,14 @@
  * The ordering here is important, because the highest numerical value takes
  * precedence when a RTE is specified multiple ways.  See applyLockingClause.
  */
-typedef enum LockClauseStrength
+typedef enum PGLockClauseStrength
 {
-	LCS_NONE,					/* no such clause - only used in PlanRowMark */
-	LCS_FORKEYSHARE,			/* FOR KEY SHARE */
-	LCS_FORSHARE,				/* FOR SHARE */
-	LCS_FORNOKEYUPDATE,			/* FOR NO KEY UPDATE */
+	PG_LCS_NONE,					/* no such clause - only used in PGPlanRowMark */
+	PG_LCS_FORKEYSHARE,			/* FOR KEY SHARE */
+	PG_LCS_FORSHARE,				/* FOR SHARE */
+	PG_LCS_FORNOKEYUPDATE,			/* FOR NO KEY UPDATE */
 	LCS_FORUPDATE				/* FOR UPDATE */
-} LockClauseStrength;
+} PGLockClauseStrength;
 
 /*
  * This enum controls how to deal with rows being locked by FOR UPDATE/SHARE
@@ -32,13 +32,13 @@ typedef enum LockClauseStrength
  * The ordering here is important, because the highest numerical value takes
  * precedence when a RTE is specified multiple ways.  See applyLockingClause.
  */
-typedef enum LockWaitPolicy
+typedef enum PGLockWaitPolicy
 {
 	/* Wait for the lock to become available (default behavior) */
-	LockWaitBlock,
+	PGLockWaitBlock,
 	/* Skip rows that can't be locked (SKIP LOCKED) */
-	LockWaitSkip,
+	PGLockWaitSkip,
 	/* Raise an error if a row cannot be locked (NOWAIT) */
 	LockWaitError
-} LockWaitPolicy;
+} PGLockWaitPolicy;
 

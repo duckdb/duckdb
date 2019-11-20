@@ -6,44 +6,44 @@
  *****************************************************************************/
 ExecuteStmt: EXECUTE name execute_param_clause
 				{
-					ExecuteStmt *n = makeNode(ExecuteStmt);
+					PGExecuteStmt *n = makeNode(PGExecuteStmt);
 					n->name = $2;
 					n->params = $3;
-					$$ = (Node *) n;
+					$$ = (PGNode *) n;
 				}
 			| CREATE OptTemp TABLE create_as_target AS
 				EXECUTE name execute_param_clause opt_with_data
 				{
-					CreateTableAsStmt *ctas = makeNode(CreateTableAsStmt);
-					ExecuteStmt *n = makeNode(ExecuteStmt);
+					PGCreateTableAsStmt *ctas = makeNode(PGCreateTableAsStmt);
+					PGExecuteStmt *n = makeNode(PGExecuteStmt);
 					n->name = $7;
 					n->params = $8;
-					ctas->query = (Node *) n;
+					ctas->query = (PGNode *) n;
 					ctas->into = $4;
-					ctas->relkind = OBJECT_TABLE;
+					ctas->relkind = PG_OBJECT_TABLE;
 					ctas->is_select_into = false;
 					ctas->if_not_exists = false;
-					/* cram additional flags into the IntoClause */
+					/* cram additional flags into the PGIntoClause */
 					$4->rel->relpersistence = $2;
 					$4->skipData = !($9);
-					$$ = (Node *) ctas;
+					$$ = (PGNode *) ctas;
 				}
 			| CREATE OptTemp TABLE IF_P NOT EXISTS create_as_target AS
 				EXECUTE name execute_param_clause opt_with_data
 				{
-					CreateTableAsStmt *ctas = makeNode(CreateTableAsStmt);
-					ExecuteStmt *n = makeNode(ExecuteStmt);
+					PGCreateTableAsStmt *ctas = makeNode(PGCreateTableAsStmt);
+					PGExecuteStmt *n = makeNode(PGExecuteStmt);
 					n->name = $10;
 					n->params = $11;
-					ctas->query = (Node *) n;
+					ctas->query = (PGNode *) n;
 					ctas->into = $7;
-					ctas->relkind = OBJECT_TABLE;
+					ctas->relkind = PG_OBJECT_TABLE;
 					ctas->is_select_into = false;
 					ctas->if_not_exists = true;
-					/* cram additional flags into the IntoClause */
+					/* cram additional flags into the PGIntoClause */
 					$7->rel->relpersistence = $2;
 					$7->skipData = !($12);
-					$$ = (Node *) ctas;
+					$$ = (PGNode *) ctas;
 				}
 		;
 

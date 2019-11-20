@@ -8,7 +8,7 @@
 ViewStmt: CREATE OptTemp VIEW qualified_name opt_column_list opt_reloptions
 				AS SelectStmt opt_check_option
 				{
-					ViewStmt *n = makeNode(ViewStmt);
+					PGViewStmt *n = makeNode(PGViewStmt);
 					n->view = $4;
 					n->view->relpersistence = $2;
 					n->aliases = $5;
@@ -16,12 +16,12 @@ ViewStmt: CREATE OptTemp VIEW qualified_name opt_column_list opt_reloptions
 					n->replace = false;
 					n->options = $6;
 					n->withCheckOption = $9;
-					$$ = (Node *) n;
+					$$ = (PGNode *) n;
 				}
 		| CREATE OR REPLACE OptTemp VIEW qualified_name opt_column_list opt_reloptions
 				AS SelectStmt opt_check_option
 				{
-					ViewStmt *n = makeNode(ViewStmt);
+					PGViewStmt *n = makeNode(PGViewStmt);
 					n->view = $6;
 					n->view->relpersistence = $4;
 					n->aliases = $7;
@@ -29,12 +29,12 @@ ViewStmt: CREATE OptTemp VIEW qualified_name opt_column_list opt_reloptions
 					n->replace = true;
 					n->options = $8;
 					n->withCheckOption = $11;
-					$$ = (Node *) n;
+					$$ = (PGNode *) n;
 				}
 		| CREATE OptTemp RECURSIVE VIEW qualified_name '(' columnList ')' opt_reloptions
 				AS SelectStmt opt_check_option
 				{
-					ViewStmt *n = makeNode(ViewStmt);
+					PGViewStmt *n = makeNode(PGViewStmt);
 					n->view = $5;
 					n->view->relpersistence = $2;
 					n->aliases = $7;
@@ -42,17 +42,17 @@ ViewStmt: CREATE OptTemp VIEW qualified_name opt_column_list opt_reloptions
 					n->replace = false;
 					n->options = $9;
 					n->withCheckOption = $12;
-					if (n->withCheckOption != NO_CHECK_OPTION)
+					if (n->withCheckOption != PG_NO_CHECK_OPTION)
 						ereport(ERROR,
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
 								 errmsg("WITH CHECK OPTION not supported on recursive views"),
 								 parser_errposition(@12)));
-					$$ = (Node *) n;
+					$$ = (PGNode *) n;
 				}
 		| CREATE OR REPLACE OptTemp RECURSIVE VIEW qualified_name '(' columnList ')' opt_reloptions
 				AS SelectStmt opt_check_option
 				{
-					ViewStmt *n = makeNode(ViewStmt);
+					PGViewStmt *n = makeNode(PGViewStmt);
 					n->view = $7;
 					n->view->relpersistence = $4;
 					n->aliases = $9;
@@ -60,12 +60,12 @@ ViewStmt: CREATE OptTemp VIEW qualified_name opt_column_list opt_reloptions
 					n->replace = true;
 					n->options = $11;
 					n->withCheckOption = $14;
-					if (n->withCheckOption != NO_CHECK_OPTION)
+					if (n->withCheckOption != PG_NO_CHECK_OPTION)
 						ereport(ERROR,
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
 								 errmsg("WITH CHECK OPTION not supported on recursive views"),
 								 parser_errposition(@14)));
-					$$ = (Node *) n;
+					$$ = (PGNode *) n;
 				}
 		;
 
@@ -73,6 +73,6 @@ ViewStmt: CREATE OptTemp VIEW qualified_name opt_column_list opt_reloptions
 opt_check_option:
 		WITH CHECK OPTION				{ $$ = CASCADED_CHECK_OPTION; }
 		| WITH CASCADED CHECK OPTION	{ $$ = CASCADED_CHECK_OPTION; }
-		| WITH LOCAL CHECK OPTION		{ $$ = LOCAL_CHECK_OPTION; }
-		| /* EMPTY */					{ $$ = NO_CHECK_OPTION; }
+		| WITH LOCAL CHECK OPTION		{ $$ = PG_LOCAL_CHECK_OPTION; }
+		| /* EMPTY */					{ $$ = PG_NO_CHECK_OPTION; }
 		;

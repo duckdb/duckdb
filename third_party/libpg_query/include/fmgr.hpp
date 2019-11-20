@@ -8,7 +8,7 @@
  * or call fmgr-callable functions.
  *
  *
- * Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2017, PostgreSQL Global Development PGGroup
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/fmgr.h
@@ -18,14 +18,14 @@
 #pragma once
 
 /* We don't want to include primnodes.h here, so make some stub references */
-typedef struct Node *fmNodePtr;
-typedef struct Aggref *fmAggrefPtr;
+typedef struct PGNode *pg_fmNodePtr;
+typedef struct PGAggref *pg_fmAggrefPtr;
 
 /* Likewise, avoid including execnodes.h here */
-typedef void (*fmExprContextCallbackFunction) (Datum arg);
+typedef void (*fmExprContextCallbackFunction) (PGDatum arg);
 
 /* Likewise, avoid including stringinfo.h here */
-typedef struct StringInfoData *fmStringInfo;
+typedef struct PGStringInfoData *pg_fmStringInfo;
 
 
 /*
@@ -34,9 +34,9 @@ typedef struct StringInfoData *fmStringInfo;
  * signature.)
  */
 
-typedef struct FunctionCallInfoData *FunctionCallInfo;
+typedef struct PGFunctionCallInfoData *PGFunctionCallInfo;
 
-typedef Datum (*PGFunction) (FunctionCallInfo fcinfo);
+typedef PGDatum (*PGFunction) (PGFunctionCallInfo fcinfo);
 
 /*
  * This struct holds the system-catalog information that must be looked up
@@ -46,24 +46,24 @@ typedef Datum (*PGFunction) (FunctionCallInfo fcinfo);
  *
  * Note that fn_expr really is parse-time-determined information about the
  * arguments, rather than about the function itself.  But it's convenient
- * to store it here rather than in FunctionCallInfoData, where it might more
+ * to store it here rather than in PGFunctionCallInfoData, where it might more
  * logically belong.
  *
  * fn_extra is available for use by the called function; all other fields
  * should be treated as read-only after the struct is created.
  */
-typedef struct FmgrInfo
+typedef struct PGFmgrInfo
 {
 	PGFunction	fn_addr;		/* pointer to function or handler to be called */
-	Oid			fn_oid;			/* OID of function (NOT of handler, if any) */
+	PGOid			fn_oid;			/* OID of function (NOT of handler, if any) */
 	short		fn_nargs;		/* number of input args (0..FUNC_MAX_ARGS) */
 	bool		fn_strict;		/* function is "strict" (NULL in => NULL out) */
 	bool		fn_retset;		/* function returns a set */
 	unsigned char fn_stats;		/* collect stats if track_functions > this */
 	void	   *fn_extra;		/* extra space for use by handler */
-	MemoryContext fn_mcxt;		/* memory context to store fn_extra in */
-	fmNodePtr	fn_expr;		/* expression parse tree for call, or NULL */
-} FmgrInfo;
+	PGMemoryContext fn_mcxt;		/* memory context to store fn_extra in */
+	pg_fmNodePtr	fn_expr;		/* expression parse tree for call, or NULL */
+} PGFmgrInfo;
 
 /*
  * This struct is the data actually passed to an fmgr-called function.
@@ -73,44 +73,44 @@ typedef struct FmgrInfo
  * fields.  (In particular, scribbling on the argument arrays is a bad idea,
  * since some callers assume they can re-call with the same arguments.)
  */
-typedef struct FunctionCallInfoData
+typedef struct PGFunctionCallInfoData
 {
-	FmgrInfo   *flinfo;			/* ptr to lookup info used for this call */
-	fmNodePtr	context;		/* pass info about context of call */
-	fmNodePtr	resultinfo;		/* pass or return extra info about result */
-	Oid			fncollation;	/* collation for function to use */
+	PGFmgrInfo   *flinfo;			/* ptr to lookup info used for this call */
+	pg_fmNodePtr	context;		/* pass info about context of call */
+	pg_fmNodePtr	resultinfo;		/* pass or return extra info about result */
+	PGOid			fncollation;	/* collation for function to use */
 	bool		isnull;			/* function must set true if result is NULL */
 	short		nargs;			/* # arguments actually passed */
-	Datum		arg[FUNC_MAX_ARGS]; /* Arguments passed to function */
+	PGDatum		arg[FUNC_MAX_ARGS]; /* Arguments passed to function */
 	bool		argnull[FUNC_MAX_ARGS]; /* T if arg[i] is actually NULL */
-} FunctionCallInfoData;
+} PGFunctionCallInfoData;
 
 /*
- * This routine fills a FmgrInfo struct, given the OID
+ * This routine fills a PGFmgrInfo struct, given the OID
  * of the function to be called.
  */
-extern void fmgr_info(Oid functionId, FmgrInfo *finfo);
+extern void fmgr_info(PGOid functionId, PGFmgrInfo *finfo);
 
 /*
- * Same, when the FmgrInfo struct is in a memory context longer-lived than
+ * Same, when the PGFmgrInfo struct is in a memory context longer-lived than
  * CurrentMemoryContext.  The specified context will be set as fn_mcxt
  * and used to hold all subsidiary data of finfo.
  */
-extern void fmgr_info_cxt(Oid functionId, FmgrInfo *finfo,
-			  MemoryContext mcxt);
+extern void fmgr_info_cxt(PGOid functionId, PGFmgrInfo *finfo,
+			  PGMemoryContext mcxt);
 
 /* Convenience macro for setting the fn_expr field */
 #define fmgr_info_set_expr(expr, finfo) \
 	((finfo)->fn_expr = (expr))
 
 /*
- * Copy an FmgrInfo struct
+ * Copy an PGFmgrInfo struct
  */
-extern void fmgr_info_copy(FmgrInfo *dstinfo, FmgrInfo *srcinfo,
-			   MemoryContext destcxt);
+extern void fmgr_info_copy(PGFmgrInfo *dstinfo, PGFmgrInfo *srcinfo,
+			   PGMemoryContext destcxt);
 
 /*
- * This macro initializes all the fields of a FunctionCallInfoData except
+ * This macro initializes all the fields of a PGFunctionCallInfoData except
  * for the arg[] and argnull[] arrays.  Performance testing has shown that
  * the fastest way to set up argnull[] for small numbers of arguments is to
  * explicitly set each required element to false, so we don't try to zero
@@ -127,8 +127,8 @@ extern void fmgr_info_copy(FmgrInfo *dstinfo, FmgrInfo *srcinfo,
 	} while (0)
 
 /*
- * This macro invokes a function given a filled-in FunctionCallInfoData
- * struct.  The macro result is the returned Datum --- but note that
+ * This macro invokes a function given a filled-in PGFunctionCallInfoData
+ * struct.  The macro result is the returned PGDatum --- but note that
  * caller must still check fcinfo->isnull!	Also, if function is strict,
  * it is caller's responsibility to verify that no null arguments are present
  * before calling.
@@ -141,7 +141,7 @@ extern void fmgr_info_copy(FmgrInfo *dstinfo, FmgrInfo *srcinfo,
  *
  * A C-coded fmgr-compatible function should be declared as
  *
- *		Datum
+ *		PGDatum
  *		function_name(PG_FUNCTION_ARGS)
  *		{
  *			...
@@ -154,7 +154,7 @@ extern void fmgr_info_copy(FmgrInfo *dstinfo, FmgrInfo *srcinfo,
  */
 
 /* Standard parameter list for fmgr-compatible functions */
-#define PG_FUNCTION_ARGS	FunctionCallInfo fcinfo
+#define PG_FUNCTION_ARGS	PGFunctionCallInfo fcinfo
 
 /*
  * Get collation function should use.
@@ -174,7 +174,7 @@ extern void fmgr_info_copy(FmgrInfo *dstinfo, FmgrInfo *srcinfo,
 
 /*
  * Support for fetching detoasted copies of toastable datatypes (all of
- * which are varlena types).  pg_detoast_datum() gives you either the input
+ * which are pg_varlena types).  pg_detoast_datum() gives you either the input
  * datum (if not toasted) or a detoasted copy allocated with palloc().
  * pg_detoast_datum_copy() always gives you a palloc'd copy --- use it
  * if you need a modifiable copy of the input.  Caller is expected to have
@@ -187,7 +187,7 @@ extern void fmgr_info_copy(FmgrInfo *dstinfo, FmgrInfo *srcinfo,
  *
  * In consumers oblivious to data alignment, call PG_DETOAST_DATUM_PACKED(),
  * VARDATA_ANY(), VARSIZE_ANY() and VARSIZE_ANY_EXHDR().  Elsewhere, call
- * PG_DETOAST_DATUM(), VARDATA() and VARSIZE().  Directly fetching an int16,
+ * PG_DETOAST_DATUM(), VARDATA() and VARSIZE().  Directly fetching an int16_t,
  * int32_t or wider field in the struct representing the datum layout requires
  * aligned data.  memcpy() is alignment-oblivious, as are most operations on
  * datatypes, such as text, whose layout struct contains only char fields.
@@ -195,22 +195,22 @@ extern void fmgr_info_copy(FmgrInfo *dstinfo, FmgrInfo *srcinfo,
  * Note: it'd be nice if these could be macros, but I see no way to do that
  * without evaluating the arguments multiple times, which is NOT acceptable.
  */
-extern struct varlena *pg_detoast_datum(struct varlena *datum);
-extern struct varlena *pg_detoast_datum_copy(struct varlena *datum);
-extern struct varlena *pg_detoast_datum_slice(struct varlena *datum,
+extern struct pg_varlena *pg_detoast_datum(struct pg_varlena *datum);
+extern struct pg_varlena *pg_detoast_datum_copy(struct pg_varlena *datum);
+extern struct pg_varlena *pg_detoast_datum_slice(struct pg_varlena *datum,
 					   int32_t first, int32_t count);
-extern struct varlena *pg_detoast_datum_packed(struct varlena *datum);
+extern struct pg_varlena *pg_detoast_datum_packed(struct pg_varlena *datum);
 
 #define PG_DETOAST_DATUM(datum) \
-	pg_detoast_datum((struct varlena *) DatumGetPointer(datum))
+	pg_detoast_datum((struct pg_varlena *) DatumGetPointer(datum))
 #define PG_DETOAST_DATUM_COPY(datum) \
-	pg_detoast_datum_copy((struct varlena *) DatumGetPointer(datum))
+	pg_detoast_datum_copy((struct pg_varlena *) DatumGetPointer(datum))
 #define PG_DETOAST_DATUM_SLICE(datum,f,c) \
-		pg_detoast_datum_slice((struct varlena *) DatumGetPointer(datum), \
-		(int32) (f), (int32) (c))
-/* WARNING -- unaligned pointer */
+		pg_detoast_datum_slice((struct pg_varlena *) DatumGetPointer(datum), \
+		(int32_t) (f), (int32_t) (c))
+/* PGWARNING -- unaligned pointer */
 #define PG_DETOAST_DATUM_PACKED(datum) \
-	pg_detoast_datum_packed((struct varlena *) DatumGetPointer(datum))
+	pg_detoast_datum_packed((struct pg_varlena *) DatumGetPointer(datum))
 
 /*
  * Support for cleaning up detoasted copies of inputs.  This must only
@@ -245,12 +245,12 @@ extern struct varlena *pg_detoast_datum_packed(struct varlena *datum);
 #define PG_GETARG_FLOAT8(n)  DatumGetFloat8(PG_GETARG_DATUM(n))
 #define PG_GETARG_INT64(n)	 DatumGetInt64(PG_GETARG_DATUM(n))
 /* use this if you want the raw, possibly-toasted input datum: */
-#define PG_GETARG_RAW_VARLENA_P(n)	((struct varlena *) PG_GETARG_POINTER(n))
+#define PG_GETARG_RAW_VARLENA_P(n)	((struct pg_varlena *) PG_GETARG_POINTER(n))
 /* use this if you want the input datum de-toasted: */
 #define PG_GETARG_VARLENA_P(n) PG_DETOAST_DATUM(PG_GETARG_DATUM(n))
 /* and this if you can handle 1-byte-header datums: */
 #define PG_GETARG_VARLENA_PP(n) PG_DETOAST_DATUM_PACKED(PG_GETARG_DATUM(n))
-/* DatumGetFoo macros for varlena types will typically look like this: */
+/* DatumGetFoo macros for pg_varlena types will typically look like this: */
 #define DatumGetByteaPP(X)			((bytea *) PG_DETOAST_DATUM_PACKED(X))
 #define DatumGetTextPP(X)			((text *) PG_DETOAST_DATUM_PACKED(X))
 #define DatumGetBpCharPP(X)			((BpChar *) PG_DETOAST_DATUM_PACKED(X))
@@ -267,7 +267,7 @@ extern struct varlena *pg_detoast_datum_packed(struct varlena *datum);
 #define DatumGetTextPSlice(X,m,n)	((text *) PG_DETOAST_DATUM_SLICE(X,m,n))
 #define DatumGetBpCharPSlice(X,m,n) ((BpChar *) PG_DETOAST_DATUM_SLICE(X,m,n))
 #define DatumGetVarCharPSlice(X,m,n) ((VarChar *) PG_DETOAST_DATUM_SLICE(X,m,n))
-/* GETARG macros for varlena types will typically look like this: */
+/* GETARG macros for pg_varlena types will typically look like this: */
 #define PG_GETARG_BYTEA_PP(n)		DatumGetByteaPP(PG_GETARG_DATUM(n))
 #define PG_GETARG_TEXT_PP(n)		DatumGetTextPP(PG_GETARG_DATUM(n))
 #define PG_GETARG_BPCHAR_PP(n)		DatumGetBpCharPP(PG_GETARG_DATUM(n))
@@ -302,10 +302,10 @@ extern struct varlena *pg_detoast_datum_packed(struct varlena *datum);
 
 /* To return a NULL do this: */
 #define PG_RETURN_NULL()  \
-	do { fcinfo->isnull = true; return (Datum) 0; } while (0)
+	do { fcinfo->isnull = true; return (PGDatum) 0; } while (0)
 
 /* A few internal functions return void (which is not the same as NULL!) */
-#define PG_RETURN_VOID()	 return (Datum) 0
+#define PG_RETURN_VOID()	 return (PGDatum) 0
 
 /* Macros for returning results of standard types */
 
@@ -370,7 +370,7 @@ typedef const Pg_finfo_record *(*PGFInfoFunction) (void);
  *	info function, since authors shouldn't need to be explicitly aware of it.
  */
 #define PG_FUNCTION_INFO_V1(funcname) \
-extern Datum funcname(PG_FUNCTION_ARGS); \
+extern PGDatum funcname(PG_FUNCTION_ARGS); \
 extern PGDLLEXPORT const Pg_finfo_record * CppConcat(pg_finfo_,funcname)(void); \
 const Pg_finfo_record * \
 CppConcat(pg_finfo_,funcname) (void) \
@@ -459,36 +459,36 @@ extern int no_such_variable
  * directly-computed parameter list.  Note that neither arguments nor result
  * are allowed to be NULL.
  */
-extern Datum DirectFunctionCall1Coll(PGFunction func, Oid collation,
-						Datum arg1);
-extern Datum DirectFunctionCall2Coll(PGFunction func, Oid collation,
-						Datum arg1, Datum arg2);
-extern Datum DirectFunctionCall3Coll(PGFunction func, Oid collation,
-						Datum arg1, Datum arg2,
-						Datum arg3);
-extern Datum DirectFunctionCall4Coll(PGFunction func, Oid collation,
-						Datum arg1, Datum arg2,
-						Datum arg3, Datum arg4);
-extern Datum DirectFunctionCall5Coll(PGFunction func, Oid collation,
-						Datum arg1, Datum arg2,
-						Datum arg3, Datum arg4, Datum arg5);
-extern Datum DirectFunctionCall6Coll(PGFunction func, Oid collation,
-						Datum arg1, Datum arg2,
-						Datum arg3, Datum arg4, Datum arg5,
-						Datum arg6);
-extern Datum DirectFunctionCall7Coll(PGFunction func, Oid collation,
-						Datum arg1, Datum arg2,
-						Datum arg3, Datum arg4, Datum arg5,
-						Datum arg6, Datum arg7);
-extern Datum DirectFunctionCall8Coll(PGFunction func, Oid collation,
-						Datum arg1, Datum arg2,
-						Datum arg3, Datum arg4, Datum arg5,
-						Datum arg6, Datum arg7, Datum arg8);
-extern Datum DirectFunctionCall9Coll(PGFunction func, Oid collation,
-						Datum arg1, Datum arg2,
-						Datum arg3, Datum arg4, Datum arg5,
-						Datum arg6, Datum arg7, Datum arg8,
-						Datum arg9);
+extern PGDatum DirectFunctionCall1Coll(PGFunction func, PGOid collation,
+						PGDatum arg1);
+extern PGDatum DirectFunctionCall2Coll(PGFunction func, PGOid collation,
+						PGDatum arg1, PGDatum arg2);
+extern PGDatum DirectFunctionCall3Coll(PGFunction func, PGOid collation,
+						PGDatum arg1, PGDatum arg2,
+						PGDatum arg3);
+extern PGDatum DirectFunctionCall4Coll(PGFunction func, PGOid collation,
+						PGDatum arg1, PGDatum arg2,
+						PGDatum arg3, PGDatum arg4);
+extern PGDatum DirectFunctionCall5Coll(PGFunction func, PGOid collation,
+						PGDatum arg1, PGDatum arg2,
+						PGDatum arg3, PGDatum arg4, PGDatum arg5);
+extern PGDatum DirectFunctionCall6Coll(PGFunction func, PGOid collation,
+						PGDatum arg1, PGDatum arg2,
+						PGDatum arg3, PGDatum arg4, PGDatum arg5,
+						PGDatum arg6);
+extern PGDatum DirectFunctionCall7Coll(PGFunction func, PGOid collation,
+						PGDatum arg1, PGDatum arg2,
+						PGDatum arg3, PGDatum arg4, PGDatum arg5,
+						PGDatum arg6, PGDatum arg7);
+extern PGDatum DirectFunctionCall8Coll(PGFunction func, PGOid collation,
+						PGDatum arg1, PGDatum arg2,
+						PGDatum arg3, PGDatum arg4, PGDatum arg5,
+						PGDatum arg6, PGDatum arg7, PGDatum arg8);
+extern PGDatum DirectFunctionCall9Coll(PGFunction func, PGOid collation,
+						PGDatum arg1, PGDatum arg2,
+						PGDatum arg3, PGDatum arg4, PGDatum arg5,
+						PGDatum arg6, PGDatum arg7, PGDatum arg8,
+						PGDatum arg9);
 
 /*
  * These functions work like the DirectFunctionCall functions except that
@@ -498,45 +498,45 @@ extern Datum DirectFunctionCall9Coll(PGFunction func, Oid collation,
  * not the callee.  Conversely, the calling function should not have
  * used fn_extra, unless its use is known to be compatible with the callee's.
  */
-extern Datum CallerFInfoFunctionCall1(PGFunction func, FmgrInfo *flinfo,
-						 Oid collation, Datum arg1);
-extern Datum CallerFInfoFunctionCall2(PGFunction func, FmgrInfo *flinfo,
-						 Oid collation, Datum arg1, Datum arg2);
+extern PGDatum CallerFInfoFunctionCall1(PGFunction func, PGFmgrInfo *flinfo,
+						 PGOid collation, PGDatum arg1);
+extern PGDatum CallerFInfoFunctionCall2(PGFunction func, PGFmgrInfo *flinfo,
+						 PGOid collation, PGDatum arg1, PGDatum arg2);
 
 /* These are for invocation of a previously-looked-up function with a
  * directly-computed parameter list.  Note that neither arguments nor result
  * are allowed to be NULL.
  */
-extern Datum FunctionCall1Coll(FmgrInfo *flinfo, Oid collation,
-				  Datum arg1);
-extern Datum FunctionCall2Coll(FmgrInfo *flinfo, Oid collation,
-				  Datum arg1, Datum arg2);
-extern Datum FunctionCall3Coll(FmgrInfo *flinfo, Oid collation,
-				  Datum arg1, Datum arg2,
-				  Datum arg3);
-extern Datum FunctionCall4Coll(FmgrInfo *flinfo, Oid collation,
-				  Datum arg1, Datum arg2,
-				  Datum arg3, Datum arg4);
-extern Datum FunctionCall5Coll(FmgrInfo *flinfo, Oid collation,
-				  Datum arg1, Datum arg2,
-				  Datum arg3, Datum arg4, Datum arg5);
-extern Datum FunctionCall6Coll(FmgrInfo *flinfo, Oid collation,
-				  Datum arg1, Datum arg2,
-				  Datum arg3, Datum arg4, Datum arg5,
-				  Datum arg6);
-extern Datum FunctionCall7Coll(FmgrInfo *flinfo, Oid collation,
-				  Datum arg1, Datum arg2,
-				  Datum arg3, Datum arg4, Datum arg5,
-				  Datum arg6, Datum arg7);
-extern Datum FunctionCall8Coll(FmgrInfo *flinfo, Oid collation,
-				  Datum arg1, Datum arg2,
-				  Datum arg3, Datum arg4, Datum arg5,
-				  Datum arg6, Datum arg7, Datum arg8);
-extern Datum FunctionCall9Coll(FmgrInfo *flinfo, Oid collation,
-				  Datum arg1, Datum arg2,
-				  Datum arg3, Datum arg4, Datum arg5,
-				  Datum arg6, Datum arg7, Datum arg8,
-				  Datum arg9);
+extern PGDatum FunctionCall1Coll(PGFmgrInfo *flinfo, PGOid collation,
+				  PGDatum arg1);
+extern PGDatum FunctionCall2Coll(PGFmgrInfo *flinfo, PGOid collation,
+				  PGDatum arg1, PGDatum arg2);
+extern PGDatum FunctionCall3Coll(PGFmgrInfo *flinfo, PGOid collation,
+				  PGDatum arg1, PGDatum arg2,
+				  PGDatum arg3);
+extern PGDatum FunctionCall4Coll(PGFmgrInfo *flinfo, PGOid collation,
+				  PGDatum arg1, PGDatum arg2,
+				  PGDatum arg3, PGDatum arg4);
+extern PGDatum FunctionCall5Coll(PGFmgrInfo *flinfo, PGOid collation,
+				  PGDatum arg1, PGDatum arg2,
+				  PGDatum arg3, PGDatum arg4, PGDatum arg5);
+extern PGDatum FunctionCall6Coll(PGFmgrInfo *flinfo, PGOid collation,
+				  PGDatum arg1, PGDatum arg2,
+				  PGDatum arg3, PGDatum arg4, PGDatum arg5,
+				  PGDatum arg6);
+extern PGDatum FunctionCall7Coll(PGFmgrInfo *flinfo, PGOid collation,
+				  PGDatum arg1, PGDatum arg2,
+				  PGDatum arg3, PGDatum arg4, PGDatum arg5,
+				  PGDatum arg6, PGDatum arg7);
+extern PGDatum FunctionCall8Coll(PGFmgrInfo *flinfo, PGOid collation,
+				  PGDatum arg1, PGDatum arg2,
+				  PGDatum arg3, PGDatum arg4, PGDatum arg5,
+				  PGDatum arg6, PGDatum arg7, PGDatum arg8);
+extern PGDatum FunctionCall9Coll(PGFmgrInfo *flinfo, PGOid collation,
+				  PGDatum arg1, PGDatum arg2,
+				  PGDatum arg3, PGDatum arg4, PGDatum arg5,
+				  PGDatum arg6, PGDatum arg7, PGDatum arg8,
+				  PGDatum arg9);
 
 /* These are for invocation of a function identified by OID with a
  * directly-computed parameter list.  Note that neither arguments nor result
@@ -544,37 +544,37 @@ extern Datum FunctionCall9Coll(FmgrInfo *flinfo, Oid collation,
  * FunctionCallN().  If the same function is to be invoked repeatedly, do the
  * fmgr_info() once and then use FunctionCallN().
  */
-extern Datum OidFunctionCall0Coll(Oid functionId, Oid collation);
-extern Datum OidFunctionCall1Coll(Oid functionId, Oid collation,
-					 Datum arg1);
-extern Datum OidFunctionCall2Coll(Oid functionId, Oid collation,
-					 Datum arg1, Datum arg2);
-extern Datum OidFunctionCall3Coll(Oid functionId, Oid collation,
-					 Datum arg1, Datum arg2,
-					 Datum arg3);
-extern Datum OidFunctionCall4Coll(Oid functionId, Oid collation,
-					 Datum arg1, Datum arg2,
-					 Datum arg3, Datum arg4);
-extern Datum OidFunctionCall5Coll(Oid functionId, Oid collation,
-					 Datum arg1, Datum arg2,
-					 Datum arg3, Datum arg4, Datum arg5);
-extern Datum OidFunctionCall6Coll(Oid functionId, Oid collation,
-					 Datum arg1, Datum arg2,
-					 Datum arg3, Datum arg4, Datum arg5,
-					 Datum arg6);
-extern Datum OidFunctionCall7Coll(Oid functionId, Oid collation,
-					 Datum arg1, Datum arg2,
-					 Datum arg3, Datum arg4, Datum arg5,
-					 Datum arg6, Datum arg7);
-extern Datum OidFunctionCall8Coll(Oid functionId, Oid collation,
-					 Datum arg1, Datum arg2,
-					 Datum arg3, Datum arg4, Datum arg5,
-					 Datum arg6, Datum arg7, Datum arg8);
-extern Datum OidFunctionCall9Coll(Oid functionId, Oid collation,
-					 Datum arg1, Datum arg2,
-					 Datum arg3, Datum arg4, Datum arg5,
-					 Datum arg6, Datum arg7, Datum arg8,
-					 Datum arg9);
+extern PGDatum OidFunctionCall0Coll(PGOid functionId, PGOid collation);
+extern PGDatum OidFunctionCall1Coll(PGOid functionId, PGOid collation,
+					 PGDatum arg1);
+extern PGDatum OidFunctionCall2Coll(PGOid functionId, PGOid collation,
+					 PGDatum arg1, PGDatum arg2);
+extern PGDatum OidFunctionCall3Coll(PGOid functionId, PGOid collation,
+					 PGDatum arg1, PGDatum arg2,
+					 PGDatum arg3);
+extern PGDatum OidFunctionCall4Coll(PGOid functionId, PGOid collation,
+					 PGDatum arg1, PGDatum arg2,
+					 PGDatum arg3, PGDatum arg4);
+extern PGDatum OidFunctionCall5Coll(PGOid functionId, PGOid collation,
+					 PGDatum arg1, PGDatum arg2,
+					 PGDatum arg3, PGDatum arg4, PGDatum arg5);
+extern PGDatum OidFunctionCall6Coll(PGOid functionId, PGOid collation,
+					 PGDatum arg1, PGDatum arg2,
+					 PGDatum arg3, PGDatum arg4, PGDatum arg5,
+					 PGDatum arg6);
+extern PGDatum OidFunctionCall7Coll(PGOid functionId, PGOid collation,
+					 PGDatum arg1, PGDatum arg2,
+					 PGDatum arg3, PGDatum arg4, PGDatum arg5,
+					 PGDatum arg6, PGDatum arg7);
+extern PGDatum OidFunctionCall8Coll(PGOid functionId, PGOid collation,
+					 PGDatum arg1, PGDatum arg2,
+					 PGDatum arg3, PGDatum arg4, PGDatum arg5,
+					 PGDatum arg6, PGDatum arg7, PGDatum arg8);
+extern PGDatum OidFunctionCall9Coll(PGOid functionId, PGOid collation,
+					 PGDatum arg1, PGDatum arg2,
+					 PGDatum arg3, PGDatum arg4, PGDatum arg5,
+					 PGDatum arg6, PGDatum arg7, PGDatum arg8,
+					 PGDatum arg9);
 
 /* These macros allow the collation argument to be omitted (with a default of
  * InvalidOid, ie, no collation).  They exist mostly for backwards
@@ -639,18 +639,18 @@ extern Datum OidFunctionCall9Coll(Oid functionId, Oid collation,
 
 
 /* Special cases for convenient invocation of datatype I/O functions. */
-extern Datum InputFunctionCall(FmgrInfo *flinfo, char *str,
-				  Oid typioparam, int32_t typmod);
-extern Datum OidInputFunctionCall(Oid functionId, char *str,
-					 Oid typioparam, int32_t typmod);
-extern char *OutputFunctionCall(FmgrInfo *flinfo, Datum val);
-extern char *OidOutputFunctionCall(Oid functionId, Datum val);
-extern Datum ReceiveFunctionCall(FmgrInfo *flinfo, fmStringInfo buf,
-					Oid typioparam, int32_t typmod);
-extern Datum OidReceiveFunctionCall(Oid functionId, fmStringInfo buf,
-					   Oid typioparam, int32_t typmod);
-extern bytea *SendFunctionCall(FmgrInfo *flinfo, Datum val);
-extern bytea *OidSendFunctionCall(Oid functionId, Datum val);
+extern PGDatum InputFunctionCall(PGFmgrInfo *flinfo, char *str,
+				  PGOid typioparam, int32_t typmod);
+extern PGDatum OidInputFunctionCall(PGOid functionId, char *str,
+					 PGOid typioparam, int32_t typmod);
+extern char *OutputFunctionCall(PGFmgrInfo *flinfo, PGDatum val);
+extern char *OidOutputFunctionCall(PGOid functionId, PGDatum val);
+extern PGDatum ReceiveFunctionCall(PGFmgrInfo *flinfo, pg_fmStringInfo buf,
+					PGOid typioparam, int32_t typmod);
+extern PGDatum OidReceiveFunctionCall(PGOid functionId, pg_fmStringInfo buf,
+					   PGOid typioparam, int32_t typmod);
+extern bytea *SendFunctionCall(PGFmgrInfo *flinfo, PGDatum val);
+extern bytea *OidSendFunctionCall(PGOid functionId, PGDatum val);
 
 
 /*
@@ -658,14 +658,14 @@ extern bytea *OidSendFunctionCall(Oid functionId, Datum val);
  */
 extern const Pg_finfo_record *fetch_finfo_record(void *filehandle, const char *funcname);
 extern void clear_external_function_hash(void *filehandle);
-extern Oid	fmgr_internal_function(const char *proname);
-extern Oid	get_fn_expr_rettype(FmgrInfo *flinfo);
-extern Oid	get_fn_expr_argtype(FmgrInfo *flinfo, int argnum);
-extern Oid	get_call_expr_argtype(fmNodePtr expr, int argnum);
-extern bool get_fn_expr_arg_stable(FmgrInfo *flinfo, int argnum);
-extern bool get_call_expr_arg_stable(fmNodePtr expr, int argnum);
-extern bool get_fn_expr_variadic(FmgrInfo *flinfo);
-extern bool CheckFunctionValidatorAccess(Oid validatorOid, Oid functionOid);
+extern PGOid	fmgr_internal_function(const char *proname);
+extern PGOid	get_fn_expr_rettype(PGFmgrInfo *flinfo);
+extern PGOid	get_fn_expr_argtype(PGFmgrInfo *flinfo, int argnum);
+extern PGOid	get_call_expr_argtype(pg_fmNodePtr expr, int argnum);
+extern bool get_fn_expr_arg_stable(PGFmgrInfo *flinfo, int argnum);
+extern bool get_call_expr_arg_stable(pg_fmNodePtr expr, int argnum);
+extern bool get_fn_expr_variadic(PGFmgrInfo *flinfo);
+extern bool CheckFunctionValidatorAccess(PGOid validatorOid, PGOid functionOid);
 
 /*
  * Routines in dfmgr.c
@@ -677,8 +677,8 @@ extern PGFunction load_external_function(const char *filename, const char *funcn
 extern PGFunction lookup_external_function(void *filehandle, const char *funcname);
 extern void load_file(const char *filename, bool restricted);
 extern void **find_rendezvous_variable(const char *varName);
-extern Size EstimateLibraryStateSpace(void);
-extern void SerializeLibraryState(Size maxsize, char *start_address);
+extern PGSize EstimateLibraryStateSpace(void);
+extern void SerializeLibraryState(PGSize maxsize, char *start_address);
 extern void RestoreLibraryState(char *start_address);
 
 /*
@@ -692,10 +692,10 @@ extern void RestoreLibraryState(char *start_address);
 #define AGG_CONTEXT_AGGREGATE	1	/* regular aggregate */
 #define AGG_CONTEXT_WINDOW		2	/* window function */
 
-extern int AggCheckCallContext(FunctionCallInfo fcinfo,
-					MemoryContext *aggcontext);
-extern fmAggrefPtr AggGetAggref(FunctionCallInfo fcinfo);
-extern MemoryContext AggGetTempMemoryContext(FunctionCallInfo fcinfo);
-extern void AggRegisterCallback(FunctionCallInfo fcinfo,
+extern int AggCheckCallContext(PGFunctionCallInfo fcinfo,
+					PGMemoryContext *aggcontext);
+extern pg_fmAggrefPtr AggGetAggref(PGFunctionCallInfo fcinfo);
+extern PGMemoryContext AggGetTempMemoryContext(PGFunctionCallInfo fcinfo);
+extern void AggRegisterCallback(PGFunctionCallInfo fcinfo,
 					fmExprContextCallbackFunction func,
-					Datum arg);
+					PGDatum arg);

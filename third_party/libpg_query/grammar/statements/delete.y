@@ -7,13 +7,13 @@
 DeleteStmt: opt_with_clause DELETE_P FROM relation_expr_opt_alias
 			using_clause where_or_current_clause returning_clause
 				{
-					DeleteStmt *n = makeNode(DeleteStmt);
+					PGDeleteStmt *n = makeNode(PGDeleteStmt);
 					n->relation = $4;
 					n->usingClause = $5;
 					n->whereClause = $6;
 					n->returningList = $7;
 					n->withClause = $1;
-					$$ = (Node *)n;
+					$$ = (PGNode *)n;
 				}
 		;
 
@@ -24,14 +24,14 @@ relation_expr_opt_alias: relation_expr					%prec UMINUS
 				}
 			| relation_expr ColId
 				{
-					Alias *alias = makeNode(Alias);
+					PGAlias *alias = makeNode(PGAlias);
 					alias->aliasname = $2;
 					$1->alias = alias;
 					$$ = $1;
 				}
 			| relation_expr AS ColId
 				{
-					Alias *alias = makeNode(Alias);
+					PGAlias *alias = makeNode(PGAlias);
 					alias->aliasname = $3;
 					$1->alias = alias;
 					$$ = $1;

@@ -9,21 +9,21 @@
 VariableSetStmt:
 			SET set_rest
 				{
-					VariableSetStmt *n = $2;
+					PGVariableSetStmt *n = $2;
 					n->is_local = false;
-					$$ = (Node *) n;
+					$$ = (PGNode *) n;
 				}
 			| SET LOCAL set_rest
 				{
-					VariableSetStmt *n = $3;
+					PGVariableSetStmt *n = $3;
 					n->is_local = true;
-					$$ = (Node *) n;
+					$$ = (PGNode *) n;
 				}
 			| SET SESSION set_rest
 				{
-					VariableSetStmt *n = $3;
+					PGVariableSetStmt *n = $3;
 					n->is_local = false;
-					$$ = (Node *) n;
+					$$ = (PGNode *) n;
 				}
 		;
 
@@ -32,7 +32,7 @@ set_rest:	/* Generic SET syntaxes: */
 			generic_set 						{$$ = $1;}
 			| var_name FROM CURRENT_P
 				{
-					VariableSetStmt *n = makeNode(VariableSetStmt);
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_SET_CURRENT;
 					n->name = $1;
 					$$ = n;
@@ -40,7 +40,7 @@ set_rest:	/* Generic SET syntaxes: */
 			/* Special syntaxes mandated by SQL standard: */
 			| TIME ZONE zone_value
 				{
-					VariableSetStmt *n = makeNode(VariableSetStmt);
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_SET_VALUE;
 					n->name = (char*) "timezone";
 					if ($3 != NULL)
@@ -51,7 +51,7 @@ set_rest:	/* Generic SET syntaxes: */
 				}
 			| SCHEMA Sconst
 				{
-					VariableSetStmt *n = makeNode(VariableSetStmt);
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_SET_VALUE;
 					n->name = (char*) "search_path";
 					n->args = list_make1(makeStringConst($2, @2));
@@ -63,7 +63,7 @@ set_rest:	/* Generic SET syntaxes: */
 generic_set:
 			var_name TO var_list
 				{
-					VariableSetStmt *n = makeNode(VariableSetStmt);
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_SET_VALUE;
 					n->name = $1;
 					n->args = $3;
@@ -71,7 +71,7 @@ generic_set:
 				}
 			| var_name '=' var_list
 				{
-					VariableSetStmt *n = makeNode(VariableSetStmt);
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_SET_VALUE;
 					n->name = $1;
 					n->args = $3;
@@ -79,14 +79,14 @@ generic_set:
 				}
 			| var_name TO DEFAULT
 				{
-					VariableSetStmt *n = makeNode(VariableSetStmt);
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_SET_DEFAULT;
 					n->name = $1;
 					$$ = n;
 				}
 			| var_name '=' DEFAULT
 				{
-					VariableSetStmt *n = makeNode(VariableSetStmt);
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_SET_DEFAULT;
 					n->name = $1;
 					$$ = n;
@@ -112,13 +112,13 @@ zone_value:
 				}
 			| ConstInterval Sconst opt_interval
 				{
-					TypeName *t = $1;
+					PGTypeName *t = $1;
 					if ($3 != NIL)
 					{
-						A_Const *n = (A_Const *) linitial($3);
+						PGAConst *n = (PGAConst *) linitial($3);
 						if ((n->val.val.ival & ~(INTERVAL_MASK(HOUR) | INTERVAL_MASK(MINUTE))) != 0)
 							ereport(ERROR,
-									(errcode(ERRCODE_SYNTAX_ERROR),
+									(errcode(PG_ERRCODE_SYNTAX_ERROR),
 									 errmsg("time zone interval must be HOUR or HOUR TO MINUTE"),
 									 parser_errposition(@3)));
 					}
@@ -127,7 +127,7 @@ zone_value:
 				}
 			| ConstInterval '(' Iconst ')' Sconst
 				{
-					TypeName *t = $1;
+					PGTypeName *t = $1;
 					t->typmods = list_make2(makeIntConst(INTERVAL_FULL_RANGE, -1),
 											makeIntConst($3, @3));
 					$$ = makeStringConstCast($5, @5, t);

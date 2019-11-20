@@ -4,8 +4,8 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<DeleteStatement> Transformer::TransformDelete(postgres::Node *node) {
-	auto stmt = reinterpret_cast<postgres::DeleteStmt *>(node);
+unique_ptr<DeleteStatement> Transformer::TransformDelete(postgres::PGNode *node) {
+	auto stmt = reinterpret_cast<postgres::PGDeleteStmt *>(node);
 	assert(stmt);
 	auto result = make_unique<DeleteStatement>();
 

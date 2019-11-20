@@ -6,9 +6,9 @@
  *****************************************************************************/
 LoadStmt:	LOAD file_name
 				{
-					LoadStmt *n = makeNode(LoadStmt);
+					PGLoadStmt *n = makeNode(PGLoadStmt);
 					n->filename = $2;
-					$$ = (Node *)n;
+					$$ = (PGNode *)n;
 				}
 		;
 

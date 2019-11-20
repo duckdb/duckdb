@@ -8,7 +8,7 @@
  * higher-level API provided by parser.h.
  *
  *
- * Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2017, PostgreSQL Global Development PGGroup
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/parser/scanner.h
@@ -69,12 +69,12 @@ typedef struct core_yy_extra_type
 	 * that we can cheaply compute the offset of the current token (yytext).
 	 */
 	char	   *scanbuf;
-	Size		scanbuflen;
+	PGSize		scanbuflen;
 
 	/*
 	 * The keyword list to use.
 	 */
-	const ScanKeyword *keywords;
+	const PGScanKeyword *keywords;
 	int			num_keywords;
 
 	/*
@@ -102,7 +102,7 @@ typedef struct core_yy_extra_type
 	char	   *dolqstart;		/* current $foo$ quote start string */
 
 	/* first part of UTF16 surrogate pair for Unicode escapes */
-	int32		utf16_first_part;
+	int32_t		utf16_first_part;
 
 	/* state variables for literal-lexing warnings */
 	bool		warn_on_first_escape;
@@ -118,7 +118,7 @@ typedef void *core_yyscan_t;
 /* Entry points in parser/scan.l */
 extern core_yyscan_t scanner_init(const char *str,
 			 core_yy_extra_type *yyext,
-			 const ScanKeyword *keywords,
+			 const PGScanKeyword *keywords,
 			 int num_keywords);
 extern void scanner_finish(core_yyscan_t yyscanner);
 extern int core_yylex(core_YYSTYPE *lvalp, YYLTYPE *llocp,

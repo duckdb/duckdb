@@ -1,11 +1,11 @@
 /*-------------------------------------------------------------------------
  *
  * timestamp.h
- *	  Timestamp and Interval typedefs and related macros.
+ *	  PGTimestamp and PGInterval typedefs and related macros.
  *
  * Note: this file must be includable in both frontend and backend contexts.
  *
- * Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2017, PostgreSQL Global Development PGGroup
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/datatype/timestamp.h
@@ -15,9 +15,9 @@
 #pragma once
 
 /*
- * Timestamp represents absolute time.
+ * PGTimestamp represents absolute time.
  *
- * Interval represents delta time. Keep track of months (and years), days,
+ * PGInterval represents delta time. Keep track of months (and years), days,
  * and hours/minutes/seconds separately since the elapsed time spanned is
  * unknown until instantiated relative to an absolute time.
  *
@@ -28,24 +28,24 @@
  * int64_t values with units of microseconds.  (Once upon a time they were
  * double values with units of seconds.)
  *
- * TimeOffset and fsec_t are convenience typedefs for temporary variables.
- * Do not use fsec_t in values stored on-disk.
- * Also, fsec_t is only meant for *fractional* seconds; beware of overflow
+ * PGTimeOffset and pg_fsec_t are convenience typedefs for temporary variables.
+ * Do not use pg_fsec_t in values stored on-disk.
+ * Also, pg_fsec_t is only meant for *fractional* seconds; beware of overflow
  * if the value you need to store could be many seconds.
  */
 
-typedef int64_t Timestamp;
-typedef int64_t TimestampTz;
-typedef int64_t TimeOffset;
-typedef int32_t fsec_t;			/* fractional seconds (in microseconds) */
+typedef int64_t PGTimestamp;
+typedef int64_t PGTimestampTz;
+typedef int64_t PGTimeOffset;
+typedef int32_t pg_fsec_t;			/* fractional seconds (in microseconds) */
 
 typedef struct
 {
-	TimeOffset	time;			/* all time units other than days, months and
+	PGTimeOffset	time;			/* all time units other than days, months and
 								 * years */
-	int32		day;			/* days, after time for alignment */
-	int32		month;			/* months and years, after time for alignment */
-} Interval;
+	int32_t		day;			/* days, after time for alignment */
+	int32_t		month;			/* months and years, after time for alignment */
+} PGInterval;
 
 
 /* Limits on the "precision" option (typmod) for these data types */
@@ -179,7 +179,7 @@ typedef struct
 #define DATE_END_JULIAN (2147483494)	/* == date2j(JULIAN_MAXYEAR, 1, 1) */
 #define TIMESTAMP_END_JULIAN (109203528)	/* == date2j(294277, 1, 1) */
 
-/* Timestamp limits */
+/* PGTimestamp limits */
 #define MIN_TIMESTAMP	INT64CONST(-211813488000000000)
 /* == (DATETIME_MIN_JULIAN - POSTGRES_EPOCH_JDATE) * USECS_PER_DAY */
 #define END_TIMESTAMP	INT64CONST(9223371331200000000)

@@ -21,37 +21,37 @@
 
 	char				chr;
 	bool				boolean;
-	JoinType			jtype;
-	DropBehavior		dbehavior;
-	OnCommitAction		oncommit;
-	List				*list;
-	Node				*node;
-	Value				*value;
-	ObjectType			objtype;
-	TypeName			*typnam;
-	ObjectWithArgs		*objwithargs;
-	DefElem				*defelt;
-	SortBy				*sortby;
-	WindowDef			*windef;
-	JoinExpr			*jexpr;
-	IndexElem			*ielem;
-	Alias				*alias;
-	RangeVar			*range;
-	IntoClause			*into;
-	WithClause			*with;
-	InferClause			*infer;
-	OnConflictClause	*onconflict;
-	A_Indices			*aind;
-	ResTarget			*target;
-	InsertStmt			*istmt;
-	VariableSetStmt		*vsetstmt;
-	OverridingKind       override;
-	SortByDir            sortorder;
-	SortByNulls          nullorder;
-	LockClauseStrength lockstrength;
-	LockWaitPolicy lockwaitpolicy;
-	SubLinkType subquerytype;
-	ViewCheckOption viewcheckoption;
+	PGJoinType			jtype;
+	PGDropBehavior		dbehavior;
+	PGOnCommitAction		oncommit;
+	PGList				*list;
+	PGNode				*node;
+	PGValue				*value;
+	PGObjectType			objtype;
+	PGTypeName			*typnam;
+	PGObjectWithArgs		*objwithargs;
+	PGDefElem				*defelt;
+	PGSortBy				*sortby;
+	PGWindowDef			*windef;
+	PGJoinExpr			*jexpr;
+	PGIndexElem			*ielem;
+	PGAlias				*alias;
+	PGRangeVar			*range;
+	PGIntoClause			*into;
+	PGWithClause			*with;
+	PGInferClause			*infer;
+	PGOnConflictClause	*onconflict;
+	PGAIndices			*aind;
+	PGResTarget			*target;
+	PGInsertStmt			*istmt;
+	PGVariableSetStmt		*vsetstmt;
+	PGOverridingKind       override;
+	PGSortByDir            sortorder;
+	PGSortByNulls          nullorder;
+	PGLockClauseStrength lockstrength;
+	PGLockWaitPolicy lockwaitpolicy;
+	PGSubLinkType subquerytype;
+	PGViewCheckOption viewcheckoption;
 }
 
 %type <node> stmt
@@ -171,7 +171,7 @@ stmtblock:	stmtmulti
 		;
 
 /*
- * At top level, we wrap each stmt with a RawStmt node carrying start location
+ * At top level, we wrap each stmt with a PGRawStmt node carrying start location
  * and length of the stmt's text.  Notice that the start loc/len are driven
  * entirely from semicolon locations (@2).  It would seem natural to use
  * @1 or @3 to get the true start location of a stmt, but that doesn't work
@@ -185,7 +185,7 @@ stmtmulti:	stmtmulti ';' stmt
 					if ($1 != NIL)
 					{
 						/* update length of previous stmt */
-						updateRawStmtEnd(llast_node(RawStmt, $1), @2);
+						updateRawStmtEnd(llast_node(PGRawStmt, $1), @2);
 					}
 					if ($3 != NULL)
 						$$ = lappend($1, makeRawStmt($3, @2 + 1));

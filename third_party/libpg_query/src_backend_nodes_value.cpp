@@ -9,10 +9,10 @@
 /*-------------------------------------------------------------------------
  *
  * value.c
- *	  implementation of Value nodes
+ *	  implementation of PGValue nodes
  *
  *
- * Copyright (c) 2003-2017, PostgreSQL Global Development Group
+ * Copyright (c) 2003-2017, PostgreSQL Global Development PGGroup
  *
  *
  * IDENTIFICATION
@@ -27,12 +27,12 @@
 /*
  *	makeInteger
  */
-Value *
+PGValue *
 makeInteger(long i)
 {
-	Value	   *v = makeNode(Value);
+	PGValue	   *v = makeNode(PGValue);
 
-	v->type = T_Integer;
+	v->type = T_PGInteger;
 	v->val.ival = i;
 	return v;
 }
@@ -42,12 +42,12 @@ makeInteger(long i)
  *
  * Caller is responsible for passing a palloc'd string.
  */
-Value *
+PGValue *
 makeFloat(char *numericStr)
 {
-	Value	   *v = makeNode(Value);
+	PGValue	   *v = makeNode(PGValue);
 
-	v->type = T_Float;
+	v->type = T_PGFloat;
 	v->val.str = numericStr;
 	return v;
 }
@@ -57,12 +57,12 @@ makeFloat(char *numericStr)
  *
  * Caller is responsible for passing a palloc'd string.
  */
-Value *
+PGValue *
 makeString(const char *str)
 {
-	Value	   *v = makeNode(Value);
+	PGValue	   *v = makeNode(PGValue);
 
-	v->type = T_String;
+	v->type = T_PGString;
 	v->val.str = (char*) str;
 	return v;
 }

@@ -4,7 +4,7 @@
 CheckPointStmt:
 			CHECKPOINT
 				{
-					CheckPointStmt *n = makeNode(CheckPointStmt);
-					$$ = (Node *)n;
+					PGCheckPointStmt *n = makeNode(PGCheckPointStmt);
+					$$ = (PGNode *)n;
 				}
 		;

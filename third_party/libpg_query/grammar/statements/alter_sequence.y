@@ -8,19 +8,19 @@
 AlterSeqStmt:
 			ALTER SEQUENCE qualified_name SeqOptList
 				{
-					AlterSeqStmt *n = makeNode(AlterSeqStmt);
+					PGAlterSeqStmt *n = makeNode(PGAlterSeqStmt);
 					n->sequence = $3;
 					n->options = $4;
 					n->missing_ok = false;
-					$$ = (Node *)n;
+					$$ = (PGNode *)n;
 				}
 			| ALTER SEQUENCE IF_P EXISTS qualified_name SeqOptList
 				{
-					AlterSeqStmt *n = makeNode(AlterSeqStmt);
+					PGAlterSeqStmt *n = makeNode(PGAlterSeqStmt);
 					n->sequence = $5;
 					n->options = $6;
 					n->missing_ok = true;
-					$$ = (Node *)n;
+					$$ = (PGNode *)n;
 				}
 
 		;
@@ -51,31 +51,31 @@ NumericOnly:
 
 SeqOptElem: AS SimpleTypename
 				{
-					$$ = makeDefElem("as", (Node *)$2, @1);
+					$$ = makeDefElem("as", (PGNode *)$2, @1);
 				}
 			| CACHE NumericOnly
 				{
-					$$ = makeDefElem("cache", (Node *)$2, @1);
+					$$ = makeDefElem("cache", (PGNode *)$2, @1);
 				}
 			| CYCLE
 				{
-					$$ = makeDefElem("cycle", (Node *)makeInteger(TRUE), @1);
+					$$ = makeDefElem("cycle", (PGNode *)makeInteger(TRUE), @1);
 				}
 			| NO CYCLE
 				{
-					$$ = makeDefElem("cycle", (Node *)makeInteger(FALSE), @1);
+					$$ = makeDefElem("cycle", (PGNode *)makeInteger(FALSE), @1);
 				}
 			| INCREMENT opt_by NumericOnly
 				{
-					$$ = makeDefElem("increment", (Node *)$3, @1);
+					$$ = makeDefElem("increment", (PGNode *)$3, @1);
 				}
 			| MAXVALUE NumericOnly
 				{
-					$$ = makeDefElem("maxvalue", (Node *)$2, @1);
+					$$ = makeDefElem("maxvalue", (PGNode *)$2, @1);
 				}
 			| MINVALUE NumericOnly
 				{
-					$$ = makeDefElem("minvalue", (Node *)$2, @1);
+					$$ = makeDefElem("minvalue", (PGNode *)$2, @1);
 				}
 			| NO MAXVALUE
 				{
@@ -87,16 +87,16 @@ SeqOptElem: AS SimpleTypename
 				}
 			| OWNED BY any_name
 				{
-					$$ = makeDefElem("owned_by", (Node *)$3, @1);
+					$$ = makeDefElem("owned_by", (PGNode *)$3, @1);
 				}
 			| SEQUENCE NAME_P any_name
 				{
 					/* not documented, only used by pg_dump */
-					$$ = makeDefElem("sequence_name", (Node *)$3, @1);
+					$$ = makeDefElem("sequence_name", (PGNode *)$3, @1);
 				}
 			| START opt_with NumericOnly
 				{
-					$$ = makeDefElem("start", (Node *)$3, @1);
+					$$ = makeDefElem("start", (PGNode *)$3, @1);
 				}
 			| RESTART
 				{
@@ -104,7 +104,7 @@ SeqOptElem: AS SimpleTypename
 				}
 			| RESTART opt_with NumericOnly
 				{
-					$$ = makeDefElem("restart", (Node *)$3, @1);
+					$$ = makeDefElem("restart", (PGNode *)$3, @1);
 				}
 		;
 

@@ -9,23 +9,23 @@
 #include <stdint.h>
 #include <stdio.h>
 
-typedef uintptr_t Datum;
-typedef uint64_t Size;
+typedef uintptr_t PGDatum;
+typedef uint64_t PGSize;
 
-typedef int64_t int64;
+typedef int64_t int64_t;
 
-typedef uint32_t uint32;
-typedef uint32_t Index;
-typedef uint32_t Oid;
+typedef uint32_t uint32_t;
+typedef uint32_t PGIndex;
+typedef uint32_t PGOid;
 
-#define InvalidOid ((Oid)0)
+#define InvalidOid ((PGOid)0)
 
-typedef int32_t int32;
+typedef int32_t int32_t;
 
-typedef int16_t int16;
-typedef uint16_t uint16;
+typedef int16_t int16_t;
+typedef uint16_t uint16_t;
 
-typedef uint8_t uint8;
+typedef uint8_t uint8_t;
 
 #ifndef true
 #define true 1
@@ -67,53 +67,53 @@ typedef uint8_t uint8;
 
 typedef struct {
 	int32_t vl_len_;    /* these fields must match ArrayType! */
-	int ndim;         /* always 1 for int2vector */
-	int32_t dataoffset; /* always 0 for int2vector */
-	Oid elemtype;
+	int ndim;         /* always 1 for PGint2vector */
+	int32_t dataoffset; /* always 0 for PGint2vector */
+	PGOid elemtype;
 	int dim1;
 	int lbound1;
 	int16_t values[];
-} int2vector;
+} PGint2vector;
 
-typedef struct NameData {
+typedef struct PGNameData {
 	char data[NAMEDATALEN];
-} NameData;
-typedef NameData *Name;
+} PGNameData;
+typedef PGNameData *Name;
 
-struct varlena {
+struct pg_varlena {
 	char vl_len_[4];                    /* Do not touch this field directly! */
 	char vl_dat[1]; /* Data content is here */
 };
 
-typedef struct varlena bytea;
+typedef struct pg_varlena bytea;
 
-typedef int MemoryContext;
+typedef int PGMemoryContext;
 
-typedef enum PostgresParserErrors {
-	ERRCODE_SYNTAX_ERROR,
-	ERRCODE_FEATURE_NOT_SUPPORTED,
-	ERRCODE_INVALID_PARAMETER_VALUE,
-	ERRCODE_WINDOWING_ERROR,
-	ERRCODE_RESERVED_NAME,
-	ERRCODE_INVALID_ESCAPE_SEQUENCE,
-	ERRCODE_NONSTANDARD_USE_OF_ESCAPE_CHARACTER,
+typedef enum PGPostgresParserErrors {
+	PG_ERRCODE_SYNTAX_ERROR,
+	PG_ERRCODE_FEATURE_NOT_SUPPORTED,
+	PG_ERRCODE_INVALID_PARAMETER_VALUE,
+	PG_ERRCODE_WINDOWING_ERROR,
+	PG_ERRCODE_RESERVED_NAME,
+	PG_ERRCODE_INVALID_ESCAPE_SEQUENCE,
+	PG_ERRCODE_NONSTANDARD_USE_OF_ESCAPE_CHARACTER,
 	ERRCODE_NAME_TOO_LONG
-} PostgresParserErrors;
+} PGPostgresParserErrors;
 
-typedef enum PostgresRelPersistence {
-	RELPERSISTENCE_TEMP,
-	RELPERSISTENCE_UNLOGGED,
+typedef enum PGPostgresRelPersistence {
+	PG_RELPERSISTENCE_TEMP,
+	PG_RELPERSISTENCE_UNLOGGED,
 	RELPERSISTENCE_PERMANENT
-} PostgresRelPersistence;
+} PGPostgresRelPersistence;
 
-typedef enum PostgresErrorLevel {
-	UNDEFINED,
-	NOTICE,
-	WARNING,
+typedef enum PGPostgresErrorLevel {
+	PGUNDEFINED,
+	PGNOTICE,
+	PGWARNING,
 	ERROR
-} PostgresErrorLevel;
+} PGPostgresErrorLevel;
 
-typedef enum PostgresAttributIdentityTypes {
-	ATTRIBUTE_IDENTITY_ALWAYS,
+typedef enum PGPostgresAttributIdentityTypes {
+	PG_ATTRIBUTE_IDENTITY_ALWAYS,
 	ATTRIBUTE_IDENTITY_BY_DEFAULT
-} PostgresAttributIdentityTypes;
+} PGPostgresAttributIdentityTypes;

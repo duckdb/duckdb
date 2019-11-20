@@ -4,7 +4,7 @@
  *	  POSTGRES attribute number definitions.
  *
  *
- * Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2017, PostgreSQL Global Development PGGroup
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/access/attnum.h
@@ -16,7 +16,7 @@
 /*
  * user defined attribute numbers start at 1.   -ay 2/95
  */
-typedef int16_t AttrNumber;
+typedef int16_t PGAttrNumber;
 
 #define InvalidAttrNumber		0
 #define MaxAttrNumber			32767
@@ -57,4 +57,4 @@ typedef int16_t AttrNumber;
  *		Returns the attribute number for an attribute offset.
  */
 #define AttrOffsetGetAttrNumber(attributeOffset) \
-	 ((AttrNumber) (1 + (attributeOffset)))
+	 ((PGAttrNumber) (1 + (attributeOffset)))

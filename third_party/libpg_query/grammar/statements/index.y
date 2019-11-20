@@ -9,7 +9,7 @@ IndexStmt:	CREATE opt_unique INDEX opt_concurrently opt_index_name
 			ON qualified_name access_method_clause '(' index_params ')'
 			opt_reloptions where_clause
 				{
-					IndexStmt *n = makeNode(IndexStmt);
+					PGIndexStmt *n = makeNode(PGIndexStmt);
 					n->unique = $2;
 					n->concurrent = $4;
 					n->idxname = $5;
@@ -28,13 +28,13 @@ IndexStmt:	CREATE opt_unique INDEX opt_concurrently opt_index_name
 					n->initdeferred = false;
 					n->transformed = false;
 					n->if_not_exists = false;
-					$$ = (Node *)n;
+					$$ = (PGNode *)n;
 				}
 			| CREATE opt_unique INDEX opt_concurrently IF_P NOT EXISTS index_name
 			ON qualified_name access_method_clause '(' index_params ')'
 			opt_reloptions where_clause
 				{
-					IndexStmt *n = makeNode(IndexStmt);
+					PGIndexStmt *n = makeNode(PGIndexStmt);
 					n->unique = $2;
 					n->concurrent = $4;
 					n->idxname = $8;
@@ -53,7 +53,7 @@ IndexStmt:	CREATE opt_unique INDEX opt_concurrently opt_index_name
 					n->initdeferred = false;
 					n->transformed = false;
 					n->if_not_exists = true;
-					$$ = (Node *)n;
+					$$ = (PGNode *)n;
 				}
 		;
 
