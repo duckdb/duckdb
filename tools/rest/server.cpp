@@ -21,11 +21,13 @@ using namespace nlohmann;
 
 void print_help() {
 	fprintf(stderr, "🦆 Usage: duckdb_rest_server\n");
-	fprintf(stderr, "         --listen=[address] listening address\n");
-	fprintf(stderr, "         --port=[no]        listening port\n");
-	fprintf(stderr, "         --database=[file]  use given database file\n");
-	fprintf(stderr, "         --read_only        open database in read-only mode\n");
-	fprintf(stderr, "         --log=[file]       log queries to file\n");
+	fprintf(stderr, "          --listen=[address]    listening address\n");
+	fprintf(stderr, "          --port=[no]           listening port\n");
+	fprintf(stderr, "          --database=[file]     use given database file\n");
+	fprintf(stderr, "          --read_only           open database in read-only mode\n");
+	fprintf(stderr, "          --query_timeout=[sec] query timeout in seconds\n");
+	fprintf(stderr, "          --fetch_timeout=[sec] result set timeout in seconds\n");
+	fprintf(stderr, "          --log=[file]          log queries to file\n");
 }
 
 // https://stackoverflow.com/a/12468109/2652376
@@ -41,8 +43,6 @@ std::string random_string(size_t length) {
 	std::generate_n(str.begin(), length, randchar);
 	return str;
 }
-
-// todo query cleanup time limit for streaming queries
 
 struct RestClientState {
 	unique_ptr<QueryResult> res;
@@ -216,11 +216,7 @@ int main(int argc, char **argv) {
 	}
 
 	std::mutex out_mutex;
-
-	unordered_map<string, RestClientState> client_state_map;
-	std::mutex client_state_map_mutex;
-
-	std::thread client_state_cleanup_thread(client_state_cleanup, &client_state_map, &client_state_map_mutex, 20);
+	srand(time(nullptr));
 
 	DBConfig config;
 	string dbfile;
@@ -229,6 +225,10 @@ int main(int argc, char **argv) {
 	string listen = "localhost";
 	int port = 1294;
 	std::ofstream logfile;
+
+	int query_timeout = 60;
+	int fetch_timeout = 60*5;
+
 
 	// parse config
 	for (int arg_index = 1; arg_index < argc; ++arg_index) {
@@ -266,13 +266,33 @@ int main(int argc, char **argv) {
 				exit(1);
 			}
 			port = std::stoi(splits[1]);
-			;
+
+		} else if (StringUtil::StartsWith(arg, "--query_timeout=")) {
+			auto splits = StringUtil::Split(arg, '=');
+			if (splits.size() != 2) {
+				print_help();
+				exit(1);
+			}
+			query_timeout = std::stoi(splits[1]);
+
+		} else if (StringUtil::StartsWith(arg, "--fetch_timeout=")) {
+			auto splits = StringUtil::Split(arg, '=');
+			if (splits.size() != 2) {
+				print_help();
+				exit(1);
+			}
+			fetch_timeout = std::stoi(splits[1]);
+
 		} else {
 			fprintf(stderr, "Error: unknown argument %s\n", arg.c_str());
 			print_help();
 			exit(1);
 		}
 	}
+
+	unordered_map<string, RestClientState> client_state_map;
+	std::mutex client_state_map_mutex;
+	std::thread client_state_cleanup_thread(client_state_cleanup, &client_state_map, &client_state_map_mutex, fetch_timeout);
 
 	if (!logfile_name.empty()) {
 		logfile.open(logfile_name, std::ios_base::app);
@@ -296,7 +316,7 @@ int main(int argc, char **argv) {
 		state.touched = std::time(nullptr);
 		bool is_active = true;
 
-		std::thread interrupt_thread(sleep_thread, state.con.get(), &is_active, 60);
+		std::thread interrupt_thread(sleep_thread, state.con.get(), &is_active, query_timeout);
 		auto res = state.con->context->Query(q, true);
 
 		is_active = false;
@@ -308,6 +328,7 @@ int main(int argc, char **argv) {
 			j = {{"query", q},
 			     {"success", state.res->success},
 			     {"column_count", state.res->types.size()},
+
 			     {"statement_type", StatementTypeToString(state.res->statement_type)},
 			     {"names", json(state.res->names)},
 			     {"name_index_map", json::object()},
@@ -333,6 +354,7 @@ int main(int argc, char **argv) {
 			string query_ref = random_string(10);
 			j["ref"] = query_ref;
 			auto chunk = state.res->Fetch();
+
 			serialize_chunk(state.res.get(), chunk.get(), j);
 			{
 				std::lock_guard<std::mutex> guard(client_state_map_mutex);
@@ -348,34 +370,35 @@ int main(int argc, char **argv) {
 
 	svr.Get("/fetch", [&](const Request &req, Response &resp) {
 		auto ref = req.get_param_value("ref");
-		Connection conn(duckdb);
 		json j;
-		RestClientState *state = nullptr;
+		RestClientState state;
+		bool found_state = false;
 		{
 			std::lock_guard<std::mutex> guard(client_state_map_mutex);
-			if (client_state_map.find(ref) != client_state_map.end()) {
-				state = &client_state_map[ref];
-				state->touched = std::time(nullptr);
+			auto it = client_state_map.find(ref);
+			if (it != client_state_map.end()) {
+				state = move(it->second);
+				client_state_map.erase(it);
+				found_state = true;
 			}
 		}
 
-		// TODO need to avoid that the state is cleaned before this request is handled
-
-		if (state) {
+		if (found_state) {
 			bool is_active = true;
-			//	std::thread interrupt_thread(sleep_thread, state.con.get(), &is_active, 60);
-			auto chunk = state->res->Fetch();
+			std::thread interrupt_thread(sleep_thread, state.con.get(), &is_active, query_timeout);
+			auto chunk = state.res->Fetch();
 			is_active = false;
-			// interrupt_thread.join();
+			interrupt_thread.join();
 
 			j = {{"success", true}, {"ref", ref}, {"count", chunk->data[0].count}, {"data", json::array()}};
-
-			serialize_chunk(state->res.get(), chunk.get(), j);
-
+			serialize_chunk(state.res.get(), chunk.get(), j);
 			if (chunk->data[0].count == 0) {
 				client_state_map.erase(client_state_map.find(ref));
 			}
-
+			{
+				std::lock_guard<std::mutex> guard(client_state_map_mutex);
+				client_state_map[ref] = move(state);
+			}
 		} else {
 			j = {{"success", false}, {"error", "Unable to find ref."}};
 		}
@@ -398,7 +421,7 @@ int main(int argc, char **argv) {
 		serialize_json(req, resp, j);
 	});
 
-	std::cout << "🦆 listening on http://" + listen + ":" + std::to_string(port) + "\n";
+	std::cout << "🦆 serving "+dbfile+" on http://" + listen + ":" + std::to_string(port) + "\n";
 
 	svr.listen(listen.c_str(), port);
 	return 0;
