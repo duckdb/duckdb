@@ -7,6 +7,9 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
+// you can set this to enable compression. You will need to link zlib as well.
+// #define CPPHTTPLIB_ZLIB_SUPPORT 1
+
 #include "httplib.hpp"
 #include "json.hpp"
 
@@ -44,6 +47,7 @@ std::string random_string(size_t length) {
 struct RestClientState {
 	unique_ptr<QueryResult> res;
 	unique_ptr<Connection> con;
+	time_t touched;
 };
 
 enum ReturnContentType { JSON, BSON, CBOR, MESSAGE_PACK, UBJSON };
@@ -117,11 +121,6 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 }
 
 void serialize_json(const Request &req, Response &resp, json &j) {
-
-	// TODO should we compress?
-	// zlib dependency uuuugh
-	// CPPHTTPLIB_ZLIB_SUPPORT
-
 	auto return_type = ReturnContentType::JSON;
 
 	if (req.has_header("Accept")) {
@@ -190,6 +189,25 @@ void sleep_thread(Connection *conn, bool *is_active, int timeout_duration) {
 	}
 }
 
+void client_state_cleanup(unordered_map<string, RestClientState> *map, std::mutex *mutex, int timeout_duration) {
+	// timeout is given in seconds
+	while (true) {
+		// sleep for half the timeout duration
+		std::this_thread::sleep_for(std::chrono::milliseconds((timeout_duration * 1000) / 2));
+		{
+			std::lock_guard<std::mutex> guard(*mutex);
+			auto now = std::time(nullptr);
+			for (auto it = map->cbegin(); it != map->cend(); ) {
+				if (now - it->second.touched > timeout_duration) {
+					it = map->erase(it);
+				} else {
+					++it;
+				}
+			}
+		}
+	}
+}
+
 int main(int argc, char **argv) {
 	Server svr;
 	if (!svr.is_valid()) {
@@ -200,6 +218,9 @@ int main(int argc, char **argv) {
 	std::mutex out_mutex;
 
 	unordered_map<string, RestClientState> client_state_map;
+	std::mutex client_state_map_mutex;
+
+	std::thread client_state_cleanup_thread(client_state_cleanup, &client_state_map, &client_state_map_mutex, 20);
 
 	DBConfig config;
 	string dbfile;
@@ -272,6 +293,7 @@ int main(int argc, char **argv) {
 		RestClientState state;
 		state.con = make_unique<Connection>(duckdb);
 		state.con->EnableProfiling();
+		state.touched = std::time(nullptr);
 		bool is_active = true;
 
 		std::thread interrupt_thread(sleep_thread, state.con.get(), &is_active, 60);
@@ -312,7 +334,10 @@ int main(int argc, char **argv) {
 			j["ref"] = query_ref;
 			auto chunk = state.res->Fetch();
 			serialize_chunk(state.res.get(), chunk.get(), j);
-			client_state_map[query_ref] = move(state);
+			{
+				std::lock_guard<std::mutex> guard(client_state_map_mutex);
+				client_state_map[query_ref] = move(state);
+			}
 
 		} else {
 			j = {{"query", q}, {"success", state.res->success}, {"error", state.res->error}};
@@ -325,13 +350,27 @@ int main(int argc, char **argv) {
 		auto ref = req.get_param_value("ref");
 		Connection conn(duckdb);
 		json j;
+		RestClientState *state = nullptr;
+		{
+			std::lock_guard<std::mutex> guard(client_state_map_mutex);
+			if (client_state_map.find(ref) != client_state_map.end()) {
+				state = &client_state_map[ref];
+				state->touched = std::time(nullptr);
+			}
+		}
 
-		if (client_state_map.find(ref) != client_state_map.end()) {
-			auto &state = client_state_map[ref];
-			auto chunk = state.res->Fetch();
+		// TODO need to avoid that the state is cleaned before this request is handled
+
+		if (state) {
+			bool is_active = true;
+			//	std::thread interrupt_thread(sleep_thread, state.con.get(), &is_active, 60);
+			auto chunk = state->res->Fetch();
+			is_active = false;
+			// interrupt_thread.join();
+
 			j = {{"success", true}, {"ref", ref}, {"count", chunk->data[0].count}, {"data", json::array()}};
 
-			serialize_chunk(state.res.get(), chunk.get(), j);
+			serialize_chunk(state->res.get(), chunk.get(), j);
 
 			if (chunk->data[0].count == 0) {
 				client_state_map.erase(client_state_map.find(ref));
