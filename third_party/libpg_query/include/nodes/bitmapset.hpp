@@ -41,8 +41,7 @@ typedef struct Bitmapset
 
 
 /* result of bms_subset_compare */
-typedef enum
-{
+typedef enum BMS_Comparison {
 	BMS_EQUAL,					/* sets are equal */
 	BMS_SUBSET1,				/* first set is a subset of the second */
 	BMS_SUBSET2,				/* second set is a subset of the first */
@@ -50,8 +49,7 @@ typedef enum
 } BMS_Comparison;
 
 /* result of bms_membership */
-typedef enum
-{
+typedef enum BMS_Membership {
 	BMS_EMPTY_SET,				/* 0 members */
 	BMS_SINGLETON,				/* 1 member */
 	BMS_MULTIPLE				/* >1 member */

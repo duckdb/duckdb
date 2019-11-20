@@ -89,7 +89,7 @@ typedef struct varlena bytea;
 
 typedef int MemoryContext;
 
-enum PostgresParserErrors {
+typedef enum PostgresParserErrors {
 	ERRCODE_SYNTAX_ERROR,
 	ERRCODE_FEATURE_NOT_SUPPORTED,
 	ERRCODE_INVALID_PARAMETER_VALUE,
@@ -98,10 +98,22 @@ enum PostgresParserErrors {
 	ERRCODE_INVALID_ESCAPE_SEQUENCE,
 	ERRCODE_NONSTANDARD_USE_OF_ESCAPE_CHARACTER,
 	ERRCODE_NAME_TOO_LONG
-};
+} PostgresParserErrors;
 
-enum PostgresRelPersistence { RELPERSISTENCE_TEMP, RELPERSISTENCE_UNLOGGED, RELPERSISTENCE_PERMANENT };
+typedef enum PostgresRelPersistence {
+	RELPERSISTENCE_TEMP,
+	RELPERSISTENCE_UNLOGGED,
+	RELPERSISTENCE_PERMANENT
+} PostgresRelPersistence;
 
-enum PostgresErrorLevel { UNDEFINED, NOTICE, WARNING, ERROR };
+typedef enum PostgresErrorLevel {
+	UNDEFINED,
+	NOTICE,
+	WARNING,
+	ERROR
+} PostgresErrorLevel;
 
-enum PostgresAttributIdentityTypes { ATTRIBUTE_IDENTITY_ALWAYS, ATTRIBUTE_IDENTITY_BY_DEFAULT };
+typedef enum PostgresAttributIdentityTypes {
+	ATTRIBUTE_IDENTITY_ALWAYS,
+	ATTRIBUTE_IDENTITY_BY_DEFAULT
+} PostgresAttributIdentityTypes;
