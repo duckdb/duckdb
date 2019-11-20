@@ -3,7 +3,7 @@
 using namespace duckdb;
 using namespace std;
 
-string Transformer::TransformAlias(postgres::PGAlias *root) {
+string Transformer::TransformAlias(PGAlias *root) {
 	if (!root) {
 		return "";
 	}

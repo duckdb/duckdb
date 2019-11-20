@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<ParsedExpression> Transformer::TransformResTarget(postgres::PGResTarget *root) {
+unique_ptr<ParsedExpression> Transformer::TransformResTarget(PGResTarget *root) {
 	if (!root) {
 		return nullptr;
 	}
@@ -19,39 +19,39 @@ unique_ptr<ParsedExpression> Transformer::TransformResTarget(postgres::PGResTarg
 	return expr;
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformExpression(postgres::PGNode *node) {
+unique_ptr<ParsedExpression> Transformer::TransformExpression(PGNode *node) {
 	if (!node) {
 		return nullptr;
 	}
 
 	switch (node->type) {
-	case postgres::T_PGColumnRef:
-		return TransformColumnRef(reinterpret_cast<postgres::PGColumnRef *>(node));
-	case postgres::T_PGAConst:
-		return TransformConstant(reinterpret_cast<postgres::PGAConst *>(node));
-	case postgres::T_PGAExpr:
-		return TransformAExpr(reinterpret_cast<postgres::PGAExpr *>(node));
-	case postgres::T_PGFuncCall:
-		return TransformFuncCall(reinterpret_cast<postgres::PGFuncCall *>(node));
-	case postgres::T_PGBoolExpr:
-		return TransformBoolExpr(reinterpret_cast<postgres::PGBoolExpr *>(node));
-	case postgres::T_PGTypeCast:
-		return TransformTypeCast(reinterpret_cast<postgres::PGTypeCast *>(node));
-	case postgres::T_PGCaseExpr:
-		return TransformCase(reinterpret_cast<postgres::PGCaseExpr *>(node));
-	case postgres::T_PGSubLink:
-		return TransformSubquery(reinterpret_cast<postgres::PGSubLink *>(node));
-	case postgres::T_PGCoalesceExpr:
-		return TransformCoalesce(reinterpret_cast<postgres::PGAExpr *>(node));
-	case postgres::T_PGNullTest:
-		return TransformNullTest(reinterpret_cast<postgres::PGNullTest *>(node));
-	case postgres::T_PGResTarget:
-		return TransformResTarget(reinterpret_cast<postgres::PGResTarget *>(node));
-	case postgres::T_PGParamRef:
-		return TransformParamRef(reinterpret_cast<postgres::PGParamRef *>(node));
-	case postgres::T_PGSQLValueFunction:
-		return TransformSQLValueFunction(reinterpret_cast<postgres::PGSQLValueFunction *>(node));
-	case postgres::T_PGSetToDefault:
+	case T_PGColumnRef:
+		return TransformColumnRef(reinterpret_cast<PGColumnRef *>(node));
+	case T_PGAConst:
+		return TransformConstant(reinterpret_cast<PGAConst *>(node));
+	case T_PGAExpr:
+		return TransformAExpr(reinterpret_cast<PGAExpr *>(node));
+	case T_PGFuncCall:
+		return TransformFuncCall(reinterpret_cast<PGFuncCall *>(node));
+	case T_PGBoolExpr:
+		return TransformBoolExpr(reinterpret_cast<PGBoolExpr *>(node));
+	case T_PGTypeCast:
+		return TransformTypeCast(reinterpret_cast<PGTypeCast *>(node));
+	case T_PGCaseExpr:
+		return TransformCase(reinterpret_cast<PGCaseExpr *>(node));
+	case T_PGSubLink:
+		return TransformSubquery(reinterpret_cast<PGSubLink *>(node));
+	case T_PGCoalesceExpr:
+		return TransformCoalesce(reinterpret_cast<PGAExpr *>(node));
+	case T_PGNullTest:
+		return TransformNullTest(reinterpret_cast<PGNullTest *>(node));
+	case T_PGResTarget:
+		return TransformResTarget(reinterpret_cast<PGResTarget *>(node));
+	case T_PGParamRef:
+		return TransformParamRef(reinterpret_cast<PGParamRef *>(node));
+	case T_PGSQLValueFunction:
+		return TransformSQLValueFunction(reinterpret_cast<PGSQLValueFunction *>(node));
+	case T_PGSetToDefault:
 		return make_unique<DefaultExpression>();
 
 	default:
@@ -59,12 +59,12 @@ unique_ptr<ParsedExpression> Transformer::TransformExpression(postgres::PGNode *
 	}
 }
 
-bool Transformer::TransformExpressionList(postgres::PGList *list, vector<unique_ptr<ParsedExpression>> &result) {
+bool Transformer::TransformExpressionList(PGList *list, vector<unique_ptr<ParsedExpression>> &result) {
 	if (!list) {
 		return false;
 	}
 	for (auto node = list->head; node != nullptr; node = node->next) {
-		auto target = reinterpret_cast<postgres::PGNode *>(node->data.ptr_value);
+		auto target = reinterpret_cast<PGNode *>(node->data.ptr_value);
 		if (!target) {
 			return false;
 		}

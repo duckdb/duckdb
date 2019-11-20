@@ -3,8 +3,7 @@
 #include <string>
 #include "nodes/pg_list.hpp"
 
-namespace postgres {
-
+namespace duckdb {
 class PostgresParser {
 public:
 	PostgresParser();
@@ -16,4 +15,4 @@ public:
 	std::string error_message;
 	int error_location;
 };
-} // namespace postgres
+}

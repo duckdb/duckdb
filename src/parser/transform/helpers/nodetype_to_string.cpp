@@ -2,811 +2,811 @@
 
 using namespace duckdb;
 
-std::string Transformer::NodetypeToString(postgres::PGNodeTag type) {
+std::string Transformer::NodetypeToString(PGNodeTag type) {
 	switch (type) {
-	case postgres::T_PGInvalid:
+	case T_PGInvalid:
 		return "T_Invalid";
-	case postgres::T_PGIndexInfo:
+	case T_PGIndexInfo:
 		return "T_IndexInfo";
-	case postgres::T_PGExprContext:
+	case T_PGExprContext:
 		return "T_ExprContext";
-	case postgres::T_PGProjectionInfo:
+	case T_PGProjectionInfo:
 		return "T_ProjectionInfo";
-	case postgres::T_PGJunkFilter:
+	case T_PGJunkFilter:
 		return "T_JunkFilter";
-	case postgres::T_PGResultRelInfo:
+	case T_PGResultRelInfo:
 		return "T_ResultRelInfo";
-	case postgres::T_PGEState:
+	case T_PGEState:
 		return "T_EState";
-	case postgres::T_PGTupleTableSlot:
+	case T_PGTupleTableSlot:
 		return "T_TupleTableSlot";
-	case postgres::T_PGPlan:
+	case T_PGPlan:
 		return "T_Plan";
-	case postgres::T_PGResult:
+	case T_PGResult:
 		return "T_Result";
-	case postgres::T_PGProjectSet:
+	case T_PGProjectSet:
 		return "T_ProjectSet";
-	case postgres::T_PGModifyTable:
+	case T_PGModifyTable:
 		return "T_ModifyTable";
-	case postgres::T_PGAppend:
+	case T_PGAppend:
 		return "T_Append";
-	case postgres::T_PGMergeAppend:
+	case T_PGMergeAppend:
 		return "T_MergeAppend";
-	case postgres::T_PGRecursiveUnion:
+	case T_PGRecursiveUnion:
 		return "T_RecursiveUnion";
-	case postgres::T_PGBitmapAnd:
+	case T_PGBitmapAnd:
 		return "T_BitmapAnd";
-	case postgres::T_PGBitmapOr:
+	case T_PGBitmapOr:
 		return "T_BitmapOr";
-	case postgres::T_PGScan:
+	case T_PGScan:
 		return "T_Scan";
-	case postgres::T_PGSeqScan:
+	case T_PGSeqScan:
 		return "T_SeqScan";
-	case postgres::T_PGSampleScan:
+	case T_PGSampleScan:
 		return "T_SampleScan";
-	case postgres::T_PGIndexScan:
+	case T_PGIndexScan:
 		return "T_IndexScan";
-	case postgres::T_PGIndexOnlyScan:
+	case T_PGIndexOnlyScan:
 		return "T_IndexOnlyScan";
-	case postgres::T_PGBitmapIndexScan:
+	case T_PGBitmapIndexScan:
 		return "T_BitmapIndexScan";
-	case postgres::T_PGBitmapHeapScan:
+	case T_PGBitmapHeapScan:
 		return "T_BitmapHeapScan";
-	case postgres::T_PGTidScan:
+	case T_PGTidScan:
 		return "T_TidScan";
-	case postgres::T_PGSubqueryScan:
+	case T_PGSubqueryScan:
 		return "T_SubqueryScan";
-	case postgres::T_PGFunctionScan:
+	case T_PGFunctionScan:
 		return "T_FunctionScan";
-	case postgres::T_PGValuesScan:
+	case T_PGValuesScan:
 		return "T_ValuesScan";
-	case postgres::T_PGTableFuncScan:
+	case T_PGTableFuncScan:
 		return "T_TableFuncScan";
-	case postgres::T_PGCteScan:
+	case T_PGCteScan:
 		return "T_CteScan";
-	case postgres::T_PGNamedTuplestoreScan:
+	case T_PGNamedTuplestoreScan:
 		return "T_NamedTuplestoreScan";
-	case postgres::T_PGWorkTableScan:
+	case T_PGWorkTableScan:
 		return "T_WorkTableScan";
-	case postgres::T_PGForeignScan:
+	case T_PGForeignScan:
 		return "T_ForeignScan";
-	case postgres::T_PGCustomScan:
+	case T_PGCustomScan:
 		return "T_CustomScan";
-	case postgres::T_PGJoin:
+	case T_PGJoin:
 		return "T_Join";
-	case postgres::T_PGNestLoop:
+	case T_PGNestLoop:
 		return "T_NestLoop";
-	case postgres::T_PGMergeJoin:
+	case T_PGMergeJoin:
 		return "T_MergeJoin";
-	case postgres::T_PGHashJoin:
+	case T_PGHashJoin:
 		return "T_HashJoin";
-	case postgres::T_PGMaterial:
+	case T_PGMaterial:
 		return "T_Material";
-	case postgres::T_PGSort:
+	case T_PGSort:
 		return "T_Sort";
-	case postgres::T_PGGroup:
+	case T_PGGroup:
 		return "T_Group";
-	case postgres::T_PGAgg:
+	case T_PGAgg:
 		return "T_Agg";
-	case postgres::T_PGWindowAgg:
+	case T_PGWindowAgg:
 		return "T_WindowAgg";
-	case postgres::T_PGUnique:
+	case T_PGUnique:
 		return "T_Unique";
-	case postgres::T_PGGather:
+	case T_PGGather:
 		return "T_Gather";
-	case postgres::T_PGGatherMerge:
+	case T_PGGatherMerge:
 		return "T_GatherMerge";
-	case postgres::T_PGHash:
+	case T_PGHash:
 		return "T_Hash";
-	case postgres::T_PGSetOp:
+	case T_PGSetOp:
 		return "T_SetOp";
-	case postgres::T_PGLockRows:
+	case T_PGLockRows:
 		return "T_LockRows";
-	case postgres::T_PGLimit:
+	case T_PGLimit:
 		return "T_Limit";
-	case postgres::T_PGNestLoopParam:
+	case T_PGNestLoopParam:
 		return "T_NestLoopParam";
-	case postgres::T_PGPlanRowMark:
+	case T_PGPlanRowMark:
 		return "T_PlanRowMark";
-	case postgres::T_PGPlanInvalItem:
+	case T_PGPlanInvalItem:
 		return "T_PlanInvalItem";
-	case postgres::T_PGPlanState:
+	case T_PGPlanState:
 		return "T_PlanState";
-	case postgres::T_PGResultState:
+	case T_PGResultState:
 		return "T_ResultState";
-	case postgres::T_PGProjectSetState:
+	case T_PGProjectSetState:
 		return "T_ProjectSetState";
-	case postgres::T_PGModifyTableState:
+	case T_PGModifyTableState:
 		return "T_ModifyTableState";
-	case postgres::T_PGAppendState:
+	case T_PGAppendState:
 		return "T_AppendState";
-	case postgres::T_PGMergeAppendState:
+	case T_PGMergeAppendState:
 		return "T_MergeAppendState";
-	case postgres::T_PGRecursiveUnionState:
+	case T_PGRecursiveUnionState:
 		return "T_RecursiveUnionState";
-	case postgres::T_PGBitmapAndState:
+	case T_PGBitmapAndState:
 		return "T_BitmapAndState";
-	case postgres::T_PGBitmapOrState:
+	case T_PGBitmapOrState:
 		return "T_BitmapOrState";
-	case postgres::T_PGScanState:
+	case T_PGScanState:
 		return "T_ScanState";
-	case postgres::T_PGSeqScanState:
+	case T_PGSeqScanState:
 		return "T_SeqScanState";
-	case postgres::T_PGSampleScanState:
+	case T_PGSampleScanState:
 		return "T_SampleScanState";
-	case postgres::T_PGIndexScanState:
+	case T_PGIndexScanState:
 		return "T_IndexScanState";
-	case postgres::T_PGIndexOnlyScanState:
+	case T_PGIndexOnlyScanState:
 		return "T_IndexOnlyScanState";
-	case postgres::T_PGBitmapIndexScanState:
+	case T_PGBitmapIndexScanState:
 		return "T_BitmapIndexScanState";
-	case postgres::T_PGBitmapHeapScanState:
+	case T_PGBitmapHeapScanState:
 		return "T_BitmapHeapScanState";
-	case postgres::T_PGTidScanState:
+	case T_PGTidScanState:
 		return "T_TidScanState";
-	case postgres::T_PGSubqueryScanState:
+	case T_PGSubqueryScanState:
 		return "T_SubqueryScanState";
-	case postgres::T_PGFunctionScanState:
+	case T_PGFunctionScanState:
 		return "T_FunctionScanState";
-	case postgres::T_PGTableFuncScanState:
+	case T_PGTableFuncScanState:
 		return "T_TableFuncScanState";
-	case postgres::T_PGValuesScanState:
+	case T_PGValuesScanState:
 		return "T_ValuesScanState";
-	case postgres::T_PGCteScanState:
+	case T_PGCteScanState:
 		return "T_CteScanState";
-	case postgres::T_PGNamedTuplestoreScanState:
+	case T_PGNamedTuplestoreScanState:
 		return "T_NamedTuplestoreScanState";
-	case postgres::T_PGWorkTableScanState:
+	case T_PGWorkTableScanState:
 		return "T_WorkTableScanState";
-	case postgres::T_PGForeignScanState:
+	case T_PGForeignScanState:
 		return "T_ForeignScanState";
-	case postgres::T_PGCustomScanState:
+	case T_PGCustomScanState:
 		return "T_CustomScanState";
-	case postgres::T_PGJoinState:
+	case T_PGJoinState:
 		return "T_JoinState";
-	case postgres::T_PGNestLoopState:
+	case T_PGNestLoopState:
 		return "T_NestLoopState";
-	case postgres::T_PGMergeJoinState:
+	case T_PGMergeJoinState:
 		return "T_MergeJoinState";
-	case postgres::T_PGHashJoinState:
+	case T_PGHashJoinState:
 		return "T_HashJoinState";
-	case postgres::T_PGMaterialState:
+	case T_PGMaterialState:
 		return "T_MaterialState";
-	case postgres::T_PGSortState:
+	case T_PGSortState:
 		return "T_SortState";
-	case postgres::T_PGGroupState:
+	case T_PGGroupState:
 		return "T_GroupState";
-	case postgres::T_PGAggState:
+	case T_PGAggState:
 		return "T_AggState";
-	case postgres::T_PGWindowAggState:
+	case T_PGWindowAggState:
 		return "T_WindowAggState";
-	case postgres::T_PGUniqueState:
+	case T_PGUniqueState:
 		return "T_UniqueState";
-	case postgres::T_PGGatherState:
+	case T_PGGatherState:
 		return "T_GatherState";
-	case postgres::T_PGGatherMergeState:
+	case T_PGGatherMergeState:
 		return "T_GatherMergeState";
-	case postgres::T_PGHashState:
+	case T_PGHashState:
 		return "T_HashState";
-	case postgres::T_PGSetOpState:
+	case T_PGSetOpState:
 		return "T_SetOpState";
-	case postgres::T_PGLockRowsState:
+	case T_PGLockRowsState:
 		return "T_LockRowsState";
-	case postgres::T_PGLimitState:
+	case T_PGLimitState:
 		return "T_LimitState";
-	case postgres::T_PGAlias:
+	case T_PGAlias:
 		return "T_Alias";
-	case postgres::T_PGRangeVar:
+	case T_PGRangeVar:
 		return "T_RangeVar";
-	case postgres::T_PGTableFunc:
+	case T_PGTableFunc:
 		return "T_TableFunc";
-	case postgres::T_PGExpr:
+	case T_PGExpr:
 		return "T_Expr";
-	case postgres::T_PGVar:
+	case T_PGVar:
 		return "T_Var";
-	case postgres::T_PGConst:
+	case T_PGConst:
 		return "T_Const";
-	case postgres::T_PGParam:
+	case T_PGParam:
 		return "T_Param";
-	case postgres::T_PGAggref:
+	case T_PGAggref:
 		return "T_Aggref";
-	case postgres::T_PGGroupingFunc:
+	case T_PGGroupingFunc:
 		return "T_GroupingFunc";
-	case postgres::T_PGWindowFunc:
+	case T_PGWindowFunc:
 		return "T_WindowFunc";
-	case postgres::T_PGArrayRef:
+	case T_PGArrayRef:
 		return "T_ArrayRef";
-	case postgres::T_PGFuncExpr:
+	case T_PGFuncExpr:
 		return "T_FuncExpr";
-	case postgres::T_PGNamedArgExpr:
+	case T_PGNamedArgExpr:
 		return "T_NamedArgExpr";
-	case postgres::T_PGOpExpr:
+	case T_PGOpExpr:
 		return "T_OpExpr";
-	case postgres::T_PGDistinctExpr:
+	case T_PGDistinctExpr:
 		return "T_DistinctExpr";
-	case postgres::T_PGNullIfExpr:
+	case T_PGNullIfExpr:
 		return "T_NullIfExpr";
-	case postgres::T_PGScalarArrayOpExpr:
+	case T_PGScalarArrayOpExpr:
 		return "T_ScalarArrayOpExpr";
-	case postgres::T_PGBoolExpr:
+	case T_PGBoolExpr:
 		return "T_BoolExpr";
-	case postgres::T_PGSubLink:
+	case T_PGSubLink:
 		return "T_SubLink";
-	case postgres::T_PGSubPlan:
+	case T_PGSubPlan:
 		return "T_SubPlan";
-	case postgres::T_PGAlternativeSubPlan:
+	case T_PGAlternativeSubPlan:
 		return "T_AlternativeSubPlan";
-	case postgres::T_PGFieldSelect:
+	case T_PGFieldSelect:
 		return "T_FieldSelect";
-	case postgres::T_PGFieldStore:
+	case T_PGFieldStore:
 		return "T_FieldStore";
-	case postgres::T_PGRelabelType:
+	case T_PGRelabelType:
 		return "T_RelabelType";
-	case postgres::T_PGCoerceViaIO:
+	case T_PGCoerceViaIO:
 		return "T_CoerceViaIO";
-	case postgres::T_PGArrayCoerceExpr:
+	case T_PGArrayCoerceExpr:
 		return "T_ArrayCoerceExpr";
-	case postgres::T_PGConvertRowtypeExpr:
+	case T_PGConvertRowtypeExpr:
 		return "T_ConvertRowtypeExpr";
-	case postgres::T_PGCollateExpr:
+	case T_PGCollateExpr:
 		return "T_CollateExpr";
-	case postgres::T_PGCaseExpr:
+	case T_PGCaseExpr:
 		return "T_CaseExpr";
-	case postgres::T_PGCaseWhen:
+	case T_PGCaseWhen:
 		return "T_CaseWhen";
-	case postgres::T_PGCaseTestExpr:
+	case T_PGCaseTestExpr:
 		return "T_CaseTestExpr";
-	case postgres::T_PGArrayExpr:
+	case T_PGArrayExpr:
 		return "T_ArrayExpr";
-	case postgres::T_PGRowExpr:
+	case T_PGRowExpr:
 		return "T_RowExpr";
-	case postgres::T_PGRowCompareExpr:
+	case T_PGRowCompareExpr:
 		return "T_RowCompareExpr";
-	case postgres::T_PGCoalesceExpr:
+	case T_PGCoalesceExpr:
 		return "T_CoalesceExpr";
-	case postgres::T_PGMinMaxExpr:
+	case T_PGMinMaxExpr:
 		return "T_MinMaxExpr";
-	case postgres::T_PGSQLValueFunction:
+	case T_PGSQLValueFunction:
 		return "T_SQLValueFunction";
-	case postgres::T_PGXmlExpr:
+	case T_PGXmlExpr:
 		return "T_XmlExpr";
-	case postgres::T_PGNullTest:
+	case T_PGNullTest:
 		return "T_NullTest";
-	case postgres::T_PGBooleanTest:
+	case T_PGBooleanTest:
 		return "T_BooleanTest";
-	case postgres::T_PGCoerceToDomain:
+	case T_PGCoerceToDomain:
 		return "T_CoerceToDomain";
-	case postgres::T_PGCoerceToDomainValue:
+	case T_PGCoerceToDomainValue:
 		return "T_CoerceToDomainValue";
-	case postgres::T_PGSetToDefault:
+	case T_PGSetToDefault:
 		return "T_SetToDefault";
-	case postgres::T_PGCurrentOfExpr:
+	case T_PGCurrentOfExpr:
 		return "T_CurrentOfExpr";
-	case postgres::T_PGNextValueExpr:
+	case T_PGNextValueExpr:
 		return "T_NextValueExpr";
-	case postgres::T_PGInferenceElem:
+	case T_PGInferenceElem:
 		return "T_InferenceElem";
-	case postgres::T_PGTargetEntry:
+	case T_PGTargetEntry:
 		return "T_TargetEntry";
-	case postgres::T_PGRangeTblRef:
+	case T_PGRangeTblRef:
 		return "T_RangeTblRef";
-	case postgres::T_PGJoinExpr:
+	case T_PGJoinExpr:
 		return "T_JoinExpr";
-	case postgres::T_PGFromExpr:
+	case T_PGFromExpr:
 		return "T_FromExpr";
-	case postgres::T_PGOnConflictExpr:
+	case T_PGOnConflictExpr:
 		return "T_OnConflictExpr";
-	case postgres::T_PGIntoClause:
+	case T_PGIntoClause:
 		return "T_IntoClause";
-	case postgres::T_PGExprState:
+	case T_PGExprState:
 		return "T_ExprState";
-	case postgres::T_PGAggrefExprState:
+	case T_PGAggrefExprState:
 		return "T_AggrefExprState";
-	case postgres::T_PGWindowFuncExprState:
+	case T_PGWindowFuncExprState:
 		return "T_WindowFuncExprState";
-	case postgres::T_PGSetExprState:
+	case T_PGSetExprState:
 		return "T_SetExprState";
-	case postgres::T_PGSubPlanState:
+	case T_PGSubPlanState:
 		return "T_SubPlanState";
-	case postgres::T_PGAlternativeSubPlanState:
+	case T_PGAlternativeSubPlanState:
 		return "T_AlternativeSubPlanState";
-	case postgres::T_PGDomainConstraintState:
+	case T_PGDomainConstraintState:
 		return "T_DomainConstraintState";
-	case postgres::T_PGPlannerInfo:
+	case T_PGPlannerInfo:
 		return "T_PlannerInfo";
-	case postgres::T_PGPlannerGlobal:
+	case T_PGPlannerGlobal:
 		return "T_PlannerGlobal";
-	case postgres::T_PGRelOptInfo:
+	case T_PGRelOptInfo:
 		return "T_RelOptInfo";
-	case postgres::T_PGIndexOptInfo:
+	case T_PGIndexOptInfo:
 		return "T_IndexOptInfo";
-	case postgres::T_PGForeignKeyOptInfo:
+	case T_PGForeignKeyOptInfo:
 		return "T_ForeignKeyOptInfo";
-	case postgres::T_PGParamPathInfo:
+	case T_PGParamPathInfo:
 		return "T_ParamPathInfo";
-	case postgres::T_PGPath:
+	case T_PGPath:
 		return "T_Path";
-	case postgres::T_PGIndexPath:
+	case T_PGIndexPath:
 		return "T_IndexPath";
-	case postgres::T_PGBitmapHeapPath:
+	case T_PGBitmapHeapPath:
 		return "T_BitmapHeapPath";
-	case postgres::T_PGBitmapAndPath:
+	case T_PGBitmapAndPath:
 		return "T_BitmapAndPath";
-	case postgres::T_PGBitmapOrPath:
+	case T_PGBitmapOrPath:
 		return "T_BitmapOrPath";
-	case postgres::T_PGTidPath:
+	case T_PGTidPath:
 		return "T_TidPath";
-	case postgres::T_PGSubqueryScanPath:
+	case T_PGSubqueryScanPath:
 		return "T_SubqueryScanPath";
-	case postgres::T_PGForeignPath:
+	case T_PGForeignPath:
 		return "T_ForeignPath";
-	case postgres::T_PGCustomPath:
+	case T_PGCustomPath:
 		return "T_CustomPath";
-	case postgres::T_PGNestPath:
+	case T_PGNestPath:
 		return "T_NestPath";
-	case postgres::T_PGMergePath:
+	case T_PGMergePath:
 		return "T_MergePath";
-	case postgres::T_PGHashPath:
+	case T_PGHashPath:
 		return "T_HashPath";
-	case postgres::T_PGAppendPath:
+	case T_PGAppendPath:
 		return "T_AppendPath";
-	case postgres::T_PGMergeAppendPath:
+	case T_PGMergeAppendPath:
 		return "T_MergeAppendPath";
-	case postgres::T_PGResultPath:
+	case T_PGResultPath:
 		return "T_ResultPath";
-	case postgres::T_PGMaterialPath:
+	case T_PGMaterialPath:
 		return "T_MaterialPath";
-	case postgres::T_PGUniquePath:
+	case T_PGUniquePath:
 		return "T_UniquePath";
-	case postgres::T_PGGatherPath:
+	case T_PGGatherPath:
 		return "T_GatherPath";
-	case postgres::T_PGGatherMergePath:
+	case T_PGGatherMergePath:
 		return "T_GatherMergePath";
-	case postgres::T_PGProjectionPath:
+	case T_PGProjectionPath:
 		return "T_ProjectionPath";
-	case postgres::T_PGProjectSetPath:
+	case T_PGProjectSetPath:
 		return "T_ProjectSetPath";
-	case postgres::T_PGSortPath:
+	case T_PGSortPath:
 		return "T_SortPath";
-	case postgres::T_PGGroupPath:
+	case T_PGGroupPath:
 		return "T_GroupPath";
-	case postgres::T_PGUpperUniquePath:
+	case T_PGUpperUniquePath:
 		return "T_UpperUniquePath";
-	case postgres::T_PGAggPath:
+	case T_PGAggPath:
 		return "T_AggPath";
-	case postgres::T_PGGroupingSetsPath:
+	case T_PGGroupingSetsPath:
 		return "T_GroupingSetsPath";
-	case postgres::T_PGMinMaxAggPath:
+	case T_PGMinMaxAggPath:
 		return "T_MinMaxAggPath";
-	case postgres::T_PGWindowAggPath:
+	case T_PGWindowAggPath:
 		return "T_WindowAggPath";
-	case postgres::T_PGSetOpPath:
+	case T_PGSetOpPath:
 		return "T_SetOpPath";
-	case postgres::T_PGRecursiveUnionPath:
+	case T_PGRecursiveUnionPath:
 		return "T_RecursiveUnionPath";
-	case postgres::T_PGLockRowsPath:
+	case T_PGLockRowsPath:
 		return "T_LockRowsPath";
-	case postgres::T_PGModifyTablePath:
+	case T_PGModifyTablePath:
 		return "T_ModifyTablePath";
-	case postgres::T_PGLimitPath:
+	case T_PGLimitPath:
 		return "T_LimitPath";
-	case postgres::T_PGEquivalenceClass:
+	case T_PGEquivalenceClass:
 		return "T_EquivalenceClass";
-	case postgres::T_PGEquivalenceMember:
+	case T_PGEquivalenceMember:
 		return "T_EquivalenceMember";
-	case postgres::T_PGPathKey:
+	case T_PGPathKey:
 		return "T_PathKey";
-	case postgres::T_PGPathTarget:
+	case T_PGPathTarget:
 		return "T_PathTarget";
-	case postgres::T_PGRestrictInfo:
+	case T_PGRestrictInfo:
 		return "T_RestrictInfo";
-	case postgres::T_PGPlaceHolderVar:
+	case T_PGPlaceHolderVar:
 		return "T_PlaceHolderVar";
-	case postgres::T_PGSpecialJoinInfo:
+	case T_PGSpecialJoinInfo:
 		return "T_SpecialJoinInfo";
-	case postgres::T_PGAppendRelInfo:
+	case T_PGAppendRelInfo:
 		return "T_AppendRelInfo";
-	case postgres::T_PGPartitionedChildRelInfo:
+	case T_PGPartitionedChildRelInfo:
 		return "T_PartitionedChildRelInfo";
-	case postgres::T_PGPlaceHolderInfo:
+	case T_PGPlaceHolderInfo:
 		return "T_PlaceHolderInfo";
-	case postgres::T_PGMinMaxAggInfo:
+	case T_PGMinMaxAggInfo:
 		return "T_MinMaxAggInfo";
-	case postgres::T_PGPlannerParamItem:
+	case T_PGPlannerParamItem:
 		return "T_PlannerParamItem";
-	case postgres::T_PGRollupData:
+	case T_PGRollupData:
 		return "T_RollupData";
-	case postgres::T_PGGroupingSetData:
+	case T_PGGroupingSetData:
 		return "T_GroupingSetData";
-	case postgres::T_PGStatisticExtInfo:
+	case T_PGStatisticExtInfo:
 		return "T_StatisticExtInfo";
-	case postgres::T_PGMemoryContext:
+	case T_PGMemoryContext:
 		return "T_MemoryContext";
-	case postgres::T_PGAllocSetContext:
+	case T_PGAllocSetContext:
 		return "T_AllocSetContext";
-	case postgres::T_PGSlabContext:
+	case T_PGSlabContext:
 		return "T_SlabContext";
-	case postgres::T_PGValue:
+	case T_PGValue:
 		return "T_Value";
-	case postgres::T_PGInteger:
+	case T_PGInteger:
 		return "T_Integer";
-	case postgres::T_PGFloat:
+	case T_PGFloat:
 		return "T_Float";
-	case postgres::T_PGString:
+	case T_PGString:
 		return "T_String";
-	case postgres::T_PGBitString:
+	case T_PGBitString:
 		return "T_BitString";
-	case postgres::T_PGNull:
+	case T_PGNull:
 		return "T_Null";
-	case postgres::T_PGList:
+	case T_PGList:
 		return "T_List";
-	case postgres::T_PGIntList:
+	case T_PGIntList:
 		return "T_IntList";
-	case postgres::T_PGOidList:
+	case T_PGOidList:
 		return "T_OidList";
-	case postgres::T_PGExtensibleNode:
+	case T_PGExtensibleNode:
 		return "T_ExtensibleNode";
-	case postgres::T_PGRawStmt:
+	case T_PGRawStmt:
 		return "T_RawStmt";
-	case postgres::T_PGQuery:
+	case T_PGQuery:
 		return "T_Query";
-	case postgres::T_PGPlannedStmt:
+	case T_PGPlannedStmt:
 		return "T_PlannedStmt";
-	case postgres::T_PGInsertStmt:
+	case T_PGInsertStmt:
 		return "T_InsertStmt";
-	case postgres::T_PGDeleteStmt:
+	case T_PGDeleteStmt:
 		return "T_DeleteStmt";
-	case postgres::T_PGUpdateStmt:
+	case T_PGUpdateStmt:
 		return "T_UpdateStmt";
-	case postgres::T_PGSelectStmt:
+	case T_PGSelectStmt:
 		return "T_SelectStmt";
-	case postgres::T_PGAlterTableStmt:
+	case T_PGAlterTableStmt:
 		return "T_AlterTableStmt";
-	case postgres::T_PGAlterTableCmd:
+	case T_PGAlterTableCmd:
 		return "T_AlterTableCmd";
-	case postgres::T_PGAlterDomainStmt:
+	case T_PGAlterDomainStmt:
 		return "T_AlterDomainStmt";
-	case postgres::T_PGSetOperationStmt:
+	case T_PGSetOperationStmt:
 		return "T_SetOperationStmt";
-	case postgres::T_PGGrantStmt:
+	case T_PGGrantStmt:
 		return "T_GrantStmt";
-	case postgres::T_PGGrantRoleStmt:
+	case T_PGGrantRoleStmt:
 		return "T_GrantRoleStmt";
-	case postgres::T_PGAlterDefaultPrivilegesStmt:
+	case T_PGAlterDefaultPrivilegesStmt:
 		return "T_AlterDefaultPrivilegesStmt";
-	case postgres::T_PGClosePortalStmt:
+	case T_PGClosePortalStmt:
 		return "T_ClosePortalStmt";
-	case postgres::T_PGClusterStmt:
+	case T_PGClusterStmt:
 		return "T_ClusterStmt";
-	case postgres::T_PGCopyStmt:
+	case T_PGCopyStmt:
 		return "T_CopyStmt";
-	case postgres::T_PGCreateStmt:
+	case T_PGCreateStmt:
 		return "T_CreateStmt";
-	case postgres::T_PGDefineStmt:
+	case T_PGDefineStmt:
 		return "T_DefineStmt";
-	case postgres::T_PGDropStmt:
+	case T_PGDropStmt:
 		return "T_DropStmt";
-	case postgres::T_PGTruncateStmt:
+	case T_PGTruncateStmt:
 		return "T_TruncateStmt";
-	case postgres::T_PGCommentStmt:
+	case T_PGCommentStmt:
 		return "T_CommentStmt";
-	case postgres::T_PGFetchStmt:
+	case T_PGFetchStmt:
 		return "T_FetchStmt";
-	case postgres::T_PGIndexStmt:
+	case T_PGIndexStmt:
 		return "T_IndexStmt";
-	case postgres::T_PGCreateFunctionStmt:
+	case T_PGCreateFunctionStmt:
 		return "T_CreateFunctionStmt";
-	case postgres::T_PGAlterFunctionStmt:
+	case T_PGAlterFunctionStmt:
 		return "T_AlterFunctionStmt";
-	case postgres::T_PGDoStmt:
+	case T_PGDoStmt:
 		return "T_DoStmt";
-	case postgres::T_PGRenameStmt:
+	case T_PGRenameStmt:
 		return "T_RenameStmt";
-	case postgres::T_PGRuleStmt:
+	case T_PGRuleStmt:
 		return "T_RuleStmt";
-	case postgres::T_PGNotifyStmt:
+	case T_PGNotifyStmt:
 		return "T_NotifyStmt";
-	case postgres::T_PGListenStmt:
+	case T_PGListenStmt:
 		return "T_ListenStmt";
-	case postgres::T_PGUnlistenStmt:
+	case T_PGUnlistenStmt:
 		return "T_UnlistenStmt";
-	case postgres::T_PGTransactionStmt:
+	case T_PGTransactionStmt:
 		return "T_TransactionStmt";
-	case postgres::T_PGViewStmt:
+	case T_PGViewStmt:
 		return "T_ViewStmt";
-	case postgres::T_PGLoadStmt:
+	case T_PGLoadStmt:
 		return "T_LoadStmt";
-	case postgres::T_PGCreateDomainStmt:
+	case T_PGCreateDomainStmt:
 		return "T_CreateDomainStmt";
-	case postgres::T_PGCreatedbStmt:
+	case T_PGCreatedbStmt:
 		return "T_CreatedbStmt";
-	case postgres::T_PGDropdbStmt:
+	case T_PGDropdbStmt:
 		return "T_DropdbStmt";
-	case postgres::T_PGVacuumStmt:
+	case T_PGVacuumStmt:
 		return "T_VacuumStmt";
-	case postgres::T_PGExplainStmt:
+	case T_PGExplainStmt:
 		return "T_ExplainStmt";
-	case postgres::T_PGCreateTableAsStmt:
+	case T_PGCreateTableAsStmt:
 		return "T_CreateTableAsStmt";
-	case postgres::T_PGCreateSeqStmt:
+	case T_PGCreateSeqStmt:
 		return "T_CreateSeqStmt";
-	case postgres::T_PGAlterSeqStmt:
+	case T_PGAlterSeqStmt:
 		return "T_AlterSeqStmt";
-	case postgres::T_PGVariableSetStmt:
+	case T_PGVariableSetStmt:
 		return "T_VariableSetStmt";
-	case postgres::T_PGVariableShowStmt:
+	case T_PGVariableShowStmt:
 		return "T_VariableShowStmt";
-	case postgres::T_PGDiscardStmt:
+	case T_PGDiscardStmt:
 		return "T_DiscardStmt";
-	case postgres::T_PGCreateTrigStmt:
+	case T_PGCreateTrigStmt:
 		return "T_CreateTrigStmt";
-	case postgres::T_PGCreatePLangStmt:
+	case T_PGCreatePLangStmt:
 		return "T_CreatePLangStmt";
-	case postgres::T_PGCreateRoleStmt:
+	case T_PGCreateRoleStmt:
 		return "T_CreateRoleStmt";
-	case postgres::T_PGAlterRoleStmt:
+	case T_PGAlterRoleStmt:
 		return "T_AlterRoleStmt";
-	case postgres::T_PGDropRoleStmt:
+	case T_PGDropRoleStmt:
 		return "T_DropRoleStmt";
-	case postgres::T_PGLockStmt:
+	case T_PGLockStmt:
 		return "T_LockStmt";
-	case postgres::T_PGConstraintsSetStmt:
+	case T_PGConstraintsSetStmt:
 		return "T_ConstraintsSetStmt";
-	case postgres::T_PGReindexStmt:
+	case T_PGReindexStmt:
 		return "T_ReindexStmt";
-	case postgres::T_PGCheckPointStmt:
+	case T_PGCheckPointStmt:
 		return "T_CheckPointStmt";
-	case postgres::T_PGCreateSchemaStmt:
+	case T_PGCreateSchemaStmt:
 		return "T_CreateSchemaStmt";
-	case postgres::T_PGAlterDatabaseStmt:
+	case T_PGAlterDatabaseStmt:
 		return "T_AlterDatabaseStmt";
-	case postgres::T_PGAlterDatabaseSetStmt:
+	case T_PGAlterDatabaseSetStmt:
 		return "T_AlterDatabaseSetStmt";
-	case postgres::T_PGAlterRoleSetStmt:
+	case T_PGAlterRoleSetStmt:
 		return "T_AlterRoleSetStmt";
-	case postgres::T_PGCreateConversionStmt:
+	case T_PGCreateConversionStmt:
 		return "T_CreateConversionStmt";
-	case postgres::T_PGCreateCastStmt:
+	case T_PGCreateCastStmt:
 		return "T_CreateCastStmt";
-	case postgres::T_PGCreateOpClassStmt:
+	case T_PGCreateOpClassStmt:
 		return "T_CreateOpClassStmt";
-	case postgres::T_PGCreateOpFamilyStmt:
+	case T_PGCreateOpFamilyStmt:
 		return "T_CreateOpFamilyStmt";
-	case postgres::T_PGAlterOpFamilyStmt:
+	case T_PGAlterOpFamilyStmt:
 		return "T_AlterOpFamilyStmt";
-	case postgres::T_PGPrepareStmt:
+	case T_PGPrepareStmt:
 		return "T_PrepareStmt";
-	case postgres::T_PGExecuteStmt:
+	case T_PGExecuteStmt:
 		return "T_ExecuteStmt";
-	case postgres::T_PGDeallocateStmt:
+	case T_PGDeallocateStmt:
 		return "T_DeallocateStmt";
-	case postgres::T_PGDeclareCursorStmt:
+	case T_PGDeclareCursorStmt:
 		return "T_DeclareCursorStmt";
-	case postgres::T_PGCreateTableSpaceStmt:
+	case T_PGCreateTableSpaceStmt:
 		return "T_CreateTableSpaceStmt";
-	case postgres::T_PGDropTableSpaceStmt:
+	case T_PGDropTableSpaceStmt:
 		return "T_DropTableSpaceStmt";
-	case postgres::T_PGAlterObjectDependsStmt:
+	case T_PGAlterObjectDependsStmt:
 		return "T_AlterObjectDependsStmt";
-	case postgres::T_PGAlterObjectSchemaStmt:
+	case T_PGAlterObjectSchemaStmt:
 		return "T_AlterObjectSchemaStmt";
-	case postgres::T_PGAlterOwnerStmt:
+	case T_PGAlterOwnerStmt:
 		return "T_AlterOwnerStmt";
-	case postgres::T_PGAlterOperatorStmt:
+	case T_PGAlterOperatorStmt:
 		return "T_AlterOperatorStmt";
-	case postgres::T_PGDropOwnedStmt:
+	case T_PGDropOwnedStmt:
 		return "T_DropOwnedStmt";
-	case postgres::T_PGReassignOwnedStmt:
+	case T_PGReassignOwnedStmt:
 		return "T_ReassignOwnedStmt";
-	case postgres::T_PGCompositeTypeStmt:
+	case T_PGCompositeTypeStmt:
 		return "T_CompositeTypeStmt";
-	case postgres::T_PGCreateEnumStmt:
+	case T_PGCreateEnumStmt:
 		return "T_CreateEnumStmt";
-	case postgres::T_PGCreateRangeStmt:
+	case T_PGCreateRangeStmt:
 		return "T_CreateRangeStmt";
-	case postgres::T_PGAlterEnumStmt:
+	case T_PGAlterEnumStmt:
 		return "T_AlterEnumStmt";
-	case postgres::T_PGAlterTSDictionaryStmt:
+	case T_PGAlterTSDictionaryStmt:
 		return "T_AlterTSDictionaryStmt";
-	case postgres::T_PGAlterTSConfigurationStmt:
+	case T_PGAlterTSConfigurationStmt:
 		return "T_AlterTSConfigurationStmt";
-	case postgres::T_PGCreateFdwStmt:
+	case T_PGCreateFdwStmt:
 		return "T_CreateFdwStmt";
-	case postgres::T_PGAlterFdwStmt:
+	case T_PGAlterFdwStmt:
 		return "T_AlterFdwStmt";
-	case postgres::T_PGCreateForeignServerStmt:
+	case T_PGCreateForeignServerStmt:
 		return "T_CreateForeignServerStmt";
-	case postgres::T_PGAlterForeignServerStmt:
+	case T_PGAlterForeignServerStmt:
 		return "T_AlterForeignServerStmt";
-	case postgres::T_PGCreateUserMappingStmt:
+	case T_PGCreateUserMappingStmt:
 		return "T_CreateUserMappingStmt";
-	case postgres::T_PGAlterUserMappingStmt:
+	case T_PGAlterUserMappingStmt:
 		return "T_AlterUserMappingStmt";
-	case postgres::T_PGDropUserMappingStmt:
+	case T_PGDropUserMappingStmt:
 		return "T_DropUserMappingStmt";
-	case postgres::T_PGAlterTableSpaceOptionsStmt:
+	case T_PGAlterTableSpaceOptionsStmt:
 		return "T_AlterTableSpaceOptionsStmt";
-	case postgres::T_PGAlterTableMoveAllStmt:
+	case T_PGAlterTableMoveAllStmt:
 		return "T_AlterTableMoveAllStmt";
-	case postgres::T_PGSecLabelStmt:
+	case T_PGSecLabelStmt:
 		return "T_SecLabelStmt";
-	case postgres::T_PGCreateForeignTableStmt:
+	case T_PGCreateForeignTableStmt:
 		return "T_CreateForeignTableStmt";
-	case postgres::T_PGImportForeignSchemaStmt:
+	case T_PGImportForeignSchemaStmt:
 		return "T_ImportForeignSchemaStmt";
-	case postgres::T_PGCreateExtensionStmt:
+	case T_PGCreateExtensionStmt:
 		return "T_CreateExtensionStmt";
-	case postgres::T_PGAlterExtensionStmt:
+	case T_PGAlterExtensionStmt:
 		return "T_AlterExtensionStmt";
-	case postgres::T_PGAlterExtensionContentsStmt:
+	case T_PGAlterExtensionContentsStmt:
 		return "T_AlterExtensionContentsStmt";
-	case postgres::T_PGCreateEventTrigStmt:
+	case T_PGCreateEventTrigStmt:
 		return "T_CreateEventTrigStmt";
-	case postgres::T_PGAlterEventTrigStmt:
+	case T_PGAlterEventTrigStmt:
 		return "T_AlterEventTrigStmt";
-	case postgres::T_PGRefreshMatViewStmt:
+	case T_PGRefreshMatViewStmt:
 		return "T_RefreshMatViewStmt";
-	case postgres::T_PGReplicaIdentityStmt:
+	case T_PGReplicaIdentityStmt:
 		return "T_ReplicaIdentityStmt";
-	case postgres::T_PGAlterSystemStmt:
+	case T_PGAlterSystemStmt:
 		return "T_AlterSystemStmt";
-	case postgres::T_PGCreatePolicyStmt:
+	case T_PGCreatePolicyStmt:
 		return "T_CreatePolicyStmt";
-	case postgres::T_PGAlterPolicyStmt:
+	case T_PGAlterPolicyStmt:
 		return "T_AlterPolicyStmt";
-	case postgres::T_PGCreateTransformStmt:
+	case T_PGCreateTransformStmt:
 		return "T_CreateTransformStmt";
-	case postgres::T_PGCreateAmStmt:
+	case T_PGCreateAmStmt:
 		return "T_CreateAmStmt";
-	case postgres::T_PGCreatePublicationStmt:
+	case T_PGCreatePublicationStmt:
 		return "T_CreatePublicationStmt";
-	case postgres::T_PGAlterPublicationStmt:
+	case T_PGAlterPublicationStmt:
 		return "T_AlterPublicationStmt";
-	case postgres::T_PGCreateSubscriptionStmt:
+	case T_PGCreateSubscriptionStmt:
 		return "T_CreateSubscriptionStmt";
-	case postgres::T_PGAlterSubscriptionStmt:
+	case T_PGAlterSubscriptionStmt:
 		return "T_AlterSubscriptionStmt";
-	case postgres::T_PGDropSubscriptionStmt:
+	case T_PGDropSubscriptionStmt:
 		return "T_DropSubscriptionStmt";
-	case postgres::T_PGCreateStatsStmt:
+	case T_PGCreateStatsStmt:
 		return "T_CreateStatsStmt";
-	case postgres::T_PGAlterCollationStmt:
+	case T_PGAlterCollationStmt:
 		return "T_AlterCollationStmt";
-	case postgres::T_PGAExpr:
+	case T_PGAExpr:
 		return "TAExpr";
-	case postgres::T_PGColumnRef:
+	case T_PGColumnRef:
 		return "T_ColumnRef";
-	case postgres::T_PGParamRef:
+	case T_PGParamRef:
 		return "T_ParamRef";
-	case postgres::T_PGAConst:
+	case T_PGAConst:
 		return "TAConst";
-	case postgres::T_PGFuncCall:
+	case T_PGFuncCall:
 		return "T_FuncCall";
-	case postgres::T_PGAStar:
+	case T_PGAStar:
 		return "TAStar";
-	case postgres::T_PGAIndices:
+	case T_PGAIndices:
 		return "TAIndices";
-	case postgres::T_PGAIndirection:
+	case T_PGAIndirection:
 		return "TAIndirection";
-	case postgres::T_PGAArrayExpr:
+	case T_PGAArrayExpr:
 		return "TAArrayExpr";
-	case postgres::T_PGResTarget:
+	case T_PGResTarget:
 		return "T_ResTarget";
-	case postgres::T_PGMultiAssignRef:
+	case T_PGMultiAssignRef:
 		return "T_MultiAssignRef";
-	case postgres::T_PGTypeCast:
+	case T_PGTypeCast:
 		return "T_TypeCast";
-	case postgres::T_PGCollateClause:
+	case T_PGCollateClause:
 		return "T_CollateClause";
-	case postgres::T_PGSortBy:
+	case T_PGSortBy:
 		return "T_SortBy";
-	case postgres::T_PGWindowDef:
+	case T_PGWindowDef:
 		return "T_WindowDef";
-	case postgres::T_PGRangeSubselect:
+	case T_PGRangeSubselect:
 		return "T_RangeSubselect";
-	case postgres::T_PGRangeFunction:
+	case T_PGRangeFunction:
 		return "T_RangeFunction";
-	case postgres::T_PGRangeTableSample:
+	case T_PGRangeTableSample:
 		return "T_RangeTableSample";
-	case postgres::T_PGRangeTableFunc:
+	case T_PGRangeTableFunc:
 		return "T_RangeTableFunc";
-	case postgres::T_PGRangeTableFuncCol:
+	case T_PGRangeTableFuncCol:
 		return "T_RangeTableFuncCol";
-	case postgres::T_PGTypeName:
+	case T_PGTypeName:
 		return "T_TypeName";
-	case postgres::T_PGColumnDef:
+	case T_PGColumnDef:
 		return "T_ColumnDef";
-	case postgres::T_PGIndexElem:
+	case T_PGIndexElem:
 		return "T_IndexElem";
-	case postgres::T_PGConstraint:
+	case T_PGConstraint:
 		return "T_Constraint";
-	case postgres::T_PGDefElem:
+	case T_PGDefElem:
 		return "T_DefElem";
-	case postgres::T_PGRangeTblEntry:
+	case T_PGRangeTblEntry:
 		return "T_RangeTblEntry";
-	case postgres::T_PGRangeTblFunction:
+	case T_PGRangeTblFunction:
 		return "T_RangeTblFunction";
-	case postgres::T_PGTableSampleClause:
+	case T_PGTableSampleClause:
 		return "T_TableSampleClause";
-	case postgres::T_PGWithCheckOption:
+	case T_PGWithCheckOption:
 		return "T_WithCheckOption";
-	case postgres::T_PGSortGroupClause:
+	case T_PGSortGroupClause:
 		return "T_SortGroupClause";
-	case postgres::T_PGGroupingSet:
+	case T_PGGroupingSet:
 		return "T_GroupingSet";
-	case postgres::T_PGWindowClause:
+	case T_PGWindowClause:
 		return "T_WindowClause";
-	case postgres::T_PGObjectWithArgs:
+	case T_PGObjectWithArgs:
 		return "T_ObjectWithArgs";
-	case postgres::T_PGAccessPriv:
+	case T_PGAccessPriv:
 		return "T_AccessPriv";
-	case postgres::T_PGCreateOpClassItem:
+	case T_PGCreateOpClassItem:
 		return "T_CreateOpClassItem";
-	case postgres::T_PGTableLikeClause:
+	case T_PGTableLikeClause:
 		return "T_TableLikeClause";
-	case postgres::T_PGFunctionParameter:
+	case T_PGFunctionParameter:
 		return "T_FunctionParameter";
-	case postgres::T_PGLockingClause:
+	case T_PGLockingClause:
 		return "T_LockingClause";
-	case postgres::T_PGRowMarkClause:
+	case T_PGRowMarkClause:
 		return "T_RowMarkClause";
-	case postgres::T_PGXmlSerialize:
+	case T_PGXmlSerialize:
 		return "T_XmlSerialize";
-	case postgres::T_PGWithClause:
+	case T_PGWithClause:
 		return "T_WithClause";
-	case postgres::T_PGInferClause:
+	case T_PGInferClause:
 		return "T_InferClause";
-	case postgres::T_PGOnConflictClause:
+	case T_PGOnConflictClause:
 		return "T_OnConflictClause";
-	case postgres::T_PGCommonTableExpr:
+	case T_PGCommonTableExpr:
 		return "T_CommonTableExpr";
-	case postgres::T_PGRoleSpec:
+	case T_PGRoleSpec:
 		return "T_RoleSpec";
-	case postgres::T_PGTriggerTransition:
+	case T_PGTriggerTransition:
 		return "T_TriggerTransition";
-	case postgres::T_PGPartitionElem:
+	case T_PGPartitionElem:
 		return "T_PartitionElem";
-	case postgres::T_PGPartitionSpec:
+	case T_PGPartitionSpec:
 		return "T_PartitionSpec";
-	case postgres::T_PGPartitionBoundSpec:
+	case T_PGPartitionBoundSpec:
 		return "T_PartitionBoundSpec";
-	case postgres::T_PGPartitionRangeDatum:
+	case T_PGPartitionRangeDatum:
 		return "T_PartitionRangeDatum";
-	case postgres::T_PGPartitionCmd:
+	case T_PGPartitionCmd:
 		return "T_PartitionCmd";
-	case postgres::T_PGIdentifySystemCmd:
+	case T_PGIdentifySystemCmd:
 		return "T_IdentifySystemCmd";
-	case postgres::T_PGBaseBackupCmd:
+	case T_PGBaseBackupCmd:
 		return "T_BaseBackupCmd";
-	case postgres::T_PGCreateReplicationSlotCmd:
+	case T_PGCreateReplicationSlotCmd:
 		return "T_CreateReplicationSlotCmd";
-	case postgres::T_PGDropReplicationSlotCmd:
+	case T_PGDropReplicationSlotCmd:
 		return "T_DropReplicationSlotCmd";
-	case postgres::T_PGStartReplicationCmd:
+	case T_PGStartReplicationCmd:
 		return "T_StartReplicationCmd";
-	case postgres::T_PGTimeLineHistoryCmd:
+	case T_PGTimeLineHistoryCmd:
 		return "T_TimeLineHistoryCmd";
-	case postgres::T_PGSQLCmd:
+	case T_PGSQLCmd:
 		return "T_SQLCmd";
-	case postgres::T_PGTriggerData:
+	case T_PGTriggerData:
 		return "T_TriggerData";
-	case postgres::T_PGEventTriggerData:
+	case T_PGEventTriggerData:
 		return "T_EventTriggerData";
-	case postgres::T_PGReturnSetInfo:
+	case T_PGReturnSetInfo:
 		return "T_ReturnSetInfo";
-	case postgres::T_PGWindowObjectData:
+	case T_PGWindowObjectData:
 		return "T_WindowObjectData";
-	case postgres::T_PGTIDBitmap:
+	case T_PGTIDBitmap:
 		return "T_TIDBitmap";
-	case postgres::T_PGInlineCodeBlock:
+	case T_PGInlineCodeBlock:
 		return "T_InlineCodeBlock";
-	case postgres::T_PGFdwRoutine:
+	case T_PGFdwRoutine:
 		return "T_FdwRoutine";
-	case postgres::T_PGIndexAmRoutine:
+	case T_PGIndexAmRoutine:
 		return "T_IndexAmRoutine";
-	case postgres::T_PGTsmRoutine:
+	case T_PGTsmRoutine:
 		return "T_TsmRoutine";
-	case postgres::T_PGForeignKeyCacheInfo:
+	case T_PGForeignKeyCacheInfo:
 		return "T_ForeignKeyCacheInfo";
 	default:
 		assert(0);

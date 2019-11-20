@@ -4,7 +4,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<AlterTableStatement> Transformer::TransformAlter(postgres::PGNode *node) {
+unique_ptr<AlterTableStatement> Transformer::TransformAlter(PGNode *node) {
 	throw NotImplementedException("Alter table not supported yet!");
 	// auto stmt = reinterpret_cast<AlterTableStmt *>(node);
 	// assert(stmt);
@@ -24,7 +24,7 @@ unique_ptr<AlterTableStatement> Transformer::TransformAlter(postgres::PGNode *no
 	// 	switch (command->subtype) {
 	// 		case PG_AT_AddColumn: {
 	//                auto cdef = (ColumnDef *)command->def;
-	//                char *name = (reinterpret_cast<postgres::PGValue *>(
+	//                char *name = (reinterpret_cast<PGValue *>(
 	//                        cdef->typeName->names->tail->data.ptr_value)
 	//                        ->val.str);
 	//                auto centry =

@@ -4,9 +4,7 @@
 #include "duckdb/parser/pragma_parser.hpp"
 #include "postgres_parser.hpp"
 
-namespace postgres {
 #include "parser/parser.hpp"
-}
 
 using namespace duckdb;
 using namespace std;
@@ -26,7 +24,7 @@ void Parser::ParseQuery(string query) {
 		return;
 	}
 
-	postgres::PostgresParser parser;
+	PostgresParser parser;
 	parser.Parse(query);
 
 	if (!parser.success) {
