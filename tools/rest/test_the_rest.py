@@ -20,13 +20,10 @@ def find_free_port():
 # create binary
 process = subprocess.Popen("make debug -C ../..".split(' '))
 process.wait()
-if process.returncode != 0:
+server_binary = "%s/duckdb_rest_server" % BIN_PREFIX
+if process.returncode != 0 or not os.path.isfile(server_binary):
 	raise Exception('build failed')
 
-server_binary = "%s/duckdb_rest_server" % BIN_PREFIX
-# check if binary exists
-if not os.path.isfile(server_binary):
-	raise
 
 # create database if not exists
 db_file = "%s/%s" % (BIN_PREFIX, DBFILE)
