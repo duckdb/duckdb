@@ -21,7 +21,7 @@ def find_free_port():
 process = subprocess.Popen("make debug -C ../..".split(' '))
 process.wait()
 if process.returncode != 0:
-	raise
+	raise Exception('build failed')
 
 server_binary = "%s/duckdb_rest_server" % BIN_PREFIX
 # check if binary exists
@@ -34,7 +34,8 @@ if not os.path.isfile(db_file):
 	process = subprocess.Popen(("%s/duckdb_dbgen --database=%s --scale_factor=0.1" % (BIN_PREFIX, db_file)).split(' '))
 	process.wait()
 	if process.returncode != 0 or not os.path.isfile(db_file):
-		raise
+		raise Exception('dbgen failed')
+
 
 
 # launch server
@@ -51,7 +52,7 @@ while count < 10:
 	try:
 		resp = requests.get("%s/query?q=SELECT+42" % base_url)
 		if resp.status_code != 200:
-			raise
+			raise Exception('startup failed')
 		break
 	except:
 		pass
@@ -59,19 +60,19 @@ while count < 10:
 def query(q):
 	resp = requests.get("%s/query?q=%s" % (base_url, urllib.parse.quote(q)))
 	if resp.status_code != 200:
-		raise
+		raise Exception('query %s failed' % q)
 	return resp.json()
 
 def fetch(ref):
 	resp = requests.get("%s/fetch?ref=%s" % (base_url, ref))
 	if resp.status_code != 200:
-		raise
+		raise Exception('fetch %s failed' % ref)
 	return resp.json()
 
 def close(ref):
 	resp = requests.get("%s/close?ref=%s" % (base_url, ref))
 	if resp.status_code != 200:
-		raise
+		raise Exception('fetch %s failed' % ref)
 	return resp.json()
 
 
@@ -79,109 +80,113 @@ def close(ref):
 # basic small result set test
 res = query("SELECT COUNT(*) FROM lineitem")
 if not res['success'] or res['data'][0][0] != 600572:
-	raise
+	raise Exception('test failed')
+
 
 res = close(res['ref'])
 if not res['success']:
-	raise
+	raise Exception('test failed')
+
 
 # close again, should not be successful
 res = close(res['ref'])
 if res['success']:
-	raise
+	raise Exception('test failed')
 
 
 
 # basic large result set test
 res = query("SELECT * FROM lineitem")
 if not res['success']:
-	raise
+	raise Exception('test failed')
 
 if res['column_count'] != 16:
-	raise
+	raise Exception('test failed')
 
 if res['column_count'] != len(res['data']):
-	raise
+	raise Exception('test failed')
 
 if res['column_count'] != len(res['name_index_map']):
-	raise
+	raise Exception('test failed')
 
 if res['column_count'] != len(res['sql_types']):
-	raise
+	raise Exception('test failed')
 
 if res['column_count'] != len(res['types']):
-	raise
+	raise Exception('test failed')
 
 if res['column_count'] != len(res['names']):
-	raise
+	raise Exception('test failed')
 
 res = fetch(res['ref'])
 if not res['success']:
-	raise
+	raise Exception('test failed')
 
 res = fetch(res['ref'])
 if not res['success']:
-	raise
+	raise Exception('test failed')
 
 res = close(res['ref'])
 if not res['success']:
-	raise
+	raise Exception('test failed')
 
 # fetch again, should fail
 res = fetch(res['ref'])
 if res['success']:
-	raise
+	raise Exception('test failed')
 
 
 
 # invalid ref test
 res = fetch("asdf")
 if res['success']:
-	raise
+	raise Exception('test failed')
+
 
 res = close("asdf")
 if res['success']:
-	raise
+	raise Exception('test failed')
 
 
 
 # timeout fetch test
 res = query("SELECT * FROM lineitem")
 if not res['success']:
-	raise
+	raise Exception('test failed')
 
 time.sleep(1)
 
 res = fetch(res['ref'])
 if not res['success']:
-	raise
+	raise Exception('test failed')
 
 time.sleep(1)
 
 res = fetch(res['ref'])
 if not res['success']:
-	raise
+	raise Exception('test failed')
 
 time.sleep(1)
 
 res = fetch(res['ref'])
 if not res['success']:
-	raise
+	raise Exception('test failed')
+
 
 time.sleep(1)
 
 # still valid because the time between the individual fetch calls was less than two seconds
 res = fetch(res['ref'])
 if not res['success']:
-	raise
+	raise Exception('test failed')
 
 
-time.sleep(3)
+time.sleep(4)
 
 # this should now fail because the timeout hit
 res = fetch(res['ref'])
 if res['success']:
-	raise
+	raise Exception('test failed')
 
 
 

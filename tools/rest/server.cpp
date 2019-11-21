@@ -197,7 +197,7 @@ void client_state_cleanup(unordered_map<string, RestClientState> *map, std::mute
 		{
 			std::lock_guard<std::mutex> guard(*mutex);
 			auto now = std::time(nullptr);
-			for (auto it = map->cbegin(); it != map->cend(); ) {
+			for (auto it = map->cbegin(); it != map->cend();) {
 				if (now - it->second.touched > timeout_duration) {
 					it = map->erase(it);
 				} else {
@@ -227,8 +227,7 @@ int main(int argc, char **argv) {
 	std::ofstream logfile;
 
 	int query_timeout = 60;
-	int fetch_timeout = 60*5;
-
+	int fetch_timeout = 60 * 5;
 
 	// parse config
 	for (int arg_index = 1; arg_index < argc; ++arg_index) {
@@ -292,7 +291,8 @@ int main(int argc, char **argv) {
 
 	unordered_map<string, RestClientState> client_state_map;
 	std::mutex client_state_map_mutex;
-	std::thread client_state_cleanup_thread(client_state_cleanup, &client_state_map, &client_state_map_mutex, fetch_timeout);
+	std::thread client_state_cleanup_thread(client_state_cleanup, &client_state_map, &client_state_map_mutex,
+	                                        fetch_timeout);
 
 	if (!logfile_name.empty()) {
 		logfile.open(logfile_name, std::ios_base::app);
@@ -418,7 +418,7 @@ int main(int argc, char **argv) {
 		serialize_json(req, resp, j);
 	});
 
-	std::cout << "🦆 serving "+dbfile+" on http://" + listen + ":" + std::to_string(port) + "\n";
+	std::cout << "🦆 serving " + dbfile + " on http://" + listen + ":" + std::to_string(port) + "\n";
 
 	svr.listen(listen.c_str(), port);
 	return 0;
