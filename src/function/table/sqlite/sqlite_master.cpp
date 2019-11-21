@@ -13,12 +13,8 @@ using namespace std;
 
 namespace duckdb {
 
-struct SQLiteMasterData : public FunctionData {
+struct SQLiteMasterData : public TableFunctionData {
 	SQLiteMasterData() : initialized(false), offset(0) {
-	}
-
-	unique_ptr<FunctionData> Copy() override {
-		throw NotImplementedException("Copy not required for table-producing function");
 	}
 
 	bool initialized;
