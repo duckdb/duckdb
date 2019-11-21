@@ -557,7 +557,7 @@ having_clause:
 
 for_locking_clause:
 			for_locking_items						{ $$ = $1; }
-			| FOR READ ONLY							{ $$ = NIL; }
+			| FOR READ_P ONLY							{ $$ = NIL; }
 		;
 
 opt_for_locking_clause:

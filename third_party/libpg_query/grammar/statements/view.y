@@ -5,7 +5,7 @@
  *			AS <query> [ WITH [ CASCADED | LOCAL ] CHECK OPTION ]
  *
  *****************************************************************************/
-ViewStmt: CREATE OptTemp VIEW qualified_name opt_column_list opt_reloptions
+ViewStmt: CREATE_P OptTemp VIEW qualified_name opt_column_list opt_reloptions
 				AS SelectStmt opt_check_option
 				{
 					PGViewStmt *n = makeNode(PGViewStmt);
@@ -18,7 +18,7 @@ ViewStmt: CREATE OptTemp VIEW qualified_name opt_column_list opt_reloptions
 					n->withCheckOption = $9;
 					$$ = (PGNode *) n;
 				}
-		| CREATE OR REPLACE OptTemp VIEW qualified_name opt_column_list opt_reloptions
+		| CREATE_P OR REPLACE OptTemp VIEW qualified_name opt_column_list opt_reloptions
 				AS SelectStmt opt_check_option
 				{
 					PGViewStmt *n = makeNode(PGViewStmt);
@@ -31,7 +31,7 @@ ViewStmt: CREATE OptTemp VIEW qualified_name opt_column_list opt_reloptions
 					n->withCheckOption = $11;
 					$$ = (PGNode *) n;
 				}
-		| CREATE OptTemp RECURSIVE VIEW qualified_name '(' columnList ')' opt_reloptions
+		| CREATE_P OptTemp RECURSIVE VIEW qualified_name '(' columnList ')' opt_reloptions
 				AS SelectStmt opt_check_option
 				{
 					PGViewStmt *n = makeNode(PGViewStmt);
@@ -49,7 +49,7 @@ ViewStmt: CREATE OptTemp VIEW qualified_name opt_column_list opt_reloptions
 								 parser_errposition(@12)));
 					$$ = (PGNode *) n;
 				}
-		| CREATE OR REPLACE OptTemp RECURSIVE VIEW qualified_name '(' columnList ')' opt_reloptions
+		| CREATE_P OR REPLACE OptTemp RECURSIVE VIEW qualified_name '(' columnList ')' opt_reloptions
 				AS SelectStmt opt_check_option
 				{
 					PGViewStmt *n = makeNode(PGViewStmt);

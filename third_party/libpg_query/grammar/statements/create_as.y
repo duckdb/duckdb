@@ -8,7 +8,7 @@
  *
  *****************************************************************************/
 CreateAsStmt:
-		CREATE OptTemp TABLE create_as_target AS SelectStmt opt_with_data
+		CREATE_P OptTemp TABLE create_as_target AS SelectStmt opt_with_data
 				{
 					PGCreateTableAsStmt *ctas = makeNode(PGCreateTableAsStmt);
 					ctas->query = $6;
@@ -21,7 +21,7 @@ CreateAsStmt:
 					$4->skipData = !($7);
 					$$ = (PGNode *) ctas;
 				}
-		| CREATE OptTemp TABLE IF_P NOT EXISTS create_as_target AS SelectStmt opt_with_data
+		| CREATE_P OptTemp TABLE IF_P NOT EXISTS create_as_target AS SelectStmt opt_with_data
 				{
 					PGCreateTableAsStmt *ctas = makeNode(PGCreateTableAsStmt);
 					ctas->query = $9;

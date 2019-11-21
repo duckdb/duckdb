@@ -4,7 +4,7 @@
  *				CREATE TABLE relname
  *
  *****************************************************************************/
-CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
+CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 			OptWith OnCommitOption
 				{
 					PGCreateStmt *n = makeNode(PGCreateStmt);
@@ -18,7 +18,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->if_not_exists = false;
 					$$ = (PGNode *)n;
 				}
-		| CREATE OptTemp TABLE IF_P NOT EXISTS qualified_name '('
+		| CREATE_P OptTemp TABLE IF_P NOT EXISTS qualified_name '('
 			OptTableElementList ')' OptWith
 			OnCommitOption
 				{

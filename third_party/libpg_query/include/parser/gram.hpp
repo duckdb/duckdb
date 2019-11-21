@@ -126,7 +126,7 @@
      CONVERSION_P = 342,
      COPY = 343,
      COST = 344,
-     CREATE = 345,
+     CREATE_P = 345,
      CROSS = 346,
      CSV = 347,
      CUBE = 348,
@@ -342,7 +342,7 @@
      PUBLICATION = 558,
      QUOTE = 559,
      RANGE = 560,
-     READ = 561,
+     READ_P = 561,
      REAL = 562,
      REASSIGN = 563,
      RECHECK = 564,
@@ -470,7 +470,7 @@
      WITHOUT = 686,
      WORK = 687,
      WRAPPER = 688,
-     WRITE = 689,
+     WRITE_P = 689,
      XML_P = 690,
      XMLATTRIBUTES = 691,
      XMLCONCAT = 692,
@@ -581,7 +581,7 @@
 #define CONVERSION_P 342
 #define COPY 343
 #define COST 344
-#define CREATE 345
+#define CREATE_P 345
 #define CROSS 346
 #define CSV 347
 #define CUBE 348
@@ -797,7 +797,7 @@
 #define PUBLICATION 558
 #define QUOTE 559
 #define RANGE 560
-#define READ 561
+#define READ_P 561
 #define REAL 562
 #define REASSIGN 563
 #define RECHECK 564
@@ -925,7 +925,7 @@
 #define WITHOUT 686
 #define WORK 687
 #define WRAPPER 688
-#define WRITE 689
+#define WRITE_P 689
 #define XML_P 690
 #define XMLATTRIBUTES 691
 #define XMLCONCAT 692

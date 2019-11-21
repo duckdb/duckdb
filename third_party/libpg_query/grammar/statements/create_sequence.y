@@ -6,7 +6,7 @@
  *
  *****************************************************************************/
 CreateSeqStmt:
-			CREATE OptTemp SEQUENCE qualified_name OptSeqOptList
+			CREATE_P OptTemp SEQUENCE qualified_name OptSeqOptList
 				{
 					PGCreateSeqStmt *n = makeNode(PGCreateSeqStmt);
 					$4->relpersistence = $2;
@@ -16,7 +16,7 @@ CreateSeqStmt:
 					n->if_not_exists = false;
 					$$ = (PGNode *)n;
 				}
-			| CREATE OptTemp SEQUENCE IF_P NOT EXISTS qualified_name OptSeqOptList
+			| CREATE_P OptTemp SEQUENCE IF_P NOT EXISTS qualified_name OptSeqOptList
 				{
 					PGCreateSeqStmt *n = makeNode(PGCreateSeqStmt);
 					$7->relpersistence = $2;

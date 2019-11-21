@@ -5,7 +5,7 @@
  * Note: we cannot put TABLESPACE clause after WHERE clause unless we are
  * willing to make TABLESPACE a fully reserved word.
  *****************************************************************************/
-IndexStmt:	CREATE opt_unique INDEX opt_concurrently opt_index_name
+IndexStmt:	CREATE_P opt_unique INDEX opt_concurrently opt_index_name
 			ON qualified_name access_method_clause '(' index_params ')'
 			opt_reloptions where_clause
 				{
@@ -30,7 +30,7 @@ IndexStmt:	CREATE opt_unique INDEX opt_concurrently opt_index_name
 					n->if_not_exists = false;
 					$$ = (PGNode *)n;
 				}
-			| CREATE opt_unique INDEX opt_concurrently IF_P NOT EXISTS index_name
+			| CREATE_P opt_unique INDEX opt_concurrently IF_P NOT EXISTS index_name
 			ON qualified_name access_method_clause '(' index_params ')'
 			opt_reloptions where_clause
 				{

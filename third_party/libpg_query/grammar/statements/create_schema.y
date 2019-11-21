@@ -4,7 +4,7 @@
  *
  *****************************************************************************/
 CreateSchemaStmt:
-			CREATE SCHEMA ColId OptSchemaEltList
+			CREATE_P SCHEMA ColId OptSchemaEltList
 				{
 					PGCreateSchemaStmt *n = makeNode(PGCreateSchemaStmt);
 					/* ...but not both */
@@ -13,7 +13,7 @@ CreateSchemaStmt:
 					n->if_not_exists = false;
 					$$ = (PGNode *)n;
 				}
-			| CREATE SCHEMA IF_P NOT EXISTS ColId OptSchemaEltList
+			| CREATE_P SCHEMA IF_P NOT EXISTS ColId OptSchemaEltList
 				{
 					PGCreateSchemaStmt *n = makeNode(PGCreateSchemaStmt);
 					/* ...but not here */

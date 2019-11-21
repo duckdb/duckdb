@@ -11,7 +11,7 @@ ExecuteStmt: EXECUTE name execute_param_clause
 					n->params = $3;
 					$$ = (PGNode *) n;
 				}
-			| CREATE OptTemp TABLE create_as_target AS
+			| CREATE_P OptTemp TABLE create_as_target AS
 				EXECUTE name execute_param_clause opt_with_data
 				{
 					PGCreateTableAsStmt *ctas = makeNode(PGCreateTableAsStmt);
@@ -28,7 +28,7 @@ ExecuteStmt: EXECUTE name execute_param_clause
 					$4->skipData = !($9);
 					$$ = (PGNode *) ctas;
 				}
-			| CREATE OptTemp TABLE IF_P NOT EXISTS create_as_target AS
+			| CREATE_P OptTemp TABLE IF_P NOT EXISTS create_as_target AS
 				EXECUTE name execute_param_clause opt_with_data
 				{
 					PGCreateTableAsStmt *ctas = makeNode(PGCreateTableAsStmt);

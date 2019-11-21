@@ -4,7 +4,7 @@ source_file = "duckdb.cpp"
 cache_file = 'amalgamation.cache'
 include_paths = ["src/include", "third_party/hyperloglog", "third_party/re2", "third_party/miniz", "third_party/libpg_query/include", "third_party/libpg_query"]
 compile_directories = ['src', 'third_party/hyperloglog', 'third_party/miniz', 'third_party/re2', 'third_party/libpg_query']
-excluded_files = ["duckdb-c.cpp", 'grammar.cpp', 'grammar.hpp', 'symbols.cpp']
+excluded_files = ["duckdb-c.cpp", 'grammar.cpp', 'grammar.hpp', 'symbols.cpp', 'file_system.cpp']
 excluded_compilation_files = excluded_files + ['gram.hpp', 'kwlist.hpp']
 
 import os, re, sys, pickle
@@ -49,9 +49,9 @@ def cleanup_file(text):
 # recursively get all includes and write them
 written_files = {}
 
-def write_file(current_file):
+def write_file(current_file, ignore_excluded = False):
 	global written_files
-	if current_file.split('/')[-1] in excluded_files:
+	if current_file.split('/')[-1] in excluded_files and not ignore_excluded:
 		# file is in ignored files set
 		return ""
 	if current_file in written_files:
@@ -140,3 +140,6 @@ with open(source_file, 'w+') as sfile:
 	sfile.write('#include "duckdb.hpp"\n\n')
 	for compile_dir in compile_directories:
 		write_dir(compile_dir, sfile)
+	# for windows we write file_system.cpp last
+	# this is because it includes windows.h which contains a lot of #define statements that mess up the other code
+	sfile.write(write_file('src/common/file_system.cpp', True))
