@@ -40,6 +40,12 @@ docs:
 doxygen: docs
 	open build/docs/html/index.html
 
+amalgamation:
+	python scripts/amalgamation.py
+
+test_compile: # test compilation of individual cpp files
+	python scripts/amalgamation.py --compile
+
 format:
 	python scripts/format.py
 
