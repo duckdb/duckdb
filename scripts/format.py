@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+# this script is used to format the source directory
+
 import os, time, sys,inspect
 
 last_format_file = '.last_format'

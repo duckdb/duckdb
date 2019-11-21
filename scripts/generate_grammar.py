@@ -1,7 +1,6 @@
 # use bison to generate the parser files
-# the following versions were used:
-# bison (GNU Bison) 3.4.2
-# flex 2.6.4
+# the following version of bison is used:
+# bison (GNU Bison) 2.3
 import os, subprocess, re
 
 bison_location     = "bison"

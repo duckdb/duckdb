@@ -1,5 +1,4 @@
-
-
+# this script was used to clean up a gram.y file and remove useless rules
 import subprocess, re, os, sys
 
 fpath = 'third_party/libpg_query/gram.y'

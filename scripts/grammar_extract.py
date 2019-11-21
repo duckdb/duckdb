@@ -1,5 +1,4 @@
-
-
+# this script was used to extract statements from a gram.y file and place them in separate files
 import subprocess, re, os, sys
 
 fpath = 'third_party/libpg_query/gram.y'

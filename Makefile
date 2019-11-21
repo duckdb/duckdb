@@ -41,7 +41,7 @@ doxygen: docs
 	open build/docs/html/index.html
 
 format:
-	python format.py
+	python scripts/format.py
 
 third_party/sqllogictest:
 	git clone --depth=1 https://github.com/cwida/sqllogictest.git third_party/sqllogictest
