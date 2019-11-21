@@ -163,7 +163,6 @@ template <class T> bool IsValidType() {
 extern const TypeId ROW_TYPE;
 
 string TypeIdToString(TypeId type);
-string TypeIdToString(TypeId type);
 index_t GetTypeIdSize(TypeId type);
 bool TypeIsConstantSize(TypeId type);
 bool TypeIsIntegral(TypeId type);
