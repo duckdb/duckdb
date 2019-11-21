@@ -104,10 +104,6 @@
 #define DSS_HUGE __int64_t
 #endif /* SGI */
 
-#ifdef WIN32 // hack
-#define _POSIX_
-#endif
-
 #if (defined(WIN32) && !defined(_POSIX_))
 #define PATH_SEP '\\'
 #define DSS_HUGE __int64
