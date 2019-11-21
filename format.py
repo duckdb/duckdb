@@ -116,6 +116,7 @@ format_directory('src')
 format_directory('benchmark')
 format_directory('test')
 format_directory('tools')
+format_directory('examples')
 
 # write the last modified time
 if not ignore_last_format:

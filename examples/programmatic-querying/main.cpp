@@ -44,7 +44,6 @@ void my_scan_function(ClientContext &context, DataChunk &input, DataChunk &outpu
 }
 
 class MyScanFunction : public TableFunction {
-
 public:
 	MyScanFunction()
 	    : TableFunction("my_scan", {}, {SQLType::INTEGER, SQLType::VARCHAR}, {"some_int", "some_string"},
