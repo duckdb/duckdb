@@ -4,7 +4,8 @@ source_file = "duckdb.cpp"
 cache_file = 'amalgamation.cache'
 include_paths = ["src/include", "third_party/hyperloglog", "third_party/re2", "third_party/miniz", "third_party/libpg_query/include", "third_party/libpg_query"]
 compile_directories = ['src', 'third_party/hyperloglog', 'third_party/miniz', 'third_party/re2', 'third_party/libpg_query']
-excluded_files = ["duckdb-c.cpp", 'grammar.cpp', 'grammar.hpp', 'gram.hpp', 'kwlist.hpp', 'symbols.cpp']
+excluded_files = ["duckdb-c.cpp", 'grammar.cpp', 'grammar.hpp', 'symbols.cpp']
+excluded_compilation_files = excluded_files + ['gram.hpp', 'kwlist.hpp']
 
 import os, re, sys, pickle
 
@@ -89,7 +90,7 @@ def compile_dir(dir, cache):
 	files = os.listdir(dir)
 	files.sort()
 	for fname in files:
-		if fname in excluded_files:
+		if fname in excluded_compilation_files:
 			continue
 		fpath = os.path.join(dir, fname)
 		if os.path.isdir(fpath):

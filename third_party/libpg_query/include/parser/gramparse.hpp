@@ -20,11 +20,6 @@
 
 #include "nodes/parsenodes.hpp"
 #include "parser/scanner.hpp"
-
-/*
- * NB: include gram.h only AFTER including scanner.h, because scanner.h
- * is what #defines YYLTYPE.
- */
 #include "parser/gram.hpp"
 
 /*

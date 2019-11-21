@@ -8598,10 +8598,10 @@ __thread bool		escape_string_warning = true;
 __thread bool		standard_conforming_strings = true;
 
 
-/*
- * Set the type of YYSTYPE.
- */
-#define YYSTYPE core_YYSTYPE
+// /*
+//  * Set the type of YYSTYPE.
+//  */
+// #define YYSTYPE core_YYSTYPE
 
 /*
  * Set the type of yyextra.  All state variables used by the scanner should
@@ -9037,10 +9037,10 @@ static int input (yyscan_t yyscanner );
 #define YY_DECL_IS_OURS 1
 
 extern int core_yylex \
-               (YYSTYPE * yylval_param,YYLTYPE * yylloc_param ,yyscan_t yyscanner);
+               (core_YYSTYPE * yylval_param,YYLTYPE * yylloc_param ,yyscan_t yyscanner);
 
 #define YY_DECL int core_yylex \
-               (YYSTYPE * yylval_param, YYLTYPE * yylloc_param , yyscan_t yyscanner)
+               (core_YYSTYPE * yylval_param, YYLTYPE * yylloc_param , yyscan_t yyscanner)
 #endif /* !YY_DECL */
 
 /* Code executed at the beginning of each rule, after yytext and yyleng
@@ -9072,7 +9072,7 @@ YY_DECL
 
 
 
-    yylval = yylval_param;
+    yylval = (YYSTYPE*) yylval_param;
 
     yylloc = yylloc_param;
 
