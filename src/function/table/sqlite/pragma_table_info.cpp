@@ -12,13 +12,10 @@ using namespace std;
 
 namespace duckdb {
 
-struct PragmaTableFunctionData : public FunctionData {
+struct PragmaTableFunctionData : public TableFunctionData {
 	PragmaTableFunctionData() : entry(nullptr), offset(0) {
 	}
 
-	unique_ptr<FunctionData> Copy() override {
-		throw NotImplementedException("Copy not required for table-producing function");
-	}
 
 	TableCatalogEntry *entry;
 	index_t offset;
