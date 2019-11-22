@@ -395,8 +395,8 @@ sortby:		a_expr USING qual_all_Op opt_nulls_order
 				}
 		;
 
-opt_asc_desc: ASC							{ $$ = PG_SORTBY_ASC; }
-			| DESC							{ $$ = PG_SORTBY_DESC; }
+opt_asc_desc: ASC_P							{ $$ = PG_SORTBY_ASC; }
+			| DESC_P						{ $$ = PG_SORTBY_DESC; }
 			| /*EMPTY*/						{ $$ = PG_SORTBY_DEFAULT; }
 		;
 

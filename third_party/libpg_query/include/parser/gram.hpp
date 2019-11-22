@@ -72,7 +72,7 @@
      ANY = 288,
      ARRAY = 289,
      AS = 290,
-     ASC = 291,
+     ASC_P = 291,
      ASSERTION = 292,
      ASSIGNMENT = 293,
      ASYMMETRIC = 294,
@@ -156,7 +156,7 @@
      DELIMITER = 372,
      DELIMITERS = 373,
      DEPENDS = 374,
-     DESC = 375,
+     DESC_P = 375,
      DETACH = 376,
      DICTIONARY = 377,
      DISABLE_P = 378,
@@ -527,7 +527,7 @@
 #define ANY 288
 #define ARRAY 289
 #define AS 290
-#define ASC 291
+#define ASC_P 291
 #define ASSERTION 292
 #define ASSIGNMENT 293
 #define ASYMMETRIC 294
@@ -611,7 +611,7 @@
 #define DELIMITER 372
 #define DELIMITERS 373
 #define DEPENDS 374
-#define DESC 375
+#define DESC_P 375
 #define DETACH 376
 #define DICTIONARY 377
 #define DISABLE_P 378
