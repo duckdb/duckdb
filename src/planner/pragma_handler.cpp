@@ -1,118 +1,100 @@
-#include "duckdb/parser/pragma_parser.hpp"
+#include "duckdb/planner/pragma_handler.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
-#include <cctype>
+#include "duckdb/parser/statement/pragma_statement.hpp"
+
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-PragmaParser::PragmaParser(ClientContext &context) : context(context) {
+PragmaHandler::PragmaHandler(ClientContext &context) : context(context) {
 }
 
-bool PragmaParser::ParsePragma(string &query) {
-	// check if there is a PRAGMA statement, this is done before calling the
-	// postgres parser
-	static const string pragma_string = "PRAGMA";
-	auto query_cstr = query.c_str();
-
-	// skip any spaces
-	index_t pos = 0;
-	while (isspace(query_cstr[pos])) {
-		pos++;
-	}
-
-	if (pos + pragma_string.size() >= query.size()) {
-		// query is too small, can't contain PRAGMA
-		return false;
-	}
-
-	if (query.compare(pos, pragma_string.size(), pragma_string.c_str()) != 0) {
-		// statement does not start with PRAGMA
-		return false;
-	}
-	pos += pragma_string.size();
-	// string starts with PRAGMA, parse the pragma
-	// first skip any spaces
-	while (isspace(query_cstr[pos]))
-		pos++;
-	// now look for the keyword
-	index_t keyword_start = pos;
-	while (query_cstr[pos] && query_cstr[pos] != ';' && query_cstr[pos] != '=' && query_cstr[pos] != '(' &&
-	       !isspace(query_cstr[pos]))
-		pos++;
-
-	// no keyword found
-	if (pos == keyword_start) {
-		throw ParserException("Invalid PRAGMA: PRAGMA without keyword");
-	}
-
-	string keyword = query.substr(keyword_start, pos - keyword_start);
-
-	while (isspace(query_cstr[pos]))
-		pos++;
-
-	PragmaType type;
-	if (query_cstr[pos] == '=') {
-		// assignment
-		type = PragmaType::ASSIGNMENT;
-	} else if (query_cstr[pos] == '(') {
-		// function call
-		type = PragmaType::CALL;
-	} else {
-		// nothing
-		type = PragmaType::NOTHING;
-	}
-
+unique_ptr<SQLStatement> PragmaHandler::HandlePragma(PragmaStatement &pragma) {
+	string keyword = StringUtil::Lower(pragma.name);
 	if (keyword == "table_info") {
-		if (type != PragmaType::CALL) {
+		if (pragma.pragma_type != PragmaType::CALL) {
 			throw ParserException("Invalid PRAGMA table_info: expected table name");
 		}
-		new_query = "SELECT * FROM pragma_" + query.substr(keyword_start);
+		if (pragma.parameters.size() != 1) {
+			throw ParserException("Invalid PRAGMA table_info: table_info takes exactly one argument");
+		}
+		// generate a SelectStatement that selects from the pragma_table_info function
+		// i.e. SELECT * FROM pragma_table_info('table_name')
+		auto select_statement = make_unique<SelectStatement>();
+		auto select_node = make_unique<SelectNode>();
+		select_node->select_list.push_back(make_unique<StarExpression>());
+
+		vector<unique_ptr<ParsedExpression>> children;
+		children.push_back(make_unique<ConstantExpression>(SQLTypeId::VARCHAR, pragma.parameters[0]));
+		auto table_function = make_unique<TableFunctionRef>();
+		table_function->function = make_unique<FunctionExpression>(DEFAULT_SCHEMA, "pragma_table_info", children);
+		select_node->from_table = move(table_function);
+		select_statement->node = move(select_node);
+		return move(select_statement);
 	} else if (keyword == "enable_profile" || keyword == "enable_profiling") {
 		// enable profiling
-		if (type == PragmaType::ASSIGNMENT) {
-			string assignment = StringUtil::Replace(StringUtil::Lower(query.substr(pos + 1)), ";", "");
+		if (pragma.pragma_type == PragmaType::ASSIGNMENT) {
+			// enable_profiling with assignment
+			// this is either enable_profiling = json, or enable_profiling = query_tree
+			string assignment = pragma.parameters[0].ToString();
 			if (assignment == "json") {
 				context.profiler.automatic_print_format = ProfilerPrintFormat::JSON;
 			} else if (assignment == "query_tree") {
 				context.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
 			} else {
-				throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree]",
-				                      assignment.c_str());
+				throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree]", assignment.c_str());
 			}
-		} else if (type == PragmaType::NOTHING) {
+		} else if (pragma.pragma_type == PragmaType::NOTHING) {
 			context.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
 		} else {
 			throw ParserException("Cannot call PRAGMA enable_profiling");
 		}
 		context.profiler.Enable();
 	} else if (keyword == "disable_profile" || keyword == "disable_profiling") {
+		if (pragma.pragma_type != PragmaType::NOTHING) {
+			throw ParserException("disable_profiling cannot take parameters!");
+		}
 		// enable profiling
 		context.profiler.Disable();
 		context.profiler.automatic_print_format = ProfilerPrintFormat::NONE;
 	} else if (keyword == "profiling_output" || keyword == "profile_output") {
 		// set file location of where to save profiling output
-		if (type != PragmaType::ASSIGNMENT) {
-			throw ParserException("Profiling output must be an assignment");
+		if (pragma.pragma_type != PragmaType::ASSIGNMENT || pragma.parameters[0].type != TypeId::VARCHAR) {
+			throw ParserException("Profiling output must be an assignment (e.g. PRAGMA profile_output='/tmp/test.json')");
 		}
-		string location = StringUtil::Replace(StringUtil::Lower(query.substr(pos + 1)), ";", "");
-		context.profiler.save_location = location;
+		context.profiler.save_location = pragma.parameters[0].str_value;
 	} else if (keyword == "memory_limit") {
-		if (type != PragmaType::ASSIGNMENT) {
-			throw ParserException("Memory limit must be an assignment (e.g. PRAGMA memory_limit=1GB)");
+		if (pragma.pragma_type != PragmaType::ASSIGNMENT) {
+			throw ParserException("Memory limit must be an assignment (e.g. PRAGMA memory_limit='1GB')");
 		}
-		ParseMemoryLimit(query.substr(pos + 1));
+		if (pragma.parameters[0].type == TypeId::VARCHAR) {
+			ParseMemoryLimit(pragma.parameters[0].str_value);
+		} else {
+			int64_t value = pragma.parameters[0].GetNumericValue();
+			if (value < 0) {
+				// limit < 0, set limit to infinite
+				context.db.storage->buffer_manager->SetLimit();
+			} else {
+				throw ParserException("Memory limit must be an assignment with a memory unit (e.g. PRAGMA memory_limit='1GB')");
+			}
+		}
 	} else {
 		throw ParserException("Unrecognized PRAGMA keyword: %s", keyword.c_str());
 	}
-
-	return true;
+	return nullptr;
 }
 
-void PragmaParser::ParseMemoryLimit(string arg) {
+void PragmaHandler::ParseMemoryLimit(string arg) {
 	// split based on the number/non-number
 	index_t idx = 0;
 	while (std::isspace(arg[idx])) {

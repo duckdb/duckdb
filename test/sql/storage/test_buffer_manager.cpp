@@ -188,13 +188,13 @@ TEST_CASE("Modifying the buffer manager limit at runtime for an in-memory databa
 	REQUIRE(CHECK_COLUMN(result, 2, {Value::BIGINT(sum)}));
 
 	// we can set the memory limit to 1GB
-	REQUIRE_NO_FAIL(con.Query("PRAGMA memory_limit=1GB"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA memory_limit='1GB'"));
 	// but we cannot set it below 10MB
-	REQUIRE_FAIL(con.Query("PRAGMA memory_limit=1MB"));
+	REQUIRE_FAIL(con.Query("PRAGMA memory_limit='1MB'"));
 
 	// if we make room by dropping the table, we can set it to 1MB though
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE test"));
-	REQUIRE_NO_FAIL(con.Query("PRAGMA memory_limit=1MB"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA memory_limit='1MB'"));
 
 	// also test that large strings are properly deleted
 	// reset the memory limit
@@ -217,8 +217,8 @@ TEST_CASE("Modifying the buffer manager limit at runtime for an in-memory databa
 	}
 
 	// now we cannot set the memory limit to 1MB again
-	REQUIRE_FAIL(con.Query("PRAGMA memory_limit=1MB"));
+	REQUIRE_FAIL(con.Query("PRAGMA memory_limit='1MB'"));
 	// but dropping the table allows us to set the memory limit to 1MB again
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE test"));
-	REQUIRE_NO_FAIL(con.Query("PRAGMA memory_limit=1MB"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA memory_limit='1MB'"));
 }

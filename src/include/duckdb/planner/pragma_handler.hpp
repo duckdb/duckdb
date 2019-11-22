@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/pragma_parser.hpp
+// planner/pragma_handler.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,18 +12,17 @@
 
 namespace duckdb {
 class ClientContext;
+class SQLStatement;
+class PragmaStatement;
 
-enum class PragmaType : uint8_t { NOTHING, ASSIGNMENT, CALL };
-
-//! Pragma parser is responsible for parsing PRAGMA statements separate from the Postgres parser
-class PragmaParser {
+//! Pragma handler is responsible for handling PRAGMA statements
+class PragmaHandler {
 public:
-	PragmaParser(ClientContext &context);
-
-	string new_query;
+	PragmaHandler(ClientContext &context);
 
 public:
-	bool ParsePragma(string &query);
+	//! Handles a pragma statement, (potentially) returning a new statement to replace the current one
+	unique_ptr<SQLStatement> HandlePragma(PragmaStatement &pragma);
 
 private:
 	ClientContext &context;

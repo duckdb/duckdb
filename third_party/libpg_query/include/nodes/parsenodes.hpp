@@ -1997,3 +1997,27 @@ typedef struct PGDeallocateStmt
 	char	   *name;			/* The name of the plan to remove */
 	/* NULL means DEALLOCATE ALL */
 } PGDeallocateStmt;
+
+
+/* ----------------------
+ * PRAGMA statements
+ * Three types of pragma statements:
+ * PRAGMA pragma_name;          (NOTHING)
+ * PRAGMA pragma_name='param';  (ASSIGNMENT)
+ * PRAGMA pragma_name('param'); (CALL)
+ * ----------------------
+ */
+typedef enum
+	{
+	PG_PRAGMA_TYPE_NOTHING,
+	PG_PRAGMA_TYPE_ASSIGNMENT,
+	PG_PRAGMA_TYPE_CALL
+} PGPragmaKind;
+
+typedef struct PGPragmaStmt
+{
+	PGNodeTag		type;
+	PGPragmaKind kind;
+	char	   *name;			/* variable to be set */
+	PGList	   *args;			/* PGList of PGAConst nodes */
+} PGPragmaStmt;

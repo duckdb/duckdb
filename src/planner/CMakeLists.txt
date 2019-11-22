@@ -14,6 +14,7 @@ add_library_unity(duckdb_planner
                   joinside.cpp
                   logical_operator.cpp
                   logical_plan_generator.cpp
+                  pragma_handler.cpp
                   binder.cpp
                   bind_context.cpp
                   planner.cpp

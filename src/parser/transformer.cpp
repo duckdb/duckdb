@@ -65,6 +65,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(PGNode *stmt) {
 	case T_PGVacuumStmt: { // Ignore VACUUM/ANALYZE for now
 		return nullptr;
 	}
+	case T_PGPragmaStmt:
+		return TransformPragma(stmt);
 	default:
 		throw NotImplementedException(NodetypeToString(stmt->type));
 	}

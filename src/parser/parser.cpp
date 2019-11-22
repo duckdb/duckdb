@@ -1,7 +1,6 @@
 #include "duckdb/parser/parser.hpp"
 
 #include "duckdb/parser/transformer.hpp"
-#include "duckdb/parser/pragma_parser.hpp"
 #include "postgres_parser.hpp"
 
 #include "parser/parser.hpp"
@@ -13,17 +12,6 @@ Parser::Parser(ClientContext &context) : context(context) {
 }
 
 void Parser::ParseQuery(string query) {
-	// first try to parse any PRAGMA statements
-	PragmaParser pragma_parser(context);
-	if (pragma_parser.ParsePragma(query)) {
-		// query parsed as pragma statement
-		// check if there is a new query to replace the current one
-		if (!pragma_parser.new_query.empty()) {
-			ParseQuery(pragma_parser.new_query);
-		}
-		return;
-	}
-
 	PostgresParser parser;
 	parser.Parse(query);
 

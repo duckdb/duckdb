@@ -31,6 +31,7 @@ class PrepareStatement;
 class ExecuteStatement;
 class DeallocateStatement;
 class CreateSequenceStatement;
+class PragmaStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node

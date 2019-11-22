@@ -14,6 +14,8 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 
+#include "duckdb/planner/pragma_handler.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -224,6 +226,15 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		}
 		break;
 	}
+	case StatementType::PRAGMA: {
+		auto &stmt = *reinterpret_cast<PragmaStatement *>(statement.get());
+		PragmaHandler handler(context);
+		auto new_stmt = handler.HandlePragma(stmt);
+		if (new_stmt) {
+			CreatePlan(move(new_stmt));
+		}
+		break;
+	}
 	default:
 		throw NotImplementedException("Statement of type %d not implemented in planner!", statement->type);
 	}
@@ -293,4 +304,9 @@ void Planner::VerifyExpression(Expression &expr, vector<unique_ptr<Expression>> 
 	assert(copy->Hash() == expr.Hash());
 	assert(Expression::Equals(copy.get(), &expr));
 	copies.push_back(move(copy));
+}
+
+void Planner::HandlePragmaStatement(PragmaStatement &statement) {
+
+
 }
