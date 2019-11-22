@@ -26,6 +26,7 @@ excluded_compilation_files = excluded_files + ['gram.hpp', 'kwlist.hpp', "duckdb
 # where to cache which files have already been compiled, only used for --compile --resume
 cache_file = 'amalgamation.cache'
 
+linenumbers = False
 compile = False
 resume = False
 
@@ -34,6 +35,10 @@ for arg in sys.argv:
 		compile = True
 	elif arg == '--resume':
 		resume = True
+	elif arg == '--linenumbers':
+		linenumbers = True
+	elif arg == '--no-linenumbers':
+		linenumbers = False
 
 if not resume:
 	try:
@@ -46,16 +51,17 @@ def get_includes(fpath, text):
 	include_statements = re.findall("(^[#]include[\t ]+[\"]([^\"]+)[\"])", text, flags=re.MULTILINE)
 	include_files = []
 	# figure out where they are located
-	for statement in [x[1] for x in include_statements]:
+	for included_file in [x[1] for x in include_statements]:
+		included_file = os.sep.join(included_file.split('/'))
 		found = False
 		for include_path in include_paths:
-			ipath = os.path.join(include_path, statement)
+			ipath = os.path.join(include_path, included_file)
 			if os.path.isfile(ipath):
 				include_files.append(ipath)
 				found = True
 				break
 		if not found:
-			raise Exception('Could not find include file "' + statement + '", included from file "' + fpath + '"')
+			raise Exception('Could not find include file "' + included_file + '", included from file "' + fpath + '"')
 	return ([x[0] for x in include_statements], include_files)
 
 def cleanup_file(text):
@@ -67,8 +73,9 @@ def cleanup_file(text):
 written_files = {}
 
 def write_file(current_file, ignore_excluded = False):
+	global linenumbers
 	global written_files
-	if current_file.split('/')[-1] in excluded_files and not ignore_excluded:
+	if current_file.split(os.sep)[-1] in excluded_files and not ignore_excluded:
 		# file is in ignored files set
 		return ""
 	if current_file in written_files:
@@ -89,13 +96,14 @@ def write_file(current_file, ignore_excluded = False):
 		# now write all the dependencies of this header first
 		for i in range(len(includes)):
 			include_text = write_file(includes[i])
-			if i == len(includes) - 1:
+			if linenumbers and i == len(includes) - 1:
 				# for the last include statement, we also include a #line directive
 				include_text += '\n#line %d "%s"\n' % (linenr, current_file)
 			text = text.replace(statements[i], include_text)
 
 	# add the initial line here
-	text = '#line 1 "%s"\n' % (current_file,) + text
+	if linenumbers:
+		text = '#line 1 "%s"\n' % (current_file,) + text
 	print(current_file)
 	# now read the header and write it
 	return cleanup_file(text)
