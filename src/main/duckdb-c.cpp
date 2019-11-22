@@ -7,6 +7,10 @@
 
 #include <cstring>
 
+#ifdef _WIN32
+#define strdup _strdup
+#endif
+
 using namespace duckdb;
 
 static SQLType ConvertCTypeToCPP(duckdb_type type);
