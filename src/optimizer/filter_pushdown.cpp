@@ -67,10 +67,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 
 FilterResult FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
 	// if there are filters in this FilterPushdown node, push them into the combiner
+#ifdef DEBUG
 	for (auto &f : filters) {
 		auto result = combiner.AddFilter(move(f->filter));
 		assert(result == FilterResult::SUCCESS);
 	}
+#endif
 	filters.clear();
 	// split up the filters by AND predicate
 	vector<unique_ptr<Expression>> expressions;

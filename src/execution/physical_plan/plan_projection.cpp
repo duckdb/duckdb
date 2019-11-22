@@ -9,9 +9,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalProjection
 	assert(op.children.size() == 1);
 	auto plan = CreatePlan(*op.children[0]);
 
+#ifdef DEBUG
 	for (auto &expr : op.expressions) {
 		assert(!expr->IsWindow() && !expr->IsAggregate());
 	}
+#endif
 
 	auto projection = make_unique<PhysicalProjection>(op, move(op.expressions));
 	projection->children.push_back(move(plan));

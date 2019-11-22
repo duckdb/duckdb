@@ -14,9 +14,10 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(PGSubLink *root) {
 	if (!subquery_expr->subquery) {
 		return nullptr;
 	}
+#ifdef DEBUG
 	auto &select_list = subquery_expr->subquery->GetSelectList();
 	assert(select_list.size() > 0);
-
+#endif
 	switch (root->subLinkType) {
 	case PG_EXISTS_SUBLINK: {
 		subquery_expr->subquery_type = SubqueryType::EXISTS;

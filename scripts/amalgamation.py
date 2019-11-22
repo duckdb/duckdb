@@ -131,6 +131,9 @@ print("-----------------------")
 with open(header_file, 'w+') as hfile:
 	hfile.write("#pragma once\n")
 	hfile.write(write_file('src/include/duckdb.hpp'))
+	hfile.write(write_file('src/include/duckdb/common/types/timestamp.hpp'))
+	hfile.write(write_file('src/include/duckdb/common/types/date.hpp'))
+
 	hfile.write(write_file('src/include/duckdb.h'))
 
 def write_dir(dir, sfile):

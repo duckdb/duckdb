@@ -481,8 +481,6 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 
 	// now perform checking on the expressions
 	auto &orig_expr_list = select_stmt->node->GetSelectList();
-	auto &de_expr_list = deserialized_stmt->node->GetSelectList();
-	auto &cp_expr_list = copied_stmt->node->GetSelectList();
 	assert(orig_expr_list.size() == de_expr_list.size() && cp_expr_list.size() == de_expr_list.size());
 	for (index_t i = 0; i < orig_expr_list.size(); i++) {
 		// check that the expressions are equivalent
