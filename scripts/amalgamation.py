@@ -64,11 +64,21 @@ def write_file(current_file, ignore_excluded = False):
 		text = f.read()
 
 	(statements, includes) = get_includes(current_file, text)
-	# now write all the dependencies of this header first
-	for i in range(len(includes)):
-		include_text = write_file(includes[i])
-		text = text.replace(statements[i], include_text)
+	# find the linenr of the final #include statement we parsed
+	if len(statements) > 0:
+		index = text.find(statements[-1])
+		linenr = len(text[:index].split('\n'))
 
+		# now write all the dependencies of this header first
+		for i in range(len(includes)):
+			include_text = write_file(includes[i])
+			if i == len(includes) - 1:
+				# for the last include statement, we also include a #line directive
+				include_text += '\n#line %d "%s"\n' % (linenr, current_file)
+			text = text.replace(statements[i], include_text)
+
+	# add the initial line here
+	text = '#line 1 "%s"\n' % (current_file,) + text
 	print(current_file)
 	# now read the header and write it
 	return cleanup_file(text)
