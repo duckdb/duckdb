@@ -405,6 +405,8 @@ matrix:
       name: GCC 9 (Amalgamation)
       addons:
         apt:
+          sources:
+            - ubuntu-toolchain-r-test
           packages:
             - g++-9
       env:
