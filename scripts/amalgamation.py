@@ -3,11 +3,28 @@ import os, re, sys, pickle
 amal_dir = os.path.join('src', 'amalgamation')
 header_file = os.path.join(amal_dir, "duckdb.hpp")
 source_file = os.path.join(amal_dir, "duckdb.cpp")
-cache_file = 'amalgamation.cache'
-include_paths = ["src/include", "third_party/hyperloglog", "third_party/re2", "third_party/miniz", "third_party/libpg_query/include", "third_party/libpg_query"]
-compile_directories = ['src', 'third_party/hyperloglog', 'third_party/miniz', 'third_party/re2', 'third_party/libpg_query']
+
+src_dir = 'src'
+include_dir = os.path.join('src', 'include')
+hll_dir = os.path.join('third_party', 'hyperloglog')
+miniz_dir = os.path.join('third_party', 'miniz')
+re2_dir = os.path.join('third_party', 're2')
+pg_query_dir = os.path.join('third_party', 'libpg_query')
+pg_query_include_dir = os.path.join('third_party', 'libpg_query', 'include')
+
+# files included in the amalgamated "duckdb.hpp" file
+main_header_files = [os.path.join(include_dir, 'duckdb.hpp'), os.path.join(include_dir, 'duckdb.h')]
+# include paths for where to search for include files during amalgamation
+include_paths = [include_dir, hll_dir, re2_dir, miniz_dir, pg_query_include_dir, pg_query_dir]
+# paths of where to look for files to compile and include to the final amalgamation
+compile_directories = [src_dir, hll_dir, miniz_dir, re2_dir, pg_query_dir]
+
+# files excluded from the amalgamation
 excluded_files = ['grammar.cpp', 'grammar.hpp', 'symbols.cpp', 'file_system.cpp']
+# files excluded from individual file compilation during test_compile
 excluded_compilation_files = excluded_files + ['gram.hpp', 'kwlist.hpp', "duckdb-c.cpp"]
+# where to cache which files have already been compiled, only used for --compile --resume
+cache_file = 'amalgamation.cache'
 
 compile = False
 resume = False
@@ -130,11 +147,8 @@ print("-- Writing duckdb.hpp --")
 print("-----------------------")
 with open(header_file, 'w+') as hfile:
 	hfile.write("#pragma once\n")
-	hfile.write(write_file('src/include/duckdb.hpp'))
-	hfile.write(write_file('src/include/duckdb/common/types/timestamp.hpp'))
-	hfile.write(write_file('src/include/duckdb/common/types/date.hpp'))
-
-	hfile.write(write_file('src/include/duckdb.h'))
+	for fpath in main_header_files:
+		hfile.write(write_file(fpath))
 
 def write_dir(dir, sfile):
 	files = os.listdir(dir)
@@ -160,4 +174,4 @@ with open(source_file, 'w+') as sfile:
 		write_dir(compile_dir, sfile)
 	# for windows we write file_system.cpp last
 	# this is because it includes windows.h which contains a lot of #define statements that mess up the other code
-	sfile.write(write_file('src/common/file_system.cpp', True))
+	sfile.write(write_file(os.path.join('src', 'common', 'file_system.cpp'), True))
