@@ -7,6 +7,10 @@ endif()
 
 if (AMALGAMATION_BUILD)
 
+if(WIN32)
+  add_definitions(/bigobj)
+endif()
+
 add_library(duckdb SHARED "${CMAKE_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
 add_library(duckdb_static STATIC "${CMAKE_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
 
