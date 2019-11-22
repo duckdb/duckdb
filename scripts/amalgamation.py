@@ -149,6 +149,9 @@ with open(header_file, 'w+') as hfile:
 	hfile.write("#pragma once\n")
 	for fpath in main_header_files:
 		hfile.write(write_file(fpath))
+	hfile.write(write_file("src/include/duckdb/common/types/date.hpp"))
+	hfile.write(write_file("src/include/duckdb/common/types/timestamp.hpp"))
+
 
 def write_dir(dir, sfile):
 	files = os.listdir(dir)
