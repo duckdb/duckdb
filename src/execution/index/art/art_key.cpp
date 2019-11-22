@@ -23,13 +23,10 @@ static uint8_t FlipSign(uint8_t key_byte) {
 
 uint32_t EncodeFloat(float x)
 {
-    int shift;
-    unsigned long sign, exp, hibits, buff;
-    double fnorm, significand;
+    unsigned long buff;
     int expbits = 8;
-    int significandbits = 23;
 
-    //! zero (can't handle signed zero)
+    //! zero
     if (x == 0)
     {
         buff = 0;
@@ -58,57 +55,16 @@ uint32_t EncodeFloat(float x)
         buff |= 1234;
         return buff;
     }
-
-    //! get the sign
-    if (x < 0) { sign = 1; fnorm = -x; }
-    else { sign = 0; fnorm = x; }
-
-    //! get the normalized form of f and track the exponent
-    shift = 0;
-    while (fnorm >= 2.0) { fnorm /= 2.0; shift++; }
-    while (fnorm < 1.0) { fnorm *= 2.0; shift--; }
-
-    //! check for denormalized numbers
-    if (shift < -126)
-    {
-        while (shift < -126) { fnorm /= 2.0; shift++; }
-        shift = -1023;
-    }
-        //! out of range. Set to infinity
-    else if (shift > 128)
-    {
-        buff = 128 + ((1 << (expbits - 1)) - 1);
-        buff <<= (31 - expbits);
-        buff |= (sign << 31);
-        return buff;
-    }
-    else
-        fnorm = fnorm - 1.0; //! take the significant bit off mantissa
-
-    //! calculate the integer form of the significand
-    //! hold it in a  double for now
-
-    significand = fnorm * ((1LL << significandbits) + 0.5f);
-
-
-    //! get the biased exponent
-    exp = shift + ((1 << (expbits - 1)) - 1); //! shift + bias
-
-    hibits = (long)(significand);
-    buff = (sign << 31) | (exp << (31 - expbits)) | hibits;
-
-    return buff;
+    return x;
 }
 
 
 uint64_t EncodeDouble(double x) {
-    int shift;
-    unsigned long sign, exp, hibits, hilong, lowlong;
-    double fnorm, significand;
+    unsigned long hilong, lowlong;
     int expbits = 11;
-    int significandbits = 52;
     uint64_t buff;
-    //! zero (can't handle signed zero)
+
+    //! zero
     if (x == 0)
     {
         buff = 0;
@@ -148,56 +104,7 @@ uint64_t EncodeDouble(double x) {
         buff += lowlong;
         return buff;
     }
-
-    //! get the sign
-    if (x < 0) { sign = 1; fnorm = -x; }
-    else { sign = 0; fnorm = x; }
-
-    //! get the normalized form of f and track the exponent
-    shift = 0;
-    while (fnorm >= 2.0) { fnorm /= 2.0; shift++; }
-    while (fnorm < 1.0) { fnorm *= 2.0; shift--; }
-
-    //! check for denormalized numbers
-    if (shift < -1022)
-    {
-        while (shift < -1022) { fnorm /= 2.0; shift++; }
-        shift = -1023;
-    }
-        //! out of range. Set to infinity
-    else if (shift > 1023)
-    {
-        hilong = 1024 + ((1 << (expbits - 1)) - 1);
-        hilong <<= (31 - expbits);
-        hilong |= (sign << 31);
-        lowlong = 0;
-        buff = hilong;
-        buff <<=32;
-        buff += lowlong;
-        return buff;
-    }
-    else
-        fnorm = fnorm - 1.0; //! take the significant bit off mantissa
-
-    //! calculate the integer form of the significand
-    //! hold it in a  double for now
-
-    significand = fnorm * ((1LL << significandbits) + 0.5f);
-
-
-    //! get the biased exponent
-    exp = shift + ((1 << (expbits - 1)) - 1); //! shift + bias
-
-    //! put the data into two longs (for convenience)
-    hibits = (long)(significand / 4294967296);
-    hilong = (sign << 31) | (exp << (31 - expbits)) | hibits;
-    //x = significand - hibits * 4294967296;
-    lowlong = (unsigned long)(significand - hibits * 4294967296);
-
-    buff = hilong;
-    buff <<=32;
-    buff += lowlong;
-    return buff;
+    return x;
 }
 
 
