@@ -32,6 +32,12 @@ struct FunctionData {
 	virtual unique_ptr<FunctionData> Copy() = 0;
 };
 
+struct TableFunctionData : public FunctionData {
+	unique_ptr<FunctionData> Copy() override {
+		throw NotImplementedException("Copy not required for table-producing function");
+	}
+};
+
 //! Function is the base class used for any type of function (scalar, aggregate or simple function)
 class Function {
 public:

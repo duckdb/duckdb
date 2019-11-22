@@ -17,9 +17,9 @@ namespace duckdb {
 //! Represents a scan of a base table
 class PhysicalTableFunction : public PhysicalOperator {
 public:
-	PhysicalTableFunction(LogicalOperator &op, TableFunctionCatalogEntry *function,
+	PhysicalTableFunction(vector<TypeId> types, TableFunctionCatalogEntry *function,
 	                      vector<unique_ptr<Expression>> parameters)
-	    : PhysicalOperator(PhysicalOperatorType::TABLE_FUNCTION, op.types), function(function),
+	    : PhysicalOperator(PhysicalOperatorType::TABLE_FUNCTION, types), function(function),
 	      parameters(move(parameters)) {
 	}
 

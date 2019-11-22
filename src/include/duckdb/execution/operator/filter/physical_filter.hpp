@@ -17,8 +17,8 @@ namespace duckdb {
 //! adds a selection vector to the chunk.
 class PhysicalFilter : public PhysicalOperator {
 public:
-	PhysicalFilter(LogicalOperator &op, vector<unique_ptr<Expression>> select_list)
-	    : PhysicalOperator(PhysicalOperatorType::FILTER, op.types), expressions(std::move(select_list)) {
+	PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expression>> select_list)
+	    : PhysicalOperator(PhysicalOperatorType::FILTER, types), expressions(std::move(select_list)) {
 	}
 
 	vector<unique_ptr<Expression>> expressions;

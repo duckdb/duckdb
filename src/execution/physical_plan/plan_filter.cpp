@@ -14,7 +14,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalFilter &op
 	unique_ptr<PhysicalOperator> plan = CreatePlan(*op.children[0]);
 	if (op.expressions.size() > 0) {
 		// create a filter if there is anything to filter
-		auto filter = make_unique<PhysicalFilter>(op, move(op.expressions));
+		auto filter = make_unique<PhysicalFilter>(op.types, move(op.expressions));
 		filter->children.push_back(move(plan));
 		plan = move(filter);
 	}
