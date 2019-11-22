@@ -41,7 +41,11 @@ doxygen: docs
 	open build/docs/html/index.html
 
 amalgamation:
-	python scripts/amalgamation.py
+	mkdir -p build/amalgamation && \
+	python scripts/amalgamation.py && \
+	cd build/amalgamation && \
+	cmake $(GENERATOR) $(FORCE_COLOR) -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake --build .
 
 test_compile: # test compilation of individual cpp files
 	python scripts/amalgamation.py --compile

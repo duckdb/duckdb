@@ -304,3 +304,4 @@ third_party/imdb/data
 benchmark_results/
 duckdb_unittest_tempdir/
 grammar.y.tmp
+src/amalgamation/

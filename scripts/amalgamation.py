@@ -1,13 +1,13 @@
 # this script creates a single header + source file combination out of the DuckDB sources
-header_file = "duckdb.hpp"
-source_file = "duckdb.cpp"
+import os, re, sys, pickle
+amal_dir = os.path.join('src', 'amalgamation')
+header_file = os.path.join(amal_dir, "duckdb.hpp")
+source_file = os.path.join(amal_dir, "duckdb.cpp")
 cache_file = 'amalgamation.cache'
 include_paths = ["src/include", "third_party/hyperloglog", "third_party/re2", "third_party/miniz", "third_party/libpg_query/include", "third_party/libpg_query"]
 compile_directories = ['src', 'third_party/hyperloglog', 'third_party/miniz', 'third_party/re2', 'third_party/libpg_query']
-excluded_files = ["duckdb-c.cpp", 'grammar.cpp', 'grammar.hpp', 'symbols.cpp', 'file_system.cpp']
-excluded_compilation_files = excluded_files + ['gram.hpp', 'kwlist.hpp']
-
-import os, re, sys, pickle
+excluded_files = ['grammar.cpp', 'grammar.hpp', 'symbols.cpp', 'file_system.cpp']
+excluded_compilation_files = excluded_files + ['gram.hpp', 'kwlist.hpp', "duckdb-c.cpp"]
 
 compile = False
 resume = False
@@ -120,6 +120,10 @@ if compile:
 		compile_dir(cdir, cache)
 	exit(0)
 
+
+if not os.path.exists(amal_dir):
+	os.makedirs(amal_dir)
+
 # now construct duckdb.hpp from these headers
 print("-----------------------")
 print("-- Writing duckdb.hpp --")
@@ -127,6 +131,7 @@ print("-----------------------")
 with open(header_file, 'w+') as hfile:
 	hfile.write("#pragma once\n")
 	hfile.write(write_file('src/include/duckdb.hpp'))
+	hfile.write(write_file('src/include/duckdb.h'))
 
 def write_dir(dir, sfile):
 	files = os.listdir(dir)
