@@ -8657,25 +8657,25 @@ extern void core_yyset_column(int column_no, yyscan_t yyscanner);
  * OK, here is a short description of lex/flex rules behavior.
  * The longest pattern which matches an input string is always chosen.
  * For equal-length patterns, the first occurring in the rules list is chosen.
- * INITIAL is the starting state, to which all non-conditional rules apply.
+ * LEX_INITIAL_STATE is the starting state, to which all non-conditional rules apply.
  * Exclusive states change parsing rules while the state is active.  When in
  * an exclusive state, only those rules defined for that state apply.
  *
  * We use exclusive states for quoted strings, extended comments,
  * and to eliminate parsing troubles for numeric strings.
  * Exclusive states:
- *  <xb> bit string literal
- *  <xc> extended C-style comments
- *  <xd> delimited identifiers (double-quoted identifiers)
- *  <xh> hexadecimal numeric string
- *  <xq> standard quoted strings
- *  <xe> extended quoted strings (support backslash escape sequences)
- *  <xdolq> $foo$ quoted strings
- *  <xui> quoted identifier with Unicode escapes
- *  <xuiend> end of a quoted identifier with Unicode escapes, UESCAPE can follow
- *  <xus> quoted string with Unicode escapes
- *  <xusend> end of a quoted string with Unicode escapes, UESCAPE can follow
- *  <xeu> Unicode surrogate pair in extended quoted string
+ *  <LEX_BITSTRING_LITERAL> bit string literal
+ *  <LEX_EXTENDED_C_COMMENTS> extended C-style comments
+ *  <LEX_DELIMITED_IDENTIFIER> delimited identifiers (double-quoted identifiers)
+ *  <LEX_HEXADECIMAL_NUMERIC_STRING> hexadecimal numeric string
+ *  <LEX_STANDARD_QUOTED_STRING> standard quoted strings
+ *  <LEX_EXTENDED_QUOTED_STRING> extended quoted strings (support backslash escape sequences)
+ *  <LEX_DOLLAR_QUOTED_STRING> $foo$ quoted strings
+ *  <LEX_QUOTED_IDENTIFIER_WITH_UNICODE_ESCAPE> quoted identifier with Unicode escapes
+ *  <LEX_END_OF_QUOTED_IDENTIFIER_WITH_UNICODE_ESCAPE> end of a quoted identifier with Unicode escapes, UESCAPE can follow
+ *  <LEX_QUOTED_STRING_WITH_UNICODE_ESCAPE> quoted string with Unicode escapes
+ *  <LEX_END_OF_QUOTED_STRING_WITH_UNICODE_ESCAPE> end of a quoted string with Unicode escapes, UESCAPE can follow
+ *  <LEX_UNICODE_SURROGATE_IN_EXTENDED_QUOTED_STRING> Unicode surrogate pair in extended quoted string
  *
  * Remember to add an <<EOF>> case whenever you add a new exclusive state!
  * The default one is probably not the right thing.
@@ -8810,19 +8810,19 @@ extern void core_yyset_column(int column_no, yyscan_t yyscanner);
  */
 
 
-#define INITIAL 0
-#define xb 1
-#define xc 2
-#define xd 3
-#define xh 4
-#define xe 5
-#define xq 6
-#define xdolq 7
-#define xui 8
-#define xuiend 9
-#define xus 10
-#define xusend 11
-#define xeu 12
+#define LEX_INITIAL_STATE 0
+#define LEX_BITSTRING_LITERAL 1
+#define LEX_EXTENDED_C_COMMENTS 2
+#define LEX_DELIMITED_IDENTIFIER 3
+#define LEX_HEXADECIMAL_NUMERIC_STRING 4
+#define LEX_EXTENDED_QUOTED_STRING 5
+#define LEX_STANDARD_QUOTED_STRING 6
+#define LEX_DOLLAR_QUOTED_STRING 7
+#define LEX_QUOTED_IDENTIFIER_WITH_UNICODE_ESCAPE 8
+#define LEX_END_OF_QUOTED_IDENTIFIER_WITH_UNICODE_ESCAPE 9
+#define LEX_QUOTED_STRING_WITH_UNICODE_ESCAPE 10
+#define LEX_END_OF_QUOTED_STRING_WITH_UNICODE_ESCAPE 11
+#define LEX_UNICODE_SURROGATE_IN_EXTENDED_QUOTED_STRING 12
 
 #ifndef YY_NO_UNISTD_H
 /* Special case for "unistd.hpp", since it is non-ANSI. We include it way
@@ -8964,14 +8964,6 @@ static int input (yyscan_t yyscanner );
 /* Amount of stuff to slurp up with each read. */
 #ifndef YY_READ_BUF_SIZE
 #define YY_READ_BUF_SIZE 8192
-#endif
-
-/* Copy whatever the last rule matched to the standard output. */
-#ifndef ECHO
-/* This used to be an fputs(), but since the string might contain NUL's,
- * we now use fwrite().
- */
-#define ECHO fwrite( yytext, yyleng, 1, yyout )
 #endif
 
 /* Gets input and stuffs it into "buf".  number of characters read, or YY_NULL,
@@ -9152,7 +9144,7 @@ YY_RULE_SETUP
 					/* Set location in case of syntax error in comment */
 					SET_YYLLOC();
 					yyextra->xcdepth = 0;
-					BEGIN(xc);
+					BEGIN(LEX_EXTENDED_C_COMMENTS);
 					/* Put back any characters past slash-star; see above */
 					yyless(2);
 				}
@@ -9171,7 +9163,7 @@ YY_RULE_SETUP
 
 {
 					if (yyextra->xcdepth <= 0)
-						BEGIN(INITIAL);
+						BEGIN(LEX_INITIAL_STATE);
 					else
 						(yyextra->xcdepth)--;
 				}
@@ -9198,7 +9190,7 @@ YY_RULE_SETUP
 					/* ignore */
 				}
 	YY_BREAK
-case YY_STATE_EOF(xc):
+case YY_STATE_EOF(LEX_EXTENDED_C_COMMENTS):
 
 { scan_error("unterminated /* comment"); }
 	YY_BREAK
@@ -9213,7 +9205,7 @@ YY_RULE_SETUP
 					 * to mark it for the input routine as a binary string.
 					 */
 					SET_YYLLOC();
-					BEGIN(xb);
+					BEGIN(LEX_BITSTRING_LITERAL);
 					startlit();
 					addlitchar('b', yyscanner);
 				}
@@ -9227,7 +9219,7 @@ YY_RULE_SETUP
 
 {
 					yyless(1);
-					BEGIN(INITIAL);
+					BEGIN(LEX_INITIAL_STATE);
 					yylval->str = litbufdup(yyscanner);
 					return BCONST;
 				}
@@ -9254,7 +9246,7 @@ YY_RULE_SETUP
 					/* ignore */
 				}
 	YY_BREAK
-case YY_STATE_EOF(xb):
+case YY_STATE_EOF(LEX_BITSTRING_LITERAL):
 
 { scan_error("unterminated bit string literal"); }
 	YY_BREAK
@@ -9269,7 +9261,7 @@ YY_RULE_SETUP
 					 * to mark it for the input routine as a hex string.
 					 */
 					SET_YYLLOC();
-					BEGIN(xh);
+					BEGIN(LEX_HEXADECIMAL_NUMERIC_STRING);
 					startlit();
 					addlitchar('x', yyscanner);
 				}
@@ -9283,12 +9275,12 @@ YY_RULE_SETUP
 
 {
 					yyless(1);
-					BEGIN(INITIAL);
+					BEGIN(LEX_INITIAL_STATE);
 					yylval->str = litbufdup(yyscanner);
 					return XCONST;
 				}
 	YY_BREAK
-case YY_STATE_EOF(xh):
+case YY_STATE_EOF(LEX_HEXADECIMAL_NUMERIC_STRING):
 
 { scan_error("unterminated hexadecimal string literal"); }
 	YY_BREAK
@@ -9329,9 +9321,9 @@ YY_RULE_SETUP
 					yyextra->saw_non_ascii = false;
 					SET_YYLLOC();
 					if (yyextra->standard_conforming_strings)
-						BEGIN(xq);
+						BEGIN(LEX_STANDARD_QUOTED_STRING);
 					else
-						BEGIN(xe);
+						BEGIN(LEX_EXTENDED_QUOTED_STRING);
 					startlit();
 				}
 	YY_BREAK
@@ -9342,7 +9334,7 @@ YY_RULE_SETUP
 					yyextra->warn_on_first_escape = false;
 					yyextra->saw_non_ascii = false;
 					SET_YYLLOC();
-					BEGIN(xe);
+					BEGIN(LEX_EXTENDED_QUOTED_STRING);
 					startlit();
 				}
 	YY_BREAK
@@ -9357,7 +9349,7 @@ YY_RULE_SETUP
 								 errmsg("unsafe use of string constant with Unicode escapes"),
 								 errdetail("String constants with Unicode escapes cannot be used when standard_conforming_strings is off."),
 								 lexer_errposition()));
-					BEGIN(xus);
+					BEGIN(LEX_QUOTED_STRING_WITH_UNICODE_ESCAPE);
 					startlit();
 				}
 	YY_BREAK
@@ -9370,7 +9362,7 @@ YY_RULE_SETUP
 
 {
 					yyless(1);
-					BEGIN(INITIAL);
+					BEGIN(LEX_INITIAL_STATE);
 					/*
 					 * check that the data remains valid if it might have been
 					 * made invalid by unescaping any chars.
@@ -9393,8 +9385,8 @@ YY_RULE_SETUP
 {
 					/* throw back all but the quote */
 					yyless(1);
-					/* xusend state looks for possible UESCAPE */
-					BEGIN(xusend);
+					/* LEX_END_OF_QUOTED_STRING_WITH_UNICODE_ESCAPE state looks for possible UESCAPE */
+					BEGIN(LEX_END_OF_QUOTED_STRING_WITH_UNICODE_ESCAPE);
 				}
 	YY_BREAK
 case 26:
@@ -9402,10 +9394,10 @@ case 26:
 YY_RULE_SETUP
 
 {
-					/* stay in xusend state over whitespace */
+					/* stay in LEX_END_OF_QUOTED_STRING_WITH_UNICODE_ESCAPE state over whitespace */
 				}
 	YY_BREAK
-case YY_STATE_EOF(xusend):
+case YY_STATE_EOF(LEX_END_OF_QUOTED_STRING_WITH_UNICODE_ESCAPE):
 
 case 27:
 /* rule 27 can match eol */
@@ -9417,7 +9409,7 @@ YY_RULE_SETUP
 {
 					/* no UESCAPE after the quote, throw back everything */
 					yyless(0);
-					BEGIN(INITIAL);
+					BEGIN(LEX_INITIAL_STATE);
 					yylval->str = litbuf_udeescape('\\', yyscanner);
 					return SCONST;
 				}
@@ -9428,7 +9420,7 @@ YY_RULE_SETUP
 
 {
 					/* found UESCAPE after the end quote */
-					BEGIN(INITIAL);
+					BEGIN(LEX_INITIAL_STATE);
 					if (!check_uescapechar(yytext[yyleng - 2]))
 					{
 						SET_YYLLOC();
@@ -9474,7 +9466,7 @@ YY_RULE_SETUP
 					if (is_utf16_surrogate_first(c))
 					{
 						yyextra->utf16_first_part = c;
-						BEGIN(xeu);
+						BEGIN(LEX_UNICODE_SURROGATE_IN_EXTENDED_QUOTED_STRING);
 					}
 					else if (is_utf16_surrogate_second(c))
 						scan_error("invalid Unicode surrogate pair");
@@ -9495,7 +9487,7 @@ YY_RULE_SETUP
 
 					addunicode(c, yyscanner);
 
-					BEGIN(xe);
+					BEGIN(LEX_EXTENDED_QUOTED_STRING);
 				}
 	YY_BREAK
 case 35:
@@ -9509,7 +9501,7 @@ YY_RULE_SETUP
 
 { scan_error("invalid Unicode surrogate pair"); }
 	YY_BREAK
-case YY_STATE_EOF(xeu):
+case YY_STATE_EOF(LEX_UNICODE_SURROGATE_IN_EXTENDED_QUOTED_STRING):
 
 { scan_error("invalid Unicode surrogate pair"); }
 	YY_BREAK
@@ -9585,9 +9577,9 @@ YY_RULE_SETUP
 					addlitchar(yytext[0], yyscanner);
 				}
 	YY_BREAK
-case YY_STATE_EOF(xq):
-case YY_STATE_EOF(xe):
-case YY_STATE_EOF(xus):
+case YY_STATE_EOF(LEX_STANDARD_QUOTED_STRING):
+case YY_STATE_EOF(LEX_EXTENDED_QUOTED_STRING):
+case YY_STATE_EOF(LEX_QUOTED_STRING_WITH_UNICODE_ESCAPE):
 
 { scan_error("unterminated quoted string"); }
 	YY_BREAK
@@ -9597,7 +9589,7 @@ YY_RULE_SETUP
 {
 					SET_YYLLOC();
 					yyextra->dolqstart = pstrdup(yytext);
-					BEGIN(xdolq);
+					BEGIN(LEX_DOLLAR_QUOTED_STRING);
 					startlit();
 				}
 	YY_BREAK
@@ -9620,7 +9612,7 @@ YY_RULE_SETUP
 					{
 						pfree(yyextra->dolqstart);
 						yyextra->dolqstart = NULL;
-						BEGIN(INITIAL);
+						BEGIN(LEX_INITIAL_STATE);
 						yylval->str = litbufdup(yyscanner);
 						return SCONST;
 					}
@@ -9659,7 +9651,7 @@ YY_RULE_SETUP
 					addlitchar(yytext[0], yyscanner);
 				}
 	YY_BREAK
-case YY_STATE_EOF(xdolq):
+case YY_STATE_EOF(LEX_DOLLAR_QUOTED_STRING):
 
 { scan_error("unterminated dollar-quoted string"); }
 	YY_BREAK
@@ -9668,7 +9660,7 @@ YY_RULE_SETUP
 
 {
 					SET_YYLLOC();
-					BEGIN(xd);
+					BEGIN(LEX_DELIMITED_IDENTIFIER);
 					startlit();
 				}
 	YY_BREAK
@@ -9677,7 +9669,7 @@ YY_RULE_SETUP
 
 {
 					SET_YYLLOC();
-					BEGIN(xui);
+					BEGIN(LEX_QUOTED_IDENTIFIER_WITH_UNICODE_ESCAPE);
 					startlit();
 				}
 	YY_BREAK
@@ -9687,7 +9679,7 @@ YY_RULE_SETUP
 {
 					char	   *ident;
 
-					BEGIN(INITIAL);
+					BEGIN(LEX_INITIAL_STATE);
 					if (yyextra->literallen == 0)
 						scan_error("zero-length delimited identifier");
 					ident = litbufdup(yyscanner);
@@ -9702,8 +9694,8 @@ YY_RULE_SETUP
 
 {
 					yyless(1);
-					/* xuiend state looks for possible UESCAPE */
-					BEGIN(xuiend);
+					/* LEX_END_OF_QUOTED_IDENTIFIER_WITH_UNICODE_ESCAPE state looks for possible UESCAPE */
+					BEGIN(LEX_END_OF_QUOTED_IDENTIFIER_WITH_UNICODE_ESCAPE);
 				}
 	YY_BREAK
 case 53:
@@ -9711,10 +9703,10 @@ case 53:
 YY_RULE_SETUP
 
 {
-					/* stay in xuiend state over whitespace */
+					/* stay in LEX_END_OF_QUOTED_IDENTIFIER_WITH_UNICODE_ESCAPE state over whitespace */
 				}
 	YY_BREAK
-case YY_STATE_EOF(xuiend):
+case YY_STATE_EOF(LEX_END_OF_QUOTED_IDENTIFIER_WITH_UNICODE_ESCAPE):
 
 case 54:
 /* rule 54 can match eol */
@@ -9730,7 +9722,7 @@ YY_RULE_SETUP
 
 					yyless(0);
 
-					BEGIN(INITIAL);
+					BEGIN(LEX_INITIAL_STATE);
 					if (yyextra->literallen == 0)
 						scan_error("zero-length delimited identifier");
 					ident = litbuf_udeescape('\\', yyscanner);
@@ -9750,7 +9742,7 @@ YY_RULE_SETUP
 					char	   *ident;
 					int			identlen;
 
-					BEGIN(INITIAL);
+					BEGIN(LEX_INITIAL_STATE);
 					if (yyextra->literallen == 0)
 						scan_error("zero-length delimited identifier");
 					if (!check_uescapechar(yytext[yyleng - 2]))
@@ -9782,8 +9774,8 @@ YY_RULE_SETUP
 					addlit(yytext, yyleng, yyscanner);
 				}
 	YY_BREAK
-case YY_STATE_EOF(xd):
-case YY_STATE_EOF(xui):
+case YY_STATE_EOF(LEX_DELIMITED_IDENTIFIER):
+case YY_STATE_EOF(LEX_QUOTED_IDENTIFIER_WITH_UNICODE_ESCAPE):
 
 { scan_error("unterminated quoted identifier"); }
 	YY_BREAK
@@ -10096,7 +10088,7 @@ YY_RULE_SETUP
 					return yytext[0];
 				}
 	YY_BREAK
-case YY_STATE_EOF(INITIAL):
+case YY_STATE_EOF(LEX_INITIAL_STATE):
 
 {
 					SET_YYLLOC();
@@ -10496,7 +10488,7 @@ static int yy_get_next_buffer (yyscan_t yyscanner)
 /** Immediately switch to a different input stream.
  * @param input_file A readable stream.
  * @param yyscanner The scanner object.
- * @note This function does not reset the start condition to @c INITIAL .
+ * @note This function does not reset the start condition to @c LEX_INITIAL_STATE .
  */
     void core_yyrestart  (FILE * input_file , yyscan_t yyscanner)
 {
