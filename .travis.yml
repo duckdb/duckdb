@@ -241,6 +241,7 @@ matrix:
         - R -f dependencies.R
 
       install:
+        - ./configure
         - R CMD build .
         - R CMD INSTALL duckdb_*.tar.gz
 
@@ -264,6 +265,7 @@ matrix:
         - R -f dependencies.R
 
       install:
+        - ./configure
         - R CMD build .
         - R CMD INSTALL --build duckdb_*.tar.gz
         - R CMD INSTALL duckdb_*.tgz
@@ -292,6 +294,7 @@ matrix:
         - export "PATH=/c/Rtools/bin:$PATH"
         - cd tools/rpkg
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe -f dependencies.R
+        - sh configure
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD build .
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL --build --no-multiarch duckdb_*.tar.gz
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL duckdb_*.zip
