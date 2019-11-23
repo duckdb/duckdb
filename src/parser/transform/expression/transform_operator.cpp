@@ -70,16 +70,16 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(string op, uni
 	}
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformAExpr(postgres::A_Expr *root) {
+unique_ptr<ParsedExpression> Transformer::TransformAExpr(PGAExpr *root) {
 	if (!root) {
 		return nullptr;
 	}
-	auto name = string((reinterpret_cast<postgres::Value *>(root->name->head->data.ptr_value))->val.str);
+	auto name = string((reinterpret_cast<PGValue *>(root->name->head->data.ptr_value))->val.str);
 
 	switch (root->kind) {
-	case postgres::AEXPR_DISTINCT:
+	case PG_AEXPR_DISTINCT:
 		break;
-	case postgres::AEXPR_IN: {
+	case PG_AEXPR_IN: {
 		auto left_expr = TransformExpression(root->lexpr);
 		ExpressionType operator_type;
 		// this looks very odd, but seems to be the way to find out its NOT IN
@@ -91,11 +91,11 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(postgres::A_Expr *root)
 			operator_type = ExpressionType::COMPARE_IN;
 		}
 		auto result = make_unique<OperatorExpression>(operator_type, move(left_expr));
-		TransformExpressionList((postgres::List *)root->rexpr, result->children);
+		TransformExpressionList((PGList *)root->rexpr, result->children);
 		return move(result);
 	} break;
 	// rewrite NULLIF(a, b) into CASE WHEN a=b THEN NULL ELSE a END
-	case postgres::AEXPR_NULLIF: {
+	case PG_AEXPR_NULLIF: {
 		auto case_expr = make_unique<CaseExpression>();
 		auto value = TransformExpression(root->lexpr);
 		// the check (A = B)
@@ -109,17 +109,17 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(postgres::A_Expr *root)
 	} break;
 	// rewrite (NOT) X BETWEEN A AND B into (NOT) AND(GREATERTHANOREQUALTO(X,
 	// A), LESSTHANOREQUALTO(X, B))
-	case postgres::AEXPR_BETWEEN:
-	case postgres::AEXPR_NOT_BETWEEN: {
-		auto between_args = reinterpret_cast<postgres::List *>(root->rexpr);
+	case PG_AEXPR_BETWEEN:
+	case PG_AEXPR_NOT_BETWEEN: {
+		auto between_args = reinterpret_cast<PGList *>(root->rexpr);
 
 		if (between_args->length != 2 || !between_args->head->data.ptr_value || !between_args->tail->data.ptr_value) {
 			throw Exception("(NOT) BETWEEN needs two args");
 		}
 
-		auto between_left = TransformExpression(reinterpret_cast<postgres::Node *>(between_args->head->data.ptr_value));
+		auto between_left = TransformExpression(reinterpret_cast<PGNode *>(between_args->head->data.ptr_value));
 		auto between_right =
-		    TransformExpression(reinterpret_cast<postgres::Node *>(between_args->tail->data.ptr_value));
+		    TransformExpression(reinterpret_cast<PGNode *>(between_args->tail->data.ptr_value));
 
 		auto compare_left = make_unique<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
 		                                                      TransformExpression(root->lexpr), move(between_left));
@@ -127,14 +127,14 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(postgres::A_Expr *root)
 		                                                       TransformExpression(root->lexpr), move(between_right));
 		auto compare_between = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(compare_left),
 		                                                          move(compare_right));
-		if (root->kind == postgres::AEXPR_BETWEEN) {
+		if (root->kind == PG_AEXPR_BETWEEN) {
 			return move(compare_between);
 		} else {
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(compare_between));
 		}
 	} break;
 	// rewrite SIMILAR TO into regexp_matches('asdf', '.*sd.*')
-	case postgres::AEXPR_SIMILAR: {
+	case PG_AEXPR_SIMILAR: {
 		auto left_expr = TransformExpression(root->lexpr);
 		auto right_expr = TransformExpression(root->rexpr);
 

@@ -25,26 +25,26 @@ static string get_tablename_union(TableRef *ref) {
 	}
 }
 
-unique_ptr<TableRef> Transformer::TransformJoin(postgres::JoinExpr *root) {
+unique_ptr<TableRef> Transformer::TransformJoin(PGJoinExpr *root) {
 	auto result = make_unique<JoinRef>();
 	switch (root->jointype) {
-	case postgres::JOIN_INNER: {
+	case PG_JOIN_INNER: {
 		result->type = JoinType::INNER;
 		break;
 	}
-	case postgres::JOIN_LEFT: {
+	case PG_JOIN_LEFT: {
 		result->type = JoinType::LEFT;
 		break;
 	}
-	case postgres::JOIN_FULL: {
+	case PG_JOIN_FULL: {
 		result->type = JoinType::OUTER;
 		break;
 	}
-	case postgres::JOIN_RIGHT: {
+	case PG_JOIN_RIGHT: {
 		result->type = JoinType::RIGHT;
 		break;
 	}
-	case postgres::JOIN_SEMI: {
+	case PG_JOIN_SEMI: {
 		result->type = JoinType::SEMI;
 		break;
 	}
@@ -61,9 +61,9 @@ unique_ptr<TableRef> Transformer::TransformJoin(postgres::JoinExpr *root) {
 		// usingClause is a list of strings
 		vector<string> using_column_names;
 		for (auto node = root->usingClause->head; node != nullptr; node = node->next) {
-			auto target = reinterpret_cast<postgres::Node *>(node->data.ptr_value);
-			assert(target->type == postgres::T_String);
-			auto column_name = string(reinterpret_cast<postgres::Value *>(target)->val.str);
+			auto target = reinterpret_cast<PGNode *>(node->data.ptr_value);
+			assert(target->type == T_PGString);
+			auto column_name = string(reinterpret_cast<PGValue *>(target)->val.str);
 			using_column_names.push_back(column_name);
 		}
 		assert(using_column_names.size() > 0);

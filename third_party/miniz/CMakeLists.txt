@@ -1,7 +1,6 @@
 cmake_policy(SET CMP0063 NEW)
 
-add_definitions(-DMINIZ_NO_ARCHIVE_APIS)
-add_library(miniz STATIC miniz.c)
+add_library(miniz STATIC miniz.cpp)
 
 target_include_directories(miniz PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)

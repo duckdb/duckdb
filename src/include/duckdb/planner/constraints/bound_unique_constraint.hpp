@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
 
 namespace duckdb {

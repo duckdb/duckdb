@@ -7,10 +7,10 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stmt) {
+unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 	unique_ptr<QueryNode> node;
 	switch (stmt->op) {
-	case postgres::SETOP_NONE: {
+	case PG_SETOP_NONE: {
 		node = make_unique<SelectNode>();
 		auto result = (SelectNode *)node.get();
 		// do this early so the value lists also have a `FROM`
@@ -25,7 +25,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 		if (stmt->distinctClause != NULL) {
 			result->select_distinct = true;
 			// checks distinct on clause
-			auto target = reinterpret_cast<postgres::Node *>(stmt->distinctClause->head->data.ptr_value);
+			auto target = reinterpret_cast<PGNode *>(stmt->distinctClause->head->data.ptr_value);
 			if (target) {
 				//  add the columns defined in the ON clause to the select list
 				if (!TransformExpressionList(stmt->distinctClause, result->distinct_on_targets)) {
@@ -45,9 +45,9 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 		}
 		break;
 	}
-	case postgres::SETOP_UNION:
-	case postgres::SETOP_EXCEPT:
-	case postgres::SETOP_INTERSECT: {
+	case PG_SETOP_UNION:
+	case PG_SETOP_EXCEPT:
+	case PG_SETOP_INTERSECT: {
 		node = make_unique<SetOperationNode>();
 		auto result = (SetOperationNode *)node.get();
 		result->left = TransformSelectNode(stmt->larg);
@@ -58,14 +58,14 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 
 		result->select_distinct = true;
 		switch (stmt->op) {
-		case postgres::SETOP_UNION:
+		case PG_SETOP_UNION:
 			result->select_distinct = !stmt->all;
 			result->setop_type = SetOperationType::UNION;
 			break;
-		case postgres::SETOP_EXCEPT:
+		case PG_SETOP_EXCEPT:
 			result->setop_type = SetOperationType::EXCEPT;
 			break;
-		case postgres::SETOP_INTERSECT:
+		case PG_SETOP_INTERSECT:
 			result->setop_type = SetOperationType::INTERSECT;
 			break;
 		default:

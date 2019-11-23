@@ -303,3 +303,5 @@ third_party/imdb/data
 .last_benchmarked_commit
 benchmark_results/
 duckdb_unittest_tempdir/
+grammar.y.tmp
+src/amalgamation/

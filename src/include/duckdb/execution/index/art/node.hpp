@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "art_key.hpp"
+#include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/common/common.hpp"
 
 namespace duckdb {

@@ -1,7 +1,17 @@
 #include "duckdb/storage/write_ahead_log.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
-
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 
 using namespace duckdb;
 using namespace std;

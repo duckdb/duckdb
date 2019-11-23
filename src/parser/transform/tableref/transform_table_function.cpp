@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<TableRef> Transformer::TransformRangeFunction(postgres::RangeFunction *root) {
+unique_ptr<TableRef> Transformer::TransformRangeFunction(PGRangeFunction *root) {
 	if (root->lateral) {
 		throw NotImplementedException("LATERAL not implemented");
 	}
@@ -18,18 +18,18 @@ unique_ptr<TableRef> Transformer::TransformRangeFunction(postgres::RangeFunction
 	if (root->functions->length != 1) {
 		throw NotImplementedException("Need exactly one function");
 	}
-	auto function_sublist = (postgres::List *)root->functions->head->data.ptr_value;
+	auto function_sublist = (PGList *)root->functions->head->data.ptr_value;
 	assert(function_sublist->length == 2);
-	auto call_tree = (postgres::Node *)function_sublist->head->data.ptr_value;
+	auto call_tree = (PGNode *)function_sublist->head->data.ptr_value;
 	auto coldef = function_sublist->head->next->data.ptr_value;
 
-	assert(call_tree->type == postgres::T_FuncCall);
+	assert(call_tree->type == T_PGFuncCall);
 	if (coldef) {
 		throw NotImplementedException("Explicit column definition not supported yet");
 	}
 	// transform the function call
 	auto result = make_unique<TableFunctionRef>();
-	result->function = TransformFuncCall((postgres::FuncCall *)call_tree);
+	result->function = TransformFuncCall((PGFuncCall *)call_tree);
 	result->alias = TransformAlias(root->alias);
 	return move(result);
 }

@@ -1,4 +1,5 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/function/aggregate_function.hpp"
 
 using namespace duckdb;
 using namespace std;

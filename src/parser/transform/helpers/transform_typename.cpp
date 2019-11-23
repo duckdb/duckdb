@@ -37,8 +37,8 @@ static SQLType TransformStringToSQLType(char *str) {
 	}
 }
 
-SQLType Transformer::TransformTypeName(postgres::TypeName *type_name) {
-	auto name = (reinterpret_cast<postgres::Value *>(type_name->names->tail->data.ptr_value)->val.str);
+SQLType Transformer::TransformTypeName(PGTypeName *type_name) {
+	auto name = (reinterpret_cast<PGValue *>(type_name->names->tail->data.ptr_value)->val.str);
 	// transform it to the SQL type
 	return TransformStringToSQLType(name);
 }

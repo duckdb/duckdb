@@ -5,6 +5,22 @@ if(NOT MSVC)
       "${CMAKE_CXX_FLAGS_DEBUG} -Wextra -Wno-unused-parameter -Wnarrowing")
 endif()
 
+if (AMALGAMATION_BUILD)
+
+if(WIN32)
+  add_definitions(/bigobj)
+endif()
+
+add_library(duckdb SHARED "${CMAKE_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
+add_library(duckdb_static STATIC "${CMAKE_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
+
+install(
+    FILES
+        "${CMAKE_SOURCE_DIR}/src/amalgamation/duckdb.hpp"
+    DESTINATION "${INSTALL_INCLUDE_DIR}")
+
+else()
+
 add_subdirectory(optimizer)
 add_subdirectory(planner)
 add_subdirectory(parser)
@@ -37,12 +53,6 @@ target_include_directories(duckdb_static PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
 install(
-    TARGETS duckdb duckdb_static
-    EXPORT "${DUCKDB_EXPORT_SET}"
-    LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
-    ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
-
-install(
     DIRECTORY "${CMAKE_SOURCE_DIR}/src/include/duckdb"
     DESTINATION "${INSTALL_INCLUDE_DIR}"
     FILES_MATCHING PATTERN "*.hpp")
@@ -51,3 +61,11 @@ install(
         "${CMAKE_SOURCE_DIR}/src/include/duckdb.hpp"
         "${CMAKE_SOURCE_DIR}/src/include/duckdb.h"
     DESTINATION "${INSTALL_INCLUDE_DIR}")
+
+endif()
+
+install(
+    TARGETS duckdb duckdb_static
+    EXPORT "${DUCKDB_EXPORT_SET}"
+    LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+    ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")

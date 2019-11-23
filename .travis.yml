@@ -391,3 +391,43 @@ matrix:
 
       after_success:
         C:/Python37-x64/python.exe tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
+
+    - os: osx
+      name: Xcode 11.0 (Amalgamation)
+      osx_image: xcode11
+      script:
+        - python scripts/amalgamation.py
+        - (mkdir -p build/release && cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        - build/release/test/unittest
+
+    - os: linux
+      dist: xenial
+      name: GCC 9 (Amalgamation)
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-9
+      env:
+        - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
+      before_install:
+        - eval "${MATRIX_EVAL}"
+      script:
+        - python scripts/amalgamation.py
+        - mkdir -p build/release
+        - (cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        - build/release/test/unittest "*"
+
+    - os: windows
+      name: VS 2017 (Amalgamation)
+      filter_secrets: false
+      language: c
+      before_script:
+        - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
+      script:
+        - C:/Python37-x64/python.exe scripts/amalgamation.py
+        - cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64
+        - cmake --build . --target duckdb --config Release
+        - cmake --build . --target unittest --config Release
+        - test/Release/unittest.exe

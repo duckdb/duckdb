@@ -1,5 +1,8 @@
 #include "duckdb/storage/write_ahead_log.hpp"
-
+#include "duckdb/main/database.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include <cstring>
 
 using namespace duckdb;

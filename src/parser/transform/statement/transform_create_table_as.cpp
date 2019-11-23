@@ -5,10 +5,10 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<CreateTableStatement> Transformer::TransformCreateTableAs(postgres::Node *node) {
-	auto stmt = reinterpret_cast<postgres::CreateTableAsStmt *>(node);
+unique_ptr<CreateTableStatement> Transformer::TransformCreateTableAs(PGNode *node) {
+	auto stmt = reinterpret_cast<PGCreateTableAsStmt *>(node);
 	assert(stmt);
-	if (stmt->relkind == postgres::OBJECT_MATVIEW) {
+	if (stmt->relkind == PG_OBJECT_MATVIEW) {
 		throw NotImplementedException("Materialized view not implemented");
 	}
 	if (stmt->is_select_into || stmt->into->colNames || stmt->into->options) {

@@ -1,4 +1,5 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 using namespace duckdb;
 using namespace std;

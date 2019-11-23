@@ -4,9 +4,6 @@
 #include "duckdb/function/cast_rules.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-// #include "duckdb/function/aggregate/list.hpp"
-// #include "duckdb/function/scalar/list.hpp"
-// #include "duckdb/function/table/list.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"

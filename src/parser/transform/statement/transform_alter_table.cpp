@@ -4,7 +4,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<AlterTableStatement> Transformer::TransformAlter(postgres::Node *node) {
+unique_ptr<AlterTableStatement> Transformer::TransformAlter(PGNode *node) {
 	throw NotImplementedException("Alter table not supported yet!");
 	// auto stmt = reinterpret_cast<AlterTableStmt *>(node);
 	// assert(stmt);
@@ -19,12 +19,12 @@ unique_ptr<AlterTableStatement> Transformer::TransformAlter(postgres::Node *node
 
 	// // first we check the type of ALTER
 	// for (auto c = stmt->cmds->head; c != NULL; c = c->next) {
-	// 	auto command = reinterpret_cast<AlterTableCmd *>(lfirst(c));
+	// 	auto command = reinterpret_cast<PGAlterTableCmd *>(lfirst(c));
 	// 	//TODO: Include more options for command->subtype
 	// 	switch (command->subtype) {
-	// 		case AT_AddColumn: {
+	// 		case PG_AT_AddColumn: {
 	//                auto cdef = (ColumnDef *)command->def;
-	//                char *name = (reinterpret_cast<postgres::Value *>(
+	//                char *name = (reinterpret_cast<PGValue *>(
 	//                        cdef->typeName->names->tail->data.ptr_value)
 	//                        ->val.str);
 	//                auto centry =
@@ -33,8 +33,8 @@ unique_ptr<AlterTableStatement> Transformer::TransformAlter(postgres::Node *node
 	//                info.new_columns.push_back(centry);
 	//                break;
 	//            }
-	// 		case AT_DropColumn:
-	// 		case AT_AlterColumnType:
+	// 		case PG_AT_DropColumn:
+	// 		case PG_AT_AlterColumnType:
 	// 		default:
 	// 			throw NotImplementedException(
 	// 			    "ALTER TABLE option not supported yet!");

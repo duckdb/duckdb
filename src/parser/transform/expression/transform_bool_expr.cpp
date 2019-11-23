@@ -5,13 +5,13 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(postgres::BoolExpr *root) {
+unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(PGBoolExpr *root) {
 	unique_ptr<ParsedExpression> result;
 	for (auto node = root->args->head; node != nullptr; node = node->next) {
-		auto next = TransformExpression(reinterpret_cast<postgres::Node *>(node->data.ptr_value));
+		auto next = TransformExpression(reinterpret_cast<PGNode *>(node->data.ptr_value));
 
 		switch (root->boolop) {
-		case postgres::AND_EXPR: {
+		case PG_AND_EXPR: {
 			if (!result) {
 				result = move(next);
 			} else {
@@ -19,7 +19,7 @@ unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(postgres::BoolExpr *
 			}
 			break;
 		}
-		case postgres::OR_EXPR: {
+		case PG_OR_EXPR: {
 			if (!result) {
 				result = move(next);
 			} else {
@@ -27,7 +27,7 @@ unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(postgres::BoolExpr *
 			}
 			break;
 		}
-		case postgres::NOT_EXPR: {
+		case PG_NOT_EXPR: {
 			if (next->type == ExpressionType::COMPARE_IN) {
 				// convert COMPARE_IN to COMPARE_NOT_IN
 				next->type = ExpressionType::COMPARE_NOT_IN;

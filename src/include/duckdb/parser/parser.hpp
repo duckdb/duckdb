@@ -10,10 +10,8 @@
 
 #include "duckdb/parser/sql_statement.hpp"
 
-namespace postgres {
-struct Node;
-struct List;
-} // namespace postgres
+struct PGNode;
+struct PGList;
 
 namespace duckdb {
 class ClientContext;
@@ -39,8 +37,8 @@ public:
 private:
 	ClientContext &context;
 	//! Transform a Postgres parse tree into a set of SQL Statements
-	bool TransformList(postgres::List *tree);
+	bool TransformList(PGList *tree);
 	//! Transform a single Postgres parse node into a SQL Statement.
-	unique_ptr<SQLStatement> TransformNode(postgres::Node *stmt);
+	unique_ptr<SQLStatement> TransformNode(PGNode *stmt);
 };
 } // namespace duckdb

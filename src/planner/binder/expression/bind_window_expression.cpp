@@ -4,6 +4,10 @@
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
+#include "duckdb/main/client_context.hpp"
+
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+
 using namespace duckdb;
 using namespace std;
 

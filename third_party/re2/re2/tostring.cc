@@ -61,8 +61,6 @@ std::string Regexp::ToString() {
   return t;
 }
 
-#define ToString DontCallToString  // Avoid accidental recursion.
-
 // Visits re before children are processed.
 // Appends ( if needed and passes new precedence to children.
 int ToStringWalker::PreVisit(Regexp* re, int parent_arg, bool* stop) {

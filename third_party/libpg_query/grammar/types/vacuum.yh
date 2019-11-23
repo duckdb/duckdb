@@ -1,0 +1,4 @@
+%type <ival> vacuum_option_elem
+%type <boolean> opt_full
+%type <ival> vacuum_option_list
+%type <boolean> opt_freeze
