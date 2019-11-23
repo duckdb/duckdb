@@ -13,6 +13,8 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 
+#include <cctype>
+
 using namespace duckdb;
 using namespace std;
 
