@@ -27,7 +27,6 @@ void print_help() {
 	fprintf(stderr, "          --read_only           open database in read-only mode\n");
 	fprintf(stderr, "          --query_timeout=[sec] query timeout in seconds\n");
 	fprintf(stderr, "          --fetch_timeout=[sec] result set timeout in seconds\n");
-	fprintf(stderr, "          --static=[path]       path to frontend files\n");
 	fprintf(stderr, "          --log=[file]          log queries to file\n");
 }
 
@@ -220,9 +219,8 @@ int main(int argc, char **argv) {
 	srand(time(nullptr));
 
 	DBConfig config;
-	string dbfile;
+	string dbfile = "";
 	string logfile_name;
-	string static_files = "";
 
 	string listen = "localhost";
 	int port = 1294;
@@ -253,13 +251,6 @@ int main(int argc, char **argv) {
 				exit(1);
 			}
 			logfile_name = string(splits[1]);
-		} else if (StringUtil::StartsWith(arg, "--static=")) {
-			auto splits = StringUtil::Split(arg, '=');
-			if (splits.size() != 2) {
-				print_help();
-				exit(1);
-			}
-			static_files = string(splits[1]);
 		} else if (StringUtil::StartsWith(arg, "--listen=")) {
 			auto splits = StringUtil::Split(arg, '=');
 			if (splits.size() != 2) {
@@ -426,15 +417,6 @@ int main(int argc, char **argv) {
 
 		serialize_json(req, resp, j);
 	});
-
-	svr.Get("/", [&](const Request &req, Response &resp) {
-		resp.set_header("Location", "/select.html");
-		resp.set_content("<a href='/select.html'>select.html</a>", "text/html");
-		});
-
-	if (!static_files.empty()) {
-		svr.set_base_dir(static_files.c_str());
-	}
 
 	std::cout << "🦆 serving " + dbfile + " on http://" + listen + ":" + std::to_string(port) + "\n";
 

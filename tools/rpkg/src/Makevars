@@ -1,2 +1,2 @@
-PKG_CXXFLAGS = -I../../../src/include
-OBJECTS=duckdbr.o ../../../build/release_notest/src/libduckdb_static.a ../../../build/release_notest/third_party/libpg_query/libpg_query.a ../../../build/release_notest/third_party/hyperloglog/libhyperloglog.a ../../../build/release_notest/third_party/re2/libre2.a ../../../build/release_notest/third_party/miniz/libminiz.a
+PKG_CXXFLAGS = -I.
+OBJECTS=duckdbr.o duckdb.o

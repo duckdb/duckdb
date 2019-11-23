@@ -1,8 +1,5 @@
 #include "duckdb.hpp"
-#include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/types/date.hpp"
 
-#include "duckdb/main/appender.hpp"
 
 #include <Rdefines.h>
 // motherfucker
