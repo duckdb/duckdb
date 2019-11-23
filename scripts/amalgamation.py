@@ -26,6 +26,7 @@ excluded_compilation_files = excluded_files + ['gram.hpp', 'kwlist.hpp', "duckdb
 # where to cache which files have already been compiled, only used for --compile --resume
 cache_file = 'amalgamation.cache'
 
+
 linenumbers = False
 compile = False
 resume = False
@@ -157,8 +158,8 @@ with open(header_file, 'w+') as hfile:
 	hfile.write("#pragma once\n")
 	for fpath in main_header_files:
 		hfile.write(write_file(fpath))
-		hfile.write(write_file("src/include/duckdb/common/types/date.hpp"))
-		hfile.write(write_file("src/include/duckdb/common/types/timestamp.hpp"))
+	hfile.write(write_file("src/include/duckdb/common/types/date.hpp"))
+	hfile.write(write_file("src/include/duckdb/common/types/timestamp.hpp"))
 
 def write_dir(dir, sfile):
 	files = os.listdir(dir)
