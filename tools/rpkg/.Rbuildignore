@@ -2,3 +2,4 @@
 .*\.tar.gz
 dependencies\.R
 git
+configure
