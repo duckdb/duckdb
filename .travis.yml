@@ -419,6 +419,11 @@ matrix:
         - (cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest "*"
 
+      after_success:
+        - (cd src/amalgamation; tar -cvzf ../../build/duckdb.tar.gz duckdb.*)
+        - python tools/upload-s3.py src-amalgamation build/duckdb.tar.gz
+
+
     - os: windows
       name: VS 2017 (Amalgamation)
       filter_secrets: false
