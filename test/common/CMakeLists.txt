@@ -9,7 +9,8 @@ add_library_unity(test_common
                   test_hyperloglog.cpp
                   test_timestamp.cpp
                   test_sort.cpp
-                  test_utf.cpp) # test_serializer.cpp
+                  test_utf.cpp
+                  test_string_util.cpp) # test_serializer.cpp
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_common>
     PARENT_SCOPE)
