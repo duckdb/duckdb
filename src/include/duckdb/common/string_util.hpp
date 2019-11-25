@@ -37,6 +37,27 @@ public:
 	//! Join multiple strings into one string. Components are concatenated by the given separator
 	static string Join(const vector<string> &input, const string &separator);
 
+	//! Join multiple items of container with given size, transformed to string
+	//! using function, into one string using the given separator
+	template<typename C, typename S, typename Func>
+	static string Join(const C& input, S count, const string &separator, Func f) {
+		// The result
+		std::string result;
+
+		// If the input isn't empty, append the first element. We do this so we
+		// don't need to introduce an if into the loop.
+		if (count > 0) {
+			result += f(input[0]);
+		}
+
+		// Append the remaining input components, after the first
+		for (size_t i = 1; i < count; i++) {
+			result += separator + f(input[i]);
+		}
+
+		return result;
+	}
+
 	//! Append the prefix to the beginning of each line in str
 	static string Prefix(const string &str, const string &prefix);
 

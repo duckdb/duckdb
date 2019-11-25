@@ -31,7 +31,7 @@ struct RelationSet {
 	RelationSet(unique_ptr<index_t[]> relations, index_t count) : relations(move(relations)), count(count) {
 	}
 
-	string ToString();
+	string ToString() const;
 
 	unique_ptr<index_t[]> relations;
 	index_t count;
