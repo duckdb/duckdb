@@ -250,8 +250,8 @@ matrix:
 
       script:
         - (cd tests && R -f testthat.R)
-        - R -f ../../examples/R/dbi.R 
-        - R -f ../../examples/R/dplyr.R 
+        - R -f ../../examples/R/dbi.R
+        - R -f ../../examples/R/dplyr.R
 
       after_success:
         - python ../upload-s3.py rstats duckdb_*.tar.gz
