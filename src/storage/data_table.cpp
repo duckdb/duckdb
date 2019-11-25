@@ -350,6 +350,21 @@ void DataTable::Append(Transaction &transaction, transaction_t commit_id, DataCh
 	state.current_row += chunk.size();
 }
 
+void DataTable::RevertAppend(TableAppendState &state) {
+	if (state.row_start == state.current_row) {
+		// nothing to revert!
+		return;
+	}
+	// revert changes in the base columns
+	for (index_t i = 0; i < types.size(); i++) {
+		columns[i].RevertAppend(state.row_start);
+	}
+	// adjust the cardinality
+	cardinality -= state.current_row - state.row_start;
+	// revert changes in the transient manager
+	transient_manager.RevertAppend(state.row_start, state.current_row);
+}
+
 //===--------------------------------------------------------------------===//
 // Indexes
 //===--------------------------------------------------------------------===//

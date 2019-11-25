@@ -56,25 +56,34 @@ void Transaction::PushQuery(string query) {
 	strcpy(blob, query.c_str());
 }
 
-void Transaction::CheckCommit() {
-	storage.CheckCommit();
-}
-
-void Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept {
+bool Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept {
 	this->commit_id = commit_id;
 
-	// commit the undo buffer
+	UndoBuffer::IteratorState iterator_state;
+	LocalStorage::CommitState commit_state;
 	bool changes_made = undo_buffer.ChangesMade() || storage.ChangesMade() || sequence_usage.size() > 0;
-	undo_buffer.Commit(log, commit_id);
-	storage.Commit(*this, log, commit_id);
-	if (log) {
-		// commit any sequences that were used to the WAL
-		for (auto &entry : sequence_usage) {
-			log->WriteSequenceValue(entry.first, entry.second);
+	try {
+		// commit the undo buffer
+		undo_buffer.Commit(iterator_state, log, commit_id);
+		storage.Commit(commit_state, *this, log, commit_id);
+		if (log) {
+			// commit any sequences that were used to the WAL
+			for (auto &entry : sequence_usage) {
+				log->WriteSequenceValue(entry.first, entry.second);
+			}
+			// flush the WAL
+			if (changes_made) {
+				log->Flush();
+			}
 		}
-		// flush the WAL
-		if (changes_made) {
-			log->Flush();
+		return true;
+	} catch(Exception &ex) {
+		undo_buffer.RevertCommit(iterator_state, transaction_id);
+		storage.RevertCommit(commit_state);
+		if (log && changes_made) {
+			throw Exception("FIXME: flush undo into log");
+			// log->FlushUndo();
 		}
+		return false;
 	}
 }

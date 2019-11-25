@@ -35,6 +35,7 @@ public:
 
 public:
 	template <bool HAS_LOG> void CommitEntry(UndoFlags type, data_ptr_t data);
+	void RevertCommit(UndoFlags type, data_ptr_t data);
 
 private:
 	void SwitchTable(DataTable *table, UndoFlags new_op);

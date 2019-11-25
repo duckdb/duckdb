@@ -172,5 +172,39 @@ template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t
 	}
 }
 
+void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
+	transaction_t transaction_id = commit_id;
+	switch (type) {
+	case UndoFlags::CATALOG_ENTRY: {
+		// set the commit timestamp of the catalog entry to the given id
+		CatalogEntry *catalog_entry = *((CatalogEntry **)data);
+		assert(catalog_entry->parent);
+		catalog_entry->parent->timestamp = transaction_id;
+		break;
+	}
+	case UndoFlags::DELETE_TUPLE: {
+		// deletion:
+		auto info = (DeleteInfo *)data;
+		info->GetTable().cardinality += info->count;
+		// revert the commit by writing the (uncommitted) transaction_id back into the version info
+		info->vinfo->CommitDelete(transaction_id, info->rows, info->count);
+		break;
+	}
+	case UndoFlags::UPDATE_TUPLE: {
+		// update:
+		auto info = (UpdateInfo *)data;
+		info->version_number = transaction_id;
+		break;
+	}
+	case UndoFlags::QUERY: {
+		break;
+	}
+	case UndoFlags::DATA:
+		break;
+	default:
+		throw NotImplementedException("UndoBuffer - don't know how to revert commit of this type!");
+	}
+}
+
 template void CommitState::CommitEntry<true>(UndoFlags type, data_ptr_t data);
 template void CommitState::CommitEntry<false>(UndoFlags type, data_ptr_t data);

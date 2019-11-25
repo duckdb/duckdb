@@ -32,7 +32,9 @@ void TransactionContext::Commit() {
 		throw TransactionException("No transaction is currently active - cannot commit!");
 	}
 	current_transaction = nullptr;
-	transaction_manager.CommitTransaction(transaction);
+	if (!transaction_manager.CommitTransaction(transaction)) {
+		throw TransactionException("Failed to commit!");
+	}
 }
 
 void TransactionContext::Rollback() {

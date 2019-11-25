@@ -54,7 +54,8 @@ enum class ExceptionType {
 	OPTIMIZER = 26,       // optimizer related
 	NULL_POINTER = 27,    // nullptr exception
 	IO = 28,              // IO exception
-	INTERRUPT = 29        // interrupt
+	INTERRUPT = 29,       // interrupt
+	FATAL = 30   // Fatal exception: fatal exceptions are non-recoverable, and render the entire DB in an unusable state
 };
 
 class Exception : public std::exception {
@@ -165,6 +166,11 @@ public:
 class InterruptException : public Exception {
 public:
 	InterruptException();
+};
+
+class FatalException : public Exception {
+public:
+	FatalException(string msg, ...);
 };
 
 } // namespace duckdb

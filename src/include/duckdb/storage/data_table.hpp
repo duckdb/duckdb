@@ -88,6 +88,8 @@ public:
 	void InitializeAppend(TableAppendState &state);
 	//! Append a chunk to the table using the AppendState obtained from BeginAppend
 	void Append(Transaction &transaction, transaction_t commit_id, DataChunk &chunk, TableAppendState &state);
+	//! Revert a set of appends made by the given AppendState, used to revert appends in the event of an error during commit (e.g. because of an I/O exception)
+	void RevertAppend(TableAppendState &state);
 
 	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table, returns
 	//! whether or not the append succeeded

@@ -38,7 +38,7 @@ public:
 	//! Start a new transaction
 	Transaction *StartTransaction();
 	//! Commit the given transaction
-	void CommitTransaction(Transaction *transaction);
+	bool CommitTransaction(Transaction *transaction);
 	//! Rollback the given transaction
 	void RollbackTransaction(Transaction *transaction);
 	//! Add the catalog set
@@ -50,7 +50,7 @@ public:
 
 private:
 	//! Remove the given transaction from the list of active transactions
-	void RemoveTransaction(Transaction *transaction);
+	void RemoveTransaction(Transaction *transaction) noexcept;
 
 	//! The current query number
 	std::atomic<transaction_t> current_query_number;

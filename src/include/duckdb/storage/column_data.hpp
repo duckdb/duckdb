@@ -47,6 +47,8 @@ public:
 	void InitializeAppend(ColumnAppendState &state);
 	//! Append a vector of type [type] to the end of the column
 	void Append(ColumnAppendState &state, Vector &vector);
+	//! Revert a set of appends to the ColumnData
+	void RevertAppend(row_t start_row);
 
 	//! Update the specified row identifiers
 	void Update(Transaction &transaction, Vector &updates, row_t *ids);
@@ -55,7 +57,6 @@ public:
 	void Fetch(ColumnScanState &state, row_t row_id, Vector &result);
 	//! Fetch a specific row id and append it to the vector
 	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result);
-
 private:
 	//! Append a transient segment
 	void AppendTransientSegment(index_t start_row);

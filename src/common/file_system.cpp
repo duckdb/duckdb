@@ -259,7 +259,7 @@ string FileSystem::PathSeparator() {
 void FileSystem::FileSync(FileHandle &handle) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	if (fsync(fd) != 0) {
-		throw IOException("FATAL ERROR: fsync failed!");
+		throw FatalException("fsync failed!");
 	}
 }
 
