@@ -420,8 +420,8 @@ matrix:
         - build/release/test/unittest "*"
 
       after_success:
-        - (cd src/amalgamation; tar -cvzf ../../build/duckdb.tar.gz duckdb.*)
-        - python tools/upload-s3.py src-amalgamation build/duckdb.tar.gz
+        - (cd src/amalgamation; zip ../../build/duckdb.zip duckdb.*)
+        - python tools/upload-s3.py src-amalgamation build/duckdb.zip
 
 
     - os: windows
