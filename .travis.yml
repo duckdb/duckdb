@@ -244,7 +244,7 @@ matrix:
         - R -f dependencies.R
 
       install:
-        - ./prepare_sourcetree.sh
+        - ./configure
         - R CMD build .
         - R CMD INSTALL duckdb_*.tar.gz
 
@@ -270,7 +270,7 @@ matrix:
         - R -f dependencies.R
 
       install:
-        - ./prepare_sourcetree.sh
+        - ./configure
         - R CMD build .
         - R CMD INSTALL --build duckdb_*.tar.gz
         - R CMD INSTALL duckdb_*.tgz
@@ -299,7 +299,7 @@ matrix:
         - export "PATH=/c/Rtools/bin:$PATH"
         - cd tools/rpkg
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe -f dependencies.R
-        - sh prepare_sourcetree.sh
+        - sh configure
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD build .
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL --build --no-multiarch duckdb_*.tar.gz
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL duckdb_*.zip
@@ -423,6 +423,11 @@ matrix:
         - mkdir -p build/release
         - (cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest "*"
+
+      after_success:
+        - (cd src/amalgamation; zip ../../build/duckdb.zip duckdb.*)
+        - python tools/upload-s3.py src-amalgamation build/duckdb.zip
+
 
     - os: windows
       name: VS 2017 (Amalgamation)

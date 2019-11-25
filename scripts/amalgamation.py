@@ -13,7 +13,8 @@ pg_query_dir = os.path.join('third_party', 'libpg_query')
 pg_query_include_dir = os.path.join('third_party', 'libpg_query', 'include')
 
 # files included in the amalgamated "duckdb.hpp" file
-main_header_files = [os.path.join(include_dir, 'duckdb.hpp'), os.path.join(include_dir, 'duckdb.h')]
+main_header_files = [os.path.join(include_dir, 'duckdb.hpp'), os.path.join(include_dir, 'duckdb.h'), os.path.join(include_dir, 'duckdb', 'common', 'types', 'date.hpp'), os.path.join(include_dir, 'duckdb', 'common', 'types', 'timestamp.hpp')]
+
 # include paths for where to search for include files during amalgamation
 include_paths = [include_dir, hll_dir, re2_dir, miniz_dir, pg_query_include_dir, pg_query_dir]
 # paths of where to look for files to compile and include to the final amalgamation
@@ -25,6 +26,7 @@ excluded_files = ['grammar.cpp', 'grammar.hpp', 'symbols.cpp', 'file_system.cpp'
 excluded_compilation_files = excluded_files + ['gram.hpp', 'kwlist.hpp', "duckdb-c.cpp"]
 # where to cache which files have already been compiled, only used for --compile --resume
 cache_file = 'amalgamation.cache'
+
 
 linenumbers = False
 compile = False
