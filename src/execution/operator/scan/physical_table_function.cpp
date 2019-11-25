@@ -9,6 +9,15 @@
 using namespace duckdb;
 using namespace std;
 
+class PhysicalTableFunctionOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalTableFunctionOperatorState() : PhysicalOperatorState(nullptr), initialized(false) {
+	}
+
+	unique_ptr<FunctionData> function_data;
+	bool initialized;
+};
+
 void PhysicalTableFunction::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = (PhysicalTableFunctionOperatorState *)state_;
 	if (!state->initialized) {

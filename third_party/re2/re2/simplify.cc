@@ -187,8 +187,6 @@ Regexp* Regexp::Simplify() {
   return sre;
 }
 
-#define Simplify DontCallSimplify  // Avoid accidental recursion
-
 // Utility function for PostVisit implementations that compares re->sub() with
 // child_args to determine whether any child_args changed. In the common case,
 // where nothing changed, calls Decref() for all child_args and returns false,

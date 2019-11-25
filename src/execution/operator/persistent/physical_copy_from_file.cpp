@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/persistent/physical_copy_from_file.hpp"
+#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -11,6 +12,17 @@
 
 using namespace duckdb;
 using namespace std;
+
+class PhysicalCopyFromFileOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalCopyFromFileOperatorState();
+	~PhysicalCopyFromFileOperatorState();
+
+	//! The istream to read from
+	unique_ptr<std::istream> csv_stream;
+	//! The CSV reader
+	unique_ptr<BufferedCSVReader> csv_reader;
+};
 
 void PhysicalCopyFromFile::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto &state = (PhysicalCopyFromFileOperatorState &)*state_;

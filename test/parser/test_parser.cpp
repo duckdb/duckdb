@@ -46,6 +46,7 @@ TEST_CASE("Test parser", "[parser]") {
     }
 
     SECTION("Wrong pragma query") {
-        REQUIRE_THROWS(parser.ParseQuery("PRAGMA table_info;"));
+        parser.ParseQuery("PRAGMA table_info;");
+        REQUIRE(parser.statements.size() == 1);
     }
 }

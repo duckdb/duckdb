@@ -36,20 +36,4 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
-class PhysicalHashAggregateOperatorState : public PhysicalOperatorState {
-public:
-	PhysicalHashAggregateOperatorState(PhysicalHashAggregate *parent, PhysicalOperator *child);
-
-	//! Materialized GROUP BY expression
-	DataChunk group_chunk;
-	//! Materialized aggregates
-	DataChunk aggregate_chunk;
-	//! The current position to scan the HT for output tuples
-	index_t ht_scan_position;
-	index_t tuples_scanned;
-	//! The HT
-	unique_ptr<SuperLargeHashTable> ht;
-	//! The payload chunk, only used while filling the HT
-	DataChunk payload_chunk;
-};
 } // namespace duckdb

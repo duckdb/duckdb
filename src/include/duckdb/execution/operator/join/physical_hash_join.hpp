@@ -29,15 +29,4 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
-class PhysicalHashJoinOperatorState : public PhysicalOperatorState {
-public:
-	PhysicalHashJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right)
-	    : PhysicalOperatorState(left), initialized(false) {
-		assert(left && right);
-	}
-
-	bool initialized;
-	DataChunk join_keys;
-	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
-};
 } // namespace duckdb

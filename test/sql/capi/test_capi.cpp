@@ -329,7 +329,7 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 
 	status = duckdb_prepare(tester.connection, "SELECT CAST($1 AS BIGINT)", &stmt);
 	REQUIRE(status == DuckDBSuccess);
-	REQUIRE(stmt != NULL);
+	REQUIRE(stmt != nullptr);
 
 	status = duckdb_bind_boolean(stmt, 1, 1);
 	REQUIRE(status == DuckDBSuccess);
@@ -399,21 +399,21 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 
 	status = duckdb_prepare(tester.connection, "INSERT INTO a VALUES (?)", &stmt);
 	REQUIRE(status == DuckDBSuccess);
-	REQUIRE(stmt != NULL);
+	REQUIRE(stmt != nullptr);
 	index_t nparams;
 	REQUIRE(duckdb_nparams(stmt, &nparams) == DuckDBSuccess);
 	REQUIRE(nparams == 1);
 
 	for (int32_t i = 1; i <= 1000; i++) {
 		duckdb_bind_int32(stmt, 1, i);
-		status = duckdb_execute_prepared(stmt, NULL);
+		status = duckdb_execute_prepared(stmt, nullptr);
 		REQUIRE(status == DuckDBSuccess);
 	}
 	duckdb_destroy_prepare(&stmt);
 
 	status = duckdb_prepare(tester.connection, "SELECT SUM(i)*$1-$2 FROM a", &stmt);
 	REQUIRE(status == DuckDBSuccess);
-	REQUIRE(stmt != NULL);
+	REQUIRE(stmt != nullptr);
 	duckdb_bind_int32(stmt, 1, 2);
 	duckdb_bind_int32(stmt, 2, 1000);
 
@@ -430,7 +430,7 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 
 	status = duckdb_prepare(tester.connection, "SELECT CAST($1 AS INTEGER)", &stmt);
 	REQUIRE(status == DuckDBSuccess);
-	REQUIRE(stmt != NULL);
+	REQUIRE(stmt != nullptr);
 
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBError);

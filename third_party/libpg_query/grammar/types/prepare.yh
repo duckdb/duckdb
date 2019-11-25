@@ -1,0 +1,2 @@
+%type <list> prep_type_clause
+%type <node> PreparableStmt

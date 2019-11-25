@@ -9,6 +9,16 @@
 using namespace duckdb;
 using namespace std;
 
+class PhysicalOrderOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalOrderOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
+	}
+
+	index_t position;
+	ChunkCollection sorted_data;
+	unique_ptr<index_t[]> sorted_vector;
+};
+
 void PhysicalOrder::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_);
 	ChunkCollection &big_data = state->sorted_data;

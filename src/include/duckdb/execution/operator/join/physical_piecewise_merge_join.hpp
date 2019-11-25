@@ -27,24 +27,4 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
-class PhysicalPiecewiseMergeJoinOperatorState : public PhysicalOperatorState {
-public:
-	PhysicalPiecewiseMergeJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right)
-	    : PhysicalOperatorState(left), initialized(false), left_position(0), right_position(0), right_chunk_index(0),
-	      has_null(false) {
-		assert(left && right);
-	}
-
-	bool initialized;
-	index_t left_position;
-	index_t right_position;
-	index_t right_chunk_index;
-	DataChunk left_chunk;
-	DataChunk join_keys;
-	MergeOrder left_orders;
-	ChunkCollection right_chunks;
-	ChunkCollection right_conditions;
-	vector<MergeOrder> right_orders;
-	bool has_null;
-};
 } // namespace duckdb

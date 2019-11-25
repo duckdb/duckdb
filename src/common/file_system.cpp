@@ -81,15 +81,15 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	if (fd == -1) {
 		throw IOException("Cannot open file \"%s\": %s", path, strerror(errno));
 	}
-#if defined(__DARWIN__) || defined(__APPLE__)
-	if (flags & FileFlags::DIRECT_IO) {
-		// OSX requires fcntl for Direct IO
-		rc = fcntl(fd, F_NOCACHE, 1);
-		if (fd == -1) {
-			throw IOException("Could not enable direct IO for file \"%s\": %s", path, strerror(errno));
-		}
-	}
-#endif
+// #if defined(__DARWIN__) || defined(__APPLE__)
+// 	if (flags & FileFlags::DIRECT_IO) {
+// 		// OSX requires fcntl for Direct IO
+// 		rc = fcntl(fd, F_NOCACHE, 1);
+// 		if (fd == -1) {
+// 			throw IOException("Could not enable direct IO for file \"%s\": %s", path, strerror(errno));
+// 		}
+// 	}
+// #endif
 	if (lock_type != FileLockType::NO_LOCK) {
 		// set lock on file
 		struct flock fl;

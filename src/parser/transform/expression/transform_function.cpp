@@ -36,7 +36,7 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 	return ExpressionType::WINDOW_AGGREGATE;
 }
 
-void Transformer::TransformWindowDef(postgres::WindowDef *window_spec, WindowExpression *expr) {
+void Transformer::TransformWindowDef(PGWindowDef *window_spec, WindowExpression *expr) {
 	assert(window_spec);
 	assert(expr);
 
@@ -91,17 +91,17 @@ void Transformer::TransformWindowDef(postgres::WindowDef *window_spec, WindowExp
 	}
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformFuncCall(postgres::FuncCall *root) {
+unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 	auto name = root->funcname;
 	string schema, function_name;
 	if (name->length == 2) {
 		// schema + name
-		schema = reinterpret_cast<postgres::Value *>(name->head->data.ptr_value)->val.str;
-		function_name = reinterpret_cast<postgres::Value *>(name->head->next->data.ptr_value)->val.str;
+		schema = reinterpret_cast<PGValue *>(name->head->data.ptr_value)->val.str;
+		function_name = reinterpret_cast<PGValue *>(name->head->next->data.ptr_value)->val.str;
 	} else {
 		// unqualified name
 		schema = DEFAULT_SCHEMA;
-		function_name = reinterpret_cast<postgres::Value *>(name->head->data.ptr_value)->val.str;
+		function_name = reinterpret_cast<PGValue *>(name->head->data.ptr_value)->val.str;
 	}
 
 	auto lowercase_name = StringUtil::Lower(function_name);
@@ -140,7 +140,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(postgres::FuncCall *
 				assert(function_list.size() <= 3);
 			}
 		}
-		auto window_spec = reinterpret_cast<postgres::WindowDef *>(root->over);
+		auto window_spec = reinterpret_cast<PGWindowDef *>(root->over);
 
 		if (window_spec->name) {
 			auto it = window_clauses.find(StringUtil::Lower(string(window_spec->name)));
@@ -158,7 +158,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(postgres::FuncCall *
 	vector<unique_ptr<ParsedExpression>> children;
 	if (root->args != nullptr) {
 		for (auto node = root->args->head; node != nullptr; node = node->next) {
-			auto child_expr = TransformExpression((postgres::Node *)node->data.ptr_value);
+			auto child_expr = TransformExpression((PGNode *)node->data.ptr_value);
 			children.push_back(move(child_expr));
 		}
 	}
@@ -166,44 +166,44 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(postgres::FuncCall *
 	return make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children, root->agg_distinct);
 }
 
-static string SQLValueOpToString(postgres::SQLValueFunctionOp op) {
+static string SQLValueOpToString(PGSQLValueFunctionOp op) {
 	switch (op) {
-	case postgres::SVFOP_CURRENT_DATE:
+	case PG_SVFOP_CURRENT_DATE:
 		return "current_date";
-	case postgres::SVFOP_CURRENT_TIME:
+	case PG_SVFOP_CURRENT_TIME:
 		return "current_time";
-	case postgres::SVFOP_CURRENT_TIME_N:
+	case PG_SVFOP_CURRENT_TIME_N:
 		return "current_time_n";
-	case postgres::SVFOP_CURRENT_TIMESTAMP:
+	case PG_SVFOP_CURRENT_TIMESTAMP:
 		return "current_timestamp";
-	case postgres::SVFOP_CURRENT_TIMESTAMP_N:
+	case PG_SVFOP_CURRENT_TIMESTAMP_N:
 		return "current_timestamp_n";
-	case postgres::SVFOP_LOCALTIME:
+	case PG_SVFOP_LOCALTIME:
 		return "current_localtime";
-	case postgres::SVFOP_LOCALTIME_N:
+	case PG_SVFOP_LOCALTIME_N:
 		return "current_localtime_n";
-	case postgres::SVFOP_LOCALTIMESTAMP:
+	case PG_SVFOP_LOCALTIMESTAMP:
 		return "current_localtimestamp";
-	case postgres::SVFOP_LOCALTIMESTAMP_N:
+	case PG_SVFOP_LOCALTIMESTAMP_N:
 		return "current_localtimestamp_n";
-	case postgres::SVFOP_CURRENT_ROLE:
+	case PG_SVFOP_CURRENT_ROLE:
 		return "current_role";
-	case postgres::SVFOP_CURRENT_USER:
+	case PG_SVFOP_CURRENT_USER:
 		return "current_user";
-	case postgres::SVFOP_USER:
+	case PG_SVFOP_USER:
 		return "user";
-	case postgres::SVFOP_SESSION_USER:
+	case PG_SVFOP_SESSION_USER:
 		return "session_user";
-	case postgres::SVFOP_CURRENT_CATALOG:
+	case PG_SVFOP_CURRENT_CATALOG:
 		return "current_catalog";
-	case postgres::SVFOP_CURRENT_SCHEMA:
+	case PG_SVFOP_CURRENT_SCHEMA:
 		return "current_schema";
 	default:
 		throw Exception("Could not find named SQL value function specification " + to_string((int)op));
 	}
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformSQLValueFunction(postgres::SQLValueFunction *node) {
+unique_ptr<ParsedExpression> Transformer::TransformSQLValueFunction(PGSQLValueFunction *node) {
 	if (!node) {
 		return nullptr;
 	}

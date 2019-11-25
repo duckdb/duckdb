@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 
 namespace duckdb {

@@ -7,6 +7,27 @@
 using namespace duckdb;
 using namespace std;
 
+class PhysicalPiecewiseMergeJoinOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalPiecewiseMergeJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right)
+	    : PhysicalOperatorState(left), initialized(false), left_position(0), right_position(0), right_chunk_index(0),
+	      has_null(false) {
+		assert(left && right);
+	}
+
+	bool initialized;
+	index_t left_position;
+	index_t right_position;
+	index_t right_chunk_index;
+	DataChunk left_chunk;
+	DataChunk join_keys;
+	MergeOrder left_orders;
+	ChunkCollection right_chunks;
+	ChunkCollection right_conditions;
+	vector<MergeOrder> right_orders;
+	bool has_null;
+};
+
 PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                                        unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond,
                                                        JoinType join_type)

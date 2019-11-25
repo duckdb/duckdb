@@ -4,7 +4,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<TableRef> Transformer::TransformRangeVar(postgres::RangeVar *root) {
+unique_ptr<TableRef> Transformer::TransformRangeVar(PGRangeVar *root) {
 	auto result = make_unique<BaseTableRef>();
 
 	result->alias = TransformAlias(root->alias);

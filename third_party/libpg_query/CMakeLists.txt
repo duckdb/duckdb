@@ -7,14 +7,14 @@ set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 add_library(pg_query STATIC
             postgres_parser.cpp
             pg_functions.cpp
-            src_backend_parser_parser.c
-            src_backend_parser_gram.c
-            src_backend_nodes_list.c
-            src_backend_parser_scansup.c
-            src_backend_nodes_makefuncs.c
-            src_backend_nodes_value.c
-            src_backend_parser_scan.c
-            src_common_keywords.c)
+            src_backend_parser_parser.cpp
+            src_backend_parser_gram.cpp
+            src_backend_nodes_list.cpp
+            src_backend_parser_scansup.cpp
+            src_backend_nodes_makefuncs.cpp
+            src_backend_nodes_value.cpp
+            src_backend_parser_scan.cpp
+            src_common_keywords.cpp)
 
 target_include_directories(pg_query PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
@@ -33,5 +33,4 @@ if(NOT MSVC)
                                    "-Wno-unused-function -Wno-unused-variable")
 endif()
 
-set_target_properties(pg_query PROPERTIES LINKER_LANGUAGE C)
 set_target_properties(pg_query PROPERTIES POSITION_INDEPENDENT_CODE ON)

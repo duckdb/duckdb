@@ -6,8 +6,8 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<PrepareStatement> Transformer::TransformPrepare(postgres::Node *node) {
-	auto stmt = reinterpret_cast<postgres::PrepareStmt *>(node);
+unique_ptr<PrepareStatement> Transformer::TransformPrepare(PGNode *node) {
+	auto stmt = reinterpret_cast<PGPrepareStmt *>(node);
 	assert(stmt);
 
 	if (stmt->argtypes && stmt->argtypes->length > 0) {
@@ -21,8 +21,8 @@ unique_ptr<PrepareStatement> Transformer::TransformPrepare(postgres::Node *node)
 	return result;
 }
 
-unique_ptr<ExecuteStatement> Transformer::TransformExecute(postgres::Node *node) {
-	auto stmt = reinterpret_cast<postgres::ExecuteStmt *>(node);
+unique_ptr<ExecuteStatement> Transformer::TransformExecute(PGNode *node) {
+	auto stmt = reinterpret_cast<PGExecuteStmt *>(node);
 	assert(stmt);
 
 	auto result = make_unique<ExecuteStatement>();
@@ -39,8 +39,8 @@ unique_ptr<ExecuteStatement> Transformer::TransformExecute(postgres::Node *node)
 	return result;
 }
 
-unique_ptr<DeallocateStatement> Transformer::TransformDeallocate(postgres::Node *node) {
-	auto stmt = reinterpret_cast<postgres::DeallocateStmt *>(node);
+unique_ptr<DeallocateStatement> Transformer::TransformDeallocate(PGNode *node) {
+	auto stmt = reinterpret_cast<PGDeallocateStmt *>(node);
 	assert(stmt);
 
 	// TODO empty name means all are removed

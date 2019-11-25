@@ -32,6 +32,7 @@ enum class StatementType : uint8_t {
 	CREATE_FUNC,  // create func statement type
 	EXPLAIN,      // explain statement type
 	DROP,         // DROP statement type
+	PRAGMA,       // PRAGMA statement type
 
 	// -----------------------------
 	// Create Types

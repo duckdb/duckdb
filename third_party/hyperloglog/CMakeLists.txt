@@ -1,5 +1,5 @@
 cmake_policy(SET CMP0063 NEW)
-add_library(hyperloglog STATIC hyperloglog.c sds.c)
+add_library(hyperloglog STATIC hyperloglog.cpp sds.cpp)
 
 target_include_directories(hyperloglog PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)

@@ -29,13 +29,4 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
-class PhysicalOrderOperatorState : public PhysicalOperatorState {
-public:
-	PhysicalOrderOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
-	}
-
-	index_t position;
-	ChunkCollection sorted_data;
-	unique_ptr<index_t[]> sorted_vector;
-};
 } // namespace duckdb

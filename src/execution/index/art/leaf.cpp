@@ -1,6 +1,9 @@
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 
+using namespace duckdb;
+using namespace std;
+
 Leaf::Leaf(ART &art, unique_ptr<Key> value, row_t row_id) : Node(art, NodeType::NLeaf) {
 	this->value = move(value);
 	this->capacity = 1;

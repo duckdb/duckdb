@@ -36,5 +36,7 @@ private:
 	void VerifyQuery(BoundSQLStatement &statement);
 	void VerifyNode(BoundQueryNode &statement);
 	void VerifyExpression(Expression &expr, vector<unique_ptr<Expression>> &copies);
+
+	void HandlePragmaStatement(PragmaStatement &statement);
 };
 } // namespace duckdb

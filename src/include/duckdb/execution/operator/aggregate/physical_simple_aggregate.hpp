@@ -27,13 +27,4 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
-class PhysicalSimpleAggregateOperatorState : public PhysicalOperatorState {
-public:
-	PhysicalSimpleAggregateOperatorState(PhysicalSimpleAggregate *parent, PhysicalOperator *child);
-
-	//! The aggregate values
-	vector<Value> aggregates;
-	//! The payload chunk
-	DataChunk payload_chunk;
-};
 } // namespace duckdb

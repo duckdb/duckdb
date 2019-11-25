@@ -19,8 +19,8 @@ static IndexType StringToIndexType(const string &str) {
 	return IndexType::INVALID;
 }
 
-unique_ptr<CreateIndexStatement> Transformer::TransformCreateIndex(postgres::Node *node) {
-	auto stmt = reinterpret_cast<postgres::IndexStmt *>(node);
+unique_ptr<CreateIndexStatement> Transformer::TransformCreateIndex(PGNode *node) {
+	auto stmt = reinterpret_cast<PGIndexStmt *>(node);
 	assert(stmt);
 	auto result = make_unique<CreateIndexStatement>();
 	auto &info = *result->info.get();
@@ -29,7 +29,7 @@ unique_ptr<CreateIndexStatement> Transformer::TransformCreateIndex(postgres::Nod
 	info.if_not_exists = stmt->if_not_exists;
 
 	for (auto cell = stmt->indexParams->head; cell != nullptr; cell = cell->next) {
-		auto index_element = (postgres::IndexElem *)cell->data.ptr_value;
+		auto index_element = (PGIndexElem *)cell->data.ptr_value;
 		if (index_element->collation) {
 			throw NotImplementedException("Index with collation not supported yet!");
 		}

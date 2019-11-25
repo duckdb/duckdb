@@ -11,6 +11,7 @@
 #include "duckdb/transaction/undo_buffer.hpp"
 
 namespace duckdb {
+class CatalogEntry;
 class DataChunk;
 class DataTable;
 class WriteAheadLog;

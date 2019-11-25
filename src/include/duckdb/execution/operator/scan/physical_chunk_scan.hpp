@@ -30,12 +30,4 @@ public:
 	unique_ptr<ChunkCollection> owned_collection;
 };
 
-class PhysicalChunkScanState : public PhysicalOperatorState {
-public:
-	PhysicalChunkScanState() : PhysicalOperatorState(nullptr), chunk_index(0) {
-	}
-
-	//! The current position in the scan
-	index_t chunk_index;
-};
 } // namespace duckdb

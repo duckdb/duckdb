@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/bound_sql_statement.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 

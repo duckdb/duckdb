@@ -6,7 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<ParsedExpression> Transformer::TransformTypeCast(postgres::TypeCast *root) {
+unique_ptr<ParsedExpression> Transformer::TransformTypeCast(PGTypeCast *root) {
 	if (!root) {
 		return nullptr;
 	}

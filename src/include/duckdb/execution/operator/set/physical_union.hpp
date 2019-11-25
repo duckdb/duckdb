@@ -20,13 +20,4 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
-class PhysicalUnionOperatorState : public PhysicalOperatorState {
-public:
-	PhysicalUnionOperatorState() : PhysicalOperatorState(nullptr), top_done(false) {
-	}
-	unique_ptr<PhysicalOperatorState> top_state;
-	unique_ptr<PhysicalOperatorState> bottom_state;
-	bool top_done = false;
-};
-
 }; // namespace duckdb

@@ -1,0 +1,116 @@
+%type <node>	select_no_parens select_with_parens select_clause
+				simple_select values_clause
+
+
+%type <sortorder> opt_asc_desc
+%type <nullorder> opt_nulls_order
+
+%type <node> opt_collate_clause
+
+
+
+
+%type <lockwaitpolicy>	opt_nowait_or_skip
+
+%type <str>	 			 attr_name
+				name
+%type <list>	func_name qual_Op qual_all_Op subquery_Op
+
+%type <range>	qualified_name
+%type <str>		all_Op
+%type <conststr> MathOp
+
+
+%type <list>	distinct_clause opt_all_clause 			 			 			 			 			 			 opt_name_list
+				sort_clause opt_sort_clause sortby_list 				name_list from_clause from_list opt_array_bounds
+				qualified_name_list any_name 				any_operator expr_list attrs
+				target_list opt_target_list 			 			 indirection opt_indirection
+			 group_clause select_limit
+				opt_select_limit 			 			 TableFuncElementList opt_type_modifiers
+%type <list>	group_by_list
+%type <node>	group_by_item empty_grouping_set
+%type <range>	OptTempTableName
+%type <into>	into_clause
+
+
+
+%type <lockstrength>	for_locking_strength
+%type <node>	for_locking_item
+%type <list>	for_locking_clause opt_for_locking_clause for_locking_items
+%type <list>	locked_rels_list
+%type <boolean>	all_or_distinct
+
+%type <node>	join_outer join_qual
+%type <jtype>	join_type
+
+%type <list>	extract_list overlay_list position_list
+%type <list>	substr_list trim_list
+%type <list>	opt_interval interval_second
+%type <node>	overlay_placing substr_from substr_for
+
+
+%type <node> limit_clause select_limit_value
+				offset_clause select_offset_value
+				select_fetch_first_value I_or_F_const
+%type <ival>	row_or_rows first_or_next
+
+
+
+%type <node> TableFuncElement
+
+
+%type <node> where_clause 				a_expr b_expr c_expr AexprConst indirection_el opt_slice_bound
+				columnref in_expr having_clause func_table
+%type <list>	rowsfrom_item rowsfrom_list opt_col_def_list
+%type <boolean> opt_ordinality
+%type <list>	func_arg_list
+%type <node>	func_arg_expr
+%type <list>	row type_list
+%type <node>	case_expr case_arg when_clause case_default
+%type <list>	when_clause_list
+%type <subquerytype>	sub_type
+
+%type <alias>	alias_clause opt_alias_clause
+%type <list>	func_alias_clause
+%type <sortby>	sortby
+
+%type <node>	table_ref
+%type <jexpr>	joined_table
+%type <range>	relation_expr
+
+%type <node>	tablesample_clause opt_repeatable_clause
+%type <target>	target_el
+
+
+
+%type <typnam>	Typename SimpleTypename ConstTypename
+				GenericType Numeric opt_float
+				Character ConstCharacter
+				CharacterWithLength CharacterWithoutLength
+				ConstDatetime ConstInterval
+				Bit ConstBit BitWithLength BitWithoutLength
+%type <conststr>		character
+%type <str>		extract_arg
+%type <boolean> opt_varying opt_timezone
+%type <ival>	Iconst
+%type <str>		Sconst
+%type <str>		ColId ColLabel type_function_name param_name
+
+%type <keyword> unreserved_keyword type_func_name_keyword
+%type <keyword> col_name_keyword reserved_keyword
+
+
+
+
+%type <node>	func_application func_expr_common_subexpr
+%type <node>	func_expr func_expr_windowless
+%type <node>	common_table_expr
+%type <with>	with_clause
+%type <list>	cte_list
+
+%type <list>	within_group_clause
+%type <node>	filter_clause
+%type <list>	window_clause window_definition_list opt_partition_clause
+%type <windef>	window_definition over_clause window_specification
+				opt_frame_clause frame_extent frame_bound
+%type <str>		opt_existing_window_name

@@ -1,5 +1,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -10,18 +12,15 @@ BoundAggregateExpression::BoundAggregateExpression(TypeId return_type, Aggregate
 }
 
 string BoundAggregateExpression::ToString() const {
-	string str = function.name + "(";
+	string result = function.name + "(";
 	if (distinct) {
-		str += "DISTINCT ";
+		result += "DISTINCT ";
 	}
-	for (index_t i = 0; i < children.size(); i++) {
-		if (i > 0) {
-			str += ", ";
-		}
-		str += children[i]->GetName();
-	}
-	str += ")";
-	return str;
+	StringUtil::Join(children, children.size(), ", ", [](const unique_ptr<Expression>& child){
+		return child->GetName();
+	});
+	result += ")";
+	return result;
 }
 uint64_t BoundAggregateExpression::Hash() const {
 	uint64_t result = Expression::Hash();

@@ -16,6 +16,7 @@
 #include "duckdb/common/enums/profiler_format.hpp"
 
 #include <stack>
+#include <unordered_map>
 
 namespace duckdb {
 class PhysicalOperator;
@@ -105,8 +106,13 @@ private:
 	//! The timer used to time the individual phases of the planning process
 	Profiler phase_profiler;
 	//! A mapping of the phase names to the timings
-	unordered_map<string, double> phase_timings;
+	using PhaseTimingStorage = unordered_map<string, double>;
+	PhaseTimingStorage phase_timings;
+	using PhaseTimingItem = PhaseTimingStorage::value_type;
 	//! The stack of currently active phases
 	vector<string> phase_stack;
+
+private:
+	vector<PhaseTimingItem> GetOrderedPhaseTimings() const;
 };
 } // namespace duckdb

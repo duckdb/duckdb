@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-#include "node.hpp"
+#include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {
 
