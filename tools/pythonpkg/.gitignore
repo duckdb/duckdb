@@ -6,3 +6,5 @@ build
 src/duckdb
 /src/
 /duckdb_tarball/
+duckdb.cpp
+duckdb.hpp

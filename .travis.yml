@@ -126,6 +126,9 @@ matrix:
         - mkdir -p build/release
         - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest "*"
+        - (cd examples/embedded-c; make)
+        - (cd examples/embedded-c++; make)
+        - (cd examples/programmatic-querying; make)
 
       after_success:
         - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a
@@ -247,6 +250,8 @@ matrix:
 
       script:
         - (cd tests && R -f testthat.R)
+        - R -f ../../examples/R/dbi.R 
+        - R -f ../../examples/R/dplyr.R 
 
       after_success:
         - python ../upload-s3.py rstats duckdb_*.tar.gz
