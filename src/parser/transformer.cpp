@@ -58,6 +58,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(PGNode *stmt) {
 		return TransformDeallocate(stmt);
 	case T_PGCreateTableAsStmt:
 		return TransformCreateTableAs(stmt);
+	case T_PGPragmaStmt:
+		return TransformPragma(stmt);
 	case T_PGExplainStmt: {
 		PGExplainStmt *explain_stmt = reinterpret_cast<PGExplainStmt *>(stmt);
 		return make_unique<ExplainStatement>(TransformStatement(explain_stmt->query));
@@ -65,8 +67,6 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(PGNode *stmt) {
 	case T_PGVacuumStmt: { // Ignore VACUUM/ANALYZE for now
 		return nullptr;
 	}
-	case T_PGPragmaStmt:
-		return TransformPragma(stmt);
 	default:
 		throw NotImplementedException(NodetypeToString(stmt->type));
 	}

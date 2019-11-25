@@ -13,6 +13,17 @@
 using namespace duckdb;
 using namespace std;
 
+//! The operator state of the window
+class PhysicalWindowOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalWindowOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
+	}
+
+	index_t position;
+	ChunkCollection tuples;
+	ChunkCollection window_results;
+};
+
 // this implements a sorted window functions variant
 PhysicalWindow::PhysicalWindow(LogicalOperator &op, vector<unique_ptr<Expression>> select_list,
                                PhysicalOperatorType type)

@@ -8,6 +8,16 @@
 using namespace duckdb;
 using namespace std;
 
+class PhysicalSimpleAggregateOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalSimpleAggregateOperatorState(PhysicalSimpleAggregate *parent, PhysicalOperator *child);
+
+	//! The aggregate values
+	vector<Value> aggregates;
+	//! The payload chunk
+	DataChunk payload_chunk;
+};
+
 PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions)
     : PhysicalOperator(PhysicalOperatorType::SIMPLE_AGGREGATE, types), aggregates(move(expressions)) {
 }

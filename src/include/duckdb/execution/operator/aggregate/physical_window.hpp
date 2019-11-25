@@ -28,15 +28,4 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
-//! The operator state of the window
-class PhysicalWindowOperatorState : public PhysicalOperatorState {
-public:
-	PhysicalWindowOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
-	}
-
-	index_t position;
-	ChunkCollection tuples;
-	ChunkCollection window_results;
-};
-
 } // namespace duckdb

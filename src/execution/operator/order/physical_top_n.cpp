@@ -9,6 +9,17 @@
 using namespace duckdb;
 using namespace std;
 
+class PhysicalTopNOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalTopNOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
+	}
+
+	index_t position;
+	index_t current_offset;
+	ChunkCollection sorted_data;
+	unique_ptr<index_t[]> heap;
+};
+
 void PhysicalTopN::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalTopNOperatorState *>(state_);
 	ChunkCollection &big_data = state->sorted_data;

@@ -3,6 +3,15 @@
 using namespace duckdb;
 using namespace std;
 
+class PhysicalChunkScanState : public PhysicalOperatorState {
+public:
+	PhysicalChunkScanState() : PhysicalOperatorState(nullptr), chunk_index(0) {
+	}
+
+	//! The current position in the scan
+	index_t chunk_index;
+};
+
 void PhysicalChunkScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = (PhysicalChunkScanState *)state_;
 	assert(collection);

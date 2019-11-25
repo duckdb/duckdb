@@ -33,13 +33,4 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
-class PhysicalTableFunctionOperatorState : public PhysicalOperatorState {
-public:
-	PhysicalTableFunctionOperatorState() : PhysicalOperatorState(nullptr), initialized(false) {
-	}
-
-	unique_ptr<FunctionData> function_data;
-	bool initialized;
-};
-
 } // namespace duckdb

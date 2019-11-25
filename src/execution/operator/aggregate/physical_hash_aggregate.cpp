@@ -9,6 +9,23 @@
 using namespace duckdb;
 using namespace std;
 
+class PhysicalHashAggregateOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalHashAggregateOperatorState(PhysicalHashAggregate *parent, PhysicalOperator *child);
+
+	//! Materialized GROUP BY expression
+	DataChunk group_chunk;
+	//! Materialized aggregates
+	DataChunk aggregate_chunk;
+	//! The current position to scan the HT for output tuples
+	index_t ht_scan_position;
+	index_t tuples_scanned;
+	//! The HT
+	unique_ptr<SuperLargeHashTable> ht;
+	//! The payload chunk, only used while filling the HT
+	DataChunk payload_chunk;
+};
+
 PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
                                              PhysicalOperatorType type)
     : PhysicalHashAggregate(types, move(expressions), {}, type) {

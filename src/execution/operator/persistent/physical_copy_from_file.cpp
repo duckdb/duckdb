@@ -13,6 +13,17 @@
 using namespace duckdb;
 using namespace std;
 
+class PhysicalCopyFromFileOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalCopyFromFileOperatorState();
+	~PhysicalCopyFromFileOperatorState();
+
+	//! The istream to read from
+	unique_ptr<std::istream> csv_stream;
+	//! The CSV reader
+	unique_ptr<BufferedCSVReader> csv_reader;
+};
+
 void PhysicalCopyFromFile::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto &state = (PhysicalCopyFromFileOperatorState &)*state_;
 	auto &info = *this->info;

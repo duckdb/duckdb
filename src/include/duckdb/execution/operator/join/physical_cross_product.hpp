@@ -23,15 +23,4 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
-class PhysicalCrossProductOperatorState : public PhysicalOperatorState {
-public:
-	PhysicalCrossProductOperatorState(PhysicalOperator *left, PhysicalOperator *right)
-	    : PhysicalOperatorState(left), left_position(0) {
-		assert(left && right);
-	}
-
-	index_t left_position;
-	index_t right_position;
-	ChunkCollection right_data;
-};
 } // namespace duckdb

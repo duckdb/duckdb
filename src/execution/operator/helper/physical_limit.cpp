@@ -3,6 +3,15 @@
 using namespace duckdb;
 using namespace std;
 
+class PhysicalLimitOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalLimitOperatorState(PhysicalOperator *child, index_t current_offset = 0)
+	    : PhysicalOperatorState(child), current_offset(current_offset) {
+	}
+
+	index_t current_offset;
+};
+
 void PhysicalLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalLimitOperatorState *>(state_);
 

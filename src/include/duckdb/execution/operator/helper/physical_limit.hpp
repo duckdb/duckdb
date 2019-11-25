@@ -28,12 +28,4 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
-class PhysicalLimitOperatorState : public PhysicalOperatorState {
-public:
-	PhysicalLimitOperatorState(PhysicalOperator *child, index_t current_offset = 0)
-	    : PhysicalOperatorState(child), current_offset(current_offset) {
-	}
-
-	index_t current_offset;
-};
 } // namespace duckdb

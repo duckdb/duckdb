@@ -32,21 +32,4 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
-class PhysicalNestedLoopJoinOperatorState : public PhysicalOperatorState {
-public:
-	PhysicalNestedLoopJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right)
-	    : PhysicalOperatorState(left), right_chunk(0), has_null(false), left_tuple(0), right_tuple(0) {
-		assert(left && right);
-	}
-
-	index_t right_chunk;
-	DataChunk left_join_condition;
-	ChunkCollection right_data;
-	ChunkCollection right_chunks;
-	//! Whether or not the RHS of the nested loop join has NULL values
-	bool has_null;
-
-	index_t left_tuple;
-	index_t right_tuple;
-};
 } // namespace duckdb

@@ -6,6 +6,14 @@
 using namespace duckdb;
 using namespace std;
 
+class PhysicalDelimJoinState : public PhysicalOperatorState {
+public:
+	PhysicalDelimJoinState(PhysicalOperator *left) : PhysicalOperatorState(left) {
+	}
+
+	unique_ptr<PhysicalOperatorState> join_state;
+};
+
 PhysicalDelimJoin::PhysicalDelimJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> original_join,
                                      vector<PhysicalOperator *> delim_scans)
     : PhysicalOperator(PhysicalOperatorType::DELIM_JOIN, op.types), join(move(original_join)) {
