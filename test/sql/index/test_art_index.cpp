@@ -1276,13 +1276,6 @@ TEST_CASE("ART Floating Point", "[art-float][.]") {
     }
     REQUIRE_NO_FAIL(con.Query("COMMIT"));
     REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
-    //! Check if all elements are in
-//    for (index_t i = 0; i < n; i++) {
-//        answer = full_scan_float(keys.get(),n,keys[i],keys[i]);
-//        result = con.Query("SELECT COUNT(i) FROM numbers WHERE i = CAST("+ to_string(keys[i])+ " AS REAL)");
-//        REQUIRE(CHECK_COLUMN(result, 0, {answer}));
-//    }
-
     //! Generate 500 small-small range queries
     for (index_t i = 0; i < 500; i++) {
         aux = generate_small_float();
@@ -1356,7 +1349,7 @@ TEST_CASE("ART Floating Point Double", "[art-double][.]") {
         low = min(aux,high);
         high = max(aux,high);
         answer = full_scan_double(keys.get(),n,low,high);
-        result = con.Query("SELECT COUNT(i) FROM numbers WHERE i >= CAST("+ to_string(low)+ " AS REAL) and i <= CAST("+ to_string(high)+ " AS REAL)");
+        result = con.Query("SELECT COUNT(i) FROM numbers WHERE i >= CAST("+ to_string(low)+ " AS DOUBLE) and i <= CAST("+ to_string(high)+ " AS DOUBLE)");
         REQUIRE(CHECK_COLUMN(result, 0, {answer}));
     }
     //! Generate 500 small-normal range queries
@@ -1366,7 +1359,7 @@ TEST_CASE("ART Floating Point Double", "[art-double][.]") {
         low = min(aux,high);
         high = max(aux,high);
         answer = full_scan_double(keys.get(),n,low,high);
-        result = con.Query("SELECT COUNT(i) FROM numbers WHERE i >= CAST("+ to_string(low)+ " AS REAL) and i <= CAST("+ to_string(high)+ " AS REAL)");
+        result = con.Query("SELECT COUNT(i) FROM numbers WHERE i >= CAST("+ to_string(low)+ " AS DOUBLE) and i <= CAST("+ to_string(high)+ " AS DOUBLE)");
         REQUIRE(CHECK_COLUMN(result, 0, {answer}));
     }
     //! Generate 500 normal-normal range queries
@@ -1376,7 +1369,7 @@ TEST_CASE("ART Floating Point Double", "[art-double][.]") {
         low = min(aux,high);
         high = max(aux,high);
         answer = full_scan_double(keys.get(),n,low,high);
-        result = con.Query("SELECT COUNT(i) FROM numbers WHERE i >= CAST("+ to_string(low)+ " AS REAL) and i <= CAST("+ to_string(high)+ " AS REAL)");
+        result = con.Query("SELECT COUNT(i) FROM numbers WHERE i >= CAST("+ to_string(low)+ " AS DOUBLE) and i <= CAST("+ to_string(high)+ " AS DOUBLE)");
         REQUIRE(CHECK_COLUMN(result, 0, {answer}));
     }
 
