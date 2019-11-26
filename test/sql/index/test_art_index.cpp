@@ -1238,6 +1238,7 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
 }
 
 TEST_CASE("ART Floating Point", "[art-float][.]") {
+    srand(1);
     unique_ptr<QueryResult> result;
     DuckDB db(nullptr);
     float low,high, aux;
@@ -1304,6 +1305,7 @@ TEST_CASE("ART Floating Point", "[art-float][.]") {
 }
 
 TEST_CASE("ART Floating Point Double", "[art-double][.]") {
+    srand(1);
     unique_ptr<QueryResult> result;
     DuckDB db(nullptr);
     double low,high, aux;
