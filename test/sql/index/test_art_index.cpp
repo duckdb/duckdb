@@ -1136,12 +1136,6 @@ TEST_CASE("ART Floating Point Small", "[art-float-small]") {
     }
     REQUIRE_NO_FAIL(con.Query("COMMIT"));
     REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
-    //! Check if all elements are in
-    for (index_t i = 0; i < n; i++) {
-        answer = full_scan_float(keys.get(),n,keys[i],keys[i]);
-        result = con.Query("SELECT COUNT(i) FROM numbers WHERE i = CAST("+ to_string(keys[i])+ " AS REAL)");
-        REQUIRE(CHECK_COLUMN(result, 0, {answer}));
-    }
     //! Generate 5 small-small range queries
     for (index_t i = 0; i < 5; i++) {
         aux = generate_small_float();
@@ -1207,8 +1201,6 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
     }
     REQUIRE_NO_FAIL(con.Query("COMMIT"));
     REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
-    //! Check if all elements are in
-
     //! Generate 5 small-small range queries
 
     for (index_t i = 0; i < 5; i++) {
@@ -1337,7 +1329,7 @@ TEST_CASE("ART Floating Point Double", "[art-double][.]") {
     //! Insert values and create index
     REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
     for (index_t i = 0; i < n; i++) {
-        REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES ($1)", keys[i]));
+        REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (CAST("+ to_string(keys[i])+ " AS DOUBLE))"));
     }
     REQUIRE_NO_FAIL(con.Query("COMMIT"));
     REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
