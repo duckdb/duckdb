@@ -1,3 +1,4 @@
+#include <cfloat>
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 
@@ -19,6 +20,93 @@ using namespace duckdb;
 static uint8_t FlipSign(uint8_t key_byte) {
 	return key_byte ^ 128;
 }
+
+uint32_t EncodeFloat(float x)
+{
+    unsigned long buff;
+    int expbits = 8;
+
+    //! zero
+    if (x == 0)
+    {
+        buff = 0;
+        return buff;
+    }
+    //! infinity
+    if (x > FLT_MAX)
+    {
+        buff = 128 + ((1 << (expbits - 1)) - 1);
+        buff <<= (31 - expbits);
+        return buff;
+    }
+    //! -infinity
+    if (x < -FLT_MAX)
+    {
+        buff = 128 + ((1 << (expbits - 1)) - 1);
+        buff <<= (31 - expbits);
+        buff |= (1 << 31);
+        return buff;
+    }
+    //! NaN
+    if (x != x)
+    {
+        buff = 128 + ((1 << (expbits - 1)) - 1);
+        buff <<= (31 - expbits);
+        buff |= 1234;
+        return buff;
+    }
+    return x;
+}
+
+
+uint64_t EncodeDouble(double x) {
+    unsigned long hilong, lowlong;
+    int expbits = 11;
+    uint64_t buff;
+
+    //! zero
+    if (x == 0)
+    {
+        buff = 0;
+        return buff;
+    }
+    //! infinity
+    if (x > DBL_MAX)
+    {
+        hilong = 1024 + ((1 << (expbits - 1)) - 1);
+        hilong <<= (31 - expbits);
+        lowlong = 0;
+        buff = hilong;
+        buff <<=32;
+        buff += lowlong;
+        return buff;
+    }
+    //! -infinity
+    if (x < -DBL_MAX)
+    {
+        hilong = 1024 + ((1 << (expbits - 1)) - 1);
+        hilong <<= (31 - expbits);
+        hilong |= (1 << 31);
+        lowlong = 0;
+        buff = hilong;
+        buff <<=32;
+        buff += lowlong;
+        return buff;
+    }
+    //! NaN
+    if (x != x)
+    {
+        hilong = 1024 + ((1 << (expbits - 1)) - 1);
+        hilong <<= (31 - expbits);
+        lowlong = 1234;
+        buff = hilong;
+        buff <<=32;
+        buff += lowlong;
+        return buff;
+    }
+    return x;
+}
+
 
 Key::Key(unique_ptr<data_t[]> data, index_t len) : len(len), data(move(data)) {
 }
@@ -50,6 +138,23 @@ template <> unique_ptr<data_t[]> Key::CreateData(int64_t value, bool is_little_e
 	data[0] = FlipSign(data[0]);
 	return data;
 }
+
+template <> unique_ptr<data_t[]> Key::CreateData(float value, bool is_little_endian) {
+    uint32_t converted_value = EncodeFloat(value);
+    auto data = unique_ptr<data_t[]>(new data_t[sizeof(converted_value)]);
+    reinterpret_cast<uint32_t *>(data.get())[0] = is_little_endian ? BSWAP32(converted_value) : converted_value;
+    data[0] = FlipSign(data[0]);
+    return data;
+}
+template <> unique_ptr<data_t[]> Key::CreateData(double value, bool is_little_endian) {
+    uint64_t converted_value = EncodeDouble(value);
+    auto data = unique_ptr<data_t[]>(new data_t[sizeof(converted_value)]);
+    reinterpret_cast<uint64_t *>(data.get())[0] = is_little_endian ? BSWAP64(converted_value) : converted_value;
+    data[0] = FlipSign(data[0]);
+    return data;
+}
+
+
 
 template <> unique_ptr<Key> Key::CreateKey(string value, bool is_little_endian) {
 	index_t len = value.size() + 1;
