@@ -74,6 +74,14 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(string query, vector<Va
 	return statement->Execute(values);
 }
 
+unique_ptr<TableDescription> Connection::TableInfo(string table_name) {
+	return TableInfo(DEFAULT_SCHEMA, table_name);
+}
+
+unique_ptr<TableDescription> Connection::TableInfo(string schema_name, string table_name) {
+	return context->TableInfo(schema_name, table_name);
+}
+
 Appender *Connection::OpenAppender(string schema_name, string table_name) {
 	if (context->is_invalidated) {
 		throw Exception("Database that this connection belongs to has been closed!");
