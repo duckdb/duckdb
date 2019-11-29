@@ -276,3 +276,37 @@ TEST_CASE("Test index with versioned data from updates in secondary columns", "[
 	result = con2.Query("SELECT j FROM integers WHERE i=1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
+
+TEST_CASE("Test abort of update/delete", "[transactions]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3)"));
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
+
+	// insert the value "4" for both transactions
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (4, 4)"));
+	REQUIRE_NO_FAIL(con2.Query("INSERT INTO integers VALUES (4, 4)"));
+
+	// perform some other operations
+	REQUIRE_NO_FAIL(con2.Query("UPDATE integers SET j=j+1"));
+	REQUIRE_NO_FAIL(con2.Query("DELETE FROM integers WHERE i=2"));
+	REQUIRE_NO_FAIL(con2.Query("CREATE TABLE test(i INTEGER)"));
+
+	// commit both transactions, con2 should now fail
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+	REQUIRE_FAIL(con2.Query("COMMIT"));
+
+	// verify that the data is (1, 1), (...), (4, 4)
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3, 4}));
+
+	// table test should not exist
+	REQUIRE_FAIL(con.Query("SELECT * FROM test"));
+}

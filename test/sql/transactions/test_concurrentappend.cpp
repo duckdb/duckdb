@@ -19,7 +19,7 @@ TEST_CASE("Sequential append", "[transactions]") {
 	vector<unique_ptr<Connection>> connections;
 
 	// initialize the database
-	con.Query("CREATE TABLE integers(i INTEGER);");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
 
 	for (size_t i = 0; i < THREAD_COUNT; i++) {
 		connections.push_back(make_unique<Connection>(db));

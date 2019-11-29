@@ -60,6 +60,7 @@ bool TransactionManager::CommitTransaction(Transaction *transaction) {
 	// commit the UndoBuffer of the transaction
 	if (!transaction->Commit(storage.GetWriteAheadLog(), commit_id)) {
 		// commit unsuccessful: rollback the transaction instead
+		transaction->commit_id = 0;
 		transaction->Rollback();
 		success = false;
 	}

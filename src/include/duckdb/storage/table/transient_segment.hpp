@@ -44,6 +44,8 @@ public:
 	void InitializeAppend(ColumnAppendState &state);
 	//! Appends a (part of) vector to the transient segment, returns the amount of entries successfully appended
 	index_t Append(ColumnAppendState &state, Vector &data, index_t offset, index_t count);
+	//! Revert an append made to this transient segment
+	void RevertAppend(index_t start_row);
 };
 
 } // namespace duckdb

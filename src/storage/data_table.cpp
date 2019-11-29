@@ -361,6 +361,7 @@ void DataTable::RevertAppend(TableAppendState &state) {
 	}
 	// adjust the cardinality
 	cardinality -= state.current_row - state.row_start;
+	transient_manager.max_row = state.row_start;
 	// revert changes in the transient manager
 	transient_manager.RevertAppend(state.row_start, state.current_row);
 }
