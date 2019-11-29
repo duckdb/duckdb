@@ -1237,6 +1237,37 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
     REQUIRE_NO_FAIL(con.Query("DROP TABLE numbers"));
 }
 
+TEST_CASE("ART Strings", "[art-string]") {
+    unique_ptr<QueryResult> result;
+    DuckDB db(nullptr);
+
+    Connection con(db);
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(i varchar)"));
+    REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON strings(i)"));
+
+    //! Insert values and create index
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('test')"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('test1')"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('vest1')"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('somesuperbigstring')"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('somesuperbigstring1')"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('somesuperbigstring2')"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('somesuperbigstring')"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('maybesomesuperbigstring')"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('maybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstring')"));
+
+
+
+    result = con.Query("SELECT COUNT(i) FROM strings WHERE i = 'test'");
+    REQUIRE(CHECK_COLUMN(result, 0, {1}));
+    result = con.Query("SELECT COUNT(i) FROM strings WHERE i = 'somesuperbigstring'");
+    REQUIRE(CHECK_COLUMN(result, 0, {2}));
+    result = con.Query("SELECT COUNT(i) FROM strings WHERE i = 'maybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstring'");
+    REQUIRE(CHECK_COLUMN(result, 0, {1}));
+    REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
+    REQUIRE_NO_FAIL(con.Query("DROP TABLE strings"));
+}
+
 TEST_CASE("ART Floating Point", "[art-float][.]") {
     srand(1);
     unique_ptr<QueryResult> result;

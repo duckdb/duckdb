@@ -42,6 +42,9 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expres
     case TypeId::DOUBLE:
         maxPrefix = sizeof(double);
         break;
+    case TypeId::VARCHAR:
+        maxPrefix = 8;
+        break;
 	default:
 		throw InvalidTypeException(types[0], "Invalid type for index");
 	}
@@ -117,6 +120,9 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
         break;
     case TypeId::DOUBLE:
         generate_keys<double>(input, keys, is_little_endian);
+        break;
+    case TypeId::VARCHAR:
+        generate_keys<char*>(input, keys, is_little_endian);
         break;
 	default:
 		throw InvalidTypeException(input.data[0].type, "Invalid type for index");
@@ -223,16 +229,20 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 		Key &existingKey = *leaf->value;
 		uint32_t newPrefixLength = 0;
 		// Leaf node is already there, update row_id vector
-		if (depth + newPrefixLength == maxPrefix) {
+		if (depth + newPrefixLength == existingKey.len && existingKey.len == key.len) {
 			return InsertToLeaf(*leaf, row_id);
 		}
 		while (existingKey[depth + newPrefixLength] == key[depth + newPrefixLength]) {
 			newPrefixLength++;
 			// Leaf node is already there, update row_id vector
-			if (depth + newPrefixLength == maxPrefix) {
+			if (depth + newPrefixLength == existingKey.len && existingKey.len == key.len) {
 				return InsertToLeaf(*leaf, row_id);
 			}
 		}
+        //! verify if we have to increase maxprefix size
+        if (value->len > maxPrefix){
+            maxPrefix = value->len;
+        }
 		unique_ptr<Node> newNode = make_unique<Node4>(*this);
 		newNode->prefix_length = newPrefixLength;
 		memcpy(newNode->prefix.get(), &key[depth], std::min(newPrefixLength, maxPrefix));
@@ -261,8 +271,11 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 			} else {
 				throw NotImplementedException("PrefixLength > MaxPrefixLength");
 			}
+            //! verify if we have to increase maxprefix size
+            if (value->len > maxPrefix){
+                maxPrefix = value->len;
+            }
 			unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, move(value), row_id);
-
 			Node4::insert(*this, newNode, key[depth + mismatchPos], leaf_node);
 			node = move(newNode);
 			return true;
@@ -276,7 +289,10 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 		auto child = node->GetChild(pos);
 		return Insert(*child, move(value), depth + 1, row_id);
 	}
-
+    //! verify if we have to increase maxprefix size
+    if (value->len > maxPrefix){
+        maxPrefix = value->len;
+    }
 	unique_ptr<Node> newNode = make_unique<Leaf>(*this, move(value), row_id);
 	Node::InsertLeaf(*this, node, key[depth], newNode);
 	return true;
@@ -364,6 +380,8 @@ static unique_ptr<Key> CreateKey(ART &art, TypeId type, Value &value) {
         return Key::CreateKey<float>(value.value_.float_, art.is_little_endian);
     case TypeId::DOUBLE:
         return Key::CreateKey<double>(value.value_.double_, art.is_little_endian);
+    case TypeId::VARCHAR:
+        return Key::CreateKey<string>(value.str_value, art.is_little_endian);
 	default:
 		throw InvalidTypeException(type, "Invalid type for index");
 	}
@@ -396,7 +414,7 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 				// Check leaf
 				auto leaf = static_cast<Leaf *>(node_val);
 				Key &leafKey = *leaf->value;
-				for (index_t i = (skippedPrefix ? 0 : depth); i < maxPrefix; i++) {
+				for (index_t i = (skippedPrefix ? 0 : depth); i < leafKey.len; i++) {
 					if (leafKey[i] != key[i]) {
 						return nullptr;
 					}
