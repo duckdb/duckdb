@@ -77,6 +77,7 @@ void WriteAheadLog::Replay(DuckDB &database, string &path) {
 			if (entry_type == WALType::WAL_FLUSH) {
 				// flush: commit the current transaction
 				context.transaction.Commit();
+				context.transaction.SetAutoCommit(false);
 				// check if the file is exhausted
 				if (reader.Finished()) {
 					// we finished reading the file: break
