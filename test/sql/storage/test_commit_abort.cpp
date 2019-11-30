@@ -36,15 +36,18 @@ TEST_CASE("Test abort of commit with persistent storage", "[storage]") {
 		REQUIRE_NO_FAIL(con.Query("COMMIT"));
 		REQUIRE_FAIL(con2.Query("COMMIT"));
 
+		// now add another row of all NULLs
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (15, NULL, NULL)"));
+
 		// check that the result is correct
-		expected_count = Value::BIGINT(5);
+		expected_count = Value::BIGINT(6);
 		expected_count_b = Value::BIGINT(4);
-		expected_sum_a = Value::BIGINT(10+11+12+13+14);
+		expected_sum_a = Value::BIGINT(10+11+12+13+14+15);
 		expected_sum_b = Value::BIGINT(22+22+21+10);
 		expected_sum_strlen = Value::BIGINT(5+5+4+3);
 
 		// verify the contents of the database
-		result = con.Query("SELECT COUNT(*), COUNT(a) COUNT(b), SUM(a), SUM(b), SUM(LENGTH(c)) FROM test");
+		result = con.Query("SELECT COUNT(*), COUNT(a), COUNT(b), SUM(a), SUM(b), SUM(LENGTH(c)) FROM test");
 		REQUIRE(CHECK_COLUMN(result, 0, {expected_count}));
 		REQUIRE(CHECK_COLUMN(result, 1, {expected_count}));
 		REQUIRE(CHECK_COLUMN(result, 2, {expected_count_b}));
@@ -56,7 +59,7 @@ TEST_CASE("Test abort of commit with persistent storage", "[storage]") {
 	for(index_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
-		result = con.Query("SELECT COUNT(*), COUNT(a) COUNT(b), SUM(a), SUM(b), SUM(LENGTH(c)) FROM test");
+		result = con.Query("SELECT COUNT(*), COUNT(a), COUNT(b), SUM(a), SUM(b), SUM(LENGTH(c)) FROM test");
 		REQUIRE(CHECK_COLUMN(result, 0, {expected_count}));
 		REQUIRE(CHECK_COLUMN(result, 1, {expected_count}));
 		REQUIRE(CHECK_COLUMN(result, 2, {expected_count_b}));

@@ -61,6 +61,10 @@ bool Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept {
 
 	UndoBuffer::IteratorState iterator_state;
 	LocalStorage::CommitState commit_state;
+	int64_t initial_wal_size;
+	if (log) {
+		initial_wal_size = log->GetWALSize();
+	}
 	bool changes_made = undo_buffer.ChangesMade() || storage.ChangesMade() || sequence_usage.size() > 0;
 	try {
 		// commit the undo buffer
@@ -81,8 +85,8 @@ bool Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept {
 		undo_buffer.RevertCommit(iterator_state, transaction_id);
 		storage.RevertCommit(commit_state);
 		if (log && changes_made) {
-			throw Exception("FIXME: flush undo into log");
-			// log->FlushUndo();
+			// remove any entries written into the WAL by truncating it
+			log->Truncate(initial_wal_size);
 		}
 		return false;
 	}

@@ -16,6 +16,13 @@ void WriteAheadLog::Initialize(string &path) {
 	initialized = true;
 }
 
+int64_t WriteAheadLog::GetWALSize() {
+	return writer->GetFileSize();
+}
+
+void WriteAheadLog::Truncate(int64_t size) {
+	writer->Truncate(size);
+}
 //===--------------------------------------------------------------------===//
 // Write Entries
 //===--------------------------------------------------------------------===//

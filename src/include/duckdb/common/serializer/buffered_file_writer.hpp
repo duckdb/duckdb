@@ -30,6 +30,10 @@ public:
 	void WriteData(const_data_ptr_t buffer, uint64_t write_size) override;
 	//! Flush the buffer to disk and sync the file to ensure writing is completed
 	void Sync();
+	//! Returns the current size of the file
+	int64_t GetFileSize();
+	//! Truncate the size to a previous size (given that size <= GetFileSize())
+	void Truncate(int64_t size);
 
 private:
 	//! Flush the buffer to the file

@@ -43,6 +43,8 @@ public:
 
 	//! Initialize the WAL in the specified directory
 	void Initialize(string &path);
+	//! Returns the current size of the WAL in bytes
+	int64_t GetWALSize();
 
 	void WriteCreateTable(TableCatalogEntry *entry);
 	void WriteDropTable(TableCatalogEntry *entry);
@@ -66,6 +68,8 @@ public:
 
 	void WriteQuery(string &query);
 
+	//! Truncate the WAL to a previous size, and clear anything currently set in the writer
+	void Truncate(int64_t size);
 	void Flush();
 
 private:
