@@ -95,9 +95,9 @@ public:
 	//! whether or not the append succeeded
 	bool AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start);
 	//! Remove a chunk with the row ids [row_start, ..., row_start + chunk.size()] from all indexes of the table
-	void RemoveFromIndexes(DataChunk &chunk, row_t row_start);
+	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start);
 	//! Remove the chunk with the specified set of row identifiers from all indexes of the table
-	void RemoveFromIndexes(DataChunk &chunk, Vector &row_identifiers);
+	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers);
 	//! Remove the row identifiers from all the indexes of the table
 	void RemoveFromIndexes(Vector &row_identifiers);
 	//! Is this a temporary table?

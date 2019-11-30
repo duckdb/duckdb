@@ -398,7 +398,7 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 	return true;
 }
 
-void DataTable::RemoveFromIndexes(DataChunk &chunk, row_t row_start) {
+void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
 	if (indexes.size() == 0) {
 		return;
 	}
@@ -409,12 +409,12 @@ void DataTable::RemoveFromIndexes(DataChunk &chunk, row_t row_start) {
 	VectorOperations::GenerateSequence(row_identifiers, row_start);
 
 	// now remove the entries from the indices
-	RemoveFromIndexes(chunk, row_identifiers);
+	RemoveFromIndexes(state, chunk, row_identifiers);
 }
 
-void DataTable::RemoveFromIndexes(DataChunk &chunk, Vector &row_identifiers) {
+void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers) {
 	for (index_t i = 0; i < indexes.size(); i++) {
-		indexes[i]->Delete(chunk, row_identifiers);
+		indexes[i]->Delete(state.index_locks[i], chunk, row_identifiers);
 	}
 }
 

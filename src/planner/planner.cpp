@@ -155,7 +155,6 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 			} else {
 				// explicitly commit the current transaction
 				context.transaction.Commit();
-				context.transaction.SetAutoCommit(true);
 			}
 			break;
 		}
@@ -165,7 +164,6 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 			} else {
 				// explicitly rollback the current transaction
 				context.transaction.Rollback();
-				context.transaction.SetAutoCommit(true);
 			}
 			break;
 		}

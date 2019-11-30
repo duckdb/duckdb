@@ -298,6 +298,24 @@ void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &
 void LocalStorage::RevertCommit(LocalStorage::CommitState &commit_state) {
 	for (auto &entry : commit_state.append_states) {
 		auto table = entry.first;
+		auto storage = table_storage[table].get();
+		auto &append_state = *entry.second;
+
+		if (table->indexes.size() > 0) {
+			row_t current_row = append_state.row_start;
+			// remove the data from the indexes, if there are any indexes
+			ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
+				// append this chunk to the indexes of the table
+				table->RemoveFromIndexes(append_state, chunk, current_row);
+
+				current_row += chunk.size();
+				if (current_row >= append_state.current_row) {
+					// finished deleting all rows from the index: abort now
+					return false;
+				}
+				return true;
+			});
+		}
 
 		table->RevertAppend(*entry.second);
 	}

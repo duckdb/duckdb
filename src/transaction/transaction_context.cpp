@@ -31,6 +31,7 @@ void TransactionContext::Commit() {
 	if (!transaction) {
 		throw TransactionException("No transaction is currently active - cannot commit!");
 	}
+	SetAutoCommit(true);
 	current_transaction = nullptr;
 	if (!transaction_manager.CommitTransaction(transaction)) {
 		throw TransactionException("Failed to commit!");
@@ -42,6 +43,7 @@ void TransactionContext::Rollback() {
 	if (!transaction) {
 		throw TransactionException("No transaction is currently active - cannot rollback!");
 	}
+	SetAutoCommit(true);
 	current_transaction = nullptr;
 	transaction_manager.RollbackTransaction(transaction);
 }
