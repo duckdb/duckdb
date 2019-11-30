@@ -410,7 +410,7 @@ int64_t FileSystem::GetFileSize(FileHandle &handle) {
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	// seek to the location
-	SetFilePointer(handle, location);
+	SetFilePointer(handle, new_size);
 	// now set the end of file position
 	if (!SetEndOfFile(hFile)) {
 		auto error = GetLastErrorAsString();
