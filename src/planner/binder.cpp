@@ -99,6 +99,8 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 		return Bind((EmptyTableRef &)ref);
 	case TableReferenceType::TABLE_FUNCTION:
 		return Bind((TableFunctionRef &)ref);
+	case TableReferenceType::EXPRESSION_LIST:
+		return Bind((ExpressionListRef &)ref);
 	default:
 		throw Exception("Unknown table ref type");
 	}

@@ -74,3 +74,7 @@ void BindContext::AddSubquery(index_t index, const string &alias, SubqueryRef &r
 void BindContext::AddTableFunction(index_t index, const string &alias, TableFunctionCatalogEntry *function_entry) {
 	AddBinding(alias, make_unique<TableFunctionBinding>(alias, function_entry, index));
 }
+
+void BindContext::AddGenericBinding(index_t index, const string &alias, vector<string> names, vector<SQLType> types) {
+	AddBinding(alias, make_unique<GenericBinding>(alias, move(types), move(names), index));
+}

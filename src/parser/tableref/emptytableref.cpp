@@ -5,8 +5,8 @@
 using namespace duckdb;
 using namespace std;
 
-bool EmptyTableRef::Equals(const TableRef *other_) const {
-	return true; // they are always the same they only have a type
+bool EmptyTableRef::Equals(const TableRef *other) const {
+	return TableRef::Equals(other);
 }
 
 unique_ptr<TableRef> EmptyTableRef::Copy() {

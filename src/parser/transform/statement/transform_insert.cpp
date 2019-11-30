@@ -1,11 +1,13 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-void Transformer::TransformValuesList(PGList *list, vector<vector<unique_ptr<ParsedExpression>>> &values) {
+unique_ptr<TableRef> Transformer::TransformValuesList(PGList *list) {
+	auto result = make_unique<ExpressionListRef>();
 	for (auto value_list = list->head; value_list != NULL; value_list = value_list->next) {
 		auto target = (PGList *)(value_list->data.ptr_value);
 
@@ -13,13 +15,15 @@ void Transformer::TransformValuesList(PGList *list, vector<vector<unique_ptr<Par
 		if (!TransformExpressionList(target, insert_values)) {
 			throw ParserException("Could not parse expression list!");
 		}
-		if (values.size() > 0) {
-			if (values[0].size() != insert_values.size()) {
+		if (result->values.size() > 0) {
+			if (result->values[0].size() != insert_values.size()) {
 				throw ParserException("VALUES lists must all be the same length");
 			}
 		}
-		values.push_back(move(insert_values));
+		result->values.push_back(move(insert_values));
 	}
+	result->alias = "valueslist";
+	return move(result);
 }
 
 unique_ptr<InsertStatement> Transformer::TransformInsert(PGNode *node) {
@@ -35,15 +39,7 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(PGNode *node) {
 			result->columns.push_back(string(target->name));
 		}
 	}
-
-	auto select_stmt = reinterpret_cast<PGSelectStmt *>(stmt->selectStmt);
-	if (!select_stmt->valuesLists) {
-		// insert from select statement
-		result->select_statement = TransformSelect(stmt->selectStmt);
-	} else {
-		// transform the value list
-		TransformValuesList(select_stmt->valuesLists, result->values);
-	}
+	result->select_statement = TransformSelect(stmt->selectStmt);
 
 	auto ref = TransformRangeVar(stmt->relation);
 	auto &table = *reinterpret_cast<BaseTableRef *>(ref.get());

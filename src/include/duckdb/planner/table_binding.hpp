@@ -23,7 +23,7 @@ class SubqueryRef;
 class TableCatalogEntry;
 class TableFunctionCatalogEntry;
 
-enum class BindingType : uint8_t { TABLE = 0, SUBQUERY = 1, TABLE_FUNCTION = 2 };
+enum class BindingType : uint8_t { TABLE = 0, SUBQUERY = 1, TABLE_FUNCTION = 2, GENERIC = 3 };
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index. Used
 //! in the binder.
@@ -83,6 +83,22 @@ struct TableFunctionBinding : public Binding {
 	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
 
 	TableFunctionCatalogEntry *function;
+};
+
+//! Represents a generic binding with types and names
+struct GenericBinding : public Binding {
+	GenericBinding(const string &alias, vector<SQLType> types, vector<string> names, index_t index);
+
+	vector<SQLType> types;
+	//! Column names of the subquery
+	vector<string> names;
+	//! Name -> index for the names
+	unordered_map<string, uint64_t> name_map;
+
+public:
+	bool HasMatchingBinding(const string &column_name) override;
+	BindResult Bind(ColumnRefExpression &colref, index_t depth) override;
+	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
 };
 
 } // namespace duckdb

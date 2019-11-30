@@ -33,27 +33,12 @@ public:
 	vector<unique_ptr<ParsedExpression>> distinct_on_targets;
 	//! HAVING clause
 	unique_ptr<ParsedExpression> having;
-	//! Value list, only used for VALUES statement
-	vector<vector<unique_ptr<ParsedExpression>>> values;
 
 	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
 		return select_list;
 	}
 
 public:
-	// //! Whether or not the query has a GROUP BY clause
-	// bool HasGroup() {
-	// 	return groups.size() > 0;
-	// }
-	// //! Whether or not the query has a HAVING clause
-	// bool HasHaving() {
-	// 	return having.get();
-	// }
-	// //! Whether or not the query has an AGGREGATION
-	// bool HasAggregation() {
-	// 	return HasGroup();
-	// }
-
 	bool Equals(const QueryNode *other) const override;
 	//! Create a copy of this SelectNode
 	unique_ptr<QueryNode> Copy() override;
