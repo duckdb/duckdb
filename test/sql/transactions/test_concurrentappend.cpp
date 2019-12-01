@@ -12,7 +12,7 @@ using namespace std;
 #define THREAD_COUNT 100
 #define INSERT_ELEMENTS 1000
 
-TEST_CASE("Sequential append", "[transactions]") {
+TEST_CASE("Sequential append", "[transactions][.]") {
 	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

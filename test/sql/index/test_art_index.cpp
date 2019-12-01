@@ -7,7 +7,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test index creation statements with multiple connections", "[art]") {
+TEST_CASE("Test index creation statements with multiple connections", "[art][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db), con2(db);
@@ -462,7 +462,7 @@ TEST_CASE("Test ART index with prefixes", "[art]") {
 	}
 }
 
-TEST_CASE("Test ART index with linear insertions and deletes", "[art]") {
+TEST_CASE("Test ART index with linear insertions and deletes", "[art][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -505,7 +505,7 @@ TEST_CASE("Test ART index with linear insertions and deletes", "[art]") {
 	}
 }
 
-TEST_CASE("Test ART index with random insertions and deletes", "[art]") {
+TEST_CASE("Test ART index with random insertions and deletes", "[art][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -542,7 +542,7 @@ TEST_CASE("Test ART index with random insertions and deletes", "[art]") {
 	}
 }
 
-TEST_CASE("Test ART index creation with many versions", "[art]") {
+TEST_CASE("Test ART index creation with many versions", "[art][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -596,7 +596,7 @@ TEST_CASE("Test ART index creation with many versions", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(total_sum)}));
 }
 
-TEST_CASE("Test ART index with many matches", "[art]") {
+TEST_CASE("Test ART index with many matches", "[art][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -703,7 +703,7 @@ TEST_CASE("Test ART index with rollbacks", "[art][.]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(count)}));
 }
 
-TEST_CASE("Test ART index with the same value multiple times", "[art]") {
+TEST_CASE("Test ART index with the same value multiple times", "[art][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -808,7 +808,7 @@ TEST_CASE("Test ART with different Integer Types", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 }
 
-TEST_CASE("ART Integer Types", "[art]") {
+TEST_CASE("ART Integer Types", "[art][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 
@@ -932,7 +932,7 @@ TEST_CASE("ART Integer Types", "[art]") {
 	}
 }
 
-TEST_CASE("ART Simple Big Range", "[art]") {
+TEST_CASE("ART Simple Big Range", "[art][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -967,7 +967,7 @@ TEST_CASE("ART Simple Big Range", "[art]") {
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 }
 
-TEST_CASE("ART Big Range with deletions", "[art]") {
+TEST_CASE("ART Big Range with deletions", "[art][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

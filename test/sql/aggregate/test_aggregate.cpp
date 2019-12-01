@@ -241,7 +241,7 @@ TEST_CASE("Test GROUP BY on expression", "[aggregate]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {8, 10, 14}));
 }
 
-TEST_CASE("Test GROUP BY with many groups", "[aggregate]") {
+TEST_CASE("Test GROUP BY with many groups", "[aggregate][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

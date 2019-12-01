@@ -1161,7 +1161,7 @@ TEST_CASE("Test date copy", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"2019-06-05"}));
 }
 
-TEST_CASE("Test cranlogs broken gzip copy and temp table", "[copy]") {
+TEST_CASE("Test cranlogs broken gzip copy and temp table", "[copy][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
