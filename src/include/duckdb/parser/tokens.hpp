@@ -79,5 +79,6 @@ class JoinRef;
 class SubqueryRef;
 class TableFunctionRef;
 class EmptyTableRef;
+class ExpressionListRef;
 
 } // namespace duckdb

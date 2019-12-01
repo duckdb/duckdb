@@ -21,8 +21,6 @@ public:
 
 	//! The select statement to insert from
 	unique_ptr<SelectStatement> select_statement;
-	//! List of values to insert
-	vector<vector<unique_ptr<ParsedExpression>>> values;
 	//! Column names to insert into
 	vector<string> columns;
 

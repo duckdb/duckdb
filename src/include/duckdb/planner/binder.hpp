@@ -118,6 +118,7 @@ private:
 	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref);
 	unique_ptr<BoundTableRef> Bind(TableFunctionRef &ref);
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
+	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
 };
 
 } // namespace duckdb

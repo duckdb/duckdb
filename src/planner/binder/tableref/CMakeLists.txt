@@ -3,6 +3,7 @@ add_library_unity(duckdb_bind_tableref
                   bind_basetableref.cpp
                   bind_crossproductref.cpp
                   bind_emptytableref.cpp
+                  bind_expressionlistref.cpp
                   bind_joinref.cpp
                   bind_subqueryref.cpp
                   bind_table_function.cpp)

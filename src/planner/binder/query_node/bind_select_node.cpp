@@ -23,34 +23,6 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	// first bind the FROM table statement
 	result->from_table = Bind(*statement.from_table);
 
-	if (statement.values.size() > 0) {
-		// bind value list
-		WhereBinder binder(*this, context);
-		binder.target_type = SQLType(SQLTypeId::INVALID);
-		for (index_t list_idx = 0; list_idx < statement.values.size(); list_idx++) {
-			auto &expression_list = statement.values[list_idx];
-			vector<unique_ptr<Expression>> list;
-			if (list_idx == 0) {
-				// for the first list, we set the expected types as the types of these expressions
-				for (index_t val_idx = 0; val_idx < expression_list.size(); val_idx++) {
-					SQLType result_type;
-					auto expr = binder.Bind(expression_list[val_idx], &result_type);
-					result->types.push_back(result_type);
-					result->names.push_back("col" + to_string(val_idx));
-					list.push_back(move(expr));
-				}
-			} else {
-				// for subsequent lists, we apply the expected types we found in the first list
-				for (index_t val_idx = 0; val_idx < expression_list.size(); val_idx++) {
-					binder.target_type = result->types[val_idx];
-					list.push_back(binder.Bind(expression_list[val_idx]));
-				}
-			}
-			result->values.push_back(move(list));
-		}
-		return move(result);
-	}
-
 	// visit the select list and expand any "*" statements
 	vector<unique_ptr<ParsedExpression>> new_select_list;
 	for (auto &select_element : statement.select_list) {

@@ -47,10 +47,9 @@ void Node256::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_p
 void Node256::erase(ART &art, unique_ptr<Node> &node, int pos) {
 	Node256 *n = static_cast<Node256 *>(node.get());
 
-	if (node->count > 37) {
-		n->child[pos].reset();
-		n->count--;
-	} else {
+	n->child[pos].reset();
+	n->count--;
+	if (node->count <= 36) {
 		auto newNode = make_unique<Node48>(art);
 		CopyPrefix(art, n, newNode.get());
 		for (index_t i = 0; i < 256; i++) {

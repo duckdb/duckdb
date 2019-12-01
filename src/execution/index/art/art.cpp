@@ -300,6 +300,8 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 			return;
 		}
 		Erase(tree, *keys[k], 0, row_identifiers[i]);
+		// assert that the entry was erased properly
+		assert(!is_unique || Lookup(tree, *keys[k], 0) == nullptr);
 	});
 }
 

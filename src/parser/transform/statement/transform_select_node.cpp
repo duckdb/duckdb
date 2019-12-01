@@ -3,6 +3,7 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -14,12 +15,20 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 		node = make_unique<SelectNode>();
 		auto result = (SelectNode *)node.get();
 		// do this early so the value lists also have a `FROM`
-		result->from_table = TransformFrom(stmt->fromClause);
 		if (stmt->valuesLists) {
-			TransformValuesList(stmt->valuesLists, result->values);
-			return node;
-		} else if (!stmt->targetList) {
-			throw ParserException("SELECT clause without selection list");
+			// VALUES list, create an ExpressionList
+			assert(!stmt->fromClause);
+			result->from_table = TransformValuesList(stmt->valuesLists);
+			result->select_list.push_back(make_unique<StarExpression>());
+		} else {
+			result->from_table = TransformFrom(stmt->fromClause);
+			if (!stmt->targetList) {
+				throw ParserException("SELECT clause without selection list");
+			}
+			// select list
+			if (!TransformExpressionList(stmt->targetList, result->select_list)) {
+				throw Exception("Failed to transform expression list.");
+			}
 		}
 		// checks distinct clause
 		if (stmt->distinctClause != NULL) {
@@ -39,10 +48,6 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 		result->having = TransformExpression(stmt->havingClause);
 		// where
 		result->where_clause = TransformExpression(stmt->whereClause);
-		// select list
-		if (!TransformExpressionList(stmt->targetList, result->select_list)) {
-			throw Exception("Failed to transform expression list.");
-		}
 		break;
 	}
 	case PG_SETOP_UNION:

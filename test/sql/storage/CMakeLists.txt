@@ -4,6 +4,7 @@ if(NOT WIN32)
                     test_buffer_manager.cpp
                     test_constraints.cpp
                     test_checksum.cpp
+                    test_commit_abort.cpp
                     test_droptable.cpp
                     test_storage_sequences.cpp
                     test_shutdown.cpp

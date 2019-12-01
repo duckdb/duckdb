@@ -76,11 +76,10 @@ void Node48::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_pt
 void Node48::erase(ART &art, unique_ptr<Node> &node, int pos) {
 	Node48 *n = static_cast<Node48 *>(node.get());
 
-	if (node->count > 12) {
-		n->child[n->childIndex[pos]].reset();
-		n->childIndex[pos] = Node::EMPTY_MARKER;
-		n->count--;
-	} else {
+	n->child[n->childIndex[pos]].reset();
+	n->childIndex[pos] = Node::EMPTY_MARKER;
+	n->count--;
+	if (node->count <= 12) {
 		auto newNode = make_unique<Node16>(art);
 		CopyPrefix(art, n, newNode.get());
 		for (index_t i = 0; i < 256; i++) {

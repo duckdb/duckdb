@@ -350,6 +350,22 @@ void DataTable::Append(Transaction &transaction, transaction_t commit_id, DataCh
 	state.current_row += chunk.size();
 }
 
+void DataTable::RevertAppend(TableAppendState &state) {
+	if (state.row_start == state.current_row) {
+		// nothing to revert!
+		return;
+	}
+	// revert changes in the base columns
+	for (index_t i = 0; i < types.size(); i++) {
+		columns[i].RevertAppend(state.row_start);
+	}
+	// adjust the cardinality
+	cardinality -= state.current_row - state.row_start;
+	transient_manager.max_row = state.row_start;
+	// revert changes in the transient manager
+	transient_manager.RevertAppend(state.row_start, state.current_row);
+}
+
 //===--------------------------------------------------------------------===//
 // Indexes
 //===--------------------------------------------------------------------===//
@@ -382,7 +398,7 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 	return true;
 }
 
-void DataTable::RemoveFromIndexes(DataChunk &chunk, row_t row_start) {
+void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
 	if (indexes.size() == 0) {
 		return;
 	}
@@ -393,12 +409,12 @@ void DataTable::RemoveFromIndexes(DataChunk &chunk, row_t row_start) {
 	VectorOperations::GenerateSequence(row_identifiers, row_start);
 
 	// now remove the entries from the indices
-	RemoveFromIndexes(chunk, row_identifiers);
+	RemoveFromIndexes(state, chunk, row_identifiers);
 }
 
-void DataTable::RemoveFromIndexes(DataChunk &chunk, Vector &row_identifiers) {
+void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers) {
 	for (index_t i = 0; i < indexes.size(); i++) {
-		indexes[i]->Delete(chunk, row_identifiers);
+		indexes[i]->Delete(state.index_locks[i], chunk, row_identifiers);
 	}
 }
 
