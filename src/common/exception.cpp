@@ -84,6 +84,8 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 		return "IO";
 	case ExceptionType::INTERRUPT:
 		return "INTERRUPT";
+	case ExceptionType::FATAL:
+		return "FATAL";
 	default:
 		return "Unknown";
 	}
@@ -171,4 +173,8 @@ SequenceException::SequenceException(string msg, ...) : Exception(ExceptionType:
 }
 
 InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, "Interrupted!") {
+}
+
+FatalException::FatalException(string msg, ...) : Exception(ExceptionType::FATAL, msg) {
+	FORMAT_CONSTRUCTOR(msg);
 }

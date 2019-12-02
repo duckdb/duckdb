@@ -43,7 +43,7 @@ TEST_CASE("Test deletions", "[delete]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
 
-TEST_CASE("Test scan with large deletions", "[delete]") {
+TEST_CASE("Test scan with large deletions", "[delete][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

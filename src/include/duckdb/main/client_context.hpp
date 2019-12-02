@@ -9,13 +9,14 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/main/prepared_statement.hpp"
+#include "duckdb/main/table_description.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/main/prepared_statement.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include <random>
 
 namespace duckdb {
@@ -78,6 +79,9 @@ public:
 	//! Invalidate the client context. The current query will be interrupted and the client context will be invalidated,
 	//! making it impossible for future queries to run.
 	void Invalidate();
+
+	//! Get the table info of a specific table, or nullptr if it cannot be found
+	unique_ptr<TableDescription> TableInfo(string schema_name, string table_name);
 
 	//! Prepare a query
 	unique_ptr<PreparedStatement> Prepare(string query);

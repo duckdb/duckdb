@@ -49,6 +49,8 @@ public:
 	void Delete(Transaction &transaction, Vector &row_ids);
 	//! Append a set of rows to the version manager, setting their inserted id to the given commit_id
 	void Append(Transaction &transaction, row_t row_start, index_t count, transaction_t commit_id);
+	//! Revert a set of appends made to the version manager from the rows [row_start] until [row_end]
+	void RevertAppend(row_t row_start, row_t row_end);
 
 private:
 	ChunkInsertInfo *GetInsertInfo(index_t chunk_idx);

@@ -146,6 +146,8 @@ private:
 	unique_ptr<TableRef> TransformJoin(PGJoinExpr *root);
 	//! Transform a table producing subquery into a TableRef
 	unique_ptr<TableRef> TransformRangeSubselect(PGRangeSubselect *root);
+	//! Transform a VALUES list into a set of expressions
+	unique_ptr<TableRef> TransformValuesList(PGList *list);
 
 	//! Transform a Postgres TypeName string into a SQLType
 	SQLType TransformTypeName(PGTypeName *name);
@@ -157,8 +159,6 @@ private:
 
 	//! Transform a Postgres SELECT clause into a list of Expressions
 	bool TransformExpressionList(PGList *list, vector<unique_ptr<ParsedExpression>> &result);
-	//! Transform a VALUES list into a set of expressions
-	void TransformValuesList(PGList *list, vector<vector<unique_ptr<ParsedExpression>>> &values);
 
 	void TransformWindowDef(PGWindowDef *window_spec, WindowExpression *expr);
 

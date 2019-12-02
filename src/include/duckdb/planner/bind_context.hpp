@@ -44,6 +44,8 @@ public:
 	void AddSubquery(index_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery);
 	//! Adds a table function with a given alias to the BindContext
 	void AddTableFunction(index_t index, const string &alias, TableFunctionCatalogEntry *function_entry);
+	//! Adds a base table with the given alias to the BindContext.
+	void AddGenericBinding(index_t index, const string &alias, vector<string> names, vector<SQLType> types);
 
 	unordered_set<string> hidden_columns;
 

@@ -142,6 +142,13 @@ int64_t FileSystem::GetFileSize(FileHandle &handle) {
 	return s.st_size;
 }
 
+void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
+	int fd = ((UnixFileHandle &)handle).fd;
+	if (ftruncate(fd, new_size) != 0) {
+		throw IOException("Could not truncate file \"%s\": %s", handle.path.c_str(), strerror(errno));
+	}
+}
+
 bool FileSystem::DirectoryExists(const string &directory) {
 	if (!directory.empty()) {
 		if (access(directory.c_str(), 0) == 0) {
@@ -259,7 +266,7 @@ string FileSystem::PathSeparator() {
 void FileSystem::FileSync(FileHandle &handle) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	if (fsync(fd) != 0) {
-		throw IOException("FATAL ERROR: fsync failed!");
+		throw FatalException("fsync failed!");
 	}
 }
 
@@ -398,6 +405,17 @@ int64_t FileSystem::GetFileSize(FileHandle &handle) {
 		return -1;
 	}
 	return result.QuadPart;
+}
+
+void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	// seek to the location
+	SetFilePointer(handle, new_size);
+	// now set the end of file position
+	if (!SetEndOfFile(hFile)) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Failure in SetEndOfFile call on file \"%s\": %s", handle.path.c_str(), error.c_str());
+	}
 }
 
 bool FileSystem::DirectoryExists(const string &directory) {
@@ -552,4 +570,8 @@ void FileHandle::Write(void *buffer, index_t nr_bytes, index_t location) {
 
 void FileHandle::Sync() {
 	file_system.FileSync(*this);
+}
+
+void FileHandle::Truncate(int64_t new_size) {
+	file_system.Truncate(*this, new_size);
 }

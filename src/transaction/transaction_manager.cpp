@@ -50,29 +50,25 @@ Transaction *TransactionManager::StartTransaction() {
 	return transaction_ptr;
 }
 
-void TransactionManager::CommitTransaction(Transaction *transaction) {
+bool TransactionManager::CommitTransaction(Transaction *transaction) {
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
 
-	// first check whether we can commit this transaction
-	try {
-		transaction->CheckCommit();
-	} catch (Exception &ex) {
-		// cannot commit transaction! roll it back instead of committing it
-		transaction->Rollback();
-		RemoveTransaction(transaction);
-		throw ex;
-	}
-
 	// obtain a commit id for the transaction
 	transaction_t commit_id = current_start_timestamp++;
-
+	bool success = true;
 	// commit the UndoBuffer of the transaction
-	transaction->Commit(storage.GetWriteAheadLog(), commit_id);
+	if (!transaction->Commit(storage.GetWriteAheadLog(), commit_id)) {
+		// commit unsuccessful: rollback the transaction instead
+		transaction->commit_id = 0;
+		transaction->Rollback();
+		success = false;
+	}
 
-	// remove the transaction id from the list of active transactions
+	// commit successful: remove the transaction id from the list of active transactions
 	// potentially resulting in garbage collection
 	RemoveTransaction(transaction);
+	return success;
 }
 
 void TransactionManager::RollbackTransaction(Transaction *transaction) {
@@ -87,7 +83,7 @@ void TransactionManager::RollbackTransaction(Transaction *transaction) {
 	RemoveTransaction(transaction);
 }
 
-void TransactionManager::RemoveTransaction(Transaction *transaction) {
+void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 	// remove the transaction from the list of active transactions
 	index_t t_index = active_transactions.size();
 	// check for the lowest and highest start time in the list of transactions

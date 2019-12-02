@@ -34,7 +34,7 @@ TEST_CASE("Test not equals join", "[join]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1080}));
 }
 
-TEST_CASE("Test less than join", "[join]") {
+TEST_CASE("Test less than join", "[join][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

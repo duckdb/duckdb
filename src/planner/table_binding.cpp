@@ -152,3 +152,41 @@ void TableFunctionBinding::GenerateAllColumnExpressions(BindContext &context,
 		select_list.push_back(make_unique<ColumnRefExpression>(name, alias));
 	}
 }
+
+
+GenericBinding::GenericBinding(const string &alias, vector<SQLType> coltypes, vector<string> colnames, index_t index) :
+	Binding(BindingType::GENERIC, alias, index), types(move(coltypes)), names(move(colnames)) {
+	assert(types.size() == names.size());
+	for(index_t i = 0; i < names.size(); i++) {
+		auto &name = names[i];
+		if (name_map.find(name) != name_map.end()) {
+			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias.c_str(), name.c_str());
+		}
+		name_map[name] = i;
+	}
+}
+
+bool GenericBinding::HasMatchingBinding(const string &column_name) {
+	auto entry = name_map.find(column_name);
+	return entry != name_map.end();
+}
+
+BindResult GenericBinding::Bind(ColumnRefExpression &colref, index_t depth) {
+	auto column_entry = name_map.find(colref.column_name);
+	if (column_entry == name_map.end()) {
+		return BindResult(StringUtil::Format("Values list \"%s\" does not have a column named \"%s\"", alias.c_str(),
+		                                     colref.column_name.c_str()));
+	}
+	ColumnBinding binding;
+	binding.table_index = index;
+	binding.column_index = column_entry->second;
+	SQLType sql_type = types[column_entry->second];
+	return BindResult(
+	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(sql_type), binding, depth), sql_type);
+}
+
+void GenericBinding::GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) {
+	for (auto &column_name : names) {
+		select_list.push_back(make_unique<ColumnRefExpression>(column_name, alias));
+	}
+}

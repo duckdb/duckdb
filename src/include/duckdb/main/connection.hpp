@@ -57,6 +57,11 @@ public:
 	//! Prepare the specified query, returning a prepared statement object
 	unique_ptr<PreparedStatement> Prepare(string query);
 
+	//! Get the table info of a specific table (in the default schema), or nullptr if it cannot be found
+	unique_ptr<TableDescription> TableInfo(string table_name);
+	//! Get the table info of a specific table, or nullptr if it cannot be found
+	unique_ptr<TableDescription> TableInfo(string schema_name, string table_name);
+
 	Appender *OpenAppender(string schema_name, string table_name);
 	void CloseAppender();
 

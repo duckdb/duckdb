@@ -87,24 +87,19 @@ void Node4::erase(ART &art, unique_ptr<Node> &node, int pos) {
 	// This is a one way node
 	if (n->count == 1) {
 		auto childref = n->child[0].get();
-		if (childref->type == NodeType::NLeaf) {
-			// Concantenate prefixes
-			uint32_t l1 = childref->prefix_length;
-			if (l1 < art.maxPrefix) {
-				n->prefix[l1] = n->key[0];
-				l1++;
-			}
-			if (l1 < art.maxPrefix) {
-				uint32_t l2 = std::min(childref->prefix_length, art.maxPrefix - l1);
-				for (index_t i = 0; i < l2; i++) {
-					n->prefix[l1 + i] = childref->prefix[l2];
-				}
-				l1 += l2;
-			}
-			for (index_t i = 0; i < l1; i++) {
-				childref->prefix[i] = n->prefix[i];
-			}
+		// concatenate prefixes
+		auto new_length = node->prefix_length + childref->prefix_length + 1;
+		// first move the existing prefix (if any)
+		for(uint32_t i = 0; i < childref->prefix_length; i++) {
+			childref->prefix[new_length - (i + 1)] = childref->prefix[childref->prefix_length - (i + 1)];
 		}
+		// now move the current key as part of the prefix
+		childref->prefix[node->prefix_length] = n->key[0];
+		// finally add the old prefix
+		for(uint32_t i = 0; i < node->prefix_length; i++) {
+			childref->prefix[i] = node->prefix[i];
+		}
+		childref->prefix_length = new_length;
 		node = move(n->child[0]);
 	}
 }

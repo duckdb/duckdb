@@ -28,8 +28,6 @@ public:
 	vector<unique_ptr<Index>> indexes;
 	//! The set of deleted entries
 	unordered_map<index_t, unique_ptr<bool[]>> deleted_entries;
-	//! The append struct, used during the final append of the LocalTableStorage to the base DataTable
-	unique_ptr<TableAppendState> state;
 	//! The max row
 	row_t max_row;
 
@@ -41,6 +39,10 @@ public:
 
 //! The LocalStorage class holds appends that have not been committed yet
 class LocalStorage {
+public:
+	struct CommitState {
+		unordered_map<DataTable *, unique_ptr<TableAppendState>> append_states;
+	};
 public:
 	//! Initialize a scan of the local storage
 	void InitializeScan(DataTable *table, LocalScanState &state);
@@ -54,11 +56,10 @@ public:
 	//! Update a set of rows in the local storage
 	void Update(DataTable *table, Vector &row_identifiers, vector<column_t> &column_ids, DataChunk &data);
 
-	//! Check whether or not committing the local storage is possible, throws an exception if it is not possible
-	void CheckCommit();
-
 	//! Commits the local storage, writing it to the WAL and completing the commit
-	void Commit(Transaction &transaction, WriteAheadLog *log, transaction_t commit_id) noexcept;
+	void Commit(LocalStorage::CommitState &commit_state, Transaction &transaction, WriteAheadLog *log, transaction_t commit_id);
+	//! Revert the commit made so far by the LocalStorage
+	void RevertCommit(LocalStorage::CommitState &commit_state);
 
 	bool ChangesMade() noexcept {
 		return table_storage.size() > 0;

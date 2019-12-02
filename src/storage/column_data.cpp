@@ -94,6 +94,22 @@ void ColumnData::Append(ColumnAppendState &state, Vector &vector) {
 	}
 }
 
+void ColumnData::RevertAppend(row_t start_row) {
+	lock_guard<mutex> tree_lock(data.node_lock);
+	// find the segment index that the current row belongs to
+	index_t segment_index = data.GetSegmentIndex(start_row);
+	auto segment = data.nodes[segment_index].node;
+	auto &transient = (TransientSegment&) *segment;
+	assert(transient.segment_type == ColumnSegmentType::TRANSIENT);
+
+	// remove any segments AFTER this segment: they should be deleted entirely
+	if (segment_index < data.nodes.size() - 1) {
+		data.nodes.erase(data.nodes.begin() + segment_index + 1, data.nodes.end());
+	}
+	segment->next = nullptr;
+	transient.RevertAppend(start_row);
+}
+
 void ColumnData::Update(Transaction &transaction, Vector &updates, row_t *ids) {
 	// first find the segment that the update belongs to
 	index_t first_id = ids[updates.sel_vector ? updates.sel_vector[0] : 0];

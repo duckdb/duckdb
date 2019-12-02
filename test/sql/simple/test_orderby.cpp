@@ -155,7 +155,7 @@ TEST_CASE("Test ORDER BY exceptions", "[order]") {
 	REQUIRE_FAIL(con.Query("SELECT a % 2, b FROM test UNION SELECT a % 2 AS k FROM test ORDER BY -1"));
 }
 
-TEST_CASE("Test ORDER BY with large table", "[order]") {
+TEST_CASE("Test ORDER BY with large table", "[order][.]") {
 	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

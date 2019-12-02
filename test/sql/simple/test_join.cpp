@@ -77,7 +77,7 @@ TEST_CASE("Test basic joins of tables", "[joins]") {
 	}
 }
 
-TEST_CASE("Test join with > STANDARD_VECTOR_SIZE duplicates", "[joins]") {
+TEST_CASE("Test join with > STANDARD_VECTOR_SIZE duplicates", "[joins][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	unique_ptr<QueryResult> result;

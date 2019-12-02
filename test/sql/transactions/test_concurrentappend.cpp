@@ -12,14 +12,14 @@ using namespace std;
 #define THREAD_COUNT 100
 #define INSERT_ELEMENTS 1000
 
-TEST_CASE("Sequential append", "[transactions]") {
+TEST_CASE("Sequential append", "[transactions][.]") {
 	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 	vector<unique_ptr<Connection>> connections;
 
 	// initialize the database
-	con.Query("CREATE TABLE integers(i INTEGER);");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
 
 	for (size_t i = 0; i < THREAD_COUNT; i++) {
 		connections.push_back(make_unique<Connection>(db));

@@ -41,6 +41,9 @@ public:
 	SegmentBase *GetSegment(index_t row_number);
 	//! Append a column segment to the tree
 	void AppendSegment(unique_ptr<SegmentBase> segment);
+
+	//! Get the segment index of the column segment for the given row (does not lock the segment tree!)
+	index_t GetSegmentIndex(index_t row_number);
 };
 
 } // namespace duckdb

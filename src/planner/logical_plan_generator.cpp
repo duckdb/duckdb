@@ -59,6 +59,8 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundTableRef &ref)
 		return CreatePlan((BoundTableFunction &)ref);
 	case TableReferenceType::EMPTY:
 		return CreatePlan((BoundEmptyTableRef &)ref);
+	case TableReferenceType::EXPRESSION_LIST:
+		return CreatePlan((BoundExpressionListRef &)ref);
 	default:
 		throw Exception("Unsupported bound table ref type type");
 	}

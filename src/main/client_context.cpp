@@ -589,3 +589,31 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 
 	return "";
 }
+
+unique_ptr<TableDescription> ClientContext::TableInfo(string schema_name, string table_name) {
+	lock_guard<mutex> client_guard(context_lock);
+	// check if we are on AutoCommit. In this case we should start a transaction.
+	if (transaction.IsAutoCommit()) {
+		transaction.BeginTransaction();
+	}
+	unique_ptr<TableDescription> result;
+	try {
+		// obtain the table info
+		auto table = db.catalog->GetTable(*this, schema_name, table_name);
+		// write the table info to the result
+		result = make_unique<TableDescription>();
+		result->schema = schema_name;
+		result->table = table_name;
+		for(auto &column : table->columns) {
+			result->columns.push_back(ColumnDefinition(column.name, column.type));
+		}
+	} catch(...) {
+		// table not found!
+		result = nullptr;
+	}
+
+	if (transaction.IsAutoCommit()) {
+		transaction.Commit();
+	}
+	return result;
+}

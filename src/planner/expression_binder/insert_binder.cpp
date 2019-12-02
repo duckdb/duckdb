@@ -11,10 +11,7 @@ InsertBinder::InsertBinder(Binder &binder, ClientContext &context) : ExpressionB
 BindResult InsertBinder::BindExpression(ParsedExpression &expr, index_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::DEFAULT:
-		if (!root_expression) {
-			return BindResult("DEFAULT must be the root expression!");
-		}
-		return BindResult(make_unique<BoundDefaultExpression>(), SQLType());
+		return BindResult("DEFAULT is not allowed here!");
 	case ExpressionClass::WINDOW:
 		return BindResult("INSERT statement cannot contain window functions!");
 	default:
