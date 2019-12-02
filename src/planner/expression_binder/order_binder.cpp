@@ -1,21 +1,26 @@
-#include "planner/expression_binder/order_binder.hpp"
+#include "duckdb/planner/expression_binder/order_binder.hpp"
 
-#include "parser/expression/columnref_expression.hpp"
-#include "parser/expression/constant_expression.hpp"
-#include "parser/query_node/select_node.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 OrderBinder::OrderBinder(index_t projection_index, SelectNode &node, unordered_map<string, index_t> &alias_map,
-                         expression_map_t<index_t> &projection_map)
-    : projection_index(projection_index), node(node), alias_map(alias_map), projection_map(projection_map) {
+                         expression_map_t<index_t> &projection_map,
+                         vector<unique_ptr<ParsedExpression>> &extra_select_list)
+    : projection_index(projection_index), node(node), alias_map(alias_map), projection_map(projection_map),
+      extra_select_list(extra_select_list) {
 }
 
 unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &expr, index_t index) {
 	return make_unique<BoundColumnRefExpression>(expr.GetName(), TypeId::INVALID,
 	                                             ColumnBinding(projection_index, index));
+}
+
+void OrderBinder::RemapIndex(BoundColumnRefExpression &expr, index_t index) {
+	expr.binding.column_index = index;
 }
 
 unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
@@ -75,7 +80,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		throw BinderException("for SELECT DISTINCT, ORDER BY expressions must appear in select list!");
 	}
 	// otherwise we need to push the ORDER BY entry into the select list
-	auto result = CreateProjectionReference(*expr, node.select_list.size());
-	node.select_list.push_back(move(expr));
+	auto result = CreateProjectionReference(*expr, node.select_list.size() + extra_select_list.size());
+	extra_select_list.push_back(move(expr));
 	return result;
 }

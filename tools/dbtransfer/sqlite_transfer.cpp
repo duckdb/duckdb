@@ -1,6 +1,6 @@
 #include "sqlite_transfer.hpp"
 
-#include "common/types/date.hpp"
+#include "duckdb/common/types/date.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -119,18 +119,20 @@ unique_ptr<QueryResult> QueryDatabase(vector<SQLType> result_types, sqlite3 *sql
 	if (sqlite3_prepare_v2(sqlite, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
 		return nullptr;
 	}
-	// construct the result
-	auto result = make_unique<MaterializedQueryResult>(StatementType::SELECT);
+	int col_count = sqlite3_column_count(stmt);
+	vector<string> names;
+	for (int i = 0; i < col_count; i++) {
+		names.push_back(sqlite3_column_name(stmt, i));
+	}
 	// figure out the types of the columns
 	// construct the types of the result
-	int col_count = sqlite3_column_count(stmt);
-	for (int i = 0; i < col_count; i++) {
-		result->names.push_back(sqlite3_column_name(stmt, i));
-	}
 	vector<TypeId> typeids;
 	for (auto &tp : result_types) {
 		typeids.push_back(GetInternalType(tp));
 	}
+
+	// construct the result
+	auto result = make_unique<MaterializedQueryResult>(StatementType::SELECT, result_types, typeids, std::move(names));
 	DataChunk result_chunk;
 	result_chunk.Initialize(typeids);
 	int rc = SQLITE_ERROR;

@@ -1,13 +1,30 @@
-#include "execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "planner/expression/bound_aggregate_expression.hpp"
-#include "planner/expression/bound_constant_expression.hpp"
-#include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+class PhysicalHashAggregateOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalHashAggregateOperatorState(PhysicalHashAggregate *parent, PhysicalOperator *child);
+
+	//! Materialized GROUP BY expression
+	DataChunk group_chunk;
+	//! Materialized aggregates
+	DataChunk aggregate_chunk;
+	//! The current position to scan the HT for output tuples
+	index_t ht_scan_position;
+	index_t tuples_scanned;
+	//! The HT
+	unique_ptr<SuperLargeHashTable> ht;
+	//! The payload chunk, only used while filling the HT
+	DataChunk payload_chunk;
+};
 
 PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
                                              PhysicalOperatorType type)

@@ -1,13 +1,13 @@
-#include "parser/statement/update_statement.hpp"
-#include "planner/binder.hpp"
-#include "planner/expression/bound_default_expression.hpp"
-#include "planner/expression_binder/update_binder.hpp"
-#include "planner/expression_binder/where_binder.hpp"
-#include "planner/statement/bound_update_statement.hpp"
-#include "planner/tableref/bound_basetableref.hpp"
-#include "planner/constraints/bound_check_constraint.hpp"
-#include "parser/expression/columnref_expression.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_default_expression.hpp"
+#include "duckdb/planner/expression_binder/update_binder.hpp"
+#include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/planner/statement/bound_update_statement.hpp"
+#include "duckdb/planner/tableref/bound_basetableref.hpp"
+#include "duckdb/planner/constraints/bound_check_constraint.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -60,9 +60,22 @@ static void BindUpdateConstraints(TableCatalogEntry &table, Binder &binder, Clie
 			BindExtraColumns(table, binder, context, result, check.bound_columns);
 		}
 	}
-	// do the same for all the indexes with multiple columns
+	// for index updates, we do the same, however, for index updates we always turn any update into an insert and a
+	// delete for the insert, we thus need all the columns to be available, hence we check if the update touches any
+	// index columns
+	result.is_index_update = false;
 	for (auto &index : table.storage->indexes) {
-		BindExtraColumns(table, binder, context, result, index->column_id_set);
+		if (index->IndexIsUpdated(result.column_ids)) {
+			result.is_index_update = true;
+		}
+	}
+	if (result.is_index_update) {
+		// the update updates a column required by an index, push projections for all columns
+		unordered_set<column_t> all_columns;
+		for (index_t i = 0; i < table.storage->types.size(); i++) {
+			all_columns.insert(i);
+		}
+		BindExtraColumns(table, binder, context, result, all_columns);
 	}
 }
 

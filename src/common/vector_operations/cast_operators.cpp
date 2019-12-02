@@ -2,9 +2,9 @@
 // cast_operators.cpp
 // Description: This file contains the implementation of the different casts
 //===--------------------------------------------------------------------===//
-#include "common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -64,9 +64,9 @@ static void result_cast_switch(Vector &source, Vector &result, SQLType source_ty
 		templated_cast_loop<SRC, int32_t, duckdb::CastToDate, true>(source, result);
 		break;
 	case SQLTypeId::TIME:
-			assert(result.type == TypeId::INTEGER);
-			templated_cast_loop<SRC, int32_t, duckdb::CastToTime, true>(source, result);
-			break;
+		assert(result.type == TypeId::INTEGER);
+		templated_cast_loop<SRC, int32_t, duckdb::CastToTime, true>(source, result);
+		break;
 	case SQLTypeId::TIMESTAMP:
 		assert(result.type == TypeId::BIGINT);
 		templated_cast_loop<SRC, int64_t, duckdb::CastToTimestamp, true>(source, result);
@@ -133,6 +133,10 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 	case SQLTypeId::DATE:
 		assert(source.type == TypeId::INTEGER);
 		result_cast_switch<int32_t, duckdb::CastFromDate, true>(source, result, source_type, target_type);
+		break;
+	case SQLTypeId::TIME:
+		assert(source.type == TypeId::INTEGER);
+		result_cast_switch<int32_t, duckdb::CastFromTime, true>(source, result, source_type, target_type);
 		break;
 	case SQLTypeId::TIMESTAMP:
 		assert(source.type == TypeId::BIGINT);

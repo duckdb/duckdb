@@ -1,15 +1,13 @@
-#include "storage/checkpoint/table_data_reader.hpp"
-#include "storage/checkpoint/table_data_writer.hpp"
-#include "storage/meta_block_reader.hpp"
+#include "duckdb/storage/checkpoint/table_data_reader.hpp"
+#include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
 
-#include "storage/meta_block_reader.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/null_value.hpp"
 
-#include "common/vector_operations/vector_operations.hpp"
-#include "common/types/null_value.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-
-#include "planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -38,7 +36,7 @@ void TableDataReader::ReadTableData() {
 			data_pointer.block_id = reader.Read<block_id_t>();
 			data_pointer.offset = reader.Read<uint32_t>();
 			// create a persistent segment
-			auto segment = make_unique<PersistentSegment>(manager.block_manager, data_pointer.block_id,
+			auto segment = make_unique<PersistentSegment>(manager.buffer_manager, data_pointer.block_id,
 			                                              data_pointer.offset, GetInternalType(column.type),
 			                                              data_pointer.row_start, data_pointer.tuple_count);
 			info.data[col].push_back(move(segment));

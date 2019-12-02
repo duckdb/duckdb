@@ -1,6 +1,6 @@
 #include "catch.hpp"
-#include "common/types/date.hpp"
-#include "common/types/time.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/time.hpp"
 
 #include <vector>
 

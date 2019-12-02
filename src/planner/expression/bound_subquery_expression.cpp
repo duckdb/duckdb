@@ -1,6 +1,6 @@
-#include "planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/expression/bound_subquery_expression.hpp"
 
-#include "common/exception.hpp"
+#include "duckdb/common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;

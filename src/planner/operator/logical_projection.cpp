@@ -1,4 +1,4 @@
-#include "planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 
 using namespace duckdb;
 using namespace std;

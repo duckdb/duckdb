@@ -1,18 +1,20 @@
-#include "planner/planner.hpp"
+#include "duckdb/planner/planner.hpp"
 
-#include "common/serializer.hpp"
-#include "main/client_context.hpp"
-#include "main/database.hpp"
-#include "parser/statement/list.hpp"
-#include "planner/binder.hpp"
-#include "planner/bound_sql_statement.hpp"
-#include "planner/expression/bound_parameter_expression.hpp"
-#include "planner/logical_plan_generator.hpp"
-#include "planner/operator/logical_explain.hpp"
-#include "planner/operator/logical_prepare.hpp"
-#include "planner/statement/bound_select_statement.hpp"
-#include "planner/query_node/bound_select_node.hpp"
-#include "planner/query_node/bound_set_operation_node.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/statement/list.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/bound_sql_statement.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/planner/logical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_explain.hpp"
+#include "duckdb/planner/operator/logical_prepare.hpp"
+#include "duckdb/planner/statement/bound_select_statement.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/query_node/bound_set_operation_node.hpp"
+
+#include "duckdb/planner/pragma_handler.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -77,6 +79,9 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	}
 	case StatementType::CREATE_SEQUENCE: {
 		auto &stmt = *((CreateSequenceStatement *)statement.get());
+		if (stmt.info->schema == INVALID_SCHEMA) { // no temp sequences
+			stmt.info->schema = DEFAULT_SCHEMA;
+		}
 		context.catalog.CreateSequence(context.ActiveTransaction(), stmt.info.get());
 		break;
 	}
@@ -84,15 +89,33 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		auto &stmt = *((DropStatement *)statement.get());
 		switch (stmt.info->type) {
 		case CatalogType::SEQUENCE:
+			if (stmt.info->schema == INVALID_SCHEMA) { // no temp sequences
+				stmt.info->schema = DEFAULT_SCHEMA;
+			}
 			context.catalog.DropSequence(context.ActiveTransaction(), stmt.info.get());
 			break;
 		case CatalogType::VIEW:
+			if (stmt.info->schema == INVALID_SCHEMA) { // no temp views
+				stmt.info->schema = DEFAULT_SCHEMA;
+			}
 			context.catalog.DropView(context.ActiveTransaction(), stmt.info.get());
 			break;
-		case CatalogType::TABLE:
-			context.catalog.DropTable(context.ActiveTransaction(), stmt.info.get());
+		case CatalogType::TABLE: {
+			auto temp = context.temporary_objects->GetTableOrNull(context.ActiveTransaction(), stmt.info->name);
+			if (temp && (stmt.info->schema == INVALID_SCHEMA || stmt.info->schema == TEMP_SCHEMA)) {
+				context.temporary_objects->DropTable(context.ActiveTransaction(), stmt.info.get());
+			} else {
+				if (stmt.info->schema == INVALID_SCHEMA) {
+					stmt.info->schema = DEFAULT_SCHEMA;
+				}
+				context.catalog.DropTable(context.ActiveTransaction(), stmt.info.get());
+			}
 			break;
+		}
 		case CatalogType::INDEX:
+			if (stmt.info->schema == INVALID_SCHEMA) { // no temp views
+				stmt.info->schema = DEFAULT_SCHEMA;
+			}
 			context.catalog.DropIndex(context.ActiveTransaction(), stmt.info.get());
 			break;
 		case CatalogType::SCHEMA:
@@ -132,7 +155,6 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 			} else {
 				// explicitly commit the current transaction
 				context.transaction.Commit();
-				context.transaction.SetAutoCommit(true);
 			}
 			break;
 		}
@@ -142,7 +164,6 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 			} else {
 				// explicitly rollback the current transaction
 				context.transaction.Rollback();
-				context.transaction.SetAutoCommit(true);
 			}
 			break;
 		}
@@ -165,6 +186,9 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::PREPARE: {
 		auto &stmt = *reinterpret_cast<PrepareStatement *>(statement.get());
 		auto statement_type = stmt.statement->type;
+		if (statement_type == StatementType::EXPLAIN) {
+			throw NotImplementedException("Cannot explain prepared statements");
+		}
 		// first create the plan for the to-be-prepared statement
 		vector<BoundParameterExpression *> bound_parameters;
 		CreatePlan(*stmt.statement, &bound_parameters);
@@ -197,6 +221,15 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		auto &stmt = *reinterpret_cast<DeallocateStatement *>(statement.get());
 		if (!context.prepared_statements->DropEntry(context.ActiveTransaction(), stmt.name, false)) {
 			// silently ignore
+		}
+		break;
+	}
+	case StatementType::PRAGMA: {
+		auto &stmt = *reinterpret_cast<PragmaStatement *>(statement.get());
+		PragmaHandler handler(context);
+		auto new_stmt = handler.HandlePragma(stmt);
+		if (new_stmt) {
+			CreatePlan(move(new_stmt));
 		}
 		break;
 	}
@@ -269,4 +302,9 @@ void Planner::VerifyExpression(Expression &expr, vector<unique_ptr<Expression>> 
 	assert(copy->Hash() == expr.Hash());
 	assert(Expression::Equals(copy.get(), &expr));
 	copies.push_back(move(copy));
+}
+
+void Planner::HandlePragmaStatement(PragmaStatement &statement) {
+
+
 }

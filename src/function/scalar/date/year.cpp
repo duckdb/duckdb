@@ -1,16 +1,16 @@
-#include "function/scalar/date_functions.hpp"
+#include "duckdb/function/scalar/date_functions.hpp"
 
-#include "common/exception.hpp"
-#include "common/types/date.hpp"
-#include "common/types/timestamp.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace std;
 
 namespace duckdb {
 
 static void year_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                   Vector &result) {
+                          Vector &result) {
 	assert(input_count == 1);
 	auto &input = inputs[0];
 	assert(input.type == TypeId::INTEGER || input.type == TypeId::BIGINT);
@@ -35,10 +35,10 @@ static void year_function(ExpressionExecutor &exec, Vector inputs[], index_t inp
 	}
 }
 
-void Year::RegisterFunction(BuiltinFunctions &set) {
+void YearFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet year("year");
-	year.AddFunction(ScalarFunction({ SQLType::DATE }, SQLType::INTEGER, year_function));
-	year.AddFunction(ScalarFunction({ SQLType::TIMESTAMP }, SQLType::INTEGER, year_function));
+	year.AddFunction(ScalarFunction({SQLType::DATE}, SQLType::INTEGER, year_function));
+	year.AddFunction(ScalarFunction({SQLType::TIMESTAMP}, SQLType::INTEGER, year_function));
 	set.AddFunction(year);
 }
 

@@ -1,7 +1,7 @@
-#include "planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
-#include "common/serializer.hpp"
-#include "common/types/hash.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 using namespace duckdb;
 using namespace std;

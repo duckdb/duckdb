@@ -1,13 +1,13 @@
-#include "function/scalar/date_functions.hpp"
-#include "common/types/time.hpp"
-#include "common/types/timestamp.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/scalar/date_functions.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace std;
 
 namespace duckdb {
 
-static const char* age_scalar_function(timestamp_t input1, timestamp_t input2, index_t result_index, string &output) {
+static const char *age_scalar_function(timestamp_t input1, timestamp_t input2, index_t result_index, string &output) {
 	auto interval = Timestamp::GetDifference(input1, input2);
 	auto timestamp = Timestamp::IntervalToTimestamp(interval);
 	auto years = timestamp.year;
@@ -40,7 +40,7 @@ static const char* age_scalar_function(timestamp_t input1, timestamp_t input2, i
 }
 
 static void age_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                  Vector &result) {
+                         Vector &result) {
 	assert(input_count == 2 || input_count == 1);
 
 	auto &input1 = inputs[0];
@@ -62,16 +62,16 @@ static void age_function(ExpressionExecutor &exec, Vector inputs[], index_t inpu
 	result.sel_vector = input1.sel_vector;
 
 	string output_buffer;
-	VectorOperations::BinaryExec<timestamp_t, timestamp_t, const char*>(input1, input2, result,
-		[&](timestamp_t input1, timestamp_t input2, index_t result_index) {
-			return result.string_heap.AddString(age_scalar_function(input1, input2, result_index, output_buffer));
-	});
+	VectorOperations::BinaryExec<timestamp_t, timestamp_t, const char *>(
+	    input1, input2, result, [&](timestamp_t input1, timestamp_t input2, index_t result_index) {
+		    return result.string_heap.AddString(age_scalar_function(input1, input2, result_index, output_buffer));
+	    });
 }
 
-void Age::RegisterFunction(BuiltinFunctions &set) {
+void AgeFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet age("age");
-	age.AddFunction(ScalarFunction({ SQLType::TIMESTAMP }, SQLType::VARCHAR, age_function));
-	age.AddFunction(ScalarFunction({ SQLType::TIMESTAMP,  SQLType::TIMESTAMP }, SQLType::VARCHAR, age_function));
+	age.AddFunction(ScalarFunction({SQLType::TIMESTAMP}, SQLType::VARCHAR, age_function));
+	age.AddFunction(ScalarFunction({SQLType::TIMESTAMP, SQLType::TIMESTAMP}, SQLType::VARCHAR, age_function));
 	set.AddFunction(age);
 }
 

@@ -1,9 +1,9 @@
-#include "function/scalar/math_functions.hpp"
-#include "common/exception.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "main/client_context.hpp"
-#include "planner/expression/bound_function_expression.hpp"
+#include "duckdb/function/scalar/math_functions.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -20,9 +20,9 @@ struct SetseedBindData : public FunctionData {
 	}
 };
 
-static void setseed_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                     Vector &result) {
-	auto &info = (SetseedBindData &) *expr.bind_info;
+static void setseed_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
+                             BoundFunctionExpression &expr, Vector &result) {
+	auto &info = (SetseedBindData &)*expr.bind_info;
 	assert(input_count == 1 && inputs[0].type == TypeId::DOUBLE);
 	result.Initialize(TypeId::INTEGER);
 	result.nullmask.set();
@@ -30,7 +30,7 @@ static void setseed_function(ExpressionExecutor &exec, Vector inputs[], index_t 
 	result.count = inputs[0].count;
 
 	auto input_seeds = ((double *)inputs[0].data);
- 	uint32_t half_max = numeric_limits<uint32_t>::max() / 2;
+	uint32_t half_max = numeric_limits<uint32_t>::max() / 2;
 	VectorOperations::Exec(result, [&](index_t i, index_t k) {
 		if (input_seeds[i] < -1.0 || input_seeds[i] > 1.0) {
 			throw Exception("SETSEED accepts seed values between -1.0 and 1.0, inclusive");
@@ -44,6 +44,7 @@ unique_ptr<FunctionData> setseed_bind(BoundFunctionExpression &expr, ClientConte
 	return make_unique<SetseedBindData>(context);
 }
 
-void Setseed::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("setseed", { SQLType::DOUBLE }, SQLType::SQLNULL, setseed_function, true, setseed_bind));
+void SetseedFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(
+	    ScalarFunction("setseed", {SQLType::DOUBLE}, SQLType::SQLNULL, setseed_function, true, setseed_bind));
 }

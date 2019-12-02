@@ -1,11 +1,30 @@
-#include "execution/operator/join/physical_blockwise_nl_join.hpp"
+#include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
 
-#include "common/types/static_vector.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
+#include "duckdb/common/types/static_vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+class PhysicalBlockwiseNLJoinState : public PhysicalOperatorState {
+public:
+	PhysicalBlockwiseNLJoinState(PhysicalOperator *left, PhysicalOperator *right)
+	    : PhysicalOperatorState(left), left_position(0), right_position(0), fill_in_rhs(false),
+	      checked_found_match(false) {
+		assert(left && right);
+	}
+
+	//! Whether or not a tuple on the LHS has found a match, only used for LEFT OUTER and FULL OUTER joins
+	unique_ptr<bool[]> lhs_found_match;
+	//! Whether or not a tuple on the RHS has found a match, only used for FULL OUTER joins
+	unique_ptr<bool[]> rhs_found_match;
+	ChunkCollection right_chunks;
+	index_t left_position;
+	index_t right_position;
+	bool fill_in_rhs;
+	bool checked_found_match;
+};
 
 PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                                  unique_ptr<PhysicalOperator> right, unique_ptr<Expression> condition,

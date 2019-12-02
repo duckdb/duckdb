@@ -1,17 +1,28 @@
-#include "execution/operator/aggregate/physical_window.hpp"
+#include "duckdb/execution/operator/aggregate/physical_window.hpp"
 
-#include "common/types/chunk_collection.hpp"
-#include "common/types/constant_vector.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "execution/window_segment_tree.hpp"
-#include "planner/expression/bound_reference_expression.hpp"
-#include "planner/expression/bound_window_expression.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/types/constant_vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/window_segment_tree.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
 
 #include <cmath>
 
 using namespace duckdb;
 using namespace std;
+
+//! The operator state of the window
+class PhysicalWindowOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalWindowOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
+	}
+
+	index_t position;
+	ChunkCollection tuples;
+	ChunkCollection window_results;
+};
 
 // this implements a sorted window functions variant
 PhysicalWindow::PhysicalWindow(LogicalOperator &op, vector<unique_ptr<Expression>> select_list,
@@ -52,14 +63,14 @@ static index_t BinarySearchRightmost(ChunkCollection &input, vector<Value> row, 
 	return l - 1;
 }
 
-static void MaterializeExpressions(ClientContext &context, Expression** exprs, index_t expr_count, ChunkCollection &input,
-                                  ChunkCollection &output, bool scalar = false) {
-	if (expr_count == 0 ) {
+static void MaterializeExpressions(ClientContext &context, Expression **exprs, index_t expr_count,
+                                   ChunkCollection &input, ChunkCollection &output, bool scalar = false) {
+	if (expr_count == 0) {
 		return;
 	}
 
 	vector<TypeId> types;
-	for ( index_t expr_idx = 0; expr_idx < expr_count; ++expr_idx ) {
+	for (index_t expr_idx = 0; expr_idx < expr_count; ++expr_idx) {
 		types.push_back(exprs[expr_idx]->return_type);
 	}
 
@@ -67,7 +78,7 @@ static void MaterializeExpressions(ClientContext &context, Expression** exprs, i
 		DataChunk chunk;
 		chunk.Initialize(types);
 		ExpressionExecutor executor(*input.chunks[i]);
-		for ( index_t expr_idx = 0; expr_idx < expr_count; ++expr_idx ) {
+		for (index_t expr_idx = 0; expr_idx < expr_count; ++expr_idx) {
 			auto expr = exprs[expr_idx];
 			executor.ExecuteExpression(*expr, chunk.data[expr_idx]);
 		}
@@ -81,7 +92,7 @@ static void MaterializeExpressions(ClientContext &context, Expression** exprs, i
 	}
 }
 
-static void MaterializeExpression(ClientContext &context, Expression* expr, ChunkCollection &input,
+static void MaterializeExpression(ClientContext &context, Expression *expr, ChunkCollection &input,
                                   ChunkCollection &output, bool scalar = false) {
 	MaterializeExpressions(context, &expr, 1, input, output, scalar);
 }
@@ -275,8 +286,8 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 
 	// evaluate inner expressions of window functions, could be more complex
 	ChunkCollection payload_collection;
-	vector<Expression*> exprs;
-	for (auto& child : wexpr->children)  {
+	vector<Expression *> exprs;
+	for (auto &child : wexpr->children) {
 		exprs.push_back(child.get());
 	}
 	// TODO: child may be a scalar, don't need to materialize the whole collection then

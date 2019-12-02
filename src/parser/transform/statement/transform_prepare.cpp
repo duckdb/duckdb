@@ -1,14 +1,13 @@
-#include "parser/statement/deallocate_statement.hpp"
-#include "parser/statement/execute_statement.hpp"
-#include "parser/statement/prepare_statement.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/parser/statement/deallocate_statement.hpp"
+#include "duckdb/parser/statement/execute_statement.hpp"
+#include "duckdb/parser/statement/prepare_statement.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<PrepareStatement> Transformer::TransformPrepare(Node *node) {
-	PrepareStmt *stmt = reinterpret_cast<PrepareStmt *>(node);
+unique_ptr<PrepareStatement> Transformer::TransformPrepare(PGNode *node) {
+	auto stmt = reinterpret_cast<PGPrepareStmt *>(node);
 	assert(stmt);
 
 	if (stmt->argtypes && stmt->argtypes->length > 0) {
@@ -22,8 +21,8 @@ unique_ptr<PrepareStatement> Transformer::TransformPrepare(Node *node) {
 	return result;
 }
 
-unique_ptr<ExecuteStatement> Transformer::TransformExecute(Node *node) {
-	ExecuteStmt *stmt = reinterpret_cast<ExecuteStmt *>(node);
+unique_ptr<ExecuteStatement> Transformer::TransformExecute(PGNode *node) {
+	auto stmt = reinterpret_cast<PGExecuteStmt *>(node);
 	assert(stmt);
 
 	auto result = make_unique<ExecuteStatement>();
@@ -40,8 +39,8 @@ unique_ptr<ExecuteStatement> Transformer::TransformExecute(Node *node) {
 	return result;
 }
 
-unique_ptr<DeallocateStatement> Transformer::TransformDeallocate(Node *node) {
-	DeallocateStmt *stmt = reinterpret_cast<DeallocateStmt *>(node);
+unique_ptr<DeallocateStatement> Transformer::TransformDeallocate(PGNode *node) {
+	auto stmt = reinterpret_cast<PGDeallocateStmt *>(node);
 	assert(stmt);
 
 	// TODO empty name means all are removed

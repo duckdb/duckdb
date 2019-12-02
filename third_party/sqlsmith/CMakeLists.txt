@@ -14,6 +14,8 @@ add_executable(sqlsmith
                schema.cc
                sqlsmith.cc)
 target_link_libraries(sqlsmith duckdb dbgen)
+TARGET_LINK_LIBRARIES(sqlsmith pthread)
+
 
 set_target_properties(
   sqlsmith

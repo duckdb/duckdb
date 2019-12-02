@@ -75,6 +75,39 @@ matrix:
 
 
     - os: linux
+      dist: bionic
+      name: Valgrind
+
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - valgrind
+
+      script:
+        - mkdir -p build/debug
+        - (cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_SANITIZER=FALSE ../.. && cmake --build .)
+        - valgrind ./build/debug/test/unittest -s "[tpch]"
+
+
+    - os: linux
+      dist: xenial
+      name: REST Server
+
+      before_install:
+        - pip install --user boto3
+
+      script:
+        - cd tools/rest
+        - python3 test_the_rest.py
+
+      # after_success:
+      #   - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a
+
+
+
+    - os: linux
       dist: xenial
       name: GCC 9
 
@@ -93,6 +126,9 @@ matrix:
         - mkdir -p build/release
         - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest "*"
+        - (cd examples/embedded-c; make)
+        - (cd examples/embedded-c++; make)
+        - (cd examples/programmatic-querying; make)
 
       after_success:
         - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a
@@ -142,6 +178,17 @@ matrix:
 
       after_success:
         - coveralls -b build/coverage -E '.*CMakeCXXCompilerId.cpp' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --gcov-options '\-lp'
+
+
+    - os: linux
+      dist: xenial
+      name: GCC 5 (ARM64)
+      arch: arm64
+
+      script:
+        - mkdir -p build/debug
+        - (cd build/debug && cmake -DEXPLICIT_EXCEPTIONS=TRUE -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
+        - build/debug/test/unittest -s "[tpch]"
 
 
     - os: windows
@@ -197,12 +244,14 @@ matrix:
         - R -f dependencies.R
 
       install:
-        - ./prepare_sourcetree.sh
+        - ./configure
         - R CMD build .
         - R CMD INSTALL duckdb_*.tar.gz
 
       script:
         - (cd tests && R -f testthat.R)
+        - R -f ../../examples/R/dbi.R
+        - R -f ../../examples/R/dplyr.R
 
       after_success:
         - python ../upload-s3.py rstats duckdb_*.tar.gz
@@ -221,7 +270,7 @@ matrix:
         - R -f dependencies.R
 
       install:
-        - ./prepare_sourcetree.sh
+        - ./configure
         - R CMD build .
         - R CMD INSTALL --build duckdb_*.tar.gz
         - R CMD INSTALL duckdb_*.tgz
@@ -250,7 +299,7 @@ matrix:
         - export "PATH=/c/Rtools/bin:$PATH"
         - cd tools/rpkg
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe -f dependencies.R
-        - sh prepare_sourcetree.sh
+        - sh configure
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD build .
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL --build --no-multiarch duckdb_*.tar.gz
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL duckdb_*.zip
@@ -348,4 +397,47 @@ matrix:
       after_success:
         C:/Python37-x64/python.exe tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
 
+    - os: osx
+      name: Xcode 11.0 (Amalgamation)
+      osx_image: xcode11
+      script:
+        - python scripts/amalgamation.py
+        - (mkdir -p build/release && cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        - build/release/test/unittest
 
+    - os: linux
+      dist: xenial
+      name: GCC 9 (Amalgamation)
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-9
+      env:
+        - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
+      before_install:
+        - eval "${MATRIX_EVAL}"
+      script:
+        - python scripts/amalgamation.py
+        - mkdir -p build/release
+        - (cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        - build/release/test/unittest "*"
+
+      after_success:
+        - (cd src/amalgamation; zip ../../build/duckdb.zip duckdb.*)
+        - python tools/upload-s3.py src-amalgamation build/duckdb.zip
+
+
+    - os: windows
+      name: VS 2017 (Amalgamation)
+      filter_secrets: false
+      language: c
+      before_script:
+        - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
+      script:
+        - C:/Python37-x64/python.exe scripts/amalgamation.py
+        - cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64
+        - cmake --build . --target duckdb --config Release
+        - cmake --build . --target unittest --config Release
+        - test/Release/unittest.exe

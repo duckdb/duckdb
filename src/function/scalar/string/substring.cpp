@@ -1,13 +1,14 @@
-#include "function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
-#include "common/exception.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace std;
 
 namespace duckdb {
 
-static const char* substring_scalar_function(const char *input_string, int offset, int length, unique_ptr<char[]> &output, index_t &current_len) {
+static const char *substring_scalar_function(const char *input_string, int offset, int length,
+                                             unique_ptr<char[]> &output, index_t &current_len) {
 	// reduce offset by one because SQL starts counting at 1
 	offset--;
 
@@ -42,10 +43,11 @@ static const char* substring_scalar_function(const char *input_string, int offse
 	return output.get();
 }
 
-static void substring_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                        Vector &result) {
-	assert(input_count == 3 && inputs[0].type == TypeId::VARCHAR && inputs[1].type == TypeId::INTEGER && inputs[2].type == TypeId::INTEGER);
-	auto &input_vector  = inputs[0];
+static void substring_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
+                               BoundFunctionExpression &expr, Vector &result) {
+	assert(input_count == 3 && inputs[0].type == TypeId::VARCHAR && inputs[1].type == TypeId::INTEGER &&
+	       inputs[2].type == TypeId::INTEGER);
+	auto &input_vector = inputs[0];
 	auto &offset_vector = inputs[1];
 	auto &length_vector = inputs[2];
 
@@ -53,21 +55,20 @@ static void substring_function(ExpressionExecutor &exec, Vector inputs[], index_
 
 	index_t current_len = 0;
 	unique_ptr<char[]> output;
-	VectorOperations::TernaryExec<const char*, int, int, const char*>(
+	VectorOperations::TernaryExec<const char *, int, int, const char *>(
 	    input_vector, offset_vector, length_vector, result,
 	    [&](const char *input_string, int offset, int length, index_t result_index) {
-			return result.string_heap.AddString(substring_scalar_function(input_string, offset, length, output, current_len));
+		    return result.string_heap.AddString(
+		        substring_scalar_function(input_string, offset, length, output, current_len));
 	    });
 }
 
-void Substring::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction(
-		"substring",          // name of function
-		{ SQLType::VARCHAR,   // argument list
-		  SQLType::INTEGER,
-		  SQLType::INTEGER },
-		SQLType::VARCHAR,     // return type
-		substring_function)); // pointer to function implementation
+void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("substring",       // name of function
+	                               {SQLType::VARCHAR, // argument list
+	                                SQLType::INTEGER, SQLType::INTEGER},
+	                               SQLType::VARCHAR,     // return type
+	                               substring_function)); // pointer to function implementation
 }
 
 } // namespace duckdb

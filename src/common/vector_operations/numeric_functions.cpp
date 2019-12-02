@@ -4,13 +4,13 @@
 // += *= /= -= %=
 //===--------------------------------------------------------------------===//
 
-#include "common/operator/numeric_functions.hpp"
+#include "duckdb/common/operator/numeric_functions.hpp"
 
-#include "common/vector_operations/binary_loops.hpp"
-#include "common/vector_operations/unary_loops.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_operations/binary_loops.hpp"
+#include "duckdb/common/vector_operations/unary_loops.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
-#include "common/vector_operations/unary_numeric.hpp"
+#include "duckdb/common/vector_operations/unary_numeric.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -96,49 +96,49 @@ void VectorOperations::Sin(Vector &left, Vector &result) {
 	if (left.type != TypeId::DOUBLE) {
 		throw InvalidTypeException(left.type, "Invalid type for SIN");
 	}
-	templated_unary_loop<double, double, duckdb::Sin>(left, result);
+	templated_unary_loop<double, double, duckdb::Sin, true>(left, result);
 }
 
 void VectorOperations::Cos(Vector &left, Vector &result) {
 	if (left.type != TypeId::DOUBLE) {
 		throw InvalidTypeException(left.type, "Invalid type for COS");
 	}
-	templated_unary_loop<double, double, duckdb::Cos>(left, result);
+	templated_unary_loop<double, double, duckdb::Cos, true>(left, result);
 }
 
 void VectorOperations::Tan(Vector &left, Vector &result) {
 	if (left.type != TypeId::DOUBLE) {
 		throw InvalidTypeException(left.type, "Invalid type for TAN");
 	}
-	templated_unary_loop<double, double, duckdb::Tan>(left, result);
+	templated_unary_loop<double, double, duckdb::Tan, true>(left, result);
 }
 
 void VectorOperations::ASin(Vector &left, Vector &result) {
 	if (left.type != TypeId::DOUBLE) {
 		throw InvalidTypeException(left.type, "Invalid type for ASIN");
 	}
-	templated_unary_loop<double, double, duckdb::ASin>(left, result);
+	templated_unary_loop<double, double, duckdb::ASin, true>(left, result);
 }
 
 void VectorOperations::ACos(Vector &left, Vector &result) {
 	if (left.type != TypeId::DOUBLE) {
 		throw InvalidTypeException(left.type, "Invalid type for ACOS");
 	}
-	templated_unary_loop<double, double, duckdb::ACos>(left, result);
+	templated_unary_loop<double, double, duckdb::ACos, true>(left, result);
 }
 
 void VectorOperations::ATan(Vector &left, Vector &result) {
 	if (left.type != TypeId::DOUBLE) {
 		throw InvalidTypeException(left.type, "Invalid type for ACOS");
 	}
-	templated_unary_loop<double, double, duckdb::ATan>(left, result);
+	templated_unary_loop<double, double, duckdb::ATan, true>(left, result);
 }
 
 void VectorOperations::ATan2(Vector &left, Vector &right, Vector &result) {
 	if (left.type != TypeId::DOUBLE || right.type != TypeId::DOUBLE) {
 		throw InvalidTypeException(left.type, "Invalid type for ATAN2");
 	}
-	templated_binary_loop<double, double, double, duckdb::ATan2>(left, right, result);
+	templated_binary_loop<double, double, double, duckdb::ATan2, true>(left, right, result);
 }
 
 void VectorOperations::Sign(Vector &input, Vector &result) {
@@ -146,5 +146,5 @@ void VectorOperations::Sign(Vector &input, Vector &result) {
 }
 
 void VectorOperations::Pow(Vector &base, Vector &exponent, Vector &result) {
-	templated_binary_loop<double, double, double, duckdb::Pow>(base, exponent, result);
+	templated_binary_loop<double, double, double, duckdb::Pow, true>(base, exponent, result);
 }

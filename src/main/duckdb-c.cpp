@@ -1,11 +1,15 @@
-#include "common/types/date.hpp"
-#include "common/types/time.hpp"
-#include "common/types/timestamp.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb.h"
 #include "duckdb.hpp"
 
 #include <cstring>
+
+#ifdef _WIN32
+#define strdup _strdup
+#endif
 
 using namespace duckdb;
 
@@ -179,25 +183,24 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			break;
 		}
 		case SQLTypeId::TIME: {
-					index_t row = 0;
-					duckdb_time *target = (duckdb_time *)out->columns[col].data;
-					for (auto &chunk : result->collection.chunks) {
-						dtime_t *source = (dtime_t *)chunk->data[col].data;
-						for (index_t k = 0; k < chunk->data[col].count; k++) {
-							if (!chunk->data[col].nullmask[k]) {
-								int32_t hour, min, sec, msec;
-								Time::Convert(source[k], hour, min, sec, msec);
-								target[row].hour = hour;
-								target[row].min = min;
-								target[row].sec = sec;
-								target[row].msec = msec;
-
-							}
-							row++;
-						}
+			index_t row = 0;
+			duckdb_time *target = (duckdb_time *)out->columns[col].data;
+			for (auto &chunk : result->collection.chunks) {
+				dtime_t *source = (dtime_t *)chunk->data[col].data;
+				for (index_t k = 0; k < chunk->data[col].count; k++) {
+					if (!chunk->data[col].nullmask[k]) {
+						int32_t hour, min, sec, msec;
+						Time::Convert(source[k], hour, min, sec, msec);
+						target[row].hour = hour;
+						target[row].min = min;
+						target[row].sec = sec;
+						target[row].msec = msec;
 					}
-					break;
+					row++;
 				}
+			}
+			break;
+		}
 		case SQLTypeId::TIMESTAMP: {
 			index_t row = 0;
 			duckdb_timestamp *target = (duckdb_timestamp *)out->columns[col].data;
@@ -354,6 +357,10 @@ duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, i
 	return duckdb_bind_value(prepared_statement, param_idx, Value(val));
 }
 
+duckdb_state duckdb_bind_null(duckdb_prepared_statement prepared_statement, index_t param_idx) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value());
+}
+
 duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statement, duckdb_result *out_result) {
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
 	if (!wrapper || !wrapper->statement || !wrapper->statement->success || wrapper->statement->is_invalidated) {
@@ -501,9 +508,9 @@ static Value GetCValue(duckdb_result *result, index_t col, index_t row) {
 		return Value::DATE(date.year, date.month, date.day);
 	}
 	case DUCKDB_TYPE_TIME: {
-			auto time = UnsafeFetch<duckdb_time>(result, col, row);
-			return Value::TIME(time.hour, time.min, time.sec, time.msec);
-		}
+		auto time = UnsafeFetch<duckdb_time>(result, col, row);
+		return Value::TIME(time.hour, time.min, time.sec, time.msec);
+	}
 	case DUCKDB_TYPE_TIMESTAMP: {
 		auto timestamp = UnsafeFetch<duckdb_timestamp>(result, col, row);
 		return Value::TIMESTAMP(timestamp.date.year, timestamp.date.month, timestamp.date.day, timestamp.time.hour,

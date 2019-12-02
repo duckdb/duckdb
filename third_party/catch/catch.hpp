@@ -9943,11 +9943,26 @@ namespace Catch {
             TestSpec testSpec = config->testSpec();
 
             auto const& allTestCases = getAllTestCasesSorted(*config);
+            int total_tests_run = 0, current_test = 0;
             for (auto const& testCase : allTestCases) {
-                if (!context.aborting() && matchTest(testCase, testSpec, *config))
+                if (matchTest(testCase, testSpec, *config)) {
+                    total_tests_run++;
+                }
+            }
+            int fraction = (int) (total_tests_run / 10.0 + 1);
+            int next_report = fraction;
+            for (auto const& testCase : allTestCases) {
+                if (!context.aborting() && matchTest(testCase, testSpec, *config)) {
                     totals += context.runTest(testCase);
-                else
+                    current_test++;
+                    if (current_test == next_report) {
+                        int percentage_completed = (int) ((100.0 * current_test) / total_tests_run);
+                        printf("Completed %d%% (%d / %d)\n", percentage_completed, current_test, total_tests_run);
+                        next_report += fraction;
+                    }
+                } else {
                     context.reporter().skipTest(testCase);
+                }
             }
 
             if (config->warnAboutNoTests() && totals.testCases.total() == 0) {

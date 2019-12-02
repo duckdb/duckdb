@@ -1,4 +1,4 @@
-#include "function/table/sqlite_functions.hpp"
+#include "duckdb/function/table/sqlite_functions.hpp"
 
 using namespace std;
 

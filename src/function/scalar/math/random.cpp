@@ -1,8 +1,8 @@
-#include "function/scalar/math_functions.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "main/client_context.hpp"
-#include "planner/expression/bound_function_expression.hpp"
+#include "duckdb/function/scalar/math_functions.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include <random>
 
 using namespace duckdb;
@@ -20,9 +20,9 @@ struct RandomBindData : public FunctionData {
 	}
 };
 
-static void random_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                     Vector &result) {
-	auto &info = (RandomBindData &) *expr.bind_info;
+static void random_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
+                            BoundFunctionExpression &expr, Vector &result) {
+	auto &info = (RandomBindData &)*expr.bind_info;
 	assert(input_count == 0);
 	result.Initialize(TypeId::DOUBLE);
 
@@ -32,10 +32,9 @@ static void random_function(ExpressionExecutor &exec, Vector inputs[], index_t i
 		result.sel_vector = exec.chunk->sel_vector;
 	}
 
-	double *result_data = (double *) result.data;
-	VectorOperations::Exec(result, [&](index_t i, index_t k) {
-		result_data[i] = info.dist(info.context.random_engine);
-	});
+	double *result_data = (double *)result.data;
+	VectorOperations::Exec(result,
+	                       [&](index_t i, index_t k) { result_data[i] = info.dist(info.context.random_engine); });
 }
 
 unique_ptr<FunctionData> random_bind(BoundFunctionExpression &expr, ClientContext &context) {
@@ -43,6 +42,6 @@ unique_ptr<FunctionData> random_bind(BoundFunctionExpression &expr, ClientContex
 	return make_unique<RandomBindData>(context, move(dist));
 }
 
-void Random::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("random", { }, SQLType::DOUBLE, random_function, true, random_bind));
+void RandomFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("random", {}, SQLType::DOUBLE, random_function, true, random_bind));
 }

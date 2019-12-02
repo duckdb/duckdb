@@ -1,11 +1,11 @@
-#include "execution/aggregate_hashtable.hpp"
+#include "duckdb/execution/aggregate_hashtable.hpp"
 
-#include "common/exception.hpp"
-#include "common/types/null_value.hpp"
-#include "common/types/static_vector.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "planner/expression/bound_aggregate_expression.hpp"
-#include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/static_vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 #include <cmath>
 #include <map>
@@ -82,7 +82,7 @@ void SuperLargeHashTable::Resize(index_t size) {
 		auto new_table = make_unique<SuperLargeHashTable>(size, group_types, payload_types, aggregates, parallel);
 
 		DataChunk groups;
-		groups.Initialize(group_types, false);
+		groups.Initialize(group_types);
 
 		Vector addresses(TypeId::POINTER, true, false);
 		auto data_pointers = (data_ptr_t *)addresses.data;
@@ -176,7 +176,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			vector<TypeId> probe_types(group_types);
 			probe_types.push_back(payload_types[payload_idx]);
 			DataChunk probe_chunk;
-			probe_chunk.Initialize(probe_types, false);
+			probe_chunk.Initialize(probe_types);
 			for (index_t group_idx = 0; group_idx < group_types.size(); group_idx++) {
 				probe_chunk.data[group_idx].Reference(groups.data[group_idx]);
 			}
@@ -253,8 +253,8 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 		assert(payload_types[aggr_idx] == TypeId::BIGINT);
 
 		VectorOperations::Gather::Set(addresses, result.data[aggr_idx]);
-		VectorOperations::AddInPlace(
-		    addresses, aggregates[aggr_idx]->function.state_size(aggregates[aggr_idx]->return_type));
+		VectorOperations::AddInPlace(addresses,
+		                             aggregates[aggr_idx]->function.state_size(aggregates[aggr_idx]->return_type));
 	}
 }
 

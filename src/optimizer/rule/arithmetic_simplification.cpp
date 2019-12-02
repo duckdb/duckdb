@@ -1,8 +1,8 @@
-#include "optimizer/rule/arithmetic_simplification.hpp"
+#include "duckdb/optimizer/rule/arithmetic_simplification.hpp"
 
-#include "common/exception.hpp"
-#include "planner/expression/bound_constant_expression.hpp"
-#include "planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

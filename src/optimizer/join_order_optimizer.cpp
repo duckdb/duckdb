@@ -1,8 +1,8 @@
-#include "optimizer/join_order_optimizer.hpp"
+#include "duckdb/optimizer/join_order_optimizer.hpp"
 
-#include "planner/expression/list.hpp"
-#include "planner/expression_iterator.hpp"
-#include "planner/operator/list.hpp"
+#include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/list.hpp"
 
 using namespace duckdb;
 using namespace std;

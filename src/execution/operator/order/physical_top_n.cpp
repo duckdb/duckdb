@@ -1,13 +1,24 @@
-#include "execution/operator/order/physical_top_n.hpp"
+#include "duckdb/execution/operator/order/physical_top_n.hpp"
 
-#include "common/assert.hpp"
-#include "common/value_operations/value_operations.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+class PhysicalTopNOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalTopNOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
+	}
+
+	index_t position;
+	index_t current_offset;
+	ChunkCollection sorted_data;
+	unique_ptr<index_t[]> heap;
+};
 
 void PhysicalTopN::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalTopNOperatorState *>(state_);

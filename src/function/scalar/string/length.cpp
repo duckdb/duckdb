@@ -1,14 +1,14 @@
-#include "function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
-#include "common/exception.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace std;
 
 namespace duckdb {
 
-static void length_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                     Vector &result) {
+static void length_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
+                            BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 1);
 	auto &input = inputs[0];
 	assert(input.type == TypeId::VARCHAR);
@@ -32,9 +32,9 @@ static void length_function(ExpressionExecutor &exec, Vector inputs[], index_t i
 	});
 }
 
-void Length::RegisterFunction(BuiltinFunctions &set) {
+void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 	// TODO: extend to support arbitrary number of arguments, not only two
-	set.AddFunction(ScalarFunction("length", { SQLType::VARCHAR }, SQLType::BIGINT, length_function));
+	set.AddFunction(ScalarFunction("length", {SQLType::VARCHAR}, SQLType::BIGINT, length_function));
 }
 
 } // namespace duckdb

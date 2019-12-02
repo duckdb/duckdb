@@ -1,6 +1,6 @@
-#include "parser/tableref/table_function_ref.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 
-#include "common/serializer.hpp"
+#include "duckdb/common/serializer.hpp"
 
 using namespace duckdb;
 using namespace std;

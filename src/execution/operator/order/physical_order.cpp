@@ -1,13 +1,23 @@
-#include "execution/operator/order/physical_order.hpp"
+#include "duckdb/execution/operator/order/physical_order.hpp"
 
-#include "common/assert.hpp"
-#include "common/value_operations/value_operations.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+class PhysicalOrderOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalOrderOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
+	}
+
+	index_t position;
+	ChunkCollection sorted_data;
+	unique_ptr<index_t[]> sorted_vector;
+};
 
 void PhysicalOrder::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_);

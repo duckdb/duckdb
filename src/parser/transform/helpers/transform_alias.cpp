@@ -1,10 +1,9 @@
-#include "parser/transformer.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-string Transformer::TransformAlias(Alias *root) {
+string Transformer::TransformAlias(PGAlias *root) {
 	if (!root) {
 		return "";
 	}

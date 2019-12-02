@@ -1,9 +1,9 @@
-#include "execution/operator/schema/physical_create_index.hpp"
+#include "duckdb/execution/operator/schema/physical_create_index.hpp"
 
-#include "catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "execution/expression_executor.hpp"
-#include "main/client_context.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,7 +1,7 @@
-#include "optimizer/join_order/query_graph.hpp"
+#include "duckdb/optimizer/join_order/query_graph.hpp"
 
-#include "common/printer.hpp"
-#include "common/string_util.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;

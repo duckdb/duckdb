@@ -1,9 +1,18 @@
-#include "execution/operator/scan/physical_expression_scan.hpp"
+#include "duckdb/execution/operator/scan/physical_expression_scan.hpp"
 
-#include "execution/expression_executor.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+class PhysicalExpressionScanState : public PhysicalOperatorState {
+public:
+	PhysicalExpressionScanState(PhysicalOperator *child) : PhysicalOperatorState(child), expression_index(0) {
+	}
+
+	//! The current position in the scan
+	index_t expression_index;
+};
 
 void PhysicalExpressionScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = (PhysicalExpressionScanState *)state_;

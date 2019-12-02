@@ -1,13 +1,14 @@
-#include "function/scalar/sequence_functions.hpp"
+#include "duckdb/function/scalar/sequence_functions.hpp"
 
-#include "catalog/catalog.hpp"
-#include "catalog/catalog_entry/sequence_catalog_entry.hpp"
-#include "common/exception.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "main/client_context.hpp"
-#include "main/database.hpp"
-#include "planner/expression/bound_function_expression.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 using namespace std;
 
@@ -82,8 +83,8 @@ static int64_t next_sequence_value(Transaction &transaction, SequenceCatalogEntr
 	return result;
 }
 
-static void nextval_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                      Vector &result) {
+static void nextval_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
+                             BoundFunctionExpression &expr, Vector &result) {
 	auto &info = (NextvalBindData &)*expr.bind_info;
 	assert(input_count == 1 && inputs[0].type == TypeId::VARCHAR);
 	result.Initialize(TypeId::BIGINT);
@@ -142,8 +143,9 @@ static void nextval_dependency(BoundFunctionExpression &expr, unordered_set<Cata
 	}
 }
 
-void Nextval::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("nextval", { SQLType::VARCHAR }, SQLType::BIGINT, nextval_function, true, nextval_bind, nextval_dependency));
+void NextvalFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("nextval", {SQLType::VARCHAR}, SQLType::BIGINT, nextval_function, true, nextval_bind,
+	                               nextval_dependency));
 }
 
 } // namespace duckdb

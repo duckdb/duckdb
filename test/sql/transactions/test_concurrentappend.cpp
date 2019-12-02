@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "common/value_operations/value_operations.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include "test_helpers.hpp"
 
 #include <atomic>
@@ -10,16 +10,16 @@ using namespace duckdb;
 using namespace std;
 
 #define THREAD_COUNT 100
-#define INSERT_ELEMENTS 10
+#define INSERT_ELEMENTS 1000
 
-TEST_CASE("Sequential append", "[transactions]") {
+TEST_CASE("Sequential append", "[transactions][.]") {
 	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 	vector<unique_ptr<Connection>> connections;
 
 	// initialize the database
-	con.Query("CREATE TABLE integers(i INTEGER);");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
 
 	for (size_t i = 0; i < THREAD_COUNT; i++) {
 		connections.push_back(make_unique<Connection>(db));
@@ -80,7 +80,7 @@ TEST_CASE("Concurrent append", "[transactions][.]") {
 	Connection con(db);
 
 	// initialize the database
-	con.Query("CREATE TABLE integers(i INTEGER);");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
 
 	finished_threads = 0;
 
@@ -94,4 +94,8 @@ TEST_CASE("Concurrent append", "[transactions][.]") {
 		threads[i].join();
 		REQUIRE(correct[i]);
 	}
+
+	result = con.Query("SELECT COUNT(*), SUM(i) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(THREAD_COUNT * INSERT_ELEMENTS)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(3 * THREAD_COUNT * INSERT_ELEMENTS)}));
 }

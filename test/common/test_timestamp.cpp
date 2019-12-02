@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "common/types/timestamp.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 #include <vector>
 

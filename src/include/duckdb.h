@@ -149,6 +149,7 @@ duckdb_state duckdb_bind_int64(duckdb_prepared_statement prepared_statement, ind
 duckdb_state duckdb_bind_float(duckdb_prepared_statement prepared_statement, index_t param_idx, float val);
 duckdb_state duckdb_bind_double(duckdb_prepared_statement prepared_statement, index_t param_idx, double val);
 duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, index_t param_idx, const char *val);
+duckdb_state duckdb_bind_null(duckdb_prepared_statement prepared_statement, index_t param_idx);
 
 //! Executes the prepared statements with currently bound parameters
 duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statement, duckdb_result *out_result);

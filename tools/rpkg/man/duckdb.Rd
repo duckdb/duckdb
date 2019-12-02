@@ -4,7 +4,7 @@
 \alias{duckdb}
 \title{DuckDB driver}
 \usage{
-duckdb(dbdir = ":memory:")
+duckdb()
 }
 \description{
 TBD.

@@ -60,6 +60,7 @@ fix_rownames <- function(df) {
 
 #' @rdname DBI
 #' @inheritParams DBI::dbFetch
+#' @importFrom utils head
 #' @export
 setMethod(
   "dbFetch", "duckdb_result",
@@ -193,6 +194,7 @@ setMethod(
 
 #' @rdname DBI
 #' @inheritParams DBI::dbBind
+#' @importFrom testthat skip
 #' @export
 setMethod(
   "dbBind", "duckdb_result",

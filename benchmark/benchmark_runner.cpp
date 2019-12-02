@@ -1,7 +1,7 @@
 #include "benchmark_runner.hpp"
 
-#include "common/profiler.hpp"
-#include "common/string_util.hpp"
+#include "duckdb/common/profiler.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
@@ -131,7 +131,8 @@ void print_help() {
 	fprintf(stderr, "              --out=[file]   Move benchmark output to file\n");
 	fprintf(stderr, "              --log=[file]   Move log output to file\n");
 	fprintf(stderr, "              --info         Prints info about the benchmark\n");
-	fprintf(stderr, "              [name_pattern] Run only the benchmark which names match the specified name pattern, e.g., DS.* for TPC-DS benchmarks\n");
+	fprintf(stderr, "              [name_pattern] Run only the benchmark which names match the specified name pattern, "
+	                "e.g., DS.* for TPC-DS benchmarks\n");
 }
 
 struct BenchmarkConfiguration {
@@ -139,12 +140,12 @@ struct BenchmarkConfiguration {
 	bool info{false};
 };
 
-enum ConfigurationError {None, BenchmarkNotFound, InfoWithoutBenchmarkName};
+enum ConfigurationError { None, BenchmarkNotFound, InfoWithoutBenchmarkName };
 
 /**
  * Builds a configuration based on the passed arguments.
  */
-BenchmarkConfiguration parse_arguments(const int arg_counter, char const* const* arg_values) {
+BenchmarkConfiguration parse_arguments(const int arg_counter, char const *const *arg_values) {
 	auto &instance = BenchmarkRunner::GetInstance();
 	auto &benchmarks = instance.benchmarks;
 	BenchmarkConfiguration configuration;
@@ -186,11 +187,11 @@ BenchmarkConfiguration parse_arguments(const int arg_counter, char const* const*
 	return configuration;
 }
 
-/** 
+/**
  * Runs the benchmarks specified by the configuration if possible.
  * Returns an configuration error code.
  */
-ConfigurationError run_benchmarks(const BenchmarkConfiguration& configuration) {
+ConfigurationError run_benchmarks(const BenchmarkConfiguration &configuration) {
 	auto &instance = BenchmarkRunner::GetInstance();
 	auto &benchmarks = instance.benchmarks;
 	if (!configuration.name_pattern.empty()) {
@@ -199,22 +200,22 @@ ConfigurationError run_benchmarks(const BenchmarkConfiguration& configuration) {
 		std::vector<int> benchmark_indices{};
 		benchmark_indices.reserve(benchmarks.size());
 		for (auto index = 0; index < benchmarks.size(); ++index) {
-			if (RE2::FullMatch(benchmarks[index]->name, configuration.name_pattern)){
+			if (RE2::FullMatch(benchmarks[index]->name, configuration.name_pattern)) {
 				benchmark_indices.emplace_back(index);
 			}
 		}
 		benchmark_indices.shrink_to_fit();
 		if (benchmark_indices.empty()) {
-			return ConfigurationError::BenchmarkNotFound;		
+			return ConfigurationError::BenchmarkNotFound;
 		}
 		if (configuration.info) {
 			// print info of benchmarks
-			for (const auto& benchmark_index : benchmark_indices) {
-				auto info = benchmarks[benchmark_index]->GetInfo();	
+			for (const auto &benchmark_index : benchmark_indices) {
+				auto info = benchmarks[benchmark_index]->GetInfo();
 				fprintf(stdout, "%s\n", info.c_str());
 			}
 		} else {
-			for (const auto& benchmark_index : benchmark_indices) {
+			for (const auto &benchmark_index : benchmark_indices) {
 				instance.RunBenchmark(benchmarks[benchmark_index]);
 			}
 		}
@@ -228,16 +229,16 @@ ConfigurationError run_benchmarks(const BenchmarkConfiguration& configuration) {
 	return ConfigurationError::None;
 }
 
-void print_error_message(const ConfigurationError& error){
+void print_error_message(const ConfigurationError &error) {
 	switch (error) {
-		case ConfigurationError::BenchmarkNotFound:
-			fprintf(stderr, "Benchmark to run could not be found.\n");
-			break;
-		case ConfigurationError::InfoWithoutBenchmarkName:
-			fprintf(stderr, "Info requires benchmark name pattern.\n");
-			break;
-		case ConfigurationError::None:
-			break;
+	case ConfigurationError::BenchmarkNotFound:
+		fprintf(stderr, "Benchmark to run could not be found.\n");
+		break;
+	case ConfigurationError::InfoWithoutBenchmarkName:
+		fprintf(stderr, "Info requires benchmark name pattern.\n");
+		break;
+	case ConfigurationError::None:
+		break;
 	}
 	print_help();
 }
@@ -245,7 +246,7 @@ void print_error_message(const ConfigurationError& error){
 int main(int argc, char **argv) {
 	BenchmarkConfiguration configuration = parse_arguments(argc, argv);
 	const auto configuration_error = run_benchmarks(configuration);
-	if(configuration_error != ConfigurationError::None){
+	if (configuration_error != ConfigurationError::None) {
 		print_error_message(configuration_error);
 		exit(1);
 	}

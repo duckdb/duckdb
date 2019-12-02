@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "common/types/vector.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 using namespace duckdb;
 using namespace std;

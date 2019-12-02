@@ -1,18 +1,17 @@
-#include "parser/statement/select_statement.hpp"
-#include "parser/transformer.hpp"
-#include "common/string_util.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<SelectStatement> Transformer::TransformSelect(Node *node) {
-	SelectStmt *stmt = reinterpret_cast<SelectStmt *>(node);
+unique_ptr<SelectStatement> Transformer::TransformSelect(PGNode *node) {
+	auto stmt = reinterpret_cast<PGSelectStmt *>(node);
 	auto result = make_unique<SelectStatement>();
 
 	if (stmt->windowClause) {
 		for (auto window_ele = stmt->windowClause->head; window_ele != NULL; window_ele = window_ele->next) {
-			auto window_def = reinterpret_cast<WindowDef *>(window_ele->data.ptr_value);
+			auto window_def = reinterpret_cast<PGWindowDef *>(window_ele->data.ptr_value);
 			assert(window_def);
 			assert(window_def->name);
 			auto window_name = StringUtil::Lower(string(window_def->name));
@@ -27,7 +26,7 @@ unique_ptr<SelectStatement> Transformer::TransformSelect(Node *node) {
 
 	// may contain windows so second
 	if (stmt->withClause) {
-		TransformCTE(reinterpret_cast<WithClause *>(stmt->withClause), *result);
+		TransformCTE(reinterpret_cast<PGWithClause *>(stmt->withClause), *result);
 	}
 
 	result->node = TransformSelectNode(stmt);

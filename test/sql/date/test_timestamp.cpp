@@ -1,6 +1,7 @@
 #include "catch.hpp"
-#include "common/types/timestamp.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/common/types/time.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -239,4 +240,30 @@ TEST_CASE("Test milliseconds with timestamps", "[timestamp]") {
 	    "SELECT CAST('2001-04-20 14:42:11.123' AS TIMESTAMP) a, CAST('2001-04-20 14:42:11.0' AS TIMESTAMP) b;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(Timestamp::FromString("2001-04-20 14:42:11.123"))}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(Timestamp::FromString("2001-04-20 14:42:11"))}));
+}
+
+TEST_CASE("Test more timestamp functions", "[timestamp]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	result = con.Query("SELECT CAST(CURRENT_TIME AS STRING), CAST(CURRENT_DATE AS STRING), CAST(CURRENT_TIMESTAMP AS "
+	                   "STRING), CAST(NOW() AS STRING)");
+	REQUIRE(result->success);
+
+	auto ds = result->Fetch();
+	REQUIRE(ds->size() == 1);
+	REQUIRE(ds->column_count == 4);
+
+	auto time = Time::FromString(ds->GetVector(0).GetValue(0).str_value);
+	REQUIRE(time > 0);
+
+	auto date = Date::FromString(ds->GetVector(1).GetValue(0).str_value);
+	REQUIRE(date > 0);
+
+	auto ts = Timestamp::FromString(ds->GetVector(2).GetValue(0).str_value);
+	REQUIRE(ts > 0);
+
+	auto ts2 = Timestamp::FromString(ds->GetVector(3).GetValue(0).str_value);
+	REQUIRE(ts2 > 0);
 }

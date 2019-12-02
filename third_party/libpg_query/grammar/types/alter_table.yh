@@ -1,0 +1,10 @@
+%type <list> alter_identity_column_option_list
+%type <node> alter_column_default
+%type <defelt> alter_identity_column_option
+%type <list> alter_generic_option_list
+%type <node> alter_table_cmd
+%type <node> alter_using
+%type <defelt> alter_generic_option_elem
+%type <list> alter_table_cmds
+%type <list> alter_generic_options
+%type <ival> opt_set_data

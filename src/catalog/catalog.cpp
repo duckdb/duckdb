@@ -1,20 +1,20 @@
-#include "catalog/catalog.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
-#include "catalog/catalog_entry/list.hpp"
-#include "common/exception.hpp"
-#include "main/client_context.hpp"
-#include "parser/expression/function_expression.hpp"
-#include "parser/parsed_data/alter_table_info.hpp"
-#include "parser/parsed_data/create_index_info.hpp"
-#include "parser/parsed_data/create_aggregate_function_info.hpp"
-#include "parser/parsed_data/create_scalar_function_info.hpp"
-#include "parser/parsed_data/create_schema_info.hpp"
-#include "parser/parsed_data/create_sequence_info.hpp"
-#include "parser/parsed_data/create_table_function_info.hpp"
-#include "parser/parsed_data/create_view_info.hpp"
-#include "parser/parsed_data/drop_info.hpp"
-#include "planner/parsed_data/bound_create_table_info.hpp"
-#include "storage/storage_manager.hpp"
+#include "duckdb/catalog/catalog_entry/list.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -23,6 +23,13 @@ Catalog::Catalog(StorageManager &storage) : storage(storage), schemas(*this), de
 }
 
 void Catalog::CreateSchema(Transaction &transaction, CreateSchemaInfo *info) {
+	if (info->schema == INVALID_SCHEMA) {
+		throw CatalogException("Schema not specified");
+	}
+	if (info->schema == TEMP_SCHEMA) {
+		throw CatalogException("Cannot create built-in schema \"%s\"", info->schema.c_str());
+	}
+
 	unordered_set<CatalogEntry *> dependencies;
 	auto entry = make_unique_base<CatalogEntry, SchemaCatalogEntry>(this, info->schema);
 	if (!schemas.CreateEntry(transaction, info->schema, move(entry), dependencies)) {
@@ -33,7 +40,10 @@ void Catalog::CreateSchema(Transaction &transaction, CreateSchemaInfo *info) {
 }
 
 void Catalog::DropSchema(Transaction &transaction, DropInfo *info) {
-	if (info->name == DEFAULT_SCHEMA) {
+	if (info->name == INVALID_SCHEMA) {
+		throw CatalogException("Schema not specified");
+	}
+	if (info->name == DEFAULT_SCHEMA || info->name == TEMP_SCHEMA) {
 		throw CatalogException("Cannot drop schema \"%s\" because it is required by the database system",
 		                       info->name.c_str());
 	}
@@ -45,6 +55,9 @@ void Catalog::DropSchema(Transaction &transaction, DropInfo *info) {
 }
 
 SchemaCatalogEntry *Catalog::GetSchema(Transaction &transaction, const string &schema_name) {
+	if (schema_name == INVALID_SCHEMA) {
+		throw CatalogException("Schema not specified");
+	}
 	auto entry = schemas.GetEntry(transaction, schema_name);
 	if (!entry) {
 		throw CatalogException("Schema with name %s does not exist!", schema_name.c_str());
@@ -87,17 +100,29 @@ void Catalog::AlterTable(ClientContext &context, AlterTableInfo *info) {
 	schema->AlterTable(context, info);
 }
 
-TableCatalogEntry *Catalog::GetTable(Transaction &transaction, const string &schema_name, const string &table_name) {
-	auto table = GetTableOrView(transaction, schema_name, table_name);
+TableCatalogEntry *Catalog::GetTable(ClientContext &context, const string &schema_name, const string &table_name) {
+	auto table = GetTableOrView(context, schema_name, table_name);
 	if (table->type != CatalogType::TABLE) {
 		throw CatalogException("%s is not a table", table_name.c_str());
 	}
 	return (TableCatalogEntry *)table;
 }
 
-CatalogEntry *Catalog::GetTableOrView(Transaction &transaction, const string &schema_name, const string &table_name) {
-	auto schema = GetSchema(transaction, schema_name);
-	return schema->GetTableOrView(transaction, table_name);
+CatalogEntry *Catalog::GetTableOrView(ClientContext &context, string schema_name, const string &table_name) {
+	if (schema_name == INVALID_SCHEMA) {
+		// invalid schema: search both the temporary objects and the normal catalog
+		auto temp_result = context.temporary_objects->GetTableOrNull(context.ActiveTransaction(), table_name);
+		if (temp_result) {
+			return temp_result;
+		}
+		schema_name = DEFAULT_SCHEMA;
+	} else if (schema_name == TEMP_SCHEMA) {
+		// temp_schema: search only the temporary objects
+		return context.temporary_objects->GetTable(context.ActiveTransaction(), table_name);
+	}
+	// default case: first search the schema and then find the table in the schema
+	auto schema = GetSchema(context.ActiveTransaction(), schema_name);
+	return schema->GetTableOrView(context.ActiveTransaction(), table_name);
 }
 
 SequenceCatalogEntry *Catalog::GetSequence(Transaction &transaction, const string &schema_name,

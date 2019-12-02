@@ -1,10 +1,10 @@
-#include "main/client_context.hpp"
-#include "main/database.hpp"
-#include "parser/expression/function_expression.hpp"
-#include "parser/tableref/table_function_ref.hpp"
-#include "planner/binder.hpp"
-#include "planner/expression_binder/constant_binder.hpp"
-#include "planner/tableref/bound_table_function.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
+#include "duckdb/planner/tableref/bound_table_function.hpp"
 
 using namespace duckdb;
 using namespace std;

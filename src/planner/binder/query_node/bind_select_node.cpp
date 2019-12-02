@@ -1,14 +1,14 @@
-#include "parser/expression/columnref_expression.hpp"
-#include "parser/expression/constant_expression.hpp"
-#include "parser/query_node/select_node.hpp"
-#include "parser/tableref/joinref.hpp"
-#include "planner/binder.hpp"
-#include "planner/expression_binder/group_binder.hpp"
-#include "planner/expression_binder/having_binder.hpp"
-#include "planner/expression_binder/order_binder.hpp"
-#include "planner/expression_binder/select_binder.hpp"
-#include "planner/expression_binder/where_binder.hpp"
-#include "planner/query_node/bound_select_node.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/group_binder.hpp"
+#include "duckdb/planner/expression_binder/having_binder.hpp"
+#include "duckdb/planner/expression_binder/order_binder.hpp"
+#include "duckdb/planner/expression_binder/select_binder.hpp"
+#include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -20,37 +20,8 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	result->aggregate_index = GenerateTableIndex();
 	result->window_index = GenerateTableIndex();
 
-	if (statement.values.size() > 0) {
-		// bind value list
-		WhereBinder binder(*this, context);
-		binder.target_type = SQLType(SQLTypeId::INVALID);
-		for (index_t list_idx = 0; list_idx < statement.values.size(); list_idx++) {
-			auto &expression_list = statement.values[list_idx];
-			vector<unique_ptr<Expression>> list;
-			if (list_idx == 0) {
-				// for the first list, we set the expected types as the types of these expressions
-				for (index_t val_idx = 0; val_idx < expression_list.size(); val_idx++) {
-					SQLType result_type;
-					auto expr = binder.Bind(expression_list[val_idx], &result_type);
-					result->types.push_back(result_type);
-					result->names.push_back("col" + to_string(val_idx));
-					list.push_back(move(expr));
-				}
-			} else {
-				// for subsequent lists, we apply the expected types we found in the first list
-				for (index_t val_idx = 0; val_idx < expression_list.size(); val_idx++) {
-					binder.target_type = result->types[val_idx];
-					list.push_back(binder.Bind(expression_list[val_idx]));
-				}
-			}
-			result->values.push_back(move(list));
-		}
-		return move(result);
-	}
 	// first bind the FROM table statement
-	if (statement.from_table) {
-		result->from_table = Bind(*statement.from_table);
-	}
+	result->from_table = Bind(*statement.from_table);
 
 	// visit the select list and expand any "*" statements
 	vector<unique_ptr<ParsedExpression>> new_select_list;
@@ -89,10 +60,11 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	}
 
 	// we bind the DISTINCT ON before we bind any order, aggregations or window functions
+	vector<unique_ptr<ParsedExpression>> extra_select_list;
+	OrderBinder order_binder(result->projection_index, statement, alias_map, projection_map, extra_select_list);
 	for (index_t i = 0; i < statement.distinct_on_targets.size(); i++) {
 		// we treat the Distinct list as a order by
-		OrderBinder distinct_binder(result->projection_index, statement, alias_map, projection_map);
-		auto bound_expr = distinct_binder.Bind(move(statement.distinct_on_targets[i]));
+		auto bound_expr = order_binder.Bind(move(statement.distinct_on_targets[i]));
 		if (!bound_expr) {
 			// DISTINCT ON non-integer constant
 			// remove the expression from the  DISTINCT ON list
@@ -104,7 +76,6 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 
 	// we bind the ORDER BY before we bind any aggregations or window functions
 	for (index_t i = 0; i < statement.orders.size(); i++) {
-		OrderBinder order_binder(result->projection_index, statement, alias_map, projection_map);
 		auto bound_expr = order_binder.Bind(move(statement.orders[i].expression));
 		if (!bound_expr) {
 			// ORDER BY non-integer constant
@@ -160,8 +131,26 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	// after that, we bind to the SELECT list
 	SelectBinder select_binder(*this, context, *result, info);
 	for (index_t i = 0; i < statement.select_list.size(); i++) {
-		SQLType result_type;
 		select_binder.BindTableNames(*statement.select_list[i]);
+	}
+	// including the extra SELECT list from DISTINCT ON & ORDER BY
+	unordered_map<index_t, index_t> projection_remap;
+	for (index_t i = 0; i < extra_select_list.size(); i++) {
+		auto &expr = extra_select_list[i];
+		select_binder.BindTableNames(*expr);
+		// See if it matches an entry already in the SELECT list
+		auto post_bind_index = projection_map.find(expr.get());
+		index_t newindex;
+		if (post_bind_index != projection_map.end()) {
+			newindex = post_bind_index->second;
+		} else {
+			newindex = statement.select_list.size();
+			statement.select_list.push_back(move(expr));
+		}
+		projection_remap[result->column_count + i] = newindex;
+	}
+	for (index_t i = 0; i < statement.select_list.size(); i++) {
+		SQLType result_type;
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type);
 		result->select_list.push_back(move(expr));
 		if (i < result->column_count) {
@@ -182,6 +171,10 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	for (index_t i = 0; i < result->orders.size(); i++) {
 		assert(result->orders[i].expression->type == ExpressionType::BOUND_COLUMN_REF);
 		auto &order = (BoundColumnRefExpression &)*result->orders[i].expression;
+		// See if the column index has been remapped in the projection
+		auto entry = projection_remap.find(order.binding.column_index);
+		if (entry != projection_remap.end())
+			order_binder.RemapIndex(order, entry->second);
 		assert(order.binding.column_index < statement.select_list.size());
 		order.return_type = result->select_list[order.binding.column_index]->return_type;
 		assert(order.return_type != TypeId::INVALID);
@@ -191,6 +184,10 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	for (index_t i = 0; i < result->target_distincts.size(); i++) {
 		assert(result->target_distincts[i]->type == ExpressionType::BOUND_COLUMN_REF);
 		auto &distinct = (BoundColumnRefExpression &)*result->target_distincts[i];
+		// See if the column index has been remapped in the projection
+		auto entry = projection_remap.find(distinct.binding.column_index);
+		if (entry != projection_remap.end())
+			order_binder.RemapIndex(distinct, entry->second);
 		assert(distinct.binding.column_index < statement.select_list.size());
 		distinct.return_type = result->select_list[distinct.binding.column_index]->return_type;
 		assert(distinct.return_type != TypeId::INVALID);

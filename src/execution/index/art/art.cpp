@@ -1,8 +1,9 @@
-#include "execution/index/art/art.hpp"
-#include "execution/expression_executor.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "main/client_context.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/main/client_context.hpp"
 #include <algorithm>
+#include <ctgmath>
 
 using namespace duckdb;
 using namespace std;
@@ -16,7 +17,7 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expres
 	tree = nullptr;
 	expression_result.Initialize(types);
 	int n = 1;
-	// little endian if true
+	//! little endian if true
 	if (*(char *)&n == 1) {
 		is_little_endian = true;
 	} else {
@@ -35,6 +36,12 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expres
 	case TypeId::BIGINT:
 		maxPrefix = sizeof(int64_t);
 		break;
+    case TypeId::FLOAT:
+        maxPrefix = sizeof(float);
+        break;
+    case TypeId::DOUBLE:
+        maxPrefix = sizeof(double);
+        break;
 	default:
 		throw InvalidTypeException(types[0], "Invalid type for index");
 	}
@@ -105,12 +112,18 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	case TypeId::BIGINT:
 		generate_keys<int64_t>(input, keys, is_little_endian);
 		break;
+    case TypeId::FLOAT:
+        generate_keys<float>(input, keys, is_little_endian);
+        break;
+    case TypeId::DOUBLE:
+        generate_keys<double>(input, keys, is_little_endian);
+        break;
 	default:
 		throw InvalidTypeException(input.data[0].type, "Invalid type for index");
 	}
 }
 
-bool ART::Insert(DataChunk &input, Vector &row_ids) {
+bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	assert(row_ids.type == TypeId::BIGINT);
 	assert(input.size() == row_ids.count);
 	assert(types[0] == input.data[0].type);
@@ -152,14 +165,39 @@ bool ART::Insert(DataChunk &input, Vector &row_ids) {
 	return true;
 }
 
-bool ART::Append(DataChunk &appended_data, Vector &row_identifiers) {
-	lock_guard<mutex> l(lock);
-
+bool ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifiers) {
 	// first resolve the expressions for the index
 	ExecuteExpressions(appended_data, expression_result);
 
 	// now insert into the index
-	return Insert(expression_result, row_identifiers);
+	return Insert(lock, expression_result, row_identifiers);
+}
+
+void ART::VerifyAppend(DataChunk &chunk) {
+	if (!is_unique) {
+		return;
+	}
+
+	// unique index, check
+	lock_guard<mutex> l(lock);
+
+	// first resolve the expressions for the index
+	ExecuteExpressions(chunk, expression_result);
+
+	// generate the keys for the given input
+	vector<unique_ptr<Key>> keys;
+	GenerateKeys(expression_result, keys);
+
+	// now insert the elements into the index
+	for (index_t i = 0; i < expression_result.size(); i++) {
+		if (!keys[i]) {
+			continue;
+		}
+		if (Lookup(tree, *keys[i], 0) != nullptr) {
+			// node already exists in tree
+			throw ConstraintException("duplicate key value violates primary key or unique constraint");
+		}
+	}
 }
 
 bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
@@ -247,9 +285,7 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 //===--------------------------------------------------------------------===//
 // Delete
 //===--------------------------------------------------------------------===//
-void ART::Delete(DataChunk &input, Vector &row_ids) {
-	lock_guard<mutex> l(lock);
-
+void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	// first resolve the expressions
 	ExecuteExpressions(input, expression_result);
 
@@ -264,6 +300,8 @@ void ART::Delete(DataChunk &input, Vector &row_ids) {
 			return;
 		}
 		Erase(tree, *keys[k], 0, row_identifiers[i]);
+		// assert that the entry was erased properly
+		assert(!is_unique || Lookup(tree, *keys[k], 0) == nullptr);
 	});
 }
 
@@ -324,6 +362,10 @@ static unique_ptr<Key> CreateKey(ART &art, TypeId type, Value &value) {
 		return Key::CreateKey<int32_t>(value.value_.integer, art.is_little_endian);
 	case TypeId::BIGINT:
 		return Key::CreateKey<int64_t>(value.value_.bigint, art.is_little_endian);
+    case TypeId::FLOAT:
+        return Key::CreateKey<float>(value.value_.float_, art.is_little_endian);
+    case TypeId::DOUBLE:
+        return Key::CreateKey<double>(value.value_.double_, art.is_little_endian);
 	default:
 		throw InvalidTypeException(type, "Invalid type for index");
 	}
@@ -616,8 +658,8 @@ void ART::SearchCloseRange(vector<row_t> &result_ids, ARTIndexScanState *state, 
 	}
 }
 
-void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) {
-	auto state = (ARTIndexScanState *)ss;
+void ART::Scan(Transaction &transaction, TableIndexScanState &table_state, DataChunk &result) {
+	auto state = (ARTIndexScanState *)table_state.index_state.get();
 
 	// scan the index
 	if (!state->checked) {
@@ -684,7 +726,7 @@ void ART::Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) 
 	    std::min((index_t)STANDARD_VECTOR_SIZE, (index_t)state->result_ids.size() - state->result_index);
 
 	// fetch the actual values from the base table
-	table.Fetch(transaction, result, state->column_ids, row_identifiers);
+	table.Fetch(transaction, result, state->column_ids, row_identifiers, table_state);
 
 	// move to the next set of row ids
 	state->result_index += row_identifiers.count;

@@ -1,9 +1,9 @@
-#include "function/scalar/date_functions.hpp"
-#include "common/exception.hpp"
-#include "common/types/date.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "common/string_util.hpp"
-
+#include "duckdb/function/scalar/date_functions.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/string_util.hpp"
 using namespace std;
 
 namespace duckdb {
@@ -128,79 +128,82 @@ static int64_t extract_element(SpecifierType type, timestamp_t element) {
 	case SpecifierType::ISODOW:
 	case SpecifierType::DOY:
 	case SpecifierType::WEEK:
-        return extract_element(type, Timestamp::GetDate(element));
+		return extract_element(type, Timestamp::GetDate(element));
 	case SpecifierType::EPOCH:
 		return Timestamp::GetEpoch(element);
 	case SpecifierType::MILLISECONDS:
-        return Timestamp::GetMilliseconds(element);
+		return Timestamp::GetMilliseconds(element);
 	case SpecifierType::SECOND:
-        return Timestamp::GetSeconds(element);
+		return Timestamp::GetSeconds(element);
 	case SpecifierType::MINUTE:
-        return Timestamp::GetMinutes(element);
+		return Timestamp::GetMinutes(element);
 	case SpecifierType::HOUR:
-        return Timestamp::GetHours(element);
+		return Timestamp::GetHours(element);
 	default:
 		throw NotImplementedException("Specifier type not implemented");
 	}
 }
 
-static void date_part_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                        Vector &result) {
+static void date_part_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
+                               BoundFunctionExpression &expr, Vector &result) {
 	result.Initialize(TypeId::BIGINT);
 	result.nullmask = inputs[1].nullmask;
 	result.count = inputs[1].count;
 	result.sel_vector = inputs[1].sel_vector;
 	if (inputs[1].type != TypeId::INTEGER) {
 		throw NotImplementedException("Can only extract from dates or timestamps");
-    }
+	}
 
 	auto result_data = (int64_t *)result.data;
 	if (inputs[0].IsConstant()) {
 		// constant specifier
 		auto specifier_type = GetSpecifierType(((const char **)inputs[0].data)[0]);
-  		VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, index_t i, index_t k) {
-		    result_data[i] = extract_element(specifier_type, element);
-    	});
+		VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, index_t i, index_t k) {
+			result_data[i] = extract_element(specifier_type, element);
+		});
 	} else {
 		// not constant specifier
 		auto specifiers = ((const char **)inputs[0].data);
 		VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, index_t i, index_t k) {
-		    result_data[i] = extract_element(GetSpecifierType(specifiers[i]), element);
-    	});
+			result_data[i] = extract_element(GetSpecifierType(specifiers[i]), element);
+		});
 	}
 }
 
-static void timestamp_part_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                        Vector &result) {
+static void timestamp_part_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
+                                    BoundFunctionExpression &expr, Vector &result) {
 	result.Initialize(TypeId::BIGINT);
 	result.nullmask = inputs[1].nullmask;
 	result.count = inputs[1].count;
 	result.sel_vector = inputs[1].sel_vector;
 	if (inputs[1].type != TypeId::BIGINT) {
 		throw NotImplementedException("Can only extract from dates or timestamps");
-    }
+	}
 
 	auto result_data = (int64_t *)result.data;
 	if (inputs[0].IsConstant()) {
 		// constant specifier
 		auto specifier_type = GetSpecifierType(((const char **)inputs[0].data)[0]);
-  		VectorOperations::ExecType<timestamp_t>(inputs[1], [&](timestamp_t element, index_t i, index_t k) {
-		    result_data[i] = extract_element(specifier_type, element);
-    	});
+		VectorOperations::ExecType<timestamp_t>(inputs[1], [&](timestamp_t element, index_t i, index_t k) {
+			result_data[i] = extract_element(specifier_type, element);
+		});
 	} else {
 		// not constant specifier
 		auto specifiers = ((const char **)inputs[0].data);
 		VectorOperations::ExecType<timestamp_t>(inputs[1], [&](timestamp_t element, index_t i, index_t k) {
-		    result_data[i] = extract_element(GetSpecifierType(specifiers[i]), element);
-    	});
+			result_data[i] = extract_element(GetSpecifierType(specifiers[i]), element);
+		});
 	}
 }
 
-void DatePart::RegisterFunction(BuiltinFunctions &set) {
-    ScalarFunctionSet date_part("date_part");
-	date_part.AddFunction(ScalarFunction({ SQLType::VARCHAR, SQLType::DATE }, SQLType::BIGINT, date_part_function));
-	date_part.AddFunction(ScalarFunction({ SQLType::VARCHAR, SQLType::TIMESTAMP }, SQLType::BIGINT, timestamp_part_function));
-    set.AddFunction(date_part);
+void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
+	ScalarFunctionSet date_part("date_part");
+	date_part.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::DATE}, SQLType::BIGINT, date_part_function));
+	date_part.AddFunction(
+	    ScalarFunction({SQLType::VARCHAR, SQLType::TIMESTAMP}, SQLType::BIGINT, timestamp_part_function));
+	set.AddFunction(date_part);
+	date_part.name = "datepart";
+	set.AddFunction(date_part);
 }
 
 } // namespace duckdb

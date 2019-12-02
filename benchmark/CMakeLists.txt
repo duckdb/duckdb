@@ -1,5 +1,6 @@
 include_directories(../third_party/catch)
 include_directories(../third_party/tpce-tool/include)
+include_directories(../third_party/sqlite/include)
 include_directories(../test/include)
 include_directories(../tools/dbtransfer/include)
 include_directories(include)

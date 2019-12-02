@@ -1,10 +1,10 @@
-#include "planner/expression/bound_cast_expression.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/logical_plan_generator.hpp"
-#include "planner/operator/logical_projection.hpp"
-#include "planner/operator/logical_set_operation.hpp"
-#include "planner/operator/logical_subquery.hpp"
-#include "planner/query_node/bound_set_operation_node.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/logical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_set_operation.hpp"
+#include "duckdb/planner/operator/logical_subquery.hpp"
+#include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 
 using namespace duckdb;
 using namespace std;

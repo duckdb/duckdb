@@ -1,38 +1,16 @@
-#include "planner/logical_plan_generator.hpp"
-#include "planner/operator/list.hpp"
-#include "planner/query_node/bound_select_node.hpp"
-#include "planner/operator/logical_expression_get.hpp"
+#include "duckdb/planner/logical_plan_generator.hpp"
+#include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/operator/logical_expression_get.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSelectNode &statement) {
 	unique_ptr<LogicalOperator> root;
-	if (statement.from_table) {
-		// SELECT with FROM
-		root = CreatePlan(*statement.from_table);
-	} else {
-		// SELECT without FROM, add empty GET
-		root = make_unique<LogicalGet>();
-	}
-
-	if (statement.values.size() > 0) {
-		// values list, first plan any subqueries in the list
-		for (auto &expr_list : statement.values) {
-			for (auto &expr : expr_list) {
-				PlanSubqueries(&expr, &root);
-			}
-		}
-		// now create a LogicalExpressionGet from the set of expressions
-		// fetch the types
-		vector<TypeId> types;
-		for (auto &expr : statement.values[0]) {
-			types.push_back(expr->return_type);
-		}
-		auto expr_get = make_unique<LogicalExpressionGet>(statement.projection_index, types, move(statement.values));
-		expr_get->AddChild(move(root));
-		return move(expr_get);
-	}
+	assert(statement.from_table);
+	root = CreatePlan(*statement.from_table);
+	assert(root);
 
 	if (statement.where_clause) {
 		PlanSubqueries(&statement.where_clause, &root);

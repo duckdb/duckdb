@@ -77,7 +77,7 @@ TEST_CASE("Test basic joins of tables", "[joins]") {
 	}
 }
 
-TEST_CASE("Test join with > STANDARD_VECTOR_SIZE duplicates", "[joins]") {
+TEST_CASE("Test join with > STANDARD_VECTOR_SIZE duplicates", "[joins][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	unique_ptr<QueryResult> result;
@@ -326,14 +326,14 @@ TEST_CASE("Test USING joins", "[joins]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO t2 VALUES (1,2,3), (2,2,4), (1,3,4)"));
 
 	// USING join
-	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(a)");
+	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(a) ORDER BY t2.b");
 	REQUIRE(result->success);
 
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 2, {3, 4}));
 
-	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(b)");
+	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(b) ORDER BY t2.c");
 	REQUIRE(result->success);
 
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
@@ -352,18 +352,11 @@ TEST_CASE("Test USING joins", "[joins]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {2}));
 	REQUIRE(CHECK_COLUMN(result, 2, {3}));
 
-	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(a+b)");
-	REQUIRE(!result->success);
-
-	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(\"\")");
-	REQUIRE(!result->success);
-
-	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(d)");
-	REQUIRE(!result->success);
+	REQUIRE_FAIL(con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(a+b)"));
+	REQUIRE_FAIL(con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(\"\")"));
+	REQUIRE_FAIL(con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(d)"));
 
 	result = con.Query("SELECT * FROM t1 JOIN t2 USING(a,b)");
-	REQUIRE(result->success);
-
 	REQUIRE(result->names.size() == 4);
 	REQUIRE(result->names[0] == "a");
 	REQUIRE(result->names[1] == "b");

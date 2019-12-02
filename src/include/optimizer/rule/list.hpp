@@ -1,7 +1,0 @@
-#include "optimizer/rule/arithmetic_simplification.hpp"
-#include "optimizer/rule/case_simplification.hpp"
-#include "optimizer/rule/comparison_simplification.hpp"
-#include "optimizer/rule/conjunction_simplification.hpp"
-#include "optimizer/rule/constant_folding.hpp"
-#include "optimizer/rule/distributivity.hpp"
-#include "optimizer/rule/move_constants.hpp"

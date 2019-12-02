@@ -1,13 +1,12 @@
-#include "parser/statement/create_table_statement.hpp"
-#include "parser/transformer.hpp"
-#include "parser/constraint.hpp"
+#include "duckdb/parser/statement/create_table_statement.hpp"
+#include "duckdb/parser/transformer.hpp"
+#include "duckdb/parser/constraint.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<CreateTableStatement> Transformer::TransformCreateTable(Node *node) {
-	auto stmt = reinterpret_cast<CreateStmt *>(node);
+unique_ptr<CreateTableStatement> Transformer::TransformCreateTable(PGNode *node) {
+	auto stmt = reinterpret_cast<PGCreateStmt *>(node);
 	assert(stmt);
 	auto result = make_unique<CreateTableStatement>();
 	auto &info = *result->info.get();
@@ -17,20 +16,26 @@ unique_ptr<CreateTableStatement> Transformer::TransformCreateTable(Node *node) {
 	}
 	assert(stmt->relation);
 
+	info.schema = INVALID_SCHEMA;
 	if (stmt->relation->schemaname) {
 		info.schema = stmt->relation->schemaname;
 	}
 	info.table = stmt->relation->relname;
 	info.if_not_exists = stmt->if_not_exists;
-	info.temporary = stmt->relation->relpersistence == PostgresRelPersistence::RELPERSISTENCE_TEMP;
+	info.temporary = stmt->relation->relpersistence == PGPostgresRelPersistence::PG_RELPERSISTENCE_TEMP;
+
+	if (info.temporary && stmt->oncommit != PGOnCommitAction::PG_ONCOMMIT_PRESERVE_ROWS &&
+	    stmt->oncommit != PGOnCommitAction::PG_ONCOMMIT_NOOP) {
+		throw NotImplementedException("Only ON COMMIT PRESERVE ROWS is supported");
+	}
 
 	assert(stmt->tableElts);
 
 	for (auto c = stmt->tableElts->head; c != NULL; c = lnext(c)) {
-		auto node = reinterpret_cast<Node *>(c->data.ptr_value);
+		auto node = reinterpret_cast<PGNode *>(c->data.ptr_value);
 		switch (node->type) {
-		case T_ColumnDef: {
-			auto cdef = (ColumnDef *)c->data.ptr_value;
+		case T_PGColumnDef: {
+			auto cdef = (PGColumnDef *)c->data.ptr_value;
 			SQLType target_type = TransformTypeName(cdef->typeName);
 			auto centry = ColumnDefinition(cdef->colname, target_type);
 
@@ -45,7 +50,7 @@ unique_ptr<CreateTableStatement> Transformer::TransformCreateTable(Node *node) {
 			info.columns.push_back(move(centry));
 			break;
 		}
-		case T_Constraint: {
+		case T_PGConstraint: {
 			info.constraints.push_back(TransformConstraint(c));
 			break;
 		}

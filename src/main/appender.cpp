@@ -1,17 +1,18 @@
-#include "main/appender.hpp"
+#include "duckdb/main/appender.hpp"
 
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "common/exception.hpp"
-#include "main/connection.hpp"
-#include "main/database.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/main/connection.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-Appender::Appender(Connection &con, string schema_name, string table_name) : con(con), table_entry(nullptr), column(0) {
+Appender::Appender(Connection &con, string schema_name, string table_name, unique_lock<mutex> lock)
+    : con(con), table_entry(nullptr), column(0), lock(std::move(lock)) {
 
-	table_entry = con.db.catalog->GetTable(con.context->transaction.ActiveTransaction(), schema_name, table_name);
+	table_entry = con.db.catalog->GetTable(*con.context, schema_name, table_name);
 
 	// get the table entry
 	auto types = table_entry->GetTypes();

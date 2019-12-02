@@ -1,7 +1,7 @@
-#include "execution/physical_operator.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 
-#include "common/string_util.hpp"
-#include "main/client_context.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;

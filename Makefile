@@ -24,7 +24,7 @@ debug:
 release:
 	mkdir -p build/release && \
 	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
 unittest: debug
@@ -40,8 +40,18 @@ docs:
 doxygen: docs
 	open build/docs/html/index.html
 
+amalgamation:
+	mkdir -p build/amalgamation && \
+	python scripts/amalgamation.py && \
+	cd build/amalgamation && \
+	cmake $(GENERATOR) $(FORCE_COLOR) -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake --build .
+
+test_compile: # test compilation of individual cpp files
+	python scripts/amalgamation.py --compile
+
 format:
-	python format.py
+	python scripts/format.py
 
 third_party/sqllogictest:
 	git clone --depth=1 https://github.com/cwida/sqllogictest.git third_party/sqllogictest

@@ -41,7 +41,13 @@
 \usage{
 \S4method{show}{duckdb_driver}(object)
 
-\S4method{dbConnect}{duckdb_driver}(drv, ...)
+\S4method{dbConnect}{duckdb_driver}(
+  drv,
+  dbdir = ":memory:",
+  ...,
+  debug = getOption("duckdb.debug", FALSE),
+  dbname = NA
+)
 
 \S4method{dbDataType}{duckdb_driver}(dbObj, obj, ...)
 
@@ -57,13 +63,21 @@
 
 \S4method{dbSendQuery}{duckdb_connection,character}(conn, statement, ...)
 
-\S4method{dbSendStatement}{duckdb_connection,character}(conn, statement,
-  ...)
+\S4method{dbSendStatement}{duckdb_connection,character}(conn, statement, ...)
 
 \S4method{dbDataType}{duckdb_connection}(dbObj, obj, ...)
 
-\S4method{dbWriteTable}{duckdb_connection,character,data.frame}(conn, name,
-  value, overwrite = FALSE, append = FALSE, ...)
+\S4method{dbWriteTable}{duckdb_connection,character,data.frame}(
+  conn,
+  name,
+  value,
+  row.names = FALSE,
+  overwrite = FALSE,
+  append = FALSE,
+  field.types = NULL,
+  temporary = FALSE,
+  ...
+)
 
 \S4method{dbListTables}{duckdb_connection}(conn, ...)
 
@@ -127,7 +141,7 @@ or \linkS4class{DBIConnection}}
 \item{name}{A character string specifying the unquoted DBMS table name,
 or the result of a call to \code{\link[=dbQuoteIdentifier]{dbQuoteIdentifier()}}.}
 
-\item{value}{a \link{data.frame} (or coercible to data.frame).}
+\item{value}{a \link[DBI]{data.frame} (or coercible to data.frame).}
 
 \item{overwrite}{Allow overwriting the destination table. Cannot be
 `TRUE` if `append` is also `TRUE`.}

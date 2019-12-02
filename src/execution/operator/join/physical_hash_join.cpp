@@ -1,10 +1,22 @@
-#include "execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/execution/operator/join/physical_hash_join.hpp"
 
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+class PhysicalHashJoinOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalHashJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right)
+	    : PhysicalOperatorState(left), initialized(false) {
+		assert(left && right);
+	}
+
+	bool initialized;
+	DataChunk join_keys;
+	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
+};
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type)

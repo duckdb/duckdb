@@ -1,0 +1,2 @@
+%type <vsetstmt> generic_reset
+%type <vsetstmt> reset_rest

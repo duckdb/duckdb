@@ -1,15 +1,13 @@
-#include "function/function.hpp"
-#include "function/aggregate_function.hpp"
-#include "function/scalar_function.hpp"
-#include "function/cast_rules.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/cast_rules.hpp"
 
-#include "catalog/catalog.hpp"
-// #include "function/aggregate/list.hpp"
-// #include "function/scalar/list.hpp"
-// #include "function/table/list.hpp"
-#include "parser/parsed_data/create_aggregate_function_info.hpp"
-#include "parser/parsed_data/create_scalar_function_info.hpp"
-#include "parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -59,12 +57,9 @@ void BuiltinFunctions::Initialize() {
 
 string Function::CallToString(string name, vector<SQLType> arguments) {
 	string result = name + "(";
-	for (index_t i = 0; i < arguments.size(); i++) {
-		if (i != 0) {
-			result += ", ";
-		}
-		result += SQLTypeToString(arguments[i]);
-	}
+	result += StringUtil::Join(arguments, arguments.size(), ", ", [](const SQLType& argument){
+		return SQLTypeToString(argument);
+	});
 	return result + ")";
 }
 

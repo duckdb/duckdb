@@ -1,10 +1,10 @@
-#include "common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
-#include "common/exception.hpp"
-#include "common/limits.hpp"
-#include "common/types/date.hpp"
-#include "common/types/time.hpp"
-#include "common/types/timestamp.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 #include <cstdlib>
 #include <cctype>
@@ -431,7 +431,6 @@ template <> date_t CastToDate::Operation(int32_t left) {
 template <> date_t CastToDate::Operation(int64_t left) {
 	return (date_t)left;
 }
-
 
 //===--------------------------------------------------------------------===//
 // Cast From Time
