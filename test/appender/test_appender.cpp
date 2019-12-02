@@ -20,7 +20,7 @@ TEST_CASE("Basic appender tests", "[appender]") {
 		auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
 		for (size_t i = 0; i < 2000; i++) {
 			appender->BeginRow();
-			appender->AppendInteger(1);
+			appender->Append<int32_t>(1);
 			appender->EndRow();
 		}
 		con.CloseAppender();
@@ -38,7 +38,7 @@ TEST_CASE("Basic appender tests", "[appender]") {
 		// now append a bunch of values
 		for (size_t i = 0; i < 2000; i++) {
 			appender2->BeginRow();
-			appender2->AppendInteger(1);
+			appender2->Append<int32_t>(1);
 			appender2->EndRow();
 		}
 		con.CloseAppender();
@@ -58,11 +58,11 @@ TEST_CASE("Basic appender tests", "[appender]") {
 
 		for (size_t i = 0; i < 2000; i++) {
 			appender->BeginRow();
-			appender->AppendTinyInt(1);
-			appender->AppendSmallInt(1);
-			appender->AppendBigInt(1);
-			appender->AppendString("hello");
-			appender->AppendDouble(3.33);
+			appender->Append<int8_t>(1);
+			appender->Append<int16_t>(1);
+			appender->Append<int64_t>(1);
+			appender->Append<const char*>("hello");
+			appender->Append<double>(3.33);
 			appender->EndRow();
 		}
 		con.CloseAppender();
@@ -85,8 +85,8 @@ TEST_CASE("Basic appender tests", "[appender]") {
 	{
 		auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
 		appender->BeginRow();
-		appender->AppendValue(Value::INTEGER(2000));
-		REQUIRE_THROWS(appender->AppendValue(Value::INTEGER(2000)));
+		appender->Append<Value>(Value::INTEGER(2000));
+		REQUIRE_THROWS(appender->Append<Value>(Value::INTEGER(2000)));
 		con.CloseAppender();
 	}
 }

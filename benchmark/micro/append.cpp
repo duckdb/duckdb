@@ -118,7 +118,7 @@ FINISH_BENCHMARK(Append100KIntegersPREPAREDPrimary)
 		auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers");                                          \
 		for (int32_t i = 0; i < 100000; i++) {                                                                         \
 			appender->BeginRow();                                                                                      \
-			appender->AppendInteger(i);                                                                                \
+			appender->Append<int32_t>(i);                                                                                \
 			appender->EndRow();                                                                                        \
 		}                                                                                                              \
 		state->conn.CloseAppender();                                                                                   \
@@ -158,7 +158,7 @@ FINISH_BENCHMARK(Append100KIntegersAPPENDERPrimary)
 		auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers");                                          \
 		for (int32_t i = 0; i < 100000; i++) {                                                                         \
 			appender->BeginRow();                                                                                      \
-			appender->AppendInteger(i);                                                                                \
+			appender->Append<int32_t>(i);                                                                                \
 			appender->EndRow();                                                                                        \
 		}                                                                                                              \
 		state->conn.CloseAppender();                                                                                   \
@@ -201,7 +201,7 @@ void Load(DuckDBBenchmarkState *state) override {
 	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers");
 	for (int32_t i = 0; i < 100000; i++) {
 		appender->BeginRow();
-		appender->AppendInteger(i);
+		appender->Append<int32_t>(i);
 		appender->EndRow();
 	}
 	state->conn.CloseAppender();

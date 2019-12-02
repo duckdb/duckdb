@@ -19,7 +19,7 @@ void Load(DuckDBBenchmarkState *state) override {
 	// insert the elements into the database
 	for (size_t i = 0; i < GROUP_ROW_COUNT; i++) {
 		appender->BeginRow();
-		appender->AppendInteger(i % GROUP_COUNT);
+		appender->Append<int32_t>(i % GROUP_COUNT);
 		appender->EndRow();
 
 		sum += i % GROUP_COUNT;
@@ -57,7 +57,7 @@ void Load(DuckDBBenchmarkState *state) override {
 	// insert the elements into the database
 	for (size_t i = 0; i < GROUP_ROW_COUNT; i++) {
 		appender->BeginRow();
-		appender->AppendInteger(i % GROUP_COUNT);
+		appender->Append<int32_t>(i % GROUP_COUNT);
 		appender->EndRow();
 
 		sum += i % GROUP_COUNT;

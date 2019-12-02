@@ -45,48 +45,42 @@ void Appender::EndRow() {
 	}
 }
 
-void Appender::AppendBoolean(int8_t value) {
-	CheckAppend(TypeId::BOOLEAN);
-	auto &col = chunk.data[column++];
-	((int8_t *)col.data)[col.count++] = value;
-}
-
-void Appender::AppendTinyInt(int8_t value) {
+template <> void Appender::Append(int8_t value) {
 	CheckAppend(TypeId::TINYINT);
 	auto &col = chunk.data[column++];
 	((int8_t *)col.data)[col.count++] = value;
 }
 
-void Appender::AppendSmallInt(int16_t value) {
+template <> void Appender::Append(int16_t value) {
 	CheckAppend(TypeId::SMALLINT);
 	auto &col = chunk.data[column++];
 	((int16_t *)col.data)[col.count++] = value;
 }
 
-void Appender::AppendInteger(int value) {
+template <> void Appender::Append(int value) {
 	CheckAppend(TypeId::INTEGER);
 	auto &col = chunk.data[column++];
 	((int32_t *)col.data)[col.count++] = value;
 }
 
-void Appender::AppendBigInt(int64_t value) {
+template <> void Appender::Append(int64_t value) {
 	CheckAppend(TypeId::BIGINT);
 	auto &col = chunk.data[column++];
 	((int64_t *)col.data)[col.count++] = value;
 }
 
-void Appender::AppendString(const char *value) {
+template <> void Appender::Append(const char *value) {
 	CheckAppend(TypeId::VARCHAR);
-	AppendValue(Value(value));
+	Append<Value>(Value(value));
 }
 
-void Appender::AppendDouble(double value) {
+template <> void Appender::Append(double value) {
 	CheckAppend(TypeId::DOUBLE);
 	auto &col = chunk.data[column++];
 	((double *)col.data)[col.count++] = value;
 }
 
-void Appender::AppendValue(Value value) {
+template <> void Appender::Append(Value value) {
 	CheckAppend();
 	chunk.data[column].SetValue(chunk.data[column].count++, value);
 	column++;

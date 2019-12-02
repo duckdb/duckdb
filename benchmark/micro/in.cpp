@@ -28,7 +28,7 @@ using namespace std;
 		auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "strings");                                           \
 		for (size_t i = 0; i < IN_LIST_ROW_COUNT; i++) {                                                               \
 			appender->BeginRow();                                                                                      \
-			appender->AppendValue(Value(GenerateString(distribution, gen)));                                           \
+			appender->Append<Value>(Value(GenerateString(distribution, gen)));                                           \
 			appender->EndRow();                                                                                        \
 		}                                                                                                              \
 		state->conn.CloseAppender();                                                                                   \

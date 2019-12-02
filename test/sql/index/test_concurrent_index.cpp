@@ -37,7 +37,7 @@ TEST_CASE("Concurrent reads during index creation", "[index][.]") {
 	auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
 	for (index_t i = 0; i < 1000000; i++) {
 		appender->BeginRow();
-		appender->AppendInteger(i);
+		appender->Append<int32_t>(i);
 		appender->EndRow();
 	}
 	con.CloseAppender();
@@ -85,7 +85,7 @@ TEST_CASE("Concurrent writes during index creation", "[index][.]") {
 	auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
 	for (index_t i = 0; i < 1000000; i++) {
 		appender->BeginRow();
-		appender->AppendInteger(i);
+		appender->Append<int32_t>(i);
 		appender->EndRow();
 	}
 	con.CloseAppender();

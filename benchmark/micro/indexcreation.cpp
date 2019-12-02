@@ -17,7 +17,7 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers"); // insert the elements into the database
 	for (size_t i = 0; i < ROW_COUNT; i++) {
 		appender->BeginRow();
-		appender->AppendInteger(rand() % UPPERBOUND);
+		appender->Append<int32_t>(rand() % UPPERBOUND);
 		appender->EndRow();
 	}
 	state->conn.CloseAppender();

@@ -46,28 +46,8 @@ public:
 	void EndRow();
 
 	// Append functions
-	// Note that none of these functions (besides AppendValue) does type
-	// conversion, using the wrong type for the wrong column will trigger an
-	// assert
-	//! Append a bool
-
-	void AppendBoolean(int8_t value);
-
-	//! Append a tinyint
-	void AppendTinyInt(int8_t value);
-	//! Append a smallint
-	void AppendSmallInt(int16_t value);
-	//! Append an integer
-	void AppendInteger(int value);
-	//! Append a bigint
-	void AppendBigInt(int64_t value);
-	//! Append a varchar
-	void AppendString(const char *value);
-	//! Append a double
-	void AppendDouble(double value);
-	//! Append a generic value. This is the only function of the append_X family
-	//! that does conversion for you, but in exchange for lower efficiency.
-	void AppendValue(Value value);
+	template<class T>
+	void Append(T value);
 
 	//! Commit the changes made by the appender. The appender cannot be used after this point.
 	void Flush();
@@ -79,4 +59,14 @@ public:
 private:
 	void CheckAppend(TypeId type = TypeId::INVALID);
 };
+
+template <> void Appender::Append(int8_t value);
+template <> void Appender::Append(int16_t value);
+template <> void Appender::Append(int32_t value);
+template <> void Appender::Append(int64_t value);
+template <> void Appender::Append(double value);
+template <> void Appender::Append(const char* value);
+template <> void Appender::Append(double value);
+template <> void Appender::Append(Value value);
+
 } // namespace duckdb

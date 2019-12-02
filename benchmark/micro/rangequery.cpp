@@ -18,8 +18,8 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers"); // insert the elements into the database
 	for (size_t i = 0; i < RANGE_QUERY_ROW_COUNT; i++) {
 		appender->BeginRow();
-		appender->AppendInteger(i);
-		appender->AppendInteger(i);
+		appender->Append<int32_t>(i);
+		appender->Append<int32_t>(i);
 		appender->EndRow();
 	}
 	state->conn.CloseAppender();
@@ -57,8 +57,8 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers"); // insert the elements into the database
 	for (size_t i = 0; i < RANGE_QUERY_ROW_COUNT; i++) {
 		appender->BeginRow();
-		appender->AppendInteger(i);
-		appender->AppendInteger(i);
+		appender->Append<int32_t>(i);
+		appender->Append<int32_t>(i);
 		appender->EndRow();
 	}
 	state->conn.CloseAppender();

@@ -18,7 +18,7 @@ TEST_CASE("Abort appender due to primary key conflict", "[appender]") {
 	return;
 	auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
 	appender->BeginRow();
-	appender->AppendInteger(1);
+	appender->Append<int32_t>(1);
 	appender->EndRow();
 	// FIXME: this should fail
 	appender->Flush();

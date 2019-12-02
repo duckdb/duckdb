@@ -356,7 +356,7 @@ TEST_CASE("Test update/deletes on big table", "[storage][.]") {
 		auto appender = con.OpenAppender(DEFAULT_SCHEMA, "test");
 		for (int32_t i = 0; i < 100000; i++) {
 			appender->BeginRow();
-			appender->AppendInteger(i % 1000);
+			appender->Append<int32_t>(i % 1000);
 			appender->EndRow();
 		}
 		con.CloseAppender();
