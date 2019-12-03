@@ -45,6 +45,11 @@ public:
 	// Append functions
 	template<class T>
 	void Append(T value);
+	// prepared statements
+	template <typename... Args> void AppendRow(Args... args) {
+		BeginRow();
+		AppendRowRecursive(args...);
+	}
 
 	//! Commit the changes made by the appender.
 	void Flush();
@@ -58,8 +63,20 @@ public:
 	void Invalidate(string msg);
 
 private:
-	void CheckAppend(TypeId type = TypeId::INVALID);
+	bool CheckAppend(TypeId type);
 	void CheckInvalidated();
+
+	void AppendRowRecursive() {
+		EndRow();
+	}
+
+	template <typename T, typename... Args>
+	void AppendRowRecursive(T value, Args... args) {
+		Append<T>(value);
+		AppendRowRecursive(args...);
+	}
+
+	void AppendValue(Value value);
 };
 
 template <> void Appender::Append(int8_t value);

@@ -87,3 +87,61 @@ TEST_CASE("Basic appender tests", "[appender]") {
 		REQUIRE_THROWS(appender.Append<Value>(Value::INTEGER(2000)));
 	}
 }
+
+TEST_CASE("Test AppendRow", "[appender]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// create a table to append to
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+
+	// append a bunch of values
+	{
+		Appender appender(con, "integers");
+		for (size_t i = 0; i < 2000; i++) {
+			appender.AppendRow(1);
+		}
+		appender.Close();
+	}
+
+	// check that the values have been added to the database
+	result = con.Query("SELECT SUM(i) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {2000}));
+
+
+	{
+		Appender appender(con, "integers");
+		// test wrong types in append row
+		REQUIRE_THROWS(appender.AppendRow("hello"));
+	}
+
+	// test different types
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE vals(i TINYINT, j SMALLINT, k BIGINT, l VARCHAR, m DECIMAL)"));
+	// now append a bunch of values
+	{
+		Appender appender(con, "vals");
+		for (size_t i = 0; i < 2000; i++) {
+			appender.AppendRow(1, 1, 1, "hello", 3.33);
+		}
+	}
+
+	// check that the values have been added to the database
+	result = con.Query("SELECT l, SUM(k) FROM vals GROUP BY l");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2000}));
+
+	// test dates and times
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE dates(d DATE, t TIME, ts TIMESTAMP)"));
+	// now append a bunch of values
+	{
+		Appender appender(con, "dates");
+		appender.AppendRow(Value::DATE(1992, 1, 1), Value::TIME(1, 1, 1, 0), Value::TIMESTAMP(1992, 1, 1, 1, 1, 1, 0));
+	}
+	result = con.Query("SELECT * FROM dates");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1992, 1, 1)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::TIME(1, 1, 1, 0)}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value::TIMESTAMP(1992, 1, 1, 1, 1, 1, 0)}));
+
+
+}

@@ -41,11 +41,11 @@ void Appender::CheckInvalidated() {
 	}
 }
 
-void Appender::CheckAppend(TypeId type) {
+bool Appender::CheckAppend(TypeId type) {
 	if (column >= chunk.column_count) {
 		throw Exception("Too many appends for chunk!");
 	}
-	assert(type == TypeId::INVALID || chunk.data[column].type == type);
+	return chunk.data[column].type == type;
 }
 
 void Appender::BeginRow() {
@@ -66,42 +66,67 @@ void Appender::EndRow() {
 }
 
 template <> void Appender::Append(int8_t value) {
-	CheckAppend(TypeId::TINYINT);
+	if (!CheckAppend(TypeId::TINYINT)) {
+		AppendValue(Value::TINYINT(value));
+		return;
+	}
+	// fast path: correct type
 	auto &col = chunk.data[column++];
 	((int8_t *)col.data)[col.count++] = value;
 }
 
 template <> void Appender::Append(int16_t value) {
-	CheckAppend(TypeId::SMALLINT);
+	if (!CheckAppend(TypeId::SMALLINT)) {
+		AppendValue(Value::SMALLINT(value));
+		return;
+	}
 	auto &col = chunk.data[column++];
 	((int16_t *)col.data)[col.count++] = value;
 }
 
 template <> void Appender::Append(int value) {
-	CheckAppend(TypeId::INTEGER);
+	if (!CheckAppend(TypeId::INTEGER)) {
+		AppendValue(Value::INTEGER(value));
+		return;
+	}
 	auto &col = chunk.data[column++];
 	((int32_t *)col.data)[col.count++] = value;
 }
 
 template <> void Appender::Append(int64_t value) {
-	CheckAppend(TypeId::BIGINT);
+	if (!CheckAppend(TypeId::BIGINT)) {
+		AppendValue(Value::BIGINT(value));
+		return;
+	}
 	auto &col = chunk.data[column++];
 	((int64_t *)col.data)[col.count++] = value;
 }
 
 template <> void Appender::Append(const char *value) {
-	CheckAppend(TypeId::VARCHAR);
+	if (!CheckAppend(TypeId::VARCHAR)) {
+		AppendValue(Value(value));
+		return;
+	}
 	Append<Value>(Value(value));
 }
 
 template <> void Appender::Append(double value) {
-	CheckAppend(TypeId::DOUBLE);
+	if (!CheckAppend(TypeId::DOUBLE)) {
+		AppendValue(Value::DOUBLE(value));
+		return;
+	}
 	auto &col = chunk.data[column++];
 	((double *)col.data)[col.count++] = value;
 }
 
 template <> void Appender::Append(Value value) {
-	CheckAppend();
+	if (column >= chunk.column_count) {
+		throw Exception("Too many appends for chunk!");
+	}
+	AppendValue(move(value));
+}
+
+void Appender::AppendValue(Value value) {
 	chunk.data[column].SetValue(chunk.data[column].count++, value);
 	column++;
 }
@@ -128,7 +153,6 @@ void Appender::Close() {
 	con.context->RemoveAppender(this);
 	Invalidate("The appender has been closed!");
 }
-
 
 void Appender::Invalidate(string msg) {
 	if (!invalidated_msg.empty()) {
