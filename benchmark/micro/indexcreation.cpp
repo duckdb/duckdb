@@ -14,13 +14,12 @@ using namespace std;
 DUCKDB_BENCHMARK(IndexCreationART, "[micro]")
 virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.Query("CREATE TABLE integers(i INTEGER);");
-	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers"); // insert the elements into the database
+	Appender appender(state->conn, "integers"); // insert the elements into the database
 	for (size_t i = 0; i < ROW_COUNT; i++) {
-		appender->BeginRow();
-		appender->Append<int32_t>(rand() % UPPERBOUND);
-		appender->EndRow();
+		appender.BeginRow();
+		appender.Append<int32_t>(rand() % UPPERBOUND);
+		appender.EndRow();
 	}
-	state->conn.CloseAppender();
 }
 
 virtual string GetQuery() {

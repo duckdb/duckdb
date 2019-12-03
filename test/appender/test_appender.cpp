@@ -17,13 +17,13 @@ TEST_CASE("Basic appender tests", "[appender]") {
 
 	// append a bunch of values
 	{
-		auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
+		Appender appender(con, "integers");
 		for (size_t i = 0; i < 2000; i++) {
-			appender->BeginRow();
-			appender->Append<int32_t>(1);
-			appender->EndRow();
+			appender.BeginRow();
+			appender.Append<int32_t>(1);
+			appender.EndRow();
 		}
-		con.CloseAppender();
+		appender.Close();
 	}
 
 	con.Query("BEGIN TRANSACTION");
@@ -34,14 +34,14 @@ TEST_CASE("Basic appender tests", "[appender]") {
 
 	// test a rollback of the appender
 	{
-		auto appender2 = con.OpenAppender(DEFAULT_SCHEMA, "integers");
+		Appender appender2(con, "integers");
 		// now append a bunch of values
 		for (size_t i = 0; i < 2000; i++) {
-			appender2->BeginRow();
-			appender2->Append<int32_t>(1);
-			appender2->EndRow();
+			appender2.BeginRow();
+			appender2.Append<int32_t>(1);
+			appender2.EndRow();
 		}
-		con.CloseAppender();
+		appender2.Close();
 	}
 	con.Query("ROLLBACK");
 
@@ -54,18 +54,17 @@ TEST_CASE("Basic appender tests", "[appender]") {
 
 	// now append a bunch of values
 	{
-		auto appender = con.OpenAppender(DEFAULT_SCHEMA, "vals");
+		Appender appender(con, "vals");
 
 		for (size_t i = 0; i < 2000; i++) {
-			appender->BeginRow();
-			appender->Append<int8_t>(1);
-			appender->Append<int16_t>(1);
-			appender->Append<int64_t>(1);
-			appender->Append<const char*>("hello");
-			appender->Append<double>(3.33);
-			appender->EndRow();
+			appender.BeginRow();
+			appender.Append<int8_t>(1);
+			appender.Append<int16_t>(1);
+			appender.Append<int64_t>(1);
+			appender.Append<const char*>("hello");
+			appender.Append<double>(3.33);
+			appender.EndRow();
 		}
-		con.CloseAppender();
 	}
 
 	// check that the values have been added to the database
@@ -76,17 +75,15 @@ TEST_CASE("Basic appender tests", "[appender]") {
 	// now test various error conditions
 	// too few values per row
 	{
-		auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
-		appender->BeginRow();
-		REQUIRE_THROWS(appender->EndRow());
-		con.CloseAppender();
+		Appender appender(con, "integers");
+		appender.BeginRow();
+		REQUIRE_THROWS(appender.EndRow());
 	}
 	// too many values per row
 	{
-		auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
-		appender->BeginRow();
-		appender->Append<Value>(Value::INTEGER(2000));
-		REQUIRE_THROWS(appender->Append<Value>(Value::INTEGER(2000)));
-		con.CloseAppender();
+		Appender appender(con, "integers");
+		appender.BeginRow();
+		appender.Append<Value>(Value::INTEGER(2000));
+		REQUIRE_THROWS(appender.Append<Value>(Value::INTEGER(2000)));
 	}
 }

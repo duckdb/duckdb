@@ -9,9 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/main/client_context.hpp"
-
-#include <mutex>
+#include "duckdb/main/table_description.hpp"
 
 namespace duckdb {
 
@@ -24,18 +22,17 @@ class Connection;
 class Appender {
 	//! A reference to a database connection that created this appender
 	Connection &con;
-	//! The table entry to append to
-	TableCatalogEntry *table_entry;
+	//! The table description (including column names)
+	unique_ptr<TableDescription> description;
 	//! Internal chunk used for appends
 	DataChunk chunk;
 	//! The current column to append to
 	index_t column = 0;
-	//! Lock holder for appends
-	std::unique_lock<std::mutex> lock;
-
+	//! Message explaining why the Appender is invalidated (if any)
+	string invalidated_msg;
 public:
-	Appender(Connection &con, string schema_name, string table_name, std::unique_lock<std::mutex> lock);
-
+	Appender(Connection &con, string schema_name, string table_name);
+	Appender(Connection &con, string table_name);
 	~Appender();
 
 	//! Begins a new row append, after calling this the other AppendX() functions
@@ -49,15 +46,20 @@ public:
 	template<class T>
 	void Append(T value);
 
-	//! Commit the changes made by the appender. The appender cannot be used after this point.
+	//! Commit the changes made by the appender.
 	void Flush();
+	//! Flush the changes made by the appender and close it. The appender cannot be used after this point
+	void Close();
 
 	index_t CurrentColumn() {
 		return column;
 	}
 
+	void Invalidate(string msg);
+
 private:
 	void CheckAppend(TypeId type = TypeId::INVALID);
+	void CheckInvalidated();
 };
 
 template <> void Appender::Append(int8_t value);

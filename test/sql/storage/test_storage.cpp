@@ -353,13 +353,13 @@ TEST_CASE("Test update/deletes on big table", "[storage][.]") {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER);"));
-		auto appender = con.OpenAppender(DEFAULT_SCHEMA, "test");
+		Appender appender(con, "test");
 		for (int32_t i = 0; i < 100000; i++) {
-			appender->BeginRow();
-			appender->Append<int32_t>(i % 1000);
-			appender->EndRow();
+			appender.BeginRow();
+			appender.Append<int32_t>(i % 1000);
+			appender.EndRow();
 		}
-		con.CloseAppender();
+		appender.Close();
 		// now perform some updates
 		REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=2000 WHERE a=1"));
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE a=2 OR a=17"));
