@@ -384,7 +384,7 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 					if (ISNA(val)) {
 						appender.Append<Value>(Value());
 					} else {
-						appender.Append<int32_t>((int32_t)val + 719528); // MAGIC!
+						appender.Append<int>((int32_t)val + 719528); // MAGIC!
 					}
 				}
 
@@ -408,7 +408,7 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 					if (val == NA_INTEGER) {
 						appender.Append<Value>(Value());
 					} else {
-						appender.Append<int32_t>(val);
+						appender.Append<int>(val);
 					}
 				} else if (TYPEOF(coldata) == REALSXP) {
 					double val = NUMERIC_POINTER(coldata)[row_idx];
