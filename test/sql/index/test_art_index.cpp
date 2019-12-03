@@ -1116,7 +1116,7 @@ TEST_CASE("ART Floating Point Small", "[art-float-small]") {
 	//! Will use 100 keys
 	auto keys = unique_ptr<float[]>(new float[100]);
 	index_t n  = 100;
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i real)"));
+	con.Query("CREATE TABLE numbers(i real)");
 	//! Generate 100 small floats (0.0 - 1.0)
 	for (index_t i = 0; i < 10; i ++){
 		keys[i] = generate_small_float();
@@ -1130,11 +1130,11 @@ TEST_CASE("ART Floating Point Small", "[art-float-small]") {
 		keys[i] = generate_float(FLT_MIN,FLT_MAX);
 	}
 	//! Insert values and create index
-	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	con.Query("BEGIN TRANSACTION");
 	for (index_t i = 0; i < n; i++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (CAST("+ to_string(keys[i])+ " AS REAL))"));
+		con.Query("INSERT INTO numbers VALUES (CAST("+ to_string(keys[i])+ " AS REAL))");
 	}
-	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+	con.Query("COMMIT");
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
 	//! Generate 5 small-small range queries
 	for (index_t i = 0; i < 5; i++) {
@@ -1241,6 +1241,7 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
 	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE numbers"));
 }
+
 
 TEST_CASE("ART Floating Point", "[art-float][.]") {
 	srand(1);

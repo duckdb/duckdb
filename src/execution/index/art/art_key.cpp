@@ -30,6 +30,7 @@ uint32_t EncodeFloat(float x)
     if (x == 0)
     {
         buff = 0;
+        buff |= (1u<<31);
         return buff;
     }
     //! infinity
@@ -55,7 +56,14 @@ uint32_t EncodeFloat(float x)
         buff |= 1234;
         return buff;
     }
-    return x;
+    buff = reinterpret_cast<uint32_t*>(&x)[0];
+    if ((buff & (1u<<31)) == 0){ //! +0 and positive numbers
+        buff |= (1u<<31);
+    } else { //! negative numbers
+        buff = ~buff; //! complement 1
+    }
+
+    return buff;
 }
 
 
@@ -68,6 +76,7 @@ uint64_t EncodeDouble(double x) {
     if (x == 0)
     {
         buff = 0;
+        buff += (1ull<<63);
         return buff;
     }
     //! infinity
@@ -104,7 +113,13 @@ uint64_t EncodeDouble(double x) {
         buff += lowlong;
         return buff;
     }
-    return x;
+    buff = reinterpret_cast<uint64_t*>(&x)[0];
+    if (buff < (1ull<<63)){ //! +0 and positive numbers
+        buff += (1ull<<63);
+    } else { //! negative numbers
+        buff = ~buff; //! complement 1
+    }
+    return buff;
 }
 
 
@@ -150,7 +165,7 @@ template <> unique_ptr<data_t[]> Key::CreateData(double value, bool is_little_en
     uint64_t converted_value = EncodeDouble(value);
     auto data = unique_ptr<data_t[]>(new data_t[sizeof(converted_value)]);
     reinterpret_cast<uint64_t *>(data.get())[0] = is_little_endian ? BSWAP64(converted_value) : converted_value;
-    data[0] = FlipSign(data[0]);
+//    data[0] = FlipSign(data[0]);
     return data;
 }
 
