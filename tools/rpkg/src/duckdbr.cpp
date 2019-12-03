@@ -1,5 +1,4 @@
 #include "duckdb.hpp"
-#include "duckdb/main/appender.hpp"
 
 #include <Rdefines.h>
 // motherfucker
