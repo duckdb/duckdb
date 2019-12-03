@@ -204,3 +204,24 @@ TEST_CASE("Test using multiple appenders", "[api]") {
 	result = con.Query("SELECT * FROM t1");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 }
+
+TEST_CASE("Test usage of appender interleaved with connection usage", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+	// create the table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(i INTEGER)"));
+	Appender appender(con, "t1");
+
+	appender.AppendRow(1);
+	appender.Flush();
+
+	result = con.Query("SELECT * FROM t1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	appender.AppendRow(2);
+	appender.Flush();
+
+	result = con.Query("SELECT * FROM t1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+}
