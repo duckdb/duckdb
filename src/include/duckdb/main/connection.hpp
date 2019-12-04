@@ -62,6 +62,9 @@ public:
 	//! Get the table info of a specific table, or nullptr if it cannot be found
 	unique_ptr<TableDescription> TableInfo(string schema_name, string table_name);
 
+	//! Extract a set of SQL statements from a specific query
+	vector<unique_ptr<SQLStatement>> ExtractStatements(string query);
+
 	Appender *OpenAppender(string schema_name, string table_name);
 	void CloseAppender();
 

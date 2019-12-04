@@ -8,7 +8,7 @@
 using namespace duckdb;
 using namespace std;
 
-Parser::Parser(ClientContext &context) : context(context) {
+Parser::Parser() {
 }
 
 void Parser::ParseQuery(string query) {

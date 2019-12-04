@@ -366,3 +366,24 @@ TEST_CASE("PREPARE with NULL", "[prepared]") {
 	result = con.Query("SELECT i FROM b");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 }
+
+TEST_CASE("PREPARE multiple statements", "[prepared]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	string query = "SELECT $1::INTEGER; SELECT $1::INTEGER;";
+	// cannot prepare multiple statements like this
+	auto prepared = con.Prepare(query);
+	REQUIRE(!prepared->success);
+	// we can use ExtractStatements to execute the individual statements though
+	auto statements = con.ExtractStatements(query);
+	for(auto &statement : statements) {
+		string stmt = query.substr(statement->stmt_location, statement->stmt_length);
+		prepared = con.Prepare(stmt);
+		REQUIRE(prepared->success);
+
+		result = prepared->Execute(1);
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	}
+}

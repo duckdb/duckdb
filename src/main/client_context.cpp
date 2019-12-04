@@ -244,7 +244,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 		interrupted = false;
 
 		// first parse the query
-		Parser parser(*this);
+		Parser parser;
 		parser.ParseQuery(query.c_str());
 		if (parser.statements.size() != 1) {
 			throw Exception("Cannot prepare multiple statements at once!");
@@ -409,7 +409,7 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 	interrupted = false;
 
 	// now start by parsing the query
-	Parser parser(*this);
+	Parser parser;
 	try {
 		// parse the query and transform it into a set of statements
 		parser.ParseQuery(query.c_str());

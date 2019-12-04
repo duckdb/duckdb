@@ -1,5 +1,4 @@
 #include "duckdb.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 #include "catch.hpp"
@@ -7,10 +6,7 @@
 using namespace duckdb;
 
 TEST_CASE("Test parser", "[parser]") {
-    DuckDB db(nullptr);
-    ClientContext context(db);
-
-    Parser parser(context);
+    Parser parser;
 
     SECTION("Query with several statements") {
         parser.ParseQuery("CREATE TABLE nums (num INTEGER);"

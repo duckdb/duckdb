@@ -4,6 +4,7 @@
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/parser/parser.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -80,6 +81,12 @@ unique_ptr<TableDescription> Connection::TableInfo(string table_name) {
 
 unique_ptr<TableDescription> Connection::TableInfo(string schema_name, string table_name) {
 	return context->TableInfo(schema_name, table_name);
+}
+
+vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(string query) {
+	Parser parser;
+	parser.ParseQuery(query);
+	return move(parser.statements);
 }
 
 Appender *Connection::OpenAppender(string schema_name, string table_name) {

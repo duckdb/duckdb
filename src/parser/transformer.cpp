@@ -20,8 +20,13 @@ bool Transformer::TransformParseTree(PGList *tree, vector<unique_ptr<SQLStatemen
 
 unique_ptr<SQLStatement> Transformer::TransformStatement(PGNode *stmt) {
 	switch (stmt->type) {
-	case T_PGRawStmt:
-		return TransformStatement(((PGRawStmt *)stmt)->stmt);
+	case T_PGRawStmt: {
+		auto raw_stmt = (PGRawStmt *)stmt;
+		auto result = TransformStatement(raw_stmt->stmt);
+		result->stmt_location = raw_stmt->stmt_location;
+		result->stmt_length = raw_stmt->stmt_len;
+		return result;
+	}
 	case T_PGSelectStmt:
 		return TransformSelect(stmt);
 	case T_PGCreateStmt:
