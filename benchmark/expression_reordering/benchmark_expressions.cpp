@@ -10,7 +10,7 @@ using namespace std;
 
 string getQuery(int queryID) {
 		
-	string queries [36] = {
+	string queries [35] = {
 		"l_quantity <= 1 + 10",
 		"l_shipdate > date '1992-01-01'",
 		"l_receiptdate >= l_commitdate",
@@ -54,8 +54,7 @@ string getQuery(int queryID) {
 		"upper(l_comment) = 'R'",
 		"substring(l_shipinstruct, 1, 7) = 'R'",
 
-		"date_part('year', l_commitdate)",
-		"age(l_commitdate::TIMESTAMP)"
+		"date_part('year', l_commitdate)"
 		};
 
 	string enable_profiling = "pragma enable_profiling='json';";
@@ -219,7 +218,3 @@ FINISH_BENCHMARK(ExpressionReorderingH33)
 DUCKDB_BENCHMARK(ExpressionReorderingH34, "[expression_reordering]")
 HEURISTICS_QUERY_BODY(34);
 FINISH_BENCHMARK(ExpressionReorderingH34)
-
-DUCKDB_BENCHMARK(ExpressionReorderingH35, "[expression_reordering]")
-HEURISTICS_QUERY_BODY(35);
-FINISH_BENCHMARK(ExpressionReorderingH35)
