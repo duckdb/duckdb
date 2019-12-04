@@ -6,6 +6,9 @@
 #include "duckdb.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/main/client_context.hpp"
 
 // you can set this to enable compression. You will need to link zlib as well.
 // #define CPPHTTPLIB_ZLIB_SUPPORT 1

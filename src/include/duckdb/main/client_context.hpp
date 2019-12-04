@@ -20,6 +20,7 @@
 #include <random>
 
 namespace duckdb {
+class Appender;
 class Catalog;
 class DuckDB;
 
@@ -82,6 +83,8 @@ public:
 
 	//! Get the table info of a specific table, or nullptr if it cannot be found
 	unique_ptr<TableDescription> TableInfo(string schema_name, string table_name);
+	//! Appends a DataChunk to the specified table. Returns whether or not the append was successful.
+	void Append(TableDescription &description, DataChunk &chunk);
 
 	//! Prepare a query
 	unique_ptr<PreparedStatement> Prepare(string query);
@@ -90,6 +93,8 @@ public:
 	//! Removes a prepared statement from the set of prepared statements in the client context
 	void RemovePreparedStatement(PreparedStatement *statement);
 
+	void RegisterAppender(Appender *appender);
+	void RemoveAppender(Appender *appender);
 private:
 	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
 	//! true.
@@ -113,5 +118,7 @@ private:
 	StreamQueryResult *open_result = nullptr;
 	//! Prepared statement objects that were created using the ClientContext::Prepare method
 	unordered_set<PreparedStatement *> prepared_statement_objects;
+	//! Appenders that were attached to this client context
+	unordered_set<Appender*> appenders;
 };
 } // namespace duckdb
