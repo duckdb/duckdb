@@ -12,7 +12,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/prepared_statement.hpp"
-#include "duckdb/main/appender.hpp"
+#include "duckdb/main/table_description.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
 
 namespace duckdb {
@@ -29,6 +29,10 @@ public:
 	Connection(DuckDB &database);
 	~Connection();
 
+	DuckDB &db;
+	unique_ptr<ClientContext> context;
+	warning_callback warning_cb;
+public:
 	//! Returns query profiling information for the current query
 	string GetProfilingInformation(ProfilerPrintFormat format = ProfilerPrintFormat::QUERY_TREE);
 
@@ -53,6 +57,11 @@ public:
 	//! Issues a query to the database and materializes the result (if necessary). Always returns a
 	//! MaterializedQueryResult.
 	unique_ptr<MaterializedQueryResult> Query(string query);
+	// prepared statements
+	template <typename... Args> unique_ptr<QueryResult> Query(string query, Args... args) {
+		vector<Value> values;
+		return QueryParamsRecursive(query, values, args...);
+	}
 
 	//! Prepare the specified query, returning a prepared statement object
 	unique_ptr<PreparedStatement> Prepare(string query);
@@ -61,27 +70,12 @@ public:
 	unique_ptr<TableDescription> TableInfo(string table_name);
 	//! Get the table info of a specific table, or nullptr if it cannot be found
 	unique_ptr<TableDescription> TableInfo(string schema_name, string table_name);
-
 	//! Extract a set of SQL statements from a specific query
 	vector<unique_ptr<SQLStatement>> ExtractStatements(string query);
 
-	Appender *OpenAppender(string schema_name, string table_name);
-	void CloseAppender();
-
-	// prepared statements
-	template <typename... Args> unique_ptr<QueryResult> Query(string query, Args... args) {
-		vector<Value> values;
-		return QueryParamsRecursive(query, values, args...);
-	}
-
-public:
-	DuckDB &db;
-	unique_ptr<ClientContext> context;
-	warning_callback warning_cb;
-
+	//! Appends a DataChunk to the specified table
+	void Append(TableDescription &description, DataChunk &chunk);
 private:
-	unique_ptr<Appender> appender = nullptr;
-
 	unique_ptr<QueryResult> QueryParamsRecursive(string query, vector<Value> &values);
 
 	template <typename T, typename... Args>

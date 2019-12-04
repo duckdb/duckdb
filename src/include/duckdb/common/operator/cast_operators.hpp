@@ -112,12 +112,8 @@ struct CastToDate {
 	}
 };
 
-template <> int32_t CastFromDate::Operation(duckdb::date_t left);
-template <> int64_t CastFromDate::Operation(duckdb::date_t left);
 template <> duckdb::string CastFromDate::Operation(duckdb::date_t left);
 template <> duckdb::date_t CastToDate::Operation(const char *left);
-template <> duckdb::date_t CastToDate::Operation(int32_t left);
-template <> duckdb::date_t CastToDate::Operation(int64_t left);
 
 struct CastFromTime {
 	template <class SRC, class DST> static inline DST Operation(SRC left) {
@@ -129,12 +125,8 @@ struct CastToTime {
 		throw duckdb::NotImplementedException("Cast to time could not be performed!");
 	}
 };
-template <> int32_t CastFromTime::Operation(duckdb::dtime_t left);
-template <> int64_t CastFromTime::Operation(duckdb::dtime_t left);
 template <> duckdb::string CastFromTime::Operation(duckdb::dtime_t left);
 template <> duckdb::dtime_t CastToTime::Operation(const char *left);
-template <> duckdb::dtime_t CastToTime::Operation(int32_t left);
-template <> duckdb::dtime_t CastToTime::Operation(int64_t left);
 
 struct CastToTimestamp {
 	template <class SRC, class DST> static inline DST Operation(SRC left) {
@@ -148,9 +140,21 @@ struct CastFromTimestamp {
 	}
 };
 
-template <> int64_t CastFromTimestamp::Operation(duckdb::timestamp_t left);
+struct CastTimestampToDate {
+	template <class SRC, class DST> static inline DST Operation(SRC left) {
+		throw duckdb::NotImplementedException("Cast to timestamp could not be performed!");
+	}
+};
+
+struct CastTimestampToTime {
+	template <class SRC, class DST> static inline DST Operation(SRC left) {
+		throw duckdb::NotImplementedException("Cast to timestamp could not be performed!");
+	}
+};
+
+template <> duckdb::date_t CastTimestampToDate::Operation(duckdb::timestamp_t left);
+template <> duckdb::dtime_t CastTimestampToTime::Operation(duckdb::timestamp_t left);
 template <> duckdb::string CastFromTimestamp::Operation(duckdb::timestamp_t left);
 template <> duckdb::timestamp_t CastToTimestamp::Operation(const char *left);
-template <> duckdb::timestamp_t CastToTimestamp::Operation(int64_t left);
 
 } // namespace duckdb

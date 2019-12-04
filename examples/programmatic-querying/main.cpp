@@ -6,6 +6,7 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/main/client_context.hpp"
 
 using namespace duckdb;
 

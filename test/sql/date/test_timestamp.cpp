@@ -50,6 +50,17 @@ TEST_CASE("Test TIMESTAMP type", "[timestamp]") {
 	REQUIRE_FAIL(con.Query("SELECT t%t FROM timestamp"));
 	// FIXME: we can subtract timestamps!
 	// REQUIRE_NO_FAIL(con.Query("SELECT t-t FROM timestamp"));
+
+	// test casting timestamp
+	result = con.Query("SELECT (TIMESTAMP '1992-01-01 01:01:01')::DATE;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1992, 1, 1)}));
+	result = con.Query("SELECT (TIMESTAMP '1992-01-01 01:01:01')::TIME;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIME(1, 1, 1, 0)}));
+	// scalar timestamp
+	result = con.Query("SELECT t::DATE FROM timestamp WHERE EXTRACT(YEAR from t)=2007 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(2007, 1, 1)}));
+	result = con.Query("SELECT t::TIME FROM timestamp WHERE EXTRACT(YEAR from t)=2007 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIME(0, 0, 1, 0)}));
 }
 
 TEST_CASE("Test out of range/incorrect timestamp formats", "[timestamp]") {

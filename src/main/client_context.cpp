@@ -1,5 +1,6 @@
 #include "duckdb/main/client_context.hpp"
 
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
@@ -18,6 +19,8 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/parser/statement/deallocate_statement.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/main/appender.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -47,7 +50,27 @@ void ClientContext::Cleanup() {
 	for (auto &statement : prepared_statement_objects) {
 		statement->is_invalidated = true;
 	}
-	return CleanupInternal();
+	for(auto &appender : appenders) {
+		appender->Invalidate("Connection has been closed!");
+	}
+	CleanupInternal();
+}
+
+
+void ClientContext::RegisterAppender(Appender *appender) {
+	lock_guard<mutex> client_guard(context_lock);
+	if (is_invalidated) {
+		throw Exception("Database that this connection belongs to has been closed!");
+	}
+	appenders.insert(appender);
+}
+
+void ClientContext::RemoveAppender(Appender *appender) {
+	lock_guard<mutex> client_guard(context_lock);
+	if (is_invalidated) {
+		return;
+	}
+	appenders.erase(appender);
 }
 
 unique_ptr<DataChunk> ClientContext::Fetch() {
@@ -452,6 +475,11 @@ void ClientContext::Invalidate() {
 	if (open_result) {
 		open_result->is_open = false;
 	}
+	// and close any open appenders
+	for(auto &appender : appenders) {
+		appender->Invalidate("Database that this appender belongs to has been closed!");
+	}
+	appenders.clear();
 }
 
 string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> statement) {
@@ -592,7 +620,10 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 
 unique_ptr<TableDescription> ClientContext::TableInfo(string schema_name, string table_name) {
 	lock_guard<mutex> client_guard(context_lock);
-	// check if we are on AutoCommit. In this case we should start a transaction.
+	if (is_invalidated || (transaction.HasActiveTransaction() && transaction.ActiveTransaction().is_invalidated)) {
+		return nullptr;
+	}
+	// check if we are on AutoCommit. In this case we should start a transaction
 	if (transaction.IsAutoCommit()) {
 		transaction.BeginTransaction();
 	}
@@ -616,4 +647,41 @@ unique_ptr<TableDescription> ClientContext::TableInfo(string schema_name, string
 		transaction.Commit();
 	}
 	return result;
+}
+
+void ClientContext::Append(TableDescription &description, DataChunk &chunk) {
+	lock_guard<mutex> client_guard(context_lock);
+	if (is_invalidated) {
+		throw Exception("Failed to append: database has been closed!");
+	}
+	if (transaction.HasActiveTransaction() && transaction.ActiveTransaction().is_invalidated) {
+		throw Exception("Failed to append: transaction has been invalidated!");
+	}
+	// check if we are on AutoCommit. In this case we should start a transaction
+	if (transaction.IsAutoCommit()) {
+		transaction.BeginTransaction();
+	}
+	try {
+		auto table_entry = db.catalog->GetTable(*this, description.schema, description.table);
+		// verify that the table columns and types match up
+		if (description.columns.size() != table_entry->columns.size()) {
+			throw Exception("Failed to append: table entry has different number of columns!");
+		}
+		for(index_t i = 0; i < description.columns.size(); i++) {
+			if (description.columns[i].type != table_entry->columns[i].type) {
+				throw Exception("Failed to append: table entry has different number of columns!");
+			}
+		}
+		table_entry->storage->Append(*table_entry, *this, chunk);
+	} catch(Exception &ex) {
+		if (transaction.IsAutoCommit()) {
+			transaction.Rollback();
+		} else {
+			transaction.Invalidate();
+		}
+		throw ex;
+	}
+	if (transaction.IsAutoCommit()) {
+		transaction.Commit();
+	}
 }

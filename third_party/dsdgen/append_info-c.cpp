@@ -31,26 +31,26 @@ void append_row_end(append_info *info) {
 void append_varchar(append_info *info, const char *value) {
 	auto append_info = (tpcds_append_information *)info;
 	if (!nullCheck(append_info->appender.CurrentColumn())) {
-		append_info->appender.AppendString(value);
+		append_info->appender.Append<const char*>(value);
 	} else {
-		append_info->appender.AppendValue(duckdb::Value());
+		append_info->appender.Append<duckdb::Value>(duckdb::Value());
 	}
 }
 
 // TODO: use direct array manipulation for speed, but not now
 static void append_value(append_info *info, duckdb::Value v) {
 	auto append_info = (tpcds_append_information *)info;
-	append_info->appender.AppendValue(v);
+	append_info->appender.Append<duckdb::Value>(v);
 }
 
 void append_key(append_info *info, int64_t value) {
 	auto append_info = (tpcds_append_information *)info;
-	append_info->appender.AppendValue(duckdb::Value::BIGINT(value));
+	append_info->appender.Append<duckdb::Value>(duckdb::Value::BIGINT(value));
 }
 
 void append_integer(append_info *info, int32_t value) {
 	auto append_info = (tpcds_append_information *)info;
-	append_info->appender.AppendValue(duckdb::Value::INTEGER(value));
+	append_info->appender.Append<duckdb::Value>(duckdb::Value::INTEGER(value));
 }
 
 void append_boolean(append_info *info, int32_t value) {

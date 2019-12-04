@@ -1,6 +1,5 @@
 #include "duckdb.hpp"
 
-
 #include <Rdefines.h>
 // motherfucker
 #undef error
@@ -42,7 +41,7 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 	auto result = conn->Query(query);
 
 	if (!result->success) {
-		Rf_error("duckdb_query_R: Error: %s", result->error.c_str());
+		Rf_error("duckdb_query_R: Failed to run query %s\nError: %s", query, result->error.c_str());
 	}
 
 	// step 2: create result data frame and allocate columns
@@ -355,10 +354,11 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	}
 
 	try {
-		auto appender = conn->OpenAppender(INVALID_SCHEMA, name);
+		// FIXME: this row-wise appending is very inefficient
+		Appender appender(*conn, INVALID_SCHEMA, name);
 		auto nrows = LENGTH(VECTOR_ELT(valuesexp, 0));
 		for (uint64_t row_idx = 0; row_idx < nrows; row_idx++) {
-			appender->BeginRow();
+			appender.BeginRow();
 			for (uint32_t col_idx = 0; col_idx < LENGTH(valuesexp); col_idx++) {
 				SEXP coldata = VECTOR_ELT(valuesexp, col_idx);
 
@@ -369,11 +369,11 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 				    strcmp("POSIXct", CHAR(STRING_ELT(GET_CLASS(coldata), 0))) == 0) {
 					double val = NUMERIC_POINTER(coldata)[row_idx];
 					if (ISNA(val)) {
-						appender->AppendValue(Value());
+						appender.Append(nullptr);
 					} else {
-						auto date = Date::EpochToDate((int64_t)val);
-						auto time = (int32_t)(((int64_t)val % (60 * 60 * 24)) * 1000);
-						appender->AppendBigInt(Timestamp::FromDatetime(date, time));
+						date_t date = Date::EpochToDate((int64_t)val);
+						dtime_t time = (dtime_t)(((int64_t)val % (60 * 60 * 24)) * 1000);
+						appender.Append<timestamp_t>(Timestamp::FromDatetime(date, time));
 					}
 				}
 
@@ -383,58 +383,59 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 					// TODO some say there are dates that are stored as integers
 					double val = NUMERIC_POINTER(coldata)[row_idx];
 					if (ISNA(val)) {
-						appender->AppendValue(Value());
+						appender.Append(nullptr);
 					} else {
-						appender->AppendInteger((int32_t)val + 719528); // MAGIC!
+						appender.Append<date_t>((date_t)val + 719528); // MAGIC!
 					}
 				}
 
 				else if (isFactor(coldata) && TYPEOF(coldata) == INTSXP) {
 					int val = INTEGER_POINTER(coldata)[row_idx];
 					if (val == NA_INTEGER) {
-						appender->AppendValue(Value());
+						appender.Append(nullptr);
 					} else {
 						SEXP factor_levels = GET_LEVELS(coldata);
-						appender->AppendString(CHAR(STRING_ELT(factor_levels, val - 1)));
+						appender.Append<const char*>(CHAR(STRING_ELT(factor_levels, val - 1)));
 					}
 				} else if (TYPEOF(coldata) == LGLSXP) {
 					int val = INTEGER_POINTER(coldata)[row_idx];
 					if (val == NA_INTEGER) {
-						appender->AppendValue(Value());
+						appender.Append(nullptr);
 					} else {
-						appender->AppendBoolean(val);
+						appender.Append<bool>(val);
 					}
 				} else if (TYPEOF(coldata) == INTSXP) {
 					int val = INTEGER_POINTER(coldata)[row_idx];
 					if (val == NA_INTEGER) {
-						appender->AppendValue(Value());
+						appender.Append(nullptr);
 					} else {
-						appender->AppendInteger(val);
+						appender.Append<int32_t>(val);
 					}
 				} else if (TYPEOF(coldata) == REALSXP) {
 					double val = NUMERIC_POINTER(coldata)[row_idx];
 					if (val == NA_REAL) {
-						appender->AppendValue(Value());
+						appender.Append(nullptr);
 					} else {
-						appender->AppendDouble(val);
+						appender.Append<double>(val);
 					}
 				} else if (TYPEOF(coldata) == STRSXP) {
 					SEXP val = STRING_ELT(coldata, row_idx);
 					if (val == NA_STRING) {
-						appender->AppendValue(Value());
+						appender.Append(nullptr);
 					} else {
-						appender->AppendString(CHAR(val));
+						appender.Append<const char*>(CHAR(val));
 					}
 				} else {
 					throw;
 				}
 			}
-			appender->EndRow();
+			appender.EndRow();
 		}
-
-		conn->CloseAppender();
-	} catch (...) {
-		Rf_error("duckdb_append_R: Failed to append data");
+		appender.Close();
+	} catch (std::exception &ex) {
+		Rf_error("duckdb_append_R failed: %s", ex.what());
+	} catch(...) {
+		Rf_error("duckdb_append_R failed: unknown error");
 	}
 
 	return R_NilValue;

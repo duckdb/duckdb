@@ -6,6 +6,7 @@ if(NOT WIN32)
                     test_read_only.cpp
                     test_prepared_api.cpp
                     test_table_info.cpp
+                    test_appender_api.cpp
                     test_query_profiler.cpp)
 else()
   add_library_unity(test_api
@@ -14,6 +15,7 @@ else()
                     test_results.cpp
                     test_prepared_api.cpp
                     test_table_info.cpp
+                    test_appender_api.cpp
                     test_query_profiler.cpp)
 endif()
 
