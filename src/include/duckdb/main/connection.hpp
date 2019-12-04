@@ -14,6 +14,7 @@
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
+#include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
 
