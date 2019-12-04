@@ -44,7 +44,9 @@ public:
 
 	// Append functions
 	template<class T>
-	void Append(T value);
+	void Append(T value) {
+		throw Exception("Undefined type for Appender::Append!");
+	}
 	// prepared statements
 	template <typename... Args> void AppendRow(Args... args) {
 		BeginRow();
@@ -85,7 +87,6 @@ template <> void Appender::Append(int32_t value);
 template <> void Appender::Append(int64_t value);
 template <> void Appender::Append(double value);
 template <> void Appender::Append(const char* value);
-template <> void Appender::Append(double value);
 template <> void Appender::Append(Value value);
 
 } // namespace duckdb

@@ -84,7 +84,7 @@ template <> void Appender::Append(int16_t value) {
 	((int16_t *)col.data)[col.count++] = value;
 }
 
-template <> void Appender::Append(int value) {
+template <> void Appender::Append(int32_t value) {
 	if (!CheckAppend(TypeId::INTEGER)) {
 		AppendValue(Value::INTEGER(value));
 		return;
