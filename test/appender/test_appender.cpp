@@ -123,11 +123,21 @@ TEST_CASE("Test AppendRow", "[appender]") {
 		Appender appender(con, "vals");
 		for (size_t i = 0; i < 2000; i++) {
 			appender.AppendRow(1, 1, 1, "hello", 3.33);
+			// append null values
+			appender.AppendRow(nullptr, nullptr, nullptr, nullptr, nullptr);
 		}
 	}
 
+	result = con.Query("SELECT COUNT(*), COUNT(i), COUNT(j), COUNT(k), COUNT(l), COUNT(m) FROM vals");
+	REQUIRE(CHECK_COLUMN(result, 0, {4000}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2000}));
+	REQUIRE(CHECK_COLUMN(result, 2, {2000}));
+	REQUIRE(CHECK_COLUMN(result, 3, {2000}));
+	REQUIRE(CHECK_COLUMN(result, 4, {2000}));
+	REQUIRE(CHECK_COLUMN(result, 5, {2000}));
+
 	// check that the values have been added to the database
-	result = con.Query("SELECT l, SUM(k) FROM vals GROUP BY l");
+	result = con.Query("SELECT l, SUM(k) FROM vals WHERE i IS NOT NULL GROUP BY l");
 	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2000}));
 
@@ -142,6 +152,5 @@ TEST_CASE("Test AppendRow", "[appender]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1992, 1, 1)}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value::TIME(1, 1, 1, 0)}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value::TIMESTAMP(1992, 1, 1, 1, 1, 1, 0)}));
-
 
 }

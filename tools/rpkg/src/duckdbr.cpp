@@ -368,7 +368,7 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 				    strcmp("POSIXct", CHAR(STRING_ELT(GET_CLASS(coldata), 0))) == 0) {
 					double val = NUMERIC_POINTER(coldata)[row_idx];
 					if (ISNA(val)) {
-						appender.Append<Value>(Value());
+						appender.Append(nullptr);
 					} else {
 						auto date = Date::EpochToDate((int64_t)val);
 						auto time = (int32_t)(((int64_t)val % (60 * 60 * 24)) * 1000);
@@ -382,7 +382,7 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 					// TODO some say there are dates that are stored as integers
 					double val = NUMERIC_POINTER(coldata)[row_idx];
 					if (ISNA(val)) {
-						appender.Append<Value>(Value());
+						appender.Append(nullptr);
 					} else {
 						appender.Append<int32_t>((int32_t)val + 719528); // MAGIC!
 					}
@@ -391,7 +391,7 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 				else if (isFactor(coldata) && TYPEOF(coldata) == INTSXP) {
 					int val = INTEGER_POINTER(coldata)[row_idx];
 					if (val == NA_INTEGER) {
-						appender.Append<Value>(Value());
+						appender.Append(nullptr);
 					} else {
 						SEXP factor_levels = GET_LEVELS(coldata);
 						appender.Append<const char*>(CHAR(STRING_ELT(factor_levels, val - 1)));
@@ -399,28 +399,28 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 				} else if (TYPEOF(coldata) == LGLSXP) {
 					int val = INTEGER_POINTER(coldata)[row_idx];
 					if (val == NA_INTEGER) {
-						appender.Append<Value>(Value());
+						appender.Append(nullptr);
 					} else {
 						appender.Append<bool>(val);
 					}
 				} else if (TYPEOF(coldata) == INTSXP) {
 					int val = INTEGER_POINTER(coldata)[row_idx];
 					if (val == NA_INTEGER) {
-						appender.Append<Value>(Value());
+						appender.Append(nullptr);
 					} else {
 						appender.Append<int32_t>(val);
 					}
 				} else if (TYPEOF(coldata) == REALSXP) {
 					double val = NUMERIC_POINTER(coldata)[row_idx];
 					if (val == NA_REAL) {
-						appender.Append<Value>(Value());
+						appender.Append(nullptr);
 					} else {
 						appender.Append<double>(val);
 					}
 				} else if (TYPEOF(coldata) == STRSXP) {
 					SEXP val = STRING_ELT(coldata, row_idx);
 					if (val == NA_STRING) {
-						appender.Append<Value>(Value());
+						appender.Append(nullptr);
 					} else {
 						appender.Append<const char*>(CHAR(val));
 					}

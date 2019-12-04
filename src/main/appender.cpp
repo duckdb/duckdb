@@ -126,6 +126,14 @@ template <> void Appender::Append(Value value) {
 	AppendValue(move(value));
 }
 
+template <> void Appender::Append(nullptr_t value) {
+	if (column >= chunk.column_count) {
+		throw Exception("Too many appends for chunk!");
+	}
+	auto &col = chunk.data[column++];
+	col.nullmask[col.count++] = true;
+}
+
 void Appender::AppendValue(Value value) {
 	chunk.data[column].SetValue(chunk.data[column].count++, value);
 	column++;
