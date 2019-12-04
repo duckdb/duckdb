@@ -1,13 +1,14 @@
 #include "sqlite3.h"
 
 #include <ctype.h>
-#include <duckdb.h>
+#include <duckdb.hpp>
 #include <err.h>
 #include <stdio.h>
 #include <string.h>
 #include <string>
 #include <stdlib.h>
 
+using namespace duckdb;
 using namespace std;
 
 // TODO:
@@ -20,16 +21,36 @@ using namespace std;
 		exit(1);                                                                                                       \
 	}
 
+static char* sqlite3_strdup(const string &str);
+static char* sqlite3_strdup(const char* str);
+
+struct sqlite3_string_buffer {
+	//! String data
+	unique_ptr<char[]> data;
+};
+
 struct sqlite3_stmt {
-	char *zSql;
-	size_t lenSql;
-	duckdb_result result;
-	int curr_row;
+	//! The DB object that this statement belongs to
+	sqlite3 *db;
+	//! The query string
+	string query_string;
+	//! The prepared statement object, if successfully prepared
+	unique_ptr<PreparedStatement> prepared;
+	//! The result object, if successfully executed
+	unique_ptr<QueryResult> result;
+	//! The current chunk that we are iterating over
+	unique_ptr<DataChunk> current_chunk;
+	//! The current row into the current chunk that we are iterating over
+	int64_t current_row;
+	//! Bound values, used for binding to the prepared statement
+	vector<Value> bound_values;
+	//! The current column values converted to string, used and filled by sqlite3_column_text
+	unique_ptr<sqlite3_string_buffer[]> current_text;
 };
 
 struct sqlite3 {
-	duckdb_database pDuckDB;
-	duckdb_connection pCon;
+	unique_ptr<DuckDB> db;
+	unique_ptr<Connection> con;
 	string last_error;
 };
 
@@ -49,30 +70,30 @@ void sqlite3_randomness(int N, void *pBuf) {
 int sqlite3_open(const char *filename, /* Database filename (UTF-8) */
                  sqlite3 **ppDb        /* OUT: SQLite db handle */
 ) {
-	duckdb_database database_ptr;
-	duckdb_connection connection_ptr;
-
 	if (strcmp(filename, ":memory:") == 0) {
 		filename = NULL;
 	}
+	*ppDb = nullptr;
 
-	if (duckdb_open(filename, &database_ptr) != DuckDBSuccess) {
-		fprintf(stderr, "Couldn't open the database file: %s\n", filename);
-		exit(1);
+	sqlite3 *pDb = nullptr;
+	try {
+		pDb = new sqlite3();
+		pDb->db = make_unique<DuckDB>(filename);
+		pDb->con = make_unique<Connection>(*pDb->db);
+	} catch(std::exception &ex) {
+		if (pDb) {
+			pDb->last_error = ex.what();
+		}
+		return SQLITE_ERROR;
 	}
-	if (duckdb_connect(database_ptr, &connection_ptr) != DuckDBSuccess) {
-		fprintf(stderr, "Couldn't connect to the database.\n");
-		exit(1);
-	}
-
-	sqlite3 *pDb = (sqlite3 *)malloc(sizeof(sqlite3));
-	if (!pDb)
-		err(1, NULL);
-
-	pDb->pDuckDB = database_ptr;
-	pDb->pCon = connection_ptr;
 	*ppDb = pDb;
+	return SQLITE_OK;
+}
 
+int sqlite3_close(sqlite3 *db) {
+	if (db) {
+		delete db;
+	}
 	return SQLITE_OK;
 }
 
@@ -85,46 +106,85 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
                        sqlite3_stmt **ppStmt, /* OUT: Statement handle */
                        const char **pzTail    /* OUT: Pointer to unused portion of zSql */
 ) {
-	sqlite3_stmt *pStmt = (sqlite3_stmt *)malloc(sizeof(sqlite3_stmt));
-	if (pStmt == NULL)
-		err(1, NULL);
+	*ppStmt = nullptr;
+	*pzTail = nullptr;
+	string query = zSql ? zSql : "";
 
-	size_t size = 1;
-
-	/* Set the tail to the end of the first SQL statement */
-	for (*pzTail = zSql; **pzTail && **pzTail != ';'; (*pzTail)++)
-		size++;
-	if (**pzTail == ';') {
-		size++;
-		(*pzTail)++;
-	}
-
-	if ((pStmt->zSql = (char *)malloc(size)) == NULL)
-		err(1, NULL);
-
-	/* Init sql statement */
-	pStmt->zSql[size - 1] = '\0';
-	strncpy(pStmt->zSql, zSql, size - 1);
-	pStmt->lenSql = size - 1;
-
-	/* Execute the query */
-	pStmt->curr_row = -1;
-	*ppStmt = pStmt;
-	if (duckdb_query(db->pCon, pStmt->zSql, &pStmt->result) != DuckDBSuccess) {
-		if (pStmt->result.error_message) {
-			db->last_error = string(pStmt->result.error_message);
+	try {
+		// extract the statements from the SQL query
+		auto statements = db->con->ExtractStatements(query);
+		if (statements.size() == 0) {
+			// no statements to prepare!
+			*pzTail = sqlite3_strdup("");
+			return SQLITE_OK;
 		}
+
+		// extract the first statement
+		auto statement = statements[0].get();
+		query = query.substr(statement->stmt_location, statement->stmt_length);
+
+		// now prepare the query
+		auto prepared = db->con->Prepare(query);
+		if (!prepared->success) {
+			// failed to prepare: set the error message
+			db->last_error = prepared->error;
+			return SQLITE_ERROR;
+		}
+
+		// create the statement entry
+		unique_ptr<sqlite3_stmt> stmt = make_unique<sqlite3_stmt>();
+		stmt->db = db;
+		stmt->query_string = query;
+		stmt->prepared = move(prepared);
+		stmt->current_row = -1;
+
+		// extract the remainder of the query and assign it to the pzTail
+		string remainder = query.substr(statement->stmt_location + statement->stmt_length);
+		*pzTail = sqlite3_strdup(remainder);
+		if (!*pzTail) {
+			throw std::bad_alloc();
+		}
+
+		*ppStmt = stmt.release();
+		return SQLITE_OK;
+	} catch(std::exception &ex) {
+		db->last_error = ex.what();
 		return SQLITE_ERROR;
 	}
-	return SQLITE_OK;
 }
 
 /* Prepare the next result to be retrieved */
 int sqlite3_step(sqlite3_stmt *pStmt) {
-	pStmt->curr_row++;
-	if (pStmt->curr_row >= pStmt->result.row_count)
+	if (!pStmt) {
+		return SQLITE_ERROR;
+	}
+	if (!pStmt->prepared) {
+		pStmt->db->last_error = "Attempting sqlite3_step() on a non-successfully prepared statement";
+		return SQLITE_ERROR;
+	}
+	pStmt->current_text = nullptr;
+	if (!pStmt->result) {
+		// no result yet! call Execute()
+		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values);
+		if (!pStmt->result->success) {
+			pStmt->db->last_error = pStmt->result->error;
+			return SQLITE_ERROR;
+		}
+		// fetch a chunk
+		pStmt->current_chunk = pStmt->result->Fetch();
+	}
+	if (!pStmt->current_chunk) {
 		return SQLITE_DONE;
-
+	}
+	pStmt->current_row++;
+	if (pStmt->current_row >= pStmt->current_chunk->size()) {
+		// have to fetch again!
+		pStmt->current_row = 0;
+		pStmt->current_chunk = pStmt->result->Fetch();
+		if (!pStmt->current_chunk || pStmt->current_chunk->size() == 0) {
+			return SQLITE_DONE;
+		}
+	}
 	return SQLITE_ROW;
 }
 
@@ -137,25 +197,25 @@ int sqlite3_exec(sqlite3 *db,                /* The database on which the SQL ex
                  void *pArg,                 /* First argument to xCallback() */
                  char **pzErrMsg             /* Write error messages here */
 ) {
-	int rc = SQLITE_OK;      /* Return code */
-	const char *zLeftover;   /* Tail of unprocessed SQL */
-	sqlite3_stmt *pStmt = 0; /* The current SQL statement */
-	char **azCols = 0;       /* Names of result columns */
-	int callbackIsInit;      /* True if callback data is initialized */
+	int rc = SQLITE_OK;            /* Return code */
+	const char *zLeftover;         /* Tail of unprocessed SQL */
+	sqlite3_stmt *pStmt = nullptr; /* The current SQL statement */
+	bool callbackIsInit;           /* True if callback data is initialized */
+	char **azCols = nullptr;       /* Names of result columns */
+	char **azVals = nullptr;       /* Result values */
 
-	if (zSql == 0)
+	if (zSql == nullptr) {
 		zSql = "";
+	}
 
 	while (rc == SQLITE_OK && zSql[0]) {
 		int nCol;
-		char **azVals = 0;
 
-		pStmt = 0;
+		pStmt = nullptr;
 		rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, &zLeftover);
 		if (rc != SQLITE_OK) {
 			if (pStmt) {
-				*pzErrMsg = pStmt->result.error_message;
-				pStmt->result.error_message = 0;
+				*pzErrMsg = sqlite3_strdup(pStmt->result->error);
 			}
 			continue;
 		}
@@ -165,7 +225,7 @@ int sqlite3_exec(sqlite3 *db,                /* The database on which the SQL ex
 			continue;
 		}
 
-		callbackIsInit = 0;
+		callbackIsInit = false;
 		nCol = sqlite3_column_count(pStmt);
 
 		while (1) {
@@ -175,8 +235,9 @@ int sqlite3_exec(sqlite3 *db,                /* The database on which the SQL ex
 			/* Invoke the callback function if required */
 			if (xCallback && (SQLITE_ROW == rc || (SQLITE_DONE == rc && !callbackIsInit))) {
 				if (!callbackIsInit) {
-					azCols = (char **)malloc((2 * nCol + 1) * sizeof(const char *));
-					if (azCols == NULL) {
+					azCols = (char **)malloc(nCol * sizeof(const char *));
+					azVals = (char **)malloc(nCol * sizeof(const char *));
+					if (!azCols || !azVals) {
 						goto exec_out;
 					}
 					for (i = 0; i < nCol; i++) {
@@ -185,7 +246,6 @@ int sqlite3_exec(sqlite3 *db,                /* The database on which the SQL ex
 					callbackIsInit = 1;
 				}
 				if (rc == SQLITE_ROW) {
-					azVals = &azCols[nCol];
 					for (i = 0; i < nCol; i++) {
 						azVals[i] = (char *)sqlite3_column_text(pStmt, i);
 						if (!azVals[i] && sqlite3_column_type(pStmt, i) != SQLITE_NULL) {
@@ -193,7 +253,6 @@ int sqlite3_exec(sqlite3 *db,                /* The database on which the SQL ex
 							goto exec_out;
 						}
 					}
-					azVals[i] = 0;
 				}
 				if (xCallback(pArg, nCol, azVals, azCols)) {
 					/* EVIDENCE-OF: R-38229-40159 If the callback function to
@@ -218,58 +277,61 @@ int sqlite3_exec(sqlite3 *db,                /* The database on which the SQL ex
 			}
 		}
 
-		free(azCols);
-		azCols = 0;
+		sqlite3_free(azCols);
+		sqlite3_free(azVals);
+		azCols = nullptr;
+		azVals = nullptr;
 	}
 
 exec_out:
-	if (pStmt)
+	if (pStmt) {
 		sqlite3_finalize(pStmt);
-	free(azCols);
+	}
+	sqlite3_free(azCols);
+	sqlite3_free(azVals);
 	if (rc != SQLITE_OK && !*pzErrMsg) {
 		// error but no error message set
-		static const char *unknown_error = "Unknown error in DuckDB!";
-		*pzErrMsg = (char *)sqlite3_malloc64(strlen(unknown_error) + 1);
-		strcpy(*pzErrMsg, unknown_error);
+		*pzErrMsg = sqlite3_strdup("Unknown error in DuckDB!");
 	}
 
 	return rc;
 }
 
-int sqlite3_close(sqlite3 *db) {
-	duckdb_disconnect(&db->pCon);
-	duckdb_close(&db->pDuckDB);
-	return SQLITE_OK;
-}
-
 /* Return the text of the SQL that was used to prepare the statement */
 const char *sqlite3_sql(sqlite3_stmt *pStmt) {
-	char *zSql = (char *)malloc(pStmt->lenSql + 1);
-	strncpy(zSql, pStmt->zSql, pStmt->lenSql + 1);
-	return zSql;
+	return sqlite3_strdup(pStmt->query_string);
 }
 
 int sqlite3_column_count(sqlite3_stmt *pStmt) {
-	return (int)pStmt->result.column_count;
+	if (!pStmt || !pStmt->result) {
+		return 0;
+	}
+	return (int) pStmt->result->sql_types.size();
 }
 
 int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
-	duckdb_column column = pStmt->result.columns[iCol];
-
-	if (pStmt->result.columns[iCol].nullmask[pStmt->curr_row])
+	if (!pStmt || !pStmt->result || !pStmt->current_chunk) {
+		return 0;
+	}
+	if (pStmt->current_chunk->data[iCol].nullmask[pStmt->current_row]) {
 		return SQLITE_NULL;
-
-	switch (column.type) {
-	case DUCKDB_TYPE_BOOLEAN:
-	case DUCKDB_TYPE_TINYINT:
-	case DUCKDB_TYPE_SMALLINT:
-	case DUCKDB_TYPE_INTEGER:
-	case DUCKDB_TYPE_BIGINT: /* TODO: Maybe blob? */
+	}
+	auto column_type = pStmt->result->sql_types[iCol];
+	switch (column_type.id) {
+	case SQLTypeId::BOOLEAN:
+	case SQLTypeId::TINYINT:
+	case SQLTypeId::SMALLINT:
+	case SQLTypeId::INTEGER:
+	case SQLTypeId::BIGINT: /* TODO: Maybe blob? */
 		return SQLITE_INTEGER;
-	case DUCKDB_TYPE_DOUBLE:
+	case SQLTypeId::FLOAT:
+	case SQLTypeId::DOUBLE:
+	case SQLTypeId::DECIMAL:
 		return SQLITE_FLOAT;
-	case DUCKDB_TYPE_DATE:
-	case DUCKDB_TYPE_VARCHAR:
+	case SQLTypeId::DATE:
+	case SQLTypeId::TIME:
+	case SQLTypeId::TIMESTAMP:
+	case SQLTypeId::VARCHAR:
 		return SQLITE_BLOB;
 	default:
 		return 0;
@@ -278,16 +340,36 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 }
 
 const char *sqlite3_column_name(sqlite3_stmt *pStmt, int N) {
-	return pStmt->result.columns[N].name;
+	if (!pStmt || !pStmt->result) {
+		return nullptr;
+	}
+	return pStmt->result->names[N].c_str();
 }
 
 const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {
-	if (iCol >= pStmt->result.column_count)
-		return NULL;
-	if (pStmt->result.columns[iCol].nullmask[pStmt->curr_row]) {
-		return NULL;
+	int column_count = pStmt->result->sql_types.size();
+	if (iCol >= column_count) {
+		return nullptr;
 	}
-	return (unsigned char *)duckdb_value_varchar(&pStmt->result, iCol, pStmt->curr_row);
+	if (pStmt->current_chunk->data[iCol].nullmask[pStmt->current_row]) {
+		return nullptr;
+	}
+	try {
+		if (!pStmt->current_text) {
+			pStmt->current_text = unique_ptr<sqlite3_string_buffer[]>(new sqlite3_string_buffer[column_count]);
+		}
+		auto &entry = pStmt->current_text[iCol];
+		if (!entry.data) {
+			// not initialized yet, convert the value and initialize it
+			Value v = pStmt->current_chunk->data[iCol].GetValue(pStmt->current_row).CastAs(pStmt->result->sql_types[iCol], SQLTypeId::VARCHAR);
+			entry.data = unique_ptr<char[]>(new char[v.str_value.size() + 1]);
+			memcpy(entry.data.get(), v.str_value.c_str(), v.str_value.size() + 1);
+		}
+		return (const unsigned char*) entry.data.get();
+	} catch(...) {
+		// memory error!
+		return nullptr;
+	}
 }
 
 int sqlite3_initialize(void) {
@@ -295,10 +377,8 @@ int sqlite3_initialize(void) {
 }
 
 int sqlite3_finalize(sqlite3_stmt *pStmt) {
-	if (pStmt != NULL) {
-		duckdb_destroy_result(&pStmt->result);
-		free(pStmt->zSql);
-		free(pStmt);
+	if (pStmt) {
+		delete pStmt;
 	}
 	return SQLITE_OK;
 }
@@ -368,6 +448,18 @@ SQLITE_API int sqlite3_strnicmp(const char *zLeft, const char *zRight, int N) {
 	return N < 0 ? 0 : sqlite3UpperToLower[*a] - sqlite3UpperToLower[*b];
 }
 
+char* sqlite3_strdup(const string &str) {
+	char* result = (char*) sqlite3_malloc64(str.size() + 1);
+	strcpy(result, str.c_str());
+	return result;
+}
+
+char* sqlite3_strdup(const char* str) {
+	char* result = (char*) sqlite3_malloc64(strlen(str) + 1);
+	strcpy(result, str);
+	return result;
+}
+
 void *sqlite3_malloc64(sqlite3_uint64 n) {
 	return malloc(n);
 }
@@ -411,18 +503,21 @@ int sqlite3_config(int i, ...) {
 	return SQLITE_OK;
 }
 
-// TODO: stub
 int sqlite3_errcode(sqlite3 *db) {
-	return SQLITE_OK;
+	return db->last_error.empty() ? SQLITE_OK : SQLITE_ERROR;
 }
 
-// TODO: stub
+int sqlite3_extended_errcode(sqlite3 *db) {
+	return sqlite3_errcode(db);
+}
+
 const char *sqlite3_errmsg(sqlite3 *db) {
 	return db->last_error.c_str();
 }
 
-// TODO: stub
-void sqlite3_interrupt(sqlite3 *db){};
+void sqlite3_interrupt(sqlite3 *db) {
+	db->con->Interrupt();
+}
 
 const char *sqlite3_libversion(void) {
 	return LIB_VERSION;
