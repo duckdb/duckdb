@@ -82,6 +82,7 @@ private:
 	void AppendValue(Value value);
 };
 
+template <> void Appender::Append(bool value);
 template <> void Appender::Append(int8_t value);
 template <> void Appender::Append(int16_t value);
 template <> void Appender::Append(int32_t value);

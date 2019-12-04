@@ -65,6 +65,16 @@ void Appender::EndRow() {
 	}
 }
 
+template <> void Appender::Append(bool value) {
+	if (!CheckAppend(TypeId::BOOLEAN)) {
+		AppendValue(Value::BOOLEAN(value));
+		return;
+	}
+	// fast path: correct type
+	auto &col = chunk.data[column++];
+	((bool *)col.data)[col.count++] = value;
+}
+
 template <> void Appender::Append(int8_t value) {
 	if (!CheckAppend(TypeId::TINYINT)) {
 		AppendValue(Value::TINYINT(value));

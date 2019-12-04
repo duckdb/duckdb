@@ -41,7 +41,7 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 	auto result = conn->Query(query);
 
 	if (!result->success) {
-		Rf_error("duckdb_query_R: Error: %s", result->error.c_str());
+		Rf_error("duckdb_query_R: Failed to run query %s\nError: %s", query, result->error.c_str());
 	}
 
 	// step 2: create result data frame and allocate columns
@@ -354,6 +354,7 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	}
 
 	try {
+		// FIXME: this row-wise appending is very inefficient
 		Appender appender(*conn, INVALID_SCHEMA, name);
 		auto nrows = LENGTH(VECTOR_ELT(valuesexp, 0));
 		for (uint64_t row_idx = 0; row_idx < nrows; row_idx++) {
@@ -370,9 +371,9 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 					if (ISNA(val)) {
 						appender.Append(nullptr);
 					} else {
-						auto date = Date::EpochToDate((int64_t)val);
-						auto time = (int32_t)(((int64_t)val % (60 * 60 * 24)) * 1000);
-						appender.Append<Value>(Value::TIMESTAMP(date, time));
+						date_t date = Date::EpochToDate((int64_t)val);
+						dtime_t time = (dtime_t)(((int64_t)val % (60 * 60 * 24)) * 1000);
+						appender.Append<timestamp_t>(Timestamp::FromDatetime(date, time));
 					}
 				}
 
@@ -384,7 +385,7 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 					if (ISNA(val)) {
 						appender.Append(nullptr);
 					} else {
-						appender.Append<int32_t>((int32_t)val + 719528); // MAGIC!
+						appender.Append<date_t>((date_t)val + 719528); // MAGIC!
 					}
 				}
 
@@ -431,8 +432,10 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 			appender.EndRow();
 		}
 		appender.Close();
-	} catch (...) {
-		Rf_error("duckdb_append_R: Failed to append data");
+	} catch (std::exception &ex) {
+		Rf_error("duckdb_append_R failed: %s", ex.what());
+	} catch(...) {
+		Rf_error("duckdb_append_R failed: unknown error");
 	}
 
 	return R_NilValue;
