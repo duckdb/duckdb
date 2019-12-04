@@ -34,10 +34,11 @@ void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 				chunk.data[i].sel_vector = state->child_chunk.sel_vector;
 			}
 		}
-
+		/*
 		if (state->iteration > 995) {
 			std::cout << "Iteration: " << state->iteration << " Selectivity: " << state->selectivity << std::endl;
 		}
+		*/
 
 	} while (chunk.size() == 0);
 }
