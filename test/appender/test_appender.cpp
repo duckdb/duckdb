@@ -1,6 +1,9 @@
 #include "catch.hpp"
 #include "duckdb/main/appender.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 #include <vector>
 
@@ -153,4 +156,15 @@ TEST_CASE("Test AppendRow", "[appender]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {Value::TIME(1, 1, 1, 0)}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value::TIMESTAMP(1992, 1, 1, 1, 1, 1, 0)}));
 
+	// test dates and times without value append
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM dates"));
+	// now append a bunch of values
+	{
+		Appender appender(con, "dates");
+		appender.AppendRow(Date::FromDate(1992, 1, 1), Time::FromTime(1, 1, 1, 0), Timestamp::FromDatetime(Date::FromDate(1992, 1, 1), Time::FromTime(1, 1, 1, 0)));
+	}
+	result = con.Query("SELECT * FROM dates");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1992, 1, 1)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::TIME(1, 1, 1, 0)}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value::TIMESTAMP(1992, 1, 1, 1, 1, 1, 0)}));
 }

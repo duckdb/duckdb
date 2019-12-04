@@ -47,6 +47,16 @@ static NotImplementedException UnimplementedCast(SQLType source_type, SQLType ta
 	return NotImplementedException("Unimplemented type for cast (%s -> %s)", SQLTypeToString(source_type).c_str(), SQLTypeToString(target_type).c_str());
 }
 
+// NULL cast only works if all values in source are NULL, otherwise an unimplemented cast exception is thrown
+static void null_cast(Vector &source, Vector &result, SQLType source_type, SQLType target_type) {
+	result.nullmask = source.nullmask;
+	VectorOperations::Exec(source, [&](index_t i, index_t k) {
+		if (!source.nullmask[i]) {
+			throw UnimplementedCast(source_type, target_type);
+		}
+	});
+}
+
 template <class SRC>
 static void numeric_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type) {
 	// now switch on the result type
@@ -85,7 +95,8 @@ static void numeric_cast_switch(Vector &source, Vector &result, SQLType source_t
 		break;
 	}
 	default:
-		throw UnimplementedCast(source_type, target_type);
+		null_cast(source, result, source_type, target_type);
+		break;
 	}
 }
 
@@ -134,7 +145,8 @@ static void string_cast_switch(Vector &source, Vector &result, SQLType source_ty
 		templated_cast_loop<const char*, timestamp_t, duckdb::CastToTimestamp, true>(source, result);
 		break;
 	default:
-		throw UnimplementedCast(source_type, target_type);
+		null_cast(source, result, source_type, target_type);
+		break;
 	}
 }
 
@@ -146,7 +158,8 @@ static void date_cast_switch(Vector &source, Vector &result, SQLType source_type
 		string_cast<date_t, duckdb::CastFromDate>(source, result);
 		break;
 	default:
-		throw UnimplementedCast(source_type, target_type);
+		null_cast(source, result, source_type, target_type);
+		break;
 	}
 }
 
@@ -158,7 +171,8 @@ static void time_cast_switch(Vector &source, Vector &result, SQLType source_type
 		string_cast<dtime_t, duckdb::CastFromTime>(source, result);
 		break;
 	default:
-		throw UnimplementedCast(source_type, target_type);
+		null_cast(source, result, source_type, target_type);
+		break;
 	}
 }
 
@@ -178,7 +192,8 @@ static void timestamp_cast_switch(Vector &source, Vector &result, SQLType source
 		templated_cast_loop<timestamp_t, dtime_t, duckdb::CastTimestampToTime, true>(source, result);
 		break;
 	default:
-		throw UnimplementedCast(source_type, target_type);
+		null_cast(source, result, source_type, target_type);
+		break;
 	}
 }
 
