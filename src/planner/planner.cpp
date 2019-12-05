@@ -192,6 +192,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		// first create the plan for the to-be-prepared statement
 		vector<BoundParameterExpression *> bound_parameters;
 		CreatePlan(*stmt.statement, &bound_parameters);
+
 		// set up a map of parameter number -> value entries
 		unordered_map<index_t, PreparedValueEntry> value_map;
 		for (auto &expr : bound_parameters) {

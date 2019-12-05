@@ -214,8 +214,9 @@ int sqlite3_exec(sqlite3 *db,                /* The database on which the SQL ex
 		pStmt = nullptr;
 		rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, &zLeftover);
 		if (rc != SQLITE_OK) {
-			if (pStmt) {
-				*pzErrMsg = sqlite3_strdup(pStmt->result->error);
+			if (pzErrMsg) {
+				auto errmsg = sqlite3_errmsg(db);
+				*pzErrMsg = errmsg ? sqlite3_strdup(errmsg) : nullptr;
 			}
 			continue;
 		}
@@ -289,11 +290,10 @@ exec_out:
 	}
 	sqlite3_free(azCols);
 	sqlite3_free(azVals);
-	if (rc != SQLITE_OK && !*pzErrMsg) {
+	if (rc != SQLITE_OK && pzErrMsg && !*pzErrMsg) {
 		// error but no error message set
 		*pzErrMsg = sqlite3_strdup("Unknown error in DuckDB!");
 	}
-
 	return rc;
 }
 

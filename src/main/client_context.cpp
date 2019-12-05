@@ -269,7 +269,10 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 		// first parse the query
 		Parser parser;
 		parser.ParseQuery(query.c_str());
-		if (parser.statements.size() != 1) {
+		if (parser.statements.size() == 0) {
+			throw Exception("No statement to prepare!");
+		}
+		if (parser.statements.size() > 1) {
 			throw Exception("Cannot prepare multiple statements at once!");
 		}
 		string prepare_name = "duckdb_internal_prepare_" + to_string(prepare_count);
