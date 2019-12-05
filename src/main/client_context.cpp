@@ -158,23 +158,14 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 	}
 	StatementType statement_type = statement->type;
 	bool create_stream_result = statement_type == StatementType::SELECT && allow_stream_result;
-	// for some statements, we log the literal query string in the WAL
-	bool log_query_string = statement_type == StatementType::ALTER;
 
 	profiler.StartPhase("planner");
 	Planner planner(*this);
 	planner.CreatePlan(move(statement));
 	if (!planner.plan) {
-		// we have to log here because some queries are executed in the planner
-		// return an empty result
-		if (log_query_string) {
-			ActiveTransaction().PushQuery(query);
-		}
 		return make_unique<MaterializedQueryResult>(statement_type);
 	}
 	profiler.EndPhase();
-
-	assert(!log_query_string);
 
 	auto plan = move(planner.plan);
 	// extract the result column names from the plan

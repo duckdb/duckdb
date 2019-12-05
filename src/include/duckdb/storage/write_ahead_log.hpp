@@ -16,6 +16,8 @@
 
 namespace duckdb {
 
+struct AlterInfo;
+
 class BufferedSerializer;
 class Catalog;
 class DuckDB;
@@ -62,11 +64,11 @@ public:
 	//! Sets the table used for subsequent insert/delete/update commands
 	void WriteSetTable(string &schema, string &table);
 
+	void WriteAlter(AlterInfo &info);
+
 	void WriteInsert(DataChunk &chunk);
 	void WriteDelete(DataChunk &chunk);
 	void WriteUpdate(DataChunk &chunk, column_t col_idx);
-
-	void WriteQuery(string &query);
 
 	//! Truncate the WAL to a previous size, and clear anything currently set in the writer
 	void Truncate(int64_t size);

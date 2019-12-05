@@ -5,6 +5,8 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/serializer/buffered_serializer.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -98,8 +100,13 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	value->child->parent = value.get();
 	value->set = this;
 
+	// serialize the AlterInfo into a temporary buffer
+	BufferedSerializer serializer;
+	alter_info->Serialize(serializer);
+	BinaryData serialized_alter = serializer.GetData();
+
 	// push the old entry in the undo buffer for this transaction
-	transaction.PushCatalogEntry(value->child.get());
+	transaction.PushCatalogEntry(value->child.get(), serialized_alter.data.get(), serialized_alter.size);
 	data[name] = move(value);
 
 	return true;
