@@ -1109,8 +1109,8 @@ int full_scan_double(double* keys, index_t size, double low, double high){
 TEST_CASE("ART Floating Point Small", "[art-float-small]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	float low,high, aux;
-	int answer;
+	float a,b;
+    vector<float> min_values, max_values;
 
 	Connection con(db);
 	//! Will use 100 keys
@@ -1138,35 +1138,42 @@ TEST_CASE("ART Floating Point Small", "[art-float-small]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
 	//! Generate 5 small-small range queries
 	for (index_t i = 0; i < 5; i++) {
-		aux = generate_small_float();
-		high = generate_small_float();
-		low = min(aux,high);
-		high = max(aux,high);
-		answer = full_scan_float(keys.get(),n,low,high);
-		result = con.Query("SELECT COUNT(i) FROM numbers WHERE i >= CAST("+ to_string(low)+ " AS REAL) and i <= CAST("+ to_string(high)+ " AS REAL)");
-		REQUIRE(CHECK_COLUMN(result, 0, {answer}));
+		a = generate_small_float();
+		b = generate_small_float();
+        min_values.push_back(min(a, b));
+        max_values.push_back(max(a, b));
 	}
 	//! Generate 5 normal-normal range queries
 	for (index_t i = 0; i < 5; i++) {
-		aux = generate_float(-50,50);
-		high = generate_float(-50,50);
-		low = min(aux,high);
-		high = max(aux,high);
-		answer = full_scan_float(keys.get(),n,low,high);
-		result = con.Query("SELECT COUNT(i) FROM numbers WHERE i >= CAST("+ to_string(low)+ " AS REAL) and i <= CAST("+ to_string(high)+ " AS REAL)");
-		REQUIRE(CHECK_COLUMN(result, 0, {answer}));
+		a = generate_float(-50,50);
+		b = generate_float(-50,50);
+        min_values.push_back(min(a, b));
+        max_values.push_back(max(a, b));
 	}
 	//! Generate 5 big-big range queries
 	for (index_t i = 0; i < 5; i++) {
-		aux = generate_float(FLT_MIN,FLT_MAX);
-		high = generate_float(FLT_MIN,FLT_MAX);
-		low = min(aux,high);
-		high = max(aux,high);
-		answer = full_scan_float(keys.get(),n,low,high);
-		result = con.Query("SELECT COUNT(i) FROM numbers WHERE i >= CAST("+ to_string(low)+ " AS REAL) and i <= CAST("+ to_string(high)+ " AS REAL)");
-		REQUIRE(CHECK_COLUMN(result, 0, {answer}));
+		a = generate_float(FLT_MIN,FLT_MAX);
+		b = generate_float(FLT_MIN,FLT_MAX);
+        min_values.push_back(min(a, b));
+        max_values.push_back(max(a, b));
 	}
-
+    for (index_t i = 0; i < min_values.size(); i++) {
+        double low = min_values[i];
+        double high = max_values[i];
+        int answer = full_scan_float(keys.get(), n, low, high);
+        string query = "SELECT COUNT(i) FROM numbers WHERE i >= CAST("+ to_string(low)+ " AS REAL) and i <= CAST("+ to_string(high)+ " AS REAL);";
+        result = con.Query(query);
+//        REQUIRE(CHECK_COLUMN(result, 0, {answer}));
+        if (!CHECK_COLUMN(result, 0, {answer})) {
+            printf("Wrong answer on floating point real-small!\nQueries to reproduce:\n");
+            printf("CREATE TABLE numbers(i real);\n");
+            for(index_t k = 0; k < n; k++) {
+                printf("INSERT INTO numbers VALUES (CAST(%lf AS REAL));\n", keys[k]);
+            }
+            printf("%s\n", query.c_str());
+            REQUIRE(false);
+        }
+    }
 	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE numbers"));
 }
@@ -1178,7 +1185,7 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
 	//! Will use 10k keys
 	auto keys = unique_ptr<double[]>(new double[100]);
 	index_t n  = 100;
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i double)"));
+	con.Query("CREATE TABLE numbers(i double)");
 	//! Generate 10 small double (0.0 - 1.0)
 	for (index_t i = 0; i < 10; i ++){
 		keys[i] = generate_small_double();
@@ -1192,11 +1199,11 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
 		keys[i] = generate_double(FLT_MIN,FLT_MAX);
 	}
 	//! Insert values and create index
-	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	con.Query("BEGIN TRANSACTION");
 	for (index_t i = 0; i < n; i++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (CAST("+ to_string(keys[i])+ " AS DOUBLE))"));
+		con.Query("INSERT INTO numbers VALUES (CAST("+ to_string(keys[i])+ " AS DOUBLE))");
 	}
-	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+	con.Query("COMMIT");
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
 
 	vector<double> min_values, max_values;
@@ -1227,6 +1234,7 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
 		int answer = full_scan_double(keys.get(), n, low, high);
 		string query = "SELECT COUNT(i) FROM numbers WHERE i >= CAST("+ to_string(low)+ " AS DOUBLE) and i <= CAST("+ to_string(high)+ " AS DOUBLE);";
 		result = con.Query(query);
+//        REQUIRE(CHECK_COLUMN(result, 0, {answer}));
 		if (!CHECK_COLUMN(result, 0, {answer})) {
 			printf("Wrong answer on floating point double-small!\nQueries to reproduce:\n");
 			printf("CREATE TABLE numbers(i double);\n");
@@ -1243,18 +1251,18 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
 }
 
 
+
 TEST_CASE("ART Floating Point", "[art-float][.]") {
 	srand(1);
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	float low,high, aux;
-	int answer;
-
+    float a,b;
+    vector<float> min_values, max_values;
 	Connection con(db);
 	//! Will use 10k keys
 	auto keys = unique_ptr<float[]>(new float[10000]);
 	index_t n  = 10000;
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i real)"));
+	con.Query("CREATE TABLE numbers(i real)");
 	//! Generate 1000 small floats (0.0 - 1.0)
 	for (index_t i = 0; i < 1000; i ++){
 		keys[i] = generate_small_float();
@@ -1269,43 +1277,50 @@ TEST_CASE("ART Floating Point", "[art-float][.]") {
 		keys[i] = generate_float(FLT_MIN,FLT_MAX);
 	}
 	//! Insert values and create index
-	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	con.Query("BEGIN TRANSACTION");
 	for (index_t i = 0; i < n; i++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (CAST("+ to_string(keys[i])+ " AS REAL))"));
+		con.Query("INSERT INTO numbers VALUES (CAST("+ to_string(keys[i])+ " AS REAL))");
 	}
-	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+	con.Query("COMMIT");
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
 	//! Generate 500 small-small range queries
 	for (index_t i = 0; i < 500; i++) {
-		aux = generate_small_float();
-		high = generate_small_float();
-		low = min(aux,high);
-		high = max(aux,high);
-		answer = full_scan_float(keys.get(),n,low,high);
-		result = con.Query("SELECT COUNT(i) FROM numbers WHERE i >= CAST("+ to_string(low)+ " AS REAL) and i <= CAST("+ to_string(high)+ " AS REAL)");
-		REQUIRE(CHECK_COLUMN(result, 0, {answer}));
+		a = generate_small_float();
+		b = generate_small_float();
+        min_values.push_back(min(a, b));
+        max_values.push_back(max(a, b));
 	}
 	//! Generate 500 normal-normal range queries
 	for (index_t i = 0; i < 500; i++) {
-		aux = generate_float(-50,50);
-		high = generate_float(-50,50);
-		low = min(aux,high);
-		high = max(aux,high);
-		answer = full_scan_float(keys.get(),n,low,high);
-		result = con.Query("SELECT COUNT(i) FROM numbers WHERE i >= CAST("+ to_string(low)+ " AS REAL) and i <= CAST("+ to_string(high)+ " AS REAL)");
-		REQUIRE(CHECK_COLUMN(result, 0, {answer}));
+		a = generate_float(-50,50);
+		b = generate_float(-50,50);
+        min_values.push_back(min(a, b));
+        max_values.push_back(max(a, b));
 	}
 	//! Generate 500 big-big range queries
 	for (index_t i = 0; i < 500; i++) {
-		aux = generate_float(FLT_MIN,FLT_MAX);
-		high = generate_float(FLT_MIN,FLT_MAX);
-		low = min(aux,high);
-		high = max(aux,high);
-		answer = full_scan_float(keys.get(),n,low,high);
-		result = con.Query("SELECT COUNT(i) FROM numbers WHERE i >= CAST("+ to_string(low)+ " AS REAL) and i <= CAST("+ to_string(high)+ " AS REAL)");
-		REQUIRE(CHECK_COLUMN(result, 0, {answer}));
+		a = generate_float(FLT_MIN,FLT_MAX);
+		b = generate_float(FLT_MIN,FLT_MAX);
+        min_values.push_back(min(a, b));
+        max_values.push_back(max(a, b));
 	}
-
+    for (index_t i = 7; i < min_values.size(); i++) {
+        double low = min_values[i];
+        double high = max_values[i];
+        int answer = full_scan_float(keys.get(), n, low, high);
+        string query = "SELECT COUNT(i) FROM numbers WHERE i >= CAST("+ to_string(low)+ " AS REAL) and i <= CAST("+ to_string(high)+ " AS REAL);";
+        result = con.Query(query);
+//        REQUIRE(CHECK_COLUMN(result, 0, {answer}));
+        if (!CHECK_COLUMN(result, 0, {answer})) {
+            printf("Wrong answer on floating point real-small!\nQueries to reproduce:\n");
+            printf("CREATE TABLE numbers(i real);\n");
+            for(index_t k = 0; k < n; k++) {
+                printf("INSERT INTO numbers VALUES (CAST(%lf AS REAL));\n", keys[k]);
+            }
+            printf("%s\n", query.c_str());
+            REQUIRE(false);
+        }
+    }
 	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE numbers"));
 }
@@ -1321,7 +1336,7 @@ TEST_CASE("ART Floating Point Double", "[art-double][.]") {
 	//! Will use 10k keys
 	auto keys = unique_ptr<double[]>(new double[10000]);
 	index_t n  = 10000;
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i double)"));
+	con.Query("CREATE TABLE numbers(i double)");
 	//! Generate 1000 small double (0.0 - 1.0)
 	for (index_t i = 0; i < 1000; i ++){
 		keys[i] = generate_small_double();
@@ -1335,11 +1350,11 @@ TEST_CASE("ART Floating Point Double", "[art-double][.]") {
 		keys[i] = generate_double(FLT_MIN,FLT_MAX);
 	}
 	//! Insert values and create index
-	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	con.Query("BEGIN TRANSACTION");
 	for (index_t i = 0; i < n; i++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (CAST("+ to_string(keys[i])+ " AS DOUBLE))"));
+		con.Query("INSERT INTO numbers VALUES (CAST("+ to_string(keys[i])+ " AS DOUBLE))");
 	}
-	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+	con.Query("COMMIT");
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
 
 	//! Generate 500 small-small range queries
