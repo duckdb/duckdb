@@ -1,6 +1,10 @@
-type <- "both"
-if (.Platform$OS.type == "windows") {
+install_args <- list(
+	pkgs=c("DBI", "DBItest", "testthat", "dbplyr", "RSQLite", "callr", "nycflights13"),
+	repos=c("http://cran.rstudio.com/"))
+
+if (.Platform$OS.type == "unix") {
 	message("Forcing binary package installs on Windows :/")
-	type <- "binary"
+	install_args[['type']] <- "binary"
 }
-install.packages(c("DBI", "DBItest", "testthat", "dbplyr", "RSQLite", "callr", "nycflights13"), repos=c("http://cran.rstudio.com/"), type=type)
+
+do.call(install.packages, install_args)
