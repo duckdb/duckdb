@@ -5,6 +5,8 @@
 #include "duckdb.hpp"
 #include "dbgen.hpp"
 
+#include "duckdb/common/string_util.hpp"
+
 using namespace std;
 using namespace duckdb;
 
