@@ -37,6 +37,8 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSQLStatement &
 		return CreatePlan((BoundSimpleStatement &)statement);
 	case StatementType::EXECUTE:
 		return CreatePlan((BoundExecuteStatement &)statement);
+	case StatementType::EXPLAIN:
+		return CreatePlan((BoundExplainStatement &)statement);
 	default:
 		throw Exception("Unsupported bound statement type");
 	}

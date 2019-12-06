@@ -5,6 +5,7 @@ add_library_unity(duckdb_logical_plan_statement
                   plan_create_table.cpp
                   plan_delete.cpp
                   plan_execute.cpp
+                  plan_explain.cpp
                   plan_insert.cpp
                   plan_select.cpp
                   plan_simple.cpp

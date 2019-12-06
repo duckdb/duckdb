@@ -58,19 +58,9 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::DROP:
 	case StatementType::ALTER:
 	case StatementType::TRANSACTION:
+	case StatementType::EXPLAIN:
 		CreatePlan(*statement);
 		break;
-	case StatementType::EXPLAIN: {
-		auto &stmt = *reinterpret_cast<ExplainStatement *>(statement.get());
-		CreatePlan(move(stmt.stmt));
-		auto logical_plan_unopt = plan->ToString();
-		auto explain = make_unique<LogicalExplain>(move(plan));
-		explain->logical_plan_unopt = logical_plan_unopt;
-		names = {"explain_key", "explain_value"};
-		sql_types = {SQLType::VARCHAR, SQLType::VARCHAR};
-		plan = move(explain);
-		break;
-	}
 	case StatementType::PRAGMA: {
 		auto &stmt = *reinterpret_cast<PragmaStatement *>(statement.get());
 		PragmaHandler handler(context);
@@ -193,9 +183,4 @@ void Planner::VerifyExpression(Expression &expr, vector<unique_ptr<Expression>> 
 	assert(copy->Hash() == expr.Hash());
 	assert(Expression::Equals(copy.get(), &expr));
 	copies.push_back(move(copy));
-}
-
-void Planner::HandlePragmaStatement(PragmaStatement &statement) {
-
-
 }

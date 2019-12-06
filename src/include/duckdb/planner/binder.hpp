@@ -114,6 +114,7 @@ private:
 	unique_ptr<BoundSQLStatement> Bind(AlterTableStatement &stmt);
 	unique_ptr<BoundSQLStatement> Bind(TransactionStatement &stmt);
 	unique_ptr<BoundSQLStatement> Bind(PragmaStatement &stmt);
+	unique_ptr<BoundSQLStatement> Bind(ExplainStatement &stmt);
 
 	unique_ptr<BoundQueryNode> Bind(SelectNode &node);
 	unique_ptr<BoundQueryNode> Bind(SetOperationNode &node);

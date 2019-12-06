@@ -48,9 +48,12 @@ unique_ptr<BoundSQLStatement> Binder::Bind(SQLStatement &statement) {
 		return Bind((PragmaStatement &)statement);
 	case StatementType::EXECUTE:
 		return Bind((ExecuteStatement &)statement);
-	default:
-		assert(statement.type == StatementType::CREATE_INDEX);
+	case StatementType::CREATE_INDEX:
 		return Bind((CreateIndexStatement &)statement);
+	case StatementType::EXPLAIN:
+		return Bind((ExplainStatement &)statement);
+	default:
+		throw NotImplementedException("Unimplemented statement type for Bind");
 	}
 }
 
