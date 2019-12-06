@@ -81,6 +81,27 @@ private:
 // Exception derived classes
 //===--------------------------------------------------------------------===//
 
+//! Exceptions that are StandardExceptions do NOT invalidate the current transaction when thrown
+class StandardException : public Exception {
+public:
+	StandardException(ExceptionType exception_type, string message) : Exception(exception_type, message) {}
+};
+
+class CatalogException : public StandardException {
+public:
+	CatalogException(string msg, ...);
+};
+
+class ParserException : public StandardException {
+public:
+	ParserException(string msg, ...);
+};
+
+class BinderException : public StandardException {
+public:
+	BinderException(string msg, ...);
+};
+
 class CastException : public Exception {
 public:
 	CastException(const TypeId origType, const TypeId newType);
@@ -123,16 +144,6 @@ public:
 	OutOfRangeException(string msg, ...);
 };
 
-class CatalogException : public Exception {
-public:
-	CatalogException(string msg, ...);
-};
-
-class ParserException : public Exception {
-public:
-	ParserException(string msg, ...);
-};
-
 class SyntaxException : public Exception {
 public:
 	SyntaxException(string msg, ...);
@@ -141,11 +152,6 @@ public:
 class ConstraintException : public Exception {
 public:
 	ConstraintException(string msg, ...);
-};
-
-class BinderException : public Exception {
-public:
-	BinderException(string msg, ...);
 };
 
 class IOException : public Exception {
