@@ -24,7 +24,6 @@ static uint8_t FlipSign(uint8_t key_byte) {
 uint32_t Key::EncodeFloat(float x)
 {
     unsigned long buff;
-    int expbits = 8;
 
     //! zero
     if (x == 0)
@@ -36,25 +35,12 @@ uint32_t Key::EncodeFloat(float x)
     //! infinity
     if (x > FLT_MAX)
     {
-        buff = 128 + ((1 << (expbits - 1)) - 1);
-        buff <<= (31 - expbits);
-        return buff;
+        return UINT_MAX;
     }
     //! -infinity
     if (x < -FLT_MAX)
     {
-        buff = 128 + ((1 << (expbits - 1)) - 1);
-        buff <<= (31 - expbits);
-        buff |= (1 << 31);
-        return buff;
-    }
-    //! NaN
-    if (x != x)
-    {
-        buff = 128 + ((1 << (expbits - 1)) - 1);
-        buff <<= (31 - expbits);
-        buff |= 1234;
-        return buff;
+        return 0;
     }
     buff = reinterpret_cast<uint32_t*>(&x)[0];
     if ((buff & (1u<<31)) == 0){ //! +0 and positive numbers
@@ -68,10 +54,7 @@ uint32_t Key::EncodeFloat(float x)
 
 
 uint64_t  Key::EncodeDouble(double x) {
-    unsigned long hilong, lowlong;
-    int expbits = 11;
     uint64_t buff;
-
     //! zero
     if (x == 0)
     {
@@ -82,36 +65,12 @@ uint64_t  Key::EncodeDouble(double x) {
     //! infinity
     if (x > DBL_MAX)
     {
-        hilong = 1024 + ((1 << (expbits - 1)) - 1);
-        hilong <<= (31 - expbits);
-        lowlong = 0;
-        buff = hilong;
-        buff <<=32;
-        buff += lowlong;
-        return buff;
+        return ULLONG_MAX;
     }
     //! -infinity
     if (x < -DBL_MAX)
     {
-        hilong = 1024 + ((1 << (expbits - 1)) - 1);
-        hilong <<= (31 - expbits);
-        hilong |= (1 << 31);
-        lowlong = 0;
-        buff = hilong;
-        buff <<=32;
-        buff += lowlong;
-        return buff;
-    }
-    //! NaN
-    if (x != x)
-    {
-        hilong = 1024 + ((1 << (expbits - 1)) - 1);
-        hilong <<= (31 - expbits);
-        lowlong = 1234;
-        buff = hilong;
-        buff <<=32;
-        buff += lowlong;
-        return buff;
+        return 0;
     }
     buff = reinterpret_cast<uint64_t*>(&x)[0];
     if (buff < (1ull<<63)){ //! +0 and positive numbers
