@@ -758,6 +758,39 @@ TEST_CASE("Test ART index with negative values and big values", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {7}));
 }
 
+TEST_CASE("Test Drop Index", "[drop-index]") {
+    unique_ptr<QueryResult> result;
+    DuckDB db(nullptr);
+    Connection con(db);
+
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE A (A1 INTEGER,A2 VARCHAR, A3 INTEGER)"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO A VALUES (1, 1, 1)"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO A VALUES (2, 2, 2)"));
+
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE B (B1 INTEGER,B2 INTEGER, B3 INTEGER)"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO B VALUES (1, 1, 1)"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO B VALUES (2, 2, 2)"));
+
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE C (C1 VARCHAR, C2 INTEGER, C3 INTEGER)"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO C VALUES ('t1', 1, 1)"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO C VALUES ('t2', 2, 2)"));
+
+    REQUIRE_NO_FAIL(con.Query("SELECT A2 FROM A WHERE A1=1"));
+
+    REQUIRE_NO_FAIL(con.Query("CREATE INDEX A_index ON A (A1)"));
+    REQUIRE_NO_FAIL(con.Query("SELECT A2 FROM A WHERE A1=1"));
+
+    REQUIRE_NO_FAIL(con.Query("CREATE INDEX B_index ON B (B1)"));
+    REQUIRE_NO_FAIL(con.Query("SELECT A2 FROM A WHERE A1=1"));
+
+    REQUIRE_NO_FAIL(con.Query("CREATE INDEX C_index ON C (C2)"));
+    REQUIRE_NO_FAIL(con.Query("SELECT A2 FROM A WHERE A1=1"));
+
+    REQUIRE_NO_FAIL(con.Query("DROP INDEX IF EXISTS A_index"));
+    REQUIRE_NO_FAIL(con.Query("SELECT A2 FROM A WHERE A1=1"));
+}
+
+
 TEST_CASE("Test ART with different Integer Types", "[art]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
