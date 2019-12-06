@@ -11,6 +11,7 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/catalog/catalog_entry/prepared_statement_catalog_entry.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -26,12 +27,13 @@ public:
 	unique_ptr<LogicalOperator> plan;
 	vector<string> names;
 	vector<SQLType> sql_types;
+	unordered_map<index_t, PreparedValueEntry> value_map;
 
 	Binder binder;
 	ClientContext &context;
 
 private:
-	void CreatePlan(SQLStatement &statement, vector<BoundParameterExpression *> *parameters = nullptr);
+	void CreatePlan(SQLStatement &statement);
 
 	void VerifyQuery(BoundSQLStatement &statement);
 	void VerifyNode(BoundQueryNode &statement);

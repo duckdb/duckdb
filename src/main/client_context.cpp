@@ -231,19 +231,27 @@ static string CanExecuteStatementInReadOnlyMode(SQLStatement &stmt) {
 	case StatementType::CREATE_VIEW:
 	case StatementType::CREATE_SCHEMA:
 	case StatementType::CREATE_SEQUENCE:
-	case StatementType::DROP:
 	case StatementType::ALTER:
 	case StatementType::TRANSACTION:
-		return StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!",
-		                          StatementTypeToString(stmt.type).c_str());
+		break;
 	case StatementType::PREPARE: {
 		// prepare statement: check the underlying statement type
 		auto &prepare = (PrepareStatement &)stmt;
 		return CanExecuteStatementInReadOnlyMode(*prepare.statement);
 	}
+	case StatementType::DROP: {
+		// drop statement: we can drop prepared statements in read-only mode
+		auto &drop_stmt = (DropStatement&) stmt;
+		if (drop_stmt.info->type == CatalogType::PREPARED_STATEMENT) {
+			return string();
+		}
+		break;
+	}
 	default:
 		return string();
 	}
+	return StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!",
+								StatementTypeToString(stmt.type).c_str());
 }
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {

@@ -44,6 +44,8 @@ string StatementTypeToString(StatementType type) {
 		return "CREATE_SEQUENCE";
 	case StatementType::DROP:
 		return "DROP";
+	case StatementType::PRAGMA:
+		return "PRAGMA";
 	default:
 		return "INVALID";
 	}

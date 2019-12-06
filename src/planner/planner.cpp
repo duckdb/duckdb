@@ -22,10 +22,12 @@ using namespace std;
 Planner::Planner(ClientContext &context) : binder(context), context(context) {
 }
 
-void Planner::CreatePlan(SQLStatement &statement, vector<BoundParameterExpression *> *parameters) {
+void Planner::CreatePlan(SQLStatement &statement) {
+	vector<BoundParameterExpression *> bound_parameters;
+
 	// first bind the tables and columns to the catalog
 	context.profiler.StartPhase("binder");
-	binder.parameters = parameters;
+	binder.parameters = &bound_parameters;
 	auto bound_statement = binder.Bind(statement);
 	context.profiler.EndPhase();
 
@@ -39,6 +41,24 @@ void Planner::CreatePlan(SQLStatement &statement, vector<BoundParameterExpressio
 	LogicalPlanGenerator logical_planner(binder, context);
 	this->plan = logical_planner.CreatePlan(*bound_statement);
 	context.profiler.EndPhase();
+
+	// set up a map of parameter number -> value entries
+	for (auto &expr : bound_parameters) {
+		// check if the type of the parameter could be resolved
+		if (expr->return_type == TypeId::INVALID) {
+			throw BinderException("Could not determine type of parameters: try adding explicit type casts");
+		}
+		auto value = make_unique<Value>(expr->return_type);
+		expr->value = value.get();
+		// check if the parameter number has been used before
+		if (value_map.find(expr->parameter_nr) != value_map.end()) {
+			throw BinderException("Duplicate parameter index. Use $1, $2 etc. to differentiate.");
+		}
+		PreparedValueEntry entry;
+		entry.value = move(value);
+		entry.target_type = expr->sql_type;
+		value_map[expr->parameter_nr] = move(entry);
+	}
 }
 
 void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
@@ -60,10 +80,15 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::TRANSACTION:
 	case StatementType::EXPLAIN:
 		CreatePlan(*statement);
+		if (value_map.size() > 0) {
+			throw BinderException("Bind parameters without PREPARE statement!");
+		}
 		break;
 	case StatementType::PRAGMA: {
 		auto &stmt = *reinterpret_cast<PragmaStatement *>(statement.get());
 		PragmaHandler handler(context);
+		// some pragma statements have a "replacement" SQL statement that will be executed instead
+		// use the PragmaHandler to get the (potential) replacement SQL statement
 		auto new_stmt = handler.HandlePragma(*stmt.info);
 		if (new_stmt) {
 			CreatePlan(move(new_stmt));
@@ -75,31 +100,9 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::PREPARE: {
 		auto &stmt = *reinterpret_cast<PrepareStatement *>(statement.get());
 		auto statement_type = stmt.statement->type;
-		if (statement_type == StatementType::EXPLAIN) {
-			throw NotImplementedException("Cannot explain prepared statements");
-		}
-		// first create the plan for the to-be-prepared statement
-		vector<BoundParameterExpression *> bound_parameters;
-		CreatePlan(*stmt.statement, &bound_parameters);
-
-		// set up a map of parameter number -> value entries
-		unordered_map<index_t, PreparedValueEntry> value_map;
-		for (auto &expr : bound_parameters) {
-			// check if the type of the parameter could be resolved
-			if (expr->return_type == TypeId::INVALID) {
-				throw BinderException("Could not determine type of parameters: try adding explicit type casts");
-			}
-			auto value = make_unique<Value>(expr->return_type);
-			expr->value = value.get();
-			// check if the parameter number has been used before
-			if (value_map.find(expr->parameter_nr) != value_map.end()) {
-				throw BinderException("Duplicate parameter index. Use $1, $2 etc. to differentiate.");
-			}
-			PreparedValueEntry entry;
-			entry.value = move(value);
-			entry.target_type = expr->sql_type;
-			value_map[expr->parameter_nr] = move(entry);
-		}
+		// create a plan of the underlying statement
+		CreatePlan(*stmt.statement);
+		// now create the logical prepare
 		auto prepare =
 		    make_unique<LogicalPrepare>(stmt.name, statement_type, names, sql_types, move(value_map), move(plan));
 		names = {"Success"};
