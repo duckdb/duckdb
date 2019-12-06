@@ -8,12 +8,15 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
+#include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/enums/index_type.hpp"
 
 namespace duckdb {
 
-struct CreateIndexInfo {
+struct CreateIndexInfo : public ParseInfo {
+	CreateIndexInfo() : if_not_exists(false) {
+	}
+
 	////! Index Type (e.g., B+-tree, Skip-List, ...)
 	IndexType index_type;
 	////! Name of the Index
@@ -23,9 +26,6 @@ struct CreateIndexInfo {
 
 	//! Ignore if the entry already exists, instead of failing
 	bool if_not_exists = false;
-
-	CreateIndexInfo() : if_not_exists(false) {
-	}
 };
 
 } // namespace duckdb

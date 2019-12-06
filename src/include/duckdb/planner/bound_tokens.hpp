@@ -23,6 +23,7 @@ class BoundExecuteStatement;
 class BoundInsertStatement;
 class BoundSelectStatement;
 class BoundUpdateStatement;
+class BoundSimpleStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node

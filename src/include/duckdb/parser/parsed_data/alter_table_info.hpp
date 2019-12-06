@@ -8,13 +8,13 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
+#include "duckdb/parser/parsed_data/parse_info.hpp"
 
 namespace duckdb {
 
 enum class AlterType : uint8_t { INVALID = 0, ALTER_TABLE = 1 };
 
-struct AlterInfo {
+struct AlterInfo : public ParseInfo {
 	AlterInfo(AlterType type) : type(type) {
 	}
 	virtual ~AlterInfo(){}

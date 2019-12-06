@@ -13,6 +13,8 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 
+#include "duckdb/parser/parsed_data/pragma_info.hpp"
+
 #include <cctype>
 
 using namespace duckdb;
@@ -21,7 +23,7 @@ using namespace std;
 PragmaHandler::PragmaHandler(ClientContext &context) : context(context) {
 }
 
-unique_ptr<SQLStatement> PragmaHandler::HandlePragma(PragmaStatement &pragma) {
+unique_ptr<SQLStatement> PragmaHandler::HandlePragma(PragmaInfo &pragma) {
 	string keyword = StringUtil::Lower(pragma.name);
 	if (keyword == "table_info") {
 		if (pragma.pragma_type != PragmaType::CALL) {

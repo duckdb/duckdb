@@ -59,8 +59,19 @@ enum class LogicalOperatorType : uint8_t {
 	INSERT,
 	DELETE,
 	UPDATE,
+
+	// -----------------------------
+	// Schema
+	// -----------------------------
+	ALTER,
 	CREATE_TABLE,
 	CREATE_INDEX,
+	CREATE_SEQUENCE,
+	CREATE_VIEW,
+	CREATE_SCHEMA,
+	DROP,
+	PRAGMA,
+	TRANSACTION,
 
 	// -----------------------------
 	// Explain

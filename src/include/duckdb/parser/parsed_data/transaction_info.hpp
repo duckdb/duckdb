@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/parsed_data/create_schema_info.hpp
+// parser/parsed_data/transaction_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,14 +12,13 @@
 
 namespace duckdb {
 
-struct CreateSchemaInfo : public ParseInfo {
-	CreateSchemaInfo() : if_not_exists(false) {
-	}
+enum class TransactionType : uint8_t { INVALID, BEGIN_TRANSACTION, COMMIT, ROLLBACK };
 
-	//! Schema name to create
-	string schema;
-	//! Ignore if the entry already exists, instead of failing
-	bool if_not_exists = false;
+struct TransactionInfo : public ParseInfo {
+	TransactionInfo(TransactionType type) : type(type) {}
+
+	//! The type of transaction statement
+	TransactionType type;
 };
 
 } // namespace duckdb

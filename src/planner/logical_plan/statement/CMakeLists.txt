@@ -7,6 +7,7 @@ add_library_unity(duckdb_logical_plan_statement
                   plan_execute.cpp
                   plan_insert.cpp
                   plan_select.cpp
+                  plan_simple.cpp
                   plan_update.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_logical_plan_statement>

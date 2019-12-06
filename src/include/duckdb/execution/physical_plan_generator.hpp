@@ -61,6 +61,7 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalPrepare &expr);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalWindow &expr);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalExecute &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalSimple &op);
 
 	unique_ptr<PhysicalOperator> CreateDistinct(unique_ptr<PhysicalOperator> child);
 	unique_ptr<PhysicalOperator> CreateDistinctOn(unique_ptr<PhysicalOperator> child,

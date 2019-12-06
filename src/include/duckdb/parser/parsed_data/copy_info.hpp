@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
+#include "duckdb/parser/parsed_data/parse_info.hpp"
 
 namespace duckdb {
 
@@ -17,7 +17,12 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 enum class ExternalFileFormat : uint8_t { INVALID, CSV };
 
-struct CopyInfo {
+struct CopyInfo : public ParseInfo {
+	CopyInfo()
+	    : schema(DEFAULT_SCHEMA), is_from(false), delimiter(","), quote("\""), escape(""), header(false),
+	      format(ExternalFileFormat::CSV), null_str(""), quote_all(false) {
+	}
+
 	//! The schema name to copy to/from
 	string schema;
 	//! The table name to copy to/from
@@ -50,11 +55,6 @@ struct CopyInfo {
 	vector<string> force_not_null_list;
 	//! True, if column with that index must skip null check
 	vector<bool> force_not_null;
-
-	CopyInfo()
-	    : schema(DEFAULT_SCHEMA), is_from(false), delimiter(","), quote("\""), escape(""), header(false),
-	      format(ExternalFileFormat::CSV), null_str(""), quote_all(false) {
-	}
 };
 
 } // namespace duckdb

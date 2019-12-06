@@ -66,8 +66,20 @@ enum class PhysicalOperatorType : uint8_t {
 	DELETE,
 	UPDATE,
 	EXPORT_EXTERNAL_FILE,
+
+	// -----------------------------
+	// Schema
+	// -----------------------------
 	CREATE,
 	CREATE_INDEX,
+	ALTER,
+	CREATE_SEQUENCE,
+	CREATE_VIEW,
+	CREATE_SCHEMA,
+	DROP,
+	PRAGMA,
+	TRANSACTION,
+
 	// -----------------------------
 	// Helpers
 	// -----------------------------

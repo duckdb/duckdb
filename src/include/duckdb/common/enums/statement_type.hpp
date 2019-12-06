@@ -41,7 +41,7 @@ enum class StatementType : uint8_t {
 	CREATE_SCHEMA,   // create schema statement type
 	CREATE_INDEX,    // create index statement type
 	CREATE_VIEW,     // create view statement type
-	CREATE_SEQUENCE, // create sequence statement type
+	CREATE_SEQUENCE  // create sequence statement type
 };
 
 string StatementTypeToString(StatementType type);
