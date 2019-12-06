@@ -71,6 +71,17 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		plan = move(explain);
 		break;
 	}
+	case StatementType::PRAGMA: {
+		auto &stmt = *reinterpret_cast<PragmaStatement *>(statement.get());
+		PragmaHandler handler(context);
+		auto new_stmt = handler.HandlePragma(*stmt.info);
+		if (new_stmt) {
+			CreatePlan(move(new_stmt));
+		} else {
+			CreatePlan(stmt);
+		}
+		break;
+	}
 	case StatementType::PREPARE: {
 		auto &stmt = *reinterpret_cast<PrepareStatement *>(statement.get());
 		auto statement_type = stmt.statement->type;
@@ -110,15 +121,6 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		auto &stmt = *reinterpret_cast<DeallocateStatement *>(statement.get());
 		if (!context.prepared_statements->DropEntry(context.ActiveTransaction(), stmt.name, false)) {
 			// silently ignore
-		}
-		break;
-	}
-	case StatementType::PRAGMA: {
-		auto &stmt = *reinterpret_cast<PragmaStatement *>(statement.get());
-		PragmaHandler handler(context);
-		auto new_stmt = handler.HandlePragma(*stmt.info);
-		if (new_stmt) {
-			CreatePlan(move(new_stmt));
 		}
 		break;
 	}
