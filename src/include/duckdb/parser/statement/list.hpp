@@ -5,7 +5,6 @@
 #include "duckdb/parser/statement/create_sequence_statement.hpp"
 #include "duckdb/parser/statement/create_table_statement.hpp"
 #include "duckdb/parser/statement/create_view_statement.hpp"
-#include "duckdb/parser/statement/deallocate_statement.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"

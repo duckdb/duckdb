@@ -11,6 +11,7 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
@@ -18,7 +19,6 @@
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/transaction/transaction.hpp"
-#include "duckdb/parser/statement/deallocate_statement.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/main/appender.hpp"
 
@@ -318,7 +318,9 @@ void ClientContext::RemovePreparedStatement(PreparedStatement *statement) {
 	// erase the object from the list of prepared statements
 	prepared_statement_objects.erase(statement);
 	// drop it from the catalog
-	auto deallocate_statement = make_unique<DeallocateStatement>(statement->name);
+	auto deallocate_statement = make_unique<DropStatement>();
+	deallocate_statement->info->type = CatalogType::PREPARED_STATEMENT;
+	deallocate_statement->info->name = statement->name;
 	vector<unique_ptr<SQLStatement>> statements;
 	statements.push_back(move(deallocate_statement));
 	ExecuteStatementsInternal("", statements, false);

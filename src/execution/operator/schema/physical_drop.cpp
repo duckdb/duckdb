@@ -39,6 +39,11 @@ void PhysicalDrop::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 	case CatalogType::SCHEMA:
 		context.catalog.DropSchema(context.ActiveTransaction(), info.get());
 		break;
+	case CatalogType::PREPARED_STATEMENT:
+		if (!context.prepared_statements->DropEntry(context.ActiveTransaction(), info->name, false)) {
+			// silently ignore
+		}
+		break;
 	default:
 		throw NotImplementedException("Unimplemented catalog type for drop statement");
 	}

@@ -52,7 +52,6 @@ template class std::unique_ptr<TransactionStatement>;
 template class std::unique_ptr<UpdateStatement>;
 template class std::unique_ptr<PrepareStatement>;
 template class std::unique_ptr<ExecuteStatement>;
-template class std::unique_ptr<DeallocateStatement>;
 template class std::unique_ptr<QueryNode>;
 template class std::unique_ptr<SelectNode>;
 template class std::unique_ptr<SetOperationNode>;

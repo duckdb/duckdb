@@ -107,13 +107,6 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		plan = move(prepare);
 		break;
 	}
-	case StatementType::DEALLOCATE: {
-		auto &stmt = *reinterpret_cast<DeallocateStatement *>(statement.get());
-		if (!context.prepared_statements->DropEntry(context.ActiveTransaction(), stmt.name, false)) {
-			// silently ignore
-		}
-		break;
-	}
 	default:
 		throw NotImplementedException("Cannot plan statement of type %s!", StatementTypeToString(statement->type).c_str());
 	}

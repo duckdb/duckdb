@@ -21,7 +21,6 @@ enum class StatementType : uint8_t {
 	INSERT,       // insert statement type
 	UPDATE,       // update statement type
 	DELETE,       // delete statement type
-	DEALLOCATE,   // de-allocate statement type
 	PREPARE,      // prepare statement type
 	EXECUTE,      // execute statement type
 	ALTER,        // alter statement type
