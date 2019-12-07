@@ -47,6 +47,7 @@ index_t Node48::GetMin(){
             return i;
         }
     }
+    return INVALID_INDEX;
 }
 
 void Node48::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child) {

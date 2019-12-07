@@ -29,6 +29,7 @@ index_t Node256::GetMin(){
              return i;
         }
     }
+    return INVALID_INDEX;
 }
 
 index_t Node256::GetNextPos(index_t pos) {
