@@ -101,7 +101,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		auto &stmt = *reinterpret_cast<PrepareStatement *>(statement.get());
 		auto statement_type = stmt.statement->type;
 		// create a plan of the underlying statement
-		CreatePlan(*stmt.statement);
+		CreatePlan(move(stmt.statement));
 		// now create the logical prepare
 		auto prepared_data = make_unique<PreparedStatementData>(statement_type);
 		prepared_data->names = names;

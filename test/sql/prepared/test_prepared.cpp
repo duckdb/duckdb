@@ -380,3 +380,62 @@ TEST_CASE("PREPARE multiple statements", "[prepared]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	}
 }
+
+static unique_ptr<QueryResult> TestExecutePrepared(Connection &con, string query) {
+	auto prepared = con.Prepare(query);
+	return prepared->Execute();
+}
+
+TEST_CASE("Prepare all types of statements", "[prepared]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	string csv_path = TestCreatePath("csv_files");
+	if (db.file_system->DirectoryExists(csv_path)) {
+		db.file_system->RemoveDirectory(csv_path);
+	}
+
+	// TRANSACTION
+	REQUIRE_NO_FAIL(TestExecutePrepared(con, "BEGIN TRANSACTION"));
+	// SELECT
+	result = TestExecutePrepared(con, "SELECT 42");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	// CREATE_SCHEMA
+	REQUIRE_NO_FAIL(TestExecutePrepared(con, "CREATE SCHEMA test"));
+	// CREATE_TABLE
+	REQUIRE_NO_FAIL(TestExecutePrepared(con, "CREATE TABLE test.a(i INTEGER)"));
+	// CREATE_TABLE
+	REQUIRE_NO_FAIL(TestExecutePrepared(con, "CREATE TABLE b(i INTEGER)"));
+	// CREATE_INDEX
+	REQUIRE_NO_FAIL(TestExecutePrepared(con, "CREATE INDEX i_index ON test.a(i)"));
+	// CREATE_VIEW
+	REQUIRE_NO_FAIL(TestExecutePrepared(con, "CREATE VIEW v1 AS SELECT * FROM test.a WHERE i=2"));
+	// CREATE_SEQUENCE
+	REQUIRE_NO_FAIL(TestExecutePrepared(con, "CREATE SEQUENCE seq"));
+	// PRAGMA
+	REQUIRE_NO_FAIL(TestExecutePrepared(con, "PRAGMA table_info('b')"));
+	// EXPLAIN
+	REQUIRE_NO_FAIL(TestExecutePrepared(con, "EXPLAIN SELECT 42"));
+	// COPY
+	REQUIRE_NO_FAIL(TestExecutePrepared(con, "COPY test.a TO '" + csv_path + "'"));
+	// INSERT
+	REQUIRE_NO_FAIL(TestExecutePrepared(con, "INSERT INTO test.a VALUES (1), (2), (3)"));
+	// UPDATE
+	REQUIRE_NO_FAIL(TestExecutePrepared(con, "UPDATE test.a SET i=i+1"));
+	// DELETE
+	REQUIRE_NO_FAIL(TestExecutePrepared(con, "DELETE FROM test.a WHERE i<4"));
+	// PREPARE
+	REQUIRE_NO_FAIL(TestExecutePrepared(con, "PREPARE p1 AS SELECT * FROM test.a"));
+	// EXECUTE
+	result = TestExecutePrepared(con, "EXECUTE p1");
+	REQUIRE(CHECK_COLUMN(result, 0, {4}));
+	// DROP
+	REQUIRE_NO_FAIL(TestExecutePrepared(con, "DROP SEQUENCE seq"));
+	REQUIRE_NO_FAIL(TestExecutePrepared(con, "DROP VIEW v1"));
+	REQUIRE_NO_FAIL(TestExecutePrepared(con, "DROP TABLE test.a CASCADE"));
+	REQUIRE_NO_FAIL(TestExecutePrepared(con, "DROP SCHEMA test CASCADE"));
+
+	// TRANSACTION
+	REQUIRE_NO_FAIL(TestExecutePrepared(con, "COMMIT"));
+}
