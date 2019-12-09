@@ -103,8 +103,12 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		// create a plan of the underlying statement
 		CreatePlan(*stmt.statement);
 		// now create the logical prepare
-		auto prepare =
-		    make_unique<LogicalPrepare>(stmt.name, statement_type, names, sql_types, move(value_map), move(plan));
+		auto prepared_data = make_unique<PreparedStatementData>(statement_type);
+		prepared_data->names = names;
+		prepared_data->sql_types = sql_types;
+		prepared_data->value_map = move(value_map);
+
+		auto prepare = make_unique<LogicalPrepare>(stmt.name, move(prepared_data), move(plan));
 		names = {"Success"};
 		sql_types = {SQLType(SQLTypeId::BOOLEAN)};
 		plan = move(prepare);

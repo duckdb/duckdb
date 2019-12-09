@@ -187,7 +187,7 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 	// special case with logging EXECUTE with prepared statements that do not scan the table
 	if (plan->type == LogicalOperatorType::EXECUTE) {
 		auto exec = (LogicalExecute *)plan.get();
-		statement_type = exec->prep->statement_type;
+		statement_type = exec->prep->prepared->statement_type;
 	}
 
 	profiler.StartPhase("physical_planner");

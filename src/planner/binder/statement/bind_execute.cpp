@@ -18,14 +18,14 @@ unique_ptr<BoundSQLStatement> Binder::Bind(ExecuteStatement &stmt) {
 		throw BinderException("Could not find prepared statement with that name");
 	}
 	// set parameters
-	if (stmt.values.size() != result->prep->value_map.size()) {
+	if (stmt.values.size() != result->prep->prepared->value_map.size()) {
 		throw BinderException("Parameter/argument count mismatch");
 	}
 	// bind the values
 	index_t param_idx = 1;
 	for (auto &expr : stmt.values) {
-		auto it = result->prep->value_map.find(param_idx);
-		if (it == result->prep->value_map.end()) {
+		auto it = result->prep->prepared->value_map.find(param_idx);
+		if (it == result->prep->prepared->value_map.end()) {
 			throw Exception("Could not find parameter with this index");
 		}
 		auto &target = it->second;

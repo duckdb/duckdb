@@ -23,10 +23,10 @@ public:
 
 public:
 	vector<string> GetNames() override {
-		return prep->names;
+		return prep->prepared->names;
 	}
 	vector<SQLType> GetTypes() override {
-		return prep->sql_types;
+		return prep->prepared->sql_types;
 	}
 };
 } // namespace duckdb

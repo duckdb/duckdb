@@ -10,21 +10,14 @@ using namespace std;
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPrepare &op) {
 	assert(op.children.size() == 1);
 
-	// create the physical plan for the prepare statement.
-	auto entry = make_unique<PreparedStatementCatalogEntry>(op.name, op.statement_type);
-	entry->catalog = &context.catalog;
-	entry->names = op.names;
-	entry->value_map = move(op.value_map);
-
-	// find tables
-	// op.GetTableBindings(entry->tables);
-
 	// generate physical plan
 	auto plan = CreatePlan(*op.children[0]);
+	op.prepared->types = plan->types;
+	op.prepared->plan = move(plan);
 
-	entry->types = plan->types;
-	entry->sql_types = op.sql_types;
-	entry->plan = move(plan);
+	// finally create the catalog entry
+	auto entry = make_unique<PreparedStatementCatalogEntry>(op.name, move(op.prepared));
+	entry->catalog = &context.catalog;
 
 	// now store plan in context
 	if (!context.prepared_statements->CreateEntry(context.ActiveTransaction(), op.name, move(entry), dependencies)) {
