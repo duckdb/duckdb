@@ -151,26 +151,24 @@ unique_ptr<DataChunk> ClientContext::FetchInternal() {
 	return chunk;
 }
 
-unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, unique_ptr<SQLStatement> statement,
-                                                                bool allow_stream_result) {
+unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const string &query, unique_ptr<SQLStatement> statement) {
 	if (ActiveTransaction().is_invalidated && statement->type != StatementType::TRANSACTION) {
 		throw Exception("Current transaction is aborted (please ROLLBACK)");
 	}
 	StatementType statement_type = statement->type;
-	bool create_stream_result = statement_type == StatementType::SELECT && allow_stream_result;
+	auto result = make_unique<PreparedStatementData>(statement_type);
 
 	profiler.StartPhase("planner");
 	Planner planner(*this);
 	planner.CreatePlan(move(statement));
-	if (!planner.plan) {
-		return make_unique<MaterializedQueryResult>(statement_type);
-	}
+	assert(planner.plan);
 	profiler.EndPhase();
 
 	auto plan = move(planner.plan);
 	// extract the result column names from the plan
-	auto names = planner.names;
-	auto sql_types = planner.sql_types;
+	result->names = planner.names;
+	result->sql_types = planner.sql_types;
+	result->value_map = move(planner.value_map);
 
 #ifdef DEBUG
 	if (enable_optimizer) {
@@ -196,20 +194,28 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 	auto physical_plan = physical_planner.CreatePlan(move(plan));
 	profiler.EndPhase();
 
+	result->types = physical_plan->types;
+	result->plan = move(physical_plan);
+	return result;
+}
+
+unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &query, PreparedStatementData &statement, bool allow_stream_result) {
+	bool create_stream_result = statement.statement_type == StatementType::SELECT && allow_stream_result;
+
 	// store the physical plan in the context for calls to Fetch()
-	execution_context.physical_plan = move(physical_plan);
+	execution_context.physical_plan = move(statement.plan);
 	execution_context.physical_state = execution_context.physical_plan->GetOperatorState();
 
 	auto types = execution_context.physical_plan->GetTypes();
-	assert(types.size() == sql_types.size());
+	assert(types.size() == statement.sql_types.size());
 
 	if (create_stream_result) {
 		// successfully compiled SELECT clause and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
-		return make_unique<StreamQueryResult>(statement_type, *this, sql_types, types, names);
+		return make_unique<StreamQueryResult>(statement.statement_type, *this, statement.sql_types, types, statement.names);
 	}
 	// create a materialized result by continuously fetching
-	auto result = make_unique<MaterializedQueryResult>(statement_type, sql_types, types, names);
+	auto result = make_unique<MaterializedQueryResult>(statement.statement_type, statement.sql_types, types, statement.names);
 	while (true) {
 		auto chunk = FetchInternal();
 		if (chunk->size() == 0) {
@@ -218,6 +224,13 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 		result->collection.Append(*chunk);
 	}
 	return move(result);
+}
+
+unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(const string &query, unique_ptr<SQLStatement> statement, bool allow_stream_result) {
+	// prepare the query for execution
+	auto prepared = CreatePreparedStatement(query, move(statement));
+	// execute the prepared statement
+	return ExecutePreparedStatement(query, *prepared, allow_stream_result);
 }
 
 static string CanExecuteStatementInReadOnlyMode(SQLStatement &stmt) {
@@ -333,7 +346,7 @@ void ClientContext::RemovePreparedStatement(PreparedStatement *statement) {
 	ExecuteStatementsInternal("", statements, false);
 }
 
-unique_ptr<QueryResult> ClientContext::ExecuteStatementsInternal(string query,
+unique_ptr<QueryResult> ClientContext::ExecuteStatementsInternal(const string &query,
                                                                  vector<unique_ptr<SQLStatement>> &statements,
                                                                  bool allow_stream_result) {
 	// now we have a list of statements
@@ -371,7 +384,7 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementsInternal(string query,
 		// start the profiler
 		profiler.StartQuery(query);
 		try {
-			// run the actual query
+			// execute the actual query
 			current_result = ExecuteStatementInternal(query, move(statement), allow_stream_result && is_last_statement);
 			// only the last result can be STREAM_RESULT
 			assert(is_last_statement || current_result->type != QueryResultType::STREAM_RESULT);

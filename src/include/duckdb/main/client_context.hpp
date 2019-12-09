@@ -24,6 +24,8 @@ class Appender;
 class Catalog;
 class DuckDB;
 
+struct PreparedStatementData;
+
 //! The ClientContext holds information relevant to the current client session
 //! during execution
 class ClientContext {
@@ -106,12 +108,15 @@ private:
 	//! Internal fetch, does not lock. Caller must hold the context_lock.
 	unique_ptr<DataChunk> FetchInternal();
 	//! Internally execute a set of SQL statement. Caller must hold the context_lock.
-	unique_ptr<QueryResult> ExecuteStatementsInternal(string query, vector<unique_ptr<SQLStatement>> &statements,
+	unique_ptr<QueryResult> ExecuteStatementsInternal(const string &query, vector<unique_ptr<SQLStatement>> &statements,
 	                                                  bool allow_stream_result);
-	//! Internally execute a SQL statement. Caller must hold the context_lock.
-	unique_ptr<QueryResult> ExecuteStatementInternal(string query, unique_ptr<SQLStatement> statement,
-	                                                 bool allow_stream_result);
 
+	//! Internally prepare a SQL statement. Caller must hold the context_lock.
+	unique_ptr<PreparedStatementData> CreatePreparedStatement(const string &query, unique_ptr<SQLStatement> statement);
+	//! Internally execute a prepared SQL statement. Caller must hold the context_lock.
+	unique_ptr<QueryResult> ExecutePreparedStatement(const string &query, PreparedStatementData &statement, bool allow_stream_result);
+	//! Internally prepare and execute a prepared SQL statement. Caller must hold the context_lock.
+	unique_ptr<QueryResult> ExecuteStatementInternal(const string &query, unique_ptr<SQLStatement> statement, bool allow_stream_result);
 private:
 	index_t prepare_count = 0;
 	//! The currently opened StreamQueryResult (if any)
