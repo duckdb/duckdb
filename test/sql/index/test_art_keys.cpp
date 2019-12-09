@@ -143,66 +143,67 @@ TEST_CASE("Test correct functioning of art keys", "[art]") {
 	keys.push_back(CreateCompoundKey("hello", 1, is_little_endian));
 	keys.push_back(CreateCompoundKey("hellow", -10000, is_little_endian));
 	keys.push_back(CreateCompoundKey("z", 30, is_little_endian));
+
 	TestKeys(keys);
 
 	keys.clear();
 }
 
-TEST_CASE("Test correct functioning of art EncodeFloat/EncodeDouble", "[art]") {
-	return;
-	{
-		// EncodeFloat
-		// positive values
-		vector<float> values;
-		float current_value = 0.00001f;
-		while(isfinite(current_value)) {
-			values.push_back(current_value);
-			current_value *= 2;
-		}
-		// negative values
-		current_value = -0.00001f;
-		while(isfinite(current_value)) {
-			values.push_back(current_value);
-			current_value *= 2;
-		}
-		std::sort(values.begin(), values.end());
-		uint32_t current_encoded = Key::EncodeFloat(values[0]);
-		for(index_t i = 1; i < values.size(); i++) {
-			uint32_t next_encoded = Key::EncodeFloat(values[i]);
-			if (!(next_encoded > current_encoded)) {
-				printf("Failure in Key::EncodeFloat!\n");
-				printf("Generated value for key %f (=> %u) is bigger or equal to the generated value for key %f (=> %u)\n", values[i - 1], current_encoded, values[i], next_encoded);
-				REQUIRE(next_encoded > current_encoded);
-			}
-			next_encoded = current_encoded;
-		}
-	}
-	{
-		// EncodeDouble
-		// positive values
-		vector<double> values;
-		double current_value = 0.0000001;
-		while(isfinite(current_value)) {
-			values.push_back(current_value);
-			current_value *= 2;
-		}
-		// negative values
-		current_value = -0.0000001;
-		while(isfinite(current_value)) {
-			values.push_back(current_value);
-			current_value *= 2;
-		}
-		std::sort(values.begin(), values.end());
-		uint64_t current_encoded = Key::EncodeDouble(values[0]);
-		for(index_t i = 1; i < values.size(); i++) {
-			uint64_t next_encoded = Key::EncodeDouble(values[i]);
-			if (!(next_encoded > current_encoded)) {
-				printf("Failure in Key::EncodeDouble!\n");
-				printf("Generated value for key %lf (=> %llu) is bigger or equal to the generated value for key %lf (=> %llu)\n", values[i - 1], current_encoded, values[i], next_encoded);
-				REQUIRE(next_encoded > current_encoded);
-			}
-			next_encoded = current_encoded;
-		}
-	}
+TEST_CASE("Test correct functioning of art EncodeFloat/EncodeDouble", "[art-enc]") {
+    {
+        // EncodeFloat
+        // positive values
+        vector<float> values;
+        float current_value = 0.00001f;
+        while(isfinite(current_value)) {
+            values.push_back(current_value);
+            current_value *= 2;
+        }
+        // negative values
+        current_value = -0.00001f;
+        while(isfinite(current_value)) {
+            values.push_back(current_value);
+            current_value *= 2;
+        }
+        std::sort(values.begin(), values.end());
+        uint32_t current_encoded = Key::EncodeFloat(values[0]);
+        for(index_t i = 1; i < values.size(); i++) {
+            uint32_t next_encoded = Key::EncodeFloat(values[i]);
+            if (!(next_encoded > current_encoded)) {
+                printf("Failure in Key::EncodeFloat!\n");
+                printf("Generated value for key %f (=> %u) is bigger or equal to the generated value for key %f (=> %u)\n", values[i - 1], current_encoded, values[i], next_encoded);
+            }
+            REQUIRE(next_encoded > current_encoded);
+            current_encoded = next_encoded;
+        }
+    }
+    {
+        // EncodeDouble
+        // positive values
+        vector<double> values;
+        double current_value = 0.0000001;
+        while(isfinite(current_value)) {
+            values.push_back(current_value);
+            current_value *= 2;
+        }
+        // negative values
+        current_value = -0.0000001;
+        while(isfinite(current_value)) {
+            values.push_back(current_value);
+            current_value *= 2;
+        }
+        std::sort(values.begin(), values.end());
+        uint64_t current_encoded = Key::EncodeDouble(values[0]);
+        for(index_t i = 1; i < values.size(); i++) {
+            uint64_t next_encoded = Key::EncodeDouble(values[i]);
+            if (!(next_encoded > current_encoded)) {
+                printf("Failure in Key::EncodeDouble!\n");
+                printf("Generated value for key %lf (=> %llu) is bigger or equal to the generated value for key %lf (=> %llu)\n", values[i - 1], current_encoded, values[i], next_encoded);
+
+            }
+            REQUIRE(next_encoded > current_encoded);
+            current_encoded = next_encoded;
+        }
+    }
 
 }

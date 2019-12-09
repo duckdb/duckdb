@@ -29,6 +29,8 @@ public:
 	//! Get Node4 Child
 	unique_ptr<Node> *GetChild(index_t pos) override;
 
+	index_t GetMin() override;
+
 	//! Insert Leaf to the Node4
 	static void insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child);
 	//! Remove Leaf from Node4

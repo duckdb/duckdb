@@ -26,6 +26,10 @@ index_t Node4::GetChildGreaterEqual(uint8_t k) {
 	return Node::GetChildGreaterEqual(k);
 }
 
+index_t Node4::GetMin() {
+    return 0;
+}
+
 index_t Node4::GetNextPos(index_t pos) {
 	if (pos == INVALID_INDEX) {
 		return 0;
