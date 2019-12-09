@@ -14,6 +14,7 @@
 #include "duckdb/common/enums/statement_type.hpp"
 
 namespace duckdb {
+class CatalogEntry;
 class PhysicalOperator;
 
 struct PreparedValueEntry {
@@ -28,6 +29,7 @@ struct PreparedStatementData {
 	StatementType statement_type;
 	unique_ptr<PhysicalOperator> plan;
 	unordered_map<index_t, PreparedValueEntry> value_map;
+	unordered_set<CatalogEntry *> dependencies;
 
 	vector<string> names;
 	vector<TypeId> types;

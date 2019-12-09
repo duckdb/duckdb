@@ -152,9 +152,6 @@ unique_ptr<DataChunk> ClientContext::FetchInternal() {
 }
 
 unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const string &query, unique_ptr<SQLStatement> statement) {
-	if (ActiveTransaction().is_invalidated && statement->type != StatementType::TRANSACTION) {
-		throw Exception("Current transaction is aborted (please ROLLBACK)");
-	}
 	StatementType statement_type = statement->type;
 	auto result = make_unique<PreparedStatementData>(statement_type);
 
@@ -194,12 +191,16 @@ unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 	auto physical_plan = physical_planner.CreatePlan(move(plan));
 	profiler.EndPhase();
 
+	result->dependencies = move(physical_planner.dependencies);
 	result->types = physical_plan->types;
 	result->plan = move(physical_plan);
 	return result;
 }
 
 unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &query, PreparedStatementData &statement, bool allow_stream_result) {
+	if (ActiveTransaction().is_invalidated && statement.statement_type != StatementType::TRANSACTION) {
+		throw Exception("Current transaction is aborted (please ROLLBACK)");
+	}
 	bool create_stream_result = statement.statement_type == StatementType::SELECT && allow_stream_result;
 
 	// store the physical plan in the context for calls to Fetch()
@@ -286,7 +287,8 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 		if (parser.statements.size() > 1) {
 			throw Exception("Cannot prepare multiple statements at once!");
 		}
-		string prepare_name = "duckdb_internal_prepare_" + to_string(prepare_count);
+		// now write the prepared statement data into the catalog
+		string prepare_name = "____duckdb_internal_prepare_" + to_string(prepare_count);
 		prepare_count++;
 		// create a prepare statement out of the underlying statement
 		auto prepare = make_unique<PrepareStatement>();
@@ -341,9 +343,10 @@ void ClientContext::RemovePreparedStatement(PreparedStatement *statement) {
 	auto deallocate_statement = make_unique<DropStatement>();
 	deallocate_statement->info->type = CatalogType::PREPARED_STATEMENT;
 	deallocate_statement->info->name = statement->name;
+	string query = "DEALLOCATE " + statement->name;
 	vector<unique_ptr<SQLStatement>> statements;
 	statements.push_back(move(deallocate_statement));
-	ExecuteStatementsInternal("", statements, false);
+	ExecuteStatementsInternal(query, statements, false);
 }
 
 unique_ptr<QueryResult> ClientContext::ExecuteStatementsInternal(const string &query,

@@ -23,10 +23,11 @@ public:
 	PhysicalPlanGenerator(ClientContext &context) : context(context) {
 	}
 
+	unordered_set<CatalogEntry *> dependencies;
+public:
 	//! Creates a plan from the logical operator. This involves resolving column bindings and generating physical
 	//! operator nodes.
 	unique_ptr<PhysicalOperator> CreatePlan(unique_ptr<LogicalOperator> logical);
-
 protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalOperator &op);
 
@@ -69,7 +70,5 @@ protected:
 
 private:
 	ClientContext &context;
-
-	unordered_set<CatalogEntry *> dependencies;
 };
 } // namespace duckdb
