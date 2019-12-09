@@ -31,9 +31,6 @@ public:
 	vector<string> names;
 	vector<SQLType> sql_types;
 	unordered_map<index_t, PreparedValueEntry> value_map;
-
-	void GetTableBindings(unordered_set<TableCatalogEntry *> &result_list);
-
 protected:
 	void ResolveTypes() override {
 		types.push_back(TypeId::BOOLEAN);

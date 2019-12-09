@@ -66,6 +66,19 @@ TEST_CASE("Test prepared statements and dependencies", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	// now delete the table in con2
 	REQUIRE_NO_FAIL(con2.Query("DROP TABLE a"));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a(i TINYINT)"));
+
+	// keep a prepared statement around
+	auto prepare = con.Prepare("SELECT COUNT(*) FROM a WHERE i=$1");
+
+	// now we can't drop the table
+	REQUIRE_FAIL(con2.Query("DROP TABLE a"));
+
+	// until we delete the prepared statement
+	prepare.reset();
+
+	REQUIRE_NO_FAIL(con2.Query("DROP TABLE a"));
 }
 
 TEST_CASE("Test destructors of prepared statements", "[api]") {

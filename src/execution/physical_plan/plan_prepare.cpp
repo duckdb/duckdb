@@ -17,7 +17,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPrepare &o
 	entry->value_map = move(op.value_map);
 
 	// find tables
-	op.GetTableBindings(entry->tables);
+	// op.GetTableBindings(entry->tables);
 
 	// generate physical plan
 	auto plan = CreatePlan(*op.children[0]);
