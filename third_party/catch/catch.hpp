@@ -9941,9 +9941,6 @@ namespace Catch {
             }
             std::cout << "\r" << result;
             std::cout.flush();
-            if (current_test == total_tests) {
-                std::cout << std::endl;
-            }
         }
 
         Catch::Totals runTests(std::shared_ptr<Config> const& config) {
@@ -9971,6 +9968,9 @@ namespace Catch {
                     renderTestProgress(current_test, total_tests_run, testCase.name);
                     totals += context.runTest(testCase);
                     current_test++;
+                    if (current_test == total_tests_run) {
+                        std::cout << std::endl;
+                    }
                 } else {
                     context.reporter().skipTest(testCase);
                 }
