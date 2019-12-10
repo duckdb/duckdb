@@ -22,7 +22,8 @@ struct PreparedValueEntry {
 	SQLType target_type;
 };
 
-struct PreparedStatementData {
+class PreparedStatementData {
+public:
 	PreparedStatementData(StatementType type);
 	~PreparedStatementData();
 
@@ -34,6 +35,11 @@ struct PreparedStatementData {
 	vector<string> names;
 	vector<TypeId> types;
 	vector<SQLType> sql_types;
+public:
+	//! Bind a set of values to the prepared statement data
+	void Bind(vector<Value> values);
+	//! Get the expected SQL Type of the bound parameter
+	SQLType GetType(index_t param_index);
 };
 
 } // namespace duckdb

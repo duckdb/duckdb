@@ -80,9 +80,6 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::TRANSACTION:
 	case StatementType::EXPLAIN:
 		CreatePlan(*statement);
-		if (value_map.size() > 0) {
-			throw BinderException("Bind parameters without PREPARE statement!");
-		}
 		break;
 	case StatementType::PRAGMA: {
 		auto &stmt = *reinterpret_cast<PragmaStatement *>(statement.get());

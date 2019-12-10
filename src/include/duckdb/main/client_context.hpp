@@ -23,8 +23,7 @@ namespace duckdb {
 class Appender;
 class Catalog;
 class DuckDB;
-
-struct PreparedStatementData;
+class PreparedStatementData;
 
 //! The ClientContext holds information relevant to the current client session
 //! during execution
@@ -114,7 +113,7 @@ private:
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
 	unique_ptr<PreparedStatementData> CreatePreparedStatement(const string &query, unique_ptr<SQLStatement> statement);
 	//! Internally execute a prepared SQL statement. Caller must hold the context_lock.
-	unique_ptr<QueryResult> ExecutePreparedStatement(const string &query, PreparedStatementData &statement, bool allow_stream_result);
+	unique_ptr<QueryResult> ExecutePreparedStatement(const string &query, PreparedStatementData &statement, vector<Value> bound_values, bool allow_stream_result);
 	//! Internally prepare and execute a prepared SQL statement. Caller must hold the context_lock.
 	unique_ptr<QueryResult> ExecuteStatementInternal(const string &query, unique_ptr<SQLStatement> statement, bool allow_stream_result);
 private:

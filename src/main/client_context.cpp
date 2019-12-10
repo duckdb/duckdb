@@ -197,10 +197,13 @@ unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 	return result;
 }
 
-unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &query, PreparedStatementData &statement, bool allow_stream_result) {
+unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &query, PreparedStatementData &statement, vector<Value> bound_values, bool allow_stream_result) {
 	if (ActiveTransaction().is_invalidated && statement.statement_type != StatementType::TRANSACTION) {
 		throw Exception("Current transaction is aborted (please ROLLBACK)");
 	}
+	// bind the bound values before execution
+	statement.Bind(move(bound_values));
+
 	bool create_stream_result = statement.statement_type == StatementType::SELECT && allow_stream_result;
 
 	// store the physical plan in the context for calls to Fetch()
@@ -230,8 +233,10 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(const string &query, unique_ptr<SQLStatement> statement, bool allow_stream_result) {
 	// prepare the query for execution
 	auto prepared = CreatePreparedStatement(query, move(statement));
+	// by default, no values are bound
+	vector<Value> bound_values;
 	// execute the prepared statement
-	return ExecutePreparedStatement(query, *prepared, allow_stream_result);
+	return ExecutePreparedStatement(query, *prepared, move(bound_values), allow_stream_result);
 }
 
 static string CanExecuteStatementInReadOnlyMode(SQLStatement &stmt) {
