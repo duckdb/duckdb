@@ -196,11 +196,17 @@ CatalogEntry *CatalogSet::GetEntry(Transaction &transaction, const string &name)
 		return nullptr;
 	}
 	// if it does, we have to check version numbers
-	CatalogEntry *current = GetEntryForTransaction(transaction, data[name].get());
+	CatalogEntry *current = GetEntryForTransaction(transaction, entry->second.get());
 	if (current->deleted) {
 		return nullptr;
 	}
 	return current;
+}
+
+CatalogEntry *CatalogSet::GetRootEntry(const string &name) {
+	lock_guard<mutex> lock(catalog_lock);
+	auto entry = data.find(name);
+	return entry == data.end() ? nullptr : entry->second.get();
 }
 
 void CatalogSet::Undo(CatalogEntry *entry) {
