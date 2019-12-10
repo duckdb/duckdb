@@ -90,6 +90,33 @@ TEST_CASE("Basic sqlite wrapper usage", "[sqlite3wrapper]" ) {
 	// open an in-memory db
 	REQUIRE(db.Open(":memory:"));
 
+	// standard selection
 	REQUIRE(db.Execute("SELECT 42;"));
 	REQUIRE(db.CheckColumn(0, {"42"}));
+
+	// simple statements
+	REQUIRE(db.Execute("CREATE TABLE test(i INTEGER)"));
+	REQUIRE(db.Execute("INSERT INTO test VALUES (1), (2), (3)"));
+	REQUIRE(db.Execute("SELECT SUM(t1.i) FROM test t1, test t2, test t3;"));
+	REQUIRE(db.CheckColumn(0, {"54"}));
+
+	REQUIRE(db.Execute("DELETE FROM test WHERE i=2"));
+	REQUIRE(db.Execute("UPDATE test SET i=i+1"));
+	REQUIRE(db.Execute("SELECT * FROM test ORDER BY 1;"));
+	REQUIRE(db.CheckColumn(0, {"2", "4"}));
+
+	// test different types
+	REQUIRE(db.Execute("SELECT DATE '1992-01-01', 3, 'hello world', TIMESTAMP '1992-01-01 00:00:00';"));
+	REQUIRE(db.CheckColumn(0, {"1992-01-01"}));
+	REQUIRE(db.CheckColumn(1, {"3"}));
+	REQUIRE(db.CheckColumn(2, {"hello world"}));
+	REQUIRE(db.CheckColumn(3, {"1992-01-01 00:00:00"}));
+
+	// handle errors
+	// syntax error
+	REQUIRE(!db.Execute("SELEC 42"));
+	// catalog error
+	REQUIRE(!db.Execute("SELECT * FROM nonexistant_tbl"));
+
+
 }
