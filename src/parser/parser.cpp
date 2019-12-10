@@ -29,4 +29,9 @@ void Parser::ParseQuery(string query) {
 	Transformer transformer;
 	transformer.TransformParseTree(parser.parse_tree, statements);
 	n_prepared_parameters = transformer.prepared_statement_parameter_index;
+
+	if (statements.size() > 0) {
+		auto &last_statement = statements.back();
+		last_statement->stmt_length = query.size() - last_statement->stmt_location;
+	}
 }

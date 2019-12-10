@@ -45,7 +45,6 @@ public:
 		char *errmsg = nullptr;
 		int rc = sqlite3_exec(db, query.c_str(), concatenate_results, &results, &errmsg);
 		if (errmsg) {
-			fprintf(stderr, "%s\n", errmsg);
 			sqlite3_free(errmsg);
 		}
 		return rc == SQLITE_OK;
@@ -117,6 +116,4 @@ TEST_CASE("Basic sqlite wrapper usage", "[sqlite3wrapper]" ) {
 	REQUIRE(!db.Execute("SELEC 42"));
 	// catalog error
 	REQUIRE(!db.Execute("SELECT * FROM nonexistant_tbl"));
-
-
 }

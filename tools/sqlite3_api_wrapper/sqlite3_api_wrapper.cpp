@@ -228,31 +228,25 @@ int sqlite3_exec(sqlite3 *db,                /* The database on which the SQL ex
 
 		callbackIsInit = false;
 		nCol = sqlite3_column_count(pStmt);
+		azCols = (char **)malloc(nCol * sizeof(const char *));
+		azVals = (char **)malloc(nCol * sizeof(const char *));
+		if (!azCols || !azVals) {
+			goto exec_out;
+		}
+		for (int i = 0; i < nCol; i++) {
+			azCols[i] = (char *)sqlite3_column_name(pStmt, i);
+		}
 
-		while (1) {
-			int i;
+		while (true) {
 			rc = sqlite3_step(pStmt);
 
 			/* Invoke the callback function if required */
-			if (xCallback && (SQLITE_ROW == rc || (SQLITE_DONE == rc && !callbackIsInit))) {
-				if (!callbackIsInit) {
-					azCols = (char **)malloc(nCol * sizeof(const char *));
-					azVals = (char **)malloc(nCol * sizeof(const char *));
-					if (!azCols || !azVals) {
+			if (xCallback && rc == SQLITE_ROW) {
+				for (int i = 0; i < nCol; i++) {
+					azVals[i] = (char *)sqlite3_column_text(pStmt, i);
+					if (!azVals[i] && sqlite3_column_type(pStmt, i) != SQLITE_NULL) {
+						fprintf(stderr, "sqlite3_exec: out of memory.\n");
 						goto exec_out;
-					}
-					for (i = 0; i < nCol; i++) {
-						azCols[i] = (char *)sqlite3_column_name(pStmt, i);
-					}
-					callbackIsInit = 1;
-				}
-				if (rc == SQLITE_ROW) {
-					for (i = 0; i < nCol; i++) {
-						azVals[i] = (char *)sqlite3_column_text(pStmt, i);
-						if (!azVals[i] && sqlite3_column_type(pStmt, i) != SQLITE_NULL) {
-							fprintf(stderr, "sqlite3_exec: out of memory.\n");
-							goto exec_out;
-						}
 					}
 				}
 				if (xCallback(pArg, nCol, azVals, azCols)) {
@@ -303,10 +297,10 @@ const char *sqlite3_sql(sqlite3_stmt *pStmt) {
 }
 
 int sqlite3_column_count(sqlite3_stmt *pStmt) {
-	if (!pStmt || !pStmt->result) {
+	if (!pStmt) {
 		return 0;
 	}
-	return (int) pStmt->result->sql_types.size();
+	return (int) pStmt->prepared->types.size();
 }
 
 int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
@@ -340,10 +334,10 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 }
 
 const char *sqlite3_column_name(sqlite3_stmt *pStmt, int N) {
-	if (!pStmt || !pStmt->result) {
+	if (!pStmt) {
 		return nullptr;
 	}
-	return pStmt->result->names[N].c_str();
+	return pStmt->prepared->names[N].c_str();
 }
 
 const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {
