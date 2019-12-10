@@ -179,12 +179,6 @@ unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 	}
 #endif
 
-	// special case with logging EXECUTE with prepared statements that do not scan the table
-	if (plan->type == LogicalOperatorType::EXECUTE) {
-		auto exec = (LogicalExecute *)plan.get();
-		statement_type = exec->prep->prepared->statement_type;
-	}
-
 	profiler.StartPhase("physical_planner");
 	// now convert logical query plan into a physical query plan
 	PhysicalPlanGenerator physical_planner(*this);
@@ -230,14 +224,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	return move(result);
 }
 
-unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(const string &query, unique_ptr<SQLStatement> statement, bool allow_stream_result) {
-	// prepare the query for execution
-	auto prepared = CreatePreparedStatement(query, move(statement));
-	// by default, no values are bound
-	vector<Value> bound_values;
-	// execute the prepared statement
-	return ExecutePreparedStatement(query, *prepared, move(bound_values), allow_stream_result);
-}
+
 
 static string CanExecuteStatementInReadOnlyMode(SQLStatement &stmt) {
 	switch (stmt.type) {
@@ -272,16 +259,20 @@ static string CanExecuteStatementInReadOnlyMode(SQLStatement &stmt) {
 								StatementTypeToString(stmt.type).c_str());
 }
 
+void ClientContext::InitialCleanup() {
+	if (is_invalidated) {
+		throw Exception("Database that this connection belongs to has been closed!");
+	}
+	//! Cleanup any open results and reset the interrupted flag
+	CleanupInternal();
+	interrupted = false;
+}
+
 unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 	lock_guard<mutex> client_guard(context_lock);
 	// prepare the query
 	try {
-		if (is_invalidated) {
-			throw Exception("Database that this connection belongs to has been closed!");
-		}
-		//! Cleanup any open results and reset the interrupted flag
-		CleanupInternal();
-		interrupted = false;
+		InitialCleanup();
 
 		// first parse the query
 		Parser parser;
@@ -299,10 +290,9 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 		auto prepare = make_unique<PrepareStatement>();
 		prepare->name = prepare_name;
 		prepare->statement = move(parser.statements[0]);
-		parser.statements[0] = move(prepare);
 
 		// now perform the actual PREPARE query
-		auto result = ExecuteStatementsInternal(query, parser.statements, false);
+		auto result = RunStatement(query, move(prepare), false);
 		if (!result->success) {
 			throw Exception(result->error);
 		}
@@ -316,13 +306,11 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 
 unique_ptr<QueryResult> ClientContext::Execute(string name, vector<Value> &values, bool allow_stream_result) {
 	lock_guard<mutex> client_guard(context_lock);
-	if (is_invalidated) {
-		return make_unique<MaterializedQueryResult>("Database that this connection belongs to has been closed!");
+	try {
+		InitialCleanup();
+	} catch(std::exception &ex) {
+		return make_unique<MaterializedQueryResult>(ex.what());
 	}
-
-	//! Cleanup any open results and reset the interrupted flag
-	CleanupInternal();
-	interrupted = false;
 
 	// create the execute statement
 	auto execute = make_unique<ExecuteStatement>();
@@ -331,12 +319,8 @@ unique_ptr<QueryResult> ClientContext::Execute(string name, vector<Value> &value
 		execute->values.push_back(make_unique<ConstantExpression>(SQLTypeFromInternalType(val.type), val));
 	}
 
-	vector<unique_ptr<SQLStatement>> statements;
-	statements.push_back(move(execute));
-
-	return ExecuteStatementsInternal("", statements, allow_stream_result);
+	return RunStatement("", move(execute), allow_stream_result);
 }
-
 void ClientContext::RemovePreparedStatement(PreparedStatement *statement) {
 	lock_guard<mutex> client_guard(context_lock);
 	if (!statement->success || statement->is_invalidated || is_invalidated) {
@@ -349,82 +333,92 @@ void ClientContext::RemovePreparedStatement(PreparedStatement *statement) {
 	deallocate_statement->info->type = CatalogType::PREPARED_STATEMENT;
 	deallocate_statement->info->name = statement->name;
 	string query = "DEALLOCATE " + statement->name;
-	vector<unique_ptr<SQLStatement>> statements;
-	statements.push_back(move(deallocate_statement));
-	ExecuteStatementsInternal(query, statements, false);
+	RunStatement(query, move(deallocate_statement), false);
 }
 
-unique_ptr<QueryResult> ClientContext::ExecuteStatementsInternal(const string &query,
+unique_ptr<QueryResult> ClientContext::RunStatementInternal(const string &query, unique_ptr<SQLStatement> statement, bool allow_stream_result) {
+	// prepare the query for execution
+	auto prepared = CreatePreparedStatement(query, move(statement));
+	// by default, no values are bound
+	vector<Value> bound_values;
+	// execute the prepared statement
+	return ExecutePreparedStatement(query, *prepared, move(bound_values), allow_stream_result);
+}
+
+unique_ptr<QueryResult> ClientContext::RunStatement(const string &query, unique_ptr<SQLStatement> statement, bool allow_stream_result) {
+	unique_ptr<QueryResult> result;
+	if (db.access_mode == AccessMode::READ_ONLY) {
+		// if the database is opened in read-only mode, check if we can execute this statement
+		string error = CanExecuteStatementInReadOnlyMode(*statement);
+		if (!error.empty()) {
+			return make_unique<MaterializedQueryResult>(error);
+		}
+	}
+	// check if we are on AutoCommit. In this case we should start a transaction.
+	if (transaction.IsAutoCommit()) {
+		transaction.BeginTransaction();
+	}
+	ActiveTransaction().active_query = db.transaction_manager->GetQueryNumber();
+	if (statement->type == StatementType::SELECT && query_verification_enabled) {
+		// query verification is enabled:
+		// create a copy of the statement and verify the original statement
+		auto copied_statement = ((SelectStatement &)*statement).Copy();
+		string error = VerifyQuery(query, move(statement));
+		if (!error.empty()) {
+			// query failed: abort now
+			FinalizeQuery(false);
+			// error in verifying query
+			return make_unique<MaterializedQueryResult>(error);
+		}
+		statement = move(copied_statement);
+	}
+	// start the profiler
+	profiler.StartQuery(query);
+	try {
+		result = RunStatementInternal(query, move(statement), allow_stream_result);
+	} catch (StandardException &ex) {
+		// standard exceptions do not invalidate the current transaction
+		result = make_unique<MaterializedQueryResult>(ex.what());
+	} catch (std::exception &ex) {
+		// other types of exceptions do invalidate the current transaction
+		if (transaction.HasActiveTransaction()) {
+			ActiveTransaction().is_invalidated = true;
+		}
+		result = make_unique<MaterializedQueryResult>(ex.what());
+	}
+	if (!result->success) {
+		// initial failures should always be reported as MaterializedResult
+		assert(result->type != QueryResultType::STREAM_RESULT);
+		// query failed: abort now
+		FinalizeQuery(false);
+		return result;
+	}
+	// query succeeded, append to list of results
+	if (result->type == QueryResultType::STREAM_RESULT) {
+		// store as currently open result if it is a stream result
+		this->open_result = (StreamQueryResult *)result.get();
+	} else {
+		// finalize the query if it is not a stream result
+		string error = FinalizeQuery(true);
+		if (!error.empty()) {
+			// failure in committing transaction
+			return make_unique<MaterializedQueryResult>(error);
+		}
+	}
+	return result;
+}
+
+unique_ptr<QueryResult> ClientContext::RunStatements(const string &query,
                                                                  vector<unique_ptr<SQLStatement>> &statements,
                                                                  bool allow_stream_result) {
 	// now we have a list of statements
 	// iterate over them and execute them one by one
-	unique_ptr<QueryResult> result, current_result;
+	unique_ptr<QueryResult> result;
 	QueryResult *last_result = nullptr;
 	for (index_t i = 0; i < statements.size(); i++) {
 		auto &statement = statements[i];
-		if (db.access_mode == AccessMode::READ_ONLY) {
-			// if the database is opened in read-only mode, check if we can execute this statement
-			string error = CanExecuteStatementInReadOnlyMode(*statement);
-			if (!error.empty()) {
-				return make_unique<MaterializedQueryResult>(error);
-			}
-		}
 		bool is_last_statement = i + 1 == statements.size();
-		// check if we are on AutoCommit. In this case we should start a transaction.
-		if (transaction.IsAutoCommit()) {
-			transaction.BeginTransaction();
-		}
-		ActiveTransaction().active_query = db.transaction_manager->GetQueryNumber();
-		if (statement->type == StatementType::SELECT && query_verification_enabled) {
-			// query verification is enabled:
-			// create a copy of the statement and verify the original statement
-			auto copied_statement = ((SelectStatement &)*statement).Copy();
-			string error = VerifyQuery(query, move(statement));
-			if (!error.empty()) {
-				// query failed: abort now
-				FinalizeQuery(false);
-				// error in verifying query
-				return make_unique<MaterializedQueryResult>(error);
-			}
-			statement = move(copied_statement);
-		}
-		// start the profiler
-		profiler.StartQuery(query);
-		try {
-			// execute the actual query
-			current_result = ExecuteStatementInternal(query, move(statement), allow_stream_result && is_last_statement);
-			// only the last result can be STREAM_RESULT
-			assert(is_last_statement || current_result->type != QueryResultType::STREAM_RESULT);
-		} catch (StandardException &ex) {
-			// standard exceptions do not invalidate the current transaction
-			current_result = make_unique<MaterializedQueryResult>(ex.what());
-		} catch (std::exception &ex) {
-			// other types of exceptions do invalidate the current transaction
-			if (transaction.HasActiveTransaction()) {
-				ActiveTransaction().is_invalidated = true;
-			}
-			current_result = make_unique<MaterializedQueryResult>(ex.what());
-		}
-		if (!current_result->success) {
-			// initial failures should always be reported as MaterializedResult
-			assert(current_result->type != QueryResultType::STREAM_RESULT);
-			// query failed: abort now
-			FinalizeQuery(false);
-			return current_result;
-		}
-		// query succeeded, append to list of results
-		if (current_result->type == QueryResultType::STREAM_RESULT) {
-			// store as currently open result if it is a stream result
-			open_result = (StreamQueryResult *)current_result.get();
-		} else {
-			// finalize the query if it is not a stream result
-			string error = FinalizeQuery(true);
-			if (!error.empty()) {
-				// failure in committing transaction
-				return make_unique<MaterializedQueryResult>(error);
-			}
-		}
+		auto current_result = RunStatement(query, move(statement), allow_stream_result && is_last_statement);
 		// now append the result to the list of results
 		if (!last_result) {
 			// first result of the query
@@ -441,17 +435,10 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementsInternal(const string &q
 
 unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_result) {
 	lock_guard<mutex> client_guard(context_lock);
-	if (is_invalidated) {
-		return make_unique<MaterializedQueryResult>("Database that this connection belongs to has been closed!");
-	}
 
-	//! Cleanup any open results and reset the interrupted flag
-	CleanupInternal();
-	interrupted = false;
-
-	// now start by parsing the query
 	Parser parser;
 	try {
+		InitialCleanup();
 		// parse the query and transform it into a set of statements
 		parser.ParseQuery(query.c_str());
 	} catch (std::exception &ex) {
@@ -463,7 +450,7 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 		return make_unique<MaterializedQueryResult>(StatementType::INVALID);
 	}
 
-	return ExecuteStatementsInternal(query, parser.statements, allow_stream_result);
+	return RunStatements(query, parser.statements, allow_stream_result);
 }
 
 void ClientContext::Interrupt() {
@@ -566,7 +553,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	     unoptimized_result = make_unique<MaterializedQueryResult>(StatementType::SELECT);
 	// execute the original statement
 	try {
-		auto result = ExecuteStatementInternal(query, move(statement), false);
+		auto result = RunStatementInternal(query, move(statement), false);
 		original_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (Exception &ex) {
 		original_result->error = ex.what();
@@ -578,7 +565,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		auto explain_q = "EXPLAIN " + query;
 		auto explain_stmt = make_unique<ExplainStatement>(move(statement_copy_for_explain));
 		try {
-			ExecuteStatementInternal(explain_q, move(explain_stmt), false);
+			RunStatementInternal(explain_q, move(explain_stmt), false);
 		} catch (Exception &ex) {
 			return "EXPLAIN failed but query did not";
 		}
@@ -586,14 +573,14 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 
 	// now execute the copied statement
 	try {
-		auto result = ExecuteStatementInternal(query, move(copied_stmt), false);
+		auto result = RunStatementInternal(query, move(copied_stmt), false);
 		copied_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (Exception &ex) {
 		copied_result->error = ex.what();
 	}
 	// now execute the deserialized statement
 	try {
-		auto result = ExecuteStatementInternal(query, move(deserialized_stmt), false);
+		auto result = RunStatementInternal(query, move(deserialized_stmt), false);
 		deserialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (Exception &ex) {
 		deserialized_result->error = ex.what();
@@ -601,7 +588,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	// now execute the unoptimized statement
 	enable_optimizer = false;
 	try {
-		auto result = ExecuteStatementInternal(query, move(unoptimized_stmt), false);
+		auto result = RunStatementInternal(query, move(unoptimized_stmt), false);
 		unoptimized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (Exception &ex) {
 		unoptimized_result->error = ex.what();
