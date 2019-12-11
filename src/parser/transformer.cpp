@@ -23,8 +23,10 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(PGNode *stmt) {
 	case T_PGRawStmt: {
 		auto raw_stmt = (PGRawStmt *)stmt;
 		auto result = TransformStatement(raw_stmt->stmt);
-		result->stmt_location = raw_stmt->stmt_location;
-		result->stmt_length = raw_stmt->stmt_len;
+		if (result) {
+			result->stmt_location = raw_stmt->stmt_location;
+			result->stmt_length = raw_stmt->stmt_len;
+		}
 		return result;
 	}
 	case T_PGSelectStmt:
