@@ -142,7 +142,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		stmt->query_string = query;
 		stmt->prepared = move(prepared);
 		stmt->current_row = -1;
-		for(int i = 0; i < stmt->prepared->n_param; i++) {
+		for(index_t i = 0; i < stmt->prepared->n_param; i++) {
 			stmt->bound_names.push_back("$" + to_string(i + 1));
 			stmt->bound_values.push_back(Value());
 		}
@@ -195,7 +195,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		return SQLITE_DONE;
 	}
 	pStmt->current_row++;
-	if (pStmt->current_row >= pStmt->current_chunk->size()) {
+	if (pStmt->current_row >= (int32_t) pStmt->current_chunk->size()) {
 		// have to fetch again!
 		pStmt->current_row = 0;
 		pStmt->current_chunk = pStmt->result->Fetch();
@@ -219,7 +219,6 @@ int sqlite3_exec(sqlite3 *db,                /* The database on which the SQL ex
 	int rc = SQLITE_OK;            /* Return code */
 	const char *zLeftover;         /* Tail of unprocessed SQL */
 	sqlite3_stmt *pStmt = nullptr; /* The current SQL statement */
-	bool callbackIsInit;           /* True if callback data is initialized */
 	char **azCols = nullptr;       /* Names of result columns */
 	char **azVals = nullptr;       /* Result values */
 
@@ -245,7 +244,6 @@ int sqlite3_exec(sqlite3 *db,                /* The database on which the SQL ex
 			continue;
 		}
 
-		callbackIsInit = false;
 		nCol = sqlite3_column_count(pStmt);
 		azCols = (char **)malloc(nCol * sizeof(const char *));
 		azVals = (char **)malloc(nCol * sizeof(const char *));
@@ -588,7 +586,7 @@ const char *sqlite3_bind_parameter_name(sqlite3_stmt *stmt, int idx) {
 	if (!stmt) {
 		return nullptr;
 	}
-	if (idx < 1 || idx > stmt->prepared->n_param) {
+	if (idx < 1 || idx > (int) stmt->prepared->n_param) {
 		return nullptr;
 	}
 	return stmt->bound_names[idx - 1].c_str();
@@ -598,7 +596,7 @@ int sqlite3_bind_parameter_index(sqlite3_stmt *stmt, const char *zName) {
 	if (!stmt || !zName) {
 		return 0;
 	}
-	for(int i = 0; i < stmt->bound_names.size(); i++) {
+	for(index_t i = 0; i < stmt->bound_names.size(); i++) {
 		if (stmt->bound_names[i] == string(zName)) {
 			return i + 1;
 		}
@@ -610,7 +608,7 @@ int sqlite3_internal_bind_value(sqlite3_stmt *stmt, int idx, Value value) {
 	if (!stmt || !stmt->prepared || stmt->result) {
 		return SQLITE_MISUSE;
 	}
-	if (idx < 1 || idx > stmt->prepared->n_param) {
+	if (idx < 1 || idx > (int) stmt->prepared->n_param) {
 		return SQLITE_RANGE;
 	}
 	stmt->bound_values[idx - 1] = value;

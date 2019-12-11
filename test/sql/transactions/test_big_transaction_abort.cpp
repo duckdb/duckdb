@@ -61,7 +61,7 @@ TEST_CASE("Test abort of big append", "[transactions][.]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1);"));
 	index_t tpl_count = 2 * Storage::BLOCK_SIZE / sizeof(int);
 	auto prepared = con2.Prepare("INSERT INTO integers VALUES (?)");
-	for(int i = 2; i < tpl_count; i++) {
+	for(int i = 2; i < (int32_t) tpl_count; i++) {
 		REQUIRE_NO_FAIL(prepared->Execute(i));
 	}
 	// finally insert the value "1"

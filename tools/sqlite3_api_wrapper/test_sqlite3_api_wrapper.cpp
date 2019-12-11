@@ -51,8 +51,8 @@ public:
 	}
 
 	void PrintResult() {
-		for(int row_idx = 0; row_idx < results[0].size(); row_idx++) {
-			for(int col_idx = 0; col_idx < results.size(); col_idx++) {
+		for(size_t row_idx = 0; row_idx < results[0].size(); row_idx++) {
+			for(size_t col_idx = 0; col_idx < results.size(); col_idx++) {
 				printf("%s|", results[col_idx][row_idx].c_str());
 			}
 			printf("\n");
