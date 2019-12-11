@@ -361,7 +361,7 @@ static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, SQLType targ
 	if (!pStmt || !pStmt->result || !pStmt->current_chunk) {
 		return false;
 	}
-	if (iCol >= pStmt->result->sql_types.size()) {
+	if (iCol >= (int) pStmt->result->sql_types.size()) {
 		return false;
 	}
 	if (pStmt->current_chunk->data[iCol].nullmask[pStmt->current_row]) {

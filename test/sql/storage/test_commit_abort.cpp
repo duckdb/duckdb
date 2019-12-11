@@ -96,7 +96,7 @@ TEST_CASE("Test abort of large commit with persistent storage", "[storage][.]") 
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (14, 10, 'con')"));
 		// now insert many non-conflicting values in con2
 		index_t tpl_count = 2 * Storage::BLOCK_SIZE / sizeof(int);
-		for(int i = 0; i < tpl_count; i++) {
+		for(int i = 0; i < (int) tpl_count; i++) {
 			REQUIRE_NO_FAIL(con2.Query("INSERT INTO test VALUES (" + to_string(15 + i) + ", 10, 'con2')"));
 		}
 		// finally insert one conflicting tuple
