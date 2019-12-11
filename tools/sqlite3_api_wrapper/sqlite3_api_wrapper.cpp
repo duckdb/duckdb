@@ -11,15 +11,8 @@
 using namespace duckdb;
 using namespace std;
 
-// TODO:
 #define SOURCE_ID __DATE__
-#define LIB_VERSION "0.01"
-
-#define NOT_IMPLEMENTED(func_decl)                                                                                     \
-	func_decl {                                                                                                        \
-		fprintf(stderr, "The function " #func_decl " of the sqlite3 api has not been implemented!\n");                 \
-		exit(1);                                                                                                       \
-	}
+#define LIB_VERSION "DuckDB 0.1"
 
 static char* sqlite3_strdup(const string &str);
 static char* sqlite3_strdup(const char* str);
@@ -44,6 +37,8 @@ struct sqlite3_stmt {
 	int64_t current_row;
 	//! Bound values, used for binding to the prepared statement
 	vector<Value> bound_values;
+	//! Names of the prepared parameters
+	vector<string> bound_names;
 	//! The current column values converted to string, used and filled by sqlite3_column_text
 	unique_ptr<sqlite3_string_buffer[]> current_text;
 };
@@ -106,8 +101,13 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
                        sqlite3_stmt **ppStmt, /* OUT: Statement handle */
                        const char **pzTail    /* OUT: Pointer to unused portion of zSql */
 ) {
+	if (!db || !ppStmt) {
+		return SQLITE_MISUSE;
+	}
 	*ppStmt = nullptr;
-	*pzTail = nullptr;
+	if (pzTail) {
+		*pzTail = nullptr;
+	}
 	string query = zSql ? zSql : "";
 
 	try {
@@ -115,7 +115,12 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		auto statements = db->con->ExtractStatements(query);
 		if (statements.size() == 0) {
 			// no statements to prepare!
-			*pzTail = sqlite3_strdup("");
+			if (pzTail) {
+				*pzTail = sqlite3_strdup("");
+				if (!*pzTail) {
+					throw std::bad_alloc();
+				}
+			}
 			return SQLITE_OK;
 		}
 
@@ -137,12 +142,18 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		stmt->query_string = query;
 		stmt->prepared = move(prepared);
 		stmt->current_row = -1;
+		for(int i = 0; i < stmt->prepared->n_param; i++) {
+			stmt->bound_names.push_back("$" + to_string(i + 1));
+			stmt->bound_values.push_back(Value());
+		}
 
 		// extract the remainder of the query and assign it to the pzTail
 		string remainder = query.substr(statement->stmt_location + statement->stmt_length);
-		*pzTail = sqlite3_strdup(remainder);
-		if (!*pzTail) {
-			throw std::bad_alloc();
+		if (pzTail) {
+			*pzTail = sqlite3_strdup(remainder);
+			if (!*pzTail) {
+				throw std::bad_alloc();
+			}
 		}
 
 		*ppStmt = stmt.release();
@@ -156,7 +167,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 /* Prepare the next result to be retrieved */
 int sqlite3_step(sqlite3_stmt *pStmt) {
 	if (!pStmt) {
-		return SQLITE_ERROR;
+		return SQLITE_MISUSE;
 	}
 	if (!pStmt->prepared) {
 		pStmt->db->last_error = "Attempting sqlite3_step() on a non-successfully prepared statement";
@@ -167,11 +178,18 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		// no result yet! call Execute()
 		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values);
 		if (!pStmt->result->success) {
+			// error in execute: clear prepared statement
 			pStmt->db->last_error = pStmt->result->error;
+			pStmt->prepared = nullptr;
 			return SQLITE_ERROR;
 		}
 		// fetch a chunk
 		pStmt->current_chunk = pStmt->result->Fetch();
+		pStmt->current_row = -1;
+		if (pStmt->prepared->type != StatementType::SELECT) {
+			// only SELECT statements return results
+			sqlite3_reset(pStmt);
+		}
 	}
 	if (!pStmt->current_chunk) {
 		return SQLITE_DONE;
@@ -182,6 +200,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		pStmt->current_row = 0;
 		pStmt->current_chunk = pStmt->result->Fetch();
 		if (!pStmt->current_chunk || pStmt->current_chunk->size() == 0) {
+			sqlite3_reset(pStmt);
 			return SQLITE_DONE;
 		}
 	}
@@ -340,24 +359,62 @@ const char *sqlite3_column_name(sqlite3_stmt *pStmt, int N) {
 	return pStmt->prepared->names[N].c_str();
 }
 
-const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {
-	int column_count = pStmt->result->sql_types.size();
-	if (iCol >= column_count) {
-		return nullptr;
+static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, SQLType target_type, Value &val) {
+	if (!pStmt || !pStmt->result || !pStmt->current_chunk) {
+		return false;
+	}
+	if (iCol >= pStmt->result->sql_types.size()) {
+		return false;
 	}
 	if (pStmt->current_chunk->data[iCol].nullmask[pStmt->current_row]) {
+		return false;
+	}
+	try {
+		val = pStmt->current_chunk->data[iCol].GetValue(pStmt->current_row).CastAs(pStmt->result->sql_types[iCol], target_type);
+	} catch(...) {
+		return false;
+	}
+	return true;
+}
+
+double sqlite3_column_double(sqlite3_stmt *stmt, int iCol) {
+	Value val;
+	if (!sqlite3_column_has_value(stmt, iCol, SQLTypeId::DOUBLE, val)) {
+		return 0;
+	}
+	return val.value_.double_;
+}
+
+int sqlite3_column_int(sqlite3_stmt *stmt, int iCol) {
+	Value val;
+	if (!sqlite3_column_has_value(stmt, iCol, SQLTypeId::INTEGER, val)) {
+		return 0;
+	}
+	return val.value_.integer;
+}
+
+sqlite3_int64 sqlite3_column_int64(sqlite3_stmt *stmt, int iCol) {
+	Value val;
+	if (!sqlite3_column_has_value(stmt, iCol, SQLTypeId::BIGINT, val)) {
+		return 0;
+	}
+	return val.value_.bigint;
+}
+
+const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {
+	Value val;
+	if (!sqlite3_column_has_value(pStmt, iCol, SQLTypeId::VARCHAR, val)) {
 		return nullptr;
 	}
 	try {
 		if (!pStmt->current_text) {
-			pStmt->current_text = unique_ptr<sqlite3_string_buffer[]>(new sqlite3_string_buffer[column_count]);
+			pStmt->current_text = unique_ptr<sqlite3_string_buffer[]>(new sqlite3_string_buffer[pStmt->result->sql_types.size()]);
 		}
 		auto &entry = pStmt->current_text[iCol];
 		if (!entry.data) {
 			// not initialized yet, convert the value and initialize it
-			Value v = pStmt->current_chunk->data[iCol].GetValue(pStmt->current_row).CastAs(pStmt->result->sql_types[iCol], SQLTypeId::VARCHAR);
-			entry.data = unique_ptr<char[]>(new char[v.str_value.size() + 1]);
-			memcpy(entry.data.get(), v.str_value.c_str(), v.str_value.size() + 1);
+			entry.data = unique_ptr<char[]>(new char[val.str_value.size() + 1]);
+			memcpy(entry.data.get(), val.str_value.c_str(), val.str_value.size() + 1);
 		}
 		return (const unsigned char*) entry.data.get();
 	} catch(...) {
@@ -518,4 +575,87 @@ const char *sqlite3_libversion(void) {
 }
 const char *sqlite3_sourceid(void) {
 	return SOURCE_ID;
+}
+
+int sqlite3_bind_parameter_count(sqlite3_stmt *stmt) {
+	if (!stmt) {
+		return 0;
+	}
+	return stmt->prepared->n_param;
+}
+
+const char *sqlite3_bind_parameter_name(sqlite3_stmt *stmt, int idx) {
+	if (!stmt) {
+		return nullptr;
+	}
+	if (idx < 1 || idx > stmt->prepared->n_param) {
+		return nullptr;
+	}
+	return stmt->bound_names[idx - 1].c_str();
+}
+
+int sqlite3_bind_parameter_index(sqlite3_stmt *stmt, const char *zName) {
+	if (!stmt || !zName) {
+		return 0;
+	}
+	for(int i = 0; i < stmt->bound_names.size(); i++) {
+		if (stmt->bound_names[i] == string(zName)) {
+			return i + 1;
+		}
+	}
+	return 0;
+}
+
+int sqlite3_internal_bind_value(sqlite3_stmt *stmt, int idx, Value value) {
+	if (!stmt || !stmt->prepared || stmt->result) {
+		return SQLITE_MISUSE;
+	}
+	if (idx < 1 || idx > stmt->prepared->n_param) {
+		return SQLITE_RANGE;
+	}
+	stmt->bound_values[idx - 1] = value;
+	return SQLITE_OK;
+}
+
+int sqlite3_bind_int(sqlite3_stmt *stmt, int idx, int val) {
+	return sqlite3_internal_bind_value(stmt, idx, Value::INTEGER(val));
+}
+
+int sqlite3_bind_int64(sqlite3_stmt *stmt, int idx, sqlite3_int64 val) {
+	return sqlite3_internal_bind_value(stmt, idx, Value::BIGINT(val));
+}
+
+int sqlite3_bind_null(sqlite3_stmt *stmt, int idx) {
+	return sqlite3_internal_bind_value(stmt, idx, Value());
+}
+
+int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char* val, int length, void(*free_func)(void*)) {
+	if (!val) {
+		return SQLITE_MISUSE;
+	}
+	string value;
+	if (length < 0) {
+		value = string(val);
+	} else {
+		value = string(val, val + length);
+	}
+	if (free_func) {
+		free_func((void*) val);
+	}
+	return sqlite3_internal_bind_value(stmt, idx, Value(value));
+}
+
+int sqlite3_reset(sqlite3_stmt *stmt) {
+	if (stmt) {
+		stmt->result = nullptr;
+		stmt->current_chunk = nullptr;
+	}
+	return SQLITE_OK;
+}
+
+int sqlite3_clear_bindings(sqlite3_stmt *stmt) {
+	if (!stmt) {
+		return SQLITE_MISUSE;
+	}
+	return SQLITE_OK;
 }

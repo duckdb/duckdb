@@ -25,6 +25,7 @@ public:
 	~PreparedStatement();
 
 public:
+	StatementType type;
 	//! The client context this prepared statement belongs to
 	ClientContext *context;
 	//! The internal name of the prepared statement

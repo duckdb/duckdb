@@ -7,3 +7,8 @@ include_directories(../../third_party/catch)
 
 add_executable(test_sqlite3_api_wrapper test_sqlite3_api_wrapper.cpp)
 target_link_libraries(test_sqlite3_api_wrapper sqlite3_api_wrapper duckdb)
+
+# For testing only: compile a version of test_sqlite3_api_wrapper that is bound to SQLite: this should have the same behavior as binding to DuckDB
+# add_executable(test_sqlite3_api_wrapper_sqlite test_sqlite3_api_wrapper.cpp ../../third_party/sqlite/sqlite3.c)
+# target_link_libraries(test_sqlite3_api_wrapper_sqlite sqlite3_api_wrapper)
+# target_compile_definitions(test_sqlite3_api_wrapper_sqlite PUBLIC -DSQLITE_TEST)
