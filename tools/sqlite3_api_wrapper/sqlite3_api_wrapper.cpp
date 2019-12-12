@@ -225,7 +225,7 @@ int sqlite3_exec(sqlite3 *db,                /* The database on which the SQL ex
 		rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, &zLeftover);
 		if (rc != SQLITE_OK) {
 			if (pzErrMsg) {
-				*pzErrMsg = sqlite3_errmsg(db);
+				*pzErrMsg = (char*) sqlite3_errmsg(db);
 			}
 			continue;
 		}
@@ -294,7 +294,7 @@ exec_out:
 	sqlite3_free(azVals);
 	if (rc != SQLITE_OK && pzErrMsg && !*pzErrMsg) {
 		// error but no error message set
-		*pzErrMsg = "Unknown error in DuckDB!";
+		*pzErrMsg = (char*) "Unknown error in DuckDB!";
 	}
 	return rc;
 }
@@ -488,17 +488,17 @@ SQLITE_API int sqlite3_strnicmp(const char *zLeft, const char *zRight, int N) {
 	return N < 0 ? 0 : sqlite3UpperToLower[*a] - sqlite3UpperToLower[*b];
 }
 
-char* sqlite3_strdup(const string &str) {
-	char* result = (char*) sqlite3_malloc64(str.size() + 1);
-	strcpy(result, str.c_str());
-	return result;
-}
+// char* sqlite3_strdup(const string &str) {
+// 	char* result = (char*) sqlite3_malloc64(str.size() + 1);
+// 	strcpy(result, str.c_str());
+// 	return result;
+// }
 
-char* sqlite3_strdup(const char* str) {
-	char* result = (char*) sqlite3_malloc64(strlen(str) + 1);
-	strcpy(result, str);
-	return result;
-}
+// char* sqlite3_strdup(const char* str) {
+// 	char* result = (char*) sqlite3_malloc64(strlen(str) + 1);
+// 	strcpy(result, str);
+// 	return result;
+// }
 
 void *sqlite3_malloc64(sqlite3_uint64 n) {
 	return malloc(n);
