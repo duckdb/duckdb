@@ -105,7 +105,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		return SQLITE_MISUSE;
 	}
 	*ppStmt = nullptr;
-	string query(zSql);
+	string query = nByte < 0 ? zSql : string(zSql, nByte);
 	if (pzTail) {
 		*pzTail = zSql + query.size();
 	}
