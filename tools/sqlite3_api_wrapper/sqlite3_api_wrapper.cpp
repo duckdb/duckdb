@@ -225,8 +225,7 @@ int sqlite3_exec(sqlite3 *db,                /* The database on which the SQL ex
 		rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, &zLeftover);
 		if (rc != SQLITE_OK) {
 			if (pzErrMsg) {
-				auto errmsg = sqlite3_errmsg(db);
-				*pzErrMsg = errmsg ? sqlite3_strdup(errmsg) : nullptr;
+				*pzErrMsg = sqlite3_errmsg(db);
 			}
 			continue;
 		}
@@ -295,14 +294,14 @@ exec_out:
 	sqlite3_free(azVals);
 	if (rc != SQLITE_OK && pzErrMsg && !*pzErrMsg) {
 		// error but no error message set
-		*pzErrMsg = sqlite3_strdup("Unknown error in DuckDB!");
+		*pzErrMsg = "Unknown error in DuckDB!";
 	}
 	return rc;
 }
 
 /* Return the text of the SQL that was used to prepare the statement */
 const char *sqlite3_sql(sqlite3_stmt *pStmt) {
-	return sqlite3_strdup(pStmt->query_string);
+	return pStmt->query_string.c_str();
 }
 
 int sqlite3_column_count(sqlite3_stmt *pStmt) {
