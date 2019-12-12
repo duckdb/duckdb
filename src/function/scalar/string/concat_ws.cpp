@@ -84,7 +84,7 @@ void concat_ws_function(ExpressionExecutor &exec, Vector inputs[], index_t input
 
 				// append the next input string
 				int input_length = strlen(input_chars[i]);
-				strncpy(output.get() + length_so_far, input_chars[i], input_length);
+				memcpy(output.get() + length_so_far, input_chars[i], sizeof(char) * input_length);
 				length_so_far += input_length;
 			}
 		}

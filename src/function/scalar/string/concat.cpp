@@ -57,7 +57,7 @@ static void concat_function(ExpressionExecutor &exec, Vector inputs[], index_t i
 		int length_so_far = 0;
 		for (index_t i = 0; i < input_count; i++) {
 			int len = strlen(input_chars[i]);
-			strncpy(output.get() + length_so_far, input_chars[i], len);
+			memcpy(output.get() + length_so_far, input_chars[i], sizeof(char) * len);
 			length_so_far += len;
 		}
 		output[length_so_far] = '\0';
