@@ -9969,6 +9969,7 @@ namespace Catch {
                     totals += context.runTest(testCase);
                     current_test++;
                     if (current_test == total_tests_run) {
+                        renderTestProgress(current_test, total_tests_run, testCase.name);
                         std::cout << std::endl;
                     }
                 } else {
