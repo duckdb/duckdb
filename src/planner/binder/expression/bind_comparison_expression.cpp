@@ -19,6 +19,15 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, index_t 
 	// cast the input types to the same type
 	// now obtain the result type of the input types
 	auto input_type = MaxSQLType(left.sql_type, right.sql_type);
+	if (input_type.id == SQLTypeId::VARCHAR) {
+		// for comparison with strings, we prefer to bind to the numeric types
+		if (IsNumericType(left.sql_type.id)) {
+			input_type = left.sql_type;
+		}
+		if (IsNumericType(right.sql_type.id)) {
+			input_type = right.sql_type;
+		}
+	}
 	if (input_type.id == SQLTypeId::UNKNOWN) {
 		throw BinderException("Could not determine type of parameters: try adding explicit type casts");
 	}
