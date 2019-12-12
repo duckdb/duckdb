@@ -327,6 +327,11 @@ void ClientContext::RemovePreparedStatement(PreparedStatement *statement) {
 	if (!statement->success || statement->is_invalidated || is_invalidated) {
 		return;
 	}
+	try {
+		InitialCleanup();
+	} catch(std::exception &ex) {
+		return;
+	}
 	// erase the object from the list of prepared statements
 	prepared_statement_objects.erase(statement);
 	// drop it from the catalog

@@ -2,6 +2,7 @@
 #include "catch.hpp"
 #include "sqlite3.h"
 #include <string>
+#include <thread>
 
 using namespace std;
 
@@ -308,5 +309,33 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]" ) {
 	// using too large nByte?
 	REQUIRE(stmt.Prepare(db.db, "SELECT 42 WHERE 1=0", 19, &leftover) == SQLITE_OK);
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_DONE);
+}
 
+
+static void sqlite3_interrupt_fast(SQLiteDBWrapper *db, bool *success) {
+	*success = db->Execute("SELECT SUM(i1.i) FROM integers i1, integers i2, integers i3, integers i4, integers i5");
+}
+
+TEST_CASE("Test sqlite3_interrupt", "[sqlite3wrapper]" ) {
+	SQLiteDBWrapper db;
+	bool success;
+
+	// open an in-memory db
+	REQUIRE(db.Open(":memory:"));
+	REQUIRE(db.Execute("CREATE TABLE integers(i INTEGER)"));
+	// create a database with 5 values
+	REQUIRE(db.Execute("INSERT INTO integers VALUES (1), (2), (3), (4), (5)"));
+	// 5 + 5 * 5 = 30 values
+	REQUIRE(db.Execute("INSERT INTO integers SELECT i1.i FROM integers i1, integers i2"));
+	// 30 + 30 * 30 = 930 values
+	REQUIRE(db.Execute("INSERT INTO integers SELECT i1.i FROM integers i1, integers i2"));
+	// run a thread that will run a big cross product
+	thread t1(sqlite3_interrupt_fast, &db, &success);
+	// wait a second and interrupt the db
+	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+	sqlite3_interrupt(db.db);
+	// join the thread again
+	t1.join();
+	// the execution should have been cancelled
+	REQUIRE(!success);
 }

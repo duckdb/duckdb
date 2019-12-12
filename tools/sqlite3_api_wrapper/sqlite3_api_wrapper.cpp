@@ -269,14 +269,20 @@ int sqlite3_exec(sqlite3 *db,                /* The database on which the SQL ex
 					goto exec_out;
 				}
 			}
-
-			if (rc != SQLITE_ROW) {
+			if (rc == SQLITE_DONE) {
 				rc = sqlite3_finalize(pStmt);
-				pStmt = 0;
+				pStmt = nullptr;
 				zSql = zLeftover;
 				while (isspace(zSql[0]))
 					zSql++;
 				break;
+			} else if (rc != SQLITE_ROW) {
+				// error
+				if (pzErrMsg) {
+					auto errmsg = sqlite3_errmsg(db);
+					*pzErrMsg = errmsg ? sqlite3_strdup(errmsg) : nullptr;
+				}
+				goto exec_out;
 			}
 		}
 
@@ -311,6 +317,9 @@ int sqlite3_column_count(sqlite3_stmt *pStmt) {
 	return (int) pStmt->prepared->types.size();
 }
 
+////////////////////////////
+//     sqlite3_column     //
+////////////////////////////
 int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	if (!pStmt || !pStmt->result || !pStmt->current_chunk) {
 		return 0;
@@ -410,6 +419,84 @@ const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {
 		// memory error!
 		return nullptr;
 	}
+}
+
+////////////////////////////
+//      sqlite3_bind      //
+////////////////////////////
+int sqlite3_bind_parameter_count(sqlite3_stmt *stmt) {
+	if (!stmt) {
+		return 0;
+	}
+	return stmt->prepared->n_param;
+}
+
+const char *sqlite3_bind_parameter_name(sqlite3_stmt *stmt, int idx) {
+	if (!stmt) {
+		return nullptr;
+	}
+	if (idx < 1 || idx > (int) stmt->prepared->n_param) {
+		return nullptr;
+	}
+	return stmt->bound_names[idx - 1].c_str();
+}
+
+int sqlite3_bind_parameter_index(sqlite3_stmt *stmt, const char *zName) {
+	if (!stmt || !zName) {
+		return 0;
+	}
+	for(index_t i = 0; i < stmt->bound_names.size(); i++) {
+		if (stmt->bound_names[i] == string(zName)) {
+			return i + 1;
+		}
+	}
+	return 0;
+}
+
+int sqlite3_internal_bind_value(sqlite3_stmt *stmt, int idx, Value value) {
+	if (!stmt || !stmt->prepared || stmt->result) {
+		return SQLITE_MISUSE;
+	}
+	if (idx < 1 || idx > (int) stmt->prepared->n_param) {
+		return SQLITE_RANGE;
+	}
+	stmt->bound_values[idx - 1] = value;
+	return SQLITE_OK;
+}
+
+int sqlite3_bind_int(sqlite3_stmt *stmt, int idx, int val) {
+	return sqlite3_internal_bind_value(stmt, idx, Value::INTEGER(val));
+}
+
+int sqlite3_bind_int64(sqlite3_stmt *stmt, int idx, sqlite3_int64 val) {
+	return sqlite3_internal_bind_value(stmt, idx, Value::BIGINT(val));
+}
+
+int sqlite3_bind_null(sqlite3_stmt *stmt, int idx) {
+	return sqlite3_internal_bind_value(stmt, idx, Value());
+}
+
+int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char* val, int length, void(*free_func)(void*)) {
+	if (!val) {
+		return SQLITE_MISUSE;
+	}
+	string value;
+	if (length < 0) {
+		value = string(val);
+	} else {
+		value = string(val, val + length);
+	}
+	if (free_func) {
+		free_func((void*) val);
+	}
+	return sqlite3_internal_bind_value(stmt, idx, Value(value));
+}
+
+int sqlite3_clear_bindings(sqlite3_stmt *stmt) {
+	if (!stmt) {
+		return SQLITE_MISUSE;
+	}
+	return SQLITE_OK;
 }
 
 int sqlite3_initialize(void) {
@@ -560,85 +647,10 @@ const char *sqlite3_sourceid(void) {
 	return SOURCE_ID;
 }
 
-int sqlite3_bind_parameter_count(sqlite3_stmt *stmt) {
-	if (!stmt) {
-		return 0;
-	}
-	return stmt->prepared->n_param;
-}
-
-const char *sqlite3_bind_parameter_name(sqlite3_stmt *stmt, int idx) {
-	if (!stmt) {
-		return nullptr;
-	}
-	if (idx < 1 || idx > (int) stmt->prepared->n_param) {
-		return nullptr;
-	}
-	return stmt->bound_names[idx - 1].c_str();
-}
-
-int sqlite3_bind_parameter_index(sqlite3_stmt *stmt, const char *zName) {
-	if (!stmt || !zName) {
-		return 0;
-	}
-	for(index_t i = 0; i < stmt->bound_names.size(); i++) {
-		if (stmt->bound_names[i] == string(zName)) {
-			return i + 1;
-		}
-	}
-	return 0;
-}
-
-int sqlite3_internal_bind_value(sqlite3_stmt *stmt, int idx, Value value) {
-	if (!stmt || !stmt->prepared || stmt->result) {
-		return SQLITE_MISUSE;
-	}
-	if (idx < 1 || idx > (int) stmt->prepared->n_param) {
-		return SQLITE_RANGE;
-	}
-	stmt->bound_values[idx - 1] = value;
-	return SQLITE_OK;
-}
-
-int sqlite3_bind_int(sqlite3_stmt *stmt, int idx, int val) {
-	return sqlite3_internal_bind_value(stmt, idx, Value::INTEGER(val));
-}
-
-int sqlite3_bind_int64(sqlite3_stmt *stmt, int idx, sqlite3_int64 val) {
-	return sqlite3_internal_bind_value(stmt, idx, Value::BIGINT(val));
-}
-
-int sqlite3_bind_null(sqlite3_stmt *stmt, int idx) {
-	return sqlite3_internal_bind_value(stmt, idx, Value());
-}
-
-int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char* val, int length, void(*free_func)(void*)) {
-	if (!val) {
-		return SQLITE_MISUSE;
-	}
-	string value;
-	if (length < 0) {
-		value = string(val);
-	} else {
-		value = string(val, val + length);
-	}
-	if (free_func) {
-		free_func((void*) val);
-	}
-	return sqlite3_internal_bind_value(stmt, idx, Value(value));
-}
-
 int sqlite3_reset(sqlite3_stmt *stmt) {
 	if (stmt) {
 		stmt->result = nullptr;
 		stmt->current_chunk = nullptr;
-	}
-	return SQLITE_OK;
-}
-
-int sqlite3_clear_bindings(sqlite3_stmt *stmt) {
-	if (!stmt) {
-		return SQLITE_MISUSE;
 	}
 	return SQLITE_OK;
 }
