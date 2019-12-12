@@ -91,6 +91,11 @@ public:
 	sqlite3_stmt *stmt;
 	string error_message;
 
+	int Prepare(sqlite3 *db, const char *zSql, int nByte, const char **pzTail) {
+		Finalize();
+		return sqlite3_prepare_v2(db, zSql, nByte, &stmt, pzTail);
+	}
+
 	void Finalize() {
 		if (stmt) {
 			sqlite3_finalize(stmt);
@@ -143,13 +148,14 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]" ) {
 	// open an in-memory db
 	REQUIRE(db.Open(":memory:"));
 	REQUIRE(db.Execute("CREATE TABLE test(i INTEGER, j BIGINT, k DATE, l VARCHAR)"));
-	// sqlite3_prepare_v2 errors
 #ifndef SQLITE_TEST
+	// sqlite3_prepare_v2 errors
+	// nullptr for db/stmt, note: normal sqlite segfaults here
 	REQUIRE(sqlite3_prepare_v2(nullptr, "INSERT INTO test VALUES ($1, $2, $3, $4)", -1, nullptr, nullptr) == SQLITE_MISUSE);
 	REQUIRE(sqlite3_prepare_v2(db.db, "INSERT INTO test VALUES ($1, $2, $3, $4)", -1, nullptr, nullptr) == SQLITE_MISUSE);
 #endif
 	// prepared statement
-	REQUIRE(sqlite3_prepare_v2(db.db, "INSERT INTO test VALUES ($1, $2, $3, $4)", -1, &stmt.stmt, nullptr) == SQLITE_OK);
+	REQUIRE(stmt.Prepare(db.db, "INSERT INTO test VALUES ($1, $2, $3, $4)", -1, nullptr) == SQLITE_OK);
 
 	// test for parameter count, names and indexes
 	REQUIRE(sqlite3_bind_parameter_count(nullptr) == 0);
@@ -217,11 +223,10 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]" ) {
 	REQUIRE(db.CheckColumn(2, {"", "", "", "", "1992-01-01"}));
 	REQUIRE(db.CheckColumn(3, {"", "", "", "", "hello world"}));
 
-	stmt.Finalize();
 	REQUIRE(sqlite3_finalize(nullptr) == SQLITE_OK);
 
 	// first prepare the statement again
-	REQUIRE(sqlite3_prepare_v2(db.db, "SELECT * FROM test WHERE i=CAST($1 AS INTEGER)", -1, &stmt.stmt, nullptr) == SQLITE_OK);
+	REQUIRE(stmt.Prepare(db.db, "SELECT * FROM test WHERE i=CAST($1 AS INTEGER)", -1, nullptr) == SQLITE_OK);
 	// bind a non-integer here
 	REQUIRE(sqlite3_bind_text(stmt.stmt, 1, "hello", -1, nullptr) == SQLITE_OK);
 #ifndef SQLITE_TEST
@@ -229,7 +234,7 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]" ) {
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_ERROR);
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_ERROR);
 	// need to be prepare aggain
-	REQUIRE(sqlite3_prepare_v2(db.db, "SELECT * FROM test WHERE i=CAST($1 AS INTEGER)", -1, &stmt.stmt, nullptr) == SQLITE_OK);
+	REQUIRE(stmt.Prepare(db.db, "SELECT * FROM test WHERE i=CAST($1 AS INTEGER)", -1, nullptr) == SQLITE_OK);
 	REQUIRE(sqlite3_bind_text(stmt.stmt, 1, "2", -1, nullptr) == SQLITE_OK);
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_ROW);
 #else
@@ -268,49 +273,40 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]" ) {
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_ROW);
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_DONE);
 
-	stmt.Finalize();
-
 	// sqlite bind and errors
-	REQUIRE(sqlite3_prepare_v2(db.db, "SELECT * FROM non_existant_table", -1, &stmt.stmt, nullptr) == SQLITE_ERROR);
+	REQUIRE(stmt.Prepare(db.db, "SELECT * FROM non_existant_table", -1, nullptr) == SQLITE_ERROR);
 	REQUIRE(stmt.stmt == nullptr);
 
 	// sqlite3 prepare leftovers
 	// empty statement
 	const char *leftover;
-	REQUIRE(sqlite3_prepare_v2(db.db, "", -1, &stmt.stmt, &leftover) == SQLITE_OK);
+	REQUIRE(stmt.Prepare(db.db, "", -1, &leftover) == SQLITE_OK);
 	REQUIRE(leftover != nullptr);
 	REQUIRE(string(leftover) == "");
-	stmt.Finalize();
 	// leftover comment
-	REQUIRE(sqlite3_prepare_v2(db.db, "SELECT 42; --hello\nSELECT 3", -1, &stmt.stmt, &leftover) == SQLITE_OK);
+	REQUIRE(stmt.Prepare(db.db, "SELECT 42; --hello\nSELECT 3", -1, &leftover) == SQLITE_OK);
 	REQUIRE(leftover != nullptr);
 	REQUIRE(string(leftover) == " --hello\nSELECT 3");
-	stmt.Finalize();
 	// leftover extra statement
-	REQUIRE(sqlite3_prepare_v2(db.db, "SELECT 42--hello;\n, 3; SELECT 17", -1, &stmt.stmt, &leftover) == SQLITE_OK);
+	REQUIRE(stmt.Prepare(db.db, "SELECT 42--hello;\n, 3; SELECT 17", -1, &leftover) == SQLITE_OK);
 	REQUIRE(leftover != nullptr);
 	REQUIRE(string(leftover) == " SELECT 17");
-	stmt.Finalize();
 	// no query
-	REQUIRE(sqlite3_prepare_v2(db.db, nullptr, -1, &stmt.stmt, &leftover) == SQLITE_MISUSE);
-	stmt.Finalize();
+	REQUIRE(stmt.Prepare(db.db, nullptr, -1, &leftover) == SQLITE_MISUSE);
 
 	// sqlite3 prepare nByte
 	// any negative value can be used, not just -1
-	REQUIRE(sqlite3_prepare_v2(db.db, "SELECT 42", -1000, &stmt.stmt, &leftover) == SQLITE_OK);
+	REQUIRE(stmt.Prepare(db.db, "SELECT 42", -1000, &leftover) == SQLITE_OK);
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_ROW);
 	REQUIRE(sqlite3_column_int(stmt.stmt, 0) == 42);
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_DONE);
-	stmt.Finalize();
 	// we can use nByte to skip reading part of string (in this case, skip WHERE 1=0)
-	REQUIRE(sqlite3_prepare_v2(db.db, "SELECT 42 WHERE 1=0", 9, &stmt.stmt, &leftover) == SQLITE_OK);
+	REQUIRE(stmt.Prepare(db.db, "SELECT 42 WHERE 1=0", 9, &leftover) == SQLITE_OK);
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_ROW);
 	REQUIRE(sqlite3_column_int(stmt.stmt, 0) == 42);
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_DONE);
-	stmt.Finalize();
 	// using too large nByte?
-	REQUIRE(sqlite3_prepare_v2(db.db, "SELECT 42 WHERE 1=0", 19, &stmt.stmt, &leftover) == SQLITE_OK);
+	REQUIRE(stmt.Prepare(db.db, "SELECT 42 WHERE 1=0", 19, &leftover) == SQLITE_OK);
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_DONE);
-	stmt.Finalize();
 
 }
