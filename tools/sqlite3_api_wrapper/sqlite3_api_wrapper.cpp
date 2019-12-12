@@ -101,31 +101,27 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
                        sqlite3_stmt **ppStmt, /* OUT: Statement handle */
                        const char **pzTail    /* OUT: Pointer to unused portion of zSql */
 ) {
-	if (!db || !ppStmt) {
+	if (!db || !ppStmt || !zSql) {
 		return SQLITE_MISUSE;
 	}
 	*ppStmt = nullptr;
+	string query(zSql);
 	if (pzTail) {
-		*pzTail = nullptr;
+		*pzTail = zSql + query.size();
 	}
-	string query = zSql ? zSql : "";
 
 	try {
 		// extract the statements from the SQL query
 		auto statements = db->con->ExtractStatements(query);
 		if (statements.size() == 0) {
 			// no statements to prepare!
-			if (pzTail) {
-				*pzTail = sqlite3_strdup("");
-				if (!*pzTail) {
-					throw std::bad_alloc();
-				}
-			}
 			return SQLITE_OK;
 		}
 
 		// extract the first statement
 		auto statement = statements[0].get();
+		// extract the remainder
+		bool set_remainder = statement->stmt_location + statement->stmt_length < query.size();
 		query = query.substr(statement->stmt_location, statement->stmt_length);
 
 		// now prepare the query
@@ -148,12 +144,8 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		}
 
 		// extract the remainder of the query and assign it to the pzTail
-		string remainder = query.substr(statement->stmt_location + statement->stmt_length);
-		if (pzTail) {
-			*pzTail = sqlite3_strdup(remainder);
-			if (!*pzTail) {
-				throw std::bad_alloc();
-			}
+		if (pzTail && set_remainder) {
+			*pzTail = zSql + query.size() + 1;
 		}
 
 		*ppStmt = stmt.release();
@@ -361,7 +353,7 @@ static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, SQLType targ
 	if (!pStmt || !pStmt->result || !pStmt->current_chunk) {
 		return false;
 	}
-	if (iCol >= (int) pStmt->result->sql_types.size()) {
+	if (iCol < 0 || iCol >= (int) pStmt->result->sql_types.size()) {
 		return false;
 	}
 	if (pStmt->current_chunk->data[iCol].nullmask[pStmt->current_row]) {

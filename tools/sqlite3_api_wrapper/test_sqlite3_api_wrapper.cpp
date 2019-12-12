@@ -243,7 +243,6 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]" ) {
 	// repeatedly call sqlite3_step on a SELECT statement
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_ROW);
 	// verify the results
-	REQUIRE(sqlite3_column_text(stmt.stmt, -1) == nullptr);
 	REQUIRE(string((char*) sqlite3_column_text(stmt.stmt, 0)) == string("2"));
 	REQUIRE(sqlite3_column_int(stmt.stmt, 0) == 2);
 	REQUIRE(sqlite3_column_int64(stmt.stmt, 0) == 2);
@@ -254,6 +253,7 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]" ) {
 	REQUIRE(sqlite3_column_int(stmt.stmt, 3) == 0);
 	REQUIRE(sqlite3_column_int64(stmt.stmt, 3) == 0);
 	REQUIRE(sqlite3_column_double(stmt.stmt, 3) == 0);
+	REQUIRE(sqlite3_column_text(stmt.stmt, -1) == nullptr);
 	REQUIRE(sqlite3_column_text(stmt.stmt, 10) == nullptr);
 
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_DONE);
@@ -270,4 +270,21 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]" ) {
 	// sqlite bind and errors
 	REQUIRE(sqlite3_prepare_v2(db.db, "SELECT * FROM non_existant_table", -1, &stmt.stmt, nullptr) == SQLITE_ERROR);
 	REQUIRE(stmt.stmt == nullptr);
+
+	// sqlite3 prepare leftovers
+	// empty statement
+	const char *leftover;
+	REQUIRE(sqlite3_prepare_v2(db.db, "", -1, &stmt.stmt, &leftover) == SQLITE_OK);
+	REQUIRE(leftover != nullptr);
+	REQUIRE(string(leftover) == "");
+	// leftover comment
+	REQUIRE(sqlite3_prepare_v2(db.db, "SELECT 42; --hello\nSELECT 3", -1, &stmt.stmt, &leftover) == SQLITE_OK);
+	REQUIRE(leftover != nullptr);
+	REQUIRE(string(leftover) == " --hello\nSELECT 3");
+	// leftover extra statement
+	REQUIRE(sqlite3_prepare_v2(db.db, "SELECT 42--hello;\n, 3; SELECT 17", -1, &stmt.stmt, &leftover) == SQLITE_OK);
+	REQUIRE(leftover != nullptr);
+	REQUIRE(string(leftover) == " SELECT 17");
+	// no query
+	REQUIRE(sqlite3_prepare_v2(db.db, nullptr, -1, &stmt.stmt, &leftover) == SQLITE_MISUSE);
 }
