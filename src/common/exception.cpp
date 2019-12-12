@@ -140,11 +140,11 @@ OutOfRangeException::OutOfRangeException(string msg, ...) : Exception(ExceptionT
 	FORMAT_CONSTRUCTOR(msg);
 }
 
-CatalogException::CatalogException(string msg, ...) : Exception(ExceptionType::CATALOG, msg) {
+CatalogException::CatalogException(string msg, ...) : StandardException(ExceptionType::CATALOG, msg) {
 	FORMAT_CONSTRUCTOR(msg);
 }
 
-ParserException::ParserException(string msg, ...) : Exception(ExceptionType::PARSER, msg) {
+ParserException::ParserException(string msg, ...) : StandardException(ExceptionType::PARSER, msg) {
 	FORMAT_CONSTRUCTOR(msg);
 }
 
@@ -156,7 +156,7 @@ ConstraintException::ConstraintException(string msg, ...) : Exception(ExceptionT
 	FORMAT_CONSTRUCTOR(msg);
 }
 
-BinderException::BinderException(string msg, ...) : Exception(ExceptionType::BINDER, msg) {
+BinderException::BinderException(string msg, ...) : StandardException(ExceptionType::BINDER, msg) {
 	FORMAT_CONSTRUCTOR(msg);
 }
 

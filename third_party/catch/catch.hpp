@@ -9901,6 +9901,7 @@ namespace Catch {
 // end catch_version.h
 #include <cstdlib>
 #include <iomanip>
+#include <iostream>
 
 namespace Catch {
 
@@ -9929,6 +9930,19 @@ namespace Catch {
             return std::move(multi);
         }
 
+        void renderTestProgress(int current_test, int total_tests, std::string next_test) {
+            double progress = (double) current_test / (double) total_tests;
+            int render_width = 80;
+            std::string result = "[" + std::to_string(current_test) + "/" + std::to_string(total_tests) + "] (" + std::to_string(int(progress * 100)) + "%): " + next_test;
+            if (result.size() < render_width) {
+                result += std::string(render_width - result.size(), ' ');
+            } else if (result.size() > render_width) {
+                result = result.substr(0, render_width - 3) + "...";
+            }
+            std::cout << "\r" << result;
+            std::cout.flush();
+        }
+
         Catch::Totals runTests(std::shared_ptr<Config> const& config) {
             // FixMe: Add listeners in order first, then add reporters.
 
@@ -9949,16 +9963,13 @@ namespace Catch {
                     total_tests_run++;
                 }
             }
-            int fraction = (int) (total_tests_run / 10.0 + 1);
-            int next_report = fraction;
             for (auto const& testCase : allTestCases) {
                 if (!context.aborting() && matchTest(testCase, testSpec, *config)) {
+                    renderTestProgress(current_test, total_tests_run, testCase.name);
                     totals += context.runTest(testCase);
                     current_test++;
-                    if (current_test == next_report) {
-                        int percentage_completed = (int) ((100.0 * current_test) / total_tests_run);
-                        printf("Completed %d%% (%d / %d)\n", percentage_completed, current_test, total_tests_run);
-                        next_report += fraction;
+                    if (current_test == total_tests_run) {
+                        std::cout << std::endl;
                     }
                 } else {
                     context.reporter().skipTest(testCase);

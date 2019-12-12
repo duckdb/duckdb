@@ -30,17 +30,30 @@ unique_ptr<BoundSQLStatement> Binder::Bind(SQLStatement &statement) {
 		return Bind((DeleteStatement &)statement);
 	case StatementType::UPDATE:
 		return Bind((UpdateStatement &)statement);
-	case StatementType::ALTER:
-		return Bind((AlterTableStatement &)statement);
 	case StatementType::CREATE_TABLE:
 		return Bind((CreateTableStatement &)statement);
 	case StatementType::CREATE_VIEW:
 		return Bind((CreateViewStatement &)statement);
+	case StatementType::CREATE_SCHEMA:
+		return Bind((CreateSchemaStatement &)statement);
+	case StatementType::CREATE_SEQUENCE:
+		return Bind((CreateSequenceStatement &)statement);
+	case StatementType::DROP:
+		return Bind((DropStatement &)statement);
+	case StatementType::ALTER:
+		return Bind((AlterTableStatement &)statement);
+	case StatementType::TRANSACTION:
+		return Bind((TransactionStatement &)statement);
+	case StatementType::PRAGMA:
+		return Bind((PragmaStatement &)statement);
 	case StatementType::EXECUTE:
 		return Bind((ExecuteStatement &)statement);
-	default:
-		assert(statement.type == StatementType::CREATE_INDEX);
+	case StatementType::CREATE_INDEX:
 		return Bind((CreateIndexStatement &)statement);
+	case StatementType::EXPLAIN:
+		return Bind((ExplainStatement &)statement);
+	default:
+		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind", StatementTypeToString(statement.type).c_str());
 	}
 }
 

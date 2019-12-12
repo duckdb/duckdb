@@ -14,6 +14,7 @@
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
+#include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
 
@@ -70,6 +71,8 @@ public:
 	unique_ptr<TableDescription> TableInfo(string table_name);
 	//! Get the table info of a specific table, or nullptr if it cannot be found
 	unique_ptr<TableDescription> TableInfo(string schema_name, string table_name);
+	//! Extract a set of SQL statements from a specific query
+	vector<unique_ptr<SQLStatement>> ExtractStatements(string query);
 
 	//! Appends a DataChunk to the specified table
 	void Append(TableDescription &description, DataChunk &chunk);

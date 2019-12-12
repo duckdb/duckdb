@@ -1,23 +1,19 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/statement/deallocate_statement.hpp
+// parser/parsed_data/parse_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/common/common.hpp"
 
 namespace duckdb {
 
-class DeallocateStatement : public SQLStatement {
-public:
-	DeallocateStatement(string name) : SQLStatement(StatementType::DEALLOCATE), name(name){};
-
-	string name;
-
-	// TODO
+struct ParseInfo {
+	virtual ~ParseInfo() {}
 };
+
 } // namespace duckdb

@@ -1,7 +1,6 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/prepared_statement_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer.hpp"

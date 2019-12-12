@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include <cstring>
 
 using namespace duckdb;
@@ -131,11 +132,11 @@ void WriteAheadLog::WriteUpdate(DataChunk &chunk, column_t col_idx) {
 }
 
 //===--------------------------------------------------------------------===//
-// QUERY
+// Write ALTER Statement
 //===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteQuery(string &query) {
-	writer->Write<WALType>(WALType::QUERY);
-	writer->WriteString(query);
+void WriteAheadLog::WriteAlter(AlterInfo &info) {
+	writer->Write<WALType>(WALType::ALTER_INFO);
+	info.Serialize(*writer);
 }
 
 //===--------------------------------------------------------------------===//

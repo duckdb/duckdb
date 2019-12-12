@@ -9,22 +9,15 @@
 #pragma once
 
 #include "duckdb/parser/sql_statement.hpp"
-#include "duckdb/common/types/value.hpp"
+#include "duckdb/parser/parsed_data/pragma_info.hpp"
 
 namespace duckdb {
 
-enum class PragmaType : uint8_t { NOTHING, ASSIGNMENT, CALL };
-
 class PragmaStatement : public SQLStatement {
 public:
-	PragmaStatement() : SQLStatement(StatementType::PRAGMA) {};
+	PragmaStatement() : SQLStatement(StatementType::PRAGMA), info(make_unique<PragmaInfo>()) {};
 
-	//! Name of the PRAGMA statement
-	string name;
-	//! Type of pragma statement
-	PragmaType pragma_type;
-	//! Parameter list (if any)
-	vector<Value> parameters;
+	unique_ptr<PragmaInfo> info;
 };
 
 } // namespace duckdb

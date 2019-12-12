@@ -37,6 +37,8 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundCreateTableStatement &statement);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCreateIndexStatement &statement);
 	unique_ptr<LogicalOperator> CreatePlan(BoundExecuteStatement &statement);
+	unique_ptr<LogicalOperator> CreatePlan(BoundSimpleStatement &statement);
+	unique_ptr<LogicalOperator> CreatePlan(BoundExplainStatement &stmt);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);

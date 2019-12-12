@@ -29,6 +29,7 @@ release:
 
 unittest: debug
 	build/debug/test/unittest
+	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 allunit: release # uses release build because otherwise allunit takes forever
 	build/release/test/unittest "*"

@@ -107,6 +107,14 @@ private:
 	unique_ptr<BoundSQLStatement> Bind(CreateTableStatement &stmt);
 	unique_ptr<BoundSQLStatement> Bind(CreateIndexStatement &stmt);
 	unique_ptr<BoundSQLStatement> Bind(ExecuteStatement &stmt);
+	unique_ptr<BoundSQLStatement> Bind(CreateViewStatement &stmt);
+	unique_ptr<BoundSQLStatement> Bind(CreateSchemaStatement &stmt);
+	unique_ptr<BoundSQLStatement> Bind(CreateSequenceStatement &stmt);
+	unique_ptr<BoundSQLStatement> Bind(DropStatement &stmt);
+	unique_ptr<BoundSQLStatement> Bind(AlterTableStatement &stmt);
+	unique_ptr<BoundSQLStatement> Bind(TransactionStatement &stmt);
+	unique_ptr<BoundSQLStatement> Bind(PragmaStatement &stmt);
+	unique_ptr<BoundSQLStatement> Bind(ExplainStatement &stmt);
 
 	unique_ptr<BoundQueryNode> Bind(SelectNode &node);
 	unique_ptr<BoundQueryNode> Bind(SetOperationNode &node);

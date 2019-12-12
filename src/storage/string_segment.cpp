@@ -569,7 +569,6 @@ void StringSegment::MergeUpdateInfo(UpdateInfo *node, Vector &update, row_t *ids
 	// first we copy the old update info into a temporary structure
 	sel_t old_ids[STANDARD_VECTOR_SIZE];
 	string_location_t old_data[STANDARD_VECTOR_SIZE];
-	string_location_t stored_data[STANDARD_VECTOR_SIZE];
 
 	memcpy(old_ids, node->tuples, node->N * sizeof(sel_t));
 	memcpy(old_data, node->tuple_data, node->N * sizeof(string_location_t));

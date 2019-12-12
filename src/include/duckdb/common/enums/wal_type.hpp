@@ -29,6 +29,8 @@ enum class WALType : uint8_t {
 	CREATE_SEQUENCE = 8,
 	DROP_SEQUENCE = 9,
 	SEQUENCE_VALUE = 10,
+
+	ALTER_INFO = 20,
 	// -----------------------------
 	// Data
 	// -----------------------------
@@ -36,10 +38,6 @@ enum class WALType : uint8_t {
 	INSERT_TUPLE = 26,
 	DELETE_TUPLE = 27,
 	UPDATE_TUPLE = 28,
-	// -----------------------------
-	// Query
-	// -----------------------------
-	QUERY = 50,
 	// -----------------------------
 	// Flush
 	// -----------------------------

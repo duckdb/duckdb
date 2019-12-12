@@ -23,6 +23,7 @@ namespace duckdb {
 class Appender;
 class Catalog;
 class DuckDB;
+class PreparedStatementData;
 
 //! The ClientContext holds information relevant to the current client session
 //! during execution
@@ -100,18 +101,25 @@ private:
 	//! true.
 	string VerifyQuery(string query, unique_ptr<SQLStatement> statement);
 
+
+	void InitialCleanup();
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
 	void CleanupInternal();
 	string FinalizeQuery(bool success);
 	//! Internal fetch, does not lock. Caller must hold the context_lock.
 	unique_ptr<DataChunk> FetchInternal();
 	//! Internally execute a set of SQL statement. Caller must hold the context_lock.
-	unique_ptr<QueryResult> ExecuteStatementsInternal(string query, vector<unique_ptr<SQLStatement>> &statements,
+	unique_ptr<QueryResult> RunStatements(const string &query, vector<unique_ptr<SQLStatement>> &statements,
 	                                                  bool allow_stream_result);
-	//! Internally execute a SQL statement. Caller must hold the context_lock.
-	unique_ptr<QueryResult> ExecuteStatementInternal(string query, unique_ptr<SQLStatement> statement,
-	                                                 bool allow_stream_result);
+	//! Internally prepare and execute a prepared SQL statement. Caller must hold the context_lock.
+	unique_ptr<QueryResult> RunStatement(const string &query, unique_ptr<SQLStatement> statement, bool allow_stream_result);
 
+	//! Internally prepare a SQL statement. Caller must hold the context_lock.
+	unique_ptr<PreparedStatementData> CreatePreparedStatement(const string &query, unique_ptr<SQLStatement> statement);
+	//! Internally execute a prepared SQL statement. Caller must hold the context_lock.
+	unique_ptr<QueryResult> ExecutePreparedStatement(const string &query, PreparedStatementData &statement, vector<Value> bound_values, bool allow_stream_result);
+	//! Call CreatePreparedStatement() and ExecutePreparedStatement() without any bound values
+	unique_ptr<QueryResult> RunStatementInternal(const string &query, unique_ptr<SQLStatement> statement, bool allow_stream_result);
 private:
 	index_t prepare_count = 0;
 	//! The currently opened StreamQueryResult (if any)

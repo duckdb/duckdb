@@ -14,8 +14,6 @@ string StatementTypeToString(StatementType type) {
 		return "UPDATE";
 	case StatementType::DELETE:
 		return "DELETE";
-	case StatementType::DEALLOCATE:
-		return "DEALLOCATE";
 	case StatementType::PREPARE:
 		return "PREPARE";
 	case StatementType::EXECUTE:
@@ -46,6 +44,8 @@ string StatementTypeToString(StatementType type) {
 		return "CREATE_SEQUENCE";
 	case StatementType::DROP:
 		return "DROP";
+	case StatementType::PRAGMA:
+		return "PRAGMA";
 	default:
 		return "INVALID";
 	}

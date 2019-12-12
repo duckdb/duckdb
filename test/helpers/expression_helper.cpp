@@ -47,7 +47,7 @@ string ExpressionHelper::AddColumns(string columns) {
 unique_ptr<Expression> ExpressionHelper::ParseExpression(string expression) {
 	string query = "SELECT " + expression + from_clause;
 
-	Parser parser(*con.context);
+	Parser parser;
 	parser.ParseQuery(query.c_str());
 	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT) {
 		return nullptr;
@@ -63,7 +63,7 @@ unique_ptr<Expression> ExpressionHelper::ParseExpression(string expression) {
 }
 
 unique_ptr<LogicalOperator> ExpressionHelper::ParseLogicalTree(string query) {
-	Parser parser(*con.context);
+	Parser parser;
 	parser.ParseQuery(query.c_str());
 	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT) {
 		return nullptr;

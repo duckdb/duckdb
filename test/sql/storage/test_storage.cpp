@@ -286,7 +286,7 @@ TEST_CASE("Test interleaving of insertions/updates/deletes on multiple tables", 
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER);"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2 (a INTEGER, b INTEGER);"));
-		int32_t test_insert = 0, test_insert2 = 0;
+		index_t test_insert = 0, test_insert2 = 0;
 		for (index_t i = 0; i < 1000; i++) {
 			index_t stage = i % 7;
 			switch (stage) {
