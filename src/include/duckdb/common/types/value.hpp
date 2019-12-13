@@ -51,7 +51,6 @@ public:
 			throw Exception("String value is not valid UTF8");
 		}
 	}
-	Value(const Value &other);
 
 	//! Create the lowest possible value of a given type (numeric only)
 	static Value MinimumValue(TypeId type);
