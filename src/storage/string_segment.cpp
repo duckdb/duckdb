@@ -7,10 +7,12 @@
 using namespace duckdb;
 using namespace std;
 
+#ifdef DEBUG
 static bool IsValidStringLocation(string_location_t location) {
 	return location.offset < Storage::BLOCK_SIZE &&
 	       (location.block_id == INVALID_BLOCK || location.block_id >= MAXIMUM_BLOCK);
 }
+#endif
 
 StringSegment::StringSegment(BufferManager &manager, index_t row_start, block_id_t block)
     : UncompressedSegment(manager, TypeId::VARCHAR, row_start) {

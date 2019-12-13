@@ -519,6 +519,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	assert(copied_stmt->Equals(deserialized_stmt.get()));
 
 	// now perform checking on the expressions
+#ifdef DEBUG
 	auto &orig_expr_list = select_stmt->node->GetSelectList();
 	auto &de_expr_list = deserialized_stmt->node->GetSelectList();
 	auto &cp_expr_list = copied_stmt->node->GetSelectList();
@@ -543,6 +544,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 			}
 		}
 	}
+#endif
 
 	// disable profiling if it is enabled
 	bool profiling_is_enabled = profiler.IsEnabled();
