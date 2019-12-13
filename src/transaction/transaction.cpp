@@ -63,7 +63,7 @@ UpdateInfo *Transaction::CreateUpdateInfo(index_t type_size, index_t entries) {
 	return update_info;
 }
 
-bool Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept {
+string Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept {
 	this->commit_id = commit_id;
 
 	UndoBuffer::IteratorState iterator_state;
@@ -87,7 +87,7 @@ bool Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept {
 				log->Flush();
 			}
 		}
-		return true;
+		return string();
 	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, transaction_id);
 		storage.RevertCommit(commit_state);
@@ -95,6 +95,6 @@ bool Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept {
 			// remove any entries written into the WAL by truncating it
 			log->Truncate(initial_wal_size);
 		}
-		return false;
+		return ex.what();
 	}
 }

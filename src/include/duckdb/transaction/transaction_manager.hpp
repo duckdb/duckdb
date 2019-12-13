@@ -38,7 +38,7 @@ public:
 	//! Start a new transaction
 	Transaction *StartTransaction();
 	//! Commit the given transaction
-	bool CommitTransaction(Transaction *transaction);
+	string CommitTransaction(Transaction *transaction);
 	//! Rollback the given transaction
 	void RollbackTransaction(Transaction *transaction);
 	//! Add the catalog set

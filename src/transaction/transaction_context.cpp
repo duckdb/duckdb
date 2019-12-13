@@ -33,8 +33,9 @@ void TransactionContext::Commit() {
 	}
 	SetAutoCommit(true);
 	current_transaction = nullptr;
-	if (!transaction_manager.CommitTransaction(transaction)) {
-		throw TransactionException("Failed to commit!");
+	string error = transaction_manager.CommitTransaction(transaction);
+	if (!error.empty()) {
+		throw TransactionException("Failed to commit: %s", error.c_str());
 	}
 }
 
