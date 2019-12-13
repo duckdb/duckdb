@@ -25,12 +25,4 @@ add_library(dbgen STATIC
 
 set_property(TARGET dbgen PROPERTY C_STANDARD 99)
 
-# disable warnings
-if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-  set_target_properties(
-    dbgen
-    PROPERTIES
-      COMPILE_FLAGS
-      "-w"
-    )
-endif()
+disable_target_warnings(dbgen)

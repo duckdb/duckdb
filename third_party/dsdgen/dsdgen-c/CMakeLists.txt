@@ -54,12 +54,4 @@ set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:dsdgen_c>
     PARENT_SCOPE)
 
-# disable some warnings
-if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-  set_target_properties(
-    dsdgen_c
-    PROPERTIES
-      COMPILE_FLAGS
-      "-w"
-    )
-endif()
+disable_target_warnings(dsdgen_c)

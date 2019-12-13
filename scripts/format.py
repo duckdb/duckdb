@@ -46,8 +46,8 @@ def can_format_file(full_path):
 	if fname in ignored_files:
 		return False
 	# skip files that end in .txt but are not CMakeLists.txt
-	if full_path.endswith('.txt') and fname != 'CMakeLists.txt':
-		return False
+	if full_path.endswith('.txt'):
+		return fname == 'CMakeLists.txt'
 	found = False
 	# check file extension
 	for ext in extensions:
@@ -173,4 +173,4 @@ else:
 		fname = splits[-1]
 		dirname = os.path.sep.join(splits[:-1])
 		ext = '.' + full_path.split('.')[-1]
-		format_file([-1], full_path, dirname, ext, False)
+		format_file(fname, full_path, dirname, ext, False)

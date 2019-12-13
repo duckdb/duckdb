@@ -17,12 +17,4 @@ add_library(tpce STATIC
             tpce.cpp
             tpce_generated.cpp)
 
-# disable warnings
-if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-  set_target_properties(
-    tpce
-    PROPERTIES
-      COMPILE_FLAGS
-      "-w"
-    )
-endif()
+disable_target_warnings(tpce)

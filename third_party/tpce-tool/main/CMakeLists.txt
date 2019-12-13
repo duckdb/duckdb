@@ -35,8 +35,4 @@ set(TPCE_OBJECT_FILES
     ${TPCE_OBJECT_FILES} $<TARGET_OBJECTS:tpce_main>
     PARENT_SCOPE)
 
-set_target_properties(
-  tpce_main
-  PROPERTIES
-    COMPILE_FLAGS
-    "-w")
+disable_target_warnings(tpce_main)

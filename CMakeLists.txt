@@ -167,6 +167,15 @@ function(add_library_unity NAME MODE)
   add_library(${NAME} OBJECT ${SRCS})
 endfunction()
 
+function(disable_target_warnings NAME)
+  if(MSVC)
+    set_target_properties(${NAME} PROPERTIES COMPILE_FLAGS "/w")
+  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"
+         OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    set_target_properties(${NAME} PROPERTIES COMPILE_FLAGS "-w")
+  endif()
+endfunction()
+
 add_subdirectory(src)
 add_subdirectory(third_party)
 
