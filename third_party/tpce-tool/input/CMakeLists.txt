@@ -38,4 +38,4 @@ set_target_properties(
   tpce_input
   PROPERTIES
     COMPILE_FLAGS
-    "-Wno-unused-private-field -Wno-exceptions -Wno-unused-const-variable")
+    "-w")

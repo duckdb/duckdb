@@ -37,7 +37,6 @@ TEST_CASE("Test TPC-DS SF0.1 Query Execution", "[tpcds][.]") {
 		if (missing_queries.count(q) != 0) {
 			continue;
 		}
-		fprintf(stderr, "Running Q: %d\n", (int)q);
 		REQUIRE_NO_FAIL(con.Query(tpcds::get_query(q)));
 	}
 }

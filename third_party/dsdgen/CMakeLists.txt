@@ -12,3 +12,13 @@ add_library(dsdgen STATIC
             append_info-c.cpp
             dsdgen_helpers.cpp
             ${ALL_OBJECT_FILES})
+
+# disable warnings
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+  set_target_properties(
+    dsdgen
+    PROPERTIES
+      COMPILE_FLAGS
+      "-w"
+    )
+endif()

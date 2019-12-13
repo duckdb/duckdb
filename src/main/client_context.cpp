@@ -331,7 +331,7 @@ void ClientContext::RemovePreparedStatement(PreparedStatement *statement) {
 	}
 	try {
 		InitialCleanup();
-	} catch (std::exception &ex) {
+	} catch (...) {
 		return;
 	}
 	// erase the object from the list of prepared statements
@@ -577,8 +577,8 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		auto explain_stmt = make_unique<ExplainStatement>(move(statement_copy_for_explain));
 		try {
 			RunStatementInternal(explain_q, move(explain_stmt), false);
-		} catch (Exception &ex) {
-			return "EXPLAIN failed but query did not";
+		} catch (std::exception &ex) {
+			return "EXPLAIN failed but query did not (" + string(ex.what()) + ")";
 		}
 	}
 

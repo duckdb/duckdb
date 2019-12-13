@@ -30,7 +30,7 @@ install(
 if(NOT MSVC)
   set_target_properties(pg_query
                         PROPERTIES COMPILE_FLAGS
-                                   "-Wno-unused-function -Wno-unused-variable")
+                                   "-w")
 endif()
 
 set_target_properties(pg_query PROPERTIES POSITION_INDEPENDENT_CODE ON)

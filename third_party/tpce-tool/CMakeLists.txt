@@ -17,6 +17,12 @@ add_library(tpce STATIC
             tpce.cpp
             tpce_generated.cpp)
 
-set_target_properties(tpce
-                      PROPERTIES COMPILE_FLAGS
-                                 "-Wno-unused-private-field -Wno-exceptions")
+# disable warnings
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+  set_target_properties(
+    tpce
+    PROPERTIES
+      COMPILE_FLAGS
+      "-w"
+    )
+endif()
