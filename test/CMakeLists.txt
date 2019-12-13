@@ -14,7 +14,6 @@ add_subdirectory(sql)
 add_subdirectory(planner)
 add_subdirectory(optimizer)
 add_subdirectory(parser)
-add_subdirectory(predicate_optimization)
 
 if(NOT WIN32)
   add_subdirectory(sqlserver)
