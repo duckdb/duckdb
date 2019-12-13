@@ -45,7 +45,7 @@ matrix:
           packages:
             - clang-6.0
       env:
-        - MATRIX_EVAL="CC=clang-6.0 && CXX=clang++-6.0 -Werror"
+        - MATRIX_EVAL="CC=clang-6.0 && CXX=clang++-6.0 && CXXFLAGS=\"${CXXFLAGS} -Werror\""
 
 
     - os: linux
@@ -71,7 +71,7 @@ matrix:
           packages:
             - g++-9
       env:
-        - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9 -Werror"
+        - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9 && CXXFLAGS=\"${CXXFLAGS} -Werror\""
 
 
     - os: linux
