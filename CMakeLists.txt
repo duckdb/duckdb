@@ -102,7 +102,7 @@ if(NOT MSVC)
 else()
   set(
     CMAKE_CXX_WINDOWS_FLAGS
-    "/wd4244 /wd9025 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS"
+    "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS"
     )
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CMAKE_CXX_WINDOWS_FLAGS}")
   set(CMAKE_CXX_FLAGS_RELEASE"${CMAKE_CXX_FLAGS_RELEASE} ${CMAKE_CXX_WINDOWS_FLAGS}")
@@ -173,10 +173,10 @@ endfunction()
 
 function(disable_target_warnings NAME)
   if(MSVC)
-    set_target_properties(${NAME} PROPERTIES COMPILE_FLAGS "/w")
+    target_compile_options(${NAME} PRIVATE "/w")
   elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"
          OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    set_target_properties(${NAME} PROPERTIES COMPILE_FLAGS "-w")
+    target_compile_options(${NAME} PRIVATE "-w")
   endif()
 endfunction()
 

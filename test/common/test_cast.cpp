@@ -106,7 +106,7 @@ TEST_CASE("Test casting to int8_t", "[cast]") {
 	vector<int64_t> broken_values_int64 = {128, -128, 10000000000, -10000000000};
 	TestNumericCast<int64_t, int8_t>(working_values_int64, broken_values_int64);
 	// float -> int8_t
-	vector<float> working_values_float = {10, -10, 127, -127, 1.3, -2.7};
+	vector<float> working_values_float = {10, -10, 127, -127, 1.3f, -2.7f};
 	vector<float> broken_values_float = {128, -128, 10000000000, -10000000000, 1e30f, -1e30f};
 	TestNumericCast<float, int8_t>(working_values_float, broken_values_float);
 	// double -> int8_t
