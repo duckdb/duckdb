@@ -43,5 +43,5 @@ unique_ptr<Expression> BoundParameterExpression::Copy() {
 	result->sql_type = sql_type;
 	result->value = value;
 	result->return_type = return_type;
-	return result;
+	return move(result);
 }

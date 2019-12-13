@@ -38,5 +38,5 @@ unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 	}
 	result->bind_index = GenerateTableIndex();
 	bind_context.AddGenericBinding(result->bind_index, expr.alias, result->names, result->types);
-	return result;
+	return move(result);
 }

@@ -13,5 +13,5 @@ unique_ptr<BoundSQLStatement> Binder::Bind(SelectStatement &stmt) {
 	}
 	// now visit the root node of the select statement
 	result->node = Bind(*stmt.node);
-	return result;
+	return move(result);
 }

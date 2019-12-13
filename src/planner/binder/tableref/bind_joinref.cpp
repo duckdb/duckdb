@@ -18,5 +18,5 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 
 	WhereBinder binder(*this, context);
 	result->condition = binder.Bind(ref.condition);
-	return result;
+	return move(result);
 }

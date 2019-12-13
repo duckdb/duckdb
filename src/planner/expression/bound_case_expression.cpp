@@ -34,5 +34,5 @@ bool BoundCaseExpression::Equals(const BaseExpression *other_) const {
 unique_ptr<Expression> BoundCaseExpression::Copy() {
 	auto new_case = make_unique<BoundCaseExpression>(check->Copy(), result_if_true->Copy(), result_if_false->Copy());
 	new_case->CopyProperties(*this);
-	return new_case;
+	return move(new_case);
 }

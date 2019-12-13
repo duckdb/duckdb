@@ -57,5 +57,5 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() {
 		copy->children.push_back(child->Copy());
 	}
 	copy->CopyProperties(*this);
-	return copy;
+	return move(copy);
 }

@@ -57,5 +57,5 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() {
 	}
 	copy->bind_info = bind_info ? bind_info->Copy() : nullptr;
 	copy->CopyProperties(*this);
-	return copy;
+	return move(copy);
 }

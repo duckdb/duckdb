@@ -49,5 +49,5 @@ unique_ptr<Expression> BoundOperatorExpression::Copy() {
 	for (auto &child : children) {
 		copy->children.push_back(child->Copy());
 	}
-	return copy;
+	return move(copy);
 }

@@ -92,5 +92,5 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 	new_window->offset_expr = offset_expr ? offset_expr->Copy() : nullptr;
 	new_window->default_expr = default_expr ? default_expr->Copy() : nullptr;
 
-	return new_window;
+	return move(new_window);
 }

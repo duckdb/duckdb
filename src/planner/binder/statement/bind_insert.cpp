@@ -69,7 +69,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 	// bind the default values
 	BindDefaultValues(table->columns, result->bound_defaults);
 	if (!stmt.select_statement) {
-		return result;
+		return move(result);
 	}
 
 	index_t expected_columns = stmt.columns.size() == 0 ? result->table->columns.size() : stmt.columns.size();

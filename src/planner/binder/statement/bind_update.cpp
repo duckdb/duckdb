@@ -116,5 +116,5 @@ unique_ptr<BoundSQLStatement> Binder::Bind(UpdateStatement &stmt) {
 	BindUpdateConstraints(*table, *this, context, *result);
 	// bind the default values
 	BindDefaultValues(table->columns, result->bound_defaults);
-	return result;
+	return move(result);
 }

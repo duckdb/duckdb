@@ -114,7 +114,7 @@ unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOpe
 		filter->expressions.push_back(move(f->filter));
 	}
 	filter->children.push_back(move(op));
-	return filter;
+	return move(filter);
 }
 
 void FilterPushdown::Filter::ExtractBindings() {

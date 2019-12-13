@@ -193,5 +193,5 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 		assert(distinct.return_type != TypeId::INVALID);
 	}
 
-	return result;
+	return move(result);
 }

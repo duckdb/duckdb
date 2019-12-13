@@ -9,5 +9,5 @@ unique_ptr<BoundTableRef> Binder::Bind(CrossProductRef &ref) {
 	auto result = make_unique<BoundCrossProductRef>();
 	result->left = Bind(*ref.left);
 	result->right = Bind(*ref.right);
-	return result;
+	return move(result);
 }
