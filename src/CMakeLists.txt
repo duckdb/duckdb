@@ -2,7 +2,7 @@ add_definitions(-DDUCKDB)
 
 if(NOT MSVC)
   set(CMAKE_CXX_FLAGS_DEBUG
-      "${CMAKE_CXX_FLAGS_DEBUG} -Wextra -Wno-unused-parameter -Wnarrowing")
+      "${CMAKE_CXX_FLAGS_DEBUG} -Wextra -Wno-unused-parameter -Wno-redundant-move -Wnarrowing")
 endif()
 
 if (AMALGAMATION_BUILD)

@@ -59,7 +59,7 @@ void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &outp
 		auto &column = data.entry->columns[i];
 		// return values:
 		// "cid", TypeId::INTEGER
-		assert(column.oid < std::numeric_limits<int32_t>::max());
+		assert(column.oid < (index_t) std::numeric_limits<int32_t>::max());
 
 		output.data[0].SetValue(index, Value::INTEGER((int32_t)column.oid));
 		// "name", TypeId::VARCHAR

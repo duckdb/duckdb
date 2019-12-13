@@ -9943,10 +9943,11 @@ YY_RULE_SETUP
           if (yytext[0] != '?' && strchr(yytext, '?'))
             /* Lex up to just before the ? character */
             nchars = strchr(yytext, '?') - yytext;
+			assert(nchars >= 0);
 
 					SET_YYLLOC();
 
-					if (nchars < yyleng)
+					if ((yy_size_t) nchars < yyleng)
 					{
 						/* Strip the unwanted chars from the token */
 						yyless(nchars);

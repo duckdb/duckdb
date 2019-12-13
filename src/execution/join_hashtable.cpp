@@ -341,6 +341,17 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	case JoinType::MARK:
 		// initialize all tuples with found_match to false
 		memset(ss->found_match, 0, sizeof(ss->found_match));
+		break;
+	default:
+		break;
+	}
+
+	switch (join_type) {
+	case JoinType::SEMI:
+	case JoinType::ANTI:
+	case JoinType::LEFT:
+	case JoinType::SINGLE:
+	case JoinType::MARK:
 	case JoinType::INNER: {
 		// create the selection vector linking to only non-empty entries
 		index_t count = 0;

@@ -1,6 +1,8 @@
 #include "catch.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
 
+#include <iostream>
+
 using namespace duckdb;
 using namespace std;
 
@@ -197,8 +199,8 @@ TEST_CASE("Test correct functioning of art EncodeFloat/EncodeDouble", "[art-enc]
         for(index_t i = 1; i < values.size(); i++) {
             uint64_t next_encoded = Key::EncodeDouble(values[i]);
             if (!(next_encoded > current_encoded)) {
-                printf("Failure in Key::EncodeDouble!\n");
-                printf("Generated value for key %lf (=> %llu) is bigger or equal to the generated value for key %lf (=> %llu)\n", values[i - 1], current_encoded, values[i], next_encoded);
+                cout << "Failure in Key::EncodeDouble!" << std::endl;
+                cout << "Generated value for key " << values[i - 1] << " (=> %" << current_encoded << ") is bigger or equal to the generated value for key " << values[i] << "(=> %" << next_encoded << ")" << std::endl;
 
             }
             REQUIRE(next_encoded > current_encoded);

@@ -2,8 +2,10 @@
 #include "duckdb/common/file_system.hpp"
 #include "dbgen.hpp"
 #include "test_helpers.hpp"
-#include <cfloat>
 #include "duckdb/execution/index/art/art_key.hpp"
+
+#include <cfloat>
+#include <iostream>
 
 using namespace duckdb;
 using namespace std;
@@ -1190,12 +1192,12 @@ TEST_CASE("ART Floating Point Small", "[art-float-small]") {
         string query = "SELECT COUNT(i) FROM numbers WHERE i >= "+ to_string(low)+ " and i <= "+ to_string(high)+ ";";
         result = con.Query(query);
         if (!CHECK_COLUMN(result, 0, {answer})) {
-            printf("Wrong answer on floating point real-small!\nQueries to reproduce:\n");
-            printf("CREATE TABLE numbers(i BIGINT);\n");
+            cout << "Wrong answer on floating point real-small!" << std::endl << "Queries to reproduce:" << std::endl;
+            cout << "CREATE TABLE numbers(i BIGINT);" << std::endl;
             for(index_t k = 0; k < n; k++) {
-                printf("INSERT INTO numbers VALUES (%lld);\n", keys[k]);
+                cout << "INSERT INTO numbers VALUES (" << keys[k] << ");" << std::endl;
             }
-            printf("%s\n", query.c_str());
+			cout << query << std::endl;
             REQUIRE(false);
         }
     }
@@ -1261,12 +1263,12 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
         string query = "SELECT COUNT(i) FROM numbers WHERE i >= "+ to_string(low)+ " and i <= "+ to_string(high)+ ";";
         result = con.Query(query);
         if (!CHECK_COLUMN(result, 0, {answer})) {
-            printf("Wrong answer on double!\nQueries to reproduce:\n");
-            printf("CREATE TABLE numbers(i BIGINT);\n");
+            cout << "Wrong answer on double!" << std::endl << "Queries to reproduce:" << std::endl;
+            cout << "CREATE TABLE numbers(i BIGINT);" << std::endl;
             for(index_t k = 0; k < n; k++) {
-                printf("INSERT INTO numbers VALUES (%lld);\n", keys[k]);
+                cout << "INSERT INTO numbers VALUES (" << keys[k] << ");" << std::endl;
             }
-            printf("%s\n", query.c_str());
+			cout << query << std::endl;
             REQUIRE(false);
         }
     }
@@ -1332,12 +1334,12 @@ TEST_CASE("ART Floating Point", "[art-float][.]") {
         string query = "SELECT COUNT(i) FROM numbers WHERE i >= "+ to_string(low)+ " and i <= "+ to_string(high)+ ";";
         result = con.Query(query);
         if (!CHECK_COLUMN(result, 0, {answer})) {
-            printf("Wrong answer on floating point real-small!\nQueries to reproduce:\n");
-            printf("CREATE TABLE numbers(i BIGINT);\n");
+            cout << "Wrong answer on floating point real-small!" << std::endl << "Queries to reproduce:" << std::endl;
+            cout << "CREATE TABLE numbers(i BIGINT);" << std::endl;
             for(index_t k = 0; k < n; k++) {
-                printf("INSERT INTO numbers VALUES (%lld);\n", keys[k]);
+                cout << "INSERT INTO numbers VALUES (" << keys[k] << ");" << std::endl;
             }
-            printf("%s\n", query.c_str());
+			cout << query << std::endl;
             REQUIRE(false);
         }
     }
@@ -1403,12 +1405,12 @@ TEST_CASE("ART Floating Point Double", "[art-double][.]") {
         string query = "SELECT COUNT(i) FROM numbers WHERE i >= "+ to_string(low)+ " and i <= "+ to_string(high)+ ";";
         result = con.Query(query);
         if (!CHECK_COLUMN(result, 0, {answer})) {
-            printf("Wrong answer on double!\nQueries to reproduce:\n");
-            printf("CREATE TABLE numbers(i BIGINT);\n");
+            cout << "Wrong answer on floating point real-small!" << std::endl << "Queries to reproduce:" << std::endl;
+            cout << "CREATE TABLE numbers(i BIGINT);" << std::endl;
             for(index_t k = 0; k < n; k++) {
-                printf("INSERT INTO numbers VALUES (%lld);\n", keys[k]);
+                cout << "INSERT INTO numbers VALUES (" << keys[k] << ");" << std::endl;
             }
-            printf("%s\n", query.c_str());
+			cout << query << std::endl;
             REQUIRE(false);
         }
     }
