@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/execution/operator/schema/physical_drop.hpp
+// duckdb/execution/operator/schema/physical_drop.hpp
 //
 //
 //===----------------------------------------------------------------------===//

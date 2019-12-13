@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/parser/statement/drop_statement.hpp
+// duckdb/parser/statement/drop_statement.hpp
 //
 //
 //===----------------------------------------------------------------------===//

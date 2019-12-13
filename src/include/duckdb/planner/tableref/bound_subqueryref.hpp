@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/planner/tableref/bound_subqueryref.hpp
+// duckdb/planner/tableref/bound_subqueryref.hpp
 //
 //
 //===----------------------------------------------------------------------===//

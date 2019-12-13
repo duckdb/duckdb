@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/parser/expression/subquery_expression.hpp
+// duckdb/parser/expression/subquery_expression.hpp
 //
 //
 //===----------------------------------------------------------------------===//

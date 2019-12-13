@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/function/table/sqlite_functions.hpp
+// duckdb/function/table/sqlite_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//

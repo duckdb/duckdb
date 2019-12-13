@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/common/vector_operations/vector_operations.hpp
+// duckdb/common/vector_operations/vector_operations.hpp
 //
 //
 //===----------------------------------------------------------------------===//

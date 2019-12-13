@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/optimizer/rule/constant_folding.hpp
+// duckdb/optimizer/rule/constant_folding.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/common/operator/numeric_functions.hpp
+// duckdb/common/operator/numeric_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//

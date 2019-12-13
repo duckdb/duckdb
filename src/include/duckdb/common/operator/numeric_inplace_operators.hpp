@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/common/operator/numeric_inplace_operators.hpp
+// duckdb/common/operator/numeric_inplace_operators.hpp
 //
 //
 //===----------------------------------------------------------------------===//

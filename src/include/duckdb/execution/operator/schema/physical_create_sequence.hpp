@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/execution/operator/schema/physical_create_sequence.hpp
+// duckdb/execution/operator/schema/physical_create_sequence.hpp
 //
 //
 //===----------------------------------------------------------------------===//

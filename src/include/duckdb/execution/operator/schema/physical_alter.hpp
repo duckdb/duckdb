@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/execution/operator/schema/physical_alter.hpp
+// duckdb/execution/operator/schema/physical_alter.hpp
 //
 //
 //===----------------------------------------------------------------------===//

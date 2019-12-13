@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/planner/subquery/has_correlated_expressions.hpp
+// duckdb/planner/subquery/has_correlated_expressions.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/parser/constraints/check_constraint.hpp
+// duckdb/parser/constraints/check_constraint.hpp
 //
 //
 //===----------------------------------------------------------------------===//

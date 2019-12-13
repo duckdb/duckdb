@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/planner/expression/bound_aggregate_expression.hpp
+// duckdb/planner/expression/bound_aggregate_expression.hpp
 //
 //
 //===----------------------------------------------------------------------===//

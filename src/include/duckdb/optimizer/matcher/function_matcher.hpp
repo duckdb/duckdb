@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/optimizer/matcher/function_matcher.hpp
+// duckdb/optimizer/matcher/function_matcher.hpp
 //
 //
 //===----------------------------------------------------------------------===//

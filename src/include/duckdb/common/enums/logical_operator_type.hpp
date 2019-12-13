@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/common/enums/logical_operator_type.hpp
+// duckdb/common/enums/logical_operator_type.hpp
 //
 //
 //===----------------------------------------------------------------------===//

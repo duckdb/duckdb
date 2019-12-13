@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/parser/tableref/crossproductref.hpp
+// duckdb/parser/tableref/crossproductref.hpp
 //
 //
 //===----------------------------------------------------------------------===//

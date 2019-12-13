@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/execution/operator/scan/physical_table_scan.hpp
+// duckdb/execution/operator/scan/physical_table_scan.hpp
 //
 //
 //===----------------------------------------------------------------------===//

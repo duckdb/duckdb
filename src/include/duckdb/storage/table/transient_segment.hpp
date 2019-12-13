@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/storage/table/transient_segment.hpp
+// duckdb/storage/table/transient_segment.hpp
 //
 //
 //===----------------------------------------------------------------------===//

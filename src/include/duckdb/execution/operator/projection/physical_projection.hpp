@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/execution/operator/projection/physical_projection.hpp
+// duckdb/execution/operator/projection/physical_projection.hpp
 //
 //
 //===----------------------------------------------------------------------===//

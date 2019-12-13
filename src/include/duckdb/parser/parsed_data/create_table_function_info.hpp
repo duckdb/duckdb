@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/parser/parsed_data/create_table_function_info.hpp
+// duckdb/parser/parsed_data/create_table_function_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//

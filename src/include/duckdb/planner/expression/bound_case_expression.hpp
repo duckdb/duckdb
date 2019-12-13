@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/planner/expression/bound_case_expression.hpp
+// duckdb/planner/expression/bound_case_expression.hpp
 //
 //
 //===----------------------------------------------------------------------===//

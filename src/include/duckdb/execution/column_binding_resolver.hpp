@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/execution/column_binding_resolver.hpp
+// duckdb/execution/column_binding_resolver.hpp
 //
 //
 //===----------------------------------------------------------------------===//

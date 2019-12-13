@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/parser/tableref/table_function_ref.hpp
+// duckdb/parser/tableref/table_function_ref.hpp
 //
 //
 //===----------------------------------------------------------------------===//

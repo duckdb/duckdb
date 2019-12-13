@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/planner/statement/bound_select_statement.hpp
+// duckdb/planner/statement/bound_select_statement.hpp
 //
 //
 //===----------------------------------------------------------------------===//

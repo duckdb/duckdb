@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/optimizer/rule/conjunction_simplification.hpp
+// duckdb/optimizer/rule/conjunction_simplification.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/planner/operator/logical_delim_get.hpp
+// duckdb/planner/operator/logical_delim_get.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/execution/operator/scan/physical_empty_result.hpp
+// duckdb/execution/operator/scan/physical_empty_result.hpp
 //
 //
 //===----------------------------------------------------------------------===//

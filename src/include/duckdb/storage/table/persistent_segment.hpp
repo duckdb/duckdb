@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/storage/table/persistent_segment.hpp
+// duckdb/storage/table/persistent_segment.hpp
 //
 //
 //===----------------------------------------------------------------------===//

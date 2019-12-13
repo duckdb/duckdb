@@ -108,8 +108,7 @@ header_top = "//===-------------------------------------------------------------
 header_top +=  "//                         DuckDB\n"+ "//\n"
 header_bottom = "//\n" +  "//\n"
 header_bottom+= "//===----------------------------------------------------------------------===//\n\n"
-script_dir =  os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-script_dir = os.path.join(script_dir,'src/include')
+base_dir = os.path.join(os.getcwd(),'src/include')
 
 def format_file(f, full_path, directory, ext, sort_includes):
 	if f == 'list.hpp':
@@ -122,7 +121,7 @@ def format_file(f, full_path, directory, ext, sort_includes):
 				file.write('#include "%s"\n' % (x))
 	elif ext == ".hpp" and directory.startswith("src/include"):
 		# format header in files
-		header_middle ="// "+ os.path.relpath(full_path, script_dir) + "\n"
+		header_middle ="// "+ os.path.relpath(full_path, base_dir) + "\n"
 		file = open(full_path, "r")
 		lines = file.readlines()
 		file.close()

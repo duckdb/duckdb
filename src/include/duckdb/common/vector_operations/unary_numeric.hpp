@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/common/vector_operations/unary_numeric.hpp
+// duckdb/common/vector_operations/unary_numeric.hpp
 //
 //
 //===----------------------------------------------------------------------===//

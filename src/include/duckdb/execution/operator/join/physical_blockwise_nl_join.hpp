@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/execution/operator/join/physical_blockwise_nl_join.hpp
+// duckdb/execution/operator/join/physical_blockwise_nl_join.hpp
 //
 //
 //===----------------------------------------------------------------------===//

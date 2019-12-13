@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/parser/statement/create_schema_statement.hpp
+// duckdb/parser/statement/create_schema_statement.hpp
 //
 //
 //===----------------------------------------------------------------------===//

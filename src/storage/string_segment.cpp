@@ -7,13 +7,6 @@
 using namespace duckdb;
 using namespace std;
 
-#ifdef DEBUG
-static bool IsValidStringLocation(string_location_t location) {
-	return location.offset < Storage::BLOCK_SIZE &&
-	       (location.block_id == INVALID_BLOCK || location.block_id >= MAXIMUM_BLOCK);
-}
-#endif
-
 StringSegment::StringSegment(BufferManager &manager, index_t row_start, block_id_t block)
     : UncompressedSegment(manager, TypeId::VARCHAR, row_start) {
 	this->max_vector_count = 0;
@@ -578,13 +571,13 @@ void StringSegment::MergeUpdateInfo(UpdateInfo *node, Vector &update, row_t *ids
 	// now we perform a merge of the new ids with the old ids
 	auto merge = [&](index_t id, index_t aidx, index_t bidx, index_t count) {
 		// new_id and old_id are the same, insert the old data in the UpdateInfo
-		assert(IsValidStringLocation(old_data[bidx]));
+		assert(old_data[bidx].IsValid());
 		info_data[count] = old_data[bidx];
 		node->tuples[count] = id;
 	};
 	auto pick_new = [&](index_t id, index_t aidx, index_t count) {
 		// new_id comes before the old id, insert the base table data into the update info
-		assert(IsValidStringLocation(base_data[aidx]));
+		assert(base_data[aidx].IsValid());
 		info_data[count] = base_data[aidx];
 		node->nullmask[id] = base_nullmask[aidx];
 
@@ -592,7 +585,7 @@ void StringSegment::MergeUpdateInfo(UpdateInfo *node, Vector &update, row_t *ids
 	};
 	auto pick_old = [&](index_t id, index_t bidx, index_t count) {
 		// old_id comes before new_id, insert the old data
-		assert(IsValidStringLocation(old_data[bidx]));
+		assert(old_data[bidx].IsValid());
 		info_data[count] = old_data[bidx];
 		node->tuples[count] = id;
 	};

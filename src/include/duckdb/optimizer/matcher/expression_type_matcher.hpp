@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/optimizer/matcher/expression_type_matcher.hpp
+// duckdb/optimizer/matcher/expression_type_matcher.hpp
 //
 //
 //===----------------------------------------------------------------------===//

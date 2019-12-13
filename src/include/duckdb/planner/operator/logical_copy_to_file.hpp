@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/planner/operator/logical_copy_to_file.hpp
+// duckdb/planner/operator/logical_copy_to_file.hpp
 //
 //
 //===----------------------------------------------------------------------===//

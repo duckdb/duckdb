@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/function/scalar/string_functions.hpp
+// duckdb/function/scalar/string_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//

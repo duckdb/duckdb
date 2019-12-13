@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/execution/operator/persistent/physical_delete.hpp
+// duckdb/execution/operator/persistent/physical_delete.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/planner/expression_binder/having_binder.hpp
+// duckdb/planner/expression_binder/having_binder.hpp
 //
 //
 //===----------------------------------------------------------------------===//

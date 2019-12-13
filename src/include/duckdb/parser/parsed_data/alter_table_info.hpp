@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/parser/parsed_data/alter_table_info.hpp
+// duckdb/parser/parsed_data/alter_table_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/parser/constraints/unique_constraint.hpp
+// duckdb/parser/constraints/unique_constraint.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/planner/tableref/bound_expressionlistref.hpp
+// duckdb/planner/tableref/bound_expressionlistref.hpp
 //
 //
 //===----------------------------------------------------------------------===//

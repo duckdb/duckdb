@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/planner/logical_operator_visitor.hpp
+// duckdb/planner/logical_operator_visitor.hpp
 //
 //
 //===----------------------------------------------------------------------===//

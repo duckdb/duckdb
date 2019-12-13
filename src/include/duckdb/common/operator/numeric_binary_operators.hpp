@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/common/operator/numeric_binary_operators.hpp
+// duckdb/common/operator/numeric_binary_operators.hpp
 //
 //
 //===----------------------------------------------------------------------===//

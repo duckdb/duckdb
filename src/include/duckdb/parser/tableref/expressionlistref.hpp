@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/parser/tableref/expressionlistref.hpp
+// duckdb/parser/tableref/expressionlistref.hpp
 //
 //
 //===----------------------------------------------------------------------===//

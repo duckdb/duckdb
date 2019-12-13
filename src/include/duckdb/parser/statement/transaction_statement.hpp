@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/parser/statement/transaction_statement.hpp
+// duckdb/parser/statement/transaction_statement.hpp
 //
 //
 //===----------------------------------------------------------------------===//

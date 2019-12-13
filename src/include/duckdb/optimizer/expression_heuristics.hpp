@@ -1,7 +1,8 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/optimizer/expression_heuristics.hpp
+// duckdb/optimizer/expression_heuristics.hpp
 //
 //
 //===----------------------------------------------------------------------===//
+

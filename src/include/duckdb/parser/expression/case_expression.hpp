@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/parser/expression/case_expression.hpp
+// duckdb/parser/expression/case_expression.hpp
 //
 //
 //===----------------------------------------------------------------------===//

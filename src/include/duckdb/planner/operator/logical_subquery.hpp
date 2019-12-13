@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/planner/operator/logical_subquery.hpp
+// duckdb/planner/operator/logical_subquery.hpp
 //
 //
 //===----------------------------------------------------------------------===//

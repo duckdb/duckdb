@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/common/vector_operations/scatter_loops.hpp
+// duckdb/common/vector_operations/scatter_loops.hpp
 //
 //
 //===----------------------------------------------------------------------===//

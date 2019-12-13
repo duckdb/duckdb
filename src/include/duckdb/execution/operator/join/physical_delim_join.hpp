@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/execution/operator/join/physical_delim_join.hpp
+// duckdb/execution/operator/join/physical_delim_join.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/planner/operator/logical_any_join.hpp
+// duckdb/planner/operator/logical_any_join.hpp
 //
 //
 //===----------------------------------------------------------------------===//

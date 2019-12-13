@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/parser/statement/select_statement.hpp
+// duckdb/parser/statement/select_statement.hpp
 //
 //
 //===----------------------------------------------------------------------===//

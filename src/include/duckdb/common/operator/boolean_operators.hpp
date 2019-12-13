@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/common/operator/boolean_operators.hpp
+// duckdb/common/operator/boolean_operators.hpp
 //
 //
 //===----------------------------------------------------------------------===//

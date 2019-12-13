@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/execution/physical_plan_generator.hpp
+// duckdb/execution/physical_plan_generator.hpp
 //
 //
 //===----------------------------------------------------------------------===//

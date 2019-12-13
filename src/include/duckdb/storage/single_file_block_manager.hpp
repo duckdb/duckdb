@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/storage/single_file_block_manager.hpp
+// duckdb/storage/single_file_block_manager.hpp
 //
 //
 //===----------------------------------------------------------------------===//

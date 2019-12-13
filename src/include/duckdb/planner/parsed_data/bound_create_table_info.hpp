@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// ../../../src/include/duckdb/planner/parsed_data/bound_create_table_info.hpp
+// duckdb/planner/parsed_data/bound_create_table_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
