@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// optimizer/matcher/expression_matcher.hpp
+// ../../../src/include/duckdb/optimizer/matcher/expression_matcher.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -114,7 +114,6 @@ public:
 
 	bool Match(Expression *expr_, vector<Expression *> &bindings) override;
 };
-
 
 class FunctionExpressionMatcher : public ExpressionMatcher {
 public:

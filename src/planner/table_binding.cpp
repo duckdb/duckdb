@@ -153,11 +153,10 @@ void TableFunctionBinding::GenerateAllColumnExpressions(BindContext &context,
 	}
 }
 
-
-GenericBinding::GenericBinding(const string &alias, vector<SQLType> coltypes, vector<string> colnames, index_t index) :
-	Binding(BindingType::GENERIC, alias, index), types(move(coltypes)), names(move(colnames)) {
+GenericBinding::GenericBinding(const string &alias, vector<SQLType> coltypes, vector<string> colnames, index_t index)
+    : Binding(BindingType::GENERIC, alias, index), types(move(coltypes)), names(move(colnames)) {
 	assert(types.size() == names.size());
-	for(index_t i = 0; i < names.size(); i++) {
+	for (index_t i = 0; i < names.size(); i++) {
 		auto &name = names[i];
 		if (name_map.find(name) != name_map.end()) {
 			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias.c_str(), name.c_str());
@@ -185,7 +184,8 @@ BindResult GenericBinding::Bind(ColumnRefExpression &colref, index_t depth) {
 	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(sql_type), binding, depth), sql_type);
 }
 
-void GenericBinding::GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) {
+void GenericBinding::GenerateAllColumnExpressions(BindContext &context,
+                                                  vector<unique_ptr<ParsedExpression>> &select_list) {
 	for (auto &column_name : names) {
 		select_list.push_back(make_unique<ColumnRefExpression>(column_name, alias));
 	}

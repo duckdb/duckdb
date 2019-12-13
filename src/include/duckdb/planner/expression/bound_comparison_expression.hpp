@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/expression/bound_comparison_expression.hpp
+// ../../../src/include/duckdb/planner/expression/bound_comparison_expression.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/vector_operations/fold_loops.hpp
+// ../../../src/include/duckdb/common/vector_operations/fold_loops.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -22,7 +22,7 @@ static inline bool fold_loop_function(LEFT_TYPE *__restrict ldata, RESULT_TYPE *
 		// skip null values in the operation
 		index_t i = 0;
 		// find the first null value
-		for(; i < count; i++) {
+		for (; i < count; i++) {
 			index_t index = HAS_SEL_VECTOR ? sel_vector[i] : i;
 			if (!nullmask[index]) {
 				*result = ldata[index];
@@ -33,7 +33,7 @@ static inline bool fold_loop_function(LEFT_TYPE *__restrict ldata, RESULT_TYPE *
 			return false;
 		}
 		// now perform the rest of the iteration
-		for(i++; i < count; i++) {
+		for (i++; i < count; i++) {
 			index_t index = HAS_SEL_VECTOR ? sel_vector[i] : i;
 			if (!nullmask[index]) {
 				*result = OP::Operation(ldata[index], *result);
@@ -42,7 +42,7 @@ static inline bool fold_loop_function(LEFT_TYPE *__restrict ldata, RESULT_TYPE *
 	} else {
 		// quick path: no NULL values
 		*result = ldata[HAS_SEL_VECTOR ? sel_vector[0] : 0];
-		for(index_t i = 1; i < count; i++) {
+		for (index_t i = 1; i < count; i++) {
 			*result = OP::Operation(ldata[HAS_SEL_VECTOR ? sel_vector[i] : i], *result);
 		}
 	}
@@ -52,9 +52,11 @@ static inline bool fold_loop_function(LEFT_TYPE *__restrict ldata, RESULT_TYPE *
 template <class LEFT_TYPE, class RESULT_TYPE, class OP> bool templated_unary_fold(Vector &input, RESULT_TYPE *result) {
 	auto ldata = (LEFT_TYPE *)input.data;
 	if (input.sel_vector) {
-		return fold_loop_function<LEFT_TYPE, RESULT_TYPE, OP, true>(ldata, result, input.count, input.sel_vector, input.nullmask);
+		return fold_loop_function<LEFT_TYPE, RESULT_TYPE, OP, true>(ldata, result, input.count, input.sel_vector,
+		                                                            input.nullmask);
 	} else {
-		return fold_loop_function<LEFT_TYPE, RESULT_TYPE, OP, false>(ldata, result, input.count, input.sel_vector, input.nullmask);
+		return fold_loop_function<LEFT_TYPE, RESULT_TYPE, OP, false>(ldata, result, input.count, input.sel_vector,
+		                                                             input.nullmask);
 	}
 }
 

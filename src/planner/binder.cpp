@@ -53,7 +53,8 @@ unique_ptr<BoundSQLStatement> Binder::Bind(SQLStatement &statement) {
 	case StatementType::EXPLAIN:
 		return Bind((ExplainStatement &)statement);
 	default:
-		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind", StatementTypeToString(statement.type).c_str());
+		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
+		                              StatementTypeToString(statement.type).c_str());
 	}
 }
 

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/constraints/bound_unique_constraint.hpp
+// ../../../src/include/duckdb/planner/constraints/bound_unique_constraint.hpp
 //
 //
 //===----------------------------------------------------------------------===//

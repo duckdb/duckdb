@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/helper/physical_pragma.hpp
+// ../../../src/include/duckdb/execution/operator/helper/physical_pragma.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -21,6 +21,7 @@ public:
 	}
 
 	unique_ptr<PragmaInfo> info;
+
 public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };

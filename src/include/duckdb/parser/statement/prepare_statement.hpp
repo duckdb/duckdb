@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/statement/prepare_statement.hpp
+// ../../../src/include/duckdb/parser/statement/prepare_statement.hpp
 //
 //
 //===----------------------------------------------------------------------===//

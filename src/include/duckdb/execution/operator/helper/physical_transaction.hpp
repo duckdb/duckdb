@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/helper/physical_transaction.hpp
+// ../../../src/include/duckdb/execution/operator/helper/physical_transaction.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -21,6 +21,7 @@ public:
 	}
 
 	unique_ptr<TransactionInfo> info;
+
 public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };

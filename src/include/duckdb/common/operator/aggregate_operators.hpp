@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/operator/aggregate_operators.hpp
+// ../../../src/include/duckdb/common/operator/aggregate_operators.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/serializer/buffered_serializer.hpp
+// ../../../src/include/duckdb/common/serializer/buffered_serializer.hpp
 //
 //
 //===----------------------------------------------------------------------===//

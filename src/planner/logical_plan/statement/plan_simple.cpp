@@ -7,7 +7,7 @@ using namespace std;
 
 unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSimpleStatement &stmt) {
 	LogicalOperatorType type;
-	switch(stmt.type) {
+	switch (stmt.type) {
 	case StatementType::ALTER:
 		type = LogicalOperatorType::ALTER;
 		break;

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/enums/physical_operator_type.hpp
+// ../../../src/include/duckdb/common/enums/physical_operator_type.hpp
 //
 //
 //===----------------------------------------------------------------------===//

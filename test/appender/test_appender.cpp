@@ -64,7 +64,7 @@ TEST_CASE("Basic appender tests", "[appender]") {
 			appender.Append<int8_t>(1);
 			appender.Append<int16_t>(1);
 			appender.Append<int64_t>(1);
-			appender.Append<const char*>("hello");
+			appender.Append<const char *>("hello");
 			appender.Append<double>(3.33);
 			appender.EndRow();
 		}
@@ -111,7 +111,6 @@ TEST_CASE("Test AppendRow", "[appender]") {
 	// check that the values have been added to the database
 	result = con.Query("SELECT SUM(i) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {2000}));
-
 
 	{
 		Appender appender(con, "integers");
@@ -161,7 +160,8 @@ TEST_CASE("Test AppendRow", "[appender]") {
 	// now append a bunch of values
 	{
 		Appender appender(con, "dates");
-		appender.AppendRow(Date::FromDate(1992, 1, 1), Time::FromTime(1, 1, 1, 0), Timestamp::FromDatetime(Date::FromDate(1992, 1, 1), Time::FromTime(1, 1, 1, 0)));
+		appender.AppendRow(Date::FromDate(1992, 1, 1), Time::FromTime(1, 1, 1, 0),
+		                   Timestamp::FromDatetime(Date::FromDate(1992, 1, 1), Time::FromTime(1, 1, 1, 0)));
 	}
 	result = con.Query("SELECT * FROM dates");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1992, 1, 1)}));

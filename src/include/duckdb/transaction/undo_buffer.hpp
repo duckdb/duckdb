@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// transaction/undo_buffer.hpp
+// ../../../src/include/duckdb/transaction/undo_buffer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -41,6 +41,7 @@ public:
 		data_ptr_t start;
 		data_ptr_t end;
 	};
+
 public:
 	UndoBuffer();
 
@@ -66,7 +67,8 @@ private:
 
 private:
 	template <class T> void IterateEntries(UndoBuffer::IteratorState &state, T &&callback);
-	template <class T> void IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::IteratorState &end_state, T &&callback);
+	template <class T>
+	void IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::IteratorState &end_state, T &&callback);
 	template <class T> void ReverseIterateEntries(T &&callback);
 };
 

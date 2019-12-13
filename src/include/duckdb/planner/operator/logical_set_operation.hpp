@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/operator/logical_set_operation.hpp
+// ../../../src/include/duckdb/planner/operator/logical_set_operation.hpp
 //
 //
 //===----------------------------------------------------------------------===//

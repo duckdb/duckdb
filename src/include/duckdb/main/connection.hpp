@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// main/connection.hpp
+// ../../../src/include/duckdb/main/connection.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -33,6 +33,7 @@ public:
 	DuckDB &db;
 	unique_ptr<ClientContext> context;
 	warning_callback warning_cb;
+
 public:
 	//! Returns query profiling information for the current query
 	string GetProfilingInformation(ProfilerPrintFormat format = ProfilerPrintFormat::QUERY_TREE);
@@ -76,6 +77,7 @@ public:
 
 	//! Appends a DataChunk to the specified table
 	void Append(TableDescription &description, DataChunk &chunk);
+
 private:
 	unique_ptr<QueryResult> QueryParamsRecursive(string query, vector<Value> &values);
 

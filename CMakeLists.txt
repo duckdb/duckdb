@@ -8,7 +8,8 @@ project(DuckDB)
 set(DUCKDB_MAJOR_VERSION 0)
 set(DUCKDB_MINOR_VERSION 1)
 set(DUCKDB_PATCH_VERSION 1)
-set(DUCKDB_VERSION ${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION})
+set(DUCKDB_VERSION
+    ${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION})
 
 find_package(Threads REQUIRED)
 
@@ -23,21 +24,29 @@ set(CMAKE_MACOSX_RPATH 1)
 # Determine install paths
 set(INSTALL_LIB_DIR lib CACHE PATH "Installation directory for libraries")
 set(INSTALL_BIN_DIR bin CACHE PATH "Installation directory for executables")
-set(INSTALL_INCLUDE_DIR include CACHE PATH "Installation directory for header files")
+set(INSTALL_INCLUDE_DIR
+    include
+    CACHE PATH "Installation directory for header files")
 if(WIN32 AND NOT CYGWIN)
-    set(DEF_INSTALL_CMAKE_DIR cmake)
+  set(DEF_INSTALL_CMAKE_DIR cmake)
 else()
-    set(DEF_INSTALL_CMAKE_DIR lib/cmake/DuckDB)
+  set(DEF_INSTALL_CMAKE_DIR lib/cmake/DuckDB)
 endif()
-set(INSTALL_CMAKE_DIR ${DEF_INSTALL_CMAKE_DIR} CACHE PATH "Installation directory for CMake files")
+set(INSTALL_CMAKE_DIR
+    ${DEF_INSTALL_CMAKE_DIR}
+    CACHE PATH "Installation directory for CMake files")
 set(DUCKDB_EXPORT_SET "DuckDBExports")
 
 # Make relative install paths absolute
-foreach(p LIB BIN INCLUDE CMAKE)
-    set(var INSTALL_${p}_DIR)
-    if(NOT IS_ABSOLUTE "${${var}}")
-        set(${var} "${CMAKE_INSTALL_PREFIX}/${${var}}")
-    endif()
+foreach(p
+        LIB
+        BIN
+        INCLUDE
+        CMAKE)
+  set(var INSTALL_${p}_DIR)
+  if(NOT IS_ABSOLUTE "${${var}}")
+    set(${var} "${CMAKE_INSTALL_PREFIX}/${${var}}")
+  endif()
 endforeach()
 
 set(M32_FLAG "")
@@ -65,7 +74,9 @@ if(${EXPLICIT_EXCEPTIONS})
   set(CXX_EXTRA "${CXX_EXTRA} -fexceptions")
 endif()
 
-option(AMALGAMATION_BUILD "Build from the amalgamation files, rather than from the normal sources." FALSE)
+option(AMALGAMATION_BUILD
+       "Build from the amalgamation files, rather than from the normal sources."
+       FALSE)
 
 if(NOT MSVC)
   set(CMAKE_CXX_FLAGS_DEBUG
@@ -98,7 +109,6 @@ endif()
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
-
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(DEFAULT_BUILD_TYPE "Release")
@@ -170,31 +180,37 @@ endif()
 
 # Write the export set for build and install tree
 install(EXPORT "${DUCKDB_EXPORT_SET}" DESTINATION "${INSTALL_CMAKE_DIR}")
-export(EXPORT "${DUCKDB_EXPORT_SET}" FILE "${PROJECT_BINARY_DIR}/${DUCKDB_EXPORT_SET}.cmake")
+export(EXPORT "${DUCKDB_EXPORT_SET}"
+       FILE "${PROJECT_BINARY_DIR}/${DUCKDB_EXPORT_SET}.cmake")
 
 # Only write the cmake package configuration if the templates exist
 set(CMAKE_CONFIG_TEMPLATE "${CMAKE_SOURCE_DIR}/DuckDBConfig.cmake.in")
-set(CMAKE_CONFIG_VERSION_TEMPLATE "${CMAKE_SOURCE_DIR}/DuckDBConfigVersion.cmake.in")
-if (EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
+set(CMAKE_CONFIG_VERSION_TEMPLATE
+    "${CMAKE_SOURCE_DIR}/DuckDBConfigVersion.cmake.in")
+if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
 
   # Configure cmake package config for the build tree
   set(CONF_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/src/include")
-  configure_file(${CMAKE_CONFIG_TEMPLATE} "${PROJECT_BINARY_DIR}/DuckDBConfig.cmake" @ONLY)
+  configure_file(${CMAKE_CONFIG_TEMPLATE}
+                 "${PROJECT_BINARY_DIR}/DuckDBConfig.cmake" @ONLY)
 
   # Configure cmake package config for the install tree
-  file(RELATIVE_PATH REL_INCLUDE_DIR "${INSTALL_CMAKE_DIR}" "${INSTALL_INCLUDE_DIR}")
+  file(RELATIVE_PATH
+       REL_INCLUDE_DIR
+       "${INSTALL_CMAKE_DIR}"
+       "${INSTALL_INCLUDE_DIR}")
   set(CONF_INCLUDE_DIRS "\${DuckDB_CMAKE_DIR}/${REL_INCLUDE_DIR}")
-  configure_file(${CMAKE_CONFIG_TEMPLATE}
+  configure_file(
+    ${CMAKE_CONFIG_TEMPLATE}
     "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/DuckDBConfig.cmake" @ONLY)
 
   # Configure cmake package version for build and install tree
   configure_file(${CMAKE_CONFIG_VERSION_TEMPLATE}
-    "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake" @ONLY)
+                 "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake" @ONLY)
 
   # Install the cmake package
   install(
-    FILES
-      "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/DuckDBConfig.cmake"
-      "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake"
+    FILES "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/DuckDBConfig.cmake"
+          "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake"
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()

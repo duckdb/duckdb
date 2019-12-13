@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/parsed_data/alter_table_info.hpp
+// ../../../src/include/duckdb/parser/parsed_data/alter_table_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -17,7 +17,8 @@ enum class AlterType : uint8_t { INVALID = 0, ALTER_TABLE = 1 };
 struct AlterInfo : public ParseInfo {
 	AlterInfo(AlterType type) : type(type) {
 	}
-	virtual ~AlterInfo(){}
+	virtual ~AlterInfo() {
+	}
 
 	AlterType type;
 
@@ -31,7 +32,8 @@ struct AlterTableInfo : public AlterInfo {
 	AlterTableInfo(AlterTableType type, string schema, string table)
 	    : AlterInfo(AlterType::ALTER_TABLE), alter_table_type(type), schema(schema), table(table) {
 	}
-	virtual ~AlterTableInfo() override {}
+	virtual ~AlterTableInfo() override {
+	}
 
 	AlterTableType alter_table_type;
 	//! Schema name to alter to
@@ -47,7 +49,8 @@ struct RenameColumnInfo : public AlterTableInfo {
 	RenameColumnInfo(string schema, string table, string name, string new_name)
 	    : AlterTableInfo(AlterTableType::RENAME_COLUMN, schema, table), name(name), new_name(new_name) {
 	}
-	~RenameColumnInfo() override {}
+	~RenameColumnInfo() override {
+	}
 
 	//! Column old name
 	string name;

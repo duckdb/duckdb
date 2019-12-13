@@ -7,8 +7,8 @@ using namespace duckdb;
 using namespace std;
 
 BoundAggregateExpression::BoundAggregateExpression(TypeId return_type, AggregateFunction function, bool distinct)
-    : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, return_type),
-      function(function), distinct(distinct) {
+    : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, return_type), function(function),
+      distinct(distinct) {
 }
 
 string BoundAggregateExpression::ToString() const {
@@ -16,9 +16,8 @@ string BoundAggregateExpression::ToString() const {
 	if (distinct) {
 		result += "DISTINCT ";
 	}
-	StringUtil::Join(children, children.size(), ", ", [](const unique_ptr<Expression>& child){
-		return child->GetName();
-	});
+	StringUtil::Join(children, children.size(), ", ",
+	                 [](const unique_ptr<Expression> &child) { return child->GetName(); });
 	result += ")";
 	return result;
 }

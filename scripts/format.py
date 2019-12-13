@@ -9,7 +9,7 @@ sql_format_command = 'pg_format "${FILE}" -o "${FILE}.out" && mv "${FILE}.out" "
 cmake_format_command = 'cmake-format -i "${FILE}"'
 extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', '.sql', '.txt']
 formatted_directories = ['src', 'benchmark', 'test', 'tools', 'examples']
-ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpce_flat_input.hpp', 'test_csv_header.hpp', 'duckdb.cpp', 'duckdb.hpp', 'json.hpp']
+ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpce_flat_input.hpp', 'test_csv_header.hpp', 'duckdb.cpp', 'duckdb.hpp', 'json.hpp', 'sqlite3.h']
 confirm = True
 format_all = False
 
@@ -41,11 +41,12 @@ if revision == '--all':
 
 def can_format_file(full_path):
 	global extensions, formatted_directories, ignored_files
+	fname = full_path.split(os.path.sep)[-1]
 	# check ignored files
-	if full_path in ignored_files:
+	if fname in ignored_files:
 		return False
 	# skip files that end in .txt but are not CMakeLists.txt
-	if full_path.endswith('.txt') and 'CMakeLists.txt' not in full_path:
+	if full_path.endswith('.txt') and fname != 'CMakeLists.txt':
 		return False
 	found = False
 	# check file extension
@@ -157,7 +158,7 @@ def format_directory(directory, sort_includes=False):
 			print(full_path)
 			format_directory(full_path, sort_includes)
 		elif can_format_file(full_path):
-			format_file(f, full_path, directory, f.split('.')[-1], sort_includes)
+			format_file(f, full_path, directory, '.' + f.split('.')[-1], sort_includes)
 
 if format_all:
 	os.system(cmake_format_command.replace("${FILE}", "CMakeLists.txt"))
@@ -171,5 +172,5 @@ else:
 		splits = full_path.split(os.path.sep)
 		fname = splits[-1]
 		dirname = os.path.sep.join(splits[:-1])
-		ext = full_path.split('.')[-1]
+		ext = '.' + full_path.split('.')[-1]
 		format_file([-1], full_path, dirname, ext, False)

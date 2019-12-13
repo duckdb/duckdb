@@ -5,6 +5,6 @@ using namespace duckdb;
 using namespace std;
 
 void PhysicalAlter::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
-	context.catalog.AlterTable(context, (AlterTableInfo*) info.get());
+	context.catalog.AlterTable(context, (AlterTableInfo *)info.get());
 	state->finished = true;
 }

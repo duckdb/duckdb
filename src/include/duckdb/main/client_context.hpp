@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// main/client_context.hpp
+// ../../../src/include/duckdb/main/client_context.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -96,11 +96,11 @@ public:
 
 	void RegisterAppender(Appender *appender);
 	void RemoveAppender(Appender *appender);
+
 private:
 	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
 	//! true.
 	string VerifyQuery(string query, unique_ptr<SQLStatement> statement);
-
 
 	void InitialCleanup();
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
@@ -110,16 +110,20 @@ private:
 	unique_ptr<DataChunk> FetchInternal();
 	//! Internally execute a set of SQL statement. Caller must hold the context_lock.
 	unique_ptr<QueryResult> RunStatements(const string &query, vector<unique_ptr<SQLStatement>> &statements,
-	                                                  bool allow_stream_result);
+	                                      bool allow_stream_result);
 	//! Internally prepare and execute a prepared SQL statement. Caller must hold the context_lock.
-	unique_ptr<QueryResult> RunStatement(const string &query, unique_ptr<SQLStatement> statement, bool allow_stream_result);
+	unique_ptr<QueryResult> RunStatement(const string &query, unique_ptr<SQLStatement> statement,
+	                                     bool allow_stream_result);
 
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
 	unique_ptr<PreparedStatementData> CreatePreparedStatement(const string &query, unique_ptr<SQLStatement> statement);
 	//! Internally execute a prepared SQL statement. Caller must hold the context_lock.
-	unique_ptr<QueryResult> ExecutePreparedStatement(const string &query, PreparedStatementData &statement, vector<Value> bound_values, bool allow_stream_result);
+	unique_ptr<QueryResult> ExecutePreparedStatement(const string &query, PreparedStatementData &statement,
+	                                                 vector<Value> bound_values, bool allow_stream_result);
 	//! Call CreatePreparedStatement() and ExecutePreparedStatement() without any bound values
-	unique_ptr<QueryResult> RunStatementInternal(const string &query, unique_ptr<SQLStatement> statement, bool allow_stream_result);
+	unique_ptr<QueryResult> RunStatementInternal(const string &query, unique_ptr<SQLStatement> statement,
+	                                             bool allow_stream_result);
+
 private:
 	index_t prepare_count = 0;
 	//! The currently opened StreamQueryResult (if any)
@@ -127,6 +131,6 @@ private:
 	//! Prepared statement objects that were created using the ClientContext::Prepare method
 	unordered_set<PreparedStatement *> prepared_statement_objects;
 	//! Appenders that were attached to this client context
-	unordered_set<Appender*> appenders;
+	unordered_set<Appender *> appenders;
 };
 } // namespace duckdb

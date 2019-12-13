@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/helper/physical_limit.hpp
+// ../../../src/include/duckdb/execution/operator/helper/physical_limit.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -49,7 +49,7 @@ template <class OP> static bool generic_fold_loop(Vector &input, Value &result) 
 	}
 	case TypeId::VARCHAR: {
 		const char *res = nullptr;
-		if (!templated_unary_fold<const char*, const char*, OP>(input, &res)) {
+		if (!templated_unary_fold<const char *, const char *, OP>(input, &res)) {
 			return false;
 		}
 		result.str_value = res;

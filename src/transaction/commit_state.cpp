@@ -34,8 +34,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 		}
 		if (entry->type == CatalogType::TABLE) {
 			// ALTER TABLE statement, read the extra data after the entry
-			auto extra_data_size = *((index_t*) dataptr);
-			auto extra_data = (data_ptr_t) (dataptr + sizeof(index_t));
+			auto extra_data_size = *((index_t *)dataptr);
+			auto extra_data = (data_ptr_t)(dataptr + sizeof(index_t));
 			// deserialize it
 			BufferedDeserializer source(extra_data, extra_data_size);
 			auto info = AlterInfo::Deserialize(source);
@@ -144,7 +144,7 @@ template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t
 
 		if (HAS_LOG) {
 			// push the catalog update to the WAL
-			WriteCatalogEntry(catalog_entry, data + sizeof(CatalogEntry*));
+			WriteCatalogEntry(catalog_entry, data + sizeof(CatalogEntry *));
 		}
 		break;
 	}

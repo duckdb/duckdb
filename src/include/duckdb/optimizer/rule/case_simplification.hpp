@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// optimizer/rule/case_simplification.hpp
+// ../../../src/include/duckdb/optimizer/rule/case_simplification.hpp
 //
 //
 //===----------------------------------------------------------------------===//

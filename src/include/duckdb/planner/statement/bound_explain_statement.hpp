@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/statement/bound_explain_statement.hpp
+// ../../../src/include/duckdb/planner/statement/bound_explain_statement.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -19,6 +19,7 @@ public:
 
 	//! The bound statement underlying the explain
 	unique_ptr<BoundSQLStatement> bound_statement;
+
 public:
 	vector<string> GetNames() override {
 		return {"explain_key", "explain_value"};

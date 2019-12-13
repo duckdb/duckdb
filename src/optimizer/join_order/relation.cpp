@@ -11,9 +11,7 @@ using RelationTreeNode = RelationSetManager::RelationTreeNode;
 
 string RelationSet::ToString() const {
 	string result = "[";
-	result += StringUtil::Join(relations, count, ", ", [](const index_t& relation){
-		return to_string(relation);
-	});
+	result += StringUtil::Join(relations, count, ", ", [](const index_t &relation) { return to_string(relation); });
 	result += "]";
 	return result;
 }

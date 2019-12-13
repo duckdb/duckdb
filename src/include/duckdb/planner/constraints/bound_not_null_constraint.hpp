@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/constraints/bound_not_null_constraint.hpp
+// ../../../src/include/duckdb/planner/constraints/bound_not_null_constraint.hpp
 //
 //
 //===----------------------------------------------------------------------===//

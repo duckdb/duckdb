@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// optimizer/rule/arithmetic_simplification.hpp
+// ../../../src/include/duckdb/optimizer/rule/arithmetic_simplification.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// main/appender.hpp
+// ../../../src/include/duckdb/main/appender.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -30,6 +30,7 @@ class Appender {
 	index_t column = 0;
 	//! Message explaining why the Appender is invalidated (if any)
 	string invalidated_msg;
+
 public:
 	Appender(Connection &con, string schema_name, string table_name);
 	Appender(Connection &con, string table_name);
@@ -43,8 +44,7 @@ public:
 	void EndRow();
 
 	// Append functions
-	template<class T>
-	void Append(T value) {
+	template <class T> void Append(T value) {
 		throw Exception("Undefined type for Appender::Append!");
 	}
 
@@ -73,8 +73,7 @@ private:
 		EndRow();
 	}
 
-	template <typename T, typename... Args>
-	void AppendRowRecursive(T value, Args... args) {
+	template <typename T, typename... Args> void AppendRowRecursive(T value, Args... args) {
 		Append<T>(value);
 		AppendRowRecursive(args...);
 	}
@@ -88,7 +87,7 @@ template <> void Appender::Append(int16_t value);
 template <> void Appender::Append(int32_t value);
 template <> void Appender::Append(int64_t value);
 template <> void Appender::Append(double value);
-template <> void Appender::Append(const char* value);
+template <> void Appender::Append(const char *value);
 template <> void Appender::Append(Value value);
 template <> void Appender::Append(std::nullptr_t value);
 

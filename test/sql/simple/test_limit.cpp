@@ -38,9 +38,6 @@ TEST_CASE("Test LIMIT keyword", "[limit]") {
 	REQUIRE_FAIL(con.Query("SELECT a FROM test LIMIT (SELECT MIN(a) FROM test)"));
 }
 
-
-
-
 TEST_CASE("LIMIT Bug #321 Crazy Result", "[limit]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

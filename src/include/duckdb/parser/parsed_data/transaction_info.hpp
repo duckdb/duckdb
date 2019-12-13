@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/parsed_data/transaction_info.hpp
+// ../../../src/include/duckdb/parser/parsed_data/transaction_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -15,7 +15,8 @@ namespace duckdb {
 enum class TransactionType : uint8_t { INVALID, BEGIN_TRANSACTION, COMMIT, ROLLBACK };
 
 struct TransactionInfo : public ParseInfo {
-	TransactionInfo(TransactionType type) : type(type) {}
+	TransactionInfo(TransactionType type) : type(type) {
+	}
 
 	//! The type of transaction statement
 	TransactionType type;

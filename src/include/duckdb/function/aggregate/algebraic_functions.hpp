@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// function/aggregate/algebraic_functions.hpp
+// ../../../src/include/duckdb/function/aggregate/algebraic_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//

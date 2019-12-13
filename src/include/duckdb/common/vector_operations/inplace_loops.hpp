@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/vector_operations/inplace_loops.hpp
+// ../../../src/include/duckdb/common/vector_operations/inplace_loops.hpp
 //
 //
 //===----------------------------------------------------------------------===//

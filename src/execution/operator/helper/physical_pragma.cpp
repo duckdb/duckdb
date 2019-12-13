@@ -27,7 +27,8 @@ void PhysicalPragma::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			} else if (assignment == "query_tree") {
 				context.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
 			} else {
-				throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree]", assignment.c_str());
+				throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree]",
+				                      assignment.c_str());
 			}
 		} else if (pragma.pragma_type == PragmaType::NOTHING) {
 			context.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
@@ -45,7 +46,8 @@ void PhysicalPragma::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 	} else if (keyword == "profiling_output" || keyword == "profile_output") {
 		// set file location of where to save profiling output
 		if (pragma.pragma_type != PragmaType::ASSIGNMENT || pragma.parameters[0].type != TypeId::VARCHAR) {
-			throw ParserException("Profiling output must be an assignment (e.g. PRAGMA profile_output='/tmp/test.json')");
+			throw ParserException(
+			    "Profiling output must be an assignment (e.g. PRAGMA profile_output='/tmp/test.json')");
 		}
 		context.profiler.save_location = pragma.parameters[0].str_value;
 	} else if (keyword == "memory_limit") {
@@ -62,7 +64,8 @@ void PhysicalPragma::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 				// limit < 0, set limit to infinite
 				context.db.storage->buffer_manager->SetLimit();
 			} else {
-				throw ParserException("Memory limit must be an assignment with a memory unit (e.g. PRAGMA memory_limit='1GB')");
+				throw ParserException(
+				    "Memory limit must be an assignment with a memory unit (e.g. PRAGMA memory_limit='1GB')");
 			}
 		}
 	} else {
@@ -99,7 +102,7 @@ index_t ParseMemoryLimit(string arg) {
 	}
 	if (limit < 0) {
 		// limit < 0, set limit to infinite
-		return (index_t) -1;
+		return (index_t)-1;
 	}
 	string unit = StringUtil::Lower(arg.substr(start, idx - start));
 	index_t multiplier;
@@ -116,5 +119,5 @@ index_t ParseMemoryLimit(string arg) {
 	} else {
 		throw ParserException("Unknown unit for memory_limit: %s (expected: b, mb, gb or tb)", unit.c_str());
 	}
-	return (index_t) multiplier * limit;
+	return (index_t)multiplier * limit;
 }

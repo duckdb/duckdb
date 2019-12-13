@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// transaction/transaction.hpp
+// ../../../src/include/duckdb/transaction/transaction.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -59,7 +59,8 @@ public:
 public:
 	void PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data = nullptr, index_t extra_data_size = 0);
 
-	//! Commit the current transaction with the given commit identifier. Returns true if the transaction commit was successful, or false if it was aborted.
+	//! Commit the current transaction with the given commit identifier. Returns true if the transaction commit was
+	//! successful, or false if it was aborted.
 	bool Commit(WriteAheadLog *log, transaction_t commit_id) noexcept;
 	//! Rollback
 	void Rollback() noexcept {

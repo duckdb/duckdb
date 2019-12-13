@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// optimizer/matcher/function_matcher.hpp
+// ../../../src/include/duckdb/optimizer/matcher/function_matcher.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -22,7 +22,7 @@ public:
 
 	virtual bool Match(string &name) = 0;
 
-	static bool Match(unique_ptr<FunctionMatcher>& matcher, string &name) {
+	static bool Match(unique_ptr<FunctionMatcher> &matcher, string &name) {
 		if (!matcher) {
 			return true;
 		}

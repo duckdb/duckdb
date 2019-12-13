@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/order/physical_order.hpp
+// ../../../src/include/duckdb/execution/operator/order/physical_order.hpp
 //
 //
 //===----------------------------------------------------------------------===//

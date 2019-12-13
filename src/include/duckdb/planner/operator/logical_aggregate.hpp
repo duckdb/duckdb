@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/operator/logical_aggregate.hpp
+// ../../../src/include/duckdb/planner/operator/logical_aggregate.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/expression_binder/insert_binder.hpp
+// ../../../src/include/duckdb/planner/expression_binder/insert_binder.hpp
 //
 //
 //===----------------------------------------------------------------------===//

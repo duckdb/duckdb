@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/aggregate/physical_simple_aggregate.hpp
+// ../../../src/include/duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/join/physical_comparison_join.hpp
+// ../../../src/include/duckdb/execution/operator/join/physical_comparison_join.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/index/art/art.hpp
+// ../../../src/include/duckdb/execution/index/art/art.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -68,6 +68,7 @@ public:
 	uint32_t maxPrefix;
 	//! Whether or not the ART is an index built to enforce a UNIQUE constraint
 	bool is_unique;
+
 public:
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table for a single predicate

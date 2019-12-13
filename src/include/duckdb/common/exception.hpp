@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/exception.hpp
+// ../../../src/include/duckdb/common/exception.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -55,7 +55,7 @@ enum class ExceptionType {
 	NULL_POINTER = 27,    // nullptr exception
 	IO = 28,              // IO exception
 	INTERRUPT = 29,       // interrupt
-	FATAL = 30   // Fatal exception: fatal exceptions are non-recoverable, and render the entire DB in an unusable state
+	FATAL = 30 // Fatal exception: fatal exceptions are non-recoverable, and render the entire DB in an unusable state
 };
 
 class Exception : public std::exception {
@@ -84,7 +84,8 @@ private:
 //! Exceptions that are StandardExceptions do NOT invalidate the current transaction when thrown
 class StandardException : public Exception {
 public:
-	StandardException(ExceptionType exception_type, string message) : Exception(exception_type, message) {}
+	StandardException(ExceptionType exception_type, string message) : Exception(exception_type, message) {
+	}
 };
 
 class CatalogException : public StandardException {

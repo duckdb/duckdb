@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/tableref/bound_table_function.hpp
+// ../../../src/include/duckdb/planner/tableref/bound_table_function.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/operator/constant_operators.hpp
+// ../../../src/include/duckdb/common/operator/constant_operators.hpp
 //
 //
 //===----------------------------------------------------------------------===//

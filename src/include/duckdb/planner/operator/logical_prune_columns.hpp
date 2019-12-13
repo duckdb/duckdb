@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/operator/logical_prune_columns.hpp
+// ../../../src/include/duckdb/planner/operator/logical_prune_columns.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/operator/logical_cross_product.hpp
+// ../../../src/include/duckdb/planner/operator/logical_cross_product.hpp
 //
 //
 //===----------------------------------------------------------------------===//

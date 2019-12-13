@@ -18,9 +18,8 @@ string LogicalAggregate::ParamsToString() const {
 	string result = LogicalOperator::ParamsToString();
 	if (groups.size() > 0) {
 		result += "[";
-		result += StringUtil::Join(groups, groups.size(), ", ", [](const unique_ptr<Expression>& child){
-			return child->GetName();
-		});
+		result += StringUtil::Join(groups, groups.size(), ", ",
+		                           [](const unique_ptr<Expression> &child) { return child->GetName(); });
 		result += "]";
 	}
 

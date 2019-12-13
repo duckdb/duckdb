@@ -69,7 +69,7 @@ vector<string> StringUtil::Split(const string &str, char delimiter) {
 }
 
 string StringUtil::Join(const vector<string> &input, const string &separator) {
-	return StringUtil::Join(input, input.size(), separator, [](const string& s) { return s; });
+	return StringUtil::Join(input, input.size(), separator, [](const string &s) { return s; });
 }
 
 string StringUtil::Prefix(const string &str, const string &prefix) {

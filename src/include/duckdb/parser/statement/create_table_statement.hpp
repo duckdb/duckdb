@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/statement/create_table_statement.hpp
+// ../../../src/include/duckdb/parser/statement/create_table_statement.hpp
 //
 //
 //===----------------------------------------------------------------------===//

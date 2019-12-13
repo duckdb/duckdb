@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/tableref/expressionlistref.hpp
+// ../../../src/include/duckdb/parser/tableref/expressionlistref.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -24,6 +24,7 @@ public:
 	vector<SQLType> expected_types;
 	//! The set of expected names
 	vector<string> expected_names;
+
 public:
 	bool Equals(const TableRef *other_) const override;
 

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// main/database.hpp
+// ../../../src/include/duckdb/main/database.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -18,12 +18,7 @@ class TransactionManager;
 class ConnectionManager;
 class FileSystem;
 
-enum class AccessMode : uint8_t {
-	UNDEFINED = 0,
-	AUTOMATIC = 1,
-	READ_ONLY = 2,
-	READ_WRITE = 3
-};
+enum class AccessMode : uint8_t { UNDEFINED = 0, AUTOMATIC = 1, READ_ONLY = 2, READ_WRITE = 3 };
 
 // this is optional and only used in tests at the moment
 struct DBConfig {

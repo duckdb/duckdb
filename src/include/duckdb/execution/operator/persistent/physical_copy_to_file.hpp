@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/persistent/physical_copy_to_file.hpp
+// ../../../src/include/duckdb/execution/operator/persistent/physical_copy_to_file.hpp
 //
 //
 //===----------------------------------------------------------------------===//

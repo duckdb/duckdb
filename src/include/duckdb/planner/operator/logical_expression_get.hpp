@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/operator/logical_expression_get.hpp
+// ../../../src/include/duckdb/planner/operator/logical_expression_get.hpp
 //
 //
 //===----------------------------------------------------------------------===//

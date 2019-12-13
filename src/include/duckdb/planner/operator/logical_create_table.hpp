@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/operator/logical_create_table.hpp
+// ../../../src/include/duckdb/planner/operator/logical_create_table.hpp
 //
 //
 //===----------------------------------------------------------------------===//

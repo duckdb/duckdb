@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/parsed_data/create_scalar_function_info.hpp
+// ../../../src/include/duckdb/parser/parsed_data/create_scalar_function_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -19,7 +19,8 @@ struct CreateScalarFunctionInfo : public CreateFunctionInfo {
 		this->name = function.name;
 		functions.push_back(function);
 	}
-	CreateScalarFunctionInfo(ScalarFunctionSet set) : CreateFunctionInfo(FunctionType::SCALAR), functions(move(set.functions)) {
+	CreateScalarFunctionInfo(ScalarFunctionSet set)
+	    : CreateFunctionInfo(FunctionType::SCALAR), functions(move(set.functions)) {
 		this->name = set.name;
 	}
 

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/query_node/bound_set_operation_node.hpp
+// ../../../src/include/duckdb/planner/query_node/bound_set_operation_node.hpp
 //
 //
 //===----------------------------------------------------------------------===//

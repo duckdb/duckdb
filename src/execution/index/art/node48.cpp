@@ -41,13 +41,13 @@ unique_ptr<Node> *Node48::GetChild(index_t pos) {
 	return &child[childIndex[pos]];
 }
 
-index_t Node48::GetMin(){
-    for (index_t i = 0; i < 256; i ++){
-        if (childIndex[i] != Node::EMPTY_MARKER){
-            return i;
-        }
-    }
-    return INVALID_INDEX;
+index_t Node48::GetMin() {
+	for (index_t i = 0; i < 256; i++) {
+		if (childIndex[i] != Node::EMPTY_MARKER) {
+			return i;
+		}
+	}
+	return INVALID_INDEX;
 }
 
 void Node48::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child) {

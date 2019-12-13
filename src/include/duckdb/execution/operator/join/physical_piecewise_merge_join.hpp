@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/join/physical_piecewise_merge_join.hpp
+// ../../../src/include/duckdb/execution/operator/join/physical_piecewise_merge_join.hpp
 //
 //
 //===----------------------------------------------------------------------===//

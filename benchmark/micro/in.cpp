@@ -25,7 +25,7 @@ using namespace std;
 		std::mt19937 gen;                                                                                              \
 		gen.seed(42);                                                                                                  \
 		state->conn.Query("CREATE TABLE strings(s VARCHAR);");                                                         \
-		Appender appender(state->conn, "strings");                                                                    \
+		Appender appender(state->conn, "strings");                                                                     \
 		for (size_t i = 0; i < IN_LIST_ROW_COUNT; i++) {                                                               \
 			appender.BeginRow();                                                                                       \
 			appender.Append<Value>(Value(GenerateString(distribution, gen)));                                          \

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/constraints/bound_check_constraint.hpp
+// ../../../src/include/duckdb/planner/constraints/bound_check_constraint.hpp
 //
 //
 //===----------------------------------------------------------------------===//

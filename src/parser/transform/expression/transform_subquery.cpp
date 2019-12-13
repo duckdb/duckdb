@@ -31,8 +31,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(PGSubLink *root) {
 			// simple IN
 			subquery_expr->comparison_type = ExpressionType::COMPARE_EQUAL;
 		} else {
-			auto operator_name =
-			    string((reinterpret_cast<PGValue *>(root->operName->head->data.ptr_value))->val.str);
+			auto operator_name = string((reinterpret_cast<PGValue *>(root->operName->head->data.ptr_value))->val.str);
 			subquery_expr->comparison_type = OperatorToExpressionType(operator_name);
 		}
 		assert(subquery_expr->comparison_type == ExpressionType::COMPARE_EQUAL ||

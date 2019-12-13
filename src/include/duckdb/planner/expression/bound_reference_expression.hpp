@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/expression/bound_reference_expression.hpp
+// ../../../src/include/duckdb/planner/expression/bound_reference_expression.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// catalog/catalog_entry/aggregate_function_catalog_entry.hpp
+// ../../../src/include/duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp
 //
 //
 //===----------------------------------------------------------------------===//

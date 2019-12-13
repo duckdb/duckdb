@@ -14,7 +14,7 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op) {
-	switch(op.type) {
+	switch (op.type) {
 	case LogicalOperatorType::ALTER:
 		return make_unique<PhysicalAlter>(unique_ptr_cast<ParseInfo, AlterInfo>(move(op.info)));
 	case LogicalOperatorType::CREATE_SEQUENCE:

@@ -31,7 +31,7 @@ TEST_CASE("Test storage of alter table", "[storage]") {
 		}
 	}
 	// reload the database from disk
-	for(index_t i = 0; i < 2; i++) {
+	for (index_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT k FROM test ORDER BY k");

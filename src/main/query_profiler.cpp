@@ -176,9 +176,9 @@ static string ToJSONRecursive(QueryProfiler::TreeNode &node) {
 	result += "\"cardinality\":" + to_string(node.info.elements) + ",\n";
 	result += "\"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
 	result += "\"children\": [";
-	result += StringUtil::Join(node.children, node.children.size(), ",\n", [](const unique_ptr<QueryProfiler::TreeNode>& child){
-		return ToJSONRecursive(*child);
-	});
+	result +=
+	    StringUtil::Join(node.children, node.children.size(), ",\n",
+	                     [](const unique_ptr<QueryProfiler::TreeNode> &child) { return ToJSONRecursive(*child); });
 	result += "]\n}\n";
 	return result;
 }
@@ -196,10 +196,11 @@ string QueryProfiler::ToJSON() const {
 	string result = "{ \"result\": " + to_string(main_query.Elapsed()) + ",\n";
 	// print the phase timings
 	result += "\"timings\": {\n";
-	const auto& ordered_phase_timings = GetOrderedPhaseTimings();
-	result += StringUtil::Join(ordered_phase_timings, ordered_phase_timings.size(), ",\n", [](const PhaseTimingItem& entry){
-		return "\"" + entry.first + "\": " + to_string(entry.second);
-	});
+	const auto &ordered_phase_timings = GetOrderedPhaseTimings();
+	result +=
+	    StringUtil::Join(ordered_phase_timings, ordered_phase_timings.size(), ",\n", [](const PhaseTimingItem &entry) {
+		    return "\"" + entry.first + "\": " + to_string(entry.second);
+	    });
 	result += "},\n";
 	// recursively print the physical operator tree
 	result += "\"tree\": ";
@@ -276,7 +277,7 @@ static string DrawPadded(string text, char padding_character = ' ') {
 	if (text.size() > remaining_width) {
 		text = text.substr(0, remaining_width);
 	}
-	assert(text.size() <= (index_t) numeric_limits<int32_t>::max());
+	assert(text.size() <= (index_t)numeric_limits<int32_t>::max());
 
 	auto right_padding = (remaining_width - text.size()) / 2;
 	auto left_padding = remaining_width - text.size() - right_padding;
@@ -376,8 +377,7 @@ void QueryProfiler::Print() {
 	Printer::Print(ToString());
 }
 
-vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() const
-{
+vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() const {
 	vector<PhaseTimingItem> result;
 	// first sort the phases alphabetically
 	vector<string> phases;

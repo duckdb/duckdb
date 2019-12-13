@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/operator/logical_comparison_join.hpp
+// ../../../src/include/duckdb/planner/operator/logical_comparison_join.hpp
 //
 //
 //===----------------------------------------------------------------------===//

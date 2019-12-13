@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/schema/physical_create_table.hpp
+// ../../../src/include/duckdb/execution/operator/schema/physical_create_table.hpp
 //
 //
 //===----------------------------------------------------------------------===//

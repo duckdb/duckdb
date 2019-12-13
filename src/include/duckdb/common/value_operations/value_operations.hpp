@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/value_operations/value_operations.hpp
+// ../../../src/include/duckdb/common/value_operations/value_operations.hpp
 //
 //
 //===----------------------------------------------------------------------===//

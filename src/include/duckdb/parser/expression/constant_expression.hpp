@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/expression/constant_expression.hpp
+// ../../../src/include/duckdb/parser/expression/constant_expression.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/scan/physical_expression_scan.hpp
+// ../../../src/include/duckdb/execution/operator/scan/physical_expression_scan.hpp
 //
 //
 //===----------------------------------------------------------------------===//

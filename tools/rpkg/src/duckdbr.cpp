@@ -232,7 +232,8 @@ static SEXP duckdb_finalize_database_R(SEXP dbsexp) {
 	}
 	DuckDB *dbaddr = (DuckDB *)R_ExternalPtrAddr(dbsexp);
 	if (dbaddr) {
-		warning("duckdb_finalize_database_R: Database is garbage-collected, use dbDisconnect(con, shutdown=TRUE) or duckdb::duckdb_shutdown(drv) to avoid this.");
+		warning("duckdb_finalize_database_R: Database is garbage-collected, use dbDisconnect(con, shutdown=TRUE) or "
+		        "duckdb::duckdb_shutdown(drv) to avoid this.");
 		R_ClearExternalPtr(dbsexp);
 		delete dbaddr;
 	}
@@ -258,7 +259,6 @@ SEXP duckdb_startup_R(SEXP dbdirsexp, SEXP readonlysexp) {
 	config.access_mode = AccessMode::READ_WRITE;
 	if (read_only) {
 		config.access_mode = AccessMode::READ_ONLY;
-
 	}
 	DuckDB *dbaddr;
 	try {
@@ -395,7 +395,7 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 						appender.Append(nullptr);
 					} else {
 						SEXP factor_levels = GET_LEVELS(coldata);
-						appender.Append<const char*>(CHAR(STRING_ELT(factor_levels, val - 1)));
+						appender.Append<const char *>(CHAR(STRING_ELT(factor_levels, val - 1)));
 					}
 				} else if (TYPEOF(coldata) == LGLSXP) {
 					int val = INTEGER_POINTER(coldata)[row_idx];
@@ -423,7 +423,7 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 					if (val == NA_STRING) {
 						appender.Append(nullptr);
 					} else {
-						appender.Append<const char*>(CHAR(val));
+						appender.Append<const char *>(CHAR(val));
 					}
 				} else {
 					throw;
@@ -434,7 +434,7 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 		appender.Close();
 	} catch (std::exception &ex) {
 		Rf_error("duckdb_append_R failed: %s", ex.what());
-	} catch(...) {
+	} catch (...) {
 		Rf_error("duckdb_append_R failed: unknown error");
 	}
 

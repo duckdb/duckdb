@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/set/physical_union.hpp
+// ../../../src/include/duckdb/execution/operator/set/physical_union.hpp
 //
 //
 //===----------------------------------------------------------------------===//

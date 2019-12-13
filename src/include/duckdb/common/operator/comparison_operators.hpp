@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/operator/comparison_operators.hpp
+// ../../../src/include/duckdb/common/operator/comparison_operators.hpp
 //
 //
 //===----------------------------------------------------------------------===//

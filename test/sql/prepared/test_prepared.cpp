@@ -325,7 +325,7 @@ TEST_CASE("PREPARE and WAL", "[prepared][.]") {
 		result = con.Query("SELECT a FROM t");
 		REQUIRE(CHECK_COLUMN(result, 0, {43}));
 	}
-	for(index_t i = 0; i < 2; i++) {
+	for (index_t i = 0; i < 2; i++) {
 		DuckDB db(prepare_database);
 		Connection con(db);
 
@@ -371,7 +371,7 @@ TEST_CASE("PREPARE multiple statements", "[prepared]") {
 	REQUIRE(!prepared->success);
 	// we can use ExtractStatements to execute the individual statements though
 	auto statements = con.ExtractStatements(query);
-	for(auto &statement : statements) {
+	for (auto &statement : statements) {
 		string stmt = query.substr(statement->stmt_location, statement->stmt_length);
 		prepared = con.Prepare(stmt);
 		REQUIRE(prepared->success);

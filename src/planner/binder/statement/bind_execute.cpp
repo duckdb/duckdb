@@ -5,7 +5,6 @@
 #include "duckdb/planner/statement/bound_execute_statement.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 
-
 using namespace duckdb;
 using namespace std;
 
@@ -18,7 +17,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(ExecuteStatement &stmt) {
 		throw BinderException("Could not find prepared statement with that name");
 	}
 	vector<Value> bind_values;
-	for(index_t i = 0; i < stmt.values.size(); i++) {
+	for (index_t i = 0; i < stmt.values.size(); i++) {
 		ConstantBinder binder(*this, context, "EXECUTE statement");
 		binder.target_type = result->prep->prepared->GetType(i + 1);
 		auto bound_expr = binder.Bind(stmt.values[i]);

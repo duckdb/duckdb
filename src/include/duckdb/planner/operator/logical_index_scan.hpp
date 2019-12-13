@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/operator/logical_index_scan.hpp
+// ../../../src/include/duckdb/planner/operator/logical_index_scan.hpp
 //
 //
 //===----------------------------------------------------------------------===//

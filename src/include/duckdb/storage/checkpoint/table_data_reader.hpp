@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// storage/checkpoint/table_data_reader.hpp
+// ../../../src/include/duckdb/storage/checkpoint/table_data_reader.hpp
 //
 //
 //===----------------------------------------------------------------------===//

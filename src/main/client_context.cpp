@@ -50,12 +50,11 @@ void ClientContext::Cleanup() {
 	for (auto &statement : prepared_statement_objects) {
 		statement->is_invalidated = true;
 	}
-	for(auto &appender : appenders) {
+	for (auto &appender : appenders) {
 		appender->Invalidate("Connection has been closed!");
 	}
 	CleanupInternal();
 }
-
 
 void ClientContext::RegisterAppender(Appender *appender) {
 	lock_guard<mutex> client_guard(context_lock);
@@ -151,7 +150,8 @@ unique_ptr<DataChunk> ClientContext::FetchInternal() {
 	return chunk;
 }
 
-unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const string &query, unique_ptr<SQLStatement> statement) {
+unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const string &query,
+                                                                         unique_ptr<SQLStatement> statement) {
 	StatementType statement_type = statement->type;
 	auto result = make_unique<PreparedStatementData>(statement_type);
 
@@ -191,7 +191,8 @@ unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 	return result;
 }
 
-unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &query, PreparedStatementData &statement, vector<Value> bound_values, bool allow_stream_result) {
+unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &query, PreparedStatementData &statement,
+                                                                vector<Value> bound_values, bool allow_stream_result) {
 	if (ActiveTransaction().is_invalidated && statement.statement_type != StatementType::TRANSACTION) {
 		throw Exception("Current transaction is aborted (please ROLLBACK)");
 	}
@@ -210,10 +211,12 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	if (create_stream_result) {
 		// successfully compiled SELECT clause and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
-		return make_unique<StreamQueryResult>(statement.statement_type, *this, statement.sql_types, types, statement.names);
+		return make_unique<StreamQueryResult>(statement.statement_type, *this, statement.sql_types, types,
+		                                      statement.names);
 	}
 	// create a materialized result by continuously fetching
-	auto result = make_unique<MaterializedQueryResult>(statement.statement_type, statement.sql_types, types, statement.names);
+	auto result =
+	    make_unique<MaterializedQueryResult>(statement.statement_type, statement.sql_types, types, statement.names);
 	while (true) {
 		auto chunk = FetchInternal();
 		if (chunk->size() == 0) {
@@ -223,8 +226,6 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	}
 	return move(result);
 }
-
-
 
 static string CanExecuteStatementInReadOnlyMode(SQLStatement &stmt) {
 	switch (stmt.type) {
@@ -246,7 +247,7 @@ static string CanExecuteStatementInReadOnlyMode(SQLStatement &stmt) {
 	}
 	case StatementType::DROP: {
 		// drop statement: we can drop prepared statements in read-only mode
-		auto &drop_stmt = (DropStatement&) stmt;
+		auto &drop_stmt = (DropStatement &)stmt;
 		if (drop_stmt.info->type == CatalogType::PREPARED_STATEMENT) {
 			return string();
 		}
@@ -256,7 +257,7 @@ static string CanExecuteStatementInReadOnlyMode(SQLStatement &stmt) {
 		return string();
 	}
 	return StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!",
-								StatementTypeToString(stmt.type).c_str());
+	                          StatementTypeToString(stmt.type).c_str());
 }
 
 void ClientContext::InitialCleanup() {
@@ -296,8 +297,9 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 		if (!result->success) {
 			throw Exception(result->error);
 		}
-		auto prepared_catalog = (PreparedStatementCatalogEntry*) prepared_statements->GetRootEntry(prepare_name);
-		auto prepared_object = make_unique<PreparedStatement>(this, prepare_name, *prepared_catalog->prepared, parser.n_prepared_parameters);
+		auto prepared_catalog = (PreparedStatementCatalogEntry *)prepared_statements->GetRootEntry(prepare_name);
+		auto prepared_object = make_unique<PreparedStatement>(this, prepare_name, *prepared_catalog->prepared,
+		                                                      parser.n_prepared_parameters);
 		prepared_statement_objects.insert(prepared_object.get());
 		return prepared_object;
 	} catch (Exception &ex) {
@@ -309,7 +311,7 @@ unique_ptr<QueryResult> ClientContext::Execute(string name, vector<Value> &value
 	lock_guard<mutex> client_guard(context_lock);
 	try {
 		InitialCleanup();
-	} catch(std::exception &ex) {
+	} catch (std::exception &ex) {
 		return make_unique<MaterializedQueryResult>(ex.what());
 	}
 
@@ -329,7 +331,7 @@ void ClientContext::RemovePreparedStatement(PreparedStatement *statement) {
 	}
 	try {
 		InitialCleanup();
-	} catch(std::exception &ex) {
+	} catch (std::exception &ex) {
 		return;
 	}
 	// erase the object from the list of prepared statements
@@ -342,7 +344,8 @@ void ClientContext::RemovePreparedStatement(PreparedStatement *statement) {
 	RunStatement(query, move(deallocate_statement), false);
 }
 
-unique_ptr<QueryResult> ClientContext::RunStatementInternal(const string &query, unique_ptr<SQLStatement> statement, bool allow_stream_result) {
+unique_ptr<QueryResult> ClientContext::RunStatementInternal(const string &query, unique_ptr<SQLStatement> statement,
+                                                            bool allow_stream_result) {
 	// prepare the query for execution
 	auto prepared = CreatePreparedStatement(query, move(statement));
 	// by default, no values are bound
@@ -351,7 +354,8 @@ unique_ptr<QueryResult> ClientContext::RunStatementInternal(const string &query,
 	return ExecutePreparedStatement(query, *prepared, move(bound_values), allow_stream_result);
 }
 
-unique_ptr<QueryResult> ClientContext::RunStatement(const string &query, unique_ptr<SQLStatement> statement, bool allow_stream_result) {
+unique_ptr<QueryResult> ClientContext::RunStatement(const string &query, unique_ptr<SQLStatement> statement,
+                                                    bool allow_stream_result) {
 	unique_ptr<QueryResult> result;
 	if (db.access_mode == AccessMode::READ_ONLY) {
 		// if the database is opened in read-only mode, check if we can execute this statement
@@ -414,9 +418,8 @@ unique_ptr<QueryResult> ClientContext::RunStatement(const string &query, unique_
 	return result;
 }
 
-unique_ptr<QueryResult> ClientContext::RunStatements(const string &query,
-                                                                 vector<unique_ptr<SQLStatement>> &statements,
-                                                                 bool allow_stream_result) {
+unique_ptr<QueryResult> ClientContext::RunStatements(const string &query, vector<unique_ptr<SQLStatement>> &statements,
+                                                     bool allow_stream_result) {
 	// now we have a list of statements
 	// iterate over them and execute them one by one
 	unique_ptr<QueryResult> result;
@@ -487,7 +490,7 @@ void ClientContext::Invalidate() {
 		open_result->is_open = false;
 	}
 	// and close any open appenders
-	for(auto &appender : appenders) {
+	for (auto &appender : appenders) {
 		appender->Invalidate("Database that this appender belongs to has been closed!");
 	}
 	appenders.clear();
@@ -648,10 +651,10 @@ unique_ptr<TableDescription> ClientContext::TableInfo(string schema_name, string
 		result = make_unique<TableDescription>();
 		result->schema = schema_name;
 		result->table = table_name;
-		for(auto &column : table->columns) {
+		for (auto &column : table->columns) {
 			result->columns.push_back(ColumnDefinition(column.name, column.type));
 		}
-	} catch(...) {
+	} catch (...) {
 		// table not found!
 		result = nullptr;
 	}
@@ -680,13 +683,13 @@ void ClientContext::Append(TableDescription &description, DataChunk &chunk) {
 		if (description.columns.size() != table_entry->columns.size()) {
 			throw Exception("Failed to append: table entry has different number of columns!");
 		}
-		for(index_t i = 0; i < description.columns.size(); i++) {
+		for (index_t i = 0; i < description.columns.size(); i++) {
 			if (description.columns[i].type != table_entry->columns[i].type) {
 				throw Exception("Failed to append: table entry has different number of columns!");
 			}
 		}
 		table_entry->storage->Append(*table_entry, *this, chunk);
-	} catch(Exception &ex) {
+	} catch (Exception &ex) {
 		if (transaction.IsAutoCommit()) {
 			transaction.Rollback();
 		} else {

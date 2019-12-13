@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/operator/logical_prepare.hpp
+// ../../../src/include/duckdb/planner/operator/logical_prepare.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -26,6 +26,7 @@ public:
 
 	string name;
 	unique_ptr<PreparedStatementData> prepared;
+
 protected:
 	void ResolveTypes() override {
 		types.push_back(TypeId::BOOLEAN);

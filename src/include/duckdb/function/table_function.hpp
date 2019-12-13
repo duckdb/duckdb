@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// function/table_function.hpp
+// ../../../src/include/duckdb/function/table_function.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -21,8 +21,11 @@ typedef void (*table_function_final_t)(ClientContext &, FunctionData *dataptr);
 
 class TableFunction : public Function {
 public:
-	TableFunction(string name, vector<SQLType> arguments, vector<SQLType> return_types, vector<string> names, table_function_init_t init, table_function_t function, table_function_final_t final) :
-		Function(name), types(move(return_types)), names(move(names)), arguments(move(arguments)), init(init), function(function), final(final) {}
+	TableFunction(string name, vector<SQLType> arguments, vector<SQLType> return_types, vector<string> names,
+	              table_function_init_t init, table_function_t function, table_function_final_t final)
+	    : Function(name), types(move(return_types)), names(move(names)), arguments(move(arguments)), init(init),
+	      function(function), final(final) {
+	}
 
 	//! List of return column types
 	vector<SQLType> types;
