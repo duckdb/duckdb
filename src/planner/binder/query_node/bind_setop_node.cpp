@@ -159,5 +159,5 @@ unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 		node.type = statement.orders[i].type;
 		result->orders.push_back(move(node));
 	}
-	return move(result);
+	return result;
 }

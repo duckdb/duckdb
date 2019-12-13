@@ -27,5 +27,5 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CreateIndexStatement &stmt) {
 		result->expressions.push_back(binder.Bind(expr));
 	}
 	result->info = move(stmt.info);
-	return move(result);
+	return result;
 }

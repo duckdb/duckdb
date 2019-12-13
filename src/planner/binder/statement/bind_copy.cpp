@@ -81,5 +81,5 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CopyStatement &stmt) {
 		}
 	}
 	result->info = move(stmt.info);
-	return move(result);
+	return result;
 }

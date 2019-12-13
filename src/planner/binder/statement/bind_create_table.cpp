@@ -156,5 +156,5 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CreateTableStatement &stmt) {
 	} else {
 		result->info = BindCreateTableInfo(move(stmt.info));
 	}
-	return move(result);
+	return result;
 }

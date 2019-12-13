@@ -27,5 +27,5 @@ unique_ptr<BoundSQLStatement> Binder::Bind(ExecuteStatement &stmt) {
 		bind_values.push_back(move(value));
 	}
 	result->prep->prepared->Bind(move(bind_values));
-	return move(result);
+	return result;
 }

@@ -38,7 +38,7 @@ unique_ptr<SQLStatement> PragmaHandler::HandlePragma(PragmaInfo &pragma) {
 		table_function->function = make_unique<FunctionExpression>(DEFAULT_SCHEMA, "pragma_table_info", children);
 		select_node->from_table = move(table_function);
 		select_statement->node = move(select_node);
-		return move(select_statement);
+		return select_statement;
 	}
 	return nullptr;
 }

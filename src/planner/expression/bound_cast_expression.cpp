@@ -30,5 +30,5 @@ bool BoundCastExpression::Equals(const BaseExpression *other_) const {
 unique_ptr<Expression> BoundCastExpression::Copy() {
 	auto copy = make_unique<BoundCastExpression>(return_type, child->Copy(), source_type, target_type);
 	copy->CopyProperties(*this);
-	return move(copy);
+	return copy;
 }
