@@ -1140,7 +1140,7 @@ TEST_CASE("ART Floating Point Small", "[art-float-small]") {
 	//! Will use 100 keys
 	index_t n = 100;
 	auto keys = unique_ptr<int64_t[]>(new int64_t[n]);
-	con.Query("CREATE TABLE numbers(i BIGINT)");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i BIGINT)"));
 	//! Generate 10 small floats (0.0 - 1.0)
 	for (index_t i = 0; i < n / 10; i++) {
 		keys[i] = Key::EncodeFloat(generate_small_float());
@@ -1155,11 +1155,11 @@ TEST_CASE("ART Floating Point Small", "[art-float-small]") {
 		keys[i] = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 	}
 	//! Insert values and create index
-	con.Query("BEGIN TRANSACTION");
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	for (index_t i = 0; i < n; i++) {
-		con.Query("INSERT INTO numbers VALUES (" + to_string(keys[i]) + ")");
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (" + to_string(keys[i]) + ")"));
 	}
-	con.Query("COMMIT");
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
 	//! Generate 500 small-small range queries
 	for (index_t i = 0; i < 5; i++) {
@@ -1212,7 +1212,7 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
 	//! Will use 100 keys
 	index_t n = 100;
 	auto keys = unique_ptr<int64_t[]>(new int64_t[n]);
-	con.Query("CREATE TABLE numbers(i BIGINT)");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i BIGINT)"));
 	//! Generate 10 small floats (0.0 - 1.0)
 	for (index_t i = 0; i < n / 10; i++) {
 		keys[i] = Key::EncodeFloat(generate_small_float());
@@ -1227,11 +1227,11 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
 		keys[i] = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 	}
 	//! Insert values and create index
-	con.Query("BEGIN TRANSACTION");
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	for (index_t i = 0; i < n; i++) {
-		con.Query("INSERT INTO numbers VALUES (" + to_string(keys[i]) + ")");
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (" + to_string(keys[i]) + ")"));
 	}
-	con.Query("COMMIT");
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
 	//! Generate 500 small-small range queries
 	for (index_t i = 0; i < 5; i++) {
@@ -1284,7 +1284,7 @@ TEST_CASE("ART Floating Point", "[art-float][.]") {
 	//! Will use 10k keys
 	index_t n = 10000;
 	auto keys = unique_ptr<int64_t[]>(new int64_t[n]);
-	con.Query("CREATE TABLE numbers(i BIGINT)");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i BIGINT)"));
 	//! Generate 1000 small floats (0.0 - 1.0)
 	for (index_t i = 0; i < n / 10; i++) {
 		keys[i] = Key::EncodeFloat(generate_small_float());
@@ -1299,11 +1299,11 @@ TEST_CASE("ART Floating Point", "[art-float][.]") {
 		keys[i] = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 	}
 	//! Insert values and create index
-	con.Query("BEGIN TRANSACTION");
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	for (index_t i = 0; i < n; i++) {
-		con.Query("INSERT INTO numbers VALUES (" + to_string(keys[i]) + ")");
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (" + to_string(keys[i]) + ")"));
 	}
-	con.Query("COMMIT");
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
 	//! Generate 500 small-small range queries
 	for (index_t i = 0; i < 500; i++) {
@@ -1371,11 +1371,11 @@ TEST_CASE("ART Floating Point Double", "[art-double][.]") {
 		keys[i] = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 	}
 	//! Insert values and create index
-	con.Query("BEGIN TRANSACTION");
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	for (index_t i = 0; i < n; i++) {
-		con.Query("INSERT INTO numbers VALUES (" + to_string(keys[i]) + ")");
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (" + to_string(keys[i]) + ")"));
 	}
-	con.Query("COMMIT");
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
 	//! Generate 500 small-small range queries
 	for (index_t i = 0; i < 500; i++) {
@@ -1433,7 +1433,7 @@ TEST_CASE("ART FP Unique Constraint", "[art-float-unique]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (3.45, 4), (2.2, 5)"));
 
 	result = con.Query("SELECT * FROM numbers");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::FLOAT(3.45), Value::FLOAT(2.2)}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::FLOAT(3.45f), Value::FLOAT(2.2f)}));
 	REQUIRE(CHECK_COLUMN(result, 1, {4, 5}));
 
 	//! insert a duplicate value as part of a chain of values
@@ -1443,7 +1443,7 @@ TEST_CASE("ART FP Unique Constraint", "[art-float-unique]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (6, 6);"));
 
 	result = con.Query("SELECT * FROM numbers");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::FLOAT(3.45), Value::FLOAT(2.2), Value::FLOAT(6)}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::FLOAT(3.45f), Value::FLOAT(2.2f), Value::FLOAT(6.0f)}));
 	REQUIRE(CHECK_COLUMN(result, 1, {4, 5, 6}));
 
 	//! insert NULL value in PRIMARY KEY is not allowed

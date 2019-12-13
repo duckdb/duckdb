@@ -88,7 +88,7 @@ bool Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept {
 			}
 		}
 		return true;
-	} catch (Exception &ex) {
+	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, transaction_id);
 		storage.RevertCommit(commit_state);
 		if (log && changes_made) {
