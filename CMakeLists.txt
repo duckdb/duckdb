@@ -82,6 +82,9 @@ option(TREAT_WARNINGS_AS_ERRORS
         "Treat warnings as errors"
         FALSE)
 
+if(TREAT_WARNINGS_AS_ERRORS)
+  message("Treating warnings as errors.")
+endif()
 
 if(NOT MSVC)
   set(CMAKE_CXX_FLAGS_DEBUG
