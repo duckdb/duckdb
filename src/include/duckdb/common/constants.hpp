@@ -92,4 +92,6 @@ struct Storage {
 	constexpr static int FILE_HEADER_SIZE = 4096;
 };
 
+static const double UNUSED_VAR = 4.0;
+
 } // namespace duckdb
