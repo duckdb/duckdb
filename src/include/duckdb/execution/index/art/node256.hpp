@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/index/art/node256.hpp
+// duckdb/execution/index/art/node256.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -28,7 +28,7 @@ public:
 	//! Get Node256 Child
 	unique_ptr<Node> *GetChild(index_t pos) override;
 
-    index_t GetMin() override;
+	index_t GetMin() override;
 
 	//! Insert node From Node256
 	static void insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child);

@@ -36,12 +36,12 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expres
 	case TypeId::BIGINT:
 		maxPrefix = sizeof(int64_t);
 		break;
-    case TypeId::FLOAT:
-        maxPrefix = sizeof(float);
-        break;
-    case TypeId::DOUBLE:
-        maxPrefix = sizeof(double);
-        break;
+	case TypeId::FLOAT:
+		maxPrefix = sizeof(float);
+		break;
+	case TypeId::DOUBLE:
+		maxPrefix = sizeof(double);
+		break;
 	default:
 		throw InvalidTypeException(types[0], "Invalid type for index");
 	}
@@ -112,12 +112,12 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	case TypeId::BIGINT:
 		generate_keys<int64_t>(input, keys, is_little_endian);
 		break;
-    case TypeId::FLOAT:
-        generate_keys<float>(input, keys, is_little_endian);
-        break;
-    case TypeId::DOUBLE:
-        generate_keys<double>(input, keys, is_little_endian);
-        break;
+	case TypeId::FLOAT:
+		generate_keys<float>(input, keys, is_little_endian);
+		break;
+	case TypeId::DOUBLE:
+		generate_keys<double>(input, keys, is_little_endian);
+		break;
 	default:
 		throw InvalidTypeException(input.data[0].type, "Invalid type for index");
 	}
@@ -362,10 +362,10 @@ static unique_ptr<Key> CreateKey(ART &art, TypeId type, Value &value) {
 		return Key::CreateKey<int32_t>(value.value_.integer, art.is_little_endian);
 	case TypeId::BIGINT:
 		return Key::CreateKey<int64_t>(value.value_.bigint, art.is_little_endian);
-    case TypeId::FLOAT:
-        return Key::CreateKey<float>(value.value_.float_, art.is_little_endian);
-    case TypeId::DOUBLE:
-        return Key::CreateKey<double>(value.value_.double_, art.is_little_endian);
+	case TypeId::FLOAT:
+		return Key::CreateKey<float>(value.value_.float_, art.is_little_endian);
+	case TypeId::DOUBLE:
+		return Key::CreateKey<double>(value.value_.double_, art.is_little_endian);
 	default:
 		throw InvalidTypeException(type, "Invalid type for index");
 	}
@@ -519,32 +519,29 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 				// if its not inclusive check if there is a next leaf
 				if (!inclusive && !IteratorNext(it)) {
 					return false;
-				}
-				else{
-				    return true;
+				} else {
+					return true;
 				}
 			}
 
-			if (*leaf->value > key){
-			    return true;
+			if (*leaf->value > key) {
+				return true;
 			}
-            // Leaf is lower than key
-            // Check if next leaf is still lower than key
-            while (IteratorNext(it)){
-                if (*it.node->value == key){
-                    // if its not inclusive check if there is a next leaf
-                    if (!inclusive && !IteratorNext(it)) {
-                        return false;
-                    }
-                    else{
-                        return true;
-                    }
-                }
-                else if (*it.node->value > key){
-                    // if its not inclusive check if there is a next leaf
-                        return true;
-                }
-            }
+			// Leaf is lower than key
+			// Check if next leaf is still lower than key
+			while (IteratorNext(it)) {
+				if (*it.node->value == key) {
+					// if its not inclusive check if there is a next leaf
+					if (!inclusive && !IteratorNext(it)) {
+						return false;
+					} else {
+						return true;
+					}
+				} else if (*it.node->value > key) {
+					// if its not inclusive check if there is a next leaf
+					return true;
+				}
+			}
 			return false;
 		}
 		uint32_t mismatchPos = Node::PrefixMismatch(*this, node, key, depth);
@@ -565,8 +562,8 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 		top.pos = node->GetChildGreaterEqual(key[depth]);
 
 		if (top.pos == INVALID_INDEX) {
-		    // Find min leaf
-            top.pos = node->GetMin();
+			// Find min leaf
+			top.pos = node->GetMin();
 		}
 		node = node->GetChild(top.pos)->get();
 		depth++;

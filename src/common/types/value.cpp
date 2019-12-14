@@ -19,10 +19,6 @@
 using namespace duckdb;
 using namespace std;
 
-Value::Value(const Value &other) : type(other.type), is_null(other.is_null), str_value(other.str_value) {
-	this->value_ = other.value_;
-}
-
 Value Value::MinimumValue(TypeId type) {
 	Value result;
 	result.type = type;

@@ -111,8 +111,7 @@ void HandleOptions(PGCopyStmt *stmt, CopyInfo &info) {
 			}
 
 			auto *force_quote_val = def_elem->arg;
-			if (!force_quote_val ||
-			    (force_quote_val->type != T_PGAStar && force_quote_val->type != T_PGList)) {
+			if (!force_quote_val || (force_quote_val->type != T_PGAStar && force_quote_val->type != T_PGList)) {
 				throw ParserException("Unsupported parameter type for FORCE_QUOTE: expected e.g. FORCE_QUOTE *");
 			}
 

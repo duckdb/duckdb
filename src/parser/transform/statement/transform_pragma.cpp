@@ -19,12 +19,12 @@ unique_ptr<PragmaStatement> Transformer::TransformPragma(PGNode *node) {
 			if (node->type != T_PGAConst) {
 				throw ParserException("Unsupported PRAGMA parameter: can only accept constants!");
 			}
-			auto constant = TransformConstant((PGAConst*) node);
-			info.parameters.push_back(((ConstantExpression&) *constant).value);
+			auto constant = TransformConstant((PGAConst *)node);
+			info.parameters.push_back(((ConstantExpression &)*constant).value);
 		}
 	}
 	// now parse the pragma type
-	switch(stmt->kind) {
+	switch (stmt->kind) {
 	case PG_PRAGMA_TYPE_NOTHING:
 		if (info.parameters.size() > 0) {
 			throw ParserException("PRAGMA statement that is not a call or assignment cannot contain parameters");

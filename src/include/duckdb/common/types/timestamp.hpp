@@ -56,12 +56,12 @@ public:
 
 	static timestamp_struct IntervalToTimestamp(Interval &interval);
 
-    // Unix epoch: milliseconds since 1970
-    static int64_t GetEpoch(timestamp_t timestamp);
-    // Seconds including fractional part multiplied by 1000
-    static int64_t GetMilliseconds(timestamp_t timestamp);
-    static int64_t GetSeconds(timestamp_t timestamp);
-    static int64_t GetMinutes(timestamp_t timestamp);
-    static int64_t GetHours(timestamp_t timestamp);
+	// Unix epoch: milliseconds since 1970
+	static int64_t GetEpoch(timestamp_t timestamp);
+	// Seconds including fractional part multiplied by 1000
+	static int64_t GetMilliseconds(timestamp_t timestamp);
+	static int64_t GetSeconds(timestamp_t timestamp);
+	static int64_t GetMinutes(timestamp_t timestamp);
+	static int64_t GetHours(timestamp_t timestamp);
 };
 } // namespace duckdb

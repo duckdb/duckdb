@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// function/scalar/trigonometric_functions.hpp
+// duckdb/function/scalar/trigonometric_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//

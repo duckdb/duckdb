@@ -10,11 +10,11 @@ void AlterInfo::Serialize(Serializer &serializer) {
 
 unique_ptr<AlterInfo> AlterInfo::Deserialize(Deserializer &source) {
 	auto type = source.Read<AlterType>();
-	switch(type) {
-		case AlterType::ALTER_TABLE:
-			return AlterTableInfo::Deserialize(source);
-		default:
-			throw SerializationException("Unknown alter type for deserialization!");
+	switch (type) {
+	case AlterType::ALTER_TABLE:
+		return AlterTableInfo::Deserialize(source);
+	default:
+		throw SerializationException("Unknown alter type for deserialization!");
 	}
 }
 
@@ -30,11 +30,11 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &source) {
 	auto schema = source.Read<string>();
 	auto table = source.Read<string>();
 	unique_ptr<AlterTableInfo> info;
-	switch(type) {
-		case AlterTableType::RENAME_COLUMN:
-			return RenameColumnInfo::Deserialize(source, schema, table);
-		default:
-			throw SerializationException("Unknown alter table type for deserialization!");
+	switch (type) {
+	case AlterTableType::RENAME_COLUMN:
+		return RenameColumnInfo::Deserialize(source, schema, table);
+	default:
+		throw SerializationException("Unknown alter table type for deserialization!");
 	}
 }
 

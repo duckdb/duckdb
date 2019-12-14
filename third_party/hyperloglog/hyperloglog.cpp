@@ -1185,7 +1185,7 @@ int hll_count(robj *o, size_t *result) {
 robj *hll_merge(robj **hlls, size_t hll_count) {
     uint8_t max[HLL_REGISTERS];
     struct hllhdr *hdr;
-    int j;
+    size_t j;
 	 /* Use dense representation as target? */
     int use_dense = 0;
 

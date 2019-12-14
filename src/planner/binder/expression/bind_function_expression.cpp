@@ -9,9 +9,9 @@
 using namespace duckdb;
 using namespace std;
 
-
-void ExpressionBinder::CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children, vector<SQLType> &types) {
-	for(index_t i = 0; i < types.size(); i++) {
+void ExpressionBinder::CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children,
+                                               vector<SQLType> &types) {
+	for (index_t i = 0; i < types.size(); i++) {
 		auto target_type = i < function.arguments.size() ? function.arguments[i] : function.varargs;
 		if (target_type.id != SQLTypeId::ANY && types[i] != target_type) {
 			// type of child does not match type of function argument: add a cast
@@ -61,7 +61,8 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	// types match up, get the result type
 	auto return_type = bound_function.return_type;
 	// now create the function
-	auto result = make_unique<BoundFunctionExpression>(GetInternalType(return_type), bound_function, function.is_operator);
+	auto result =
+	    make_unique<BoundFunctionExpression>(GetInternalType(return_type), bound_function, function.is_operator);
 	result->children = move(children);
 	if (bound_function.bind) {
 		result->bind_info = bound_function.bind(*result, context);

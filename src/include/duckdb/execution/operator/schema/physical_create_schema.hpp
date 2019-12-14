@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/schema/physical_create_schema.hpp
+// duckdb/execution/operator/schema/physical_create_schema.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -21,6 +21,7 @@ public:
 	}
 
 	unique_ptr<CreateSchemaInfo> info;
+
 public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };

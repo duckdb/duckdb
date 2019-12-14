@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// function/function_set.hpp
+// duckdb/function/function_set.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,15 +13,16 @@
 
 namespace duckdb {
 
-template<class T>
-class FunctionSet {
+template <class T> class FunctionSet {
 public:
-	FunctionSet(string name) : name(name) {}
+	FunctionSet(string name) : name(name) {
+	}
 
 	//! The name of the function set
 	string name;
 	//! The set of functions
 	vector<T> functions;
+
 public:
 	void AddFunction(T function) {
 		function.name = name;
@@ -31,13 +32,14 @@ public:
 
 class ScalarFunctionSet : public FunctionSet<ScalarFunction> {
 public:
-	ScalarFunctionSet(string name) : FunctionSet(move(name)) {}
+	ScalarFunctionSet(string name) : FunctionSet(move(name)) {
+	}
 };
 
 class AggregateFunctionSet : public FunctionSet<AggregateFunction> {
 public:
-	AggregateFunctionSet(string name) : FunctionSet(move(name)) {}
+	AggregateFunctionSet(string name) : FunctionSet(move(name)) {
+	}
 };
-
 
 } // namespace duckdb

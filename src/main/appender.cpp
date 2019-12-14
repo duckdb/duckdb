@@ -10,15 +10,15 @@
 using namespace duckdb;
 using namespace std;
 
-Appender::Appender(Connection &con, string schema_name, string table_name)
-    : con(con), column(0) {
+Appender::Appender(Connection &con, string schema_name, string table_name) : con(con), column(0) {
 	description = con.TableInfo(schema_name, table_name);
 	if (!description) {
 		// table could not be found
-		throw CatalogException(StringUtil::Format("Table \"%s.%s\" could not be found", schema_name.c_str(), table_name.c_str()));
+		throw CatalogException(
+		    StringUtil::Format("Table \"%s.%s\" could not be found", schema_name.c_str(), table_name.c_str()));
 	} else {
 		vector<TypeId> types;
-		for(auto &column : description->columns) {
+		for (auto &column : description->columns) {
 			types.push_back(GetInternalType(column.type));
 		}
 		chunk.Initialize(types);
@@ -26,8 +26,8 @@ Appender::Appender(Connection &con, string schema_name, string table_name)
 	}
 }
 
-Appender::Appender(Connection &con, string table_name) :
-	Appender(con, DEFAULT_SCHEMA, table_name) {}
+Appender::Appender(Connection &con, string table_name) : Appender(con, DEFAULT_SCHEMA, table_name) {
+}
 
 Appender::~Appender() {
 	if (invalidated_msg.empty()) {
@@ -157,7 +157,7 @@ void Appender::Flush() {
 
 	try {
 		con.Append(*description, chunk);
-	} catch(Exception &ex) {
+	} catch (Exception &ex) {
 		con.context->RemoveAppender(this);
 		Invalidate(ex.what());
 		throw ex;

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/schema/physical_drop.hpp
+// duckdb/execution/operator/schema/physical_drop.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -21,6 +21,7 @@ public:
 	}
 
 	unique_ptr<DropInfo> info;
+
 public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };

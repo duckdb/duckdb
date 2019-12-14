@@ -10,7 +10,8 @@
 using namespace duckdb;
 using namespace std;
 
-//! This file contains the binder definitions for statements that do not need to be bound at all and only require a straightforward conversion
+//! This file contains the binder definitions for statements that do not need to be bound at all and only require a
+//! straightforward conversion
 
 unique_ptr<BoundSQLStatement> Binder::Bind(AlterTableStatement &stmt) {
 	return make_unique<BoundSimpleStatement>(stmt.type, move(stmt.info));

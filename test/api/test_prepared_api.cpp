@@ -90,7 +90,6 @@ TEST_CASE("Dropping connection with prepared statement resets dependencies", "[a
 	REQUIRE_NO_FAIL(con->Query("CREATE TABLE a(i TINYINT)"));
 	REQUIRE_NO_FAIL(con->Query("INSERT INTO a VALUES (11), (12), (13)"));
 
-
 	auto prepared = con->Prepare("SELECT COUNT(*) FROM a WHERE i=$1");
 	result = prepared->Execute(12);
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));

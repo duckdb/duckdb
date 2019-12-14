@@ -17,9 +17,9 @@ unique_ptr<Node> *Node::GetChild(index_t pos) {
 	assert(0);
 	return nullptr;
 }
-index_t Node::GetMin(){
-    assert(0);
-    return 0;
+index_t Node::GetMin() {
+	assert(0);
+	return 0;
 }
 
 uint32_t Node::PrefixMismatch(ART &art, Node *node, Key &key, uint64_t depth) {

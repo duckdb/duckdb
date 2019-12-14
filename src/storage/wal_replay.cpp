@@ -179,7 +179,7 @@ void ReplayState::ReplayAlter() {
 		throw Exception("Expected ALTER TABLE!");
 	}
 
-	db.catalog->AlterTable(context, (AlterTableInfo*) info.get());
+	db.catalog->AlterTable(context, (AlterTableInfo *)info.get());
 }
 
 //===--------------------------------------------------------------------===//

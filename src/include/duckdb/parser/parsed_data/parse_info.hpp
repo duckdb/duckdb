@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/parsed_data/parse_info.hpp
+// duckdb/parser/parsed_data/parse_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,7 +13,8 @@
 namespace duckdb {
 
 struct ParseInfo {
-	virtual ~ParseInfo() {}
+	virtual ~ParseInfo() {
+	}
 };
 
 } // namespace duckdb

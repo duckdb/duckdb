@@ -79,12 +79,14 @@ template <class T> void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &st
 	}
 }
 
-template <class T> void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::IteratorState &end_state, T &&callback) {
+template <class T>
+void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::IteratorState &end_state, T &&callback) {
 	// iterate in insertion order: start with the tail
 	state.current = tail;
 	while (state.current) {
 		state.start = state.current->data.get();
-		state.end = state.current == end_state.current ? end_state.start : state.start + state.current->current_position;
+		state.end =
+		    state.current == end_state.current ? end_state.start : state.start + state.current->current_position;
 		while (state.start < state.end) {
 			UndoFlags type = *((UndoFlags *)state.start);
 			state.start += sizeof(UndoFlags);
@@ -143,7 +145,7 @@ void UndoBuffer::Cleanup() {
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CleanupEntry(type, data); });
 }
 
-void UndoBuffer::Commit(UndoBuffer::IteratorState iterator_state, WriteAheadLog *log, transaction_t commit_id) {
+void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, WriteAheadLog *log, transaction_t commit_id) {
 	CommitState state(commit_id, log);
 	if (log) {
 		// commit WITH write ahead log
@@ -154,13 +156,10 @@ void UndoBuffer::Commit(UndoBuffer::IteratorState iterator_state, WriteAheadLog 
 	}
 }
 
-void UndoBuffer::RevertCommit(UndoBuffer::IteratorState end_state, transaction_t transaction_id) {
+void UndoBuffer::RevertCommit(UndoBuffer::IteratorState &end_state, transaction_t transaction_id) {
 	CommitState state(transaction_id, nullptr);
 	UndoBuffer::IteratorState start_state;
-	IterateEntries(start_state, end_state, [&](UndoFlags type, data_ptr_t data) {
-		state.RevertCommit(type, data);
-	});
-
+	IterateEntries(start_state, end_state, [&](UndoFlags type, data_ptr_t data) { state.RevertCommit(type, data); });
 }
 
 void UndoBuffer::Rollback() noexcept {
@@ -168,4 +167,4 @@ void UndoBuffer::Rollback() noexcept {
 	RollbackState state;
 	ReverseIterateEntries([&](UndoFlags type, data_ptr_t data) { state.RollbackEntry(type, data); });
 }
-}
+} // namespace duckdb

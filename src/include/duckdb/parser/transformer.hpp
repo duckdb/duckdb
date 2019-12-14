@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/transformer.hpp
+// duckdb/parser/transformer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -16,7 +16,6 @@
 
 #include "pg_definitions.hpp"
 #include "nodes/parsenodes.hpp"
-
 
 namespace duckdb {
 

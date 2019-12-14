@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/aggregate/physical_window.hpp
+// duckdb/execution/operator/aggregate/physical_window.hpp
 //
 //
 //===----------------------------------------------------------------------===//

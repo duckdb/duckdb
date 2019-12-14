@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/operator/logical_table_function.hpp
+// duckdb/planner/operator/logical_table_function.hpp
 //
 //
 //===----------------------------------------------------------------------===//

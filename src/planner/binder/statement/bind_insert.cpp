@@ -12,16 +12,15 @@ using namespace std;
 
 namespace duckdb {
 
-static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t result_columns, bool columns_provided, const char* tname) {
+static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t result_columns, bool columns_provided,
+                                           const char *tname) {
 	if (result_columns != expected_columns) {
-		string msg =
-		    StringUtil::Format(!columns_provided ? "table %s has %lld columns but %lld values were supplied"
-		                                                : "Column name/value mismatch for insert on %s: "
-		                                                  "expected %lld columns but %lld values were supplied",
-		                       tname, expected_columns, result_columns);
+		string msg = StringUtil::Format(!columns_provided ? "table %s has %lld columns but %lld values were supplied"
+		                                                  : "Column name/value mismatch for insert on %s: "
+		                                                    "expected %lld columns but %lld values were supplied",
+		                                tname, expected_columns, result_columns);
 		throw BinderException(msg);
 	}
-
 }
 
 unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
@@ -75,11 +74,12 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 	index_t expected_columns = stmt.columns.size() == 0 ? result->table->columns.size() : stmt.columns.size();
 	// special case: check if we are inserting from a VALUES statement
 	if (stmt.select_statement->node->type == QueryNodeType::SELECT_NODE) {
-		auto &node = (SelectNode&) *stmt.select_statement->node;
+		auto &node = (SelectNode &)*stmt.select_statement->node;
 		if (node.from_table->type == TableReferenceType::EXPRESSION_LIST) {
-			auto &expr_list = (ExpressionListRef&) *node.from_table;
+			auto &expr_list = (ExpressionListRef &)*node.from_table;
 			assert(expr_list.values.size() > 0);
-			CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), stmt.columns.size() != 0, result->table->name.c_str());
+			CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), stmt.columns.size() != 0,
+			                               result->table->name.c_str());
 
 			// VALUES list!
 			for (index_t col_idx = 0; col_idx < expected_columns; col_idx++) {
@@ -92,13 +92,14 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 				expr_list.expected_names.push_back(column.name);
 
 				// now replace any DEFAULT values with the corresponding default expression
-				for(index_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
+				for (index_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
 					if (expr_list.values[list_idx][col_idx]->type == ExpressionType::VALUE_DEFAULT) {
 						// DEFAULT value! replace the entry
 						if (column.default_value) {
 							expr_list.values[list_idx][col_idx] = column.default_value->Copy();
 						} else {
-							expr_list.values[list_idx][col_idx] = make_unique<ConstantExpression>(column.type, Value(GetInternalType(column.type)));
+							expr_list.values[list_idx][col_idx] =
+							    make_unique<ConstantExpression>(column.type, Value(GetInternalType(column.type)));
 						}
 					}
 				}
@@ -107,11 +108,11 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 	}
 
 	// bind the select statement, if any
-	result->select_statement =
-		unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*stmt.select_statement));
-	CheckInsertColumnCountMismatch(expected_columns, result->select_statement->node->types.size(), stmt.columns.size() != 0, result->table->name.c_str());
+	result->select_statement = unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*stmt.select_statement));
+	CheckInsertColumnCountMismatch(expected_columns, result->select_statement->node->types.size(),
+	                               stmt.columns.size() != 0, result->table->name.c_str());
 
 	return move(result);
 }
 
-}
+} // namespace duckdb

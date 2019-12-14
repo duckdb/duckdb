@@ -118,17 +118,17 @@ TEST_CASE("Test STRING_AGG operator", "[aggregate]") {
 	// test string aggregation on a set of values
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(g INTEGER, x VARCHAR, y VARCHAR);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES (1,'a','/'), (1,'b','-'), "
-	                            "(2,'i','/'), (2,NULL,'-'), (2,'j','+'), "
-	                            "(3,'p','/'), "
-	                            "(4,'x','/'), (4,'y','-'), (4,'z','+')"));
+	                          "(2,'i','/'), (2,NULL,'-'), (2,'j','+'), "
+	                          "(3,'p','/'), "
+	                          "(4,'x','/'), (4,'y','-'), (4,'z','+')"));
 
 	result = con.Query("SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {"a,b,i,j,p,x,y,z"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"a-b/i+j/p/x-y+z"}));
 
 	result = con.Query("SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings GROUP BY g");
-	REQUIRE(CHECK_COLUMN(result, 0, {"a,b","x,y,z","i,j","p"}));
-	REQUIRE(CHECK_COLUMN(result, 1, {"a-b","x-y+z","i+j","p"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {"a,b", "x,y,z", "i,j", "p"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"a-b", "x-y+z", "i+j", "p"}));
 
 	// test average on empty set
 	result = con.Query("SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings WHERE g > 100");

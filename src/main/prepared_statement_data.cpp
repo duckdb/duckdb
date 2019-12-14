@@ -5,11 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 PreparedStatementData::PreparedStatementData(StatementType type) : statement_type(type) {
-
 }
 
 PreparedStatementData::~PreparedStatementData() {
-
 }
 
 void PreparedStatementData::Bind(vector<Value> values) {
@@ -18,13 +16,16 @@ void PreparedStatementData::Bind(vector<Value> values) {
 		throw BinderException("Parameter/argument count mismatch for prepared statement");
 	}
 	// bind the values
-	for(index_t i = 0; i < values.size(); i++) {
+	for (index_t i = 0; i < values.size(); i++) {
 		auto it = value_map.find(i + 1);
 		if (it == value_map.end()) {
 			throw BinderException("Could not find parameter with index %llu", i + 1);
 		}
 		if (values[i].type != GetInternalType(it->second.target_type)) {
-			throw BinderException("Type mismatch for binding parameter with index %llu, expected type %s but got type %s", i + 1, TypeIdToString(values[i].type).c_str(), TypeIdToString(GetInternalType(it->second.target_type)).c_str());
+			throw BinderException(
+			    "Type mismatch for binding parameter with index %llu, expected type %s but got type %s", i + 1,
+			    TypeIdToString(values[i].type).c_str(),
+			    TypeIdToString(GetInternalType(it->second.target_type)).c_str());
 		}
 		auto &target = it->second;
 		*target.value = values[i];

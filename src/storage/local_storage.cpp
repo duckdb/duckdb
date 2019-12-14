@@ -255,7 +255,8 @@ template <class T> bool LocalStorage::ScanTableStorage(DataTable *table, LocalTa
 	}
 }
 
-void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &transaction, WriteAheadLog *log, transaction_t commit_id) {
+void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &transaction, WriteAheadLog *log,
+                          transaction_t commit_id) {
 	// commit local storage, iterate over all entries in the table storage map
 	for (auto &entry : table_storage) {
 		auto table = entry.first;

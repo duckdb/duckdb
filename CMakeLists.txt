@@ -8,7 +8,8 @@ project(DuckDB)
 set(DUCKDB_MAJOR_VERSION 0)
 set(DUCKDB_MINOR_VERSION 1)
 set(DUCKDB_PATCH_VERSION 1)
-set(DUCKDB_VERSION ${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION})
+set(DUCKDB_VERSION
+    ${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION})
 
 find_package(Threads REQUIRED)
 
@@ -23,21 +24,29 @@ set(CMAKE_MACOSX_RPATH 1)
 # Determine install paths
 set(INSTALL_LIB_DIR lib CACHE PATH "Installation directory for libraries")
 set(INSTALL_BIN_DIR bin CACHE PATH "Installation directory for executables")
-set(INSTALL_INCLUDE_DIR include CACHE PATH "Installation directory for header files")
+set(INSTALL_INCLUDE_DIR
+    include
+    CACHE PATH "Installation directory for header files")
 if(WIN32 AND NOT CYGWIN)
-    set(DEF_INSTALL_CMAKE_DIR cmake)
+  set(DEF_INSTALL_CMAKE_DIR cmake)
 else()
-    set(DEF_INSTALL_CMAKE_DIR lib/cmake/DuckDB)
+  set(DEF_INSTALL_CMAKE_DIR lib/cmake/DuckDB)
 endif()
-set(INSTALL_CMAKE_DIR ${DEF_INSTALL_CMAKE_DIR} CACHE PATH "Installation directory for CMake files")
+set(INSTALL_CMAKE_DIR
+    ${DEF_INSTALL_CMAKE_DIR}
+    CACHE PATH "Installation directory for CMake files")
 set(DUCKDB_EXPORT_SET "DuckDBExports")
 
 # Make relative install paths absolute
-foreach(p LIB BIN INCLUDE CMAKE)
-    set(var INSTALL_${p}_DIR)
-    if(NOT IS_ABSOLUTE "${${var}}")
-        set(${var} "${CMAKE_INSTALL_PREFIX}/${${var}}")
-    endif()
+foreach(p
+        LIB
+        BIN
+        INCLUDE
+        CMAKE)
+  set(var INSTALL_${p}_DIR)
+  if(NOT IS_ABSOLUTE "${${var}}")
+    set(${var} "${CMAKE_INSTALL_PREFIX}/${${var}}")
+  endif()
 endforeach()
 
 set(M32_FLAG "")
@@ -65,7 +74,17 @@ if(${EXPLICIT_EXCEPTIONS})
   set(CXX_EXTRA "${CXX_EXTRA} -fexceptions")
 endif()
 
-option(AMALGAMATION_BUILD "Build from the amalgamation files, rather than from the normal sources." FALSE)
+option(AMALGAMATION_BUILD
+       "Build from the amalgamation files, rather than from the normal sources."
+       FALSE)
+
+option(TREAT_WARNINGS_AS_ERRORS
+        "Treat warnings as errors"
+        FALSE)
+
+if(TREAT_WARNINGS_AS_ERRORS)
+  message("Treating warnings as errors.")
+endif()
 
 if(NOT MSVC)
   set(CMAKE_CXX_FLAGS_DEBUG
@@ -78,6 +97,9 @@ if(NOT MSVC)
     CXX_EXTRA_DEBUG
     "${CXX_EXTRA_DEBUG} -Wunused-variable -Wunused-const-variable -Werror=vla -Wnarrowing"
     )
+  if(TREAT_WARNINGS_AS_ERRORS)
+    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -Werror")
+  endif()
 
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU"
      AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 8.0)
@@ -89,8 +111,17 @@ if(NOT MSVC)
     message(WARNING "Please use a recent compiler for debug builds")
   endif()
 else()
-  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /wd4244") # equivalent to
-                                                                # -Wnarrowing
+  set(
+    CMAKE_CXX_WINDOWS_FLAGS
+    "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS"
+    )
+  if(TREAT_WARNINGS_AS_ERRORS)
+    set(CMAKE_CXX_WINDOWS_FLAGS "${CMAKE_CXX_WINDOWS_FLAGS} /WX")
+  endif()
+  # remove warning from CXX flags
+  string(REGEX REPLACE "/W[0-4]" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  # add to-be-ignored warnings
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS")
 endif()
 
 # todo use CHECK_CXX_COMPILER_FLAG(-fsanitize=address SUPPORTS_SANITIZER) etc.
@@ -98,7 +129,6 @@ endif()
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
-
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(DEFAULT_BUILD_TYPE "Release")
@@ -157,6 +187,15 @@ function(add_library_unity NAME MODE)
   add_library(${NAME} OBJECT ${SRCS})
 endfunction()
 
+function(disable_target_warnings NAME)
+  if(MSVC)
+    target_compile_options(${NAME} PRIVATE "/W0")
+  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"
+         OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    target_compile_options(${NAME} PRIVATE "-w")
+  endif()
+endfunction()
+
 add_subdirectory(src)
 add_subdirectory(third_party)
 
@@ -170,31 +209,37 @@ endif()
 
 # Write the export set for build and install tree
 install(EXPORT "${DUCKDB_EXPORT_SET}" DESTINATION "${INSTALL_CMAKE_DIR}")
-export(EXPORT "${DUCKDB_EXPORT_SET}" FILE "${PROJECT_BINARY_DIR}/${DUCKDB_EXPORT_SET}.cmake")
+export(EXPORT "${DUCKDB_EXPORT_SET}"
+       FILE "${PROJECT_BINARY_DIR}/${DUCKDB_EXPORT_SET}.cmake")
 
 # Only write the cmake package configuration if the templates exist
 set(CMAKE_CONFIG_TEMPLATE "${CMAKE_SOURCE_DIR}/DuckDBConfig.cmake.in")
-set(CMAKE_CONFIG_VERSION_TEMPLATE "${CMAKE_SOURCE_DIR}/DuckDBConfigVersion.cmake.in")
-if (EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
+set(CMAKE_CONFIG_VERSION_TEMPLATE
+    "${CMAKE_SOURCE_DIR}/DuckDBConfigVersion.cmake.in")
+if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
 
   # Configure cmake package config for the build tree
   set(CONF_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/src/include")
-  configure_file(${CMAKE_CONFIG_TEMPLATE} "${PROJECT_BINARY_DIR}/DuckDBConfig.cmake" @ONLY)
+  configure_file(${CMAKE_CONFIG_TEMPLATE}
+                 "${PROJECT_BINARY_DIR}/DuckDBConfig.cmake" @ONLY)
 
   # Configure cmake package config for the install tree
-  file(RELATIVE_PATH REL_INCLUDE_DIR "${INSTALL_CMAKE_DIR}" "${INSTALL_INCLUDE_DIR}")
+  file(RELATIVE_PATH
+       REL_INCLUDE_DIR
+       "${INSTALL_CMAKE_DIR}"
+       "${INSTALL_INCLUDE_DIR}")
   set(CONF_INCLUDE_DIRS "\${DuckDB_CMAKE_DIR}/${REL_INCLUDE_DIR}")
-  configure_file(${CMAKE_CONFIG_TEMPLATE}
+  configure_file(
+    ${CMAKE_CONFIG_TEMPLATE}
     "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/DuckDBConfig.cmake" @ONLY)
 
   # Configure cmake package version for build and install tree
   configure_file(${CMAKE_CONFIG_VERSION_TEMPLATE}
-    "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake" @ONLY)
+                 "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake" @ONLY)
 
   # Install the cmake package
   install(
-    FILES
-      "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/DuckDBConfig.cmake"
-      "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake"
+    FILES "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/DuckDBConfig.cmake"
+          "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake"
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()

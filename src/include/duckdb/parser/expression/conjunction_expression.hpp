@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/expression/conjunction_expression.hpp
+// duckdb/parser/expression/conjunction_expression.hpp
 //
 //
 //===----------------------------------------------------------------------===//

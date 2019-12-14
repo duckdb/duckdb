@@ -19,9 +19,8 @@ bool BoundFunctionExpression::IsFoldable() const {
 
 string BoundFunctionExpression::ToString() const {
 	string result = function.name + "(";
-	result += StringUtil::Join(children, children.size(), ", ", [](const unique_ptr<Expression>& child){
-		return child->GetName();
-	});
+	result += StringUtil::Join(children, children.size(), ", ",
+	                           [](const unique_ptr<Expression> &child) { return child->GetName(); });
 	result += ")";
 	return result;
 }

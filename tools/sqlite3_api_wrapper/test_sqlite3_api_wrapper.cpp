@@ -6,12 +6,12 @@
 
 using namespace std;
 
-static int concatenate_results(void* arg, int ncols, char** vals, char** colnames) {
-	auto &results = *((vector<vector<string>> *) arg);
+static int concatenate_results(void *arg, int ncols, char **vals, char **colnames) {
+	auto &results = *((vector<vector<string>> *)arg);
 	if (results.size() == 0) {
 		results.resize(ncols);
 	}
-	for(int i = 0; i < ncols; i++) {
+	for (int i = 0; i < ncols; i++) {
 		results[i].push_back(vals[i] ? vals[i] : "");
 	}
 	return SQLITE_OK;
@@ -20,8 +20,7 @@ static int concatenate_results(void* arg, int ncols, char** vals, char** colname
 // C++ wrapper class for the C wrapper API that wraps our C++ API, because why not
 class SQLiteDBWrapper {
 public:
-	SQLiteDBWrapper() :
-		db(nullptr) {
+	SQLiteDBWrapper() : db(nullptr) {
 	}
 	~SQLiteDBWrapper() {
 		if (db) {
@@ -31,6 +30,7 @@ public:
 
 	sqlite3 *db;
 	vector<vector<string>> results;
+
 public:
 	int Open(string filename) {
 		return sqlite3_open(filename.c_str(), &db) == SQLITE_OK;
@@ -52,8 +52,8 @@ public:
 	}
 
 	void PrintResult() {
-		for(size_t row_idx = 0; row_idx < results[0].size(); row_idx++) {
-			for(size_t col_idx = 0; col_idx < results.size(); col_idx++) {
+		for (size_t row_idx = 0; row_idx < results[0].size(); row_idx++) {
+			for (size_t col_idx = 0; col_idx < results.size(); col_idx++) {
 				printf("%s|", results[col_idx][row_idx].c_str());
 			}
 			printf("\n");
@@ -71,9 +71,10 @@ public:
 			PrintResult();
 			return false;
 		}
-		for(size_t i = 0; i < expected_data.size(); i++) {
+		for (size_t i = 0; i < expected_data.size(); i++) {
 			if (expected_data[i] != results[column][i]) {
-				fprintf(stderr, "Value does not match: expected \"%s\" but got \"%s\"\n", expected_data[i].c_str(), results[column][i].c_str());
+				fprintf(stderr, "Value does not match: expected \"%s\" but got \"%s\"\n", expected_data[i].c_str(),
+				        results[column][i].c_str());
 				return false;
 			}
 		}
@@ -83,8 +84,8 @@ public:
 
 class SQLiteStmtWrapper {
 public:
-	SQLiteStmtWrapper() :
-		stmt(nullptr) {}
+	SQLiteStmtWrapper() : stmt(nullptr) {
+	}
 	~SQLiteStmtWrapper() {
 		Finalize();
 	}
@@ -105,7 +106,7 @@ public:
 	}
 };
 
-TEST_CASE("Basic sqlite wrapper usage", "[sqlite3wrapper]" ) {
+TEST_CASE("Basic sqlite wrapper usage", "[sqlite3wrapper]") {
 	SQLiteDBWrapper db;
 
 	// open an in-memory db
@@ -128,7 +129,8 @@ TEST_CASE("Basic sqlite wrapper usage", "[sqlite3wrapper]" ) {
 
 	// test different types
 #ifndef SQLITE_TEST
-	REQUIRE(db.Execute("SELECT CAST('1992-01-01' AS DATE), 3, 'hello world', CAST('1992-01-01 00:00:00' AS TIMESTAMP);"));
+	REQUIRE(
+	    db.Execute("SELECT CAST('1992-01-01' AS DATE), 3, 'hello world', CAST('1992-01-01 00:00:00' AS TIMESTAMP);"));
 	REQUIRE(db.CheckColumn(0, {"1992-01-01"}));
 	REQUIRE(db.CheckColumn(1, {"3"}));
 	REQUIRE(db.CheckColumn(2, {"hello world"}));
@@ -142,7 +144,7 @@ TEST_CASE("Basic sqlite wrapper usage", "[sqlite3wrapper]" ) {
 	REQUIRE(!db.Execute("SELECT * FROM nonexistant_tbl"));
 }
 
-TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]" ) {
+TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]") {
 	SQLiteDBWrapper db;
 	SQLiteStmtWrapper stmt;
 
@@ -152,8 +154,10 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]" ) {
 #ifndef SQLITE_TEST
 	// sqlite3_prepare_v2 errors
 	// nullptr for db/stmt, note: normal sqlite segfaults here
-	REQUIRE(sqlite3_prepare_v2(nullptr, "INSERT INTO test VALUES ($1, $2, $3, $4)", -1, nullptr, nullptr) == SQLITE_MISUSE);
-	REQUIRE(sqlite3_prepare_v2(db.db, "INSERT INTO test VALUES ($1, $2, $3, $4)", -1, nullptr, nullptr) == SQLITE_MISUSE);
+	REQUIRE(sqlite3_prepare_v2(nullptr, "INSERT INTO test VALUES ($1, $2, $3, $4)", -1, nullptr, nullptr) ==
+	        SQLITE_MISUSE);
+	REQUIRE(sqlite3_prepare_v2(db.db, "INSERT INTO test VALUES ($1, $2, $3, $4)", -1, nullptr, nullptr) ==
+	        SQLITE_MISUSE);
 #endif
 	// prepared statement
 	REQUIRE(stmt.Prepare(db.db, "INSERT INTO test VALUES ($1, $2, $3, $4)", -1, nullptr) == SQLITE_OK);
@@ -161,7 +165,7 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]" ) {
 	// test for parameter count, names and indexes
 	REQUIRE(sqlite3_bind_parameter_count(nullptr) == 0);
 	REQUIRE(sqlite3_bind_parameter_count(stmt.stmt) == 4);
-	for(int i = 1; i < 5; i++) {
+	for (int i = 1; i < 5; i++) {
 		REQUIRE(sqlite3_bind_parameter_name(nullptr, i) == nullptr);
 		REQUIRE(sqlite3_bind_parameter_index(nullptr, nullptr) == 0);
 		REQUIRE(sqlite3_bind_parameter_index(stmt.stmt, nullptr) == 0);
@@ -253,13 +257,13 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]" ) {
 	// repeatedly call sqlite3_step on a SELECT statement
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_ROW);
 	// verify the results
-	REQUIRE(string((char*) sqlite3_column_text(stmt.stmt, 0)) == string("2"));
+	REQUIRE(string((char *)sqlite3_column_text(stmt.stmt, 0)) == string("2"));
 	REQUIRE(sqlite3_column_int(stmt.stmt, 0) == 2);
 	REQUIRE(sqlite3_column_int64(stmt.stmt, 0) == 2);
 	REQUIRE(sqlite3_column_double(stmt.stmt, 0) == 2);
-	REQUIRE(string((char*) sqlite3_column_text(stmt.stmt, 1)) == string("1000"));
-	REQUIRE(string((char*) sqlite3_column_text(stmt.stmt, 2)) == string("1992-01-01"));
-	REQUIRE(string((char*) sqlite3_column_text(stmt.stmt, 3)) == string("hello world"));
+	REQUIRE(string((char *)sqlite3_column_text(stmt.stmt, 1)) == string("1000"));
+	REQUIRE(string((char *)sqlite3_column_text(stmt.stmt, 2)) == string("1992-01-01"));
+	REQUIRE(string((char *)sqlite3_column_text(stmt.stmt, 3)) == string("hello world"));
 	REQUIRE(sqlite3_column_int(stmt.stmt, 3) == 0);
 	REQUIRE(sqlite3_column_int64(stmt.stmt, 3) == 0);
 	REQUIRE(sqlite3_column_double(stmt.stmt, 3) == 0);
@@ -311,12 +315,11 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]" ) {
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_DONE);
 }
 
-
 static void sqlite3_interrupt_fast(SQLiteDBWrapper *db, bool *success) {
 	*success = db->Execute("SELECT SUM(i1.i) FROM integers i1, integers i2, integers i3, integers i4, integers i5");
 }
 
-TEST_CASE("Test sqlite3_interrupt", "[sqlite3wrapper]" ) {
+TEST_CASE("Test sqlite3_interrupt", "[sqlite3wrapper]") {
 	SQLiteDBWrapper db;
 	bool success;
 

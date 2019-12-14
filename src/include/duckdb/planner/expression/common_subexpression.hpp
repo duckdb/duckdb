@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/expression/common_subexpression.hpp
+// duckdb/planner/expression/common_subexpression.hpp
 //
 //
 //===----------------------------------------------------------------------===//

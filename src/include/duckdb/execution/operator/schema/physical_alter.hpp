@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/schema/physical_alter.hpp
+// duckdb/execution/operator/schema/physical_alter.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -21,6 +21,7 @@ public:
 	}
 
 	unique_ptr<AlterInfo> info;
+
 public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };

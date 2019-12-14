@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// main/prepared_statement_data.hpp
+// duckdb/main/prepared_statement_data.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -35,6 +35,7 @@ public:
 	vector<string> names;
 	vector<TypeId> types;
 	vector<SQLType> sql_types;
+
 public:
 	//! Bind a set of values to the prepared statement data
 	void Bind(vector<Value> values);

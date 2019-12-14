@@ -14,7 +14,7 @@ using namespace std;
 #define SOURCE_ID __DATE__
 #define LIB_VERSION "DuckDB 0.1"
 
-static char* sqlite3_strdup(const char* str);
+static char *sqlite3_strdup(const char *str);
 
 struct sqlite3_string_buffer {
 	//! String data
@@ -74,7 +74,7 @@ int sqlite3_open(const char *filename, /* Database filename (UTF-8) */
 		pDb = new sqlite3();
 		pDb->db = make_unique<DuckDB>(filename);
 		pDb->con = make_unique<Connection>(*pDb->db);
-	} catch(std::exception &ex) {
+	} catch (std::exception &ex) {
 		if (pDb) {
 			pDb->last_error = ex.what();
 		}
@@ -137,7 +137,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		stmt->query_string = query;
 		stmt->prepared = move(prepared);
 		stmt->current_row = -1;
-		for(index_t i = 0; i < stmt->prepared->n_param; i++) {
+		for (index_t i = 0; i < stmt->prepared->n_param; i++) {
 			stmt->bound_names.push_back("$" + to_string(i + 1));
 			stmt->bound_values.push_back(Value());
 		}
@@ -149,7 +149,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 
 		*ppStmt = stmt.release();
 		return SQLITE_OK;
-	} catch(std::exception &ex) {
+	} catch (std::exception &ex) {
 		db->last_error = ex.what();
 		return SQLITE_ERROR;
 	}
@@ -186,7 +186,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		return SQLITE_DONE;
 	}
 	pStmt->current_row++;
-	if (pStmt->current_row >= (int32_t) pStmt->current_chunk->size()) {
+	if (pStmt->current_row >= (int32_t)pStmt->current_chunk->size()) {
 		// have to fetch again!
 		pStmt->current_row = 0;
 		pStmt->current_chunk = pStmt->result->Fetch();
@@ -314,7 +314,7 @@ int sqlite3_column_count(sqlite3_stmt *pStmt) {
 	if (!pStmt) {
 		return 0;
 	}
-	return (int) pStmt->prepared->types.size();
+	return (int)pStmt->prepared->types.size();
 }
 
 ////////////////////////////
@@ -361,15 +361,17 @@ static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, SQLType targ
 	if (!pStmt || !pStmt->result || !pStmt->current_chunk) {
 		return false;
 	}
-	if (iCol < 0 || iCol >= (int) pStmt->result->sql_types.size()) {
+	if (iCol < 0 || iCol >= (int)pStmt->result->sql_types.size()) {
 		return false;
 	}
 	if (pStmt->current_chunk->data[iCol].nullmask[pStmt->current_row]) {
 		return false;
 	}
 	try {
-		val = pStmt->current_chunk->data[iCol].GetValue(pStmt->current_row).CastAs(pStmt->result->sql_types[iCol], target_type);
-	} catch(...) {
+		val = pStmt->current_chunk->data[iCol]
+		          .GetValue(pStmt->current_row)
+		          .CastAs(pStmt->result->sql_types[iCol], target_type);
+	} catch (...) {
 		return false;
 	}
 	return true;
@@ -406,7 +408,8 @@ const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {
 	}
 	try {
 		if (!pStmt->current_text) {
-			pStmt->current_text = unique_ptr<sqlite3_string_buffer[]>(new sqlite3_string_buffer[pStmt->result->sql_types.size()]);
+			pStmt->current_text =
+			    unique_ptr<sqlite3_string_buffer[]>(new sqlite3_string_buffer[pStmt->result->sql_types.size()]);
 		}
 		auto &entry = pStmt->current_text[iCol];
 		if (!entry.data) {
@@ -414,8 +417,8 @@ const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {
 			entry.data = unique_ptr<char[]>(new char[val.str_value.size() + 1]);
 			memcpy(entry.data.get(), val.str_value.c_str(), val.str_value.size() + 1);
 		}
-		return (const unsigned char*) entry.data.get();
-	} catch(...) {
+		return (const unsigned char *)entry.data.get();
+	} catch (...) {
 		// memory error!
 		return nullptr;
 	}
@@ -435,7 +438,7 @@ const char *sqlite3_bind_parameter_name(sqlite3_stmt *stmt, int idx) {
 	if (!stmt) {
 		return nullptr;
 	}
-	if (idx < 1 || idx > (int) stmt->prepared->n_param) {
+	if (idx < 1 || idx > (int)stmt->prepared->n_param) {
 		return nullptr;
 	}
 	return stmt->bound_names[idx - 1].c_str();
@@ -445,7 +448,7 @@ int sqlite3_bind_parameter_index(sqlite3_stmt *stmt, const char *zName) {
 	if (!stmt || !zName) {
 		return 0;
 	}
-	for(index_t i = 0; i < stmt->bound_names.size(); i++) {
+	for (index_t i = 0; i < stmt->bound_names.size(); i++) {
 		if (stmt->bound_names[i] == string(zName)) {
 			return i + 1;
 		}
@@ -457,7 +460,7 @@ int sqlite3_internal_bind_value(sqlite3_stmt *stmt, int idx, Value value) {
 	if (!stmt || !stmt->prepared || stmt->result) {
 		return SQLITE_MISUSE;
 	}
-	if (idx < 1 || idx > (int) stmt->prepared->n_param) {
+	if (idx < 1 || idx > (int)stmt->prepared->n_param) {
 		return SQLITE_RANGE;
 	}
 	stmt->bound_values[idx - 1] = value;
@@ -476,7 +479,7 @@ int sqlite3_bind_null(sqlite3_stmt *stmt, int idx) {
 	return sqlite3_internal_bind_value(stmt, idx, Value());
 }
 
-int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char* val, int length, void(*free_func)(void*)) {
+int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char *val, int length, void (*free_func)(void *)) {
 	if (!val) {
 		return SQLITE_MISUSE;
 	}
@@ -487,7 +490,7 @@ int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char* val, int length, 
 		value = string(val, val + length);
 	}
 	if (free_func) {
-		free_func((void*) val);
+		free_func((void *)val);
 	}
 	return sqlite3_internal_bind_value(stmt, idx, Value(value));
 }
@@ -575,8 +578,8 @@ SQLITE_API int sqlite3_strnicmp(const char *zLeft, const char *zRight, int N) {
 	return N < 0 ? 0 : sqlite3UpperToLower[*a] - sqlite3UpperToLower[*b];
 }
 
-char* sqlite3_strdup(const char* str) {
-	char* result = (char*) sqlite3_malloc64(strlen(str) + 1);
+char *sqlite3_strdup(const char *str) {
+	char *result = (char *)sqlite3_malloc64(strlen(str) + 1);
 	strcpy(result, str);
 	return result;
 }

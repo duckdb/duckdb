@@ -6,15 +6,15 @@
 using namespace duckdb;
 using namespace std;
 
-
 PreparedStatement::PreparedStatement(ClientContext *context, string name, PreparedStatementData &data, index_t n_param)
-	: context(context), name(name), success(true), is_invalidated(false), n_param(n_param) {
+    : context(context), name(name), success(true), is_invalidated(false), n_param(n_param) {
 	this->type = data.statement_type;
 	this->types = data.sql_types;
 	this->names = data.names;
 }
 
-PreparedStatement::PreparedStatement(string error) : context(nullptr), success(false), error(error), is_invalidated(false) {
+PreparedStatement::PreparedStatement(string error)
+    : context(nullptr), success(false), error(error), is_invalidated(false) {
 }
 
 PreparedStatement::~PreparedStatement() {

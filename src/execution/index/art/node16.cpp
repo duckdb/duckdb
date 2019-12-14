@@ -41,7 +41,7 @@ unique_ptr<Node> *Node16::GetChild(index_t pos) {
 }
 
 index_t Node16::GetMin() {
-    return 0;
+	return 0;
 }
 
 void Node16::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child) {
