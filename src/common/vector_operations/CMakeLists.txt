@@ -10,7 +10,6 @@ add_library_unity(duckdb_vector_operations
                   gather.cpp
                   hash.cpp
                   null_operations.cpp
-                  numeric_bitwise_operators.cpp
                   numeric_inplace_operators.cpp
                   numeric_inplace_bitwise_operators.cpp
                   numeric_binary_operators.cpp

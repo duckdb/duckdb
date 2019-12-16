@@ -50,20 +50,6 @@ struct VectorOperations {
 	static void ModuloInPlace(Vector &A, int64_t B);
 
 	//===--------------------------------------------------------------------===//
-	// Bitwise Operators
-	//===--------------------------------------------------------------------===//
-	//! result = A ^ B
-	static void BitwiseXOR(Vector &A, Vector &B, Vector &result);
-	//! result = A & B
-	static void BitwiseAND(Vector &A, Vector &B, Vector &result);
-	//! result = A | B
-	static void BitwiseOR(Vector &A, Vector &B, Vector &result);
-	//! result = A << B
-	static void BitwiseShiftLeft(Vector &A, Vector &B, Vector &result);
-	//! result = A >> B
-	static void BitwiseShiftRight(Vector &A, Vector &B, Vector &result);
-
-	//===--------------------------------------------------------------------===//
 	// In-Place Bitwise Operators
 	//===--------------------------------------------------------------------===//
 	//! A ^= B
