@@ -16,7 +16,8 @@ add_library_unity(duckdb_func_math
                   round.cpp
                   setseed.cpp
                   sign.cpp
-                  sqrt.cpp)
+                  sqrt.cpp
+                  trigonometrics.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_math>
     PARENT_SCOPE)

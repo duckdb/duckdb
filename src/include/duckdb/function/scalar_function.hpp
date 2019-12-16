@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/function/function.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
 class BoundFunctionExpression;
@@ -49,6 +50,22 @@ public:
 	bool operator!=(const ScalarFunction &rhs) const {
 		return !(*this == rhs);
 	}
+
+	template <class TA, class TR, class OP>
+	static void UnaryFunction(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
+	                          BoundFunctionExpression &expr, Vector &result) {
+		assert(input_count == 1);
+		result.Initialize(GetTypeId<TR>());
+		VectorOperations::UnaryExec<TA, TR>(inputs[0], result, OP::template Operation<TR>);
+	};
+
+	template <class TA, class TB, class TR, class OP>
+	static void BinaryFunction(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
+	                           BoundFunctionExpression &expr, Vector &result) {
+		assert(input_count == 2);
+		result.Initialize(GetTypeId<TR>());
+		VectorOperations::BinaryExec<TA, TB, TR>(inputs[0], inputs[1], result, OP::template Operation<TR>);
+	};
 };
 
 } // namespace duckdb

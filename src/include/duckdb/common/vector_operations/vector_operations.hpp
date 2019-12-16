@@ -68,14 +68,6 @@ struct VectorOperations {
 	static void Sign(Vector &A, Vector &result);
 	static void Pow(Vector &A, Vector &B, Vector &result);
 
-	static void Sin(Vector &A, Vector &result);
-	static void Cos(Vector &A, Vector &result);
-	static void Tan(Vector &A, Vector &result);
-	static void ASin(Vector &A, Vector &result);
-	static void ACos(Vector &A, Vector &result);
-	static void ATan(Vector &A, Vector &result);
-	static void ATan2(Vector &A, Vector &B, Vector &result);
-
 	//===--------------------------------------------------------------------===//
 	// Bitwise Operators
 	//===--------------------------------------------------------------------===//

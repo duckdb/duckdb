@@ -111,6 +111,8 @@ header_bottom+= "//===----------------------------------------------------------
 base_dir = os.path.join(os.getcwd(),'src/include')
 
 def format_file(f, full_path, directory, ext, sort_includes):
+	if not os.path.isfile(full_path):
+		return
 	if f == 'list.hpp':
 		# fill in list file
 		list = [os.path.join(dp, f) for dp, dn, filenames in os.walk(directory) for f in filenames if os.path.splitext(f)[1] == '.hpp' and not f.endswith("list.hpp")]
