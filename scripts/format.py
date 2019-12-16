@@ -41,6 +41,8 @@ if revision == '--all':
 
 def can_format_file(full_path):
 	global extensions, formatted_directories, ignored_files
+	if not os.path.isfile(full_path):
+		return False
 	fname = full_path.split(os.path.sep)[-1]
 	# check ignored files
 	if fname in ignored_files:

@@ -1,7 +1,9 @@
 #include "duckdb/function/scalar/trigonometric_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/vector_operations/unary_numeric.hpp"
+
+#include <algorithm>
+#include <cmath>
 
 using namespace std;
 

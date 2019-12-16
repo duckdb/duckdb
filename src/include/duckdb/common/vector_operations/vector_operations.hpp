@@ -50,25 +50,6 @@ struct VectorOperations {
 	static void ModuloInPlace(Vector &A, int64_t B);
 
 	//===--------------------------------------------------------------------===//
-	// Numeric Functions
-	//===--------------------------------------------------------------------===//
-	//! result = ABS(A)
-	static void Abs(Vector &A, Vector &result);
-	static void Round(Vector &A, Vector &B, Vector &result);
-	static void Ceil(Vector &A, Vector &result);
-	static void Floor(Vector &A, Vector &result);
-	static void CbRt(Vector &A, Vector &result);
-	static void Degrees(Vector &A, Vector &result);
-	static void Radians(Vector &A, Vector &result);
-	static void Exp(Vector &A, Vector &result);
-	static void Sqrt(Vector &A, Vector &result);
-	static void Ln(Vector &A, Vector &result);
-	static void Log10(Vector &A, Vector &result);
-	static void Log2(Vector &A, Vector &result);
-	static void Sign(Vector &A, Vector &result);
-	static void Pow(Vector &A, Vector &B, Vector &result);
-
-	//===--------------------------------------------------------------------===//
 	// Bitwise Operators
 	//===--------------------------------------------------------------------===//
 	//! result = A ^ B

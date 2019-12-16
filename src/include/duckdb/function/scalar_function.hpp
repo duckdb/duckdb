@@ -51,6 +51,7 @@ public:
 		return !(*this == rhs);
 	}
 
+public:
 	template <class TA, class TR, class OP>
 	static void UnaryFunction(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
 	                          BoundFunctionExpression &expr, Vector &result) {
