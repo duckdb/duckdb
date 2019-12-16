@@ -117,4 +117,4 @@ void ModFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(functions);
 }
 
-}
+} // namespace duckdb

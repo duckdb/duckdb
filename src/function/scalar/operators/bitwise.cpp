@@ -33,7 +33,8 @@ struct BitwiseANDOperator {
 void BitwiseAndFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("&");
 	for (auto &type : SQLType::INTEGRAL) {
-		functions.AddFunction(ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseANDOperator>(type)));
+		functions.AddFunction(
+		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseANDOperator>(type)));
 	}
 	set.AddFunction(functions);
 }
@@ -50,7 +51,8 @@ struct BitwiseOROperator {
 void BitwiseOrFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("|");
 	for (auto &type : SQLType::INTEGRAL) {
-		functions.AddFunction(ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseOROperator>(type)));
+		functions.AddFunction(
+		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseOROperator>(type)));
 	}
 	set.AddFunction(functions);
 }
@@ -67,7 +69,8 @@ struct BitwiseXOROperator {
 void BitwiseXorFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("#");
 	for (auto &type : SQLType::INTEGRAL) {
-		functions.AddFunction(ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseXOROperator>(type)));
+		functions.AddFunction(
+		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseXOROperator>(type)));
 	}
 	set.AddFunction(functions);
 }
@@ -84,7 +87,8 @@ struct BitwiseShiftLeftOperator {
 void LeftShiftFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("<<");
 	for (auto &type : SQLType::INTEGRAL) {
-		functions.AddFunction(ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseShiftLeftOperator>(type)));
+		functions.AddFunction(
+		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseShiftLeftOperator>(type)));
 	}
 	set.AddFunction(functions);
 }
@@ -101,9 +105,10 @@ struct BitwiseShiftRightOperator {
 void RightShiftFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions(">>");
 	for (auto &type : SQLType::INTEGRAL) {
-		functions.AddFunction(ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseShiftRightOperator>(type)));
+		functions.AddFunction(
+		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseShiftRightOperator>(type)));
 	}
 	set.AddFunction(functions);
 }
 
-}
+} // namespace duckdb
