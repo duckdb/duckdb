@@ -98,6 +98,7 @@ struct SQLType {
 
 	bool IsIntegral() const;
 	bool IsNumeric() const;
+
 public:
 	static const SQLType SQLNULL;
 	static const SQLType BOOLEAN;

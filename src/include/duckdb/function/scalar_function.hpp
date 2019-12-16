@@ -54,7 +54,7 @@ public:
 
 public:
 	static void NopFunction(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-	                          BoundFunctionExpression &expr, Vector &result) {
+	                        BoundFunctionExpression &expr, Vector &result) {
 		assert(input_count >= 1);
 		inputs[0].Move(result);
 	};

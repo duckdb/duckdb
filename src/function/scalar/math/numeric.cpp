@@ -9,9 +9,8 @@ using namespace std;
 
 namespace duckdb {
 
-template<class OP>
-static scalar_function_t GetScalarUnaryFunction(SQLType type) {
-	switch(type.id) {
+template <class OP> static scalar_function_t GetScalarUnaryFunction(SQLType type) {
+	switch (type.id) {
 	case SQLTypeId::TINYINT:
 		return ScalarFunction::UnaryFunction<int8_t, int8_t, OP>;
 	case SQLTypeId::SMALLINT:
@@ -51,9 +50,8 @@ void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // sign
 //===--------------------------------------------------------------------===//
-template<class TR, class OP>
-static scalar_function_t GetScalarUnaryFunctionFixedReturn(SQLType type) {
-	switch(type.id) {
+template <class TR, class OP> static scalar_function_t GetScalarUnaryFunctionFixedReturn(SQLType type) {
+	switch (type.id) {
 	case SQLTypeId::TINYINT:
 		return ScalarFunction::UnaryFunction<int8_t, TR, OP>;
 	case SQLTypeId::SMALLINT:
@@ -87,7 +85,8 @@ struct SignOperator {
 void SignFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet sign("sign");
 	for (auto &type : SQLType::NUMERIC) {
-		sign.AddFunction(ScalarFunction({type}, SQLType::TINYINT, GetScalarUnaryFunctionFixedReturn<int8_t, SignOperator>(type)));
+		sign.AddFunction(
+		    ScalarFunction({type}, SQLType::TINYINT, GetScalarUnaryFunctionFixedReturn<int8_t, SignOperator>(type)));
 	}
 	set.AddFunction(sign);
 }
@@ -145,9 +144,8 @@ void FloorFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // round
 //===--------------------------------------------------------------------===//
-template<class TB, class OP>
-static scalar_function_t GetScalarBinaryFunctionFixedArgument(SQLType type) {
-	switch(type.id) {
+template <class TB, class OP> static scalar_function_t GetScalarBinaryFunctionFixedArgument(SQLType type) {
+	switch (type.id) {
 	case SQLTypeId::TINYINT:
 		return ScalarFunction::BinaryFunction<int8_t, TB, int8_t, OP>;
 	case SQLTypeId::SMALLINT:
@@ -217,7 +215,7 @@ struct PowOperator {
 
 void PowFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction power_function("pow", {SQLType::DOUBLE, SQLType::DOUBLE}, SQLType::DOUBLE,
-	                               ScalarFunction::BinaryFunction<double, double, double, PowOperator>);
+	                              ScalarFunction::BinaryFunction<double, double, double, PowOperator>);
 	set.AddFunction(power_function);
 	power_function.name = "power";
 	set.AddFunction(power_function);
@@ -262,7 +260,7 @@ struct Log10Operator {
 
 void Log10Fun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction log_function("log10", {SQLType::DOUBLE}, SQLType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, Log10Operator>);
+	                            ScalarFunction::UnaryFunction<double, double, Log10Operator>);
 	set.AddFunction(log_function);
 	// "log" is an alias for "log10"
 	log_function.name = "log";
@@ -296,7 +294,6 @@ void CbrtFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("cbrt", {SQLType::DOUBLE}, SQLType::DOUBLE,
 	                               ScalarFunction::UnaryFunction<double, double, CbRtOperator>));
 }
-
 
 //===--------------------------------------------------------------------===//
 // pi
@@ -341,4 +338,4 @@ void RadiansFun::RegisterFunction(BuiltinFunctions &set) {
 	                               ScalarFunction::UnaryFunction<double, double, RadiansOperator>));
 }
 
-}
+} // namespace duckdb
