@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/index/art/node48.hpp
+// duckdb/execution/index/art/node48.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -28,6 +28,8 @@ public:
 	index_t GetNextPos(index_t pos) override;
 	//! Get Node48 Child
 	unique_ptr<Node> *GetChild(index_t pos) override;
+
+	index_t GetMin() override;
 
 	//! Insert node in Node48
 	static void insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child);

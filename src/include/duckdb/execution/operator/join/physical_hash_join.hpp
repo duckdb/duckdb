@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/join/physical_hash_join.hpp
+// duckdb/execution/operator/join/physical_hash_join.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -9,8 +9,9 @@ unique_ptr<PragmaStatement> Transformer::TransformPragma(PGNode *node) {
 	auto stmt = reinterpret_cast<PGPragmaStmt *>(node);
 
 	auto result = make_unique<PragmaStatement>();
+	auto &info = *result->info;
 
-	result->name = stmt->name;
+	info.name = stmt->name;
 	// parse the arguments, if any
 	if (stmt->args) {
 		for (auto cell = stmt->args->head; cell != nullptr; cell = cell->next) {
@@ -18,26 +19,26 @@ unique_ptr<PragmaStatement> Transformer::TransformPragma(PGNode *node) {
 			if (node->type != T_PGAConst) {
 				throw ParserException("Unsupported PRAGMA parameter: can only accept constants!");
 			}
-			auto constant = TransformConstant((PGAConst*) node);
-			result->parameters.push_back(((ConstantExpression&) *constant).value);
+			auto constant = TransformConstant((PGAConst *)node);
+			info.parameters.push_back(((ConstantExpression &)*constant).value);
 		}
 	}
 	// now parse the pragma type
-	switch(stmt->kind) {
+	switch (stmt->kind) {
 	case PG_PRAGMA_TYPE_NOTHING:
-		if (result->parameters.size() > 0) {
+		if (info.parameters.size() > 0) {
 			throw ParserException("PRAGMA statement that is not a call or assignment cannot contain parameters");
 		}
-		result->pragma_type = PragmaType::NOTHING;
+		info.pragma_type = PragmaType::NOTHING;
 		break;
 	case PG_PRAGMA_TYPE_ASSIGNMENT:
-		if (result->parameters.size() != 1) {
+		if (info.parameters.size() != 1) {
 			throw ParserException("PRAGMA statement with assignment should contain exactly one parameter");
 		}
-		result->pragma_type = PragmaType::ASSIGNMENT;
+		info.pragma_type = PragmaType::ASSIGNMENT;
 		break;
 	case PG_PRAGMA_TYPE_CALL:
-		result->pragma_type = PragmaType::CALL;
+		info.pragma_type = PragmaType::CALL;
 		break;
 	default:
 		throw ParserException("Unknown pragma type");

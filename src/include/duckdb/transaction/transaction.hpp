@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// transaction/transaction.hpp
+// duckdb/transaction/transaction.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -57,12 +57,10 @@ public:
 	bool is_invalidated;
 
 public:
-	void PushCatalogEntry(CatalogEntry *entry);
-	//! Push a query into the undo buffer
-	void PushQuery(string query);
+	void PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data = nullptr, index_t extra_data_size = 0);
 
-	//! Commit the current transaction with the given commit identifier. Returns true if the transaction commit was successful, or false if it was aborted.
-	bool Commit(WriteAheadLog *log, transaction_t commit_id) noexcept;
+	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction commit failed, or an empty string if the commit was sucessful
+	string Commit(WriteAheadLog *log, transaction_t commit_id) noexcept;
 	//! Rollback
 	void Rollback() noexcept {
 		undo_buffer.Rollback();

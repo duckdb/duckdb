@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/index/art/art_key.hpp
+// duckdb/execution/index/art/art_key.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -30,6 +30,7 @@ public:
 	data_t &operator[](std::size_t i);
 	const data_t &operator[](std::size_t i) const;
 	bool operator>(const Key &k) const;
+	bool operator<(const Key &k) const;
 	bool operator>=(const Key &k) const;
 	bool operator==(const Key &k) const;
 
@@ -37,6 +38,7 @@ public:
 
 	static uint32_t EncodeFloat(float x);
 	static uint64_t EncodeDouble(double x);
+
 private:
 	template <class T> static unique_ptr<data_t[]> CreateData(T value, bool is_little_endian) {
 		throw NotImplementedException("Cannot create data from this type");

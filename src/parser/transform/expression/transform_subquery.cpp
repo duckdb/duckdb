@@ -14,8 +14,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(PGSubLink *root) {
 	if (!subquery_expr->subquery) {
 		return nullptr;
 	}
-	auto &select_list = subquery_expr->subquery->GetSelectList();
-	assert(select_list.size() > 0);
+	assert(subquery_expr->subquery->GetSelectList().size() > 0);
 
 	switch (root->subLinkType) {
 	case PG_EXISTS_SUBLINK: {
@@ -32,8 +31,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(PGSubLink *root) {
 			// simple IN
 			subquery_expr->comparison_type = ExpressionType::COMPARE_EQUAL;
 		} else {
-			auto operator_name =
-			    string((reinterpret_cast<PGValue *>(root->operName->head->data.ptr_value))->val.str);
+			auto operator_name = string((reinterpret_cast<PGValue *>(root->operName->head->data.ptr_value))->val.str);
 			subquery_expr->comparison_type = OperatorToExpressionType(operator_name);
 		}
 		assert(subquery_expr->comparison_type == ExpressionType::COMPARE_EQUAL ||

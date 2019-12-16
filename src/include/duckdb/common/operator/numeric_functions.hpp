@@ -27,7 +27,7 @@ struct Round {
 			precision = 0;
 		}
 		T modifier = pow(10, precision);
-		return ((int64_t)(input * modifier)) / modifier;
+		return (round(input * modifier)) / modifier;
 	}
 };
 

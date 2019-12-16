@@ -50,25 +50,24 @@ Transaction *TransactionManager::StartTransaction() {
 	return transaction_ptr;
 }
 
-bool TransactionManager::CommitTransaction(Transaction *transaction) {
+string TransactionManager::CommitTransaction(Transaction *transaction) {
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
 
 	// obtain a commit id for the transaction
 	transaction_t commit_id = current_start_timestamp++;
-	bool success = true;
 	// commit the UndoBuffer of the transaction
-	if (!transaction->Commit(storage.GetWriteAheadLog(), commit_id)) {
+	string error = transaction->Commit(storage.GetWriteAheadLog(), commit_id);
+	if (!error.empty()) {
 		// commit unsuccessful: rollback the transaction instead
 		transaction->commit_id = 0;
 		transaction->Rollback();
-		success = false;
 	}
 
 	// commit successful: remove the transaction id from the list of active transactions
 	// potentially resulting in garbage collection
 	RemoveTransaction(transaction);
-	return success;
+	return error;
 }
 
 void TransactionManager::RollbackTransaction(Transaction *transaction) {
@@ -182,10 +181,12 @@ void TransactionManager::AddCatalogSet(ClientContext &context, unique_ptr<Catalo
 	context.catalog.dependency_manager.ClearDependencies(*catalog_set);
 
 	lock_guard<mutex> lock(transaction_lock);
+	if (active_transactions.size() > 0) {
+		// if there are active transactions we wait with deleting the objects
+		StoredCatalogSet set;
+		set.stored_set = move(catalog_set);
+		set.highest_active_query = current_start_timestamp;
 
-	StoredCatalogSet set;
-	set.stored_set = move(catalog_set);
-	set.highest_active_query = current_start_timestamp;
-
-	old_catalog_sets.push_back(move(set));
+		old_catalog_sets.push_back(move(set));
+	}
 }

@@ -77,7 +77,8 @@ public:
 
 	//! Returns the file size of a file handle, returns -1 on error
 	virtual int64_t GetFileSize(FileHandle &handle);
-	//! Truncate a file to a maximum size of new_size, new_size should be smaller than or equal to the current size of the file
+	//! Truncate a file to a maximum size of new_size, new_size should be smaller than or equal to the current size of
+	//! the file
 	virtual void Truncate(FileHandle &handle, int64_t new_size);
 
 	//! Check if a directory exists

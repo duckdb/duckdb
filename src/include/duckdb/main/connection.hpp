@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// main/connection.hpp
+// duckdb/main/connection.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -14,6 +14,7 @@
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
+#include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
 
@@ -32,6 +33,7 @@ public:
 	DuckDB &db;
 	unique_ptr<ClientContext> context;
 	warning_callback warning_cb;
+
 public:
 	//! Returns query profiling information for the current query
 	string GetProfilingInformation(ProfilerPrintFormat format = ProfilerPrintFormat::QUERY_TREE);
@@ -70,9 +72,12 @@ public:
 	unique_ptr<TableDescription> TableInfo(string table_name);
 	//! Get the table info of a specific table, or nullptr if it cannot be found
 	unique_ptr<TableDescription> TableInfo(string schema_name, string table_name);
+	//! Extract a set of SQL statements from a specific query
+	vector<unique_ptr<SQLStatement>> ExtractStatements(string query);
 
 	//! Appends a DataChunk to the specified table
 	void Append(TableDescription &description, DataChunk &chunk);
+
 private:
 	unique_ptr<QueryResult> QueryParamsRecursive(string query, vector<Value> &values);
 

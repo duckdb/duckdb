@@ -44,7 +44,7 @@ template <class OP> static void numeric_scatter_loop(Vector &source, Vector &des
 template <class OP> static void generic_scatter_loop(Vector &source, Vector &dest) {
 	switch (source.type) {
 	case TypeId::VARCHAR:
-		scatter_templated_loop<const char*, OP>(source, dest);
+		scatter_templated_loop<const char *, OP>(source, dest);
 		break;
 	default:
 		numeric_scatter_loop<OP>(source, dest);

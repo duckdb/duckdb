@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/bound_tokens.hpp
+// duckdb/planner/bound_tokens.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -20,9 +20,11 @@ class BoundCreateIndexStatement;
 class BoundCreateTableStatement;
 class BoundDeleteStatement;
 class BoundExecuteStatement;
+class BoundExplainStatement;
 class BoundInsertStatement;
 class BoundSelectStatement;
 class BoundUpdateStatement;
+class BoundSimpleStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node

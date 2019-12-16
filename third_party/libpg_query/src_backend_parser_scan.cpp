@@ -9946,7 +9946,7 @@ YY_RULE_SETUP
 
 					SET_YYLLOC();
 
-					if (nchars < yyleng)
+					if ((yy_size_t) nchars < yyleng)
 					{
 						/* Strip the unwanted chars from the token */
 						yyless(nchars);

@@ -30,9 +30,8 @@ string OperatorExpression::ToString() const {
 	}
 	// if there is no operator we render it as a function
 	auto result = ExpressionTypeToString(type) + "(";
-	result += StringUtil::Join(children, children.size(), ", ", [](const unique_ptr<ParsedExpression>& child){
-		return child->ToString();
-	});
+	result += StringUtil::Join(children, children.size(), ", ",
+	                           [](const unique_ptr<ParsedExpression> &child) { return child->ToString(); });
 	result += ")";
 	return result;
 }

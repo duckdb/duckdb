@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/transformer.hpp
+// duckdb/parser/transformer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -16,7 +16,6 @@
 
 #include "pg_definitions.hpp"
 #include "nodes/parsenodes.hpp"
-
 
 namespace duckdb {
 
@@ -74,7 +73,7 @@ private:
 
 	unique_ptr<PrepareStatement> TransformPrepare(PGNode *node);
 	unique_ptr<ExecuteStatement> TransformExecute(PGNode *node);
-	unique_ptr<DeallocateStatement> TransformDeallocate(PGNode *node);
+	unique_ptr<DropStatement> TransformDeallocate(PGNode *node);
 
 	//===--------------------------------------------------------------------===//
 	// Query Node Transform

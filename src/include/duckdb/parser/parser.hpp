@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/parser.hpp
+// duckdb/parser/parser.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -21,7 +21,7 @@ class ClientContext;
 //! plan and executed.
 class Parser {
 public:
-	Parser(ClientContext &context);
+	Parser();
 
 	//! Attempts to parse a query into a series of SQL statements. Returns
 	//! whether or not the parsing was successful. If the parsing was
@@ -35,7 +35,6 @@ public:
 	index_t n_prepared_parameters = 0;
 
 private:
-	ClientContext &context;
 	//! Transform a Postgres parse tree into a set of SQL Statements
 	bool TransformList(PGList *tree);
 	//! Transform a single Postgres parse node into a SQL Statement.

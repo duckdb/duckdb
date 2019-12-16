@@ -16,21 +16,16 @@ add_library(pg_query STATIC
             src_backend_parser_scan.cpp
             src_common_keywords.cpp)
 
-target_include_directories(pg_query PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-set_target_properties(pg_query PROPERTIES
-    EXPORT_NAME duckdb_pg_query)
+target_include_directories(
+  pg_query
+  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+set_target_properties(pg_query PROPERTIES EXPORT_NAME duckdb_pg_query)
 
-install(
-    TARGETS pg_query
-    EXPORT "${DUCKDB_EXPORT_SET}"
-    LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
-    ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
+install(TARGETS pg_query
+        EXPORT "${DUCKDB_EXPORT_SET}"
+        LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+        ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
 
-if(NOT MSVC)
-  set_target_properties(pg_query
-                        PROPERTIES COMPILE_FLAGS
-                                   "-Wno-unused-function -Wno-unused-variable")
-endif()
+disable_target_warnings(pg_query)
 
 set_target_properties(pg_query PROPERTIES POSITION_INDEPENDENT_CODE ON)

@@ -954,7 +954,7 @@
 
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 typedef union YYSTYPE
-#line 173 "third_party/libpg_query/grammar/grammar.y.tmp"
+#line 171 "third_party/libpg_query/grammar/grammar.y.tmp"
 {
 	core_YYSTYPE		core_yystype;
 	/* these fields must match core_YYSTYPE: */

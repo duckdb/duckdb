@@ -225,6 +225,8 @@ static void require_arith(TypeId t) {
 	Vector v2(t, true, false);
 	v2.count = v1.count;
 
+	// v1: 1, 2, 3, NULL, 42, NULL
+	// v2: 4, 5, 6, 7, NULL, NULL
 	v1.SetValue(0, Value::BIGINT(1));
 	v1.SetValue(1, Value::BIGINT(2));
 	v1.SetValue(2, Value::BIGINT(3));
@@ -299,6 +301,12 @@ static void require_arith(TypeId t) {
 	VectorOperations::Divide(v2, v1, r);
 	VectorOperations::Round(r, prec, r2);
 
+	// v1: 1, 2, 3, NULL, 42, NULL
+	// v2: 4, 5, 6, 7, NULL, NULL
+	// 4 / 1 = 4
+	// 5 / 2 = 2.5 (2 for integers)
+	// 6 / 3 = 2
+
 	REQUIRE(r.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(4));
 	REQUIRE(r.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
 	REQUIRE(r.GetValue(2).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
@@ -306,9 +314,15 @@ static void require_arith(TypeId t) {
 	REQUIRE(r.GetValue(4).is_null);
 	REQUIRE(r.GetValue(5).is_null);
 
-	REQUIRE(r2.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(4));
-	REQUIRE(r2.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
-	REQUIRE(r2.GetValue(2).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
+	if (TypeIsIntegral(t)) {
+		REQUIRE(r2.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(4));
+		REQUIRE(r2.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
+		REQUIRE(r2.GetValue(2).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
+	} else {
+		REQUIRE(r2.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(4));
+		REQUIRE(r2.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(3));
+		REQUIRE(r2.GetValue(2).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
+	}
 	REQUIRE(r2.GetValue(3).is_null);
 	REQUIRE(r2.GetValue(4).is_null);
 	REQUIRE(r2.GetValue(5).is_null);

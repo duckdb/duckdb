@@ -16,7 +16,7 @@ TEST_CASE("Update big table of even and odd values", "[update][.]") {
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR);"));
-	for (index_t i = 0; i < count; i++) {
+	for (int64_t i = 0; i < count; i++) {
 		sum += i;
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (?, 'hello')", (int)i));
 	}

@@ -476,16 +476,6 @@ makeNotExpr(PGNode *expr, int location)
 }
 
 static PGNode *
-makeAArrayExpr(PGList *elements, int location)
-{
-	PGAArrayExpr *n = makeNode(PGAArrayExpr);
-
-	n->elements = elements;
-	n->location = location;
-	return (PGNode *) n;
-}
-
-static PGNode *
 makeSQLValueFunction(PGSQLValueFunctionOp op, int32_t typmod, int location)
 {
 	PGSQLValueFunction *svf = makeNode(PGSQLValueFunction);
@@ -495,48 +485,6 @@ makeSQLValueFunction(PGSQLValueFunctionOp op, int32_t typmod, int location)
 	svf->typmod = typmod;
 	svf->location = location;
 	return (PGNode *) svf;
-}
-
-/*
- * Convert a list of (dotted) names to a PGRangeVar (like
- * makeRangeVarFromNameList, but with position support).  The
- * "AnyName" refers to the any_name production in the grammar.
- */
-static PGRangeVar *
-makeRangeVarFromAnyName(PGList *names, int position, core_yyscan_t yyscanner)
-{
-	PGRangeVar *r = makeNode(PGRangeVar);
-
-	switch (list_length(names))
-	{
-		case 1:
-			r->catalogname = NULL;
-			r->schemaname = NULL;
-			r->relname = strVal(linitial(names));
-			break;
-		case 2:
-			r->catalogname = NULL;
-			r->schemaname = strVal(linitial(names));
-			r->relname = strVal(lsecond(names));
-			break;
-		case 3:
-			r->catalogname = strVal(linitial(names));
-			r->schemaname = strVal(lsecond(names));
-			r->relname = strVal(lthird(names));
-			break;
-		default:
-			ereport(ERROR,
-					(errcode(PG_ERRCODE_SYNTAX_ERROR),
-					 errmsg("improper qualified name (too many dotted names): %s",
-							NameListToString(names)),
-					 parser_errposition(position)));
-			break;
-	}
-
-	r->relpersistence = RELPERSISTENCE_PERMANENT;
-	r->location = position;
-
-	return r;
 }
 
 /* Separate PGConstraint nodes from COLLATE clauses in a */

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/sql_statement.hpp
+// duckdb/parser/sql_statement.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -22,5 +22,7 @@ public:
 	}
 
 	StatementType type;
+	index_t stmt_location;
+	index_t stmt_length;
 };
 } // namespace duckdb

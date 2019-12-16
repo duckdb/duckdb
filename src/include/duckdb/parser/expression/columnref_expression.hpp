@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/expression/columnref_expression.hpp
+// duckdb/parser/expression/columnref_expression.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/expression/bound_window_expression.hpp
+// duckdb/planner/expression/bound_window_expression.hpp
 //
 //
 //===----------------------------------------------------------------------===//

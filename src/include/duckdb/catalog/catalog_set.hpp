@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// catalog/catalog_set.hpp
+// duckdb/catalog/catalog_set.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -41,6 +41,8 @@ public:
 	bool DropEntry(Transaction &transaction, const string &name, bool cascade);
 	//! Returns the entry with the specified name
 	CatalogEntry *GetEntry(Transaction &transaction, const string &name);
+	//! Returns the root entry with the specified name regardless of transaction (or nullptr if there are none)
+	CatalogEntry *GetRootEntry(const string &name);
 
 	//! Rollback <entry> to be the currently valid entry for a certain catalog
 	//! entry

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/order/physical_top_n.hpp
+// duckdb/execution/operator/order/physical_top_n.hpp
 //
 //
 //===----------------------------------------------------------------------===//

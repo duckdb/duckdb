@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/statement/bound_execute_statement.hpp
+// duckdb/planner/statement/bound_execute_statement.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -23,10 +23,10 @@ public:
 
 public:
 	vector<string> GetNames() override {
-		return prep->names;
+		return prep->prepared->names;
 	}
 	vector<SQLType> GetTypes() override {
-		return prep->sql_types;
+		return prep->prepared->sql_types;
 	}
 };
 } // namespace duckdb

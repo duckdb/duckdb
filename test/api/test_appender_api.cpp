@@ -42,15 +42,14 @@ TEST_CASE("Test using appender after connection is gone", "[api]") {
 	REQUIRE_THROWS(appender->BeginRow());
 }
 
-
 TEST_CASE("Test appender and connection destruction order", "[api]") {
-	for(index_t i = 0; i < 6; i++) {
+	for (index_t i = 0; i < 6; i++) {
 		auto db = make_unique<DuckDB>(nullptr);
 		auto con = make_unique<Connection>(*db);
 		REQUIRE_NO_FAIL(con->Query("CREATE TABLE integers(i INTEGER)"));
 		auto appender = make_unique<Appender>(*con, "integers");
 
-		switch(i) {
+		switch (i) {
 		case 0:
 			// db - con - appender
 			db.reset();
@@ -189,7 +188,7 @@ TEST_CASE("Test using multiple appenders", "[api]") {
 	a1.Flush();
 
 	a2.BeginRow();
-	a2.Append<const char*>("hello");
+	a2.Append<const char *>("hello");
 	a2.Append<Value>(Value::DATE(1992, 1, 1));
 	a2.EndRow();
 	a2.Flush();

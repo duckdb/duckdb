@@ -10,9 +10,8 @@ string LogicalOperator::ParamsToString() const {
 	string result = "";
 	if (expressions.size() > 0) {
 		result += "[";
-		result += StringUtil::Join(expressions, expressions.size(), ", ", [](const unique_ptr<Expression>& expression){
-			return expression->GetName();
-		});
+		result += StringUtil::Join(expressions, expressions.size(), ", ",
+		                           [](const unique_ptr<Expression> &expression) { return expression->GetName(); });
 		result += "]";
 	}
 

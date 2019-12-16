@@ -12,9 +12,9 @@ string LogicalComparisonJoin::ParamsToString() const {
 	string result = "[" + JoinTypeToString(type);
 	if (conditions.size() > 0) {
 		result += " ";
-		result += StringUtil::Join(conditions, conditions.size(), ", ", [](const JoinCondition& condition){
+		result += StringUtil::Join(conditions, conditions.size(), ", ", [](const JoinCondition &condition) {
 			return ExpressionTypeToString(condition.comparison) + "(" + condition.left->GetName() + ", " +
-			          condition.right->GetName() + ")";
+			       condition.right->GetName() + ")";
 		});
 		result += "]";
 	}

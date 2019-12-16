@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/statement/bound_update_statement.hpp
+// duckdb/planner/statement/bound_update_statement.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// storage/column_data.hpp
+// duckdb/storage/column_data.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -57,6 +57,7 @@ public:
 	void Fetch(ColumnScanState &state, row_t row_id, Vector &result);
 	//! Fetch a specific row id and append it to the vector
 	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result);
+
 private:
 	//! Append a transient segment
 	void AppendTransientSegment(index_t start_row);

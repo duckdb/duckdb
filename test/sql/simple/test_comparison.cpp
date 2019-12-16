@@ -120,3 +120,25 @@ TEST_CASE("Test strcmp() to ensure platform sanity", "[comparison]") {
 	REQUIRE(nut != hxr);
 	REQUIRE_FALSE(nut != nut);
 }
+
+TEST_CASE("Test auto casting of comparison statements", "[comparison]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// string <> number comparisons should result in the string being cast to a number
+	REQUIRE_FAIL(con.Query("select ('abc' between 20 and True);"));
+	REQUIRE_FAIL(con.Query("select 'abc' > 10"));
+	REQUIRE_FAIL(con.Query("select 20.0 = 'abc'"));
+
+	// 1000 > 20
+	result = con.Query("select '1000' > 20");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	// ... but '1000' < '20'!
+	result = con.Query("select '1000' > '20'");
+	REQUIRE(CHECK_COLUMN(result, 0, {false}));
+
+	result = con.Query("select ('abc' between '20' and 'true');");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+}

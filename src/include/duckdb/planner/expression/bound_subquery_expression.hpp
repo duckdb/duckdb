@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/expression/bound_subquery_expression.hpp
+// duckdb/planner/expression/bound_subquery_expression.hpp
 //
 //
 //===----------------------------------------------------------------------===//

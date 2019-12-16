@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/operator/logical_execute.hpp
+// duckdb/planner/operator/logical_execute.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -17,7 +17,7 @@ class LogicalExecute : public LogicalOperator {
 public:
 	LogicalExecute(PreparedStatementCatalogEntry *prep) : LogicalOperator(LogicalOperatorType::EXECUTE), prep(prep) {
 		assert(prep);
-		types = prep->types;
+		types = prep->prepared->types;
 	}
 
 	PreparedStatementCatalogEntry *prep;

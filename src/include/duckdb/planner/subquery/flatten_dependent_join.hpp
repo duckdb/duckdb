@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/subquery/flatten_dependent_join.hpp
+// duckdb/planner/subquery/flatten_dependent_join.hpp
 //
 //
 //===----------------------------------------------------------------------===//

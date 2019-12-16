@@ -278,8 +278,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(stamp.time.min == 1);
 	REQUIRE(stamp.time.sec == 30);
 	REQUIRE(stamp.time.msec == 0);
-	REQUIRE(result->Fetch<string>(0, 1) ==
-	        Value::TIMESTAMP(1992, 9, 20, 12, 1, 30, 0).ToString(SQLType::TIMESTAMP));
+	REQUIRE(result->Fetch<string>(0, 1) == Value::TIMESTAMP(1992, 9, 20, 12, 1, 30, 0).ToString(SQLType::TIMESTAMP));
 
 	// boolean columns
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE booleans(b BOOLEAN)"));

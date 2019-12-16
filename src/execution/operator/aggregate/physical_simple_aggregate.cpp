@@ -51,7 +51,8 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 			}
 			// perform the actual aggregation
 			assert(aggregate.function.simple_update);
-			aggregate.function.simple_update(&payload_chunk.data[payload_idx], payload_cnt, state->aggregates[aggr_idx]);
+			aggregate.function.simple_update(&payload_chunk.data[payload_idx], payload_cnt,
+			                                 state->aggregates[aggr_idx]);
 
 			payload_idx += payload_cnt;
 		}

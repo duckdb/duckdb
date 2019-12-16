@@ -26,8 +26,7 @@ void templated_cast_loop(Vector &source, Vector &result) {
 	}
 }
 
-template<class SRC, class OP>
-static void string_cast(Vector &source, Vector &result) {
+template <class SRC, class OP> static void string_cast(Vector &source, Vector &result) {
 	assert(result.type == TypeId::VARCHAR);
 	// result is VARCHAR
 	// we have to place the resulting strings in the string heap
@@ -44,7 +43,8 @@ static void string_cast(Vector &source, Vector &result) {
 }
 
 static NotImplementedException UnimplementedCast(SQLType source_type, SQLType target_type) {
-	return NotImplementedException("Unimplemented type for cast (%s -> %s)", SQLTypeToString(source_type).c_str(), SQLTypeToString(target_type).c_str());
+	return NotImplementedException("Unimplemented type for cast (%s -> %s)", SQLTypeToString(source_type).c_str(),
+	                               SQLTypeToString(target_type).c_str());
 }
 
 // NULL cast only works if all values in source are NULL, otherwise an unimplemented cast exception is thrown
@@ -105,44 +105,44 @@ static void string_cast_switch(Vector &source, Vector &result, SQLType source_ty
 	switch (target_type.id) {
 	case SQLTypeId::BOOLEAN:
 		assert(result.type == TypeId::BOOLEAN);
-		templated_cast_loop<const char*, bool, duckdb::Cast, true>(source, result);
+		templated_cast_loop<const char *, bool, duckdb::Cast, true>(source, result);
 		break;
 	case SQLTypeId::TINYINT:
 		assert(result.type == TypeId::TINYINT);
-		templated_cast_loop<const char*, int8_t, duckdb::Cast, true>(source, result);
+		templated_cast_loop<const char *, int8_t, duckdb::Cast, true>(source, result);
 		break;
 	case SQLTypeId::SMALLINT:
 		assert(result.type == TypeId::SMALLINT);
-		templated_cast_loop<const char*, int16_t, duckdb::Cast, true>(source, result);
+		templated_cast_loop<const char *, int16_t, duckdb::Cast, true>(source, result);
 		break;
 	case SQLTypeId::INTEGER:
 		assert(result.type == TypeId::INTEGER);
-		templated_cast_loop<const char*, int32_t, duckdb::Cast, true>(source, result);
+		templated_cast_loop<const char *, int32_t, duckdb::Cast, true>(source, result);
 		break;
 	case SQLTypeId::BIGINT:
 		assert(result.type == TypeId::BIGINT);
-		templated_cast_loop<const char*, int64_t, duckdb::Cast, true>(source, result);
+		templated_cast_loop<const char *, int64_t, duckdb::Cast, true>(source, result);
 		break;
 	case SQLTypeId::FLOAT:
 		assert(result.type == TypeId::FLOAT);
-		templated_cast_loop<const char*, float, duckdb::Cast, true>(source, result);
+		templated_cast_loop<const char *, float, duckdb::Cast, true>(source, result);
 		break;
 	case SQLTypeId::DECIMAL:
 	case SQLTypeId::DOUBLE:
 		assert(result.type == TypeId::DOUBLE);
-		templated_cast_loop<const char*, double, duckdb::Cast, true>(source, result);
+		templated_cast_loop<const char *, double, duckdb::Cast, true>(source, result);
 		break;
 	case SQLTypeId::DATE:
 		assert(result.type == TypeId::INTEGER);
-		templated_cast_loop<const char*, date_t, duckdb::CastToDate, true>(source, result);
+		templated_cast_loop<const char *, date_t, duckdb::CastToDate, true>(source, result);
 		break;
 	case SQLTypeId::TIME:
 		assert(result.type == TypeId::INTEGER);
-		templated_cast_loop<const char*, dtime_t, duckdb::CastToTime, true>(source, result);
+		templated_cast_loop<const char *, dtime_t, duckdb::CastToTime, true>(source, result);
 		break;
 	case SQLTypeId::TIMESTAMP:
 		assert(result.type == TypeId::BIGINT);
-		templated_cast_loop<const char*, timestamp_t, duckdb::CastToTimestamp, true>(source, result);
+		templated_cast_loop<const char *, timestamp_t, duckdb::CastToTimestamp, true>(source, result);
 		break;
 	default:
 		null_cast(source, result, source_type, target_type);
