@@ -25,7 +25,7 @@ namespace duckdb {
             //! Reorder the expressions of a filter
             void ReorderExpressions(vector<unique_ptr<Expression>> &expressions);
             //! Return the cost of an expression
-            index_t ReturnCost(unique_ptr<Expression> &expr);
+            index_t Cost(Expression &expr);
 
             //! Override this function to search for filter operators
             void VisitOperator(LogicalOperator &op) override;

@@ -11,31 +11,31 @@ using namespace std;
 string getQuery(int queryID) {
 		
 	string queries [37] = {
-		"l_quantity <= 1 + 10",
-		"l_shipdate > date '1992-01-01'",
-		"l_receiptdate >= l_commitdate",
-		"l_shipinstruct <= l_comment",
+		"l_quantity <= 1 + 10", //H0, BOUND_COMPARISON, COMPARE_LESSTHANOREQUALTO
+		"l_shipdate > date '1992-01-01'", //H1, BOUND_COMPARISON, COMPARE_GREATERTHAN
+		"l_receiptdate >= l_commitdate", //H2, BOUND_COMPARISON, COMPARE_GREATERTHANOREQUALTO
+		"l_shipinstruct < l_comment", //H3, BOUND_COMPARISON,
 
-		"l_commitdate = l_receiptdate",
-		"l_orderkey != 0",
-		"l_discount = 1.0",
-		"l_returnflag = 'R'",
-		"l_shipinstruct != 'DELIVER IN PERSON'",
+		"l_commitdate = l_receiptdate", //H4, BOUND_COMPARISON, COMPARE_EQUAL
+		"l_orderkey != 0", //H5, BOUND_COMPARISON, COMPARE_NOTEQUAL
+		"l_discount = 1.0", //H6, BOUND_COMPARISON, COMPARE_EQUAL
+		"l_returnflag = 'R'", //H7, BOUND_COMPARISON, COMPARE_EQUAL
+		"l_shipinstruct != 'DELIVER IN PERSON'", //H8, BOUND_COMPARISON, COMPARE_NOTEQUAL
 
-		"l_returnflag IS NOT NULL",
-		"l_quantity IS NOT NULL",
+		"l_returnflag IS NOT NULL", //H9, BOUND_OPERATOR, OPERATOR_IS_NOT_NULL
+		"l_quantity IS NULL", //H10, BOUND_OPERATOR,
 
-		"l_shipinstruct LIKE 'DE%I%ER%'",
-		"l_comment NOT LIKE '%str%'",
-		"l_shipinstruct SIMILAR TO 'DE.*I.*ER.*'",
-		"l_comment NOT SIMILAR TO '.*str.*'",
+		"l_shipinstruct LIKE 'DE%I%ER%'", //H11, BOUND_FUNCTION, "~~"
+		"l_comment NOT LIKE '%str%'", //H12, BOUND_FUNCTION, "!~~"
+		"l_shipinstruct SIMILAR TO 'DE.*I.*ER.*'", //H13, BOUND_FUNCTION, "regexp_matches"
+		"l_comment NOT SIMILAR TO '.*str.*'", //H14, BOUND_FUNCTION, "regexp_matches", preceeded by NOT
 
-		"l_shipmode IN ('MAIL', 'SHIP')",
+		"l_shipmode IN ('MAIL', 'SHIP')", //H15, BOUND_OPERATOR, COMPARE_IN, children - 1 is the cardinality, loop over children
 
-		"(CASE WHEN l_orderkey = 2 THEN 1 ELSE 0 END) = 1",
+		"(CASE WHEN l_orderkey = 2 THEN 1 ELSE 0 END) = 1", //H16, BOUND_CASE, ...
 
-		"l_discount + l_tax",
-		"l_tax - l_discount",
+		"l_discount + l_tax", //H17
+		"l_tax - l_discount", //H18
 		"l_receiptdate - l_commitdate",
 		"l_discount * l_tax",
 		"l_discount / l_tax",
@@ -58,6 +58,11 @@ string getQuery(int queryID) {
 
 		"l_orderkey::VARCHAR = '1'",
 		"l_orderkey::DOUBLE = 3.0"
+
+		//BOUND_OPERATOR, OPERATOR_NOT
+		//BOUND_CONSTANT, VALUE_CONSTANT, return_type = duckdb::TypeId::VARCHAR
+		//BOUND_COLUMN_REF, no expr type, return_type = duckdb::TypeId::VARCHAR
+
 		};
 
 	string enable_profiling = "pragma enable_profiling='json';";
