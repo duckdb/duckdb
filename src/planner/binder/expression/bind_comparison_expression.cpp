@@ -21,10 +21,10 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, index_t 
 	auto input_type = MaxSQLType(left.sql_type, right.sql_type);
 	if (input_type.id == SQLTypeId::VARCHAR) {
 		// for comparison with strings, we prefer to bind to the numeric types
-		if (IsNumericType(left.sql_type.id)) {
+		if (left.sql_type.IsNumeric()) {
 			input_type = left.sql_type;
 		}
-		if (IsNumericType(right.sql_type.id)) {
+		if (right.sql_type.IsNumeric()) {
 			input_type = right.sql_type;
 		}
 	}

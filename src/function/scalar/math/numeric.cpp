@@ -104,7 +104,14 @@ struct CeilOperator {
 void CeilFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet ceil("ceil");
 	for (auto &type : SQLType::NUMERIC) {
-		ceil.AddFunction(ScalarFunction({type}, type, GetScalarUnaryFunction<CeilOperator>(type)));
+		scalar_function_t func;
+		if (type.IsIntegral()) {
+			// ceil on integral type is a nop
+			func = ScalarFunction::NopFunction;
+		} else {
+			func = GetScalarUnaryFunction<CeilOperator>(type);
+		}
+		ceil.AddFunction(ScalarFunction({type}, type, func));
 	}
 	set.AddFunction(ceil);
 	ceil.name = "ceiling";
@@ -123,7 +130,14 @@ struct FloorOperator {
 void FloorFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet floor("floor");
 	for (auto &type : SQLType::NUMERIC) {
-		floor.AddFunction(ScalarFunction({type}, type, GetScalarUnaryFunction<FloorOperator>(type)));
+		scalar_function_t func;
+		if (type.IsIntegral()) {
+			// floor on integral type is a nop
+			func = ScalarFunction::NopFunction;
+		} else {
+			func = GetScalarUnaryFunction<FloorOperator>(type);
+		}
+		floor.AddFunction(ScalarFunction({type}, type, func));
 	}
 	set.AddFunction(floor);
 }
@@ -154,7 +168,7 @@ static scalar_function_t GetScalarBinaryFunctionFixedArgument(SQLType type) {
 }
 
 struct RoundOperator {
-	template <class T> static inline T Operation(T input, int32_t precision, index_t i) {
+	template <class T> static inline T Operation(T input, int32_t precision) {
 		if (precision < 0) {
 			precision = 0;
 		}
@@ -166,7 +180,14 @@ struct RoundOperator {
 void RoundFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet round("round");
 	for (auto &type : SQLType::NUMERIC) {
-		round.AddFunction(ScalarFunction({type, SQLType::INTEGER}, type, GetScalarBinaryFunctionFixedArgument<int8_t, RoundOperator>(type)));
+		scalar_function_t func;
+		if (type.IsIntegral()) {
+			// round on integral type is a nop
+			func = ScalarFunction::NopFunction;
+		} else {
+			func = GetScalarBinaryFunctionFixedArgument<int8_t, RoundOperator>(type);
+		}
+		round.AddFunction(ScalarFunction({type, SQLType::INTEGER}, type, func));
 	}
 	set.AddFunction(round);
 }
@@ -189,7 +210,7 @@ void ExpFun::RegisterFunction(BuiltinFunctions &set) {
 // pow
 //===--------------------------------------------------------------------===//
 struct PowOperator {
-	template <class T> static inline T Operation(T base, T exponent, index_t i) {
+	template <class T> static inline T Operation(T base, T exponent) {
 		return pow(base, exponent);
 	}
 };

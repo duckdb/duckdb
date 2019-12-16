@@ -86,7 +86,7 @@ void AtanFun::RegisterFunction(BuiltinFunctions &set) {
 // atan2
 //===--------------------------------------------------------------------===//
 struct ATan2 {
-	template <class T> static inline double Operation(T left, T right, index_t i) {
+	template <class T> static inline double Operation(T left, T right) {
 		return (double)atan2(left, right);
 	}
 };

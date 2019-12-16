@@ -96,6 +96,8 @@ struct SQLType {
 	//! Deserializes a blob back into an SQLType
 	static SQLType Deserialize(Deserializer &source);
 
+	bool IsIntegral() const;
+	bool IsNumeric() const;
 public:
 	static const SQLType SQLNULL;
 	static const SQLType BOOLEAN;
@@ -117,8 +119,6 @@ public:
 	//! A list of ALL SQL types
 	static const vector<SQLType> ALL_TYPES;
 };
-
-bool IsNumericType(SQLTypeId type);
 
 string SQLTypeIdToString(SQLTypeId type);
 string SQLTypeToString(SQLType type);

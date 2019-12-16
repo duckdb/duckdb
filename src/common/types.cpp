@@ -189,8 +189,20 @@ string SQLTypeToString(SQLType type) {
 	return SQLTypeIdToString(type.id);
 }
 
-bool IsNumericType(SQLTypeId type) {
-	switch (type) {
+bool SQLType::IsIntegral() const {
+	switch (id) {
+	case SQLTypeId::TINYINT:
+	case SQLTypeId::SMALLINT:
+	case SQLTypeId::INTEGER:
+	case SQLTypeId::BIGINT:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool SQLType::IsNumeric() const {
+	switch (id) {
 	case SQLTypeId::TINYINT:
 	case SQLTypeId::SMALLINT:
 	case SQLTypeId::INTEGER:
