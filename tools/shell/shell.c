@@ -996,7 +996,7 @@ static char *save_err_msg(sqlite3 *db /* Database to query */
 /*
 ** Run a prepared statement
 */
-static void exec_prepared_stmt(ShellState *pArg,                                      /* Pointer to ShellState */
+static int exec_prepared_stmt(ShellState *pArg,                                      /* Pointer to ShellState */
                                sqlite3_stmt *pStmt,                                   /* Statment to run */
                                int (*xCallback)(void *, int, char **, char **, int *) /* Callback function */
 ) {
@@ -1059,6 +1059,7 @@ static void exec_prepared_stmt(ShellState *pArg,                                
 			} while (rc == SQLITE_ROW);
 		}
 	}
+	return rc;
 }
 
 /*
@@ -1118,7 +1119,12 @@ static int shell_exec(sqlite3 *db,                                            /*
 				utf8_printf(pArg->out, "%s\n", zStmtSql ? zStmtSql : zSql);
 			}
 
-			exec_prepared_stmt(pArg, pStmt, xCallback);
+			rc = exec_prepared_stmt(pArg, pStmt, xCallback);
+			if (rc == SQLITE_ERROR) {
+				if (pzErrMsg) {
+					*pzErrMsg = save_err_msg(db);
+				}
+			}
 
 			/* Finalize the statement just executed. If this fails, save a
 			 ** copy of the error message. Otherwise, set zSql to point to the
