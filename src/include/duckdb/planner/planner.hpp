@@ -32,11 +32,16 @@ public:
 	Binder binder;
 	ClientContext &context;
 
+	bool read_only;
+	bool requires_valid_transaction;
 private:
 	void CreatePlan(SQLStatement &statement);
 
 	void VerifyQuery(BoundSQLStatement &statement);
 	void VerifyNode(BoundQueryNode &statement);
 	void VerifyExpression(Expression &expr, vector<unique_ptr<Expression>> &copies);
+
+	bool StatementIsReadOnly(BoundSQLStatement &statement);
+	bool StatementRequiresValidTransaction(BoundSQLStatement &statement);
 };
 } // namespace duckdb

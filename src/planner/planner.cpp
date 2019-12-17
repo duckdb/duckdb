@@ -3,22 +3,68 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/parser/statement/list.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_sql_statement.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/logical_plan_generator.hpp"
-#include "duckdb/planner/operator/logical_explain.hpp"
 #include "duckdb/planner/operator/logical_prepare.hpp"
+#include "duckdb/planner/statement/bound_execute_statement.hpp"
 #include "duckdb/planner/statement/bound_select_statement.hpp"
+#include "duckdb/planner/statement/bound_simple_statement.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 #include "duckdb/planner/pragma_handler.hpp"
+#include "duckdb/parser/parsed_data/drop_info.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 Planner::Planner(ClientContext &context) : binder(context), context(context) {
+}
+
+bool Planner::StatementIsReadOnly(BoundSQLStatement &statement) {
+	switch(statement.type) {
+	case StatementType::INSERT:
+	case StatementType::COPY:
+	case StatementType::DELETE:
+	case StatementType::UPDATE:
+	case StatementType::CREATE_INDEX:
+	case StatementType::CREATE_TABLE:
+	case StatementType::CREATE_VIEW:
+	case StatementType::CREATE_SCHEMA:
+	case StatementType::CREATE_SEQUENCE:
+	case StatementType::ALTER:
+		return false;
+	case StatementType::DROP: {
+		// dropping prepared statements is a read-only action
+		auto &drop_info = (DropInfo&) (*((BoundSimpleStatement&) statement).info);
+		return drop_info.type == CatalogType::PREPARED_STATEMENT;
+	}
+	case StatementType::EXECUTE:
+		// execute statement: look into the to-be-executed statement
+		return ((BoundExecuteStatement&) statement).prepared->read_only;
+	default:
+		return true;
+	}
+}
+
+bool Planner::StatementRequiresValidTransaction(BoundSQLStatement &statement) {
+	switch(statement.type) {
+	case StatementType::DROP: {
+		// dropping prepared statements also does not require a valid transaction
+		auto &drop_info = (DropInfo&) (*((BoundSimpleStatement&) statement).info);
+		return drop_info.type == CatalogType::PREPARED_STATEMENT;
+	}
+	case StatementType::PREPARE:
+	case StatementType::TRANSACTION:
+		// prepare and transaction statements can be executed without valid transaction
+		return false;
+	case StatementType::EXECUTE:
+		// execute statement: look into the to-be-executed statement
+		return ((BoundExecuteStatement&) statement).prepared->requires_valid_transaction;
+	default:
+		return true;
+	}
 }
 
 void Planner::CreatePlan(SQLStatement &statement) {
@@ -32,6 +78,8 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 	VerifyQuery(*bound_statement);
 
+	this->read_only = StatementIsReadOnly(*bound_statement);
+	this->requires_valid_transaction = StatementRequiresValidTransaction(*bound_statement);
 	this->names = bound_statement->GetNames();
 	this->sql_types = bound_statement->GetTypes();
 
@@ -103,6 +151,11 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		prepared_data->names = names;
 		prepared_data->sql_types = sql_types;
 		prepared_data->value_map = move(value_map);
+		prepared_data->read_only = this->read_only;
+		prepared_data->requires_valid_transaction = this->requires_valid_transaction;
+
+		this->read_only = true;
+		this->requires_valid_transaction = false;
 
 		auto prepare = make_unique<LogicalPrepare>(stmt.name, move(prepared_data), move(plan));
 		names = {"Success"};

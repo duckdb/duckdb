@@ -384,3 +384,19 @@ TEST_CASE("Test different statement types", "[sqlite3wrapper]") {
 	REQUIRE(db.Execute("SELECT * FROM integers ORDER BY 1"));
 	REQUIRE(db.CheckColumn(0, {"3", "4"}));
 }
+
+TEST_CASE("Test rollback of aborted transaction", "[sqlite3wrapper]") {
+	SQLiteDBWrapper db;
+
+	// open an in-memory db
+	REQUIRE(db.Open(":memory:"));
+
+	// can start a transaction
+	REQUIRE(db.Execute("START TRANSACTION"));
+	// cannot start a transaction within a transaction
+	REQUIRE(!db.Execute("START TRANSACTION"));
+	// now we need to rollback!
+	REQUIRE(db.Execute("ROLLBACK"));
+	// can start a transaction again after a rollback
+	REQUIRE(db.Execute("START TRANSACTION"));
+}
