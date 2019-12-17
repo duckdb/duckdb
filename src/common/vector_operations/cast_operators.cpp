@@ -157,6 +157,10 @@ static void date_cast_switch(Vector &source, Vector &result, SQLType source_type
 		// date to varchar
 		string_cast<date_t, duckdb::CastFromDate>(source, result);
 		break;
+	case SQLTypeId::TIMESTAMP:
+		// date to timestamp
+		templated_cast_loop<date_t, timestamp_t, duckdb::CastDateToTimestamp, true>(source, result);
+		break;
 	default:
 		null_cast(source, result, source_type, target_type);
 		break;

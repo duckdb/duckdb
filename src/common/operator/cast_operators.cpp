@@ -430,6 +430,10 @@ template <> dtime_t CastToTime::Operation(const char *left) {
 	return Time::FromCString(left);
 }
 
+template <> timestamp_t CastDateToTimestamp::Operation(date_t input) {
+	return Timestamp::FromDatetime(input, Time::FromTime(0, 0, 0, 0));
+}
+
 //===--------------------------------------------------------------------===//
 // Cast From Timestamps
 //===--------------------------------------------------------------------===//

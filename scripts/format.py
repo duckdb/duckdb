@@ -41,6 +41,8 @@ if revision == '--all':
 
 def can_format_file(full_path):
 	global extensions, formatted_directories, ignored_files
+	if not os.path.isfile(full_path):
+		return False
 	fname = full_path.split(os.path.sep)[-1]
 	# check ignored files
 	if fname in ignored_files:
@@ -111,6 +113,8 @@ header_bottom+= "//===----------------------------------------------------------
 base_dir = os.path.join(os.getcwd(),'src/include')
 
 def format_file(f, full_path, directory, ext, sort_includes):
+	if not os.path.isfile(full_path):
+		return
 	if f == 'list.hpp':
 		# fill in list file
 		list = [os.path.join(dp, f) for dp, dn, filenames in os.walk(directory) for f in filenames if os.path.splitext(f)[1] == '.hpp' and not f.endswith("list.hpp")]
