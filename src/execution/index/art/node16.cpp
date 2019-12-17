@@ -2,6 +2,8 @@
 #include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
 
+#include <cstring>
+
 using namespace duckdb;
 
 Node16::Node16(ART &art) : Node(art, NodeType::N16) {
