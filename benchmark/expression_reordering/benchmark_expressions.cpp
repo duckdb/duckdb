@@ -10,7 +10,7 @@ using namespace std;
 
 string getQuery(int queryID) {
 		
-	string queries [37] = {
+	string queries [42] = {
 		"l_quantity <= 1 + 10", //H0, BOUND_COMPARISON, COMPARE_LESSTHANOREQUALTO
 		"l_shipdate > date '1992-01-01'", //H1, BOUND_COMPARISON, COMPARE_GREATERTHAN
 		"l_receiptdate >= l_commitdate", //H2, BOUND_COMPARISON, COMPARE_GREATERTHANOREQUALTO
@@ -32,37 +32,38 @@ string getQuery(int queryID) {
 
 		"l_shipmode IN ('MAIL', 'SHIP')", //H15, BOUND_OPERATOR, COMPARE_IN, children - 1 is the cardinality, loop over children
 
-		"(CASE WHEN l_orderkey = 2 THEN 1 ELSE 0 END) = 1", //H16, BOUND_CASE, ...
+		"(CASE WHEN l_orderkey = 2 THEN 1 ELSE 0 END) = 1", //H16, BOUND_CASE, three children
 
-		"l_discount + l_tax", //H17
-		"l_tax - l_discount", //H18
-		"l_receiptdate - l_commitdate",
-		"l_discount * l_tax",
-		"l_discount / l_tax",
-		"l_orderkey % 5",
-		"l_orderkey & l_partkey",
-		"l_orderkey # l_partkey",
-		"l_orderkey >> l_partkey",
-		"l_orderkey << l_partkey",
+		"l_discount + l_tax", //H17, BOUND_FUNCTION, "+"
+		"l_tax - l_discount", //H18, BOUND_FUNCTION, "-"
+		"l_receiptdate - l_commitdate", //H19, BOUND_FUNCTION, "-"
+		"l_discount * l_tax", //H20, BOUND_FUNCTION, "*"
+		"l_discount / l_tax", //H21, BOUND_FUNCTION, "/"
+		"l_orderkey % 5", //H22, BOUND_FUNCTION, "%"
+		"l_orderkey & l_partkey", //H23, BOUND_FUNCTION, "&"
+		"l_orderkey # l_partkey", //H24, BOUND_FUNCTION, "#"
+		"l_orderkey >> l_partkey", //H25, BOUND_FUNCTION, ">>"
+		"l_orderkey << l_partkey", //H26, BOUND_FUNCTION, "<<"
 
-		"abs(l_extendedprice)",
-		"round(l_discount, 1)",
+		"abs(l_extendedprice)", //H27, BOUND_FUNCTION, "abs"
+		"round(l_discount, 1)", //H28, BOUND_FUNCTION, "round"
 
-		"l_shipinstruct || l_returnflag = 'R'",
-		"length(l_comment)",
-		"lower(l_comment) = 'R'",
-		"upper(l_comment) = 'R'",
-		"substring(l_shipinstruct, 1, 7) = 'R'",
+		"l_shipinstruct || l_returnflag = 'R'", //H29, BOUND_FUNCTION, "||"
+		"length(l_comment)", //H30, BOUND_FUNCTION, "length"
+		"lower(l_comment) = 'R'", //H31, BOUND_FUNCTION, "lower"
+		"upper(l_comment) = 'R'", //H32, BOUND_FUNCTION, "upper"
+		"substring(l_shipinstruct, 1, 7) = 'R'", //H33, BOUND_FUNCTION, "substring"
 
-		"date_part('year', l_commitdate)",
+		"date_part('year', l_commitdate)", //H34, BOUND_FUNCTION, "date_part"
 
-		"l_orderkey::VARCHAR = '1'",
-		"l_orderkey::DOUBLE = 3.0"
+		"l_orderkey::VARCHAR = '1'", //H35, BOUND_CAST, OPERATOR_CAST
+		"l_orderkey::DOUBLE = 3.0", //H36, BOUND_CAST, OPERATOR_CAST
 
-		//BOUND_OPERATOR, OPERATOR_NOT
-		//BOUND_CONSTANT, VALUE_CONSTANT, return_type = duckdb::TypeId::VARCHAR
-		//BOUND_COLUMN_REF, no expr type, return_type = duckdb::TypeId::VARCHAR
-
+		"l_comment SIMILAR TO '.*str.*'", //H37, BOUND_FUNCTION, used to estimate runtime of OPERATOR_NOT
+		"l_quantity < 10 OR l_quantity > 20", //H38, BOUND_CONJUNCTION, CONJUNCTION_OR
+		"(l_quantity < 10 AND l_shipdate > date '1992-01-01') OR l_quantity > 20", //H39, BOUND_CONJUNCTION, CONJUNCTION_AND
+		"EXTRACT(YEAR from l_shipdate) = 1995", //H40, BOUND_FUNCTION, "date_part"
+		"YEAR(l_shipdate) IN ('1995','1996')" //H41, BOUND_FUNCTION, "year"
 		};
 
 	string enable_profiling = "pragma enable_profiling='json';";
@@ -234,3 +235,23 @@ FINISH_BENCHMARK(ExpressionReorderingH35)
 DUCKDB_BENCHMARK(ExpressionReorderingH36, "[expression_reordering]")
 HEURISTICS_QUERY_BODY(36);
 FINISH_BENCHMARK(ExpressionReorderingH36)
+
+DUCKDB_BENCHMARK(ExpressionReorderingH37, "[expression_reordering]")
+HEURISTICS_QUERY_BODY(37);
+FINISH_BENCHMARK(ExpressionReorderingH37)
+
+DUCKDB_BENCHMARK(ExpressionReorderingH38, "[expression_reordering]")
+HEURISTICS_QUERY_BODY(38);
+FINISH_BENCHMARK(ExpressionReorderingH38)
+
+DUCKDB_BENCHMARK(ExpressionReorderingH39, "[expression_reordering]")
+HEURISTICS_QUERY_BODY(39);
+FINISH_BENCHMARK(ExpressionReorderingH39)
+
+DUCKDB_BENCHMARK(ExpressionReorderingH40, "[expression_reordering]")
+HEURISTICS_QUERY_BODY(40);
+FINISH_BENCHMARK(ExpressionReorderingH40)
+
+DUCKDB_BENCHMARK(ExpressionReorderingH41, "[expression_reordering]")
+HEURISTICS_QUERY_BODY(41);
+FINISH_BENCHMARK(ExpressionReorderingH41)
