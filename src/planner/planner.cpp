@@ -3,6 +3,8 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/parser/statement/pragma_statement.hpp"
+#include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_sql_statement.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"

@@ -27,8 +27,12 @@ public:
 	}
 
 public:
-	data_t &operator[](std::size_t i);
-	const data_t &operator[](std::size_t i) const;
+	data_t &operator[](std::size_t i) {
+		return data[i];
+	}
+	const data_t &operator[](std::size_t i) const {
+		return data[i];
+	}
 	bool operator>(const Key &k) const;
 	bool operator<(const Key &k) const;
 	bool operator>=(const Key &k) const;
