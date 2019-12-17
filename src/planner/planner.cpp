@@ -13,7 +13,6 @@
 #include "duckdb/planner/statement/bound_select_statement.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
-
 #include "duckdb/planner/pragma_handler.hpp"
 
 using namespace duckdb;
