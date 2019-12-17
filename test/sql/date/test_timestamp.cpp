@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 
 using namespace duckdb;
@@ -61,6 +62,9 @@ TEST_CASE("Test TIMESTAMP type", "[timestamp]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(2007, 1, 1)}));
 	result = con.Query("SELECT t::TIME FROM timestamp WHERE EXTRACT(YEAR from t)=2007 ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIME(0, 0, 1, 0)}));
+	// date -> timestamp
+	result = con.Query("SELECT (DATE '1992-01-01')::TIMESTAMP;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIMESTAMP(1992, 1, 1, 0, 0, 0, 0)}));
 }
 
 TEST_CASE("Test out of range/incorrect timestamp formats", "[timestamp]") {
@@ -115,22 +119,7 @@ TEST_CASE("Test storage for timestamp type", "[timestamp]") {
 		    "('2008-01-02 00:00:01'), ('2008-01-01 10:00:00'), ('2008-01-01 00:10:00'), ('2008-01-01 00:00:10')"));
 	}
 	// reload the database from disk
-	{
-		DuckDB db(storage_database);
-		Connection con(db);
-		result = con.Query("SELECT t FROM timestamp ORDER BY t;");
-		REQUIRE(CHECK_COLUMN(result, 0,
-		                     {Value(), Value::BIGINT(Timestamp::FromString("2007-01-01 00:00:01")),
-		                      Value::BIGINT(Timestamp::FromString("2008-01-01 00:00:01")),
-		                      Value::BIGINT(Timestamp::FromString("2008-01-01 00:00:10")),
-		                      Value::BIGINT(Timestamp::FromString("2008-01-01 00:10:00")),
-		                      Value::BIGINT(Timestamp::FromString("2008-01-01 10:00:00")),
-		                      Value::BIGINT(Timestamp::FromString("2008-01-02 00:00:01")),
-		                      Value::BIGINT(Timestamp::FromString("2008-02-01 00:00:01"))}));
-	}
-	// reload the database from disk, we do this again because checkpointing at startup causes this to follow a
-	// different code path
-	{
+	for (index_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database);
 		Connection con(db);
 		result = con.Query("SELECT t FROM timestamp ORDER BY t;");

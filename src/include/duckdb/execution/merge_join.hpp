@@ -102,6 +102,7 @@ struct MergeJoinMark {
 	template index_t MJCLASS::OPNAME::Operation<int16_t>(L & l, R & r);                                                \
 	template index_t MJCLASS::OPNAME::Operation<int32_t>(L & l, R & r);                                                \
 	template index_t MJCLASS::OPNAME::Operation<int64_t>(L & l, R & r);                                                \
+	template index_t MJCLASS::OPNAME::Operation<float>(L & l, R & r);                                                 \
 	template index_t MJCLASS::OPNAME::Operation<double>(L & l, R & r);                                                 \
 	template index_t MJCLASS::OPNAME::Operation<const char *>(L & l, R & r);
 

@@ -2,6 +2,7 @@
 #include "duckdb/execution/index/art/art_key.hpp"
 
 #include <iostream>
+#include <cstring>
 
 using namespace duckdb;
 using namespace std;

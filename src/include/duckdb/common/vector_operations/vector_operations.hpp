@@ -50,47 +50,6 @@ struct VectorOperations {
 	static void ModuloInPlace(Vector &A, int64_t B);
 
 	//===--------------------------------------------------------------------===//
-	// Numeric Functions
-	//===--------------------------------------------------------------------===//
-	//! result = ABS(A)
-	static void Abs(Vector &A, Vector &result);
-	static void Round(Vector &A, Vector &B, Vector &result);
-	static void Ceil(Vector &A, Vector &result);
-	static void Floor(Vector &A, Vector &result);
-	static void CbRt(Vector &A, Vector &result);
-	static void Degrees(Vector &A, Vector &result);
-	static void Radians(Vector &A, Vector &result);
-	static void Exp(Vector &A, Vector &result);
-	static void Sqrt(Vector &A, Vector &result);
-	static void Ln(Vector &A, Vector &result);
-	static void Log10(Vector &A, Vector &result);
-	static void Log2(Vector &A, Vector &result);
-	static void Sign(Vector &A, Vector &result);
-	static void Pow(Vector &A, Vector &B, Vector &result);
-
-	static void Sin(Vector &A, Vector &result);
-	static void Cos(Vector &A, Vector &result);
-	static void Tan(Vector &A, Vector &result);
-	static void ASin(Vector &A, Vector &result);
-	static void ACos(Vector &A, Vector &result);
-	static void ATan(Vector &A, Vector &result);
-	static void ATan2(Vector &A, Vector &B, Vector &result);
-
-	//===--------------------------------------------------------------------===//
-	// Bitwise Operators
-	//===--------------------------------------------------------------------===//
-	//! result = A ^ B
-	static void BitwiseXOR(Vector &A, Vector &B, Vector &result);
-	//! result = A & B
-	static void BitwiseAND(Vector &A, Vector &B, Vector &result);
-	//! result = A | B
-	static void BitwiseOR(Vector &A, Vector &B, Vector &result);
-	//! result = A << B
-	static void BitwiseShiftLeft(Vector &A, Vector &B, Vector &result);
-	//! result = A >> B
-	static void BitwiseShiftRight(Vector &A, Vector &B, Vector &result);
-
-	//===--------------------------------------------------------------------===//
 	// In-Place Bitwise Operators
 	//===--------------------------------------------------------------------===//
 	//! A ^= B
@@ -129,14 +88,6 @@ struct VectorOperations {
 	static void LessThan(Vector &A, Vector &B, Vector &result);
 	// result = A <= B
 	static void LessThanEquals(Vector &A, Vector &B, Vector &result);
-
-	//===--------------------------------------------------------------------===//
-	// String Operations
-	//===--------------------------------------------------------------------===//
-	// result = A LIKE B
-	static void Like(Vector &A, Vector &B, Vector &result);
-	// result = A NOT LIKE B
-	static void NotLike(Vector &A, Vector &B, Vector &result);
 
 	//===--------------------------------------------------------------------===//
 	// Aggregates

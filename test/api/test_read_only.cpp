@@ -51,8 +51,11 @@ TEST_CASE("Test connection using a read only database", "[readonly]") {
 	REQUIRE_NO_FAIL(con->Query("PREPARE v1 AS SELECT * FROM integers"));
 	REQUIRE_NO_FAIL(con->Query("EXECUTE v1"));
 	REQUIRE_NO_FAIL(con->Query("DEALLOCATE v1"));
-	// unless the prepared statements involve DDL statements or inserts/updates!
-	REQUIRE_FAIL(con->Query("PREPARE v1 AS INSERT INTO integers VALUES ($1)"));
+	// we can also prepare a DDL/update statement
+	REQUIRE_NO_FAIL(con->Query("PREPARE v1 AS INSERT INTO integers VALUES ($1)"));
+	// however, executing it fails then!
+	REQUIRE_FAIL(con->Query("EXECUTE v1(3)"));
+
 
 	con.reset();
 	db.reset();

@@ -163,6 +163,8 @@ unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 
 	auto plan = move(planner.plan);
 	// extract the result column names from the plan
+	result->read_only = planner.read_only;
+	result->requires_valid_transaction = planner.requires_valid_transaction;
 	result->names = planner.names;
 	result->sql_types = planner.sql_types;
 	result->value_map = move(planner.value_map);
@@ -193,9 +195,13 @@ unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 
 unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &query, PreparedStatementData &statement,
                                                                 vector<Value> bound_values, bool allow_stream_result) {
-	if (ActiveTransaction().is_invalidated && statement.statement_type != StatementType::TRANSACTION) {
+	if (ActiveTransaction().is_invalidated && statement.requires_valid_transaction) {
 		throw Exception("Current transaction is aborted (please ROLLBACK)");
 	}
+	if (db.access_mode == AccessMode::READ_ONLY && !statement.read_only) {
+		throw Exception(StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!", StatementTypeToString(statement.statement_type).c_str()));
+	}
+
 	// bind the bound values before execution
 	statement.Bind(move(bound_values));
 
@@ -225,39 +231,6 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 		result->collection.Append(*chunk);
 	}
 	return move(result);
-}
-
-static string CanExecuteStatementInReadOnlyMode(SQLStatement &stmt) {
-	switch (stmt.type) {
-	case StatementType::INSERT:
-	case StatementType::COPY:
-	case StatementType::DELETE:
-	case StatementType::UPDATE:
-	case StatementType::CREATE_INDEX:
-	case StatementType::CREATE_TABLE:
-	case StatementType::CREATE_VIEW:
-	case StatementType::CREATE_SCHEMA:
-	case StatementType::CREATE_SEQUENCE:
-	case StatementType::ALTER:
-		break;
-	case StatementType::PREPARE: {
-		// prepare statement: check the underlying statement type
-		auto &prepare = (PrepareStatement &)stmt;
-		return CanExecuteStatementInReadOnlyMode(*prepare.statement);
-	}
-	case StatementType::DROP: {
-		// drop statement: we can drop prepared statements in read-only mode
-		auto &drop_stmt = (DropStatement &)stmt;
-		if (drop_stmt.info->type == CatalogType::PREPARED_STATEMENT) {
-			return string();
-		}
-		break;
-	}
-	default:
-		return string();
-	}
-	return StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!",
-	                          StatementTypeToString(stmt.type).c_str());
 }
 
 void ClientContext::InitialCleanup() {
@@ -357,13 +330,6 @@ unique_ptr<QueryResult> ClientContext::RunStatementInternal(const string &query,
 unique_ptr<QueryResult> ClientContext::RunStatement(const string &query, unique_ptr<SQLStatement> statement,
                                                     bool allow_stream_result) {
 	unique_ptr<QueryResult> result;
-	if (db.access_mode == AccessMode::READ_ONLY) {
-		// if the database is opened in read-only mode, check if we can execute this statement
-		string error = CanExecuteStatementInReadOnlyMode(*statement);
-		if (!error.empty()) {
-			return make_unique<MaterializedQueryResult>(error);
-		}
-	}
 	// check if we are on AutoCommit. In this case we should start a transaction.
 	if (transaction.IsAutoCommit()) {
 		transaction.BeginTransaction();

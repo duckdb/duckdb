@@ -169,13 +169,3 @@ bool Key::operator==(const Key &k) const {
 	}
 	return true;
 }
-
-inline uint8_t &Key::operator[](std::size_t i) {
-	assert(i <= len);
-	return data[i];
-}
-
-inline const uint8_t &Key::operator[](std::size_t i) const {
-	assert(i <= len);
-	return data[i];
-}

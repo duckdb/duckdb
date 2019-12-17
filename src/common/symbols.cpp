@@ -4,6 +4,7 @@
 #ifdef DEBUG
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/list.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
@@ -66,6 +67,7 @@ template class std::unique_ptr<DefaultExpression>;
 template class std::unique_ptr<FunctionExpression>;
 template class std::unique_ptr<OperatorExpression>;
 template class std::unique_ptr<ParameterExpression>;
+template class std::unique_ptr<PreparedStatementData>;
 template class std::unique_ptr<StarExpression>;
 template class std::unique_ptr<SubqueryExpression>;
 template class std::unique_ptr<WindowExpression>;

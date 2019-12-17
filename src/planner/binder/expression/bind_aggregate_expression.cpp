@@ -57,11 +57,24 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	// create the aggregate
 	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(return_type), bound_function, aggr.distinct);
 	aggregate->children = move(children);
-	// now create a column reference referring to this aggregate
+
+	// check for all the aggregates if this aggregate already exists
+	index_t aggr_index;
+	auto entry = node.aggregate_map.find(aggregate.get());
+	if (entry == node.aggregate_map.end()) {
+		// new aggregate: insert into aggregate list
+		aggr_index = node.aggregates.size();
+		node.aggregate_map.insert(make_pair(aggregate.get(), aggr_index));
+		node.aggregates.push_back(move(aggregate));
+	} else {
+		// duplicate aggregate: simplify refer to this aggregate
+		aggr_index = entry->second;
+	}
+
+	// now create a column reference referring to the aggregate
 	auto colref = make_unique<BoundColumnRefExpression>(
-	    aggr.alias.empty() ? aggregate->ToString() : aggr.alias, aggregate->return_type,
-	    ColumnBinding(node.aggregate_index, node.aggregates.size()), depth);
+	    aggr.alias.empty() ? node.aggregates[aggr_index]->ToString() : aggr.alias, node.aggregates[aggr_index]->return_type,
+	    ColumnBinding(node.aggregate_index, aggr_index), depth);
 	// move the aggregate expression into the set of bound aggregates
-	node.aggregates.push_back(move(aggregate));
 	return BindResult(move(colref), return_type);
 }

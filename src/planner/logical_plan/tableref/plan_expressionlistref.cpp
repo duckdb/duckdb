@@ -1,6 +1,7 @@
 #include "duckdb/planner/logical_plan_generator.hpp"
 #include "duckdb/planner/tableref/bound_expressionlistref.hpp"
 #include "duckdb/planner/operator/logical_expression_get.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 using namespace duckdb;
 using namespace std;

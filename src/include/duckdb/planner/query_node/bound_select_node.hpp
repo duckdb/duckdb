@@ -10,6 +10,7 @@
 
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
+#include "duckdb/parser/expression_map.hpp"
 
 namespace duckdb {
 
@@ -42,6 +43,8 @@ public:
 	index_t aggregate_index;
 	//! Aggregate functions to compute (only used if HasAggregation is true)
 	vector<unique_ptr<Expression>> aggregates;
+	//! Map from aggregate function to aggregate index (used to eliminate duplicate aggregates)
+	expression_map_t<index_t> aggregate_map;
 
 	//! Window index used by the LogicalWindow (only used if HasWindow is true)
 	index_t window_index;

@@ -342,3 +342,61 @@ TEST_CASE("Test sqlite3_interrupt", "[sqlite3wrapper]") {
 	// the execution should have been cancelled
 	REQUIRE(!success);
 }
+
+TEST_CASE("Test different statement types", "[sqlite3wrapper]") {
+	SQLiteDBWrapper db;
+
+	// open an in-memory db
+	REQUIRE(db.Open(":memory:"));
+	// create
+	REQUIRE(db.Execute("CREATE TABLE integers(i INTEGER)"));
+	// prepare
+	REQUIRE(db.Execute("PREPARE v1 AS INSERT INTO integers VALUES (?)"));
+	// execute
+	REQUIRE(db.Execute("EXECUTE v1(1)"));
+	REQUIRE(db.Execute("EXECUTE v1(2)"));
+	REQUIRE(db.Execute("EXECUTE v1(3)"));
+	// select
+	REQUIRE(db.Execute("SELECT * FROM integers ORDER BY 1"));
+	REQUIRE(db.CheckColumn(0, {"1", "2", "3"}));
+
+	// update
+	REQUIRE(db.Execute("UPDATE integers SET i=i+1"));
+	// delete
+	REQUIRE(db.Execute("DELETE FROM integers WHERE i=4"));
+	// verify
+	REQUIRE(db.Execute("SELECT * FROM integers ORDER BY 1"));
+	REQUIRE(db.CheckColumn(0, {"2", "3"}));
+
+	// transactions
+	REQUIRE(db.Execute("BEGIN TRANSACTION"));
+	REQUIRE(db.Execute("UPDATE integers SET i=i+1"));
+	REQUIRE(db.Execute("ROLLBACK"));
+	// verify
+	REQUIRE(db.Execute("SELECT * FROM integers ORDER BY 1"));
+	REQUIRE(db.CheckColumn(0, {"2", "3"}));
+
+	// commit
+	REQUIRE(db.Execute("BEGIN TRANSACTION"));
+	REQUIRE(db.Execute("UPDATE integers SET i=i+1"));
+	REQUIRE(db.Execute("COMMIT"));
+	// verify
+	REQUIRE(db.Execute("SELECT * FROM integers ORDER BY 1"));
+	REQUIRE(db.CheckColumn(0, {"3", "4"}));
+}
+
+TEST_CASE("Test rollback of aborted transaction", "[sqlite3wrapper]") {
+	SQLiteDBWrapper db;
+
+	// open an in-memory db
+	REQUIRE(db.Open(":memory:"));
+
+	// can start a transaction
+	REQUIRE(db.Execute("START TRANSACTION"));
+	// cannot start a transaction within a transaction
+	REQUIRE(!db.Execute("START TRANSACTION"));
+	// now we need to rollback!
+	REQUIRE(db.Execute("ROLLBACK"));
+	// can start a transaction again after a rollback
+	REQUIRE(db.Execute("START TRANSACTION"));
+}

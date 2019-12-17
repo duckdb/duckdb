@@ -4,7 +4,8 @@
 using namespace duckdb;
 using namespace std;
 
-PreparedStatementData::PreparedStatementData(StatementType type) : statement_type(type) {
+PreparedStatementData::PreparedStatementData(StatementType type) : statement_type(type), read_only(true), requires_valid_transaction(true) {
+
 }
 
 PreparedStatementData::~PreparedStatementData() {

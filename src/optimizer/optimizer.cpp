@@ -2,7 +2,6 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/optimizer/ca_optimizer.hpp"
 #include "duckdb/optimizer/cse_optimizer.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
@@ -95,11 +94,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	JoinOrderOptimizer optimizer;
 	plan = optimizer.Optimize(move(plan));
 	context.profiler.EndPhase();
-	// next we make sure that multiple occurences of the same aggregation are only computed once
-	// context.profiler.StartPhase("common_aggregate_expressions");
-	// CommonAggregateOptimizer ca_optimizer;
-	// ca_optimizer.VisitOperator(*plan);
-	// context.profiler.EndPhase();
 
 	// then we extract common subexpressions inside the different operators
 	// context.profiler.StartPhase("common_subexpressions");
