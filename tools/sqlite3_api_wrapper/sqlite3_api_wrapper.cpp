@@ -155,6 +155,17 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 	}
 }
 
+bool sqlite3_display_result(StatementType type) {
+	switch(type) {
+	case StatementType::EXECUTE:
+	case StatementType::EXPLAIN:
+	case StatementType::SELECT:
+		return true;
+	default:
+		return false;
+	}
+}
+
 /* Prepare the next result to be retrieved */
 int sqlite3_step(sqlite3_stmt *pStmt) {
 	if (!pStmt) {
@@ -177,7 +188,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		// fetch a chunk
 		pStmt->current_chunk = pStmt->result->Fetch();
 		pStmt->current_row = -1;
-		if (pStmt->prepared->type != StatementType::SELECT) {
+		if (!sqlite3_display_result(pStmt->prepared->type)) {
 			// only SELECT statements return results
 			sqlite3_reset(pStmt);
 		}
