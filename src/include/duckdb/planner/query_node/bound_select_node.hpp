@@ -46,8 +46,6 @@ public:
 	//! Map from aggregate function to aggregate index (used to eliminate duplicate aggregates)
 	expression_map_t<index_t> aggregate_map;
 
-
-
 	//! Window index used by the LogicalWindow (only used if HasWindow is true)
 	index_t window_index;
 	//! Window functions to compute (only used if HasWindow is true)
