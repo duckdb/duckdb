@@ -37,7 +37,7 @@ void ExpressionExecutor::Execute(vector<Expression *> &expressions, DataChunk &r
 	result.Verify();
 }
 
-void ExpressionExecutor::Merge(std::vector<std::unique_ptr<Expression>> &expressions, index_t &selectivity) {
+void ExpressionExecutor::Merge(std::vector<std::unique_ptr<Expression>> &expressions) {
 	assert(expressions.size() > 0);
 	//evaluate all expressions
 	for (index_t i = 0; i < expressions.size(); i++) {
@@ -45,7 +45,6 @@ void ExpressionExecutor::Merge(std::vector<std::unique_ptr<Expression>> &express
 		if (chunk->size() != 0) {
 			//evaluate current expression
 			Vector intermediate;
-			selectivity += chunk->data[0].count;
 			Execute(*expressions[i], intermediate);
 			assert(intermediate.type == TypeId::BOOLEAN);
 			//if constant and false/null, set count == 0 to fetch the next chunk

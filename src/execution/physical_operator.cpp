@@ -24,7 +24,7 @@ string PhysicalOperator::ToString(index_t depth) const {
 	return result;
 }
 
-PhysicalOperatorState::PhysicalOperatorState(PhysicalOperator *child) : finished(false), selectivity(0), iteration(0) {
+PhysicalOperatorState::PhysicalOperatorState(PhysicalOperator *child) : finished(false) {
 	if (child) {
 		child->InitializeChunk(child_chunk);
 		child_state = child->GetOperatorState();

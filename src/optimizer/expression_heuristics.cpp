@@ -1,6 +1,4 @@
 #include "duckdb/optimizer/expression_heuristics.hpp"
-#include <iostream>
-
 #include "duckdb/planner/expression/list.hpp"
 
 using namespace duckdb;
@@ -14,7 +12,9 @@ unique_ptr<LogicalOperator> ExpressionHeuristics::Rewrite(unique_ptr<LogicalOper
 void ExpressionHeuristics::VisitOperator(LogicalOperator &op) {
     if (op.type == LogicalOperatorType::FILTER) {
         //reorder all filter expressions
-        ReorderExpressions(op.expressions);
+		if (op.expressions.size() > 1) {
+			ReorderExpressions(op.expressions);
+		}
     }
 
     //traverse recursively through the operator tree
@@ -36,28 +36,24 @@ void ExpressionHeuristics::ReorderExpressions(vector<unique_ptr<Expression>> &ex
 	};
 
 	vector<expr> exprCosts;
+	//iterate expressions, get cost for each one and order by that cost
+	for (index_t i = 0; i < expressions.size(); i++) {
+		exprCosts.push_back({i, Cost(*expressions[i])});
+	}
 
-    if (expressions.size() > 1) {
-        //iterate expressions, get cost for each one and order by that cost
-		for (index_t i = 0; i < expressions.size(); i++) {
-			exprCosts.push_back({i, Cost(*expressions[i])});
+	sort(exprCosts.begin(), exprCosts.end());
+	assert(exprCosts.size() == expressions.size());
+
+	//for all elements to put in place
+	for(index_t i = 0; i < expressions.size() - 1; ++i) {
+		//while the element i is not yet in place
+		while(i != exprCosts[i].idx) {
+			//swap it with the element at its final place
+			index_t alt = exprCosts[i].idx;
+			swap(expressions[i], expressions[alt]);
+			swap(exprCosts[i], exprCosts[alt]);
 		}
-
-		sort(exprCosts.begin(), exprCosts.end());
-
-		assert(exprCosts.size() == expressions.size());
-
-		//for all elements to put in place
-		for(index_t i = 0; i < expressions.size() - 1; ++i) {
-			//while the element i is not yet in place
-			while(i != exprCosts[i].idx) {
-				//swap it with the element at its final place
-				index_t alt = exprCosts[i].idx;
-				swap(expressions[i], expressions[alt]);
-				swap(exprCosts[i], exprCosts[alt]);
-			}
-		}
-    }
+	}
 }
 
 index_t ExpressionHeuristics::Cost(Expression &expr) {

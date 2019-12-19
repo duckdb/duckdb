@@ -29,7 +29,7 @@ public:
 	void Execute(vector<Expression *> &expressions, DataChunk &result);
 	//! Executes a set of column expresions and merges them using the logical
 	//! AND operator
-	void Merge(vector<std::unique_ptr<Expression>> &expressions, index_t &selectivity);
+	void Merge(vector<std::unique_ptr<Expression>> &expressions);
 	//! Execute a single abstract expression and store the result in result
 	void ExecuteExpression(Expression &expr, Vector &result);
 	//! Evaluate a scalar expression and fold it into a single value

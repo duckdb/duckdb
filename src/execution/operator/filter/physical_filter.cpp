@@ -1,8 +1,5 @@
 #include "duckdb/execution/operator/filter/physical_filter.hpp"
-
 #include "duckdb/execution/expression_executor.hpp"
-
-#include <iostream>
 
 using namespace duckdb;
 using namespace std;
@@ -11,7 +8,6 @@ void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 	auto state = reinterpret_cast<PhysicalOperatorState *>(state_);
 	do {
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-		state->iteration++;
 		if (state->child_chunk.size() == 0) {
 			return;
 		}
@@ -19,7 +15,7 @@ void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		assert(expressions.size() > 0);
 
 		ExpressionExecutor executor(state->child_chunk);
-		executor.Merge(expressions, state->selectivity);
+		executor.Merge(expressions);
 
 		if (state->child_chunk.size() != 0) {
 			// chunk gets the same selection vector as its child chunk
@@ -34,11 +30,6 @@ void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 				chunk.data[i].sel_vector = state->child_chunk.sel_vector;
 			}
 		}
-		/*
-		if (state->iteration > 995) {
-			std::cout << "Iteration: " << state->iteration << " Selectivity: " << state->selectivity << std::endl;
-		}
-		*/
 
 	} while (chunk.size() == 0);
 }
