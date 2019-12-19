@@ -9,9 +9,9 @@
 using namespace duckdb;
 using namespace std;
 
-class PhysicalHashAggregateOperatorState : public PhysicalOperatorState {
+class PhysicalHashAggregateState : public PhysicalOperatorState {
 public:
-	PhysicalHashAggregateOperatorState(PhysicalHashAggregate *parent, PhysicalOperator *child);
+	PhysicalHashAggregateState(PhysicalHashAggregate *parent, PhysicalOperator *child);
 
 	//! Materialized GROUP BY expression
 	DataChunk group_chunk;
@@ -55,14 +55,12 @@ PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique
 }
 
 void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalHashAggregateOperatorState *>(state_);
+	auto state = reinterpret_cast<PhysicalHashAggregateState *>(state_);
 	do {
-		if (children.size() > 0) {
-			// resolve the child chunk if there is one
-			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-			if (state->child_chunk.size() == 0) {
-				break;
-			}
+		// resolve the child chunk if there is one
+		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+		if (state->child_chunk.size() == 0) {
+			break;
 		}
 		// aggregation with groups
 		DataChunk &group_chunk = state->group_chunk;
@@ -140,8 +138,8 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
-	auto state =
-	    make_unique<PhysicalHashAggregateOperatorState>(this, children.size() == 0 ? nullptr : children[0].get());
+	assert(children.size() > 0);
+	auto state = make_unique<PhysicalHashAggregateState>(this, children[0].get());
 	state->tuples_scanned = 0;
 	vector<TypeId> group_types, payload_types;
 	vector<BoundAggregateExpression *> aggregate_kind;
@@ -170,7 +168,7 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 	return move(state);
 }
 
-PhysicalHashAggregateOperatorState::PhysicalHashAggregateOperatorState(PhysicalHashAggregate *parent,
+PhysicalHashAggregateState::PhysicalHashAggregateState(PhysicalHashAggregate *parent,
                                                                        PhysicalOperator *child)
     : PhysicalOperatorState(child), ht_scan_position(0), tuples_scanned(0), group_executor(parent->groups) {
 	vector<TypeId> group_types, aggregate_types;
