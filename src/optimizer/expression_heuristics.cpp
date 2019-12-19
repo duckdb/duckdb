@@ -86,8 +86,8 @@ index_t ExpressionHeuristics::ExpressionCost(BoundFunctionExpression &expr) {
 		cost_children += Cost(*child);
 	}
 
-	auto cost_function = function_names.find(expr.function.name);
-	if (cost_function != function_names.end()) {
+	auto cost_function = function_costs.find(expr.function.name);
+	if (cost_function != function_costs.end()) {
 		return cost_children + cost_function->second;
 	} else {
 		return cost_children + 1000;

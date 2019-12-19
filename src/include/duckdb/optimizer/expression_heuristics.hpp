@@ -30,7 +30,7 @@ namespace duckdb {
             void VisitOperator(LogicalOperator &op) override;
 
         private:
-            std::unordered_map<std::string, index_t> function_names = {
+            std::unordered_map<std::string, index_t> function_costs = {
                 {"+", 5},
                 {"-", 5},
                 {"&", 5},
