@@ -8,10 +8,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // + [add]
 //===--------------------------------------------------------------------===//
-static void add_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                         Vector &result) {
-	result.Initialize(inputs[0].type);
-	VectorOperations::Add(inputs[0], inputs[1], result);
+static void add_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	VectorOperations::Add(input.data[0], input.data[1], result);
 }
 
 void AddFun::RegisterFunction(BuiltinFunctions &set) {
@@ -33,20 +31,16 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // - [subtract]
 //===--------------------------------------------------------------------===//
-static void subtract_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-                              BoundFunctionExpression &expr, Vector &result) {
-	result.Initialize(inputs[0].type);
-	VectorOperations::Subtract(inputs[0], inputs[1], result);
+static void subtract_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	VectorOperations::Subtract(input.data[0], input.data[1], result);
 }
 
-static void unary_subtract_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-                                    BoundFunctionExpression &expr, Vector &result) {
-	Value minus_one = Value::Numeric(inputs[0].type, -1);
+static void unary_subtract_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	Value minus_one = Value::Numeric(args.data[0].type, -1);
 	Vector right;
 	right.Reference(minus_one);
 
-	result.Initialize(inputs[0].type);
-	VectorOperations::Multiply(inputs[0], right, result);
+	VectorOperations::Multiply(args.data[0], right, result);
 }
 
 void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
@@ -67,10 +61,8 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // * [multiply]
 //===--------------------------------------------------------------------===//
-static void multiply_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-                              BoundFunctionExpression &expr, Vector &result) {
-	result.Initialize(inputs[0].type);
-	VectorOperations::Multiply(inputs[0], inputs[1], result);
+static void multiply_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	VectorOperations::Multiply(input.data[0], input.data[1], result);
 }
 
 void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
@@ -84,10 +76,8 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // / [divide]
 //===--------------------------------------------------------------------===//
-static void divide_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-                            BoundFunctionExpression &expr, Vector &result) {
-	result.Initialize(inputs[0].type);
-	VectorOperations::Divide(inputs[0], inputs[1], result);
+static void divide_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	VectorOperations::Divide(input.data[0], input.data[1], result);
 }
 
 void DivideFun::RegisterFunction(BuiltinFunctions &set) {
@@ -101,10 +91,8 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // % [modulo]
 //===--------------------------------------------------------------------===//
-static void mod_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                         Vector &result) {
-	result.Initialize(inputs[0].type);
-	VectorOperations::Modulo(inputs[0], inputs[1], result);
+static void mod_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	VectorOperations::Modulo(input.data[0], input.data[1], result);
 }
 
 void ModFun::RegisterFunction(BuiltinFunctions &set) {

@@ -7,13 +7,11 @@ using namespace std;
 
 namespace duckdb {
 
-static void length_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-                            BoundFunctionExpression &expr, Vector &result) {
-	assert(input_count == 1);
-	auto &input = inputs[0];
+static void length_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	assert(args.column_count == 1);
+	auto &input = args.data[0];
 	assert(input.type == TypeId::VARCHAR);
 
-	result.Initialize(TypeId::BIGINT);
 	result.nullmask = input.nullmask;
 	result.count = input.count;
 	result.sel_vector = input.sel_vector;

@@ -43,15 +43,12 @@ static const char *substring_scalar_function(const char *input_string, int offse
 	return output.get();
 }
 
-static void substring_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-                               BoundFunctionExpression &expr, Vector &result) {
-	assert(input_count == 3 && inputs[0].type == TypeId::VARCHAR && inputs[1].type == TypeId::INTEGER &&
-	       inputs[2].type == TypeId::INTEGER);
-	auto &input_vector = inputs[0];
-	auto &offset_vector = inputs[1];
-	auto &length_vector = inputs[2];
-
-	result.Initialize(TypeId::VARCHAR);
+static void substring_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	assert(args.column_count == 3 && args.data[0].type == TypeId::VARCHAR && args.data[1].type == TypeId::INTEGER &&
+	       args.data[2].type == TypeId::INTEGER);
+	auto &input_vector = args.data[0];
+	auto &offset_vector = args.data[1];
+	auto &length_vector = args.data[2];
 
 	index_t current_len = 0;
 	unique_ptr<char[]> output;

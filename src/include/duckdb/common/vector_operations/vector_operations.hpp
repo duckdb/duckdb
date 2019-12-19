@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 
 #include <functional>
@@ -303,13 +304,13 @@ struct VectorOperations {
 		});
 	}
 
-	template <class FUNC> static void MultiaryExec(Vector inputs[], int input_count, Vector &result, FUNC &&fun) {
+	template <class FUNC> static void MultiaryExec(DataChunk &args, Vector &result, FUNC &&fun) {
 		result.sel_vector = nullptr;
 		result.count = 1;
-		vector<index_t> mul(input_count, 0);
+		vector<index_t> mul(args.column_count, 0);
 
-		for (int i = 0; i < input_count; i++) {
-			auto &input = inputs[i];
+		for (index_t i = 0; i < args.column_count; i++) {
+			auto &input = args.data[i];
 			if (!input.IsConstant()) {
 				result.sel_vector = input.sel_vector;
 				result.count = input.count;

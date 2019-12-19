@@ -14,6 +14,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -85,6 +86,8 @@ protected:
 private:
 	//! Bound expressions used by the index
 	vector<unique_ptr<Expression>> bound_expressions;
+	//! Expression executor for the index expressions
+	ExpressionExecutor executor;
 
 	unique_ptr<Expression> BindExpression(unique_ptr<Expression> expr);
 };

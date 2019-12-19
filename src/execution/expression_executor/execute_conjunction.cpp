@@ -5,12 +5,19 @@
 using namespace duckdb;
 using namespace std;
 
-void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, Vector &result) {
-	Vector left, right;
-	Execute(*expr.left, left);
-	Execute(*expr.right, right);
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConjunctionExpression &expr, ExpressionExecutorState &root) {
+	auto result = make_unique<ExpressionState>(expr, root);
+	result->AddIntermediates({expr.left.get(), expr.right.get()});
+	return result;
+}
 
-	result.Initialize(TypeId::BOOLEAN);
+void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionState *state, Vector &result) {
+	// resolve the children
+	auto &left = state->arguments.data[0];
+	auto &right = state->arguments.data[1];
+	Execute(*expr.left, state->child_states[0].get(), left);
+	Execute(*expr.right, state->child_states[1].get(), right);
+
 	switch (expr.type) {
 	case ExpressionType::CONJUNCTION_AND:
 		VectorOperations::And(left, right, result);

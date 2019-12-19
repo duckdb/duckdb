@@ -144,53 +144,56 @@ static int64_t extract_element(SpecifierType type, timestamp_t element) {
 	}
 }
 
-static void date_part_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-                               BoundFunctionExpression &expr, Vector &result) {
-	result.Initialize(TypeId::BIGINT);
-	result.nullmask = inputs[1].nullmask;
-	result.count = inputs[1].count;
-	result.sel_vector = inputs[1].sel_vector;
-	if (inputs[1].type != TypeId::INTEGER) {
+static void date_part_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &specifier = args.data[0];
+	auto &source = args.data[1];
+
+
+	result.nullmask = source.nullmask;
+	result.count = source.count;
+	result.sel_vector = source.sel_vector;
+	if (source.type != TypeId::INTEGER) {
 		throw NotImplementedException("Can only extract from dates or timestamps");
 	}
 
 	auto result_data = (int64_t *)result.data;
-	if (inputs[0].IsConstant()) {
+	if (specifier.IsConstant()) {
 		// constant specifier
-		auto specifier_type = GetSpecifierType(((const char **)inputs[0].data)[0]);
-		VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, index_t i, index_t k) {
+		auto specifier_type = GetSpecifierType(((const char **)specifier.data)[0]);
+		VectorOperations::ExecType<date_t>(source, [&](date_t element, index_t i, index_t k) {
 			result_data[i] = extract_element(specifier_type, element);
 		});
 	} else {
 		// not constant specifier
-		auto specifiers = ((const char **)inputs[0].data);
-		VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, index_t i, index_t k) {
+		auto specifiers = ((const char **)specifier.data);
+		VectorOperations::ExecType<date_t>(source, [&](date_t element, index_t i, index_t k) {
 			result_data[i] = extract_element(GetSpecifierType(specifiers[i]), element);
 		});
 	}
 }
 
-static void timestamp_part_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-                                    BoundFunctionExpression &expr, Vector &result) {
-	result.Initialize(TypeId::BIGINT);
-	result.nullmask = inputs[1].nullmask;
-	result.count = inputs[1].count;
-	result.sel_vector = inputs[1].sel_vector;
-	if (inputs[1].type != TypeId::BIGINT) {
+static void timestamp_part_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &specifier = args.data[0];
+	auto &source = args.data[1];
+
+	result.nullmask = source.nullmask;
+	result.count = source.count;
+	result.sel_vector = source.sel_vector;
+	if (source.type != TypeId::BIGINT) {
 		throw NotImplementedException("Can only extract from dates or timestamps");
 	}
 
 	auto result_data = (int64_t *)result.data;
-	if (inputs[0].IsConstant()) {
+	if (specifier.IsConstant()) {
 		// constant specifier
-		auto specifier_type = GetSpecifierType(((const char **)inputs[0].data)[0]);
-		VectorOperations::ExecType<timestamp_t>(inputs[1], [&](timestamp_t element, index_t i, index_t k) {
+		auto specifier_type = GetSpecifierType(((const char **)specifier.data)[0]);
+		VectorOperations::ExecType<timestamp_t>(source, [&](timestamp_t element, index_t i, index_t k) {
 			result_data[i] = extract_element(specifier_type, element);
 		});
 	} else {
 		// not constant specifier
-		auto specifiers = ((const char **)inputs[0].data);
-		VectorOperations::ExecType<timestamp_t>(inputs[1], [&](timestamp_t element, index_t i, index_t k) {
+		auto specifiers = ((const char **)specifier.data);
+		VectorOperations::ExecType<timestamp_t>(source, [&](timestamp_t element, index_t i, index_t k) {
 			result_data[i] = extract_element(GetSpecifierType(specifiers[i]), element);
 		});
 	}

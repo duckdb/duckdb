@@ -70,18 +70,17 @@ static void MaterializeExpressions(ClientContext &context, Expression **exprs, i
 	}
 
 	vector<TypeId> types;
+	ExpressionExecutor executor;
 	for (index_t expr_idx = 0; expr_idx < expr_count; ++expr_idx) {
 		types.push_back(exprs[expr_idx]->return_type);
+		executor.AddExpression(*exprs[expr_idx]);
 	}
 
 	for (index_t i = 0; i < input.chunks.size(); i++) {
 		DataChunk chunk;
 		chunk.Initialize(types);
-		ExpressionExecutor executor(*input.chunks[i]);
-		for (index_t expr_idx = 0; expr_idx < expr_count; ++expr_idx) {
-			auto expr = exprs[expr_idx];
-			executor.ExecuteExpression(*expr, chunk.data[expr_idx]);
-		}
+
+		executor.Execute(*input.chunks[i], chunk);
 
 		chunk.Verify();
 		output.Append(chunk);
@@ -100,22 +99,22 @@ static void MaterializeExpression(ClientContext &context, Expression *expr, Chun
 static void SortCollectionForWindow(ClientContext &context, BoundWindowExpression *wexpr, ChunkCollection &input,
                                     ChunkCollection &output, ChunkCollection &sort_collection) {
 	vector<TypeId> sort_types;
-	vector<Expression *> exprs;
 	vector<OrderType> orders;
+	ExpressionExecutor executor;
 
 	// we sort by both 1) partition by expression list and 2) order by expressions
 	for (index_t prt_idx = 0; prt_idx < wexpr->partitions.size(); prt_idx++) {
 		auto &pexpr = wexpr->partitions[prt_idx];
 		sort_types.push_back(pexpr->return_type);
-		exprs.push_back(pexpr.get());
 		orders.push_back(OrderType::ASCENDING);
+		executor.AddExpression(*pexpr);
 	}
 
 	for (index_t ord_idx = 0; ord_idx < wexpr->orders.size(); ord_idx++) {
 		auto &oexpr = wexpr->orders[ord_idx].expression;
 		sort_types.push_back(oexpr->return_type);
-		exprs.push_back(oexpr.get());
 		orders.push_back(wexpr->orders[ord_idx].type);
+		executor.AddExpression(*oexpr);
 	}
 
 	assert(sort_types.size() > 0);
@@ -125,8 +124,8 @@ static void SortCollectionForWindow(ClientContext &context, BoundWindowExpressio
 		DataChunk sort_chunk;
 		sort_chunk.Initialize(sort_types);
 
-		ExpressionExecutor executor(*input.chunks[i]);
-		executor.Execute(exprs, sort_chunk);
+		executor.Execute(*input.chunks[i], sort_chunk);
+
 		sort_chunk.Verify();
 		sort_collection.Append(sort_chunk);
 	}

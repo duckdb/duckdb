@@ -1,23 +1,42 @@
 #include "duckdb/execution/operator/filter/physical_filter.hpp"
-
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
+class PhysicalFilterState : public PhysicalOperatorState {
+public:
+	PhysicalFilterState(PhysicalOperator *child, Expression &expr)
+	    : PhysicalOperatorState(child), executor(expr) {
+		// initialize the intermediate
+		vector<TypeId> result_type = { TypeId::BOOLEAN };
+		intermediate.Initialize(result_type);
+	}
+
+	DataChunk intermediate;
+	ExpressionExecutor executor;
+};
+
+PhysicalFilter::PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expression>> select_list) :
+	PhysicalOperator(PhysicalOperatorType::FILTER, types) {
+	// create a big AND out of the expressions
+	expression = move(select_list[0]);
+	for(index_t i = 1; i < select_list.size(); i++) {
+		expression = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(expression), move(select_list[i]));
+	}
+}
+
 void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalOperatorState *>(state_);
+	auto state = reinterpret_cast<PhysicalFilterState *>(state_);
 	do {
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 		if (state->child_chunk.size() == 0) {
 			return;
 		}
+		state->intermediate.Reset();
 
-		assert(expressions.size() > 0);
-
-		Vector result(TypeId::BOOLEAN, true, false);
-		ExpressionExecutor executor(state->child_chunk);
-		executor.Merge(expressions, result);
+		state->executor.ExecuteExpression(state->child_chunk, state->intermediate.data[0]);
 
 		// now generate the selection vector
 		chunk.sel_vector = state->child_chunk.sel_vector;
@@ -25,14 +44,14 @@ void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			// create a reference to the vector of the child chunk
 			chunk.data[i].Reference(state->child_chunk.data[i]);
 		}
-		chunk.SetSelectionVector(result);
+		chunk.SetSelectionVector(state->intermediate.data[0]);
 	} while (chunk.size() == 0);
 }
 
+unique_ptr<PhysicalOperatorState> PhysicalFilter::GetOperatorState() {
+	return make_unique<PhysicalFilterState>(children[0].get(), *expression);
+}
+
 string PhysicalFilter::ExtraRenderInformation() const {
-	string extra_info;
-	for (auto &expr : expressions) {
-		extra_info += expr->GetName() + "\n";
-	}
-	return extra_info;
+	return expression->GetName();
 }
