@@ -19,6 +19,12 @@ void ExpressionHeuristics::VisitOperator(LogicalOperator &op) {
 
     //traverse recursively through the operator tree
     VisitOperatorChildren(op);
+	VisitOperatorExpressions(op);
+}
+
+unique_ptr<Expression> ExpressionHeuristics::VisitReplace(BoundConjunctionExpression &expr, unique_ptr<Expression> *expr_ptr) {
+	ReorderExpressions(expr.children);
+	return nullptr;
 }
 
 void ExpressionHeuristics::ReorderExpressions(vector<unique_ptr<Expression>> &expressions) {
