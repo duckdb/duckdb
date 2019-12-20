@@ -1,7 +1,7 @@
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer.hpp"
-#include "duckdb/parser/expression_map.hpp"
+#include "duckdb/parser/expression_util.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -47,36 +47,7 @@ string ConjunctionExpression::ToString() const {
 }
 
 bool ConjunctionExpression::Equals(const ConjunctionExpression *a, const ConjunctionExpression *b) {
-	if (a->children.size() != b->children.size()) {
-		return false;
-	}
-	// conjunctions are commutative, check if all children have an equivalent expression on the other side
-
-	// we create a map of expression -> count for the left side
-	// we keep the count because the same expression can occur multiple times (e.g. "1 AND 1" is legal)
-	// in this case we track the following value: map["Constant(1)"] = 2
-	expression_map_t<index_t> map;
-	for(index_t i = 0; i < a->children.size(); i++) {
-		map[a->children[i].get()]++;
-	}
-	// now on the right side we reduce the counts again
-	// if the conjunctions are identical, all the counts will be 0 after the
-	for(auto &expr : b->children) {
-		auto entry = map.find(expr.get());
-		// first we check if we can find the expression in the map at all
-		if (entry == map.end()) {
-			return false;
-		}
-		// if we found it we check the count; if the count is already 0 we return false
-		// this happens if e.g. the left side contains "1 AND X", and the right side contains "1 AND 1"
-		// "1" is contained in the map, however, the right side contains the expression twice
-		// hence we know the children are not identical in this case because the LHS and RHS have a different count for the Constant(1) expression
-		if (entry->second == 0) {
-			return false;
-		}
-		entry->second--;
-	}
-	return true;
+	return ExpressionUtil::SetEquals(a->children, b->children);
 }
 
 unique_ptr<ParsedExpression> ConjunctionExpression::Copy() const {
