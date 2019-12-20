@@ -37,12 +37,28 @@ void ExpressionExecutor::Execute(vector<Expression *> &expressions, DataChunk &r
 	result.Verify();
 }
 
-void ExpressionExecutor::Merge(std::vector<std::unique_ptr<Expression>> &expressions, Vector &result) {
+void ExpressionExecutor::Merge(std::vector<std::unique_ptr<Expression>> &expressions) {
 	assert(expressions.size() > 0);
-
-	ExecuteExpression(*expressions[0], result);
-	for (index_t i = 1; i < expressions.size(); i++) {
-		MergeExpression(*expressions[i], result);
+	//evaluate all expressions
+	for (index_t i = 0; i < expressions.size(); i++) {
+		//return if no more true rows
+		if (chunk->size() != 0) {
+			//evaluate current expression
+			Vector intermediate;
+			Execute(*expressions[i], intermediate);
+			assert(intermediate.type == TypeId::BOOLEAN);
+			//if constant and false/null, set count == 0 to fetch the next chunk
+			if (intermediate.IsConstant()) {
+				if (!intermediate.data[0] || intermediate.nullmask[0]) {
+					chunk->data[0].count = 0;
+					break;
+				}
+			} else {
+				chunk->SetSelectionVector(intermediate);
+			}
+		} else {
+			break;
+		}
 	}
 }
 
@@ -68,18 +84,6 @@ void ExpressionExecutor::ExecuteExpression(Expression &expr, Vector &result) {
 	vector.Move(result);
 }
 
-void ExpressionExecutor::MergeExpression(Expression &expr, Vector &result) {
-	Vector intermediate;
-	Execute(expr, intermediate);
-
-	assert(result.type == TypeId::BOOLEAN);
-	assert(intermediate.type == TypeId::BOOLEAN);
-
-	StaticVector<bool> and_result;
-	VectorOperations::And(result, intermediate, and_result);
-	and_result.Move(result);
-}
-
 Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 	assert(expr.IsFoldable());
 	// use an ExpressionExecutor to execute the expression
@@ -91,9 +95,6 @@ Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 }
 
 void ExpressionExecutor::Verify(Expression &expr, Vector &vector) {
-	//	if (chunk) {
-	//		assert(vector.IsConstant() || vector.sel_vector == chunk->sel_vector);
-	//	}
 	assert(expr.return_type == vector.type);
 	vector.Verify();
 }
