@@ -110,45 +110,6 @@ void DataChunk::Append(DataChunk &other) {
 	}
 }
 
-void DataChunk::MergeSelVector(sel_t *current_vector, sel_t *new_vector, sel_t *result, index_t new_count) {
-	for (index_t i = 0; i < new_count; i++) {
-		result[i] = current_vector[new_vector[i]];
-	}
-}
-
-void DataChunk::SetSelectionVector(Vector &matches) {
-	if (matches.type != TypeId::BOOLEAN) {
-		throw InvalidTypeException(matches.type, "Can only set selection vector using a boolean vector!");
-	}
-	bool *match_data = (bool *)matches.data;
-	index_t match_count = 0;
-	if (sel_vector) {
-		assert(matches.sel_vector);
-		// existing selection vector: have to merge the selection vector
-		for (index_t i = 0; i < matches.count; i++) {
-			if (match_data[sel_vector[i]] && !matches.nullmask[sel_vector[i]]) {
-				owned_sel_vector[match_count++] = sel_vector[i];
-			}
-		}
-		sel_vector = owned_sel_vector;
-	} else {
-		// no selection vector yet: can just set the selection vector
-		for (index_t i = 0; i < matches.count; i++) {
-			if (match_data[i] && !matches.nullmask[i]) {
-				owned_sel_vector[match_count++] = i;
-			}
-		}
-		if (match_count < matches.count) {
-			// we only have to set the selection vector if tuples were filtered
-			sel_vector = owned_sel_vector;
-		}
-	}
-	for (index_t i = 0; i < column_count; i++) {
-		data[i].count = match_count;
-		data[i].sel_vector = sel_vector;
-	}
-}
-
 vector<TypeId> DataChunk::GetTypes() {
 	vector<TypeId> types;
 	for (index_t i = 0; i < column_count; i++) {

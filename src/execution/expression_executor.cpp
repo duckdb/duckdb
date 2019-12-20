@@ -183,7 +183,15 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, Vecto
 
 index_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, sel_t result[]) {
 	assert(expr.return_type == TypeId::BOOLEAN);
+	switch(expr.expression_class) {
+	case ExpressionClass::BOUND_CONJUNCTION:
+		return Select((BoundConjunctionExpression &)expr, state, result);
+	default:
+		return DefaultSelect(expr, state, result);
+	}
+}
 
+index_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state, sel_t result[]) {
 	// generic selection of boolean expression:
 	// resolve the true/false expression first
 	// then use that to generate the selection vector

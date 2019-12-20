@@ -92,6 +92,9 @@ protected:
 
 	//! Execute the (boolean-returning) expression and generate a selection vector with all entries that are "true" in the result
 	index_t Select(Expression &expr, ExpressionState *state, sel_t result[]);
+	index_t DefaultSelect(Expression &expr, ExpressionState *state, sel_t result[]);
+
+	index_t Select(BoundConjunctionExpression &expr, ExpressionState *state, sel_t result[]);
 
 	//! Verify that the output of a step in the ExpressionExecutor is correct
 	void Verify(Expression &expr, Vector &result);
