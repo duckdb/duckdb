@@ -192,11 +192,23 @@ index_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, sel
 	Execute(expr, state, intermediate);
 
 	auto intermediate_result = (bool*) intermediate.data;
-	index_t result_count = 0;
-	VectorOperations::Exec(intermediate, [&](index_t i, index_t k) {
-		if (intermediate_result[i] && !intermediate.nullmask[i]) {
-			result[result_count++] = i;
+	if (intermediate.IsConstant()) {
+		// constant result: get the value
+		if (intermediate_result[0] && !intermediate.nullmask[0]) {
+			// constant true: return everything; we skip filling the selection vector here as it will not be used
+			return chunk->size();
+		} else {
+			// constant false: filter everything
+			return 0;
 		}
-	});
-	return result_count;
+	} else {
+		// not a constant value
+		index_t result_count = 0;
+		VectorOperations::Exec(intermediate, [&](index_t i, index_t k) {
+			if (intermediate_result[i] && !intermediate.nullmask[i]) {
+				result[result_count++] = i;
+			}
+		});
+		return result_count;
+	}
 }

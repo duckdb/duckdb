@@ -36,7 +36,12 @@ void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		if (chunk.size() == 0) {
 			return;
 		}
+		index_t initial_count = chunk.size();
 		index_t result_count = state->executor.SelectExpression(chunk, chunk.owned_sel_vector);
+		if (result_count == initial_count) {
+			// nothing was filtered: skip adding any selection vectors
+			return;
+		}
 		if (result_count > 0) {
 			for (index_t i = 0; i < chunk.column_count; i++) {
 				chunk.data[i].count = result_count;
