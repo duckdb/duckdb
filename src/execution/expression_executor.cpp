@@ -103,9 +103,6 @@ Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 }
 
 void ExpressionExecutor::Verify(Expression &expr, Vector &vector) {
-	//	if (chunk) {
-	//		assert(vector.IsConstant() || vector.sel_vector == chunk->sel_vector);
-	//	}
 	assert(expr.return_type == vector.type);
 	vector.Verify();
 }

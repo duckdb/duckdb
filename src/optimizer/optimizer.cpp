@@ -3,6 +3,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/optimizer/cse_optimizer.hpp"
+#include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/index_scan.hpp"
 #include "duckdb/optimizer/join_order_optimizer.hpp"
@@ -109,6 +110,12 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	context.profiler.StartPhase("top_n");
 	TopN topn;
 	plan = topn.Optimize(move(plan));
+	context.profiler.EndPhase();
+
+	// apply simple expression heuristics to get an initial reordering
+	context.profiler.StartPhase("reorder_filter_expressions");
+	ExpressionHeuristics expression_heuristics(*this);
+	plan = expression_heuristics.Rewrite(move(plan));
 	context.profiler.EndPhase();
 
 	return plan;

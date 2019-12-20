@@ -26,6 +26,7 @@ def pull_new_changes():
 
 def build_optimized():
     log("Starting optimized build")
+    os.system('rm -rf build')
     proc = subprocess.Popen(['make', 'opt', 'imdb','-j'], stdout=FNULL, stderr=subprocess.PIPE)
     proc.wait()
     if proc.returncode != 0:

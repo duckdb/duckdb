@@ -6,6 +6,7 @@ add_subdirectory(rule)
 add_library_unity(duckdb_optimizer
                   OBJECT
                   cse_optimizer.cpp
+                  expression_heuristics.cpp
                   filter_combiner.cpp
                   filter_pushdown.cpp
                   join_order_optimizer.cpp

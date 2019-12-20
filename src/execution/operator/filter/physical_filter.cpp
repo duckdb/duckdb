@@ -44,11 +44,18 @@ void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 
 		state->executor.ExecuteExpression(state->child_chunk, state->intermediate.data[0]);
 
-		// now generate the selection vector
-		chunk.sel_vector = state->child_chunk.sel_vector;
-		for (index_t i = 0; i < chunk.column_count; i++) {
-			// create a reference to the vector of the child chunk
-			chunk.data[i].Reference(state->child_chunk.data[i]);
+		if (state->child_chunk.size() != 0) {
+			// chunk gets the same selection vector as its child chunk
+			chunk.sel_vector = state->child_chunk.sel_vector;
+			for (index_t i = 0; i < chunk.column_count; i++) {
+				// create a reference to the vector of the child chunk, same number of columns
+				chunk.data[i].Reference(state->child_chunk.data[i]);
+			}
+			// chunk gets the same data as child chunk
+			for (index_t i = 0; i < chunk.column_count; i++) {
+				chunk.data[i].count = state->child_chunk.data[i].count;
+				chunk.data[i].sel_vector = state->child_chunk.sel_vector;
+			}
 		}
 		chunk.SetSelectionVector(state->intermediate.data[0]);
 	} while (chunk.size() == 0);
