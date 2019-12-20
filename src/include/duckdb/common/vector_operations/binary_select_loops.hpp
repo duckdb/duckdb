@@ -64,7 +64,9 @@ index_t templated_binary_select(Vector &left, Vector &right, sel_t result[]) {
 
 	if (left.IsConstant()) {
 		if (right.IsConstant()) {
-			// both sides are constant
+			// early out in case both sides are constant
+			// in this case we don't want to edit the selection vector in the result at all
+			// hence we return 0 or 1 based on the condition immediately
 			if (left.nullmask[0] || right.nullmask[0] || !OP::Operation(ldata[0], rdata[0])) {
 				return 0;
 			} else {

@@ -27,32 +27,46 @@ inline void BINARY_TYPE_CHECK(Vector &left, Vector &right, Vector &result) {
 	}
 }
 
-template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
-static inline void binary_loop_function_left_constant(LEFT_TYPE ldata, RIGHT_TYPE *__restrict rdata,
+template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL, int LEFT_MULTIPLIER, int RIGHT_MULTIPLIER>
+static inline void binary_function_loop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+                                                  RESULT_TYPE *__restrict result_data, index_t count,
+                                                  sel_t *__restrict sel_vector, nullmask_t &nullmask) {
+	if (IGNORE_NULL && nullmask.any()) {
+		VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
+			if (!nullmask[i]) {
+				result_data[i] = OP::Operation(ldata[LEFT_MULTIPLIER * i], rdata[RIGHT_MULTIPLIER *i]);
+			}
+		});
+	} else {
+		VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
+			result_data[i] = OP::Operation(ldata[LEFT_MULTIPLIER * i], rdata[RIGHT_MULTIPLIER * i]);
+		});
+	}
+}
+
+template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL>
+static inline void binary_loop_left_constant(LEFT_TYPE ldata, RIGHT_TYPE *__restrict rdata,
                                                       RESULT_TYPE *__restrict result_data, index_t count,
-                                                      sel_t *__restrict sel_vector) {
+                                                      sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 	ASSERT_RESTRICT(rdata, rdata + count, result_data, result_data + count);
-	VectorOperations::Exec(sel_vector, count,
-	                       [&](index_t i, index_t k) { result_data[i] = OP::Operation(ldata, rdata[i]); });
+	binary_function_loop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL, 0, 1>(&ldata, rdata, result_data, count, sel_vector, nullmask);
 }
 
-template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
-static inline void binary_loop_function_right_constant(LEFT_TYPE *__restrict ldata, RIGHT_TYPE rdata,
+template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL>
+static inline void binary_loop_right_constant(LEFT_TYPE *__restrict ldata, RIGHT_TYPE rdata,
                                                        RESULT_TYPE *__restrict result_data, index_t count,
-                                                       sel_t *__restrict sel_vector) {
+                                                       sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
-	VectorOperations::Exec(sel_vector, count,
-	                       [&](index_t i, index_t k) { result_data[i] = OP::Operation(ldata[i], rdata); });
+	binary_function_loop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL, 1, 0>(ldata, &rdata, result_data, count, sel_vector, nullmask);
 }
 
-template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
-static inline void binary_loop_function_array(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL>
+static inline void binary_loop_array(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
                                               RESULT_TYPE *__restrict result_data, index_t count,
-                                              sel_t *__restrict sel_vector) {
+                                              sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 	ASSERT_RESTRICT(rdata, rdata + count, result_data, result_data + count);
-	VectorOperations::Exec(sel_vector, count,
-	                       [&](index_t i, index_t k) { result_data[i] = OP::Operation(ldata[i], rdata[i]); });
+	binary_function_loop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL, 1, 1>(ldata, rdata, result_data, count, sel_vector, nullmask);
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL = false>
@@ -66,20 +80,10 @@ void templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 			// left side is constant NULL, set everything to NULL
 			result.nullmask.set();
 		} else {
-			// left side is normal constant, use right nullmask and do
-			// computation
-			LEFT_TYPE constant = ldata[0];
+			// left side is normal constant, use right nullmask
 			result.nullmask = right.nullmask;
-			if (IGNORE_NULL && result.nullmask.any()) {
-				VectorOperations::Exec(right.sel_vector, right.count, [&](index_t i, index_t k) {
-					if (!result.nullmask[i]) {
-						result_data[i] = OP::Operation(constant, rdata[i]);
-					}
-				});
-			} else {
-				binary_loop_function_left_constant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(
-				    constant, rdata, result_data, right.count, right.sel_vector);
-			}
+			binary_loop_left_constant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL>(
+				ldata[0], rdata, result_data, right.count, right.sel_vector, result.nullmask);
 		}
 		result.sel_vector = right.sel_vector;
 		result.count = right.count;
@@ -89,37 +93,18 @@ void templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 			result.nullmask.set();
 		} else {
 			// right side is normal constant, use left nullmask and do
-			// computation
-			RIGHT_TYPE constant = rdata[0];
 			result.nullmask = left.nullmask;
-			if (IGNORE_NULL && result.nullmask.any()) {
-				VectorOperations::Exec(left.sel_vector, left.count, [&](index_t i, index_t k) {
-					if (!result.nullmask[i]) {
-						result_data[i] = OP::Operation(ldata[i], constant);
-					}
-				});
-			} else {
-				binary_loop_function_right_constant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(
-				    ldata, constant, result_data, left.count, left.sel_vector);
-			}
+			binary_loop_right_constant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL>(
+				ldata, rdata[0], result_data, left.count, left.sel_vector, result.nullmask);
 		}
 		result.sel_vector = left.sel_vector;
 		result.count = left.count;
 	} else {
 		assert(left.count == right.count);
+		assert(left.sel_vector == right.sel_vector);
 		// OR nullmasks together
 		result.nullmask = left.nullmask | right.nullmask;
-		assert(left.sel_vector == right.sel_vector);
-		if (IGNORE_NULL && result.nullmask.any()) {
-			VectorOperations::Exec(left.sel_vector, left.count, [&](index_t i, index_t k) {
-				if (!result.nullmask[i]) {
-					result_data[i] = OP::Operation(ldata[i], rdata[i]);
-				}
-			});
-		} else {
-			binary_loop_function_array<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(ldata, rdata, result_data, left.count,
-			                                                                   left.sel_vector);
-		}
+		binary_loop_array<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL>(ldata, rdata, result_data, left.count, left.sel_vector, result.nullmask);
 		result.sel_vector = left.sel_vector;
 		result.count = left.count;
 	}
@@ -163,7 +148,7 @@ template <class T, class OP> void templated_divmod_loop(Vector &left, Vector &ri
 			// right side is normal constant, use left nullmask and do
 			// computation
 			result.nullmask = left.nullmask;
-			binary_loop_function_right_constant<T, T, T, OP>(ldata, constant, result_data, left.count, left.sel_vector);
+			binary_loop_right_constant<T, T, T, OP, false>(ldata, constant, result_data, left.count, left.sel_vector, result.nullmask);
 		}
 		result.sel_vector = left.sel_vector;
 		result.count = left.count;
