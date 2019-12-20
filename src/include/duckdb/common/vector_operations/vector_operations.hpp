@@ -91,6 +91,22 @@ struct VectorOperations {
 	static void LessThanEquals(Vector &A, Vector &B, Vector &result);
 
 	//===--------------------------------------------------------------------===//
+	// Select Comparison Operations
+	//===--------------------------------------------------------------------===//
+	// result = A == B
+	static index_t SelectEquals(Vector &A, Vector &B, sel_t result[]);
+	// result = A != B
+	static index_t SelectNotEquals(Vector &A, Vector &B, sel_t result[]);
+	// result = A > B
+	static index_t SelectGreaterThan(Vector &A, Vector &B, sel_t result[]);
+	// result = A >= B
+	static index_t SelectGreaterThanEquals(Vector &A, Vector &B, sel_t result[]);
+	// result = A < B
+	static index_t SelectLessThan(Vector &A, Vector &B, sel_t result[]);
+	// result = A <= B
+	static index_t SelectLessThanEquals(Vector &A, Vector &B, sel_t result[]);
+
+	//===--------------------------------------------------------------------===//
 	// Aggregates
 	//===--------------------------------------------------------------------===//
 	// SUM(A)

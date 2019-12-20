@@ -94,6 +94,7 @@ protected:
 	index_t Select(Expression &expr, ExpressionState *state, sel_t result[]);
 	index_t DefaultSelect(Expression &expr, ExpressionState *state, sel_t result[]);
 
+	index_t Select(BoundComparisonExpression &expr, ExpressionState *state, sel_t result[]);
 	index_t Select(BoundConjunctionExpression &expr, ExpressionState *state, sel_t result[]);
 
 	//! Verify that the output of a step in the ExpressionExecutor is correct

@@ -43,3 +43,42 @@ void ExpressionExecutor::Execute(BoundComparisonExpression &expr, ExpressionStat
 		throw NotImplementedException("Unknown comparison type!");
 	}
 }
+
+index_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionState *state, sel_t result[]) {
+	// resolve the children
+	auto &left = state->arguments.data[0];
+	auto &right = state->arguments.data[1];
+	Execute(*expr.left, state->child_states[0].get(), left);
+	Execute(*expr.right, state->child_states[1].get(), right);
+
+	index_t result_count;
+	switch (expr.type) {
+	case ExpressionType::COMPARE_EQUAL:
+		result_count = VectorOperations::SelectEquals(left, right, result);
+		break;
+	case ExpressionType::COMPARE_NOTEQUAL:
+		result_count = VectorOperations::SelectNotEquals(left, right, result);
+		break;
+	case ExpressionType::COMPARE_LESSTHAN:
+		result_count = VectorOperations::SelectLessThan(left, right, result);
+		break;
+	case ExpressionType::COMPARE_GREATERTHAN:
+		result_count = VectorOperations::SelectGreaterThan(left, right, result);
+		break;
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		result_count = VectorOperations::SelectLessThanEquals(left, right, result);
+		break;
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		result_count = VectorOperations::SelectGreaterThanEquals(left, right, result);
+		break;
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		throw NotImplementedException("Unimplemented compare: COMPARE_DISTINCT_FROM");
+	default:
+		throw NotImplementedException("Unknown comparison type!");
+	}
+	if (left.IsConstant() && right.IsConstant()) {
+		return result_count == 0 ? 0 : chunk->size();
+	} else {
+		return result_count;
+	}
+}

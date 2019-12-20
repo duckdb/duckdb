@@ -184,6 +184,8 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, Vecto
 index_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, sel_t result[]) {
 	assert(expr.return_type == TypeId::BOOLEAN);
 	switch(expr.expression_class) {
+	case ExpressionClass::BOUND_COMPARISON:
+		return Select((BoundComparisonExpression &)expr, state, result);
 	case ExpressionClass::BOUND_CONJUNCTION:
 		return Select((BoundConjunctionExpression &)expr, state, result);
 	default:
