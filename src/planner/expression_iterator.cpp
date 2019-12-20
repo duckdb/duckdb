@@ -53,8 +53,9 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	}
 	case ExpressionClass::BOUND_CONJUNCTION: {
 		auto &conj_expr = (BoundConjunctionExpression &)expr;
-		conj_expr.left = callback(move(conj_expr.left));
-		conj_expr.right = callback(move(conj_expr.right));
+		for (auto &child : conj_expr.children) {
+			child = callback(move(child));
+		}
 		break;
 	}
 	case ExpressionClass::BOUND_FUNCTION: {

@@ -13,6 +13,7 @@
 #include "duckdb/parser/base_expression.hpp"
 
 namespace duckdb {
+class Expression;
 
 struct ExpressionHashFunction {
 	uint64_t operator()(const BaseExpression *const &expr) const {

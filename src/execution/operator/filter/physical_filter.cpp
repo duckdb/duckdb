@@ -20,10 +20,16 @@ public:
 
 PhysicalFilter::PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expression>> select_list) :
 	PhysicalOperator(PhysicalOperatorType::FILTER, types) {
-	// create a big AND out of the expressions
-	expression = move(select_list[0]);
-	for(index_t i = 1; i < select_list.size(); i++) {
-		expression = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(expression), move(select_list[i]));
+	assert(select_list.size() > 0);
+	if (select_list.size() > 1) {
+		// create a big AND out of the expressions
+		auto conjunction = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
+		for(auto &expr : select_list) {
+			conjunction->children.push_back(move(expr));
+		}
+		expression = move(conjunction);
+	} else {
+		expression = move(select_list[0]);
 	}
 }
 
