@@ -57,6 +57,12 @@ void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
 	ExecuteExpression(result);
 }
 
+index_t ExpressionExecutor::SelectExpression(DataChunk &input, sel_t result[]) {
+	assert(expressions.size() == 1);
+	SetChunk(&input);
+	return Select(*expressions[0], states[0]->root_state.get(), result);
+}
+
 void ExpressionExecutor::ExecuteExpression(Vector &result) {
 	assert(expressions.size() == 1);
 	ExecuteExpression(0, result);
@@ -173,4 +179,24 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, Vecto
 		throw NotImplementedException("Attempting to execute expression of unknown type!");
 	}
 	Verify(expr, result);
+}
+
+index_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, sel_t result[]) {
+	assert(expr.return_type == TypeId::BOOLEAN);
+
+	// generic selection of boolean expression:
+	// resolve the true/false expression first
+	// then use that to generate the selection vector
+	bool intermediate_bools[STANDARD_VECTOR_SIZE];
+	Vector intermediate(TypeId::BOOLEAN, (data_ptr_t) intermediate_bools);
+	Execute(expr, state, intermediate);
+
+	auto intermediate_result = (bool*) intermediate.data;
+	index_t result_count = 0;
+	VectorOperations::Exec(intermediate, [&](index_t i, index_t k) {
+		if (intermediate_result[i] && !intermediate.nullmask[i]) {
+			result[result_count++] = i;
+		}
+	});
+	return result_count;
 }

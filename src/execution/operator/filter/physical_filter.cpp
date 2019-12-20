@@ -9,12 +9,8 @@ class PhysicalFilterState : public PhysicalOperatorState {
 public:
 	PhysicalFilterState(PhysicalOperator *child, Expression &expr)
 	    : PhysicalOperatorState(child), executor(expr) {
-		// initialize the intermediate
-		vector<TypeId> result_type = { TypeId::BOOLEAN };
-		intermediate.Initialize(result_type);
 	}
 
-	DataChunk intermediate;
 	ExpressionExecutor executor;
 };
 
@@ -35,30 +31,21 @@ PhysicalFilter::PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expressio
 
 void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalFilterState *>(state_);
-	do {
-		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-		if (state->child_chunk.size() == 0) {
+	while(true) {
+		children[0]->GetChunk(context, chunk, state->child_state.get());
+		if (chunk.size() == 0) {
 			return;
 		}
-		state->intermediate.Reset();
-
-		state->executor.ExecuteExpression(state->child_chunk, state->intermediate.data[0]);
-
-		if (state->child_chunk.size() != 0) {
-			// chunk gets the same selection vector as its child chunk
-			chunk.sel_vector = state->child_chunk.sel_vector;
+		index_t result_count = state->executor.SelectExpression(chunk, chunk.owned_sel_vector);
+		if (result_count > 0) {
 			for (index_t i = 0; i < chunk.column_count; i++) {
-				// create a reference to the vector of the child chunk, same number of columns
-				chunk.data[i].Reference(state->child_chunk.data[i]);
+				chunk.data[i].count = result_count;
+				chunk.data[i].sel_vector = chunk.owned_sel_vector;
 			}
-			// chunk gets the same data as child chunk
-			for (index_t i = 0; i < chunk.column_count; i++) {
-				chunk.data[i].count = state->child_chunk.data[i].count;
-				chunk.data[i].sel_vector = state->child_chunk.sel_vector;
-			}
+			chunk.sel_vector = chunk.owned_sel_vector;
+			return;
 		}
-		chunk.SetSelectionVector(state->intermediate.data[0]);
-	} while (chunk.size() == 0);
+	}
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalFilter::GetOperatorState() {
