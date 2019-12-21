@@ -112,7 +112,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// create the JOIN condition
 		JoinCondition cond;
 		cond.left = move(expr.child);
-		cond.right = AddCastToType(
+		cond.right = BoundCastExpression::AddCastToType(
 		    make_unique<BoundColumnRefExpression>(GetInternalType(expr.child_type), ColumnBinding(subquery_index, 0)),
 		    expr.child_type, expr.child_target);
 		cond.comparison = expr.comparison_type;
@@ -247,7 +247,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		// add the actual condition based on the ANY/ALL predicate
 		JoinCondition compare_cond;
 		compare_cond.left = move(expr.child);
-		compare_cond.right = AddCastToType(
+		compare_cond.right = BoundCastExpression::AddCastToType(
 		    make_unique<BoundColumnRefExpression>(GetInternalType(expr.child_type), ColumnBinding(subquery_index, 0)),
 		    expr.child_type, expr.child_target);
 		compare_cond.comparison = expr.comparison_type;

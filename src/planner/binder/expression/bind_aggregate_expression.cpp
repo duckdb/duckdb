@@ -51,7 +51,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	// found a matching function!
 	auto &bound_function = func->functions[best_function];
 	// check if we need to add casts to the children
-	CastToFunctionArguments(bound_function, children, types);
+	bound_function.CastToFunctionArguments(children, types);
 
 	auto return_type = bound_function.return_type;
 	// create the aggregate

@@ -15,6 +15,7 @@
 
 namespace duckdb {
 class BoundFunctionExpression;
+class ScalarFunctionCatalogEntry;
 
 //! The type used for scalar functions
 typedef void (*scalar_function_t)(DataChunk &input, ExpressionState &state, Vector &result);
@@ -44,6 +45,9 @@ public:
 	bind_scalar_function_t bind;
 	// The dependency function (if any)
 	dependency_function_t dependency;
+
+	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, string schema, string name, vector<SQLType> &arguments, vector<unique_ptr<Expression>> children, bool is_operator = false);
+	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, ScalarFunctionCatalogEntry &function, vector<SQLType> &arguments, vector<unique_ptr<Expression>> children, bool is_operator = false);
 
 	bool operator==(const ScalarFunction &rhs) const {
 		return function == rhs.function && bind == rhs.bind && dependency == rhs.dependency;

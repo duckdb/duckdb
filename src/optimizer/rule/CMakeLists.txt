@@ -5,6 +5,7 @@ add_library_unity(duckdb_optimizer_rules
                   comparison_simplification.cpp
                   conjunction_simplification.cpp
                   constant_folding.cpp
+                  date_part_simplification.cpp
                   distributivity.cpp
                   move_constants.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES}

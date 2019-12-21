@@ -24,6 +24,9 @@ public:
 	SQLType target_type;
 
 public:
+	//! Cast an expression to the specified SQL type if required
+	static unique_ptr<Expression> AddCastToType(unique_ptr<Expression> expr, SQLType source_type, SQLType target_type);
+
 	string ToString() const override;
 
 	bool Equals(const BaseExpression *other) const override;

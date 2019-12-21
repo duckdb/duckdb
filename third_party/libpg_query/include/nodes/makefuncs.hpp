@@ -83,4 +83,3 @@ extern PGDefElem *makeDefElemExtended(const char *nameSpace, const char *name, P
 					PGDefElemAction defaction, int location);
 
 extern PGGroupingSet *makeGroupingSet(GroupingSetKind kind, PGList *content, int location);
-

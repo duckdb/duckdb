@@ -1,4 +1,5 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
@@ -32,8 +33,8 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, index_t 
 		throw BinderException("Could not determine type of parameters: try adding explicit type casts");
 	}
 	// add casts (if necessary)
-	left.expr = AddCastToType(move(left.expr), left.sql_type, input_type);
-	right.expr = AddCastToType(move(right.expr), right.sql_type, input_type);
+	left.expr = BoundCastExpression::AddCastToType(move(left.expr), left.sql_type, input_type);
+	right.expr = BoundCastExpression::AddCastToType(move(right.expr), right.sql_type, input_type);
 	// now create the bound comparison expression
 	return BindResult(make_unique<BoundComparisonExpression>(expr.type, move(left.expr), move(right.expr)),
 	                  SQLType(SQLTypeId::BOOLEAN));
