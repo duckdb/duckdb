@@ -9,27 +9,6 @@ using namespace std;
 
 namespace duckdb {
 
-template <class OP> static scalar_function_t GetScalarUnaryFunction(SQLType type) {
-	switch (type.id) {
-	case SQLTypeId::TINYINT:
-		return ScalarFunction::UnaryFunction<int8_t, int8_t, OP>;
-	case SQLTypeId::SMALLINT:
-		return ScalarFunction::UnaryFunction<int16_t, int16_t, OP>;
-	case SQLTypeId::INTEGER:
-		return ScalarFunction::UnaryFunction<int32_t, int32_t, OP>;
-	case SQLTypeId::BIGINT:
-		return ScalarFunction::UnaryFunction<int64_t, int64_t, OP>;
-	case SQLTypeId::FLOAT:
-		return ScalarFunction::UnaryFunction<float, float, OP>;
-	case SQLTypeId::DOUBLE:
-		return ScalarFunction::UnaryFunction<double, double, OP>;
-	case SQLTypeId::DECIMAL:
-		return ScalarFunction::UnaryFunction<double, double, OP>;
-	default:
-		throw NotImplementedException("Unimplemented type for GetScalarUnaryFunction");
-	}
-}
-
 //===--------------------------------------------------------------------===//
 // abs
 //===--------------------------------------------------------------------===//
@@ -42,7 +21,7 @@ struct AbsOperator {
 void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet abs("abs");
 	for (auto &type : SQLType::NUMERIC) {
-		abs.AddFunction(ScalarFunction({type}, type, GetScalarUnaryFunction<AbsOperator>(type)));
+		abs.AddFunction(ScalarFunction({type}, type, ScalarFunction::GetScalarUnaryFunction<AbsOperator>(type)));
 	}
 	set.AddFunction(abs);
 }
@@ -50,27 +29,6 @@ void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // sign
 //===--------------------------------------------------------------------===//
-template <class TR, class OP> static scalar_function_t GetScalarUnaryFunctionFixedReturn(SQLType type) {
-	switch (type.id) {
-	case SQLTypeId::TINYINT:
-		return ScalarFunction::UnaryFunction<int8_t, TR, OP>;
-	case SQLTypeId::SMALLINT:
-		return ScalarFunction::UnaryFunction<int16_t, TR, OP>;
-	case SQLTypeId::INTEGER:
-		return ScalarFunction::UnaryFunction<int32_t, TR, OP>;
-	case SQLTypeId::BIGINT:
-		return ScalarFunction::UnaryFunction<int64_t, TR, OP>;
-	case SQLTypeId::FLOAT:
-		return ScalarFunction::UnaryFunction<float, TR, OP>;
-	case SQLTypeId::DOUBLE:
-		return ScalarFunction::UnaryFunction<double, TR, OP>;
-	case SQLTypeId::DECIMAL:
-		return ScalarFunction::UnaryFunction<double, TR, OP>;
-	default:
-		throw NotImplementedException("Unimplemented type for GetScalarUnaryFunctionFixedReturn");
-	}
-}
-
 struct SignOperator {
 	template <class T> static inline int8_t Operation(T left) {
 		if (left == T(0))
@@ -86,7 +44,7 @@ void SignFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet sign("sign");
 	for (auto &type : SQLType::NUMERIC) {
 		sign.AddFunction(
-		    ScalarFunction({type}, SQLType::TINYINT, GetScalarUnaryFunctionFixedReturn<int8_t, SignOperator>(type)));
+		    ScalarFunction({type}, SQLType::TINYINT, ScalarFunction::GetScalarUnaryFunctionFixedReturn<int8_t, SignOperator>(type)));
 	}
 	set.AddFunction(sign);
 }
@@ -108,7 +66,7 @@ void CeilFun::RegisterFunction(BuiltinFunctions &set) {
 			// ceil on integral type is a nop
 			func = ScalarFunction::NopFunction;
 		} else {
-			func = GetScalarUnaryFunction<CeilOperator>(type);
+			func = ScalarFunction::GetScalarUnaryFunction<CeilOperator>(type);
 		}
 		ceil.AddFunction(ScalarFunction({type}, type, func));
 	}
@@ -134,7 +92,7 @@ void FloorFun::RegisterFunction(BuiltinFunctions &set) {
 			// floor on integral type is a nop
 			func = ScalarFunction::NopFunction;
 		} else {
-			func = GetScalarUnaryFunction<FloorOperator>(type);
+			func = ScalarFunction::GetScalarUnaryFunction<FloorOperator>(type);
 		}
 		floor.AddFunction(ScalarFunction({type}, type, func));
 	}
@@ -144,27 +102,6 @@ void FloorFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // round
 //===--------------------------------------------------------------------===//
-template <class TB, class OP> static scalar_function_t GetScalarBinaryFunctionFixedArgument(SQLType type) {
-	switch (type.id) {
-	case SQLTypeId::TINYINT:
-		return ScalarFunction::BinaryFunction<int8_t, TB, int8_t, OP>;
-	case SQLTypeId::SMALLINT:
-		return ScalarFunction::BinaryFunction<int16_t, TB, int16_t, OP>;
-	case SQLTypeId::INTEGER:
-		return ScalarFunction::BinaryFunction<int32_t, TB, int32_t, OP>;
-	case SQLTypeId::BIGINT:
-		return ScalarFunction::BinaryFunction<int64_t, TB, int64_t, OP>;
-	case SQLTypeId::FLOAT:
-		return ScalarFunction::BinaryFunction<float, TB, float, OP>;
-	case SQLTypeId::DOUBLE:
-		return ScalarFunction::BinaryFunction<double, TB, double, OP>;
-	case SQLTypeId::DECIMAL:
-		return ScalarFunction::BinaryFunction<double, TB, double, OP>;
-	default:
-		throw NotImplementedException("Unimplemented type for GetScalarUnaryFunctionFixedReturn");
-	}
-}
-
 struct RoundOperator {
 	template <class T> static inline T Operation(T input, int32_t precision) {
 		if (precision < 0) {
@@ -183,7 +120,7 @@ void RoundFun::RegisterFunction(BuiltinFunctions &set) {
 			// round on integral type is a nop
 			func = ScalarFunction::NopFunction;
 		} else {
-			func = GetScalarBinaryFunctionFixedArgument<int8_t, RoundOperator>(type);
+			func = ScalarFunction::GetScalarBinaryFunctionFixedArgument<int8_t, RoundOperator>(type);
 		}
 		round.AddFunction(ScalarFunction({type, SQLType::INTEGER}, type, func));
 	}

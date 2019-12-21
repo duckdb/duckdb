@@ -35,13 +35,11 @@ static void subtract_function(DataChunk &input, ExpressionState &state, Vector &
 	VectorOperations::Subtract(input.data[0], input.data[1], result);
 }
 
-static void unary_subtract_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	Value minus_one = Value::Numeric(args.data[0].type, -1);
-	Vector right;
-	right.Reference(minus_one);
-
-	VectorOperations::Multiply(args.data[0], right, result);
-}
+struct NegateOperator {
+	template <class T> static inline T Operation(T input) {
+		return -input;
+	}
+};
 
 void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("-");
@@ -53,7 +51,7 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::INTEGER}, SQLType::DATE, subtract_function));
 	// unary subtract function, negates the input (i.e. multiplies by -1)
 	for (auto &type : SQLType::NUMERIC) {
-		functions.AddFunction(ScalarFunction({type}, type, unary_subtract_function));
+		functions.AddFunction(ScalarFunction({type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type)));
 	}
 	set.AddFunction(functions);
 }
