@@ -36,6 +36,54 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 	case DatePartSpecifier::YEAR:
 		new_function_name = "year";
 		break;
+	case DatePartSpecifier::MONTH:
+		new_function_name = "month";
+		break;
+	case DatePartSpecifier::DAY:
+		new_function_name = "day";
+		break;
+	case DatePartSpecifier::DECADE:
+		new_function_name = "decade";
+		break;
+	case DatePartSpecifier::CENTURY:
+		new_function_name = "century";
+		break;
+	case DatePartSpecifier::MILLENIUM:
+		new_function_name = "millenium";
+		break;
+	case DatePartSpecifier::QUARTER:
+		new_function_name = "quarter";
+		break;
+	case DatePartSpecifier::WEEK:
+		new_function_name = "week";
+		break;
+	case DatePartSpecifier::DOW:
+		new_function_name = "dayofweek";
+		break;
+	case DatePartSpecifier::ISODOW:
+		new_function_name = "isodow";
+		break;
+	case DatePartSpecifier::DOY:
+		new_function_name = "dayofyear";
+		break;
+	case DatePartSpecifier::EPOCH:
+		new_function_name = "epoch";
+		break;
+	case DatePartSpecifier::MICROSECONDS:
+		new_function_name = "microsecond";
+		break;
+	case DatePartSpecifier::MILLISECONDS:
+		new_function_name = "millisecond";
+		break;
+	case DatePartSpecifier::SECOND:
+		new_function_name = "second";
+		break;
+	case DatePartSpecifier::MINUTE:
+		new_function_name = "minute";
+		break;
+	case DatePartSpecifier::HOUR:
+		new_function_name = "hour";
+		break;
 	default:
 		return nullptr;
 	}

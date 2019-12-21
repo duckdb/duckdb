@@ -56,70 +56,216 @@ DatePartSpecifier GetDatePartSpecifier(string specifier) {
 	}
 }
 
-static int64_t extract_element(DatePartSpecifier type, date_t element) {
-	switch (type) {
-	case DatePartSpecifier::YEAR:
-		return Date::ExtractYear(element);
-	case DatePartSpecifier::MONTH:
-		return Date::ExtractMonth(element);
-	case DatePartSpecifier::DAY:
-		return Date::ExtractDay(element);
-	case DatePartSpecifier::DECADE:
-		return Date::ExtractYear(element) / 10;
-	case DatePartSpecifier::CENTURY:
-		return ((Date::ExtractYear(element) - 1) / 100) + 1;
-	case DatePartSpecifier::MILLENIUM:
-		return ((Date::ExtractYear(element) - 1) / 1000) + 1;
-	case DatePartSpecifier::QUARTER:
-		return Date::ExtractMonth(element) / 4;
-	case DatePartSpecifier::EPOCH:
-		return Date::Epoch(element);
-	case DatePartSpecifier::DOW:
-		// day of the week (Sunday = 0, Saturday = 6)
-		// turn sunday into 0 by doing mod 7
-		return Date::ExtractISODayOfTheWeek(element) % 7;
-	case DatePartSpecifier::ISODOW:
-		// isodow (Monday = 1, Sunday = 7)
-		return Date::ExtractISODayOfTheWeek(element);
-	case DatePartSpecifier::DOY:
-		return Date::ExtractDayOfTheYear(element);
-	case DatePartSpecifier::WEEK:
-		return Date::ExtractWeekNumber(element);
-	case DatePartSpecifier::MICROSECONDS:
-	case DatePartSpecifier::MILLISECONDS:
-	case DatePartSpecifier::SECOND:
-	case DatePartSpecifier::MINUTE:
-	case DatePartSpecifier::HOUR:
-		return 0;
-	default:
-		throw NotImplementedException("Specifier type not implemented");
+struct YearOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return Date::ExtractYear(input);
 	}
+};
+
+template <> int64_t YearOperator::Operation(timestamp_t input) {
+	return YearOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
-static int64_t extract_element(DatePartSpecifier type, timestamp_t element) {
+struct MonthOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return Date::ExtractMonth(input);
+	}
+};
+
+template <> int64_t MonthOperator::Operation(timestamp_t input) {
+	return MonthOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct DayOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return Date::ExtractDay(input);
+	}
+};
+
+template <> int64_t DayOperator::Operation(timestamp_t input) {
+	return DayOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct DecadeOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return Date::ExtractYear(input) / 10;
+	}
+};
+
+template <> int64_t DecadeOperator::Operation(timestamp_t input) {
+	return DecadeOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct CenturyOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return ((Date::ExtractYear(input) - 1) / 100) + 1;
+	}
+};
+
+template <> int64_t CenturyOperator::Operation(timestamp_t input) {
+	return CenturyOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct MilleniumOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return ((Date::ExtractYear(input) - 1) / 1000) + 1;
+	}
+};
+
+template <> int64_t MilleniumOperator::Operation(timestamp_t input) {
+	return MilleniumOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct QuarterOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return Date::ExtractMonth(input) / 4;
+	}
+};
+
+template <> int64_t QuarterOperator::Operation(timestamp_t input) {
+	return QuarterOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct DayOfWeekOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		// day of the week (Sunday = 0, Saturday = 6)
+		// turn sunday into 0 by doing mod 7
+		return Date::ExtractISODayOfTheWeek(input) % 7;
+	}
+};
+
+template <> int64_t DayOfWeekOperator::Operation(timestamp_t input) {
+	return DayOfWeekOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct ISODayOfWeekOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		// isodow (Monday = 1, Sunday = 7)
+		return Date::ExtractISODayOfTheWeek(input);
+	}
+};
+
+template <> int64_t ISODayOfWeekOperator::Operation(timestamp_t input) {
+	return ISODayOfWeekOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct DayOfYearOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return Date::ExtractDayOfTheYear(input);
+	}
+};
+
+template <> int64_t DayOfYearOperator::Operation(timestamp_t input) {
+	return DayOfYearOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct WeekOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return Date::ExtractWeekNumber(input);
+	}
+};
+
+template <> int64_t WeekOperator::Operation(timestamp_t input) {
+	return WeekOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct EpochOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return Date::Epoch(input);
+	}
+};
+
+template <> int64_t EpochOperator::Operation(timestamp_t input) {
+	return Timestamp::GetEpoch(input);
+}
+
+struct MicrosecondsOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return 0;
+	}
+};
+
+template <> int64_t MicrosecondsOperator::Operation(timestamp_t input) {
+	return Timestamp::GetMilliseconds(input) * 1000;
+}
+
+struct MillisecondsOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return 0;
+	}
+};
+
+template <> int64_t MillisecondsOperator::Operation(timestamp_t input) {
+	return Timestamp::GetMilliseconds(input);
+}
+
+struct SecondsOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return 0;
+	}
+};
+
+template <> int64_t SecondsOperator::Operation(timestamp_t input) {
+	return Timestamp::GetSeconds(input);
+}
+
+struct MinutesOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return 0;
+	}
+};
+
+template <> int64_t MinutesOperator::Operation(timestamp_t input) {
+	return Timestamp::GetMinutes(input);
+}
+
+struct HoursOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return 0;
+	}
+};
+
+template <> int64_t HoursOperator::Operation(timestamp_t input) {
+	return Timestamp::GetHours(input);
+}
+
+template<class T>
+static int64_t extract_element(DatePartSpecifier type, T element) {
 	switch (type) {
 	case DatePartSpecifier::YEAR:
+		return YearOperator::Operation<T, int64_t>(element);
 	case DatePartSpecifier::MONTH:
+		return MonthOperator::Operation<T, int64_t>(element);
 	case DatePartSpecifier::DAY:
+		return DayOperator::Operation<T, int64_t>(element);
 	case DatePartSpecifier::DECADE:
+		return DecadeOperator::Operation<T, int64_t>(element);
 	case DatePartSpecifier::CENTURY:
+		return CenturyOperator::Operation<T, int64_t>(element);
 	case DatePartSpecifier::MILLENIUM:
+		return MilleniumOperator::Operation<T, int64_t>(element);
 	case DatePartSpecifier::QUARTER:
+		return QuarterOperator::Operation<T, int64_t>(element);
 	case DatePartSpecifier::DOW:
+		return DayOfWeekOperator::Operation<T, int64_t>(element);
 	case DatePartSpecifier::ISODOW:
+		return ISODayOfWeekOperator::Operation<T, int64_t>(element);
 	case DatePartSpecifier::DOY:
+		return DayOfYearOperator::Operation<T, int64_t>(element);
 	case DatePartSpecifier::WEEK:
-		return extract_element(type, Timestamp::GetDate(element));
+		return WeekOperator::Operation<T, int64_t>(element);
 	case DatePartSpecifier::EPOCH:
-		return Timestamp::GetEpoch(element);
+		return EpochOperator::Operation<T, int64_t>(element);
+	case DatePartSpecifier::MICROSECONDS:
+		return MicrosecondsOperator::Operation<T, int64_t>(element);
 	case DatePartSpecifier::MILLISECONDS:
-		return Timestamp::GetMilliseconds(element);
+		return MillisecondsOperator::Operation<T, int64_t>(element);
 	case DatePartSpecifier::SECOND:
-		return Timestamp::GetSeconds(element);
+		return SecondsOperator::Operation<T, int64_t>(element);
 	case DatePartSpecifier::MINUTE:
-		return Timestamp::GetMinutes(element);
+		return MinutesOperator::Operation<T, int64_t>(element);
 	case DatePartSpecifier::HOUR:
-		return Timestamp::GetHours(element);
+		return HoursOperator::Operation<T, int64_t>(element);
 	default:
 		throw NotImplementedException("Specifier type not implemented");
 	}
@@ -127,11 +273,39 @@ static int64_t extract_element(DatePartSpecifier type, timestamp_t element) {
 
 struct DatePartOperator {
 	template <class T> static inline int64_t Operation(const char* specifier, T date) {
-		return extract_element(GetDatePartSpecifier(specifier), date);
+		return extract_element<T>(GetDatePartSpecifier(specifier), date);
 	}
 };
 
+template<class OP>
+static void AddDatePartOperator(BuiltinFunctions &set, string name) {
+	ScalarFunctionSet operator_set(name);
+	operator_set.AddFunction(ScalarFunction({SQLType::DATE}, SQLType::BIGINT, ScalarFunction::UnaryFunction<date_t, int64_t, OP>));
+	operator_set.AddFunction(ScalarFunction({SQLType::TIMESTAMP}, SQLType::BIGINT, ScalarFunction::UnaryFunction<timestamp_t, int64_t, OP>));
+	set.AddFunction(operator_set);
+}
+
 void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
+	// register the individual operators
+	AddDatePartOperator<YearOperator>(set, "year");
+	AddDatePartOperator<MonthOperator>(set, "month");
+	AddDatePartOperator<DayOperator>(set, "day");
+	AddDatePartOperator<DecadeOperator>(set, "decade");
+	AddDatePartOperator<CenturyOperator>(set, "century");
+	AddDatePartOperator<MilleniumOperator>(set, "millenium");
+	AddDatePartOperator<QuarterOperator>(set, "quarter");
+	AddDatePartOperator<DayOfWeekOperator>(set, "dayofweek");
+	AddDatePartOperator<ISODayOfWeekOperator>(set, "isodow");
+	AddDatePartOperator<DayOfYearOperator>(set, "dayofyear");
+	AddDatePartOperator<WeekOperator>(set, "week");
+	AddDatePartOperator<EpochOperator>(set, "epoch");
+	AddDatePartOperator<MicrosecondsOperator>(set, "microsecond");
+	AddDatePartOperator<MillisecondsOperator>(set, "millisecond");
+	AddDatePartOperator<SecondsOperator>(set, "second");
+	AddDatePartOperator<MinutesOperator>(set, "minute");
+	AddDatePartOperator<HoursOperator>(set, "hour");
+
+	// finally the actual date_part function
 	ScalarFunctionSet date_part("date_part");
 	date_part.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::DATE}, SQLType::BIGINT, ScalarFunction::BinaryFunction<const char*, date_t, int64_t, DatePartOperator>));
 	date_part.AddFunction(

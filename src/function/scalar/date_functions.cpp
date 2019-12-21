@@ -6,7 +6,6 @@ using namespace std;
 void BuiltinFunctions::RegisterDateFunctions() {
 	Register<AgeFun>();
 	Register<DatePartFun>();
-	Register<YearFun>();
 	Register<CurrentTimeFun>();
 	Register<CurrentDateFun>();
 	Register<CurrentTimestampFun>();
