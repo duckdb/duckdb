@@ -8,7 +8,7 @@ using namespace std;
 
 namespace duckdb {
 
-enum class SpecifierType {
+enum class SpecifierType : int8_t {
 	YEAR,
 	MONTH,
 	DAY,
@@ -144,66 +144,17 @@ static int64_t extract_element(SpecifierType type, timestamp_t element) {
 	}
 }
 
-static void date_part_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &specifier = args.data[0];
-	auto &source = args.data[1];
-
-
-	result.nullmask = source.nullmask;
-	result.count = source.count;
-	result.sel_vector = source.sel_vector;
-	if (source.type != TypeId::INTEGER) {
-		throw NotImplementedException("Can only extract from dates or timestamps");
+struct DatePartOperator {
+	template <class T> static inline int64_t Operation(const char* specifier, T date) {
+		return extract_element(GetSpecifierType(specifier), date);
 	}
-
-	auto result_data = (int64_t *)result.data;
-	if (specifier.IsConstant()) {
-		// constant specifier
-		auto specifier_type = GetSpecifierType(((const char **)specifier.data)[0]);
-		VectorOperations::ExecType<date_t>(source, [&](date_t element, index_t i, index_t k) {
-			result_data[i] = extract_element(specifier_type, element);
-		});
-	} else {
-		// not constant specifier
-		auto specifiers = ((const char **)specifier.data);
-		VectorOperations::ExecType<date_t>(source, [&](date_t element, index_t i, index_t k) {
-			result_data[i] = extract_element(GetSpecifierType(specifiers[i]), element);
-		});
-	}
-}
-
-static void timestamp_part_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &specifier = args.data[0];
-	auto &source = args.data[1];
-
-	result.nullmask = source.nullmask;
-	result.count = source.count;
-	result.sel_vector = source.sel_vector;
-	if (source.type != TypeId::BIGINT) {
-		throw NotImplementedException("Can only extract from dates or timestamps");
-	}
-
-	auto result_data = (int64_t *)result.data;
-	if (specifier.IsConstant()) {
-		// constant specifier
-		auto specifier_type = GetSpecifierType(((const char **)specifier.data)[0]);
-		VectorOperations::ExecType<timestamp_t>(source, [&](timestamp_t element, index_t i, index_t k) {
-			result_data[i] = extract_element(specifier_type, element);
-		});
-	} else {
-		// not constant specifier
-		auto specifiers = ((const char **)specifier.data);
-		VectorOperations::ExecType<timestamp_t>(source, [&](timestamp_t element, index_t i, index_t k) {
-			result_data[i] = extract_element(GetSpecifierType(specifiers[i]), element);
-		});
-	}
-}
+};
 
 void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet date_part("date_part");
-	date_part.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::DATE}, SQLType::BIGINT, date_part_function));
+	date_part.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::DATE}, SQLType::BIGINT, ScalarFunction::BinaryFunction<const char*, date_t, int64_t, DatePartOperator>));
 	date_part.AddFunction(
-	    ScalarFunction({SQLType::VARCHAR, SQLType::TIMESTAMP}, SQLType::BIGINT, timestamp_part_function));
+	    ScalarFunction({SQLType::VARCHAR, SQLType::TIMESTAMP}, SQLType::BIGINT, ScalarFunction::BinaryFunction<const char*, timestamp_t, int64_t, DatePartOperator>));
 	set.AddFunction(date_part);
 	date_part.name = "datepart";
 	set.AddFunction(date_part);
