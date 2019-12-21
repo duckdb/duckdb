@@ -9,34 +9,24 @@ using namespace std;
 
 namespace duckdb {
 
-static void year_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count == 1);
-	auto &input = args.data[0];
-	assert(input.type == TypeId::INTEGER || input.type == TypeId::BIGINT);
-
-	result.nullmask = input.nullmask;
-	result.count = input.count;
-	result.sel_vector = input.sel_vector;
-	auto result_data = (int *)result.data;
-	switch (input.type) {
-	case TypeId::INTEGER:
-		VectorOperations::ExecType<date_t>(
-		    input, [&](date_t date, index_t i, index_t k) { result_data[i] = Date::ExtractYear(date); });
-		break;
-	case TypeId::BIGINT:
-		VectorOperations::ExecType<timestamp_t>(input, [&](timestamp_t timestamp, index_t i, index_t k) {
-			result_data[i] = Date::ExtractYear(Timestamp::GetDate(timestamp));
-		});
-		break;
-	default:
-		throw NotImplementedException("Can only extract year from dates or timestamps");
+struct YearOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		throw NotImplementedException("Unsupported type for year!");
 	}
+};
+
+template <> int32_t YearOperator::Operation(date_t input) {
+	return Date::ExtractYear(input);
+}
+
+template <> int32_t YearOperator::Operation(timestamp_t input) {
+	return Date::ExtractYear(Timestamp::GetDate(input));
 }
 
 void YearFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet year("year");
-	year.AddFunction(ScalarFunction({SQLType::DATE}, SQLType::INTEGER, year_function));
-	year.AddFunction(ScalarFunction({SQLType::TIMESTAMP}, SQLType::INTEGER, year_function));
+	year.AddFunction(ScalarFunction({SQLType::DATE}, SQLType::INTEGER, ScalarFunction::UnaryFunction<date_t, int32_t, YearOperator>));
+	year.AddFunction(ScalarFunction({SQLType::TIMESTAMP}, SQLType::INTEGER, ScalarFunction::UnaryFunction<timestamp_t, int32_t, YearOperator>));
 	set.AddFunction(year);
 }
 

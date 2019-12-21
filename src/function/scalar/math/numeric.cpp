@@ -13,7 +13,7 @@ namespace duckdb {
 // abs
 //===--------------------------------------------------------------------===//
 struct AbsOperator {
-	template <class T> static inline T Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return left < 0 ? left * -1 : left;
 	}
 };
@@ -30,10 +30,10 @@ void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 // sign
 //===--------------------------------------------------------------------===//
 struct SignOperator {
-	template <class T> static inline int8_t Operation(T left) {
-		if (left == T(0))
+	template <class TA, class TR> static inline TR Operation(TA left) {
+		if (left == TA(0))
 			return 0;
-		else if (left > T(0))
+		else if (left > TA(0))
 			return 1;
 		else
 			return -1;
@@ -53,7 +53,7 @@ void SignFun::RegisterFunction(BuiltinFunctions &set) {
 // ceil
 //===--------------------------------------------------------------------===//
 struct CeilOperator {
-	template <class T> static inline T Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return ceil(left);
 	}
 };
@@ -79,7 +79,7 @@ void CeilFun::RegisterFunction(BuiltinFunctions &set) {
 // floor
 //===--------------------------------------------------------------------===//
 struct FloorOperator {
-	template <class T> static inline T Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return floor(left);
 	}
 };
@@ -131,7 +131,7 @@ void RoundFun::RegisterFunction(BuiltinFunctions &set) {
 // exp
 //===--------------------------------------------------------------------===//
 struct ExpOperator {
-	template <class T> static inline double Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return exp(left);
 	}
 };
@@ -162,7 +162,7 @@ void PowFun::RegisterFunction(BuiltinFunctions &set) {
 // sqrt
 //===--------------------------------------------------------------------===//
 struct SqrtOperator {
-	template <class T> static inline T Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return sqrt(left);
 	}
 };
@@ -176,7 +176,7 @@ void SqrtFun::RegisterFunction(BuiltinFunctions &set) {
 // ln
 //===--------------------------------------------------------------------===//
 struct LnOperator {
-	template <class T> static inline T Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return log(left);
 	}
 };
@@ -190,7 +190,7 @@ void LnFun::RegisterFunction(BuiltinFunctions &set) {
 // log
 //===--------------------------------------------------------------------===//
 struct Log10Operator {
-	template <class T> static inline T Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return log10(left);
 	}
 };
@@ -208,7 +208,7 @@ void Log10Fun::RegisterFunction(BuiltinFunctions &set) {
 // log2
 //===--------------------------------------------------------------------===//
 struct Log2Operator {
-	template <class T> static inline T Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return log2(left);
 	}
 };
@@ -222,7 +222,7 @@ void Log2Fun::RegisterFunction(BuiltinFunctions &set) {
 // cbrt
 //===--------------------------------------------------------------------===//
 struct CbRtOperator {
-	template <class T> static inline double Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return cbrt(left);
 	}
 };
@@ -250,7 +250,7 @@ void PiFun::RegisterFunction(BuiltinFunctions &set) {
 // degrees
 //===--------------------------------------------------------------------===//
 struct DegreesOperator {
-	template <class T> static inline double Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return left * (180 / PI);
 	}
 };
@@ -264,7 +264,7 @@ void DegreesFun::RegisterFunction(BuiltinFunctions &set) {
 // radians
 //===--------------------------------------------------------------------===//
 struct RadiansOperator {
-	template <class T> static inline double Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return left * (PI / 180);
 	}
 };

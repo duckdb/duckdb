@@ -8,7 +8,7 @@ using namespace std;
 namespace duckdb {
 
 struct StringLengthOperator {
-	template<class T> static inline T Operation(const char* input) {
+	template<class TA, class TR> static inline TR Operation(TA input) {
 		int64_t length = 0;
 		for (index_t str_idx = 0; input[str_idx]; str_idx++) {
 			length += (input[str_idx] & 0xC0) != 0x80;

@@ -61,7 +61,7 @@ public:
 	template <class TA, class TR, class OP, bool SKIP_NULLS = false>
 	static void UnaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		assert(input.column_count >= 1);
-		VectorOperations::UnaryExec<TA, TR, SKIP_NULLS>(input.data[0], result, OP::template Operation<TR>);
+		VectorOperations::UnaryExec<TA, TR, SKIP_NULLS>(input.data[0], result, OP::template Operation<TA, TR>);
 	};
 
 	template <class TA, class TB, class TR, class OP, bool IGNORE_NULL = false>

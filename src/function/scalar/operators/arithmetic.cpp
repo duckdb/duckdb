@@ -36,7 +36,7 @@ static void subtract_function(DataChunk &input, ExpressionState &state, Vector &
 }
 
 struct NegateOperator {
-	template <class T> static inline T Operation(T input) {
+	template <class TA, class TR> static inline TR Operation(TA input) {
 		return -input;
 	}
 };

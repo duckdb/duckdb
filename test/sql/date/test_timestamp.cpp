@@ -52,6 +52,11 @@ TEST_CASE("Test TIMESTAMP type", "[timestamp]") {
 	// FIXME: we can subtract timestamps!
 	// REQUIRE_NO_FAIL(con.Query("SELECT t-t FROM timestamp"));
 
+	// test YEAR function
+	result = con.Query("SELECT YEAR(TIMESTAMP '1992-01-01 01:01:01');");
+	REQUIRE(CHECK_COLUMN(result, 0, {1992}));
+	result = con.Query("SELECT YEAR(TIMESTAMP '1992-01-01 01:01:01'::DATE);");
+	REQUIRE(CHECK_COLUMN(result, 0, {1992}));
 	// test casting timestamp
 	result = con.Query("SELECT (TIMESTAMP '1992-01-01 01:01:01')::DATE;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1992, 1, 1)}));
