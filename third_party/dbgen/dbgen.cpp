@@ -588,7 +588,9 @@ string get_answer(double sf, int query) {
 		throw SyntaxException("Out of range TPC-H query number %d", query);
 	}
 	const char *answer;
-	if (sf == 0.1) {
+	if (sf == 0.01) {
+		answer = TPCH_ANSWERS_SF0_01[query - 1];
+	} else if (sf == 0.1) {
 		answer = TPCH_ANSWERS_SF0_1[query - 1];
 	} else if (sf == 1) {
 		answer = TPCH_ANSWERS_SF1[query - 1];

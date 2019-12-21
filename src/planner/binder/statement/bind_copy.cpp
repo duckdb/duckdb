@@ -54,9 +54,8 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CopyStatement &stmt) {
 
 		auto table = context.catalog.GetTable(context, stmt.info->schema, stmt.info->table);
 		// set all columns to false
-		for (index_t i = 0; i < table->columns.size(); i++) {
-			stmt.info->force_not_null.push_back(false);
-		}
+		index_t column_count = stmt.info->select_list.empty() ? table->columns.size() : stmt.info->select_list.size();
+		stmt.info->force_not_null.resize(column_count, false);
 
 		// transform column names of force_not_null_list into force_not_null booleans
 		if (!stmt.info->force_not_null_list.empty()) {

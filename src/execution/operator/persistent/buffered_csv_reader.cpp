@@ -21,6 +21,10 @@ static char is_newline(char c) {
 
 BufferedCSVReader::BufferedCSVReader(CopyInfo &info, vector<SQLType> sql_types, istream &source)
     : info(info), sql_types(sql_types), source(source), buffer_size(0), position(0), start(0) {
+	if (info.force_not_null.size() == 0) {
+		info.force_not_null.resize(sql_types.size(), false);
+	}
+	assert(info.force_not_null.size() == sql_types.size());
 	// initialize the parse_chunk with a set of VARCHAR types
 	vector<TypeId> varchar_types;
 	for (index_t i = 0; i < sql_types.size(); i++) {

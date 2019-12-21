@@ -90,7 +90,7 @@ matrix:
       script:
         - mkdir -p build/debug
         - (cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_SANITIZER=FALSE ../.. && cmake --build .)
-        - valgrind ./build/debug/test/unittest -s "[tpch]"
+        - valgrind ./build/debug/test/unittest -s "Test TPC-H SF0.01"
 
 
     - os: linux
