@@ -87,12 +87,20 @@ with open(template_file, 'r') as f:
 
 # now perform a series of replacements in the file to construct the final yacc file
 
+def get_file_contents(fpath, add_line_numbers=False):
+    with open(fpath, 'r') as f:
+        result = f.read()
+        if add_line_numbers:
+            return '#line 1 "%s"\n' % (fpath,) + result
+        else:
+            return result
+
+
 # grammar.hpp
-with open(header_file, 'r') as f:
-    text = text.replace("{{{ GRAMMAR_HEADER }}}", f.read())
+text = text.replace("{{{ GRAMMAR_HEADER }}}", get_file_contents(header_file, True))
+
 # grammar.cpp
-with open(source_file, 'r') as f:
-    text = text.replace("{{{ GRAMMAR_SOURCE }}}", f.read())
+text = text.replace("{{{ GRAMMAR_SOURCE }}}", get_file_contents(source_file, True))
 
 # keyword list
 kw_token_list = "%token <keyword> " + " ".join([x[0] for x in kwlist])
@@ -111,7 +119,7 @@ kw_definitions += "reserved_keyword: " + " | ".join(reserved_keywords) + "\n"
 text = text.replace("{{{ KEYWORD_DEFINITIONS }}}", kw_definitions)
 
 # types
-def concat_dir(dname, extension):
+def concat_dir(dname, extension, add_line_numbers=False):
     result = ""
     for fname in os.listdir(dname):
         fpath = os.path.join(dname, fname)
@@ -120,8 +128,7 @@ def concat_dir(dname, extension):
         else:
             if not fname.endswith(extension):
                 continue
-            with open(fpath, 'r') as f:
-                result += f.read() + "\n"
+            result += get_file_contents(fpath, add_line_numbers)
     return result
 
 type_definitions = concat_dir(type_dir, ".yh")
@@ -132,7 +139,7 @@ for stmt in statements:
 text = text.replace("{{{ TYPES }}}", type_definitions)
 
 # grammar rules
-grammar_rules = concat_dir(rule_dir, ".y")
+grammar_rules = concat_dir(rule_dir, ".y", True)
 
 text = text.replace("{{{ GRAMMAR RULES }}}", grammar_rules)
 
