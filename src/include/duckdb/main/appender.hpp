@@ -66,7 +66,8 @@ public:
 	void Invalidate(string msg);
 
 private:
-	bool CheckAppend(TypeId type);
+	template<class T>
+	void AppendValueInternal(T value);
 	void CheckInvalidated();
 
 	void AppendRowRecursive() {

@@ -7,6 +7,8 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/data_table.hpp"
 
+#include "duckdb/common/operator/cast_operators.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -41,13 +43,6 @@ void Appender::CheckInvalidated() {
 	}
 }
 
-bool Appender::CheckAppend(TypeId type) {
-	if (column >= chunk.column_count) {
-		throw Exception("Too many appends for chunk!");
-	}
-	return chunk.data[column].type == type;
-}
-
 void Appender::BeginRow() {
 	CheckInvalidated();
 	column = 0;
@@ -65,68 +60,67 @@ void Appender::EndRow() {
 	}
 }
 
-template <> void Appender::Append(bool value) {
-	if (!CheckAppend(TypeId::BOOLEAN)) {
-		AppendValue(Value::BOOLEAN(value));
+template<class T>
+void Appender::AppendValueInternal(T input) {
+	if (column >= chunk.column_count) {
+		throw Exception("Too many appends for chunk!");
+	}
+	auto &col = chunk.data[column];
+	switch(col.type) {
+	case TypeId::BOOLEAN:
+		((bool *)col.data)[col.count++] = Cast::Operation<T, bool>(input);
+		break;
+	case TypeId::TINYINT:
+		((int8_t *)col.data)[col.count++] = Cast::Operation<T, int8_t>(input);
+		break;
+	case TypeId::SMALLINT:
+		((int16_t *)col.data)[col.count++] = Cast::Operation<T, int16_t>(input);
+		break;
+	case TypeId::INTEGER:
+		((int32_t *)col.data)[col.count++] = Cast::Operation<T, int32_t>(input);
+		break;
+	case TypeId::BIGINT:
+		((int64_t *)col.data)[col.count++] = Cast::Operation<T, int64_t>(input);
+		break;
+	case TypeId::FLOAT:
+		((float *)col.data)[col.count++] = Cast::Operation<T, float>(input);
+		break;
+	case TypeId::DOUBLE:
+		((double *)col.data)[col.count++] = Cast::Operation<T, double>(input);
+		break;
+	default:
+		AppendValue(Value::CreateValue<T>(input));
 		return;
 	}
-	// fast path: correct type
-	auto &col = chunk.data[column++];
-	((bool *)col.data)[col.count++] = value;
+	column++;
+}
+
+template <> void Appender::Append(bool value) {
+	AppendValueInternal<bool>(value);
 }
 
 template <> void Appender::Append(int8_t value) {
-	if (!CheckAppend(TypeId::TINYINT)) {
-		AppendValue(Value::TINYINT(value));
-		return;
-	}
-	// fast path: correct type
-	auto &col = chunk.data[column++];
-	((int8_t *)col.data)[col.count++] = value;
+	AppendValueInternal<int8_t>(value);
 }
 
 template <> void Appender::Append(int16_t value) {
-	if (!CheckAppend(TypeId::SMALLINT)) {
-		AppendValue(Value::SMALLINT(value));
-		return;
-	}
-	auto &col = chunk.data[column++];
-	((int16_t *)col.data)[col.count++] = value;
+	AppendValueInternal<int16_t>(value);
 }
 
 template <> void Appender::Append(int32_t value) {
-	if (!CheckAppend(TypeId::INTEGER)) {
-		AppendValue(Value::INTEGER(value));
-		return;
-	}
-	auto &col = chunk.data[column++];
-	((int32_t *)col.data)[col.count++] = value;
+	AppendValueInternal<int32_t>(value);
 }
 
 template <> void Appender::Append(int64_t value) {
-	if (!CheckAppend(TypeId::BIGINT)) {
-		AppendValue(Value::BIGINT(value));
-		return;
-	}
-	auto &col = chunk.data[column++];
-	((int64_t *)col.data)[col.count++] = value;
+	AppendValueInternal<int64_t>(value);
 }
 
 template <> void Appender::Append(const char *value) {
-	if (!CheckAppend(TypeId::VARCHAR)) {
-		AppendValue(Value(value));
-		return;
-	}
-	Append<Value>(Value(value));
+	AppendValueInternal<const char*>(value);
 }
 
 template <> void Appender::Append(double value) {
-	if (!CheckAppend(TypeId::DOUBLE)) {
-		AppendValue(Value::DOUBLE(value));
-		return;
-	}
-	auto &col = chunk.data[column++];
-	((double *)col.data)[col.count++] = value;
+	AppendValueInternal<double>(value);
 }
 
 template <> void Appender::Append(Value value) {
