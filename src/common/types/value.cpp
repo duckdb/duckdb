@@ -172,6 +172,10 @@ Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, i
 	return Value::TIMESTAMP(Date::FromDate(year, month, day), Time::FromTime(hour, min, sec, msec));
 }
 
+template <> Value Value::CreateValue(bool value) {
+	return Value::BOOLEAN(value);
+}
+
 template <> Value Value::CreateValue(int8_t value) {
 	return Value::TINYINT(value);
 }

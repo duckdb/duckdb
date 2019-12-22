@@ -186,6 +186,7 @@ private:
 	template <class OP> static bool _templated_boolean_operation(const Value &left, const Value &right);
 };
 
+template <> Value Value::CreateValue(bool value);
 template <> Value Value::CreateValue(int8_t value);
 template <> Value Value::CreateValue(int16_t value);
 template <> Value Value::CreateValue(int32_t value);
