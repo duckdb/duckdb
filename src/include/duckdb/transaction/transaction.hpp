@@ -77,10 +77,6 @@ public:
 	void PushDelete(ChunkInfo *vinfo, row_t rows[], index_t count, index_t base_row);
 
 	UpdateInfo *CreateUpdateInfo(index_t type_size, index_t entries);
-
-	data_ptr_t PushData(index_t len);
-	data_ptr_t PushString(string_t str);
-
 private:
 	//! The undo buffer is used to store old versions of rows that are updated
 	//! or deleted

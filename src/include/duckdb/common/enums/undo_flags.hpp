@@ -17,9 +17,7 @@ enum class UndoFlags : uint8_t {
 	CATALOG_ENTRY = 1,
 	INSERT_TUPLE = 2,
 	DELETE_TUPLE = 3,
-	UPDATE_TUPLE = 4,
-	QUERY = 5,
-	DATA = 6
+	UPDATE_TUPLE = 4
 };
 
 } // namespace duckdb

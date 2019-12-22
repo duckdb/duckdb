@@ -168,8 +168,6 @@ template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t
 		info->version_number = commit_id;
 		break;
 	}
-	case UndoFlags::DATA:
-		break;
 	default:
 		throw NotImplementedException("UndoBuffer - don't know how to commit this type!");
 	}
@@ -199,11 +197,6 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		info->version_number = transaction_id;
 		break;
 	}
-	case UndoFlags::QUERY: {
-		break;
-	}
-	case UndoFlags::DATA:
-		break;
 	default:
 		throw NotImplementedException("UndoBuffer - don't know how to revert commit of this type!");
 	}

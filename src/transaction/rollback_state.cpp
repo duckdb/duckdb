@@ -31,9 +31,6 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 		info->segment->RollbackUpdate(info);
 		break;
 	}
-	case UndoFlags::DATA:
-	case UndoFlags::QUERY:
-		break;
 	default:
 		assert(type == UndoFlags::EMPTY_ENTRY);
 		break;
