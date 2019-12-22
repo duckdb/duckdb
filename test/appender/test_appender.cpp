@@ -168,3 +168,58 @@ TEST_CASE("Test AppendRow", "[appender]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {Value::TIME(1, 1, 1, 0)}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value::TIMESTAMP(1992, 1, 1, 1, 1, 1, 0)}));
 }
+
+
+TEST_CASE("Test incorrect usage of appender", "[appender]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// create a table to append to
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)"));
+
+	// append a bunch of values
+	{
+		Appender appender(con, "integers");
+		appender.BeginRow();
+		appender.Append<int32_t>(1);
+		// call EndRow before all rows have been appended results in an exception
+		REQUIRE_THROWS(appender.EndRow());
+		// the appender is now invalidated: anything results in an exception
+		REQUIRE_THROWS(appender.BeginRow());
+		REQUIRE_THROWS(appender.Append<int32_t>(1));
+		REQUIRE_THROWS(appender.Flush());
+		// except we can still close the appender
+		REQUIRE_NOTHROW(appender.Close());
+	}
+	{
+		Appender appender(con, "integers");
+		// flushing results in the same error
+		appender.BeginRow();
+		appender.Append<int32_t>(1);
+		REQUIRE_THROWS(appender.Flush());
+		// and also invalidates the connection
+		REQUIRE_THROWS(appender.BeginRow());
+		REQUIRE_THROWS(appender.Append<int32_t>(1));
+		REQUIRE_THROWS(appender.Flush());
+		// except we can still close the appender
+		REQUIRE_NOTHROW(appender.Close());
+	}
+	{
+		// we get the same exception when calling AppendRow with an incorrect number of arguments
+		Appender appender(con, "integers");
+		REQUIRE_THROWS(appender.AppendRow(1));
+		// and also invalidates the connection
+		REQUIRE_THROWS(appender.BeginRow());
+		REQUIRE_THROWS(appender.Append<int32_t>(1));
+		REQUIRE_THROWS(appender.Append<int32_t>(1));
+		REQUIRE_THROWS(appender.EndRow());
+	}
+	{
+		// we can flush an empty appender
+		Appender appender(con, "integers");
+		REQUIRE_NOTHROW(appender.Flush());
+		REQUIRE_NOTHROW(appender.Flush());
+		REQUIRE_NOTHROW(appender.Flush());
+	}
+}

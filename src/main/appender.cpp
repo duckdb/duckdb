@@ -32,9 +32,7 @@ Appender::Appender(Connection &con, string table_name) : Appender(con, DEFAULT_S
 }
 
 Appender::~Appender() {
-	if (invalidated_msg.empty()) {
-		Close();
-	}
+	Close();
 }
 
 void Appender::CheckInvalidated() {
@@ -52,8 +50,9 @@ void Appender::EndRow() {
 	CheckInvalidated();
 	// check that all rows have been appended to
 	if (column != chunk.column_count) {
-		throw Exception("Call to Appender::EndRow() without all rows having been "
-		                "appended to!");
+		string msg = "Call to EndRow before all rows have been appended to!";
+		Invalidate(msg, true);
+		throw Exception(msg);
 	}
 	if (chunk.size() >= STANDARD_VECTOR_SIZE) {
 		Flush();
@@ -62,6 +61,7 @@ void Appender::EndRow() {
 
 template<class T>
 void Appender::AppendValueInternal(T input) {
+	CheckInvalidated();
 	if (column >= chunk.column_count) {
 		throw Exception("Too many appends for chunk!");
 	}
@@ -148,8 +148,12 @@ void Appender::Flush() {
 		return;
 	}
 	CheckInvalidated();
-
 	try {
+		// check that all rows have been appended to
+		if (column != 0 && column != chunk.column_count) {
+			throw Exception("Cannot Flush appender when a partial row has been appended");
+		}
+
 		con.Append(*description, chunk);
 	} catch (Exception &ex) {
 		con.context->RemoveAppender(this);
@@ -161,14 +165,21 @@ void Appender::Flush() {
 }
 
 void Appender::Close() {
-	Flush();
-	con.context->RemoveAppender(this);
-	Invalidate("The appender has been closed!");
-}
-
-void Appender::Invalidate(string msg) {
 	if (!invalidated_msg.empty()) {
 		return;
+	}
+	if (column == 0 || column == chunk.column_count) {
+		Flush();
+	}
+	Invalidate("The appender has been closed!", true);
+}
+
+void Appender::Invalidate(string msg, bool close) {
+	if (!invalidated_msg.empty()) {
+		return;
+	}
+	if (close) {
+		con.context->RemoveAppender(this);
 	}
 	assert(!msg.empty());
 	invalidated_msg = msg;

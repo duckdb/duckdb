@@ -63,7 +63,7 @@ public:
 		return column;
 	}
 
-	void Invalidate(string msg);
+	void Invalidate(string msg, bool close = false);
 
 private:
 	template<class T>
