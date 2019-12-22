@@ -51,7 +51,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	// found a matching function!
 	auto &bound_function = func->functions[best_function];
 	// check if we need to add casts to the children
-	CastToFunctionArguments(bound_function, children, types);
+	bound_function.CastToFunctionArguments(children, types);
 
 	auto return_type = bound_function.return_type;
 	// create the aggregate
@@ -73,8 +73,8 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 
 	// now create a column reference referring to the aggregate
 	auto colref = make_unique<BoundColumnRefExpression>(
-	    aggr.alias.empty() ? node.aggregates[aggr_index]->ToString() : aggr.alias, node.aggregates[aggr_index]->return_type,
-	    ColumnBinding(node.aggregate_index, aggr_index), depth);
+	    aggr.alias.empty() ? node.aggregates[aggr_index]->ToString() : aggr.alias,
+	    node.aggregates[aggr_index]->return_type, ColumnBinding(node.aggregate_index, aggr_index), depth);
 	// move the aggregate expression into the set of bound aggregates
 	return BindResult(move(colref), return_type);
 }

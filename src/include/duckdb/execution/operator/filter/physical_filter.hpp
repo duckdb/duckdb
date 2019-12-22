@@ -17,15 +17,15 @@ namespace duckdb {
 //! adds a selection vector to the chunk.
 class PhysicalFilter : public PhysicalOperator {
 public:
-	PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expression>> select_list)
-	    : PhysicalOperator(PhysicalOperatorType::FILTER, types), expressions(std::move(select_list)) {
-	}
+	PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expression>> select_list);
 
-	vector<unique_ptr<Expression>> expressions;
+	//! The filter expression
+	unique_ptr<Expression> expression;
 
 public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
+	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 	string ExtraRenderInformation() const override;
 };
 } // namespace duckdb

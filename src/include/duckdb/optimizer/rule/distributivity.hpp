@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/optimizer/rule.hpp"
+#include "duckdb/parser/expression_map.hpp"
 
 namespace duckdb {
 
@@ -18,6 +19,10 @@ public:
 	DistributivityRule(ExpressionRewriter &rewriter);
 
 	unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression *> &bindings, bool &changes_made) override;
+
+private:
+	void AddExpressionSet(Expression &expr, expression_set_t &set);
+	unique_ptr<Expression> ExtractExpression(BoundConjunctionExpression &conj, index_t idx, Expression &expr);
 };
 
 } // namespace duckdb

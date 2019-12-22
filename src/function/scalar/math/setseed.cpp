@@ -20,16 +20,15 @@ struct SetseedBindData : public FunctionData {
 	}
 };
 
-static void setseed_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-                             BoundFunctionExpression &expr, Vector &result) {
-	auto &info = (SetseedBindData &)*expr.bind_info;
-	assert(input_count == 1 && inputs[0].type == TypeId::DOUBLE);
-	result.Initialize(TypeId::INTEGER);
+static void setseed_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &info = (SetseedBindData &)*func_expr.bind_info;
+	auto &input = args.data[0];
 	result.nullmask.set();
-	result.sel_vector = inputs[0].sel_vector;
-	result.count = inputs[0].count;
+	result.sel_vector = input.sel_vector;
+	result.count = input.count;
 
-	auto input_seeds = ((double *)inputs[0].data);
+	auto input_seeds = ((double *)input.data);
 	uint32_t half_max = numeric_limits<uint32_t>::max() / 2;
 	VectorOperations::Exec(result, [&](index_t i, index_t k) {
 		if (input_seeds[i] < -1.0 || input_seeds[i] > 1.0) {

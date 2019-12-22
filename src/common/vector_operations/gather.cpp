@@ -13,23 +13,26 @@ using namespace std;
 
 struct GatherLoopSetNull {
 	template <class T, class OP> static void Operation(Vector &src, Vector &result, index_t offset) {
-		(void)offset;
-		auto source = (T **)src.data;
+		auto source = (data_ptr_t *)src.data;
 		auto ldata = (T *)result.data;
 		if (result.sel_vector) {
 			VectorOperations::Exec(src, [&](index_t i, index_t k) {
-				if (IsNullValue<T>(source[i][0])) {
+				data_ptr_t ptr = source[i] + offset;
+				T source_value = *((T *)ptr);
+				if (IsNullValue<T>(source_value)) {
 					result.nullmask.set(result.sel_vector[k]);
 				} else {
-					ldata[result.sel_vector[k]] = OP::Operation(source[i][0], ldata[i]);
+					ldata[result.sel_vector[k]] = OP::Operation(source_value, ldata[i]);
 				}
 			});
 		} else {
 			VectorOperations::Exec(src, [&](index_t i, index_t k) {
-				if (IsNullValue<T>(source[i][0])) {
+				data_ptr_t ptr = source[i] + offset;
+				T source_value = *((T *)ptr);
+				if (IsNullValue<T>(source_value)) {
 					result.nullmask.set(k);
 				} else {
-					ldata[k] = OP::Operation(source[i][0], ldata[i]);
+					ldata[k] = OP::Operation(source_value, ldata[i]);
 				}
 			});
 		}
@@ -38,16 +41,20 @@ struct GatherLoopSetNull {
 
 struct GatherLoopIgnoreNull {
 	template <class T, class OP> static void Operation(Vector &src, Vector &result, index_t offset) {
-		(void)offset;
-		auto source = (T **)src.data;
+		auto source = (data_ptr_t *)src.data;
 		auto ldata = (T *)result.data;
 		if (result.sel_vector) {
 			VectorOperations::Exec(src, [&](index_t i, index_t k) {
-				ldata[result.sel_vector[k]] = OP::Operation(source[i][0], ldata[i]);
+				data_ptr_t ptr = source[i] + offset;
+				T source_value = *((T *)ptr);
+				ldata[result.sel_vector[k]] = OP::Operation(source_value, ldata[i]);
 			});
 		} else {
-			VectorOperations::Exec(src,
-			                       [&](index_t i, index_t k) { ldata[k] = OP::Operation(source[i][0], ldata[i]); });
+			VectorOperations::Exec(src, [&](index_t i, index_t k) {
+				data_ptr_t ptr = source[i] + offset;
+				T source_value = *((T *)ptr);
+				ldata[k] = OP::Operation(source_value, ldata[i]);
+			});
 		}
 	}
 };
@@ -98,7 +105,6 @@ void VectorOperations::Gather::Set(Vector &source, Vector &dest, bool set_null, 
 
 struct GatherLoopAppendNull {
 	template <class T, class OP> static void Operation(Vector &src, Vector &result, index_t offset) {
-		(void)offset;
 		auto source = (data_ptr_t *)src.data;
 		auto ldata = (T *)result.data;
 		VectorOperations::Exec(src, [&](index_t i, index_t k) {
@@ -112,7 +118,6 @@ struct GatherLoopAppendNull {
 
 struct GatherLoopAppend {
 	template <class T, class OP> static void Operation(Vector &src, Vector &result, index_t offset) {
-		(void)offset;
 		auto source = (data_t **)src.data;
 		auto ldata = (T *)result.data;
 		VectorOperations::Exec(src,

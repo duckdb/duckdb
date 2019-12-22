@@ -9,9 +9,9 @@ using namespace std;
 
 class PhysicalBlockwiseNLJoinState : public PhysicalOperatorState {
 public:
-	PhysicalBlockwiseNLJoinState(PhysicalOperator *left, PhysicalOperator *right)
+	PhysicalBlockwiseNLJoinState(PhysicalOperator *left, PhysicalOperator *right, Expression &condition)
 	    : PhysicalOperatorState(left), left_position(0), right_position(0), fill_in_rhs(false),
-	      checked_found_match(false) {
+	      checked_found_match(false), executor(condition) {
 		assert(left && right);
 	}
 
@@ -24,6 +24,7 @@ public:
 	index_t right_position;
 	bool fill_in_rhs;
 	bool checked_found_match;
+	ExpressionExecutor executor;
 };
 
 PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -173,8 +174,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 			chunk.data[lchunk.column_count + i].Reference(rchunk.data[i]);
 		}
 		// now perform the computation
-		ExpressionExecutor executor(chunk);
-		executor.ExecuteExpression(*condition, result);
+		state->executor.ExecuteExpression(chunk, result);
 
 		// create the result
 		VectorOperations::ExecType<bool>(result, [&](bool match, index_t i, index_t k) {
@@ -216,7 +216,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalBlockwiseNLJoin::GetOperatorState() {
-	return make_unique<PhysicalBlockwiseNLJoinState>(children[0].get(), children[1].get());
+	return make_unique<PhysicalBlockwiseNLJoinState>(children[0].get(), children[1].get(), *condition);
 }
 
 string PhysicalBlockwiseNLJoin::ExtraRenderInformation() const {

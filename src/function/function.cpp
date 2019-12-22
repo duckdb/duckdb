@@ -3,6 +3,11 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/cast_rules.hpp"
 
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
@@ -177,4 +182,45 @@ index_t Function::BindFunction(string name, vector<ScalarFunction> &functions, v
 
 index_t Function::BindFunction(string name, vector<AggregateFunction> &functions, vector<SQLType> &arguments) {
 	return BindFunctionFromArguments(name, functions, arguments);
+}
+
+void SimpleFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> &children, vector<SQLType> &types) {
+	for (index_t i = 0; i < types.size(); i++) {
+		auto target_type = i < this->arguments.size() ? this->arguments[i] : this->varargs;
+		if (target_type.id != SQLTypeId::ANY && types[i] != target_type) {
+			// type of child does not match type of function argument: add a cast
+			children[i] = BoundCastExpression::AddCastToType(move(children[i]), types[i], target_type);
+		}
+	}
+}
+
+unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context, string schema,
+                                                                       string name, vector<SQLType> &arguments,
+                                                                       vector<unique_ptr<Expression>> children,
+                                                                       bool is_operator) {
+	// bind the function
+	auto function = context.catalog.GetFunction(context.ActiveTransaction(), schema, name);
+	assert(function && function->type == CatalogType::SCALAR_FUNCTION);
+	return ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)*function, arguments,
+	                                          move(children), is_operator);
+}
+
+unique_ptr<BoundFunctionExpression>
+ScalarFunction::BindScalarFunction(ClientContext &context, ScalarFunctionCatalogEntry &func, vector<SQLType> &arguments,
+                                   vector<unique_ptr<Expression>> children, bool is_operator) {
+	// bind the function
+	index_t best_function = Function::BindFunction(func.name, func.functions, arguments);
+	// found a matching function!
+	auto &bound_function = func.functions[best_function];
+	// check if we need to add casts to the children
+	bound_function.CastToFunctionArguments(children, arguments);
+
+	// now create the function
+	auto result =
+	    make_unique<BoundFunctionExpression>(GetInternalType(bound_function.return_type), bound_function, is_operator);
+	result->children = move(children);
+	if (bound_function.bind) {
+		result->bind_info = bound_function.bind(*result, context);
+	}
+	return result;
 }

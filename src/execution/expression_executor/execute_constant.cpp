@@ -5,6 +5,11 @@
 using namespace duckdb;
 using namespace std;
 
-void ExpressionExecutor::Execute(BoundConstantExpression &expr, Vector &result) {
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConstantExpression &expr,
+                                                                ExpressionExecutorState &root) {
+	return nullptr;
+}
+
+void ExpressionExecutor::Execute(BoundConstantExpression &expr, ExpressionState *state, Vector &result) {
 	result.Reference(expr.value);
 }

@@ -48,6 +48,7 @@ create_csv_header(csv_dir)
 
 tpch_dir = 'third_party/dbgen'
 tpch_queries = os.path.join(tpch_dir, 'queries')
+tpch_answers_sf001 = os.path.join(tpch_dir, 'answers', 'sf0.01')
 tpch_answers_sf01 = os.path.join(tpch_dir, 'answers', 'sf0.1')
 tpch_answers_sf1 = os.path.join(tpch_dir, 'answers', 'sf1')
 tpch_header = os.path.join(tpch_dir, 'include', 'tpch_constants.hpp')
@@ -73,6 +74,7 @@ const int TPCH_QUERIES_COUNT = 22;
 """
 	# write the queries
 	result += write_dir(tpch_queries, "TPCH_QUERIES")
+	result += write_dir(tpch_answers_sf001, "TPCH_ANSWERS_SF0_01")
 	result += write_dir(tpch_answers_sf01, "TPCH_ANSWERS_SF0_1")
 	result += write_dir(tpch_answers_sf1, "TPCH_ANSWERS_SF1")
 

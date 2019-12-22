@@ -33,14 +33,14 @@ void PhysicalTopN::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 
 		// now perform the actual ordering of the data
 		// compute the sorting columns from the input data
+		ExpressionExecutor executor;
 		vector<TypeId> sort_types;
-		vector<Expression *> order_expressions;
 		vector<OrderType> order_types;
 		for (index_t i = 0; i < orders.size(); i++) {
 			auto &expr = orders[i].expression;
 			sort_types.push_back(expr->return_type);
-			order_expressions.push_back(expr.get());
 			order_types.push_back(orders[i].type);
+			executor.AddExpression(*expr);
 		}
 
 		CalculateHeapSize(big_data.count);
@@ -53,8 +53,7 @@ void PhysicalTopN::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 			DataChunk heap_chunk;
 			heap_chunk.Initialize(sort_types);
 
-			ExpressionExecutor executor(*big_data.chunks[i]);
-			executor.Execute(order_expressions, heap_chunk);
+			executor.Execute(*big_data.chunks[i], heap_chunk);
 			heap_collection.Append(heap_chunk);
 		}
 

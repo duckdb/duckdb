@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 
 #include <functional>
@@ -88,6 +89,22 @@ struct VectorOperations {
 	static void LessThan(Vector &A, Vector &B, Vector &result);
 	// result = A <= B
 	static void LessThanEquals(Vector &A, Vector &B, Vector &result);
+
+	//===--------------------------------------------------------------------===//
+	// Select Comparison Operations
+	//===--------------------------------------------------------------------===//
+	// result = A == B
+	static index_t SelectEquals(Vector &A, Vector &B, sel_t result[]);
+	// result = A != B
+	static index_t SelectNotEquals(Vector &A, Vector &B, sel_t result[]);
+	// result = A > B
+	static index_t SelectGreaterThan(Vector &A, Vector &B, sel_t result[]);
+	// result = A >= B
+	static index_t SelectGreaterThanEquals(Vector &A, Vector &B, sel_t result[]);
+	// result = A < B
+	static index_t SelectLessThan(Vector &A, Vector &B, sel_t result[]);
+	// result = A <= B
+	static index_t SelectLessThanEquals(Vector &A, Vector &B, sel_t result[]);
 
 	//===--------------------------------------------------------------------===//
 	// Aggregates
@@ -250,14 +267,14 @@ struct VectorOperations {
 		}
 	}
 
-	template <typename TA, typename TR, class FUNC, bool SKIP_NULLS = std::is_same<TR, const char *>()>
+	template <typename TA, typename TR, bool SKIP_NULLS = std::is_same<TR, const char *>(), class FUNC>
 	static void UnaryExec(Vector &a, Vector &result, FUNC &&fun) {
 		auto adata = (TA *)a.data;
 		auto rdata = (TR *)result.data;
 		result.sel_vector = a.sel_vector;
 		result.count = a.count;
 		result.nullmask = a.nullmask;
-		if (SKIP_NULLS) {
+		if (SKIP_NULLS && result.nullmask.any()) {
 			VectorOperations::Exec(result, [&](index_t i, index_t k) {
 				if (result.nullmask[i]) {
 					return;
@@ -303,13 +320,13 @@ struct VectorOperations {
 		});
 	}
 
-	template <class FUNC> static void MultiaryExec(Vector inputs[], int input_count, Vector &result, FUNC &&fun) {
+	template <class FUNC> static void MultiaryExec(DataChunk &args, Vector &result, FUNC &&fun) {
 		result.sel_vector = nullptr;
 		result.count = 1;
-		vector<index_t> mul(input_count, 0);
+		vector<index_t> mul(args.column_count, 0);
 
-		for (int i = 0; i < input_count; i++) {
-			auto &input = inputs[i];
+		for (index_t i = 0; i < args.column_count; i++) {
+			auto &input = args.data[i];
 			if (!input.IsConstant()) {
 				result.sel_vector = input.sel_vector;
 				result.count = input.count;

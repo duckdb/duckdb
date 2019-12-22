@@ -9,32 +9,11 @@ using namespace std;
 
 namespace duckdb {
 
-template <class OP> static scalar_function_t GetScalarUnaryFunction(SQLType type) {
-	switch (type.id) {
-	case SQLTypeId::TINYINT:
-		return ScalarFunction::UnaryFunction<int8_t, int8_t, OP>;
-	case SQLTypeId::SMALLINT:
-		return ScalarFunction::UnaryFunction<int16_t, int16_t, OP>;
-	case SQLTypeId::INTEGER:
-		return ScalarFunction::UnaryFunction<int32_t, int32_t, OP>;
-	case SQLTypeId::BIGINT:
-		return ScalarFunction::UnaryFunction<int64_t, int64_t, OP>;
-	case SQLTypeId::FLOAT:
-		return ScalarFunction::UnaryFunction<float, float, OP>;
-	case SQLTypeId::DOUBLE:
-		return ScalarFunction::UnaryFunction<double, double, OP>;
-	case SQLTypeId::DECIMAL:
-		return ScalarFunction::UnaryFunction<double, double, OP>;
-	default:
-		throw NotImplementedException("Unimplemented type for GetScalarUnaryFunction");
-	}
-}
-
 //===--------------------------------------------------------------------===//
 // abs
 //===--------------------------------------------------------------------===//
 struct AbsOperator {
-	template <class T> static inline T Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return left < 0 ? left * -1 : left;
 	}
 };
@@ -42,7 +21,7 @@ struct AbsOperator {
 void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet abs("abs");
 	for (auto &type : SQLType::NUMERIC) {
-		abs.AddFunction(ScalarFunction({type}, type, GetScalarUnaryFunction<AbsOperator>(type)));
+		abs.AddFunction(ScalarFunction({type}, type, ScalarFunction::GetScalarUnaryFunction<AbsOperator>(type)));
 	}
 	set.AddFunction(abs);
 }
@@ -50,32 +29,11 @@ void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // sign
 //===--------------------------------------------------------------------===//
-template <class TR, class OP> static scalar_function_t GetScalarUnaryFunctionFixedReturn(SQLType type) {
-	switch (type.id) {
-	case SQLTypeId::TINYINT:
-		return ScalarFunction::UnaryFunction<int8_t, TR, OP>;
-	case SQLTypeId::SMALLINT:
-		return ScalarFunction::UnaryFunction<int16_t, TR, OP>;
-	case SQLTypeId::INTEGER:
-		return ScalarFunction::UnaryFunction<int32_t, TR, OP>;
-	case SQLTypeId::BIGINT:
-		return ScalarFunction::UnaryFunction<int64_t, TR, OP>;
-	case SQLTypeId::FLOAT:
-		return ScalarFunction::UnaryFunction<float, TR, OP>;
-	case SQLTypeId::DOUBLE:
-		return ScalarFunction::UnaryFunction<double, TR, OP>;
-	case SQLTypeId::DECIMAL:
-		return ScalarFunction::UnaryFunction<double, TR, OP>;
-	default:
-		throw NotImplementedException("Unimplemented type for GetScalarUnaryFunctionFixedReturn");
-	}
-}
-
 struct SignOperator {
-	template <class T> static inline int8_t Operation(T left) {
-		if (left == T(0))
+	template <class TA, class TR> static inline TR Operation(TA left) {
+		if (left == TA(0))
 			return 0;
-		else if (left > T(0))
+		else if (left > TA(0))
 			return 1;
 		else
 			return -1;
@@ -85,8 +43,8 @@ struct SignOperator {
 void SignFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet sign("sign");
 	for (auto &type : SQLType::NUMERIC) {
-		sign.AddFunction(
-		    ScalarFunction({type}, SQLType::TINYINT, GetScalarUnaryFunctionFixedReturn<int8_t, SignOperator>(type)));
+		sign.AddFunction(ScalarFunction({type}, SQLType::TINYINT,
+		                                ScalarFunction::GetScalarUnaryFunctionFixedReturn<int8_t, SignOperator>(type)));
 	}
 	set.AddFunction(sign);
 }
@@ -95,7 +53,7 @@ void SignFun::RegisterFunction(BuiltinFunctions &set) {
 // ceil
 //===--------------------------------------------------------------------===//
 struct CeilOperator {
-	template <class T> static inline T Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return ceil(left);
 	}
 };
@@ -108,7 +66,7 @@ void CeilFun::RegisterFunction(BuiltinFunctions &set) {
 			// ceil on integral type is a nop
 			func = ScalarFunction::NopFunction;
 		} else {
-			func = GetScalarUnaryFunction<CeilOperator>(type);
+			func = ScalarFunction::GetScalarUnaryFunction<CeilOperator>(type);
 		}
 		ceil.AddFunction(ScalarFunction({type}, type, func));
 	}
@@ -121,7 +79,7 @@ void CeilFun::RegisterFunction(BuiltinFunctions &set) {
 // floor
 //===--------------------------------------------------------------------===//
 struct FloorOperator {
-	template <class T> static inline T Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return floor(left);
 	}
 };
@@ -134,7 +92,7 @@ void FloorFun::RegisterFunction(BuiltinFunctions &set) {
 			// floor on integral type is a nop
 			func = ScalarFunction::NopFunction;
 		} else {
-			func = GetScalarUnaryFunction<FloorOperator>(type);
+			func = ScalarFunction::GetScalarUnaryFunction<FloorOperator>(type);
 		}
 		floor.AddFunction(ScalarFunction({type}, type, func));
 	}
@@ -144,27 +102,6 @@ void FloorFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // round
 //===--------------------------------------------------------------------===//
-template <class TB, class OP> static scalar_function_t GetScalarBinaryFunctionFixedArgument(SQLType type) {
-	switch (type.id) {
-	case SQLTypeId::TINYINT:
-		return ScalarFunction::BinaryFunction<int8_t, TB, int8_t, OP>;
-	case SQLTypeId::SMALLINT:
-		return ScalarFunction::BinaryFunction<int16_t, TB, int16_t, OP>;
-	case SQLTypeId::INTEGER:
-		return ScalarFunction::BinaryFunction<int32_t, TB, int32_t, OP>;
-	case SQLTypeId::BIGINT:
-		return ScalarFunction::BinaryFunction<int64_t, TB, int64_t, OP>;
-	case SQLTypeId::FLOAT:
-		return ScalarFunction::BinaryFunction<float, TB, float, OP>;
-	case SQLTypeId::DOUBLE:
-		return ScalarFunction::BinaryFunction<double, TB, double, OP>;
-	case SQLTypeId::DECIMAL:
-		return ScalarFunction::BinaryFunction<double, TB, double, OP>;
-	default:
-		throw NotImplementedException("Unimplemented type for GetScalarUnaryFunctionFixedReturn");
-	}
-}
-
 struct RoundOperator {
 	template <class T> static inline T Operation(T input, int32_t precision) {
 		if (precision < 0) {
@@ -183,7 +120,7 @@ void RoundFun::RegisterFunction(BuiltinFunctions &set) {
 			// round on integral type is a nop
 			func = ScalarFunction::NopFunction;
 		} else {
-			func = GetScalarBinaryFunctionFixedArgument<int8_t, RoundOperator>(type);
+			func = ScalarFunction::GetScalarBinaryFunctionFixedArgument<int8_t, RoundOperator>(type);
 		}
 		round.AddFunction(ScalarFunction({type, SQLType::INTEGER}, type, func));
 	}
@@ -194,7 +131,7 @@ void RoundFun::RegisterFunction(BuiltinFunctions &set) {
 // exp
 //===--------------------------------------------------------------------===//
 struct ExpOperator {
-	template <class T> static inline double Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return exp(left);
 	}
 };
@@ -225,7 +162,7 @@ void PowFun::RegisterFunction(BuiltinFunctions &set) {
 // sqrt
 //===--------------------------------------------------------------------===//
 struct SqrtOperator {
-	template <class T> static inline T Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return sqrt(left);
 	}
 };
@@ -239,7 +176,7 @@ void SqrtFun::RegisterFunction(BuiltinFunctions &set) {
 // ln
 //===--------------------------------------------------------------------===//
 struct LnOperator {
-	template <class T> static inline T Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return log(left);
 	}
 };
@@ -253,7 +190,7 @@ void LnFun::RegisterFunction(BuiltinFunctions &set) {
 // log
 //===--------------------------------------------------------------------===//
 struct Log10Operator {
-	template <class T> static inline T Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return log10(left);
 	}
 };
@@ -271,7 +208,7 @@ void Log10Fun::RegisterFunction(BuiltinFunctions &set) {
 // log2
 //===--------------------------------------------------------------------===//
 struct Log2Operator {
-	template <class T> static inline T Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return log2(left);
 	}
 };
@@ -285,7 +222,7 @@ void Log2Fun::RegisterFunction(BuiltinFunctions &set) {
 // cbrt
 //===--------------------------------------------------------------------===//
 struct CbRtOperator {
-	template <class T> static inline double Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return cbrt(left);
 	}
 };
@@ -300,9 +237,8 @@ void CbrtFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 Value pi_value = Value::DOUBLE(PI);
 
-static void pi_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                        Vector &result) {
-	assert(input_count == 0);
+static void pi_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	assert(args.column_count == 0);
 	result.Reference(pi_value);
 }
 
@@ -314,7 +250,7 @@ void PiFun::RegisterFunction(BuiltinFunctions &set) {
 // degrees
 //===--------------------------------------------------------------------===//
 struct DegreesOperator {
-	template <class T> static inline double Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return left * (180 / PI);
 	}
 };
@@ -328,7 +264,7 @@ void DegreesFun::RegisterFunction(BuiltinFunctions &set) {
 // radians
 //===--------------------------------------------------------------------===//
 struct RadiansOperator {
-	template <class T> static inline double Operation(T left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return left * (PI / 180);
 	}
 };

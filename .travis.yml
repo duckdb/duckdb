@@ -90,7 +90,7 @@ matrix:
       script:
         - mkdir -p build/debug
         - (cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_SANITIZER=FALSE ../.. && cmake --build .)
-        - valgrind ./build/debug/test/unittest -s "[tpch]"
+        - valgrind ./build/debug/test/unittest -s "Test TPC-H SF0.01"
 
 
     - os: linux
@@ -179,7 +179,7 @@ matrix:
         - build/coverage/test/unittest
 
       after_success:
-        - coveralls -b build/coverage -E '.*CMakeCXXCompilerId.cpp' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --gcov-options '\-lp'
+        - coveralls -b build/coverage -E '.*CMakeCXXCompilerId.cpp' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --exclude build/coverage/third_party/libpg_query/grammar --gcov-options '\-lp'
 
 
     - os: linux

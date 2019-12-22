@@ -5,16 +5,24 @@
 using namespace duckdb;
 using namespace std;
 
-void ExpressionExecutor::Execute(BoundCastExpression &expr, Vector &result) {
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCastExpression &expr,
+                                                                ExpressionExecutorState &root) {
+	auto result = make_unique<ExpressionState>(expr, root);
+	result->AddIntermediates({expr.child.get()});
+	return result;
+}
+
+void ExpressionExecutor::Execute(BoundCastExpression &expr, ExpressionState *state, Vector &result) {
 	// resolve the child
-	Vector child;
-	Execute(*expr.child, child);
+	auto &child = state->arguments.data[0];
+	auto child_state = state->child_states[0].get();
+
+	Execute(*expr.child, child_state, child);
 	if (child.type == expr.return_type) {
 		// NOP cast
-		child.Move(result);
+		result.Reference(child);
 	} else {
 		// cast it to the type specified by the cast expression
-		result.Initialize(expr.return_type);
 		VectorOperations::Cast(child, result, expr.source_type, expr.target_type);
 	}
 }

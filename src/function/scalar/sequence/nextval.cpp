@@ -83,18 +83,17 @@ static int64_t next_sequence_value(Transaction &transaction, SequenceCatalogEntr
 	return result;
 }
 
-static void nextval_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-                             BoundFunctionExpression &expr, Vector &result) {
-	auto &info = (NextvalBindData &)*expr.bind_info;
-	assert(input_count == 1 && inputs[0].type == TypeId::VARCHAR);
-	result.Initialize(TypeId::BIGINT);
-
-	if (exec.chunk) {
-		result.count = exec.chunk->size();
-		result.sel_vector = exec.chunk->sel_vector;
+static void nextval_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &info = (NextvalBindData &)*func_expr.bind_info;
+	assert(args.column_count == 1 && args.data[0].type == TypeId::VARCHAR);
+	auto &input = args.data[0];
+	if (state.root.executor->chunk) {
+		result.count = state.root.executor->chunk->size();
+		result.sel_vector = state.root.executor->chunk->sel_vector;
 	} else {
-		result.count = inputs[0].count;
-		result.sel_vector = inputs[0].sel_vector;
+		result.count = input.count;
+		result.sel_vector = input.sel_vector;
 	}
 	Transaction &transaction = info.context.ActiveTransaction();
 	if (info.sequence) {
@@ -107,9 +106,9 @@ static void nextval_function(ExpressionExecutor &exec, Vector inputs[], index_t 
 		});
 	} else {
 		// sequence to use comes from the input
-		assert(result.count == inputs[0].count && result.sel_vector == inputs[0].sel_vector);
+		assert(result.count == input.count && result.sel_vector == input.sel_vector);
 		int64_t *result_data = (int64_t *)result.data;
-		VectorOperations::ExecType<const char *>(inputs[0], [&](const char *value, index_t i, index_t k) {
+		VectorOperations::ExecType<const char *>(input, [&](const char *value, index_t i, index_t k) {
 			// first get the sequence schema/name
 			string schema, seq;
 			string seqname = string(value);

@@ -13,7 +13,7 @@ namespace duckdb {
 // sin
 //===--------------------------------------------------------------------===//
 struct SinOperator {
-	template <class T> static inline double Operation(T input) {
+	template <class TA, class TR> static inline TR Operation(TA input) {
 		return sin(input);
 	}
 };
@@ -27,7 +27,7 @@ void SinFun::RegisterFunction(BuiltinFunctions &set) {
 // cos
 //===--------------------------------------------------------------------===//
 struct CosOperator {
-	template <class T> static inline double Operation(T input) {
+	template <class TA, class TR> static inline TR Operation(TA input) {
 		return (double)cos(input);
 	}
 };
@@ -41,7 +41,7 @@ void CosFun::RegisterFunction(BuiltinFunctions &set) {
 // tan
 //===--------------------------------------------------------------------===//
 struct TanOperator {
-	template <class T> static inline double Operation(T input) {
+	template <class TA, class TR> static inline TR Operation(TA input) {
 		return (double)tan(input);
 	}
 };
@@ -55,7 +55,7 @@ void TanFun::RegisterFunction(BuiltinFunctions &set) {
 // asin
 //===--------------------------------------------------------------------===//
 struct ASinOperator {
-	template <class T> static inline double Operation(T input) {
+	template <class TA, class TR> static inline TR Operation(TA input) {
 		if (input < -1 || input > 1) {
 			throw Exception("ASIN is undefined outside [-1,1]");
 		}
@@ -72,7 +72,7 @@ void AsinFun::RegisterFunction(BuiltinFunctions &set) {
 // atan
 //===--------------------------------------------------------------------===//
 struct ATanOperator {
-	template <class T> static inline double Operation(T input) {
+	template <class TA, class TR> static inline TR Operation(TA input) {
 		return (double)atan(input);
 	}
 };
@@ -100,7 +100,7 @@ void Atan2Fun::RegisterFunction(BuiltinFunctions &set) {
 // acos
 //===--------------------------------------------------------------------===//
 struct ACos {
-	template <class T> static inline double Operation(T input) {
+	template <class TA, class TR> static inline TR Operation(TA input) {
 		if (input < -1 || input > 1) {
 			throw Exception("ACOS is undefined outside [-1,1]");
 		}
@@ -117,7 +117,7 @@ void AcosFun::RegisterFunction(BuiltinFunctions &set) {
 // cot
 //===--------------------------------------------------------------------===//
 struct CotOperator {
-	template <class T> static inline double Operation(T input) {
+	template <class TA, class TR> static inline TR Operation(TA input) {
 		return 1.0 / (double)tan(input);
 	}
 };

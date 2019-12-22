@@ -16,6 +16,7 @@ namespace duckdb {
 class CatalogEntry;
 class Catalog;
 class ClientContext;
+class Expression;
 class ExpressionExecutor;
 class Transaction;
 
@@ -83,6 +84,9 @@ public:
 	bool has_side_effects;
 
 public:
+	//! Cast a set of expressions to the arguments of this function
+	void CastToFunctionArguments(vector<unique_ptr<Expression>> &children, vector<SQLType> &types);
+
 	string ToString() {
 		return Function::CallToString(name, arguments, return_type);
 	}

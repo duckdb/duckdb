@@ -20,16 +20,15 @@ struct RandomBindData : public FunctionData {
 	}
 };
 
-static void random_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-                            BoundFunctionExpression &expr, Vector &result) {
-	auto &info = (RandomBindData &)*expr.bind_info;
-	assert(input_count == 0);
-	result.Initialize(TypeId::DOUBLE);
+static void random_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	assert(args.column_count == 0);
+	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &info = (RandomBindData &)*func_expr.bind_info;
 
 	result.count = 1;
-	if (exec.chunk) {
-		result.count = exec.chunk->size();
-		result.sel_vector = exec.chunk->sel_vector;
+	if (state.root.executor->chunk) {
+		result.count = state.root.executor->chunk->size();
+		result.sel_vector = state.root.executor->chunk->sel_vector;
 	}
 
 	double *result_data = (double *)result.data;

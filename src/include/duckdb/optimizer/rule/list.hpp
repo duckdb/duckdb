@@ -3,5 +3,6 @@
 #include "duckdb/optimizer/rule/comparison_simplification.hpp"
 #include "duckdb/optimizer/rule/conjunction_simplification.hpp"
 #include "duckdb/optimizer/rule/constant_folding.hpp"
+#include "duckdb/optimizer/rule/date_part_simplification.hpp"
 #include "duckdb/optimizer/rule/distributivity.hpp"
 #include "duckdb/optimizer/rule/move_constants.hpp"

@@ -12,6 +12,8 @@ public:
 
 	//! The current position in the scan
 	index_t expression_index;
+
+	unique_ptr<ExpressionExecutor> executor;
 };
 
 void PhysicalExpressionScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
@@ -30,8 +32,8 @@ void PhysicalExpressionScan::GetChunkInternal(ClientContext &context, DataChunk 
 		}
 	}
 	// now execute the expressions of the nth expression list for the child chunk list
-	ExpressionExecutor executor(state->child_chunk);
-	executor.Execute(expressions[state->expression_index], chunk);
+	state->executor = make_unique<ExpressionExecutor>(expressions[state->expression_index]);
+	state->executor->Execute(state->child_chunk, chunk);
 
 	state->expression_index++;
 }

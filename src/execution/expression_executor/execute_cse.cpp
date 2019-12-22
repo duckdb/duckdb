@@ -5,20 +5,11 @@
 using namespace duckdb;
 using namespace std;
 
-void ExpressionExecutor::Execute(CommonSubExpression &expr, Vector &result) {
-	// check if the CSE has already been executed
-	auto entry = cached_cse.find(expr.child);
-	if (entry != cached_cse.end()) {
-		// already existed, just reference the stored vector!
-		result.Reference(*(entry->second));
-	} else {
-		// else execute it
-		Execute(*expr.child, result);
-		auto it = cached_cse.insert(make_pair(expr.child, make_unique<Vector>()));
-		auto &inserted_vector = *(it.first->second);
-		// move the result data to the vector cached in the CSE map
-		result.Move(inserted_vector);
-		// now reference that vector in the result
-		result.Reference(inserted_vector);
-	}
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(CommonSubExpression &expr,
+                                                                ExpressionExecutorState &root) {
+	return nullptr;
+}
+
+void ExpressionExecutor::Execute(CommonSubExpression &expr, ExpressionState *state, Vector &result) {
+	throw NotImplementedException("FIXME: rework CSE again");
 }

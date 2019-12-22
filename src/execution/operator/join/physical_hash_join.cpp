@@ -6,11 +6,10 @@
 using namespace duckdb;
 using namespace std;
 
-class PhysicalHashJoinOperatorState : public PhysicalOperatorState {
+class PhysicalHashJoinState : public PhysicalComparisonJoinState {
 public:
-	PhysicalHashJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right)
-	    : PhysicalOperatorState(left), initialized(false) {
-		assert(left && right);
+	PhysicalHashJoinState(PhysicalOperator *left, PhysicalOperator *right, vector<JoinCondition> &conditions)
+	    : PhysicalComparisonJoinState(left, right, conditions), initialized(false) {
 	}
 
 	bool initialized;
@@ -28,7 +27,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 }
 
 void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalHashJoinOperatorState *>(state_);
+	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_);
 	if (!state->initialized) {
 		// build the HT
 		auto right_state = children[1]->GetOperatorState();
@@ -45,11 +44,8 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 				break;
 			}
 			// resolve the join keys for the right chunk
-			state->join_keys.Reset();
-			ExpressionExecutor executor(right_chunk);
-			for (index_t i = 0; i < conditions.size(); i++) {
-				executor.ExecuteExpression(*conditions[i].right, state->join_keys.data[i]);
-			}
+			state->rhs_executor.Execute(right_chunk, state->join_keys);
+
 			// build the HT
 			hash_table->Build(state->join_keys, right_chunk);
 		}
@@ -118,11 +114,8 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 			}
 		}
 		// resolve the join keys for the left chunk
-		state->join_keys.Reset();
-		ExpressionExecutor executor(state->child_chunk);
-		for (index_t i = 0; i < conditions.size(); i++) {
-			executor.ExecuteExpression(*conditions[i].left, state->join_keys.data[i]);
-		}
+		state->lhs_executor.Execute(state->child_chunk, state->join_keys);
+
 		// perform the actual probe
 		state->scan_structure = hash_table->Probe(state->join_keys);
 		state->scan_structure->Next(state->join_keys, state->child_chunk, chunk);
@@ -130,5 +123,5 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState() {
-	return make_unique<PhysicalHashJoinOperatorState>(children[0].get(), children[1].get());
+	return make_unique<PhysicalHashJoinState>(children[0].get(), children[1].get(), conditions);
 }

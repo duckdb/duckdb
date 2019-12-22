@@ -12,6 +12,7 @@ add_subdirectory(transform)
 add_library(duckdb_parser OBJECT
             base_expression.cpp
             constraint.cpp
+            expression_util.cpp
             parsed_expression.cpp
             parsed_expression_iterator.cpp
             parser.cpp

@@ -18,6 +18,9 @@ void PhysicalUpdate::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 	DataChunk update_chunk;
 	update_chunk.Initialize(update_types);
 
+	// initialize states for bound default expressions
+	ExpressionExecutor default_executor(bound_defaults);
+
 	int64_t updated_count = 0;
 
 	DataChunk mock_chunk;
@@ -31,15 +34,15 @@ void PhysicalUpdate::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			break;
 		}
 		state->child_chunk.Flatten();
+		default_executor.SetChunk(state->child_chunk);
 
-		ExpressionExecutor executor(state->child_chunk);
 		// update data in the base table
 		// the row ids are given to us as the last column of the child chunk
 		auto &row_ids = state->child_chunk.data[state->child_chunk.column_count - 1];
 		for (index_t i = 0; i < expressions.size(); i++) {
 			if (expressions[i]->type == ExpressionType::VALUE_DEFAULT) {
 				// default expression, set to the default value of the column
-				executor.ExecuteExpression(*bound_defaults[columns[i]], update_chunk.data[i]);
+				default_executor.ExecuteExpression(columns[i], update_chunk.data[i]);
 			} else {
 				assert(expressions[i]->type == ExpressionType::BOUND_REF);
 				// index into child chunk

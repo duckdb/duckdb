@@ -39,25 +39,23 @@ static const char *age_scalar_function(timestamp_t input1, timestamp_t input2, i
 	return output.c_str();
 }
 
-static void age_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                         Vector &result) {
-	assert(input_count == 2 || input_count == 1);
+static void age_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	assert(input.column_count == 2 || input.column_count == 1);
 
-	auto &input1 = inputs[0];
+	auto &input1 = input.data[0];
 	Vector input2;
 
-	if (input_count == 1) {
+	if (input.column_count == 1) {
 		auto current_timestamp = Timestamp::GetCurrentTimestamp();
 		auto value_timestamp = Value::TIMESTAMP(current_timestamp);
 		Vector vector_timestamp(value_timestamp);
 		vector_timestamp.Move(input2);
 	} else {
-		inputs[1].Move(input2);
+		input.data[1].Move(input2);
 	}
 	assert(input1.type == TypeId::BIGINT);
 	assert(input2.type == TypeId::BIGINT);
 
-	result.Initialize(TypeId::VARCHAR);
 	result.count = input1.count;
 	result.sel_vector = input1.sel_vector;
 

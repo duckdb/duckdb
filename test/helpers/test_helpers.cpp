@@ -224,6 +224,12 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
                     string &error_message) {
 	assert(collection.types.size() == sql_types.size());
 
+	// set up the CSV reader
+	CopyInfo info;
+	info.delimiter = "|";
+	info.header = true;
+	info.quote = "\"";
+	info.escape = "\"";
 	// set up the intermediate result chunk
 	vector<TypeId> internal_types;
 	for (auto &type : sql_types) {
@@ -231,13 +237,6 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
 	}
 	DataChunk parsed_result;
 	parsed_result.Initialize(internal_types);
-
-	// set up the CSV reader
-	CopyInfo info;
-	info.delimiter = "|";
-	info.header = true;
-	info.quote = "\"";
-	info.escape = "\"";
 
 	// convert the CSV string into a stringstream
 	istringstream csv_stream(csv);

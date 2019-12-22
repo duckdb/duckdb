@@ -1,4 +1,5 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
@@ -20,7 +21,7 @@ BindResult ExpressionBinder::BindExpression(CastExpression &expr, index_t depth)
 		parameter.sql_type = expr.cast_type;
 	} else {
 		// otherwise add a cast to the target type
-		child.expr = AddCastToType(move(child.expr), child.sql_type, expr.cast_type);
+		child.expr = BoundCastExpression::AddCastToType(move(child.expr), child.sql_type, expr.cast_type);
 	}
 	return BindResult(move(child.expr), expr.cast_type);
 }

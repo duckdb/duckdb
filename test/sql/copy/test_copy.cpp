@@ -454,7 +454,6 @@ TEST_CASE("Test force_quote and force_not_null", "[copy]") {
 	                       "' (FORCE_NOT_NULL (col_c, col_d));"));
 
 	// FORCE_NOT_NULL fails on integer columns
-	// FIXME: only working if test cases are run individually, not working if whole [copy] test cases are run at once
 	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test_2.csv") + "' (FORCE_NOT_NULL (col_a));"));
 }
 

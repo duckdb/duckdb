@@ -69,8 +69,10 @@ bool ConjunctionExpressionMatcher::Match(Expression *expr_, vector<Expression *>
 		return false;
 	}
 	auto expr = (BoundConjunctionExpression *)expr_;
-	vector<Expression *> expressions = {expr->left.get(), expr->right.get()};
-	return SetMatcher::Match(matchers, expressions, bindings, policy);
+	if (!SetMatcher::Match(matchers, expr->children, bindings, policy)) {
+		return false;
+	}
+	return true;
 }
 
 bool OperatorExpressionMatcher::Match(Expression *expr_, vector<Expression *> &bindings) {
