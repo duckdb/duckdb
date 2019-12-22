@@ -11,7 +11,6 @@ using namespace std;
 namespace duckdb {
 
 static void concat_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count >= 2 && args.column_count <= 64);
 
 	result.nullmask = 0;
 	for (index_t i = 0; i < args.column_count; i++) {
@@ -65,7 +64,7 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 
 void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction concat =
-	    ScalarFunction("concat", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR, concat_function);
+	    ScalarFunction("concat", {SQLType::VARCHAR}, SQLType::VARCHAR, concat_function);
 	concat.varargs = SQLType::VARCHAR;
 	set.AddFunction(concat);
 	concat.name = "||";

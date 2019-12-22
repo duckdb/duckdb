@@ -11,8 +11,6 @@ using namespace std;
 namespace duckdb {
 
 void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count >= 2 && args.column_count <= 64);
-
 	// The first input parameter is the seperator
 	auto &input_separator = args.data[0];
 	auto input_separator_data = (const char **)input_separator.data;
@@ -92,7 +90,7 @@ void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &result)
 
 void ConcatWSFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction concat_ws =
-	    ScalarFunction("concat_ws", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR, concat_ws_function);
+	    ScalarFunction("concat_ws", {SQLType::VARCHAR}, SQLType::VARCHAR, concat_ws_function);
 	concat_ws.varargs = SQLType::VARCHAR;
 	set.AddFunction(concat_ws);
 }
