@@ -168,8 +168,7 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 	return move(state);
 }
 
-PhysicalHashAggregateState::PhysicalHashAggregateState(PhysicalHashAggregate *parent,
-                                                                       PhysicalOperator *child)
+PhysicalHashAggregateState::PhysicalHashAggregateState(PhysicalHashAggregate *parent, PhysicalOperator *child)
     : PhysicalOperatorState(child), ht_scan_position(0), tuples_scanned(0), group_executor(parent->groups) {
 	vector<TypeId> group_types, aggregate_types;
 	for (auto &expr : parent->groups) {

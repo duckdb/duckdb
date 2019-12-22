@@ -18,7 +18,7 @@ struct GatherLoopSetNull {
 		if (result.sel_vector) {
 			VectorOperations::Exec(src, [&](index_t i, index_t k) {
 				data_ptr_t ptr = source[i] + offset;
-				T source_value = *((T*) ptr);
+				T source_value = *((T *)ptr);
 				if (IsNullValue<T>(source_value)) {
 					result.nullmask.set(result.sel_vector[k]);
 				} else {
@@ -28,7 +28,7 @@ struct GatherLoopSetNull {
 		} else {
 			VectorOperations::Exec(src, [&](index_t i, index_t k) {
 				data_ptr_t ptr = source[i] + offset;
-				T source_value = *((T*) ptr);
+				T source_value = *((T *)ptr);
 				if (IsNullValue<T>(source_value)) {
 					result.nullmask.set(k);
 				} else {
@@ -46,13 +46,13 @@ struct GatherLoopIgnoreNull {
 		if (result.sel_vector) {
 			VectorOperations::Exec(src, [&](index_t i, index_t k) {
 				data_ptr_t ptr = source[i] + offset;
-				T source_value = *((T*) ptr);
+				T source_value = *((T *)ptr);
 				ldata[result.sel_vector[k]] = OP::Operation(source_value, ldata[i]);
 			});
 		} else {
 			VectorOperations::Exec(src, [&](index_t i, index_t k) {
 				data_ptr_t ptr = source[i] + offset;
-				T source_value = *((T*) ptr);
+				T source_value = *((T *)ptr);
 				ldata[k] = OP::Operation(source_value, ldata[i]);
 			});
 		}

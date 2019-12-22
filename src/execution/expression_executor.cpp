@@ -18,10 +18,9 @@ ExpressionExecutor::ExpressionExecutor(Expression &expression) {
 	AddExpression(expression);
 }
 
-
 ExpressionExecutor::ExpressionExecutor(vector<unique_ptr<Expression>> &exprs) {
 	assert(exprs.size() > 0);
-	for(auto &expr : exprs) {
+	for (auto &expr : exprs) {
 		AddExpression(*expr);
 	}
 }
@@ -183,7 +182,7 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, Vecto
 
 index_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, sel_t result[]) {
 	assert(expr.return_type == TypeId::BOOLEAN);
-	switch(expr.expression_class) {
+	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_COMPARISON:
 		return Select((BoundComparisonExpression &)expr, state, result);
 	case ExpressionClass::BOUND_CONJUNCTION:
@@ -198,10 +197,10 @@ index_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *sta
 	// resolve the true/false expression first
 	// then use that to generate the selection vector
 	bool intermediate_bools[STANDARD_VECTOR_SIZE];
-	Vector intermediate(TypeId::BOOLEAN, (data_ptr_t) intermediate_bools);
+	Vector intermediate(TypeId::BOOLEAN, (data_ptr_t)intermediate_bools);
 	Execute(expr, state, intermediate);
 
-	auto intermediate_result = (bool*) intermediate.data;
+	auto intermediate_result = (bool *)intermediate.data;
 	if (intermediate.IsConstant()) {
 		// constant result: get the value
 		if (intermediate_result[0] && !intermediate.nullmask[0]) {

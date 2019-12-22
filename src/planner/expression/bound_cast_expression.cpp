@@ -11,7 +11,8 @@ BoundCastExpression::BoundCastExpression(TypeId target, unique_ptr<Expression> c
       source_type(source_type), target_type(target_type) {
 }
 
-unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, SQLType source_type, SQLType target_type) {
+unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, SQLType source_type,
+                                                          SQLType target_type) {
 	assert(expr);
 	if (expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
 		auto &parameter = (BoundParameterExpression &)*expr;

@@ -21,6 +21,7 @@ public:
 
 	//! The filter expression
 	unique_ptr<Expression> expression;
+
 public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 

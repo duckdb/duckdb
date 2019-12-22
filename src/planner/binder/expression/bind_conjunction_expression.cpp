@@ -19,9 +19,10 @@ BindResult ExpressionBinder::BindExpression(ConjunctionExpression &expr, index_t
 	// cast the input types to boolean (if necessary)
 	// and construct the bound conjunction expression
 	auto result = make_unique<BoundConjunctionExpression>(expr.type);
-	for(auto &child_expr : expr.children) {
+	for (auto &child_expr : expr.children) {
 		auto &child = (BoundExpression &)*child_expr;
-		result->children.push_back(BoundCastExpression::AddCastToType(move(child.expr), child.sql_type, SQLType(SQLTypeId::BOOLEAN)));
+		result->children.push_back(
+		    BoundCastExpression::AddCastToType(move(child.expr), child.sql_type, SQLType(SQLTypeId::BOOLEAN)));
 	}
 	// now create the bound conjunction expression
 	return BindResult(move(result), SQLType(SQLTypeId::BOOLEAN));

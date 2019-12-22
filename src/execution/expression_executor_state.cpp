@@ -5,9 +5,9 @@
 using namespace duckdb;
 using namespace std;
 
-void ExpressionState::AddIntermediates(vector<Expression*> expressions) {
+void ExpressionState::AddIntermediates(vector<Expression *> expressions) {
 	vector<TypeId> types;
-	for(auto &expr : expressions) {
+	for (auto &expr : expressions) {
 		types.push_back(expr->return_type);
 		child_states.push_back(ExpressionExecutor::InitializeState(*expr, root));
 	}

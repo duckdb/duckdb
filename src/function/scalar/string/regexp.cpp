@@ -28,7 +28,7 @@ static void regexp_matches_function(DataChunk &args, ExpressionState &state, Vec
 	auto &strings = args.data[0];
 	auto &patterns = args.data[1];
 
-	auto &func_expr = (BoundFunctionExpression&)state.expr;
+	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (RegexpMatchesBindData &)*func_expr.bind_info;
 
 	assert(strings.type == TypeId::VARCHAR);

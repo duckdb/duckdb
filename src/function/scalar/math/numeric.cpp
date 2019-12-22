@@ -43,8 +43,8 @@ struct SignOperator {
 void SignFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet sign("sign");
 	for (auto &type : SQLType::NUMERIC) {
-		sign.AddFunction(
-		    ScalarFunction({type}, SQLType::TINYINT, ScalarFunction::GetScalarUnaryFunctionFixedReturn<int8_t, SignOperator>(type)));
+		sign.AddFunction(ScalarFunction({type}, SQLType::TINYINT,
+		                                ScalarFunction::GetScalarUnaryFunctionFixedReturn<int8_t, SignOperator>(type)));
 	}
 	set.AddFunction(sign);
 }

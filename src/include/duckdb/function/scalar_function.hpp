@@ -46,8 +46,13 @@ public:
 	// The dependency function (if any)
 	dependency_function_t dependency;
 
-	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, string schema, string name, vector<SQLType> &arguments, vector<unique_ptr<Expression>> children, bool is_operator = false);
-	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, ScalarFunctionCatalogEntry &function, vector<SQLType> &arguments, vector<unique_ptr<Expression>> children, bool is_operator = false);
+	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, string schema, string name,
+	                                                              vector<SQLType> &arguments,
+	                                                              vector<unique_ptr<Expression>> children,
+	                                                              bool is_operator = false);
+	static unique_ptr<BoundFunctionExpression>
+	BindScalarFunction(ClientContext &context, ScalarFunctionCatalogEntry &function, vector<SQLType> &arguments,
+	                   vector<unique_ptr<Expression>> children, bool is_operator = false);
 
 	bool operator==(const ScalarFunction &rhs) const {
 		return function == rhs.function && bind == rhs.bind && dependency == rhs.dependency;
@@ -69,10 +74,11 @@ public:
 	};
 
 	template <class TA, class TB, class TR, class OP, bool IGNORE_NULL = false>
-	static void BinaryFunction(DataChunk &input, ExpressionState &state, Vector &result)  {
+	static void BinaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		assert(input.column_count == 2);
 		templated_binary_loop<TA, TB, TR, OP, IGNORE_NULL>(input.data[0], input.data[1], result);
 	};
+
 public:
 	template <class OP> static scalar_function_t GetScalarUnaryFunction(SQLType type) {
 		switch (type.id) {

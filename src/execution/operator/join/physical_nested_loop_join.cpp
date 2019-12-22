@@ -14,7 +14,8 @@ namespace duckdb {
 class PhysicalNestedLoopJoinState : public PhysicalComparisonJoinState {
 public:
 	PhysicalNestedLoopJoinState(PhysicalOperator *left, PhysicalOperator *right, vector<JoinCondition> &conditions)
-	    : PhysicalComparisonJoinState(left, right, conditions), right_chunk(0), has_null(false), left_tuple(0), right_tuple(0) {
+	    : PhysicalComparisonJoinState(left, right, conditions), right_chunk(0), has_null(false), left_tuple(0),
+	      right_tuple(0) {
 	}
 
 	index_t right_chunk;

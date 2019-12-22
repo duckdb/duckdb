@@ -27,10 +27,11 @@ inline void BINARY_TYPE_CHECK(Vector &left, Vector &right, Vector &result) {
 	}
 }
 
-template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
+template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL, bool LEFT_CONSTANT,
+          bool RIGHT_CONSTANT>
 static inline void binary_function_loop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
-                                                  RESULT_TYPE *__restrict result_data, index_t count,
-                                                  sel_t *__restrict sel_vector, nullmask_t &nullmask) {
+                                        RESULT_TYPE *__restrict result_data, index_t count,
+                                        sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 	if (IGNORE_NULL && nullmask.any()) {
 		VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
 			if (!nullmask[i]) {
@@ -46,27 +47,30 @@ static inline void binary_function_loop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE 
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL>
 static inline void binary_loop_left_constant(LEFT_TYPE ldata, RIGHT_TYPE *__restrict rdata,
-                                                      RESULT_TYPE *__restrict result_data, index_t count,
-                                                      sel_t *__restrict sel_vector, nullmask_t &nullmask) {
+                                             RESULT_TYPE *__restrict result_data, index_t count,
+                                             sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 	ASSERT_RESTRICT(rdata, rdata + count, result_data, result_data + count);
-	binary_function_loop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL, true, false>(&ldata, rdata, result_data, count, sel_vector, nullmask);
+	binary_function_loop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL, true, false>(&ldata, rdata, result_data,
+	                                                                                       count, sel_vector, nullmask);
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL>
 static inline void binary_loop_right_constant(LEFT_TYPE *__restrict ldata, RIGHT_TYPE rdata,
-                                                       RESULT_TYPE *__restrict result_data, index_t count,
-                                                       sel_t *__restrict sel_vector, nullmask_t &nullmask) {
+                                              RESULT_TYPE *__restrict result_data, index_t count,
+                                              sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
-	binary_function_loop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL, false, true>(ldata, &rdata, result_data, count, sel_vector, nullmask);
+	binary_function_loop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL, false, true>(ldata, &rdata, result_data,
+	                                                                                       count, sel_vector, nullmask);
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL>
 static inline void binary_loop_array(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
-                                              RESULT_TYPE *__restrict result_data, index_t count,
-                                              sel_t *__restrict sel_vector, nullmask_t &nullmask) {
+                                     RESULT_TYPE *__restrict result_data, index_t count, sel_t *__restrict sel_vector,
+                                     nullmask_t &nullmask) {
 	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 	ASSERT_RESTRICT(rdata, rdata + count, result_data, result_data + count);
-	binary_function_loop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL, false, false>(ldata, rdata, result_data, count, sel_vector, nullmask);
+	binary_function_loop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL, false, false>(
+	    ldata, rdata, result_data, count, sel_vector, nullmask);
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL = false>
@@ -83,7 +87,7 @@ void templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 			// left side is normal constant, use right nullmask
 			result.nullmask = right.nullmask;
 			binary_loop_left_constant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL>(
-				ldata[0], rdata, result_data, right.count, right.sel_vector, result.nullmask);
+			    ldata[0], rdata, result_data, right.count, right.sel_vector, result.nullmask);
 		}
 		result.sel_vector = right.sel_vector;
 		result.count = right.count;
@@ -95,7 +99,7 @@ void templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 			// right side is normal constant, use left nullmask and do
 			result.nullmask = left.nullmask;
 			binary_loop_right_constant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL>(
-				ldata, rdata[0], result_data, left.count, left.sel_vector, result.nullmask);
+			    ldata, rdata[0], result_data, left.count, left.sel_vector, result.nullmask);
 		}
 		result.sel_vector = left.sel_vector;
 		result.count = left.count;
@@ -104,7 +108,8 @@ void templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 		assert(left.sel_vector == right.sel_vector);
 		// OR nullmasks together
 		result.nullmask = left.nullmask | right.nullmask;
-		binary_loop_array<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL>(ldata, rdata, result_data, left.count, left.sel_vector, result.nullmask);
+		binary_loop_array<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL>(ldata, rdata, result_data, left.count,
+		                                                                       left.sel_vector, result.nullmask);
 		result.sel_vector = left.sel_vector;
 		result.count = left.count;
 	}
@@ -148,7 +153,8 @@ template <class T, class OP> void templated_divmod_loop(Vector &left, Vector &ri
 			// right side is normal constant, use left nullmask and do
 			// computation
 			result.nullmask = left.nullmask;
-			binary_loop_right_constant<T, T, T, OP, false>(ldata, constant, result_data, left.count, left.sel_vector, result.nullmask);
+			binary_loop_right_constant<T, T, T, OP, false>(ldata, constant, result_data, left.count, left.sel_vector,
+			                                               result.nullmask);
 		}
 		result.sel_vector = left.sel_vector;
 		result.count = left.count;

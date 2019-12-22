@@ -18,6 +18,7 @@ public:
 	BoundConjunctionExpression(ExpressionType type, unique_ptr<Expression> left, unique_ptr<Expression> right);
 
 	vector<unique_ptr<Expression>> children;
+
 public:
 	string ToString() const override;
 

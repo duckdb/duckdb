@@ -4,24 +4,20 @@
 using namespace duckdb;
 using namespace std;
 
-
 BoundConjunctionExpression::BoundConjunctionExpression(ExpressionType type)
     : Expression(type, ExpressionClass::BOUND_CONJUNCTION, TypeId::BOOLEAN) {
-
 }
 
-
-BoundConjunctionExpression::BoundConjunctionExpression(ExpressionType type, unique_ptr<Expression> left, unique_ptr<Expression> right)
+BoundConjunctionExpression::BoundConjunctionExpression(ExpressionType type, unique_ptr<Expression> left,
+                                                       unique_ptr<Expression> right)
     : Expression(type, ExpressionClass::BOUND_CONJUNCTION, TypeId::BOOLEAN) {
 	children.push_back(move(left));
 	children.push_back(move(right));
 }
 
-
-
 string BoundConjunctionExpression::ToString() const {
 	string result = "(" + children[0]->ToString();
-	for(index_t i = 1; i < children.size(); i++) {
+	for (index_t i = 1; i < children.size(); i++) {
 		result += " " + ExpressionTypeToOperator(type) + " " + children[i]->ToString();
 	}
 	return result + ")";
@@ -37,7 +33,7 @@ bool BoundConjunctionExpression::Equals(const BaseExpression *other_) const {
 
 unique_ptr<Expression> BoundConjunctionExpression::Copy() {
 	auto copy = make_unique<BoundConjunctionExpression>(type);
-	for(auto &expr : children) {
+	for (auto &expr : children) {
 		copy->children.push_back(expr->Copy());
 	}
 	copy->CopyProperties(*this);

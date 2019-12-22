@@ -6,12 +6,12 @@
 using namespace duckdb;
 using namespace std;
 
-template<class T>
+template <class T>
 bool ExpressionUtil::ExpressionListEquals(const vector<unique_ptr<T>> &a, const vector<unique_ptr<T>> &b) {
 	if (a.size() != b.size()) {
 		return false;
 	}
-	for(index_t i = 0; i < a.size(); i++) {
+	for (index_t i = 0; i < a.size(); i++) {
 		if (!(*a[i] == *b[i])) {
 			return false;
 		}
@@ -19,7 +19,7 @@ bool ExpressionUtil::ExpressionListEquals(const vector<unique_ptr<T>> &a, const 
 	return true;
 }
 
-template<class T>
+template <class T>
 bool ExpressionUtil::ExpressionSetEquals(const vector<unique_ptr<T>> &a, const vector<unique_ptr<T>> &b) {
 	if (a.size() != b.size()) {
 		return false;
@@ -28,12 +28,12 @@ bool ExpressionUtil::ExpressionSetEquals(const vector<unique_ptr<T>> &a, const v
 	// we keep the count because the same expression can occur multiple times (e.g. "1 AND 1" is legal)
 	// in this case we track the following value: map["Constant(1)"] = 2
 	expression_map_t<index_t> map;
-	for(index_t i = 0; i < a.size(); i++) {
+	for (index_t i = 0; i < a.size(); i++) {
 		map[a[i].get()]++;
 	}
 	// now on the right side we reduce the counts again
 	// if the conjunctions are identical, all the counts will be 0 after the
-	for(auto &expr : b) {
+	for (auto &expr : b) {
 		auto entry = map.find(expr.get());
 		// first we check if we can find the expression in the map at all
 		if (entry == map.end()) {
@@ -42,7 +42,8 @@ bool ExpressionUtil::ExpressionSetEquals(const vector<unique_ptr<T>> &a, const v
 		// if we found it we check the count; if the count is already 0 we return false
 		// this happens if e.g. the left side contains "1 AND X", and the right side contains "1 AND 1"
 		// "1" is contained in the map, however, the right side contains the expression twice
-		// hence we know the children are not identical in this case because the LHS and RHS have a different count for the Constant(1) expression
+		// hence we know the children are not identical in this case because the LHS and RHS have a different count for
+		// the Constant(1) expression
 		if (entry->second == 0) {
 			return false;
 		}
@@ -51,7 +52,8 @@ bool ExpressionUtil::ExpressionSetEquals(const vector<unique_ptr<T>> &a, const v
 	return true;
 }
 
-bool ExpressionUtil::ListEquals(const vector<unique_ptr<ParsedExpression>> &a, const vector<unique_ptr<ParsedExpression>> &b) {
+bool ExpressionUtil::ListEquals(const vector<unique_ptr<ParsedExpression>> &a,
+                                const vector<unique_ptr<ParsedExpression>> &b) {
 	return ExpressionListEquals<ParsedExpression>(a, b);
 }
 
@@ -59,7 +61,8 @@ bool ExpressionUtil::ListEquals(const vector<unique_ptr<Expression>> &a, const v
 	return ExpressionListEquals<Expression>(a, b);
 }
 
-bool ExpressionUtil::SetEquals(const vector<unique_ptr<ParsedExpression>> &a, const vector<unique_ptr<ParsedExpression>> &b) {
+bool ExpressionUtil::SetEquals(const vector<unique_ptr<ParsedExpression>> &a,
+                               const vector<unique_ptr<ParsedExpression>> &b) {
 	return ExpressionSetEquals<ParsedExpression>(a, b);
 }
 

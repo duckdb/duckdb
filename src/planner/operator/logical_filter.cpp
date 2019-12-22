@@ -27,7 +27,7 @@ bool LogicalFilter::SplitPredicates(vector<unique_ptr<Expression>> &expressions)
 			auto &conjunction = (BoundConjunctionExpression &)*expressions[i];
 			found_conjunction = true;
 			// AND expression, append the other children
-			for(index_t k = 1; k < conjunction.children.size(); k++) {
+			for (index_t k = 1; k < conjunction.children.size(); k++) {
 				expressions.push_back(move(conjunction.children[k]));
 			}
 			// replace this expression with the first child of the conjunction

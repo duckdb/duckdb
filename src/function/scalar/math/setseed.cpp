@@ -21,7 +21,7 @@ struct SetseedBindData : public FunctionData {
 };
 
 static void setseed_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression&)state.expr;
+	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (SetseedBindData &)*func_expr.bind_info;
 	auto &input = args.data[0];
 	result.nullmask.set();

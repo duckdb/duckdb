@@ -14,7 +14,8 @@ namespace duckdb {
 
 class ExpressionHeuristics : public LogicalOperatorVisitor {
 public:
-	ExpressionHeuristics(Optimizer &optimizer) : optimizer(optimizer) {}
+	ExpressionHeuristics(Optimizer &optimizer) : optimizer(optimizer) {
+	}
 
 	Optimizer &optimizer;
 	unique_ptr<LogicalOperator> root;
@@ -30,26 +31,14 @@ public:
 	unique_ptr<Expression> VisitReplace(BoundConjunctionExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 	//! Override this function to search for filter operators
 	void VisitOperator(LogicalOperator &op) override;
+
 private:
 	std::unordered_map<std::string, index_t> function_costs = {
-		{"+", 5},
-		{"-", 5},
-		{"&", 5},
-		{"#", 5},
-		{">>", 5},
-		{"<<", 5},
-		{"abs", 5},
-		{"*", 10},
-		{"%", 10},
-		{"/", 15},
-		{"date_part", 20},
-		{"year", 20},
-		{"round", 100},
-		{"~~", 200},
-		{"!~~", 200},
-		{"regexp_matches", 200},
-		{"||", 200}
-	};
+	    {"+", 5},       {"-", 5},    {"&", 5},          {"#", 5},
+	    {">>", 5},      {"<<", 5},   {"abs", 5},        {"*", 10},
+	    {"%", 10},      {"/", 15},   {"date_part", 20}, {"year", 20},
+	    {"round", 100}, {"~~", 200}, {"!~~", 200},      {"regexp_matches", 200},
+	    {"||", 200}};
 
 	index_t ExpressionCost(BoundCaseExpression &expr);
 	index_t ExpressionCost(BoundCastExpression &expr);

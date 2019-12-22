@@ -41,7 +41,7 @@ void PhysicalTableFunction::GetChunkInternal(ClientContext &context, DataChunk &
 		assert(parameters.size() == input_types.size());
 		input.Initialize(input_types);
 
-		for(auto &expr : parameters) {
+		for (auto &expr : parameters) {
 			ExpressionExecutor executor(*expr);
 			executor.Execute(input);
 		}

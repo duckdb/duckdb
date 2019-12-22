@@ -5,10 +5,11 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConjunctionExpression &expr, ExpressionExecutorState &root) {
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConjunctionExpression &expr,
+                                                                ExpressionExecutorState &root) {
 	auto result = make_unique<ExpressionState>(expr, root);
-	vector<Expression*> children;
-	for(auto &child : expr.children) {
+	vector<Expression *> children;
+	for (auto &child : expr.children) {
 		children.push_back(child.get());
 	}
 	result->AddIntermediates(children);
@@ -42,7 +43,7 @@ void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionSta
 
 static void SetChunkSelectionVector(DataChunk &chunk, sel_t *sel_vector, index_t count) {
 	chunk.sel_vector = sel_vector;
-	for(index_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
+	for (index_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
 		chunk.data[col_idx].count = count;
 		chunk.data[col_idx].sel_vector = sel_vector;
 	}
@@ -57,7 +58,7 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 		auto initial_sel = chunk->sel_vector;
 		index_t initial_count = chunk->size();
 		index_t current_count = chunk->size();
-		for(index_t i = 0; i < expr.children.size(); i++) {
+		for (index_t i = 0; i < expr.children.size(); i++) {
 			index_t new_count = Select(*expr.children[i], state->child_states[i].get(), result);
 			if (new_count == 0) {
 				return 0;

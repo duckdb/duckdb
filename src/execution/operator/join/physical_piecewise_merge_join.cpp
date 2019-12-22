@@ -10,8 +10,8 @@ using namespace std;
 class PhysicalPiecewiseMergeJoinState : public PhysicalComparisonJoinState {
 public:
 	PhysicalPiecewiseMergeJoinState(PhysicalOperator *left, PhysicalOperator *right, vector<JoinCondition> &conditions)
-	    : PhysicalComparisonJoinState(left, right, conditions), initialized(false), left_position(0), right_position(0), right_chunk_index(0),
-	      has_null(false) {
+	    : PhysicalComparisonJoinState(left, right, conditions), initialized(false), left_position(0), right_position(0),
+	      right_chunk_index(0), has_null(false) {
 	}
 
 	bool initialized;

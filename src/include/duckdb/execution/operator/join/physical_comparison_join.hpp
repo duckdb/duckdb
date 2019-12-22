@@ -30,7 +30,7 @@ public:
 	PhysicalComparisonJoinState(PhysicalOperator *left, PhysicalOperator *right, vector<JoinCondition> &conditions)
 	    : PhysicalOperatorState(left) {
 		assert(left && right);
-		for(auto &cond : conditions) {
+		for (auto &cond : conditions) {
 			lhs_executor.AddExpression(*cond.left);
 			rhs_executor.AddExpression(*cond.right);
 		}

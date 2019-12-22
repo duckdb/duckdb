@@ -8,7 +8,8 @@ using namespace std;
 void Case(Vector &res_true, Vector &res_false, Vector &result, sel_t tside[], index_t tcount, sel_t fside[],
           index_t fcount);
 
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpression &expr, ExpressionExecutorState &root) {
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpression &expr,
+                                                                ExpressionExecutorState &root) {
 	auto result = make_unique<ExpressionState>(expr, root);
 	result->AddIntermediates({expr.check.get(), expr.result_if_true.get(), expr.result_if_false.get()});
 	return result;

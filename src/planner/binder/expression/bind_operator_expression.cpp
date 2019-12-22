@@ -9,7 +9,8 @@ using namespace std;
 static SQLType ResolveNotType(OperatorExpression &op, vector<BoundExpression *> &children) {
 	// NOT expression, cast child to BOOLEAN
 	assert(children.size() == 1);
-	children[0]->expr = BoundCastExpression::AddCastToType(move(children[0]->expr), children[0]->sql_type, SQLType(SQLTypeId::BOOLEAN));
+	children[0]->expr =
+	    BoundCastExpression::AddCastToType(move(children[0]->expr), children[0]->sql_type, SQLType(SQLTypeId::BOOLEAN));
 	return SQLType(SQLTypeId::BOOLEAN);
 }
 
@@ -21,7 +22,8 @@ static SQLType ResolveInType(OperatorExpression &op, vector<BoundExpression *> &
 	}
 	// cast all children to the same type
 	for (index_t i = 0; i < children.size(); i++) {
-		children[i]->expr = BoundCastExpression::AddCastToType(move(children[i]->expr), children[i]->sql_type, max_type);
+		children[i]->expr =
+		    BoundCastExpression::AddCastToType(move(children[i]->expr), children[i]->sql_type, max_type);
 	}
 	// (NOT) IN always returns a boolean
 	return SQLType(SQLTypeId::BOOLEAN);

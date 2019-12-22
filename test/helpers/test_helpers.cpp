@@ -238,7 +238,6 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
 	DataChunk parsed_result;
 	parsed_result.Initialize(internal_types);
 
-
 	// convert the CSV string into a stringstream
 	istringstream csv_stream(csv);
 

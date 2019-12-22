@@ -14,11 +14,10 @@
 
 namespace duckdb {
 
-
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool IGNORE_NULL, int LEFT_MULTIPLIER, int RIGHT_MULTIPLIER>
 static inline index_t binary_select_loop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
-                                                  sel_t *__restrict result, index_t count,
-                                                  sel_t *__restrict sel_vector, nullmask_t &nullmask) {
+                                         sel_t *__restrict result, index_t count, sel_t *__restrict sel_vector,
+                                         nullmask_t &nullmask) {
 	index_t result_count = 0;
 	if (IGNORE_NULL || nullmask.any()) {
 		VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
@@ -38,23 +37,26 @@ static inline index_t binary_select_loop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool IGNORE_NULL>
 static inline index_t binary_select_left_constant(LEFT_TYPE ldata, RIGHT_TYPE *__restrict rdata,
-                                                  sel_t *__restrict result, index_t count,
-                                                  sel_t *__restrict sel_vector, nullmask_t &nullmask) {
-	return binary_select_loop<LEFT_TYPE, RIGHT_TYPE, OP, IGNORE_NULL, 0, 1>(&ldata, rdata, result, count, sel_vector, nullmask);
+                                                  sel_t *__restrict result, index_t count, sel_t *__restrict sel_vector,
+                                                  nullmask_t &nullmask) {
+	return binary_select_loop<LEFT_TYPE, RIGHT_TYPE, OP, IGNORE_NULL, 0, 1>(&ldata, rdata, result, count, sel_vector,
+	                                                                        nullmask);
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool IGNORE_NULL>
 static inline index_t binary_select_right_constant(LEFT_TYPE *__restrict ldata, RIGHT_TYPE rdata,
-                                                       sel_t *__restrict result, index_t count,
-                                                       sel_t *__restrict sel_vector, nullmask_t &nullmask) {
-	return binary_select_loop<LEFT_TYPE, RIGHT_TYPE, OP, IGNORE_NULL, 1, 0>(ldata, &rdata, result, count, sel_vector, nullmask);
+                                                   sel_t *__restrict result, index_t count,
+                                                   sel_t *__restrict sel_vector, nullmask_t &nullmask) {
+	return binary_select_loop<LEFT_TYPE, RIGHT_TYPE, OP, IGNORE_NULL, 1, 0>(ldata, &rdata, result, count, sel_vector,
+	                                                                        nullmask);
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool IGNORE_NULL>
 static inline index_t binary_select_array(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
-                                              sel_t *__restrict result, index_t count,
-                                              sel_t *__restrict sel_vector, nullmask_t &nullmask) {
-	return binary_select_loop<LEFT_TYPE, RIGHT_TYPE, OP, IGNORE_NULL, 1, 1>(ldata, rdata, result, count, sel_vector, nullmask);
+                                          sel_t *__restrict result, index_t count, sel_t *__restrict sel_vector,
+                                          nullmask_t &nullmask) {
+	return binary_select_loop<LEFT_TYPE, RIGHT_TYPE, OP, IGNORE_NULL, 1, 1>(ldata, rdata, result, count, sel_vector,
+	                                                                        nullmask);
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool IGNORE_NULL = false>
@@ -81,7 +83,7 @@ index_t templated_binary_select(Vector &left, Vector &right, sel_t result[]) {
 			// left side is normal constant, use right nullmask and do
 			// computation
 			return binary_select_left_constant<LEFT_TYPE, RIGHT_TYPE, OP, IGNORE_NULL>(
-				ldata[0], rdata, result, right.count, right.sel_vector, right.nullmask);
+			    ldata[0], rdata, result, right.count, right.sel_vector, right.nullmask);
 		}
 	} else if (right.IsConstant()) {
 		if (right.nullmask[0]) {
@@ -89,15 +91,16 @@ index_t templated_binary_select(Vector &left, Vector &right, sel_t result[]) {
 			return 0;
 		} else {
 			return binary_select_right_constant<LEFT_TYPE, RIGHT_TYPE, OP, IGNORE_NULL>(
-				ldata, rdata[0], result, left.count, left.sel_vector, left.nullmask);
+			    ldata, rdata[0], result, left.count, left.sel_vector, left.nullmask);
 		}
 	} else {
 		assert(left.count == right.count);
 		assert(left.sel_vector == right.sel_vector);
 		// OR nullmasks together
 		auto nullmask = left.nullmask | right.nullmask;
-		return binary_select_array<LEFT_TYPE, RIGHT_TYPE, OP, IGNORE_NULL>(ldata, rdata, result, left.count, left.sel_vector, nullmask);
+		return binary_select_array<LEFT_TYPE, RIGHT_TYPE, OP, IGNORE_NULL>(ldata, rdata, result, left.count,
+		                                                                   left.sel_vector, nullmask);
 	}
 }
 
-}
+} // namespace duckdb

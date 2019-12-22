@@ -51,7 +51,8 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::INTEGER}, SQLType::DATE, subtract_function));
 	// unary subtract function, negates the input (i.e. multiplies by -1)
 	for (auto &type : SQLType::NUMERIC) {
-		functions.AddFunction(ScalarFunction({type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type)));
+		functions.AddFunction(
+		    ScalarFunction({type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type)));
 	}
 	set.AddFunction(functions);
 }

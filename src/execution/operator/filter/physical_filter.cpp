@@ -7,20 +7,19 @@ using namespace std;
 
 class PhysicalFilterState : public PhysicalOperatorState {
 public:
-	PhysicalFilterState(PhysicalOperator *child, Expression &expr)
-	    : PhysicalOperatorState(child), executor(expr) {
+	PhysicalFilterState(PhysicalOperator *child, Expression &expr) : PhysicalOperatorState(child), executor(expr) {
 	}
 
 	ExpressionExecutor executor;
 };
 
-PhysicalFilter::PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expression>> select_list) :
-	PhysicalOperator(PhysicalOperatorType::FILTER, types) {
+PhysicalFilter::PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expression>> select_list)
+    : PhysicalOperator(PhysicalOperatorType::FILTER, types) {
 	assert(select_list.size() > 0);
 	if (select_list.size() > 1) {
 		// create a big AND out of the expressions
 		auto conjunction = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
-		for(auto &expr : select_list) {
+		for (auto &expr : select_list) {
 			conjunction->children.push_back(move(expr));
 		}
 		expression = move(conjunction);
@@ -31,7 +30,7 @@ PhysicalFilter::PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expressio
 
 void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalFilterState *>(state_);
-	while(true) {
+	while (true) {
 		children[0]->GetChunk(context, chunk, state->child_state.get());
 		if (chunk.size() == 0) {
 			return;

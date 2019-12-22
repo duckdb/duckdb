@@ -17,8 +17,8 @@ DistributivityRule::DistributivityRule(ExpressionRewriter &rewriter) : Rule(rewr
 
 void DistributivityRule::AddExpressionSet(Expression &expr, expression_set_t &set) {
 	if (expr.type == ExpressionType::CONJUNCTION_AND) {
-		auto &and_expr = (BoundConjunctionExpression&) expr;
-		for(auto &child : and_expr.children) {
+		auto &and_expr = (BoundConjunctionExpression &)expr;
+		for (auto &child : and_expr.children) {
 			set.insert(child.get());
 		}
 	} else {
@@ -26,13 +26,14 @@ void DistributivityRule::AddExpressionSet(Expression &expr, expression_set_t &se
 	}
 }
 
-unique_ptr<Expression> DistributivityRule::ExtractExpression(BoundConjunctionExpression &conj, index_t idx, Expression &expr) {
+unique_ptr<Expression> DistributivityRule::ExtractExpression(BoundConjunctionExpression &conj, index_t idx,
+                                                             Expression &expr) {
 	auto &child = conj.children[idx];
 	unique_ptr<Expression> result;
 	if (child->type == ExpressionType::CONJUNCTION_AND) {
 		// AND, remove expression from the list
-		auto &and_expr = (BoundConjunctionExpression&) *child;
-		for(index_t i = 0; i < and_expr.children.size(); i++) {
+		auto &and_expr = (BoundConjunctionExpression &)*child;
+		for (index_t i = 0; i < and_expr.children.size(); i++) {
 			if (Expression::Equals(and_expr.children[i].get(), &expr)) {
 				result = move(and_expr.children[i]);
 				and_expr.children.erase(and_expr.children.begin() + i);
@@ -66,11 +67,11 @@ unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Exp
 	// now for each of the remaining children, we create a set again and intersect them
 	// in our example: the second set would be [X, B]
 	// the intersection would leave [X]
-	for(index_t i = 1; i < initial_or->children.size(); i++) {
+	for (index_t i = 1; i < initial_or->children.size(); i++) {
 		expression_set_t next_set;
 		AddExpressionSet(*initial_or->children[i], next_set);
 		expression_set_t intersect_result;
-		for(auto &expr : candidate_set) {
+		for (auto &expr : candidate_set) {
 			if (next_set.find(expr) != next_set.end()) {
 				intersect_result.insert(expr);
 			}
@@ -81,21 +82,22 @@ unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Exp
 		// nothing found: abort
 		return nullptr;
 	}
-	// now for each of the remaining expressions in the candidate set we know that it is contained in all branches of the OR
+	// now for each of the remaining expressions in the candidate set we know that it is contained in all branches of
+	// the OR
 	auto new_root = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
-	for(auto &expr : candidate_set) {
+	for (auto &expr : candidate_set) {
 		assert(initial_or->children.size() > 0);
 
 		// extract the expression from the first child of the OR
-		auto result = ExtractExpression(*initial_or, 0, (Expression&) *expr);
+		auto result = ExtractExpression(*initial_or, 0, (Expression &)*expr);
 		// now for the subsequent expressions, simply remove the expression
-		for(index_t i = 1; i < initial_or->children.size(); i++) {
+		for (index_t i = 1; i < initial_or->children.size(); i++) {
 			ExtractExpression(*initial_or, i, *result);
 		}
 		// now we add the expression to the new root
 		new_root->children.push_back(move(result));
 		// remove any expressions that were set to nullptr
-		for(index_t i = 0; i < initial_or->children.size(); i++) {
+		for (index_t i = 0; i < initial_or->children.size(); i++) {
 			if (!initial_or->children[i]) {
 				initial_or->children.erase(initial_or->children.begin() + i);
 				i--;
@@ -109,7 +111,7 @@ unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Exp
 	} else if (initial_or->children.size() > 1) {
 		// multiple children still remain: push them into a new OR and add that to the new root
 		auto new_or = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
-		for(auto &child : initial_or->children) {
+		for (auto &child : initial_or->children) {
 			new_or->children.push_back(move(child));
 		}
 		new_root->children.push_back(move(new_or));

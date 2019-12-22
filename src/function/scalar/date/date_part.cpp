@@ -229,8 +229,7 @@ template <> int64_t HoursOperator::Operation(timestamp_t input) {
 	return Timestamp::GetHours(input);
 }
 
-template<class T>
-static int64_t extract_element(DatePartSpecifier type, T element) {
+template <class T> static int64_t extract_element(DatePartSpecifier type, T element) {
 	switch (type) {
 	case DatePartSpecifier::YEAR:
 		return YearOperator::Operation<T, int64_t>(element);
@@ -272,16 +271,17 @@ static int64_t extract_element(DatePartSpecifier type, T element) {
 }
 
 struct DatePartOperator {
-	template <class T> static inline int64_t Operation(const char* specifier, T date) {
+	template <class T> static inline int64_t Operation(const char *specifier, T date) {
 		return extract_element<T>(GetDatePartSpecifier(specifier), date);
 	}
 };
 
-template<class OP>
-static void AddDatePartOperator(BuiltinFunctions &set, string name) {
+template <class OP> static void AddDatePartOperator(BuiltinFunctions &set, string name) {
 	ScalarFunctionSet operator_set(name);
-	operator_set.AddFunction(ScalarFunction({SQLType::DATE}, SQLType::BIGINT, ScalarFunction::UnaryFunction<date_t, int64_t, OP>));
-	operator_set.AddFunction(ScalarFunction({SQLType::TIMESTAMP}, SQLType::BIGINT, ScalarFunction::UnaryFunction<timestamp_t, int64_t, OP>));
+	operator_set.AddFunction(
+	    ScalarFunction({SQLType::DATE}, SQLType::BIGINT, ScalarFunction::UnaryFunction<date_t, int64_t, OP>));
+	operator_set.AddFunction(
+	    ScalarFunction({SQLType::TIMESTAMP}, SQLType::BIGINT, ScalarFunction::UnaryFunction<timestamp_t, int64_t, OP>));
 	set.AddFunction(operator_set);
 }
 
@@ -307,9 +307,12 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 
 	// finally the actual date_part function
 	ScalarFunctionSet date_part("date_part");
-	date_part.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::DATE}, SQLType::BIGINT, ScalarFunction::BinaryFunction<const char*, date_t, int64_t, DatePartOperator>));
 	date_part.AddFunction(
-	    ScalarFunction({SQLType::VARCHAR, SQLType::TIMESTAMP}, SQLType::BIGINT, ScalarFunction::BinaryFunction<const char*, timestamp_t, int64_t, DatePartOperator>));
+	    ScalarFunction({SQLType::VARCHAR, SQLType::DATE}, SQLType::BIGINT,
+	                   ScalarFunction::BinaryFunction<const char *, date_t, int64_t, DatePartOperator>));
+	date_part.AddFunction(
+	    ScalarFunction({SQLType::VARCHAR, SQLType::TIMESTAMP}, SQLType::BIGINT,
+	                   ScalarFunction::BinaryFunction<const char *, timestamp_t, int64_t, DatePartOperator>));
 	set.AddFunction(date_part);
 	date_part.name = "datepart";
 	set.AddFunction(date_part);

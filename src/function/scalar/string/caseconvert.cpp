@@ -30,8 +30,7 @@ static void strtolower(const char *input, char *output) {
 	*output = '\0';
 }
 
-template <str_function CASE_FUNCTION>
-static void caseconvert_function(Vector &input, Vector &result) {
+template <str_function CASE_FUNCTION> static void caseconvert_function(Vector &input, Vector &result) {
 	assert(input.type == TypeId::VARCHAR);
 
 	result.nullmask = input.nullmask;

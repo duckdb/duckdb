@@ -35,18 +35,20 @@ public:
 		Execute(nullptr, result);
 	}
 
-	//! Execute the ExpressionExecutor and put the result in the result vector; this should only be used for expression executors with a single expression
+	//! Execute the ExpressionExecutor and put the result in the result vector; this should only be used for expression
+	//! executors with a single expression
 	void ExecuteExpression(DataChunk &input, Vector &result);
-	//! Execute the ExpressionExecutor and put the result in the result vector; this should only be used for expression executors with a single expression
+	//! Execute the ExpressionExecutor and put the result in the result vector; this should only be used for expression
+	//! executors with a single expression
 	void ExecuteExpression(Vector &result);
-	//! Execute the ExpressionExecutor and generate a selection vector from all true values in the result; this should only be used with a single boolean expression
+	//! Execute the ExpressionExecutor and generate a selection vector from all true values in the result; this should
+	//! only be used with a single boolean expression
 	index_t SelectExpression(DataChunk &input, sel_t result[]);
 
 	//! Execute the expression with index `expr_idx` and store the result in the result vector
 	void ExecuteExpression(index_t expr_idx, Vector &result);
 	//! Evaluate a scalar expression and fold it into a single value
 	static Value EvaluateScalar(Expression &expr);
-
 
 	//! Initialize the state of a given expression
 	static unique_ptr<ExpressionState> InitializeState(Expression &expr, ExpressionExecutorState &state);
@@ -63,6 +65,7 @@ public:
 	//! The data chunk of the current physical operator, used to resolve
 	//! column references and determines the output cardinality
 	DataChunk *chunk = nullptr;
+
 protected:
 	void Initialize(Expression &expr, ExpressionExecutorState &state);
 
@@ -71,7 +74,8 @@ protected:
 	static unique_ptr<ExpressionState> InitializeState(BoundCastExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(CommonSubExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(BoundComparisonExpression &expr, ExpressionExecutorState &state);
-	static unique_ptr<ExpressionState> InitializeState(BoundConjunctionExpression &expr, ExpressionExecutorState &state);
+	static unique_ptr<ExpressionState> InitializeState(BoundConjunctionExpression &expr,
+	                                                   ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(BoundConstantExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(BoundFunctionExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(BoundOperatorExpression &expr, ExpressionExecutorState &state);
@@ -90,7 +94,8 @@ protected:
 	void Execute(BoundOperatorExpression &expr, ExpressionState *state, Vector &result);
 	void Execute(BoundParameterExpression &expr, ExpressionState *state, Vector &result);
 
-	//! Execute the (boolean-returning) expression and generate a selection vector with all entries that are "true" in the result
+	//! Execute the (boolean-returning) expression and generate a selection vector with all entries that are "true" in
+	//! the result
 	index_t Select(Expression &expr, ExpressionState *state, sel_t result[]);
 	index_t DefaultSelect(Expression &expr, ExpressionState *state, sel_t result[]);
 
@@ -99,6 +104,7 @@ protected:
 
 	//! Verify that the output of a step in the ExpressionExecutor is correct
 	void Verify(Expression &expr, Vector &result);
+
 private:
 	//! The states of the expression executor; this holds any intermediates and temporary states of expressions
 	vector<unique_ptr<ExpressionExecutorState>> states;

@@ -4,7 +4,8 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundReferenceExpression &expr, ExpressionExecutorState &root) {
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundReferenceExpression &expr,
+                                                                ExpressionExecutorState &root) {
 	return nullptr;
 }
 

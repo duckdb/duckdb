@@ -20,6 +20,7 @@ public:
 	ConjunctionExpression(ExpressionType type, unique_ptr<ParsedExpression> left, unique_ptr<ParsedExpression> right);
 
 	vector<unique_ptr<ParsedExpression>> children;
+
 public:
 	void AddExpression(unique_ptr<ParsedExpression> expr);
 

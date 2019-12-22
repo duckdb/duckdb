@@ -44,7 +44,8 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 			// resolve the child expression of the aggregate (if any)
 			if (aggregate.children.size()) {
 				for (index_t i = 0; i < aggregate.children.size(); ++i) {
-					state->child_executor.ExecuteExpression(payload_expr_idx, payload_chunk.data[payload_idx + payload_cnt]);
+					state->child_executor.ExecuteExpression(payload_expr_idx,
+					                                        payload_chunk.data[payload_idx + payload_cnt]);
 					payload_expr_idx++;
 					payload_cnt++;
 				}

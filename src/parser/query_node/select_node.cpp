@@ -14,8 +14,7 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 	auto other = (SelectNode *)other_;
 
 	// first check counts of all lists and such
-	if (select_distinct != other->select_distinct ||
-	    orders.size() != other->orders.size()) {
+	if (select_distinct != other->select_distinct || orders.size() != other->orders.size()) {
 		return false;
 	}
 	// SELECT

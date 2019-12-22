@@ -79,6 +79,7 @@ protected:
 	BindResult BindExpression(SubqueryExpression &expr, index_t depth);
 
 	void BindChild(unique_ptr<ParsedExpression> &expr, index_t depth, string &error);
+
 protected:
 	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
 

@@ -25,8 +25,10 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, index_t depth)
 	// now obtain the result type of the input types
 	auto return_type = MaxSQLType(result_if_true.sql_type, result_if_false.sql_type);
 	// add casts (if necessary)
-	result_if_true.expr = BoundCastExpression::AddCastToType(move(result_if_true.expr), result_if_true.sql_type, return_type);
-	result_if_false.expr = BoundCastExpression::AddCastToType(move(result_if_false.expr), result_if_false.sql_type, return_type);
+	result_if_true.expr =
+	    BoundCastExpression::AddCastToType(move(result_if_true.expr), result_if_true.sql_type, return_type);
+	result_if_false.expr =
+	    BoundCastExpression::AddCastToType(move(result_if_false.expr), result_if_false.sql_type, return_type);
 	// now create the bound case expression
 	return BindResult(
 	    make_unique<BoundCaseExpression>(move(check.expr), move(result_if_true.expr), move(result_if_false.expr)),

@@ -5,10 +5,11 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundOperatorExpression &expr, ExpressionExecutorState &root) {
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundOperatorExpression &expr,
+                                                                ExpressionExecutorState &root) {
 	auto result = make_unique<ExpressionState>(expr, root);
-	vector<Expression*> children;
-	for(auto &child : expr.children) {
+	vector<Expression *> children;
+	for (auto &child : expr.children) {
 		children.push_back(child.get());
 	}
 	result->AddIntermediates(children);

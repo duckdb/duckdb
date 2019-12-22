@@ -17,15 +17,18 @@ class ExpressionExecutor;
 struct ExpressionExecutorState;
 
 struct ExpressionState {
-	ExpressionState(Expression &expr, ExpressionExecutorState &root) : expr(expr), root(root) {}
-	virtual ~ExpressionState(){}
+	ExpressionState(Expression &expr, ExpressionExecutorState &root) : expr(expr), root(root) {
+	}
+	virtual ~ExpressionState() {
+	}
 
 	Expression &expr;
 	ExpressionExecutorState &root;
 	DataChunk arguments;
 	vector<unique_ptr<ExpressionState>> child_states;
+
 public:
-	void AddIntermediates(vector<Expression*> expressions);
+	void AddIntermediates(vector<Expression *> expressions);
 	virtual void Reset() {
 		arguments.Reset();
 	}
@@ -36,4 +39,4 @@ struct ExpressionExecutorState {
 	ExpressionExecutor *executor;
 };
 
-}
+} // namespace duckdb

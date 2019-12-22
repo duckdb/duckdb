@@ -194,15 +194,20 @@ void SimpleFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> &chi
 	}
 }
 
-unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context, string schema, string name, vector<SQLType> &arguments, vector<unique_ptr<Expression>> children, bool is_operator) {
+unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context, string schema,
+                                                                       string name, vector<SQLType> &arguments,
+                                                                       vector<unique_ptr<Expression>> children,
+                                                                       bool is_operator) {
 	// bind the function
 	auto function = context.catalog.GetFunction(context.ActiveTransaction(), schema, name);
 	assert(function && function->type == CatalogType::SCALAR_FUNCTION);
-	return ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry&) *function, arguments, move(children), is_operator);
+	return ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)*function, arguments,
+	                                          move(children), is_operator);
 }
 
-
-unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context, ScalarFunctionCatalogEntry &func, vector<SQLType> &arguments, vector<unique_ptr<Expression>> children, bool is_operator) {
+unique_ptr<BoundFunctionExpression>
+ScalarFunction::BindScalarFunction(ClientContext &context, ScalarFunctionCatalogEntry &func, vector<SQLType> &arguments,
+                                   vector<unique_ptr<Expression>> children, bool is_operator) {
 	// bind the function
 	index_t best_function = Function::BindFunction(func.name, func.functions, arguments);
 	// found a matching function!

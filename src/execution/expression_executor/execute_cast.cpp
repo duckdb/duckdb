@@ -5,7 +5,8 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCastExpression &expr, ExpressionExecutorState &root) {
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCastExpression &expr,
+                                                                ExpressionExecutorState &root) {
 	auto result = make_unique<ExpressionState>(expr, root);
 	result->AddIntermediates({expr.child.get()});
 	return result;
