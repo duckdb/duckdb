@@ -1,6 +1,8 @@
 #include "duckdb.hpp"
 
 #include <Rdefines.h>
+#include <algorithm>
+
 // motherfucker
 #undef error
 
@@ -13,6 +15,97 @@ static void vector_to_r(Vector &src_vec, void *dest, uint64_t dest_offset, DEST 
 	DEST *dest_ptr = ((DEST *)dest) + dest_offset;
 	for (size_t row_idx = 0; row_idx < src_vec.count; row_idx++) {
 		dest_ptr[row_idx] = src_vec.nullmask[row_idx] ? na_val : ((SRC *)src_vec.data)[row_idx];
+	}
+}
+
+struct RDoubleType {
+	static bool IsNull(double val) {
+		return ISNA(val);
+	}
+
+	static double Convert(double val) {
+		return val;
+	}
+};
+
+struct RDateType {
+	static bool IsNull(double val) {
+		return RDoubleType::IsNull(val);
+	}
+
+	static double Convert(double val) {
+		return (date_t)val + 719528; // MAGIC!
+	}
+};
+
+struct RTimestampType {
+	static bool IsNull(double val) {
+		return RDoubleType::IsNull(val);
+	}
+
+	static timestamp_t Convert(double val) {
+		date_t date = Date::EpochToDate((int64_t)val);
+		dtime_t time = (dtime_t)(((int64_t)val % (60 * 60 * 24)) * 1000);
+		return Timestamp::FromDatetime(date, time);
+	}
+};
+
+struct RIntegerType {
+	static bool IsNull(int val) {
+		return val == NA_INTEGER;
+	}
+
+	static int Convert(int val) {
+		return val;
+	}
+};
+
+struct RBooleanType {
+	static bool IsNull(int val) {
+		return RIntegerType::IsNull(val);
+	}
+
+	static bool Convert(int val) {
+		return val;
+	}
+};
+
+template<class SRC, class DST, class RTYPE>
+static void AppendColumnSegment(SRC *source_data, Vector &result, index_t count) {
+	auto result_data = (DST*) result.data;
+	for(index_t i = 0; i < count; i++) {
+		auto val = source_data[i];
+		if (RTYPE::IsNull(val)) {
+			result.nullmask[i] = true;
+		} else {
+			result_data[i] = RTYPE::Convert(val);
+		}
+	}
+}
+
+static void AppendStringSegment(SEXP coldata, Vector &result, index_t row_idx, index_t count) {
+	auto result_data = (const char**) result.data;
+	for(index_t i = 0; i < count; i++) {
+		SEXP val = STRING_ELT(coldata, row_idx + i);
+		if (val == NA_STRING) {
+			result.nullmask[i] = true;
+		} else {
+			result_data[i] = CHAR(val);
+		}
+	}
+}
+
+static void AppendFactor(SEXP coldata, Vector &result, index_t row_idx, index_t count) {
+	auto source_data = INTEGER_POINTER(coldata) + row_idx;
+	auto result_data = (const char**) result.data;
+	SEXP factor_levels = GET_LEVELS(coldata);
+	for(index_t i = 0; i < count; i++) {
+		int val = source_data[i];
+		if (RIntegerType::IsNull(val)) {
+			result.nullmask[i] = true;
+		} else {
+			result_data[i] = CHAR(STRING_ELT(factor_levels, val - 1));
+		}
 	}
 }
 
@@ -354,82 +447,48 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	}
 
 	try {
-		// FIXME: this row-wise appending is very inefficient
 		Appender appender(*conn, INVALID_SCHEMA, name);
 		auto nrows = LENGTH(VECTOR_ELT(valuesexp, 0));
-		for (uint64_t row_idx = 0; row_idx < nrows; row_idx++) {
-			appender.BeginRow();
-			for (uint32_t col_idx = 0; col_idx < LENGTH(valuesexp); col_idx++) {
+		for(index_t row_idx = 0; row_idx < nrows; row_idx += STANDARD_VECTOR_SIZE) {
+			index_t current_count = std::min((index_t) nrows - row_idx, (index_t) STANDARD_VECTOR_SIZE);
+			for (index_t col_idx = 0; col_idx < LENGTH(valuesexp); col_idx++) {
+				auto &append_data = appender.GetAppendVector(col_idx);
 				SEXP coldata = VECTOR_ELT(valuesexp, col_idx);
-
-				// TODO date time etc. types, 64 bit ints, ...
-
-				// timestamp
 				if (TYPEOF(coldata) == REALSXP && TYPEOF(GET_CLASS(coldata)) == STRSXP &&
 				    strcmp("POSIXct", CHAR(STRING_ELT(GET_CLASS(coldata), 0))) == 0) {
-					double val = NUMERIC_POINTER(coldata)[row_idx];
-					if (ISNA(val)) {
-						appender.Append(nullptr);
-					} else {
-						date_t date = Date::EpochToDate((int64_t)val);
-						dtime_t time = (dtime_t)(((int64_t)val % (60 * 60 * 24)) * 1000);
-						appender.Append<timestamp_t>(Timestamp::FromDatetime(date, time));
-					}
-				}
-
-				// date
-				else if (TYPEOF(coldata) == REALSXP && TYPEOF(GET_CLASS(coldata)) == STRSXP &&
+					// Timestamp
+					auto data_ptr = NUMERIC_POINTER(coldata) + row_idx;
+					AppendColumnSegment<double, timestamp_t, RTimestampType>(data_ptr, append_data, current_count);
+				} else if (TYPEOF(coldata) == REALSXP && TYPEOF(GET_CLASS(coldata)) == STRSXP &&
 				         strcmp("Date", CHAR(STRING_ELT(GET_CLASS(coldata), 0))) == 0) {
-					// TODO some say there are dates that are stored as integers
-					double val = NUMERIC_POINTER(coldata)[row_idx];
-					if (ISNA(val)) {
-						appender.Append(nullptr);
-					} else {
-						appender.Append<date_t>((date_t)val + 719528); // MAGIC!
-					}
-				}
-
-				else if (isFactor(coldata) && TYPEOF(coldata) == INTSXP) {
-					int val = INTEGER_POINTER(coldata)[row_idx];
-					if (val == NA_INTEGER) {
-						appender.Append(nullptr);
-					} else {
-						SEXP factor_levels = GET_LEVELS(coldata);
-						appender.Append<const char *>(CHAR(STRING_ELT(factor_levels, val - 1)));
-					}
+					// Date
+					auto data_ptr = NUMERIC_POINTER(coldata) + row_idx;
+					AppendColumnSegment<double, date_t, RDateType>(data_ptr, append_data, current_count);
+				} else if (isFactor(coldata) && TYPEOF(coldata) == INTSXP) {
+					// Factor
+					AppendFactor(coldata, append_data, row_idx, current_count);
 				} else if (TYPEOF(coldata) == LGLSXP) {
-					int val = INTEGER_POINTER(coldata)[row_idx];
-					if (val == NA_INTEGER) {
-						appender.Append(nullptr);
-					} else {
-						appender.Append<bool>(val);
-					}
+					// Boolean
+					auto data_ptr = INTEGER_POINTER(coldata) + row_idx;
+					AppendColumnSegment<int, bool, RBooleanType>(data_ptr, append_data, current_count);
 				} else if (TYPEOF(coldata) == INTSXP) {
-					int val = INTEGER_POINTER(coldata)[row_idx];
-					if (val == NA_INTEGER) {
-						appender.Append(nullptr);
-					} else {
-						appender.Append<int32_t>(val);
-					}
+					// Integer
+					auto data_ptr = INTEGER_POINTER(coldata) + row_idx;
+					AppendColumnSegment<int, int, RIntegerType>(data_ptr, append_data, current_count);
 				} else if (TYPEOF(coldata) == REALSXP) {
-					double val = NUMERIC_POINTER(coldata)[row_idx];
-					if (val == NA_REAL) {
-						appender.Append(nullptr);
-					} else {
-						appender.Append<double>(val);
-					}
+					// Double
+					auto data_ptr = NUMERIC_POINTER(coldata) + row_idx;
+					AppendColumnSegment<double, double, RDoubleType>(data_ptr, append_data, current_count);
 				} else if (TYPEOF(coldata) == STRSXP) {
-					SEXP val = STRING_ELT(coldata, row_idx);
-					if (val == NA_STRING) {
-						appender.Append(nullptr);
-					} else {
-						appender.Append<const char *>(CHAR(val));
-					}
+					// String
+					AppendStringSegment(coldata, append_data, row_idx, current_count);
 				} else {
 					throw;
 				}
+				append_data.count = current_count;
 			}
-			appender.EndRow();
+			appender.Flush();
+
 		}
 		appender.Close();
 	} catch (std::exception &ex) {
