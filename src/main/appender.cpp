@@ -143,15 +143,25 @@ void Appender::AppendValue(Value value) {
 	column++;
 }
 
+Vector &Appender::GetAppendVector(index_t col_idx) {
+	if (col_idx >= chunk.column_count) {
+		throw Exception("Column index out of range!");
+	}
+	return chunk.data[col_idx];
+}
+
 void Appender::Flush() {
 	if (chunk.size() == 0) {
 		return;
 	}
 	CheckInvalidated();
 	try {
-		// check that all rows have been appended to
-		if (column != 0 && column != chunk.column_count) {
-			throw Exception("Cannot Flush appender when a partial row has been appended");
+		// check that all vectors have the same length before appending
+		index_t chunk_size = chunk.size();
+		for(index_t i = 1; i < chunk.column_count; i++) {
+			if (chunk.data[i].count != chunk_size) {
+				throw Exception("Failed to Flush appender: vectors have different number of rows");
+			}
 		}
 
 		con.Append(*description, chunk);
