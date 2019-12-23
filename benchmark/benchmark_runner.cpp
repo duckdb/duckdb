@@ -131,13 +131,20 @@ void print_help() {
 	fprintf(stderr, "              --out=[file]   Move benchmark output to file\n");
 	fprintf(stderr, "              --log=[file]   Move log output to file\n");
 	fprintf(stderr, "              --info         Prints info about the benchmark\n");
+	fprintf(stderr, "              --group        Prints group name of the benchmark\n");
 	fprintf(stderr, "              [name_pattern] Run only the benchmark which names match the specified name pattern, "
 	                "e.g., DS.* for TPC-DS benchmarks\n");
 }
 
+enum class BenchmarkMetaType {
+	NONE,
+	INFO,
+	GROUP
+};
+
 struct BenchmarkConfiguration {
 	std::string name_pattern{};
-	bool info{false};
+	BenchmarkMetaType meta = BenchmarkMetaType::NONE;
 };
 
 enum ConfigurationError { None, BenchmarkNotFound, InfoWithoutBenchmarkName };
@@ -162,7 +169,10 @@ BenchmarkConfiguration parse_arguments(const int arg_counter, char const *const 
 			exit(0);
 		} else if (arg == "--info") {
 			// write info of benchmark
-			configuration.info = true;
+			configuration.meta = BenchmarkMetaType::INFO;
+		} else if (arg == "--group") {
+			// write group of benchmark
+			configuration.meta = BenchmarkMetaType::GROUP;
 		} else if (StringUtil::StartsWith(arg, "--out=") || StringUtil::StartsWith(arg, "--log=")) {
 			auto splits = StringUtil::Split(arg, '=');
 			if (splits.size() != 2) {
@@ -208,11 +218,16 @@ ConfigurationError run_benchmarks(const BenchmarkConfiguration &configuration) {
 		if (benchmark_indices.empty()) {
 			return ConfigurationError::BenchmarkNotFound;
 		}
-		if (configuration.info) {
+		if (configuration.meta == BenchmarkMetaType::INFO) {
 			// print info of benchmarks
 			for (const auto &benchmark_index : benchmark_indices) {
 				auto info = benchmarks[benchmark_index]->GetInfo();
 				fprintf(stdout, "%s\n", info.c_str());
+			}
+		} else if (configuration.meta == BenchmarkMetaType::GROUP) {
+			// print group of benchmarks
+			for (const auto &benchmark_index : benchmark_indices) {
+				fprintf(stdout, "%s\n", benchmarks[benchmark_index]->group.c_str());
 			}
 		} else {
 			for (const auto &benchmark_index : benchmark_indices) {
@@ -220,7 +235,7 @@ ConfigurationError run_benchmarks(const BenchmarkConfiguration &configuration) {
 			}
 		}
 	} else {
-		if (configuration.info) {
+		if (configuration.meta != BenchmarkMetaType::NONE) {
 			return ConfigurationError::InfoWithoutBenchmarkName;
 		}
 		// default: run all benchmarks
