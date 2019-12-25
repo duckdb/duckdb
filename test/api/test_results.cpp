@@ -34,6 +34,23 @@ TEST_CASE("Test results API", "[api]") {
 	REQUIRE(!str.empty());
 }
 
+TEST_CASE("Test iterating over results", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE data(i INTEGER, j VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO data VALUES (1, 'hello'), (2, 'test')"));
+
+	vector<int> i_values = {1, 2};
+	vector<string> j_values = {"hello", "test"};
+
+	auto result = con.Query("SELECT * FROM data;");
+	for(auto &row : *result) {
+		REQUIRE(row.GetValue<int>(0) == i_values[row.row]);
+		REQUIRE(row.GetValue<string>(1) == j_values[row.row]);
+	}
+}
+
 TEST_CASE("Error in streaming result after initial query", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
