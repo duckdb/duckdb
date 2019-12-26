@@ -10,7 +10,10 @@ using namespace std;
 
 #define TPCDS_QUERY_BODY(QNR)                                                                                          \
 	virtual void Load(DuckDBBenchmarkState *state) {                                                                   \
-		tpcds::dbgen(SF, state->db);                                                                                   \
+		if (!BenchmarkRunner::TryLoadDatabase(state->db, "tpcds")) {                                                   \
+			tpcds::dbgen(SF, state->db);                                                                               \
+			BenchmarkRunner::SaveDatabase(state->db, "tpcds");                                                         \
+		}                                                                                                              \
 	}                                                                                                                  \
 	virtual string GetQuery() {                                                                                        \
 		return tpcds::get_query(QNR);                                                                                  \
