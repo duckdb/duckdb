@@ -45,6 +45,11 @@ public:
 	void ParseCSV(DataChunk &insert_chunk);
 
 private:
+	//! Parses a CSV file with a one-byte delimiter, escape and quote character
+	void ParseSimpleCSV(DataChunk &insert_chunk);
+	//! Parses more complex CSV files with multi-byte delimiters, escapes or quotes
+	void ParseComplexCSV(DataChunk &insert_chunk);
+
 	//! Adds a value to the current row
 	void AddValue(char *str_val, index_t length, index_t &column, std::queue<index_t> &escape_positions);
 	//! Adds a row to the insert_chunk, returns true if the chunk is filled as a result of this row being added

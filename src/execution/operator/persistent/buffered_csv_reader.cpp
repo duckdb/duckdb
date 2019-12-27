@@ -85,9 +85,7 @@ bool BufferedCSVReader::MatchControlString(bool &delim_match, bool &quote_match,
 	}
 }
 
-void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
-	cached_buffers.clear();
-
+void BufferedCSVReader::ParseComplexCSV(DataChunk &insert_chunk) {
 	// used for parsing algorithm
 	bool in_quotes = false;
 	bool finished_chunk = false;
@@ -255,6 +253,145 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 	Flush(insert_chunk);
 }
 
+#define NextPosition() \
+	position++; \
+	if (position >= buffer_size) { \
+		if (!ReadBuffer(start)) { \
+			goto final; \
+		} \
+	} \
+
+void BufferedCSVReader::ParseSimpleCSV(DataChunk &insert_chunk) {
+	// used for parsing algorithm
+	bool finished_chunk = false;
+	index_t column = 0;
+	std::queue<index_t> escape_positions;
+
+	// read values into the buffer (if any)
+	if (position >= buffer_size) {
+		if (!ReadBuffer(start)) {
+			return;
+		}
+	}
+	// start parsing the first value
+	goto value_start;
+value_start:
+	/* state: value_start */
+	// this state parses the first character of a value
+	if (buffer[position] == info.quote[0]) {
+		// quote: actual value starts in the next position
+		// move to in_quotes state
+		start = position + 1;
+		NextPosition();
+		goto in_quotes;
+	} else {
+		// no quote, move to normal parsing state
+		start = position;
+		goto normal;
+	}
+normal:
+	/* state: normal parsing state */
+	// this state parses the remainder of a non-quoted value until we reach a delimiter or newline
+	do {
+		for(; position < buffer_size; position++) {
+			if (buffer[position] == info.delimiter[0]) {
+				// delimiter: end the value and add it to the chunk
+				AddValue(buffer.get() + start, position - start, column, escape_positions);
+				NextPosition();
+				goto value_start;
+			} else if (buffer[position] == '\r') {
+				// carriage return newline: add the value and finish parsing this row
+				AddValue(buffer.get() + start, position - start, column, escape_positions);
+				finished_chunk = AddRow(insert_chunk, column);
+				NextPosition();
+				goto carriage_return;
+			} else if (buffer[position] == '\n') {
+				// regular newline: add the value and finish parsing this row
+				AddValue(buffer.get() + start, position - start, column, escape_positions);
+				finished_chunk = AddRow(insert_chunk, column);
+				NextPosition();
+				if (finished_chunk) {
+					return;
+				}
+				goto value_start;
+			}
+		}
+	} while (ReadBuffer(start));
+	goto final;
+in_quotes:
+	/* state: in_quotes */
+	// this state parses the remainder of a quoted value
+	do {
+		for(; position < buffer_size; position++) {
+			if (buffer[position] == info.quote[0]) {
+				// quote: move to unquoted state
+				NextPosition();
+				goto unquote;
+			} else if (buffer[position] == info.escape[0]) {
+				// escape: store the escaped position and move to handle_escape state
+				escape_positions.push(position);
+				NextPosition();
+				goto handle_escape;
+			}
+		}
+	} while (ReadBuffer(start));
+	// still in quoted state at the end of the file, error:
+	throw ParserException("Error on line %lld: unterminated quotes", linenr);
+unquote:
+	/* state: unquote */
+	// this state handles the state directly after we unquote
+	// in this state we expect either another quote (entering the quoted state again, and escaping the quote)
+	// or a delimiter/newline, ending the current value and moving on to the next value
+	if (buffer[position] == info.quote[0]) {
+		// escaped quote, return to quoted state and store escape position
+		escape_positions.push(position);
+		NextPosition();
+		goto in_quotes;
+	} else if (buffer[position] == info.delimiter[0]) {
+		// delimiter, add value
+		AddValue(buffer.get() + start, position - start - 1, column, escape_positions);
+		NextPosition();
+		goto value_start;
+	} else if (buffer[position] == '\r') {
+		// carriage return newline: add the value and finish parsing this row
+		AddValue(buffer.get() + start, position - start - 1, column, escape_positions);
+		finished_chunk = AddRow(insert_chunk, column);
+		NextPosition();
+		goto carriage_return;
+	} else if (buffer[position] == '\n') {
+		// regular newline: add the value and finish parsing this row
+		AddValue(buffer.get() + start, position - start - 1, column, escape_positions);
+		finished_chunk = AddRow(insert_chunk, column);
+		NextPosition();
+		if (finished_chunk) {
+			return;
+		}
+		goto value_start;
+	} else {
+		throw Exception("Quote should be followed by end of value, end of row or another quote");
+	}
+handle_escape:
+	/* state: handle_escape */
+	// we ignore anything in the next position, then return to the quoted state
+	NextPosition();
+	goto in_quotes;
+carriage_return:
+	/* state: carriage_return */
+	// this stage optionally skips a newline (\n) character, which allows \r\n to be interpreted as a single line
+	if (buffer[position] == '\n') {
+		// newline after carriage return: skip
+		NextPosition();
+	}
+	if (finished_chunk) {
+		return;
+	}
+	goto value_start;
+final:
+	// final stage, only reached after parsing the file is finished
+	// flush the parsed chunk and finalize parsing
+	Flush(insert_chunk);
+}
+
 bool BufferedCSVReader::ReadBuffer(index_t &start) {
 	auto old_buffer = move(buffer);
 
@@ -277,7 +414,7 @@ bool BufferedCSVReader::ReadBuffer(index_t &start) {
 	index_t read_count = source.eof() ? source.gcount() : buffer_read_size;
 	buffer_size = remaining + read_count;
 	buffer[buffer_size] = '\0';
-	if (old_buffer && start != 0) {
+	if (old_buffer) {
 		cached_buffers.push_back(move(old_buffer));
 	}
 	start = 0;
@@ -286,12 +423,18 @@ bool BufferedCSVReader::ReadBuffer(index_t &start) {
 	return read_count > 0;
 }
 
+void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
+	cached_buffers.clear();
+
+	if (info.quote.size() == 1 && info.escape.size() == 1 && info.delimiter.size() == 1) {
+		ParseSimpleCSV(insert_chunk);
+	} else {
+		ParseComplexCSV(insert_chunk);
+	}
+}
+
 void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column,
                                  std::queue<index_t> &escape_positions) {
-	// used to remove escape characters
-	index_t pos = start;
-	bool in_escape = false;
-
 	if (column == sql_types.size() && length == 0) {
 		// skip a single trailing delimiter
 		column++;
@@ -306,13 +449,15 @@ void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column,
 
 	str_val[length] = '\0';
 	// test against null string
-	if (info.null_str == str_val && !info.force_not_null[column]) {
+	if (strcmp(info.null_str.c_str(), str_val) == 0 && !info.force_not_null[column]) {
 		parse_chunk.data[column].nullmask[row_entry] = true;
 	} else {
 		auto &v = parse_chunk.data[column];
 		auto parse_data = ((const char **)v.data);
 		if (escape_positions.size() > 0) {
-			// optionally remove escape(s)
+			// remove escape characters (if any)
+			index_t pos = start;
+			bool in_escape = false;
 			string new_val = "";
 			for (const char *val = str_val; *val; val++) {
 				if (!escape_positions.empty()) {
@@ -332,11 +477,6 @@ void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column,
 			parse_data[row_entry] = v.string_heap.AddString(new_val.c_str());
 		} else {
 			parse_data[row_entry] = str_val;
-		}
-
-		// test for valid utf-8 string
-		if (!Value::IsUTF8String(parse_data[row_entry])) {
-			throw ParserException("Error on line %lld: file is not valid UTF8", linenr);
 		}
 	}
 
@@ -365,7 +505,16 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	// convert the columns in the parsed chunk to the types of the table
 	for (index_t col_idx = 0; col_idx < sql_types.size(); col_idx++) {
 		if (sql_types[col_idx].id == SQLTypeId::VARCHAR) {
-			// target type is varchar: just move the parsed chunk
+			// target type is varchar: no need to convert
+			// just test that all strings are valid utf-8 strings
+			auto parse_data = (const char**) parse_chunk.data[col_idx].data;
+			VectorOperations::Exec(parse_chunk.data[col_idx], [&](index_t i, index_t k) {
+				if (!parse_chunk.data[col_idx].nullmask[i]) {
+					if (!Value::IsUTF8String(parse_data[i])) {
+						throw ParserException("Error on line %lld: file is not valid UTF8", linenr);
+					}
+				}
+			});
 			parse_chunk.data[col_idx].Move(insert_chunk.data[col_idx]);
 		} else {
 			// target type is not varchar: perform a cast
