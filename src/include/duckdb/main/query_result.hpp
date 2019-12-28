@@ -58,6 +58,70 @@ public:
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
 	bool Equals(QueryResult &other);
 
+private:
+	//! The current chunk used by the iterator
+	unique_ptr<DataChunk> iterator_chunk;
+
+	class QueryResultIterator;
+
+	class QueryResultRow {
+	public:
+		QueryResultRow(QueryResultIterator &iterator) : iterator(iterator), row(0) {
+		}
+
+		QueryResultIterator &iterator;
+		index_t row;
+
+		template <class T> T GetValue(index_t col_idx) const {
+			return iterator.result->iterator_chunk->data[col_idx].GetValue(iterator.row_idx).GetValue<T>();
+		}
+	};
+	//! The row-based query result iterator. Invoking the
+	class QueryResultIterator {
+	public:
+		QueryResultIterator(QueryResult *result) : current_row(*this), result(result), row_idx(0) {
+			if (result) {
+				result->iterator_chunk = result->Fetch();
+			}
+		}
+
+		QueryResultRow current_row;
+		QueryResult *result;
+		index_t row_idx;
+
+	public:
+		void Next() {
+			if (!result->iterator_chunk) {
+				return;
+			}
+			current_row.row++;
+			row_idx++;
+			if (row_idx >= result->iterator_chunk->size()) {
+				result->iterator_chunk = result->Fetch();
+				row_idx = 0;
+			}
+		}
+
+		QueryResultIterator &operator++() {
+			Next();
+			return *this;
+		}
+		bool operator!=(const QueryResultIterator &other) const {
+			return result->iterator_chunk && result->iterator_chunk->column_count > 0;
+		}
+		const QueryResultRow &operator*() const {
+			return current_row;
+		}
+	};
+
+public:
+	QueryResultIterator begin() {
+		return QueryResultIterator(this);
+	}
+	QueryResultIterator end() {
+		return QueryResultIterator(nullptr);
+	}
+
 protected:
 	string HeaderToString();
 
