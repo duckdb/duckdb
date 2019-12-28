@@ -367,6 +367,15 @@ TEST_CASE("Test CSVs with repeating patterns in delimiter/escape/quote", "[copy]
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
 		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE 'ABABAC';"));
 	}
+	SECTION("Quote followed by incomplete multi-byte delimiter") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "\"\"AB";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER 'ABAC';"));
+		REQUIRE_NO_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER 'AB';"));
+	}
 	SECTION("Multi-byte quote terminates after escape results in error") {
 		ofstream csv_stream(csv_path);
 		csv_stream << "ABACABABABAC";
