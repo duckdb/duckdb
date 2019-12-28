@@ -20,6 +20,9 @@ static char is_newline(char c) {
 }
 
 TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_term.size()) {
+	if (length > 255) {
+		throw Exception("Size of delimiter/quote/escape in CSV reader is limited to 255 bytes");
+	}
 	// initialize the shifts array
 	shifts = unique_ptr<uint8_t[]>(new uint8_t[length * 255]);
 	memset(shifts.get(), 0, length * 255 * sizeof(uint8_t));
@@ -63,9 +66,6 @@ BufferedCSVReader::BufferedCSVReader(CopyInfo &info, vector<SQLType> sql_types, 
 		string read_line;
 		getline(source, read_line);
 		linenr++;
-	}
-	if (info.delimiter.size() > 255 || info.quote.size() > 255 || info.escape.size() > 255) {
-		throw Exception("Size of delimiter/quote/escape in CSV reader is limited to 255 bytes");
 	}
 }
 
@@ -138,6 +138,7 @@ normal:
 add_value:
 	AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
 	// increase position by 1 and move start to the new position
+	offset = 0;
 	start = ++position;
 	if (position >= buffer_size && !ReadBuffer(start)) {
 		// file ends right after delimiter, go to final state
@@ -150,6 +151,7 @@ add_row : {
 	AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
 	finished_chunk = AddRow(insert_chunk, column);
 	// increase position by 1 and move start to the new position
+	offset = 0;
 	start = ++position;
 	if (position >= buffer_size && !ReadBuffer(start)) {
 		// file ends right after newline, go to final state
@@ -196,6 +198,7 @@ unquote:
 	position++;
 	if (position >= buffer_size && !ReadBuffer(start)) {
 		// file ends right after unquote, go to final state
+		offset = info.quote.size();
 		goto final_state;
 	}
 	if (is_newline(buffer[position])) {
@@ -268,7 +271,7 @@ final_state:
 	}
 	if (column > 0 || position > start) {
 		// remaining values to be added to the chunk
-		AddValue(buffer.get() + start, position - start, column, escape_positions);
+		AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
 		finished_chunk = AddRow(insert_chunk, column);
 	}
 	// final stage, only reached after parsing the file is finished
@@ -324,6 +327,7 @@ normal:
 add_value:
 	AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
 	// increase position by 1 and move start to the new position
+	offset = 0;
 	start = ++position;
 	if (position >= buffer_size && !ReadBuffer(start)) {
 		// file ends right after delimiter, go to final state
@@ -336,6 +340,7 @@ add_row : {
 	AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
 	finished_chunk = AddRow(insert_chunk, column);
 	// increase position by 1 and move start to the new position
+	offset = 0;
 	start = ++position;
 	if (position >= buffer_size && !ReadBuffer(start)) {
 		// file ends right after delimiter, go to final state
@@ -378,6 +383,7 @@ unquote:
 	position++;
 	if (position >= buffer_size && !ReadBuffer(start)) {
 		// file ends right after unquote, go to final state
+		offset = 1;
 		goto final_state;
 	}
 	if (buffer[position] == info.quote[0]) {
@@ -429,7 +435,7 @@ final_state:
 	}
 	if (column > 0 || position > start) {
 		// remaining values to be added to the chunk
-		AddValue(buffer.get() + start, position - start, column, escape_positions);
+		AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
 		finished_chunk = AddRow(insert_chunk, column);
 	}
 	// final stage, only reached after parsing the file is finished

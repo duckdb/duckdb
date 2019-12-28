@@ -311,6 +311,30 @@ TEST_CASE("Test CSVs with repeating patterns in delimiter/escape/quote", "[copy]
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
 		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE '\"';"));
 	}
+	SECTION("File ends in quoted value (simple)") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "\"\"";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		result = con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE '\"';");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+		result = con.Query("SELECT * FROM abac_tbl");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	}
+	SECTION("File ends in quoted value (complex)") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "\"\"";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		result = con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE '\"' DELIMITER 'AAAB';");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+		result = con.Query("SELECT * FROM abac_tbl");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	}
 	SECTION("Simple quote terminates after escape results in error") {
 		ofstream csv_stream(csv_path);
 		csv_stream << "\"\\\"";
@@ -366,6 +390,101 @@ TEST_CASE("Test CSVs with repeating patterns in delimiter/escape/quote", "[copy]
 
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
 		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE 'ABAC' ESCAPE 'ABAB';"));
+	}
+	SECTION("Delimiter, quote and escape have a maximum size of 255 bytes") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "ABAB";
+		csv_stream.close();
+
+		string long_string(1000, 'a');
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE '" + long_string + "';"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' ESCAPE '" + long_string + "';"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER '" + long_string + "';"));
+		REQUIRE_NO_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE 'BLABLABLA';"));
+	}
+	SECTION("Test \r newline with multi-byte delimiter") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "ABAB\rABAC\r";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);"));
+		result = con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER 'BA';");
+		REQUIRE(CHECK_COLUMN(result, 0, {2}));
+
+		result = con.Query("SELECT * FROM abac_tbl");
+		REQUIRE(CHECK_COLUMN(result, 0, {"A", "A"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"B", "C"}));
+	}
+	SECTION("Test \r\n newline with multi-byte delimiter") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "ABAB\r\nABAC\r\n";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);"));
+		result = con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER 'BA';");
+		REQUIRE(CHECK_COLUMN(result, 0, {2}));
+
+		result = con.Query("SELECT * FROM abac_tbl");
+		REQUIRE(CHECK_COLUMN(result, 0, {"A", "A"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"B", "C"}));
+	}
+	SECTION("Test unterminated quotes with multi-line delimiter") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "\"AAA";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER 'BA';"));
+	}
+	SECTION("Test unquote not followed by delimiter") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "\"AAA\"BB";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER 'BA';"));
+	}
+	SECTION("Test escape followed by non-quote and non-escape (single-byte)") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "\"AAA\\BB\"|A";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER '|' ESCAPE '\\';"));
+	}
+	SECTION("Test escape followed by non-quote and non-escape (multi-byte)") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "\"AAA\\BB\"BAA";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER 'BA' ESCAPE '\\';"));
+	}
+	SECTION("Test file end after delimiter with multi-byte delimiter") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "AAABA";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		result = con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER 'BA';");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+		result = con.Query("SELECT * FROM abac_tbl");
+		REQUIRE(CHECK_COLUMN(result, 0, {"AAA"}));
+	}
+	SECTION("Test file end after delimiter with single-byte delimiter") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "AAA|";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		result = con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER '|';");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+		result = con.Query("SELECT * FROM abac_tbl");
+		REQUIRE(CHECK_COLUMN(result, 0, {"AAA"}));
 	}
 }
 
@@ -1103,6 +1222,18 @@ TEST_CASE("Test Windows Newlines with a long file", "[copy]") {
 	// load CSV file into a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);"));
 	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(line_count)}));
+
+	result = con.Query("SELECT SUM(a), MIN(LENGTH(b)), MAX(LENGTH(b)), SUM(LENGTH(b)), SUM(c) FROM test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(sum_a)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(5)}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value::BIGINT(5)}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value::BIGINT(5 * line_count)}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value::BIGINT(sum_c)}));
+
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test;"));
+	// now do the same with a multi-byte quote that is not actually used
+	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "' QUOTE 'BLABLABLA';");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(line_count)}));
 
 	result = con.Query("SELECT SUM(a), MIN(LENGTH(b)), MAX(LENGTH(b)), SUM(LENGTH(b)), SUM(c) FROM test;");
