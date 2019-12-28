@@ -193,6 +193,38 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1024}));
 }
 
+TEST_CASE("Test CSV file without trailing newline", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+
+	// no newline at end of file with simple delimiter
+	ofstream csv_no_newline(fs.JoinPath(csv_path, "no_newline.csv"));
+	for (int i = 0; i < 1024; i++) {
+		csv_no_newline << i << "," << i << ", test" << (i + 1 < 1024 ? "\n" : "");
+	}
+	csv_no_newline.close();
+
+	// load CSV file into a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE no_newline (a INTEGER, b INTEGER, c VARCHAR(10));"));
+	result = con.Query("COPY no_newline FROM '" + fs.JoinPath(csv_path, "no_newline.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {1024}));
+
+	// no newline at end of file with unicode delimiter
+	ofstream csv_no_newline_unicode(fs.JoinPath(csv_path, "no_newline_unicode.csv"));
+	for (int i = 0; i < 1024; i++) {
+		csv_no_newline_unicode << i << "🦆" << i << "🦆 test" << (i + 1 < 1024 ? "\n" : "");
+	}
+	csv_no_newline_unicode.close();
+
+	// load CSV file into a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE no_newline_unicode (a INTEGER, b INTEGER, c VARCHAR(10));"));
+	result = con.Query("COPY no_newline_unicode FROM '" + fs.JoinPath(csv_path, "no_newline_unicode.csv") + "' DELIMITER '🦆';");
+	REQUIRE(CHECK_COLUMN(result, 0, {1024}));
+}
+
 TEST_CASE("Test NULL option of copy statement", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

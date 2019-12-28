@@ -387,6 +387,14 @@ carriage_return:
 	}
 	goto value_start;
 final:
+	if (finished_chunk) {
+		return;
+	}
+	if (column > 0) {
+		// remaining values to be added to the chunk
+		AddValue(buffer.get() + start, position - start, column, escape_positions);
+		finished_chunk = AddRow(insert_chunk, column);
+	}
 	// final stage, only reached after parsing the file is finished
 	// flush the parsed chunk and finalize parsing
 	Flush(insert_chunk);
