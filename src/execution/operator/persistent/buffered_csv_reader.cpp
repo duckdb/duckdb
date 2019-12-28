@@ -263,6 +263,7 @@ void BufferedCSVReader::ParseSimpleCSV(DataChunk &insert_chunk) {
 	// used for parsing algorithm
 	bool finished_chunk = false;
 	index_t column = 0;
+	index_t offset = 0;
 	vector<index_t> escape_positions;
 
 	// read values into the buffer (if any)
@@ -274,6 +275,7 @@ void BufferedCSVReader::ParseSimpleCSV(DataChunk &insert_chunk) {
 	// start parsing the first value
 	goto value_start;
 value_start:
+	offset = 0;
 	/* state: value_start */
 	// this state parses the first character of a value
 	if (buffer[position] == info.quote[0]) {
@@ -294,28 +296,35 @@ normal:
 		for(; position < buffer_size; position++) {
 			if (buffer[position] == info.delimiter[0]) {
 				// delimiter: end the value and add it to the chunk
-				AddValue(buffer.get() + start, position - start, column, escape_positions);
-				NextPosition();
-				goto value_start;
-			} else if (buffer[position] == '\r') {
-				// carriage return newline: add the value and finish parsing this row
-				AddValue(buffer.get() + start, position - start, column, escape_positions);
-				finished_chunk = AddRow(insert_chunk, column);
-				NextPosition();
-				goto carriage_return;
-			} else if (buffer[position] == '\n') {
-				// regular newline: add the value and finish parsing this row
-				AddValue(buffer.get() + start, position - start, column, escape_positions);
-				finished_chunk = AddRow(insert_chunk, column);
-				NextPosition();
-				if (finished_chunk) {
-					return;
-				}
-				goto value_start;
+				goto add_value;
+			} else if (is_newline(buffer[position])) {
+				// newline: add row
+				goto add_row;
 			}
 		}
 	} while (ReadBuffer(start));
 	goto final;
+add_value:
+	AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
+	NextPosition();
+	goto value_start;
+add_row: {
+	// check type of newline (\r or \n)
+	bool carriage_return = buffer[position] == '\r';
+	AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
+	finished_chunk = AddRow(insert_chunk, column);
+	NextPosition();
+	if (carriage_return) {
+		// \r newline, go to special state that parses an optional \n afterwards
+		goto carriage_return;
+	} else {
+		// \n newline, move to value start
+		if (finished_chunk) {
+			return;
+		}
+		goto value_start;
+	}
+}
 in_quotes:
 	/* state: in_quotes */
 	// this state parses the remainder of a quoted value
@@ -347,24 +356,11 @@ unquote:
 		goto in_quotes;
 	} else if (buffer[position] == info.delimiter[0]) {
 		// delimiter, add value
-		AddValue(buffer.get() + start, position - start - 1, column, escape_positions);
-		NextPosition();
-		goto value_start;
-	} else if (buffer[position] == '\r') {
-		// carriage return newline: add the value and finish parsing this row
-		AddValue(buffer.get() + start, position - start - 1, column, escape_positions);
-		finished_chunk = AddRow(insert_chunk, column);
-		NextPosition();
-		goto carriage_return;
-	} else if (buffer[position] == '\n') {
-		// regular newline: add the value and finish parsing this row
-		AddValue(buffer.get() + start, position - start - 1, column, escape_positions);
-		finished_chunk = AddRow(insert_chunk, column);
-		NextPosition();
-		if (finished_chunk) {
-			return;
-		}
-		goto value_start;
+		offset = 1;
+		goto add_value;
+	} else if (is_newline(buffer[position])) {
+		offset = 1;
+		goto add_row;
 	} else {
 		throw Exception("Quote should be followed by end of value, end of row or another quote");
 	}
