@@ -221,7 +221,8 @@ TEST_CASE("Test CSV file without trailing newline", "[copy]") {
 
 	// load CSV file into a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE no_newline_unicode (a INTEGER, b INTEGER, c VARCHAR(10));"));
-	result = con.Query("COPY no_newline_unicode FROM '" + fs.JoinPath(csv_path, "no_newline_unicode.csv") + "' DELIMITER '🦆';");
+	result = con.Query("COPY no_newline_unicode FROM '" + fs.JoinPath(csv_path, "no_newline_unicode.csv") +
+	                   "' DELIMITER '🦆';");
 	REQUIRE(CHECK_COLUMN(result, 0, {1024}));
 }
 
@@ -380,12 +381,14 @@ TEST_CASE("Test long value with escapes", "[copy]") {
 
 	// long value with escape and simple delimiter
 	ofstream long_escaped_value(fs.JoinPath(csv_path, "long_escaped_value.csv"));
-	long_escaped_value << 1 << "🦆" << 2 << "🦆" << "\"" << value << "\"" << endl;
+	long_escaped_value << 1 << "🦆" << 2 << "🦆"
+	                   << "\"" << value << "\"" << endl;
 	long_escaped_value.close();
 
 	// load CSV file into a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE long_escaped_value (a INTEGER, b INTEGER, c VARCHAR);"));
-	result = con.Query("COPY long_escaped_value FROM '" + fs.JoinPath(csv_path, "long_escaped_value.csv") + "' DELIMITER '🦆';");
+	result = con.Query("COPY long_escaped_value FROM '" + fs.JoinPath(csv_path, "long_escaped_value.csv") +
+	                   "' DELIMITER '🦆';");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 	result = con.Query("SELECT * FROM long_escaped_value");
@@ -395,12 +398,14 @@ TEST_CASE("Test long value with escapes", "[copy]") {
 
 	// long value with escape and complex delimiter
 	ofstream long_escaped_value_unicode(fs.JoinPath(csv_path, "long_escaped_value_unicode.csv"));
-	long_escaped_value_unicode << 1 << "," << 2 << "," << "\"" << value << "\"" << endl;
+	long_escaped_value_unicode << 1 << "," << 2 << ","
+	                           << "\"" << value << "\"" << endl;
 	long_escaped_value_unicode.close();
 
 	// load CSV file into a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE long_escaped_value_unicode (a INTEGER, b INTEGER, c VARCHAR);"));
-	result = con.Query("COPY long_escaped_value_unicode FROM '" + fs.JoinPath(csv_path, "long_escaped_value_unicode.csv") + "';");
+	result = con.Query("COPY long_escaped_value_unicode FROM '" +
+	                   fs.JoinPath(csv_path, "long_escaped_value_unicode.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 	result = con.Query("SELECT * FROM long_escaped_value_unicode");

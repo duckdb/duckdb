@@ -24,14 +24,14 @@ TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_t
 	shifts = unique_ptr<uint8_t[]>(new uint8_t[length * 255]);
 	memset(shifts.get(), 0, length * 255 * sizeof(uint8_t));
 	// iterate over each of the characters in the array
-	for(index_t main_idx = 0; main_idx < length; main_idx++) {
-		uint8_t current_char = (uint8_t) search_term[main_idx];
+	for (index_t main_idx = 0; main_idx < length; main_idx++) {
+		uint8_t current_char = (uint8_t)search_term[main_idx];
 		// now move over all the remaining positions
-		for(index_t i = main_idx; i < length; i++) {
+		for (index_t i = main_idx; i < length; i++) {
 			bool is_match = true;
 			// check if the prefix matches at this position
 			// if it does, we move to this position after encountering the current character
-			for(index_t j = 0; j < main_idx; j++) {
+			for (index_t j = 0; j < main_idx; j++) {
 				if (search_term[i - main_idx + j] != search_term[j]) {
 					is_match = false;
 				}
@@ -46,7 +46,7 @@ TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_t
 
 BufferedCSVReader::BufferedCSVReader(CopyInfo &info, vector<SQLType> sql_types, istream &source)
     : info(info), sql_types(sql_types), source(source), buffer_size(0), position(0), start(0),
-	  delimiter_search(info.delimiter), escape_search(info.escape), quote_search(info.quote) {
+      delimiter_search(info.delimiter), escape_search(info.escape), quote_search(info.quote) {
 	if (info.force_not_null.size() == 0) {
 		info.force_not_null.resize(sql_types.size(), false);
 	}
@@ -94,7 +94,7 @@ value_start:
 	quote_pos = 0;
 	do {
 		index_t count = 0;
-		for(; position < buffer_size; position++) {
+		for (; position < buffer_size; position++) {
 			quote_search.Match(quote_pos, buffer[position]);
 			delimiter_search.Match(delimiter_pos, buffer[position]);
 			count++;
@@ -124,7 +124,7 @@ normal:
 	// this state parses the remainder of a non-quoted value until we reach a delimiter or newline
 	position++;
 	do {
-		for(; position < buffer_size; position++) {
+		for (; position < buffer_size; position++) {
 			delimiter_search.Match(delimiter_pos, buffer[position]);
 			if (delimiter_pos == info.delimiter.size()) {
 				offset = info.delimiter.size() - 1;
@@ -144,7 +144,7 @@ add_value:
 		goto final_state;
 	}
 	goto value_start;
-add_row: {
+add_row : {
 	// check type of newline (\r or \n)
 	bool carriage_return = buffer[position] == '\r';
 	AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
@@ -173,7 +173,7 @@ in_quotes:
 	escape_pos = 0;
 	position++;
 	do {
-		for(; position < buffer_size; position++) {
+		for (; position < buffer_size; position++) {
 			quote_search.Match(quote_pos, buffer[position]);
 			escape_search.Match(escape_pos, buffer[position]);
 			if (quote_pos == info.quote.size()) {
@@ -205,12 +205,14 @@ unquote:
 	}
 	do {
 		index_t count = 0;
-		for(; position < buffer_size; position++) {
+		for (; position < buffer_size; position++) {
 			quote_search.Match(quote_pos, buffer[position]);
 			delimiter_search.Match(delimiter_pos, buffer[position]);
 			count++;
 			if (count > delimiter_pos && count > quote_pos) {
-				throw ParserException("Error on line %lld: quote should be followed by end of value, end of row or another quote", linenr);
+				throw ParserException(
+				    "Error on line %lld: quote should be followed by end of value, end of row or another quote",
+				    linenr);
 			}
 			if (delimiter_pos == info.delimiter.size()) {
 				// quote followed by delimiter, add value
@@ -223,20 +225,20 @@ unquote:
 			}
 		}
 	} while (ReadBuffer(start));
-	throw ParserException("Error on line %lld: quote should be followed by end of value, end of row or another quote", linenr);
+	throw ParserException("Error on line %lld: quote should be followed by end of value, end of row or another quote",
+	                      linenr);
 handle_escape:
 	escape_pos = 0;
 	quote_pos = 0;
 	position++;
 	do {
 		index_t count = 0;
-		for(; position < buffer_size; position++) {
+		for (; position < buffer_size; position++) {
 			quote_search.Match(quote_pos, buffer[position]);
 			escape_search.Match(escape_pos, buffer[position]);
 			count++;
 			if (count > escape_pos && count > quote_pos) {
-				throw ParserException("Error on line %lld: neither QUOTE nor ESCAPE is proceeded by ESCAPE",
-										linenr);
+				throw ParserException("Error on line %lld: neither QUOTE nor ESCAPE is proceeded by ESCAPE", linenr);
 			}
 			if (quote_pos == info.quote.size() || escape_pos == info.escape.size()) {
 				// found quote or escape: move back to quoted state
@@ -244,8 +246,7 @@ handle_escape:
 			}
 		}
 	} while (ReadBuffer(start));
-	throw ParserException("Error on line %lld: neither QUOTE nor ESCAPE is proceeded by ESCAPE",
-							linenr);
+	throw ParserException("Error on line %lld: neither QUOTE nor ESCAPE is proceeded by ESCAPE", linenr);
 carriage_return:
 	/* state: carriage_return */
 	// this stage optionally skips a newline (\n) character, which allows \r\n to be interpreted as a single line
@@ -308,7 +309,7 @@ normal:
 	/* state: normal parsing state */
 	// this state parses the remainder of a non-quoted value until we reach a delimiter or newline
 	do {
-		for(; position < buffer_size; position++) {
+		for (; position < buffer_size; position++) {
 			if (buffer[position] == info.delimiter[0]) {
 				// delimiter: end the value and add it to the chunk
 				goto add_value;
@@ -329,7 +330,7 @@ add_value:
 		goto final_state;
 	}
 	goto value_start;
-add_row: {
+add_row : {
 	// check type of newline (\r or \n)
 	bool carriage_return = buffer[position] == '\r';
 	AddValue(buffer.get() + start, position - start - offset, column, escape_positions);
@@ -356,7 +357,7 @@ in_quotes:
 	// this state parses the remainder of a quoted value
 	position++;
 	do {
-		for(; position < buffer_size; position++) {
+		for (; position < buffer_size; position++) {
 			if (buffer[position] == info.quote[0]) {
 				// quote: move to unquoted state
 				goto unquote;
@@ -391,19 +392,18 @@ unquote:
 		offset = 1;
 		goto add_row;
 	} else {
-		throw ParserException("Error on line %lld: quote should be followed by end of value, end of row or another quote", linenr);
+		throw ParserException(
+		    "Error on line %lld: quote should be followed by end of value, end of row or another quote", linenr);
 	}
 handle_escape:
 	/* state: handle_escape */
 	// escape should be followed by a quote or another escape character
 	position++;
 	if (position >= buffer_size && !ReadBuffer(start)) {
-		throw ParserException("Error on line %lld: neither QUOTE nor ESCAPE is proceeded by ESCAPE",
-								linenr);
+		throw ParserException("Error on line %lld: neither QUOTE nor ESCAPE is proceeded by ESCAPE", linenr);
 	}
 	if (buffer[position] != info.quote[0] && buffer[position] != info.escape[0]) {
-		throw ParserException("Error on line %lld: neither QUOTE nor ESCAPE is proceeded by ESCAPE",
-								linenr);
+		throw ParserException("Error on line %lld: neither QUOTE nor ESCAPE is proceeded by ESCAPE", linenr);
 	}
 	// escape was followed by quote or escape, go back to quoted state
 	goto in_quotes;
@@ -412,12 +412,12 @@ carriage_return:
 	// this stage optionally skips a newline (\n) character, which allows \r\n to be interpreted as a single line
 	if (buffer[position] == '\n') {
 		// newline after carriage return: skip
-	// increase position by 1 and move start to the new position
-	start = ++position;
-	if (position >= buffer_size && !ReadBuffer(start)) {
-		// file ends right after delimiter, go to final state
-		goto final_state;
-	}
+		// increase position by 1 and move start to the new position
+		start = ++position;
+		if (position >= buffer_size && !ReadBuffer(start)) {
+			// file ends right after delimiter, go to final state
+			goto final_state;
+		}
 	}
 	if (finished_chunk) {
 		return;
@@ -478,8 +478,7 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 	}
 }
 
-void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column,
-                                 vector<index_t> &escape_positions) {
+void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column, vector<index_t> &escape_positions) {
 	if (column == sql_types.size() && length == 0) {
 		// skip a single trailing delimiter
 		column++;
@@ -504,7 +503,7 @@ void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column,
 			string old_val = str_val;
 			string new_val = "";
 			index_t prev_pos = 0;
-			for(index_t i = 0; i < escape_positions.size(); i++) {
+			for (index_t i = 0; i < escape_positions.size(); i++) {
 				index_t next_pos = escape_positions[i];
 				new_val += old_val.substr(prev_pos, next_pos - prev_pos);
 				prev_pos = next_pos + info.escape.size();
@@ -544,7 +543,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 		if (sql_types[col_idx].id == SQLTypeId::VARCHAR) {
 			// target type is varchar: no need to convert
 			// just test that all strings are valid utf-8 strings
-			auto parse_data = (const char**) parse_chunk.data[col_idx].data;
+			auto parse_data = (const char **)parse_chunk.data[col_idx].data;
 			VectorOperations::Exec(parse_chunk.data[col_idx], [&](index_t i, index_t k) {
 				if (!parse_chunk.data[col_idx].nullmask[i]) {
 					if (!Value::IsUTF8String(parse_data[i])) {

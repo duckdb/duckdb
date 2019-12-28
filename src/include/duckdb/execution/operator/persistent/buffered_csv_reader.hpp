@@ -14,15 +14,16 @@
 namespace duckdb {
 struct CopyInfo;
 
-//! The shifts array allows for linear searching of multi-byte values. For each position, it determines the next position given that we encounter a byte with the given value.
+//! The shifts array allows for linear searching of multi-byte values. For each position, it determines the next
+//! position given that we encounter a byte with the given value.
 /*! For example, if we have a string "ABAC", the shifts array will have the following values:
-	*  [0] --> ['A'] = 1, all others = 0
-	*  [1] --> ['B'] = 2, ['A'] = 1, all others = 0
-	*  [2] --> ['A'] = 3, all others = 0
-	*  [3] --> ['C'] = 4 (match), 'B' = 2, 'A' = 1, all others = 0
-	* Suppose we then search in the following string "ABABAC", our progression will be as follows:
-	* 'A' -> [1], 'B' -> [2], 'A' -> [3], 'B' -> [2], 'A' -> [3], 'C' -> [4] (match!)
-	*/
+ *  [0] --> ['A'] = 1, all others = 0
+ *  [1] --> ['B'] = 2, ['A'] = 1, all others = 0
+ *  [2] --> ['A'] = 3, all others = 0
+ *  [3] --> ['C'] = 4 (match), 'B' = 2, 'A' = 1, all others = 0
+ * Suppose we then search in the following string "ABABAC", our progression will be as follows:
+ * 'A' -> [1], 'B' -> [2], 'A' -> [3], 'B' -> [2], 'A' -> [3], 'C' -> [4] (match!)
+ */
 struct TextSearchShiftArray {
 	TextSearchShiftArray(string search_term);
 
@@ -30,7 +31,6 @@ struct TextSearchShiftArray {
 		position = shifts[position * 255 + byte_value];
 		return position == length;
 	}
-
 
 	index_t length;
 	unique_ptr<uint8_t[]> shifts;

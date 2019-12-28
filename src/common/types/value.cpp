@@ -215,7 +215,7 @@ template <> Value Value::CreateValue(double value) {
 //===--------------------------------------------------------------------===//
 // GetValue
 //===--------------------------------------------------------------------===//
-template<class T> T Value::GetValueInternal() {
+template <class T> T Value::GetValueInternal() {
 	if (is_null) {
 		return NullValue<T>();
 	}
@@ -235,7 +235,7 @@ template<class T> T Value::GetValueInternal() {
 	case TypeId::DOUBLE:
 		return Cast::Operation<double, T>(value_.double_);
 	case TypeId::VARCHAR:
-		return Cast::Operation<const char*, T>(str_value.c_str());
+		return Cast::Operation<const char *, T>(str_value.c_str());
 	default:
 		throw NotImplementedException("Unimplemented type for GetValue()");
 	}
@@ -265,7 +265,6 @@ template <> float Value::GetValue() {
 template <> double Value::GetValue() {
 	return GetValueInternal<double>();
 }
-
 
 Value Value::Numeric(TypeId type, int64_t value) {
 	assert(!TypeIsIntegral(type) ||

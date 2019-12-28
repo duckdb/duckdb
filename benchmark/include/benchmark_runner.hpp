@@ -23,7 +23,7 @@ class BenchmarkRunner {
 	}
 
 public:
-	static constexpr const char* DUCKDB_BENCHMARK_DIRECTORY = "duckdb_benchmark_data";
+	static constexpr const char *DUCKDB_BENCHMARK_DIRECTORY = "duckdb_benchmark_data";
 
 	static BenchmarkRunner &GetInstance() {
 		static BenchmarkRunner instance;

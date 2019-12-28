@@ -90,7 +90,7 @@ public:
 	//! Create a double Value from a specified value
 	static Value DOUBLE(double value);
 
-	template<class T> T GetValue() {
+	template <class T> T GetValue() {
 		throw NotImplementedException("Unimplemented template type for Value::GetValue");
 	}
 	template <class T> static Value CreateValue(T value) {
@@ -178,8 +178,7 @@ public:
 	void Print();
 
 private:
-	template<class T>
-	T GetValueInternal();
+	template <class T> T GetValueInternal();
 	//! Templated helper function for casting
 	template <class DST, class OP> static DST _cast(const Value &v);
 
@@ -201,13 +200,13 @@ template <> Value Value::CreateValue(string value);
 template <> Value Value::CreateValue(float value);
 template <> Value Value::CreateValue(double value);
 
-template <> bool        Value::GetValue();
-template <> int8_t      Value::GetValue();
-template <> int16_t     Value::GetValue();
-template <> int32_t     Value::GetValue();
-template <> int64_t     Value::GetValue();
-template <> string      Value::GetValue();
-template <> float       Value::GetValue();
-template <> double      Value::GetValue();
+template <> bool Value::GetValue();
+template <> int8_t Value::GetValue();
+template <> int16_t Value::GetValue();
+template <> int32_t Value::GetValue();
+template <> int64_t Value::GetValue();
+template <> string Value::GetValue();
+template <> float Value::GetValue();
+template <> double Value::GetValue();
 
 } // namespace duckdb

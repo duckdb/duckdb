@@ -24,7 +24,7 @@ public:
 	QueryResult(QueryResultType type, StatementType statement_type);
 	//! Creates a successful query result with the specified names and types
 	QueryResult(QueryResultType type, StatementType statement_type, vector<SQLType> sql_types, vector<TypeId> types,
-				vector<string> names);
+	            vector<string> names);
 	//! Creates an unsuccessful query result with error condition
 	QueryResult(QueryResultType type, string error);
 	virtual ~QueryResult() {
@@ -57,6 +57,7 @@ public:
 	//! Returns true if the two results are identical; false otherwise. Note that this method is destructive; it calls
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
 	bool Equals(QueryResult &other);
+
 private:
 	//! The current chunk used by the iterator
 	unique_ptr<DataChunk> iterator_chunk;
@@ -65,23 +66,20 @@ private:
 
 	class QueryResultRow {
 	public:
-		QueryResultRow(QueryResultIterator &iterator) :
-			iterator(iterator), row(0) {
+		QueryResultRow(QueryResultIterator &iterator) : iterator(iterator), row(0) {
 		}
 
 		QueryResultIterator &iterator;
 		index_t row;
 
-		template<class T>
-		T GetValue(index_t col_idx) const {
+		template <class T> T GetValue(index_t col_idx) const {
 			return iterator.result->iterator_chunk->data[col_idx].GetValue(iterator.row_idx).GetValue<T>();
 		}
 	};
 	//! The row-based query result iterator. Invoking the
 	class QueryResultIterator {
 	public:
-		QueryResultIterator(QueryResult *result) :
-			current_row(*this), result(result), row_idx(0){
+		QueryResultIterator(QueryResult *result) : current_row(*this), result(result), row_idx(0) {
 			if (result) {
 				result->iterator_chunk = result->Fetch();
 			}
@@ -90,7 +88,8 @@ private:
 		QueryResultRow current_row;
 		QueryResult *result;
 		index_t row_idx;
-public:
+
+	public:
 		void Next() {
 			if (!result->iterator_chunk) {
 				return;
@@ -103,13 +102,26 @@ public:
 			}
 		}
 
-		QueryResultIterator& operator++() { Next(); return *this; }
-		bool operator!=(const QueryResultIterator &other) const { return result->iterator_chunk && result->iterator_chunk->column_count > 0; }
-		const QueryResultRow& operator*() const { return current_row; }
+		QueryResultIterator &operator++() {
+			Next();
+			return *this;
+		}
+		bool operator!=(const QueryResultIterator &other) const {
+			return result->iterator_chunk && result->iterator_chunk->column_count > 0;
+		}
+		const QueryResultRow &operator*() const {
+			return current_row;
+		}
 	};
+
 public:
-	QueryResultIterator begin() { return QueryResultIterator(this); }
-	QueryResultIterator end() { return QueryResultIterator(nullptr); }
+	QueryResultIterator begin() {
+		return QueryResultIterator(this);
+	}
+	QueryResultIterator end() {
+		return QueryResultIterator(nullptr);
+	}
+
 protected:
 	string HeaderToString();
 

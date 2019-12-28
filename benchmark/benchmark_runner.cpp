@@ -41,7 +41,7 @@ void BenchmarkRunner::SaveDatabase(DuckDB &db, string name) {
 	vector<string> table_list;
 	Connection con(db);
 	auto result = con.Query("SELECT name, sql FROM sqlite_master()");
-	for(auto &row : *result) {
+	for (auto &row : *result) {
 		auto table_name = row.GetValue<string>(0);
 		auto table_sql = row.GetValue<string>(1);
 		table_list.push_back(table_name);
@@ -53,7 +53,7 @@ void BenchmarkRunner::SaveDatabase(DuckDB &db, string name) {
 	list_file.close();
 
 	// now for each table, write it to a separate file "[name]_[tablename].csv"
-	for(auto &table : table_list) {
+	for (auto &table : table_list) {
 		auto target_path = fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name + "_" + table + ".csv");
 		result = con.Query("COPY " + table + " TO '" + target_path + "'");
 		if (!result->success) {
@@ -208,14 +208,10 @@ void print_help() {
 	fprintf(stderr, "              --info         Prints info about the benchmark\n");
 	fprintf(stderr, "              --group        Prints group name of the benchmark\n");
 	fprintf(stderr, "              [name_pattern] Run only the benchmark which names match the specified name pattern, "
-					"e.g., DS.* for TPC-DS benchmarks\n");
+	                "e.g., DS.* for TPC-DS benchmarks\n");
 }
 
-enum class BenchmarkMetaType {
-	NONE,
-	INFO,
-	GROUP
-};
+enum class BenchmarkMetaType { NONE, INFO, GROUP };
 
 struct BenchmarkConfiguration {
 	std::string name_pattern{};
