@@ -14,6 +14,28 @@
 namespace duckdb {
 struct CopyInfo;
 
+//! The shifts array allows for linear searching of multi-byte values. For each position, it determines the next position given that we encounter a byte with the given value.
+/*! For example, if we have a string "ABAC", the shifts array will have the following values:
+	*  [0] --> ['A'] = 1, all others = 0
+	*  [1] --> ['B'] = 2, ['A'] = 1, all others = 0
+	*  [2] --> ['A'] = 3, all others = 0
+	*  [3] --> ['C'] = 4 (match), 'B' = 2, 'A' = 1, all others = 0
+	* Suppose we then search in the following string "ABABAC", our progression will be as follows:
+	* 'A' -> [1], 'B' -> [2], 'A' -> [3], 'B' -> [2], 'A' -> [3], 'C' -> [4] (match!)
+	*/
+struct TextSearchShiftArray {
+	TextSearchShiftArray(string search_term);
+
+	inline bool Match(uint8_t &position, uint8_t byte_value) {
+		position = shifts[position * 255 + byte_value];
+		return position == length;
+	}
+
+
+	index_t length;
+	unique_ptr<uint8_t[]> shifts;
+};
+
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
 class BufferedCSVReader {
 	static constexpr index_t INITIAL_BUFFER_SIZE = 16384;
@@ -33,6 +55,8 @@ public:
 
 	index_t linenr = 0;
 	index_t nr_elements = 0;
+
+	TextSearchShiftArray delimiter_search, escape_search, quote_search;
 
 	vector<unique_ptr<char[]>> cached_buffers;
 
@@ -56,11 +80,6 @@ private:
 	void Flush(DataChunk &insert_chunk);
 	//! Reads a new buffer from the CSV file if the current one has been exhausted
 	bool ReadBuffer(index_t &start);
-	//! Sets the control strings starting at the current buffer position, returns false if the buffer was exhausted
-	bool MatchControlString(bool &delim_str, bool &quote_str, bool &escape_str);
-	//! Matches one position of the buffer against a corresponding char in a control string
-	void MatchBufferPosition(bool &prev_pos_matches, index_t &control_str_offset, index_t &tmp_position, bool &match,
-	                         string &control_str);
 };
 
 } // namespace duckdb
