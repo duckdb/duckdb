@@ -95,7 +95,7 @@ void BufferedCSVReader::ParseComplexCSV(DataChunk &insert_chunk) {
 	bool exhausted_buffer = false;
 	index_t column = 0;
 	index_t offset = 0;
-	std::queue<index_t> escape_positions;
+	vector<index_t> escape_positions;
 
 	// used for fast control sequence detection
 	bool delimiter = false;
@@ -145,7 +145,7 @@ void BufferedCSVReader::ParseComplexCSV(DataChunk &insert_chunk) {
 				} else if (!quote && escape && seen_escape) {
 					// escaped escape
 					// we store the position of the escape so we can skip it when adding the value
-					escape_positions.push(position);
+					escape_positions.push_back(position - start);
 					position += info.escape.length() - 1;
 					seen_escape = false;
 				} else if (quote && !escape && !seen_escape) {
@@ -156,7 +156,7 @@ void BufferedCSVReader::ParseComplexCSV(DataChunk &insert_chunk) {
 				} else if (quote && !escape && seen_escape) {
 					// escaped quote
 					// we store the position of the escape so we can skip it when adding the value
-					escape_positions.push(position);
+					escape_positions.push_back(position - start);
 					position += info.quote.length() - 1;
 					seen_escape = false;
 				} else if (quote && escape && !seen_escape) {
@@ -166,7 +166,7 @@ void BufferedCSVReader::ParseComplexCSV(DataChunk &insert_chunk) {
 					quote_or_escape = true;
 				} else if (quote && escape && seen_escape) {
 					// we store the position of the escape so we can skip it when adding the value
-					escape_positions.push(position);
+					escape_positions.push_back(position - start);
 					position += info.escape.length() - 1;
 					seen_escape = false;
 				}
@@ -236,9 +236,7 @@ void BufferedCSVReader::ParseComplexCSV(DataChunk &insert_chunk) {
 			seen_escape = false;
 			position = start;
 			quote_or_escape = false;
-			while (!escape_positions.empty()) {
-				escape_positions.pop();
-			}
+			escape_positions.clear();
 		}
 
 		// reset values for control string matching
@@ -265,7 +263,7 @@ void BufferedCSVReader::ParseSimpleCSV(DataChunk &insert_chunk) {
 	// used for parsing algorithm
 	bool finished_chunk = false;
 	index_t column = 0;
-	std::queue<index_t> escape_positions;
+	vector<index_t> escape_positions;
 
 	// read values into the buffer (if any)
 	if (position >= buffer_size) {
@@ -329,7 +327,7 @@ in_quotes:
 				goto unquote;
 			} else if (buffer[position] == info.escape[0]) {
 				// escape: store the escaped position and move to handle_escape state
-				escape_positions.push(position);
+				escape_positions.push_back(position - start);
 				NextPosition();
 				goto handle_escape;
 			}
@@ -344,7 +342,7 @@ unquote:
 	// or a delimiter/newline, ending the current value and moving on to the next value
 	if (buffer[position] == info.quote[0]) {
 		// escaped quote, return to quoted state and store escape position
-		escape_positions.push(position);
+		escape_positions.push_back(position - start);
 		NextPosition();
 		goto in_quotes;
 	} else if (buffer[position] == info.delimiter[0]) {
@@ -372,7 +370,11 @@ unquote:
 	}
 handle_escape:
 	/* state: handle_escape */
-	// we ignore anything in the next position, then return to the quoted state
+	// escape should be followed by a quote or another escape character
+	if (buffer[position] != info.quote[0] && buffer[position] != info.escape[0]) {
+		throw ParserException("Error on line %lld: neither QUOTE nor ESCAPE is proceeded by ESCAPE",
+								linenr);
+	}
 	NextPosition();
 	goto in_quotes;
 carriage_return:
@@ -442,7 +444,7 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 }
 
 void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column,
-                                 std::queue<index_t> &escape_positions) {
+                                 vector<index_t> &escape_positions) {
 	if (column == sql_types.size() && length == 0) {
 		// skip a single trailing delimiter
 		column++;
@@ -464,24 +466,16 @@ void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column,
 		auto parse_data = ((const char **)v.data);
 		if (escape_positions.size() > 0) {
 			// remove escape characters (if any)
-			index_t pos = start;
-			bool in_escape = false;
+			string old_val = str_val;
 			string new_val = "";
-			for (const char *val = str_val; *val; val++) {
-				if (!escape_positions.empty()) {
-					if (escape_positions.front() == pos) {
-						in_escape = false;
-						escape_positions.pop();
-					} else if (escape_positions.front() - info.escape.length() == pos) {
-						in_escape = true;
-					}
-				}
-				if (!in_escape) {
-					new_val += *val;
-				}
-				pos++;
+			index_t prev_pos = 0;
+			for(index_t i = 0; i < escape_positions.size(); i++) {
+				index_t next_pos = escape_positions[i];
+				new_val += old_val.substr(prev_pos, next_pos - prev_pos);
+				prev_pos = next_pos + info.escape.size();
 			}
-			escape_positions = std::queue<index_t>();
+			new_val += old_val.substr(prev_pos, old_val.size() - prev_pos);
+			escape_positions.clear();
 			parse_data[row_entry] = v.string_heap.AddString(new_val.c_str());
 		} else {
 			parse_data[row_entry] = str_val;

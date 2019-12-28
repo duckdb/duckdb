@@ -11,8 +11,6 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 
-#include <queue>
-
 namespace duckdb {
 struct CopyInfo;
 
@@ -51,7 +49,7 @@ private:
 	void ParseComplexCSV(DataChunk &insert_chunk);
 
 	//! Adds a value to the current row
-	void AddValue(char *str_val, index_t length, index_t &column, std::queue<index_t> &escape_positions);
+	void AddValue(char *str_val, index_t length, index_t &column, vector<index_t> &escape_positions);
 	//! Adds a row to the insert_chunk, returns true if the chunk is filled as a result of this row being added
 	bool AddRow(DataChunk &insert_chunk, index_t &column);
 	//! Finalizes a chunk, parsing all values that have been added so far and adding them to the insert_chunk

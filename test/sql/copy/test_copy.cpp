@@ -225,6 +225,47 @@ TEST_CASE("Test CSV file without trailing newline", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1024}));
 }
 
+TEST_CASE("Test long value with escapes", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+
+	string value = string(10000, 'a') + "\"\"" + string(20000, 'b');
+	string expected_value = string(10000, 'a') + "\"" + string(20000, 'b');
+
+	// long value with escape and simple delimiter
+	ofstream long_escaped_value(fs.JoinPath(csv_path, "long_escaped_value.csv"));
+	long_escaped_value << 1 << "🦆" << 2 << "🦆" << "\"" << value << "\"" << endl;
+	long_escaped_value.close();
+
+	// load CSV file into a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE long_escaped_value (a INTEGER, b INTEGER, c VARCHAR);"));
+	result = con.Query("COPY long_escaped_value FROM '" + fs.JoinPath(csv_path, "long_escaped_value.csv") + "' DELIMITER '🦆';");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result = con.Query("SELECT * FROM long_escaped_value");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {expected_value}));
+
+	// long value with escape and complex delimiter
+	ofstream long_escaped_value_unicode(fs.JoinPath(csv_path, "long_escaped_value_unicode.csv"));
+	long_escaped_value_unicode << 1 << "," << 2 << "," << "\"" << value << "\"" << endl;
+	long_escaped_value_unicode.close();
+
+	// load CSV file into a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE long_escaped_value_unicode (a INTEGER, b INTEGER, c VARCHAR);"));
+	result = con.Query("COPY long_escaped_value_unicode FROM '" + fs.JoinPath(csv_path, "long_escaped_value_unicode.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result = con.Query("SELECT * FROM long_escaped_value_unicode");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {expected_value}));
+}
+
 TEST_CASE("Test NULL option of copy statement", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
