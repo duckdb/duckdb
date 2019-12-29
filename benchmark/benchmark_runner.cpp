@@ -3,6 +3,7 @@
 #include "duckdb/common/profiler.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb.hpp"
+#include "duckdb_benchmark.hpp"
 
 #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
@@ -207,11 +208,12 @@ void print_help() {
 	fprintf(stderr, "              --log=[file]   Move log output to file\n");
 	fprintf(stderr, "              --info         Prints info about the benchmark\n");
 	fprintf(stderr, "              --group        Prints group name of the benchmark\n");
+	fprintf(stderr, "              --query        Prints query of the benchmark\n");
 	fprintf(stderr, "              [name_pattern] Run only the benchmark which names match the specified name pattern, "
 	                "e.g., DS.* for TPC-DS benchmarks\n");
 }
 
-enum class BenchmarkMetaType { NONE, INFO, GROUP };
+enum class BenchmarkMetaType { NONE, INFO, GROUP, QUERY };
 
 struct BenchmarkConfiguration {
 	std::string name_pattern{};
@@ -244,6 +246,9 @@ BenchmarkConfiguration parse_arguments(const int arg_counter, char const *const 
 		} else if (arg == "--group") {
 			// write group of benchmark
 			configuration.meta = BenchmarkMetaType::GROUP;
+		} else if (arg == "--query") {
+			// write group of benchmark
+			configuration.meta = BenchmarkMetaType::QUERY;
 		} else if (StringUtil::StartsWith(arg, "--out=") || StringUtil::StartsWith(arg, "--log=")) {
 			auto splits = StringUtil::Split(arg, '=');
 			if (splits.size() != 2) {
@@ -299,6 +304,14 @@ ConfigurationError run_benchmarks(const BenchmarkConfiguration &configuration) {
 			// print group of benchmarks
 			for (const auto &benchmark_index : benchmark_indices) {
 				fprintf(stdout, "%s\n", benchmarks[benchmark_index]->group.c_str());
+			}
+		} else if (configuration.meta == BenchmarkMetaType::QUERY) {
+			for (const auto &benchmark_index : benchmark_indices) {
+				auto duckdb_benchmark = dynamic_cast<DuckDBBenchmark*>(benchmarks[benchmark_index]);
+				if (!duckdb_benchmark) {
+					continue;
+				}
+				fprintf(stdout, "%s\n", duckdb_benchmark->GetQuery().c_str());
 			}
 		} else {
 			for (const auto &benchmark_index : benchmark_indices) {
