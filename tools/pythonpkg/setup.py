@@ -61,7 +61,7 @@ setup(
     packages=['duckdb_query_graph'],
     include_package_data=True,
     setup_requires=setup_requires + ["setuptools_scm"],
-    use_scm_version = {"root": "../..", "relative_to": __file__, "fallback_version":"0.1.2.dev481+g8091a7ce.d20191230.local"},
+    use_scm_version = {"root": "../..", "relative_to": __file__, "fallback_version":"DUCKDB_VERSION"},
     tests_require=['pytest'],
     classifiers = [
         'Topic :: Database :: Database Engines/Servers',
