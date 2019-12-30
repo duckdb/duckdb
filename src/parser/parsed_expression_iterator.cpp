@@ -83,7 +83,6 @@ void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expr,
 		break;
 	default:
 		// called on non ParsedExpression type!
-		assert(0);
-		break;
+		throw NotImplementedException("Unimplemented expression class");
 	}
 }

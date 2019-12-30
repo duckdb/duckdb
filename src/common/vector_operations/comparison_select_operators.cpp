@@ -31,7 +31,7 @@ template <class OP> static index_t templated_select_operation(Vector &left, Vect
 	case TypeId::DOUBLE:
 		return templated_binary_select<double, double, OP>(left, right, result);
 	case TypeId::VARCHAR:
-		return templated_binary_select<const char *, const char *, OP, true>(left, right, result);
+		return templated_binary_select<const char *, const char *, OP>(left, right, result);
 	default:
 		throw InvalidTypeException(left.type, "Invalid type for comparison");
 	}

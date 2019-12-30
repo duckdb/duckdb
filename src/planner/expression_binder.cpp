@@ -55,9 +55,10 @@ BindResult ExpressionBinder::BindExpression(ParsedExpression &expr, index_t dept
 		return BindExpression((OperatorExpression &)expr, depth);
 	case ExpressionClass::SUBQUERY:
 		return BindExpression((SubqueryExpression &)expr, depth);
-	default:
-		assert(expr.GetExpressionClass() == ExpressionClass::PARAMETER);
+	case ExpressionClass::PARAMETER:
 		return BindExpression((ParameterExpression &)expr, depth);
+	default:
+		throw NotImplementedException("Unimplemented expression class");
 	}
 }
 
