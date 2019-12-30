@@ -8,13 +8,6 @@ using namespace std;
 void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expr,
                                                  function<void(const ParsedExpression &child)> callback) {
 	switch (expr.expression_class) {
-	case ExpressionClass::BETWEEN: {
-		auto &between = (const BetweenExpression &)expr;
-		callback(*between.input);
-		callback(*between.lower);
-		callback(*between.upper);
-		break;
-	}
 	case ExpressionClass::CASE: {
 		auto &case_expr = (const CaseExpression &)expr;
 		callback(*case_expr.check);

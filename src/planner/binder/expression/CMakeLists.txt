@@ -1,7 +1,6 @@
 add_library_unity(duckdb_bind_expression
                   OBJECT
                   bind_aggregate_expression.cpp
-                  bind_between_expression.cpp
                   bind_case_expression.cpp
                   bind_cast_expression.cpp
                   bind_columnref_expression.cpp
