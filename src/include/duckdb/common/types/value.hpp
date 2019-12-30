@@ -97,8 +97,6 @@ public:
 		throw NotImplementedException("Unimplemented template type for Value::CreateValue");
 	}
 
-	int64_t GetNumericValue();
-
 	//! Return a copy of this value
 	Value Copy() const {
 		return Value(*this);

@@ -86,7 +86,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 				auto &constant = (ConstantExpression &)*order;
 				if (TypeIsIntegral(constant.value.type)) {
 					// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
-					order_references.push_back(constant.value.GetNumericValue() - 1);
+					order_references.push_back(constant.value.GetValue<int64_t>() - 1);
 					continue;
 				}
 			}

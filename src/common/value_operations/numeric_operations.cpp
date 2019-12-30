@@ -33,7 +33,7 @@ template <class OP, bool IGNORE_NULL> static Value templated_binary_operation(co
 			if (result.is_null) {
 				result.type = max(left.type, right.type);
 			} else {
-				auto type = max(MinimalType(result.GetNumericValue()), max(left.type, right.type));
+				auto type = max(MinimalType(result.GetValue<int64_t>()), max(left.type, right.type));
 				result = result.CastAs(type);
 			}
 			return result;

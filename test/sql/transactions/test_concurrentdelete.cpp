@@ -144,7 +144,7 @@ static void delete_elements(DuckDB *db, bool *correct, size_t threadnr) {
 	con.Query("BEGIN TRANSACTION;");
 	auto result = con.Query("SELECT COUNT(*) FROM integers");
 	Value count = result->collection.chunks[0]->data[0].GetValue(0);
-	auto start_count = count.GetNumericValue();
+	auto start_count = count.GetValue<int64_t>();
 
 	for (size_t i = 0; i < INSERT_ELEMENTS; i++) {
 		// count should decrease by one for every delete we do

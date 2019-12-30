@@ -255,7 +255,7 @@ static void append_values_from_sequence(ConcurrentData *data) {
 	Connection con(data->db);
 	for (size_t i = 0; i < INSERT_COUNT; i++) {
 		auto result = con.Query("SELECT nextval('seq')");
-		int64_t res = result->GetValue(0, 0).GetNumericValue();
+		int64_t res = result->GetValue(0, 0).GetValue<int64_t>();
 		lock_guard<mutex> lock(data->lock);
 		data->results.push_back(res);
 	}

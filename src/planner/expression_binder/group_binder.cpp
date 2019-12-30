@@ -72,7 +72,7 @@ BindResult GroupBinder::BindConstant(ConstantExpression &constant) {
 		return ExpressionBinder::BindExpression(constant, 0);
 	}
 	// INTEGER constant: we use the integer as an index into the select list (e.g. GROUP BY 1)
-	auto index = (index_t)constant.value.GetNumericValue();
+	auto index = (index_t)constant.value.GetValue<int64_t>();
 	return BindSelectRef(index - 1);
 }
 
