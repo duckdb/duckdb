@@ -24,17 +24,11 @@ unique_ptr<FunctionData> RegexpMatchesBindData::Copy() {
 }
 
 static void regexp_matches_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count == 2);
 	auto &strings = args.data[0];
 	auto &patterns = args.data[1];
 
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (RegexpMatchesBindData &)*func_expr.bind_info;
-
-	assert(strings.type == TypeId::VARCHAR);
-	assert(patterns.type == TypeId::VARCHAR);
-
-	result.nullmask = strings.nullmask | patterns.nullmask;
 
 	RE2::Options options;
 	options.set_log_errors(false);
@@ -85,14 +79,9 @@ static unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionEx
 }
 
 static void regexp_replace_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count == 3);
 	auto &strings = args.data[0];
 	auto &patterns = args.data[1];
 	auto &replaces = args.data[2];
-
-	assert(strings.type == TypeId::VARCHAR);
-	assert(patterns.type == TypeId::VARCHAR);
-	assert(replaces.type == TypeId::VARCHAR);
 
 	RE2::Options options;
 	options.set_log_errors(false);
