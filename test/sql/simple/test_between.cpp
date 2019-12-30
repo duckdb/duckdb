@@ -92,4 +92,10 @@ TEST_CASE("Test between statement", "[between]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
 	result = con.Query("SELECT COUNT(*) FROM integers WHERE NULL BETWEEN i-1 AND i+1");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	result = con.Query("SELECT COUNT(*) FROM integers WHERE NULL BETWEEN i-1 AND NULL");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	result = con.Query("SELECT COUNT(*) FROM integers WHERE 1 BETWEEN i-1 AND 100");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	result = con.Query("SELECT COUNT(*) FROM integers WHERE 1 BETWEEN 0 AND i-1");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
 }
