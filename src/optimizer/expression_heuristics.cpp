@@ -56,6 +56,10 @@ void ExpressionHeuristics::ReorderExpressions(vector<unique_ptr<Expression>> &ex
 	}
 }
 
+index_t ExpressionHeuristics::ExpressionCost(BoundBetweenExpression &expr) {
+	return Cost(*expr.input) + Cost(*expr.lower) + Cost(*expr.upper) + 10;
+}
+
 index_t ExpressionHeuristics::ExpressionCost(BoundCaseExpression &expr) {
 	// CASE WHEN check THEN result_if_true ELSE result_if_false END
 	return Cost(*expr.check) + Cost(*expr.result_if_true) + Cost(*expr.result_if_false) + 5;
@@ -145,6 +149,10 @@ index_t ExpressionHeuristics::Cost(Expression &expr) {
 	case ExpressionClass::BOUND_CASE: {
 		auto &case_expr = (BoundCaseExpression &)expr;
 		return ExpressionCost(case_expr);
+	}
+	case ExpressionClass::BOUND_BETWEEN: {
+		auto &between_expr = (BoundBetweenExpression &)expr;
+		return ExpressionCost(between_expr);
 	}
 	case ExpressionClass::BOUND_CAST: {
 		auto &cast_expr = (BoundCastExpression &)expr;

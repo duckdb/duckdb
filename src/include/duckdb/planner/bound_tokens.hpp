@@ -39,6 +39,7 @@ class BoundSetOperationNode;
 class Expression;
 
 class BoundAggregateExpression;
+class BoundBetweenExpression;
 class BoundCaseExpression;
 class BoundCastExpression;
 class BoundColumnRefExpression;

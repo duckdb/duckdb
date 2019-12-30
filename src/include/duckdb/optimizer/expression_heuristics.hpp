@@ -40,6 +40,7 @@ private:
 	    {"round", 100}, {"~~", 200}, {"!~~", 200},      {"regexp_matches", 200},
 	    {"||", 200}};
 
+	index_t ExpressionCost(BoundBetweenExpression &expr);
 	index_t ExpressionCost(BoundCaseExpression &expr);
 	index_t ExpressionCost(BoundCastExpression &expr);
 	index_t ExpressionCost(BoundComparisonExpression &expr);

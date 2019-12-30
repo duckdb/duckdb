@@ -66,6 +66,7 @@ public:
 protected:
 	virtual BindResult BindExpression(ParsedExpression &expr, index_t depth, bool root_expression = false);
 
+	BindResult BindExpression(BetweenExpression &expr, index_t depth);
 	BindResult BindExpression(CaseExpression &expr, index_t depth);
 	BindResult BindExpression(CastExpression &expr, index_t depth);
 	BindResult BindExpression(ColumnRefExpression &expr, index_t depth);
