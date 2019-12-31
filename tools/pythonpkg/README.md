@@ -26,7 +26,7 @@ First, get the version number from the repository.
 
     cd tools/pythonpkg
     export DUCKDB_VERSION=$(python setup.py --version)
-    sed -e "s/DUCKDB_VERSION/${DUCKDB_VERSION}.local/g" -i.orig setup.py
+    sed -e "s/0.0.0+unknown/${DUCKDB_VERSION}.local/g" -i.orig setup.py
     cd ../..
  
 Next, copy over the python package related files, and install the package.
