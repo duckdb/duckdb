@@ -216,14 +216,14 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection
 		assert(boundary_start_collection.column_count() > 0);
 		bounds.window_start =
 		    (int64_t)row_idx -
-		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetNumericValue();
+		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>();
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING: {
 		assert(boundary_start_collection.column_count() > 0);
 		bounds.window_start =
 		    row_idx +
-		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetNumericValue();
+		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>();
 		break;
 	}
 
@@ -248,13 +248,13 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection
 		assert(boundary_end_collection.column_count() > 0);
 		bounds.window_end =
 		    (int64_t)row_idx -
-		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetNumericValue() + 1;
+		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>() + 1;
 		break;
 	case WindowBoundary::EXPR_FOLLOWING:
 		assert(boundary_end_collection.column_count() > 0);
 		bounds.window_end =
-		    row_idx + boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetNumericValue() +
-		    1;
+		    row_idx +
+		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>() + 1;
 
 		break;
 	default:
@@ -393,7 +393,7 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 			if (payload_collection.column_count() != 1) {
 				throw Exception("NTILE needs a parameter");
 			}
-			auto n_param = payload_collection.GetValue(0, row_idx).GetNumericValue();
+			auto n_param = payload_collection.GetValue(0, row_idx).GetValue<int64_t>();
 			// With thanks from SQLite's ntileValueFunc()
 			int64_t n_total = bounds.partition_end - bounds.partition_start;
 			int64_t n_size = (n_total / n_param);
@@ -417,7 +417,7 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 			index_t offset = 1;
 			if (wexpr->offset_expr) {
 				offset = leadlag_offset_collection.GetValue(0, wexpr->offset_expr->IsScalar() ? 0 : row_idx)
-				             .GetNumericValue();
+				             .GetValue<int64_t>();
 			}
 			if (wexpr->default_expr) {
 				def_val = leadlag_default_collection.GetValue(0, wexpr->default_expr->IsScalar() ? 0 : row_idx);

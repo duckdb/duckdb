@@ -70,6 +70,7 @@ protected:
 	void Initialize(Expression &expr, ExpressionExecutorState &state);
 
 	static unique_ptr<ExpressionState> InitializeState(BoundReferenceExpression &expr, ExpressionExecutorState &state);
+	static unique_ptr<ExpressionState> InitializeState(BoundBetweenExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(BoundCaseExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(BoundCastExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(CommonSubExpression &expr, ExpressionExecutorState &state);
@@ -84,6 +85,7 @@ protected:
 	void Execute(Expression &expr, ExpressionState *state, Vector &result);
 
 	void Execute(BoundReferenceExpression &expr, ExpressionState *state, Vector &result);
+	void Execute(BoundBetweenExpression &expr, ExpressionState *state, Vector &result);
 	void Execute(BoundCaseExpression &expr, ExpressionState *state, Vector &result);
 	void Execute(BoundCastExpression &expr, ExpressionState *state, Vector &result);
 	void Execute(CommonSubExpression &expr, ExpressionState *state, Vector &result);
@@ -99,6 +101,7 @@ protected:
 	index_t Select(Expression &expr, ExpressionState *state, sel_t result[]);
 	index_t DefaultSelect(Expression &expr, ExpressionState *state, sel_t result[]);
 
+	index_t Select(BoundBetweenExpression &expr, ExpressionState *state, sel_t result[]);
 	index_t Select(BoundComparisonExpression &expr, ExpressionState *state, sel_t result[]);
 	index_t Select(BoundConjunctionExpression &expr, ExpressionState *state, sel_t result[]);
 

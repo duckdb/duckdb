@@ -116,6 +116,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(Expression &expr
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_REF:
 		return InitializeState((BoundReferenceExpression &)expr, state);
+	case ExpressionClass::BOUND_BETWEEN:
+		return InitializeState((BoundBetweenExpression &)expr, state);
 	case ExpressionClass::BOUND_CASE:
 		return InitializeState((BoundCaseExpression &)expr, state);
 	case ExpressionClass::BOUND_CAST:
@@ -144,6 +146,9 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, Vecto
 		state->Reset();
 	}
 	switch (expr.expression_class) {
+	case ExpressionClass::BOUND_BETWEEN:
+		Execute((BoundBetweenExpression &)expr, state, result);
+		break;
 	case ExpressionClass::BOUND_REF:
 		Execute((BoundReferenceExpression &)expr, state, result);
 		break;
@@ -183,6 +188,8 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, Vecto
 index_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, sel_t result[]) {
 	assert(expr.return_type == TypeId::BOOLEAN);
 	switch (expr.expression_class) {
+	case ExpressionClass::BOUND_BETWEEN:
+		return Select((BoundBetweenExpression &)expr, state, result);
 	case ExpressionClass::BOUND_COMPARISON:
 		return Select((BoundComparisonExpression &)expr, state, result);
 	case ExpressionClass::BOUND_CONJUNCTION:

@@ -34,7 +34,7 @@ public:
 
 	template <class T> T GetValue(index_t column, index_t index) {
 		auto value = GetValue(column, index);
-		return (T)value.GetNumericValue();
+		return (T)value.GetValue<int64_t>();
 	}
 
 	ChunkCollection collection;

@@ -45,6 +45,7 @@ class SetOperationNode;
 //===--------------------------------------------------------------------===//
 class ParsedExpression;
 
+class BetweenExpression;
 class CaseExpression;
 class CastExpression;
 class ColumnRefExpression;

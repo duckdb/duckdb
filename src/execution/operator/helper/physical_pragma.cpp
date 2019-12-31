@@ -59,7 +59,7 @@ void PhysicalPragma::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			// set the new limit in the buffer manager
 			context.db.storage->buffer_manager->SetLimit(new_limit);
 		} else {
-			int64_t value = pragma.parameters[0].GetNumericValue();
+			int64_t value = pragma.parameters[0].GetValue<int64_t>();
 			if (value < 0) {
 				// limit < 0, set limit to infinite
 				context.db.storage->buffer_manager->SetLimit();

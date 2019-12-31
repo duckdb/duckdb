@@ -65,7 +65,7 @@ static int64_t BindConstant(Binder &binder, ClientContext &context, string claus
 	if (!TypeIsNumeric(value.type)) {
 		throw BinderException("LIMIT clause can only contain numeric constants!");
 	}
-	int64_t limit_value = value.GetNumericValue();
+	int64_t limit_value = value.GetValue<int64_t>();
 	if (limit_value < 0) {
 		throw BinderException("LIMIT must not be negative");
 	}

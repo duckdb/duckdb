@@ -297,30 +297,6 @@ Value Value::Numeric(TypeId type, int64_t value) {
 	return val;
 }
 
-int64_t Value::GetNumericValue() {
-	if (is_null) {
-		throw ConversionException("Cannot convert NULL Value to numeric value");
-	}
-	switch (type) {
-	case TypeId::TINYINT:
-		return value_.tinyint;
-	case TypeId::SMALLINT:
-		return value_.smallint;
-	case TypeId::INTEGER:
-		return value_.integer;
-	case TypeId::BIGINT:
-		return value_.bigint;
-	case TypeId::FLOAT:
-		return value_.float_;
-	case TypeId::DOUBLE:
-		return value_.double_;
-	case TypeId::POINTER:
-		return value_.pointer;
-	default:
-		throw InvalidTypeException(type, "GetNumericValue requires numeric type");
-	}
-}
-
 string Value::ToString(SQLType sql_type) const {
 	if (is_null) {
 		return "NULL";

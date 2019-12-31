@@ -86,6 +86,9 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 	case ExpressionClass::BOUND_AGGREGATE:
 		result = VisitReplace((BoundAggregateExpression &)expr, expression);
 		break;
+	case ExpressionClass::BOUND_BETWEEN:
+		result = VisitReplace((BoundBetweenExpression &)expr, expression);
+		break;
 	case ExpressionClass::BOUND_CASE:
 		result = VisitReplace((BoundCaseExpression &)expr, expression);
 		break;
@@ -146,6 +149,11 @@ void LogicalOperatorVisitor::VisitExpressionChildren(Expression &expr) {
 }
 
 unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundAggregateExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
+	return nullptr;
+}
+
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundBetweenExpression &expr,
                                                             unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }

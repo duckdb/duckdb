@@ -57,7 +57,7 @@ static void insert_random_elements(DuckDB *db, bool *correct, int threadnr) {
 	con.Query("BEGIN TRANSACTION;");
 	auto result = con.Query("SELECT COUNT(*) FROM integers");
 	Value count = result->collection.chunks[0]->data[0].GetValue(0);
-	auto start_count = count.GetNumericValue();
+	auto start_count = count.GetValue<int64_t>();
 	for (size_t i = 0; i < INSERT_ELEMENTS; i++) {
 		// count should increase by one for every append we do
 		con.Query("INSERT INTO integers VALUES (3)");

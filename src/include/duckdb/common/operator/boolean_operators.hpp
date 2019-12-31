@@ -10,12 +10,6 @@
 
 namespace duckdb {
 
-struct Not {
-	static inline bool Operation(bool left) {
-		return !left;
-	}
-};
-
 /*
 SQL AND Rules:
 

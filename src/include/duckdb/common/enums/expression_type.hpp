@@ -172,6 +172,7 @@ enum class ExpressionClass : uint8_t {
 	BOUND_REF = 36,
 	BOUND_SUBQUERY = 37,
 	BOUND_WINDOW = 38,
+	BOUND_BETWEEN = 39,
 	//===--------------------------------------------------------------------===//
 	// Miscellaneous
 	//===--------------------------------------------------------------------===//

@@ -58,9 +58,15 @@ void VectorOperations::Or(Vector &left, Vector &right, Vector &result) {
 	templated_boolean_nullmask<duckdb::Or, duckdb::OrMask>(left, right, result);
 }
 
+struct NotOperator {
+	template <class TA, class TR> static inline TR Operation(TA left) {
+		return !left;
+	}
+};
+
 void VectorOperations::Not(Vector &left, Vector &result) {
 	if (left.type != TypeId::BOOLEAN) {
 		throw InvalidTypeException(left.type, "NOT() needs a boolean input");
 	}
-	templated_unary_loop<int8_t, int8_t, duckdb::Not>(left, result);
+	templated_unary_loop<bool, bool, NotOperator>(left, result);
 }

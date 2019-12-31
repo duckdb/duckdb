@@ -41,7 +41,7 @@ private:
 //! The ManyExpressionTypeMatcher class matches a set of ExpressionTypes
 class ManyExpressionTypeMatcher : public ExpressionTypeMatcher {
 public:
-	ManyExpressionTypeMatcher(vector<ExpressionType> types) : types(types) {
+	ManyExpressionTypeMatcher(vector<ExpressionType> types) : types(move(types)) {
 	}
 
 	bool Match(ExpressionType type) override {

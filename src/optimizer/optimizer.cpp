@@ -123,27 +123,42 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 }
 
 unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr) {
-	if (expr.type != ExpressionType::COMPARE_IN) {
-		return nullptr;
-	}
-	if (expr.children[0]->IsFoldable()) {
-		// LHS is scalar: we can flatten the entire list
-		return nullptr;
-	}
-	if (expr.children.size() < 6) {
-		// not enough children for flattening to be worth it
+	if (expr.type != ExpressionType::COMPARE_IN && expr.type != ExpressionType::COMPARE_NOT_IN) {
 		return nullptr;
 	}
 	assert(root);
 	auto in_type = expr.children[0]->return_type;
+	bool is_regular_in = expr.type == ExpressionType::COMPARE_IN;
+	bool all_scalar = true;
 	// IN clause with many children: try to generate a mark join that replaces this IN expression
 	// we can only do this if the expressions in the expression list are scalar
 	for (index_t i = 1; i < expr.children.size(); i++) {
 		assert(expr.children[i]->return_type == in_type);
 		if (!expr.children[i]->IsFoldable()) {
 			// non-scalar expression
-			return nullptr;
+			all_scalar = false;
 		}
+	}
+	if (expr.children.size() == 1) {
+		// only one child
+		// IN: turn into X = 1
+		// NOT IN: turn into X <> 1
+		return make_unique<BoundComparisonExpression>(is_regular_in ? ExpressionType::COMPARE_EQUAL
+		                                                            : ExpressionType::COMPARE_NOTEQUAL,
+		                                              move(expr.children[0]), move(expr.children[1]));
+	}
+	if (expr.children.size() < 6 || !all_scalar) {
+		// low amount of children or not all scalar
+		// IN: turn into (X = 1 OR X = 2 OR X = 3...)
+		// NOT IN: turn into (X <> 1 AND X <> 2 AND X <> 3 ...)
+		auto conjunction = make_unique<BoundConjunctionExpression>(is_regular_in ? ExpressionType::CONJUNCTION_OR
+		                                                                         : ExpressionType::CONJUNCTION_AND);
+		for (index_t i = 1; i < expr.children.size(); i++) {
+			conjunction->children.push_back(make_unique<BoundComparisonExpression>(
+			    is_regular_in ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOTEQUAL,
+			    expr.children[0]->Copy(), move(expr.children[i])));
+		}
+		return move(conjunction);
 	}
 	// IN clause with many constant children
 	// generate a mark join that replaces this IN expression
@@ -184,5 +199,13 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	root = move(join);
 
 	// we replace the original subquery with a BoundColumnRefExpression refering to the mark column
-	return make_unique<BoundColumnRefExpression>("IN (...)", TypeId::BOOLEAN, ColumnBinding(subquery_index, 0));
+	unique_ptr<Expression> result =
+	    make_unique<BoundColumnRefExpression>("IN (...)", TypeId::BOOLEAN, ColumnBinding(subquery_index, 0));
+	if (!is_regular_in) {
+		// NOT IN: invert
+		auto invert = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, TypeId::BOOLEAN);
+		invert->children.push_back(move(result));
+		result = move(invert);
+	}
+	return result;
 }
