@@ -207,5 +207,5 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 		invert->children.push_back(move(result));
 		result = move(invert);
 	}
-	return move(result);
+	return result;
 }
