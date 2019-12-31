@@ -3,8 +3,10 @@
 using namespace duckdb;
 using namespace std;
 
-BoundBetweenExpression::BoundBetweenExpression(unique_ptr<Expression> input, unique_ptr<Expression> lower, unique_ptr<Expression> upper, bool lower_inclusive, bool upper_inclusive)
-    : Expression(ExpressionType::COMPARE_BETWEEN, ExpressionClass::BOUND_BETWEEN, TypeId::BOOLEAN), input(move(input)), lower(move(lower)), upper(move(upper)), lower_inclusive(lower_inclusive), upper_inclusive(upper_inclusive) {
+BoundBetweenExpression::BoundBetweenExpression(unique_ptr<Expression> input, unique_ptr<Expression> lower,
+                                               unique_ptr<Expression> upper, bool lower_inclusive, bool upper_inclusive)
+    : Expression(ExpressionType::COMPARE_BETWEEN, ExpressionClass::BOUND_BETWEEN, TypeId::BOOLEAN), input(move(input)),
+      lower(move(lower)), upper(move(upper)), lower_inclusive(lower_inclusive), upper_inclusive(upper_inclusive) {
 }
 
 string BoundBetweenExpression::ToString() const {
@@ -29,7 +31,8 @@ bool BoundBetweenExpression::Equals(const BaseExpression *other_) const {
 }
 
 unique_ptr<Expression> BoundBetweenExpression::Copy() {
-	auto copy = make_unique<BoundBetweenExpression>(input->Copy(), lower->Copy(), upper->Copy(), lower_inclusive, upper_inclusive);
+	auto copy = make_unique<BoundBetweenExpression>(input->Copy(), lower->Copy(), upper->Copy(), lower_inclusive,
+	                                                upper_inclusive);
 	copy->CopyProperties(*this);
 	return move(copy);
 }

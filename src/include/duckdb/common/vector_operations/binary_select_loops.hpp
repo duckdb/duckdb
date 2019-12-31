@@ -58,15 +58,15 @@ index_t templated_binary_select(Vector &left, Vector &right, sel_t result[]) {
 		}
 		// left side is normal constant, use right nullmask and do
 		// computation
-		return binary_select_loop<LEFT_TYPE, RIGHT_TYPE, OP, true, false>(
-			ldata, rdata, result, right.count, right.sel_vector, right.nullmask);
+		return binary_select_loop<LEFT_TYPE, RIGHT_TYPE, OP, true, false>(ldata, rdata, result, right.count,
+		                                                                  right.sel_vector, right.nullmask);
 	} else if (right.IsConstant()) {
 		if (right.nullmask[0]) {
 			// right side is constant NULL, no results
 			return 0;
 		}
-		return binary_select_loop<LEFT_TYPE, RIGHT_TYPE, OP, false, true>(
-			ldata, rdata, result, left.count, left.sel_vector, left.nullmask);
+		return binary_select_loop<LEFT_TYPE, RIGHT_TYPE, OP, false, true>(ldata, rdata, result, left.count,
+		                                                                  left.sel_vector, left.nullmask);
 	} else {
 		assert(left.count == right.count);
 		assert(left.sel_vector == right.sel_vector);

@@ -16,12 +16,13 @@ namespace duckdb {
 
 template <class A_TYPE, class B_TYPE, class C_TYPE, class OP, bool A_CONSTANT, bool B_CONSTANT, bool C_CONSTANT>
 static inline index_t ternary_select_loop(A_TYPE *__restrict adata, B_TYPE *__restrict bdata, C_TYPE *__restrict cdata,
-                                         sel_t *__restrict result, index_t count, sel_t *__restrict sel_vector,
-                                         nullmask_t &nullmask) {
+                                          sel_t *__restrict result, index_t count, sel_t *__restrict sel_vector,
+                                          nullmask_t &nullmask) {
 	index_t result_count = 0;
 	if (nullmask.any()) {
 		VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
-			if (!nullmask[i] && OP::Operation(adata[A_CONSTANT ? 0 : i], bdata[B_CONSTANT ? 0 : i], cdata[C_CONSTANT ? 0 : i])) {
+			if (!nullmask[i] &&
+			    OP::Operation(adata[A_CONSTANT ? 0 : i], bdata[B_CONSTANT ? 0 : i], cdata[C_CONSTANT ? 0 : i])) {
 				result[result_count++] = i;
 			}
 		});
@@ -60,17 +61,20 @@ index_t templated_ternary_select(Vector &a, Vector &b, Vector &c, sel_t result[]
 				}
 			}
 			// AB constant
-			return ternary_select_loop<A_TYPE, B_TYPE, C_TYPE, OP, true, true, false>(adata, bdata, cdata, result, c.count, c.sel_vector, c.nullmask);
+			return ternary_select_loop<A_TYPE, B_TYPE, C_TYPE, OP, true, true, false>(
+			    adata, bdata, cdata, result, c.count, c.sel_vector, c.nullmask);
 		} else if (c.IsConstant()) {
 			if (c.nullmask[0]) {
 				return 0;
 			}
 			// AC constant
-			return ternary_select_loop<A_TYPE, B_TYPE, C_TYPE, OP, true, false, true>(adata, bdata, cdata, result, b.count, b.sel_vector, b.nullmask);
+			return ternary_select_loop<A_TYPE, B_TYPE, C_TYPE, OP, true, false, true>(
+			    adata, bdata, cdata, result, b.count, b.sel_vector, b.nullmask);
 		} else {
 			// A constant
 			auto nullmask = b.nullmask | c.nullmask;
-			return ternary_select_loop<A_TYPE, B_TYPE, C_TYPE, OP, true, false, false>(adata, bdata, cdata, result, b.count, b.sel_vector, nullmask);
+			return ternary_select_loop<A_TYPE, B_TYPE, C_TYPE, OP, true, false, false>(adata, bdata, cdata, result,
+			                                                                           b.count, b.sel_vector, nullmask);
 		}
 	} else if (b.IsConstant()) {
 		if (b.nullmask[0]) {
@@ -81,11 +85,13 @@ index_t templated_ternary_select(Vector &a, Vector &b, Vector &c, sel_t result[]
 				return 0;
 			}
 			// BC constant
-			return ternary_select_loop<A_TYPE, B_TYPE, C_TYPE, OP, false, true, true>(adata, bdata, cdata, result, a.count, a.sel_vector, a.nullmask);
+			return ternary_select_loop<A_TYPE, B_TYPE, C_TYPE, OP, false, true, true>(
+			    adata, bdata, cdata, result, a.count, a.sel_vector, a.nullmask);
 		} else {
 			// B constant
 			auto nullmask = a.nullmask | c.nullmask;
-			return ternary_select_loop<A_TYPE, B_TYPE, C_TYPE, OP, false, true, false>(adata, bdata, cdata, result, a.count, a.sel_vector, nullmask);
+			return ternary_select_loop<A_TYPE, B_TYPE, C_TYPE, OP, false, true, false>(adata, bdata, cdata, result,
+			                                                                           a.count, a.sel_vector, nullmask);
 		}
 	} else if (c.IsConstant()) {
 		if (c.nullmask[0]) {
@@ -93,11 +99,13 @@ index_t templated_ternary_select(Vector &a, Vector &b, Vector &c, sel_t result[]
 		}
 		// C constant
 		auto nullmask = a.nullmask | b.nullmask;
-		return ternary_select_loop<A_TYPE, B_TYPE, C_TYPE, OP, false, false, true>(adata, bdata, cdata, result, a.count, a.sel_vector, nullmask);
+		return ternary_select_loop<A_TYPE, B_TYPE, C_TYPE, OP, false, false, true>(adata, bdata, cdata, result, a.count,
+		                                                                           a.sel_vector, nullmask);
 	} else {
 		// no constants
 		auto nullmask = a.nullmask | b.nullmask | c.nullmask;
-		return ternary_select_loop<A_TYPE, B_TYPE, C_TYPE, OP, false, false, false>(adata, bdata, cdata, result, a.count, a.sel_vector, nullmask);
+		return ternary_select_loop<A_TYPE, B_TYPE, C_TYPE, OP, false, false, false>(adata, bdata, cdata, result,
+		                                                                            a.count, a.sel_vector, nullmask);
 	}
 }
 

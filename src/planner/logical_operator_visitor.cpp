@@ -153,7 +153,8 @@ unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundAggregateExpres
 	return nullptr;
 }
 
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundBetweenExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundBetweenExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }
 

@@ -14,7 +14,8 @@ namespace duckdb {
 
 class BoundBetweenExpression : public Expression {
 public:
-	BoundBetweenExpression(unique_ptr<Expression> input, unique_ptr<Expression> lower, unique_ptr<Expression> upper, bool lower_inclusive, bool upper_inclusive);
+	BoundBetweenExpression(unique_ptr<Expression> input, unique_ptr<Expression> lower, unique_ptr<Expression> upper,
+	                       bool lower_inclusive, bool upper_inclusive);
 
 	unique_ptr<Expression> input;
 	unique_ptr<Expression> lower;

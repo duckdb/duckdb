@@ -112,8 +112,8 @@ TEST_CASE("Test conjunction statements that can be simplified", "[conjunction]")
 	result = con.Query("SELECT i FROM integers WHERE (i IS NOT NULL AND i>1) OR (i IS NOT NULL AND i<10) ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 
-	result =
-	    con.Query("SELECT i FROM integers WHERE (i IS NULL AND (i+1) IS NULL) OR (i IS NULL AND (i+2) IS NULL) ORDER BY i");
+	result = con.Query(
+	    "SELECT i FROM integers WHERE (i IS NULL AND (i+1) IS NULL) OR (i IS NULL AND (i+2) IS NULL) ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 
 	result = con.Query("SELECT i FROM integers WHERE i=1 OR 1=1 ORDER BY i");

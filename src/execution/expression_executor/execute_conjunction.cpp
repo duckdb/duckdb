@@ -61,7 +61,7 @@ static void MergeSelectionVectorIntoResult(sel_t *result, index_t &result_count,
 	sel_t temp_result[STANDARD_VECTOR_SIZE];
 	index_t res_idx = 0, sel_idx = 0;
 	index_t temp_count = 0;
-	while(true) {
+	while (true) {
 		// the two sets should be disjunct
 		assert(result[res_idx] != sel[sel_idx]);
 		if (result[res_idx] < sel[sel_idx]) {
@@ -135,7 +135,8 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 		sel_t *result_vector = initial_sel == result ? intermediate_result : result;
 		for (index_t expr_idx = 0; expr_idx < expr.children.size(); expr_idx++) {
 			// first resolve the current expression
-			index_t new_count = Select(*expr.children[expr_idx], state->child_states[expr_idx].get(), expression_result);
+			index_t new_count =
+			    Select(*expr.children[expr_idx], state->child_states[expr_idx].get(), expression_result);
 			if (new_count == 0) {
 				// no new qualifying entries: continue
 				continue;
@@ -161,7 +162,7 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 			// we figure this out by performing a merge of the remaining tuples and the resulting selection vector
 			index_t new_idx = 0;
 			remaining_count = 0;
-			for(index_t i = 0; i < current_count; i++) {
+			for (index_t i = 0; i < current_count; i++) {
 				auto entry = current_sel ? current_sel[i] : i;
 				if (new_idx >= new_count || expression_result[new_idx] != entry) {
 					remaining[remaining_count++] = entry;

@@ -10,7 +10,7 @@ using namespace std;
 #define IN_LIST_ROW_COUNT 1000000
 #define STRING_LENGTH 4
 
-#define IN_QUERY_BODY(INCOUNT, NOT_IN)                                                                                         \
+#define IN_QUERY_BODY(INCOUNT, NOT_IN)                                                                                 \
 	static constexpr const char *chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";                                                 \
 	string in_list;                                                                                                    \
 	static string GenerateString(std::uniform_int_distribution<> &distribution, std::mt19937 &gen) {                   \
@@ -40,7 +40,7 @@ using namespace std;
 		}                                                                                                              \
 	}                                                                                                                  \
 	virtual string GetQuery() {                                                                                        \
-		return "SELECT * FROM strings WHERE s " + (NOT_IN ? string("NOT ") : string("")) + "IN (" + in_list + ")";      \
+		return "SELECT * FROM strings WHERE s " + (NOT_IN ? string("NOT ") : string("")) + "IN (" + in_list + ")";     \
 	}                                                                                                                  \
 	virtual string VerifyResult(QueryResult *result) {                                                                 \
 		if (!result->success) {                                                                                        \

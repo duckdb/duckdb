@@ -59,8 +59,7 @@ void VectorOperations::Or(Vector &left, Vector &right, Vector &result) {
 }
 
 struct NotOperator {
-	template<class TA, class TR>
-	static inline TR Operation(TA left) {
+	template <class TA, class TR> static inline TR Operation(TA left) {
 		return !left;
 	}
 };

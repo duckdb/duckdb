@@ -253,8 +253,8 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection
 	case WindowBoundary::EXPR_FOLLOWING:
 		assert(boundary_end_collection.column_count() > 0);
 		bounds.window_end =
-		    row_idx + boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>() +
-		    1;
+		    row_idx +
+		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>() + 1;
 
 		break;
 	default:

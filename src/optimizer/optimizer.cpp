@@ -143,15 +143,20 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 		// only one child
 		// IN: turn into X = 1
 		// NOT IN: turn into X <> 1
-		return make_unique<BoundComparisonExpression>(is_regular_in ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOTEQUAL, move(expr.children[0]), move(expr.children[1]));
+		return make_unique<BoundComparisonExpression>(is_regular_in ? ExpressionType::COMPARE_EQUAL
+		                                                            : ExpressionType::COMPARE_NOTEQUAL,
+		                                              move(expr.children[0]), move(expr.children[1]));
 	}
 	if (expr.children.size() < 6 || !all_scalar) {
 		// low amount of children or not all scalar
 		// IN: turn into (X = 1 OR X = 2 OR X = 3...)
 		// NOT IN: turn into (X <> 1 AND X <> 2 AND X <> 3 ...)
-		auto conjunction = make_unique<BoundConjunctionExpression>(is_regular_in ? ExpressionType::CONJUNCTION_OR : ExpressionType::CONJUNCTION_AND);
-		for(index_t i = 1; i < expr.children.size(); i++) {
-			conjunction->children.push_back(make_unique<BoundComparisonExpression>(is_regular_in ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOTEQUAL, expr.children[0]->Copy(), move(expr.children[i])));
+		auto conjunction = make_unique<BoundConjunctionExpression>(is_regular_in ? ExpressionType::CONJUNCTION_OR
+		                                                                         : ExpressionType::CONJUNCTION_AND);
+		for (index_t i = 1; i < expr.children.size(); i++) {
+			conjunction->children.push_back(make_unique<BoundComparisonExpression>(
+			    is_regular_in ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOTEQUAL,
+			    expr.children[0]->Copy(), move(expr.children[i])));
 		}
 		return move(conjunction);
 	}
@@ -194,7 +199,8 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	root = move(join);
 
 	// we replace the original subquery with a BoundColumnRefExpression refering to the mark column
-	unique_ptr<Expression> result = make_unique<BoundColumnRefExpression>("IN (...)", TypeId::BOOLEAN, ColumnBinding(subquery_index, 0));
+	unique_ptr<Expression> result =
+	    make_unique<BoundColumnRefExpression>("IN (...)", TypeId::BOOLEAN, ColumnBinding(subquery_index, 0));
 	if (!is_regular_in) {
 		// NOT IN: invert
 		auto invert = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, TypeId::BOOLEAN);

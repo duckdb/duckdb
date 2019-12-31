@@ -68,7 +68,7 @@ void templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 		}
 		result.nullmask = right.nullmask;
 		binary_function_loop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL, true, false>(
-			ldata, rdata, result_data, result.count, result.sel_vector, result.nullmask);
+		    ldata, rdata, result_data, result.count, result.sel_vector, result.nullmask);
 	} else if (right.IsConstant()) {
 		// right side is constant
 		result.sel_vector = left.sel_vector;
@@ -79,7 +79,7 @@ void templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 		}
 		result.nullmask = left.nullmask;
 		binary_function_loop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL, false, true>(
-			ldata, rdata, result_data, result.count, result.sel_vector, result.nullmask);
+		    ldata, rdata, result_data, result.count, result.sel_vector, result.nullmask);
 	} else {
 		// neither side is a constant: loop over everything
 		assert(left.count == right.count);
@@ -88,8 +88,8 @@ void templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 		result.sel_vector = left.sel_vector;
 		result.count = left.count;
 		result.nullmask = left.nullmask | right.nullmask;
-		binary_function_loop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL, false, false>(ldata, rdata, result_data, result.count,
-		                                                                       result.sel_vector, result.nullmask);
+		binary_function_loop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, IGNORE_NULL, false, false>(
+		    ldata, rdata, result_data, result.count, result.sel_vector, result.nullmask);
 	}
 }
 
@@ -131,7 +131,8 @@ template <class T, class OP> void templated_divmod_loop(Vector &left, Vector &ri
 		// right side is normal constant, use left nullmask and do
 		// computation
 		result.nullmask = left.nullmask;
-		binary_function_loop<T, T, T, OP, false, false, true>(ldata, rdata, result_data, result.count, result.sel_vector, result.nullmask);
+		binary_function_loop<T, T, T, OP, false, false, true>(ldata, rdata, result_data, result.count,
+		                                                      result.sel_vector, result.nullmask);
 	} else {
 		assert(left.count == right.count);
 		// OR nullmasks together

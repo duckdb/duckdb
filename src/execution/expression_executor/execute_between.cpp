@@ -7,7 +7,6 @@
 using namespace duckdb;
 using namespace std;
 
-
 struct BothInclusiveBetweenOperator {
 	template <class T> static inline bool Operation(T input, T lower, T upper) {
 		return GreaterThanEquals::Operation<T>(input, lower) && LessThanEquals::Operation<T>(input, upper);
@@ -32,9 +31,9 @@ struct ExclusiveBetweenOperator {
 	}
 };
 
-template<class OP>
+template <class OP>
 static index_t between_loop_type_switch(Vector &input, Vector &lower, Vector &upper, sel_t result[]) {
-	switch(input.type) {
+	switch (input.type) {
 	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
 		return templated_ternary_select<int8_t, int8_t, int8_t, OP>(input, lower, upper, result);
