@@ -126,24 +126,29 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	if (expr.type != ExpressionType::COMPARE_IN) {
 		return nullptr;
 	}
-	if (expr.children[0]->IsFoldable()) {
-		// LHS is scalar: we can flatten the entire list
-		return nullptr;
-	}
-	if (expr.children.size() < 6) {
-		// not enough children for flattening to be worth it
-		return nullptr;
-	}
 	assert(root);
 	auto in_type = expr.children[0]->return_type;
+	bool all_scalar = true;
 	// IN clause with many children: try to generate a mark join that replaces this IN expression
 	// we can only do this if the expressions in the expression list are scalar
 	for (index_t i = 1; i < expr.children.size(); i++) {
 		assert(expr.children[i]->return_type == in_type);
 		if (!expr.children[i]->IsFoldable()) {
 			// non-scalar expression
-			return nullptr;
+			all_scalar = false;
 		}
+	}
+	if (expr.children.size() == 1) {
+		// only one child: turn into equality comparison
+		return make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(expr.children[0]), move(expr.children[1]));
+	}
+	if (expr.children.size() < 6 || !all_scalar) {
+		// low amount of children or not all scalar, turn into big OR
+		auto conjunction = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
+		for(index_t i = 1; i < expr.children.size(); i++) {
+			conjunction->children.push_back(make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, expr.children[0]->Copy(), move(expr.children[i])));
+		}
+		return move(conjunction);
 	}
 	// IN clause with many constant children
 	// generate a mark join that replaces this IN expression
