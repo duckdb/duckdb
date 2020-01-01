@@ -27,10 +27,6 @@ public:
 public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-private:
-	void BuildHashTable(ClientContext &context, PhysicalOperatorState *state_);
-	void ProbeHashTable(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_);
-
 };
 
 } // namespace duckdb
