@@ -1,5 +1,8 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
@@ -18,13 +21,13 @@ public:
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
 };
 
-PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
+PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type) {
-	hash_table = make_unique<JoinHashTable>(conditions, right->GetTypes(), join_type);
-
 	children.push_back(move(left));
 	children.push_back(move(right));
+
+	hash_table = make_unique<JoinHashTable>(*context.db.storage->buffer_manager, conditions, children[1]->GetTypes(), type);
 }
 
 void PhysicalHashJoin::BuildHashTable(ClientContext &context, PhysicalOperatorState *state_) {

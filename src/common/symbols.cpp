@@ -137,7 +137,6 @@ template class std::unique_ptr<Vector[]>;
 template class std::unique_ptr<DataChunk>;
 template class std::unique_ptr<JoinHashTable>;
 template class std::unique_ptr<JoinHashTable::ScanStructure>;
-template class std::unique_ptr<JoinHashTable::Node>;
 template class std::unique_ptr<data_ptr_t[]>;
 template class std::unique_ptr<Rule>;
 template class std::unique_ptr<LogicalFilter>;

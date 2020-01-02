@@ -19,7 +19,7 @@ namespace duckdb {
 //! PhysicalHashJoin represents a hash loop join between two tables
 class PhysicalHashJoin : public PhysicalComparisonJoin {
 public:
-	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
+	PhysicalHashJoin(ClientContext &context, LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	                 vector<JoinCondition> cond, JoinType join_type);
 
 	unique_ptr<JoinHashTable> hash_table;
