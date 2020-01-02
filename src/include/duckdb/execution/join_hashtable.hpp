@@ -74,8 +74,7 @@ public:
 
 		index_t ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
-		//! Check the given set of keys against the data stored in the set of pointers; returns the amount of matches found
-		index_t ResolvePredicates(DataChunk &keys, sel_t result[]);
+		void ResolvePredicates(DataChunk &keys, Vector &comparison_result);
 	};
 
 private:
