@@ -772,6 +772,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &
 
 		auto ptrs = (data_ptr_t *)pointers.data;
 		// after doing all the comparisons we loop to find all the actual matches
+		index_t new_count = 0;
 		VectorOperations::ExecType<bool>(comparison_result, [&](bool match, index_t index, index_t k) {
 			if (match) {
 				// found a match for this index
@@ -780,17 +781,13 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &
 				build_pointers[result_count] = ptrs[index];
 				result_sel_vector[result_count] = index;
 				result_count++;
-			}
-		});
-
-		// finally we chase the pointers for the next iteration
-		index_t new_count = 0;
-		VectorOperations::Exec(pointers, [&](index_t index, index_t k) {
-			auto prev_pointer = (data_ptr_t *)(ptrs[index] + ht.build_size);
-			ptrs[index] = *prev_pointer;
-			if (ptrs[index] && !found_match[index]) {
-				// if there is a next pointer, and we have not found a match yet, we keep this entry
-				pointers.sel_vector[new_count++] = index;
+			} else {
+				auto prev_pointer = (data_ptr_t *)(ptrs[index] + ht.build_size);
+				ptrs[index] = *prev_pointer;
+				if (ptrs[index]) {
+					// if there is a next pointer, and we have not found a match yet, we keep this entry
+					pointers.sel_vector[new_count++] = index;
+				}
 			}
 		});
 		pointers.count = new_count;
