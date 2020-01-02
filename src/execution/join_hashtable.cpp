@@ -22,21 +22,9 @@ static void SerializeChunk(DataChunk &source, data_ptr_t targets[]) {
 	}
 }
 
-static void DeserializeChunk(DataChunk &result, data_ptr_t source[], index_t count) {
-	Vector source_vector(TypeId::POINTER, (data_ptr_t)source);
-	source_vector.count = count;
-
-	index_t offset = 0;
-	for (index_t i = 0; i < result.column_count; i++) {
-		VectorOperations::Gather::Set(source_vector, result.data[i], false, offset);
-		offset += GetTypeIdSize(result.data[i].type);
-	}
-}
-
-JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type,
-							 index_t initial_capacity, bool parallel)
+JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type, bool parallel)
 	: build_types(build_types), equality_size(0), condition_size(0), build_size(0), entry_size(0), tuple_size(0),
-	  join_type(type), finalized(false), has_null(false), capacity(0), count(0), parallel(parallel) {
+	  join_type(type), finalized(false), has_null(false), count(0), parallel(parallel) {
 	for (auto &condition : conditions) {
 		assert(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;

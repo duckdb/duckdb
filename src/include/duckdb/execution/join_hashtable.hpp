@@ -99,8 +99,7 @@ private:
 	void Hash(DataChunk &keys, Vector &hashes);
 
 public:
-	JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type,
-	              index_t initial_capacity = 32768, bool parallel = false);
+	JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type, bool parallel = false);
 	//! Add the given data to the HT
 	void Build(DataChunk &keys, DataChunk &input);
 	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing. Finalize must be called before any call to Probe, and after Finalize is called Build should no longer be ever called.
@@ -164,9 +163,7 @@ private:
 	//! Insert the given set of locations into the HT with the given set of
 	//! hashes. Caller should hold lock in parallel HT.
 	void InsertHashes(Vector &hashes, data_ptr_t key_locations[]);
-	//! The capacity of the HT. This can be increased using
-	//! JoinHashTable::Resize
-	index_t capacity;
+
 	//! The amount of entries stored in the HT currently
 	index_t count;
 	//! The data of the HT
