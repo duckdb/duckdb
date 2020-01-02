@@ -76,7 +76,7 @@ JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> b
 }
 
 void JoinHashTable::ApplyBitmask(Vector &hashes) {
-	auto indices = (index_t *)hashes.data;
+	auto indices = (uint64_t *)hashes.data;
 	VectorOperations::Exec(hashes, [&](index_t i, index_t k) { indices[i] = indices[i] & bitmask; });
 }
 
@@ -285,6 +285,7 @@ void JoinHashTable::Finalize() {
 }
 
 unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
+	assert(count > 0); // should be handled before
 	assert(finalized);
 	assert(!keys.sel_vector); // should be flattened before
 
@@ -297,7 +298,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	// scan structure
 	auto ss = make_unique<ScanStructure>(*this);
 	// first hash all the keys to do the lookup
-	StaticVector<uint64_t> hashes;
+	Vector hashes(TypeId::HASH, true, false);
 	Hash(keys, hashes);
 
 	// use bitmask to get index in array

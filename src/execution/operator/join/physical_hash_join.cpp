@@ -108,6 +108,18 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 					result_vector.nullmask.set();
 				}
 				return;
+			} else if (hash_table->join_type == JoinType::LEFT || hash_table->join_type == JoinType::OUTER || hash_table->join_type == JoinType::SINGLE) {
+				// LEFT/FULL OUTER/SINGLE join and build side is empty
+				// for the LHS we reference the data
+				for (index_t i = 0; i < state->child_chunk.column_count; i++) {
+					chunk.data[i].Reference(state->child_chunk.data[i]);
+				}
+				// for the RHS
+				for(index_t k = state->child_chunk.column_count; k < chunk.column_count; k++) {
+					chunk.data[k].count = state->child_chunk.size();
+					chunk.data[k].nullmask.set();
+				}
+				return;
 			}
 		}
 		// resolve the join keys for the left chunk
