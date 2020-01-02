@@ -101,11 +101,10 @@ private:
 public:
 	JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type,
 	              index_t initial_capacity = 32768, bool parallel = false);
-	//! Resize the HT to the specified size. Must be larger than the current
-	//! size.
-	void Resize(index_t size);
 	//! Add the given data to the HT
 	void Build(DataChunk &keys, DataChunk &input);
+	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing. Finalize must be called before any call to Probe, and after Finalize is called Build should no longer be ever called.
+	void Finalize();
 	//! Probe the HT with the given input chunk, resulting in the given result
 	unique_ptr<ScanStructure> Probe(DataChunk &keys);
 
@@ -136,6 +135,8 @@ public:
 	index_t tuple_size;
 	//! The join type of the HT
 	JoinType join_type;
+	//! Whether or not the HT has been finalized
+	bool finalized;
 	//! Whether or not any of the key elements contain NULL
 	bool has_null;
 	//! Bitmask for getting relevant bits from the hashes to determine the position

@@ -50,12 +50,7 @@ void PhysicalHashJoin::BuildHashTable(ClientContext &context, PhysicalOperatorSt
 		// build the HT
 		hash_table->Build(state->join_keys, right_chunk);
 	}
-
-	if (hash_table->size() == 0 &&
-		(hash_table->join_type == JoinType::INNER || hash_table->join_type == JoinType::SEMI)) {
-		// empty hash table with INNER or SEMI join means empty result set
-		return;
-	}
+	hash_table->Finalize();
 }
 
 void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
@@ -134,6 +129,12 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 		state->cached_chunk.Initialize(types);
 		BuildHashTable(context, state_);
 		state->initialized = true;
+
+		if (hash_table->size() == 0 &&
+			(hash_table->join_type == JoinType::INNER || hash_table->join_type == JoinType::SEMI)) {
+			// empty hash table with INNER or SEMI join means empty result set
+			return;
+		}
 	}
 	do {
 		ProbeHashTable(context, chunk, state);
