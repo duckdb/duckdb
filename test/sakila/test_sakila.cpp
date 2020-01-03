@@ -97,7 +97,7 @@ TEST_CASE("Run Sakila test queries", "[sakila][.]") {
 
 	result = con.Query(
 	    "SELECT first_name, last_name, SUM(amount) as total_paid FROM payment INNER JOIN customer ON "
-	    "payment.customer_id = customer.customer_id GROUP BY first_name, last_name ORDER BY total_paid desc limit 10");
+	    "payment.customer_id = customer.customer_id GROUP BY first_name, last_name ORDER BY total_paid desc, first_name limit 10");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(CHECK_COLUMN(result, 0,
 	                     {"KARL", "ELEANOR", "CLARA", "MARION", "RHONDA", "TOMMY", "WESLEY", "TIM", "MARCIA", "ANA"}));
