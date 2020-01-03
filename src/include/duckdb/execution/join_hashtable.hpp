@@ -75,6 +75,7 @@ public:
 		index_t ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
 		void ResolvePredicates(DataChunk &keys, Vector &comparison_result);
+		index_t ResolvePredicates(DataChunk &keys, sel_t comparison_result[]);
 	};
 
 private:

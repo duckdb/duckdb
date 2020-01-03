@@ -24,6 +24,12 @@ TEST_CASE("Test basic joins of tables", "[joins]") {
 		REQUIRE(CHECK_COLUMN(result, 1, {1, 1, 2}));
 		REQUIRE(CHECK_COLUMN(result, 2, {10, 20, 30}));
 	}
+	SECTION("simple cross product + multiple join conditions") {
+		result = con.Query("SELECT a, test.b, c FROM test, test2 WHERE test.b=test2.b AND test.a-1=test2.c");
+		REQUIRE(CHECK_COLUMN(result, 0, {11}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1}));
+		REQUIRE(CHECK_COLUMN(result, 2, {10}));
+	}
 	SECTION("use join columns in subquery") {
 		result = con.Query("SELECT a, (SELECT test.a), c FROM test, test2 WHERE "
 		                   "test.b = test2.b ORDER BY c;");
