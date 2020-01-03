@@ -125,6 +125,9 @@ static void scatter_set_all_loop(Vector &source, data_ptr_t dest[], index_t offs
 	case TypeId::BIGINT:
 		scatter_set_loop<int64_t, IGNORE_NULL>(source, dest, offset);
 		break;
+	case TypeId::HASH:
+		scatter_set_loop<uint64_t, IGNORE_NULL>(source, dest, offset);
+		break;
 	case TypeId::FLOAT:
 		scatter_set_loop<float, IGNORE_NULL>(source, dest, offset);
 		break;

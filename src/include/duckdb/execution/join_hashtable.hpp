@@ -13,10 +13,13 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 #include <mutex>
 
 namespace duckdb {
+class BufferManager;
+class BufferHandle;
 
 //! JoinHashTable is a linear probing HT that is used for computing joins
 /*!
@@ -72,40 +75,32 @@ public:
 		index_t ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
 		void ResolvePredicates(DataChunk &keys, Vector &comparison_result);
+		index_t ResolvePredicates(DataChunk &keys, sel_t comparison_result[]);
 	};
 
 private:
 	//! Nodes store the actual data of the tuples inside the HT as a linked list
-	struct Node {
+	struct HTDataBlock {
 		index_t count;
 		index_t capacity;
-		unique_ptr<data_t[]> data;
-		unique_ptr<Node> prev;
-
-		Node(index_t tuple_size, index_t capacity) : count(0), capacity(capacity) {
-			data = unique_ptr<data_t[]>(new data_t[tuple_size * capacity]);
-			memset(data.get(), 0, tuple_size * capacity);
-		}
-		~Node() {
-			if (prev) {
-				auto current_prev = move(prev);
-				while (current_prev) {
-					current_prev = move(current_prev->prev);
-				}
-			}
-		}
+		block_id_t block_id;
 	};
+
+	index_t AppendToBlock(HTDataBlock &block, BufferHandle &handle, Vector &key_data, data_ptr_t key_locations[],
+	                      data_ptr_t tuple_locations[], data_ptr_t hash_locations[], index_t remaining);
 
 	void Hash(DataChunk &keys, Vector &hashes);
 
 public:
-	JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type,
-	              index_t initial_capacity = 32768, bool parallel = false);
-	//! Resize the HT to the specified size. Must be larger than the current
-	//! size.
-	void Resize(index_t size);
+	JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions, vector<TypeId> build_types,
+	              JoinType type);
+	~JoinHashTable();
+
 	//! Add the given data to the HT
 	void Build(DataChunk &keys, DataChunk &input);
+	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing. Finalize
+	//! must be called before any call to Probe, and after Finalize is called Build should no longer be ever called.
+	void Finalize();
 	//! Probe the HT with the given input chunk, resulting in the given result
 	unique_ptr<ScanStructure> Probe(DataChunk &keys);
 
@@ -116,6 +111,7 @@ public:
 		return count;
 	}
 
+	BufferManager &buffer_manager;
 	//! The types of the keys used in equality comparison
 	vector<TypeId> equality_types;
 	//! The types of the keys
@@ -136,10 +132,14 @@ public:
 	index_t tuple_size;
 	//! The join type of the HT
 	JoinType join_type;
+	//! Whether or not the HT has been finalized
+	bool finalized;
 	//! Whether or not any of the key elements contain NULL
 	bool has_null;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	uint64_t bitmask;
+	//! The amount of entries stored per block
+	index_t block_capacity;
 
 	struct {
 		//! The types of the duplicate eliminated columns, only used in correlated MARK JOIN for flattening ANY()/ALL()
@@ -163,19 +163,15 @@ private:
 	//! Insert the given set of locations into the HT with the given set of
 	//! hashes. Caller should hold lock in parallel HT.
 	void InsertHashes(Vector &hashes, data_ptr_t key_locations[]);
-	//! The capacity of the HT. This can be increased using
-	//! JoinHashTable::Resize
-	index_t capacity;
+
 	//! The amount of entries stored in the HT currently
 	index_t count;
-	//! The data of the HT
-	unique_ptr<Node> head;
-	//! The hash map of the HT
-	unique_ptr<data_ptr_t[]> hashed_pointers;
-	//! Whether or not the HT has to support parallel build
-	bool parallel = false;
-	//! Mutex used for parallelism
-	std::mutex parallel_lock;
+	//! The blocks holding the main data of the hash table
+	vector<HTDataBlock> blocks;
+	//! Pinned handles, these are pinned during finalization only
+	vector<unique_ptr<BufferHandle>> pinned_handles;
+	//! The hash map of the HT, created after finalization
+	unique_ptr<BufferHandle> hash_map;
 	//! Whether or not NULL values are considered equal in each of the comparisons
 	vector<bool> null_values_are_equal;
 

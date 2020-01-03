@@ -23,7 +23,7 @@ TEST_CASE("Table subquery", "[subquery]") {
 
 	// join with subqueries
 	result = con.Query("SELECT a.i,a.j,b.r,b.j FROM (SELECT i, j FROM test) AS a "
-	                   "INNER JOIN (SELECT i+1 AS r,j FROM test) AS b ON a.i=b.r;");
+	                   "INNER JOIN (SELECT i+1 AS r,j FROM test) AS b ON a.i=b.r ORDER BY 1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 5}));
 	REQUIRE(CHECK_COLUMN(result, 1, {5, 6}));
 	REQUIRE(CHECK_COLUMN(result, 2, {4, 5}));

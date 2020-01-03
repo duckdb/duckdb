@@ -18,21 +18,11 @@ namespace duckdb {
 // bias
 // see: https://nullprogram.com/blog/2018/07/31/
 inline uint64_t murmurhash32(uint32_t x) {
-	x ^= x >> 16;
-	x *= UINT32_C(0x85ebca6b);
-	x ^= x >> 13;
-	x *= UINT32_C(0xc2b2ae35);
-	x ^= x >> 16;
-	return (uint64_t)x;
+	return x * UINT32_C(0x85ebca6b);
 }
 
 inline uint64_t murmurhash64(uint64_t x) {
-	x ^= x >> 30;
-	x *= UINT64_C(0xbf58476d1ce4e5b9);
-	x ^= x >> 27;
-	x *= UINT64_C(0x94d049bb133111eb);
-	x ^= x >> 31;
-	return x;
+	return x * UINT64_C(0xbf58476d1ce4e5b9);
 }
 
 template <class T> uint64_t Hash(T value) {

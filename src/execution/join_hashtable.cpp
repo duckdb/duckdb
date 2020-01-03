@@ -1,5 +1,7 @@
 #include "duckdb/execution/join_hashtable.hpp"
 
+#include "duckdb/storage/buffer_manager.hpp"
+
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/static_vector.hpp"
@@ -22,21 +24,10 @@ static void SerializeChunk(DataChunk &source, data_ptr_t targets[]) {
 	}
 }
 
-static void DeserializeChunk(DataChunk &result, data_ptr_t source[], index_t count) {
-	Vector source_vector(TypeId::POINTER, (data_ptr_t)source);
-	source_vector.count = count;
-
-	index_t offset = 0;
-	for (index_t i = 0; i < result.column_count; i++) {
-		VectorOperations::Gather::Set(source_vector, result.data[i], false, offset);
-		offset += GetTypeIdSize(result.data[i].type);
-	}
-}
-
-JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type,
-                             index_t initial_capacity, bool parallel)
-    : build_types(build_types), equality_size(0), condition_size(0), build_size(0), entry_size(0), tuple_size(0),
-      join_type(type), has_null(false), capacity(0), count(0), parallel(parallel) {
+JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions,
+                             vector<TypeId> build_types, JoinType type)
+    : buffer_manager(buffer_manager), build_types(build_types), equality_size(0), condition_size(0), build_size(0),
+      entry_size(0), tuple_size(0), join_type(type), finalized(false), has_null(false), count(0) {
 	for (auto &condition : conditions) {
 		assert(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
@@ -71,103 +62,27 @@ JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> b
 		}
 	}
 	tuple_size = condition_size + build_size;
-	entry_size = tuple_size + sizeof(void *);
-	Resize(initial_capacity);
+	// entry size is the tuple size and the size of the hash/next pointer
+	entry_size = tuple_size + std::max(sizeof(uint64_t), sizeof(void *));
+	// compute the per-block capacity of this HT
+	block_capacity = std::max((index_t)STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / entry_size) + 1);
+}
+
+JoinHashTable::~JoinHashTable() {
+	if (hash_map) {
+		auto hash_id = hash_map->block_id;
+		hash_map.reset();
+		buffer_manager.DestroyBuffer(hash_id);
+	}
+	pinned_handles.clear();
+	for (auto &block : blocks) {
+		buffer_manager.DestroyBuffer(block.block_id);
+	}
 }
 
 void JoinHashTable::ApplyBitmask(Vector &hashes) {
-	auto indices = (index_t *)hashes.data;
+	auto indices = (uint64_t *)hashes.data;
 	VectorOperations::Exec(hashes, [&](index_t i, index_t k) { indices[i] = indices[i] & bitmask; });
-}
-
-void JoinHashTable::InsertHashes(Vector &hashes, data_ptr_t key_locations[]) {
-	assert(hashes.type == TypeId::HASH);
-
-	// use bitmask to get position in array
-	ApplyBitmask(hashes);
-
-	auto pointers = hashed_pointers.get();
-	auto indices = (index_t *)hashes.data;
-	// now fill in the entries
-	VectorOperations::Exec(hashes, [&](index_t i, index_t k) {
-		auto index = indices[i];
-		// set prev in current key to the value (NOTE: this will be nullptr if
-		// there is none)
-		auto prev_pointer = (data_ptr_t *)(key_locations[i] + tuple_size);
-		*prev_pointer = pointers[index];
-
-		// set pointer to current tuple
-		pointers[index] = key_locations[i];
-	});
-}
-
-void JoinHashTable::Resize(index_t size) {
-	if (size <= capacity) {
-		throw Exception("Cannot downsize a hash table!");
-	}
-	capacity = size;
-
-	// size needs to be a power of 2
-	assert((size & (size - 1)) == 0);
-	bitmask = size - 1;
-
-	hashed_pointers = unique_ptr<data_ptr_t[]>(new data_ptr_t[capacity]);
-	memset(hashed_pointers.get(), 0, capacity * sizeof(data_ptr_t));
-
-	if (count > 0) {
-		// we have entries, need to rehash the pointers
-		// first reset all chain pointers to the nullptr
-		// we could do this by actually following the chains in the
-		// hashed_pointers as well might be more or less efficient depending on
-		// length of chains?
-		auto node = head.get();
-		while (node) {
-			// scan all the entries in this node
-			auto entry_pointer = (data_ptr_t)node->data.get() + tuple_size;
-			for (index_t i = 0; i < node->count; i++) {
-				// reset chain pointer
-				auto prev_pointer = (data_ptr_t *)entry_pointer;
-				*prev_pointer = nullptr;
-				// move to next entry
-				entry_pointer += entry_size;
-			}
-			node = node->prev.get();
-		}
-
-		// now rehash the entries
-		DataChunk keys;
-		keys.Initialize(equality_types);
-
-		data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
-
-		node = head.get();
-		while (node) {
-			// scan all the entries in this node
-			auto dataptr = node->data.get();
-			for (index_t i = 0; i < node->count; i++) {
-				// key is stored at the start
-				key_locations[i] = dataptr;
-				// move to next entry
-				dataptr += entry_size;
-			}
-
-			// reconstruct the keys chunk from the stored entries
-			// we only reconstruct the keys that are part of the equality
-			// comparison as these are the ones that are used to compute the
-			// hash
-			DeserializeChunk(keys, key_locations, node->count);
-
-			// create the hash
-			StaticVector<uint64_t> hashes;
-			keys.Hash(hashes);
-
-			// re-insert the entries
-			InsertHashes(hashes, key_locations);
-
-			// move to the next node
-			node = node->prev.get();
-		}
-	}
 }
 
 void JoinHashTable::Hash(DataChunk &keys, Vector &hashes) {
@@ -195,26 +110,38 @@ static index_t CreateNotNullSelVector(DataChunk &keys, sel_t *not_null_sel_vecto
 	return result_count;
 }
 
+index_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, Vector &key_data,
+                                     data_ptr_t key_locations[], data_ptr_t tuple_locations[],
+                                     data_ptr_t hash_locations[], index_t remaining) {
+	index_t append_count = std::min(remaining, block.capacity - block.count);
+	auto dataptr = handle.node->buffer + block.count * entry_size;
+	index_t offset = key_data.count - remaining;
+	VectorOperations::Exec(
+	    key_data,
+	    [&](index_t i, index_t k) {
+		    // key is stored at the start
+		    key_locations[i] = dataptr;
+		    // after that the build-side tuple is stored
+		    tuple_locations[i] = dataptr + condition_size;
+		    // the hash is stored at the end, after the key and build
+		    hash_locations[i] = dataptr + tuple_size;
+		    dataptr += entry_size;
+	    },
+	    offset, append_count);
+	block.count += append_count;
+	return append_count;
+}
+
 void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
+	assert(!finalized);
 	assert(keys.size() == payload.size());
 	if (keys.size() == 0) {
 		return;
-	}
-	// resize at 50% capacity, also need to fit the entire vector
-	if (parallel) {
-		parallel_lock.lock();
-	}
-	if (count + keys.size() > capacity / 2) {
-		Resize(capacity * 2);
 	}
 	count += keys.size();
 	// move strings to the string heap
 	keys.MoveStringsToHeap(string_heap);
 	payload.MoveStringsToHeap(string_heap);
-
-	if (parallel) {
-		parallel_lock.unlock();
-	}
 
 	// for any columns for which null values are equal, fill the NullMask
 	assert(keys.column_count == null_values_are_equal.size());
@@ -267,46 +194,135 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		}
 	}
 
-	// get the locations of where to serialize the keys and payload columns
+	vector<unique_ptr<BufferHandle>> handles;
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	data_ptr_t tuple_locations[STANDARD_VECTOR_SIZE];
-	auto node = make_unique<Node>(entry_size, keys.size());
-	auto dataptr = node->data.get();
-	VectorOperations::Exec(keys.data[0], [&](index_t i, index_t k) {
-		// key is stored at the start
-		key_locations[i] = dataptr;
-		// after that the build-side tuple is stored
-		tuple_locations[i] = dataptr + condition_size;
-		dataptr += entry_size;
-	});
-	node->count = keys.size();
+	data_ptr_t hash_locations[STANDARD_VECTOR_SIZE];
+	// first allocate space of where to serialize the keys and payload columns
+	index_t remaining = keys.data[0].count;
+	// first append to the last block (if any)
+	if (blocks.size() != 0) {
+		auto &last_block = blocks.back();
+		if (last_block.count < last_block.capacity) {
+			// last block has space: pin the buffer of this block
+			auto handle = buffer_manager.Pin(last_block.block_id);
+			// now append to the block
+			index_t append_count = AppendToBlock(last_block, *handle, keys.data[0], key_locations, tuple_locations,
+			                                     hash_locations, remaining);
+			remaining -= append_count;
+			handles.push_back(move(handle));
+		}
+	}
+	while (remaining > 0) {
+		// now for the remaining data, allocate new buffers to store the data and append there
+		auto handle = buffer_manager.Allocate(block_capacity * entry_size);
 
-	// serialize the values to these locations
-	// we serialize all the condition variables here
-	SerializeChunk(keys, key_locations);
-	if (build_size > 0) {
-		SerializeChunk(payload, tuple_locations);
+		HTDataBlock new_block;
+		new_block.count = 0;
+		new_block.capacity = block_capacity;
+		new_block.block_id = handle->block_id;
+
+		index_t append_count =
+		    AppendToBlock(new_block, *handle, keys.data[0], key_locations, tuple_locations, hash_locations, remaining);
+		remaining -= append_count;
+		handles.push_back(move(handle));
+		blocks.push_back(new_block);
 	}
 
 	// hash the keys and obtain an entry in the list
 	// note that we only hash the keys used in the equality comparison
-	StaticVector<uint64_t> hashes;
-	Hash(keys, hashes);
+	vector<TypeId> hash_types = {TypeId::HASH};
+	DataChunk hash_chunk;
+	hash_chunk.Initialize(hash_types);
+	Hash(keys, hash_chunk.data[0]);
 
-	if (parallel) {
-		// obtain lock
-		parallel_lock.lock();
+	// serialize the key, payload and hash values to these locations
+	SerializeChunk(keys, key_locations);
+	if (build_size > 0) {
+		SerializeChunk(payload, tuple_locations);
 	}
-	InsertHashes(hashes, key_locations);
-	// store the new node as the head
-	node->prev = move(head);
-	head = move(node);
-	if (parallel) {
-		parallel_lock.unlock();
+	SerializeChunk(hash_chunk, hash_locations);
+}
+
+uint64_t NextPowerOfTwo(uint64_t v) {
+	v--;
+	v |= v >> 1;
+	v |= v >> 2;
+	v |= v >> 4;
+	v |= v >> 8;
+	v |= v >> 16;
+	v |= v >> 32;
+	v++;
+	return v;
+}
+
+void JoinHashTable::InsertHashes(Vector &hashes, data_ptr_t key_locations[]) {
+	assert(hashes.type == TypeId::HASH);
+
+	// use bitmask to get position in array
+	ApplyBitmask(hashes);
+
+	auto pointers = (data_ptr_t *)hash_map->node->buffer;
+	auto indices = (index_t *)hashes.data;
+	// now fill in the entries
+	VectorOperations::Exec(hashes, [&](index_t i, index_t k) {
+		auto index = indices[i];
+		// set prev in current key to the value (NOTE: this will be nullptr if
+		// there is none)
+		auto prev_pointer = (data_ptr_t *)(key_locations[i] + tuple_size);
+		*prev_pointer = pointers[index];
+
+		// set pointer to current tuple
+		pointers[index] = key_locations[i];
+	});
+}
+
+void JoinHashTable::Finalize() {
+	// the build has finished, now iterate over all the nodes and construct the final hash table
+	// select a HT that has at least 50% empty space
+	index_t capacity =
+	    NextPowerOfTwo(std::max(count * 2, (index_t)(Storage::BLOCK_ALLOC_SIZE / sizeof(data_ptr_t)) + 1));
+	// size needs to be a power of 2
+	assert((capacity & (capacity - 1)) == 0);
+	bitmask = capacity - 1;
+
+	// allocate the HT and initialize it with all-zero entries
+	hash_map = buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
+	memset(hash_map->node->buffer, 0, capacity * sizeof(data_ptr_t));
+
+	Vector hashes(TypeId::HASH, true, false);
+	auto hash_data = (uint64_t *)hashes.data;
+	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
+	// now construct the actual hash table; scan the nodes
+	// as we can the nodes we pin all the blocks of the HT and keep them pinned until the HT is destroyed
+	// this is so that we can keep pointers around to the blocks
+	// FIXME: if we cannot keep everything pinned in memory, we could switch to an out-of-memory merge join or so
+	for (auto &block : blocks) {
+		auto handle = buffer_manager.Pin(block.block_id);
+		data_ptr_t dataptr = handle->node->buffer;
+		index_t entry = 0;
+		while (entry < block.count) {
+			// fetch the next vector of entries from the blocks
+			index_t next = std::min((index_t)STANDARD_VECTOR_SIZE, block.count - entry);
+			for (index_t i = 0; i < next; i++) {
+				hash_data[i] = *((uint64_t *)(dataptr + tuple_size));
+				key_locations[i] = dataptr;
+				dataptr += entry_size;
+			}
+			hashes.count = next;
+			// now insert into the hash table
+			InsertHashes(hashes, key_locations);
+
+			entry += next;
+		}
+		pinned_handles.push_back(move(handle));
 	}
+	finalized = true;
 }
 
 unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
+	assert(count > 0); // should be handled before
+	assert(finalized);
 	assert(!keys.sel_vector); // should be flattened before
 
 	for (index_t i = 0; i < keys.column_count; i++) {
@@ -318,7 +334,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	// scan structure
 	auto ss = make_unique<ScanStructure>(*this);
 	// first hash all the keys to do the lookup
-	StaticVector<uint64_t> hashes;
+	Vector hashes(TypeId::HASH, true, false);
 	Hash(keys, hashes);
 
 	// use bitmask to get index in array
@@ -327,6 +343,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	// now create the initial pointers from the hashes
 	auto ptrs = (data_ptr_t *)ss->pointers.data;
 	auto indices = (uint64_t *)hashes.data;
+	auto hashed_pointers = (data_ptr_t *)hash_map->node->buffer;
 	for (index_t i = 0; i < hashes.count; i++) {
 		auto index = indices[i];
 		ptrs[i] = hashed_pointers[index];
@@ -407,15 +424,11 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	}
 }
 
-void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result) {
+index_t ScanStructure::ResolvePredicates(DataChunk &keys, sel_t comparison_result[]) {
 	Vector current_pointers;
 	current_pointers.Reference(pointers);
 
-	sel_t temporary_selection_vector[STANDARD_VECTOR_SIZE];
-
-	auto old_sel_vector = current_pointers.sel_vector;
-	auto old_count = current_pointers.count;
-
+	index_t comparison_count;
 	for (index_t i = 0; i < ht.predicates.size(); i++) {
 		// gather the data from the pointers
 		Vector ht_data(keys.data[i].type, true, false);
@@ -427,30 +440,31 @@ void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result) {
 		VectorOperations::Gather::Set(current_pointers, ht_data, false);
 
 		// set the selection vector
-		index_t old_count = keys.data[i].count;
 		assert(!keys.data[i].sel_vector);
+		index_t old_count = keys.data[i].count;
+
 		keys.data[i].sel_vector = ht_data.sel_vector;
 		keys.data[i].count = ht_data.count;
 
 		// perform the comparison expression
 		switch (ht.predicates[i]) {
 		case ExpressionType::COMPARE_EQUAL:
-			VectorOperations::Equals(keys.data[i], ht_data, final_result);
+			comparison_count = VectorOperations::SelectEquals(keys.data[i], ht_data, comparison_result);
 			break;
 		case ExpressionType::COMPARE_GREATERTHAN:
-			VectorOperations::GreaterThan(keys.data[i], ht_data, final_result);
+			comparison_count = VectorOperations::SelectGreaterThan(keys.data[i], ht_data, comparison_result);
 			break;
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			VectorOperations::GreaterThanEquals(keys.data[i], ht_data, final_result);
+			comparison_count = VectorOperations::SelectGreaterThanEquals(keys.data[i], ht_data, comparison_result);
 			break;
 		case ExpressionType::COMPARE_LESSTHAN:
-			VectorOperations::LessThan(keys.data[i], ht_data, final_result);
+			comparison_count = VectorOperations::SelectLessThan(keys.data[i], ht_data, comparison_result);
 			break;
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			VectorOperations::LessThanEquals(keys.data[i], ht_data, final_result);
+			comparison_count = VectorOperations::SelectLessThanEquals(keys.data[i], ht_data, comparison_result);
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
-			VectorOperations::NotEquals(keys.data[i], ht_data, final_result);
+			comparison_count = VectorOperations::SelectNotEquals(keys.data[i], ht_data, comparison_result);
 			break;
 		default:
 			throw NotImplementedException("Unimplemented comparison type for join");
@@ -459,45 +473,60 @@ void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result) {
 		keys.data[i].sel_vector = nullptr;
 		keys.data[i].count = old_count;
 
-		// now based on the result recreate the selection vector for the next
-		// step so we can skip unnecessary comparisons in the next phase
-		if (i != ht.predicates.size() - 1) {
-			index_t new_count = 0;
-			VectorOperations::ExecType<bool>(final_result, [&](bool match, index_t index, index_t k) {
-				if (match && !final_result.nullmask[index]) {
-					temporary_selection_vector[new_count++] = index;
-				}
-			});
-			current_pointers.sel_vector = temporary_selection_vector;
-			current_pointers.count = new_count;
+		if (comparison_count == 0) {
+			// no matches remaining, skip any remaining comparisons
+			index_t increment = 0;
+			for (index_t j = i; j < ht.predicates.size(); j++) {
+				increment += GetTypeIdSize(keys.data[j].type);
+			}
+			VectorOperations::AddInPlace(pointers, increment);
+			return 0;
+		}
+		if (i + 1 < ht.predicates.size()) {
+			// more predicates remaining: update the selection vector to avoid unnecessary comparisons
+			current_pointers.sel_vector = comparison_result;
+			current_pointers.count = comparison_count;
 		}
 		// move all the pointers to the next element
 		VectorOperations::AddInPlace(pointers, GetTypeIdSize(keys.data[i].type));
 	}
-	final_result.sel_vector = old_sel_vector;
-	final_result.count = old_count;
+	return comparison_count;
+}
+
+void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result) {
+	// initialize result to false
+	final_result.sel_vector = pointers.sel_vector;
+	final_result.count = pointers.count;
+	auto result_data = (bool *)final_result.data;
+	VectorOperations::Exec(final_result, [&](index_t i, index_t k) { result_data[i] = false; });
+
+	// now resolve the predicates with the keys
+	sel_t matching_tuples[STANDARD_VECTOR_SIZE];
+	index_t match_count = ResolvePredicates(keys, matching_tuples);
+
+	// finished with all comparisons, mark the matching tuples
+	for (index_t i = 0; i < match_count; i++) {
+		result_data[matching_tuples[i]] = true;
+	}
 }
 
 index_t ScanStructure::ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
-	StaticVector<bool> comparison_result;
+	sel_t comparison_result[STANDARD_VECTOR_SIZE];
 	index_t result_count = 0;
 	do {
 		auto build_pointers = (data_ptr_t *)build_pointer_vector.data;
 
 		// resolve the predicates for all the pointers
-		ResolvePredicates(keys, comparison_result);
+		result_count = ResolvePredicates(keys, comparison_result);
 
 		auto ptrs = (data_ptr_t *)pointers.data;
-		// after doing all the comparisons we loop to find all the actual matches
-		result_count = 0;
-		VectorOperations::ExecType<bool>(comparison_result, [&](bool match, index_t index, index_t k) {
-			if (match && !comparison_result.nullmask[index]) {
-				found_match[index] = true;
-				result.owned_sel_vector[result_count] = index;
-				build_pointers[result_count] = ptrs[index];
-				result_count++;
-			}
-		});
+		// after doing all the comparisons we loop to find all the actual matches (if any)
+		for (index_t i = 0; i < result_count; i++) {
+			auto index = comparison_result[i];
+			found_match[index] = true;
+			result.owned_sel_vector[i] = index;
+			build_pointers[i] = ptrs[index];
+		}
 
 		// finally we chase the pointers for the next iteration
 		index_t new_count = 0;
@@ -764,6 +793,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &
 
 		auto ptrs = (data_ptr_t *)pointers.data;
 		// after doing all the comparisons we loop to find all the actual matches
+		index_t new_count = 0;
 		VectorOperations::ExecType<bool>(comparison_result, [&](bool match, index_t index, index_t k) {
 			if (match) {
 				// found a match for this index
@@ -772,17 +802,13 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &
 				build_pointers[result_count] = ptrs[index];
 				result_sel_vector[result_count] = index;
 				result_count++;
-			}
-		});
-
-		// finally we chase the pointers for the next iteration
-		index_t new_count = 0;
-		VectorOperations::Exec(pointers, [&](index_t index, index_t k) {
-			auto prev_pointer = (data_ptr_t *)(ptrs[index] + ht.build_size);
-			ptrs[index] = *prev_pointer;
-			if (ptrs[index] && !found_match[index]) {
-				// if there is a next pointer, and we have not found a match yet, we keep this entry
-				pointers.sel_vector[new_count++] = index;
+			} else {
+				auto prev_pointer = (data_ptr_t *)(ptrs[index] + ht.build_size);
+				ptrs[index] = *prev_pointer;
+				if (ptrs[index]) {
+					// if there is a next pointer, and we have not found a match yet, we keep this entry
+					pointers.sel_vector[new_count++] = index;
+				}
 			}
 		});
 		pointers.count = new_count;
