@@ -86,17 +86,20 @@ private:
 		block_id_t block_id;
 	};
 
-	index_t AppendToBlock(HTDataBlock &block, BufferHandle &handle, Vector &key_data, data_ptr_t key_locations[], data_ptr_t tuple_locations[], data_ptr_t hash_locations[], index_t remaining);
+	index_t AppendToBlock(HTDataBlock &block, BufferHandle &handle, Vector &key_data, data_ptr_t key_locations[],
+	                      data_ptr_t tuple_locations[], data_ptr_t hash_locations[], index_t remaining);
 
 	void Hash(DataChunk &keys, Vector &hashes);
 
 public:
-	JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type);
+	JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions, vector<TypeId> build_types,
+	              JoinType type);
 	~JoinHashTable();
 
 	//! Add the given data to the HT
 	void Build(DataChunk &keys, DataChunk &input);
-	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing. Finalize must be called before any call to Probe, and after Finalize is called Build should no longer be ever called.
+	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing. Finalize
+	//! must be called before any call to Probe, and after Finalize is called Build should no longer be ever called.
 	void Finalize();
 	//! Probe the HT with the given input chunk, resulting in the given result
 	unique_ptr<ScanStructure> Probe(DataChunk &keys);

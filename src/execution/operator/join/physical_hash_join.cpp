@@ -27,7 +27,8 @@ PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, 
 	children.push_back(move(left));
 	children.push_back(move(right));
 
-	hash_table = make_unique<JoinHashTable>(*context.db.storage->buffer_manager, conditions, children[1]->GetTypes(), type);
+	hash_table =
+	    make_unique<JoinHashTable>(*context.db.storage->buffer_manager, conditions, children[1]->GetTypes(), type);
 }
 
 void PhysicalHashJoin::BuildHashTable(ClientContext &context, PhysicalOperatorState *state_) {
@@ -111,14 +112,15 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 					result_vector.nullmask.set();
 				}
 				return;
-			} else if (hash_table->join_type == JoinType::LEFT || hash_table->join_type == JoinType::OUTER || hash_table->join_type == JoinType::SINGLE) {
+			} else if (hash_table->join_type == JoinType::LEFT || hash_table->join_type == JoinType::OUTER ||
+			           hash_table->join_type == JoinType::SINGLE) {
 				// LEFT/FULL OUTER/SINGLE join and build side is empty
 				// for the LHS we reference the data
 				for (index_t i = 0; i < state->child_chunk.column_count; i++) {
 					chunk.data[i].Reference(state->child_chunk.data[i]);
 				}
 				// for the RHS
-				for(index_t k = state->child_chunk.column_count; k < chunk.column_count; k++) {
+				for (index_t k = state->child_chunk.column_count; k < chunk.column_count; k++) {
 					chunk.data[k].count = state->child_chunk.size();
 					chunk.data[k].nullmask.set();
 				}
@@ -146,7 +148,7 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 		state->initialized = true;
 
 		if (hash_table->size() == 0 &&
-			(hash_table->join_type == JoinType::INNER || hash_table->join_type == JoinType::SEMI)) {
+		    (hash_table->join_type == JoinType::INNER || hash_table->join_type == JoinType::SEMI)) {
 			// empty hash table with INNER or SEMI join means empty result set
 			return;
 		}
@@ -156,7 +158,7 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 		if (chunk.size() == 0) {
 			if (state->cached_chunk.size() > 0) {
 				// finished probing but cached data remains, return cached chunk
-				for(index_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
+				for (index_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
 					state->cached_chunk.data[col_idx].Move(chunk.data[col_idx]);
 				}
 				chunk.sel_vector = state->cached_chunk.sel_vector;
@@ -168,7 +170,7 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 			state->cached_chunk.Append(chunk);
 			if (state->cached_chunk.size() >= (1024 - 64)) {
 				// chunk cache full: return it
-				for(index_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
+				for (index_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
 					state->cached_chunk.data[col_idx].Move(chunk.data[col_idx]);
 				}
 				chunk.sel_vector = state->cached_chunk.sel_vector;
@@ -181,5 +183,5 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 		} else {
 			return;
 		}
-	} while(true);
+	} while (true);
 }

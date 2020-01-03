@@ -643,7 +643,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		// at most one relation, nothing to reorder
 		return plan;
 	}
-	// now that we know we are going to perform join ordering we actually extract the filters, eliminating duplicate filters in the process
+	// now that we know we are going to perform join ordering we actually extract the filters, eliminating duplicate
+	// filters in the process
 	expression_set_t filter_set;
 	for (auto &op : filter_operators) {
 		if (op->type == LogicalOperatorType::COMPARISON_JOIN) {
@@ -651,7 +652,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			assert(join.type == JoinType::INNER);
 			assert(join.expressions.size() == 0);
 			for (auto &cond : join.conditions) {
-				auto comparison = make_unique<BoundComparisonExpression>(cond.comparison, move(cond.left), move(cond.right));
+				auto comparison =
+				    make_unique<BoundComparisonExpression>(cond.comparison, move(cond.left), move(cond.right));
 				if (filter_set.find(comparison.get()) == filter_set.end()) {
 					filter_set.insert(comparison.get());
 					filters.push_back(move(comparison));

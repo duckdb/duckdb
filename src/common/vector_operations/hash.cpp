@@ -10,11 +10,11 @@ using namespace duckdb;
 using namespace std;
 
 template <class T>
-static inline void tight_loop_hash(T *__restrict ldata, uint64_t *__restrict result_data,
-                                                    index_t count, sel_t *__restrict sel_vector, nullmask_t &nullmask) {
+static inline void tight_loop_hash(T *__restrict ldata, uint64_t *__restrict result_data, index_t count,
+                                   sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 	if (nullmask.any()) {
-		VectorOperations::Exec(sel_vector, count,[&](index_t i, index_t k) {
+		VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
 			result_data[i] = duckdb::HashOp::Operation(ldata[i], nullmask[i]);
 		});
 	} else {
@@ -24,14 +24,12 @@ static inline void tight_loop_hash(T *__restrict ldata, uint64_t *__restrict res
 	}
 }
 
-template <class T>
-void templated_loop_hash(Vector &input, Vector &result) {
+template <class T> void templated_loop_hash(Vector &input, Vector &result) {
 	auto ldata = (T *)input.data;
 	auto result_data = (uint64_t *)result.data;
 
 	result.nullmask.reset();
-	tight_loop_hash<T>(ldata, result_data, input.count, input.sel_vector,
-	                                                             input.nullmask);
+	tight_loop_hash<T>(ldata, result_data, input.count, input.sel_vector, input.nullmask);
 	result.sel_vector = input.sel_vector;
 	result.count = input.count;
 }
@@ -73,8 +71,8 @@ static inline uint64_t combine_hash(uint64_t a, uint64_t b) {
 }
 
 template <class T>
-static inline void tight_loop_combine_hash(T *__restrict ldata, uint64_t *__restrict hash_data,
-                                                    index_t count, sel_t *__restrict sel_vector, nullmask_t &nullmask) {
+static inline void tight_loop_combine_hash(T *__restrict ldata, uint64_t *__restrict hash_data, index_t count,
+                                           sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 	ASSERT_RESTRICT(ldata, ldata + count, hash_data, hash_data + count);
 	if (nullmask.any()) {
 		VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
@@ -89,8 +87,7 @@ static inline void tight_loop_combine_hash(T *__restrict ldata, uint64_t *__rest
 	}
 }
 
-template <class T>
-void templated_loop_combine_hash(Vector &input, Vector &hashes) {
+template <class T> void templated_loop_combine_hash(Vector &input, Vector &hashes) {
 	auto ldata = (T *)input.data;
 	auto hash_data = (uint64_t *)hashes.data;
 
