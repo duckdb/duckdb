@@ -194,7 +194,7 @@ static unique_ptr<JoinNode> CreateJoinTree(RelationSet *set, NeighborInfo *info,
 		expected_cardinality = std::max(left->cardinality, right->cardinality);
 	}
 	// cost is expected_cardinality plus the cost of the previous plans
-	index_t cost = left->cost + right->cost + expected_cardinality;
+	index_t cost = expected_cardinality;
 	return make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
 }
 
