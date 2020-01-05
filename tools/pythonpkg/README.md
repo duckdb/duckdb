@@ -25,7 +25,7 @@ storage from a notebook.
 First, get the version number from the repository.
 
     cd tools/pythonpkg
-    export DUCKDB_VERSION=$(python setup.py --version)
+    export SETUPTOOLS_SCM_PRETEND_VERSION=$(python setup.py --version)
     sed -e "s/0.0.0+unknown/${DUCKDB_VERSION}.local/g" -i.orig setup.py
     cd ../..
  
@@ -34,4 +34,3 @@ Next, copy over the python package related files, and install the package.
     mkdir -p $DUCKDB_PREFIX/src/duckdb-pythonpkg
     cp -R tools/pythonpkg $DUCKDB_PREFIX/src/duckdb-pythonpkg
     pip3 install --prefix $DUCKDB_PREFIX -e $DUCKDB_PREFIX/src/duckdb-pythonpkg
-
