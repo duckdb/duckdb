@@ -8,6 +8,7 @@
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/logical_plan_generator.hpp"
+#include "duckdb/planner/table_binding_resolver.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -65,14 +66,22 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		                                             ColumnBinding(projection_index, 0));
 	}
 	case SubqueryType::SCALAR: {
+		// uncorrelated scalar, we want to return the first entry
+		// figure out the table index of the bound table of the entry which we want to return
+		TableBindingResolver resolver;
+		resolver.VisitOperator(*plan);
+		assert(resolver.bound_tables.size() == 1 && resolver.bound_tables[0].column_count == 1);
+		index_t table_idx = resolver.bound_tables[0].table_index;
+
 		// in the uncorrelated case we are only interested in the first result of the query
 		// hence we simply push a LIMIT 1 to get the first row of the subquery
 		auto limit = make_unique<LogicalLimit>(1, 0);
 		limit->AddChild(move(plan));
 		plan = move(limit);
+
 		// we push an aggregate that returns the FIRST element
 		vector<unique_ptr<Expression>> expressions;
-		auto bound = make_unique<BoundReferenceExpression>(expr.return_type, 0);
+		auto bound = make_unique<BoundColumnRefExpression>(expr.return_type, ColumnBinding(table_idx, 0));
 		auto first_agg = make_unique<BoundAggregateExpression>(
 		    expr.return_type, FirstFun::GetFunction(SQLTypeFromInternalType(expr.return_type)), false);
 		first_agg->children.push_back(move(bound));

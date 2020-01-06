@@ -8,6 +8,7 @@
 #include "duckdb/optimizer/index_scan.hpp"
 #include "duckdb/optimizer/join_order_optimizer.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
+#include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -101,6 +102,11 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// CommonSubExpressionOptimizer cse_optimizer;
 	// cse_optimizer.VisitOperator(*plan);
 	// context.profiler.EndPhase();
+
+	context.profiler.StartPhase("unused_columns");
+	RemoveUnusedColumns unused(true);
+	unused.VisitOperator(*plan);
+	context.profiler.EndPhase();
 
 	context.profiler.StartPhase("in_clause");
 	InClauseRewriter rewriter(*this);

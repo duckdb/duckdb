@@ -15,7 +15,7 @@ LogicalSubquery::LogicalSubquery(unique_ptr<LogicalOperator> child, index_t tabl
 	this->bound_tables = resolver.bound_tables;
 	this->column_count = 0;
 	for (auto &table : bound_tables) {
-		column_count += table.column_count;
+		this->column_count += table.column_count;
 	}
 	children.push_back(move(child));
 }
