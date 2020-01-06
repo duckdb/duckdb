@@ -15,20 +15,9 @@ static void RewriteSubqueryExpressionBindings(Filter &filter, Expression &expr, 
 		assert(colref.depth == 0);
 
 		// rewrite the binding by looking into the bound_tables list of the subquery
-		index_t column_index = colref.binding.column_index;
-		for (index_t i = 0; i < subquery.bound_tables.size(); i++) {
-			auto &table = subquery.bound_tables[i];
-			if (column_index < table.column_count) {
-				// the binding belongs to this table, update the column binding
-				colref.binding.table_index = table.table_index;
-				colref.binding.column_index = column_index;
-				filter.bindings.insert(table.table_index);
-				return;
-			}
-			column_index -= table.column_count;
-		}
-		// table could not be found!
-		assert(0);
+		assert(colref.binding.column_index < subquery.columns.size());
+		colref.binding = subquery.columns[colref.binding.column_index];
+		return;
 	}
 	ExpressionIterator::EnumerateChildren(
 	    expr, [&](Expression &child) { RewriteSubqueryExpressionBindings(filter, child, subquery); });

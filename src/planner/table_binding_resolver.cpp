@@ -164,7 +164,7 @@ void TableBindingResolver::Visit(LogicalSubquery &op) {
 
 	BoundTable binding;
 	binding.table_index = op.table_index;
-	binding.column_count = op.column_count;
+	binding.column_count = op.columns.size();
 	PushBinding(binding);
 }
 

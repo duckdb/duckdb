@@ -43,7 +43,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CastLogicalOperatorToTypes(vec
 		auto subquery_index = binder.GenerateTableIndex();
 		auto subquery = make_unique<LogicalSubquery>(move(op), subquery_index);
 
-		assert(subquery->column_count == source_types.size());
+		assert(subquery->columns.size() == source_types.size());
 
 		// now generate the expression list
 		vector<unique_ptr<Expression>> select_list;

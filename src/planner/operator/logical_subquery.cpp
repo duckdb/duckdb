@@ -12,10 +12,10 @@ LogicalSubquery::LogicalSubquery(unique_ptr<LogicalOperator> child, index_t tabl
 	TableBindingResolver resolver;
 	resolver.VisitOperator(*child);
 
-	this->bound_tables = resolver.bound_tables;
-	this->column_count = 0;
-	for (auto &table : bound_tables) {
-		this->column_count += table.column_count;
+	for (auto &table : resolver.bound_tables) {
+		for(index_t i = 0; i < table.column_count; i++) {
+			columns.push_back(ColumnBinding(table.table_index, i));
+		}
 	}
 	children.push_back(move(child));
 }

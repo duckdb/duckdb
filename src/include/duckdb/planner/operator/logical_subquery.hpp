@@ -23,10 +23,8 @@ public:
 
 	//! The table index of the subquery
 	index_t table_index;
-	//! The total amount of columns of the subquery
-	index_t column_count;
-	//! The tables that are bound underneath the subquery
-	vector<BoundTable> bound_tables;
+	//! The underlying column bindings of the subquery
+	vector<ColumnBinding> columns;
 
 protected:
 	void ResolveTypes() override {

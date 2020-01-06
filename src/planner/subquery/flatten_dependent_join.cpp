@@ -278,11 +278,13 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		auto &subquery = (LogicalSubquery &)*plan;
 		// subquery node: push into children
 		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
+		// we have to add the correlated columns to the projection set of the subquery
+		for (index_t i = 0; i < correlated_columns.size(); i++) {
+			subquery.columns.push_back(ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+		}
 		// to get the correlated columns we have to refer to the subquery now
 		base_binding.table_index = subquery.table_index;
-		base_binding.column_index = subquery.column_count;
-		// we have to add the correlated columns to the projection set of the subquery
-		subquery.column_count += correlated_columns.size();
+		base_binding.column_index = subquery.columns.size() - correlated_columns.size();
 		return plan;
 	}
 	case LogicalOperatorType::WINDOW: {
