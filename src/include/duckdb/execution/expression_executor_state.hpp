@@ -26,7 +26,6 @@ struct ExpressionState {
 	ExpressionExecutorState &root;
 	DataChunk arguments;
 	vector<unique_ptr<ExpressionState>> child_states;
-
 public:
 	void AddIntermediates(vector<Expression *> expressions);
 	virtual void Reset() {
