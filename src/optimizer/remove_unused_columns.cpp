@@ -82,7 +82,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 	case LogicalOperatorType::DELIM_JOIN: {
-		return;
+		break;
 	}
 	case LogicalOperatorType::UNION:
 	case LogicalOperatorType::EXCEPT:
@@ -133,7 +133,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				auto &ref_map = references->second;
 				index_t offset = 0;
 				for(index_t col_idx = 0; col_idx < get.column_ids.size(); col_idx++) {
-					auto entry = ref_map.find(col_idx);
+					auto entry = ref_map.find(col_idx + offset);
 					if (entry == ref_map.end()) {
 						// this entry is not referred to, erase it from the set of expresisons
 						get.column_ids.erase(get.column_ids.begin() + col_idx);

@@ -103,10 +103,10 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// cse_optimizer.VisitOperator(*plan);
 	// context.profiler.EndPhase();
 
-	// context.profiler.StartPhase("unused_columns");
-	// RemoveUnusedColumns unused(true);
-	// unused.VisitOperator(*plan);
-	// context.profiler.EndPhase();
+	context.profiler.StartPhase("unused_columns");
+	RemoveUnusedColumns unused(true);
+	unused.VisitOperator(*plan);
+	context.profiler.EndPhase();
 
 	context.profiler.StartPhase("in_clause");
 	InClauseRewriter rewriter(*this);
