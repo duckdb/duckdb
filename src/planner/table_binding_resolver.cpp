@@ -52,9 +52,6 @@ void TableBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::GET:
 		Visit((LogicalGet &)op);
 		break;
-	case LogicalOperatorType::SUBQUERY:
-		Visit((LogicalSubquery &)op);
-		break;
 	case LogicalOperatorType::TABLE_FUNCTION:
 		Visit((LogicalTableFunction &)op);
 		break;
@@ -157,15 +154,6 @@ void TableBindingResolver::Visit(LogicalAggregate &op) {
 	aggregate_binding.table_index = op.aggregate_index;
 	aggregate_binding.column_count = op.expressions.size();
 	PushBinding(aggregate_binding);
-}
-
-void TableBindingResolver::Visit(LogicalSubquery &op) {
-	RecurseIntoSubquery(op);
-
-	BoundTable binding;
-	binding.table_index = op.table_index;
-	binding.column_count = op.columns.size();
-	PushBinding(binding);
 }
 
 void TableBindingResolver::Visit(LogicalProjection &op) {
@@ -337,11 +325,8 @@ void TableBindingResolver::Visit(LogicalComparisonJoin &op) {
 	}
 	if (op.type == JoinType::MARK) {
 		// for MARK join the result is the LEFT side, plus a table that has a single column (the MARK column)
-		assert(op.children[1]->type == LogicalOperatorType::SUBQUERY);
-		// the immediate RIGHT side should be a SUBQUERY
-		auto &subquery = (LogicalSubquery &)*op.children[1];
 		BoundTable binding;
-		binding.table_index = subquery.table_index;
+		binding.table_index = op.mark_index;
 		binding.column_count = 1;
 		PushBinding(binding);
 		return;

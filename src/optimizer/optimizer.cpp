@@ -103,10 +103,10 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// cse_optimizer.VisitOperator(*plan);
 	// context.profiler.EndPhase();
 
-	context.profiler.StartPhase("unused_columns");
-	RemoveUnusedColumns unused(true);
-	unused.VisitOperator(*plan);
-	context.profiler.EndPhase();
+	// context.profiler.StartPhase("unused_columns");
+	// RemoveUnusedColumns unused(true);
+	// unused.VisitOperator(*plan);
+	// context.profiler.EndPhase();
 
 	context.profiler.StartPhase("in_clause");
 	InClauseRewriter rewriter(*this);
@@ -190,6 +190,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 
 	// then we generate the MARK join with the chunk scan on the RHS
 	auto join = make_unique<LogicalComparisonJoin>(JoinType::MARK);
+	join->mark_index = chunk_index;
 	join->AddChild(move(root));
 	join->AddChild(move(chunk_scan));
 	// create the JOIN condition

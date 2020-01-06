@@ -13,6 +13,7 @@
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 #include <functional>
 
@@ -43,6 +44,8 @@ public:
 	LogicalOperatorType GetOperatorType() {
 		return type;
 	}
+
+	vector<ColumnBinding> GetColumnBindings();
 
 	//! Resolve the types of the logical operator and its children
 	void ResolveOperatorTypes();

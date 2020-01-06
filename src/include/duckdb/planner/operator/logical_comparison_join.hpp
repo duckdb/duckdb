@@ -22,6 +22,8 @@ public:
 
 	//! The conditions of the join
 	vector<JoinCondition> conditions;
+	//! Table index used to refer to the MARK column (in case of a MARK join)
+	index_t mark_index;
 
 public:
 	string ParamsToString() const override;

@@ -64,7 +64,7 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
                                               LogicalOperator *parent) {
 	LogicalOperator *op = &input_op;
-	while (op->children.size() == 1 && op->type != LogicalOperatorType::SUBQUERY &&
+	while (op->children.size() == 1 &&
 	       op->type != LogicalOperatorType::PROJECTION) {
 		if (op->type == LogicalOperatorType::FILTER) {
 			// extract join conditions from filter
@@ -132,17 +132,6 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		auto get = (LogicalGet *)op;
 		auto relation = make_unique<Relation>(&input_op, parent);
 		relation_mapping[get->table_index] = relations.size();
-		relations.push_back(move(relation));
-		return true;
-	} else if (op->type == LogicalOperatorType::SUBQUERY) {
-		auto subquery = (LogicalSubquery *)op;
-		assert(op->children.size() == 1);
-		// we run the join order optimizer witin the subquery as well
-		JoinOrderOptimizer optimizer;
-		op->children[0] = optimizer.Optimize(move(op->children[0]));
-		// now we add the subquery to the set of relations
-		auto relation = make_unique<Relation>(&input_op, parent);
-		relation_mapping[subquery->table_index] = relations.size();
 		relations.push_back(move(relation));
 		return true;
 	} else if (op->type == LogicalOperatorType::TABLE_FUNCTION) {

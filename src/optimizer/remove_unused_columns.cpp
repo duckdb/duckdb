@@ -7,7 +7,6 @@
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/planner/operator/logical_subquery.hpp"
 #include "duckdb/planner/table_binding_resolver.hpp"
 
 #include "duckdb/function/aggregate/distributive_functions.hpp"
@@ -82,76 +81,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	  	// FIXME: remove columns that are only used in the join during the projection phase
 		break;
 	}
-	// case LogicalOperatorType::ANY_JOIN:
-	// case LogicalOperatorType::DELIM_JOIN: {
-	//	return;
-	// }
-	case LogicalOperatorType::SUBQUERY: {
-		auto &subquery = (LogicalSubquery&) op;
-
-		// vector<BoundTable> original_bound_tables;
-		// RemoveUnusedColumns remove(everything_referenced);
-		// if (!everything_referenced) {
-		// 	// not everything is referenced, convert the references
-		// 	auto references = column_references.find(subquery.table_index);
-		// 	if (references != column_references.end()) {
-		// 		// first figure out what the underlying columns of the LogicalOperator are
-		// 		TableBindingResolver resolver;
-		// 		resolver.VisitOperator(*op.children[0]);
-		// 		original_bound_tables = resolver.bound_tables;
-
-		// 		// add them to the referenced columns set
-		// 		index_t idx = 0;
-		// 		for (auto &table : original_bound_tables) {
-		// 			for(index_t i = 0; i < table.column_count; i++) {
-		// 				// check if this column is referenced in the base table
-		// 				auto entry = references->second.find(idx);
-		// 				if (entry != references->second.end()) {
-		// 					// entry is referenced: add it to the map
-		// 					remove.column_references[table.table_index][i].push_back(nullptr);
-		// 				}
-		// 				idx++;
-		// 			}
-		// 		}
-		// 		assert(idx == subquery.column_count);
-		// 	} else {
-		// 		// nothing in the subquery was referenced; for now we just ignore this case and consider everything referenced
-		// 		everything_referenced = true;
-		// 		remove.everything_referenced = true;
-		// 	}
-		// }
-		// remove.VisitOperator(*op.children[0]);
-
-		// if (!everything_referenced) {
-		// 	// after we have removed operators from the children, we need to find out which columns were removed and update the column references accordingly
-		// 	// first we re-generate the bound tables from the children
-		// 	TableBindingResolver resolver;
-		// 	resolver.VisitOperator(*op.children[0]);
-
-		// 	// get the amount of columns of the subquery
-		// 	subquery.column_count = 0;
-		// 	for (auto &table : resolver.bound_tables) {
-		// 		subquery.column_count += table.column_count;
-		// 	}
-
-		// 	assert(original_bound_tables.size() == resolver.bound_tables.size());
-		// 	// now we update the column references using the mapping of the child optimizer
-		// 	auto references = column_references.find(subquery.table_index);
-		// 	assert(references != column_references.end());
-
-		// 	index_t idx = 0;
-		// 	for (auto &table : original_bound_tables) {
-		// 		for(index_t i = 0; i < table.column_count; i++) {
-		// 			auto entry = references->second.find(idx);
-		// 			if (entry != references->second.end()) {
-		// 				// entry is referenced, create a remapping
-		// 				UpdateColumnReferences(idx, new_idx, entry->second);
-		// 			}
-		// 			idx++;
-		// 		}
-		// 	}
-		// 	assert(idx == subquery.column_count);
-		// }
+	case LogicalOperatorType::DELIM_JOIN: {
 		return;
 	}
 	case LogicalOperatorType::UNION:

@@ -50,5 +50,9 @@ public:
 	index_t window_index;
 	//! Window functions to compute (only used if HasWindow is true)
 	vector<unique_ptr<Expression>> windows;
+public:
+	index_t GetRootIndex() override{
+		return projection_index;
+	}
 };
 }; // namespace duckdb

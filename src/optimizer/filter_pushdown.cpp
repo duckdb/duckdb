@@ -22,8 +22,6 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 	case LogicalOperatorType::ANY_JOIN:
 	case LogicalOperatorType::DELIM_JOIN:
 		return PushdownJoin(move(op));
-	case LogicalOperatorType::SUBQUERY:
-		return PushdownSubquery(move(op));
 	case LogicalOperatorType::PROJECTION:
 		return PushdownProjection(move(op));
 	case LogicalOperatorType::INTERSECT:

@@ -23,8 +23,8 @@ struct BoundTable {
 class TableBindingResolver : public LogicalOperatorVisitor {
 public:
 	//! If recurse_into_subqueries is true, we clear the list of tables and recurse when we encounter "blocking node"
-	//! A "blocking node" is a node that clears the bound tables (e.g. a LogicalSubquery, LogicalProjection or
-	//! LogicalAggregate) The reason this is a "blocking node" is that tables BELOW the blocking node cannot be
+	//! A "blocking node" is a node that clears the bound tables (e.g. a LogicalProjection or LogicalAggregate)
+	//! The reason this is a "blocking node" is that tables BELOW the blocking node cannot be
 	//! referenced ABOVE the blocking node i.e. if we have PROJECTION(AGGREGATE(GET())) the AGGREGATE() blocks the
 	//! PROJECTION() from accessing the table in GET()
 	TableBindingResolver(bool recurse_into_subqueries = false, bool visit_expressions = false);
@@ -50,7 +50,6 @@ protected:
 	void Visit(LogicalProjection &op);
 	void Visit(LogicalPruneColumns &op);
 	void Visit(LogicalSetOperation &op);
-	void Visit(LogicalSubquery &op);
 	void Visit(LogicalTableFunction &op);
 	void Visit(LogicalWindow &op);
 
