@@ -56,6 +56,7 @@ void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		for(index_t i = 0; i < projection_map.size(); i++) {
 			chunk.data[i].Reference(state->child_chunk.data[projection_map[i]]);
 		}
+		chunk.sel_vector = state->child_chunk.sel_vector;
 	}
 	if (result_count == initial_count) {
 		// nothing was filtered: skip adding any selection vectors

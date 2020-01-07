@@ -15,20 +15,6 @@
 using namespace duckdb;
 using namespace std;
 
-// static void UpdateColumnReferences(index_t original, index_t new_mapping, vector<BoundColumnRefExpression*> &references) {
-// 	// this entry was referred to, but entries before it have been deleted
-// 	// alter the column index in the BoundColumnRef expressions referring to the projection
-// 	if (original != new_mapping) {
-// 		for(auto &expr : references) {
-// 			if (!expr) {
-// 				continue;
-// 			}
-// 			assert(expr->binding.column_index == original);
-// 			expr->binding.column_index = new_mapping;
-// 		}
-// 	}
-// }
-
 RemoveUnusedColumns::~RemoveUnusedColumns() {
 	for(auto &remap_entry : remap) {
 		auto colrefs = column_references.find(remap_entry.first);
@@ -83,13 +69,13 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		remove.VisitOperator(*op.children[0]);
 		return;
 	}
-	case LogicalOperatorType::ANY_JOIN:
+	case LogicalOperatorType::DELIM_JOIN:
 	case LogicalOperatorType::COMPARISON_JOIN: {
 	 	// join
 	  	// FIXME: remove columns that are only used in the join itself
 		break;
 	}
-	case LogicalOperatorType::DELIM_JOIN: {
+	case LogicalOperatorType::ANY_JOIN: {
 		break;
 	}
 	case LogicalOperatorType::UNION:
@@ -136,6 +122,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::DISTINCT: {
 		// distinct, all projected columns are used for the DISTINCT computation
 		// mark all columns as used and continue to the children
+		// FIXME: DISTINCT with expression list does not implicitly reference everything
 		everything_referenced = true;
 		break;
 	}
