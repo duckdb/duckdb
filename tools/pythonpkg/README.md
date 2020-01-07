@@ -6,9 +6,10 @@ Set the prefix path:
 
     export DUCKDB_PREFIX=/path/to/install/duckdb
 
-Set the PYTHONPATH:
+Set the `PYTHONPATH` to the `site-packages` directory under the prefix path;
+this will usually work but do check the resulting `PYTHONPATH`.
 
-    export PYTHONPATH=${PYTHONPATH:+${PYTHONPATH}:}$(pip3 show six | \
+    export PYTHONPATH=${PYTHONPATH:+${PYTHONPATH}:}$(pip show six | \
       grep "Location:" | cut -d " " -f2 | \
       sed -e "s|/usr|${DUCKDB_PREFIX}|")
 
