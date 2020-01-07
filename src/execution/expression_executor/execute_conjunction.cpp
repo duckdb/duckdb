@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <random>
+#include <iostream>
 
 using namespace duckdb;
 using namespace std;
@@ -117,6 +118,50 @@ static void MergeSelectionVectorIntoResult(sel_t *result, index_t &result_count,
 	}
 }
 
+void AdaptRuntimeStatistics(BoundConjunctionExpression &expr, ConjunctionState* state, double duration) {
+	state->iteration_count++;
+	state->runtime_sum += duration;
+
+	if (!state->warmup) {
+		if (state->iteration_count == 5) {
+			if (state->observe) {
+				//keep if runtime decreased, else reverse switch
+				if (!(state->prev_mean - (state->runtime_sum / state->iteration_count) > 0)) {
+					//reverse
+					assert(state->switch_idx < expr.children.size() - 1);
+					assert(expr.children.size() > 1);
+					swap(state->permutation[state->switch_idx], state->permutation[state->switch_idx + 1]);
+				}
+				state->observe = false;
+			} else {
+				//save old mean to evaluate switch
+				state->prev_mean = state->runtime_sum / state->iteration_count;
+
+				//switch
+				uniform_int_distribution<int> distribution(0, expr.children.size() - 2);
+				state->switch_idx = distribution(state->generator);
+				assert(state->switch_idx < expr.children.size() - 1);
+				assert(expr.children.size() > 1);
+				swap(state->permutation[state->switch_idx], state->permutation[state->switch_idx + 1]);
+
+				state->observe = true;
+			}
+
+			//reset values
+			state->iteration_count = 0;
+			state->runtime_sum = 0.0;
+		}
+	} else {
+		if (state->iteration_count == 5) {
+			//initially set all values
+			state->iteration_count = 0;
+			state->runtime_sum = 0.0;
+			state->observe = false;
+			state->warmup = false;
+		}
+	}
+}
+
 index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_, sel_t result[]) {
 	auto state = (ConjunctionState*) state_;
 	if (!chunk) {
@@ -131,8 +176,8 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 		//get runtime statistics
 		chrono::time_point<chrono::high_resolution_clock> start_time;
 		chrono::time_point<chrono::high_resolution_clock> end_time;
-
 		start_time = chrono::high_resolution_clock::now();
+
 		for (index_t i = 0; i < expr.children.size(); i++) {
 
 			// first resolve the current expression and get its execution time
@@ -148,49 +193,10 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 				current_count = new_count;
 			}
 		}
+
+		//adapt runtime statistics
 		end_time = chrono::high_resolution_clock::now();
-
-		state->iteration_count++;
-		state->runtime_sum += chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count();
-
-		if (!state->warmup) {
-			if (state->iteration_count == 5) {
-				if (state->observe) {
-					//keep if runtime decreased, else reverse switch
-					if (!(state->prev_mean - (state->runtime_sum / state->iteration_count) > 0)) {
-						//reverse
-						assert(state->switch_idx < expr.children.size() - 1);
-						assert(expr.children.size() > 1);
-						swap(state->permutation[state->switch_idx], state->permutation[state->switch_idx + 1]);
-					}
-					state->observe = false;
-				} else {
-					//save old mean to evaluate switch
-					state->prev_mean = state->runtime_sum / state->iteration_count;
-
-					//switch
-					uniform_int_distribution<int> distribution(0, expr.children.size() - 2);
-					state->switch_idx = distribution(state->generator);
-					assert(state->switch_idx < expr.children.size() - 1);
-					assert(expr.children.size() > 1);
-					swap(state->permutation[state->switch_idx], state->permutation[state->switch_idx + 1]);
-
-					state->observe = true;
-				}
-
-				//reset values
-				state->iteration_count = 0;
-				state->runtime_sum = 0.0;
-			}
-		} else {
-			if (state->iteration_count == 5) {
-				//initially set all values
-				state->iteration_count = 0;
-				state->runtime_sum = 0.0;
-				state->observe = false;
-				state->warmup = false;
-			}
-		}
+		AdaptRuntimeStatistics(expr, state, chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
 
 		// restore the initial selection vector and count
 		SetChunkSelectionVector(*chunk, initial_sel, initial_count);
@@ -207,10 +213,15 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 		index_t result_count = 0;
 		index_t remaining_count = 0;
 		sel_t *result_vector = initial_sel == result ? intermediate_result : result;
+
+		//get runtime statistics
+		chrono::time_point<chrono::high_resolution_clock> start_time;
+		chrono::time_point<chrono::high_resolution_clock> end_time;
+		start_time = chrono::high_resolution_clock::now();
+
 		for (index_t expr_idx = 0; expr_idx < expr.children.size(); expr_idx++) {
 			// first resolve the current expression
-			index_t new_count =
-			    Select(*expr.children[expr_idx], state->child_states[expr_idx].get(), expression_result);
+			index_t new_count = Select(*expr.children[state->permutation[expr_idx]], state->child_states[state->permutation[expr_idx]].get(), expression_result);
 			if (new_count == 0) {
 				// no new qualifying entries: continue
 				continue;
@@ -248,6 +259,11 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 			current_count = remaining_count;
 			SetChunkSelectionVector(*chunk, remaining, remaining_count);
 		}
+
+		//adapt runtime statistics
+		end_time = chrono::high_resolution_clock::now();
+		AdaptRuntimeStatistics(expr, state, chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
+
 		SetChunkSelectionVector(*chunk, initial_sel, initial_count);
 		if (result_vector != result && result_count > 0) {
 			memcpy(result, result_vector, result_count * sizeof(sel_t));
