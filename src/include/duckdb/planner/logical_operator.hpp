@@ -41,11 +41,10 @@ public:
 	vector<TypeId> types;
 
 public:
-	LogicalOperatorType GetOperatorType() {
-		return type;
+	virtual vector<ColumnBinding> GetColumnBindings() {
+		return {};
 	}
-
-	vector<ColumnBinding> GetColumnBindings();
+	static vector<ColumnBinding> GenerateColumnBindings(index_t table_idx, index_t column_count);
 
 	//! Resolve the types of the logical operator and its children
 	void ResolveOperatorTypes();

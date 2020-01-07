@@ -24,8 +24,11 @@ public:
 	static void GetExpressionBindings(Expression &expr, unordered_set<index_t> &bindings);
 
 	//! The type of the join (INNER, OUTER, etc...)
-	JoinType type;
-
+	JoinType join_type;
+	//! Table index used to refer to the MARK column (in case of a MARK join)
+	index_t mark_index;
+public:
+	vector<ColumnBinding> GetColumnBindings() override;
 protected:
 	void ResolveTypes() override;
 };

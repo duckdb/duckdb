@@ -8,7 +8,6 @@
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/logical_plan_generator.hpp"
-#include "duckdb/planner/table_binding_resolver.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -68,10 +67,9 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 	case SubqueryType::SCALAR: {
 		// uncorrelated scalar, we want to return the first entry
 		// figure out the table index of the bound table of the entry which we want to return
-		TableBindingResolver resolver;
-		resolver.VisitOperator(*plan);
-		assert(resolver.bound_tables.size() == 1 && resolver.bound_tables[0].column_count == 1);
-		index_t table_idx = resolver.bound_tables[0].table_index;
+		auto bindings = plan->GetColumnBindings();
+		assert(bindings.size() == 1);
+		index_t table_idx = bindings[0].table_index;
 
 		// in the uncorrelated case we are only interested in the first result of the query
 		// hence we simply push a LIMIT 1 to get the first row of the subquery

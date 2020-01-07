@@ -14,7 +14,18 @@ LogicalFilter::LogicalFilter() : LogicalOperator(LogicalOperatorType::FILTER) {
 }
 
 void LogicalFilter::ResolveTypes() {
-	types = children[0]->types;
+	auto child_types = children[0]->types;
+	if (projection_map.size() > 0) {
+		for(auto index : projection_map) {
+			types.push_back(child_types[index]);
+		}
+	} else {
+		types = child_types;
+	}
+}
+
+vector<ColumnBinding> LogicalFilter::GetColumnBindings() {
+	return children[0]->GetColumnBindings();
 }
 
 // Split the predicates separated by AND statements

@@ -59,7 +59,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
                                                              unordered_set<index_t> &left_bindings,
                                                              unordered_set<index_t> &right_bindings) {
 	auto &join = (LogicalJoin &)*op;
-	assert(join.type == JoinType::LEFT);
+	assert(join.join_type == JoinType::LEFT);
 	assert(op->type != LogicalOperatorType::DELIM_JOIN);
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
 	// for a comparison join we create a FilterCombiner that checks if we can push conditions on LHS join conditions
@@ -94,7 +94,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 			// in an inner join, and then push down as we would push down an inner join
 			if (FilterRemovesNull(optimizer.rewriter, filters[i]->filter.get(), right_bindings)) {
 				// the filter removes NULL values, turn it into an inner join
-				join.type = JoinType::INNER;
+				join.join_type = JoinType::INNER;
 				// now we can do more pushdown
 				// move all filters we added to the left_pushdown back into the filter list
 				for (auto &left_filter : left_pushdown.filters) {

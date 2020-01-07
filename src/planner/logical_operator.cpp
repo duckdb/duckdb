@@ -1,5 +1,4 @@
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/table_binding_resolver.hpp"
 
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -33,17 +32,12 @@ void LogicalOperator::ResolveOperatorTypes() {
 	ResolveTypes();
 }
 
-vector<ColumnBinding> LogicalOperator::GetColumnBindings() {
-	TableBindingResolver resolver;
-	resolver.VisitOperator(*this);
-
-	vector<ColumnBinding> columns;
-	for (auto &table : resolver.bound_tables) {
-		for(index_t i = 0; i < table.column_count; i++) {
-			columns.push_back(ColumnBinding(table.table_index, i));
-		}
+vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(index_t table_idx, index_t column_count) {
+	vector<ColumnBinding> result;
+	for(index_t i = 0; i < column_count; i++) {
+		result.push_back(ColumnBinding(table_idx, i));
 	}
-	return columns;
+	return result;
 }
 
 string LogicalOperator::ToString(index_t depth) const {

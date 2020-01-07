@@ -21,7 +21,8 @@ public:
 	}
 
 	index_t column_limit;
-
+public:
+	vector<ColumnBinding> GetColumnBindings() override;
 protected:
 	void ResolveTypes() override;
 };

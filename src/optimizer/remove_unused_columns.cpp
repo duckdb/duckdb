@@ -5,9 +5,10 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/planner/table_binding_resolver.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 
@@ -78,7 +79,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::ANY_JOIN:
 	case LogicalOperatorType::COMPARISON_JOIN: {
 	 	// join
-	  	// FIXME: remove columns that are only used in the join during the projection phase
+	  	// FIXME: remove columns that are only used in the join itself
 		break;
 	}
 	case LogicalOperatorType::DELIM_JOIN: {
@@ -152,11 +153,35 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		everything_referenced = true;
 		break;
 	}
-	case LogicalOperatorType::FILTER: {
-		// filter
-		// FIXME: remove any columns that are only used in the filter
-		break;
-	}
+	// case LogicalOperatorType::FILTER: {
+	// 	auto &filter = (LogicalFilter&) op;
+	// 	// filter
+	// 	// first check which column bindings are required after the filter
+	// 	auto column_bindings = op.GetColumnBindings();
+	// 	column_binding_set_t unused_bindings;
+	// 	for(auto &column_binding : column_bindings) {
+	// 		auto entry = column_references.find(column_binding.table_index);
+	// 		if (entry == column_references.end() || entry->second.find(column_binding.column_index) == entry->second.end()) {
+	// 			// column is unused, add to set of unused column bindings
+	// 			unused_bindings.insert(column_binding);
+	// 		}
+	// 	}
+	// 	// now visit the filter expressions and remove any columns that are not used at all
+	// 	LogicalOperatorVisitor::VisitOperatorExpressions(op);
+	// 	LogicalOperatorVisitor::VisitOperatorChildren(op);
+	// 	// after that, figure out if there are columns that were ONLY used in the filter
+	// 	// these can be projected out during the filter
+	// 	column_bindings = op.GetColumnBindings();
+	// 	for(index_t i = 0; i < column_bindings.size(); i++) {
+	// 		if (unused_bindings.find(column_bindings[i]) == unused_bindings.end()) {
+	// 			filter.projection_map.push_back(i);
+	// 		}
+	// 	}
+	// 	if (filter.projection_map.size() == column_bindings.size()) {
+	// 		filter.projection_map.clear();
+	// 	}
+	// 	return;
+	// }
 	default:
 		break;
 	}

@@ -48,7 +48,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 	LogicalJoin::GetTableReferences(*op->children[0], left_bindings);
 	LogicalJoin::GetTableReferences(*op->children[1], right_bindings);
 
-	switch (join.type) {
+	switch (join.join_type) {
 	case JoinType::INNER:
 		return PushdownInnerJoin(move(op), left_bindings, right_bindings);
 	case JoinType::LEFT:
