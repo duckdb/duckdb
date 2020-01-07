@@ -25,7 +25,16 @@ void LogicalFilter::ResolveTypes() {
 }
 
 vector<ColumnBinding> LogicalFilter::GetColumnBindings() {
-	return children[0]->GetColumnBindings();
+	auto child_bindings = children[0]->GetColumnBindings();
+	if (projection_map.size() > 0) {
+		vector<ColumnBinding> result_bindings;
+		for(auto index : projection_map) {
+			result_bindings.push_back(child_bindings[index]);
+		}
+		return result_bindings;
+	} else {
+		return child_bindings;
+	}
 }
 
 // Split the predicates separated by AND statements

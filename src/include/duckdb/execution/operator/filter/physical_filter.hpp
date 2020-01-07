@@ -18,10 +18,12 @@ namespace duckdb {
 class PhysicalFilter : public PhysicalOperator {
 public:
 	PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expression>> select_list);
+	PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expression>> select_list, vector<index_t> projection_map);
 
 	//! The filter expression
 	unique_ptr<Expression> expression;
-
+	//! The set of columns to project from the child. If this is empty, all columns are projected. Otherwise, only the columns indicated in the projection_map are projected.
+	vector<index_t> projection_map;
 public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 

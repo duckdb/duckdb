@@ -159,7 +159,6 @@ template class std::unique_ptr<Binder>;
 	template VECTOR_DEFINITION::const_reference VECTOR_DEFINITION::front() const;                                      \
 	template VECTOR_DEFINITION::reference VECTOR_DEFINITION::front();
 
-template class std::vector<BoundTable>;
 INSTANTIATE_VECTOR(std::vector<ColumnDefinition>);
 template class std::vector<ExpressionType>;
 INSTANTIATE_VECTOR(std::vector<JoinCondition>);

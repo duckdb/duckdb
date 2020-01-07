@@ -19,6 +19,8 @@ public:
 	LogicalFilter();
 
 	vector<index_t> projection_map;
+public:
+	vector<ColumnBinding> GetColumnBindings() override;
 
 	bool SplitPredicates() {
 		return SplitPredicates(expressions);
@@ -26,8 +28,6 @@ public:
 	//! Splits up the predicates of the LogicalFilter into a set of predicates
 	//! separated by AND Returns whether or not any splits were made
 	static bool SplitPredicates(vector<unique_ptr<Expression>> &expressions);
-public:
-	vector<ColumnBinding> GetColumnBindings() override;
 protected:
 	void ResolveTypes() override;
 };

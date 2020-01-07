@@ -15,32 +15,49 @@
 using namespace duckdb;
 using namespace std;
 
-static void UpdateColumnReferences(index_t original, index_t new_mapping, vector<BoundColumnRefExpression*> &references) {
-	// this entry was referred to, but entries before it have been deleted
-	// alter the column index in the BoundColumnRef expressions referring to the projection
-	if (original != new_mapping) {
-		for(auto &expr : references) {
-			if (!expr) {
-				continue;
+// static void UpdateColumnReferences(index_t original, index_t new_mapping, vector<BoundColumnRefExpression*> &references) {
+// 	// this entry was referred to, but entries before it have been deleted
+// 	// alter the column index in the BoundColumnRef expressions referring to the projection
+// 	if (original != new_mapping) {
+// 		for(auto &expr : references) {
+// 			if (!expr) {
+// 				continue;
+// 			}
+// 			assert(expr->binding.column_index == original);
+// 			expr->binding.column_index = new_mapping;
+// 		}
+// 	}
+// }
+
+RemoveUnusedColumns::~RemoveUnusedColumns() {
+	for(auto &remap_entry : remap) {
+		auto colrefs = column_references.find(remap_entry.first);
+		if (colrefs != column_references.end()) {
+			for(auto &colref : colrefs->second) {
+				assert(colref->binding == remap_entry.first);
+				colref->binding = remap_entry.second;
 			}
-			assert(expr->binding.column_index == original);
-			expr->binding.column_index = new_mapping;
 		}
 	}
 }
 
-void RemoveUnusedColumns::ClearExpressions(LogicalOperator &op, unordered_map<index_t, vector<BoundColumnRefExpression*>> &ref_map) {
+template<class T>
+void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, index_t table_idx) {
 	index_t offset = 0;
-	for(index_t col_idx = 0; col_idx < op.expressions.size(); col_idx++) {
-		auto entry = ref_map.find(col_idx + offset);
-		if (entry == ref_map.end()) {
+	for(index_t col_idx = 0; col_idx < list.size(); col_idx++) {
+		auto current_binding = ColumnBinding(table_idx, col_idx + offset);
+		auto entry = column_references.find(current_binding);
+		if (entry == column_references.end()) {
 			// this entry is not referred to, erase it from the set of expresisons
-			op.expressions.erase(op.expressions.begin() + col_idx);
+			list.erase(list.begin() + col_idx);
 			offset++;
 			col_idx--;
-		} else {
-			// this entry was referred to, update any column references
-			UpdateColumnReferences(col_idx + offset, col_idx, entry->second);
+		} else if (offset > 0) {
+			// column is used but the ColumnBinding has changed because of removed columns
+			// add the entry to the remap set
+			auto new_binding = ColumnBinding(table_idx, col_idx);
+			remap[current_binding] = new_binding;
+			original_bindings[new_binding] = current_binding;
 		}
 	}
 }
@@ -50,20 +67,10 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY: {
 		// aggregate
 		if (!everything_referenced) {
-			auto &aggr = (LogicalAggregate&) op;
 			// FIXME: groups that are not referenced need to stay -> but they don't need to be scanned and output!
-			// remove any aggregates that are not referenced
-			auto references = column_references.find(aggr.aggregate_index);
-			if (references == column_references.end()) {
-				// nothing references the aggregates
-				// in this case we can just clear all the aggregates (if there are any)
-				aggr.expressions.clear();
-			} else {
-				// there are references to aggregates, however, potentially not all aggregates are referenced
-				// clear any unreferenced aggregates
-				auto &ref_map = references->second;
-				ClearExpressions(aggr, ref_map);
-			}
+			auto &aggr = (LogicalAggregate&) op;
+			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index);
+
 			if (aggr.expressions.size() == 0 && aggr.groups.size() == 0) {
 				// removed all expressions from the aggregate: push a COUNT(*)
 				aggr.expressions.push_back(make_unique<BoundAggregateExpression>(TypeId::BIGINT, CountStarFun::GetFunction(), false));
@@ -98,18 +105,13 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::PROJECTION: {
 		if (!everything_referenced) {
 			auto &proj = (LogicalProjection&) op;
-			// remove any children that are not referenced from this projection
-			auto references = column_references.find(proj.table_index);
-			if (references == column_references.end()) {
+			ClearUnusedExpressions(proj.expressions, proj.table_index);
+
+			if (proj.expressions.size() == 0) {
 				// nothing references the projected expressions
 				// this happens in the case of e.g. EXISTS(SELECT * FROM ...)
 				// in this case we only need to project a single constant
-				proj.expressions.clear();
-				proj.expressions.push_back(make_unique<BoundConstantExpression>(Value::INTEGER(1)));
-			} else {
-				// we have references to the projection: check if all projected columns are referred to
-				auto &ref_map = references->second;
-				ClearExpressions(proj, ref_map);
+				proj.expressions.push_back(make_unique<BoundConstantExpression>(Value::INTEGER(42)));
 			}
 		}
 		// then recurse into the children of this projection
@@ -122,28 +124,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		if (!everything_referenced) {
 			auto &get = (LogicalGet&) op;
 			// table scan: figure out which columns are referenced
-			auto references = column_references.find(get.table_index);
-			if (references == column_references.end()) {
-				// nothing references the table scan
+			ClearUnusedExpressions(get.column_ids, get.table_index);
+
+			if (get.column_ids.size() == 0) {
 				// this generally means we are only interested in whether or not anything exists in the table (e.g. EXISTS(SELECT * FROM tbl))
-				// clear all references and only scan the row id
-				get.column_ids.clear();
+				// in this case, we just scan the row identifier column as it means we do not need to read any of the columns
 				get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
-			} else {
-				// we have references to the table: erase any column ids that are not used
-				auto &ref_map = references->second;
-				index_t offset = 0;
-				for(index_t col_idx = 0; col_idx < get.column_ids.size(); col_idx++) {
-					auto entry = ref_map.find(col_idx + offset);
-					if (entry == ref_map.end()) {
-						// this entry is not referred to, erase it from the set of expresisons
-						get.column_ids.erase(get.column_ids.begin() + col_idx);
-						offset++;
-						col_idx--;
-					} else {
-						UpdateColumnReferences(col_idx + offset, col_idx, entry->second);
-					}
-				}
 			}
 		}
 		return;
@@ -153,35 +139,37 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		everything_referenced = true;
 		break;
 	}
-	// case LogicalOperatorType::FILTER: {
-	// 	auto &filter = (LogicalFilter&) op;
-	// 	// filter
-	// 	// first check which column bindings are required after the filter
-	// 	auto column_bindings = op.GetColumnBindings();
-	// 	column_binding_set_t unused_bindings;
-	// 	for(auto &column_binding : column_bindings) {
-	// 		auto entry = column_references.find(column_binding.table_index);
-	// 		if (entry == column_references.end() || entry->second.find(column_binding.column_index) == entry->second.end()) {
-	// 			// column is unused, add to set of unused column bindings
-	// 			unused_bindings.insert(column_binding);
-	// 		}
-	// 	}
-	// 	// now visit the filter expressions and remove any columns that are not used at all
-	// 	LogicalOperatorVisitor::VisitOperatorExpressions(op);
-	// 	LogicalOperatorVisitor::VisitOperatorChildren(op);
-	// 	// after that, figure out if there are columns that were ONLY used in the filter
-	// 	// these can be projected out during the filter
-	// 	column_bindings = op.GetColumnBindings();
-	// 	for(index_t i = 0; i < column_bindings.size(); i++) {
-	// 		if (unused_bindings.find(column_bindings[i]) == unused_bindings.end()) {
-	// 			filter.projection_map.push_back(i);
-	// 		}
-	// 	}
-	// 	if (filter.projection_map.size() == column_bindings.size()) {
-	// 		filter.projection_map.clear();
-	// 	}
-	// 	return;
-	// }
+	case LogicalOperatorType::FILTER: {
+		auto &filter = (LogicalFilter&) op;
+		// filter
+		// first check which column bindings are required after the filter
+		auto column_bindings = op.GetColumnBindings();
+		column_binding_set_t unused_bindings;
+		for(auto &column_binding : column_bindings) {
+			auto entry = column_references.find(column_binding);
+			if (entry == column_references.end()) {
+				// column is unused, add to set of unused column bindings
+				unused_bindings.insert(column_binding);
+			}
+		}
+		// now visit the filter expressions and remove any columns that are not used at all
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+		LogicalOperatorVisitor::VisitOperatorChildren(op);
+		// after that, figure out if there are columns that were ONLY used in the filter
+		// these can be projected out during the filter
+		column_bindings = op.GetColumnBindings();
+		for(index_t i = 0; i < column_bindings.size(); i++) {
+			auto entry = original_bindings.find(column_bindings[i]);
+			auto binding = entry == original_bindings.end() ? column_bindings[i] : entry->second;
+			if (unused_bindings.find(binding) == unused_bindings.end()) {
+				filter.projection_map.push_back(i);
+			}
+		}
+		if (filter.projection_map.size() == column_bindings.size()) {
+			filter.projection_map.clear();
+		}
+		return;
+	}
 	default:
 		break;
 	}
@@ -192,11 +180,11 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 
 unique_ptr<Expression> RemoveUnusedColumns::VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	// add a column reference
-	column_references[expr.binding.table_index][expr.binding.column_index].push_back(&expr);
+	column_references[expr.binding].push_back(&expr);
 	return nullptr;
 }
 
 unique_ptr<Expression> RemoveUnusedColumns::VisitReplace(BoundReferenceExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	// BoundReferenceExpression should not be used here yet, they only belong in the physical plan
-	throw NotImplementedException("FIXME: BoundReferenceExpression should not be used here yet!");
+	throw InternalException("BoundReferenceExpression should not be used here yet!");
 }
