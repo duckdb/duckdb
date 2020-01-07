@@ -4,7 +4,6 @@
 
 #include <chrono>
 #include <random>
-#include <iostream>
 
 using namespace duckdb;
 using namespace std;
@@ -12,19 +11,26 @@ using namespace std;
 struct ConjunctionState : public ExpressionState {
 	ConjunctionState(Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root), iteration_count(0), warmup(true) {
 		auto &conj_expr = (BoundConjunctionExpression&) expr;
+		assert(conj_expr.children.size() > 1);
 		for (index_t idx = 0; idx < conj_expr.children.size(); idx++) {
 			permutation.push_back(idx);
+			if (idx != conj_expr.children.size() - 1) {
+				swap_likeliness.push_back(100);
+			}
 		}
+		right_random_border = 100 * (conj_expr.children.size() - 1);
 	}
 
 	//used for adaptive expression reordering
 	index_t iteration_count;
-	index_t switch_idx;
+	index_t swap_idx;
+	index_t right_random_border;
 	double runtime_sum;
 	double prev_mean;
 	bool observe;
 	bool warmup;
 	vector<index_t> permutation;
+	vector<index_t> swap_likeliness;
 	std::default_random_engine generator;
 };
 
@@ -124,27 +130,45 @@ void AdaptRuntimeStatistics(BoundConjunctionExpression &expr, ConjunctionState* 
 
 	if (!state->warmup) {
 		if (state->iteration_count == 5) {
+			//the last swap was observed
 			if (state->observe) {
-				//keep if runtime decreased, else reverse switch
+				//keep swap if runtime decreased, else reverse swap
 				if (!(state->prev_mean - (state->runtime_sum / state->iteration_count) > 0)) {
-					//reverse
-					assert(state->switch_idx < expr.children.size() - 1);
+					//reverse swap because runtime didn't decrease
+					assert(state->swap_idx < expr.children.size() - 1);
 					assert(expr.children.size() > 1);
-					swap(state->permutation[state->switch_idx], state->permutation[state->switch_idx + 1]);
+					swap(state->permutation[state->swap_idx], state->permutation[state->swap_idx + 1]);
+
+					//decrease swap likeliness, but make sure there is always a small likeliness left
+					if (state->swap_likeliness[state->swap_idx] > 3) {
+						state->swap_likeliness[state->swap_idx] /= 2;
+					}
+				} else {
+					//keep swap because runtime decreased, reset likeliness
+					state->swap_likeliness[state->swap_idx] = 100;
 				}
 				state->observe = false;
 			} else {
-				//save old mean to evaluate switch
+				//save old mean to evaluate swap
 				state->prev_mean = state->runtime_sum / state->iteration_count;
 
-				//switch
-				uniform_int_distribution<int> distribution(0, expr.children.size() - 2);
-				state->switch_idx = distribution(state->generator);
-				assert(state->switch_idx < expr.children.size() - 1);
-				assert(expr.children.size() > 1);
-				swap(state->permutation[state->switch_idx], state->permutation[state->switch_idx + 1]);
+				//get swap index and swap likeliness
+				uniform_int_distribution<int> distribution(1, state->right_random_border); //a <= i <= b
+				index_t random_number = distribution(state->generator) - 1;
 
-				state->observe = true;
+				state->swap_idx = random_number / 100; //index to be swapped
+				index_t likeliness = random_number - 100 * state->swap_idx; //random number between [0, 100)
+
+				//check if swap is going to happen
+				if (state->swap_likeliness[state->swap_idx] > likeliness) { //always true for the first swap of an index
+					//swap
+					assert(state->swap_idx < expr.children.size() - 1);
+					assert(expr.children.size() > 1);
+					swap(state->permutation[state->swap_idx], state->permutation[state->swap_idx + 1]);
+
+					//observe whether swap will be applied
+					state->observe = true;
+				}
 			}
 
 			//reset values
@@ -167,6 +191,10 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 	if (!chunk) {
 		return DefaultSelect(expr, state, result);
 	}
+
+	chrono::time_point<chrono::high_resolution_clock> start_time;
+	chrono::time_point<chrono::high_resolution_clock> end_time;
+
 	if (expr.type == ExpressionType::CONJUNCTION_AND) {
 		// store the initial selection vector and count
 		auto initial_sel = chunk->sel_vector;
@@ -174,8 +202,6 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 		index_t current_count = chunk->size();
 
 		//get runtime statistics
-		chrono::time_point<chrono::high_resolution_clock> start_time;
-		chrono::time_point<chrono::high_resolution_clock> end_time;
 		start_time = chrono::high_resolution_clock::now();
 
 		for (index_t i = 0; i < expr.children.size(); i++) {
@@ -215,8 +241,6 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 		sel_t *result_vector = initial_sel == result ? intermediate_result : result;
 
 		//get runtime statistics
-		chrono::time_point<chrono::high_resolution_clock> start_time;
-		chrono::time_point<chrono::high_resolution_clock> end_time;
 		start_time = chrono::high_resolution_clock::now();
 
 		for (index_t expr_idx = 0; expr_idx < expr.children.size(); expr_idx++) {
