@@ -10,8 +10,5 @@ add_library(tpce_utilities OBJECT
 set(TPCE_OBJECT_FILES
     ${TPCE_OBJECT_FILES} $<TARGET_OBJECTS:tpce_utilities>
     PARENT_SCOPE)
-set_target_properties(
-  tpce_utilities
-  PROPERTIES
-    COMPILE_FLAGS
-    "-Wno-unused-private-field -Wno-exceptions -Wno-unused-const-variable")
+
+disable_target_warnings(tpce_utilities)

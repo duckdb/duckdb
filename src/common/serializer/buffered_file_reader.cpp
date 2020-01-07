@@ -2,6 +2,8 @@
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/exception.hpp"
 
+#include <cstring>
+
 using namespace duckdb;
 using namespace std;
 

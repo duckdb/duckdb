@@ -2,6 +2,8 @@
 #include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
 
+#include <cstring>
+
 using namespace duckdb;
 
 Node16::Node16(ART &art) : Node(art, NodeType::N16) {
@@ -38,6 +40,10 @@ index_t Node16::GetNextPos(index_t pos) {
 unique_ptr<Node> *Node16::GetChild(index_t pos) {
 	assert(pos < count);
 	return &child[pos];
+}
+
+index_t Node16::GetMin() {
+	return 0;
 }
 
 void Node16::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child) {

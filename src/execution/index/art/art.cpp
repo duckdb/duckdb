@@ -511,6 +511,8 @@ bool ART::IteratorNext(Iterator &it) {
 
 //===--------------------------------------------------------------------===//
 // Greater Than
+// Returns: True (If found leaf >= key)
+//          False (Otherwise)
 //===--------------------------------------------------------------------===//
 bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 	it.depth = 0;
@@ -526,24 +528,39 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 		it.depth++;
 
 		if (node->type == NodeType::NLeaf) {
-			// found a leaf node: check if it is bigger than the current key
+			// found a leaf node: check if it is bigger or equal than the current key
 			auto leaf = static_cast<Leaf *>(node);
 			it.node = leaf;
-			if (key > *leaf->value) {
-				// the key is bigger than the min_key
-				// in this case there are no keys in the set that are bigger than key
-				// thus we terminate
-				return false;
-			}
 			// if the search is not inclusive the leaf node could still be equal to the current value
 			// check if leaf is equal to the current key
-			if (!inclusive && *leaf->value == key) {
-				// leaf is equal: move to next node
-				if (!IteratorNext(it)) {
+			if (*leaf->value == key) {
+				// if its not inclusive check if there is a next leaf
+				if (!inclusive && !IteratorNext(it)) {
 					return false;
+				} else {
+					return true;
 				}
 			}
-			return true;
+
+			if (*leaf->value > key) {
+				return true;
+			}
+			// Leaf is lower than key
+			// Check if next leaf is still lower than key
+			while (IteratorNext(it)) {
+				if (*it.node->value == key) {
+					// if its not inclusive check if there is a next leaf
+					if (!inclusive && !IteratorNext(it)) {
+						return false;
+					} else {
+						return true;
+					}
+				} else if (*it.node->value > key) {
+					// if its not inclusive check if there is a next leaf
+					return true;
+				}
+			}
+			return false;
 		}
 		uint32_t mismatchPos = Node::PrefixMismatch(*this, node, key, depth);
 		if (mismatchPos != node->prefix_length) {
@@ -561,9 +578,10 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 		depth += node->prefix_length;
 
 		top.pos = node->GetChildGreaterEqual(key[depth]);
+
 		if (top.pos == INVALID_INDEX) {
-			// no node that is >= to the current node: abort
-			return false;
+			// Find min leaf
+			top.pos = node->GetMin();
 		}
 		node = node->GetChild(top.pos)->get();
 		depth++;

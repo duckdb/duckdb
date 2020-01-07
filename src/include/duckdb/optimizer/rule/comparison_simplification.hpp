@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// optimizer/rule/comparison_simplification.hpp
+// duckdb/optimizer/rule/comparison_simplification.hpp
 //
 //
 //===----------------------------------------------------------------------===//

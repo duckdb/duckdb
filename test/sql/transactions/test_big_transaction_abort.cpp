@@ -17,7 +17,7 @@ TEST_CASE("Test that index entries are properly removed after aborted append", "
 
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1);"));
 	// insert the values [2..2048] into the table
-	for(int i = 2; i <= 2048; i++) {
+	for (int i = 2; i <= 2048; i++) {
 		REQUIRE_NO_FAIL(con2.Query("INSERT INTO integers VALUES (" + to_string(i) + ");"));
 	}
 	REQUIRE_NO_FAIL(con2.Query("INSERT INTO integers VALUES (" + to_string(1) + ");"));
@@ -32,7 +32,7 @@ TEST_CASE("Test that index entries are properly removed after aborted append", "
 
 	// now append the rows [2..2048 again]
 	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION;"));
-	for(int i = 2; i <= 2048; i++) {
+	for (int i = 2; i <= 2048; i++) {
 		REQUIRE_NO_FAIL(con2.Query("INSERT INTO integers VALUES (" + to_string(i) + ");"));
 	}
 	// this time the commit should work
@@ -55,13 +55,12 @@ TEST_CASE("Test abort of big append", "[transactions][.]") {
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
 	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION;"));
 
-
 	// insert two blocks worth of values into the table in con2, plus the value [1]
 	// and the value [1] in con
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1);"));
 	index_t tpl_count = 2 * Storage::BLOCK_SIZE / sizeof(int);
 	auto prepared = con2.Prepare("INSERT INTO integers VALUES (?)");
-	for(int i = 2; i < tpl_count; i++) {
+	for (int i = 2; i < (int32_t)tpl_count; i++) {
 		REQUIRE_NO_FAIL(prepared->Execute(i));
 	}
 	// finally insert the value "1"

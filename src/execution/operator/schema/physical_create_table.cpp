@@ -31,10 +31,9 @@ void PhysicalCreateTable::GetChunkInternal(ClientContext &context, DataChunk &ch
 			inserted_count += state->child_chunk.size();
 			table->storage->Append(*table, context, state->child_chunk);
 		}
+		chunk.data[0].count = 1;
+		chunk.data[0].SetValue(0, Value::BIGINT(inserted_count));
 	}
-
-	chunk.data[0].count = 1;
-	chunk.data[0].SetValue(0, Value::BIGINT(inserted_count));
 
 	state->finished = true;
 }

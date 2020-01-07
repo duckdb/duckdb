@@ -1,18 +1,19 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/parsed_data/create_table_function_info.hpp
+// duckdb/parser/parsed_data/create_table_function_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
+#include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/function/table_function.hpp"
 
 namespace duckdb {
 
-struct CreateTableFunctionInfo {
+struct CreateTableFunctionInfo : public ParseInfo {
 	CreateTableFunctionInfo(TableFunction function) : schema(DEFAULT_SCHEMA), or_replace(false), function(function) {
 		this->name = function.name;
 	}

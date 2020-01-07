@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/pragma_handler.hpp
+// duckdb/planner/pragma_handler.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,7 +13,7 @@
 namespace duckdb {
 class ClientContext;
 class SQLStatement;
-class PragmaStatement;
+struct PragmaInfo;
 
 //! Pragma handler is responsible for handling PRAGMA statements
 class PragmaHandler {
@@ -22,7 +22,7 @@ public:
 
 public:
 	//! Handles a pragma statement, (potentially) returning a new statement to replace the current one
-	unique_ptr<SQLStatement> HandlePragma(PragmaStatement &pragma);
+	unique_ptr<SQLStatement> HandlePragma(PragmaInfo &pragma);
 
 private:
 	ClientContext &context;

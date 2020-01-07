@@ -70,18 +70,17 @@ static void MaterializeExpressions(ClientContext &context, Expression **exprs, i
 	}
 
 	vector<TypeId> types;
+	ExpressionExecutor executor;
 	for (index_t expr_idx = 0; expr_idx < expr_count; ++expr_idx) {
 		types.push_back(exprs[expr_idx]->return_type);
+		executor.AddExpression(*exprs[expr_idx]);
 	}
 
 	for (index_t i = 0; i < input.chunks.size(); i++) {
 		DataChunk chunk;
 		chunk.Initialize(types);
-		ExpressionExecutor executor(*input.chunks[i]);
-		for (index_t expr_idx = 0; expr_idx < expr_count; ++expr_idx) {
-			auto expr = exprs[expr_idx];
-			executor.ExecuteExpression(*expr, chunk.data[expr_idx]);
-		}
+
+		executor.Execute(*input.chunks[i], chunk);
 
 		chunk.Verify();
 		output.Append(chunk);
@@ -100,22 +99,22 @@ static void MaterializeExpression(ClientContext &context, Expression *expr, Chun
 static void SortCollectionForWindow(ClientContext &context, BoundWindowExpression *wexpr, ChunkCollection &input,
                                     ChunkCollection &output, ChunkCollection &sort_collection) {
 	vector<TypeId> sort_types;
-	vector<Expression *> exprs;
 	vector<OrderType> orders;
+	ExpressionExecutor executor;
 
 	// we sort by both 1) partition by expression list and 2) order by expressions
 	for (index_t prt_idx = 0; prt_idx < wexpr->partitions.size(); prt_idx++) {
 		auto &pexpr = wexpr->partitions[prt_idx];
 		sort_types.push_back(pexpr->return_type);
-		exprs.push_back(pexpr.get());
 		orders.push_back(OrderType::ASCENDING);
+		executor.AddExpression(*pexpr);
 	}
 
 	for (index_t ord_idx = 0; ord_idx < wexpr->orders.size(); ord_idx++) {
 		auto &oexpr = wexpr->orders[ord_idx].expression;
 		sort_types.push_back(oexpr->return_type);
-		exprs.push_back(oexpr.get());
 		orders.push_back(wexpr->orders[ord_idx].type);
+		executor.AddExpression(*oexpr);
 	}
 
 	assert(sort_types.size() > 0);
@@ -125,8 +124,8 @@ static void SortCollectionForWindow(ClientContext &context, BoundWindowExpressio
 		DataChunk sort_chunk;
 		sort_chunk.Initialize(sort_types);
 
-		ExpressionExecutor executor(*input.chunks[i]);
-		executor.Execute(exprs, sort_chunk);
+		executor.Execute(*input.chunks[i], sort_chunk);
+
 		sort_chunk.Verify();
 		sort_collection.Append(sort_chunk);
 	}
@@ -217,14 +216,14 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection
 		assert(boundary_start_collection.column_count() > 0);
 		bounds.window_start =
 		    (int64_t)row_idx -
-		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetNumericValue();
+		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>();
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING: {
 		assert(boundary_start_collection.column_count() > 0);
 		bounds.window_start =
 		    row_idx +
-		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetNumericValue();
+		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>();
 		break;
 	}
 
@@ -249,13 +248,13 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection
 		assert(boundary_end_collection.column_count() > 0);
 		bounds.window_end =
 		    (int64_t)row_idx -
-		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetNumericValue() + 1;
+		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>() + 1;
 		break;
 	case WindowBoundary::EXPR_FOLLOWING:
 		assert(boundary_end_collection.column_count() > 0);
 		bounds.window_end =
-		    row_idx + boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetNumericValue() +
-		    1;
+		    row_idx +
+		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>() + 1;
 
 		break;
 	default:
@@ -394,7 +393,7 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 			if (payload_collection.column_count() != 1) {
 				throw Exception("NTILE needs a parameter");
 			}
-			auto n_param = payload_collection.GetValue(0, row_idx).GetNumericValue();
+			auto n_param = payload_collection.GetValue(0, row_idx).GetValue<int64_t>();
 			// With thanks from SQLite's ntileValueFunc()
 			int64_t n_total = bounds.partition_end - bounds.partition_start;
 			int64_t n_size = (n_total / n_param);
@@ -418,7 +417,7 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 			index_t offset = 1;
 			if (wexpr->offset_expr) {
 				offset = leadlag_offset_collection.GetValue(0, wexpr->offset_expr->IsScalar() ? 0 : row_idx)
-				             .GetNumericValue();
+				             .GetValue<int64_t>();
 			}
 			if (wexpr->default_expr) {
 				def_val = leadlag_default_collection.GetValue(0, wexpr->default_expr->IsScalar() ? 0 : row_idx);

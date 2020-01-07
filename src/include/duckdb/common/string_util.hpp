@@ -39,8 +39,8 @@ public:
 
 	//! Join multiple items of container with given size, transformed to string
 	//! using function, into one string using the given separator
-	template<typename C, typename S, typename Func>
-	static string Join(const C& input, S count, const string &separator, Func f) {
+	template <typename C, typename S, typename Func>
+	static string Join(const C &input, S count, const string &separator, Func f) {
 		// The result
 		std::string result;
 

@@ -28,8 +28,9 @@ void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expr,
 	}
 	case ExpressionClass::CONJUNCTION: {
 		auto &conj_expr = (const ConjunctionExpression &)expr;
-		callback(*conj_expr.left);
-		callback(*conj_expr.right);
+		for (auto &child : conj_expr.children) {
+			callback(*child);
+		}
 		break;
 	}
 	case ExpressionClass::FUNCTION: {
@@ -82,7 +83,6 @@ void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expr,
 		break;
 	default:
 		// called on non ParsedExpression type!
-		assert(0);
-		break;
+		throw NotImplementedException("Unimplemented expression class");
 	}
 }

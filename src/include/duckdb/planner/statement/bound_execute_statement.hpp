@@ -1,14 +1,14 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/statement/bound_execute_statement.hpp
+// duckdb/planner/statement/bound_execute_statement.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/catalog/catalog_entry/prepared_statement_catalog_entry.hpp"
+#include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/planner/bound_sql_statement.hpp"
 
 namespace duckdb {
@@ -19,14 +19,13 @@ public:
 	}
 
 	//! The prepared statement to execute
-	PreparedStatementCatalogEntry *prep;
-
+	PreparedStatementData *prepared;
 public:
 	vector<string> GetNames() override {
-		return prep->names;
+		return prepared->names;
 	}
 	vector<SQLType> GetTypes() override {
-		return prep->sql_types;
+		return prepared->sql_types;
 	}
 };
 } // namespace duckdb

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/join/physical_cross_product.hpp
+// duckdb/execution/operator/join/physical_cross_product.hpp
 //
 //
 //===----------------------------------------------------------------------===//

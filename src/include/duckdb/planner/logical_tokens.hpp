@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/logical_tokens.hpp
+// duckdb/planner/logical_tokens.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -45,5 +45,6 @@ class LogicalPrepare;
 class LogicalPruneColumns;
 class LogicalWindow;
 class LogicalExecute;
+class LogicalSimple;
 
 } // namespace duckdb

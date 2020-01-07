@@ -15,12 +15,13 @@ TEST_CASE("Abort appender due to primary key conflict", "[appender]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1)"));
 
-	return;
-	auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
-	appender->BeginRow();
-	appender->AppendInteger(1);
-	appender->EndRow();
-	// FIXME: this should fail
-	appender->Flush();
-	con.CloseAppender();
+	Appender appender(con, "integers");
+	appender.BeginRow();
+	appender.Append<int32_t>(1);
+	appender.EndRow();
+	// this should fail!
+	REQUIRE_THROWS(appender.Flush());
+
+	result = con.Query("SELECT * FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }

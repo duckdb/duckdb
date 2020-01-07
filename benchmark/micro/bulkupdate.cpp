@@ -15,17 +15,16 @@ int64_t sum = 0;
 int64_t count = 0;
 void Load(DuckDBBenchmarkState *state) override {
 	state->conn.Query("CREATE TABLE integers(i INTEGER);");
-	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers");
+	Appender appender(state->conn, "integers");
 	// insert the elements into the database
 	for (size_t i = 0; i < GROUP_ROW_COUNT; i++) {
-		appender->BeginRow();
-		appender->AppendInteger(i % GROUP_COUNT);
-		appender->EndRow();
+		appender.BeginRow();
+		appender.Append<int32_t>(i % GROUP_COUNT);
+		appender.EndRow();
 
 		sum += i % GROUP_COUNT;
 		count++;
 	}
-	state->conn.CloseAppender();
 }
 
 void RunBenchmark(DuckDBBenchmarkState *state) override {
@@ -53,19 +52,18 @@ int64_t sum = 0;
 int64_t count = 0;
 void Load(DuckDBBenchmarkState *state) override {
 	state->conn.Query("CREATE TABLE integers(i INTEGER);");
-	auto appender = state->conn.OpenAppender(DEFAULT_SCHEMA, "integers");
+	Appender appender(state->conn, "integers");
 	// insert the elements into the database
 	for (size_t i = 0; i < GROUP_ROW_COUNT; i++) {
-		appender->BeginRow();
-		appender->AppendInteger(i % GROUP_COUNT);
-		appender->EndRow();
+		appender.BeginRow();
+		appender.Append<int32_t>(i % GROUP_COUNT);
+		appender.EndRow();
 
 		sum += i % GROUP_COUNT;
 		if ((i % GROUP_COUNT) == 1) {
 			count++;
 		}
 	}
-	state->conn.CloseAppender();
 }
 
 void RunBenchmark(DuckDBBenchmarkState *state) override {

@@ -193,6 +193,355 @@ TEST_CASE("Test copy statement", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1024}));
 }
 
+TEST_CASE("Test CSV file without trailing newline", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+
+	// no newline at end of file with simple delimiter
+	ofstream csv_no_newline(fs.JoinPath(csv_path, "no_newline.csv"));
+	for (int i = 0; i < 1024; i++) {
+		csv_no_newline << i << "," << i << ", test" << (i + 1 < 1024 ? "\n" : "");
+	}
+	csv_no_newline.close();
+
+	// load CSV file into a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE no_newline (a INTEGER, b INTEGER, c VARCHAR(10));"));
+	result = con.Query("COPY no_newline FROM '" + fs.JoinPath(csv_path, "no_newline.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {1024}));
+
+	// no newline at end of file with unicode delimiter
+	ofstream csv_no_newline_unicode(fs.JoinPath(csv_path, "no_newline_unicode.csv"));
+	for (int i = 0; i < 1024; i++) {
+		csv_no_newline_unicode << i << "🦆" << i << "🦆 test" << (i + 1 < 1024 ? "\n" : "");
+	}
+	csv_no_newline_unicode.close();
+
+	// load CSV file into a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE no_newline_unicode (a INTEGER, b INTEGER, c VARCHAR(10));"));
+	result = con.Query("COPY no_newline_unicode FROM '" + fs.JoinPath(csv_path, "no_newline_unicode.csv") +
+	                   "' DELIMITER '🦆';");
+	REQUIRE(CHECK_COLUMN(result, 0, {1024}));
+}
+
+TEST_CASE("Test CSVs with repeating patterns in delimiter/escape/quote", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_dir = GetCSVPath();
+	auto csv_path = fs.JoinPath(csv_dir, "abac.csv");
+
+	SECTION("ABAC delimiter") {
+		ofstream csv_stream(csv_path);
+		// this is equivalent to "AB|ABAB|"
+		csv_stream << "ABABACABABABAC";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR, c VARCHAR);"));
+		result = con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER 'ABAC';");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+		result = con.Query("SELECT * FROM abac_tbl");
+		REQUIRE(CHECK_COLUMN(result, 0, {"AB"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"ABAB"}));
+		REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+
+		// do the same but with a large unused quote specifier
+		REQUIRE_NO_FAIL(con.Query("DELETE FROM abac_tbl;"));
+		result = con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER 'ABAC' QUOTE 'ABABABABABAB';");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+		result = con.Query("SELECT * FROM abac_tbl");
+		REQUIRE(CHECK_COLUMN(result, 0, {"AB"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"ABAB"}));
+		REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+	}
+	SECTION("Mix of complex quotes/delimiters/escapes") {
+		ofstream csv_stream(csv_path);
+		// quote -> "ABAB"
+		// escape -> "ABAC"
+		// delimiter -> "ABAD"
+		// first value is an escaped quote (ABAB)
+		// second value is a quoted delimiter followed by an escaped quote
+		// third value is an escape outside of a set of quotes (interpreted as a literal value)
+		csv_stream << "ABABABACABABABABABADABABABADABABABABABABABADABAC";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR, c VARCHAR);"));
+		result = con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER 'ABAD' QUOTE 'ABAB' ESCAPE 'ABAC';");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+		result = con.Query("SELECT * FROM abac_tbl");
+		REQUIRE(CHECK_COLUMN(result, 0, {"ABAB"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"ABADABAB"}));
+		REQUIRE(CHECK_COLUMN(result, 2, {"ABAC"}));
+	}
+	SECTION("CSV terminates in the middle of quote parsing") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "ABAB";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		result = con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE 'ABABABABAB';");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+		result = con.Query("SELECT * FROM abac_tbl");
+		REQUIRE(CHECK_COLUMN(result, 0, {"ABAB"}));
+	}
+	SECTION("Newline in the middle of quote parsing") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "ABAB\nABAB";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		result = con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE 'ABABABABAB';");
+		REQUIRE(CHECK_COLUMN(result, 0, {2}));
+
+		result = con.Query("SELECT * FROM abac_tbl");
+		REQUIRE(CHECK_COLUMN(result, 0, {"ABAB", "ABAB"}));
+	}
+	SECTION("Simple quote terminates immediately results in error") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "\"";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE '\"';"));
+	}
+	SECTION("File ends in quoted value (simple)") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "\"\"";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		result = con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE '\"';");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+		result = con.Query("SELECT * FROM abac_tbl");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	}
+	SECTION("File ends in quoted value (complex)") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "\"\"";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		result = con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE '\"' DELIMITER 'AAAB';");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+		result = con.Query("SELECT * FROM abac_tbl");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	}
+	SECTION("Simple quote terminates after escape results in error") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "\"\\\"";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE '\"' ESCAPE '\\';"));
+	}
+	SECTION("Simple quote terminates after quote escape results in error") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "\"\"\"";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE '\"' ESCAPE '\"';"));
+	}
+	SECTION("Simple quote terminates after escape results in error") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "\"\\";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE '\"' ESCAPE '\\';"));
+	}
+	SECTION("Multi-byte quote terminates immediately results in error") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "ABABAC";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE 'ABABAC';"));
+	}
+	SECTION("Quote followed by incomplete multi-byte delimiter") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "\"\"AB";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER 'ABAC';"));
+		REQUIRE_NO_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER 'AB';"));
+	}
+	SECTION("Multi-byte quote terminates after escape results in error") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "ABACABABABAC";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE 'ABAC' ESCAPE 'ABAB';"));
+	}
+	SECTION("Multi-byte quote terminates after quote escape results in error") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "ABACABACABAC";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE 'ABAC' ESCAPE 'ABAC';"));
+	}
+	SECTION("Multi-byte quote terminates after escape results in error") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "ABACABAB";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE 'ABAC' ESCAPE 'ABAB';"));
+	}
+	SECTION("Delimiter, quote and escape have a maximum size of 255 bytes") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "ABAB";
+		csv_stream.close();
+
+		string long_string(1000, 'a');
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE '" + long_string + "';"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' ESCAPE '" + long_string + "';"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER '" + long_string + "';"));
+		REQUIRE_NO_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' QUOTE 'BLABLABLA';"));
+	}
+	SECTION("Test \r newline with multi-byte delimiter") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "ABAB\rABAC\r";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);"));
+		result = con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER 'BA';");
+		REQUIRE(CHECK_COLUMN(result, 0, {2}));
+
+		result = con.Query("SELECT * FROM abac_tbl");
+		REQUIRE(CHECK_COLUMN(result, 0, {"A", "A"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"B", "C"}));
+	}
+	SECTION("Test \r\n newline with multi-byte delimiter") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "ABAB\r\nABAC\r\n";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);"));
+		result = con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER 'BA';");
+		REQUIRE(CHECK_COLUMN(result, 0, {2}));
+
+		result = con.Query("SELECT * FROM abac_tbl");
+		REQUIRE(CHECK_COLUMN(result, 0, {"A", "A"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"B", "C"}));
+	}
+	SECTION("Test unterminated quotes with multi-line delimiter") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "\"AAA";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER 'BA';"));
+	}
+	SECTION("Test unquote not followed by delimiter") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "\"AAA\"BB";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER 'BA';"));
+	}
+	SECTION("Test escape followed by non-quote and non-escape (single-byte)") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "\"AAA\\BB\"|A";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER '|' ESCAPE '\\';"));
+	}
+	SECTION("Test escape followed by non-quote and non-escape (multi-byte)") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "\"AAA\\BB\"BAA";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);"));
+		REQUIRE_FAIL(con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER 'BA' ESCAPE '\\';"));
+	}
+	SECTION("Test file end after delimiter with multi-byte delimiter") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "AAABA";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		result = con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER 'BA';");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+		result = con.Query("SELECT * FROM abac_tbl");
+		REQUIRE(CHECK_COLUMN(result, 0, {"AAA"}));
+	}
+	SECTION("Test file end after delimiter with single-byte delimiter") {
+		ofstream csv_stream(csv_path);
+		csv_stream << "AAA|";
+		csv_stream.close();
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR);"));
+		result = con.Query("COPY abac_tbl FROM '" + csv_path + "' DELIMITER '|';");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+		result = con.Query("SELECT * FROM abac_tbl");
+		REQUIRE(CHECK_COLUMN(result, 0, {"AAA"}));
+	}
+}
+
+TEST_CASE("Test long value with escapes", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+
+	string value = string(10000, 'a') + "\"\"" + string(20000, 'b');
+	string expected_value = string(10000, 'a') + "\"" + string(20000, 'b');
+
+	// long value with escape and simple delimiter
+	ofstream long_escaped_value(fs.JoinPath(csv_path, "long_escaped_value.csv"));
+	long_escaped_value << 1 << "🦆" << 2 << "🦆"
+	                   << "\"" << value << "\"" << endl;
+	long_escaped_value.close();
+
+	// load CSV file into a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE long_escaped_value (a INTEGER, b INTEGER, c VARCHAR);"));
+	result = con.Query("COPY long_escaped_value FROM '" + fs.JoinPath(csv_path, "long_escaped_value.csv") +
+	                   "' DELIMITER '🦆';");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result = con.Query("SELECT * FROM long_escaped_value");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {expected_value}));
+
+	// long value with escape and complex delimiter
+	ofstream long_escaped_value_unicode(fs.JoinPath(csv_path, "long_escaped_value_unicode.csv"));
+	long_escaped_value_unicode << 1 << "," << 2 << ","
+	                           << "\"" << value << "\"" << endl;
+	long_escaped_value_unicode.close();
+
+	// load CSV file into a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE long_escaped_value_unicode (a INTEGER, b INTEGER, c VARCHAR);"));
+	result = con.Query("COPY long_escaped_value_unicode FROM '" +
+	                   fs.JoinPath(csv_path, "long_escaped_value_unicode.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result = con.Query("SELECT * FROM long_escaped_value_unicode");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {expected_value}));
+}
+
 TEST_CASE("Test NULL option of copy statement", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -454,7 +803,6 @@ TEST_CASE("Test force_quote and force_not_null", "[copy]") {
 	                       "' (FORCE_NOT_NULL (col_c, col_d));"));
 
 	// FORCE_NOT_NULL fails on integer columns
-	// FIXME: only working if test cases are run individually, not working if whole [copy] test cases are run at once
 	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test_2.csv") + "' (FORCE_NOT_NULL (col_a));"));
 }
 
@@ -883,6 +1231,18 @@ TEST_CASE("Test Windows Newlines with a long file", "[copy]") {
 	// load CSV file into a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);"));
 	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(line_count)}));
+
+	result = con.Query("SELECT SUM(a), MIN(LENGTH(b)), MAX(LENGTH(b)), SUM(LENGTH(b)), SUM(c) FROM test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(sum_a)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(5)}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value::BIGINT(5)}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value::BIGINT(5 * line_count)}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value::BIGINT(sum_c)}));
+
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test;"));
+	// now do the same with a multi-byte quote that is not actually used
+	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "' QUOTE 'BLABLABLA';");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(line_count)}));
 
 	result = con.Query("SELECT SUM(a), MIN(LENGTH(b)), MAX(LENGTH(b)), SUM(LENGTH(b)), SUM(c) FROM test;");

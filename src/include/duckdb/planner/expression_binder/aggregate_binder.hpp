@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/expression_binder/aggregate_binder.hpp
+// duckdb/planner/expression_binder/aggregate_binder.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -11,11 +11,11 @@ using namespace std;
 
 namespace duckdb {
 
-class PhysicalNestedLoopJoinOperatorState : public PhysicalOperatorState {
+class PhysicalNestedLoopJoinState : public PhysicalComparisonJoinState {
 public:
-	PhysicalNestedLoopJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right)
-	    : PhysicalOperatorState(left), right_chunk(0), has_null(false), left_tuple(0), right_tuple(0) {
-		assert(left && right);
+	PhysicalNestedLoopJoinState(PhysicalOperator *left, PhysicalOperator *right, vector<JoinCondition> &conditions)
+	    : PhysicalComparisonJoinState(left, right, conditions), right_chunk(0), has_null(false), left_tuple(0),
+	      right_tuple(0) {
 	}
 
 	index_t right_chunk;
@@ -35,11 +35,6 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<P
     : PhysicalComparisonJoin(op, PhysicalOperatorType::NESTED_LOOP_JOIN, move(cond), join_type) {
 	children.push_back(move(left));
 	children.push_back(move(right));
-
-	for (auto &cond : conditions) {
-		left_expressions.push_back(cond.left.get());
-		right_expressions.push_back(cond.right.get());
-	}
 }
 
 //! Remove NULL values from a chunk; returns true if the chunk had NULL values
@@ -102,7 +97,7 @@ static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bo
 }
 
 void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalNestedLoopJoinOperatorState *>(state_);
+	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_);
 
 	// first we fully materialize the right child, if we haven't done that yet
 	if (state->right_chunks.column_count() == 0) {
@@ -124,8 +119,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 				break;
 			}
 			// resolve the join expression of the right side
-			ExpressionExecutor executor(new_chunk);
-			executor.Execute(right_expressions, right_condition);
+			state->rhs_executor.Execute(new_chunk, right_condition);
 
 			state->right_data.Append(new_chunk);
 			state->right_chunks.Append(right_condition);
@@ -188,9 +182,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 					state->child_chunk.Flatten();
 
 					// resolve the left join condition for the current chunk
-					state->left_join_condition.Reset();
-					ExpressionExecutor executor(state->child_chunk);
-					executor.Execute(left_expressions, state->left_join_condition);
+					state->lhs_executor.Execute(state->child_chunk, state->left_join_condition);
 					if (type != JoinType::MARK) {
 						// immediately disqualify any tuples from the left side that have NULL values
 						// we don't do this for the MARK join on the LHS, because the tuple will still be output, just
@@ -279,7 +271,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalNestedLoopJoin::GetOperatorState() {
-	return make_unique<PhysicalNestedLoopJoinOperatorState>(children[0].get(), children[1].get());
+	return make_unique<PhysicalNestedLoopJoinState>(children[0].get(), children[1].get(), conditions);
 }
 
 } // namespace duckdb

@@ -349,7 +349,8 @@ def generate_html(parsed_json):
 		'css': css,
 		'meta_info': meta_info,
 		'chart_script': chart_script,
-		'libraries': libraries
+		'libraries': libraries,
+		'json': new_json
 	}
 
 def generate_ipython(json_input):

@@ -8,5 +8,5 @@ using namespace std;
 
 unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundExecuteStatement &stmt) {
 	// all set, execute
-	return make_unique<LogicalExecute>(stmt.prep);
+	return make_unique<LogicalExecute>(stmt.prepared);
 }

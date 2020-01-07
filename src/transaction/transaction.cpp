@@ -11,14 +11,26 @@
 
 #include <cstring>
 
-
 using namespace duckdb;
 using namespace std;
 
-void Transaction::PushCatalogEntry(CatalogEntry *entry) {
-	// store only the pointer to the catalog entry
-	CatalogEntry **blob = (CatalogEntry **)undo_buffer.CreateEntry(UndoFlags::CATALOG_ENTRY, sizeof(CatalogEntry *));
-	*blob = entry;
+void Transaction::PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data, index_t extra_data_size) {
+	index_t alloc_size = sizeof(CatalogEntry *);
+	if (extra_data_size > 0) {
+		alloc_size += extra_data_size + sizeof(index_t);
+	}
+	auto baseptr = undo_buffer.CreateEntry(UndoFlags::CATALOG_ENTRY, alloc_size);
+	// store the pointer to the catalog entry
+	*((CatalogEntry **)baseptr) = entry;
+	if (extra_data_size > 0) {
+		// copy the extra data behind the catalog entry pointer (if any)
+		baseptr += sizeof(CatalogEntry *);
+		// first store the extra data size
+		*((index_t *)baseptr) = extra_data_size;
+		baseptr += sizeof(index_t);
+		// then copy over the actual data
+		memcpy(baseptr, extra_data, extra_data_size);
+	}
 }
 
 void Transaction::PushDelete(ChunkInfo *vinfo, row_t rows[], index_t count, index_t base_row) {
@@ -28,16 +40,6 @@ void Transaction::PushDelete(ChunkInfo *vinfo, row_t rows[], index_t count, inde
 	delete_info->count = count;
 	delete_info->base_row = base_row;
 	memcpy(delete_info->rows, rows, sizeof(row_t) * count);
-}
-
-data_ptr_t Transaction::PushData(index_t len) {
-	return undo_buffer.CreateEntry(UndoFlags::DATA, len);
-}
-
-data_ptr_t Transaction::PushString(string_t str) {
-	auto entry = PushData(str.length + 1);
-	memcpy(entry, str.data, str.length + 1);
-	return entry;
 }
 
 UpdateInfo *Transaction::CreateUpdateInfo(index_t type_size, index_t entries) {
@@ -51,12 +53,7 @@ UpdateInfo *Transaction::CreateUpdateInfo(index_t type_size, index_t entries) {
 	return update_info;
 }
 
-void Transaction::PushQuery(string query) {
-	char *blob = (char *)undo_buffer.CreateEntry(UndoFlags::QUERY, query.size() + 1);
-	strcpy(blob, query.c_str());
-}
-
-bool Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept {
+string Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept {
 	this->commit_id = commit_id;
 
 	UndoBuffer::IteratorState iterator_state;
@@ -80,14 +77,14 @@ bool Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept {
 				log->Flush();
 			}
 		}
-		return true;
-	} catch(Exception &ex) {
+		return string();
+	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, transaction_id);
 		storage.RevertCommit(commit_state);
 		if (log && changes_made) {
 			// remove any entries written into the WAL by truncating it
 			log->Truncate(initial_wal_size);
 		}
-		return false;
+		return ex.what();
 	}
 }

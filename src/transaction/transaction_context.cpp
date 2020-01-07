@@ -20,29 +20,24 @@ TransactionContext::~TransactionContext() {
 }
 
 void TransactionContext::BeginTransaction() {
-	if (current_transaction) {
-		throw TransactionException("Transaction is already running!");
-	}
+	assert(!current_transaction); // cannot start a transaction within a transaction
 	current_transaction = transaction_manager.StartTransaction();
 }
 
 void TransactionContext::Commit() {
+	assert(current_transaction); // cannot commit if there is no active transaction
 	auto transaction = current_transaction;
-	if (!transaction) {
-		throw TransactionException("No transaction is currently active - cannot commit!");
-	}
 	SetAutoCommit(true);
 	current_transaction = nullptr;
-	if (!transaction_manager.CommitTransaction(transaction)) {
-		throw TransactionException("Failed to commit!");
+	string error = transaction_manager.CommitTransaction(transaction);
+	if (!error.empty()) {
+		throw TransactionException("Failed to commit: %s", error.c_str());
 	}
 }
 
 void TransactionContext::Rollback() {
+	assert(current_transaction); // cannot rollback if there is no active transaction
 	auto transaction = current_transaction;
-	if (!transaction) {
-		throw TransactionException("No transaction is currently active - cannot rollback!");
-	}
 	SetAutoCommit(true);
 	current_transaction = nullptr;
 	transaction_manager.RollbackTransaction(transaction);

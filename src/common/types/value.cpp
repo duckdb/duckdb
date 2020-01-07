@@ -9,6 +9,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -18,10 +19,6 @@
 
 using namespace duckdb;
 using namespace std;
-
-Value::Value(const Value &other) : type(other.type), is_null(other.is_null), str_value(other.str_value) {
-	this->value_ = other.value_;
-}
 
 Value Value::MinimumValue(TypeId type) {
 	Value result;
@@ -176,6 +173,13 @@ Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, i
 	return Value::TIMESTAMP(Date::FromDate(year, month, day), Time::FromTime(hour, min, sec, msec));
 }
 
+//===--------------------------------------------------------------------===//
+// CreateValue
+//===--------------------------------------------------------------------===//
+template <> Value Value::CreateValue(bool value) {
+	return Value::BOOLEAN(value);
+}
+
 template <> Value Value::CreateValue(int8_t value) {
 	return Value::TINYINT(value);
 }
@@ -208,6 +212,60 @@ template <> Value Value::CreateValue(double value) {
 	return Value::DOUBLE(value);
 }
 
+//===--------------------------------------------------------------------===//
+// GetValue
+//===--------------------------------------------------------------------===//
+template <class T> T Value::GetValueInternal() {
+	if (is_null) {
+		return NullValue<T>();
+	}
+	switch (type) {
+	case TypeId::BOOLEAN:
+		return Cast::Operation<bool, T>(value_.boolean);
+	case TypeId::TINYINT:
+		return Cast::Operation<int8_t, T>(value_.tinyint);
+	case TypeId::SMALLINT:
+		return Cast::Operation<int16_t, T>(value_.smallint);
+	case TypeId::INTEGER:
+		return Cast::Operation<int32_t, T>(value_.integer);
+	case TypeId::BIGINT:
+		return Cast::Operation<int64_t, T>(value_.bigint);
+	case TypeId::FLOAT:
+		return Cast::Operation<float, T>(value_.float_);
+	case TypeId::DOUBLE:
+		return Cast::Operation<double, T>(value_.double_);
+	case TypeId::VARCHAR:
+		return Cast::Operation<const char *, T>(str_value.c_str());
+	default:
+		throw NotImplementedException("Unimplemented type for GetValue()");
+	}
+}
+
+template <> bool Value::GetValue() {
+	return GetValueInternal<bool>();
+}
+template <> int8_t Value::GetValue() {
+	return GetValueInternal<int8_t>();
+}
+template <> int16_t Value::GetValue() {
+	return GetValueInternal<int16_t>();
+}
+template <> int32_t Value::GetValue() {
+	return GetValueInternal<int32_t>();
+}
+template <> int64_t Value::GetValue() {
+	return GetValueInternal<int64_t>();
+}
+template <> string Value::GetValue() {
+	return GetValueInternal<string>();
+}
+template <> float Value::GetValue() {
+	return GetValueInternal<float>();
+}
+template <> double Value::GetValue() {
+	return GetValueInternal<double>();
+}
+
 Value Value::Numeric(TypeId type, int64_t value) {
 	assert(!TypeIsIntegral(type) ||
 	       (value >= duckdb::MinimumValue(type) && (value < 0 || (uint64_t)value <= duckdb::MaximumValue(type))));
@@ -237,30 +295,6 @@ Value Value::Numeric(TypeId type, int64_t value) {
 		throw InvalidTypeException(type, "Numeric requires numeric type");
 	}
 	return val;
-}
-
-int64_t Value::GetNumericValue() {
-	if (is_null) {
-		throw ConversionException("Cannot convert NULL Value to numeric value");
-	}
-	switch (type) {
-	case TypeId::TINYINT:
-		return value_.tinyint;
-	case TypeId::SMALLINT:
-		return value_.smallint;
-	case TypeId::INTEGER:
-		return value_.integer;
-	case TypeId::BIGINT:
-		return value_.bigint;
-	case TypeId::FLOAT:
-		return value_.float_;
-	case TypeId::DOUBLE:
-		return value_.double_;
-	case TypeId::POINTER:
-		return value_.pointer;
-	default:
-		throw InvalidTypeException(type, "GetNumericValue requires numeric type");
-	}
 }
 
 string Value::ToString(SQLType sql_type) const {

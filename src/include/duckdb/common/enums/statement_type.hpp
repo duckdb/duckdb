@@ -21,7 +21,6 @@ enum class StatementType : uint8_t {
 	INSERT,       // insert statement type
 	UPDATE,       // update statement type
 	DELETE,       // delete statement type
-	DEALLOCATE,   // de-allocate statement type
 	PREPARE,      // prepare statement type
 	EXECUTE,      // execute statement type
 	ALTER,        // alter statement type
@@ -37,11 +36,11 @@ enum class StatementType : uint8_t {
 	// -----------------------------
 	// Create Types
 	// -----------------------------
-	CREATE_TABLE,    // create table statement type
-	CREATE_SCHEMA,   // create schema statement type
-	CREATE_INDEX,    // create index statement type
-	CREATE_VIEW,     // create view statement type
-	CREATE_SEQUENCE, // create sequence statement type
+	CREATE_TABLE,   // create table statement type
+	CREATE_SCHEMA,  // create schema statement type
+	CREATE_INDEX,   // create index statement type
+	CREATE_VIEW,    // create view statement type
+	CREATE_SEQUENCE // create sequence statement type
 };
 
 string StatementTypeToString(StatementType type);

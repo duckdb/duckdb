@@ -35,7 +35,8 @@ TEST_CASE("Test that aliases work properly in renaming columns", "[alias]") {
 	REQUIRE(result->names[2] == "m");
 	REQUIRE(result->names[3] == "n");
 
-	result = con.Query("SELECT CASE WHEN i=1 THEN 19 ELSE 0 END AS k, i::VARCHAR AS l FROM integers WHERE i=1 ORDER BY 1");
+	result =
+	    con.Query("SELECT CASE WHEN i=1 THEN 19 ELSE 0 END AS k, i::VARCHAR AS l FROM integers WHERE i=1 ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {19}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"1"}));
 	REQUIRE(result->names[0] == "k");

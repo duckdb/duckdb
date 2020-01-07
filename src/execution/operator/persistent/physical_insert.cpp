@@ -11,10 +11,14 @@ using namespace duckdb;
 using namespace std;
 
 void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+
 	int64_t insert_count = 0;
 	// create the chunk to insert from
 	DataChunk insert_chunk;
 	auto types = table->GetTypes();
+
+	// initialize executor for bound default expressions
+	ExpressionExecutor default_executor(bound_defaults);
 
 	insert_chunk.Initialize(types);
 	while (true) {
@@ -25,16 +29,16 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		}
 		auto &chunk = state->child_chunk;
 
-		state->child_chunk.Flatten();
+		chunk.Flatten();
+		default_executor.SetChunk(chunk);
 
-		ExpressionExecutor executor(chunk);
 		insert_chunk.Reset();
 		if (column_index_map.size() > 0) {
 			// columns specified by the user, use column_index_map
 			for (index_t i = 0; i < table->columns.size(); i++) {
 				if (column_index_map[i] == INVALID_INDEX) {
 					// insert default value
-					executor.ExecuteExpression(*bound_defaults[i], insert_chunk.data[i]);
+					default_executor.ExecuteExpression(i, insert_chunk.data[i]);
 				} else {
 					// get value from child chunk
 					assert((index_t)column_index_map[i] < chunk.column_count);

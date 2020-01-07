@@ -4,6 +4,8 @@
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/exception.hpp"
 
+#include <cstring>
+
 using namespace duckdb;
 using namespace std;
 

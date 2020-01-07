@@ -20,9 +20,8 @@ string BoundOperatorExpression::ToString() const {
 	}
 	// if there is no operator we render it as a function
 	auto result = ExpressionTypeToString(type) + "(";
-	result += StringUtil::Join(children, children.size(), ", ", [](const unique_ptr<Expression>& child){
-		return child->GetName();
-	});
+	result += StringUtil::Join(children, children.size(), ", ",
+	                           [](const unique_ptr<Expression> &child) { return child->GetName(); });
 	result += ")";
 	return result;
 }

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// transaction/commit_state.hpp
+// duckdb/transaction/commit_state.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -40,7 +40,7 @@ public:
 private:
 	void SwitchTable(DataTable *table, UndoFlags new_op);
 
-	void WriteCatalogEntry(CatalogEntry *entry);
+	void WriteCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data);
 	void WriteDelete(DeleteInfo *info);
 	void WriteUpdate(UpdateInfo *info);
 

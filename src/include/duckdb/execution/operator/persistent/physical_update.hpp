@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/persistent/physical_update.hpp
+// duckdb/execution/operator/persistent/physical_update.hpp
 //
 //
 //===----------------------------------------------------------------------===//

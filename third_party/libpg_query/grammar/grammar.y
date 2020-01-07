@@ -1,7 +1,7 @@
 %{
 {{{ GRAMMAR_HEADER }}}
 %}
-
+#line 5 "third_party/libpg_query/grammar/grammar.y"
 %pure-parser
 %expect 0
 %name-prefix="base_yy"

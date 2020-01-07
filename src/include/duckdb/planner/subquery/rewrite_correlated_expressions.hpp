@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/subquery/rewrite_correlated_expressions.hpp
+// duckdb/planner/subquery/rewrite_correlated_expressions.hpp
 //
 //
 //===----------------------------------------------------------------------===//

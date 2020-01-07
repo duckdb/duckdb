@@ -1,7 +1,6 @@
 #include "duckdb/common/types/hash.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/operator/numeric_functions.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 
 using namespace duckdb;

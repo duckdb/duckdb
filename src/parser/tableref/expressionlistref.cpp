@@ -9,7 +9,7 @@ bool ExpressionListRef::Equals(const TableRef *other_) const {
 	if (!TableRef::Equals(other_)) {
 		return false;
 	}
-	auto other = (ExpressionListRef*) other_;
+	auto other = (ExpressionListRef *)other_;
 	if (values.size() != other->values.size()) {
 		return false;
 	}
@@ -49,7 +49,7 @@ void ExpressionListRef::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<TableRef> ExpressionListRef::Deserialize(Deserializer &source) {
-	auto result =  make_unique<ExpressionListRef>();
+	auto result = make_unique<ExpressionListRef>();
 	// value list
 	index_t value_list_size = source.Read<index_t>();
 	for (index_t i = 0; i < value_list_size; i++) {

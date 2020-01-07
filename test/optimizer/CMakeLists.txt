@@ -1,7 +1,6 @@
 add_library_unity(test_optimizer
                   OBJECT
                   test_arithmetic_simplification.cpp
-                  test_ca_optimizer.cpp
                   test_case_simplification.cpp
                   test_comparison_simplification.cpp
                   test_conjunction_simplification.cpp

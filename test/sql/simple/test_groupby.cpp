@@ -238,7 +238,7 @@ TEST_CASE("Group by multiple columns", "[aggregations]") {
 	REQUIRE_NO_FAIL(
 	    con.Query("INSERT INTO integers VALUES (1, 1, 2), (1, 2, 2), (1, 1, 2), (2, 1, 2), (1, 2, 4), (1, 2, NULL);"));
 
-	result = con.Query("SELECT i, j, SUM(k), COUNT(*), COUNT(k) FROM integers GROUP BY i, j ORDER BY 1");
+	result = con.Query("SELECT i, j, SUM(k), COUNT(*), COUNT(k) FROM integers GROUP BY i, j ORDER BY 1, 2");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 1}));
 	REQUIRE(CHECK_COLUMN(result, 2, {4, 6, 2}));

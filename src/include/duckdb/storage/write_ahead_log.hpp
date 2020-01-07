@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// storage/write_ahead_log.hpp
+// duckdb/storage/write_ahead_log.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -15,6 +15,8 @@
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 
 namespace duckdb {
+
+struct AlterInfo;
 
 class BufferedSerializer;
 class Catalog;
@@ -62,11 +64,11 @@ public:
 	//! Sets the table used for subsequent insert/delete/update commands
 	void WriteSetTable(string &schema, string &table);
 
+	void WriteAlter(AlterInfo &info);
+
 	void WriteInsert(DataChunk &chunk);
 	void WriteDelete(DataChunk &chunk);
 	void WriteUpdate(DataChunk &chunk, column_t col_idx);
-
-	void WriteQuery(string &query);
 
 	//! Truncate the WAL to a previous size, and clear anything currently set in the writer
 	void Truncate(int64_t size);

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/tableref/bound_crossproductref.hpp
+// duckdb/planner/tableref/bound_crossproductref.hpp
 //
 //
 //===----------------------------------------------------------------------===//

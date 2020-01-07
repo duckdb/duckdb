@@ -225,6 +225,8 @@ static void require_arith(TypeId t) {
 	Vector v2(t, true, false);
 	v2.count = v1.count;
 
+	// v1: 1, 2, 3, NULL, 42, NULL
+	// v2: 4, 5, 6, 7, NULL, NULL
 	v1.SetValue(0, Value::BIGINT(1));
 	v1.SetValue(1, Value::BIGINT(2));
 	v1.SetValue(2, Value::BIGINT(3));
@@ -289,42 +291,6 @@ static void require_arith(TypeId t) {
 	REQUIRE(r.GetValue(3).is_null);
 	REQUIRE(r.GetValue(4).is_null);
 	REQUIRE(r.GetValue(5).is_null);
-
-	Vector r2(t, true, false);
-	r2.count = v1.count;
-
-	Vector prec(TypeId::INTEGER, true, false);
-	prec.count = v1.count;
-	VectorOperations::Set(prec, Value::TINYINT(0));
-	VectorOperations::Divide(v2, v1, r);
-	VectorOperations::Round(r, prec, r2);
-
-	REQUIRE(r.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(4));
-	REQUIRE(r.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
-	REQUIRE(r.GetValue(2).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
-	REQUIRE(r.GetValue(3).is_null);
-	REQUIRE(r.GetValue(4).is_null);
-	REQUIRE(r.GetValue(5).is_null);
-
-	REQUIRE(r2.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(4));
-	REQUIRE(r2.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
-	REQUIRE(r2.GetValue(2).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
-	REQUIRE(r2.GetValue(3).is_null);
-	REQUIRE(r2.GetValue(4).is_null);
-	REQUIRE(r2.GetValue(5).is_null);
-
-	Vector m1(t, true, false);
-	m1.count = v1.count;
-	VectorOperations::Set(m1, Value::TINYINT(-1));
-	VectorOperations::Multiply(v1, m1, r);
-	VectorOperations::Abs(r, r2);
-
-	REQUIRE(r2.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(1));
-	REQUIRE(r2.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
-	REQUIRE(r2.GetValue(2).CastAs(TypeId::BIGINT) == Value::BIGINT(3));
-	REQUIRE(r2.GetValue(3).is_null);
-	REQUIRE(r2.GetValue(4).CastAs(TypeId::BIGINT) == Value::BIGINT(42));
-	REQUIRE(r2.GetValue(5).is_null);
 }
 
 static void require_mod(TypeId t) {

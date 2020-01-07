@@ -1,19 +1,22 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/parsed_data/drop_info.hpp
+// duckdb/parser/parsed_data/drop_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
+#include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 
 namespace duckdb {
 
-struct DropInfo {
+struct DropInfo : public ParseInfo {
+	DropInfo() : schema(INVALID_SCHEMA), if_exists(false), cascade(false) {
+	}
+
 	//! The catalog type to drop
 	CatalogType type;
 	//! Schema name to drop from, if any
@@ -25,9 +28,6 @@ struct DropInfo {
 	//! Cascade drop (drop all dependents instead of throwing an error if there
 	//! are any)
 	bool cascade = false;
-
-	DropInfo() : schema(INVALID_SCHEMA), if_exists(false), cascade(false) {
-	}
 };
 
 } // namespace duckdb

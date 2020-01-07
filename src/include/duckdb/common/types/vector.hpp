@@ -142,8 +142,6 @@ public:
 
 	//! The stringheap of the vector
 	StringHeap string_heap;
-
-protected:
 	//! If the vector owns data, this is the unique_ptr holds the actual data.
 	unique_ptr<data_t[]> owned_data;
 };

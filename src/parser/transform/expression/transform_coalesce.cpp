@@ -24,8 +24,7 @@ unique_ptr<ParsedExpression> Transformer::TransformCoalesce(PGAExpr *root) {
 		cur_root->result_if_true = move(value_expr);
 		if (cell->next->next == nullptr) {
 			// if there is no next in the chain, the COALESCE ends there
-			cur_root->result_if_false =
-			    TransformExpression(reinterpret_cast<PGNode *>(cell->next->data.ptr_value));
+			cur_root->result_if_false = TransformExpression(reinterpret_cast<PGNode *>(cell->next->data.ptr_value));
 		} else {
 			// more COALESCE parameters remain, create a nested CASE statement
 			auto next_case = make_unique<CaseExpression>();

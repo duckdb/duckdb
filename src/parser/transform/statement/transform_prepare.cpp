@@ -1,4 +1,4 @@
-#include "duckdb/parser/statement/deallocate_statement.hpp"
+#include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
@@ -17,6 +17,7 @@ unique_ptr<PrepareStatement> Transformer::TransformPrepare(PGNode *node) {
 	auto result = make_unique<PrepareStatement>();
 	result->name = string(stmt->name);
 	result->statement = TransformStatement(stmt->query);
+	prepared_statement_parameter_index = 0;
 
 	return result;
 }
@@ -39,12 +40,12 @@ unique_ptr<ExecuteStatement> Transformer::TransformExecute(PGNode *node) {
 	return result;
 }
 
-unique_ptr<DeallocateStatement> Transformer::TransformDeallocate(PGNode *node) {
+unique_ptr<DropStatement> Transformer::TransformDeallocate(PGNode *node) {
 	auto stmt = reinterpret_cast<PGDeallocateStmt *>(node);
 	assert(stmt);
 
-	// TODO empty name means all are removed
-	auto result = make_unique<DeallocateStatement>(string(stmt->name));
-
+	auto result = make_unique<DropStatement>();
+	result->info->type = CatalogType::PREPARED_STATEMENT;
+	result->info->name = string(stmt->name);
 	return result;
 }

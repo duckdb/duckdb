@@ -1,4 +1,5 @@
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/expression_util.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -13,22 +14,16 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 	auto other = (SelectNode *)other_;
 
 	// first check counts of all lists and such
-	if (select_list.size() != other->select_list.size() || select_distinct != other->select_distinct ||
-	    orders.size() != other->orders.size() || groups.size() != other->groups.size() ||
-	    distinct_on_targets.size() != other->distinct_on_targets.size()) {
+	if (select_distinct != other->select_distinct || orders.size() != other->orders.size()) {
 		return false;
 	}
 	// SELECT
-	for (index_t i = 0; i < select_list.size(); i++) {
-		if (!select_list[i]->Equals(other->select_list[i].get())) {
-			return false;
-		}
+	if (!ExpressionUtil::ListEquals(select_list, other->select_list)) {
+		return false;
 	}
 	// DISTINCT ON
-	for (index_t i = 0; i < distinct_on_targets.size(); i++) {
-		if (!distinct_on_targets[i]->Equals(other->distinct_on_targets[i].get())) {
-			return false;
-		}
+	if (!ExpressionUtil::ListEquals(distinct_on_targets, other->distinct_on_targets)) {
+		return false;
 	}
 	// FROM
 	if (from_table) {
@@ -46,10 +41,8 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 		return false;
 	}
 	// GROUP BY
-	for (index_t i = 0; i < groups.size(); i++) {
-		if (!groups[i]->Equals(other->groups[i].get())) {
-			return false;
-		}
+	if (!ExpressionUtil::ListEquals(groups, other->groups)) {
+		return false;
 	}
 
 	// HAVING

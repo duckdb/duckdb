@@ -1,5 +1,6 @@
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
@@ -76,7 +77,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, index_t de
 		// cast child and subquery child to equivalent types
 		assert(bound_node->types.size() == 1);
 		auto compare_type = MaxSQLType(child->sql_type, bound_node->types[0]);
-		child->expr = AddCastToType(move(child->expr), child->sql_type, compare_type);
+		child->expr = BoundCastExpression::AddCastToType(move(child->expr), child->sql_type, compare_type);
 		result->child_type = bound_node->types[0];
 		result->child_target = compare_type;
 	}

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// transaction/local_storage.hpp
+// duckdb/transaction/local_storage.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -43,6 +43,7 @@ public:
 	struct CommitState {
 		unordered_map<DataTable *, unique_ptr<TableAppendState>> append_states;
 	};
+
 public:
 	//! Initialize a scan of the local storage
 	void InitializeScan(DataTable *table, LocalScanState &state);
@@ -57,7 +58,8 @@ public:
 	void Update(DataTable *table, Vector &row_identifiers, vector<column_t> &column_ids, DataChunk &data);
 
 	//! Commits the local storage, writing it to the WAL and completing the commit
-	void Commit(LocalStorage::CommitState &commit_state, Transaction &transaction, WriteAheadLog *log, transaction_t commit_id);
+	void Commit(LocalStorage::CommitState &commit_state, Transaction &transaction, WriteAheadLog *log,
+	            transaction_t commit_id);
 	//! Revert the commit made so far by the LocalStorage
 	void RevertCommit(LocalStorage::CommitState &commit_state);
 

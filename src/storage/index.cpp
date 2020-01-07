@@ -15,6 +15,9 @@ Index::Index(IndexType type, DataTable &table, vector<column_t> column_ids,
 		types.push_back(expr->return_type);
 		bound_expressions.push_back(BindExpression(expr->Copy()));
 	}
+	for (auto &bound_expr : bound_expressions) {
+		executor.AddExpression(*bound_expr);
+	}
 	for (auto column_id : column_ids) {
 		column_id_set.insert(column_id);
 	}
@@ -37,9 +40,7 @@ void Index::Delete(DataChunk &entries, Vector &row_identifiers) {
 }
 
 void Index::ExecuteExpressions(DataChunk &input, DataChunk &result) {
-	result.Reset();
-	ExpressionExecutor executor(input);
-	executor.Execute(bound_expressions, result);
+	executor.Execute(input, result);
 }
 
 unique_ptr<Expression> Index::BindExpression(unique_ptr<Expression> expr) {

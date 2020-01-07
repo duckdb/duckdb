@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// optimizer/rule/conjunction_simplification.hpp
+// duckdb/optimizer/rule/conjunction_simplification.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -18,6 +18,8 @@ public:
 	ConjunctionSimplificationRule(ExpressionRewriter &rewriter);
 
 	unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression *> &bindings, bool &changes_made) override;
+
+	unique_ptr<Expression> RemoveExpression(BoundConjunctionExpression &conj, Expression *expr);
 };
 
 } // namespace duckdb

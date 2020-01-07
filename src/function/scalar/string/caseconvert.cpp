@@ -30,12 +30,9 @@ static void strtolower(const char *input, char *output) {
 	*output = '\0';
 }
 
-template <str_function CASE_FUNCTION>
-static void caseconvert_function(Vector inputs[], BoundFunctionExpression &expr, Vector &result) {
-	auto &input = inputs[0];
+template <str_function CASE_FUNCTION> static void caseconvert_function(Vector &input, Vector &result) {
 	assert(input.type == TypeId::VARCHAR);
 
-	result.Initialize(TypeId::VARCHAR);
 	result.nullmask = input.nullmask;
 	result.count = input.count;
 	result.sel_vector = input.sel_vector;
@@ -43,15 +40,8 @@ static void caseconvert_function(Vector inputs[], BoundFunctionExpression &expr,
 	auto result_data = (const char **)result.data;
 	auto input_data = (const char **)input.data;
 
-	// bool has_stats = expr.function->children[0]->stats.has_stats;
 	index_t current_len = 0;
 	unique_ptr<char[]> output;
-	// if (has_stats) {
-	// 	// stats available, pre-allocate the result chunk
-	// 	current_len = expr.function->children[0]->stats.maximum_string_length + 1;
-	// 	output = unique_ptr<char[]>{new char[current_len]};
-	// }
-
 	VectorOperations::Exec(input, [&](index_t i, index_t k) {
 		if (input.nullmask[i]) {
 			return;
@@ -71,16 +61,14 @@ static void caseconvert_function(Vector inputs[], BoundFunctionExpression &expr,
 	});
 }
 
-static void caseconvert_upper_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-                                       BoundFunctionExpression &expr, Vector &result) {
-	assert(input_count == 1);
-	caseconvert_function<strtoupper>(inputs, expr, result);
+static void caseconvert_upper_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	assert(args.column_count == 1);
+	caseconvert_function<strtoupper>(args.data[0], result);
 }
 
-static void caseconvert_lower_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-                                       BoundFunctionExpression &expr, Vector &result) {
-	assert(input_count == 1);
-	caseconvert_function<strtolower>(inputs, expr, result);
+static void caseconvert_lower_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	assert(args.column_count == 1);
+	caseconvert_function<strtolower>(args.data[0], result);
 }
 
 void LowerFun::RegisterFunction(BuiltinFunctions &set) {

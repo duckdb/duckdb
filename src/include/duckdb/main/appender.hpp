@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// main/appender.hpp
+// duckdb/main/appender.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,9 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/main/client_context.hpp"
-
-#include <mutex>
+#include "duckdb/main/table_description.hpp"
 
 namespace duckdb {
 
@@ -24,18 +22,18 @@ class Connection;
 class Appender {
 	//! A reference to a database connection that created this appender
 	Connection &con;
-	//! The table entry to append to
-	TableCatalogEntry *table_entry;
+	//! The table description (including column names)
+	unique_ptr<TableDescription> description;
 	//! Internal chunk used for appends
 	DataChunk chunk;
 	//! The current column to append to
 	index_t column = 0;
-	//! Lock holder for appends
-	std::unique_lock<std::mutex> lock;
+	//! Message explaining why the Appender is invalidated (if any)
+	string invalidated_msg;
 
 public:
-	Appender(Connection &con, string schema_name, string table_name, std::unique_lock<std::mutex> lock);
-
+	Appender(Connection &con, string schema_name, string table_name);
+	Appender(Connection &con, string table_name);
 	~Appender();
 
 	//! Begins a new row append, after calling this the other AppendX() functions
@@ -46,37 +44,55 @@ public:
 	void EndRow();
 
 	// Append functions
-	// Note that none of these functions (besides AppendValue) does type
-	// conversion, using the wrong type for the wrong column will trigger an
-	// assert
-	//! Append a bool
+	template <class T> void Append(T value) {
+		throw Exception("Undefined type for Appender::Append!");
+	}
 
-	void AppendBoolean(int8_t value);
+	// prepared statements
+	template <typename... Args> void AppendRow(Args... args) {
+		BeginRow();
+		AppendRowRecursive(args...);
+	}
 
-	//! Append a tinyint
-	void AppendTinyInt(int8_t value);
-	//! Append a smallint
-	void AppendSmallInt(int16_t value);
-	//! Append an integer
-	void AppendInteger(int value);
-	//! Append a bigint
-	void AppendBigInt(int64_t value);
-	//! Append a varchar
-	void AppendString(const char *value);
-	//! Append a double
-	void AppendDouble(double value);
-	//! Append a generic value. This is the only function of the append_X family
-	//! that does conversion for you, but in exchange for lower efficiency.
-	void AppendValue(Value value);
-
-	//! Commit the changes made by the appender. The appender cannot be used after this point.
+	//! Commit the changes made by the appender.
 	void Flush();
+	//! Flush the changes made by the appender and close it. The appender cannot be used after this point
+	void Close();
+
+	//! Obtain a reference to the internal vector that is used to append to the table
+	Vector &GetAppendVector(index_t col_idx);
 
 	index_t CurrentColumn() {
 		return column;
 	}
 
+	void Invalidate(string msg, bool close = false);
+
 private:
-	void CheckAppend(TypeId type = TypeId::INVALID);
+	template<class T>
+	void AppendValueInternal(T value);
+	void CheckInvalidated();
+
+	void AppendRowRecursive() {
+		EndRow();
+	}
+
+	template <typename T, typename... Args> void AppendRowRecursive(T value, Args... args) {
+		Append<T>(value);
+		AppendRowRecursive(args...);
+	}
+
+	void AppendValue(Value value);
 };
+
+template <> void Appender::Append(bool value);
+template <> void Appender::Append(int8_t value);
+template <> void Appender::Append(int16_t value);
+template <> void Appender::Append(int32_t value);
+template <> void Appender::Append(int64_t value);
+template <> void Appender::Append(double value);
+template <> void Appender::Append(const char *value);
+template <> void Appender::Append(Value value);
+template <> void Appender::Append(std::nullptr_t value);
+
 } // namespace duckdb

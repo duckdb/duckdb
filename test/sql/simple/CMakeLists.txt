@@ -2,6 +2,8 @@ add_library_unity(test_sql_simple
                   OBJECT
                   test_arithmetic.cpp
                   test_alias.cpp
+                  test_analyze.cpp
+                  test_between.cpp
                   test_bitwise_ops.cpp
                   test_case.cpp
                   test_in.cpp
@@ -32,6 +34,7 @@ add_library_unity(test_sql_simple
                   test_unicode.cpp
                   test_window.cpp
                   test_sequence.cpp
+                  test_similar.cpp
                   test_default.cpp
                   test_rowid.cpp
                   test_value_list.cpp)

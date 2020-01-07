@@ -13,7 +13,7 @@ pg_query_dir = os.path.join('third_party', 'libpg_query')
 pg_query_include_dir = os.path.join('third_party', 'libpg_query', 'include')
 
 # files included in the amalgamated "duckdb.hpp" file
-main_header_files = [os.path.join(include_dir, 'duckdb.hpp'), os.path.join(include_dir, 'duckdb.h'), os.path.join(include_dir, 'duckdb', 'common', 'types', 'date.hpp'), os.path.join(include_dir, 'duckdb', 'common', 'types', 'timestamp.hpp')]
+main_header_files = [os.path.join(include_dir, 'duckdb.hpp'), os.path.join(include_dir, 'duckdb.h'), os.path.join(include_dir, 'duckdb', 'common', 'types', 'date.hpp'), os.path.join(include_dir, 'duckdb', 'common', 'types', 'timestamp.hpp'), os.path.join(include_dir, 'duckdb', 'main', 'appender.hpp'), os.path.join(include_dir, 'duckdb', 'main', 'client_context.hpp')]
 
 # include paths for where to search for include files during amalgamation
 include_paths = [include_dir, hll_dir, re2_dir, miniz_dir, pg_query_include_dir, pg_query_dir]
@@ -105,7 +105,7 @@ def write_file(current_file, ignore_excluded = False):
 
 	# add the initial line here
 	if linenumbers:
-		text = '#line 1 "%s"\n' % (current_file,) + text
+		text = '\n#line 1 "%s"\n' % (current_file,) + text
 	print(current_file)
 	# now read the header and write it
 	return cleanup_file(text)

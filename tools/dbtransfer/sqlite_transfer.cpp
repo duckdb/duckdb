@@ -68,10 +68,10 @@ bool TransferDatabase(Connection &con, sqlite3 *sqlite) {
 					case SQLTypeId::TINYINT:
 					case SQLTypeId::SMALLINT:
 					case SQLTypeId::INTEGER:
-						rc = sqlite3_bind_int(stmt, bind_index, (int)value.GetNumericValue());
+						rc = sqlite3_bind_int(stmt, bind_index, (int)value.GetValue<int64_t>());
 						break;
 					case SQLTypeId::BIGINT:
-						rc = sqlite3_bind_int64(stmt, bind_index, (sqlite3_int64)value.GetNumericValue());
+						rc = sqlite3_bind_int64(stmt, bind_index, (sqlite3_int64)value.GetValue<int64_t>());
 						break;
 					case SQLTypeId::DATE: {
 						auto date_str = value.ToString() + " 00:00:00";

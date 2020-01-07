@@ -240,10 +240,10 @@ static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, st
 }
 
 static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, DataChunk &chunk) {
-	ExpressionExecutor executor(chunk);
+	ExpressionExecutor executor(expr);
 	Vector result(TypeId::INTEGER, true, false);
 	try {
-		executor.ExecuteExpression(expr, result);
+		executor.ExecuteExpression(chunk, result);
 	} catch (Exception &ex) {
 		throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name.c_str(), ex.what());
 	} catch (...) {
@@ -658,6 +658,7 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 	// now start incrementally building the index
 	IndexLock lock;
 	index->InitializeLock(lock);
+	ExpressionExecutor executor(expressions);
 	while (true) {
 		intermediate.Reset();
 		// scan a new chunk from the table to index
@@ -668,8 +669,8 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 			break;
 		}
 		// resolve the expressions for this chunk
-		ExpressionExecutor executor(intermediate);
-		executor.Execute(expressions, result);
+		executor.Execute(intermediate, result);
+
 		// insert into the index
 		index->Insert(lock, result, intermediate.data[intermediate.column_count - 1]);
 	}

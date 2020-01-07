@@ -35,7 +35,7 @@ void PhysicalOperator::GetChunk(ClientContext &context, DataChunk &chunk, Physic
 	if (context.interrupted) {
 		throw InterruptException();
 	}
-	// finished with this operator
+
 	chunk.Reset();
 	if (state->finished) {
 		return;

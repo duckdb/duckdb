@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/index/art/art_key.hpp
+// duckdb/execution/index/art/art_key.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -27,13 +27,21 @@ public:
 	}
 
 public:
-	data_t &operator[](std::size_t i);
-	const data_t &operator[](std::size_t i) const;
+	data_t &operator[](std::size_t i) {
+		return data[i];
+	}
+	const data_t &operator[](std::size_t i) const {
+		return data[i];
+	}
 	bool operator>(const Key &k) const;
+	bool operator<(const Key &k) const;
 	bool operator>=(const Key &k) const;
 	bool operator==(const Key &k) const;
 
 	string ToString(bool is_little_endian, TypeId type);
+
+	static uint32_t EncodeFloat(float x);
+	static uint64_t EncodeDouble(double x);
 
 private:
 	template <class T> static unique_ptr<data_t[]> CreateData(T value, bool is_little_endian) {

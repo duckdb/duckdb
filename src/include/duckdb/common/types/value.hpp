@@ -51,7 +51,6 @@ public:
 			throw Exception("String value is not valid UTF8");
 		}
 	}
-	Value(const Value &other);
 
 	//! Create the lowest possible value of a given type (numeric only)
 	static Value MinimumValue(TypeId type);
@@ -91,11 +90,12 @@ public:
 	//! Create a double Value from a specified value
 	static Value DOUBLE(double value);
 
-	template <class T> static Value CreateValue(T value) {
-		throw NotImplementedException("Unimplemented template type for value creation");
+	template <class T> T GetValue() {
+		throw NotImplementedException("Unimplemented template type for Value::GetValue");
 	}
-
-	int64_t GetNumericValue();
+	template <class T> static Value CreateValue(T value) {
+		throw NotImplementedException("Unimplemented template type for Value::CreateValue");
+	}
 
 	//! Return a copy of this value
 	Value Copy() const {
@@ -176,6 +176,7 @@ public:
 	void Print();
 
 private:
+	template <class T> T GetValueInternal();
 	//! Templated helper function for casting
 	template <class DST, class OP> static DST _cast(const Value &v);
 
@@ -187,6 +188,7 @@ private:
 	template <class OP> static bool _templated_boolean_operation(const Value &left, const Value &right);
 };
 
+template <> Value Value::CreateValue(bool value);
 template <> Value Value::CreateValue(int8_t value);
 template <> Value Value::CreateValue(int16_t value);
 template <> Value Value::CreateValue(int32_t value);
@@ -195,5 +197,14 @@ template <> Value Value::CreateValue(const char *value);
 template <> Value Value::CreateValue(string value);
 template <> Value Value::CreateValue(float value);
 template <> Value Value::CreateValue(double value);
+
+template <> bool Value::GetValue();
+template <> int8_t Value::GetValue();
+template <> int16_t Value::GetValue();
+template <> int32_t Value::GetValue();
+template <> int64_t Value::GetValue();
+template <> string Value::GetValue();
+template <> float Value::GetValue();
+template <> double Value::GetValue();
 
 } // namespace duckdb

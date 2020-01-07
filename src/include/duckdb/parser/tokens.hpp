@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/tokens.hpp
+// duckdb/parser/tokens.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -29,9 +29,9 @@ class TransactionStatement;
 class UpdateStatement;
 class PrepareStatement;
 class ExecuteStatement;
-class DeallocateStatement;
 class CreateSequenceStatement;
 class PragmaStatement;
+class ExplainStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node
@@ -45,6 +45,7 @@ class SetOperationNode;
 //===--------------------------------------------------------------------===//
 class ParsedExpression;
 
+class BetweenExpression;
 class CaseExpression;
 class CastExpression;
 class ColumnRefExpression;

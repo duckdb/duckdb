@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 
 #include <functional>
@@ -50,47 +51,6 @@ struct VectorOperations {
 	static void ModuloInPlace(Vector &A, int64_t B);
 
 	//===--------------------------------------------------------------------===//
-	// Numeric Functions
-	//===--------------------------------------------------------------------===//
-	//! result = ABS(A)
-	static void Abs(Vector &A, Vector &result);
-	static void Round(Vector &A, Vector &B, Vector &result);
-	static void Ceil(Vector &A, Vector &result);
-	static void Floor(Vector &A, Vector &result);
-	static void CbRt(Vector &A, Vector &result);
-	static void Degrees(Vector &A, Vector &result);
-	static void Radians(Vector &A, Vector &result);
-	static void Exp(Vector &A, Vector &result);
-	static void Sqrt(Vector &A, Vector &result);
-	static void Ln(Vector &A, Vector &result);
-	static void Log10(Vector &A, Vector &result);
-	static void Log2(Vector &A, Vector &result);
-	static void Sign(Vector &A, Vector &result);
-	static void Pow(Vector &A, Vector &B, Vector &result);
-
-	static void Sin(Vector &A, Vector &result);
-	static void Cos(Vector &A, Vector &result);
-	static void Tan(Vector &A, Vector &result);
-	static void ASin(Vector &A, Vector &result);
-	static void ACos(Vector &A, Vector &result);
-	static void ATan(Vector &A, Vector &result);
-	static void ATan2(Vector &A, Vector &B, Vector &result);
-
-	//===--------------------------------------------------------------------===//
-	// Bitwise Operators
-	//===--------------------------------------------------------------------===//
-	//! result = A ^ B
-	static void BitwiseXOR(Vector &A, Vector &B, Vector &result);
-	//! result = A & B
-	static void BitwiseAND(Vector &A, Vector &B, Vector &result);
-	//! result = A | B
-	static void BitwiseOR(Vector &A, Vector &B, Vector &result);
-	//! result = A << B
-	static void BitwiseShiftLeft(Vector &A, Vector &B, Vector &result);
-	//! result = A >> B
-	static void BitwiseShiftRight(Vector &A, Vector &B, Vector &result);
-
-	//===--------------------------------------------------------------------===//
 	// In-Place Bitwise Operators
 	//===--------------------------------------------------------------------===//
 	//! A ^= B
@@ -131,12 +91,20 @@ struct VectorOperations {
 	static void LessThanEquals(Vector &A, Vector &B, Vector &result);
 
 	//===--------------------------------------------------------------------===//
-	// String Operations
+	// Select Comparison Operations
 	//===--------------------------------------------------------------------===//
-	// result = A LIKE B
-	static void Like(Vector &A, Vector &B, Vector &result);
-	// result = A NOT LIKE B
-	static void NotLike(Vector &A, Vector &B, Vector &result);
+	// result = A == B
+	static index_t SelectEquals(Vector &A, Vector &B, sel_t result[]);
+	// result = A != B
+	static index_t SelectNotEquals(Vector &A, Vector &B, sel_t result[]);
+	// result = A > B
+	static index_t SelectGreaterThan(Vector &A, Vector &B, sel_t result[]);
+	// result = A >= B
+	static index_t SelectGreaterThanEquals(Vector &A, Vector &B, sel_t result[]);
+	// result = A < B
+	static index_t SelectLessThan(Vector &A, Vector &B, sel_t result[]);
+	// result = A <= B
+	static index_t SelectLessThanEquals(Vector &A, Vector &B, sel_t result[]);
 
 	//===--------------------------------------------------------------------===//
 	// Aggregates
@@ -298,25 +266,6 @@ struct VectorOperations {
 			}
 		}
 	}
-
-	template <typename TA, typename TR, class FUNC, bool SKIP_NULLS = std::is_same<TR, const char *>()>
-	static void UnaryExec(Vector &a, Vector &result, FUNC &&fun) {
-		auto adata = (TA *)a.data;
-		auto rdata = (TR *)result.data;
-		result.sel_vector = a.sel_vector;
-		result.count = a.count;
-		result.nullmask = a.nullmask;
-		if (SKIP_NULLS) {
-			VectorOperations::Exec(result, [&](index_t i, index_t k) {
-				if (result.nullmask[i]) {
-					return;
-				}
-				rdata[i] = fun(adata[i]);
-			});
-		} else {
-			VectorOperations::Exec(result, [&](index_t i, index_t k) { rdata[i] = fun(adata[i]); });
-		}
-	}
 	template <typename TA, typename TB, typename TR, class FUNC, bool SKIP_NULLS = true, bool HANDLE_NULLS = true>
 	static void BinaryExec(Vector &a, Vector &b, Vector &result, FUNC &&fun) {
 		Vector *vectors[2] = {&a, &b};
@@ -352,13 +301,13 @@ struct VectorOperations {
 		});
 	}
 
-	template <class FUNC> static void MultiaryExec(Vector inputs[], int input_count, Vector &result, FUNC &&fun) {
+	template <class FUNC> static void MultiaryExec(DataChunk &args, Vector &result, FUNC &&fun) {
 		result.sel_vector = nullptr;
 		result.count = 1;
-		vector<index_t> mul(input_count, 0);
+		vector<index_t> mul(args.column_count, 0);
 
-		for (int i = 0; i < input_count; i++) {
-			auto &input = inputs[i];
+		for (index_t i = 0; i < args.column_count; i++) {
+			auto &input = args.data[i];
 			if (!input.IsConstant()) {
 				result.sel_vector = input.sel_vector;
 				result.count = input.count;

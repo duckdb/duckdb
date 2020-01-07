@@ -54,19 +54,4 @@ set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:dsdgen_c>
     PARENT_SCOPE)
 
-# disable some warnings
-if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-  set_target_properties(
-    dsdgen_c
-    PROPERTIES
-      COMPILE_FLAGS
-      "-Wno-unused-variable -Wno-incompatible-pointer-types-discards-qualifiers"
-    )
-elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-  set_target_properties(
-    dsdgen_c
-    PROPERTIES
-      COMPILE_FLAGS
-      "-Wno-unused-variable -Wno-implicit-int -Wno-unused-but-set-variable -Wno-discarded-qualifiers"
-    )
-endif()
+disable_target_warnings(dsdgen_c)

@@ -4,7 +4,12 @@
 using namespace duckdb;
 using namespace std;
 
-void ExpressionExecutor::Execute(BoundReferenceExpression &expr, Vector &result) {
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundReferenceExpression &expr,
+                                                                ExpressionExecutorState &root) {
+	return nullptr;
+}
+
+void ExpressionExecutor::Execute(BoundReferenceExpression &expr, ExpressionState *state, Vector &result) {
 	assert(expr.index != INVALID_INDEX);
 	assert(expr.index < chunk->column_count);
 	result.Reference(chunk->data[expr.index]);

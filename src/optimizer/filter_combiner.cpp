@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/filter_combiner.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
@@ -98,11 +99,43 @@ void FilterCombiner::GenerateFilters(std::function<void(unique_ptr<Expression> f
 				callback(move(comparison));
 			}
 			// for each entry also create a comparison with each constant
+			int lower_index = -1, upper_index = -1;
+			bool lower_inclusive, upper_inclusive;
 			for (index_t k = 0; k < constant_list.size(); k++) {
-				auto info = constant_list[k];
-				auto constant = make_unique<BoundConstantExpression>(info.constant);
-				auto comparison =
-				    make_unique<BoundComparisonExpression>(info.comparison_type, entries[i]->Copy(), move(constant));
+				auto &info = constant_list[k];
+				if (info.comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+				    info.comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+					lower_index = k;
+					lower_inclusive = info.comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+				} else if (info.comparison_type == ExpressionType::COMPARE_LESSTHAN ||
+				           info.comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) {
+					upper_index = k;
+					upper_inclusive = info.comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
+				} else {
+					auto constant = make_unique<BoundConstantExpression>(info.constant);
+					auto comparison = make_unique<BoundComparisonExpression>(info.comparison_type, entries[i]->Copy(),
+					                                                         move(constant));
+					callback(move(comparison));
+				}
+			}
+			if (lower_index >= 0 && upper_index >= 0) {
+				// found both lower and upper index, create a BETWEEN expression
+				auto lower_constant = make_unique<BoundConstantExpression>(constant_list[lower_index].constant);
+				auto upper_constant = make_unique<BoundConstantExpression>(constant_list[upper_index].constant);
+				auto between = make_unique<BoundBetweenExpression>(
+				    entries[i]->Copy(), move(lower_constant), move(upper_constant), lower_inclusive, upper_inclusive);
+				callback(move(between));
+			} else if (lower_index >= 0) {
+				// only lower index found, create simple comparison expression
+				auto constant = make_unique<BoundConstantExpression>(constant_list[lower_index].constant);
+				auto comparison = make_unique<BoundComparisonExpression>(constant_list[lower_index].comparison_type,
+				                                                         entries[i]->Copy(), move(constant));
+				callback(move(comparison));
+			} else if (upper_index >= 0) {
+				// only upper index found, create simple comparison expression
+				auto constant = make_unique<BoundConstantExpression>(constant_list[upper_index].constant);
+				auto comparison = make_unique<BoundComparisonExpression>(constant_list[upper_index].comparison_type,
+				                                                         entries[i]->Copy(), move(constant));
 				callback(move(comparison));
 			}
 		}

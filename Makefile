@@ -7,9 +7,13 @@ imdb: third_party/imdb/data
 
 GENERATOR=
 FORCE_COLOR=
+WARNINGS_AS_ERRORS=
 ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
 	FORCE_COLOR=-DFORCE_COLORED_OUTPUT=1
+endif
+ifeq (${TREAT_WARNINGS_AS_ERRORS}, 1)
+	WARNINGS_AS_ERRORS=-DTREAT_WARNINGS_AS_ERRORS=1
 endif
 
 clean:
@@ -18,17 +22,18 @@ clean:
 debug:
 	mkdir -p build/debug && \
 	cd build/debug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build .
 
 release:
 	mkdir -p build/release && \
 	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
 unittest: debug
 	build/debug/test/unittest
+	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 allunit: release # uses release build because otherwise allunit takes forever
 	build/release/test/unittest "*"

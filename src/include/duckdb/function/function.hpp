@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// function/function.hpp
+// duckdb/function/function.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -16,6 +16,7 @@ namespace duckdb {
 class CatalogEntry;
 class Catalog;
 class ClientContext;
+class Expression;
 class ExpressionExecutor;
 class Transaction;
 
@@ -41,28 +42,36 @@ struct TableFunctionData : public FunctionData {
 //! Function is the base class used for any type of function (scalar, aggregate or simple function)
 class Function {
 public:
-	Function(string name) : name(name) { }
-	virtual ~Function() {}
+	Function(string name) : name(name) {
+	}
+	virtual ~Function() {
+	}
 
 	//! The name of the function
 	string name;
+
 public:
 	//! Returns the formatted string name(arg1, arg2, ...)
 	static string CallToString(string name, vector<SQLType> arguments);
 	//! Returns the formatted string name(arg1, arg2..) -> return_type
 	static string CallToString(string name, vector<SQLType> arguments, SQLType return_type);
 
-	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function, or throws an exception if none could be found.
+	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
+	//! or throws an exception if none could be found.
 	static index_t BindFunction(string name, vector<ScalarFunction> &functions, vector<SQLType> &arguments);
-	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen function, or throws an exception if none could be found.
+	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen
+	//! function, or throws an exception if none could be found.
 	static index_t BindFunction(string name, vector<AggregateFunction> &functions, vector<SQLType> &arguments);
 };
 
 class SimpleFunction : public Function {
 public:
-	SimpleFunction(string name, vector<SQLType> arguments, SQLType return_type, bool has_side_effects) :
-		Function(name), arguments(move(arguments)), return_type(return_type), varargs(SQLTypeId::INVALID), has_side_effects(has_side_effects) { }
-	virtual ~SimpleFunction() {}
+	SimpleFunction(string name, vector<SQLType> arguments, SQLType return_type, bool has_side_effects)
+	    : Function(name), arguments(move(arguments)), return_type(return_type), varargs(SQLTypeId::INVALID),
+	      has_side_effects(has_side_effects) {
+	}
+	virtual ~SimpleFunction() {
+	}
 
 	//! The set of arguments of the function
 	vector<SQLType> arguments;
@@ -73,7 +82,11 @@ public:
 	//! Whether or not the function has side effects (e.g. sequence increments, random() functions, NOW()). Functions
 	//! with side-effects cannot be constant-folded.
 	bool has_side_effects;
+
 public:
+	//! Cast a set of expressions to the arguments of this function
+	void CastToFunctionArguments(vector<unique_ptr<Expression>> &children, vector<SQLType> &types);
+
 	string ToString() {
 		return Function::CallToString(name, arguments, return_type);
 	}
@@ -102,8 +115,7 @@ private:
 	Catalog &catalog;
 
 private:
-	template<class T>
-	void Register() {
+	template <class T> void Register() {
 		T::RegisterFunction(*this);
 	}
 

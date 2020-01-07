@@ -19,6 +19,6 @@ TEST_CASE("Test explain", "[explain]") {
 	REQUIRE_NO_FAIL(con.Query("EXPLAIN update integers set i=i+1;"));
 	REQUIRE_NO_FAIL(con.Query("EXPLAIN delete from integers where i=1;"));
 
-	// cannot explain prepared statements
-	REQUIRE_FAIL(con.Query("EXPLAIN SELECT * FROM integers WHERE i=?", 1));
+	// explaining prepared statements works now as well
+	REQUIRE_NO_FAIL(con.Query("EXPLAIN SELECT * FROM integers WHERE i=?", 1));
 }

@@ -75,14 +75,6 @@ public:
 	//! Move the data of this chunk to the other chunk
 	void Move(DataChunk &other);
 
-	//! Merges the vector new_vector with an existing selection vector (i.e.
-	//! result[i] = current_vector[new_vector[i]];)
-	static void MergeSelVector(sel_t *current_vector, sel_t *new_vector, sel_t *result, index_t new_count);
-
-	//! Filters elements from the vector based on a boolean vector. [True] is
-	//! included, [False] and [NULL] excluded.
-	void SetSelectionVector(Vector &matches);
-
 	//! Copies the data from this vector to another vector.
 	void Copy(DataChunk &other, index_t offset = 0);
 

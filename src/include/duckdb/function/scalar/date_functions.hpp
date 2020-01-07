@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// function/scalar/date_functions.hpp
+// duckdb/function/scalar/date_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -18,10 +18,6 @@ struct AgeFun {
 };
 
 struct DatePartFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct YearFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

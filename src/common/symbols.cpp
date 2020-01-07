@@ -4,6 +4,7 @@
 #ifdef DEBUG
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/list.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
@@ -52,7 +53,6 @@ template class std::unique_ptr<TransactionStatement>;
 template class std::unique_ptr<UpdateStatement>;
 template class std::unique_ptr<PrepareStatement>;
 template class std::unique_ptr<ExecuteStatement>;
-template class std::unique_ptr<DeallocateStatement>;
 template class std::unique_ptr<QueryNode>;
 template class std::unique_ptr<SelectNode>;
 template class std::unique_ptr<SetOperationNode>;
@@ -67,6 +67,7 @@ template class std::unique_ptr<DefaultExpression>;
 template class std::unique_ptr<FunctionExpression>;
 template class std::unique_ptr<OperatorExpression>;
 template class std::unique_ptr<ParameterExpression>;
+template class std::unique_ptr<PreparedStatementData>;
 template class std::unique_ptr<StarExpression>;
 template class std::unique_ptr<SubqueryExpression>;
 template class std::unique_ptr<WindowExpression>;
@@ -136,7 +137,6 @@ template class std::unique_ptr<Vector[]>;
 template class std::unique_ptr<DataChunk>;
 template class std::unique_ptr<JoinHashTable>;
 template class std::unique_ptr<JoinHashTable::ScanStructure>;
-template class std::unique_ptr<JoinHashTable::Node>;
 template class std::unique_ptr<data_ptr_t[]>;
 template class std::unique_ptr<Rule>;
 template class std::unique_ptr<LogicalFilter>;

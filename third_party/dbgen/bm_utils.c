@@ -158,7 +158,7 @@ void e_str(distribution *d, int min, int max, int stream, char *dest) {
 	pick_str(d, stream, strtmp);
 	len = (int)strlen(strtmp);
 	RANDOM(loc, 0, ((int)strlen(dest) - 1 - len), stream);
-	strncpy(dest + loc, strtmp, len);
+	memcpy(dest + loc, strtmp, sizeof(char) * len);
 
 	return;
 }

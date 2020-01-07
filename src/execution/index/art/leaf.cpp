@@ -1,6 +1,8 @@
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 
+#include <cstring>
+
 using namespace duckdb;
 using namespace std;
 

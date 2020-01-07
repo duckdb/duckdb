@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/constraints/not_null_constraint.hpp
+// duckdb/parser/constraints/not_null_constraint.hpp
 //
 //
 //===----------------------------------------------------------------------===//

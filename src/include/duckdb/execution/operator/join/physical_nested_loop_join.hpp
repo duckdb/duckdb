@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/join/physical_nested_loop_join.hpp
+// duckdb/execution/operator/join/physical_nested_loop_join.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -23,9 +23,6 @@ class PhysicalNestedLoopJoin : public PhysicalComparisonJoin {
 public:
 	PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	                       vector<JoinCondition> cond, JoinType join_type);
-
-	vector<Expression *> left_expressions;
-	vector<Expression *> right_expressions;
 
 public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;

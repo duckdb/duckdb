@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// execution/operator/helper/physical_prune_columns.hpp
+// duckdb/execution/operator/helper/physical_prune_columns.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -40,10 +40,11 @@ with open(output, 'r') as f:
 	text = f.read()
 
 #inline javascript files
-with open('benchmark/raphael.js', 'r') as f:
+javascript_base = os.path.join('tools', 'pythonpkg', 'duckdb_query_graph')
+with open(os.path.join(javascript_base, 'raphael.js'), 'r') as f:
 	raphael = f.read()
 
-with open('benchmark/treant.js', 'r') as f:
+with open(os.path.join(javascript_base, 'treant.js'), 'r') as f:
 	treant = f.read()
 
 text = text.replace('<script src="../../raphael.js"></script>', '<script>' + raphael + '</script>')

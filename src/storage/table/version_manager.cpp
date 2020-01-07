@@ -152,7 +152,7 @@ void VersionManager::RevertAppend(row_t row_start, row_t row_end) {
 
 	index_t chunk_start = row_start / STANDARD_VECTOR_SIZE + (row_start % STANDARD_VECTOR_SIZE == 0 ? 0 : 1);
 	index_t chunk_end = row_end / STANDARD_VECTOR_SIZE;
-	for(; chunk_start <= chunk_end; chunk_start++) {
+	for (; chunk_start <= chunk_end; chunk_start++) {
 		info.erase(chunk_start);
 	}
 }

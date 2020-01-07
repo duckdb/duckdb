@@ -3,6 +3,8 @@
 #include "duckdb/planner/statement/bound_create_table_statement.hpp"
 #include "duckdb/planner/statement/bound_delete_statement.hpp"
 #include "duckdb/planner/statement/bound_execute_statement.hpp"
+#include "duckdb/planner/statement/bound_explain_statement.hpp"
 #include "duckdb/planner/statement/bound_insert_statement.hpp"
 #include "duckdb/planner/statement/bound_select_statement.hpp"
+#include "duckdb/planner/statement/bound_simple_statement.hpp"
 #include "duckdb/planner/statement/bound_update_statement.hpp"

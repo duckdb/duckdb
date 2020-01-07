@@ -26,6 +26,10 @@ index_t Node4::GetChildGreaterEqual(uint8_t k) {
 	return Node::GetChildGreaterEqual(k);
 }
 
+index_t Node4::GetMin() {
+	return 0;
+}
+
 index_t Node4::GetNextPos(index_t pos) {
 	if (pos == INVALID_INDEX) {
 		return 0;
@@ -90,13 +94,13 @@ void Node4::erase(ART &art, unique_ptr<Node> &node, int pos) {
 		// concatenate prefixes
 		auto new_length = node->prefix_length + childref->prefix_length + 1;
 		// first move the existing prefix (if any)
-		for(uint32_t i = 0; i < childref->prefix_length; i++) {
+		for (uint32_t i = 0; i < childref->prefix_length; i++) {
 			childref->prefix[new_length - (i + 1)] = childref->prefix[childref->prefix_length - (i + 1)];
 		}
 		// now move the current key as part of the prefix
 		childref->prefix[node->prefix_length] = n->key[0];
 		// finally add the old prefix
-		for(uint32_t i = 0; i < node->prefix_length; i++) {
+		for (uint32_t i = 0; i < node->prefix_length; i++) {
 			childref->prefix[i] = node->prefix[i];
 		}
 		childref->prefix_length = new_length;

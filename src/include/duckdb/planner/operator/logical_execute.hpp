@@ -1,26 +1,26 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/operator/logical_execute.hpp
+// duckdb/planner/operator/logical_execute.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/catalog/catalog_entry/prepared_statement_catalog_entry.hpp"
+#include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 
 class LogicalExecute : public LogicalOperator {
 public:
-	LogicalExecute(PreparedStatementCatalogEntry *prep) : LogicalOperator(LogicalOperatorType::EXECUTE), prep(prep) {
-		assert(prep);
-		types = prep->types;
+	LogicalExecute(PreparedStatementData *prepared) : LogicalOperator(LogicalOperatorType::EXECUTE), prepared(prepared) {
+		assert(prepared);
+		types = prepared->types;
 	}
 
-	PreparedStatementCatalogEntry *prep;
+	PreparedStatementData *prepared;
 
 protected:
 	void ResolveTypes() override {

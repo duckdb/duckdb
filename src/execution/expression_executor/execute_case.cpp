@@ -8,19 +8,33 @@ using namespace std;
 void Case(Vector &res_true, Vector &res_false, Vector &result, sel_t tside[], index_t tcount, sel_t fside[],
           index_t fcount);
 
-void ExpressionExecutor::Execute(BoundCaseExpression &expr, Vector &result) {
-	Vector check;
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpression &expr,
+                                                                ExpressionExecutorState &root) {
+	auto result = make_unique<ExpressionState>(expr, root);
+	result->AddIntermediates({expr.check.get(), expr.result_if_true.get(), expr.result_if_false.get()});
+	return result;
+}
+
+void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *state, Vector &result) {
+	auto &check = state->arguments.data[0];
+	auto &res_true = state->arguments.data[1];
+	auto &res_false = state->arguments.data[2];
+
+	auto check_state = state->child_states[0].get();
+	auto res_true_state = state->child_states[1].get();
+	auto res_false_state = state->child_states[2].get();
+
 	// first execute the check expression
-	Execute(*expr.check, check);
+	Execute(*expr.check, check_state, check);
 	auto check_data = (bool *)check.data;
 	if (check.IsConstant()) {
 		// constant check: only need to execute one side
 		if (!check_data[0] || check.nullmask[0]) {
 			// constant false or NULL; result is FALSE
-			Execute(*expr.result_if_false, result);
+			Execute(*expr.result_if_false, res_false_state, result);
 		} else {
 			// constant true; result is TRUE
-			Execute(*expr.result_if_true, result);
+			Execute(*expr.result_if_true, res_true_state, result);
 		}
 	} else {
 		// check is not a constant
@@ -36,20 +50,18 @@ void ExpressionExecutor::Execute(BoundCaseExpression &expr, Vector &result) {
 		});
 		if (fcount == 0) {
 			// everything is true, only execute TRUE side
-			Execute(*expr.result_if_true, result);
+			Execute(*expr.result_if_true, res_true_state, result);
 		} else if (tcount == 0) {
 			// everything is false, only execute FALSE side
-			Execute(*expr.result_if_false, result);
+			Execute(*expr.result_if_false, res_false_state, result);
 		} else {
 			// have to execute both and mix and match
-			Vector res_true, res_false;
-			Execute(*expr.result_if_true, res_true);
-			Execute(*expr.result_if_false, res_false);
+			Execute(*expr.result_if_true, res_true_state, res_true);
+			Execute(*expr.result_if_false, res_false_state, res_false);
 
 			result.sel_vector = check.sel_vector;
 			result.count = check.count;
 
-			result.Initialize(expr.return_type);
 			Case(res_true, res_false, result, tside, tcount, fside, fcount);
 		}
 	}

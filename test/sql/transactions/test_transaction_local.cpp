@@ -4,6 +4,23 @@
 using namespace duckdb;
 using namespace std;
 
+TEST_CASE("Test basic transaction functionality", "[transactions]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db);
+	con.EnableQueryVerification();
+
+	// cannot commit or rollback in auto commit mode
+	REQUIRE_FAIL(con.Query("COMMIT"));
+	REQUIRE_FAIL(con.Query("ROLLBACK"));
+	// we can start a transaction
+	REQUIRE_NO_FAIL(con.Query("START TRANSACTION"));
+	// but we cannot start a transaction within a transaction!
+	REQUIRE_FAIL(con.Query("START TRANSACTION"));
+	// now we can rollback
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+}
+
 TEST_CASE("Test operations on transaction local data", "[transactions]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

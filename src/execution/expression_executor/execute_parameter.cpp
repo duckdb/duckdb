@@ -5,7 +5,12 @@
 using namespace duckdb;
 using namespace std;
 
-void ExpressionExecutor::Execute(BoundParameterExpression &expr, Vector &result) {
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundParameterExpression &expr,
+                                                                ExpressionExecutorState &root) {
+	return nullptr;
+}
+
+void ExpressionExecutor::Execute(BoundParameterExpression &expr, ExpressionState *state, Vector &result) {
 	assert(expr.value);
 	assert(expr.value->type == expr.return_type);
 	result.Reference(*expr.value);
