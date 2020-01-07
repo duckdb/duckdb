@@ -11,8 +11,8 @@ def test(cmd, out=None, err=None):
      stdout = res.stdout.decode('utf8').strip()
      stderr = res.stderr.decode('utf8').strip()
 
-     print(stdout)
-     print(stderr)
+     # print(stdout)
+     # print(stderr)
 
      if out and out not in stdout:
           print(stdout)
@@ -137,6 +137,28 @@ CREATE TABLE asdf (i INTEGER);
 
 test('.fullschema')
 
+test('.tables', err="syntax error")
+
+test('''
+CREATE TABLE asdf (i INTEGER);
+.tables as%
+''', err="syntax error")
+
+
+test('.indexes',  err="syntax error")
+
+test('''
+CREATE TABLE a (i INTEGER);
+CREATE INDEX a_idx ON a(i);
+.indexes a_%
+''',  err="syntax error")
+
+
+
+# this does not seem to output anything
+test('.sha3sum')
+
+
 test('''
 .separator XX
 SELECT 42,43;
@@ -163,6 +185,86 @@ outstr = open(outfile,'r').read()
 if '42' not in outstr:
      raise Exception('.output test failed')
 
+
+outfile = tempfile.mktemp()
+test('''
+.once %s
+SELECT 43;
+''' % outfile)
+outstr = open(outfile,'r').read()
+if '43' not in outstr:
+     raise Exception('.once test failed')
+
+
+# This somehow does not log nor fail. works for me.
+test('''
+.log %s
+SELECT 42;
+.log off
+''' % tempfile.mktemp())
+
+test('''
+.mode ascii
+SELECT NULL, 42, 'fourty-two', 42.0;
+''', out='fourty-two')
+
+test('''
+.mode csv
+SELECT NULL, 42, 'fourty-two', 42.0;
+''', out=',fourty-two,')
+
+test('''
+.mode column
+.width 10 10 10 10
+SELECT NULL, 42, 'fourty-two', 42.0;
+''', out='  fourty-two  ')
+
+test('''
+.mode html
+SELECT NULL, 42, 'fourty-two', 42.0;
+''', out='<TD>fourty-two</TD>')
+
+# FIXME sqlite3_column_blob
+# test('''
+# .mode insert
+# SELECT NULL, 42, 'fourty-two', 42.0;
+# ''', out='fourty-two')
+
+test('''
+.mode line
+SELECT NULL, 42, 'fourty-two' x, 42.0;
+''', out='x = fourty-two')
+
+test('''
+.mode list
+SELECT NULL, 42, 'fourty-two', 42.0;
+''', out='|fourty-two|')
+
+# FIXME sqlite3_column_blob and %! format specifier
+# test('''
+# .mode quote
+# SELECT NULL, 42, 'fourty-two', 42.0;
+# ''', out='fourty-two')
+
+test('''
+.mode tabs
+SELECT NULL, 42, 'fourty-two', 42.0;
+''', out='fourty-two')
+
+
+db1 = tempfile.mktemp()
+db2 = tempfile.mktemp()
+
+test('''
+.open %s
+CREATE TABLE t1 (i INTEGER);
+INSERT INTO t1 VALUES (42);
+.open %s
+CREATE TABLE t2 (i INTEGER);
+INSERT INTO t2 VALUES (43);
+.open %s
+SELECT * FROM t1;
+''' % (db1, db2, db1), out='42')
 
 # this fails because strlike and db_config are missing
 
@@ -216,36 +318,3 @@ if '42' not in outstr:
 # CREATE INDEX a_idx ON a(i);
 # .imposter a_idx a_idx_imp
 # ''')
-
-
-
-# .fullschema ?--indent? Show schema and the content of sqlite_stat tables
-# .indexes ?TABLE?       Show names of all indexes
-#                          If TABLE specified, only show indexes for tables
-#                          matching LIKE pattern TABLE.
-# .log FILE|off          Turn logging on or off.  FILE can be stderr/stdout
-# .mode MODE ?TABLE?     Set output mode where MODE is one of:
-#                          ascii    Columns/rows delimited by 0x1F and 0x1E
-#                          csv      Comma-separated values
-#                          column   Left-aligned columns.  (See .width)
-#                          html     HTML <table> code
-#                          insert   SQL insert statements for TABLE
-#                          line     One value per line
-#                          list     Values delimited by "|"
-#                          quote    Escape answers as for SQL
-#                          tabs     Tab-separated values
-#                          tcl      TCL list elements
-# .once (-e|-x|FILE)     Output for the next SQL command only to FILE
-#                          or invoke system text editor (-e) or spreadsheet (-x)
-#                          on the output.
-# .open ?OPTIONS? ?FILE? Close existing database and reopen FILE
-#                          The --new option starts with an empty file
-#                          Other options: --readonly --append --zip
-# .schema ?PATTERN?      Show the CREATE statements matching PATTERN
-#                           Add --indent for pretty-printing
-# .sha3sum ?OPTIONS...?  Compute a SHA3 hash of database content
-# .tables ?TABLE?        List names of tables
-#                          If TABLE specified, only list tables matching
-#                          LIKE pattern TABLE.
-# .width NUM1 NUM2 ...   Set column widths for "column" mode
-#                          Negative values right-justify
