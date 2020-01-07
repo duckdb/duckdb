@@ -128,7 +128,7 @@ matrix:
         - mkdir -p build/release
         - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest "*"
-        - python tools/shell/shell-test.py build/release/tools/shell/shell
+        - python3 tools/shell/shell-test.py build/release/tools/shell/shell
         - (cd examples/embedded-c; make)
         - (cd examples/embedded-c++; make)
         - (cd examples/programmatic-querying; make)
