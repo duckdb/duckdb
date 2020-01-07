@@ -14724,8 +14724,11 @@ static int do_meta_command(char *zLine, ShellState *p){
     }
     zCmd = sqlite3_mprintf(strchr(azArg[1],' ')==0?"%s":"\"%s\"", azArg[1]);
     for(i=2; i<nArg; i++){
-      zCmd = sqlite3_mprintf(strchr(azArg[i],' ')==0?"%z %s":"%z \"%s\"",
+    	// HM: avoid %z
+      char* zCmd2 = sqlite3_mprintf(strchr(azArg[i],' ')==0?"%s %s":"%s \"%s\"",
                              zCmd, azArg[i]);
+      free(zCmd);
+      zCmd = zCmd2;
     }
     x = system(zCmd);
     sqlite3_free(zCmd);

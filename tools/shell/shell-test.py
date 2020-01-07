@@ -95,7 +95,7 @@ test('.load %s' % tempfile.mktemp(), err="Error")
 test('.selftest', err='sqlite3_table_column_metadata')
 
 scriptfile = tempfile.mktemp()
-print("select 42",  file=open(scriptfile, 'w'))
+print("select 42", file=open(scriptfile, 'w'))
 test('.read %s' % scriptfile, out='42')
 
 
@@ -266,6 +266,9 @@ INSERT INTO t2 VALUES (43);
 SELECT * FROM t1;
 ''' % (db1, db2, db1), out='42')
 
+test('.system echo 42', out="42")
+test('.shell echo 42', out="42")
+
 # this fails because strlike and db_config are missing
 
 # test('''
@@ -306,10 +309,6 @@ SELECT * FROM t1;
 # ''')
 
 
-# this fails because sqlite printf uses %z, too. perhaps for the best
-
-# test('.system echo 42', out="42")
-# test('.shell echo 42', out="42")
 
 # printf %q
 
