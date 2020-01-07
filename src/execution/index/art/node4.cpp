@@ -4,7 +4,7 @@
 
 using namespace duckdb;
 
-Node4::Node4(ART &art) : Node(art, NodeType::N4) {
+Node4::Node4(ART &art, size_t compressionLength) : Node(art, NodeType::N4,compressionLength) {
 	memset(key, 0, sizeof(key));
 }
 
@@ -63,7 +63,7 @@ void Node4::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr
 		n->count++;
 	} else {
 		// Grow to Node16
-		auto newNode = make_unique<Node16>(art);
+		auto newNode = make_unique<Node16>(art, n->prefix_length);
 		newNode->count = 4;
 		CopyPrefix(art, node.get(), newNode.get());
 		for (unsigned i = 0; i < 4; i++) {

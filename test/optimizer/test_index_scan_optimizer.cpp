@@ -57,7 +57,7 @@ TEST_CASE("Test Index Scan Optimizer for Strings", "[index-optimizer-string]") {
     //! Checking Order Index
     con.Query("CREATE INDEX i_index ON strings(i)");
     // Checking if Optimizer is using index in simple case
-    auto tree = helper.ParseLogicalTree("SELECT i FROM strings where i like 'test%'");
+    auto tree = helper.ParseLogicalTree("SELECT i FROM strings where i >= 'testa' AND i <= 'testz'");
     IndexScan index_scan;
     auto plan = index_scan.Optimize(move(tree));
     REQUIRE(plan->children[0]->type == LogicalOperatorType::FILTER);

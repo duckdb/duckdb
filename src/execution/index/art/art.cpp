@@ -11,9 +11,6 @@ using namespace std;
 ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions,
          bool is_unique)
     : Index(IndexType::ART, table, column_ids, move(unbound_expressions)), is_unique(is_unique) {
-	if (this->unbound_expressions.size() > 1) {
-		throw NotImplementedException("Multiple columns in ART index not supported");
-	}
 	tree = nullptr;
 	expression_result.Initialize(types);
 	int n = 1;
@@ -23,46 +20,20 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expres
 	} else {
 		is_little_endian = false;
 	}
-	switch (types[0]) {
-	case TypeId::TINYINT:
-		maxPrefix = sizeof(int8_t);
-		break;
-	case TypeId::SMALLINT:
-		maxPrefix = sizeof(int16_t);
-		break;
-	case TypeId::INTEGER:
-		maxPrefix = sizeof(int32_t);
-		break;
-	case TypeId::BIGINT:
-		maxPrefix = sizeof(int64_t);
-		break;
-    case TypeId::FLOAT:
-        maxPrefix = sizeof(float);
-        break;
-    case TypeId::DOUBLE:
-        maxPrefix = sizeof(double);
-        break;
-    case TypeId::VARCHAR:
-        maxPrefix = 8;
-        break;
-	default:
-		throw InvalidTypeException(types[0], "Invalid type for index");
-	}
 }
 
 ART::~ART() {
 }
 
 bool ART::LeafMatches(Node *node, Key &key, unsigned depth) {
-	if (depth != maxPrefix) {
-		auto leaf = static_cast<Leaf *>(node);
-		Key &leaf_key = *leaf->value;
-		for (index_t i = depth; i < maxPrefix; i++) {
-			if (leaf_key[i] != key[i]) {
-				return false;
-			}
-		}
-	}
+    auto leaf = static_cast<Leaf *>(node);
+    Key &leaf_key = *leaf->value;
+    for (index_t i = depth; i < leaf_key.len; i++) {
+        if (leaf_key[i] != key[i]) {
+            return false;
+        }
+    }
+
 	return true;
 }
 
@@ -239,13 +210,10 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 				return InsertToLeaf(*leaf, row_id);
 			}
 		}
-        //! verify if we have to increase maxprefix size
-        if (value->len > maxPrefix){
-            maxPrefix = value->len;
-        }
-		unique_ptr<Node> newNode = make_unique<Node4>(*this);
+
+		unique_ptr<Node> newNode = make_unique<Node4>(*this,newPrefixLength);
 		newNode->prefix_length = newPrefixLength;
-		memcpy(newNode->prefix.get(), &key[depth], std::min(newPrefixLength, maxPrefix));
+		memcpy(newNode->prefix.get(), &key[depth], newPrefixLength);
 		Node4::insert(*this, newNode, existingKey[depth + newPrefixLength], node);
 		unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, move(value), row_id);
 		Node4::insert(*this, newNode, key[depth + newPrefixLength], leaf_node);
@@ -258,23 +226,14 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 		uint32_t mismatchPos = Node::PrefixMismatch(*this, node.get(), key, depth);
 		if (mismatchPos != node->prefix_length) {
 			// Prefix differs, create new node
-			unique_ptr<Node> newNode = make_unique<Node4>(*this);
+			unique_ptr<Node> newNode = make_unique<Node4>(*this,mismatchPos);
 			newNode->prefix_length = mismatchPos;
-			memcpy(newNode->prefix.get(), node->prefix.get(), std::min(mismatchPos, maxPrefix));
+			memcpy(newNode->prefix.get(), node->prefix.get(), mismatchPos);
 			// Break up prefix
-			if (node->prefix_length < maxPrefix) {
-				auto node_ptr = node.get();
-				Node4::insert(*this, newNode, node->prefix[mismatchPos], node);
-				node_ptr->prefix_length -= (mismatchPos + 1);
-				memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatchPos + 1,
-				        std::min(node_ptr->prefix_length, maxPrefix));
-			} else {
-				throw NotImplementedException("PrefixLength > MaxPrefixLength");
-			}
-            //! verify if we have to increase maxprefix size
-            if (value->len > maxPrefix){
-                maxPrefix = value->len;
-            }
+            auto node_ptr = node.get();
+            Node4::insert(*this, newNode, node->prefix[mismatchPos], node);
+            node_ptr->prefix_length -= (mismatchPos + 1);
+            memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatchPos + 1,node_ptr->prefix_length);
 			unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, move(value), row_id);
 			Node4::insert(*this, newNode, key[depth + mismatchPos], leaf_node);
 			node = move(newNode);
@@ -289,10 +248,6 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 		auto child = node->GetChild(pos);
 		return Insert(*child, move(value), depth + 1, row_id);
 	}
-    //! verify if we have to increase maxprefix size
-    if (value->len > maxPrefix){
-        maxPrefix = value->len;
-    }
 	unique_ptr<Node> newNode = make_unique<Leaf>(*this, move(value), row_id);
 	Node::InsertLeaf(*this, node, key[depth], newNode);
 	return true;
@@ -402,39 +357,26 @@ void ART::SearchEqual(vector<row_t> &result_ids, ARTIndexScanState *state) {
 }
 
 Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
-	bool skippedPrefix = false; // Did we optimistically skip some prefix without checking it?
 	auto node_val = node.get();
 
 	while (node_val) {
 		if (node_val->type == NodeType::NLeaf) {
-			if (!skippedPrefix && depth == maxPrefix) {
-				// No check required
-				return node_val;
-			}
-
-			if (depth != maxPrefix) {
-				// Check leaf
-				auto leaf = static_cast<Leaf *>(node_val);
-				Key &leafKey = *leaf->value;
-				for (index_t i = (skippedPrefix ? 0 : depth); i < leafKey.len; i++) {
-					if (leafKey[i] != key[i]) {
-						return nullptr;
-					}
-				}
-			}
+            auto leaf = static_cast<Leaf *>(node_val);
+            Key &leafKey = *leaf->value;
+            //! Check leaf
+            for (index_t i = depth; i < leafKey.len; i++) {
+                if (leafKey[i] != key[i]) {
+                    return nullptr;
+                }
+            }
 			return node_val;
 		}
-
 		if (node_val->prefix_length) {
-			if (node_val->prefix_length < maxPrefix) {
-				for (index_t pos = 0; pos < node_val->prefix_length; pos++) {
-					if (key[depth + pos] != node_val->prefix[pos]) {
-						return nullptr;
-					}
-				}
-			} else {
-				skippedPrefix = true;
-			}
+            for (index_t pos = 0; pos < node_val->prefix_length; pos++) {
+                if (key[depth + pos] != node_val->prefix[pos]) {
+                    return nullptr;
+                }
+            }
 			depth += node_val->prefix_length;
 		}
 		index_t pos = node_val->GetChildPos(key[depth]);

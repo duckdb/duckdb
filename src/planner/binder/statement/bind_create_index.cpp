@@ -18,9 +18,6 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CreateIndexStatement &stmt) {
 	if (table_ref->table->temporary) {
 		throw BinderException("Cannot create index on a temporary table!");
 	}
-	if (stmt.expressions.size() > 1) {
-		throw NotImplementedException("Multidimensional indexes not supported yet");
-	}
 	// visit the expressions
 	IndexBinder binder(*this, context);
 	for (auto &expr : stmt.expressions) {

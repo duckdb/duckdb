@@ -27,8 +27,6 @@ void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &ch
 	}
 
 	// create the chunk to hold intermediate expression results
-	// "Multidimensional indexes not supported yet"
-	assert(expressions.size() == 1);
 
 	switch (info->index_type) {
 	case IndexType::ART: {
