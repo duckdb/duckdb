@@ -1,6 +1,14 @@
 This is the DuckDB Python package
 
+## Default installation
+
+You would normally install the DuckDB released version using `pip` as follows:
+    pip install duckdb
+
 ## Installing locally
+
+For development, you may need a DuckDB python package that is installed from source.
+Proceed as follows.
 
 Set the prefix path:
 
