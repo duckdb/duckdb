@@ -81,6 +81,7 @@ unique_ptr<DataChunk> ClientContext::Fetch() {
 	if (is_invalidated) {
 		// ClientContext is invalidated: database has been closed
 		open_result->error = "Database that this connection belongs to has been closed!";
+		open_result->success = false;
 		return nullptr;
 	}
 	try {

@@ -534,6 +534,12 @@ int sqlite3_initialize(void) {
 
 int sqlite3_finalize(sqlite3_stmt *pStmt) {
 	if (pStmt) {
+		if (pStmt->result && !pStmt->result->success) {
+			pStmt->db->last_error = string(pStmt->result->error);
+			delete pStmt;
+			return SQLITE_ERROR;
+		}
+
 		delete pStmt;
 	}
 	return SQLITE_OK;
