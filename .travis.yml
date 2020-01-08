@@ -112,6 +112,7 @@ matrix:
     - os: linux
       dist: xenial
       name: GCC 9
+      python: 3.7
 
       addons:
         apt:
