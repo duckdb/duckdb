@@ -1,17 +1,17 @@
-#include "optimizer/index_scan.hpp"
-#include "optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/optimizer/index_scan.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
 
-#include "parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
 
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression/bound_comparison_expression.hpp"
-#include "planner/expression/bound_constant_expression.hpp"
-#include "planner/expression_iterator.hpp"
-#include "planner/operator/logical_filter.hpp"
-#include "planner/operator/logical_get.hpp"
-#include "planner/operator/logical_index_scan.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_index_scan.hpp"
 
-#include "storage/data_table.hpp"
+#include "duckdb/storage/data_table.hpp"
 using namespace duckdb;
 using namespace std;
 

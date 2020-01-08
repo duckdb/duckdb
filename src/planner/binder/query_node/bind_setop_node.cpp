@@ -1,11 +1,11 @@
-#include "parser/expression/columnref_expression.hpp"
-#include "parser/expression/constant_expression.hpp"
-#include "parser/expression_map.hpp"
-#include "parser/query_node/select_node.hpp"
-#include "parser/query_node/set_operation_node.hpp"
-#include "planner/binder.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/query_node/bound_set_operation_node.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression_map.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -86,7 +86,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 				auto &constant = (ConstantExpression &)*order;
 				if (TypeIsIntegral(constant.value.type)) {
 					// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
-					order_references.push_back(constant.value.GetNumericValue() - 1);
+					order_references.push_back(constant.value.GetValue<int64_t>() - 1);
 					continue;
 				}
 			}

@@ -1,8 +1,8 @@
-#include "common/types/time.hpp"
-#include "common/types/timestamp.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
-#include "common/string_util.hpp"
-#include "common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/exception.hpp"
 
 #include <iomanip>
 #include <cstring>
@@ -18,11 +18,11 @@ using namespace std;
 // ISO 8601
 
 // Taken from MonetDB mtime.c
-#define TIME(h, m, s, x)                                                                                               \
+#define DD_TIME(h, m, s, x)                                                                                            \
 	((h) >= 0 && (h) < 24 && (m) >= 0 && (m) < 60 && (s) >= 0 && (s) <= 60 && (x) >= 0 && (x) < 1000)
 
 static dtime_t time_to_number(int hour, int min, int sec, int msec) {
-	if (!TIME(hour, min, sec, msec)) {
+	if (!DD_TIME(hour, min, sec, msec)) {
 		throw Exception("Invalid time");
 	}
 	return (dtime_t)(((((hour * 60) + min) * 60) + sec) * 1000 + msec);
@@ -46,7 +46,7 @@ static void number_to_time(dtime_t n, int32_t &hour, int32_t &min, int32_t &sec,
 }
 
 // TODO this is duplicated in date.cpp
-static bool ParseDoubleDigit(const char *buf, index_t &pos, int32_t &result) {
+static bool ParseDoubleDigit2(const char *buf, index_t &pos, int32_t &result) {
 	if (std::isdigit(buf[pos])) {
 		result = buf[pos++] - '0';
 		if (std::isdigit(buf[pos])) {
@@ -71,7 +71,7 @@ static bool TryConvertTime(const char *buf, dtime_t &result) {
 		return false;
 	}
 
-	if (!ParseDoubleDigit(buf, pos, hour)) {
+	if (!ParseDoubleDigit2(buf, pos, hour)) {
 		return false;
 	}
 	if (hour < 0 || hour > 24) {
@@ -85,7 +85,7 @@ static bool TryConvertTime(const char *buf, dtime_t &result) {
 		return false;
 	}
 
-	if (!ParseDoubleDigit(buf, pos, min)) {
+	if (!ParseDoubleDigit2(buf, pos, min)) {
 		return false;
 	}
 	if (min < 0 || min > 60) {
@@ -96,7 +96,7 @@ static bool TryConvertTime(const char *buf, dtime_t &result) {
 		return false;
 	}
 
-	if (!ParseDoubleDigit(buf, pos, sec)) {
+	if (!ParseDoubleDigit2(buf, pos, sec)) {
 		return false;
 	}
 	if (sec < 0 || sec > 60) {
@@ -162,7 +162,7 @@ dtime_t Time::FromTime(int32_t hour, int32_t minute, int32_t second, int32_t mil
 }
 
 bool Time::IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t milisecond) {
-	return TIME(hour, minute, second, milisecond);
+	return DD_TIME(hour, minute, second, milisecond);
 }
 
 void Time::Convert(dtime_t time, int32_t &out_hour, int32_t &out_min, int32_t &out_sec, int32_t &out_msec) {

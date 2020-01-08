@@ -1,10 +1,10 @@
-#include "planner/expression/bound_cast_expression.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/logical_plan_generator.hpp"
-#include "planner/operator/logical_projection.hpp"
-#include "planner/operator/logical_set_operation.hpp"
-#include "planner/operator/logical_subquery.hpp"
-#include "planner/query_node/bound_set_operation_node.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/logical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_set_operation.hpp"
+#include "duckdb/planner/operator/logical_subquery.hpp"
+#include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -67,9 +67,14 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSetOperationNo
 	// Generate the logical plan for the left and right sides of the set operation
 	LogicalPlanGenerator generator_left(*node.left_binder, context);
 	LogicalPlanGenerator generator_right(*node.right_binder, context);
+	generator_left.plan_subquery = plan_subquery;
+	generator_right.plan_subquery = plan_subquery;
 
 	auto left_node = generator_left.CreatePlan(*node.left);
 	auto right_node = generator_right.CreatePlan(*node.right);
+
+	// check if there are any unplanned subqueries left in either child
+	has_unplanned_subqueries = generator_left.has_unplanned_subqueries || generator_right.has_unplanned_subqueries;
 
 	// for both the left and right sides, cast them to the same types
 	left_node = CastLogicalOperatorToTypes(node.left->types, node.types, move(left_node));

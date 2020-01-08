@@ -1,6 +1,5 @@
 #include "cursor.h"
-
-#include "common/types/timestamp.hpp"
+#include <vector>
 #include "module.h"
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION // motherfucker
@@ -59,47 +58,302 @@ static int check_cursor(duckdb_Cursor *cur) {
 	return duckdb_check_connection(cur->connection);
 }
 
-PyObject *duckdb_cursor_execute(duckdb_Cursor *self, PyObject *args) {
-	PyObject *operation;
-
-	if (!self->initialized) {
-		PyErr_SetString(duckdb_DatabaseError, "Base Cursor.__init__ not called.");
-		return 0;
-	}
-
-	duckdb_cursor_close(self, NULL);
-	self->reset = 0;
+static const char *_duckdb_stringconvert(PyObject *pystr) {
+	const char *cstr;
 #if PY_MAJOR_VERSION >= 3
-	if (!PyArg_ParseTuple(args, "O&|", PyUnicode_FSConverter, &operation)) {
+	assert(PyUnicode_Check(pystr));
+	Py_ssize_t cstr_len;
+	cstr = PyUnicode_AsUTF8AndSize(pystr, &cstr_len);
+
+	if (cstr == NULL) {
+		throw std::runtime_error("Got NULL pointer from string object");
+	}
+	if (strlen(cstr) != (size_t)cstr_len) {
+		throw std::runtime_error("String object has embedded NULL");
+	}
 #else
-		if (!PyArg_ParseTuple(args, "O|", &operation)) {
+	if (PyString_Check(pystr)) {
+		cstr = PyString_AsString(pystr);
+	} else {
+		auto bytestr = PyUnicode_AsUTF8String(pystr);
+		if (!bytestr) {
+			throw std::runtime_error("Can't convert string object to unicode");
+		}
+		cstr = PyString_AsString(bytestr);
+	}
+	if (cstr == NULL) {
+		throw std::runtime_error("Got NULL pointer from string object");
+	}
 #endif
-		return NULL;
+	return cstr;
+}
+
+typedef enum { TYPE_INT, TYPE_LONG, TYPE_FLOAT, TYPE_STRING, TYPE_BUFFER, TYPE_UNKNOWN } parameter_type;
+
+#ifdef WORDS_BIGENDIAN
+#define IS_LITTLE_ENDIAN 0
+#else
+#define IS_LITTLE_ENDIAN 1
+#endif
+
+duckdb::Value _duckdb_pyobject_to_value(PyObject *parameter) {
+	parameter_type paramtype = TYPE_UNKNOWN;
+
+	if (parameter == Py_None) {
+		return duckdb::Value();
+	}
+#if PY_MAJOR_VERSION < 3
+	if (PyInt_CheckExact(parameter)) {
+		paramtype = TYPE_INT;
+	} else
+#endif
+	    if (PyLong_CheckExact(parameter)) {
+		paramtype = TYPE_LONG;
+	} else if (PyFloat_CheckExact(parameter)) {
+		paramtype = TYPE_FLOAT;
+#if PY_MAJOR_VERSION >= 3
+	} else if (PyUnicode_CheckExact(parameter)) {
+#else
+	} else if (PyString_CheckExact(parameter)) {
+#endif
+		paramtype = TYPE_STRING;
+	} else if (PyLong_Check(parameter)) {
+		paramtype = TYPE_LONG;
+	} else if (PyFloat_Check(parameter)) {
+		paramtype = TYPE_FLOAT;
+	} else if (PyUnicode_Check(parameter)) {
+		paramtype = TYPE_STRING;
+	} else if (PyObject_CheckBuffer(parameter)) {
+		paramtype = TYPE_BUFFER;
+	} else {
+		paramtype = TYPE_UNKNOWN;
 	}
 
+	switch (paramtype) {
+#if PY_MAJOR_VERSION < 3
+	case TYPE_INT: {
+		return duckdb::Value::BIGINT(PyInt_AsLong(parameter));
+	}
+#endif
+	case TYPE_LONG: {
+		int overflow;
+		int64_t value = PyLong_AsLongLongAndOverflow(parameter, &overflow);
+		if (overflow) {
+			throw std::runtime_error("Overflow in long object");
+		}
+		return duckdb::Value::BIGINT(value);
+	}
+	case TYPE_FLOAT:
+		return duckdb::Value::DOUBLE(PyFloat_AsDouble(parameter));
+	case TYPE_STRING:
+		return duckdb::Value(_duckdb_stringconvert(parameter));
+	default:
+		break;
+	}
+	// TODO complain
+	throw std::runtime_error("Failed to convert object");
+}
+
+// this parameter binding mess is inherited from pysqlite
+
+void _duckdb_bind_parameters(PyObject *parameters, std::vector<duckdb::Value> &params) {
+	PyObject *current_param;
+	int i;
+	int num_params_needed = params.size();
+	Py_ssize_t num_params = 0;
+
+	if (PyTuple_CheckExact(parameters) || PyList_CheckExact(parameters) ||
+	    (!PyDict_Check(parameters) && PySequence_Check(parameters))) {
+		/* parameters passed as sequence */
+		if (PyTuple_CheckExact(parameters)) {
+			num_params = PyTuple_GET_SIZE(parameters);
+		} else if (PyList_CheckExact(parameters)) {
+			num_params = PyList_GET_SIZE(parameters);
+		} else {
+			num_params = PySequence_Size(parameters);
+		}
+		if (num_params != num_params_needed) {
+			PyErr_Format(duckdb_DatabaseError,
+			             "Incorrect number of bindings supplied. The current "
+			             "statement uses %d, and there are %zd supplied.",
+			             num_params_needed, num_params);
+			return;
+		}
+		for (i = 0; i < num_params; i++) {
+			if (PyTuple_CheckExact(parameters)) {
+				current_param = PyTuple_GET_ITEM(parameters, i);
+				Py_XINCREF(current_param);
+			} else if (PyList_CheckExact(parameters)) {
+				current_param = PyList_GET_ITEM(parameters, i);
+				Py_XINCREF(current_param);
+			} else {
+				current_param = PySequence_GetItem(parameters, i);
+			}
+			if (!current_param) {
+				return;
+			}
+
+			try {
+				params[i] = _duckdb_pyobject_to_value(current_param);
+			} catch (std::exception &e) {
+				PyErr_Format(duckdb_DatabaseError, "Error binding parameter %d - %s", i, e.what());
+				return;
+			}
+		}
+	} else {
+		PyErr_SetString(duckdb_DatabaseError, "parameters are of unsupported type");
+	}
+}
+
+// many hatred
+#if PY_MAJOR_VERSION >= 3
+#define STRING_PARSE_FLAG "U"
+#else
+#define STRING_PARSE_FLAG "O"
+#endif
+
+// borrowed from the sqlite module
+static PyObject *_duckdb_query_execute(duckdb_Cursor *self, int multiple, PyObject *args) {
+	PyObject *operation;
+	PyObject *parameters_list = NULL;
+	PyObject *parameters_iter = NULL;
+	PyObject *parameters = NULL;
+	PyObject *second_argument = NULL;
+
+	bool need_transaction;
+
+	std::vector<duckdb::Value> params;
+	std::unique_ptr<duckdb::PreparedStatement> prep;
+	const char *sql_cstr;
+
+	if (!check_cursor(self)) {
+		goto error;
+	}
+
+	need_transaction = multiple && self->connection->conn->context->transaction.IsAutoCommit();
+
+	if (need_transaction) {
+		self->connection->conn->Query("BEGIN TRANSACTION");
+	}
+
+	// unify the various possible parameters from `args` into `parameters_iter`
+	if (multiple) {
+		/* executemany() */
+		if (!PyArg_ParseTuple(args, STRING_PARSE_FLAG "O", &operation, &second_argument)) {
+			goto error;
+		}
+
+		if (PyIter_Check(second_argument)) {
+			/* iterator */
+			Py_INCREF(second_argument);
+			parameters_iter = second_argument;
+		} else {
+			/* sequence */
+			parameters_iter = PyObject_GetIter(second_argument);
+			if (!parameters_iter) {
+				goto error;
+			}
+		}
+	} else {
+		/* execute() */
+		if (!PyArg_ParseTuple(args, STRING_PARSE_FLAG "|O", &operation, &second_argument)) {
+			goto error;
+		}
+
+		parameters_list = PyList_New(0);
+		if (!parameters_list) {
+			goto error;
+		}
+
+		if (second_argument == NULL) {
+			second_argument = PyTuple_New(0); // push an empty tuple so we have an entry in parameters_list
+			if (!second_argument) {
+				goto error;
+			}
+		} else {
+			Py_INCREF(second_argument);
+		}
+		if (PyList_Append(parameters_list, second_argument) != 0) {
+			Py_DECREF(second_argument);
+			goto error;
+		}
+		Py_DECREF(second_argument);
+
+		parameters_iter = PyObject_GetIter(parameters_list);
+		if (!parameters_iter) {
+			goto error;
+		}
+	}
 	self->rowcount = 0L;
+	self->reset = 0;
 
-	char *sql = PyBytes_AsString(operation);
-	if (!sql) {
+	sql_cstr = _duckdb_stringconvert(operation);
+	if (!sql_cstr) {
+		PyErr_SetString(duckdb_DatabaseError, "Can't convert query to string");
 		goto error;
 	}
 
-	self->result = self->connection->conn->Query(sql);
-	if (!self->result->success) {
-		PyErr_SetString(duckdb_DatabaseError, self->result->error.c_str());
+	prep = self->connection->conn->Prepare(sql_cstr);
+	if (!prep->success) {
+		PyErr_SetString(duckdb_DatabaseError, prep->error.c_str());
 		goto error;
 	}
 
-	self->closed = 0;
-	self->rowcount = self->result->collection.count;
+	params.resize(prep->n_param);
+
+	while (1) {
+		parameters = PyIter_Next(parameters_iter);
+		if (!parameters) {
+			break;
+		}
+
+		// bind aprameters if any
+		_duckdb_bind_parameters(parameters, params);
+		if (PyErr_Occurred()) {
+			goto error;
+		}
+
+		// fire!
+		auto res = prep->Execute(params, false); // TODO we could do streaming results here
+		if (!res->success) {
+			PyErr_SetString(duckdb_DatabaseError, res->error.c_str());
+			goto error;
+		}
+		assert(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
+		self->result = std::unique_ptr<duckdb::MaterializedQueryResult>(
+		    static_cast<duckdb::MaterializedQueryResult *>(res.release()));
+		Py_XDECREF(parameters);
+		self->rowcount = self->result->collection.count;
+		self->closed = 0;
+		self->offset = 0;
+	}
 
 error:
+	Py_XDECREF(parameters);
+	Py_XDECREF(parameters_iter);
+	Py_XDECREF(parameters_list);
+
 	if (PyErr_Occurred()) {
+		if (need_transaction) {
+			self->connection->conn->Query("ROLLBACK");
+		}
+		self->rowcount = -1L;
 		return NULL;
 	} else {
+		if (need_transaction) {
+			self->connection->conn->Query("COMMIT");
+		}
 		Py_INCREF(self);
 		return (PyObject *)self;
 	}
+}
+
+PyObject *duckdb_cursor_execute(duckdb_Cursor *self, PyObject *args) {
+	return _duckdb_query_execute(self, 0, args);
+}
+
+PyObject *duckdb_cursor_executemany(duckdb_Cursor *self, PyObject *args) {
+	return _duckdb_query_execute(self, 1, args);
 }
 
 PyObject *duckdb_cursor_fetchone(duckdb_Cursor *self) {
@@ -153,11 +407,11 @@ static uint8_t duckdb_type_to_numpy_type(duckdb::TypeId type, duckdb::SQLTypeId 
 	case duckdb::TypeId::INTEGER:
 		return NPY_INT32;
 	case duckdb::TypeId::BIGINT:
-        if (sql_type == duckdb::SQLTypeId::TIMESTAMP) {
-            return NPY_DATETIME;
-        } else {
-            return NPY_INT64;
-        }
+		if (sql_type == duckdb::SQLTypeId::TIMESTAMP) {
+			return NPY_DATETIME;
+		} else {
+			return NPY_INT64;
+		}
 	case duckdb::TypeId::FLOAT:
 		return NPY_FLOAT32;
 	case duckdb::TypeId::DOUBLE:
@@ -194,12 +448,13 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 	for (size_t col_idx = 0; col_idx < ncol; col_idx++) {
 
 		// two owned references for each column, .array and .nullmask
-        PyArray_Descr* descr = PyArray_DescrNewFromType(duckdb_type_to_numpy_type(result->types[col_idx], result->sql_types[col_idx].id));
-        // In the case of timestamps, we need to set the datetime64 unit explicitly.
-        if (result->sql_types[col_idx].id == duckdb::SQLTypeId::TIMESTAMP) {
-            auto dtype = reinterpret_cast<PyArray_DatetimeDTypeMetaData*>(descr->c_metadata);
-            dtype->meta.base = NPY_FR_ms;
-        }
+		PyArray_Descr *descr =
+		    PyArray_DescrNewFromType(duckdb_type_to_numpy_type(result->types[col_idx], result->sql_types[col_idx].id));
+		// In the case of timestamps, we need to set the datetime64 unit explicitly.
+		if (result->sql_types[col_idx].id == duckdb::SQLTypeId::TIMESTAMP) {
+			auto dtype = reinterpret_cast<PyArray_DatetimeDTypeMetaData *>(descr->c_metadata);
+			dtype->meta.base = NPY_FR_ms;
+		}
 		cols[col_idx].array = PyArray_Empty(1, dims, descr, 0);
 		cols[col_idx].nullmask = PyArray_EMPTY(1, dims, NPY_BOOL, 0);
 		if (!cols[col_idx].array || !cols[col_idx].nullmask) {
@@ -244,15 +499,15 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 					((PyObject **)array_data)[offset + chunk_idx] = str_obj;
 				}
 				break;
-            case duckdb::TypeId::BIGINT:
-                if (result->sql_types[col_idx].id == duckdb::SQLTypeId::TIMESTAMP) {
-                    int64_t* array_data_ptr = reinterpret_cast<int64_t*>(array_data + (offset * duckdb_type_size));
-                    duckdb::timestamp_t* chunk_data_ptr = reinterpret_cast<int64_t*>(chunk->data[col_idx].data);
-                    for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
-                        array_data_ptr[chunk_idx] = duckdb::Timestamp::GetEpoch(chunk_data_ptr[chunk_idx]) * 1000;
-                    }
-                    break;
-                }  // else fall-through-to-default
+			case duckdb::TypeId::BIGINT:
+				if (result->sql_types[col_idx].id == duckdb::SQLTypeId::TIMESTAMP) {
+					int64_t *array_data_ptr = reinterpret_cast<int64_t *>(array_data + (offset * duckdb_type_size));
+					duckdb::timestamp_t *chunk_data_ptr = reinterpret_cast<int64_t *>(chunk->data[col_idx].data);
+					for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
+						array_data_ptr[chunk_idx] = duckdb::Timestamp::GetEpoch(chunk_data_ptr[chunk_idx]) * 1000;
+					}
+					break;
+				}    // else fall-through-to-default
 			default: // direct mapping types
 				// TODO need to assert the types
 				assert(duckdb::TypeIsConstantSize(duckdb_type));
@@ -423,6 +678,8 @@ PyObject *duckdb_cursor_profile(duckdb_Cursor *self, PyObject *args) {
 
 static PyMethodDef cursor_methods[] = {
     {"execute", (PyCFunction)duckdb_cursor_execute, METH_VARARGS, PyDoc_STR("Executes a SQL statement.")},
+    {"executemany", (PyCFunction)duckdb_cursor_executemany, METH_VARARGS,
+     PyDoc_STR("Repeatedly executes a SQL statement.")},
     {"fetchone", (PyCFunction)duckdb_cursor_fetchone, METH_NOARGS, PyDoc_STR("Fetches one row from the resultset.")},
     {"fetchall", (PyCFunction)duckdb_cursor_fetchall, METH_NOARGS, PyDoc_STR("Fetches all rows from the resultset.")},
     {"fetchnumpy", (PyCFunction)duckdb_cursor_fetchnumpy, METH_NOARGS,

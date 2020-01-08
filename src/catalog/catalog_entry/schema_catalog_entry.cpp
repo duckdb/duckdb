@@ -1,24 +1,24 @@
-#include "catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
-#include "catalog/catalog.hpp"
-#include "catalog/catalog_entry/index_catalog_entry.hpp"
-#include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "catalog/catalog_entry/sequence_catalog_entry.hpp"
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "catalog/catalog_entry/view_catalog_entry.hpp"
-#include "common/exception.hpp"
-#include "parser/expression/function_expression.hpp"
-#include "parser/parsed_data/alter_table_info.hpp"
-#include "parser/parsed_data/create_index_info.hpp"
-#include "parser/parsed_data/create_scalar_function_info.hpp"
-#include "parser/parsed_data/create_schema_info.hpp"
-#include "parser/parsed_data/create_sequence_info.hpp"
-#include "parser/parsed_data/create_table_function_info.hpp"
-#include "parser/parsed_data/create_view_info.hpp"
-#include "parser/parsed_data/drop_info.hpp"
-#include "planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 
 #include <algorithm>
 
@@ -31,9 +31,13 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
 }
 
 void SchemaCatalogEntry::CreateTable(Transaction &transaction, BoundCreateTableInfo *info) {
-	info->dependencies.insert(this);
 
 	auto table = make_unique_base<CatalogEntry, TableCatalogEntry>(catalog, this, info);
+	if (!info->base->temporary) {
+		info->dependencies.insert(this);
+	} else {
+		table->temporary = true;
+	}
 	if (!tables.CreateEntry(transaction, info->base->table, move(table), info->dependencies)) {
 		if (!info->base->if_not_exists) {
 			throw CatalogException("Table or view with name \"%s\" already exists!", info->base->table.c_str());
@@ -139,6 +143,17 @@ CatalogEntry *SchemaCatalogEntry::GetTableOrView(Transaction &transaction, const
 		throw CatalogException("Table or view with name %s does not exist!", table_name.c_str());
 	}
 	return entry;
+}
+
+TableCatalogEntry *SchemaCatalogEntry::GetTableOrNull(Transaction &transaction, const string &table_name) {
+	auto entry = tables.GetEntry(transaction, table_name);
+	if (!entry) {
+		return nullptr;
+	}
+	if (entry->type != CatalogType::TABLE) {
+		return nullptr;
+	}
+	return (TableCatalogEntry *)entry;
 }
 
 TableFunctionCatalogEntry *SchemaCatalogEntry::GetTableFunction(Transaction &transaction,

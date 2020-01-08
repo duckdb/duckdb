@@ -1,20 +1,17 @@
-#include "optimizer/join_order/relation.hpp"
+#include "duckdb/optimizer/join_order/relation.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include <algorithm>
+#include <string>
 
 using namespace duckdb;
 using namespace std;
 
 using RelationTreeNode = RelationSetManager::RelationTreeNode;
 
-string RelationSet::ToString() {
+string RelationSet::ToString() const {
 	string result = "[";
-	for (index_t i = 0; i < count; i++) {
-		result += std::to_string(relations[i]);
-		if (i != count - 1) {
-			result += ", ";
-		}
-	}
+	result += StringUtil::Join(relations, count, ", ", [](const index_t &relation) { return to_string(relation); });
 	result += "]";
 	return result;
 }

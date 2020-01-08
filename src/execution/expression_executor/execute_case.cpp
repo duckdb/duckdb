@@ -1,25 +1,40 @@
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "planner/expression/bound_case_expression.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_case_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-void Case(Vector &res_true, Vector &res_false, Vector &result, sel_t tside[], index_t tcount, sel_t fside[], index_t fcount);
+void Case(Vector &res_true, Vector &res_false, Vector &result, sel_t tside[], index_t tcount, sel_t fside[],
+          index_t fcount);
 
-void ExpressionExecutor::Execute(BoundCaseExpression &expr, Vector &result) {
-	Vector check;
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpression &expr,
+                                                                ExpressionExecutorState &root) {
+	auto result = make_unique<ExpressionState>(expr, root);
+	result->AddIntermediates({expr.check.get(), expr.result_if_true.get(), expr.result_if_false.get()});
+	return result;
+}
+
+void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *state, Vector &result) {
+	auto &check = state->arguments.data[0];
+	auto &res_true = state->arguments.data[1];
+	auto &res_false = state->arguments.data[2];
+
+	auto check_state = state->child_states[0].get();
+	auto res_true_state = state->child_states[1].get();
+	auto res_false_state = state->child_states[2].get();
+
 	// first execute the check expression
-	Execute(*expr.check, check);
-	auto check_data = (bool*) check.data;
+	Execute(*expr.check, check_state, check);
+	auto check_data = (bool *)check.data;
 	if (check.IsConstant()) {
 		// constant check: only need to execute one side
 		if (!check_data[0] || check.nullmask[0]) {
 			// constant false or NULL; result is FALSE
-			Execute(*expr.result_if_false, result);
+			Execute(*expr.result_if_false, res_false_state, result);
 		} else {
 			// constant true; result is TRUE
-			Execute(*expr.result_if_true, result);
+			Execute(*expr.result_if_true, res_true_state, result);
 		}
 	} else {
 		// check is not a constant
@@ -35,54 +50,53 @@ void ExpressionExecutor::Execute(BoundCaseExpression &expr, Vector &result) {
 		});
 		if (fcount == 0) {
 			// everything is true, only execute TRUE side
-			Execute(*expr.result_if_true, result);
+			Execute(*expr.result_if_true, res_true_state, result);
 		} else if (tcount == 0) {
 			// everything is false, only execute FALSE side
-			Execute(*expr.result_if_false, result);
+			Execute(*expr.result_if_false, res_false_state, result);
 		} else {
 			// have to execute both and mix and match
-			Vector res_true, res_false;
-			Execute(*expr.result_if_true, res_true);
-			Execute(*expr.result_if_false, res_false);
+			Execute(*expr.result_if_true, res_true_state, res_true);
+			Execute(*expr.result_if_false, res_false_state, res_false);
 
 			result.sel_vector = check.sel_vector;
 			result.count = check.count;
 
-			result.Initialize(expr.return_type);
 			Case(res_true, res_false, result, tside, tcount, fside, fcount);
 		}
 	}
 }
 
-template<class T>
-void fill_loop(Vector &vector, Vector &result, sel_t sel[], sel_t count) {
+template <class T> void fill_loop(Vector &vector, Vector &result, sel_t sel[], sel_t count) {
 	auto data = (T *)vector.data;
 	auto res = (T *)result.data;
 	if (vector.IsConstant()) {
 		if (vector.nullmask[0]) {
-			for(index_t i = 0; i < count; i++) {
+			for (index_t i = 0; i < count; i++) {
 				result.nullmask[sel[i]] = true;
 			}
 		} else {
-			for(index_t i = 0; i < count; i++) {
+			for (index_t i = 0; i < count; i++) {
 				res[sel[i]] = data[0];
 			}
 		}
 	} else {
-		for(index_t i = 0; i < count; i++) {
+		for (index_t i = 0; i < count; i++) {
 			res[sel[i]] = data[sel[i]];
 			result.nullmask[sel[i]] = vector.nullmask[sel[i]];
 		}
 	}
 }
 
-template<class T>
-void case_loop(Vector &res_true, Vector &res_false, Vector &result, sel_t tside[], index_t tcount, sel_t fside[], index_t fcount) {
+template <class T>
+void case_loop(Vector &res_true, Vector &res_false, Vector &result, sel_t tside[], index_t tcount, sel_t fside[],
+               index_t fcount) {
 	fill_loop<T>(res_true, result, tside, tcount);
 	fill_loop<T>(res_false, result, fside, fcount);
 }
 
-void Case(Vector &res_true, Vector &res_false, Vector &result, sel_t tside[], index_t tcount, sel_t fside[], index_t fcount) {
+void Case(Vector &res_true, Vector &res_false, Vector &result, sel_t tside[], index_t tcount, sel_t fside[],
+          index_t fcount) {
 	assert(res_true.type == res_false.type && res_true.type == result.type);
 
 	switch (result.type) {
@@ -106,7 +120,7 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, sel_t tside[], in
 		case_loop<double>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
 	case TypeId::VARCHAR:
-		case_loop<const char*>(res_true, res_false, result, tside, tcount, fside, fcount);
+		case_loop<const char *>(res_true, res_false, result, tside, tcount, fside, fcount);
 		result.string_heap.MergeHeap(res_true.string_heap);
 		result.string_heap.MergeHeap(res_false.string_heap);
 		break;

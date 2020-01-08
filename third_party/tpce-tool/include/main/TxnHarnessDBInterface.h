@@ -48,7 +48,7 @@
 #include "TxnHarnessSendToMarketInterface.h"
 #include "utilities/error.h"
 
-#include "main/connection.hpp"
+#include "duckdb/main/connection.hpp"
 
 using namespace std;
 

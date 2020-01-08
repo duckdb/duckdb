@@ -1,31 +1,31 @@
-#include "storage/checkpoint_manager.hpp"
-#include "storage/block_manager.hpp"
-#include "storage/meta_block_reader.hpp"
+#include "duckdb/storage/checkpoint_manager.hpp"
+#include "duckdb/storage/block_manager.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
 
-#include "common/serializer.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "common/types/null_value.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/null_value.hpp"
 
-#include "catalog/catalog.hpp"
-#include "catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "catalog/catalog_entry/sequence_catalog_entry.hpp"
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 
-#include "parser/parsed_data/create_schema_info.hpp"
-#include "parser/parsed_data/create_table_info.hpp"
-#include "parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
 
-#include "planner/binder.hpp"
-#include "planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 
-#include "main/client_context.hpp"
-#include "main/database.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 
-#include "transaction/transaction_manager.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
 
-#include "storage/checkpoint/table_data_writer.hpp"
-#include "storage/checkpoint/table_data_reader.hpp"
+#include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/storage/checkpoint/table_data_reader.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -33,7 +33,7 @@ using namespace std;
 // constexpr uint64_t CheckpointManager::DATA_BLOCK_HEADER_SIZE;
 
 CheckpointManager::CheckpointManager(StorageManager &manager)
-    : block_manager(*manager.block_manager), database(manager.database) {
+    : block_manager(*manager.block_manager), buffer_manager(*manager.buffer_manager), database(manager.database) {
 }
 
 void CheckpointManager::CreateCheckpoint() {
@@ -79,7 +79,7 @@ void CheckpointManager::LoadFromStorage() {
 	ClientContext context(database);
 	context.transaction.BeginTransaction();
 	// create the MetaBlockReader to read from the storage
-	MetaBlockReader reader(block_manager, meta_block);
+	MetaBlockReader reader(buffer_manager, meta_block);
 	uint32_t schema_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < schema_count; i++) {
 		ReadSchema(context, reader);
@@ -112,7 +112,7 @@ void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry
 	// write the sequences
 	metadata_writer->Write<uint32_t>(sequences.size());
 	for (auto &seq : sequences) {
-		WriteSequence(transaction, *seq);
+		WriteSequence(*seq);
 	}
 	// now write the tables
 	metadata_writer->Write<uint32_t>(tables.size());
@@ -122,9 +122,8 @@ void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry
 	// finally write the views
 	metadata_writer->Write<uint32_t>(views.size());
 	for (auto &view : views) {
-		WriteView(transaction, *view);
+		WriteView(*view);
 	}
-	// FIXME: free list?
 }
 
 void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &reader) {
@@ -154,7 +153,7 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 //===--------------------------------------------------------------------===//
 // Views
 //===--------------------------------------------------------------------===//
-void CheckpointManager::WriteView(Transaction &transaction, ViewCatalogEntry &view) {
+void CheckpointManager::WriteView(ViewCatalogEntry &view) {
 	view.Serialize(*metadata_writer);
 }
 
@@ -167,7 +166,7 @@ void CheckpointManager::ReadView(ClientContext &context, MetaBlockReader &reader
 //===--------------------------------------------------------------------===//
 // Sequences
 //===--------------------------------------------------------------------===//
-void CheckpointManager::WriteSequence(Transaction &transaction, SequenceCatalogEntry &seq) {
+void CheckpointManager::WriteSequence(SequenceCatalogEntry &seq) {
 	seq.Serialize(*metadata_writer);
 }
 
@@ -202,7 +201,7 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 	// now read the actual table data and place it into the create table info
 	auto block_id = reader.Read<block_id_t>();
 	auto offset = reader.Read<uint64_t>();
-	MetaBlockReader table_data_reader(block_manager, block_id);
+	MetaBlockReader table_data_reader(buffer_manager, block_id);
 	table_data_reader.offset = offset;
 	TableDataReader data_reader(*this, table_data_reader, *bound_info);
 	data_reader.ReadTableData();

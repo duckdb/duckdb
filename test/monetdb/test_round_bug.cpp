@@ -1,18 +1,41 @@
 #include "catch.hpp"
-#include "common/file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "dbgen.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("MonetDB Test: round.Bug-3542.sql", "[monetdb]") {
+TEST_CASE("Test simple round usage", "[round]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
 
+	REQUIRE_NO_FAIL(con.Query("create table test (col1 double);"));
+	REQUIRE_NO_FAIL(con.Query("insert into test values (2.887);"));
+
+	result = con.Query("select round(col1, -1) from test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {3.0}));
+	result = con.Query("select round(col1, 0) from test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {3.0}));
+	result = con.Query("select round(col1, 1) from test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {2.9}));
+	result = con.Query("select round(col1, 2) from test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {2.89}));
+	result = con.Query("select round(col1, 3) from test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {2.887}));
+	result = con.Query("select round(col1, 4) from test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {2.887}));
+}
+
+TEST_CASE("MonetDB Test: round.Bug-3542.sql", "[monetdb]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
 	return;
+
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_num_data (id integer, val numeric(18,10));"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test_num_data VALUES (1, '-0.0');"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test_num_data VALUES (2, '-34338492.215397047');"));

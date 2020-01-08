@@ -1,10 +1,12 @@
-#include "main/query_profiler.hpp"
+#include "duckdb/main/query_profiler.hpp"
 
-#include "common/fstream.hpp"
-#include "common/printer.hpp"
-#include "execution/physical_operator.hpp"
+#include "duckdb/common/fstream.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 
 #include <iostream>
+#include <utility>
 
 using namespace duckdb;
 using namespace std;
@@ -155,16 +157,8 @@ string QueryProfiler::ToString() const {
 	result += "<<Timing>>\n";
 	result += "Total Time: " + to_string(main_query.Elapsed()) + "s\n";
 	// print phase timings
-	// first sort the phases alphabetically
-	vector<string> phases;
-	for (auto &entry : phase_timings) {
-		phases.push_back(entry.first);
-	}
-	std::sort(phases.begin(), phases.end());
-	for (auto &phase : phases) {
-		auto entry = phase_timings.find(phase);
-		assert(entry != phase_timings.end());
-		result += phase + ": " + to_string(entry->second) + "s\n";
+	for (const auto &entry : GetOrderedPhaseTimings()) {
+		result += entry.first + ": " + to_string(entry.second) + "s\n";
 	}
 	// render the main operator tree
 	result += "<<Operator Tree>>\n";
@@ -182,12 +176,9 @@ static string ToJSONRecursive(QueryProfiler::TreeNode &node) {
 	result += "\"cardinality\":" + to_string(node.info.elements) + ",\n";
 	result += "\"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
 	result += "\"children\": [";
-	for (index_t i = 0; i < node.children.size(); i++) {
-		result += ToJSONRecursive(*node.children[i]);
-		if (i + 1 < node.children.size()) {
-			result += ",\n";
-		}
-	}
+	result +=
+	    StringUtil::Join(node.children, node.children.size(), ",\n",
+	                     [](const unique_ptr<QueryProfiler::TreeNode> &child) { return ToJSONRecursive(*child); });
 	result += "]\n}\n";
 	return result;
 }
@@ -205,15 +196,11 @@ string QueryProfiler::ToJSON() const {
 	string result = "{ \"result\": " + to_string(main_query.Elapsed()) + ",\n";
 	// print the phase timings
 	result += "\"timings\": {\n";
-	bool needs_separator = false;
-	for (auto &entry : phase_timings) {
-		if (needs_separator) {
-			// not the first entry, add a separator
-			result += ",\n";
-		}
-		result += "\"" + entry.first + "\": " + to_string(entry.second);
-		needs_separator = true;
-	}
+	const auto &ordered_phase_timings = GetOrderedPhaseTimings();
+	result +=
+	    StringUtil::Join(ordered_phase_timings, ordered_phase_timings.size(), ",\n", [](const PhaseTimingItem &entry) {
+		    return "\"" + entry.first + "\": " + to_string(entry.second);
+	    });
 	result += "},\n";
 	// recursively print the physical operator tree
 	result += "\"tree\": ";
@@ -290,7 +277,7 @@ static string DrawPadded(string text, char padding_character = ' ') {
 	if (text.size() > remaining_width) {
 		text = text.substr(0, remaining_width);
 	}
-	assert(text.size() <= numeric_limits<int32_t>::max());
+	assert(text.size() <= (index_t)numeric_limits<int32_t>::max());
 
 	auto right_padding = (remaining_width - text.size()) / 2;
 	auto left_padding = remaining_width - text.size() - right_padding;
@@ -388,4 +375,20 @@ string QueryProfiler::RenderTree(QueryProfiler::TreeNode &node) {
 
 void QueryProfiler::Print() {
 	Printer::Print(ToString());
+}
+
+vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() const {
+	vector<PhaseTimingItem> result;
+	// first sort the phases alphabetically
+	vector<string> phases;
+	for (auto &entry : phase_timings) {
+		phases.push_back(entry.first);
+	}
+	std::sort(phases.begin(), phases.end());
+	for (const auto &phase : phases) {
+		auto entry = phase_timings.find(phase);
+		assert(entry != phase_timings.end());
+		result.emplace_back(entry->first, entry->second);
+	}
+	return result;
 }

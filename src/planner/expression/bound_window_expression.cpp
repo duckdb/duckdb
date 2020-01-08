@@ -1,9 +1,11 @@
-#include "planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/function/aggregate_function.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-BoundWindowExpression::BoundWindowExpression(ExpressionType type, TypeId return_type, unique_ptr<AggregateFunction> aggregate)
+BoundWindowExpression::BoundWindowExpression(ExpressionType type, TypeId return_type,
+                                             unique_ptr<AggregateFunction> aggregate)
     : Expression(type, ExpressionClass::BOUND_WINDOW, return_type), aggregate(move(aggregate)) {
 }
 

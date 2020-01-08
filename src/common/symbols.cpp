@@ -3,36 +3,38 @@
 
 #ifdef DEBUG
 
-#include "catalog/catalog.hpp"
-#include "common/types/chunk_collection.hpp"
-#include "execution/aggregate_hashtable.hpp"
-#include "execution/column_binding_resolver.hpp"
-#include "execution/join_hashtable.hpp"
-#include "execution/physical_operator.hpp"
-#include "main/materialized_query_result.hpp"
-#include "main/query_profiler.hpp"
-#include "main/query_result.hpp"
-#include "main/stream_query_result.hpp"
-#include "optimizer/join_order_optimizer.hpp"
-#include "optimizer/rule.hpp"
-#include "parser/constraint.hpp"
-#include "parser/constraints/list.hpp"
-#include "parser/expression/list.hpp"
-#include "parser/query_node.hpp"
-#include "parser/query_node/select_node.hpp"
-#include "parser/query_node/set_operation_node.hpp"
-#include "parser/statement/list.hpp"
-#include "parser/tableref/list.hpp"
-#include "planner/expression/list.hpp"
-#include "planner/logical_operator.hpp"
-#include "planner/operator/list.hpp"
-#include "planner/operator/logical_join.hpp"
-#include "planner/query_node/bound_select_node.hpp"
-#include "planner/query_node/bound_set_operation_node.hpp"
-#include "planner/statement/list.hpp"
-#include "planner/tableref/list.hpp"
-#include "storage/data_table.hpp"
-#include "storage/write_ahead_log.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/list.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/execution/column_binding_resolver.hpp"
+#include "duckdb/execution/join_hashtable.hpp"
+#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/query_result.hpp"
+#include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/optimizer/join_order_optimizer.hpp"
+#include "duckdb/optimizer/rule.hpp"
+#include "duckdb/parser/constraint.hpp"
+#include "duckdb/parser/constraints/list.hpp"
+#include "duckdb/parser/expression/list.hpp"
+#include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/parser/statement/list.hpp"
+#include "duckdb/parser/tableref/list.hpp"
+#include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/query_node/bound_set_operation_node.hpp"
+#include "duckdb/planner/statement/list.hpp"
+#include "duckdb/planner/tableref/list.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/write_ahead_log.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -51,7 +53,6 @@ template class std::unique_ptr<TransactionStatement>;
 template class std::unique_ptr<UpdateStatement>;
 template class std::unique_ptr<PrepareStatement>;
 template class std::unique_ptr<ExecuteStatement>;
-template class std::unique_ptr<DeallocateStatement>;
 template class std::unique_ptr<QueryNode>;
 template class std::unique_ptr<SelectNode>;
 template class std::unique_ptr<SetOperationNode>;
@@ -66,6 +67,7 @@ template class std::unique_ptr<DefaultExpression>;
 template class std::unique_ptr<FunctionExpression>;
 template class std::unique_ptr<OperatorExpression>;
 template class std::unique_ptr<ParameterExpression>;
+template class std::unique_ptr<PreparedStatementData>;
 template class std::unique_ptr<StarExpression>;
 template class std::unique_ptr<SubqueryExpression>;
 template class std::unique_ptr<WindowExpression>;
@@ -125,7 +127,6 @@ template class std::unique_ptr<LogicalOperator>;
 template class std::unique_ptr<PhysicalOperator>;
 template class std::unique_ptr<PhysicalOperatorState>;
 template class std::unique_ptr<sel_t[]>;
-template class std::unique_ptr<VersionChunk>;
 template class std::unique_ptr<StringHeap>;
 template class std::unique_ptr<SuperLargeHashTable>;
 template class std::unique_ptr<TableRef>;
@@ -136,7 +137,6 @@ template class std::unique_ptr<Vector[]>;
 template class std::unique_ptr<DataChunk>;
 template class std::unique_ptr<JoinHashTable>;
 template class std::unique_ptr<JoinHashTable::ScanStructure>;
-template class std::unique_ptr<JoinHashTable::Node>;
 template class std::unique_ptr<data_ptr_t[]>;
 template class std::unique_ptr<Rule>;
 template class std::unique_ptr<LogicalFilter>;

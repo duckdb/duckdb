@@ -1,6 +1,6 @@
-#include "execution/operator/scan/physical_empty_result.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "planner/operator/logical_empty_result.hpp"
+#include "duckdb/execution/operator/scan/physical_empty_result.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_empty_result.hpp"
 
 using namespace duckdb;
 using namespace std;

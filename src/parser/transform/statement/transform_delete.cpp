@@ -1,12 +1,11 @@
-#include "parser/statement/delete_statement.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<DeleteStatement> Transformer::TransformDelete(Node *node) {
-	DeleteStmt *stmt = reinterpret_cast<DeleteStmt *>(node);
+unique_ptr<DeleteStatement> Transformer::TransformDelete(PGNode *node) {
+	auto stmt = reinterpret_cast<PGDeleteStmt *>(node);
 	assert(stmt);
 	auto result = make_unique<DeleteStatement>();
 

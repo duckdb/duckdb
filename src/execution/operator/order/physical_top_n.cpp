@@ -1,13 +1,24 @@
-#include "execution/operator/order/physical_top_n.hpp"
+#include "duckdb/execution/operator/order/physical_top_n.hpp"
 
-#include "common/assert.hpp"
-#include "common/value_operations/value_operations.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+class PhysicalTopNOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalTopNOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
+	}
+
+	index_t position;
+	index_t current_offset;
+	ChunkCollection sorted_data;
+	unique_ptr<index_t[]> heap;
+};
 
 void PhysicalTopN::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalTopNOperatorState *>(state_);
@@ -22,14 +33,14 @@ void PhysicalTopN::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 
 		// now perform the actual ordering of the data
 		// compute the sorting columns from the input data
+		ExpressionExecutor executor;
 		vector<TypeId> sort_types;
-		vector<Expression *> order_expressions;
 		vector<OrderType> order_types;
 		for (index_t i = 0; i < orders.size(); i++) {
 			auto &expr = orders[i].expression;
 			sort_types.push_back(expr->return_type);
-			order_expressions.push_back(expr.get());
 			order_types.push_back(orders[i].type);
+			executor.AddExpression(*expr);
 		}
 
 		CalculateHeapSize(big_data.count);
@@ -42,8 +53,7 @@ void PhysicalTopN::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 			DataChunk heap_chunk;
 			heap_chunk.Initialize(sort_types);
 
-			ExpressionExecutor executor(*big_data.chunks[i]);
-			executor.Execute(order_expressions, heap_chunk);
+			executor.Execute(*big_data.chunks[i], heap_chunk);
 			heap_collection.Append(heap_chunk);
 		}
 

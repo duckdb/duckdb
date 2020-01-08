@@ -1,5 +1,5 @@
-#include "common/exception.hpp"
-#include "common/string_util.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -84,6 +84,8 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 		return "IO";
 	case ExceptionType::INTERRUPT:
 		return "INTERRUPT";
+	case ExceptionType::FATAL:
+		return "FATAL";
 	default:
 		return "Unknown";
 	}
@@ -138,11 +140,11 @@ OutOfRangeException::OutOfRangeException(string msg, ...) : Exception(ExceptionT
 	FORMAT_CONSTRUCTOR(msg);
 }
 
-CatalogException::CatalogException(string msg, ...) : Exception(ExceptionType::CATALOG, msg) {
+CatalogException::CatalogException(string msg, ...) : StandardException(ExceptionType::CATALOG, msg) {
 	FORMAT_CONSTRUCTOR(msg);
 }
 
-ParserException::ParserException(string msg, ...) : Exception(ExceptionType::PARSER, msg) {
+ParserException::ParserException(string msg, ...) : StandardException(ExceptionType::PARSER, msg) {
 	FORMAT_CONSTRUCTOR(msg);
 }
 
@@ -154,7 +156,7 @@ ConstraintException::ConstraintException(string msg, ...) : Exception(ExceptionT
 	FORMAT_CONSTRUCTOR(msg);
 }
 
-BinderException::BinderException(string msg, ...) : Exception(ExceptionType::BINDER, msg) {
+BinderException::BinderException(string msg, ...) : StandardException(ExceptionType::BINDER, msg) {
 	FORMAT_CONSTRUCTOR(msg);
 }
 
@@ -171,4 +173,8 @@ SequenceException::SequenceException(string msg, ...) : Exception(ExceptionType:
 }
 
 InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, "Interrupted!") {
+}
+
+FatalException::FatalException(string msg, ...) : Exception(ExceptionType::FATAL, msg) {
+	FORMAT_CONSTRUCTOR(msg);
 }

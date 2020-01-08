@@ -1,7 +1,18 @@
-#include "storage/write_ahead_log.hpp"
-#include "common/serializer/buffered_file_reader.hpp"
-
-#include "parser/parsed_data/drop_info.hpp"
+#include "duckdb/storage/write_ahead_log.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -23,6 +34,7 @@ public:
 private:
 	void ReplayCreateTable();
 	void ReplayDropTable();
+	void ReplayAlter();
 
 	void ReplayCreateView();
 	void ReplayDropView();
@@ -38,8 +50,6 @@ private:
 	void ReplayInsert();
 	void ReplayDelete();
 	void ReplayUpdate();
-
-	void ReplayQuery();
 };
 
 void WriteAheadLog::Replay(DuckDB &database, string &path) {
@@ -67,6 +77,7 @@ void WriteAheadLog::Replay(DuckDB &database, string &path) {
 			if (entry_type == WALType::WAL_FLUSH) {
 				// flush: commit the current transaction
 				context.transaction.Commit();
+				context.transaction.SetAutoCommit(false);
 				// check if the file is exhausted
 				if (reader.Finished()) {
 					// we finished reading the file: break
@@ -97,6 +108,9 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 		break;
 	case WALType::DROP_TABLE:
 		ReplayDropTable();
+		break;
+	case WALType::ALTER_INFO:
+		ReplayAlter();
 		break;
 	case WALType::CREATE_VIEW:
 		ReplayCreateView();
@@ -131,9 +145,6 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 	case WALType::UPDATE_TUPLE:
 		ReplayUpdate();
 		break;
-	case WALType::QUERY:
-		ReplayQuery();
-		break;
 	default:
 		throw Exception("Invalid WAL entry type!");
 	}
@@ -160,6 +171,15 @@ void ReplayState::ReplayDropTable() {
 	info.name = source.Read<string>();
 
 	db.catalog->DropTable(context.ActiveTransaction(), &info);
+}
+
+void ReplayState::ReplayAlter() {
+	auto info = AlterInfo::Deserialize(source);
+	if (info->type != AlterType::ALTER_TABLE) {
+		throw Exception("Expected ALTER TABLE!");
+	}
+
+	db.catalog->AlterTable(context, (AlterTableInfo *)info.get());
 }
 
 //===--------------------------------------------------------------------===//
@@ -236,7 +256,7 @@ void ReplayState::ReplaySequenceValue() {
 void ReplayState::ReplayUseTable() {
 	auto schema_name = source.Read<string>();
 	auto table_name = source.Read<string>();
-	current_table = db.catalog->GetTable(context.ActiveTransaction(), schema_name, table_name);
+	current_table = db.catalog->GetTable(context, schema_name, table_name);
 }
 
 void ReplayState::ReplayInsert() {
@@ -274,36 +294,21 @@ void ReplayState::ReplayUpdate() {
 	if (!current_table) {
 		throw Exception("Corrupt WAL: update without table");
 	}
+
+	index_t column_index = source.Read<column_t>();
+
 	DataChunk chunk;
 	chunk.Deserialize(source);
 
-	vector<column_t> column_ids;
-	for (index_t i = 0; i < chunk.column_count - 1; i++) {
-		column_ids.push_back(i);
+	vector<column_t> column_ids{column_index};
+	if (column_index >= current_table->columns.size()) {
+		throw Exception("Corrupt WAL: column index for update out of bounds");
 	}
 
-	index_t update_count = chunk.size();
-	for (index_t i = 0; i < chunk.column_count; i++) {
-		chunk.data[i].sel_vector = chunk.owned_sel_vector;
-		chunk.data[i].count = 1;
-	}
-	chunk.sel_vector = chunk.owned_sel_vector;
+	// remove the row id vector from the chunk
+	auto &row_ids = chunk.data[chunk.column_count - 1];
 	chunk.column_count = chunk.column_count - 1;
 
-	auto &row_ids = chunk.data[chunk.column_count];
-
-	for (index_t i = 0; i < update_count; i++) {
-		chunk.owned_sel_vector[0] = i;
-		current_table->storage->Update(*current_table, context, row_ids, column_ids, chunk);
-	}
-}
-
-//===--------------------------------------------------------------------===//
-// Query
-//===--------------------------------------------------------------------===//
-void ReplayState::ReplayQuery() {
-	// read the query
-	auto query = source.Read<string>();
-
-	context.Query(query, false);
+	// now perform the update
+	current_table->storage->Update(*current_table, context, row_ids, column_ids, chunk);
 }

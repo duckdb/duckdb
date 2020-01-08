@@ -1,9 +1,9 @@
-#include "common/file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 
-#include "common/exception.hpp"
-#include "common/helper.hpp"
-#include "common/string_util.hpp"
-#include "common/checksum.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/checksum.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -81,15 +81,15 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	if (fd == -1) {
 		throw IOException("Cannot open file \"%s\": %s", path, strerror(errno));
 	}
-#if defined(__DARWIN__) || defined(__APPLE__)
-	if (flags & FileFlags::DIRECT_IO) {
-		// OSX requires fcntl for Direct IO
-		rc = fcntl(fd, F_NOCACHE, 1);
-		if (fd == -1) {
-			throw IOException("Could not enable direct IO for file \"%s\": %s", path, strerror(errno));
-		}
-	}
-#endif
+	// #if defined(__DARWIN__) || defined(__APPLE__)
+	// 	if (flags & FileFlags::DIRECT_IO) {
+	// 		// OSX requires fcntl for Direct IO
+	// 		rc = fcntl(fd, F_NOCACHE, 1);
+	// 		if (fd == -1) {
+	// 			throw IOException("Could not enable direct IO for file \"%s\": %s", path, strerror(errno));
+	// 		}
+	// 	}
+	// #endif
 	if (lock_type != FileLockType::NO_LOCK) {
 		// set lock on file
 		struct flock fl;
@@ -142,6 +142,13 @@ int64_t FileSystem::GetFileSize(FileHandle &handle) {
 	return s.st_size;
 }
 
+void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
+	int fd = ((UnixFileHandle &)handle).fd;
+	if (ftruncate(fd, new_size) != 0) {
+		throw IOException("Could not truncate file \"%s\": %s", handle.path.c_str(), strerror(errno));
+	}
+}
+
 bool FileSystem::DirectoryExists(const string &directory) {
 	if (!directory.empty()) {
 		if (access(directory.c_str(), 0) == 0) {
@@ -174,10 +181,10 @@ void FileSystem::CreateDirectory(const string &directory) {
 	if (stat(directory.c_str(), &st) != 0) {
 		/* Directory does not exist. EEXIST for race condition */
 		if (mkdir(directory.c_str(), 0755) != 0 && errno != EEXIST) {
-			throw IOException("Failed create directory!");
+			throw IOException("Failed to create directory \"%s\"!", directory.c_str());
 		}
 	} else if (!S_ISDIR(st.st_mode)) {
-		throw IOException("Could not create directory!");
+		throw IOException("Failed to create directory \"%s\": path exists but is not a directory!", directory.c_str());
 	}
 }
 
@@ -258,7 +265,9 @@ string FileSystem::PathSeparator() {
 
 void FileSystem::FileSync(FileHandle &handle) {
 	int fd = ((UnixFileHandle &)handle).fd;
-	fsync(fd);
+	if (fsync(fd) != 0) {
+		throw FatalException("fsync failed!");
+	}
 }
 
 void FileSystem::MoveFile(const string &source, const string &target) {
@@ -398,6 +407,17 @@ int64_t FileSystem::GetFileSize(FileHandle &handle) {
 	return result.QuadPart;
 }
 
+void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	// seek to the location
+	SetFilePointer(handle, new_size);
+	// now set the end of file position
+	if (!SetEndOfFile(hFile)) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Failure in SetEndOfFile call on file \"%s\": %s", handle.path.c_str(), error.c_str());
+	}
+}
+
 bool FileSystem::DirectoryExists(const string &directory) {
 	DWORD attrs = GetFileAttributesA(directory.c_str());
 	return (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY));
@@ -428,7 +448,7 @@ static void delete_dir_special_snowflake_windows(string directory) {
 	WIN32_FIND_DATA ffd;
 	HANDLE hFind = FindFirstFile(szDir, &ffd);
 	if (hFind == INVALID_HANDLE_VALUE) {
-		throw IOException("Could not find directory");
+		return;
 	}
 
 	do {
@@ -550,4 +570,8 @@ void FileHandle::Write(void *buffer, index_t nr_bytes, index_t location) {
 
 void FileHandle::Sync() {
 	file_system.FileSync(*this);
+}
+
+void FileHandle::Truncate(int64_t new_size) {
+	file_system.Truncate(*this, new_size);
 }

@@ -1,14 +1,13 @@
-#include "common/exception.hpp"
-#include "parser/expression/columnref_expression.hpp"
-#include "parser/expression/comparison_expression.hpp"
-#include "parser/expression/conjunction_expression.hpp"
-#include "parser/tableref/basetableref.hpp"
-#include "parser/tableref/crossproductref.hpp"
-#include "parser/tableref/joinref.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/crossproductref.hpp"
+#include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
 static string get_tablename_union(TableRef *ref) {
@@ -26,26 +25,26 @@ static string get_tablename_union(TableRef *ref) {
 	}
 }
 
-unique_ptr<TableRef> Transformer::TransformJoin(JoinExpr *root) {
+unique_ptr<TableRef> Transformer::TransformJoin(PGJoinExpr *root) {
 	auto result = make_unique<JoinRef>();
 	switch (root->jointype) {
-	case JOIN_INNER: {
+	case PG_JOIN_INNER: {
 		result->type = JoinType::INNER;
 		break;
 	}
-	case JOIN_LEFT: {
+	case PG_JOIN_LEFT: {
 		result->type = JoinType::LEFT;
 		break;
 	}
-	case JOIN_FULL: {
+	case PG_JOIN_FULL: {
 		result->type = JoinType::OUTER;
 		break;
 	}
-	case JOIN_RIGHT: {
+	case PG_JOIN_RIGHT: {
 		result->type = JoinType::RIGHT;
 		break;
 	}
-	case JOIN_SEMI: {
+	case PG_JOIN_SEMI: {
 		result->type = JoinType::SEMI;
 		break;
 	}
@@ -62,9 +61,9 @@ unique_ptr<TableRef> Transformer::TransformJoin(JoinExpr *root) {
 		// usingClause is a list of strings
 		vector<string> using_column_names;
 		for (auto node = root->usingClause->head; node != nullptr; node = node->next) {
-			auto target = reinterpret_cast<Node *>(node->data.ptr_value);
-			assert(target->type == T_String);
-			auto column_name = string(reinterpret_cast<postgres::Value *>(target)->val.str);
+			auto target = reinterpret_cast<PGNode *>(node->data.ptr_value);
+			assert(target->type == T_PGString);
+			auto column_name = string(reinterpret_cast<PGValue *>(target)->val.str);
 			using_column_names.push_back(column_name);
 		}
 		assert(using_column_names.size() > 0);

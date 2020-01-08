@@ -1,5 +1,10 @@
-#include "execution/index/art/node.hpp"
-#include "execution/index/art/leaf.hpp"
+#include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/execution/index/art/leaf.hpp"
+
+#include <cstring>
+
+using namespace duckdb;
+using namespace std;
 
 Leaf::Leaf(ART &art, unique_ptr<Key> value, row_t row_id) : Node(art, NodeType::NLeaf) {
 	this->value = move(value);

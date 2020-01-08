@@ -1,6 +1,6 @@
-#include "planner/expression/common_subexpression.hpp"
+#include "duckdb/planner/expression/common_subexpression.hpp"
 
-#include "common/exception.hpp"
+#include "duckdb/common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,6 +1,6 @@
-#include "optimizer/filter_pushdown.hpp"
-#include "planner/operator/logical_empty_result.hpp"
-#include "planner/operator/logical_filter.hpp"
+#include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/planner/operator/logical_empty_result.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 
 using namespace duckdb;
 using namespace std;

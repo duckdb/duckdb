@@ -12,3 +12,5 @@ add_library(dsdgen STATIC
             append_info-c.cpp
             dsdgen_helpers.cpp
             ${ALL_OBJECT_FILES})
+
+disable_target_warnings(dsdgen)

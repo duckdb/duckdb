@@ -1,11 +1,11 @@
-#include "common/types/data_chunk.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 
-#include "common/exception.hpp"
-#include "common/helper.hpp"
-#include "common/printer.hpp"
-#include "common/serializer.hpp"
-#include "common/types/null_value.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -25,7 +25,7 @@ void DataChunk::InitializeEmpty(vector<TypeId> &types) {
 	}
 }
 
-void DataChunk::Initialize(vector<TypeId> &types, bool zero_data) {
+void DataChunk::Initialize(vector<TypeId> &types) {
 	assert(types.size() > 0);
 	InitializeEmpty(types);
 	index_t size = 0;
@@ -34,9 +34,7 @@ void DataChunk::Initialize(vector<TypeId> &types, bool zero_data) {
 	}
 	assert(size > 0);
 	owned_data = unique_ptr<data_t[]>(new data_t[size]);
-	if (zero_data) {
-		memset(owned_data.get(), 0, size);
-	}
+	memset(owned_data.get(), 0, size);
 
 	auto ptr = owned_data.get();
 	for (index_t i = 0; i < types.size(); i++) {
@@ -112,45 +110,6 @@ void DataChunk::Append(DataChunk &other) {
 	}
 }
 
-void DataChunk::MergeSelVector(sel_t *current_vector, sel_t *new_vector, sel_t *result, index_t new_count) {
-	for (index_t i = 0; i < new_count; i++) {
-		result[i] = current_vector[new_vector[i]];
-	}
-}
-
-void DataChunk::SetSelectionVector(Vector &matches) {
-	if (matches.type != TypeId::BOOLEAN) {
-		throw InvalidTypeException(matches.type, "Can only set selection vector using a boolean vector!");
-	}
-	bool *match_data = (bool *)matches.data;
-	index_t match_count = 0;
-	if (sel_vector) {
-		assert(matches.sel_vector);
-		// existing selection vector: have to merge the selection vector
-		for (index_t i = 0; i < matches.count; i++) {
-			if (match_data[sel_vector[i]] && !matches.nullmask[sel_vector[i]]) {
-				owned_sel_vector[match_count++] = sel_vector[i];
-			}
-		}
-		sel_vector = owned_sel_vector;
-	} else {
-		// no selection vector yet: can just set the selection vector
-		for (index_t i = 0; i < matches.count; i++) {
-			if (match_data[i] && !matches.nullmask[i]) {
-				owned_sel_vector[match_count++] = i;
-			}
-		}
-		if (match_count < matches.count) {
-			// we only have to set the selection vector if tuples were filtered
-			sel_vector = owned_sel_vector;
-		}
-	}
-	for (index_t i = 0; i < column_count; i++) {
-		data[i].count = match_count;
-		data[i].sel_vector = sel_vector;
-	}
-}
-
 vector<TypeId> DataChunk::GetTypes() {
 	vector<TypeId> types;
 	for (index_t i = 0; i < column_count; i++) {
@@ -189,10 +148,10 @@ void DataChunk::Serialize(Serializer &serializer) {
 			// strings are inlined into the blob
 			// we use null-padding to store them
 			auto strings = (const char **)data[i].data;
-			for (index_t j = 0; j < size(); j++) {
+			VectorOperations::Exec(sel_vector, size(), [&](index_t j, index_t k) {
 				auto source = strings[j] ? strings[j] : NullValue<const char *>();
 				serializer.WriteString(source);
-			}
+			});
 		}
 	}
 }

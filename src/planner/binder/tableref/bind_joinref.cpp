@@ -1,7 +1,7 @@
-#include "parser/tableref/joinref.hpp"
-#include "planner/binder.hpp"
-#include "planner/expression_binder/where_binder.hpp"
-#include "planner/tableref/bound_joinref.hpp"
+#include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/planner/tableref/bound_joinref.hpp"
 
 using namespace duckdb;
 using namespace std;

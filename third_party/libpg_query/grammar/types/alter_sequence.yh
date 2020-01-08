@@ -1,0 +1,4 @@
+%type <list> SeqOptList
+%type <value> NumericOnly
+%type <defelt> SeqOptElem
+%type <ival> SignedIconst

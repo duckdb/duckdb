@@ -1,11 +1,11 @@
-#include "function/table/sqlite_functions.hpp"
+#include "duckdb/function/table/sqlite_functions.hpp"
 
-#include "catalog/catalog.hpp"
-#include "catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "common/exception.hpp"
-#include "main/client_context.hpp"
-#include "main/database.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 
 #include <algorithm>
 
@@ -13,12 +13,8 @@ using namespace std;
 
 namespace duckdb {
 
-struct SQLiteMasterData : public FunctionData {
+struct SQLiteMasterData : public TableFunctionData {
 	SQLiteMasterData() : initialized(false), offset(0) {
-	}
-
-	unique_ptr<FunctionData> Copy() override {
-		throw NotImplementedException("Copy not required for table-producing function");
 	}
 
 	bool initialized;

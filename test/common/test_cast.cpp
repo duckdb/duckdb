@@ -1,8 +1,8 @@
 #include "catch.hpp"
-#include "common/operator/cast_operators.hpp"
-#include "common/string_util.hpp"
-#include "common/limits.hpp"
-#include "common/types.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/types.hpp"
 #include <vector>
 
 using namespace duckdb;
@@ -75,7 +75,7 @@ template <class T> static void TestExponent() {
 
 TEST_CASE("Test casting to boolean", "[cast]") {
 	vector<string> working_values = {"true", "false", "TRUE", "FALSE", "T", "F"};
-	vector<int8_t> expected_values = {true, false, true, false, true, false};
+	vector<bool> expected_values = {true, false, true, false, true, false};
 	vector<string> broken_values = {"1", "blabla", "", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaa"};
 
 	bool result;
@@ -106,7 +106,7 @@ TEST_CASE("Test casting to int8_t", "[cast]") {
 	vector<int64_t> broken_values_int64 = {128, -128, 10000000000, -10000000000};
 	TestNumericCast<int64_t, int8_t>(working_values_int64, broken_values_int64);
 	// float -> int8_t
-	vector<float> working_values_float = {10, -10, 127, -127, 1.3, -2.7};
+	vector<float> working_values_float = {10, -10, 127, -127, 1.3f, -2.7f};
 	vector<float> broken_values_float = {128, -128, 10000000000, -10000000000, 1e30f, -1e30f};
 	TestNumericCast<float, int8_t>(working_values_float, broken_values_float);
 	// double -> int8_t
@@ -159,15 +159,15 @@ TEST_CASE("Test casting to int16_t", "[cast]") {
 TEST_CASE("Test casting to int32_t", "[cast]") {
 	// int64_t -> int32_t
 	vector<int64_t> working_values_int64 = {10, -10, 127, -127, 32767, -32767, 2147483647, -2147483647};
-	vector<int64_t> broken_values_int64 = {2147483648, -2147483648, 10000000000, -10000000000};
+	vector<int64_t> broken_values_int64 = {2147483648LL, -2147483648LL, 10000000000LL, -10000000000LL};
 	TestNumericCast<int64_t, int32_t>(working_values_int64, broken_values_int64);
 	// float -> int32_t
 	vector<float> working_values_float = {10.0f, -10.0f, 2000000000.0f, -2000000000.0f, 1.3f, -2.7f};
 	vector<float> broken_values_float = {3000000000.0f, -3000000000.0f, 10000000000.0f, -10000000000.0f, 1e30f, -1e30f};
 	TestNumericCast<float, int32_t>(working_values_float, broken_values_float);
 	// double -> int32_t
-	vector<double> working_values_double = {10, -10, 32767, -32767, 1.3, -2.7, 2147483647, -2147483647};
-	vector<double> broken_values_double = {2147483648, -2147483648, 10000000000, -10000000000, 1e100, -1e100};
+	vector<double> working_values_double = {10, -10, 32767.0, -32767.0, 1.3, -2.7, 2147483647.0, -2147483647.0};
+	vector<double> broken_values_double = {2147483648.0, -2147483648.0, 10000000000.0, -10000000000.0, 1e100, -1e100};
 	TestNumericCast<double, int32_t>(working_values_double, broken_values_double);
 	// string -> int32_t
 	vector<string> working_values_str = {"10", "-10", "2147483647", "-2147483647", "1.3", "-1.3", "1e6"};
@@ -186,8 +186,8 @@ TEST_CASE("Test casting to int64_t", "[cast]") {
 	                                      -10.0f,
 	                                      32767.0f,
 	                                      -32767.0f,
-	                                      1.3,
-	                                      -2.7,
+	                                      1.3f,
+	                                      -2.7f,
 	                                      2000000000.0f,
 	                                      -2000000000.0f,
 	                                      4000000000000000000.0f,
@@ -196,7 +196,7 @@ TEST_CASE("Test casting to int64_t", "[cast]") {
 	TestNumericCast<float, int64_t>(working_values_float, broken_values_float);
 	// double -> int64_t
 	vector<double> working_values_double = {
-	    10, -10, 32767, -32767, 1.3, -2.7, 2147483647, -2147483647, 4611686018427387904, -4611686018427387904};
+	    10, -10, 32767, -32767, 1.3, -2.7, 2147483647, -2147483647.0, 4611686018427387904.0, -4611686018427387904.0};
 	vector<double> broken_values_double = {18446744073709551616.0, -18446744073709551616.0, 1e100, -1e100};
 	TestNumericCast<double, int64_t>(working_values_double, broken_values_double);
 	// string -> int64_t

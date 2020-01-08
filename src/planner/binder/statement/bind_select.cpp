@@ -1,6 +1,6 @@
-#include "parser/statement/select_statement.hpp"
-#include "planner/binder.hpp"
-#include "planner/statement/bound_select_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/statement/bound_select_statement.hpp"
 
 using namespace duckdb;
 using namespace std;

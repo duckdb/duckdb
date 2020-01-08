@@ -1,11 +1,11 @@
-#include "function/scalar/sequence_functions.hpp"
+#include "duckdb/function/scalar/sequence_functions.hpp"
 
 using namespace std;
 
 namespace duckdb {
 
 void BuiltinFunctions::RegisterSequenceFunctions() {
-	Register<Nextval>();
+	Register<NextvalFun>();
 }
 
-}
+} // namespace duckdb

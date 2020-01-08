@@ -1,7 +1,7 @@
-#include "common/types/hyperloglog.hpp"
+#include "duckdb/common/types/hyperloglog.hpp"
 
-#include "common/exception.hpp"
-#include "hyperloglog.h"
+#include "duckdb/common/exception.hpp"
+#include "hyperloglog.hpp"
 
 using namespace duckdb;
 using namespace std;

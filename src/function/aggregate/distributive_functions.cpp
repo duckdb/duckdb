@@ -1,8 +1,8 @@
-#include "function/aggregate/distributive_functions.hpp"
-#include "common/exception.hpp"
-#include "common/types/null_value.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "function/aggregate_function.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/aggregate_function.hpp"
 
 using namespace std;
 
@@ -36,14 +36,13 @@ Value null_simple_initialize() {
 }
 
 void BuiltinFunctions::RegisterDistributiveAggregates() {
-	Register<CountStar>();
-	Register<Count>();
-	Register<First>();
-	Register<Max>();
-	Register<Min>();
-	Register<Sum>();
-	Register<StringAgg>();
+	Register<CountStarFun>();
+	Register<CountFun>();
+	Register<FirstFun>();
+	Register<MaxFun>();
+	Register<MinFun>();
+	Register<SumFun>();
+	Register<StringAggFun>();
 }
 
 } // namespace duckdb
-

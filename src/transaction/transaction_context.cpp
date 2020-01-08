@@ -1,8 +1,8 @@
-#include "transaction/transaction_context.hpp"
+#include "duckdb/transaction/transaction_context.hpp"
 
-#include "common/exception.hpp"
-#include "transaction/transaction.hpp"
-#include "transaction/transaction_manager.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -20,24 +20,25 @@ TransactionContext::~TransactionContext() {
 }
 
 void TransactionContext::BeginTransaction() {
-	if (current_transaction) {
-		throw TransactionException("Transaction is already running!");
-	}
+	assert(!current_transaction); // cannot start a transaction within a transaction
 	current_transaction = transaction_manager.StartTransaction();
 }
 
 void TransactionContext::Commit() {
-	if (!current_transaction) {
-		throw TransactionException("No transaction is currently active - cannot commit!");
-	}
-	transaction_manager.CommitTransaction(current_transaction);
+	assert(current_transaction); // cannot commit if there is no active transaction
+	auto transaction = current_transaction;
+	SetAutoCommit(true);
 	current_transaction = nullptr;
+	string error = transaction_manager.CommitTransaction(transaction);
+	if (!error.empty()) {
+		throw TransactionException("Failed to commit: %s", error.c_str());
+	}
 }
 
 void TransactionContext::Rollback() {
-	if (!current_transaction) {
-		throw TransactionException("No transaction is currently active - cannot rollback!");
-	}
-	transaction_manager.RollbackTransaction(current_transaction);
+	assert(current_transaction); // cannot rollback if there is no active transaction
+	auto transaction = current_transaction;
+	SetAutoCommit(true);
 	current_transaction = nullptr;
+	transaction_manager.RollbackTransaction(transaction);
 }

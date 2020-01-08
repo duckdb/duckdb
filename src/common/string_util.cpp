@@ -1,4 +1,4 @@
-#include "common/string_util.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -69,22 +69,7 @@ vector<string> StringUtil::Split(const string &str, char delimiter) {
 }
 
 string StringUtil::Join(const vector<string> &input, const string &separator) {
-	// The result
-	string result;
-
-	// If the input isn't empty, append the first element. We do this so we
-	// don't
-	// need to introduce an if into the loop.
-	if (!input.empty()) {
-		result += input[0];
-	}
-
-	// Append the remaining input components, after the first
-	for (index_t i = 1; i < input.size(); i++) {
-		result += separator + input[i];
-	}
-
-	return result;
+	return StringUtil::Join(input, input.size(), separator, [](const string &s) { return s; });
 }
 
 string StringUtil::Prefix(const string &str, const string &prefix) {

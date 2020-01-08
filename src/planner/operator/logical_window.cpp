@@ -1,4 +1,4 @@
-#include "planner/operator/logical_window.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
 
 using namespace duckdb;
 using namespace std;

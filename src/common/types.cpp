@@ -1,7 +1,7 @@
-#include "common/types.hpp"
+#include "duckdb/common/types.hpp"
 
-#include "common/exception.hpp"
-#include "common/serializer.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/serializer.hpp"
 
 #include <cmath>
 
@@ -189,8 +189,20 @@ string SQLTypeToString(SQLType type) {
 	return SQLTypeIdToString(type.id);
 }
 
-bool IsNumericType(SQLTypeId type) {
-	switch (type) {
+bool SQLType::IsIntegral() const {
+	switch (id) {
+	case SQLTypeId::TINYINT:
+	case SQLTypeId::SMALLINT:
+	case SQLTypeId::INTEGER:
+	case SQLTypeId::BIGINT:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool SQLType::IsNumeric() const {
+	switch (id) {
 	case SQLTypeId::TINYINT:
 	case SQLTypeId::SMALLINT:
 	case SQLTypeId::INTEGER:

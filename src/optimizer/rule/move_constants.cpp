@@ -1,10 +1,10 @@
-#include "optimizer/rule/move_constants.hpp"
+#include "duckdb/optimizer/rule/move_constants.hpp"
 
-#include "common/exception.hpp"
-#include "common/value_operations/value_operations.hpp"
-#include "planner/expression/bound_comparison_expression.hpp"
-#include "planner/expression/bound_constant_expression.hpp"
-#include "planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

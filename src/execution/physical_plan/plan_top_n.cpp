@@ -1,6 +1,6 @@
-#include "execution/operator/order/physical_top_n.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "planner/operator/logical_top_n.hpp"
+#include "duckdb/execution/operator/order/physical_top_n.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_top_n.hpp"
 
 using namespace duckdb;
 using namespace std;

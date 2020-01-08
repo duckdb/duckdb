@@ -24,6 +24,12 @@ TEST_CASE("Test basic joins of tables", "[joins]") {
 		REQUIRE(CHECK_COLUMN(result, 1, {1, 1, 2}));
 		REQUIRE(CHECK_COLUMN(result, 2, {10, 20, 30}));
 	}
+	SECTION("simple cross product + multiple join conditions") {
+		result = con.Query("SELECT a, test.b, c FROM test, test2 WHERE test.b=test2.b AND test.a-1=test2.c");
+		REQUIRE(CHECK_COLUMN(result, 0, {11}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1}));
+		REQUIRE(CHECK_COLUMN(result, 2, {10}));
+	}
 	SECTION("use join columns in subquery") {
 		result = con.Query("SELECT a, (SELECT test.a), c FROM test, test2 WHERE "
 		                   "test.b = test2.b ORDER BY c;");
@@ -77,7 +83,7 @@ TEST_CASE("Test basic joins of tables", "[joins]") {
 	}
 }
 
-TEST_CASE("Test join with > STANDARD_VECTOR_SIZE duplicates", "[joins]") {
+TEST_CASE("Test join with > STANDARD_VECTOR_SIZE duplicates", "[joins][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	unique_ptr<QueryResult> result;
@@ -326,14 +332,14 @@ TEST_CASE("Test USING joins", "[joins]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO t2 VALUES (1,2,3), (2,2,4), (1,3,4)"));
 
 	// USING join
-	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(a)");
+	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(a) ORDER BY t2.b");
 	REQUIRE(result->success);
 
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 2, {3, 4}));
 
-	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(b)");
+	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(b) ORDER BY t2.c");
 	REQUIRE(result->success);
 
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
@@ -352,18 +358,11 @@ TEST_CASE("Test USING joins", "[joins]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {2}));
 	REQUIRE(CHECK_COLUMN(result, 2, {3}));
 
-	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(a+b)");
-	REQUIRE(!result->success);
-
-	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(\"\")");
-	REQUIRE(!result->success);
-
-	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(d)");
-	REQUIRE(!result->success);
+	REQUIRE_FAIL(con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(a+b)"));
+	REQUIRE_FAIL(con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(\"\")"));
+	REQUIRE_FAIL(con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(d)"));
 
 	result = con.Query("SELECT * FROM t1 JOIN t2 USING(a,b)");
-	REQUIRE(result->success);
-
 	REQUIRE(result->names.size() == 4);
 	REQUIRE(result->names[0] == "a");
 	REQUIRE(result->names[1] == "b");

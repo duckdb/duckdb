@@ -1,8 +1,8 @@
-#include "common/exception.hpp"
-#include "common/limits.hpp"
-#include "common/operator/aggregate_operators.hpp"
-#include "common/operator/numeric_binary_operators.hpp"
-#include "common/value_operations/value_operations.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/operator/aggregate_operators.hpp"
+#include "duckdb/common/operator/numeric_binary_operators.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -33,7 +33,7 @@ template <class OP, bool IGNORE_NULL> static Value templated_binary_operation(co
 			if (result.is_null) {
 				result.type = max(left.type, right.type);
 			} else {
-				auto type = max(MinimalType(result.GetNumericValue()), max(left.type, right.type));
+				auto type = max(MinimalType(result.GetValue<int64_t>()), max(left.type, right.type));
 				result = result.CastAs(type);
 			}
 			return result;

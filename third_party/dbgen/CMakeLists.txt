@@ -24,3 +24,5 @@ add_library(dbgen STATIC
             text.c)
 
 set_property(TARGET dbgen PROPERTY C_STANDARD 99)
+
+disable_target_warnings(dbgen)

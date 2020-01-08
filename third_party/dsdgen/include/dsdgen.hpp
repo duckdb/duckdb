@@ -1,6 +1,6 @@
 #pragma once
 
-#include "catalog/catalog.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb.hpp"
 
 namespace tpcds {

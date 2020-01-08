@@ -1,5 +1,8 @@
 #include "catch.hpp"
-#include "execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/art_key.hpp"
+
+#include <iostream>
+#include <cstring>
 
 using namespace duckdb;
 using namespace std;
@@ -147,4 +150,65 @@ TEST_CASE("Test correct functioning of art keys", "[art]") {
 	TestKeys(keys);
 
 	keys.clear();
+}
+
+TEST_CASE("Test correct functioning of art EncodeFloat/EncodeDouble", "[art-enc]") {
+	{
+		// EncodeFloat
+		// positive values
+		vector<float> values;
+		float current_value = 0.00001f;
+		while (isfinite(current_value)) {
+			values.push_back(current_value);
+			current_value *= 2;
+		}
+		// negative values
+		current_value = -0.00001f;
+		while (isfinite(current_value)) {
+			values.push_back(current_value);
+			current_value *= 2;
+		}
+		std::sort(values.begin(), values.end());
+		uint32_t current_encoded = Key::EncodeFloat(values[0]);
+		for (index_t i = 1; i < values.size(); i++) {
+			uint32_t next_encoded = Key::EncodeFloat(values[i]);
+			if (!(next_encoded > current_encoded)) {
+				printf("Failure in Key::EncodeFloat!\n");
+				printf(
+				    "Generated value for key %f (=> %u) is bigger or equal to the generated value for key %f (=> %u)\n",
+				    values[i - 1], current_encoded, values[i], next_encoded);
+			}
+			REQUIRE(next_encoded > current_encoded);
+			current_encoded = next_encoded;
+		}
+	}
+	{
+		// EncodeDouble
+		// positive values
+		vector<double> values;
+		double current_value = 0.0000001;
+		while (isfinite(current_value)) {
+			values.push_back(current_value);
+			current_value *= 2;
+		}
+		// negative values
+		current_value = -0.0000001;
+		while (isfinite(current_value)) {
+			values.push_back(current_value);
+			current_value *= 2;
+		}
+		std::sort(values.begin(), values.end());
+		uint64_t current_encoded = Key::EncodeDouble(values[0]);
+		for (index_t i = 1; i < values.size(); i++) {
+			uint64_t next_encoded = Key::EncodeDouble(values[i]);
+			if (!(next_encoded > current_encoded)) {
+				cout << "Failure in Key::EncodeDouble!" << std::endl;
+				cout << "Generated value for key " << values[i - 1] << " (=> %" << current_encoded
+				     << ") is bigger or equal to the generated value for key " << values[i] << "(=> %" << next_encoded
+				     << ")" << std::endl;
+			}
+			REQUIRE(next_encoded > current_encoded);
+			current_encoded = next_encoded;
+		}
+	}
 }

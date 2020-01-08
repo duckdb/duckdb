@@ -1,9 +1,9 @@
-#include "execution/operator/join/physical_cross_product.hpp"
-#include "execution/operator/join/physical_hash_join.hpp"
-#include "execution/operator/join/physical_nested_loop_join.hpp"
-#include "execution/operator/join/physical_piecewise_merge_join.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "planner/operator/logical_comparison_join.hpp"
+#include "duckdb/execution/operator/join/physical_cross_product.hpp"
+#include "duckdb/execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/execution/operator/join/physical_nested_loop_join.hpp"
+#include "duckdb/execution/operator/join/physical_piecewise_merge_join.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -39,7 +39,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 	unique_ptr<PhysicalOperator> plan;
 	if (has_equality) {
 		// equality join: use hash join
-		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.type);
+		plan = make_unique<PhysicalHashJoin>(context, op, move(left), move(right), move(op.conditions), op.type);
 	} else {
 		assert(!has_null_equal_conditions); // don't support this for anything but hash joins for now
 		if (op.conditions.size() == 1 && (op.type == JoinType::MARK || op.type == JoinType::INNER) && !has_inequality) {

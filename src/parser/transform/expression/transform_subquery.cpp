@@ -1,30 +1,28 @@
-#include "parser/expression/operator_expression.hpp"
-#include "parser/expression/subquery_expression.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<ParsedExpression> Transformer::TransformSubquery(SubLink *root) {
+unique_ptr<ParsedExpression> Transformer::TransformSubquery(PGSubLink *root) {
 	if (!root) {
 		return nullptr;
 	}
 	auto subquery_expr = make_unique<SubqueryExpression>();
-	subquery_expr->subquery = TransformSelectNode((SelectStmt *)root->subselect);
+	subquery_expr->subquery = TransformSelectNode((PGSelectStmt *)root->subselect);
 	if (!subquery_expr->subquery) {
 		return nullptr;
 	}
-	auto &select_list = subquery_expr->subquery->GetSelectList();
-	assert(select_list.size() > 0);
+	assert(subquery_expr->subquery->GetSelectList().size() > 0);
 
 	switch (root->subLinkType) {
-	case EXISTS_SUBLINK: {
+	case PG_EXISTS_SUBLINK: {
 		subquery_expr->subquery_type = SubqueryType::EXISTS;
 		break;
 	}
-	case ANY_SUBLINK:
-	case ALL_SUBLINK: {
+	case PG_ANY_SUBLINK:
+	case PG_ALL_SUBLINK: {
 		// comparison with ANY() or ALL()
 		subquery_expr->subquery_type = SubqueryType::ANY;
 		subquery_expr->child = TransformExpression(root->testexpr);
@@ -33,8 +31,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(SubLink *root) {
 			// simple IN
 			subquery_expr->comparison_type = ExpressionType::COMPARE_EQUAL;
 		} else {
-			auto operator_name =
-			    string((reinterpret_cast<postgres::Value *>(root->operName->head->data.ptr_value))->val.str);
+			auto operator_name = string((reinterpret_cast<PGValue *>(root->operName->head->data.ptr_value))->val.str);
 			subquery_expr->comparison_type = OperatorToExpressionType(operator_name);
 		}
 		assert(subquery_expr->comparison_type == ExpressionType::COMPARE_EQUAL ||
@@ -43,7 +40,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(SubLink *root) {
 		       subquery_expr->comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
 		       subquery_expr->comparison_type == ExpressionType::COMPARE_LESSTHAN ||
 		       subquery_expr->comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
-		if (root->subLinkType == ALL_SUBLINK) {
+		if (root->subLinkType == PG_ALL_SUBLINK) {
 			// ALL sublink is equivalent to NOT(ANY) with inverted comparison
 			// e.g. [= ALL()] is equivalent to [NOT(<> ANY())]
 			// first invert the comparison type
@@ -52,7 +49,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(SubLink *root) {
 		}
 		break;
 	}
-	case EXPR_SUBLINK: {
+	case PG_EXPR_SUBLINK: {
 		// return a single scalar value from the subquery
 		// no child expression to compare to
 		subquery_expr->subquery_type = SubqueryType::SCALAR;

@@ -155,7 +155,7 @@ TEST_CASE("Test ORDER BY exceptions", "[order]") {
 	REQUIRE_FAIL(con.Query("SELECT a % 2, b FROM test UNION SELECT a % 2 AS k FROM test ORDER BY -1"));
 }
 
-TEST_CASE("Test ORDER BY with large table", "[order]") {
+TEST_CASE("Test ORDER BY with large table", "[order][.]") {
 	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -189,7 +189,7 @@ TEST_CASE("Test Top N Optimization", "[order]") {
 
 	// Top N optimization: Limit greater than number of rows
 	result = con.Query("SELECT b FROM test ORDER BY b LIMIT 10 OFFSET 1;");
-	REQUIRE(CHECK_COLUMN(result, 0, {7,22}));
+	REQUIRE(CHECK_COLUMN(result, 0, {7, 22}));
 
 	// Top N optimization: Offset greater than total number of rows
 	result = con.Query("SELECT b FROM test ORDER BY b LIMIT 10 OFFSET 10;");

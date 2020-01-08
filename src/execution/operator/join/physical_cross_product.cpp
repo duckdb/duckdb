@@ -1,9 +1,21 @@
-#include "execution/operator/join/physical_cross_product.hpp"
+#include "duckdb/execution/operator/join/physical_cross_product.hpp"
 
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+class PhysicalCrossProductOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalCrossProductOperatorState(PhysicalOperator *left, PhysicalOperator *right)
+	    : PhysicalOperatorState(left), left_position(0) {
+		assert(left && right);
+	}
+
+	index_t left_position;
+	index_t right_position;
+	ChunkCollection right_data;
+};
 
 PhysicalCrossProduct::PhysicalCrossProduct(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                            unique_ptr<PhysicalOperator> right)

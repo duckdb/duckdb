@@ -1,10 +1,10 @@
-#include "planner/expression_iterator.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
-#include "planner/bound_query_node.hpp"
-#include "planner/expression/list.hpp"
-#include "planner/query_node/bound_select_node.hpp"
-#include "planner/query_node/bound_set_operation_node.hpp"
-#include "planner/tableref/list.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/query_node/bound_set_operation_node.hpp"
+#include "duckdb/planner/tableref/list.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -33,6 +33,13 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		}
 		break;
 	}
+	case ExpressionClass::BOUND_BETWEEN: {
+		auto &between_expr = (BoundBetweenExpression &)expr;
+		between_expr.input = callback(move(between_expr.input));
+		between_expr.lower = callback(move(between_expr.lower));
+		between_expr.upper = callback(move(between_expr.upper));
+		break;
+	}
 	case ExpressionClass::BOUND_CASE: {
 		auto &case_expr = (BoundCaseExpression &)expr;
 		case_expr.check = callback(move(case_expr.check));
@@ -53,8 +60,9 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	}
 	case ExpressionClass::BOUND_CONJUNCTION: {
 		auto &conj_expr = (BoundConjunctionExpression &)expr;
-		conj_expr.left = callback(move(conj_expr.left));
-		conj_expr.right = callback(move(conj_expr.right));
+		for (auto &child : conj_expr.children) {
+			child = callback(move(child));
+		}
 		break;
 	}
 	case ExpressionClass::BOUND_FUNCTION: {
@@ -152,7 +160,8 @@ void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
 		break;
 	}
 	default:
-		assert(ref.type == TableReferenceType::TABLE_FUNCTION || ref.type == TableReferenceType::BASE_TABLE);
+		assert(ref.type == TableReferenceType::TABLE_FUNCTION || ref.type == TableReferenceType::BASE_TABLE ||
+		       ref.type == TableReferenceType::EMPTY);
 		break;
 	}
 }

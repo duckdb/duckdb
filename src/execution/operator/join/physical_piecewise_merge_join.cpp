@@ -1,11 +1,31 @@
-#include "execution/operator/join/physical_piecewise_merge_join.hpp"
+#include "duckdb/execution/operator/join/physical_piecewise_merge_join.hpp"
 
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "execution/merge_join.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/merge_join.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+class PhysicalPiecewiseMergeJoinState : public PhysicalComparisonJoinState {
+public:
+	PhysicalPiecewiseMergeJoinState(PhysicalOperator *left, PhysicalOperator *right, vector<JoinCondition> &conditions)
+	    : PhysicalComparisonJoinState(left, right, conditions), initialized(false), left_position(0), right_position(0),
+	      right_chunk_index(0), has_null(false) {
+	}
+
+	bool initialized;
+	index_t left_position;
+	index_t right_position;
+	index_t right_chunk_index;
+	DataChunk left_chunk;
+	DataChunk join_keys;
+	MergeOrder left_orders;
+	ChunkCollection right_chunks;
+	ChunkCollection right_conditions;
+	vector<MergeOrder> right_orders;
+	bool has_null;
+};
 
 PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                                        unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond,
@@ -35,7 +55,7 @@ static void OrderVector(Vector &vector, MergeOrder &order) {
 
 void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk,
                                                   PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinOperatorState *>(state_);
+	auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinState *>(state_);
 	assert(conditions.size() == 1);
 	if (!state->initialized) {
 		// create the sorted pieces
@@ -64,10 +84,10 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 			// create a new selection vector
 			// resolve the join keys for the right chunk
 			state->join_keys.Reset();
-			ExpressionExecutor executor(chunk_to_order);
+			state->rhs_executor.SetChunk(chunk_to_order);
 			for (index_t k = 0; k < conditions.size(); k++) {
 				// resolve the join key
-				executor.ExecuteExpression(*conditions[k].right, state->join_keys.data[k]);
+				state->rhs_executor.ExecuteExpression(k, state->join_keys.data[k]);
 				OrderVector(state->join_keys.data[k], state->right_orders[i]);
 				if (state->right_orders[i].count < state->join_keys.data[k].count) {
 					// the amount of entries in the order vector is smaller than the amount of entries in the vector
@@ -94,9 +114,9 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 
 			// resolve the join keys for the left chunk
 			state->join_keys.Reset();
-			ExpressionExecutor executor(state->child_chunk);
+			state->lhs_executor.SetChunk(state->child_chunk);
 			for (index_t k = 0; k < conditions.size(); k++) {
-				executor.ExecuteExpression(*conditions[k].left, state->join_keys.data[k]);
+				state->lhs_executor.ExecuteExpression(k, state->join_keys.data[k]);
 				// sort by join key
 				OrderVector(state->join_keys.data[k], state->left_orders);
 			}
@@ -180,5 +200,5 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState() {
-	return make_unique<PhysicalPiecewiseMergeJoinOperatorState>(children[0].get(), children[1].get());
+	return make_unique<PhysicalPiecewiseMergeJoinState>(children[0].get(), children[1].get(), conditions);
 }

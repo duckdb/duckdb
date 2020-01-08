@@ -1,8 +1,12 @@
-#include "parser/expression/window_expression.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression/bound_window_expression.hpp"
-#include "planner/expression_binder/select_binder.hpp"
-#include "planner/query_node/bound_select_node.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression_binder/select_binder.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
+
+#include "duckdb/main/client_context.hpp"
+
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -49,15 +53,8 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, index_t depth) {
 	// we set the inside_window flag to true to prevent binding nested window functions
 	this->inside_window = true;
 	string error;
-	vector<SQLType> types;
-	vector<unique_ptr<Expression>> children;
 	for (auto &child : window.children) {
 		BindChild(child, depth, error);
-		assert(child.get());
-		assert(child->expression_class == ExpressionClass::BOUND_EXPRESSION);
-		auto& bound = (BoundExpression &) *child;
-		types.push_back(bound.sql_type);
-		children.push_back(GetExpression(child));
 	}
 	for (auto &child : window.partitions) {
 		BindChild(child, depth, error);
@@ -74,21 +71,32 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, index_t depth) {
 		// failed to bind children of window function
 		return BindResult(error);
 	}
+	// successfully bound all children: create bound window function
+	vector<SQLType> types;
+	vector<unique_ptr<Expression>> children;
+	for (auto &child : window.children) {
+		assert(child.get());
+		assert(child->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		auto &bound = (BoundExpression &)*child;
+		types.push_back(bound.sql_type);
+		children.push_back(GetExpression(child));
+	}
 	//  Determine the function type.
 	SQLType sql_type;
 	unique_ptr<AggregateFunction> aggregate;
 	if (window.type == ExpressionType::WINDOW_AGGREGATE) {
 		//  Look up the aggregate function in the catalog
-		auto func = (AggregateFunctionCatalogEntry *) context.catalog.GetFunction(context.ActiveTransaction(), window.schema, window.function_name);
+		auto func = (AggregateFunctionCatalogEntry *)context.catalog.GetFunction(context.ActiveTransaction(),
+		                                                                         window.schema, window.function_name);
 		if (func->type != CatalogType::AGGREGATE_FUNCTION) {
-		    throw BinderException("Unknown windowed aggregate");
+			throw BinderException("Unknown windowed aggregate");
 		}
 		// bind the aggregate
 		auto best_function = Function::BindFunction(func->name, func->functions, types);
 		// found a matching function!
 		auto &bound_function = func->functions[best_function];
 		// check if we need to add casts to the children
-		CastToFunctionArguments(bound_function, children, types);
+		bound_function.CastToFunctionArguments(children, types);
 		// create the aggregate
 		aggregate = make_unique<AggregateFunction>(func->functions[best_function]);
 		sql_type = aggregate->return_type;

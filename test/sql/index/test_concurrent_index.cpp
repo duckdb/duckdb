@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "main/appender.hpp"
+#include "duckdb/main/appender.hpp"
 #include "test_helpers.hpp"
 
 #include <atomic>
@@ -34,13 +34,13 @@ TEST_CASE("Concurrent reads during index creation", "[index][.]") {
 	// create a single table to append to
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	// append a bunch of entries
-	auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
+	Appender appender(con, "integers");
 	for (index_t i = 0; i < 1000000; i++) {
-		appender->BeginRow();
-		appender->AppendInteger(i);
-		appender->EndRow();
+		appender.BeginRow();
+		appender.Append<int32_t>(i);
+		appender.EndRow();
 	}
-	con.CloseAppender();
+	appender.Close();
 
 	is_finished = false;
 	// now launch a bunch of reading threads
@@ -66,13 +66,12 @@ TEST_CASE("Concurrent reads during index creation", "[index][.]") {
 
 static void append_to_integers(DuckDB *db, index_t threadnr) {
 	Connection con(*db);
-	auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
 	for (index_t i = 0; i < INSERT_COUNT; i++) {
-		appender->BeginRow();
-		appender->AppendInteger(1);
-		appender->EndRow();
+		auto result = con.Query("INSERT INTO integers VALUES (1)");
+		if (!result->success) {
+			FAIL();
+		}
 	}
-	con.CloseAppender();
 }
 
 TEST_CASE("Concurrent writes during index creation", "[index][.]") {
@@ -83,13 +82,13 @@ TEST_CASE("Concurrent writes during index creation", "[index][.]") {
 	// create a single table to append to
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	// append a bunch of entries
-	auto appender = con.OpenAppender(DEFAULT_SCHEMA, "integers");
+	Appender appender(con, "integers");
 	for (index_t i = 0; i < 1000000; i++) {
-		appender->BeginRow();
-		appender->AppendInteger(i);
-		appender->EndRow();
+		appender.BeginRow();
+		appender.Append<int32_t>(i);
+		appender.EndRow();
 	}
-	con.CloseAppender();
+	appender.Close();
 
 	// now launch a bunch of concurrently writing threads (!)
 	thread threads[THREAD_COUNT];
@@ -104,7 +103,13 @@ TEST_CASE("Concurrent writes during index creation", "[index][.]") {
 		threads[i].join();
 	}
 
-	// now test that we can probe the index correctly
+	// first scan the actual base table to verify the count, we avoid using a filter here to prevent the optimizer from
+	// using an index scan
+	result = con.Query("SELECT i, COUNT(*) FROM integers GROUP BY i ORDER BY i LIMIT 1 OFFSET 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1 + THREAD_COUNT * INSERT_COUNT}));
+
+	// now test that we can probe the index correctly too
 	result = con.Query("SELECT COUNT(*) FROM integers WHERE i=1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1 + THREAD_COUNT * INSERT_COUNT}));
 }
@@ -242,8 +247,7 @@ string append_to_primary_key(Connection &con, index_t thread_nr) {
 	}
 	auto chunk = result->Fetch();
 	Value initial_count = chunk->data[0].GetValue(0);
-
-	for (int32_t i = 0; i < 500; i++) {
+	for (int32_t i = 0; i < 50; i++) {
 		result = con.Query("INSERT INTO integers VALUES ($1)", (int32_t)(thread_nr * 1000 + i));
 		if (!result->success) {
 			return "Failed INSERT: " + result->error;
@@ -294,6 +298,6 @@ TEST_CASE("Parallel appends to table with index with transactions", "[index][.]"
 
 	// now test that the counts are correct
 	result = con.Query("SELECT COUNT(*), COUNT(DISTINCT i) FROM integers");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(THREAD_COUNT * 500)}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(THREAD_COUNT * 500)}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(THREAD_COUNT * 50)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(THREAD_COUNT * 50)}));
 }

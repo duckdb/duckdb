@@ -16,4 +16,9 @@ TEST_CASE("Test explain", "[explain]") {
 
 	REQUIRE_NO_FAIL(con.Query("EXPLAIN SELECT * FROM integers"));
 	REQUIRE_NO_FAIL(con.Query("EXPLAIN select sum(i), j, sum(i), j from integers group by j having j < 10;"));
+	REQUIRE_NO_FAIL(con.Query("EXPLAIN update integers set i=i+1;"));
+	REQUIRE_NO_FAIL(con.Query("EXPLAIN delete from integers where i=1;"));
+
+	// explaining prepared statements works now as well
+	REQUIRE_NO_FAIL(con.Query("EXPLAIN SELECT * FROM integers WHERE i=?", 1));
 }

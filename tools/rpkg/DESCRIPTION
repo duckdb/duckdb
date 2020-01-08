@@ -1,6 +1,6 @@
 Package: duckdb
 Title: DBI Package for DuckDB
-Version: 0.1.0
+Version: 0.1.1
 Author: Hannes Muehleisen <hannes@cwi.nl>
 Maintainer: Hannes Muehleisen <hannes@cwi.nl>
 Description: TODO
@@ -11,12 +11,13 @@ LazyData: true
 Encoding: UTF-8
 Imports: 
     DBI,
-    testthat,
+    dbplyr,
     methods,
+    testthat,
     utils
 Suggests: 
     DBItest, 
-    dbplyr
+    callr
 GitHub: https://github.com/cwida/duckdb
 Collate: 
     'duckdb.R'

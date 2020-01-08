@@ -1,7 +1,7 @@
 #include "catch.hpp"
-#include "common/file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb.hpp"
-#include "main/appender.hpp"
+#include "duckdb/main/appender.hpp"
 #include "test_helpers.hpp"
 
 #include <signal.h>
@@ -64,7 +64,7 @@ TEST_CASE("Test transactional integrity when facing process aborts", "[persisten
 		Connection con(*db);
 		auto res = con.Query("SELECT COUNT(*) FROM a");
 		// there may be an off-by-one if we kill exactly between query and count increment
-		REQUIRE(abs((int64_t)(res->GetValue(0, 0).GetNumericValue() - *count)) < 2);
+		REQUIRE(abs((int64_t)(res->GetValue(0, 0).GetValue<int64_t>() - *count)) < 2);
 	} else {
 		FAIL();
 	}

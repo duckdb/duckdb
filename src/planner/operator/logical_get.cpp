@@ -1,7 +1,7 @@
-#include "planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;

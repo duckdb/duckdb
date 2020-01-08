@@ -4,16 +4,16 @@
 // aggregates
 //===--------------------------------------------------------------------===//
 
-#include "common/operator/aggregate_operators.hpp"
+#include "duckdb/common/operator/aggregate_operators.hpp"
 
-#include "common/operator/constant_operators.hpp"
-#include "common/operator/numeric_binary_operators.hpp"
-#include "common/types/constant_vector.hpp"
-#include "common/types/static_vector.hpp"
-#include "common/value_operations/value_operations.hpp"
-#include "common/vector_operations/fold_loops.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "common/operator/comparison_operators.hpp"
+#include "duckdb/common/operator/constant_operators.hpp"
+#include "duckdb/common/operator/numeric_binary_operators.hpp"
+#include "duckdb/common/types/constant_vector.hpp"
+#include "duckdb/common/types/static_vector.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector_operations/fold_loops.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -49,7 +49,7 @@ template <class OP> static bool generic_fold_loop(Vector &input, Value &result) 
 	}
 	case TypeId::VARCHAR: {
 		const char *res = nullptr;
-		if (!templated_unary_fold<const char*, const char*, OP>(input, &res)) {
+		if (!templated_unary_fold<const char *, const char *, OP>(input, &res)) {
 			return false;
 		}
 		result.str_value = res;

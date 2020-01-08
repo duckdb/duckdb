@@ -1,6 +1,7 @@
-#include "planner/logical_operator.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
-#include "common/printer.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -9,13 +10,8 @@ string LogicalOperator::ParamsToString() const {
 	string result = "";
 	if (expressions.size() > 0) {
 		result += "[";
-		for (index_t i = 0; i < expressions.size(); i++) {
-			auto &child = expressions[i];
-			result += child->GetName();
-			if (i < expressions.size() - 1) {
-				result += ", ";
-			}
-		}
+		result += StringUtil::Join(expressions, expressions.size(), ", ",
+		                           [](const unique_ptr<Expression> &expression) { return expression->GetName(); });
 		result += "]";
 	}
 

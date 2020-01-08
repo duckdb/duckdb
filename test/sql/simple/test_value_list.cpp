@@ -10,6 +10,11 @@ TEST_CASE("Test value list in selection", "[valuelist]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 
+	// value list can be a top-level statement
+	result = con.Query("(VALUES (1, 3), (2, 4));");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3, 4}));
+
 	// nulls first and then integers
 	result = con.Query("SELECT * FROM (VALUES (NULL, NULL), (3, 4), (3, 7)) v1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 3, 3}));
@@ -72,4 +77,18 @@ TEST_CASE("Test value list in selection", "[valuelist]") {
 	REQUIRE_FAIL(con.Query("SELECT * FROM (VALUES (1, 2, 3), (1,2)) v1;"));
 	// default in value list is not allowed
 	REQUIRE_FAIL(con.Query("SELECT * FROM (VALUES (DEFAULT, 2, 3), (1,2)) v1;"));
+
+	// VALUES list for INSERT
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE varchars(v VARCHAR);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO varchars VALUES (1), ('hello'), (DEFAULT);"));
+
+	result = con.Query("SELECT * FROM varchars ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "1", "hello"}));
+
+	// too many columns provided
+	REQUIRE_FAIL(con.Query("INSERT INTO varchars VALUES (1, 2), ('hello', 3), (DEFAULT, DEFAULT);"));
+	REQUIRE_FAIL(con.Query("INSERT INTO varchars (v) VALUES (1, 2), ('hello', 3), (DEFAULT, DEFAULT);"));
+	REQUIRE_FAIL(con.Query("INSERT INTO varchars (v) VALUES (1, 2), ('hello'), (DEFAULT, DEFAULT);"));
+	// operation on default not allowed
+	REQUIRE_FAIL(con.Query("INSERT INTO varchars (v) VALUES (DEFAULT IS NULL);"));
 }

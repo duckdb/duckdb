@@ -1,9 +1,9 @@
-#include "planner/expression_binder/group_binder.hpp"
+#include "duckdb/planner/expression_binder/group_binder.hpp"
 
-#include "parser/expression/columnref_expression.hpp"
-#include "parser/expression/constant_expression.hpp"
-#include "parser/query_node/select_node.hpp"
-#include "planner/expression/bound_constant_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -72,7 +72,7 @@ BindResult GroupBinder::BindConstant(ConstantExpression &constant) {
 		return ExpressionBinder::BindExpression(constant, 0);
 	}
 	// INTEGER constant: we use the integer as an index into the select list (e.g. GROUP BY 1)
-	auto index = (index_t)constant.value.GetNumericValue();
+	auto index = (index_t)constant.value.GetValue<int64_t>();
 	return BindSelectRef(index - 1);
 }
 

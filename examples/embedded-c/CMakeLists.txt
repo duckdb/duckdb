@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.7)
 project(example-c)
 
 include_directories(../../src/include)
-link_directories(../../build/debug/src)
+link_directories(../../build/release/src)
 
 add_executable(example main.c)
 target_link_libraries(example duckdb)

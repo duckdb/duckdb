@@ -1,23 +1,22 @@
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
-#include "catalog/catalog.hpp"
-#include "catalog/catalog_entry/prepared_statement_catalog_entry.hpp"
-#include "catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "common/exception.hpp"
-#include "common/serializer.hpp"
-#include "main/connection.hpp"
-#include "main/database.hpp"
-#include "parser/constraints/list.hpp"
-#include "parser/parsed_data/alter_table_info.hpp"
-#include "planner/constraints/bound_not_null_constraint.hpp"
-#include "planner/constraints/bound_unique_constraint.hpp"
-#include "planner/expression/bound_constant_expression.hpp"
-#include "planner/parsed_data/bound_create_table_info.hpp"
-#include "storage/storage_manager.hpp"
-#include "planner/binder.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/main/connection.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/constraints/list.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
+#include "duckdb/planner/constraints/bound_unique_constraint.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/planner/binder.hpp"
 
-#include "execution/index/art/art.hpp"
-#include "planner/expression/bound_reference_expression.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 #include <algorithm>
 
@@ -36,6 +35,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 	if (!storage) {
 		// create the physical storage
 		storage = make_shared<DataTable>(catalog->storage, schema->name, name, GetTypes(), move(info->data));
+
 		// create the unique indexes for the UNIQUE and PRIMARY KEY constraints
 		for (index_t i = 0; i < bound_constraints.size(); i++) {
 			auto &constraint = bound_constraints[i];

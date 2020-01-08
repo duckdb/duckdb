@@ -1,6 +1,8 @@
-#include "common/serializer/buffered_file_reader.hpp"
-#include "common/serializer/buffered_file_writer.hpp"
-#include "common/exception.hpp"
+#include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/exception.hpp"
+
+#include <cstring>
 
 using namespace duckdb;
 using namespace std;

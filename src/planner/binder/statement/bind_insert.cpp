@@ -1,16 +1,33 @@
-#include "main/client_context.hpp"
-#include "main/database.hpp"
-#include "parser/statement/insert_statement.hpp"
-#include "planner/binder.hpp"
-#include "planner/expression_binder/insert_binder.hpp"
-#include "planner/statement/bound_insert_statement.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/expressionlistref.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/insert_binder.hpp"
+#include "duckdb/planner/statement/bound_insert_statement.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
+
+static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t result_columns, bool columns_provided,
+                                           const char *tname) {
+	if (result_columns != expected_columns) {
+		string msg = StringUtil::Format(!columns_provided ? "table %s has %lld columns but %lld values were supplied"
+		                                                  : "Column name/value mismatch for insert on %s: "
+		                                                    "expected %lld columns but %lld values were supplied",
+		                                tname, expected_columns, result_columns);
+		throw BinderException(msg);
+	}
+}
 
 unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 	auto result = make_unique<BoundInsertStatement>();
-	auto table = context.catalog.GetTable(context.ActiveTransaction(), stmt.schema, stmt.table);
+	auto table = context.catalog.GetTable(context, stmt.schema, stmt.table);
+	assert(table);
+
 	result->table = table;
 
 	vector<index_t> named_column_map;
@@ -48,45 +65,54 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 		}
 	}
 
+	// bind the default values
+	BindDefaultValues(table->columns, result->bound_defaults);
+	if (!stmt.select_statement) {
+		return move(result);
+	}
+
 	index_t expected_columns = stmt.columns.size() == 0 ? result->table->columns.size() : stmt.columns.size();
-	index_t result_columns;
-	if (stmt.select_statement) {
-		// bind the select statement, if any
-		result->select_statement =
-		    unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*stmt.select_statement));
-		result_columns = result->select_statement->node->types.size();
-	} else {
-		result_columns = stmt.values.size() > 0 ? stmt.values[0].size() : expected_columns;
-	}
+	// special case: check if we are inserting from a VALUES statement
+	if (stmt.select_statement->node->type == QueryNodeType::SELECT_NODE) {
+		auto &node = (SelectNode &)*stmt.select_statement->node;
+		if (node.from_table->type == TableReferenceType::EXPRESSION_LIST) {
+			auto &expr_list = (ExpressionListRef &)*node.from_table;
+			assert(expr_list.values.size() > 0);
+			CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), stmt.columns.size() != 0,
+			                               result->table->name.c_str());
 
-	if (result_columns != expected_columns) {
-		string msg =
-		    StringUtil::Format(stmt.columns.size() == 0 ? "table %s has %d columns but %d values were supplied"
-		                                                : "Column name/value mismatch for insert on %s: "
-		                                                  "expected %llu columns but %llu values were supplied",
-		                       result->table->name.c_str(), expected_columns, result_columns);
-		throw BinderException(msg);
-	}
-
-	if (stmt.values.size() > 0) {
-		assert(!stmt.select_statement);
-		// visit the expressions
-		InsertBinder binder(*this, context);
-		for (auto &expression_list : stmt.values) {
-			vector<unique_ptr<Expression>> list;
-
-			for (index_t col_idx = 0; col_idx < expression_list.size(); col_idx++) {
+			// VALUES list!
+			for (index_t col_idx = 0; col_idx < expected_columns; col_idx++) {
 				index_t table_col_idx = stmt.columns.size() == 0 ? col_idx : named_column_map[col_idx];
 				assert(table_col_idx < table->columns.size());
-				binder.target_type = table->columns[table_col_idx].type;
-				auto bound_expr = binder.Bind(expression_list[col_idx]);
-				list.push_back(move(bound_expr));
+
+				// set the expected types as the types for the INSERT statement
+				auto &column = table->columns[table_col_idx];
+				expr_list.expected_types.push_back(column.type);
+				expr_list.expected_names.push_back(column.name);
+
+				// now replace any DEFAULT values with the corresponding default expression
+				for (index_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
+					if (expr_list.values[list_idx][col_idx]->type == ExpressionType::VALUE_DEFAULT) {
+						// DEFAULT value! replace the entry
+						if (column.default_value) {
+							expr_list.values[list_idx][col_idx] = column.default_value->Copy();
+						} else {
+							expr_list.values[list_idx][col_idx] =
+							    make_unique<ConstantExpression>(column.type, Value(GetInternalType(column.type)));
+						}
+					}
+				}
 			}
-			result->values.push_back(move(list));
 		}
 	}
 
-	// bind the default values
-	BindDefaultValues(table->columns, result->bound_defaults);
+	// bind the select statement, if any
+	result->select_statement = unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*stmt.select_statement));
+	CheckInsertColumnCountMismatch(expected_columns, result->select_statement->node->types.size(),
+	                               stmt.columns.size() != 0, result->table->name.c_str());
+
 	return move(result);
 }
+
+} // namespace duckdb

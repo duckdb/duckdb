@@ -1,11 +1,11 @@
-#include "function/cast_rules.hpp"
+#include "duckdb/function/cast_rules.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 //! The target type determines the preferred implicit casts
 static int64_t TargetTypeCost(SQLType type) {
-	switch(type.id) {
+	switch (type.id) {
 	case SQLTypeId::INTEGER:
 		return 103;
 	case SQLTypeId::BIGINT:
@@ -20,7 +20,7 @@ static int64_t TargetTypeCost(SQLType type) {
 }
 
 static int64_t ImplicitCastTinyint(SQLType to) {
-	switch(to.id) {
+	switch (to.id) {
 	case SQLTypeId::SMALLINT:
 	case SQLTypeId::INTEGER:
 	case SQLTypeId::BIGINT:
@@ -34,7 +34,7 @@ static int64_t ImplicitCastTinyint(SQLType to) {
 }
 
 static int64_t ImplicitCastSmallint(SQLType to) {
-	switch(to.id) {
+	switch (to.id) {
 	case SQLTypeId::INTEGER:
 	case SQLTypeId::BIGINT:
 	case SQLTypeId::FLOAT:
@@ -47,7 +47,7 @@ static int64_t ImplicitCastSmallint(SQLType to) {
 }
 
 static int64_t ImplicitCastInteger(SQLType to) {
-	switch(to.id) {
+	switch (to.id) {
 	case SQLTypeId::BIGINT:
 	case SQLTypeId::FLOAT:
 	case SQLTypeId::DOUBLE:
@@ -59,7 +59,7 @@ static int64_t ImplicitCastInteger(SQLType to) {
 }
 
 static int64_t ImplicitCastBigint(SQLType to) {
-	switch(to.id) {
+	switch (to.id) {
 	case SQLTypeId::FLOAT:
 	case SQLTypeId::DOUBLE:
 	case SQLTypeId::DECIMAL:
@@ -70,7 +70,7 @@ static int64_t ImplicitCastBigint(SQLType to) {
 }
 
 static int64_t ImplicitCastFloat(SQLType to) {
-	switch(to.id) {
+	switch (to.id) {
 	case SQLTypeId::DOUBLE:
 	case SQLTypeId::DECIMAL:
 		return TargetTypeCost(to);
@@ -80,7 +80,7 @@ static int64_t ImplicitCastFloat(SQLType to) {
 }
 
 static int64_t ImplicitCastDouble(SQLType to) {
-	switch(to.id) {
+	switch (to.id) {
 	case SQLTypeId::DECIMAL:
 		return TargetTypeCost(to);
 	default:
@@ -101,7 +101,7 @@ int64_t CastRules::ImplicitCast(SQLType from, SQLType to) {
 		// everything can be cast to VARCHAR, but this cast has a high cost
 		return TargetTypeCost(to);
 	}
-	switch(from.id) {
+	switch (from.id) {
 	case SQLTypeId::TINYINT:
 		return ImplicitCastTinyint(to);
 	case SQLTypeId::SMALLINT:

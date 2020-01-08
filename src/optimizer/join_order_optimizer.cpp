@@ -1,8 +1,8 @@
-#include "optimizer/join_order_optimizer.hpp"
+#include "duckdb/optimizer/join_order_optimizer.hpp"
 
-#include "planner/expression/list.hpp"
-#include "planner/expression_iterator.hpp"
-#include "planner/operator/list.hpp"
+#include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/list.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -43,13 +43,6 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<i
 		}
 	});
 	return can_reorder;
-}
-
-static void ExtractFilters(LogicalOperator *op, vector<unique_ptr<Expression>> &filters) {
-	for (index_t i = 0; i < op->expressions.size(); i++) {
-		filters.push_back(move(op->expressions[i]));
-	}
-	op->expressions.clear();
 }
 
 static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, unique_ptr<Expression> expr) {
@@ -650,19 +643,31 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		// at most one relation, nothing to reorder
 		return plan;
 	}
-	// now that we know we are going to perform join ordering we actually extract the filters
+	// now that we know we are going to perform join ordering we actually extract the filters, eliminating duplicate
+	// filters in the process
+	expression_set_t filter_set;
 	for (auto &op : filter_operators) {
 		if (op->type == LogicalOperatorType::COMPARISON_JOIN) {
 			auto &join = (LogicalComparisonJoin &)*op;
 			assert(join.type == JoinType::INNER);
 			assert(join.expressions.size() == 0);
 			for (auto &cond : join.conditions) {
-				filters.push_back(
-				    make_unique<BoundComparisonExpression>(cond.comparison, move(cond.left), move(cond.right)));
+				auto comparison =
+				    make_unique<BoundComparisonExpression>(cond.comparison, move(cond.left), move(cond.right));
+				if (filter_set.find(comparison.get()) == filter_set.end()) {
+					filter_set.insert(comparison.get());
+					filters.push_back(move(comparison));
+				}
 			}
 			join.conditions.clear();
 		} else {
-			ExtractFilters(op, filters);
+			for (index_t i = 0; i < op->expressions.size(); i++) {
+				if (filter_set.find(op->expressions[i].get()) == filter_set.end()) {
+					filter_set.insert(op->expressions[i].get());
+					filters.push_back(move(op->expressions[i]));
+				}
+			}
+			op->expressions.clear();
 		}
 	}
 	// create potential edges from the comparisons

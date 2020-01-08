@@ -1,7 +1,7 @@
-#include "planner/expression_binder/check_binder.hpp"
+#include "duckdb/planner/expression_binder/check_binder.hpp"
 
-#include "parser/expression/columnref_expression.hpp"
-#include "planner/expression/bound_reference_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

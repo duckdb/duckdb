@@ -1,4 +1,6 @@
-#include "storage/meta_block_writer.hpp"
+#include "duckdb/storage/meta_block_writer.hpp"
+
+#include <cstring>
 
 using namespace duckdb;
 using namespace std;

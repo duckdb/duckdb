@@ -15,6 +15,15 @@ TEST_CASE("Test expressions with obsolete filters", "[filter]") {
 	    con.Query("INSERT INTO integers VALUES (1, 10), (2, 12), (3, 14), (4, 16), (5, NULL), (NULL, NULL)"));
 
 	// Obsolete filters that can be pruned
+	result = con.Query("SELECT * FROM integers WHERE TRUE ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4, 5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 10, 12, 14, 16, Value()}));
+	result = con.Query("SELECT * FROM integers WHERE FALSE ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	REQUIRE(CHECK_COLUMN(result, 1, {}));
+	result = con.Query("SELECT * FROM integers WHERE NULL ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	REQUIRE(CHECK_COLUMN(result, 1, {}));
 	// involving equality
 	result = con.Query("SELECT * FROM integers WHERE a=2 AND a=2");
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));

@@ -1,0 +1,17 @@
+%type <istmt> insert_rest
+%type <range> insert_target
+%type <infer> opt_conf_expr
+%type <with> opt_with_clause
+%type <target> insert_column_item
+%type <list> set_clause
+%type <onconflict> opt_on_conflict
+%type <ielem> index_elem
+%type <list> returning_clause
+%type <override> override_kind
+%type <list> set_target_list
+%type <list> opt_collate
+%type <list> opt_class
+%type <list> insert_column_list
+%type <list> set_clause_list
+%type <list> index_params
+%type <target> set_target

@@ -1,6 +1,6 @@
-#include "parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
-#include "parser/expression/list.hpp"
+#include "duckdb/parser/expression/list.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -28,8 +28,9 @@ void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expr,
 	}
 	case ExpressionClass::CONJUNCTION: {
 		auto &conj_expr = (const ConjunctionExpression &)expr;
-		callback(*conj_expr.left);
-		callback(*conj_expr.right);
+		for (auto &child : conj_expr.children) {
+			callback(*child);
+		}
 		break;
 	}
 	case ExpressionClass::FUNCTION: {
@@ -82,7 +83,6 @@ void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expr,
 		break;
 	default:
 		// called on non ParsedExpression type!
-		assert(0);
-		break;
+		throw NotImplementedException("Unimplemented expression class");
 	}
 }

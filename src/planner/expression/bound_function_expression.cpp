@@ -1,7 +1,8 @@
-#include "planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
-#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "common/types/hash.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -17,15 +18,11 @@ bool BoundFunctionExpression::IsFoldable() const {
 }
 
 string BoundFunctionExpression::ToString() const {
-	string str = function.name + "(";
-	for (index_t i = 0; i < children.size(); i++) {
-		if (i > 0) {
-			str += ", ";
-		}
-		str += children[i]->GetName();
-	}
-	str += ")";
-	return str;
+	string result = function.name + "(";
+	result += StringUtil::Join(children, children.size(), ", ",
+	                           [](const unique_ptr<Expression> &child) { return child->GetName(); });
+	result += ")";
+	return result;
 }
 
 uint64_t BoundFunctionExpression::Hash() const {

@@ -118,17 +118,18 @@ TEST_CASE("Test STRING_AGG operator", "[aggregate]") {
 	// test string aggregation on a set of values
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(g INTEGER, x VARCHAR, y VARCHAR);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES (1,'a','/'), (1,'b','-'), "
-	                            "(2,'i','/'), (2,NULL,'-'), (2,'j','+'), "
-	                            "(3,'p','/'), "
-	                            "(4,'x','/'), (4,'y','-'), (4,'z','+')"));
+	                          "(2,'i','/'), (2,NULL,'-'), (2,'j','+'), "
+	                          "(3,'p','/'), "
+	                          "(4,'x','/'), (4,'y','-'), (4,'z','+')"));
 
 	result = con.Query("SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {"a,b,i,j,p,x,y,z"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"a-b/i+j/p/x-y+z"}));
 
-	result = con.Query("SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings GROUP BY g");
-	REQUIRE(CHECK_COLUMN(result, 0, {"a,b","x,y,z","i,j","p"}));
-	REQUIRE(CHECK_COLUMN(result, 1, {"a-b","x-y+z","i+j","p"}));
+	result = con.Query("SELECT g, STRING_AGG(x,','), STRING_AGG(x,y) FROM strings GROUP BY g ORDER BY g");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"a,b", "i,j", "p", "x,y,z"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"a-b", "i+j", "p", "x-y+z"}));
 
 	// test average on empty set
 	result = con.Query("SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings WHERE g > 100");
@@ -241,7 +242,7 @@ TEST_CASE("Test GROUP BY on expression", "[aggregate]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {8, 10, 14}));
 }
 
-TEST_CASE("Test GROUP BY with many groups", "[aggregate]") {
+TEST_CASE("Test GROUP BY with many groups", "[aggregate][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

@@ -1,7 +1,7 @@
 #include "catch.hpp"
-#include "common/helper.hpp"
+#include "duckdb/common/helper.hpp"
 #include "expression_helper.hpp"
-#include "optimizer/rule/constant_folding.hpp"
+#include "duckdb/optimizer/rule/constant_folding.hpp"
 
 using namespace duckdb;
 using namespace std;

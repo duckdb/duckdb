@@ -1,6 +1,6 @@
-#include "storage/table/segment_tree.hpp"
-#include "common/exception.hpp"
-
+#include "duckdb/storage/table/segment_tree.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 using namespace duckdb;
 using namespace std;
 
@@ -14,7 +14,10 @@ SegmentBase *SegmentTree::GetLastSegment() {
 
 SegmentBase *SegmentTree::GetSegment(index_t row_number) {
 	lock_guard<mutex> tree_lock(node_lock);
+	return nodes[GetSegmentIndex(row_number)].node;
+}
 
+index_t SegmentTree::GetSegmentIndex(index_t row_number) {
 	index_t lower = 0;
 	index_t upper = nodes.size() - 1;
 	// binary search to find the node
@@ -26,7 +29,7 @@ SegmentBase *SegmentTree::GetSegment(index_t row_number) {
 		} else if (row_number >= entry.row_start + entry.node->count) {
 			lower = index + 1;
 		} else {
-			return entry.node;
+			return index;
 		}
 	}
 	throw Exception("Could not find node in column segment tree!");

@@ -1,6 +1,8 @@
-#include "execution/index/art/node4.hpp"
-#include "execution/index/art/node16.hpp"
-#include "execution/index/art/node48.hpp"
+#include "duckdb/execution/index/art/node4.hpp"
+#include "duckdb/execution/index/art/node16.hpp"
+#include "duckdb/execution/index/art/node48.hpp"
+
+#include <cstring>
 
 using namespace duckdb;
 
@@ -40,6 +42,10 @@ unique_ptr<Node> *Node16::GetChild(index_t pos) {
 	return &child[pos];
 }
 
+index_t Node16::GetMin() {
+	return 0;
+}
+
 void Node16::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child) {
 	Node16 *n = static_cast<Node16 *>(node.get());
 
@@ -74,16 +80,15 @@ void Node16::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_pt
 
 void Node16::erase(ART &art, unique_ptr<Node> &node, int pos) {
 	Node16 *n = static_cast<Node16 *>(node.get());
-	if (node->count > 3) {
-		// erase the child and decrease the count
-		n->child[pos].reset();
-		n->count--;
-		// potentially move any children backwards
-		for (; pos < n->count; pos++) {
-			n->key[pos] = n->key[pos + 1];
-			n->child[pos] = move(n->child[pos + 1]);
-		}
-	} else {
+	// erase the child and decrease the count
+	n->child[pos].reset();
+	n->count--;
+	// potentially move any children backwards
+	for (; pos < n->count; pos++) {
+		n->key[pos] = n->key[pos + 1];
+		n->child[pos] = move(n->child[pos + 1]);
+	}
+	if (node->count <= 3) {
 		// Shrink node
 		auto newNode = make_unique<Node4>(art);
 		for (unsigned i = 0; i < n->count; i++) {

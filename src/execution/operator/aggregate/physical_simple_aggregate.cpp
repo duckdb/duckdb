@@ -1,12 +1,24 @@
-#include "execution/operator/aggregate/physical_simple_aggregate.hpp"
+#include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
 
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "planner/expression/bound_aggregate_expression.hpp"
-#include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+class PhysicalSimpleAggregateOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalSimpleAggregateOperatorState(PhysicalSimpleAggregate *parent, PhysicalOperator *child);
+
+	//! The aggregate values
+	vector<Value> aggregates;
+
+	ExpressionExecutor child_executor;
+	//! The payload chunk
+	DataChunk payload_chunk;
+};
 
 PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions)
     : PhysicalOperator(PhysicalOperatorType::SIMPLE_AGGREGATE, types), aggregates(move(expressions)) {
@@ -21,28 +33,30 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 		if (state->child_chunk.size() == 0) {
 			break;
 		}
-		ExpressionExecutor executor(state->child_chunk);
 		// now resolve the aggregates for each of the children
-		index_t payload_idx = 0;
+		index_t payload_idx = 0, payload_expr_idx = 0;
 		DataChunk &payload_chunk = state->payload_chunk;
 		payload_chunk.Reset();
+		state->child_executor.SetChunk(state->child_chunk);
 		for (index_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 			auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 			index_t payload_cnt = 0;
 			// resolve the child expression of the aggregate (if any)
 			if (aggregate.children.size()) {
 				for (index_t i = 0; i < aggregate.children.size(); ++i) {
-					executor.ExecuteExpression(*aggregate.children[i], payload_chunk.data[payload_idx + payload_cnt]);
-					++payload_cnt;
+					state->child_executor.ExecuteExpression(payload_expr_idx,
+					                                        payload_chunk.data[payload_idx + payload_cnt]);
+					payload_expr_idx++;
+					payload_cnt++;
 				}
 			} else {
 				payload_chunk.data[payload_idx + payload_cnt].count = state->child_chunk.size();
-				++payload_cnt;
+				payload_cnt++;
 			}
 			// perform the actual aggregation
 			assert(aggregate.function.simple_update);
-			aggregate.function.simple_update(&payload_chunk.data[payload_idx], payload_cnt, state->aggregates[aggr_idx]);
-
+			aggregate.function.simple_update(&payload_chunk.data[payload_idx], payload_cnt,
+			                                 state->aggregates[aggr_idx]);
 			payload_idx += payload_cnt;
 		}
 	}
@@ -69,6 +83,7 @@ PhysicalSimpleAggregateOperatorState::PhysicalSimpleAggregateOperatorState(Physi
 		if (aggr.children.size()) {
 			for (index_t i = 0; i < aggr.children.size(); ++i) {
 				payload_types.push_back(aggr.children[i]->return_type);
+				child_executor.AddExpression(*aggr.children[i]);
 			}
 		} else {
 			// COUNT(*)

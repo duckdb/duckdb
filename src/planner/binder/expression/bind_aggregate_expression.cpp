@@ -1,11 +1,11 @@
-#include "catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "main/client_context.hpp"
-#include "parser/expression/function_expression.hpp"
-#include "planner/expression/bound_aggregate_expression.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression_binder/aggregate_binder.hpp"
-#include "planner/expression_binder/select_binder.hpp"
-#include "planner/query_node/bound_select_node.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression_binder/aggregate_binder.hpp"
+#include "duckdb/planner/expression_binder/select_binder.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -51,16 +51,30 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	// found a matching function!
 	auto &bound_function = func->functions[best_function];
 	// check if we need to add casts to the children
-	CastToFunctionArguments(bound_function, children, types);
+	bound_function.CastToFunctionArguments(children, types);
 
 	auto return_type = bound_function.return_type;
 	// create the aggregate
 	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(return_type), bound_function, aggr.distinct);
 	aggregate->children = move(children);
-	// now create a column reference referring to this aggregate
+
+	// check for all the aggregates if this aggregate already exists
+	index_t aggr_index;
+	auto entry = node.aggregate_map.find(aggregate.get());
+	if (entry == node.aggregate_map.end()) {
+		// new aggregate: insert into aggregate list
+		aggr_index = node.aggregates.size();
+		node.aggregate_map.insert(make_pair(aggregate.get(), aggr_index));
+		node.aggregates.push_back(move(aggregate));
+	} else {
+		// duplicate aggregate: simplify refer to this aggregate
+		aggr_index = entry->second;
+	}
+
+	// now create a column reference referring to the aggregate
 	auto colref = make_unique<BoundColumnRefExpression>(
-	    func->name, aggregate->return_type, ColumnBinding(node.aggregate_index, node.aggregates.size()), depth);
+	    aggr.alias.empty() ? node.aggregates[aggr_index]->ToString() : aggr.alias,
+	    node.aggregates[aggr_index]->return_type, ColumnBinding(node.aggregate_index, aggr_index), depth);
 	// move the aggregate expression into the set of bound aggregates
-	node.aggregates.push_back(move(aggregate));
 	return BindResult(move(colref), return_type);
 }

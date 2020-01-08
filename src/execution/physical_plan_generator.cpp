@@ -1,9 +1,9 @@
-#include "execution/physical_plan_generator.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 
-#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "execution/column_binding_resolver.hpp"
-#include "main/client_context.hpp"
-#include "planner/expression/bound_function_expression.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/execution/column_binding_resolver.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -118,9 +118,18 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalExecute &)op);
 	case LogicalOperatorType::INDEX_SCAN:
 		return CreatePlan((LogicalIndexScan &)op);
-	default:
-		assert(op.type == LogicalOperatorType::SUBQUERY);
+	case LogicalOperatorType::SUBQUERY:
 		// subquery nodes are only there for column binding; we ignore them in physical plan generation
 		return CreatePlan(*op.children[0]);
+	case LogicalOperatorType::TRANSACTION:
+	case LogicalOperatorType::CREATE_VIEW:
+	case LogicalOperatorType::CREATE_SEQUENCE:
+	case LogicalOperatorType::CREATE_SCHEMA:
+	case LogicalOperatorType::ALTER:
+	case LogicalOperatorType::DROP:
+	case LogicalOperatorType::PRAGMA:
+		return CreatePlan((LogicalSimple &)op);
+	default:
+		throw NotImplementedException("Unimplemented logical operator type!");
 	}
 }

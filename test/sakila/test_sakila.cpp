@@ -1,6 +1,6 @@
 #include "catch.hpp"
-#include "common/fstream_util.hpp"
-#include "common/gzip_stream.hpp"
+#include "duckdb/common/fstream_util.hpp"
+#include "duckdb/common/gzip_stream.hpp"
 #include "test_helpers.hpp"
 
 #include <fstream>
@@ -95,9 +95,9 @@ TEST_CASE("Run Sakila test queries", "[sakila][.]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"HUNCHBACK IMPOSSIBLE"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {6}));
 
-	result = con.Query(
-	    "SELECT first_name, last_name, SUM(amount) as total_paid FROM payment INNER JOIN customer ON "
-	    "payment.customer_id = customer.customer_id GROUP BY first_name, last_name ORDER BY total_paid desc limit 10");
+	result = con.Query("SELECT first_name, last_name, SUM(amount) as total_paid FROM payment INNER JOIN customer ON "
+	                   "payment.customer_id = customer.customer_id GROUP BY first_name, last_name ORDER BY total_paid "
+	                   "desc, first_name limit 10");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(CHECK_COLUMN(result, 0,
 	                     {"KARL", "ELEANOR", "CLARA", "MARION", "RHONDA", "TOMMY", "WESLEY", "TIM", "MARCIA", "ANA"}));

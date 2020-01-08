@@ -1,7 +1,7 @@
-#include "common/operator/comparison_operators.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/merge_join.hpp"
-#include "parser/expression/comparison_expression.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/merge_join.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -83,7 +83,6 @@ template <class T, class OP> static index_t merge_join_mark_lt(ScalarMergeInfo &
 
 template <class T> index_t MergeJoinMark::LessThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	return merge_join_mark_lt<T, duckdb::LessThan>(l, r);
-	throw NotImplementedException("Not implemented");
 }
 
 template <class T> index_t MergeJoinMark::LessThanEquals::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {

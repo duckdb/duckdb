@@ -6,18 +6,15 @@
 #include "pythread.h"
 
 int duckdb_connection_init(duckdb_Connection *self, PyObject *args, PyObject *kwargs) {
-	static char *kwlist[] = {"database", NULL, NULL};
+	static const char *kwlist[] = {"database", NULL, NULL};
 
 	char *database;
 	PyObject *database_obj;
 #if PY_MAJOR_VERSION >= 3
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O&|", kwlist,
-	                                 PyUnicode_FSConverter,
-	                                 &database_obj)) {
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O&|", (char **)kwlist, PyUnicode_FSConverter, &database_obj)) {
 #else
-		if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|", kwlist,
-		                                 &database_obj)) {
-		#endif
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|", (char **)kwlist, &database_obj)) {
+#endif
 
 		return -1;
 	}
@@ -29,9 +26,13 @@ int duckdb_connection_init(duckdb_Connection *self, PyObject *args, PyObject *kw
 		self->db = duckdb::make_unique<duckdb::DuckDB>(database);
 		self->conn = duckdb::make_unique<duckdb::Connection>(*self->db.get());
 		self->conn->EnableProfiling();
+		// pandas compatibility, bit ugly
+		self->conn->Query("CREATE VIEW sqlite_master AS SELECT * FROM sqlite_master()");
+
 	} catch (...) {
 		return -1;
 	}
+
 	Py_END_ALLOW_THREADS;
 
 	self->initialized = 1;
@@ -73,6 +74,42 @@ PyObject *duckdb_connection_close(duckdb_Connection *self, PyObject *args) {
 	Py_RETURN_NONE;
 }
 
+static PyObject *_duckdb_internal_cmd(duckdb_Connection *self, const char *q) {
+	if (!duckdb_check_connection(self)) {
+		return NULL;
+	}
+	std::unique_ptr<duckdb::MaterializedQueryResult> result;
+	Py_BEGIN_ALLOW_THREADS result = self->conn->Query(q);
+	Py_END_ALLOW_THREADS if (!result->success) {
+		PyErr_SetString(duckdb_DatabaseError, result->error.c_str());
+		return NULL;
+	}
+	Py_INCREF(self);
+	return (PyObject *)self;
+}
+
+// confused details here: https://docs.python.org/3.7/library/sqlite3.html#sqlite3-controlling-transactions
+// TODO support this weird isolation level param
+
+PyObject *duckdb_connection_begin(duckdb_Connection *self) {
+	return _duckdb_internal_cmd(self, "BEGIN TRANSACTION");
+}
+
+PyObject *duckdb_connection_commit(duckdb_Connection *self) {
+	if (!duckdb_check_connection(self)) {
+		return NULL;
+	}
+	if (self->conn->context->transaction.IsAutoCommit()) {
+		Py_INCREF(self);
+		return (PyObject *)self;
+	}
+	return _duckdb_internal_cmd(self, "COMMIT");
+}
+
+PyObject *duckdb_connection_rollback(duckdb_Connection *self) {
+	return _duckdb_internal_cmd(self, "ROLLBACK");
+}
+
 /*
  * Checks if a connection object is usable (i. e. not closed).
  *
@@ -102,9 +139,10 @@ static PyMethodDef connection_methods[] = {
     {"cursor", (PyCFunction)(void (*)(void))duckdb_connection_cursor, METH_VARARGS | METH_KEYWORDS,
      PyDoc_STR("Return a cursor for the connection.")},
     {"close", (PyCFunction)duckdb_connection_close, METH_NOARGS, PyDoc_STR("Closes the connection.")},
-    //    {"commit", (PyCFunction)duckdb_connection_commit, METH_NOARGS, PyDoc_STR("Commit the current transaction.")},
-    //    {"rollback", (PyCFunction)duckdb_connection_rollback, METH_NOARGS, PyDoc_STR("Roll back the current
-    //    transaction.")},
+    {"begin", (PyCFunction)duckdb_connection_begin, METH_NOARGS,
+     PyDoc_STR("Start a new transaction (exit autocommit mode).")},
+    {"commit", (PyCFunction)duckdb_connection_commit, METH_NOARGS, PyDoc_STR("Commit the current transaction.")},
+    {"rollback", (PyCFunction)duckdb_connection_rollback, METH_NOARGS, PyDoc_STR("Roll back the current transaction.")},
     {NULL, NULL}};
 
 static struct PyMemberDef connection_members[] = {

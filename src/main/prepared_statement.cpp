@@ -1,9 +1,21 @@
-#include "main/prepared_statement.hpp"
-#include "common/exception.hpp"
-#include "main/client_context.hpp"
+#include "duckdb/main/prepared_statement.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/prepared_statement_data.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+PreparedStatement::PreparedStatement(ClientContext *context, string name, PreparedStatementData &data, index_t n_param)
+    : context(context), name(name), success(true), is_invalidated(false), n_param(n_param) {
+	this->type = data.statement_type;
+	this->types = data.sql_types;
+	this->names = data.names;
+}
+
+PreparedStatement::PreparedStatement(string error)
+    : context(nullptr), success(false), error(error), is_invalidated(false) {
+}
 
 PreparedStatement::~PreparedStatement() {
 	if (!is_invalidated && success) {

@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "common/file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -13,6 +13,7 @@ TEST_CASE("Test connection using a read only database", "[readonly]") {
 	DeleteDatabase(dbdir);
 
 	DBConfig readonly_config;
+	readonly_config.use_temporary_directory = false;
 	readonly_config.access_mode = AccessMode::READ_ONLY;
 
 	// cannot create read-only memory database
@@ -50,8 +51,11 @@ TEST_CASE("Test connection using a read only database", "[readonly]") {
 	REQUIRE_NO_FAIL(con->Query("PREPARE v1 AS SELECT * FROM integers"));
 	REQUIRE_NO_FAIL(con->Query("EXECUTE v1"));
 	REQUIRE_NO_FAIL(con->Query("DEALLOCATE v1"));
-	// unless the prepared statements involve DDL statements or inserts/updates!
-	REQUIRE_FAIL(con->Query("PREPARE v1 AS INSERT INTO integers VALUES ($1)"));
+	// we can also prepare a DDL/update statement
+	REQUIRE_NO_FAIL(con->Query("PREPARE v1 AS INSERT INTO integers VALUES ($1)"));
+	// however, executing it fails then!
+	REQUIRE_FAIL(con->Query("EXECUTE v1(3)"));
+
 
 	con.reset();
 	db.reset();

@@ -3,8 +3,8 @@
 // Description: This file contains the implementation of different generators
 //===--------------------------------------------------------------------===//
 
-#include "common/exception.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,5 +1,5 @@
-#include "optimizer/filter_pushdown.hpp"
-#include "planner/operator/logical_comparison_join.hpp"
+#include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -9,8 +9,7 @@ using Filter = FilterPushdown::Filter;
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSingleJoin(unique_ptr<LogicalOperator> op,
                                                                unordered_set<index_t> &left_bindings,
                                                                unordered_set<index_t> &right_bindings) {
-	auto &join = (LogicalJoin &)*op;
-	assert(join.type == JoinType::SINGLE);
+	assert(((LogicalJoin &)*op).type == JoinType::SINGLE);
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
 	// now check the set of filters
 	for (index_t i = 0; i < filters.size(); i++) {
