@@ -42,7 +42,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConjunction
 		children.push_back(child.get());
 	}
 	result->AddIntermediates(children);
-	return result;
+	return move(result);
 }
 
 void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionState *state, Vector &result) {
