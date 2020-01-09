@@ -26,8 +26,6 @@ int duckdb_connection_init(duckdb_Connection *self, PyObject *args, PyObject *kw
 		self->db = duckdb::make_unique<duckdb::DuckDB>(database);
 		self->conn = duckdb::make_unique<duckdb::Connection>(*self->db.get());
 		self->conn->EnableProfiling();
-		// pandas compatibility, bit ugly
-		self->conn->Query("CREATE VIEW sqlite_master AS SELECT * FROM sqlite_master()");
 
 	} catch (...) {
 		return -1;

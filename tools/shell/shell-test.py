@@ -30,6 +30,15 @@ def test(cmd, out=None, err=None):
 # basic test
 test('select \'asdf\' as a;', out='asdf')
 
+datafile = tempfile.mktemp()
+print("42\n84",  file=open(datafile, 'w'))
+test('''
+CREATE TABLE a (i INTEGER);
+.import %s a
+SELECT SUM(i) FROM a;
+''' % datafile, out='126')
+
+
 test('''
 CREATE TABLE a (i STRING);
 INSERT INTO a VALUES ('XXXX');
@@ -298,13 +307,6 @@ SELECT * FROM t1;
 # .clone %s
 # ''' % tempfile.mktemp())
 
-# datafile = tempfile.mktemp()
-# print("42\n84",  file=open(datafile, 'w'))
-# test('''
-# CREATE TABLE a (i INTEGER);
-# .import %s a
-# SELECT SUM(i) FROM a;
-# ''' % datafile, out='126')
 
 
 # fails because view pragma_database_list does not exist
@@ -312,8 +314,7 @@ SELECT * FROM t1;
 # test('.databases')
 
 
-# fails because sqlite printf uses %Q, too
-
+# fails 
 # test('''
 # CREATE TABLE a (I INTEGER);
 # .changes off

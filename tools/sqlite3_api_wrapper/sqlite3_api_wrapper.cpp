@@ -515,7 +515,7 @@ int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char *val, int length, 
 	} else {
 		value = string(val, val + length);
 	}
-	if (free_func) {
+	if (free_func && ((int64_t) free_func) != -1) {
 		free_func((void *)val);
 	}
 	return sqlite3_internal_bind_value(stmt, idx, Value(value));
@@ -636,42 +636,6 @@ void *sqlite3_realloc64(void* ptr, sqlite3_uint64 n) {
 	return realloc(ptr, n);
 }
 
-// TODO: test
-/* Printf into a newly allocated buffer */
-char *sqlite3_mprintf(const char *fmt, ...) {
-	size_t str_size = strlen(fmt) + 50;
-	char *res = (char *)malloc(str_size);
-	if (res == NULL)
-		err(1, NULL);
-
-	va_list valist;
-	va_start(valist, fmt);
-
-	size_t str_len = (size_t)vsnprintf(res, str_size - 1, fmt, valist);
-	if (str_len >= str_size) {
-		str_size = str_len + 1;
-		res = (char *)realloc(res, str_size);
-		va_start(valist, fmt);
-		vsnprintf(res, str_size - 1, fmt, valist);
-	}
-	va_end(valist);
-
-	return res;
-}
-
-char *sqlite3_snprintf(int size, char *str, const char *fmt, ...) {
-	va_list args;
-	va_start(args, fmt);
-	vsnprintf(str, size, fmt, args);
-	va_end(args);
-	return str;
-}
-
-char *sqlite3_vsnprintf(int size ,char*str,const char*fmt, va_list args) {
-	vsnprintf(str, size, fmt, args);
-	return str;
-}
-
 
 
 // TODO: stub
@@ -755,12 +719,6 @@ int sqlite3_complete(const char *sql) {
 	// FIXME fprintf(stderr, "sqlite3_complete: unsupported.\n");
 	return -1;
 }
-
-char *sqlite3_vmprintf(const char *zFormat, va_list ap){
-	fprintf(stderr, "sqlite3_vmprintf: unsupported.\n");
-  return nullptr;
-}
-
 
 int sqlite3_bind_blob(sqlite3_stmt*, int, const void*, int n, void(*)(void*)) {
 	fprintf(stderr, "sqlite3_bind_blob: unsupported.\n");

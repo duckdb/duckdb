@@ -1752,6 +1752,14 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @2;
 					$$ = (PGNode *)n;
 				}
+			| a_expr NOT NULL_P
+				{
+					PGNullTest *n = makeNode(PGNullTest);
+					n->arg = (PGExpr *) $1;
+					n->nulltesttype = IS_NOT_NULL;
+					n->location = @2;
+					$$ = (PGNode *)n;
+				}
 			| a_expr NOTNULL
 				{
 					PGNullTest *n = makeNode(PGNullTest);
