@@ -11,8 +11,8 @@
 using namespace duckdb;
 using namespace std;
 
-#define SOURCE_ID __DATE__
-#define LIB_VERSION "DuckDB 0.1"
+#define SOURCE_ID DUCKDB_SOURCE_ID
+#define LIB_VERSION "DuckDB"
 
 static char *sqlite3_strdup(const char *str);
 
