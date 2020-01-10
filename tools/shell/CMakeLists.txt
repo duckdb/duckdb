@@ -5,16 +5,13 @@ set(HAVE_READLINE 0)
 set(HAVE_EDITLINE 0)
 
 if(EDITLINE_LIB)
-  add_compile_definitions(HAVE_EDITLINE=1)
+  add_compile_options(-DHAVE_EDITLINE=1)
   set(LINE_LIB ${EDITLINE_LIB})
 elseif(READLINE_LIB)
-  add_compile_definitions(HAVE_READLINE=1)
+  add_compile_options(-DHAVE_READLINE=1)
   set(LINE_LIB ${READLINE_LIB})
 
 endif()
-
-
-add_compile_definitions(GIT_COMMIT_HASH=${GIT_COMMIT_HASH})
 
 
 include_directories(include)
