@@ -14,6 +14,9 @@ elseif(READLINE_LIB)
 endif()
 
 
+
+add_compile_options(-DSQLITE_OMIT_LOAD_EXTENSION=1)
+
 include_directories(include)
 include_directories(../sqlite3_api_wrapper/include)
 
