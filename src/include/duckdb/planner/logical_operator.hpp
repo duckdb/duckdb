@@ -45,6 +45,8 @@ public:
 		return {};
 	}
 	static vector<ColumnBinding> GenerateColumnBindings(index_t table_idx, index_t column_count);
+	static vector<TypeId> MapTypes(vector<TypeId> types, vector<index_t> projection_map);
+	static vector<ColumnBinding> MapBindings(vector<ColumnBinding> types, vector<index_t> projection_map);
 
 	//! Resolve the types of the logical operator and its children
 	void ResolveOperatorTypes();

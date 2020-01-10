@@ -31,10 +31,13 @@ private:
 	column_binding_map_t<vector<BoundColumnRefExpression*>> column_references;
 	//! Map of original column binding -> updated column binding
 	column_binding_map_t<ColumnBinding> remap;
-	//! Map of updated column binding -> original column binding
-	column_binding_map_t<ColumnBinding> original_bindings;
 private:
 	template<class T>
 	void ClearUnusedExpressions(vector<T> &list, index_t table_idx);
+
+	//! Schedule a replacement of the ColumnBinding, the actual replacement will not happen until after the optimizer is finished
+	void ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding);
+	//! Perform a replacement of the ColumnBinding, iterating over all the currently found column references and replacing the bindings
+	void PerformBindingReplacement(ColumnBinding current_binding, ColumnBinding new_binding);
 };
 } // namespace duckdb

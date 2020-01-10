@@ -81,6 +81,17 @@ TEST_CASE("Test basic joins of tables", "[joins]") {
 		REQUIRE(CHECK_COLUMN(result, 1, {}));
 		REQUIRE(CHECK_COLUMN(result, 2, {}));
 	}
+
+	SECTION("equality join where both lhs and rhs keys are projected") {
+		result = con.Query("SELECT * FROM (VALUES (1)) tbl(i) JOIN (VALUES (1)) tbl2(j) ON (i=j);");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	}
+	SECTION("equality join where both lhs and rhs keys are projected with filter") {
+		result = con.Query("SELECT * FROM (VALUES (1), (2)) tbl(i) JOIN (VALUES (1), (2)) tbl2(j) ON (i=j) WHERE i+j=2;");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	}
 }
 
 TEST_CASE("Test join with > STANDARD_VECTOR_SIZE duplicates", "[joins][.]") {
