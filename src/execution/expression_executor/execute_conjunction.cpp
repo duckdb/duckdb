@@ -4,12 +4,13 @@
 
 #include <chrono>
 #include <random>
+#include <vector>
 
 using namespace duckdb;
 using namespace std;
 
 struct ConjunctionState : public ExpressionState {
-	ConjunctionState(Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root), iteration_count(0), warmup(true) {
+	ConjunctionState(Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root), iteration_count(0), observe_interval(10), execute_interval(20), warmup(true) {
 		auto &conj_expr = (BoundConjunctionExpression&) expr;
 		assert(conj_expr.children.size() > 1);
 		for (index_t idx = 0; idx < conj_expr.children.size(); idx++) {
@@ -25,12 +26,14 @@ struct ConjunctionState : public ExpressionState {
 	index_t iteration_count;
 	index_t swap_idx;
 	index_t right_random_border;
-	double runtime_sum;
-	double prev_mean;
+	index_t observe_interval;
+	index_t execute_interval;
+	double prev_median;
 	bool observe;
 	bool warmup;
 	vector<index_t> permutation;
 	vector<index_t> swap_likeliness;
+	vector<double> runtimes;
 	std::default_random_engine generator;
 };
 
@@ -126,60 +129,65 @@ static void MergeSelectionVectorIntoResult(sel_t *result, index_t &result_count,
 
 void AdaptRuntimeStatistics(BoundConjunctionExpression &expr, ConjunctionState* state, double duration) {
 	state->iteration_count++;
-	state->runtime_sum += duration;
+	state->runtimes.push_back(duration);
 
 	if (!state->warmup) {
-		if (state->iteration_count == 5) {
-			//the last swap was observed
-			if (state->observe) {
-				//keep swap if runtime decreased, else reverse swap
-				if (!(state->prev_mean - (state->runtime_sum / state->iteration_count) > 0)) {
-					//reverse swap because runtime didn't decrease
-					assert(state->swap_idx < expr.children.size() - 1);
-					assert(expr.children.size() > 1);
-					swap(state->permutation[state->swap_idx], state->permutation[state->swap_idx + 1]);
+		//the last swap was observed
+		if (state->observe && state->iteration_count == state->observe_interval) {
+			//get median
+			sort(state->runtimes.begin(), state->runtimes.end());
+			//keep swap if runtime decreased, else reverse swap
+			if (!(state->prev_median - (state->runtimes[state->runtimes.size() / 2]) > 0)) {
+				//reverse swap because runtime didn't decrease
+				assert(state->swap_idx < expr.children.size() - 1);
+				assert(expr.children.size() > 1);
+				swap(state->permutation[state->swap_idx], state->permutation[state->swap_idx + 1]);
 
-					//decrease swap likeliness, but make sure there is always a small likeliness left
-					if (state->swap_likeliness[state->swap_idx] > 3) {
-						state->swap_likeliness[state->swap_idx] /= 2;
-					}
-				} else {
-					//keep swap because runtime decreased, reset likeliness
-					state->swap_likeliness[state->swap_idx] = 100;
+				//decrease swap likeliness, but make sure there is always a small likeliness left
+				if (state->swap_likeliness[state->swap_idx] > 1) {
+					state->swap_likeliness[state->swap_idx] /= 2;
 				}
-				state->observe = false;
 			} else {
-				//save old mean to evaluate swap
-				state->prev_mean = state->runtime_sum / state->iteration_count;
+				//keep swap because runtime decreased, reset likeliness
+				state->swap_likeliness[state->swap_idx] = 100;
+			}
+			state->observe = false;
 
-				//get swap index and swap likeliness
-				uniform_int_distribution<int> distribution(1, state->right_random_border); //a <= i <= b
-				index_t random_number = distribution(state->generator) - 1;
+			//reset values
+			state->iteration_count = 0;
+			state->runtimes.clear();
+		} else if (!state->observe && state->iteration_count == state->execute_interval) {
+			//save old mean to evaluate swap
+			sort(state->runtimes.begin(), state->runtimes.end());
+			state->prev_median = state->runtimes[state->runtimes.size() / 2];
 
-				state->swap_idx = random_number / 100; //index to be swapped
-				index_t likeliness = random_number - 100 * state->swap_idx; //random number between [0, 100)
+			//get swap index and swap likeliness
+			uniform_int_distribution<int> distribution(1, state->right_random_border); //a <= i <= b
+			index_t random_number = distribution(state->generator) - 1;
 
-				//check if swap is going to happen
-				if (state->swap_likeliness[state->swap_idx] > likeliness) { //always true for the first swap of an index
-					//swap
-					assert(state->swap_idx < expr.children.size() - 1);
-					assert(expr.children.size() > 1);
-					swap(state->permutation[state->swap_idx], state->permutation[state->swap_idx + 1]);
+			state->swap_idx = random_number / 100; //index to be swapped
+			index_t likeliness = random_number - 100 * state->swap_idx; //random number between [0, 100)
 
-					//observe whether swap will be applied
-					state->observe = true;
-				}
+			//check if swap is going to happen
+			if (state->swap_likeliness[state->swap_idx] > likeliness) { //always true for the first swap of an index
+				//swap
+				assert(state->swap_idx < expr.children.size() - 1);
+				assert(expr.children.size() > 1);
+				swap(state->permutation[state->swap_idx], state->permutation[state->swap_idx + 1]);
+
+				//observe whether swap will be applied
+				state->observe = true;
 			}
 
 			//reset values
 			state->iteration_count = 0;
-			state->runtime_sum = 0.0;
+			state->runtimes.clear();
 		}
 	} else {
 		if (state->iteration_count == 5) {
 			//initially set all values
 			state->iteration_count = 0;
-			state->runtime_sum = 0.0;
+			state->runtimes.clear();
 			state->observe = false;
 			state->warmup = false;
 		}
