@@ -1312,38 +1312,6 @@ TEST_CASE("ART Strings", "[art-string]") {
     REQUIRE_NO_FAIL(con.Query("DROP TABLE strings"));
 }
 
-TEST_CASE("ART FP String Constraint", "[art-string-unique]") {
-    unique_ptr<QueryResult> result;
-    DuckDB db(nullptr);
-    Connection con(db);
-
-    REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i varchar PRIMARY KEY, j INTEGER)"));
-
-    //! insert two conflicting pairs at the same time
-    REQUIRE_FAIL(con.Query("INSERT INTO numbers VALUES ('1', 4), ('1', 5)"));
-
-    //! insert unique values
-    REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES ('1', 4), ('2', 5)"));
-
-    result = con.Query("SELECT * FROM numbers");
-    REQUIRE(CHECK_COLUMN(result, 0, {"1", "2"}));
-    REQUIRE(CHECK_COLUMN(result, 1, {4, 5}));
-
-//    //! insert a duplicate value as part of a chain of values
-    REQUIRE_FAIL(con.Query("INSERT INTO numbers VALUES ('6', 6), ('1', 4);"));
-//
-//    //! now insert just the first value
-    REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES ('6', 6);"));
-//
-    result = con.Query("SELECT * FROM numbers");
-    REQUIRE(CHECK_COLUMN(result, 0, {"1", "2", "6"}));
-    REQUIRE(CHECK_COLUMN(result, 1, {4,5,6}));
-    //! insert NULL value in PRIMARY KEY is not allowed
-    REQUIRE_FAIL(con.Query("INSERT INTO numbers VALUES (NULL, 4);"));
-   //! update NULL is also not allowed
-    REQUIRE_FAIL(con.Query("UPDATE numbers SET i=NULL;"));
-}
-
 
 TEST_CASE("ART Floating Point", "[art-float][.]") {
 	unique_ptr<QueryResult> result;
@@ -1601,38 +1569,6 @@ TEST_CASE("ART Double Special Cases", "[art-double-special]") {
 	                   "CAST(POWER(1000,10000) AS DOUBLE)");
 	REQUIRE(CHECK_COLUMN(result, 0, {4}));
 }
-
-TEST_CASE("ART Compound Keys", "[art-compound]") {
-    unique_ptr<QueryResult> result;
-    DuckDB db(nullptr);
-    Connection con(db);
-
-    REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i INTEGER, j INTEGER)"));
-    REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (1,2)"));
-
-    REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i,j)"));
-
-    //! INF
-//    result = con.Query("SELECT COUNT(i) FROM numbers WHERE i = CAST(POWER(1000,10000) AS DOUBLE)");
-//    REQUIRE(CHECK_COLUMN(result, 0, {1}));
-//    //! -INF
-//    result = con.Query("SELECT COUNT(i) FROM numbers WHERE i = CAST(-POWER(1000,10000) AS DOUBLE)");
-//    REQUIRE(CHECK_COLUMN(result, 0, {1}));
-//    //! NaN
-//    result = con.Query("SELECT COUNT(i) FROM numbers WHERE i = CAST(POWER(1000,10000)*0 AS DOUBLE)");
-//    REQUIRE(CHECK_COLUMN(result, 0, {0}));
-//    //! +0
-//    result = con.Query("SELECT COUNT(i) FROM numbers WHERE i = CAST(0 AS DOUBLE)");
-//    REQUIRE(CHECK_COLUMN(result, 0, {2}));
-//    //! -0
-//    result = con.Query("SELECT COUNT(i) FROM numbers WHERE i = CAST(-0 AS DOUBLE)");
-//    REQUIRE(CHECK_COLUMN(result, 0, {2}));
-//    //! -INF till INF
-//    result = con.Query("SELECT COUNT(i) FROM numbers WHERE i >= CAST(-POWER(1000,10000) AS DOUBLE) and i <= "
-//                       "CAST(POWER(1000,10000) AS DOUBLE)");
-//    REQUIRE(CHECK_COLUMN(result, 0, {4}));
-}
-
 TEST_CASE("Test updates resulting from big index scans", "[art][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -1807,8 +1743,6 @@ TEST_CASE("Index Exceptions", "[art]") {
 	REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON integers(i COLLATE \"de_DE\")"));
 
 	REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON integers using blabla(i)"));
-
-	REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON integers(i,j)"));
 
 	REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON integers(k)"));
 

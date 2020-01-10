@@ -260,8 +260,6 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 }
 
 static void VerifyUniqueConstraint(TableCatalogEntry &table, unordered_set<index_t> &keys, DataChunk &chunk) {
-	// not implemented for multiple keys
-	assert(keys.size() == 1);
 	// check if the columns are unique
 	for (auto &key : keys) {
 		if (!VectorOperations::Unique(chunk.data[key])) {
