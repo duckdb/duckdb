@@ -1066,6 +1066,7 @@ void sqlite3StrAccumReset(StrAccum *p){
 */
 void sqlite3StrAccumInit(StrAccum *p, void *db, char *zBase, int n, int mx){
   p->zText = zBase;
+  assert(!db);
   p->db = db;
   p->nAlloc = n;
   p->mxAlloc = mx;
@@ -1074,40 +1075,6 @@ void sqlite3StrAccumInit(StrAccum *p, void *db, char *zBase, int n, int mx){
   p->printfFlags = 0;
 }
 
-/*
-** Print into memory obtained from sqliteMalloc().  Use the internal
-** %-conversion extensions.
-*/
-char *sqlite3VMPrintf(void *db, const char *zFormat, va_list ap){
-  char *z;
-  char zBase[SQLITE_PRINT_BUF_SIZE];
-  StrAccum acc;
-  assert( db!=0 );
-  sqlite3StrAccumInit(&acc, db, zBase, sizeof(zBase),
-                     SQLITE_MAX_LENGTH);
-  acc.printfFlags = SQLITE_PRINTF_INTERNAL;
-  sqlite3VXPrintf(&acc, zFormat, ap);
-  z = sqlite3StrAccumFinish(&acc);
-  if( acc.accError==STRACCUM_NOMEM ){
-   return NULL;
-	  //sqlite3OomFault(db);
-  }
-  return z;
-}
-
-/*
-** Print into memory obtained from sqliteMalloc().  Use the internal
-** %-conversion extensions.
-*/
-char *sqlite3MPrintf(void *db, const char *zFormat, ...){
-  va_list ap;
-  char *z;
-  assert(!db);
-  va_start(ap, zFormat);
-  z = sqlite3VMPrintf(db, zFormat, ap);
-  va_end(ap);
-  return z;
-}
 
 /*
 ** Print into memory obtained from sqlite3_malloc().  Omit the internal
@@ -1174,14 +1141,3 @@ char *sqlite3_snprintf(int n, char *zBuf, const char *zFormat, ...){
   return z;
 }
 
-
-/*
-** variable-argument wrapper around sqlite3VXPrintf().  The bFlags argument
-** can contain the bit SQLITE_PRINTF_INTERNAL enable internal formats.
-*/
-void sqlite3XPrintf(StrAccum *p, const char *zFormat, ...){
-  va_list ap;
-  va_start(ap,zFormat);
-  sqlite3VXPrintf(p, zFormat, ap);
-  va_end(ap);
-}
