@@ -13,8 +13,8 @@ public:
 	ExpressionExecutor executor;
 };
 
-PhysicalFilter::PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expression>> select_list, vector<index_t> projection_map)
-    : PhysicalOperator(PhysicalOperatorType::FILTER, types), projection_map(move(projection_map)) {
+PhysicalFilter::PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expression>> select_list)
+    : PhysicalOperator(PhysicalOperatorType::FILTER, types) {
 	assert(select_list.size() > 0);
 	if (select_list.size() > 1) {
 		// create a big AND out of the expressions
@@ -29,35 +29,21 @@ PhysicalFilter::PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expressio
 
 }
 
-PhysicalFilter::PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expression>> select_list)
-    : PhysicalFilter(move(types), move(select_list), vector<index_t>()) {
-}
-
 void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalFilterState *>(state_);
-	DataChunk *child_chunk = projection_map.size() == 0 ? &chunk : &state->child_chunk;
 	index_t initial_count;
 	index_t result_count;
 	do {
 		// fetch a chunk from the child and run the filter
 		// we repeat this process until either (1) passing tuples are found, or (2) the child is completely exhausted
-		children[0]->GetChunk(context, *child_chunk, state->child_state.get());
-		if (child_chunk->size() == 0) {
+		children[0]->GetChunk(context, chunk, state->child_state.get());
+		if (chunk.size() == 0) {
 			return;
 		}
-		initial_count = child_chunk->size();
-		result_count = state->executor.SelectExpression(*child_chunk, chunk.owned_sel_vector);
+		initial_count = chunk.size();
+		result_count = state->executor.SelectExpression(chunk, chunk.owned_sel_vector);
 	} while(result_count == 0);
 
-	// found results:
-	if (projection_map.size() != 0) {
-		// there are columns to project, set up the column references
-		assert(chunk.column_count == projection_map.size());
-		for(index_t i = 0; i < projection_map.size(); i++) {
-			chunk.data[i].Reference(state->child_chunk.data[projection_map[i]]);
-		}
-		chunk.sel_vector = state->child_chunk.sel_vector;
-	}
 	if (result_count == initial_count) {
 		// nothing was filtered: skip adding any selection vectors
 		return;
