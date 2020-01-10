@@ -28,12 +28,12 @@ struct ConjunctionState : public ExpressionState {
 	index_t right_random_border;
 	index_t observe_interval;
 	index_t execute_interval;
-	double prev_median;
+	double runtime_sum;
+	double prev_mean;
 	bool observe;
 	bool warmup;
 	vector<index_t> permutation;
 	vector<index_t> swap_likeliness;
-	vector<double> runtimes;
 	std::default_random_engine generator;
 };
 
@@ -129,15 +129,13 @@ static void MergeSelectionVectorIntoResult(sel_t *result, index_t &result_count,
 
 void AdaptRuntimeStatistics(BoundConjunctionExpression &expr, ConjunctionState* state, double duration) {
 	state->iteration_count++;
-	state->runtimes.push_back(duration);
+	state->runtime_sum += duration;
 
 	if (!state->warmup) {
 		//the last swap was observed
 		if (state->observe && state->iteration_count == state->observe_interval) {
-			//get median
-			sort(state->runtimes.begin(), state->runtimes.end());
 			//keep swap if runtime decreased, else reverse swap
-			if (!(state->prev_median - (state->runtimes[state->runtimes.size() / 2]) > 0)) {
+			if (!(state->prev_mean - (state->runtime_sum / state->iteration_count) > 0)) {
 				//reverse swap because runtime didn't decrease
 				assert(state->swap_idx < expr.children.size() - 1);
 				assert(expr.children.size() > 1);
@@ -155,11 +153,10 @@ void AdaptRuntimeStatistics(BoundConjunctionExpression &expr, ConjunctionState* 
 
 			//reset values
 			state->iteration_count = 0;
-			state->runtimes.clear();
+			state->runtime_sum = 0.0;
 		} else if (!state->observe && state->iteration_count == state->execute_interval) {
 			//save old mean to evaluate swap
-			sort(state->runtimes.begin(), state->runtimes.end());
-			state->prev_median = state->runtimes[state->runtimes.size() / 2];
+			state->prev_mean = state->runtime_sum / state->iteration_count;
 
 			//get swap index and swap likeliness
 			uniform_int_distribution<int> distribution(1, state->right_random_border); //a <= i <= b
@@ -181,13 +178,13 @@ void AdaptRuntimeStatistics(BoundConjunctionExpression &expr, ConjunctionState* 
 
 			//reset values
 			state->iteration_count = 0;
-			state->runtimes.clear();
+			state->runtime_sum = 0.0;
 		}
 	} else {
 		if (state->iteration_count == 5) {
 			//initially set all values
 			state->iteration_count = 0;
-			state->runtimes.clear();
+			state->runtime_sum = 0.0;
 			state->observe = false;
 			state->warmup = false;
 		}
