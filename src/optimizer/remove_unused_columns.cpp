@@ -18,13 +18,7 @@
 using namespace duckdb;
 using namespace std;
 
-RemoveUnusedColumns::~RemoveUnusedColumns() {
-	for(auto &remap_entry : remap) {
-		PerformBindingReplacement(remap_entry.first, remap_entry.second);
-	}
-}
-
-void RemoveUnusedColumns::PerformBindingReplacement(ColumnBinding current_binding, ColumnBinding new_binding) {
+void RemoveUnusedColumns::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
 	auto colrefs = column_references.find(current_binding);
 	if (colrefs != column_references.end()) {
 		for(auto &colref : colrefs->second) {
@@ -32,11 +26,6 @@ void RemoveUnusedColumns::PerformBindingReplacement(ColumnBinding current_bindin
 			colref->binding = new_binding;
 		}
 	}
-}
-
-void RemoveUnusedColumns::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
-	// add the entry to the remap set
-	remap[current_binding] = new_binding;
 }
 
 template<class T>
@@ -83,14 +72,15 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		if (!everything_referenced) {
 			auto &comp_join = (LogicalComparisonJoin&) op;
 
-			// vector<index_t> projection_map_left;
-			// vector<index_t> projection_map_right;
-			// check for comparison joins; for any comparison
-			if (comp_join.join_type == JoinType::INNER) {
-				// for inner joins
-				for(auto &cond : comp_join.conditions) {
-					if (cond.comparison == ExpressionType::COMPARE_EQUAL &&
-						cond.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
+			if (comp_join.join_type != JoinType::INNER) {
+				break;
+			}
+			// for inner joins with equality predicates in the form of (X=Y)
+			// we can replace any references to the RHS (Y) to references to the LHS (X)
+			// this reduces the amount of columns we need to extract from the join hash table
+			for(auto &cond : comp_join.conditions) {
+				if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
+					if (cond.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
 						cond.right->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
 						// comparison join between two bound column refs
 						// we can replace any reference to the RHS (build-side) with a reference to the LHS (probe-side)
@@ -108,36 +98,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 					}
 				}
 			}
-
-
-			// // first check which column bindings are required after the join
-			// auto column_bindings = op.GetColumnBindings();
-			// column_binding_set_t unused_bindings;
-			// for(auto &column_binding : column_bindings) {
-			// 	auto entry = column_references.find(column_binding);
-			// 	if (entry == column_references.end()) {
-			// 		// column is unused, add to set of unused column bindings
-			// 		unused_bindings.insert(column_binding);
-			// 	}
-			// }
-			// // now visit the join expressions and remove any columns that are not used at all
-			// LogicalOperatorVisitor::VisitOperatorExpressions(op);
-			// LogicalOperatorVisitor::VisitOperatorChildren(op);
-			// // after that, figure out if there are columns that were ONLY used in the filter
-			// // these can be projected out during the filter
-			// vector<index_t> projection_map;
-			// column_bindings = op.GetColumnBindings();
-			// for(index_t i = 0; i < column_bindings.size(); i++) {
-			// 	auto entry = original_bindings.find(column_bindings[i]);
-			// 	auto binding = entry == original_bindings.end() ? column_bindings[i] : entry->second;
-			// 	if (unused_bindings.find(binding) == unused_bindings.end()) {
-			// 		projection_map.push_back(i);
-			// 	}
-			// }
-			// if (projection_map.size() == column_bindings.size()) {
-			// 	projection_map.clear();
-			// }
-			// return;
 		}
 		break;
 	}
@@ -147,7 +107,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::EXCEPT:
 	case LogicalOperatorType::INTERSECT:
 		// for set operations we don't remove anything, just recursively visit the children
-		// FIXME: for UNION ALL we can remove unreferenced columns (i.e. we encounter a UNION node that is not preceded by a DISTINCT)
+		// FIXME: for UNION we can remove unreferenced columns as long as everything_referenced is false (i.e. we encounter a UNION node that is not preceded by a DISTINCT)
 		for(auto &child : op.children) {
 			RemoveUnusedColumns remove(true);
 			remove.VisitOperator(*child);
@@ -189,56 +149,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		// mark all columns as used and continue to the children
 		// FIXME: DISTINCT with expression list does not implicitly reference everything
 		everything_referenced = true;
-		break;
-	}
-	case LogicalOperatorType::FILTER: {
-		auto &filter = (LogicalFilter&) op;
-		if (!everything_referenced) {
-			// filter
-			// get a list of the bound column references that are used in the filter
-			// first empty the set of column references
-			auto current_references = move(column_references);
-			// then visit the expressions of the filter operator
-			LogicalOperatorVisitor::VisitOperatorExpressions(op);
-			// now iterate over the references found in the filter
-			vector<BoundColumnRefExpression*> unused_binding_expressions;
-			for(auto &entry : column_references) {
-				auto binding = entry.first;
-				if (current_references.find(binding) == current_references.end()) {
-					// this reference was used in the filter, but is not used AFTER the filter
-					// store a reference to the bound column ref expression
-					unused_binding_expressions.push_back(entry.second[0]);
-				}
-				// now move the bound column references back to the main set
-				for(auto expr : entry.second) {
-					current_references[binding].push_back(expr);
-				}
-			}
-			// now we have a list of column references that are only used in the filter (unused_bindings)
-			// move on and visit the children of the logical filter
-			column_references = move(current_references);
-			LogicalOperatorVisitor::VisitOperatorChildren(op);
-			if (unused_binding_expressions.size() > 0) {
-				// if there were unused binding expressions, check if we can project anything out of the filter
-				// first create a set of bindings that are unused after the filter
-				column_binding_set_t unused_bindings;
-				for(auto expr : unused_binding_expressions) {
-					unused_bindings.insert(expr->binding);
-				}
-				// now iterate over the result bindings of the chld of the filter
-				auto column_bindings = op.children[0]->GetColumnBindings();
-				for(index_t i = 0; i < column_bindings.size(); i++) {
-					// if this binding does not belong to the unused column bindings, add it to the projection map
-					if (unused_bindings.find(column_bindings[i]) == unused_bindings.end()) {
-						filter.projection_map.push_back(i);
-					}
-				}
-				if (filter.projection_map.size() == column_bindings.size()) {
-					filter.projection_map.clear();
-				}
-			}
-			return;
-		}
 		break;
 	}
 	default:
