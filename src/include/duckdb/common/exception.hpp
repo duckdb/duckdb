@@ -55,8 +55,9 @@ enum class ExceptionType {
 	NULL_POINTER = 27,    // nullptr exception
 	IO = 28,              // IO exception
 	INTERRUPT = 29,       // interrupt
-	FATAL = 30,           // Fatal exception: fatal exceptions are non-recoverable, and render the entire DB in an unusable state
-	INTERNAL = 31         // Internal exception: exception that indicates something went wrong internally (i.e. bug in the code base)
+	FATAL = 30, // Fatal exception: fatal exceptions are non-recoverable, and render the entire DB in an unusable state
+	INTERNAL =
+	    31 // Internal exception: exception that indicates something went wrong internally (i.e. bug in the code base)
 };
 
 class Exception : public std::exception {

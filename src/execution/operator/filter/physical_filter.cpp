@@ -26,7 +26,6 @@ PhysicalFilter::PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expressio
 	} else {
 		expression = move(select_list[0]);
 	}
-
 }
 
 void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
@@ -42,7 +41,7 @@ void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		}
 		initial_count = chunk.size();
 		result_count = state->executor.SelectExpression(chunk, chunk.owned_sel_vector);
-	} while(result_count == 0);
+	} while (result_count == 0);
 
 	if (result_count == initial_count) {
 		// nothing was filtered: skip adding any selection vectors

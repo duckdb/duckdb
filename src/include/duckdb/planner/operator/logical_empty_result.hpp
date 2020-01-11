@@ -22,10 +22,12 @@ public:
 	vector<TypeId> return_types;
 	//! The columns that would be bound at this location (if the subtree was not optimized away)
 	vector<ColumnBinding> bindings;
+
 public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return bindings;
 	}
+
 protected:
 	void ResolveTypes() override {
 		this->types = return_types;

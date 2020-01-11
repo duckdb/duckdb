@@ -120,8 +120,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		JoinCondition cond;
 		cond.left = move(expr.child);
 		cond.right = BoundCastExpression::AddCastToType(
-		    make_unique<BoundColumnRefExpression>(GetInternalType(expr.child_type), plan_columns[0]),
-		    expr.child_type, expr.child_target);
+		    make_unique<BoundColumnRefExpression>(GetInternalType(expr.child_type), plan_columns[0]), expr.child_type,
+		    expr.child_target);
 		cond.comparison = expr.comparison_type;
 		join->conditions.push_back(move(cond));
 		root = move(join);
@@ -255,8 +255,8 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		JoinCondition compare_cond;
 		compare_cond.left = move(expr.child);
 		compare_cond.right = BoundCastExpression::AddCastToType(
-		    make_unique<BoundColumnRefExpression>(GetInternalType(expr.child_type), plan_columns[0]),
-		    expr.child_type, expr.child_target);
+		    make_unique<BoundColumnRefExpression>(GetInternalType(expr.child_type), plan_columns[0]), expr.child_type,
+		    expr.child_target);
 		compare_cond.comparison = expr.comparison_type;
 		delim_join->conditions.push_back(move(compare_cond));
 

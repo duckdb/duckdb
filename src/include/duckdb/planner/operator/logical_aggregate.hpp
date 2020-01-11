@@ -30,6 +30,7 @@ public:
 	string ParamsToString() const override;
 
 	vector<ColumnBinding> GetColumnBindings() override;
+
 protected:
 	void ResolveTypes() override;
 };

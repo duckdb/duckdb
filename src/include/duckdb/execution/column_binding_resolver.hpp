@@ -21,6 +21,7 @@ public:
 	ColumnBindingResolver();
 
 	void VisitOperator(LogicalOperator &op) override;
+
 protected:
 	vector<ColumnBinding> bindings;
 

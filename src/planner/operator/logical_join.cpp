@@ -6,7 +6,8 @@
 using namespace duckdb;
 using namespace std;
 
-LogicalJoin::LogicalJoin(JoinType join_type, LogicalOperatorType logical_type) : LogicalOperator(logical_type), join_type(join_type) {
+LogicalJoin::LogicalJoin(JoinType join_type, LogicalOperatorType logical_type)
+    : LogicalOperator(logical_type), join_type(join_type) {
 }
 
 vector<ColumnBinding> LogicalJoin::GetColumnBindings() {
@@ -44,7 +45,7 @@ void LogicalJoin::ResolveTypes() {
 
 void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<index_t> &bindings) {
 	auto column_bindings = op.GetColumnBindings();
-	for(auto binding : column_bindings) {
+	for (auto binding : column_bindings) {
 		bindings.insert(binding.table_index);
 	}
 }

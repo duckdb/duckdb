@@ -30,6 +30,7 @@ public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(table_index, column_count);
 	}
+
 protected:
 	void ResolveTypes() override {
 		types = children[0]->types;

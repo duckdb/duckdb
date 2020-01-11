@@ -10,7 +10,8 @@ using namespace std;
 
 using Filter = FilterPushdown::Filter;
 
-static void ReplaceSetOpBindings(vector<ColumnBinding> &bindings, Filter &filter, Expression &expr, LogicalSetOperation &setop) {
+static void ReplaceSetOpBindings(vector<ColumnBinding> &bindings, Filter &filter, Expression &expr,
+                                 LogicalSetOperation &setop) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)expr;
 		assert(colref.binding.table_index == setop.table_index);

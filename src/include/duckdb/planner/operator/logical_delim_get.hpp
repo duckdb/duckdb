@@ -25,10 +25,12 @@ public:
 	index_t table_index;
 	//! The types of the chunk
 	vector<TypeId> chunk_types;
+
 public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(table_index, chunk_types.size());
 	}
+
 protected:
 	void ResolveTypes() override {
 		// types are resolved in the constructor

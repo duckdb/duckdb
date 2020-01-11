@@ -32,6 +32,7 @@ public:
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
+
 protected:
 	void ResolveTypes() override;
 };

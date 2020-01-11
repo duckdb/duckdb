@@ -34,7 +34,7 @@ void LogicalOperator::ResolveOperatorTypes() {
 
 vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(index_t table_idx, index_t column_count) {
 	vector<ColumnBinding> result;
-	for(index_t i = 0; i < column_count; i++) {
+	for (index_t i = 0; i < column_count; i++) {
 		result.push_back(ColumnBinding(table_idx, i));
 	}
 	return result;
@@ -45,7 +45,7 @@ vector<TypeId> LogicalOperator::MapTypes(vector<TypeId> types, vector<index_t> p
 		return types;
 	} else {
 		vector<TypeId> result_types;
-		for(auto index : projection_map) {
+		for (auto index : projection_map) {
 			result_types.push_back(types[index]);
 		}
 		return result_types;
@@ -57,7 +57,7 @@ vector<ColumnBinding> LogicalOperator::MapBindings(vector<ColumnBinding> binding
 		return bindings;
 	} else {
 		vector<ColumnBinding> result_bindings;
-		for(auto index : projection_map) {
+		for (auto index : projection_map) {
 			result_bindings.push_back(bindings[index]);
 		}
 		return result_bindings;

@@ -16,7 +16,8 @@ namespace duckdb {
 class LogicalCopyFromFile : public LogicalOperator {
 public:
 	LogicalCopyFromFile(index_t table_index, unique_ptr<CopyInfo> info, vector<SQLType> sql_types)
-	    : LogicalOperator(LogicalOperatorType::COPY_FROM_FILE), table_index(table_index), info(move(info)), sql_types(sql_types) {
+	    : LogicalOperator(LogicalOperatorType::COPY_FROM_FILE), table_index(table_index), info(move(info)),
+	      sql_types(sql_types) {
 	}
 
 	index_t table_index;
@@ -27,6 +28,7 @@ public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(table_index, sql_types.size());
 	}
+
 protected:
 	void ResolveTypes() override {
 		for (auto &type : sql_types) {

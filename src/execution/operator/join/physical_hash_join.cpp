@@ -23,20 +23,22 @@ public:
 
 PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
-								   vector<index_t> left_projection_map, vector<index_t> right_projection_map)
-    : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type), right_projection_map(right_projection_map) {
+                                   vector<index_t> left_projection_map, vector<index_t> right_projection_map)
+    : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type),
+      right_projection_map(right_projection_map) {
 	children.push_back(move(left));
 	children.push_back(move(right));
 
 	assert(left_projection_map.size() == 0);
 
 	hash_table =
-	    make_unique<JoinHashTable>(*context.db.storage->buffer_manager, conditions, LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map), type);
+	    make_unique<JoinHashTable>(*context.db.storage->buffer_manager, conditions,
+	                               LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map), type);
 }
 
 PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-				unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type) :
-				PhysicalHashJoin(context, op, move(left), move(right), move(cond), join_type, {}, {}) {
+                                   unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type)
+    : PhysicalHashJoin(context, op, move(left), move(right), move(cond), join_type, {}, {}) {
 }
 
 void PhysicalHashJoin::BuildHashTable(ClientContext &context, PhysicalOperatorState *state_) {
@@ -66,7 +68,7 @@ void PhysicalHashJoin::BuildHashTable(ClientContext &context, PhysicalOperatorSt
 		if (right_projection_map.size() > 0) {
 			// there is a projection map: fill the build chunk with the projected columns
 			build_chunk.Reset();
-			for(index_t i = 0; i < right_projection_map.size(); i++) {
+			for (index_t i = 0; i < right_projection_map.size(); i++) {
 				build_chunk.data[i].Reference(right_chunk.data[right_projection_map[i]]);
 			}
 			build_chunk.sel_vector = right_chunk.sel_vector;

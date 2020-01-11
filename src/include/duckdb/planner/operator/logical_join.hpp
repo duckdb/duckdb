@@ -31,8 +31,10 @@ public:
 	vector<index_t> left_projection_map;
 	//! The columns of the RHS that are output by the join
 	vector<index_t> right_projection_map;
+
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
+
 protected:
 	void ResolveTypes() override;
 };

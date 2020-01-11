@@ -18,8 +18,10 @@ public:
 	LogicalProjection(index_t table_index, vector<unique_ptr<Expression>> select_list);
 
 	index_t table_index;
+
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
+
 protected:
 	void ResolveTypes() override;
 };

@@ -9,20 +9,23 @@
 using namespace duckdb;
 using namespace std;
 
-void ColumnLifetimeAnalyzer::ExtractUnusedColumnBindings(vector<ColumnBinding> bindings, column_binding_set_t &unused_bindings) {
-	for(index_t i = 0; i < bindings.size(); i++) {
+void ColumnLifetimeAnalyzer::ExtractUnusedColumnBindings(vector<ColumnBinding> bindings,
+                                                         column_binding_set_t &unused_bindings) {
+	for (index_t i = 0; i < bindings.size(); i++) {
 		if (column_references.find(bindings[i]) == column_references.end()) {
 			unused_bindings.insert(bindings[i]);
 		}
 	}
 }
 
-void ColumnLifetimeAnalyzer::GenerateProjectionMap(vector<ColumnBinding> bindings, column_binding_set_t &unused_bindings, vector<index_t> &projection_map) {
+void ColumnLifetimeAnalyzer::GenerateProjectionMap(vector<ColumnBinding> bindings,
+                                                   column_binding_set_t &unused_bindings,
+                                                   vector<index_t> &projection_map) {
 	if (unused_bindings.size() == 0) {
 		return;
 	}
 	// now iterate over the result bindings of the child
-	for(index_t i = 0; i < bindings.size(); i++) {
+	for (index_t i = 0; i < bindings.size(); i++) {
 		// if this binding does not belong to the unused bindings, add it to the projection map
 		if (unused_bindings.find(bindings[i]) == unused_bindings.end()) {
 			projection_map.push_back(i);
@@ -60,10 +63,9 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		if (everything_referenced) {
 			break;
 		}
-		auto &comp_join = (LogicalComparisonJoin&) op;
-		if (comp_join.join_type == JoinType::MARK ||
-		    comp_join.join_type == JoinType::SEMI ||
-			comp_join.join_type == JoinType::ANTI) {
+		auto &comp_join = (LogicalComparisonJoin &)op;
+		if (comp_join.join_type == JoinType::MARK || comp_join.join_type == JoinType::SEMI ||
+		    comp_join.join_type == JoinType::ANTI) {
 			break;
 		}
 		// FIXME for now, we only push into the projection map for equality (hash) joins
@@ -92,8 +94,9 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::EXCEPT:
 	case LogicalOperatorType::INTERSECT:
 		// for set operations we don't remove anything, just recursively visit the children
-		// FIXME: for UNION we can remove unreferenced columns as long as everything_referenced is false (i.e. we encounter a UNION node that is not preceded by a DISTINCT)
-		for(auto &child : op.children) {
+		// FIXME: for UNION we can remove unreferenced columns as long as everything_referenced is false (i.e. we
+		// encounter a UNION node that is not preceded by a DISTINCT)
+		for (auto &child : op.children) {
 			ColumnLifetimeAnalyzer analyzer(true);
 			analyzer.VisitOperator(*child);
 		}
@@ -113,7 +116,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 	case LogicalOperatorType::FILTER: {
-		auto &filter = (LogicalFilter&) op;
+		auto &filter = (LogicalFilter &)op;
 		if (everything_referenced) {
 			break;
 		}
@@ -134,13 +137,14 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 	StandardVisitOperator(op);
 }
 
-
-unique_ptr<Expression> ColumnLifetimeAnalyzer::VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> ColumnLifetimeAnalyzer::VisitReplace(BoundColumnRefExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
 	column_references.insert(expr.binding);
 	return nullptr;
 }
 
-unique_ptr<Expression> ColumnLifetimeAnalyzer::VisitReplace(BoundReferenceExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> ColumnLifetimeAnalyzer::VisitReplace(BoundReferenceExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
 	// BoundReferenceExpression should not be used here yet, they only belong in the physical plan
 	throw InternalException("BoundReferenceExpression should not be used here yet!");
 }

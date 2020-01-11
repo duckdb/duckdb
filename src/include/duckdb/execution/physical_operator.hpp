@@ -61,6 +61,7 @@ public:
 	vector<unique_ptr<PhysicalOperator>> children;
 	//! The types returned by this physical operator
 	vector<TypeId> types;
+
 public:
 	string ToString(index_t depth = 0) const;
 	void Print();

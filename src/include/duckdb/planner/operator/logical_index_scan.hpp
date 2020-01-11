@@ -53,6 +53,7 @@ public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(table_index, column_ids.size());
 	}
+
 protected:
 	void ResolveTypes() override {
 		if (column_ids.size() == 0) {

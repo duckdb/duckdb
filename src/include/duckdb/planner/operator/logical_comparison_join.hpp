@@ -22,8 +22,10 @@ public:
 
 	//! The conditions of the join
 	vector<JoinCondition> conditions;
+
 public:
 	string ParamsToString() const override;
+
 public:
 	static unique_ptr<LogicalOperator> CreateJoin(JoinType type, unique_ptr<LogicalOperator> left_child,
 	                                              unique_ptr<LogicalOperator> right_child,

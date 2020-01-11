@@ -18,7 +18,7 @@ ColumnBindingResolver::ColumnBindingResolver() {
 void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::COMPARISON_JOIN || op.type == LogicalOperatorType::DELIM_JOIN) {
 		// special case: comparison join
-		auto &comp_join = (LogicalComparisonJoin&) op;
+		auto &comp_join = (LogicalComparisonJoin &)op;
 		// first get the bindings of the LHS and resolve the LHS expressions
 		VisitOperator(*comp_join.children[0]);
 		for (auto &cond : comp_join.conditions) {
@@ -40,8 +40,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		bindings = op.GetColumnBindings();
 		return;
 	} else if (op.type == LogicalOperatorType::ANY_JOIN) {
-		// ANY join, this join is different because we evaluate the expression on the bindings of BOTH join sides at once
-		// i.e. we set the bindings first to the bindings of the entire join, and then resolve the expressions of this operator
+		// ANY join, this join is different because we evaluate the expression on the bindings of BOTH join sides at
+		// once i.e. we set the bindings first to the bindings of the entire join, and then resolve the expressions of
+		// this operator
 		VisitOperatorChildren(op);
 		bindings = op.GetColumnBindings();
 		VisitOperatorExpressions(op);
@@ -49,7 +50,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	} else if (op.type == LogicalOperatorType::CREATE_INDEX) {
 		// CREATE INDEX statement, add the columns of the table with table index 0 to the binding set
 		// afterwards bind the expressions of the CREATE INDEX statement
-		auto &create_index = (LogicalCreateIndex&) op;
+		auto &create_index = (LogicalCreateIndex &)op;
 		bindings = LogicalOperator::GenerateColumnBindings(0, create_index.table.columns.size());
 		VisitOperatorExpressions(op);
 		return;
@@ -67,15 +68,15 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
                                                            unique_ptr<Expression> *expr_ptr) {
 	assert(expr.depth == 0);
 	// check the current set of column bindings to see which index corresponds to the column reference
-	for(index_t i = 0; i < bindings.size(); i++) {
+	for (index_t i = 0; i < bindings.size(); i++) {
 		if (expr.binding == bindings[i]) {
 			return make_unique<BoundReferenceExpression>(expr.alias, expr.return_type, i);
 		}
 	}
 	// could not bind the column reference, this should never happen and indicates a bug in the code
 	// generate an error message
-	string bound_columns =  "[";
-	for(index_t i = 0; i < bindings.size(); i++) {
+	string bound_columns = "[";
+	for (index_t i = 0; i < bindings.size(); i++) {
 		if (i != 0) {
 			bound_columns += " ";
 		}
@@ -83,5 +84,6 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	}
 	bound_columns += "]";
 
-	throw InternalException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.alias.c_str(), (int) expr.binding.table_index, (int) expr.binding.column_index, bound_columns.c_str());
+	throw InternalException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.alias.c_str(),
+	                        (int)expr.binding.table_index, (int)expr.binding.column_index, bound_columns.c_str());
 }

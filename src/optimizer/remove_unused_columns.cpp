@@ -21,17 +21,16 @@ using namespace std;
 void RemoveUnusedColumns::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
 	auto colrefs = column_references.find(current_binding);
 	if (colrefs != column_references.end()) {
-		for(auto &colref : colrefs->second) {
+		for (auto &colref : colrefs->second) {
 			assert(colref->binding == current_binding);
 			colref->binding = new_binding;
 		}
 	}
 }
 
-template<class T>
-void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, index_t table_idx) {
+template <class T> void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, index_t table_idx) {
 	index_t offset = 0;
-	for(index_t col_idx = 0; col_idx < list.size(); col_idx++) {
+	for (index_t col_idx = 0; col_idx < list.size(); col_idx++) {
 		auto current_binding = ColumnBinding(table_idx, col_idx + offset);
 		auto entry = column_references.find(current_binding);
 		if (entry == column_references.end()) {
@@ -52,12 +51,13 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		// aggregate
 		if (!everything_referenced) {
 			// FIXME: groups that are not referenced need to stay -> but they don't need to be scanned and output!
-			auto &aggr = (LogicalAggregate&) op;
+			auto &aggr = (LogicalAggregate &)op;
 			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index);
 
 			if (aggr.expressions.size() == 0 && aggr.groups.size() == 0) {
 				// removed all expressions from the aggregate: push a COUNT(*)
-				aggr.expressions.push_back(make_unique<BoundAggregateExpression>(TypeId::BIGINT, CountStarFun::GetFunction(), false));
+				aggr.expressions.push_back(
+				    make_unique<BoundAggregateExpression>(TypeId::BIGINT, CountStarFun::GetFunction(), false));
 			}
 		}
 
@@ -70,7 +70,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::DELIM_JOIN:
 	case LogicalOperatorType::COMPARISON_JOIN: {
 		if (!everything_referenced) {
-			auto &comp_join = (LogicalComparisonJoin&) op;
+			auto &comp_join = (LogicalComparisonJoin &)op;
 
 			if (comp_join.join_type != JoinType::INNER) {
 				break;
@@ -78,18 +78,18 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// for inner joins with equality predicates in the form of (X=Y)
 			// we can replace any references to the RHS (Y) to references to the LHS (X)
 			// this reduces the amount of columns we need to extract from the join hash table
-			for(auto &cond : comp_join.conditions) {
+			for (auto &cond : comp_join.conditions) {
 				if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
 					if (cond.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
-						cond.right->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+					    cond.right->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
 						// comparison join between two bound column refs
 						// we can replace any reference to the RHS (build-side) with a reference to the LHS (probe-side)
-						auto &lhs_col = (BoundColumnRefExpression &) *cond.left;
-						auto &rhs_col = (BoundColumnRefExpression &) *cond.right;
+						auto &lhs_col = (BoundColumnRefExpression &)*cond.left;
+						auto &rhs_col = (BoundColumnRefExpression &)*cond.right;
 						// if there are any columns that refer to the RHS,
 						auto colrefs = column_references.find(rhs_col.binding);
 						if (colrefs != column_references.end()) {
-							for(auto &entry : colrefs->second) {
+							for (auto &entry : colrefs->second) {
 								entry->binding = lhs_col.binding;
 								column_references[lhs_col.binding].push_back(entry);
 							}
@@ -107,15 +107,16 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::EXCEPT:
 	case LogicalOperatorType::INTERSECT:
 		// for set operations we don't remove anything, just recursively visit the children
-		// FIXME: for UNION we can remove unreferenced columns as long as everything_referenced is false (i.e. we encounter a UNION node that is not preceded by a DISTINCT)
-		for(auto &child : op.children) {
+		// FIXME: for UNION we can remove unreferenced columns as long as everything_referenced is false (i.e. we
+		// encounter a UNION node that is not preceded by a DISTINCT)
+		for (auto &child : op.children) {
 			RemoveUnusedColumns remove(true);
 			remove.VisitOperator(*child);
 		}
 		return;
 	case LogicalOperatorType::PROJECTION: {
 		if (!everything_referenced) {
-			auto &proj = (LogicalProjection&) op;
+			auto &proj = (LogicalProjection &)op;
 			ClearUnusedExpressions(proj.expressions, proj.table_index);
 
 			if (proj.expressions.size() == 0) {
@@ -133,13 +134,14 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	}
 	case LogicalOperatorType::GET:
 		if (!everything_referenced) {
-			auto &get = (LogicalGet&) op;
+			auto &get = (LogicalGet &)op;
 			// table scan: figure out which columns are referenced
 			ClearUnusedExpressions(get.column_ids, get.table_index);
 
 			if (get.column_ids.size() == 0) {
-				// this generally means we are only interested in whether or not anything exists in the table (e.g. EXISTS(SELECT * FROM tbl))
-				// in this case, we just scan the row identifier column as it means we do not need to read any of the columns
+				// this generally means we are only interested in whether or not anything exists in the table (e.g.
+				// EXISTS(SELECT * FROM tbl)) in this case, we just scan the row identifier column as it means we do not
+				// need to read any of the columns
 				get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 			}
 		}
@@ -158,14 +160,15 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
 }
 
-
-unique_ptr<Expression> RemoveUnusedColumns::VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> RemoveUnusedColumns::VisitReplace(BoundColumnRefExpression &expr,
+                                                         unique_ptr<Expression> *expr_ptr) {
 	// add a column reference
 	column_references[expr.binding].push_back(&expr);
 	return nullptr;
 }
 
-unique_ptr<Expression> RemoveUnusedColumns::VisitReplace(BoundReferenceExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> RemoveUnusedColumns::VisitReplace(BoundReferenceExpression &expr,
+                                                         unique_ptr<Expression> *expr_ptr) {
 	// BoundReferenceExpression should not be used here yet, they only belong in the physical plan
 	throw InternalException("BoundReferenceExpression should not be used here yet!");
 }

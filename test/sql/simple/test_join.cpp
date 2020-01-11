@@ -88,7 +88,8 @@ TEST_CASE("Test basic joins of tables", "[joins]") {
 		REQUIRE(CHECK_COLUMN(result, 1, {1}));
 	}
 	SECTION("equality join where both lhs and rhs keys are projected with filter") {
-		result = con.Query("SELECT * FROM (VALUES (1), (2)) tbl(i) JOIN (VALUES (1), (2)) tbl2(j) ON (i=j) WHERE i+j=2;");
+		result =
+		    con.Query("SELECT * FROM (VALUES (1), (2)) tbl(i) JOIN (VALUES (1), (2)) tbl2(j) ON (i=j) WHERE i+j=2;");
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
 		REQUIRE(CHECK_COLUMN(result, 1, {1}));
 	}
@@ -430,11 +431,11 @@ TEST_CASE("Test joins with various columns that are only used in the join", "[jo
 	REQUIRE(CHECK_COLUMN(result, 0, {36}));
 
 	// count of multi-way join with filters
-	result = con.Query("SELECT COUNT(*) FROM test a1, test a2, test a3 WHERE a1.b=a2.b AND a2.b=a3.b AND a1.a=11 AND a2.a=11 AND a3.a=11");
+	result = con.Query("SELECT COUNT(*) FROM test a1, test a2, test a3 WHERE a1.b=a2.b AND a2.b=a3.b AND a1.a=11 AND "
+	                   "a2.a=11 AND a3.a=11");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 	// unused columns that become unused because of optimizer
 	result = con.Query("SELECT (TRUE OR a1.a=a2.b) FROM test a1, test a2 WHERE a1.a=11 AND a2.a>=10");
 	REQUIRE(CHECK_COLUMN(result, 0, {true, true, true}));
-
 }

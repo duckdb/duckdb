@@ -26,10 +26,12 @@ public:
 	vector<TypeId> expr_types;
 	//! The set of expressions
 	vector<vector<unique_ptr<Expression>>> expressions;
+
 public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(table_index, expr_types.size());
 	}
+
 protected:
 	void ResolveTypes() override {
 		// types are resolved in the constructor
