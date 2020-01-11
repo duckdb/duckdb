@@ -427,9 +427,14 @@ TEST_CASE("Test joins with various columns that are only used in the join", "[jo
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	// now a sum
 	result = con.Query("SELECT SUM(a1.a) FROM test a1, test a2, test a3 WHERE a1.b=a2.b AND a2.b=a3.b");
-	REQUIRE(CHECK_COLUMN(result, 0, {33}));
+	REQUIRE(CHECK_COLUMN(result, 0, {36}));
 
 	// count of multi-way join with filters
 	result = con.Query("SELECT COUNT(*) FROM test a1, test a2, test a3 WHERE a1.b=a2.b AND a2.b=a3.b AND a1.a=11 AND a2.a=11 AND a3.a=11");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	// unused columns that become unused because of optimizer
+	result = con.Query("SELECT (TRUE OR a1.a=a2.b) FROM test a1, test a2 WHERE a1.a=11 AND a2.a>=10");
+	REQUIRE(CHECK_COLUMN(result, 0, {true, true, true}));
+
 }
