@@ -55,10 +55,14 @@ public:
 	virtual ~PhysicalOperator() {
 	}
 
-	PhysicalOperatorType GetOperatorType() {
-		return type;
-	}
+	//! The physical operator type
+	PhysicalOperatorType type;
+	//! The set of children of the operator
+	vector<unique_ptr<PhysicalOperator>> children;
+	//! The types returned by this physical operator
+	vector<TypeId> types;
 
+public:
 	string ToString(index_t depth = 0) const;
 	void Print();
 
@@ -87,12 +91,5 @@ public:
 	virtual string ExtraRenderInformation() const {
 		return "";
 	}
-
-	//! The physical operator type
-	PhysicalOperatorType type;
-	//! The set of children of the operator
-	vector<unique_ptr<PhysicalOperator>> children;
-	//! The types returned by this physical operator
-	vector<TypeId> types;
 };
 } // namespace duckdb

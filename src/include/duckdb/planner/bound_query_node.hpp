@@ -49,6 +49,9 @@ public:
 	vector<string> names;
 	//! The types returned by this QueryNode.
 	vector<SQLType> types;
+
+public:
+	virtual index_t GetRootIndex() = 0;
 };
 
 }; // namespace duckdb

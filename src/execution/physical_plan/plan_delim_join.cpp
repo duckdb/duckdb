@@ -41,7 +41,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 	for (auto &delim_expr : op.duplicate_eliminated_columns) {
 		delim_types.push_back(delim_expr->return_type);
 	}
-	if (op.type == JoinType::MARK) {
+	if (op.join_type == JoinType::MARK) {
 		assert(plan->type == PhysicalOperatorType::HASH_JOIN);
 		auto &hash_join = (PhysicalHashJoin &)*plan;
 		// correlated MARK join

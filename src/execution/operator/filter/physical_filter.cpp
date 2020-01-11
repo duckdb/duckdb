@@ -30,26 +30,28 @@ PhysicalFilter::PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expressio
 
 void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalFilterState *>(state_);
-	while (true) {
+	index_t initial_count;
+	index_t result_count;
+	do {
+		// fetch a chunk from the child and run the filter
+		// we repeat this process until either (1) passing tuples are found, or (2) the child is completely exhausted
 		children[0]->GetChunk(context, chunk, state->child_state.get());
 		if (chunk.size() == 0) {
 			return;
 		}
-		index_t initial_count = chunk.size();
-		index_t result_count = state->executor.SelectExpression(chunk, chunk.owned_sel_vector);
-		if (result_count == initial_count) {
-			// nothing was filtered: skip adding any selection vectors
-			return;
-		}
-		if (result_count > 0) {
-			for (index_t i = 0; i < chunk.column_count; i++) {
-				chunk.data[i].count = result_count;
-				chunk.data[i].sel_vector = chunk.owned_sel_vector;
-			}
-			chunk.sel_vector = chunk.owned_sel_vector;
-			return;
-		}
+		initial_count = chunk.size();
+		result_count = state->executor.SelectExpression(chunk, chunk.owned_sel_vector);
+	} while (result_count == 0);
+
+	if (result_count == initial_count) {
+		// nothing was filtered: skip adding any selection vectors
+		return;
 	}
+	for (index_t i = 0; i < chunk.column_count; i++) {
+		chunk.data[i].count = result_count;
+		chunk.data[i].sel_vector = chunk.owned_sel_vector;
+	}
+	chunk.sel_vector = chunk.owned_sel_vector;
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalFilter::GetOperatorState() {

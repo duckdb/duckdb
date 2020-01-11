@@ -9,7 +9,7 @@ using Filter = FilterPushdown::Filter;
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSingleJoin(unique_ptr<LogicalOperator> op,
                                                                unordered_set<index_t> &left_bindings,
                                                                unordered_set<index_t> &right_bindings) {
-	assert(((LogicalJoin &)*op).type == JoinType::SINGLE);
+	assert(((LogicalJoin &)*op).join_type == JoinType::SINGLE);
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
 	// now check the set of filters
 	for (index_t i = 0; i < filters.size(); i++) {

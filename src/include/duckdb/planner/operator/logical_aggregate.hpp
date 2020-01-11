@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
 
@@ -16,10 +17,7 @@ namespace duckdb {
 //! operator.
 class LogicalAggregate : public LogicalOperator {
 public:
-	LogicalAggregate(index_t group_index, index_t aggregate_index, vector<unique_ptr<Expression>> select_list)
-	    : LogicalOperator(LogicalOperatorType::AGGREGATE_AND_GROUP_BY, move(select_list)), group_index(group_index),
-	      aggregate_index(aggregate_index) {
-	}
+	LogicalAggregate(index_t group_index, index_t aggregate_index, vector<unique_ptr<Expression>> select_list);
 
 	//! The table index for the groups of the LogicalAggregate
 	index_t group_index;
@@ -30,6 +28,8 @@ public:
 
 public:
 	string ParamsToString() const override;
+
+	vector<ColumnBinding> GetColumnBindings() override;
 
 protected:
 	void ResolveTypes() override;

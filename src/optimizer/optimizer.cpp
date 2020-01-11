@@ -8,6 +8,8 @@
 #include "duckdb/optimizer/index_scan.hpp"
 #include "duckdb/optimizer/join_order_optimizer.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
+#include "duckdb/optimizer/column_lifetime_optimizer.hpp"
+#include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -89,6 +91,11 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	plan = regex_opt.Rewrite(move(plan));
 	context.profiler.EndPhase();
 
+	context.profiler.StartPhase("in_clause");
+	InClauseRewriter rewriter(*this);
+	plan = rewriter.Rewrite(move(plan));
+	context.profiler.EndPhase();
+
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
 	context.profiler.StartPhase("join_order");
@@ -102,9 +109,14 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// cse_optimizer.VisitOperator(*plan);
 	// context.profiler.EndPhase();
 
-	context.profiler.StartPhase("in_clause");
-	InClauseRewriter rewriter(*this);
-	plan = rewriter.Rewrite(move(plan));
+	context.profiler.StartPhase("unused_columns");
+	RemoveUnusedColumns unused(true);
+	unused.VisitOperator(*plan);
+	context.profiler.EndPhase();
+
+	context.profiler.StartPhase("column_lifetime");
+	ColumnLifetimeAnalyzer column_lifetime(true);
+	column_lifetime.VisitOperator(*plan);
 	context.profiler.EndPhase();
 
 	// transform ORDER BY + LIMIT to TopN
@@ -182,25 +194,23 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	auto chunk_index = optimizer.binder.GenerateTableIndex();
 	auto chunk_scan = make_unique<LogicalChunkGet>(chunk_index, types, move(collection));
 
-	auto subquery_index = optimizer.binder.GenerateTableIndex();
-	auto logical_subquery = make_unique<LogicalSubquery>(move(chunk_scan), subquery_index);
-
 	// then we generate the MARK join with the chunk scan on the RHS
 	auto join = make_unique<LogicalComparisonJoin>(JoinType::MARK);
+	join->mark_index = chunk_index;
 	join->AddChild(move(root));
-	join->AddChild(move(logical_subquery));
+	join->AddChild(move(chunk_scan));
 	// create the JOIN condition
 	JoinCondition cond;
 	cond.left = move(expr.children[0]);
 
-	cond.right = make_unique<BoundColumnRefExpression>(in_type, ColumnBinding(subquery_index, 0));
+	cond.right = make_unique<BoundColumnRefExpression>(in_type, ColumnBinding(chunk_index, 0));
 	cond.comparison = ExpressionType::COMPARE_EQUAL;
 	join->conditions.push_back(move(cond));
 	root = move(join);
 
 	// we replace the original subquery with a BoundColumnRefExpression refering to the mark column
 	unique_ptr<Expression> result =
-	    make_unique<BoundColumnRefExpression>("IN (...)", TypeId::BOOLEAN, ColumnBinding(subquery_index, 0));
+	    make_unique<BoundColumnRefExpression>("IN (...)", TypeId::BOOLEAN, ColumnBinding(chunk_index, 0));
 	if (!is_regular_in) {
 		// NOT IN: invert
 		auto invert = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, TypeId::BOOLEAN);

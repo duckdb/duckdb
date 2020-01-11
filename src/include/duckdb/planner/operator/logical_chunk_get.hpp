@@ -29,6 +29,11 @@ public:
 	//! The chunk collection to scan
 	unique_ptr<ChunkCollection> collection;
 
+public:
+	vector<ColumnBinding> GetColumnBindings() override {
+		return GenerateColumnBindings(table_index, chunk_types.size());
+	}
+
 protected:
 	void ResolveTypes() override {
 		// types are resolved in the constructor

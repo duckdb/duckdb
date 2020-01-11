@@ -10,7 +10,6 @@ add_library_unity(duckdb_planner_operator
                   logical_join.cpp
                   logical_projection.cpp
                   logical_prune_columns.cpp
-                  logical_subquery.cpp
                   logical_table_function.cpp
                   logical_window.cpp
                   logical_distinct.cpp)
