@@ -65,6 +65,7 @@ void PhysicalHashJoin::BuildHashTable(ClientContext &context, PhysicalOperatorSt
 		// build the HT
 		if (right_projection_map.size() > 0) {
 			// there is a projection map: fill the build chunk with the projected columns
+			build_chunk.Reset();
 			for(index_t i = 0; i < right_projection_map.size(); i++) {
 				build_chunk.data[i].Reference(right_chunk.data[right_projection_map[i]]);
 			}

@@ -62,6 +62,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		}
 		auto &comp_join = (LogicalComparisonJoin&) op;
 		// FIXME for now, we only push into the projection map for equality (hash) joins
+		// FIXME: add projection to LHS as well
 		bool has_equality = false;
 		for (auto &cond : comp_join.conditions) {
 			if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
