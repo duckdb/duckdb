@@ -91,6 +91,11 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	plan = regex_opt.Rewrite(move(plan));
 	context.profiler.EndPhase();
 
+	context.profiler.StartPhase("in_clause");
+	InClauseRewriter rewriter(*this);
+	plan = rewriter.Rewrite(move(plan));
+	context.profiler.EndPhase();
+
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
 	context.profiler.StartPhase("join_order");
@@ -112,11 +117,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	context.profiler.StartPhase("column_lifetime");
 	ColumnLifetimeAnalyzer column_lifetime(true);
 	column_lifetime.VisitOperator(*plan);
-	context.profiler.EndPhase();
-
-	context.profiler.StartPhase("in_clause");
-	InClauseRewriter rewriter(*this);
-	plan = rewriter.Rewrite(move(plan));
 	context.profiler.EndPhase();
 
 	// transform ORDER BY + LIMIT to TopN
