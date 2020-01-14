@@ -13,7 +13,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
                                                               unordered_set<index_t> &left_bindings,
                                                               unordered_set<index_t> &right_bindings) {
 	auto &join = (LogicalJoin &)*op;
-	assert(join.type == JoinType::INNER);
+	assert(join.join_type == JoinType::INNER);
 	assert(op->type != LogicalOperatorType::DELIM_JOIN);
 	// inner join: gather all the conditions of the inner join and add to the filter list
 	if (op->type == LogicalOperatorType::ANY_JOIN) {

@@ -3,7 +3,6 @@
 #include "duckdb/planner/logical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
-#include "duckdb/planner/operator/logical_subquery.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 
 using namespace duckdb;
@@ -39,17 +38,15 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CastLogicalOperatorToTypes(vec
 		// found a non-projection operator
 		// push a new projection containing the casts
 
-		// first push a logical subquery
-		auto subquery_index = binder.GenerateTableIndex();
-		auto subquery = make_unique<LogicalSubquery>(move(op), subquery_index);
-
-		assert(subquery->column_count == source_types.size());
+		// fetch the set of column bindings
+		auto setop_columns = op->GetColumnBindings();
+		assert(setop_columns.size() == source_types.size());
 
 		// now generate the expression list
 		vector<unique_ptr<Expression>> select_list;
 		for (index_t i = 0; i < target_types.size(); i++) {
-			unique_ptr<Expression> result = make_unique<BoundColumnRefExpression>(GetInternalType(source_types[i]),
-			                                                                      ColumnBinding(subquery_index, i));
+			unique_ptr<Expression> result =
+			    make_unique<BoundColumnRefExpression>(GetInternalType(source_types[i]), setop_columns[i]);
 			if (source_types[i] != target_types[i]) {
 				// add a cast only if the source and target types are not equivalent
 				result = make_unique<BoundCastExpression>(GetInternalType(target_types[i]), move(result),
@@ -58,7 +55,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CastLogicalOperatorToTypes(vec
 			select_list.push_back(move(result));
 		}
 		auto projection = make_unique<LogicalProjection>(binder.GenerateTableIndex(), move(select_list));
-		projection->children.push_back(move(subquery));
+		projection->children.push_back(move(op));
 		return move(projection);
 	}
 }

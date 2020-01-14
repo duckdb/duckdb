@@ -4,12 +4,12 @@
 using namespace duckdb;
 using namespace std;
 
-LogicalComparisonJoin::LogicalComparisonJoin(JoinType type, LogicalOperatorType logical_type)
-    : LogicalJoin(type, logical_type) {
+LogicalComparisonJoin::LogicalComparisonJoin(JoinType join_type, LogicalOperatorType logical_type)
+    : LogicalJoin(join_type, logical_type) {
 }
 
 string LogicalComparisonJoin::ParamsToString() const {
-	string result = "[" + JoinTypeToString(type);
+	string result = "[" + JoinTypeToString(join_type);
 	if (conditions.size() > 0) {
 		result += " ";
 		result += StringUtil::Join(conditions, conditions.size(), ", ", [](const JoinCondition &condition) {

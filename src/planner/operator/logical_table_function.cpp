@@ -5,6 +5,10 @@
 using namespace duckdb;
 using namespace std;
 
+vector<ColumnBinding> LogicalTableFunction::GetColumnBindings() {
+	return GenerateColumnBindings(table_index, function->function.types.size());
+}
+
 void LogicalTableFunction::ResolveTypes() {
 	for (auto &type : function->function.types) {
 		types.push_back(GetInternalType(type));

@@ -64,8 +64,7 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
                                               LogicalOperator *parent) {
 	LogicalOperator *op = &input_op;
-	while (op->children.size() == 1 && op->type != LogicalOperatorType::SUBQUERY &&
-	       op->type != LogicalOperatorType::PROJECTION) {
+	while (op->children.size() == 1 && op->type != LogicalOperatorType::PROJECTION) {
 		if (op->type == LogicalOperatorType::FILTER) {
 			// extract join conditions from filter
 			filter_operators.push_back(op);
@@ -88,7 +87,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 
 	if (op->type == LogicalOperatorType::COMPARISON_JOIN) {
 		LogicalJoin *join = (LogicalJoin *)op;
-		if (join->type == JoinType::INNER) {
+		if (join->join_type == JoinType::INNER) {
 			// extract join conditions from inner join
 			filter_operators.push_back(op);
 		} else {
@@ -132,17 +131,6 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		auto get = (LogicalGet *)op;
 		auto relation = make_unique<Relation>(&input_op, parent);
 		relation_mapping[get->table_index] = relations.size();
-		relations.push_back(move(relation));
-		return true;
-	} else if (op->type == LogicalOperatorType::SUBQUERY) {
-		auto subquery = (LogicalSubquery *)op;
-		assert(op->children.size() == 1);
-		// we run the join order optimizer witin the subquery as well
-		JoinOrderOptimizer optimizer;
-		op->children[0] = optimizer.Optimize(move(op->children[0]));
-		// now we add the subquery to the set of relations
-		auto relation = make_unique<Relation>(&input_op, parent);
-		relation_mapping[subquery->table_index] = relations.size();
 		relations.push_back(move(relation));
 		return true;
 	} else if (op->type == LogicalOperatorType::TABLE_FUNCTION) {
@@ -649,7 +637,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	for (auto &op : filter_operators) {
 		if (op->type == LogicalOperatorType::COMPARISON_JOIN) {
 			auto &join = (LogicalComparisonJoin &)*op;
-			assert(join.type == JoinType::INNER);
+			assert(join.join_type == JoinType::INNER);
 			assert(join.expressions.size() == 0);
 			for (auto &cond : join.conditions) {
 				auto comparison =

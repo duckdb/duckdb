@@ -14,9 +14,20 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalFilter &op
 	unique_ptr<PhysicalOperator> plan = CreatePlan(*op.children[0]);
 	if (op.expressions.size() > 0) {
 		// create a filter if there is anything to filter
-		auto filter = make_unique<PhysicalFilter>(op.types, move(op.expressions));
+		auto filter = make_unique<PhysicalFilter>(op.children[0]->types, move(op.expressions));
 		filter->children.push_back(move(plan));
 		plan = move(filter);
+
+		if (op.projection_map.size() > 0) {
+			// there is a projection map, generate a physical projection
+			vector<unique_ptr<Expression>> select_list;
+			for (index_t i = 0; i < op.projection_map.size(); i++) {
+				select_list.push_back(make_unique<BoundReferenceExpression>(op.types[i], op.projection_map[i]));
+			}
+			auto proj = make_unique<PhysicalProjection>(op.types, move(select_list));
+			proj->children.push_back(move(plan));
+			plan = move(proj);
+		}
 	}
 	return plan;
 }

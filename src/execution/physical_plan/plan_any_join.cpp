@@ -14,5 +14,5 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAnyJoin &o
 	auto right = CreatePlan(*op.children[1]);
 
 	// create the blockwise NL join
-	return make_unique<PhysicalBlockwiseNLJoin>(op, move(left), move(right), move(op.condition), op.type);
+	return make_unique<PhysicalBlockwiseNLJoin>(op, move(left), move(right), move(op.condition), op.join_type);
 }

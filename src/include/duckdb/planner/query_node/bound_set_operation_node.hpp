@@ -33,6 +33,11 @@ public:
 	unique_ptr<Binder> left_binder;
 	//! The binder used by the right side of the set operation
 	unique_ptr<Binder> right_binder;
+
+public:
+	index_t GetRootIndex() override {
+		return setop_index;
+	}
 };
 
 }; // namespace duckdb

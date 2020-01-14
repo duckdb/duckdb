@@ -36,7 +36,6 @@ enum class LogicalOperatorType : uint8_t {
 	DELIM_GET,
 	EXPRESSION_GET,
 	TABLE_FUNCTION,
-	SUBQUERY,
 	EMPTY_RESULT,
 	// -----------------------------
 	// Joins

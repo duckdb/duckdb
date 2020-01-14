@@ -34,9 +34,7 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		for (auto &expr : expressions) {
-			types.push_back(expr->return_type);
-		}
+		types.push_back(TypeId::BIGINT);
 	}
 };
 } // namespace duckdb

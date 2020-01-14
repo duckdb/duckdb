@@ -26,6 +26,9 @@ public:
 	//! The table index of the table-producing function
 	index_t table_index;
 
+public:
+	vector<ColumnBinding> GetColumnBindings() override;
+
 protected:
 	void ResolveTypes() override;
 };

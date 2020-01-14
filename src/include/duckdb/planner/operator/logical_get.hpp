@@ -16,12 +16,8 @@ namespace duckdb {
 //! LogicalGet represents a scan operation from a data source
 class LogicalGet : public LogicalOperator {
 public:
-	LogicalGet(index_t table_index)
-	    : LogicalOperator(LogicalOperatorType::GET), table(nullptr), table_index(table_index) {
-	}
-	LogicalGet(TableCatalogEntry *table, index_t table_index, vector<column_t> column_ids)
-	    : LogicalOperator(LogicalOperatorType::GET), table(table), table_index(table_index), column_ids(column_ids) {
-	}
+	LogicalGet(index_t table_index);
+	LogicalGet(TableCatalogEntry *table, index_t table_index, vector<column_t> column_ids);
 
 	index_t EstimateCardinality() override;
 
@@ -32,12 +28,10 @@ public:
 	//! Bound column IDs
 	vector<column_t> column_ids;
 
-	string ParamsToString() const override {
-		if (!table) {
-			return "";
-		}
-		return "(" + table->name + ")";
-	}
+	string ParamsToString() const override;
+
+public:
+	vector<ColumnBinding> GetColumnBindings() override;
 
 protected:
 	void ResolveTypes() override;

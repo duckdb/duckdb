@@ -38,7 +38,6 @@ class LogicalCopyFromFile;
 class LogicalCopyToFile;
 class LogicalExplain;
 class LogicalSetOperation;
-class LogicalSubquery;
 class LogicalUpdate;
 class LogicalTableFunction;
 class LogicalPrepare;
