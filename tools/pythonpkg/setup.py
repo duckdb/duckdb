@@ -27,7 +27,7 @@ if not os.path.exists('duckdb.cpp'):
 
 
 includes = [numpy.get_include(), '.']
-sources = ['duckdb.cpp', 'connection.cpp', 'cursor.cpp', 'module.cpp']
+sources = ['connection.cpp', 'cursor.cpp', 'module.cpp', 'duckdb.cpp']
 
 toolchain_args = ['-std=c++11', '-Wall']
 
