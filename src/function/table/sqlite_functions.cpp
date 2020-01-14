@@ -36,7 +36,6 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	select->from_table = move(function_expr);
 	info.query = move(select);
 //	catalog.CreateView(transaction, &info);
-
 }
 
 } // namespace duckdb
