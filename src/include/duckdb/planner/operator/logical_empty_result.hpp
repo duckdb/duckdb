@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/table_binding_resolver.hpp"
 
 namespace duckdb {
 
@@ -19,9 +18,15 @@ class LogicalEmptyResult : public LogicalOperator {
 public:
 	LogicalEmptyResult(unique_ptr<LogicalOperator> op);
 
+	//! The set of return types of the empty result
 	vector<TypeId> return_types;
-	//! The tables that would be bound at this location (if the subtree was not optimized away)
-	vector<BoundTable> bound_tables;
+	//! The columns that would be bound at this location (if the subtree was not optimized away)
+	vector<ColumnBinding> bindings;
+
+public:
+	vector<ColumnBinding> GetColumnBindings() override {
+		return bindings;
+	}
 
 protected:
 	void ResolveTypes() override {

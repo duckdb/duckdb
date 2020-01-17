@@ -21,6 +21,9 @@ public:
 
 	index_t window_index;
 
+public:
+	vector<ColumnBinding> GetColumnBindings() override;
+
 protected:
 	void ResolveTypes() override;
 };

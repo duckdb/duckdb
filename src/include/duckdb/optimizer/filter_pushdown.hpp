@@ -47,8 +47,6 @@ private:
 	unique_ptr<LogicalOperator> PushdownCrossProduct(unique_ptr<LogicalOperator> op);
 	//! Push down a join operator
 	unique_ptr<LogicalOperator> PushdownJoin(unique_ptr<LogicalOperator> op);
-	//! Push down a LogicalSubquery op
-	unique_ptr<LogicalOperator> PushdownSubquery(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalProjection op
 	unique_ptr<LogicalOperator> PushdownProjection(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalSetOperation op

@@ -22,6 +22,11 @@ public:
 
 	vector<BoundOrderByNode> orders;
 
+public:
+	vector<ColumnBinding> GetColumnBindings() override {
+		return children[0]->GetColumnBindings();
+	}
+
 protected:
 	void ResolveTypes() override {
 		types = children[0]->types;

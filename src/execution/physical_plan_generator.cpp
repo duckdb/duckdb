@@ -118,9 +118,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalExecute &)op);
 	case LogicalOperatorType::INDEX_SCAN:
 		return CreatePlan((LogicalIndexScan &)op);
-	case LogicalOperatorType::SUBQUERY:
-		// subquery nodes are only there for column binding; we ignore them in physical plan generation
-		return CreatePlan(*op.children[0]);
 	case LogicalOperatorType::TRANSACTION:
 	case LogicalOperatorType::CREATE_VIEW:
 	case LogicalOperatorType::CREATE_SEQUENCE:

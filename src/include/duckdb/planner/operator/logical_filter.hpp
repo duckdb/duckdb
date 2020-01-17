@@ -18,6 +18,11 @@ public:
 	LogicalFilter(unique_ptr<Expression> expression);
 	LogicalFilter();
 
+	vector<index_t> projection_map;
+
+public:
+	vector<ColumnBinding> GetColumnBindings() override;
+
 	bool SplitPredicates() {
 		return SplitPredicates(expressions);
 	}

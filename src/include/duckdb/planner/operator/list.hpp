@@ -27,7 +27,6 @@
 #include "duckdb/planner/operator/logical_prune_columns.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
-#include "duckdb/planner/operator/logical_subquery.hpp"
 #include "duckdb/planner/operator/logical_table_function.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"

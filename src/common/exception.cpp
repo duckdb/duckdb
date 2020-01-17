@@ -86,6 +86,8 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 		return "INTERRUPT";
 	case ExceptionType::FATAL:
 		return "FATAL";
+	case ExceptionType::INTERNAL:
+		return "INTERNAL";
 	default:
 		return "Unknown";
 	}
@@ -176,5 +178,9 @@ InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, "
 }
 
 FatalException::FatalException(string msg, ...) : Exception(ExceptionType::FATAL, msg) {
+	FORMAT_CONSTRUCTOR(msg);
+}
+
+InternalException::InternalException(string msg, ...) : Exception(ExceptionType::INTERNAL, msg) {
 	FORMAT_CONSTRUCTOR(msg);
 }

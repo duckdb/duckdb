@@ -27,7 +27,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundCopyStatement 
 		// first create a plan for the insert statement
 		auto insert = CreatePlan(*stmt.bound_insert);
 		// now create the copy statement and set it as a child of the insert statement
-		auto copy = make_unique<LogicalCopyFromFile>(move(stmt.info), stmt.sql_types);
+		auto copy = make_unique<LogicalCopyFromFile>(0, move(stmt.info), stmt.sql_types);
 		insert->children.push_back(move(copy));
 		return insert;
 	}

@@ -18,7 +18,7 @@ namespace duckdb {
 class LogicalIndexScan : public LogicalOperator {
 public:
 	LogicalIndexScan(TableCatalogEntry &tableref, DataTable &table, Index &index, vector<column_t> column_ids,
-	                 size_t table_index)
+	                 index_t table_index)
 	    : LogicalOperator(LogicalOperatorType::INDEX_SCAN), tableref(tableref), table(table), index(index),
 	      column_ids(column_ids), table_index(table_index) {
 	}
@@ -47,10 +47,15 @@ public:
 	ExpressionType high_expression_type;
 
 	//! The table index in the current bind context
-	size_t table_index;
+	index_t table_index;
+
+public:
+	vector<ColumnBinding> GetColumnBindings() override {
+		return GenerateColumnBindings(table_index, column_ids.size());
+	}
 
 protected:
-	void ResolveTypes() {
+	void ResolveTypes() override {
 		if (column_ids.size() == 0) {
 			types = {TypeId::INTEGER};
 		} else {

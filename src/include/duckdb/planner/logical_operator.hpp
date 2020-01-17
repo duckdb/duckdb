@@ -13,6 +13,7 @@
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 #include <functional>
 
@@ -40,9 +41,12 @@ public:
 	vector<TypeId> types;
 
 public:
-	LogicalOperatorType GetOperatorType() {
-		return type;
+	virtual vector<ColumnBinding> GetColumnBindings() {
+		return {};
 	}
+	static vector<ColumnBinding> GenerateColumnBindings(index_t table_idx, index_t column_count);
+	static vector<TypeId> MapTypes(vector<TypeId> types, vector<index_t> projection_map);
+	static vector<ColumnBinding> MapBindings(vector<ColumnBinding> types, vector<index_t> projection_map);
 
 	//! Resolve the types of the logical operator and its children
 	void ResolveOperatorTypes();

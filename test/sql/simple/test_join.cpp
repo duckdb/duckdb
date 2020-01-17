@@ -81,6 +81,18 @@ TEST_CASE("Test basic joins of tables", "[joins]") {
 		REQUIRE(CHECK_COLUMN(result, 1, {}));
 		REQUIRE(CHECK_COLUMN(result, 2, {}));
 	}
+
+	SECTION("equality join where both lhs and rhs keys are projected") {
+		result = con.Query("SELECT * FROM (VALUES (1)) tbl(i) JOIN (VALUES (1)) tbl2(j) ON (i=j);");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	}
+	SECTION("equality join where both lhs and rhs keys are projected with filter") {
+		result =
+		    con.Query("SELECT * FROM (VALUES (1), (2)) tbl(i) JOIN (VALUES (1), (2)) tbl2(j) ON (i=j) WHERE i+j=2;");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	}
 }
 
 TEST_CASE("Test join with > STANDARD_VECTOR_SIZE duplicates", "[joins][.]") {
@@ -389,4 +401,41 @@ TEST_CASE("Test USING joins", "[joins]") {
 	// REQUIRE(CHECK_COLUMN(result, 2, {3}));
 	// REQUIRE(CHECK_COLUMN(result, 3, {3}));
 	// REQUIRE(CHECK_COLUMN(result, 4, {3}));
+}
+
+TEST_CASE("Test joins with various columns that are only used in the join", "[joins]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+	con.EnableQueryVerification();
+
+	// create tables
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 1), (12, 2), (13, 3)"));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2 (b INTEGER, c INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (1, 10), (1, 20), (2, 30)"));
+
+	// count of single join
+	result = con.Query("SELECT COUNT(*) FROM test, test2 WHERE test.b = test2.b");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	// now a sum
+	result = con.Query("SELECT SUM(test.a) FROM test, test2 WHERE test.b = test2.b");
+	REQUIRE(CHECK_COLUMN(result, 0, {34}));
+
+	// count of multi-way join
+	result = con.Query("SELECT COUNT(*) FROM test a1, test a2, test a3 WHERE a1.b=a2.b AND a2.b=a3.b");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	// now a sum
+	result = con.Query("SELECT SUM(a1.a) FROM test a1, test a2, test a3 WHERE a1.b=a2.b AND a2.b=a3.b");
+	REQUIRE(CHECK_COLUMN(result, 0, {36}));
+
+	// count of multi-way join with filters
+	result = con.Query("SELECT COUNT(*) FROM test a1, test a2, test a3 WHERE a1.b=a2.b AND a2.b=a3.b AND a1.a=11 AND "
+	                   "a2.a=11 AND a3.a=11");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	// unused columns that become unused because of optimizer
+	result = con.Query("SELECT (TRUE OR a1.a=a2.b) FROM test a1, test a2 WHERE a1.a=11 AND a2.a>=10");
+	REQUIRE(CHECK_COLUMN(result, 0, {true, true, true}));
 }

@@ -199,7 +199,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		bool left_has_correlation = has_correlated_expressions.find(plan->children[0].get())->second;
 		bool right_has_correlation = has_correlated_expressions.find(plan->children[1].get())->second;
 
-		if (join.type == JoinType::INNER) {
+		if (join.join_type == JoinType::INNER) {
 			// inner join
 			if (!right_has_correlation) {
 				// only left has correlation: push into left
@@ -211,14 +211,14 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				plan->children[1] = PushDownDependentJoinInternal(move(plan->children[1]));
 				return plan;
 			}
-		} else if (join.type == JoinType::LEFT) {
+		} else if (join.join_type == JoinType::LEFT) {
 			// left outer join
 			if (!right_has_correlation) {
 				// only left has correlation: push into left
 				plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
 				return plan;
 			}
-		} else if (join.type == JoinType::MARK) {
+		} else if (join.join_type == JoinType::MARK) {
 			if (right_has_correlation) {
 				throw Exception("MARK join with correlation in RHS not supported");
 			}
@@ -240,7 +240,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		auto left_binding = this->base_binding;
 		plan->children[1] = PushDownDependentJoinInternal(move(plan->children[1]));
 		auto right_binding = this->base_binding;
-		if (join.type == JoinType::LEFT) {
+		if (join.join_type == JoinType::LEFT) {
 			this->base_binding = left_binding;
 		}
 		// add the correlated columns to the join conditions
@@ -273,17 +273,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			// limit > 0 does nothing
 			return move(plan->children[0]);
 		}
-	}
-	case LogicalOperatorType::SUBQUERY: {
-		auto &subquery = (LogicalSubquery &)*plan;
-		// subquery node: push into children
-		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
-		// to get the correlated columns we have to refer to the subquery now
-		base_binding.table_index = subquery.table_index;
-		base_binding.column_index = subquery.column_count;
-		// we have to add the correlated columns to the projection set of the subquery
-		subquery.column_count += correlated_columns.size();
-		return plan;
 	}
 	case LogicalOperatorType::WINDOW: {
 		auto &window = (LogicalWindow &)*plan;

@@ -24,6 +24,11 @@ public:
 	//! The offset from the start to begin emitting elements
 	int64_t offset;
 
+public:
+	vector<ColumnBinding> GetColumnBindings() override {
+		return children[0]->GetColumnBindings();
+	}
+
 protected:
 	void ResolveTypes() override {
 		types = children[0]->types;

@@ -22,13 +22,23 @@ public:
 };
 
 PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-                                   unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type)
-    : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type) {
+                                   unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
+                                   vector<index_t> left_projection_map, vector<index_t> right_projection_map)
+    : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type),
+      right_projection_map(right_projection_map) {
 	children.push_back(move(left));
 	children.push_back(move(right));
 
+	assert(left_projection_map.size() == 0);
+
 	hash_table =
-	    make_unique<JoinHashTable>(*context.db.storage->buffer_manager, conditions, children[1]->GetTypes(), type);
+	    make_unique<JoinHashTable>(*context.db.storage->buffer_manager, conditions,
+	                               LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map), type);
+}
+
+PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, unique_ptr<PhysicalOperator> left,
+                                   unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type)
+    : PhysicalHashJoin(context, op, move(left), move(right), move(cond), join_type, {}, {}) {
 }
 
 void PhysicalHashJoin::BuildHashTable(ClientContext &context, PhysicalOperatorState *state_) {
@@ -38,8 +48,12 @@ void PhysicalHashJoin::BuildHashTable(ClientContext &context, PhysicalOperatorSt
 	auto right_state = children[1]->GetOperatorState();
 	auto types = children[1]->GetTypes();
 
-	DataChunk right_chunk;
+	DataChunk right_chunk, build_chunk;
 	right_chunk.Initialize(types);
+
+	if (right_projection_map.size() > 0) {
+		build_chunk.Initialize(hash_table->build_types);
+	}
 
 	state->join_keys.Initialize(hash_table->condition_types);
 	while (true) {
@@ -50,9 +64,19 @@ void PhysicalHashJoin::BuildHashTable(ClientContext &context, PhysicalOperatorSt
 		}
 		// resolve the join keys for the right chunk
 		state->rhs_executor.Execute(right_chunk, state->join_keys);
-
 		// build the HT
-		hash_table->Build(state->join_keys, right_chunk);
+		if (right_projection_map.size() > 0) {
+			// there is a projection map: fill the build chunk with the projected columns
+			build_chunk.Reset();
+			for (index_t i = 0; i < right_projection_map.size(); i++) {
+				build_chunk.data[i].Reference(right_chunk.data[right_projection_map[i]]);
+			}
+			build_chunk.sel_vector = right_chunk.sel_vector;
+			hash_table->Build(state->join_keys, build_chunk);
+		} else {
+			// there is not a projected map: place the entire right chunk in the HT
+			hash_table->Build(state->join_keys, right_chunk);
+		}
 	}
 	hash_table->Finalize();
 }
