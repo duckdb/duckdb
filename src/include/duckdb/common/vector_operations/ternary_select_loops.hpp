@@ -38,9 +38,9 @@ static inline index_t ternary_select_loop(A_TYPE *__restrict adata, B_TYPE *__re
 
 template <class A_TYPE, class B_TYPE, class C_TYPE, class OP>
 index_t templated_ternary_select(Vector &a, Vector &b, Vector &c, sel_t result[]) {
-	auto adata = (A_TYPE *)a.data;
-	auto bdata = (B_TYPE *)b.data;
-	auto cdata = (C_TYPE *)c.data;
+	auto adata = (A_TYPE *)a.GetData();
+	auto bdata = (B_TYPE *)b.GetData();
+	auto cdata = (C_TYPE *)c.GetData();
 
 	if (a.IsConstant()) {
 		if (a.nullmask[0]) {

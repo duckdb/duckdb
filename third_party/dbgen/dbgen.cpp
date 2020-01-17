@@ -43,7 +43,7 @@ struct tpch_append_information {
 };
 
 void append_value(DataChunk &chunk, size_t index, size_t &column, int32_t value) {
-	((int32_t *)chunk.data[column++].data)[index] = value;
+	((int32_t *)chunk.data[column++].GetData())[index] = value;
 }
 
 void append_string(DataChunk &chunk, size_t index, size_t &column, const char *value) {
@@ -51,11 +51,11 @@ void append_string(DataChunk &chunk, size_t index, size_t &column, const char *v
 }
 
 void append_decimal(DataChunk &chunk, size_t index, size_t &column, int64_t value) {
-	((double *)chunk.data[column++].data)[index] = (double)value / 100.0;
+	((double *)chunk.data[column++].GetData())[index] = (double)value / 100.0;
 }
 
 void append_date(DataChunk &chunk, size_t index, size_t &column, string value) {
-	((date_t *)chunk.data[column++].data)[index] = Date::FromString(value);
+	((date_t *)chunk.data[column++].GetData())[index] = Date::FromString(value);
 }
 
 void append_char(DataChunk &chunk, size_t index, size_t &column, char value) {

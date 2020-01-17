@@ -21,9 +21,9 @@ template <class OP, class NULLOP> void templated_boolean_nullmask(Vector &left, 
 		throw TypeMismatchException(left.type, right.type, "Conjunction can only be applied on boolean values");
 	}
 
-	auto ldata = (bool *)left.data;
-	auto rdata = (bool *)right.data;
-	auto result_data = (bool *)result.data;
+	auto ldata = (bool *)left.GetData();
+	auto rdata = (bool *)right.GetData();
+	auto result_data = (bool *)result.GetData();
 
 	if (left.IsConstant()) {
 		bool left_null = left.nullmask[0];

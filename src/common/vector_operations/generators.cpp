@@ -19,7 +19,7 @@ void generate_sequence_function(T *__restrict result_data, T value, T increment,
 }
 
 template <class T> void templated_generate_sequence(Vector &result, T start, T increment) {
-	auto ldata = (T *)result.data;
+	auto ldata = (T *)result.GetData();
 	generate_sequence_function<T>(ldata, start, increment, result.count, result.sel_vector);
 }
 

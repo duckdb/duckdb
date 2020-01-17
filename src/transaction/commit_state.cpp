@@ -94,7 +94,7 @@ void CommitState::WriteDelete(DeleteInfo *info) {
 		vector<TypeId> delete_types = {ROW_TYPE};
 		delete_chunk->Initialize(delete_types);
 	}
-	auto rows = (row_t *)delete_chunk->data[0].data;
+	auto rows = (row_t *)delete_chunk->data[0].GetData();
 	for (index_t i = 0; i < info->count; i++) {
 		rows[i] = info->base_row + info->rows[i];
 	}
@@ -121,7 +121,7 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	update_chunk->data[0].count = info->N;
 
 	// write the row ids into the chunk
-	auto row_ids = (row_t *)update_chunk->data[1].data;
+	auto row_ids = (row_t *)update_chunk->data[1].GetData();
 	index_t start = info->segment->row_start + info->vector_index * STANDARD_VECTOR_SIZE;
 	for (index_t i = 0; i < info->N; i++) {
 		row_ids[info->tuples[i]] = start + info->tuples[i];

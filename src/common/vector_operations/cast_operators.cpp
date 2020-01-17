@@ -11,8 +11,8 @@ using namespace std;
 
 template <class SRC_TYPE, class DST_TYPE, class OP, bool IGNORE_NULL>
 void templated_cast_loop(Vector &source, Vector &result) {
-	auto ldata = (SRC_TYPE *)source.data;
-	auto result_data = (DST_TYPE *)result.data;
+	auto ldata = (SRC_TYPE *)source.GetData();
+	auto result_data = (DST_TYPE *)result.GetData();
 	if (!IGNORE_NULL || !result.nullmask.any()) {
 		VectorOperations::Exec(source, [&](index_t i, index_t k) {
 			result_data[i] = OP::template Operation<SRC_TYPE, DST_TYPE>(ldata[i]);
@@ -30,8 +30,8 @@ template <class SRC, class OP> static void string_cast(Vector &source, Vector &r
 	assert(result.type == TypeId::VARCHAR);
 	// result is VARCHAR
 	// we have to place the resulting strings in the string heap
-	auto ldata = (SRC *)source.data;
-	auto result_data = (const char **)result.data;
+	auto ldata = (SRC *)source.GetData();
+	auto result_data = (const char **)result.GetData();
 	VectorOperations::Exec(source, [&](index_t i, index_t k) {
 		if (source.nullmask[i]) {
 			result_data[i] = nullptr;

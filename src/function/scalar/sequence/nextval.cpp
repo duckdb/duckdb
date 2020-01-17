@@ -99,7 +99,7 @@ static void nextval_function(DataChunk &args, ExpressionState &state, Vector &re
 	if (info.sequence) {
 		// sequence to use is hard coded
 		// increment the sequence
-		int64_t *result_data = (int64_t *)result.data;
+		auto result_data = (int64_t *)result.GetData();
 		VectorOperations::Exec(result, [&](index_t i, index_t k) {
 			// get the next value from the sequence
 			result_data[i] = next_sequence_value(transaction, info.sequence);
@@ -107,7 +107,7 @@ static void nextval_function(DataChunk &args, ExpressionState &state, Vector &re
 	} else {
 		// sequence to use comes from the input
 		assert(result.count == input.count && result.sel_vector == input.sel_vector);
-		int64_t *result_data = (int64_t *)result.data;
+		auto result_data = (int64_t *)result.GetData();
 		VectorOperations::ExecType<const char *>(input, [&](const char *value, index_t i, index_t k) {
 			// first get the sequence schema/name
 			string schema, seq;

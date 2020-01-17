@@ -55,7 +55,7 @@ public:
 };
 
 void VersionManager::Delete(Transaction &transaction, Vector &row_ids) {
-	auto ids = (row_t *)row_ids.data;
+	auto ids = (row_t *)row_ids.GetData();
 
 	VersionDeleteState del_state(*this, transaction, base_row);
 

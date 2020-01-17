@@ -132,7 +132,7 @@ LocalTableStorage *LocalStorage::GetStorage(DataTable *table) {
 }
 
 static index_t GetChunk(Vector &row_identifiers) {
-	auto ids = (row_t *)row_identifiers.data;
+	auto ids = (row_t *)row_identifiers.GetData();
 	auto first_id = ids[0] - MAX_ROW_ID;
 
 	index_t chunk_idx = first_id / STANDARD_VECTOR_SIZE;
@@ -168,7 +168,7 @@ void LocalStorage::Delete(DataTable *table, Vector &row_identifiers) {
 	// now actually mark the entries as deleted in the deleted vector
 	index_t base_index = MAX_ROW_ID + chunk_idx * STANDARD_VECTOR_SIZE;
 
-	auto ids = (row_t *)row_identifiers.data;
+	auto ids = (row_t *)row_identifiers.GetData();
 	VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
 		auto id = ids[i] - base_index;
 		deleted[id] = true;
@@ -177,9 +177,9 @@ void LocalStorage::Delete(DataTable *table, Vector &row_identifiers) {
 
 template <class T>
 static void update_data(Vector &data_vector, Vector &update_vector, Vector &row_identifiers, index_t base_index) {
-	auto target = (T *)data_vector.data;
-	auto updates = (T *)update_vector.data;
-	auto ids = (row_t *)row_identifiers.data;
+	auto target = (T *)data_vector.GetData();
+	auto updates = (T *)update_vector.GetData();
+	auto ids = (row_t *)row_identifiers.GetData();
 	VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
 		auto id = ids[i] - base_index;
 		target[id] = updates[i];

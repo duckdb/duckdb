@@ -37,8 +37,8 @@ static inline index_t binary_select_loop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 index_t templated_binary_select(Vector &left, Vector &right, sel_t result[]) {
-	auto ldata = (LEFT_TYPE *)left.data;
-	auto rdata = (RIGHT_TYPE *)right.data;
+	auto ldata = (LEFT_TYPE *)left.GetData();
+	auto rdata = (RIGHT_TYPE *)right.GetData();
 
 	if (left.IsConstant()) {
 		if (right.IsConstant()) {

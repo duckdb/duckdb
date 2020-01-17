@@ -60,7 +60,7 @@ void NumericSegment::FetchBaseData(ColumnScanState &state, index_t vector_index,
 	index_t count = GetVectorCount(vector_index);
 	// fetch the nullmask and copy the data from the base table
 	result.nullmask = *((nullmask_t *)(data + offset));
-	memcpy(result.data, data + offset + sizeof(nullmask_t), count * type_size);
+	memcpy(result.GetData(), data + offset + sizeof(nullmask_t), count * type_size);
 	result.count = count;
 }
 
@@ -87,7 +87,7 @@ void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction,
 	auto vector_ptr = data + sizeof(nullmask_t);
 
 	result.nullmask[result.count] = nullmask[id_in_vector];
-	memcpy(result.data + result.count * type_size, vector_ptr + id_in_vector * type_size, type_size);
+	memcpy(result.GetData() + result.count * type_size, vector_ptr + id_in_vector * type_size, type_size);
 	if (versions && versions[vector_index]) {
 		// version information: follow the version chain to find out if we need to load this tuple data from any other
 		// version
@@ -203,7 +203,7 @@ template <class T>
 static void append_loop(SegmentStatistics &stats, data_ptr_t target, index_t target_offset, Vector &source,
                         index_t offset, index_t count) {
 	assert(offset + count <= source.count);
-	auto ldata = (T *)source.data;
+	auto ldata = (T *)source.GetData();
 	auto result_data = (T *)(target + sizeof(nullmask_t));
 	auto nullmask = (nullmask_t *)target;
 	auto min = (T *)stats.minimum.get();
@@ -270,7 +270,7 @@ static void update_loop_no_null(T *__restrict undo_data, T *__restrict base_data
 
 template <class T>
 static void update_loop(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t base, Vector &update) {
-	auto update_data = (T *)update.data;
+	auto update_data = (T *)update.GetData();
 	auto nullmask = (nullmask_t *)base;
 	auto base_data = (T *)(base + sizeof(nullmask_t));
 	auto undo_data = (T *)info->tuple_data;
@@ -314,7 +314,7 @@ static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_p
 	auto &base_nullmask = *((nullmask_t *)base);
 	auto base_data = (T *)(base + sizeof(nullmask_t));
 	auto info_data = (T *)node->tuple_data;
-	auto update_data = (T *)update.data;
+	auto update_data = (T *)update.GetData();
 
 	// first we copy the old update info into a temporary structure
 	sel_t old_ids[STANDARD_VECTOR_SIZE];
@@ -377,7 +377,7 @@ static NumericSegment::merge_update_function_t GetMergeUpdateFunction(TypeId typ
 // Update Fetch
 //===--------------------------------------------------------------------===//
 template <class T> static void update_info_fetch(Transaction &transaction, UpdateInfo *info, Vector &result) {
-	auto result_data = (T *)result.data;
+	auto result_data = (T *)result.GetData();
 	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
 		auto info_data = (T *)current->tuple_data;
 		for (index_t i = 0; i < current->N; i++) {
@@ -412,7 +412,7 @@ static NumericSegment::update_info_fetch_function_t GetUpdateInfoFetchFunction(T
 //===--------------------------------------------------------------------===//
 template <class T>
 static void update_info_append(Transaction &transaction, UpdateInfo *info, index_t row_id, Vector &result) {
-	auto result_data = (T *)result.data;
+	auto result_data = (T *)result.GetData();
 	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
 		auto info_data = (T *)current->tuple_data;
 		// loop over the tuples in this UpdateInfo

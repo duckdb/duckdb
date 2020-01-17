@@ -13,7 +13,7 @@ namespace duckdb {
 void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	// The first input parameter is the seperator
 	auto &input_separator = args.data[0];
-	auto input_separator_data = (const char **)input_separator.data;
+	auto input_separator_data = (const char **)input_separator.GetData();
 
 	// concat_ws becomes null only when the separator is null.
 	result.nullmask = input_separator.nullmask;
@@ -27,7 +27,7 @@ void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &result)
 	}
 
 	// bool has_stats = expr.function->children[0]->stats.has_stats && expr.function->children[1]->stats.has_stats;
-	auto result_data = (const char **)result.data;
+	auto result_data = (const char **)result.GetData();
 	index_t current_len = 0;
 	unique_ptr<char[]> output;
 
@@ -45,11 +45,12 @@ void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &result)
 		index_t required_len = 0;
 		for (index_t i = 1; i < args.column_count; i++) {
 			auto &input = args.data[i];
+			auto input_data = (const char **) input.GetData();
 			int current_index = mul[i] * result_index;
 
 			// Add the first non-separator string to the result string
 			if (!input.nullmask[current_index]) {
-				input_chars[i] = ((const char **)input.data)[current_index];
+				input_chars[i] = input_data[current_index];
 				// append the separator only when there is something preceding it
 				if (i > 1 && required_len > 0)
 					required_len += separator_length;

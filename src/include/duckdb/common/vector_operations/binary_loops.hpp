@@ -53,9 +53,9 @@ static inline void binary_function_loop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE 
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL = false>
 void templated_binary_loop(Vector &left, Vector &right, Vector &result) {
-	auto ldata = (LEFT_TYPE *)left.data;
-	auto rdata = (RIGHT_TYPE *)right.data;
-	auto result_data = (RESULT_TYPE *)result.data;
+	auto ldata = (LEFT_TYPE *)left.GetData();
+	auto rdata = (RIGHT_TYPE *)right.GetData();
+	auto result_data = (RESULT_TYPE *)result.GetData();
 
 	if (left.IsConstant()) {
 		// left side is constant: loop over right side
@@ -98,9 +98,9 @@ void templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 //===--------------------------------------------------------------------===//
 // to handle (division by zero -> NULL and modulo with 0 -> NULL) we have a separate function
 template <class T, class OP> void templated_divmod_loop(Vector &left, Vector &right, Vector &result) {
-	auto ldata = (T *)left.data;
-	auto rdata = (T *)right.data;
-	auto result_data = (T *)result.data;
+	auto ldata = (T *)left.GetData();
+	auto rdata = (T *)right.GetData();
+	auto result_data = (T *)result.GetData();
 
 	if (left.IsConstant()) {
 		result.sel_vector = right.sel_vector;

@@ -26,7 +26,7 @@ void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *sta
 
 	// first execute the check expression
 	Execute(*expr.check, check_state, check);
-	auto check_data = (bool *)check.data;
+	auto check_data = (bool *)check.GetData();
 	if (check.IsConstant()) {
 		// constant check: only need to execute one side
 		if (!check_data[0] || check.nullmask[0]) {
@@ -68,8 +68,8 @@ void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *sta
 }
 
 template <class T> void fill_loop(Vector &vector, Vector &result, sel_t sel[], sel_t count) {
-	auto data = (T *)vector.data;
-	auto res = (T *)result.data;
+	auto data = (T *)vector.GetData();
+	auto res = (T *)result.GetData();
 	if (vector.IsConstant()) {
 		if (vector.nullmask[0]) {
 			for (index_t i = 0; i < count; i++) {

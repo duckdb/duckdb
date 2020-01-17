@@ -72,7 +72,7 @@ void ExpressionExecutor::ExecuteExpression(index_t expr_idx, Vector &result) {
 	assert(result.type == expressions[expr_idx]->return_type);
 
 	auto owned_data = move(result.owned_data);
-	auto initial_data = result.data;
+	auto initial_data = result.GetData();
 	Execute(*expressions[expr_idx], states[expr_idx]->root_state.get(), result);
 	if (chunk) {
 		// we have an input chunk: result of this vector should have the same length as input chunk
@@ -207,7 +207,7 @@ index_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *sta
 	Vector intermediate(TypeId::BOOLEAN, (data_ptr_t)intermediate_bools);
 	Execute(expr, state, intermediate);
 
-	auto intermediate_result = (bool *)intermediate.data;
+	auto intermediate_result = (bool *)intermediate.GetData();
 	if (intermediate.IsConstant()) {
 		// constant result: get the value
 		if (intermediate_result[0] && !intermediate.nullmask[0]) {

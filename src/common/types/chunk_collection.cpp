@@ -70,8 +70,8 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 template <class TYPE>
 static int8_t templated_compare_value(Vector &left_vec, Vector &right_vec, index_t left_idx, index_t right_idx) {
 	assert(left_vec.type == right_vec.type);
-	TYPE left_val = ((TYPE *)left_vec.data)[left_idx];
-	TYPE right_val = ((TYPE *)right_vec.data)[right_idx];
+	TYPE left_val = ((TYPE *)left_vec.GetData())[left_idx];
+	TYPE right_val = ((TYPE *)right_vec.GetData())[right_idx];
 	if (left_val == right_val) {
 		return 0;
 	}
@@ -110,7 +110,7 @@ static int32_t compare_value(Vector &left_vec, Vector &right_vec, index_t vector
 	case TypeId::DOUBLE:
 		return templated_compare_value<double>(left_vec, right_vec, vector_idx_left, vector_idx_right);
 	case TypeId::VARCHAR:
-		return strcmp(((char **)left_vec.data)[vector_idx_left], ((char **)right_vec.data)[vector_idx_right]);
+		return strcmp(((char **)left_vec.GetData())[vector_idx_left], ((char **)right_vec.GetData())[vector_idx_right]);
 	default:
 		throw NotImplementedException("Type for comparison");
 	}
@@ -255,12 +255,15 @@ static void templated_set_values(ChunkCollection *src_coll, Vector &tgt_vec, ind
 
 		auto &src_chunk = src_coll->chunks[chunk_idx_src];
 		Vector &src_vec = src_chunk->data[col_idx];
+		auto source_data = (TYPE*) src_vec.GetData();
+		auto target_data = (TYPE*) tgt_vec.GetData();
+
 
 		tgt_vec.nullmask[row_idx] = src_vec.nullmask[vector_idx_src];
 		if (tgt_vec.nullmask[row_idx]) {
 			continue;
 		}
-		((TYPE *)tgt_vec.data)[row_idx] = ((TYPE *)src_vec.data)[vector_idx_src];
+		target_data[row_idx] = source_data[vector_idx_src];
 	}
 }
 

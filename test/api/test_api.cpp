@@ -262,7 +262,7 @@ static void VerifyStreamResult(unique_ptr<QueryResult> result) {
 		if (chunk->size() == 0) {
 			break;
 		}
-		int *col1_data = (int *)chunk->data[0].data;
+		auto col1_data = (int *)chunk->data[0].GetData();
 		for (size_t k = 0; k < chunk->size(); k++) {
 			if (current_row % 500 == 0) {
 				current_expected_value++;

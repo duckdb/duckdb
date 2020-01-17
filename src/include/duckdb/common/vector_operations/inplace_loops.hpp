@@ -38,8 +38,8 @@ static inline void inplace_loop_function_array(LEFT_TYPE *__restrict ldata, RESU
 }
 
 template <class LEFT_TYPE, class RESULT_TYPE, class OP> void templated_inplace_loop(Vector &input, Vector &result) {
-	auto ldata = (LEFT_TYPE *)input.data;
-	auto result_data = (RESULT_TYPE *)result.data;
+	auto ldata = (LEFT_TYPE *)input.GetData();
+	auto result_data = (RESULT_TYPE *)result.GetData();
 	if (input.IsConstant()) {
 		if (input.nullmask[0]) {
 			result.nullmask.set();

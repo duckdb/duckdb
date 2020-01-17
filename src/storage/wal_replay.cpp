@@ -282,7 +282,7 @@ void ReplayState::ReplayDelete() {
 	Vector row_identifiers(ROW_TYPE, (data_ptr_t)row_ids);
 	row_identifiers.count = 1;
 
-	auto source_ids = (row_t *)chunk.data[0].data;
+	auto source_ids = (row_t *)chunk.data[0].GetData();
 	// delete the tuples from the current table
 	for (index_t i = 0; i < chunk.size(); i++) {
 		row_ids[0] = source_ids[i];

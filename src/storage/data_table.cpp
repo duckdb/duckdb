@@ -187,7 +187,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 			// row id column: fill in the row ids
 			assert(result.data[col_idx].type == TypeId::BIGINT);
 			result.data[col_idx].count = count;
-			auto data = (int64_t *)result.data[col_idx].data;
+			auto data = (row_t *)result.data[col_idx].GetData();
 			for (index_t i = 0; i < count; i++) {
 				data[i] = rows[i];
 			}
@@ -211,7 +211,7 @@ index_t DataTable::FetchRows(Transaction &transaction, Vector &row_identifiers, 
 	// now iterate over the row ids and figure out which rows to use
 	index_t count = 0;
 
-	auto row_ids = (row_t *)row_identifiers.data;
+	auto row_ids = (row_t *)row_identifiers.GetData();
 	VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
 		auto row_id = row_ids[i];
 		bool use_row;
@@ -250,7 +250,7 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 		throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name.c_str());
 	}
 
-	int *dataptr = (int *)result.data;
+	auto dataptr = (int *)result.GetData();
 	for (index_t i = 0; i < result.count; i++) {
 		index_t index = result.sel_vector ? result.sel_vector[i] : i;
 		if (!result.nullmask[index] && dataptr[index] == 0) {
@@ -420,7 +420,7 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vec
 
 void DataTable::RemoveFromIndexes(Vector &row_identifiers) {
 	assert(!row_identifiers.sel_vector);
-	auto row_ids = (row_t *)row_identifiers.data;
+	auto row_ids = (row_t *)row_identifiers.GetData();
 	// create a selection vector from the row_ids
 	sel_t sel[STANDARD_VECTOR_SIZE];
 	for (index_t i = 0; i < row_identifiers.count; i++) {
@@ -454,7 +454,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 
 	Transaction &transaction = context.ActiveTransaction();
 
-	auto ids = (row_t *)row_identifiers.data;
+	auto ids = (row_t *)row_identifiers.GetData();
 	auto sel_vector = row_identifiers.sel_vector;
 	auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
 
@@ -566,7 +566,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	// now perform the actual update
 	Transaction &transaction = context.ActiveTransaction();
 
-	auto ids = (row_t *)row_identifiers.data;
+	auto ids = (row_t *)row_identifiers.GetData();
 	auto sel_vector = row_identifiers.sel_vector;
 	auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
 

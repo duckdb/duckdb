@@ -77,11 +77,11 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 		case TypeId::TINYINT:
 		case TypeId::SMALLINT:
 		case TypeId::INTEGER:
-		case TypeId::BIGINT:
+		case TypeId::BIGINT: {
 			// int types
 			v->Cast(TypeId::BIGINT);
+			auto data_ptr = (int64_t *)v->GetData();
 			VectorOperations::Exec(*v, [&](index_t i, index_t k) {
-				int64_t *data_ptr = (int64_t *)v->data;
 				if (!v->nullmask[i]) {
 					j["data"][col_idx] += data_ptr[i];
 
@@ -89,26 +89,14 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 					j["data"][col_idx] += nullptr;
 				}
 			});
-
 			break;
+		}
 		case TypeId::FLOAT:
-		case TypeId::DOUBLE:
+		case TypeId::DOUBLE: {
 			v->Cast(TypeId::DOUBLE);
 
+			auto data_ptr = (double *)v->GetData();
 			VectorOperations::Exec(*v, [&](index_t i, index_t k) {
-				double *data_ptr = (double *)v->data;
-				if (!v->nullmask[i]) {
-					j["data"][col_idx] += data_ptr[i];
-
-				} else {
-					j["data"][col_idx] += nullptr;
-				}
-			});
-
-			break;
-		case TypeId::VARCHAR:
-			VectorOperations::Exec(*v, [&](index_t i, index_t k) {
-				char **data_ptr = (char **)v->data;
 				if (!v->nullmask[i]) {
 					j["data"][col_idx] += data_ptr[i];
 
@@ -117,6 +105,19 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 				}
 			});
 			break;
+		}
+		case TypeId::VARCHAR: {
+			auto data_ptr = (char **)v->GetData();
+			VectorOperations::Exec(*v, [&](index_t i, index_t k) {
+				if (!v->nullmask[i]) {
+					j["data"][col_idx] += data_ptr[i];
+
+				} else {
+					j["data"][col_idx] += nullptr;
+				}
+			});
+			break;
+		}
 		default:
 			throw std::runtime_error("Unsupported Type");
 		}

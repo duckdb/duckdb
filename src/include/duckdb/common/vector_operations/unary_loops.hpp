@@ -39,8 +39,8 @@ static inline void unary_function_loop(LEFT_TYPE *__restrict ldata, RESULT_TYPE 
 
 template <class LEFT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL = false>
 void templated_unary_loop(Vector &input, Vector &result) {
-	auto ldata = (LEFT_TYPE *)input.data;
-	auto result_data = (RESULT_TYPE *)result.data;
+	auto ldata = (LEFT_TYPE *)input.GetData();
+	auto result_data = (RESULT_TYPE *)result.GetData();
 
 	unary_function_loop<LEFT_TYPE, RESULT_TYPE, OP, IGNORE_NULL>(ldata, result_data, input.count, input.sel_vector,
 	                                                             input.nullmask);

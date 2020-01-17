@@ -25,8 +25,8 @@ static inline void tight_loop_hash(T *__restrict ldata, uint64_t *__restrict res
 }
 
 template <class T> void templated_loop_hash(Vector &input, Vector &result) {
-	auto ldata = (T *)input.data;
-	auto result_data = (uint64_t *)result.data;
+	auto ldata = (T *)input.GetData();
+	auto result_data = (uint64_t *)result.GetData();
 
 	result.nullmask.reset();
 	tight_loop_hash<T>(ldata, result_data, input.count, input.sel_vector, input.nullmask);
@@ -88,8 +88,8 @@ static inline void tight_loop_combine_hash(T *__restrict ldata, uint64_t *__rest
 }
 
 template <class T> void templated_loop_combine_hash(Vector &input, Vector &hashes) {
-	auto ldata = (T *)input.data;
-	auto hash_data = (uint64_t *)hashes.data;
+	auto ldata = (T *)input.GetData();
+	auto hash_data = (uint64_t *)hashes.GetData();
 
 	tight_loop_combine_hash<T>(ldata, hash_data, input.count, input.sel_vector, input.nullmask);
 }

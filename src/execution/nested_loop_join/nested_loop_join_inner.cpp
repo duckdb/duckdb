@@ -10,8 +10,8 @@ struct InitialNestedLoopJoin {
 	                         sel_t rvector[], index_t current_match_count) {
 		// initialize phase of nested loop join
 		// fill lvector and rvector with matches from the base vectors
-		auto ldata = (T *)left.data;
-		auto rdata = (T *)right.data;
+		auto ldata = (T *)left.GetData();
+		auto rdata = (T *)right.GetData();
 		index_t result_count = 0;
 		for (; rpos < right.count; rpos++) {
 			index_t right_position = right.sel_vector ? right.sel_vector[rpos] : rpos;
@@ -44,8 +44,8 @@ struct RefineNestedLoopJoin {
 		// refine lvector and rvector based on matches of subsequent conditions (in case there are multiple conditions
 		// in the join)
 		assert(current_match_count > 0);
-		auto ldata = (T *)left.data;
-		auto rdata = (T *)right.data;
+		auto ldata = (T *)left.GetData();
+		auto rdata = (T *)right.GetData();
 		index_t result_count = 0;
 		for (index_t i = 0; i < current_match_count; i++) {
 			// null values should be filtered out before

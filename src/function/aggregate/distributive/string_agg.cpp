@@ -17,8 +17,9 @@ void string_agg_update(Vector inputs[], index_t input_count, Vector &state) {
 	assert(strs.type == TypeId::VARCHAR);
 	assert(seps.type == TypeId::VARCHAR);
 
-	auto str_data = (const char **)strs.data;
-	auto sep_data = (const char **)seps.data;
+	auto str_data = (const char **)strs.GetData();
+	auto sep_data = (const char **)seps.GetData();
+	auto states = (string_agg_state_t **) state.GetData();
 
 	//  Share a reusable buffer for the block
 	std::string buffer;
@@ -28,7 +29,7 @@ void string_agg_update(Vector inputs[], index_t input_count, Vector &state) {
 			return;
 		}
 
-		auto state_ptr = (string_agg_state_t *)((data_ptr_t *)state.data)[i];
+		auto state_ptr = states[i];
 		auto str = str_data[i];
 		auto sep = sep_data[i];
 		if (IsNullValue(*state_ptr)) {

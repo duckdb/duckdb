@@ -14,7 +14,7 @@ template <bool INVERSE> void is_null_loop(Vector &input, Vector &result) {
 	if (result.type != TypeId::BOOLEAN) {
 		throw InvalidTypeException(result.type, "IS (NOT) NULL returns a boolean!");
 	}
-	auto result_data = (bool *)result.data;
+	auto result_data = (bool *)result.GetData();
 	result.nullmask.reset();
 	VectorOperations::Exec(input.sel_vector, input.count, [&](index_t i, index_t k) {
 		result_data[i] = INVERSE ? !input.nullmask[i] : input.nullmask[i];

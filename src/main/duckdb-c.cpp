@@ -71,9 +71,9 @@ void duckdb_disconnect(duckdb_connection *connection) {
 
 template <class T> void WriteData(duckdb_result *out, ChunkCollection &source, index_t col) {
 	index_t row = 0;
-	T *target = (T *)out->columns[col].data;
+	auto target = (T *)out->columns[col].data;
 	for (auto &chunk : source.chunks) {
-		T *source = (T *)chunk->data[col].data;
+		auto source = (T *)chunk->data[col].GetData();
 		for (index_t k = 0; k < chunk->data[col].count; k++) {
 			target[row++] = source[k];
 		}
@@ -152,9 +152,9 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			break;
 		case SQLTypeId::VARCHAR: {
 			index_t row = 0;
-			const char **target = (const char **)out->columns[col].data;
+			auto target = (const char **)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
-				const char **source = (const char **)chunk->data[col].data;
+				auto source = (const char **)chunk->data[col].GetData();
 				for (index_t k = 0; k < chunk->data[col].count; k++) {
 					if (!chunk->data[col].nullmask[k]) {
 						target[row] = strdup(source[k]);
@@ -166,9 +166,9 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		}
 		case SQLTypeId::DATE: {
 			index_t row = 0;
-			duckdb_date *target = (duckdb_date *)out->columns[col].data;
+			auto target = (duckdb_date *)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
-				date_t *source = (date_t *)chunk->data[col].data;
+				auto source = (date_t *)chunk->data[col].GetData();
 				for (index_t k = 0; k < chunk->data[col].count; k++) {
 					if (!chunk->data[col].nullmask[k]) {
 						int32_t year, month, day;
@@ -184,9 +184,9 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		}
 		case SQLTypeId::TIME: {
 			index_t row = 0;
-			duckdb_time *target = (duckdb_time *)out->columns[col].data;
+			auto target = (duckdb_time *)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
-				dtime_t *source = (dtime_t *)chunk->data[col].data;
+				auto source = (dtime_t *)chunk->data[col].GetData();
 				for (index_t k = 0; k < chunk->data[col].count; k++) {
 					if (!chunk->data[col].nullmask[k]) {
 						int32_t hour, min, sec, msec;
@@ -203,9 +203,9 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		}
 		case SQLTypeId::TIMESTAMP: {
 			index_t row = 0;
-			duckdb_timestamp *target = (duckdb_timestamp *)out->columns[col].data;
+			auto target = (duckdb_timestamp *)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
-				timestamp_t *source = (timestamp_t *)chunk->data[col].data;
+				auto source = (timestamp_t *)chunk->data[col].GetData();
 				for (index_t k = 0; k < chunk->data[col].count; k++) {
 					if (!chunk->data[col].nullmask[k]) {
 						date_t date;

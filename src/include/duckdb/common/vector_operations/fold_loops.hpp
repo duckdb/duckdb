@@ -50,7 +50,7 @@ static inline bool fold_loop_function(LEFT_TYPE *__restrict ldata, RESULT_TYPE *
 }
 
 template <class LEFT_TYPE, class RESULT_TYPE, class OP> bool templated_unary_fold(Vector &input, RESULT_TYPE *result) {
-	auto ldata = (LEFT_TYPE *)input.data;
+	auto ldata = (LEFT_TYPE *)input.GetData();
 	if (input.sel_vector) {
 		return fold_loop_function<LEFT_TYPE, RESULT_TYPE, OP, true>(ldata, result, input.count, input.sel_vector,
 		                                                            input.nullmask);

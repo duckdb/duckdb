@@ -45,10 +45,10 @@ static inline void ternary_function_loop(A_TYPE *__restrict adata, B_TYPE *__res
 
 template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL = false>
 void templated_ternary_loop(Vector &a, Vector &b, Vector &c, Vector &result) {
-	auto adata = (A_TYPE *)a.data;
-	auto bdata = (B_TYPE *)b.data;
-	auto cdata = (C_TYPE *)c.data;
-	auto result_data = (RESULT_TYPE *)result.data;
+	auto adata = (A_TYPE *)a.GetData();
+	auto bdata = (B_TYPE *)b.GetData();
+	auto cdata = (C_TYPE *)c.GetData();
+	auto result_data = (RESULT_TYPE *)result.GetData();
 
 	if (a.IsConstant()) {
 		if (b.IsConstant()) {

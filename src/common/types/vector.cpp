@@ -13,13 +13,13 @@ nullmask_t ZERO_MASK = nullmask_t(0);
 }
 
 Vector::Vector(TypeId type, bool create_data, bool zero_data)
-    : type(type), count(0), data(nullptr), sel_vector(nullptr) {
+    : type(type), count(0), sel_vector(nullptr), data(nullptr) {
 	if (create_data) {
 		Initialize(type, zero_data);
 	}
 }
 
-Vector::Vector(TypeId type, data_ptr_t dataptr) : type(type), count(0), data(dataptr), sel_vector(nullptr) {
+Vector::Vector(TypeId type, data_ptr_t dataptr) : type(type), count(0), sel_vector(nullptr), data(dataptr) {
 	if (dataptr && type == TypeId::INVALID) {
 		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
 	}
@@ -30,7 +30,7 @@ Vector::Vector(Value value) : Vector(value.type, true, false) {
 	SetValue(0, value);
 }
 
-Vector::Vector() : type(TypeId::INVALID), count(0), data(nullptr), sel_vector(nullptr) {
+Vector::Vector() : type(TypeId::INVALID), count(0), sel_vector(nullptr), data(nullptr) {
 }
 
 Vector::~Vector() {

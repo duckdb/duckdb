@@ -59,8 +59,8 @@ void VectorOperations::AddInPlace(Vector &left, int64_t right) {
 
 template <class LEFT_TYPE, class RESULT_TYPE, class OP>
 void templated_inplace_divmod_loop(Vector &input, Vector &result) {
-	auto rdata = (LEFT_TYPE *)input.data;
-	auto result_data = (RESULT_TYPE *)result.data;
+	auto rdata = (LEFT_TYPE *)input.GetData();
+	auto result_data = (RESULT_TYPE *)result.GetData();
 	if (input.IsConstant()) { // a % 0 -> NULL
 		if (input.nullmask[0] || input.GetValue(0) == Value::Numeric(input.type, 0)) {
 			result.nullmask.set();

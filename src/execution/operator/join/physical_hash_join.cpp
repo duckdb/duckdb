@@ -128,7 +128,7 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 				// entry if the HT has NULL values (i.e. result set had values, but all were NULL), return a vector that
 				// has NULL for every input entry
 				if (!hash_table->has_null) {
-					auto bool_result = (bool *)result_vector.data;
+					auto bool_result = (bool *)result_vector.GetData();
 					for (index_t i = 0; i < result_vector.count; i++) {
 						bool_result[i] = false;
 					}

@@ -18,7 +18,7 @@ static inline void set_loop(T *__restrict result_data, T value, index_t count, s
 }
 
 template <class T> void templated_set_loop(Vector &result, T value) {
-	auto result_data = (T *)result.data;
+	auto result_data = (T *)result.GetData();
 
 	set_loop<T>(result_data, value, result.count, result.sel_vector);
 }
@@ -62,7 +62,7 @@ void VectorOperations::Set(Vector &result, Value value) {
 			break;
 		case TypeId::VARCHAR: {
 			auto str = result.string_heap.AddString(value.str_value);
-			auto dataptr = (const char **)result.data;
+			auto dataptr = (const char **)result.GetData();
 			VectorOperations::Exec(result.sel_vector, result.count, [&](index_t i, index_t k) { dataptr[i] = str; });
 			break;
 		}
@@ -76,7 +76,7 @@ void VectorOperations::Set(Vector &result, Value value) {
 // Set all elements of a vector to the constant value
 //===--------------------------------------------------------------------===//
 template <class T> void templated_fill_nullmask(Vector &v) {
-	auto data = (T *)v.data;
+	auto data = (T *)v.GetData();
 	VectorOperations::Exec(v, [&](index_t i, index_t k) {
 		if (v.nullmask[i]) {
 			data[i] = NullValue<T>();

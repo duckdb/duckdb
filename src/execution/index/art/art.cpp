@@ -86,7 +86,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 // Insert
 //===--------------------------------------------------------------------===//
 template <class T> static void generate_keys(DataChunk &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
-	auto input_data = (T *)input.data[0].data;
+	auto input_data = (T *)input.data[0].GetData();
 	VectorOperations::Exec(input.data[0], [&](index_t i, index_t k) {
 		if (input.data[0].nullmask[i]) {
 			keys.push_back(nullptr);
@@ -133,7 +133,7 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	GenerateKeys(input, keys);
 
 	// now insert the elements into the index
-	auto row_identifiers = (row_t *)row_ids.data;
+	auto row_identifiers = (row_t *)row_ids.GetData();
 	index_t failed_index = INVALID_INDEX;
 	for (index_t i = 0; i < row_ids.count; i++) {
 		if (!keys[i]) {
@@ -294,7 +294,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	GenerateKeys(expression_result, keys);
 
 	// now erase the elements from the database
-	auto row_identifiers = (int64_t *)row_ids.data;
+	auto row_identifiers = (row_t *)row_ids.GetData();
 	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) {
 		if (!keys[k]) {
 			return;

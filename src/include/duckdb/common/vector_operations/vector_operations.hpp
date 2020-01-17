@@ -233,7 +233,7 @@ struct VectorOperations {
 	//! every entry
 	template <typename T, class FUNC>
 	static void ExecType(Vector &vector, FUNC &&fun, index_t offset = 0, index_t limit = 0) {
-		auto data = (T *)vector.data;
+		auto data = (T *)vector.GetData();
 		VectorOperations::Exec(
 		    vector, [&](index_t i, index_t k) { fun(data[i], i, k); }, offset, limit);
 	}
@@ -272,9 +272,9 @@ struct VectorOperations {
 		index_t multipliers[2];
 		VectorOperations::NAryExec<HANDLE_NULLS>(2, vectors, multipliers, result);
 
-		auto adata = (TA *)a.data;
-		auto bdata = (TB *)b.data;
-		auto rdata = (TR *)result.data;
+		auto adata = (TA *)a.GetData();
+		auto bdata = (TB *)b.GetData();
+		auto rdata = (TR *)result.GetData();
 		VectorOperations::Exec(result, [&](index_t i, index_t k) {
 			if (SKIP_NULLS && result.nullmask[i]) {
 				return;
@@ -289,10 +289,10 @@ struct VectorOperations {
 		index_t multipliers[3];
 		VectorOperations::NAryExec<HANDLE_NULLS>(3, vectors, multipliers, result);
 
-		auto adata = (TA *)a.data;
-		auto bdata = (TB *)b.data;
-		auto cdata = (TC *)c.data;
-		auto rdata = (TR *)result.data;
+		auto adata = (TA *)a.GetData();
+		auto bdata = (TB *)b.GetData();
+		auto cdata = (TC *)c.GetData();
+		auto rdata = (TR *)result.GetData();
 		VectorOperations::Exec(result, [&](index_t i, index_t k) {
 			if (SKIP_NULLS && result.nullmask[i]) {
 				return;

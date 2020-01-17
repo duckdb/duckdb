@@ -59,6 +59,11 @@ void Appender::EndRow() {
 	}
 }
 
+template<class SRC, class DST>
+void Appender::AppendValueInternal(Vector &col, SRC input) {
+	((DST *)col.GetData())[col.count++] = Cast::Operation<SRC, DST>(input);
+}
+
 template<class T>
 void Appender::AppendValueInternal(T input) {
 	CheckInvalidated();
@@ -68,25 +73,25 @@ void Appender::AppendValueInternal(T input) {
 	auto &col = chunk.data[column];
 	switch(col.type) {
 	case TypeId::BOOLEAN:
-		((bool *)col.data)[col.count++] = Cast::Operation<T, bool>(input);
+		AppendValueInternal<T, bool>(col, input);
 		break;
 	case TypeId::TINYINT:
-		((int8_t *)col.data)[col.count++] = Cast::Operation<T, int8_t>(input);
+		AppendValueInternal<T, int8_t>(col, input);
 		break;
 	case TypeId::SMALLINT:
-		((int16_t *)col.data)[col.count++] = Cast::Operation<T, int16_t>(input);
+		AppendValueInternal<T, int16_t>(col, input);
 		break;
 	case TypeId::INTEGER:
-		((int32_t *)col.data)[col.count++] = Cast::Operation<T, int32_t>(input);
+		AppendValueInternal<T, int32_t>(col, input);
 		break;
 	case TypeId::BIGINT:
-		((int64_t *)col.data)[col.count++] = Cast::Operation<T, int64_t>(input);
+		AppendValueInternal<T, int64_t>(col, input);
 		break;
 	case TypeId::FLOAT:
-		((float *)col.data)[col.count++] = Cast::Operation<T, float>(input);
+		AppendValueInternal<T, float>(col, input);
 		break;
 	case TypeId::DOUBLE:
-		((double *)col.data)[col.count++] = Cast::Operation<T, double>(input);
+		AppendValueInternal<T, double>(col, input);
 		break;
 	default:
 		AppendValue(Value::CreateValue<T>(input));

@@ -81,7 +81,7 @@ JoinHashTable::~JoinHashTable() {
 }
 
 void JoinHashTable::ApplyBitmask(Vector &hashes) {
-	auto indices = (uint64_t *)hashes.data;
+	auto indices = (uint64_t *)hashes.GetData();
 	VectorOperations::Exec(hashes, [&](index_t i, index_t k) { indices[i] = indices[i] & bitmask; });
 }
 
@@ -263,7 +263,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, data_ptr_t key_locations[]) {
 	ApplyBitmask(hashes);
 
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
-	auto indices = (index_t *)hashes.data;
+	auto indices = (index_t *)hashes.GetData();
 	// now fill in the entries
 	VectorOperations::Exec(hashes, [&](index_t i, index_t k) {
 		auto index = indices[i];
@@ -291,7 +291,7 @@ void JoinHashTable::Finalize() {
 	memset(hash_map->node->buffer, 0, capacity * sizeof(data_ptr_t));
 
 	Vector hashes(TypeId::HASH, true, false);
-	auto hash_data = (uint64_t *)hashes.data;
+	auto hash_data = (uint64_t *)hashes.GetData();
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	// now construct the actual hash table; scan the nodes
 	// as we can the nodes we pin all the blocks of the HT and keep them pinned until the HT is destroyed
@@ -341,8 +341,8 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	ApplyBitmask(hashes);
 
 	// now create the initial pointers from the hashes
-	auto ptrs = (data_ptr_t *)ss->pointers.data;
-	auto indices = (uint64_t *)hashes.data;
+	auto ptrs = (data_ptr_t *)ss->pointers.GetData();
+	auto indices = (uint64_t *)hashes.GetData();
 	auto hashed_pointers = (data_ptr_t *)hash_map->node->buffer;
 	for (index_t i = 0; i < hashes.count; i++) {
 		auto index = indices[i];
@@ -497,7 +497,7 @@ void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result) {
 	// initialize result to false
 	final_result.sel_vector = pointers.sel_vector;
 	final_result.count = pointers.count;
-	auto result_data = (bool *)final_result.data;
+	auto result_data = (bool *)final_result.GetData();
 	VectorOperations::Exec(final_result, [&](index_t i, index_t k) { result_data[i] = false; });
 
 	// now resolve the predicates with the keys
@@ -514,12 +514,12 @@ index_t ScanStructure::ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk
 	sel_t comparison_result[STANDARD_VECTOR_SIZE];
 	index_t result_count = 0;
 	do {
-		auto build_pointers = (data_ptr_t *)build_pointer_vector.data;
+		auto build_pointers = (data_ptr_t *)build_pointer_vector.GetData();
 
 		// resolve the predicates for all the pointers
 		result_count = ResolvePredicates(keys, comparison_result);
 
-		auto ptrs = (data_ptr_t *)pointers.data;
+		auto ptrs = (data_ptr_t *)pointers.GetData();
 		// after doing all the comparisons we loop to find all the actual matches (if any)
 		for (index_t i = 0; i < result_count; i++) {
 			auto index = comparison_result[i];
@@ -588,7 +588,7 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 		ResolvePredicates(keys, comparison_result);
 
 		// after doing all the comparisons we loop to find all the matches
-		auto ptrs = (data_ptr_t *)pointers.data;
+		auto ptrs = (data_ptr_t *)pointers.GetData();
 		index_t new_count = 0;
 		VectorOperations::ExecType<bool>(comparison_result, [&](bool match, index_t index, index_t k) {
 			if (match) {
@@ -674,7 +674,7 @@ void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &
 		}
 	}
 	// now set the remaining entries to either true or false based on whether a match was found
-	auto bool_result = (bool *)result_vector.data;
+	auto bool_result = (bool *)result_vector.GetData();
 	for (index_t i = 0; i < result_vector.count; i++) {
 		bool_result[i] = found_match[i];
 	}
@@ -721,9 +721,9 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 		// first set the nullmask based on whether or not there were NULL values in the join key
 		result_vector.nullmask = keys.data[keys.column_count - 1].nullmask;
 
-		auto bool_result = (bool *)result_vector.data;
-		auto count_star = (int64_t *)info.result_chunk.data[0].data;
-		auto count = (int64_t *)info.result_chunk.data[1].data;
+		auto bool_result = (bool *)result_vector.GetData();
+		auto count_star = (int64_t *)info.result_chunk.data[0].GetData();
+		auto count = (int64_t *)info.result_chunk.data[1].GetData();
 		// set the entries to either true or false based on whether a match was found
 		for (index_t i = 0; i < result_vector.count; i++) {
 			assert(count_star[i] >= count[i]);
@@ -784,14 +784,14 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &
 	// (2) we return NULL for that data if there is no match
 	StaticVector<bool> comparison_result;
 
-	auto build_pointers = (data_ptr_t *)build_pointer_vector.data;
+	auto build_pointers = (data_ptr_t *)build_pointer_vector.GetData();
 	index_t result_count = 0;
 	sel_t result_sel_vector[STANDARD_VECTOR_SIZE];
 	while (pointers.count > 0) {
 		// resolve the predicates for all the pointers
 		ResolvePredicates(keys, comparison_result);
 
-		auto ptrs = (data_ptr_t *)pointers.data;
+		auto ptrs = (data_ptr_t *)pointers.GetData();
 		// after doing all the comparisons we loop to find all the actual matches
 		index_t new_count = 0;
 		VectorOperations::ExecType<bool>(comparison_result, [&](bool match, index_t index, index_t k) {

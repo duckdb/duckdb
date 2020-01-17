@@ -41,7 +41,7 @@ static void copy_function_set_null(T *__restrict source, T *__restrict target, i
 
 template <class T, bool SET_NULL>
 static void copy_loop(Vector &input, void *target, index_t offset, index_t element_count) {
-	auto ldata = (T *)input.data;
+	auto ldata = (T *)input.GetData();
 	auto result_data = (T *)target;
 	if (SET_NULL) {
 		copy_function_set_null(ldata, result_data, offset, element_count, input.sel_vector, input.nullmask);
@@ -114,5 +114,5 @@ void VectorOperations::Copy(Vector &source, Vector &target, index_t offset) {
 	target.count = source.count - offset;
 	VectorOperations::Exec(
 	    source, [&](index_t i, index_t k) { target.nullmask[k - offset] = source.nullmask[i]; }, offset);
-	VectorOperations::Copy(source, target.data, offset, target.count);
+	VectorOperations::Copy(source, target.GetData(), offset, target.count);
 }

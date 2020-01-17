@@ -85,7 +85,7 @@ void SuperLargeHashTable::Resize(index_t size) {
 		groups.Initialize(group_types);
 
 		Vector addresses(TypeId::POINTER, true, false);
-		auto data_pointers = (data_ptr_t *)addresses.data;
+		auto data_pointers = (data_ptr_t *)addresses.GetData();
 
 		data_ptr_t ptr = data;
 		data_ptr_t end = data + capacity * tuple_size;
@@ -126,8 +126,9 @@ void SuperLargeHashTable::Resize(index_t size) {
 			assert(addresses.count == new_addresses.count);
 			assert(addresses.sel_vector == new_addresses.sel_vector);
 
+			auto new_address_data = (data_ptr_t*) new_addresses.GetData();
 			VectorOperations::Exec(addresses, [&](index_t i, index_t k) {
-				memcpy(((data_ptr_t *)new_addresses.data)[i], data_pointers[i], payload_width);
+				memcpy(new_address_data[i], data_pointers[i], payload_width);
 			});
 		}
 
@@ -195,9 +196,10 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			// a selection vector
 			sel_t distinct_sel_vector[STANDARD_VECTOR_SIZE];
 			index_t match_count = 0;
+			auto probe_result_data = (bool*) probe_result.GetData();
 			for (index_t probe_idx = 0; probe_idx < probe_result.count; probe_idx++) {
 				index_t sel_idx = payload.sel_vector ? payload.sel_vector[probe_idx] : probe_idx;
-				if (probe_result.data[sel_idx]) {
+				if (probe_result_data[sel_idx]) {
 					distinct_sel_vector[match_count++] = sel_idx;
 				}
 			}
@@ -261,7 +263,7 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 template <class T>
 void templated_compare_group_vector(data_ptr_t group_pointers[], Vector &groups, sel_t sel_vector[], index_t &sel_count,
                                     sel_t no_match_vector[], index_t &no_match_count) {
-	auto data = (T *)groups.data;
+	auto data = (T *)groups.GetData();
 	index_t current_count = 0;
 	for (index_t i = 0; i < sel_count; i++) {
 		index_t index = sel_vector[i];
@@ -308,7 +310,7 @@ static void CompareGroupVector(data_ptr_t group_pointers[], Vector &groups, sel_
 		break;
 	case TypeId::VARCHAR: {
 		// compare group vector for varchar
-		auto data = (const char **)groups.data;
+		auto data = (const char **)groups.GetData();
 		index_t current_count = 0;
 		for (index_t i = 0; i < sel_count; i++) {
 			index_t index = sel_vector[i];
@@ -335,7 +337,7 @@ void SuperLargeHashTable::HashGroups(DataChunk &groups, Vector &addresses) {
 	StaticVector<uint64_t> hashes;
 	groups.Hash(hashes);
 
-	auto data_pointers = (data_ptr_t *)addresses.data;
+	auto data_pointers = (data_ptr_t *)addresses.GetData();
 
 	// now compute the entry in the table based on the hash using a modulo
 	// multiply the position by the tuple size and add the base address
@@ -377,13 +379,13 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 	VectorOperations::Exec(addresses, [&](index_t i, index_t k) { sel_vector[k] = i; });
 
 	// list of addresses for the tuples
-	auto data_pointers = (data_ptr_t *)addresses.data;
+	auto data_pointers = (data_ptr_t *)addresses.GetData();
 	if (parallel) {
 		throw NotImplementedException("Parallel HT not implemented");
 	}
 
 	// zero initialize the new_groups array
-	auto new_groups = ((bool *)new_group.data);
+	auto new_groups = ((bool *)new_group.GetData());
 	memset(new_groups, 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 
 	data_ptr_t group_pointers[STANDARD_VECTOR_SIZE];
@@ -466,7 +468,7 @@ index_t SuperLargeHashTable::Scan(index_t &scan_position, DataChunk &groups, Dat
 		return 0;
 
 	Vector addresses(TypeId::POINTER, true, false);
-	auto data_pointers = (data_ptr_t *)addresses.data;
+	auto data_pointers = (data_ptr_t *)addresses.GetData();
 
 	// scan the table for full cells starting from the scan position
 	index_t entry = 0;

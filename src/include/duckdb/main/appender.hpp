@@ -71,6 +71,9 @@ public:
 private:
 	template<class T>
 	void AppendValueInternal(T value);
+	template<class SRC, class DST>
+	void AppendValueInternal(Vector &vector, SRC input);
+
 	void CheckInvalidated();
 
 	void AppendRowRecursive() {

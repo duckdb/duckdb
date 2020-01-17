@@ -46,20 +46,11 @@ extern nullmask_t ZERO_MASK;
   (2) Ordering data
 */
 class Vector {
+	friend class ExpressionExecutor;
 	friend class DataChunk;
+	friend class WindowSegmentTree;
 
 public:
-	//! The type of the elements stored in the vector.
-	TypeId type;
-	//! The amount of elements in the vector.
-	index_t count;
-	//! A pointer to the data.
-	data_ptr_t data;
-	//! The selection vector of the vector.
-	sel_t *sel_vector;
-	//! The null mask of the vector, if the Vector has any NULL values
-	nullmask_t nullmask;
-
 	Vector();
 	//! Create a vector of size one holding the passed on value
 	Vector(Value value);
@@ -76,6 +67,15 @@ public:
 	// implicit copying of Vectors is not allowed
 	Vector(const Vector &) = delete;
 
+	//! The type of the elements stored in the vector.
+	TypeId type;
+	//! The amount of elements in the vector.
+	index_t count;
+	//! The selection vector of the vector.
+	sel_t *sel_vector;
+	//! The null mask of the vector, if the Vector has any NULL values
+	nullmask_t nullmask;
+public:
 	//! Create a vector that references the specified value. Note that if the
 	//! value goes out of scope or is deleted, the data in the vector becomes
 	//! corrupt. Use a ConstantVector if you want to use this method safely.
@@ -144,5 +144,12 @@ public:
 	StringHeap string_heap;
 	//! If the vector owns data, this is the unique_ptr holds the actual data.
 	unique_ptr<data_t[]> owned_data;
+
+	data_ptr_t GetData() {
+		return data;
+	}
+protected:
+	//! A pointer to the data.
+	data_ptr_t data;
 };
 } // namespace duckdb

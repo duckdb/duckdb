@@ -25,7 +25,7 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 	}
 
 	// bool has_stats = expr.function->children[0]->stats.has_stats && expr.function->children[1]->stats.has_stats;
-	auto result_data = (const char **)result.data;
+	auto result_data = (const char **)result.GetData();
 	index_t current_len = 0;
 	unique_ptr<char[]> output;
 
@@ -38,8 +38,9 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 		vector<const char *> input_chars(args.column_count);
 		index_t required_len = 0;
 		for (index_t i = 0; i < args.column_count; i++) {
+			auto arg_data = (const char **) args.data[i].GetData();
 			int current_index = mul[i] * result_index;
-			input_chars[i] = ((const char **)args.data[i].data)[current_index];
+			input_chars[i] = arg_data[current_index];
 			required_len += strlen(input_chars[i]);
 		}
 		required_len++;

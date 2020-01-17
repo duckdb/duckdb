@@ -6,8 +6,8 @@ using namespace duckdb;
 using namespace std;
 
 template <class T, class OP> static void mark_join_templated(Vector &left, Vector &right, bool found_match[]) {
-	auto ldata = (T *)left.data;
-	auto rdata = (T *)right.data;
+	auto ldata = (T *)left.GetData();
+	auto rdata = (T *)right.GetData();
 	VectorOperations::Exec(left, [&](index_t left_position, index_t k) {
 		VectorOperations::Exec(right, [&](index_t right_position, index_t k) {
 			if (OP::Operation(ldata[left_position], rdata[right_position])) {

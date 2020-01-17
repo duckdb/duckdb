@@ -86,7 +86,7 @@ template <class T, class OP> void templated_quicksort(T *data, sel_t *sel_vector
 }
 
 template <class T> static void templated_quicksort(Vector &vector, sel_t *sel_vector, index_t count, sel_t result[]) {
-	auto data = (T *)vector.data;
+	auto data = (T *)vector.GetData();
 	// quicksort without nulls
 	templated_quicksort<T, duckdb::LessThanEquals>(data, sel_vector, count, result);
 }
@@ -151,7 +151,7 @@ void VectorOperations::Sort(Vector &vector, sel_t result[]) {
 #include "duckdb/common/operator/comparison_operators.hpp"
 
 template <class T> bool is_unique(Vector &vector, sel_t sel_vector[]) {
-	auto data = (T *)vector.data;
+	auto data = (T *)vector.GetData();
 	for (index_t i = 1; i < vector.count; i++) {
 		if (vector.nullmask[sel_vector[i]]) {
 			continue;
