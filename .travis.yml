@@ -30,9 +30,10 @@ matrix:
       script:
         - (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest
+        - python3 tools/shell/shell-test.py build/release/duckdb_cli
 
       after_success:
-        - python tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a build/release/duckdb
+        - python tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a build/release/duckdb_cli
 
 
     - os: linux
@@ -130,14 +131,14 @@ matrix:
         - mkdir -p build/release
         - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest "*"
-        - python3.7 tools/shell/shell-test.py build/release/tools/shell/shell
+        - python3.7 tools/shell/shell-test.py build/release/duckdb_cli
         - (cd examples/embedded-c; make)
         - (cd examples/embedded-c++; make)
         - (cd examples/programmatic-querying; make)
 
 
       after_success:
-        - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb
+        - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli
 
 
     - os: linux
@@ -162,7 +163,7 @@ matrix:
         - build/release/test/unittest "*"
 
       after_success:
-        - python tools/upload-s3.py lib-linux-i386 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb
+        - python tools/upload-s3.py lib-linux-i386 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli
 
 
     - os: linux
@@ -212,10 +213,10 @@ matrix:
         - cmake --build . --target duckdb --config Release
         - cmake --build . --target unittest --config Release
         - test/Release/unittest.exe
-        - C:/Python37-x64/python.exe tools/shell/shell-test.py duckdb.exe
+        - C:/Python37-x64/python.exe tools/shell/shell-test.py duckdb_cli.exe
 
       after_success:
-        - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll duckdb.exe
+        - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll duckdb_cli.exe
 
 
     - os: windows
@@ -233,10 +234,10 @@ matrix:
         - cmake --build . --target duckdb --config Release
         - cmake --build . --target unittest --config Release
         - test/Release/unittest.exe
-        - C:/Python37-x64/python.exe tools/shell/shell-test.py duckdb.exe
+        - C:/Python37-x64/python.exe tools/shell/shell-test.py duckdb_cli.exe
 
       after_success:
-        - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-i386 src/Release/duckdb.dll duckdb.exe
+        - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-i386 src/Release/duckdb.dll duckdb_cli.exe
 
 
     - os: linux
