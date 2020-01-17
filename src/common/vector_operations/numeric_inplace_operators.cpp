@@ -6,7 +6,6 @@
 
 #include "duckdb/common/operator/numeric_inplace_operators.hpp"
 
-#include "duckdb/common/types/constant_vector.hpp"
 #include "duckdb/common/vector_operations/inplace_loops.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
@@ -54,7 +53,7 @@ void VectorOperations::AddInPlace(Vector &result, Vector &input) {
 
 void VectorOperations::AddInPlace(Vector &left, int64_t right) {
 	Value right_value = Value::Numeric(left.type, right);
-	ConstantVector right_vector(right_value);
+	Vector right_vector(right_value);
 	VectorOperations::AddInPlace(left, right_vector);
 }
 
@@ -120,6 +119,6 @@ void VectorOperations::ModuloInPlace(Vector &result, Vector &input) {
 
 void VectorOperations::ModuloInPlace(Vector &left, int64_t right) {
 	Value right_value = Value::Numeric(left.type, right);
-	ConstantVector right_vector(right_value);
+	Vector right_vector(right_value);
 	VectorOperations::ModuloInPlace(left, right_vector);
 }
