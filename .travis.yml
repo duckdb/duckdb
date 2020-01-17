@@ -212,6 +212,7 @@ matrix:
         - cmake --build . --target duckdb --config Release
         - cmake --build . --target unittest --config Release
         - test/Release/unittest.exe
+        - C:/Python37-x64/python.exe tools/shell/shell-test.py duckdb.exe
 
       after_success:
         - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll duckdb.exe
@@ -232,6 +233,7 @@ matrix:
         - cmake --build . --target duckdb --config Release
         - cmake --build . --target unittest --config Release
         - test/Release/unittest.exe
+        - C:/Python37-x64/python.exe tools/shell/shell-test.py duckdb.exe
 
       after_success:
         - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-i386 src/Release/duckdb.dll duckdb.exe
