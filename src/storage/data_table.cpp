@@ -259,8 +259,11 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	}
 }
 
+//! check if the columns are unique
 static void VerifyUniqueConstraint(TableCatalogEntry &table, unordered_set<index_t> &keys, DataChunk &chunk) {
-	// check if the columns are unique
+//	if (keys.size() > 1){
+//
+//	}
 	for (auto &key : keys) {
 		if (!VectorOperations::Unique(chunk.data[key])) {
 			throw ConstraintException("duplicate key value violates primary key or unique constraint");
@@ -282,9 +285,10 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chu
 			break;
 		}
 		case ConstraintType::UNIQUE: {
-			// we check these constraint in the unique index
-			auto &unique = *reinterpret_cast<BoundUniqueConstraint *>(constraint.get());
-			VerifyUniqueConstraint(table, unique.keys, chunk);
+            //! check whether or not the chunk can be inserted into the indexes
+            for (auto &index : indexes) {
+                index->VerifyAppend(chunk);
+            }
 			break;
 		}
 		case ConstraintType::FOREIGN_KEY:
@@ -292,10 +296,7 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chu
 			throw NotImplementedException("Constraint type not implemented!");
 		}
 	}
-	// check whether or not the chunk can be inserted into the indexes
-	for (auto &index : indexes) {
-		index->VerifyAppend(chunk);
-	}
+
 }
 
 void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {

@@ -145,9 +145,10 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
             // concatenate keys
             keyLen = 0;
             for (index_t cur_col = 0 ; cur_col < input.column_count; cur_col++){
-                compound_data[keyLen] =  *keys[i + cur_col * row_ids.count]->data.get();
-                keyLen += keys[i + cur_col * row_ids.count]->len;
-
+                auto key_value = keys[i + cur_col * row_ids.count]->data.get();
+                for (index_t key_idx = 0; key_idx < keys[i + cur_col * row_ids.count]->len; key_idx++){
+                    compound_data[keyLen++] =  key_value[key_idx];
+                }
             }
             key = make_unique<Key>(move(compound_data), keyLen);
         }
@@ -184,8 +185,10 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
                 // concatenate keys
                 keyLen = 0;
                 for (index_t cur_col = 0 ; cur_col < input.column_count; cur_col++){
-                    compound_data[keyLen] =  *keys[i + cur_col * row_ids.count]->data.get();
-                    keyLen += keys[i + cur_col * row_ids.count]->len;
+                    auto key_value = keys[i + cur_col * row_ids.count]->data.get();
+                    for (index_t key_idx = 0; key_idx < keys[i + cur_col * row_ids.count]->len; key_idx++){
+                        compound_data[keyLen++] =  key_value[key_idx];
+                    }
                 }
                 key = make_unique<Key>(move(compound_data), keyLen);
             }
@@ -220,12 +223,14 @@ void ART::VerifyAppend(DataChunk &chunk) {
 
     // generate the keys for the given input
     vector<unique_ptr<Key>> keys;
-    auto rows = keys.size() / expression_result.column_count;
     GenerateKeys(expression_result, keys);
 
     unique_ptr<Key> key;
-    // if the index is compound we need to concatenate the keys
+
+    auto rows = keys.size() / expression_result.column_count;
+
     for (index_t i = 0; i < rows; i++) {
+        // if the index is compound we need to concatenate the keys
         if (expression_result.column_count > 1) {
             // check length of compound key
             index_t keyLen = 0;
@@ -244,7 +249,7 @@ void ART::VerifyAppend(DataChunk &chunk) {
         } else {
             key = move(keys[i]);
         }
-        if (Lookup(tree, *key, 0) != nullptr) {
+        if (key && Lookup(tree, *key, 0) != nullptr) {
             // node already exists in tree
             throw ConstraintException("duplicate key value violates primary key or unique constraint");
         }
@@ -340,14 +345,46 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 
 	// now erase the elements from the database
 	auto row_identifiers = (int64_t *)row_ids.data;
-	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) {
-		if (!keys[k]) {
-			return;
-		}
-		Erase(tree, *keys[k], 0, row_identifiers[i]);
-		// assert that the entry was erased properly
-		assert(!is_unique || Lookup(tree, *keys[k], 0) == nullptr);
-	});
+
+
+
+    for (index_t i = 0; i < row_ids.count; i++) {
+        if (!keys[i]) {
+            continue;
+        }
+//        row_t row_id = row_identifiers[row_ids.sel_vector ? row_ids.sel_vector[i] : i];
+        unique_ptr<Key> key;
+        // if the index is compound we need to concatenate the keys
+        if (column_ids.size() > 1){
+            // check length of compound key
+            index_t keyLen = 0;
+            for (index_t cur_col = 0 ; cur_col < input.column_count; cur_col++){
+                keyLen += keys[i + cur_col * row_ids.count]->len;
+            }
+            // reserve key size
+            unique_ptr<data_t[]> compound_data = unique_ptr<data_t[]>(new data_t[keyLen]);
+            // concatenate keys
+            keyLen = 0;
+            for (index_t cur_col = 0 ; cur_col < input.column_count; cur_col++){
+                auto key_value = keys[i + cur_col * row_ids.count]->data.get();
+                for (index_t key_idx = 0; key_idx < keys[i + cur_col * row_ids.count]->len; key_idx++){
+                    compound_data[keyLen++] =  key_value[key_idx];
+                }
+            }
+            key = make_unique<Key>(move(compound_data), keyLen);
+        }
+        else{
+            key = move(keys[i]);
+        }
+
+        Erase(tree, *key, 0, row_identifiers[i]);
+        // assert that the entry was erased properly
+        assert(!is_unique || Lookup(tree, *key, 0) == nullptr);
+    }
+
+
+
+
 }
 
 void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) {
