@@ -915,6 +915,7 @@ int sqlite3_set_authorizer(
 	return -1;
 }
 
+#ifndef _WIN32
 
 #include <sys/time.h>
 
@@ -927,7 +928,13 @@ static int unixCurrentTimeInt64(sqlite3_vfs *NotUsed, sqlite3_int64 *piNow){
   *piNow = unixEpoch + 1000*(sqlite3_int64)sNow.tv_sec + sNow.tv_usec/1000;
   return rc;
 }
-
+#else
+static int unixCurrentTimeInt64(sqlite3_vfs *NotUsed, sqlite3_int64 *piNow){
+	  int rc = SQLITE_OK;
+  *piNow = 0;
+  return rc;
+}
+#endif
 
 // virtual file system, providing some dummies to avoid crashes
 sqlite3_vfs *sqlite3_vfs_find(const char *zVfsName) {
