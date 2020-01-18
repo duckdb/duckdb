@@ -327,24 +327,6 @@ static void require_mod(TypeId t) {
 	REQUIRE(r.GetValue(4).is_null);
 	REQUIRE(r.GetValue(5).is_null);
 	REQUIRE(r.GetValue(6).is_null);
-
-	VectorOperations::ModuloInPlace(v1, v2);
-	REQUIRE(v1.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(0));
-	REQUIRE(v1.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
-	REQUIRE(v1.GetValue(2).CastAs(TypeId::BIGINT) == Value::BIGINT(3));
-	REQUIRE(v1.GetValue(3).is_null);
-	REQUIRE(v1.GetValue(4).is_null);
-	REQUIRE(v1.GetValue(5).is_null);
-	REQUIRE(v2.GetValue(6).is_null);
-
-	VectorOperations::ModuloInPlace(v1, 2);
-	REQUIRE(v1.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(0));
-	REQUIRE(v1.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(0));
-	REQUIRE(v1.GetValue(2).CastAs(TypeId::BIGINT) == Value::BIGINT(1));
-	REQUIRE(v1.GetValue(3).is_null);
-	REQUIRE(v1.GetValue(4).is_null);
-	REQUIRE(v1.GetValue(5).is_null);
-	REQUIRE(v2.GetValue(6).is_null);
 }
 
 static void require_mod_double() {
@@ -366,14 +348,6 @@ static void require_mod_double() {
 	VectorOperations::Modulo(v1, v2, r);
 	REQUIRE(r.GetValue(0).CastAs(TypeId::DOUBLE) == Value::DOUBLE(0));
 	REQUIRE(r.GetValue(1).CastAs(TypeId::DOUBLE) == Value::DOUBLE(2));
-
-	VectorOperations::ModuloInPlace(v1, v2);
-	REQUIRE(v1.GetValue(0).CastAs(TypeId::DOUBLE) == Value::DOUBLE(0));
-	REQUIRE(v1.GetValue(1).CastAs(TypeId::DOUBLE) == Value::DOUBLE(2));
-
-	VectorOperations::ModuloInPlace(v1, 2);
-	REQUIRE(v1.GetValue(0).CastAs(TypeId::DOUBLE) == Value::DOUBLE(0));
-	REQUIRE(v1.GetValue(1).CastAs(TypeId::DOUBLE) == Value::DOUBLE(0));
 }
 
 TEST_CASE("Arithmetic operations on vectors", "[vector_ops]") {
