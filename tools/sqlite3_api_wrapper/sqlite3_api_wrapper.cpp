@@ -985,6 +985,40 @@ void *sqlite3_user_data(sqlite3_context*) {
 	return nullptr;
 }
 
+#ifdef _WIN32
+#include <windows.h>
+
+char *sqlite3_win32_unicode_to_utf8(LPCWSTR zWideText) {
+	auto size_needed = WideCharToMultiByte(CP_UTF8, 0, zWideText,-1, NULL, 0, NULL, NULL);
+	auto ret = (char*)sqlite3_malloc(size_needed);
+	memset(ret, 0, size_needed);
+	assert(ret);
+    WideCharToMultiByte (CP_UTF8, 0, zWideText,-1, ret, size_needed, NULL, NULL);
+    return ret;
+}
+
+char *sqlite3_win32_mbcs_to_utf8_v2(const char *zText, int) {
+	// TODO this is evil
+	return strdup(zText);
+}
+
+char *sqlite3_win32_utf8_to_mbcs_v2(const char * zText, int) {
+	auto nchar = MultiByteToWideChar(CP_UTF8, 0, zText, -1, NULL, 0);
+	auto ret = (LPWSTR)sqlite3_malloc(nchar * sizeof(zText[0]));
+	assert(ret);
+	memset(ret, 0, nchar * sizeof(zText[0]));
+
+	nchar = MultiByteToWideChar(CP_UTF8, 0, zText, -1, ret,
+                                nchar);
+	assert(nchar);
+	return (char*) ret;
+}
+
+LPWSTR sqlite3_win32_utf8_to_unicode(const char *zText) {
+	return (LPWSTR) sqlite3_win32_utf8_to_mbcs_v2(zText, 0);
+}
+#endif
+
 // TODO complain
 SQLITE_API void sqlite3_result_blob(sqlite3_context*, const void*, int, void(*)(void*)) {}
 SQLITE_API void sqlite3_result_blob64(sqlite3_context*,const void*,
