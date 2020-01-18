@@ -15,7 +15,7 @@ DuckDB requires [CMake](https://cmake.org) to be installed and a `C++11` complia
 Run `make` in the root directory to compile the sources. For development, use `make debug` to build a non-optimized debug version. You may run `make unit` and `make allunit` to verify that your version works properly after making changes.
 
 # Usage
-A command line utility based on `sqlite3` can be found in either `build/release/tools/shell/shell` (release, the default) or `build/debug/tools/shell/shell` (debug).
+A command line utility based on `sqlite3` can be found in either `build/release/duckdb_cli` (release, the default) or `build/debug/duckdb_cli` (debug).
 
 # Embedding
 As DuckDB is an embedded database, there is no database server to launch or client to connect to a running server. However, the database server can be embedded directly into an application using the C or C++ bindings. The main build process creates the shared library `build/release/src/libduckdb.[so|dylib|dll]` that can be linked against. A static library is built as well.

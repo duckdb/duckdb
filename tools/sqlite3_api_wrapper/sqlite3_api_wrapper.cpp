@@ -10,6 +10,8 @@
 #include <string.h>
 #include <time.h>
 #include <string>
+#include <chrono>
+
 
 using namespace duckdb;
 using namespace std;
@@ -915,26 +917,12 @@ int sqlite3_set_authorizer(
 	return -1;
 }
 
-#ifndef _WIN32
-
-#include <sys/time.h>
-
-// copied from sqlite3.c, needed in shell timer
+// needed in shell timer
 static int unixCurrentTimeInt64(sqlite3_vfs *NotUsed, sqlite3_int64 *piNow){
-  static const sqlite3_int64 unixEpoch = 24405875*(sqlite3_int64)8640000;
-  int rc = SQLITE_OK;
-  struct timeval sNow;
-  (void)gettimeofday(&sNow, 0);  /* Cannot fail given valid arguments */
-  *piNow = unixEpoch + 1000*(sqlite3_int64)sNow.tv_sec + sNow.tv_usec/1000;
-  return rc;
+	using namespace std::chrono;
+	*piNow = (sqlite3_int64) duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+	return SQLITE_OK;
 }
-#else
-static int unixCurrentTimeInt64(sqlite3_vfs *NotUsed, sqlite3_int64 *piNow){
-	  int rc = SQLITE_OK;
-  *piNow = 0;
-  return rc;
-}
-#endif
 
 // virtual file system, providing some dummies to avoid crashes
 sqlite3_vfs *sqlite3_vfs_find(const char *zVfsName) {
