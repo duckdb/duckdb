@@ -81,7 +81,7 @@ execute_process(COMMAND git
                 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
                 OUTPUT_VARIABLE GIT_COMMIT_HASH
                 OUTPUT_STRIP_TRAILING_WHITESPACE)
-set(CXX_EXTRA "-DDUCKDB_SOURCE_ID=\"\\\"${GIT_COMMIT_HASH}\\\"\"")
+add_definitions(-DDUCKDB_SOURCE_ID="\""${GIT_COMMIT_HASH}"\"")
 
 
 option(AMALGAMATION_BUILD
@@ -211,8 +211,8 @@ add_subdirectory(third_party)
 
 if(NOT LEAN)
   add_subdirectory(test)
+  add_subdirectory(tools)
   if(NOT WIN32)
-    add_subdirectory(tools)
     add_subdirectory(benchmark)
   endif()
 endif()

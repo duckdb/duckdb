@@ -11141,6 +11141,20 @@ struct fts5_api {
 ** END OF REGISTRATION API
 *************************************************************************/
 
+
+// This is a DuckDB hack
+#ifdef _WIN32
+typedef const wchar_t* LPCWSTR;
+typedef wchar_t* LPWSTR, *PWSTR;
+
+/* string conversion routines only needed on Win32 */
+SQLITE_API char *sqlite3_win32_unicode_to_utf8(LPCWSTR);
+SQLITE_API char *sqlite3_win32_mbcs_to_utf8_v2(const char *, int);
+SQLITE_API char *sqlite3_win32_utf8_to_mbcs_v2(const char *, int);
+SQLITE_API LPWSTR sqlite3_win32_utf8_to_unicode(const char *zText);
+#endif
+
+
 #ifdef __cplusplus
 }  /* end of the 'extern "C"' block */
 #endif

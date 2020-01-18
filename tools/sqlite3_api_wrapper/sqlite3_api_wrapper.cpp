@@ -2,11 +2,14 @@
 
 #include <ctype.h>
 #include <duckdb.hpp>
+#ifndef _WIN32
 #include <err.h>
+#endif
 #include <stdio.h>
-#include <string.h>
-#include <string>
 #include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <string>
 
 using namespace duckdb;
 using namespace std;
@@ -98,6 +101,10 @@ int sqlite3_close(sqlite3 *db) {
 	if (db) {
 		delete db;
 	}
+	return SQLITE_OK;
+}
+
+int sqlite3_shutdown(void) {
 	return SQLITE_OK;
 }
 

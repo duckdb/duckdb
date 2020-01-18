@@ -11,8 +11,8 @@ def test(cmd, out=None, err=None):
      stdout = res.stdout.decode('utf8').strip()
      stderr = res.stderr.decode('utf8').strip()
 
-     # print(stdout)
-     # print(stderr)
+#     print(stdout)
+#     print(stderr)
 
      if out and out not in stdout:
           print(stdout)
@@ -26,15 +26,17 @@ def test(cmd, out=None, err=None):
           print(stderr)
           raise Exception('got err test failed')
 
-
+def tf():
+	return tempfile.mktemp().replace('\\','/')
+		  
 # basic test
 test('select \'asdf\' as a;', out='asdf')
 
-datafile = tempfile.mktemp()
+datafile = tf()
 print("42\n84",  file=open(datafile, 'w'))
 test('''
 CREATE TABLE a (i INTEGER);
-.import %s a
+.import "%s" a
 SELECT SUM(i) FROM a;
 ''' % datafile, out='126')
 
@@ -48,7 +50,7 @@ SELECT CAST(i AS INTEGER) FROM a;
 
 test('.auth ON', err='sqlite3_set_authorizer')
 test('.auth OFF', err='sqlite3_set_authorizer')
-test('.backup %s' % tempfile.mktemp(), err='sqlite3_backup_init')
+test('.backup %s' % tf(), err='sqlite3_backup_init')
 
 test('''
 .bail on
@@ -62,7 +64,7 @@ SELECT 42;
 test('''
 .cd %s
 .cd %s
-''' % (tempfile.gettempdir(), os.getcwd()))
+''' % (tempfile.gettempdir().replace('\\','/'), os.getcwd().replace('\\','/')))
 
 test('''
 CREATE TABLE a (I INTEGER);
@@ -105,12 +107,12 @@ SELECT NULL;
 
 test('.help', 'Show this message')
 
-test('.load %s' % tempfile.mktemp(), err="Error")
+test('.load %s' % tf(), err="Error")
 
 # this should be fixed
 test('.selftest', err='sqlite3_table_column_metadata')
 
-scriptfile = tempfile.mktemp()
+scriptfile = tf()
 print("select 42", file=open(scriptfile, 'w'))
 test('.read %s' % scriptfile, out='42')
 
@@ -129,8 +131,8 @@ test('.indexes', err='syntax error')
 test('.timeout', err='sqlite3_busy_timeout')
 
 
-test('.save %s' % tempfile.mktemp(), err='sqlite3_backup_init')
-test('.restore %s' % tempfile.mktemp(), err='sqlite3_backup_init')
+test('.save %s' % tf(), err='sqlite3_backup_init')
+test('.restore %s' % tf(), err='sqlite3_backup_init')
 
 
 # don't crash plz
@@ -190,9 +192,9 @@ test('''
 SELECT NULL;
 ''', err='scanstats')
 
-test('.trace %s\n; SELECT 42;' % tempfile.mktemp(), err='sqlite3_trace_v2')
+test('.trace %s\n; SELECT 42;' % tf(), err='sqlite3_trace_v2')
 
-outfile = tempfile.mktemp()
+outfile = tf()
 test('''
 .output %s
 SELECT 42;
@@ -202,7 +204,7 @@ if '42' not in outstr:
      raise Exception('.output test failed')
 
 
-outfile = tempfile.mktemp()
+outfile = tf()
 test('''
 .once %s
 SELECT 43;
@@ -217,7 +219,7 @@ test('''
 .log %s
 SELECT 42;
 .log off
-''' % tempfile.mktemp())
+''' % tf())
 
 test('''
 .mode ascii
@@ -268,8 +270,8 @@ SELECT NULL, 42, 'fourty-two', 42.0;
 ''', out='fourty-two')
 
 
-db1 = tempfile.mktemp()
-db2 = tempfile.mktemp()
+db1 = tf()
+db2 = tf()
 
 test('''
 .open %s
