@@ -33,7 +33,7 @@ void my_scan_function(ClientContext &context, DataChunk &input, DataChunk &outpu
 	size_t this_rows = std::min(data.nrow, (size_t)1024);
 	data.nrow -= this_rows;
 
-	auto int_data = (int32_t *)output.data[0].data;
+	auto int_data = (int32_t *)output.data[0].GetData();
 	for (size_t row = 0; row < this_rows; row++) {
 		int_data[row] = row % 10;
 	}

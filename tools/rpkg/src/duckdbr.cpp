@@ -12,9 +12,10 @@ using namespace std;
 // converter for primitive types
 template <class SRC, class DEST>
 static void vector_to_r(Vector &src_vec, void *dest, uint64_t dest_offset, DEST na_val) {
-	DEST *dest_ptr = ((DEST *)dest) + dest_offset;
+	auto src_ptr = (SRC *) src_vec.GetData();
+	auto dest_ptr = ((DEST *)dest) + dest_offset;
 	for (size_t row_idx = 0; row_idx < src_vec.count; row_idx++) {
-		dest_ptr[row_idx] = src_vec.nullmask[row_idx] ? na_val : ((SRC *)src_vec.data)[row_idx];
+		dest_ptr[row_idx] = src_vec.nullmask[row_idx] ? na_val : src_ptr[row_idx];
 	}
 }
 
@@ -72,7 +73,7 @@ struct RBooleanType {
 
 template<class SRC, class DST, class RTYPE>
 static void AppendColumnSegment(SRC *source_data, Vector &result, index_t count) {
-	auto result_data = (DST*) result.data;
+	auto result_data = (DST*) result.GetData();
 	for(index_t i = 0; i < count; i++) {
 		auto val = source_data[i];
 		if (RTYPE::IsNull(val)) {
@@ -84,7 +85,7 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, index_t count)
 }
 
 static void AppendStringSegment(SEXP coldata, Vector &result, index_t row_idx, index_t count) {
-	auto result_data = (const char**) result.data;
+	auto result_data = (const char**) result.GetData();
 	for(index_t i = 0; i < count; i++) {
 		SEXP val = STRING_ELT(coldata, row_idx + i);
 		if (val == NA_STRING) {
@@ -97,7 +98,7 @@ static void AppendStringSegment(SEXP coldata, Vector &result, index_t row_idx, i
 
 static void AppendFactor(SEXP coldata, Vector &result, index_t row_idx, index_t count) {
 	auto source_data = INTEGER_POINTER(coldata) + row_idx;
-	auto result_data = (const char**) result.data;
+	auto result_data = (const char**) result.GetData();
 	SEXP factor_levels = GET_LEVELS(coldata);
 	for(index_t i = 0; i < count; i++) {
 		int val = source_data[i];
@@ -230,11 +231,12 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 					break;
 				case SQLTypeId::TIMESTAMP: {
 					auto &src_vec = chunk->data[col_idx];
+					auto src_data = (int64_t *)src_vec.GetData();
 					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 					for (size_t row_idx = 0; row_idx < src_vec.count; row_idx++) {
 						dest_ptr[row_idx] = src_vec.nullmask[row_idx]
 						                        ? NA_REAL
-						                        : (double)Timestamp::GetEpoch(((int64_t *)src_vec.data)[row_idx]);
+						                        : (double)Timestamp::GetEpoch(src_data[row_idx]);
 					}
 
 					// some dresssup for R
@@ -248,10 +250,11 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 				}
 				case SQLTypeId::DATE: {
 					auto &src_vec = chunk->data[col_idx];
+					auto src_data = (int32_t *) src_vec.GetData();
 					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 					for (size_t row_idx = 0; row_idx < src_vec.count; row_idx++) {
 						dest_ptr[row_idx] =
-						    src_vec.nullmask[row_idx] ? NA_REAL : (double)(((int32_t *)src_vec.data)[row_idx]) - 719528;
+						    src_vec.nullmask[row_idx] ? NA_REAL : (double)(src_data[row_idx]) - 719528;
 					}
 
 					// some dresssup for R
@@ -261,13 +264,14 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 				}
 				case SQLTypeId::TIME: {
 					auto &src_vec = chunk->data[col_idx];
+					auto src_data = (int32_t *)src_vec.GetData();
 					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 					for (size_t row_idx = 0; row_idx < src_vec.count; row_idx++) {
 
 						if (src_vec.nullmask[row_idx]) {
 							dest_ptr[row_idx] = NA_REAL;
 						} else {
-							time_t n = ((int32_t *)src_vec.data)[row_idx];
+							time_t n = src_data[row_idx];
 							int h;
 							double frac;
 							h = n / 3600000;
@@ -293,9 +297,9 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 				case SQLTypeId::DOUBLE:
 					vector_to_r<double, double>(chunk->data[col_idx], NUMERIC_POINTER(dest), dest_offset, NA_REAL);
 					break;
-				case SQLTypeId::VARCHAR:
+				case SQLTypeId::VARCHAR: {
 					for (size_t row_idx = 0; row_idx < chunk->data[col_idx].count; row_idx++) {
-						char **src_ptr = ((char **)chunk->data[col_idx].data);
+						auto src_ptr = (char **) chunk->data[col_idx].GetData();
 						if (chunk->data[col_idx].nullmask[row_idx]) {
 							SET_STRING_ELT(dest, dest_offset + row_idx, NA_STRING);
 						} else {
@@ -303,6 +307,7 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 						}
 					}
 					break;
+				}
 				default:
 					Rf_error("duckdb_query_R: Unknown column type %s",
 					         TypeIdToString(chunk->GetTypes()[col_idx]).c_str());

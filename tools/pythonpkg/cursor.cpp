@@ -490,7 +490,7 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 					assert(!chunk->data[col_idx].sel_vector);
 					PyObject *str_obj;
 					if (!mask_data[chunk_idx + offset]) {
-						str_obj = PyUnicode_FromString(((const char **)chunk->data[col_idx].data)[chunk_idx]);
+						str_obj = PyUnicode_FromString(((const char **)chunk->data[col_idx].GetData())[chunk_idx]);
 					} else {
 						assert(cols[col_idx].found_nil);
 						str_obj = Py_None;
@@ -502,7 +502,7 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 			case duckdb::TypeId::BIGINT:
 				if (result->sql_types[col_idx].id == duckdb::SQLTypeId::TIMESTAMP) {
 					int64_t *array_data_ptr = reinterpret_cast<int64_t *>(array_data + (offset * duckdb_type_size));
-					duckdb::timestamp_t *chunk_data_ptr = reinterpret_cast<int64_t *>(chunk->data[col_idx].data);
+					duckdb::timestamp_t *chunk_data_ptr = reinterpret_cast<int64_t *>(chunk->data[col_idx].GetData());
 					for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
 						array_data_ptr[chunk_idx] = duckdb::Timestamp::GetEpoch(chunk_data_ptr[chunk_idx]) * 1000;
 					}
@@ -511,7 +511,7 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 			default: // direct mapping types
 				// TODO need to assert the types
 				assert(duckdb::TypeIsConstantSize(duckdb_type));
-				memcpy(array_data + (offset * duckdb_type_size), chunk->data[col_idx].data,
+				memcpy(array_data + (offset * duckdb_type_size), chunk->data[col_idx].GetData(),
 				       duckdb_type_size * chunk->size());
 			}
 		}
