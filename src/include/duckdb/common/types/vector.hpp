@@ -12,6 +12,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/enums/vector_type.hpp"
 
 namespace duckdb {
 //! Type used for nullmasks
@@ -67,7 +68,9 @@ public:
 	// implicit copying of Vectors is not allowed
 	Vector(const Vector &) = delete;
 
-	//! The type of the elements stored in the vector.
+	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated constant, if it is compressed)
+	VectorType vector_type;
+	//! The type of the elements stored in the vector (e.g. integer, float)
 	TypeId type;
 	//! The amount of elements in the vector.
 	index_t count;

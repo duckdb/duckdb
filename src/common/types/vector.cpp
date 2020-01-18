@@ -13,24 +13,24 @@ nullmask_t ZERO_MASK = nullmask_t(0);
 }
 
 Vector::Vector(TypeId type, bool create_data, bool zero_data)
-    : type(type), count(0), sel_vector(nullptr), data(nullptr) {
+    : vector_type(VectorType::FLAT_VECTOR), type(type), count(0), sel_vector(nullptr), data(nullptr) {
 	if (create_data) {
 		Initialize(type, zero_data);
 	}
 }
 
-Vector::Vector(TypeId type, data_ptr_t dataptr) : type(type), count(0), sel_vector(nullptr), data(dataptr) {
+Vector::Vector(TypeId type, data_ptr_t dataptr) :
+	vector_type(VectorType::FLAT_VECTOR), type(type), count(0), sel_vector(nullptr), data(dataptr) {
 	if (dataptr && type == TypeId::INVALID) {
 		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
 	}
 }
 
-Vector::Vector(Value value) : Vector(value.type, true, false) {
-	count = 1;
-	SetValue(0, value);
+Vector::Vector(Value value) : vector_type(VectorType::CONSTANT_VECTOR), sel_vector(nullptr) {
+	Reference(value);
 }
 
-Vector::Vector() : type(TypeId::INVALID), count(0), sel_vector(nullptr), data(nullptr) {
+Vector::Vector() : vector_type(VectorType::FLAT_VECTOR), type(TypeId::INVALID), count(0), sel_vector(nullptr), data(nullptr) {
 }
 
 Vector::~Vector() {
@@ -40,50 +40,10 @@ Vector::~Vector() {
 void Vector::Reference(Value &value) {
 	Destroy();
 	type = value.type;
+	owned_data = unique_ptr<data_t[]>(new data_t[GetTypeIdSize(type)]);
+	data = owned_data.get();
 	count = 1;
-	if (value.is_null) {
-		nullmask[0] = true;
-	}
-	switch (value.type) {
-	case TypeId::BOOLEAN:
-		data = (data_ptr_t)&value.value_.boolean;
-		break;
-	case TypeId::TINYINT:
-		data = (data_ptr_t)&value.value_.tinyint;
-		break;
-	case TypeId::SMALLINT:
-		data = (data_ptr_t)&value.value_.smallint;
-		break;
-	case TypeId::INTEGER:
-		data = (data_ptr_t)&value.value_.integer;
-		break;
-	case TypeId::BIGINT:
-		data = (data_ptr_t)&value.value_.bigint;
-		break;
-	case TypeId::FLOAT:
-		data = (data_ptr_t)&value.value_.float_;
-		break;
-	case TypeId::DOUBLE:
-		data = (data_ptr_t)&value.value_.double_;
-		break;
-	case TypeId::HASH:
-		data = (data_ptr_t)&value.value_.hash;
-		break;
-	case TypeId::POINTER:
-		data = (data_ptr_t)&value.value_.pointer;
-		break;
-	case TypeId::VARCHAR: {
-		// make size-1 array of char vector
-		owned_data = unique_ptr<data_t[]>(new data_t[sizeof(data_ptr_t)]);
-		data = owned_data.get();
-		// reference the string value of the Value
-		auto strings = (const char **)data;
-		strings[0] = value.str_value.c_str();
-		break;
-	}
-	default:
-		throw NotImplementedException("Unimplemented type");
-	}
+	SetValue(0, value);
 }
 
 void Vector::Initialize(TypeId new_type, bool zero_data) {
