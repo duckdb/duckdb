@@ -524,7 +524,7 @@ int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char *val, int length, 
 	} else {
 		value = string(val, val + length);
 	}
-	if (free_func && ((int64_t) free_func) != -1) {
+	if (free_func && ((ptrdiff_t) free_func) != -1) {
 		free_func((void *)val);
 	}
 	return sqlite3_internal_bind_value(stmt, idx, Value(value));
@@ -992,9 +992,9 @@ char *sqlite3_win32_mbcs_to_utf8_v2(const char *zText, int) {
 
 char *sqlite3_win32_utf8_to_mbcs_v2(const char * zText, int) {
 	auto nchar = MultiByteToWideChar(CP_UTF8, 0, zText, -1, NULL, 0);
-	auto ret = (LPWSTR)sqlite3_malloc(nchar * sizeof(zText[0]));
+	auto ret = (LPWSTR)sqlite3_malloc(nchar * sizeof(WCHAR));
 	assert(ret);
-	memset(ret, 0, nchar * sizeof(zText[0]));
+	memset(ret, 0, nchar * sizeof(WCHAR));
 
 	nchar = MultiByteToWideChar(CP_UTF8, 0, zText, -1, ret,
                                 nchar);
