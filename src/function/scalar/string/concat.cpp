@@ -16,7 +16,7 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 	for (index_t i = 0; i < args.column_count; i++) {
 		auto &input = args.data[i];
 		assert(input.type == TypeId::VARCHAR);
-		if (!input.IsConstant()) {
+		if (input.vector_type != VectorType::CONSTANT_VECTOR) {
 			result.sel_vector = input.sel_vector;
 			result.count = input.count;
 		}

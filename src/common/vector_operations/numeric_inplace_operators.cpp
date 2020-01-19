@@ -19,7 +19,6 @@ using namespace std;
 //===--------------------------------------------------------------------===//
 // left += right
 void VectorOperations::AddInPlace(Vector &result, Vector &input) {
-	INPLACE_TYPE_CHECK(input, result);
 	// the inplace loops take the result as the last parameter
 	switch (input.type) {
 	case TypeId::TINYINT:

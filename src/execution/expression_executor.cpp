@@ -77,7 +77,7 @@ void ExpressionExecutor::ExecuteExpression(index_t expr_idx, Vector &result) {
 	if (chunk) {
 		// we have an input chunk: result of this vector should have the same length as input chunk
 		// check if the result is a single constant value
-		if (result.IsConstant()) {
+		if (result.vector_type == VectorType::CONSTANT_VECTOR) {
 			// have to duplicate the constant value to match the rows in the
 			// other columns
 			auto constant_value = result.GetValue(0);
@@ -103,7 +103,7 @@ Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 	Vector result(expr.return_type, true, false);
 	executor.ExecuteExpression(result);
 
-	assert(result.count == 1);
+	assert(result.vector_type == VectorType::CONSTANT_VECTOR);
 	return result.GetValue(0);
 }
 
@@ -208,7 +208,7 @@ index_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *sta
 	Execute(expr, state, intermediate);
 
 	auto intermediate_result = (bool *)intermediate.GetData();
-	if (intermediate.IsConstant()) {
+	if (intermediate.vector_type == VectorType::CONSTANT_VECTOR) {
 		// constant result: get the value
 		if (intermediate_result[0] && !intermediate.nullmask[0]) {
 			// constant true: return everything; we skip filling the selection vector here as it will not be used

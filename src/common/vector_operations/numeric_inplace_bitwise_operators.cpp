@@ -13,7 +13,6 @@ using namespace duckdb;
 using namespace std;
 
 template <class OP> static void templated_inplace_bitwise_operation(Vector &result, Vector &input) {
-	INPLACE_TYPE_CHECK(input, result);
 	// the inplace loops take the result as the last parameter
 	switch (input.type) {
 	case TypeId::TINYINT:

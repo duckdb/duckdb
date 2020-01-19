@@ -240,7 +240,7 @@ struct VectorOperations {
 		result.count = 1;
 		for (index_t i = 0; i < N; i++) {
 			// for every vector, check if it is a constant
-			if (vectors[i]->IsConstant()) {
+			if (vectors[i]->vector_type == VectorType::CONSTANT_VECTOR) {
 				// if it is a constant, we set the index multiplier to 0
 				// this ensures we always fetch the first element
 				multipliers[i] = 0;
@@ -303,11 +303,11 @@ struct VectorOperations {
 
 		for (index_t i = 0; i < args.column_count; i++) {
 			auto &input = args.data[i];
-			if (!input.IsConstant()) {
+			if (input.vector_type != VectorType::CONSTANT_VECTOR) {
 				result.sel_vector = input.sel_vector;
 				result.count = input.count;
 			}
-			mul[i] = input.IsConstant() ? 0 : 1;
+			mul[i] = input.vector_type == VectorType::CONSTANT_VECTOR ? 0 : 1;
 		}
 		VectorOperations::Exec(result, [&](index_t i, index_t k) { fun(mul, i); });
 	}

@@ -206,6 +206,7 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 		throw NotImplementedException("Cast between equal types");
 	}
 
+	result.vector_type = source.vector_type;
 	result.nullmask = source.nullmask;
 	result.sel_vector = source.sel_vector;
 	result.count = source.count;

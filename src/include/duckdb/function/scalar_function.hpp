@@ -71,6 +71,7 @@ public:
 	template <class TA, class TR, class OP, bool SKIP_NULLS = false>
 	static void UnaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		assert(input.column_count >= 1);
+		result.vector_type = input.data[0].vector_type;
 		templated_unary_loop<TA, TR, OP, SKIP_NULLS>(input.data[0], result);
 	};
 

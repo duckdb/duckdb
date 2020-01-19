@@ -50,20 +50,32 @@ void templated_ternary_loop(Vector &a, Vector &b, Vector &c, Vector &result) {
 	auto cdata = (C_TYPE *)c.GetData();
 	auto result_data = (RESULT_TYPE *)result.GetData();
 
-	if (a.IsConstant()) {
-		if (b.IsConstant()) {
-			// AB constant
+	if (a.vector_type == VectorType::CONSTANT_VECTOR) {
+		if (b.vector_type == VectorType::CONSTANT_VECTOR) {
 			result.sel_vector = c.sel_vector;
 			result.count = c.count;
-			if (a.nullmask[0] || b.nullmask[0]) {
-				result.nullmask.set();
-				return;
+			if (c.vector_type == VectorType::CONSTANT_VECTOR) {
+				// ABC constant, result is constant vector
+				result.vector_type = VectorType::CONSTANT_VECTOR;
+				if (a.nullmask[0] || b.nullmask[0] || c.nullmask[0]) {
+					result.nullmask[0] = true;
+				} else {
+					result_data[0] = OP::Operation(adata[0], bdata[0], cdata[0]);
+				}
+			} else {
+				// AB constant
+				result.vector_type = VectorType::FLAT_VECTOR;
+				if (a.nullmask[0] || b.nullmask[0]) {
+					result.nullmask.set();
+					return;
+				}
+				result.nullmask = c.nullmask;
+				ternary_function_loop<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, OP, IGNORE_NULL, true, true, false>(
+					adata, bdata, cdata, result_data, result.count, result.sel_vector, result.nullmask);
 			}
-			result.nullmask = c.nullmask;
-			ternary_function_loop<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, OP, IGNORE_NULL, true, true, false>(
-			    adata, bdata, cdata, result_data, result.count, result.sel_vector, result.nullmask);
-		} else if (c.IsConstant()) {
+		} else if (c.vector_type == VectorType::CONSTANT_VECTOR) {
 			// AC constant
+			result.vector_type = VectorType::FLAT_VECTOR;
 			result.sel_vector = b.sel_vector;
 			result.count = b.count;
 			if (a.nullmask[0] || c.nullmask[0]) {
@@ -75,20 +87,22 @@ void templated_ternary_loop(Vector &a, Vector &b, Vector &c, Vector &result) {
 			    adata, bdata, cdata, result_data, result.count, result.sel_vector, result.nullmask);
 		} else {
 			// A constant
+			result.vector_type = VectorType::FLAT_VECTOR;
 			result.sel_vector = b.sel_vector;
 			result.count = b.count;
 			result.nullmask = a.nullmask | c.nullmask;
 			ternary_function_loop<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, OP, IGNORE_NULL, true, false, false>(
 			    adata, bdata, cdata, result_data, result.count, result.sel_vector, result.nullmask);
 		}
-	} else if (b.IsConstant()) {
+	} else if (b.vector_type == VectorType::CONSTANT_VECTOR) {
+		result.vector_type = VectorType::FLAT_VECTOR;
 		result.sel_vector = a.sel_vector;
 		result.count = a.count;
 		if (b.nullmask[0]) {
 			result.nullmask.set();
 			return;
 		}
-		if (c.IsConstant()) {
+		if (c.vector_type == VectorType::CONSTANT_VECTOR) {
 			// BC constant
 			if (c.nullmask[0]) {
 				result.nullmask.set();
@@ -103,8 +117,9 @@ void templated_ternary_loop(Vector &a, Vector &b, Vector &c, Vector &result) {
 			ternary_function_loop<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, OP, IGNORE_NULL, false, true, false>(
 			    adata, bdata, cdata, result_data, result.count, result.sel_vector, result.nullmask);
 		}
-	} else if (c.IsConstant()) {
+	} else if (c.vector_type == VectorType::CONSTANT_VECTOR) {
 		// C constant
+		result.vector_type = VectorType::FLAT_VECTOR;
 		result.sel_vector = a.sel_vector;
 		result.count = a.count;
 		if (c.nullmask[0]) {
@@ -117,6 +132,7 @@ void templated_ternary_loop(Vector &a, Vector &b, Vector &c, Vector &result) {
 		    adata, bdata, cdata, result_data, result.count, result.sel_vector, result.nullmask);
 	} else {
 		// no constants
+		result.vector_type = VectorType::FLAT_VECTOR;
 		result.sel_vector = a.sel_vector;
 		result.count = a.count;
 		result.nullmask = a.nullmask | b.nullmask | c.nullmask;

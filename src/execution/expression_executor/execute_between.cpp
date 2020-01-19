@@ -108,9 +108,5 @@ index_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState
 	} else {
 		result_count = between_loop_type_switch<ExclusiveBetweenOperator>(input, lower, upper, result);
 	}
-	if (input.IsConstant() && lower.IsConstant() && upper.IsConstant()) {
-		return result_count == 0 ? 0 : chunk->size();
-	} else {
-		return result_count;
-	}
+	return result_count;
 }

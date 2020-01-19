@@ -45,7 +45,7 @@ static inline void scatter_loop(T *__restrict ldata, T **__restrict destination,
 template <class T, class OP> void scatter_templated_loop(Vector &source, Vector &dest) {
 	auto ldata = (T *)source.GetData();
 	auto destination = (T **)dest.GetData();
-	if (source.IsConstant()) {
+	if (source.vector_type == VectorType::CONSTANT_VECTOR) {
 		// special case: source is a constant
 		if (source.nullmask[0]) {
 			// source is NULL, do nothing

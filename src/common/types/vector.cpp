@@ -39,6 +39,7 @@ Vector::~Vector() {
 
 void Vector::Reference(Value &value) {
 	Destroy();
+	vector_type = VectorType::CONSTANT_VECTOR;
 	type = value.type;
 	owned_data = unique_ptr<data_t[]>(new data_t[GetTypeIdSize(type)]);
 	data = owned_data.get();
@@ -167,6 +168,7 @@ Value Vector::GetValue(uint64_t index) const {
 void Vector::Reference(Vector &other) {
 	assert(!owned_data);
 
+	vector_type = other.vector_type;
 	count = other.count;
 	data = other.data;
 	sel_vector = other.sel_vector;
@@ -177,6 +179,7 @@ void Vector::Reference(Vector &other) {
 void Vector::Move(Vector &other) {
 	other.Destroy();
 
+	other.vector_type = vector_type;
 	other.owned_data = move(owned_data);
 	string_heap.Move(other.string_heap);
 	other.count = count;

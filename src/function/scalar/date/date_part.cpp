@@ -309,10 +309,10 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet date_part("date_part");
 	date_part.AddFunction(
 	    ScalarFunction({SQLType::VARCHAR, SQLType::DATE}, SQLType::BIGINT,
-	                   ScalarFunction::BinaryFunction<const char *, date_t, int64_t, DatePartOperator>));
+	                   ScalarFunction::BinaryFunction<const char *, date_t, int64_t, DatePartOperator, true>));
 	date_part.AddFunction(
 	    ScalarFunction({SQLType::VARCHAR, SQLType::TIMESTAMP}, SQLType::BIGINT,
-	                   ScalarFunction::BinaryFunction<const char *, timestamp_t, int64_t, DatePartOperator>));
+	                   ScalarFunction::BinaryFunction<const char *, timestamp_t, int64_t, DatePartOperator, true>));
 	set.AddFunction(date_part);
 	date_part.name = "datepart";
 	set.AddFunction(date_part);

@@ -108,29 +108,36 @@ void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result) {
 	}
 }
 
+struct ZeroIsNullOperator {
+	template<class LEFT_TYPE, class RIGHT_TYPE>
+	static inline bool Operation(LEFT_TYPE left, RIGHT_TYPE right) {
+		return right == 0;
+	}
+};
+
 void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
 	BINARY_TYPE_CHECK(left, right, result);
 	switch (left.type) {
 	case TypeId::TINYINT:
-		templated_divmod_loop<int8_t, duckdb::Divide>(left, right, result);
+		templated_binary_loop<int8_t, int8_t, int8_t, duckdb::Divide, true, ZeroIsNullOperator>(left, right, result);
 		break;
 	case TypeId::SMALLINT:
-		templated_divmod_loop<int16_t, duckdb::Divide>(left, right, result);
+		templated_binary_loop<int16_t, int16_t, int16_t, duckdb::Divide, true, ZeroIsNullOperator>(left, right, result);
 		break;
 	case TypeId::INTEGER:
-		templated_divmod_loop<int32_t, duckdb::Divide>(left, right, result);
+		templated_binary_loop<int32_t, int32_t, int32_t, duckdb::Divide, true, ZeroIsNullOperator>(left, right, result);
 		break;
 	case TypeId::BIGINT:
-		templated_divmod_loop<int64_t, duckdb::Divide>(left, right, result);
+		templated_binary_loop<int64_t, int64_t, int64_t, duckdb::Divide, true, ZeroIsNullOperator>(left, right, result);
 		break;
 	case TypeId::FLOAT:
-		templated_divmod_loop<float, duckdb::Divide>(left, right, result);
+		templated_binary_loop<float, float, float, duckdb::Divide, true, ZeroIsNullOperator>(left, right, result);
 		break;
 	case TypeId::DOUBLE:
-		templated_divmod_loop<double, duckdb::Divide>(left, right, result);
+		templated_binary_loop<double, double, double, duckdb::Divide, true, ZeroIsNullOperator>(left, right, result);
 		break;
 	case TypeId::POINTER:
-		templated_divmod_loop<uint64_t, duckdb::Divide>(left, right, result);
+		templated_binary_loop<uint64_t, uint64_t, uint64_t, duckdb::Divide, true, ZeroIsNullOperator>(left, right, result);
 		break;
 	default:
 		throw InvalidTypeException(left.type, "Invalid type for division");
@@ -144,25 +151,25 @@ void VectorOperations::Modulo(Vector &left, Vector &right, Vector &result) {
 	BINARY_TYPE_CHECK(left, right, result);
 	switch (left.type) {
 	case TypeId::TINYINT:
-		templated_divmod_loop<int8_t, duckdb::ModuloInt>(left, right, result);
+		templated_binary_loop<int8_t, int8_t, int8_t, duckdb::ModuloInt, true, ZeroIsNullOperator>(left, right, result);
 		break;
 	case TypeId::SMALLINT:
-		templated_divmod_loop<int16_t, duckdb::ModuloInt>(left, right, result);
+		templated_binary_loop<int16_t, int16_t, int16_t, duckdb::ModuloInt, true, ZeroIsNullOperator>(left, right, result);
 		break;
 	case TypeId::INTEGER:
-		templated_divmod_loop<int32_t, duckdb::ModuloInt>(left, right, result);
+		templated_binary_loop<int32_t, int32_t, int32_t, duckdb::ModuloInt, true, ZeroIsNullOperator>(left, right, result);
 		break;
 	case TypeId::BIGINT:
-		templated_divmod_loop<int64_t, duckdb::ModuloInt>(left, right, result);
+		templated_binary_loop<int64_t, int64_t, int64_t, duckdb::ModuloInt, true, ZeroIsNullOperator>(left, right, result);
 		break;
 	case TypeId::FLOAT:
-		templated_divmod_loop<float, duckdb::ModuloReal>(left, right, result);
+		templated_binary_loop<float, float, float, duckdb::ModuloReal, true, ZeroIsNullOperator>(left, right, result);
 		break;
 	case TypeId::DOUBLE:
-		templated_divmod_loop<double, duckdb::ModuloReal>(left, right, result);
+		templated_binary_loop<double, double, double, duckdb::ModuloReal, true, ZeroIsNullOperator>(left, right, result);
 		break;
 	case TypeId::POINTER:
-		templated_divmod_loop<uint64_t, duckdb::ModuloInt>(left, right, result);
+		templated_binary_loop<uint64_t, uint64_t, uint64_t, duckdb::ModuloInt, true, ZeroIsNullOperator>(left, right, result);
 		break;
 	default:
 		throw InvalidTypeException(left.type, "Invalid type for ModuloInt");

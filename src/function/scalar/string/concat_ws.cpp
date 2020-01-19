@@ -20,7 +20,7 @@ void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &result)
 	for (index_t i = 1; i < args.column_count; i++) {
 		auto &input = args.data[i];
 		assert(input.type == TypeId::VARCHAR);
-		if (!input.IsConstant()) {
+		if (input.vector_type != VectorType::CONSTANT_VECTOR) {
 			result.sel_vector = input.sel_vector;
 			result.count = input.count;
 		}

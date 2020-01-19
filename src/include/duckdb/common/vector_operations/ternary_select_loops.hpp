@@ -42,28 +42,28 @@ index_t templated_ternary_select(Vector &a, Vector &b, Vector &c, sel_t result[]
 	auto bdata = (B_TYPE *)b.GetData();
 	auto cdata = (C_TYPE *)c.GetData();
 
-	if (a.IsConstant()) {
+	if (a.vector_type == VectorType::CONSTANT_VECTOR) {
 		if (a.nullmask[0]) {
 			return 0;
 		}
-		if (b.IsConstant()) {
+		if (b.vector_type == VectorType::CONSTANT_VECTOR) {
 			if (b.nullmask[0]) {
 				return 0;
 			}
-			if (c.IsConstant()) {
+			if (c.vector_type == VectorType::CONSTANT_VECTOR) {
 				// early out in case everything is a constant
 				// in this case we don't want to edit the selection vector in the result at all
 				// hence we return 0 or 1 based on the condition immediately
 				if (c.nullmask[0] || !OP::Operation(adata[0], bdata[0], cdata[0])) {
 					return 0;
 				} else {
-					return 1;
+					return a.count;
 				}
 			}
 			// AB constant
 			return ternary_select_loop<A_TYPE, B_TYPE, C_TYPE, OP, true, true, false>(
 			    adata, bdata, cdata, result, c.count, c.sel_vector, c.nullmask);
-		} else if (c.IsConstant()) {
+		} else if (c.vector_type == VectorType::CONSTANT_VECTOR) {
 			if (c.nullmask[0]) {
 				return 0;
 			}
@@ -76,11 +76,11 @@ index_t templated_ternary_select(Vector &a, Vector &b, Vector &c, sel_t result[]
 			return ternary_select_loop<A_TYPE, B_TYPE, C_TYPE, OP, true, false, false>(adata, bdata, cdata, result,
 			                                                                           b.count, b.sel_vector, nullmask);
 		}
-	} else if (b.IsConstant()) {
+	} else if (b.vector_type == VectorType::CONSTANT_VECTOR) {
 		if (b.nullmask[0]) {
 			return 0;
 		}
-		if (c.IsConstant()) {
+		if (c.vector_type == VectorType::CONSTANT_VECTOR) {
 			if (c.nullmask[0]) {
 				return 0;
 			}
@@ -93,7 +93,7 @@ index_t templated_ternary_select(Vector &a, Vector &b, Vector &c, sel_t result[]
 			return ternary_select_loop<A_TYPE, B_TYPE, C_TYPE, OP, false, true, false>(adata, bdata, cdata, result,
 			                                                                           a.count, a.sel_vector, nullmask);
 		}
-	} else if (c.IsConstant()) {
+	} else if (c.vector_type == VectorType::CONSTANT_VECTOR) {
 		if (c.nullmask[0]) {
 			return 0;
 		}

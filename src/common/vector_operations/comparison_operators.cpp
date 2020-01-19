@@ -12,21 +12,8 @@
 using namespace duckdb;
 using namespace std;
 
-inline void COMPARISON_TYPE_CHECK(Vector &left, Vector &right, Vector &result) {
-	if (left.type != right.type) {
-		throw TypeMismatchException(left.type, right.type, "left and right types must be the same");
-	}
-	if (result.type != TypeId::BOOLEAN) {
-		throw InvalidTypeException(result.type, "result of comparison must be boolean");
-	}
-	if (!left.IsConstant() && !right.IsConstant() && left.count != right.count) {
-		throw Exception("Cardinality exception: left and right cannot have "
-		                "different cardinalities");
-	}
-}
-
 template <class OP> static void templated_boolean_operation(Vector &left, Vector &right, Vector &result) {
-	COMPARISON_TYPE_CHECK(left, right, result);
+	assert(left.type == right.type && result.type == TypeId::BOOLEAN);
 	// the inplace loops take the result as the last parameter
 	switch (left.type) {
 	case TypeId::BOOLEAN:

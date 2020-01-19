@@ -11,11 +11,12 @@ using namespace duckdb;
 using namespace std;
 
 template <bool INVERSE> void is_null_loop(Vector &input, Vector &result) {
-	if (result.type != TypeId::BOOLEAN) {
-		throw InvalidTypeException(result.type, "IS (NOT) NULL returns a boolean!");
-	}
-	auto result_data = (bool *)result.GetData();
+	assert(result.type == TypeId::BOOLEAN);
+
+	result.vector_type = input.vector_type;
 	result.nullmask.reset();
+
+	auto result_data = (bool *)result.GetData();
 	VectorOperations::Exec(input.sel_vector, input.count, [&](index_t i, index_t k) {
 		result_data[i] = INVERSE ? !input.nullmask[i] : input.nullmask[i];
 	});
