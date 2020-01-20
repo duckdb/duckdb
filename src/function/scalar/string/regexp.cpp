@@ -3,7 +3,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/vector_operations/binary_loops.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
 
 #include "re2/re2.h"
 

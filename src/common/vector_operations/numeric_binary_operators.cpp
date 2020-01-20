@@ -6,7 +6,7 @@
 
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 
-#include "duckdb/common/vector_operations/binary_loops.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;

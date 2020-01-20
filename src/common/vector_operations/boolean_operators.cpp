@@ -6,8 +6,8 @@
 
 #include "duckdb/common/operator/boolean_operators.hpp"
 
-#include "duckdb/common/vector_operations/binary_loops.hpp"
-#include "duckdb/common/vector_operations/unary_loops.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
@@ -85,7 +85,5 @@ struct NotOperator {
 
 void VectorOperations::Not(Vector &input, Vector &result) {
 	assert(input.type == TypeId::BOOLEAN && result.type == TypeId::BOOLEAN);
-
-	result.vector_type = input.vector_type;
-	templated_unary_loop<bool, bool, NotOperator>(input, result);
+	UnaryExecutor::Execute<bool, bool, NotOperator>(input, result);
 }

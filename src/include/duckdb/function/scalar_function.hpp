@@ -10,8 +10,8 @@
 
 #include "duckdb/function/function.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/vector_operations/unary_loops.hpp"
-#include "duckdb/common/vector_operations/binary_loops.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 
 namespace duckdb {
@@ -71,8 +71,7 @@ public:
 	template <class TA, class TR, class OP, bool SKIP_NULLS = false>
 	static void UnaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		assert(input.column_count >= 1);
-		result.vector_type = input.data[0].vector_type;
-		templated_unary_loop<TA, TR, OP, SKIP_NULLS>(input.data[0], result);
+		UnaryExecutor::Execute<TA, TR, OP, SKIP_NULLS>(input.data[0], result);
 	};
 
 	template <class TA, class TB, class TR, class OP, bool IGNORE_NULL = false>
