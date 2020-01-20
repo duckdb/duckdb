@@ -16,7 +16,7 @@ struct ComparisonExecutor {
 private:
 	template<class T, class OP, bool IGNORE_NULL=false>
 	static inline void TemplatedExecute(Vector &left, Vector &right, Vector &result) {
-		BinaryExecutor::Execute<T, T, bool, IGNORE_NULL>(left, right, result, OP::template Operation<T>);
+		BinaryExecutor::Execute<T, T, bool, OP, IGNORE_NULL>(left, right, result);
 	}
 
 public:

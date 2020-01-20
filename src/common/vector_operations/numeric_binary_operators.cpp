@@ -16,7 +16,7 @@ struct NumericBinaryExecutor {
 private:
 	template<class T, class OP, bool IGNORE_NULL, class NULL_CHECK>
 	static inline void TemplatedExecute(Vector &left, Vector &right, Vector &result) {
-		BinaryExecutor::Execute<T, T, T, IGNORE_NULL, NULL_CHECK>(left, right, result, OP::template Operation<T>);
+		BinaryExecutor::Execute<T, T, T, OP, IGNORE_NULL, NULL_CHECK>(left, right, result);
 	}
 public:
 	template <class OP, bool IGNORE_NULL=false, class NULL_CHECK=DefaultNullCheckOperator>

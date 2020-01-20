@@ -22,9 +22,30 @@ struct DefaultNullCheckOperator {
 	}
 };
 
+struct StandardOperatorWrapper {
+	template<class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right) {
+		return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
+	}
+};
+
+struct SingleArgumentOperatorWrapper {
+	template<class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right) {
+		return OP::template Operation<LEFT_TYPE>(left, right);
+	}
+};
+
+struct LambdaWrapper {
+	template<class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right) {
+		return fun(left, right);
+	}
+};
+
 struct BinaryExecutor {
 private:
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class FUNC, bool IGNORE_NULL, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, class NULL_CHECK>
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, class NULL_CHECK>
 	static void ExecuteLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
 											RESULT_TYPE *__restrict result_data, index_t count,
 											sel_t *__restrict sel_vector, nullmask_t &nullmask, FUNC fun) {
@@ -42,7 +63,7 @@ private:
 					if (NULL_CHECK::Operation(lentry, rentry)) {
 						nullmask[i] = true;
 					} else {
-						result_data[i] = fun(lentry, rentry);
+						result_data[i] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(fun, lentry, rentry);
 					}
 				}
 			});
@@ -53,13 +74,13 @@ private:
 				if (NULL_CHECK::Operation(lentry, rentry)) {
 					nullmask[i] = true;
 				} else {
-					result_data[i] = fun(lentry, rentry);
+					result_data[i] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(fun, lentry, rentry);
 				}
 			});
 		}
 	}
 
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class FUNC, bool IGNORE_NULL, class NULL_CHECK>
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL, class NULL_CHECK>
 	static void ExecuteConstantConstant(Vector &left, Vector &right, Vector &result, LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata, RESULT_TYPE *__restrict result_data, FUNC fun) {
 		// both left and right are constant: result is constant vector
 		result.vector_type = VectorType::CONSTANT_VECTOR;
@@ -73,10 +94,10 @@ private:
 		if (IGNORE_NULL && result.nullmask[0]) {
 			return;
 		}
-		result_data[0] = fun(ldata[0], rdata[0]);
+		result_data[0] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(fun, ldata[0], rdata[0]);
 	}
 
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class FUNC, bool IGNORE_NULL, class NULL_CHECK>
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL, class NULL_CHECK>
 	static void ExecuteConstantFlat(Vector &left, Vector &right, Vector &result, LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata, RESULT_TYPE *__restrict result_data, FUNC fun) {
 		// left side is constant: result is flat vector
 		result.vector_type = VectorType::FLAT_VECTOR;
@@ -88,11 +109,11 @@ private:
 			return;
 		}
 		result.nullmask = right.nullmask;
-		ExecuteLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, FUNC, IGNORE_NULL, true, false, NULL_CHECK>(
+		ExecuteLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, true, false, NULL_CHECK>(
 			ldata, rdata, result_data, result.count, result.sel_vector, result.nullmask, fun);
 	}
 
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class FUNC, bool IGNORE_NULL, class NULL_CHECK>
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL, class NULL_CHECK>
 	static void ExecuteFlatConstant(Vector &left, Vector &right, Vector &result, LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata, RESULT_TYPE *__restrict result_data, FUNC fun) {
 		// right side is constant: result is flat vector
 		result.vector_type = VectorType::FLAT_VECTOR;
@@ -103,11 +124,11 @@ private:
 			return;
 		}
 		result.nullmask = left.nullmask;
-		ExecuteLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, FUNC, IGNORE_NULL, false, true, NULL_CHECK>(
+		ExecuteLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, false, true, NULL_CHECK>(
 			ldata, rdata, result_data, result.count, result.sel_vector, result.nullmask, fun);
 	}
 
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class FUNC, bool IGNORE_NULL, class NULL_CHECK>
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL, class NULL_CHECK>
 	static void ExecuteStandard(Vector &left, Vector &right, Vector &result, LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata, RESULT_TYPE *__restrict result_data, FUNC fun) {
 		// neither side is a constant: loop over everything
 		assert(left.count == right.count);
@@ -117,25 +138,39 @@ private:
 		result.sel_vector = left.sel_vector;
 		result.count = left.count;
 		result.nullmask = left.nullmask | right.nullmask;
-		ExecuteLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, FUNC, IGNORE_NULL, false, false, NULL_CHECK>(
+		ExecuteLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, false, false, NULL_CHECK>(
 			ldata, rdata, result_data, result.count, result.sel_vector, result.nullmask, fun);
 	}
-public:
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, bool IGNORE_NULL = false, class NULL_CHECK=DefaultNullCheckOperator, class FUNC=std::function<RESULT_TYPE(LEFT_TYPE, RIGHT_TYPE)>>
-	static void Execute(Vector &left, Vector &right, Vector &result, FUNC fun) {
-		auto ldata = (LEFT_TYPE *)left.GetData();
+
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL, class NULL_CHECK>
+	static void ExecuteSwitch(Vector &left, Vector &right, Vector &result, FUNC fun) {		auto ldata = (LEFT_TYPE *)left.GetData();
 		auto rdata = (RIGHT_TYPE *)right.GetData();
 		auto result_data = (RESULT_TYPE *)result.GetData();
 
 		if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
-			ExecuteConstantConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, FUNC, IGNORE_NULL, NULL_CHECK>(left, right, result, ldata, rdata, result_data, fun);
+			ExecuteConstantConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, NULL_CHECK>(left, right, result, ldata, rdata, result_data, fun);
 		} else if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::FLAT_VECTOR) {
-			ExecuteConstantFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, FUNC, IGNORE_NULL, NULL_CHECK>(left, right, result, ldata, rdata, result_data, fun);
+			ExecuteConstantFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, NULL_CHECK>(left, right, result, ldata, rdata, result_data, fun);
 		} else if (left.vector_type == VectorType::FLAT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
-			ExecuteFlatConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, FUNC, IGNORE_NULL, NULL_CHECK>(left, right, result, ldata, rdata, result_data, fun);
+			ExecuteFlatConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, NULL_CHECK>(left, right, result, ldata, rdata, result_data, fun);
 		} else {
-			ExecuteStandard<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, FUNC, IGNORE_NULL, NULL_CHECK>(left, right, result, ldata, rdata, result_data, fun);
+			ExecuteStandard<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, NULL_CHECK>(left, right, result, ldata, rdata, result_data, fun);
 		}
+	}
+public:
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, bool IGNORE_NULL = false, class NULL_CHECK=DefaultNullCheckOperator, class FUNC=std::function<RESULT_TYPE(LEFT_TYPE, RIGHT_TYPE)>>
+	static void Execute(Vector &left, Vector &right, Vector &result, FUNC fun) {
+		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, LambdaWrapper, bool, FUNC, IGNORE_NULL, NULL_CHECK>(left, right, result, fun);
+	}
+
+	template<class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL = false, class NULL_CHECK=DefaultNullCheckOperator>
+	static void Execute(Vector &left, Vector &right, Vector &result) {
+		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, SingleArgumentOperatorWrapper, OP, bool, IGNORE_NULL, NULL_CHECK>(left, right, result, false);
+	}
+
+	template<class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL = false, class NULL_CHECK=DefaultNullCheckOperator>
+	static void ExecuteStandard(Vector &left, Vector &right, Vector &result) {
+		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, StandardOperatorWrapper, OP, bool, IGNORE_NULL, NULL_CHECK>(left, right, result, false);
 	}
 };
 
