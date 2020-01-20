@@ -1,5 +1,8 @@
 add_definitions(-DSQLITE_OMIT_LOAD_EXTENSION=1)
-add_definitions(-DHAVE_LINENOISE=1)
+
+if(NOT WIN32)
+	add_definitions(-DHAVE_LINENOISE=1)
+endif()
 
 include_directories(include)
 include_directories(../sqlite3_api_wrapper/include)
