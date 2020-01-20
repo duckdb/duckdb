@@ -12,60 +12,70 @@
 using namespace duckdb;
 using namespace std;
 
-template <class OP> static void templated_boolean_operation(Vector &left, Vector &right, Vector &result) {
-	assert(left.type == right.type && result.type == TypeId::BOOLEAN);
-	// the inplace loops take the result as the last parameter
-	switch (left.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
-		templated_binary_loop<int8_t, int8_t, bool, OP>(left, right, result);
-		break;
-	case TypeId::SMALLINT:
-		templated_binary_loop<int16_t, int16_t, bool, OP>(left, right, result);
-		break;
-	case TypeId::INTEGER:
-		templated_binary_loop<int32_t, int32_t, bool, OP>(left, right, result);
-		break;
-	case TypeId::BIGINT:
-		templated_binary_loop<int64_t, int64_t, bool, OP>(left, right, result);
-		break;
-	case TypeId::POINTER:
-		templated_binary_loop<uint64_t, uint64_t, bool, OP>(left, right, result);
-		break;
-	case TypeId::FLOAT:
-		templated_binary_loop<float, float, bool, OP>(left, right, result);
-		break;
-	case TypeId::DOUBLE:
-		templated_binary_loop<double, double, bool, OP>(left, right, result);
-		break;
-	case TypeId::VARCHAR:
-		templated_binary_loop<const char *, const char *, bool, OP, true>(left, right, result);
-		break;
-	default:
-		throw InvalidTypeException(left.type, "Invalid type for addition");
+struct ComparisonExecutor {
+private:
+	template<class T, class OP, bool IGNORE_NULL=false>
+	static inline void TemplatedExecute(Vector &left, Vector &right, Vector &result) {
+		BinaryExecutor::Execute<T, T, bool, IGNORE_NULL>(left, right, result, OP::template Operation<T>);
 	}
-}
+
+public:
+	template <class OP>
+	static inline void Execute(Vector &left, Vector &right, Vector &result) {
+		assert(left.type == right.type && result.type == TypeId::BOOLEAN);
+		// the inplace loops take the result as the last parameter
+		switch (left.type) {
+		case TypeId::BOOLEAN:
+		case TypeId::TINYINT:
+			TemplatedExecute<int8_t, OP>(left, right, result);
+			break;
+		case TypeId::SMALLINT:
+			TemplatedExecute<int16_t, OP>(left, right, result);
+			break;
+		case TypeId::INTEGER:
+			TemplatedExecute<int32_t, OP>(left, right, result);
+			break;
+		case TypeId::BIGINT:
+			TemplatedExecute<int64_t, OP>(left, right, result);
+			break;
+		case TypeId::POINTER:
+			TemplatedExecute<uint64_t, OP>(left, right, result);
+			break;
+		case TypeId::FLOAT:
+			TemplatedExecute<float, OP>(left, right, result);
+			break;
+		case TypeId::DOUBLE:
+			TemplatedExecute<double, OP>(left, right, result);
+			break;
+		case TypeId::VARCHAR:
+			TemplatedExecute<const char*, OP, true>(left, right, result);
+			break;
+		default:
+			throw InvalidTypeException(left.type, "Invalid type for comparison");
+		}
+	}
+};
 
 void VectorOperations::Equals(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_operation<duckdb::Equals>(left, right, result);
+	ComparisonExecutor::Execute<duckdb::Equals>(left, right, result);
 }
 
 void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_operation<duckdb::NotEquals>(left, right, result);
+	ComparisonExecutor::Execute<duckdb::NotEquals>(left, right, result);
 }
 
 void VectorOperations::GreaterThanEquals(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_operation<duckdb::GreaterThanEquals>(left, right, result);
+	ComparisonExecutor::Execute<duckdb::GreaterThanEquals>(left, right, result);
 }
 
 void VectorOperations::LessThanEquals(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_operation<duckdb::LessThanEquals>(left, right, result);
+	ComparisonExecutor::Execute<duckdb::LessThanEquals>(left, right, result);
 }
 
 void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_operation<duckdb::GreaterThan>(left, right, result);
+	ComparisonExecutor::Execute<duckdb::GreaterThan>(left, right, result);
 }
 
 void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_operation<duckdb::LessThan>(left, right, result);
+	ComparisonExecutor::Execute<duckdb::LessThan>(left, right, result);
 }

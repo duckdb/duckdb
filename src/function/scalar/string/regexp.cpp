@@ -3,6 +3,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/vector_operations/binary_loops.hpp"
 
 #include "re2/re2.h"
 
@@ -34,19 +35,18 @@ static void regexp_matches_function(DataChunk &args, ExpressionState &state, Vec
 	options.set_log_errors(false);
 
 	if (info.constant_pattern) {
-		VectorOperations::BinaryExec<const char *, const char *, bool>(
-		    strings, patterns, result, [&](const char *string, const char *pattern, index_t result_index) {
-			    return RE2::PartialMatch(string, *info.constant_pattern);
-		    });
+		// FIXME: this should be a unary loop
+		BinaryExecutor::Execute<const char*, const char*, bool, true>(strings, patterns, result, [&](const char *string, const char *pattern) {
+			return RE2::PartialMatch(string, *info.constant_pattern);
+		});
 	} else {
-		VectorOperations::BinaryExec<const char *, const char *, bool>(
-		    strings, patterns, result, [&](const char *string, const char *pattern, index_t result_index) {
-			    RE2 re(pattern, options);
-			    if (!re.ok()) {
-				    throw Exception(re.error());
-			    }
-			    return RE2::PartialMatch(string, re);
-		    });
+		BinaryExecutor::Execute<const char*, const char*, bool, true>(strings, patterns, result, [&](const char *string, const char *pattern) {
+			RE2 re(pattern, options);
+			if (!re.ok()) {
+				throw Exception(re.error());
+			}
+			return RE2::PartialMatch(string, re);
+		});
 	}
 }
 

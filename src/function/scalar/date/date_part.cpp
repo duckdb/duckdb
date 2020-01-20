@@ -271,8 +271,8 @@ template <class T> static int64_t extract_element(DatePartSpecifier type, T elem
 }
 
 struct DatePartOperator {
-	template <class T> static inline int64_t Operation(const char *specifier, T date) {
-		return extract_element<T>(GetDatePartSpecifier(specifier), date);
+	template <class TA, class TB, class TR> static inline TR Operation(TA specifier, TB date) {
+		return extract_element<TB>(GetDatePartSpecifier(specifier), date);
 	}
 };
 

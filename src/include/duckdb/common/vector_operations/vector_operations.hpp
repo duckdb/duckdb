@@ -261,22 +261,6 @@ struct VectorOperations {
 			}
 		}
 	}
-	template <typename TA, typename TB, typename TR, class FUNC, bool SKIP_NULLS = true, bool HANDLE_NULLS = true>
-	static void BinaryExec(Vector &a, Vector &b, Vector &result, FUNC &&fun) {
-		Vector *vectors[2] = {&a, &b};
-		index_t multipliers[2];
-		VectorOperations::NAryExec<HANDLE_NULLS>(2, vectors, multipliers, result);
-
-		auto adata = (TA *)a.GetData();
-		auto bdata = (TB *)b.GetData();
-		auto rdata = (TR *)result.GetData();
-		VectorOperations::Exec(result, [&](index_t i, index_t k) {
-			if (SKIP_NULLS && result.nullmask[i]) {
-				return;
-			}
-			rdata[i] = fun(adata[multipliers[0] * i], bdata[multipliers[1] * i], i);
-		});
-	}
 	template <typename TA, typename TB, typename TC, typename TR, class FUNC, bool SKIP_NULLS = true,
 	          bool HANDLE_NULLS = true>
 	static void TernaryExec(Vector &a, Vector &b, Vector &c, Vector &result, FUNC &&fun) {

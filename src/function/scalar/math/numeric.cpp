@@ -103,11 +103,11 @@ void FloorFun::RegisterFunction(BuiltinFunctions &set) {
 // round
 //===--------------------------------------------------------------------===//
 struct RoundOperator {
-	template <class T> static inline T Operation(T input, int32_t precision) {
+	template <class TA, class TB, class TR> static inline TR Operation(TA input, TB precision) {
 		if (precision < 0) {
 			precision = 0;
 		}
-		T modifier = pow(10, precision);
+		TA modifier = pow(10, precision);
 		return (round(input * modifier)) / modifier;
 	}
 };
@@ -119,8 +119,11 @@ void RoundFun::RegisterFunction(BuiltinFunctions &set) {
 		if (type.IsIntegral()) {
 			// round on integral type is a nop
 			func = ScalarFunction::NopFunction;
+		} else if (type.id == SQLTypeId::FLOAT) {
+			func = ScalarFunction::BinaryFunction<float, int32_t, float, RoundOperator>;
 		} else {
-			func = ScalarFunction::GetScalarBinaryFunctionFixedArgument<int8_t, RoundOperator>(type);
+			assert(type.id == SQLTypeId::DOUBLE || type.id == SQLTypeId::DECIMAL);
+			func = ScalarFunction::BinaryFunction<double, int32_t, double, RoundOperator>;
 		}
 		round.AddFunction(ScalarFunction({type, SQLType::INTEGER}, type, func));
 	}
@@ -145,7 +148,7 @@ void ExpFun::RegisterFunction(BuiltinFunctions &set) {
 // pow
 //===--------------------------------------------------------------------===//
 struct PowOperator {
-	template <class T> static inline T Operation(T base, T exponent) {
+	template <class TA, class TB, class TR> static inline TR Operation(TA base, TB exponent) {
 		return pow(base, exponent);
 	}
 };
