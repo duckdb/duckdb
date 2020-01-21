@@ -124,6 +124,7 @@ private:
 	//===--------------------------------------------------------------------===//
 	string TransformAlias(PGAlias *root);
 	void TransformCTE(PGWithClause *de_with_clause, SelectStatement &select);
+    unique_ptr<QueryNode> TransformRecursiveCTE(PGCommonTableExpr *node);
 	// Operator String to ExpressionType (e.g. + => OPERATOR_ADD)
 	ExpressionType OperatorToExpressionType(string &op);
 
