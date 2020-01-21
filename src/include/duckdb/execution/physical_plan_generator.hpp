@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <duckdb/execution/operator/set/physical_recursive_cte.hpp>
 #include "duckdb/common/common.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/planner/logical_operator.hpp"
@@ -24,6 +25,7 @@ public:
 	}
 
 	unordered_set<CatalogEntry *> dependencies;
+    unordered_map<index_t, std::pair<std::shared_ptr<ChunkCollection>, std::shared_ptr<index_t>>> rec_ctes;
 
 public:
 	//! Creates a plan from the logical operator. This involves resolving column bindings and generating physical
@@ -65,6 +67,8 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalWindow &expr);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalExecute &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSimple &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalRecursiveCTE &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalCTERef &op);
 
 	unique_ptr<PhysicalOperator> CreateDistinct(unique_ptr<PhysicalOperator> child);
 	unique_ptr<PhysicalOperator> CreateDistinctOn(unique_ptr<PhysicalOperator> child,

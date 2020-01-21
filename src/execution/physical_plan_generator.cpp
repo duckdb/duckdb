@@ -126,6 +126,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::DROP:
 	case LogicalOperatorType::PRAGMA:
 		return CreatePlan((LogicalSimple &)op);
+    case LogicalOperatorType::RECURSIVE_CTE:
+        return CreatePlan((LogicalRecursiveCTE &)op);
+    case LogicalOperatorType::CTE_REF:
+        return CreatePlan((LogicalCTERef &)op);
 	default:
 		throw NotImplementedException("Unimplemented logical operator type!");
 	}
