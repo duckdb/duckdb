@@ -295,8 +295,12 @@ uint64_t Vector::NotNullSelVector(const Vector &vector, sel_t *not_null_vector, 
 
 string Vector::ToString() const {
 	string retval = TypeIdToString(type) + ": " + to_string(count) + " = [ ";
-	for (index_t i = 0; i < count; i++) {
-		retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
+	if (vector_type == VectorType::FLAT_VECTOR) {
+		for (index_t i = 0; i < count; i++) {
+			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
+		}
+	} else {
+		retval += GetValue(0).ToString();
 	}
 	retval += "]";
 	return retval;
@@ -311,13 +315,22 @@ void Vector::Verify() {
 	if (type == TypeId::VARCHAR) {
 		// we just touch all the strings and let the sanitizer figure out if any
 		// of them are deallocated/corrupt
-		VectorOperations::ExecType<const char *>(*this, [&](const char *string, uint64_t i, uint64_t k) {
-			if (!nullmask[i]) {
+		if (vector_type == VectorType::CONSTANT_VECTOR) {
+			if (!nullmask[0]) {
+				auto string = ((const char**) data)[0];
 				assert(string);
 				assert(strlen(string) != (size_t)-1);
 				assert(Value::IsUTF8String(string));
 			}
-		});
+		} else {
+			VectorOperations::ExecType<const char *>(*this, [&](const char *string, uint64_t i, uint64_t k) {
+				if (!nullmask[i]) {
+					assert(string);
+					assert(strlen(string) != (size_t)-1);
+					assert(Value::IsUTF8String(string));
+				}
+			});
+		}
 	}
 #endif
 }

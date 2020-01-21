@@ -11,55 +11,52 @@ using namespace std;
 namespace duckdb {
 
 static void concat_function(DataChunk &args, ExpressionState &state, Vector &result) {
-
-	result.nullmask = 0;
-	for (index_t i = 0; i < args.column_count; i++) {
-		auto &input = args.data[i];
+	result.vector_type = VectorType::CONSTANT_VECTOR;
+	result.nullmask.reset();
+	result.sel_vector = args.data[0].sel_vector;
+	result.count = args.data[0].count;
+	// iterate over the vectors to set the nullmasks
+	for (index_t col_idx = 0; col_idx < args.column_count; col_idx++) {
+		auto &input = args.data[col_idx];
 		assert(input.type == TypeId::VARCHAR);
-		if (input.vector_type != VectorType::CONSTANT_VECTOR) {
+		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
+			// constant vector: check for NULL
+			if (input.nullmask[0]) {
+				// constant NULL, entire result is null
+				result.vector_type = VectorType::CONSTANT_VECTOR;
+				result.nullmask[0] = true;
+				return;
+			}
+		} else {
+			// regular vector: merge the null mask and set the result type to a flat vector
+			assert(input.vector_type == VectorType::FLAT_VECTOR);
+			result.vector_type = VectorType::FLAT_VECTOR;
 			result.sel_vector = input.sel_vector;
 			result.count = input.count;
+			result.nullmask |= input.nullmask;
 		}
-		// Any null input makes concat's result null.
-		result.nullmask |= input.nullmask;
 	}
 
-	// bool has_stats = expr.function->children[0]->stats.has_stats && expr.function->children[1]->stats.has_stats;
+
+	// now perform the actual concatenation
+	vector<string> results(result.count);
+	for(index_t col_idx = 0; col_idx < args.column_count; col_idx++) {
+		auto &input = args.data[col_idx];
+		auto input_data = (const char **) input.GetData();
+		bool is_constant = input.vector_type == VectorType::CONSTANT_VECTOR;
+		assert(input.vector_type == VectorType::FLAT_VECTOR || input.vector_type == VectorType::CONSTANT_VECTOR);
+		// loop over the vector and concat to all results
+		VectorOperations::Exec(result, [&](index_t i, index_t k) {
+			if (result.nullmask[i]) {
+				return;
+			}
+			results[k] += input_data[is_constant ? 0 : i];
+		});
+	}
+	// now write the final result to the result vector and add the strings to the heap
 	auto result_data = (const char **)result.GetData();
-	index_t current_len = 0;
-	unique_ptr<char[]> output;
-
-	VectorOperations::MultiaryExec(args, result, [&](vector<index_t> mul, index_t result_index) {
-		if (result.nullmask[result_index]) {
-			return;
-		}
-
-		// calculate length of result string
-		vector<const char *> input_chars(args.column_count);
-		index_t required_len = 0;
-		for (index_t i = 0; i < args.column_count; i++) {
-			auto arg_data = (const char **) args.data[i].GetData();
-			int current_index = mul[i] * result_index;
-			input_chars[i] = arg_data[current_index];
-			required_len += strlen(input_chars[i]);
-		}
-		required_len++;
-
-		// allocate length of result string
-		if (required_len > current_len) {
-			current_len = required_len;
-			output = unique_ptr<char[]>{new char[required_len]};
-		}
-
-		// actual concatenation
-		int length_so_far = 0;
-		for (index_t i = 0; i < args.column_count; i++) {
-			int len = strlen(input_chars[i]);
-			memcpy(output.get() + length_so_far, input_chars[i], sizeof(char) * len);
-			length_so_far += len;
-		}
-		output[length_so_far] = '\0';
-		result_data[result_index] = result.string_heap.AddString(output.get());
+	VectorOperations::Exec(result, [&](index_t i, index_t k) {
+		result_data[i] = result.string_heap.AddString(results[k]);
 	});
 }
 

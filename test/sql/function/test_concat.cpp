@@ -25,6 +25,10 @@ TEST_CASE("Test concat function", "[function]") {
 	result = con.Query("SELECT s || ' ' || '🦆' FROM strings ORDER BY s");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "hello 🦆", "world 🦆"}));
 
+	// concat with constant NULL
+	result = con.Query("SELECT s || ' ' || '🦆' || NULL FROM strings ORDER BY s");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value()}));
+
 	// concat requires at least one argument
 	REQUIRE_FAIL(con.Query("SELECT CONCAT()"));
 

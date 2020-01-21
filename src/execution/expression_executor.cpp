@@ -81,6 +81,7 @@ void ExpressionExecutor::ExecuteExpression(index_t expr_idx, Vector &result) {
 			// have to duplicate the constant value to match the rows in the
 			// other columns
 			auto constant_value = result.GetValue(0);
+			result.vector_type = VectorType::FLAT_VECTOR;
 			result.data = initial_data;
 			result.count = chunk->size();
 			result.sel_vector = chunk->sel_vector;
