@@ -29,6 +29,14 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 	return result;
 }
 
+Binding* BindContext::GetCTEBinding(const string &ctename) {
+    auto match = bindings.find(ctename);
+    if(match == bindings.end()) {
+        return nullptr;
+    }
+    return match->second.get();
+}
+
 BindResult BindContext::BindColumn(ColumnRefExpression &colref, index_t depth) {
 	if (colref.table_name.empty()) {
 		return BindResult(StringUtil::Format("Could not bind alias \"%s\"!", colref.column_name.c_str()));

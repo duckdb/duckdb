@@ -6,6 +6,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
+#include "duckdb/planner/tableref/bound_cteref.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -15,10 +16,18 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &expr) {
 	// check if the table name refers to a CTE
 	auto cte = FindCTE(expr.table_name);
 	if (cte) {
-		// it does! create a subquery with a copy of the CTE and resolve it
-		SubqueryRef subquery(move(cte));
-		subquery.alias = expr.alias.empty() ? expr.table_name : expr.alias;
-		return Bind(subquery);
+        auto ctebinding = bind_context.GetCTEBinding(expr.table_name);
+        if(ctebinding == nullptr) {
+            SubqueryRef subquery(move(cte));
+            subquery.alias = expr.alias.empty() ? expr.table_name : expr.alias;
+            return Bind(subquery);
+        } else {
+            auto result = make_unique<BoundCTERef>(ctebinding->index);
+            auto b = (GenericBinding *)ctebinding;
+            result->types = b->types;
+            result->bound_columns = b->names;
+            return move(result);
+        }
 	}
 	// not a CTE
 	// extract a table or view from the catalog

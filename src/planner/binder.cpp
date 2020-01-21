@@ -78,6 +78,9 @@ unique_ptr<BoundQueryNode> Binder::Bind(QueryNode &node) {
 	case QueryNodeType::SELECT_NODE:
 		result = Bind((SelectNode &)node);
 		break;
+    case QueryNodeType::RECURSIVE_CTE_NODE:
+        result = Bind((RecursiveCTENode &)node);
+	    break;
 	default:
 		assert(node.type == QueryNodeType::SET_OPERATION_NODE);
 		result = Bind((SetOperationNode &)node);
