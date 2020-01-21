@@ -13,7 +13,7 @@ add_library(duckdb_execution OBJECT
             join_hashtable.cpp
             physical_operator.cpp
             physical_plan_generator.cpp
-            window_segment_tree.cpp)
+            window_segment_tree.cpp physical_plan/plan_recursive_cte.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_execution>
     PARENT_SCOPE)

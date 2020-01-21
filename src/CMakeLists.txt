@@ -39,7 +39,7 @@ else()
       re2
       miniz)
 
-  add_library(duckdb SHARED ${ALL_OBJECT_FILES})
+  add_library(duckdb SHARED ${ALL_OBJECT_FILES} parser/query_node/recursive_cte_node.cpp include/duckdb/parser/query_node/recursive_cte_node.hpp include/duckdb/planner/query_node/bound_recursive_cte_node.hpp planner/binder/query_node/bind_recursive_cte_node.cpp include/duckdb/planner/tableref/bound_cteref.hpp include/duckdb/planner/operator/logical_recursive_cte.hpp include/duckdb/planner/operator/logical_cteref.hpp execution/operator/set/physical_recursive_cte.cpp include/duckdb/execution/operator/set/physical_recursive_cte.hpp execution/operator/scan/physical_cte_scan.cpp include/duckdb/execution/operator/scan/physical_cte_scan.hpp)
   target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})
 
   add_library(duckdb_static STATIC ${ALL_OBJECT_FILES})
