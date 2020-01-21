@@ -29,6 +29,8 @@ public:
 	//! Given a column name, find the matching table it belongs to. Throws an
 	//! exception if no table has a column of the given name.
 	string GetMatchingBinding(const string &column_name);
+
+	Binding* GetCTEBinding(const string &ctename);
 	//! Binds a column expression to the base table. Returns the bound expression
 	//! or throws an exception if the column could not be bound.
 	BindResult BindColumn(ColumnRefExpression &colref, index_t depth);
