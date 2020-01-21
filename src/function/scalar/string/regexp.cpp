@@ -4,6 +4,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/vector_operations/ternary_executor.hpp"
 
 #include "re2/re2.h"
 
@@ -86,9 +87,9 @@ static void regexp_replace_function(DataChunk &args, ExpressionState &state, Vec
 	RE2::Options options;
 	options.set_log_errors(false);
 
-	VectorOperations::TernaryExec<const char *, const char *, const char *, const char *>(
+	TernaryExecutor::Execute<const char *, const char *, const char *, const char *, true>(
 	    strings, patterns, replaces, result,
-	    [&](const char *string, const char *pattern, const char *replace, index_t result_index) {
+	    [&](const char *string, const char *pattern, const char *replace) {
 		    RE2 re(pattern, options);
 		    std::string sstring(string);
 		    RE2::Replace(&sstring, re, replace);

@@ -261,25 +261,6 @@ struct VectorOperations {
 			}
 		}
 	}
-	template <typename TA, typename TB, typename TC, typename TR, class FUNC, bool SKIP_NULLS = true,
-	          bool HANDLE_NULLS = true>
-	static void TernaryExec(Vector &a, Vector &b, Vector &c, Vector &result, FUNC &&fun) {
-		Vector *vectors[3] = {&a, &b, &c};
-		index_t multipliers[3];
-		VectorOperations::NAryExec<HANDLE_NULLS>(3, vectors, multipliers, result);
-
-		auto adata = (TA *)a.GetData();
-		auto bdata = (TB *)b.GetData();
-		auto cdata = (TC *)c.GetData();
-		auto rdata = (TR *)result.GetData();
-		VectorOperations::Exec(result, [&](index_t i, index_t k) {
-			if (SKIP_NULLS && result.nullmask[i]) {
-				return;
-			}
-			rdata[i] = fun(adata[multipliers[0] * i], bdata[multipliers[1] * i], cdata[multipliers[2] * i], i);
-		});
-	}
-
 	template <class FUNC> static void MultiaryExec(DataChunk &args, Vector &result, FUNC &&fun) {
 		result.sel_vector = nullptr;
 		result.count = 1;

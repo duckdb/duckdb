@@ -2,7 +2,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/vector_operations/ternary_select_loops.hpp"
+#include "duckdb/common/vector_operations/ternary_executor.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -36,19 +36,19 @@ static index_t between_loop_type_switch(Vector &input, Vector &lower, Vector &up
 	switch (input.type) {
 	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
-		return templated_ternary_select<int8_t, int8_t, int8_t, OP>(input, lower, upper, result);
+		return TernaryExecutor::Select<int8_t, int8_t, int8_t, OP>(input, lower, upper, result);
 	case TypeId::SMALLINT:
-		return templated_ternary_select<int16_t, int16_t, int16_t, OP>(input, lower, upper, result);
+		return TernaryExecutor::Select<int16_t, int16_t, int16_t, OP>(input, lower, upper, result);
 	case TypeId::INTEGER:
-		return templated_ternary_select<int32_t, int32_t, int32_t, OP>(input, lower, upper, result);
+		return TernaryExecutor::Select<int32_t, int32_t, int32_t, OP>(input, lower, upper, result);
 	case TypeId::BIGINT:
-		return templated_ternary_select<int64_t, int64_t, int64_t, OP>(input, lower, upper, result);
+		return TernaryExecutor::Select<int64_t, int64_t, int64_t, OP>(input, lower, upper, result);
 	case TypeId::FLOAT:
-		return templated_ternary_select<float, float, float, OP>(input, lower, upper, result);
+		return TernaryExecutor::Select<float, float, float, OP>(input, lower, upper, result);
 	case TypeId::DOUBLE:
-		return templated_ternary_select<double, double, double, OP>(input, lower, upper, result);
+		return TernaryExecutor::Select<double, double, double, OP>(input, lower, upper, result);
 	case TypeId::VARCHAR:
-		return templated_ternary_select<const char *, const char *, const char *, OP>(input, lower, upper, result);
+		return TernaryExecutor::Select<const char *, const char *, const char *, OP>(input, lower, upper, result);
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for BETWEEN");
 	}
