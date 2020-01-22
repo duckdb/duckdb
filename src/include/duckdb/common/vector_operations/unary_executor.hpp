@@ -55,10 +55,19 @@ private:
 		auto ldata = (INPUT_TYPE *)input.GetData();
 		auto result_data = (RESULT_TYPE *)result.GetData();
 
-		assert(input.vector_type == VectorType::FLAT_VECTOR || input.vector_type == VectorType::CONSTANT_VECTOR);
-		ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(ldata, result_data, input.count, input.sel_vector, input.nullmask, fun);
-		result.vector_type = input.vector_type;
-		result.nullmask = input.nullmask;
+		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
+			result.vector_type = VectorType::CONSTANT_VECTOR;
+			if (input.nullmask[0]) {
+				result.nullmask[0] = true;
+			} else {
+				result_data[0] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[0]);
+			}
+		} else {
+			assert(input.vector_type == VectorType::FLAT_VECTOR);
+			result.vector_type = VectorType::FLAT_VECTOR;
+			result.nullmask = input.nullmask;
+			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(ldata, result_data, input.count, input.sel_vector, input.nullmask, fun);
+		}
 		result.sel_vector = input.sel_vector;
 		result.count = input.count;
 	}

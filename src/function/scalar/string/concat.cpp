@@ -23,9 +23,8 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 		if (input.vector_type != VectorType::CONSTANT_VECTOR) {
 			// regular vector: set the result type to a flat vector
 			assert(input.vector_type == VectorType::FLAT_VECTOR);
+			assert(input.sel_vector == result.sel_vector && input.count == result.count);
 			result.vector_type = VectorType::FLAT_VECTOR;
-			result.sel_vector = input.sel_vector;
-			result.count = input.count;
 		}
 	}
 
@@ -164,9 +163,8 @@ static void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &
 		if (input.vector_type != VectorType::CONSTANT_VECTOR) {
 			// regular vector: set the result type to a flat vector
 			assert(input.vector_type == VectorType::FLAT_VECTOR);
+			assert(input.sel_vector == result.sel_vector && input.count == result.count);
 			result.vector_type = VectorType::FLAT_VECTOR;
-			result.sel_vector = input.sel_vector;
-			result.count = input.count;
 		}
 	}
 

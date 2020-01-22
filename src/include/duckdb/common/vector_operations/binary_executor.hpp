@@ -84,8 +84,6 @@ private:
 	static void ExecuteConstantConstant(Vector &left, Vector &right, Vector &result, LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata, RESULT_TYPE *__restrict result_data, FUNC fun) {
 		// both left and right are constant: result is constant vector
 		result.vector_type = VectorType::CONSTANT_VECTOR;
-		result.sel_vector = left.sel_vector;
-		result.count = left.count;
 		result.nullmask[0] = left.nullmask[0] || right.nullmask[0];
 		if (NULL_CHECK::Operation(ldata[0], rdata[0])) {
 			result.nullmask[0] = true;
@@ -101,8 +99,6 @@ private:
 	static void ExecuteConstantFlat(Vector &left, Vector &right, Vector &result, LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata, RESULT_TYPE *__restrict result_data, FUNC fun) {
 		// left side is constant: result is flat vector
 		result.vector_type = VectorType::FLAT_VECTOR;
-		result.sel_vector = right.sel_vector;
-		result.count = right.count;
 		if (left.nullmask[0]) {
 			// left side is constant NULL, return a constant NULL
 			result.vector_type = VectorType::CONSTANT_VECTOR;
@@ -118,8 +114,6 @@ private:
 	static void ExecuteFlatConstant(Vector &left, Vector &right, Vector &result, LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata, RESULT_TYPE *__restrict result_data, FUNC fun) {
 		// right side is constant: result is flat vector
 		result.vector_type = VectorType::FLAT_VECTOR;
-		result.sel_vector = left.sel_vector;
-		result.count = left.count;
 		if (right.nullmask[0]) {
 			result.vector_type = VectorType::CONSTANT_VECTOR;
 			result.nullmask[0] = true;
@@ -138,8 +132,6 @@ private:
 		assert(left.vector_type == VectorType::FLAT_VECTOR && right.vector_type == VectorType::FLAT_VECTOR);
 		// OR nullmasks together
 		result.vector_type = VectorType::FLAT_VECTOR;
-		result.sel_vector = left.sel_vector;
-		result.count = left.count;
 		result.nullmask = left.nullmask | right.nullmask;
 		ExecuteLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, false, false, NULL_CHECK>(
 			ldata, rdata, result_data, result.count, result.sel_vector, result.nullmask, fun);
@@ -149,7 +141,10 @@ private:
 	static void ExecuteSwitch(Vector &left, Vector &right, Vector &result, FUNC fun) {		auto ldata = (LEFT_TYPE *)left.GetData();
 		auto rdata = (RIGHT_TYPE *)right.GetData();
 		auto result_data = (RESULT_TYPE *)result.GetData();
+		assert(left.count == right.count && left.sel_vector == right.sel_vector);
 
+		result.count = left.count;
+		result.sel_vector = left.sel_vector;
 		if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
 			ExecuteConstantConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, NULL_CHECK>(left, right, result, ldata, rdata, result_data, fun);
 		} else if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::FLAT_VECTOR) {
@@ -202,6 +197,8 @@ public:
 	static index_t Select(Vector &left, Vector &right, sel_t result[]) {
 		auto ldata = (LEFT_TYPE *)left.GetData();
 		auto rdata = (RIGHT_TYPE *)right.GetData();
+
+		assert(left.count == right.count && left.sel_vector == right.sel_vector);
 
 		if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
 			// both sides are constant, return either 0 or the count

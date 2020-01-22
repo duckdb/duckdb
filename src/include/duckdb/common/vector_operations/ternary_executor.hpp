@@ -67,17 +67,7 @@ private:
 	}
 
 	template<bool A_CONSTANT, bool B_CONSTANT, bool C_CONSTANT>
-	static void SetNullmask(Vector &a, Vector &b, Vector &c, index_t &result_count, sel_t*& result_sel_vector, nullmask_t &result_nullmask) {
-		if (!A_CONSTANT) {
-			result_sel_vector = a.sel_vector;
-			result_count = a.count;
-		} else if (!B_CONSTANT) {
-			result_sel_vector = b.sel_vector;
-			result_count = b.count;
-		} else {
-			result_sel_vector = c.sel_vector;
-			result_count = c.count;
-		}
+	static void SetNullmask(Vector &a, Vector &b, Vector &c, nullmask_t &result_nullmask) {
 		if (A_CONSTANT) {
 			if (B_CONSTANT) {
 				// AB constant
@@ -120,16 +110,12 @@ private:
 		if ((A_CONSTANT && a.nullmask[0]) || (B_CONSTANT && b.nullmask[0]) || (C_CONSTANT && c.nullmask[0])) {
 			// if any constant NULL exists the result is a constant NULL
 			result.vector_type = VectorType::CONSTANT_VECTOR;
-			result.sel_vector = a.sel_vector;
-			result.count = a.count;
 			result.nullmask[0] = true;
 			return;
 		}
 		if (A_CONSTANT && B_CONSTANT && C_CONSTANT) {
 			// everything is constant, result is constant
 			result.vector_type = VectorType::CONSTANT_VECTOR;
-			result.sel_vector = a.sel_vector;
-			result.count = a.count;
 			assert(!a.nullmask[0] && !b.nullmask[0] && !c.nullmask[0]);
 			result_data[0] = fun(adata[0], bdata[0], cdata[0]);
 			return;
@@ -138,7 +124,7 @@ private:
 		// not everything is a constant: the result is a flat vector
 		result.vector_type = VectorType::FLAT_VECTOR;
 		// we have to create the NULL mask by ORing together the different nullmasks of non-constant vectors
-		SetNullmask<A_CONSTANT, B_CONSTANT, C_CONSTANT>(a, b, c, result.count, result.sel_vector, result.nullmask);
+		SetNullmask<A_CONSTANT, B_CONSTANT, C_CONSTANT>(a, b, c, result.nullmask);
 
 		// finally we perform the actual loop over the data operation
 		ExecuteLoop<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, FUN, IGNORE_NULL, A_CONSTANT, B_CONSTANT, C_CONSTANT>(
@@ -148,6 +134,9 @@ private:
 public:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, bool IGNORE_NULL = false, class FUN=std::function<RESULT_TYPE(A_TYPE, B_TYPE, C_TYPE)>>
 	static void Execute(Vector &a, Vector &b, Vector &c, Vector &result, FUN fun) {
+		assert(a.count == b.count && a.count == c.count && a.sel_vector == b.sel_vector && a.sel_vector == c.sel_vector);
+		result.sel_vector = a.sel_vector;
+		result.count = a.count;
 		if (a.vector_type == VectorType::CONSTANT_VECTOR) {
 			ExecuteA<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, FUN, IGNORE_NULL, true>(a, b, c, result, fun);
 		} else {
@@ -219,18 +208,18 @@ private:
 				return 0;
 			}
 		}
-		index_t count;
-		sel_t* sel_vector;
-		nullmask_t nullmask;
+
 		// get the nullmask of the final result
-		SetNullmask<A_CONSTANT, B_CONSTANT, C_CONSTANT>(a, b, c, count, sel_vector, nullmask);
+		nullmask_t nullmask;
+		SetNullmask<A_CONSTANT, B_CONSTANT, C_CONSTANT>(a, b, c, nullmask);
 
 		// finally perform the select loop to get the count and the final result
-		return SelectLoop<A_TYPE, B_TYPE, C_TYPE, OP, A_CONSTANT, B_CONSTANT, C_CONSTANT>(adata, bdata, cdata, result, count, sel_vector, nullmask);
+		return SelectLoop<A_TYPE, B_TYPE, C_TYPE, OP, A_CONSTANT, B_CONSTANT, C_CONSTANT>(adata, bdata, cdata, result, a.count, a.sel_vector, nullmask);
 	}
 public:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP>
 	static index_t Select(Vector &a, Vector &b, Vector &c, sel_t result[]) {
+		assert(a.count == b.count && a.count == c.count && a.sel_vector == b.sel_vector && a.sel_vector == c.sel_vector);
 		if (a.vector_type == VectorType::CONSTANT_VECTOR) {
 			if (a.nullmask[0]) {
 				return 0;

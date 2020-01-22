@@ -40,6 +40,7 @@ Vector::~Vector() {
 void Vector::Reference(Value &value) {
 	Destroy();
 	vector_type = VectorType::CONSTANT_VECTOR;
+	sel_vector = nullptr;
 	type = value.type;
 	owned_data = unique_ptr<data_t[]>(new data_t[GetTypeIdSize(type)]);
 	data = owned_data.get();
@@ -132,10 +133,13 @@ Value Vector::GetValue(uint64_t index) const {
 	if (index >= count) {
 		throw OutOfRangeException("GetValue() out of range");
 	}
+	uint64_t entry = sel_vector ? sel_vector[index] : index;
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		entry = 0;
+	}
 	if (ValueIsNull(index)) {
 		return Value(type);
 	}
-	uint64_t entry = sel_vector ? sel_vector[index] : index;
 	switch (type) {
 	case TypeId::BOOLEAN:
 		return Value::BOOLEAN(((int8_t *)data)[entry]);
@@ -308,6 +312,25 @@ string Vector::ToString() const {
 
 void Vector::Print() {
 	Printer::Print(ToString());
+}
+
+void Vector::Normalify() {
+	switch(vector_type) {
+	case VectorType::FLAT_VECTOR:
+		// already a flat vector
+		return;
+	case VectorType::CONSTANT_VECTOR: {
+		auto constant_value = GetValue(0);
+		Vector new_result(type, true, false);
+		new_result.count = count;
+		new_result.sel_vector = sel_vector;
+		VectorOperations::Set(new_result, constant_value);
+		new_result.Move(*this);
+		break;
+	}
+	default:
+		throw NotImplementedException("FIXME: unimplemented type for normalify");
+	}
 }
 
 void Vector::Verify() {

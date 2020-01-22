@@ -133,11 +133,8 @@ public:
 	string ToString() const;
 	void Print();
 
-	//! Returns true the vector holds only a single constant value and does not
-	//! have a selection vector
-	bool IsConstant() {
-		return count == 1 && !sel_vector;
-	}
+	//! Turn the vector into a flat vector
+	void Normalify();
 
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
