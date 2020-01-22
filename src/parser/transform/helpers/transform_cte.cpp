@@ -76,6 +76,7 @@ unique_ptr<QueryNode> Transformer::TransformRecursiveCTE(PGCommonTableExpr *cte)
             node = make_unique<RecursiveCTENode>();
             auto result = (RecursiveCTENode *)node.get();
             result->ctename = string(cte->ctename);
+            result->union_all = stmt->all;
             result->left = TransformSelectNode(stmt->larg);
             result->right = TransformSelectNode(stmt->rarg);
             if (!result->left || !result->right) {

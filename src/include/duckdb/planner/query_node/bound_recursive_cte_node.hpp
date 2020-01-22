@@ -19,6 +19,7 @@ namespace duckdb {
         BoundRecursiveCTENode() : BoundQueryNode(QueryNodeType::RECURSIVE_CTE_NODE) {
         }
 
+        bool union_all;
         //! The left side of the set operation
         unique_ptr<BoundQueryNode> left;
         //! The right side of the set operation

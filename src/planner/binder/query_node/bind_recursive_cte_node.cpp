@@ -20,6 +20,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(RecursiveCTENode &statement) {
     assert(statement.left);
     assert(statement.right);
 
+    result->union_all = statement.union_all;
     result->setop_index = GenerateTableIndex();
 
     result->left_binder = make_unique<Binder>(context, this);
@@ -32,10 +33,6 @@ unique_ptr<BoundQueryNode> Binder::Bind(RecursiveCTENode &statement) {
     result->right = result->right_binder->Bind(*statement.right);
 
     result->names = result->left->names;
-
-    for(index_t i = 0; i < result->names.size(); i++) {
-
-    }
 
     // move the correlated expressions from the child binders to this binder
     MoveCorrelatedExpressions(*result->left_binder);

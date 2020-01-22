@@ -19,8 +19,8 @@ public:
     bool intermediate_empty = true;
 };
 
-PhysicalRecursiveCTE::PhysicalRecursiveCTE(LogicalOperator &op, unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom)
-        : PhysicalOperator(PhysicalOperatorType::RECURSIVE_CTE, op.types) {
+PhysicalRecursiveCTE::PhysicalRecursiveCTE(LogicalOperator &op, bool union_all, unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom)
+        : PhysicalOperator(PhysicalOperatorType::RECURSIVE_CTE, op.types), union_all(union_all) {
     children.push_back(move(top));
     children.push_back(move(bottom));
 }
@@ -31,12 +31,8 @@ void PhysicalRecursiveCTE::GetChunkInternal(ClientContext &context, DataChunk &c
 
     if(!state->recursing) {
         do {
-//            children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
             children[0]->GetChunk(context, chunk, state->top_state.get());
             working_table->Append(chunk);
-//            res.Append(state->child_chunk);
-//            working_table.MaterializeWorkingtableChunk(chunk, state->working_position);
-//            state->working_position += 1;
             if(chunk.size() != 0) return;
         } while (chunk.size() != 0);
         state->recursing = true;

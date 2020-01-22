@@ -14,9 +14,9 @@
 namespace duckdb {
     class PhysicalRecursiveCTE : public PhysicalOperator {
     public:
-        PhysicalRecursiveCTE(LogicalOperator &op, unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom);
+        PhysicalRecursiveCTE(LogicalOperator &op, bool union_all, unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom);
 
-
+        bool union_all;
         std::shared_ptr<ChunkCollection> working_table;
         std::shared_ptr<index_t> iteration;
         ChunkCollection intermediate_table;

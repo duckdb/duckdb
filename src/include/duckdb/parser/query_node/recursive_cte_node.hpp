@@ -20,6 +20,7 @@ namespace duckdb {
         }
 
         string ctename;
+        bool union_all;
         //! The left side of the set operation
         unique_ptr<QueryNode> left;
         //! The right side of the set operation
