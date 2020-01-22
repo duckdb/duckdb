@@ -104,8 +104,9 @@ private:
 		result.sel_vector = right.sel_vector;
 		result.count = right.count;
 		if (left.nullmask[0]) {
-			// left side is constant NULL, set everything to NULL
-			result.nullmask.set();
+			// left side is constant NULL, return a constant NULL
+			result.vector_type = VectorType::CONSTANT_VECTOR;
+			result.nullmask[0] = true;
 			return;
 		}
 		result.nullmask = right.nullmask;
@@ -120,7 +121,8 @@ private:
 		result.sel_vector = left.sel_vector;
 		result.count = left.count;
 		if (right.nullmask[0]) {
-			result.nullmask.set();
+			result.vector_type = VectorType::CONSTANT_VECTOR;
+			result.nullmask[0] = true;
 			return;
 		}
 		result.nullmask = left.nullmask;

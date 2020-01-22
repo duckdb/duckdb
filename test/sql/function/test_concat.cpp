@@ -39,6 +39,13 @@ TEST_CASE("Test concat function", "[function]") {
 	// automatic casting also works for vargs
 	result = con.Query("SELECT CONCAT('hello', 33, 22)");
 	REQUIRE(CHECK_COLUMN(result, 0, {"hello3322"}));
+
+	// CONCAT ignores null values
+	result = con.Query("SELECT CONCAT('hello', 33, NULL, 22, NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello3322"}));
+	// this also applies to non-constant null values
+	result = con.Query("SELECT CONCAT('hello', ' ', s) FROM strings ORDER BY s");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello ", "hello hello", "hello world"}));
 }
 
 TEST_CASE("Test length function", "[function]") {

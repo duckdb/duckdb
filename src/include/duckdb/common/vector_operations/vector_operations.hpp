@@ -232,49 +232,5 @@ struct VectorOperations {
 		VectorOperations::Exec(
 		    vector, [&](index_t i, index_t k) { fun(data[i], i, k); }, offset, limit);
 	}
-	//! NAryExec handles NULL values, sel_vector and count in the presence of potential constants
-	template <bool HANDLE_NULLS>
-	static void NAryExec(index_t N, Vector *vectors[], index_t multipliers[], Vector &result) {
-		// initialize result to a constant (no sel_vector, count = 1)
-		result.sel_vector = nullptr;
-		result.count = 1;
-		for (index_t i = 0; i < N; i++) {
-			// for every vector, check if it is a constant
-			if (vectors[i]->vector_type == VectorType::CONSTANT_VECTOR) {
-				// if it is a constant, we set the index multiplier to 0
-				// this ensures we always fetch the first element
-				multipliers[i] = 0;
-				if (HANDLE_NULLS && vectors[i]->nullmask[0]) {
-					// if there is a constant NULL, we set the entire result to NULL
-					result.nullmask.set();
-				}
-			} else {
-				// if it is not a constant, we set the multiplier to 1
-				// we set the result sel_vector/count to the count of this vector
-				multipliers[i] = 1;
-				result.sel_vector = vectors[i]->sel_vector;
-				result.count = vectors[i]->count;
-				if (HANDLE_NULLS) {
-					// if we are handling nulls here, we OR this nullmask together with the result
-					result.nullmask |= vectors[i]->nullmask;
-				}
-			}
-		}
-	}
-	template <class FUNC> static void MultiaryExec(DataChunk &args, Vector &result, FUNC &&fun) {
-		result.sel_vector = nullptr;
-		result.count = 1;
-		vector<index_t> mul(args.column_count, 0);
-
-		for (index_t i = 0; i < args.column_count; i++) {
-			auto &input = args.data[i];
-			if (input.vector_type != VectorType::CONSTANT_VECTOR) {
-				result.sel_vector = input.sel_vector;
-				result.count = input.count;
-			}
-			mul[i] = input.vector_type == VectorType::CONSTANT_VECTOR ? 0 : 1;
-		}
-		VectorOperations::Exec(result, [&](index_t i, index_t k) { fun(mul, i); });
-	}
 };
 } // namespace duckdb

@@ -18,16 +18,16 @@ TEST_CASE("CONCAT test", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"HelloSUFFIX", "HuLlDSUFFIX", "MotörHeadSUFFIX"}));
 
 	result = con.Query("select CONCAT('PREFIX', b) FROM strings");
-	REQUIRE(CHECK_COLUMN(result, 0, {"PREFIXWorld", Value(), "PREFIXRÄcks"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {"PREFIXWorld", "PREFIX", "PREFIXRÄcks"}));
 
 	result = con.Query("select CONCAT(a, b) FROM strings");
-	REQUIRE(CHECK_COLUMN(result, 0, {"HelloWorld", Value(), "MotörHeadRÄcks"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {"HelloWorld", "HuLlD", "MotörHeadRÄcks"}));
 
 	result = con.Query("select CONCAT(a, b, 'SUFFIX') FROM strings");
-	REQUIRE(CHECK_COLUMN(result, 0, {"HelloWorldSUFFIX", Value(), "MotörHeadRÄcksSUFFIX"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {"HelloWorldSUFFIX", "HuLlDSUFFIX", "MotörHeadRÄcksSUFFIX"}));
 
 	result = con.Query("select CONCAT(a, b, a) FROM strings");
-	REQUIRE(CHECK_COLUMN(result, 0, {"HelloWorldHello", Value(), "MotörHeadRÄcksMotörHead"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {"HelloWorldHello", "HuLlDHuLlD", "MotörHeadRÄcksMotörHead"}));
 
 	result = con.Query("select CONCAT('1', '2', '3', '4', '5', '6', '7', '8', '9', '0')");
 	REQUIRE(CHECK_COLUMN(result, 0, {"1234567890"}));
@@ -64,6 +64,52 @@ TEST_CASE("CONCAT_WS test", "[function]") {
 	// filters
 	result = con.Query("select CONCAT_WS(',', a, 'SUFFIX') FROM strings WHERE a != 'Hello'");
 	REQUIRE(CHECK_COLUMN(result, 0, {"HuLlD,SUFFIX", "MotörHead,SUFFIX"}));
+
+	// concat WS needs at least two parameters
+	REQUIRE_FAIL(con.Query("select CONCAT_WS()"));
+	REQUIRE_FAIL(con.Query("select CONCAT_WS(',')"));
+
+	// one entry: just returns the entry
+	result = con.Query("select CONCAT_WS(',', 'hello')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
+
+	// NULL in separator results in null
+	result = con.Query("select CONCAT_WS(NULL, 'hello')");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	// NULL in data results in empty string
+	result = con.Query("select CONCAT_WS(',', NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+
+	// NULL separator returns in entire column being NULL
+	result = con.Query("select CONCAT_WS(NULL, b, 'SUFFIX') FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value()}));
+	// NULL in separator is just ignored
+	result = con.Query("select CONCAT_WS(',', NULL, 'SUFFIX') FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"SUFFIX", "SUFFIX", "SUFFIX"}));
+
+	// empty strings still get split up by the separator
+	result = con.Query("select CONCAT_WS(',', '', '')");
+	REQUIRE(CHECK_COLUMN(result, 0, {","}));
+	result = con.Query("select CONCAT_WS(',', '', '', '')");
+	REQUIRE(CHECK_COLUMN(result, 0, {",,"}));
+
+	// but NULLs do not
+	result = con.Query("select CONCAT_WS(',', NULL, NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	result = con.Query("select CONCAT_WS(',', NULL, NULL, NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	result = con.Query("select CONCAT_WS(',', NULL, NULL, 'hello')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
+
+	// now test for non-constant separators
+	result = con.Query("select CONCAT_WS(a, '', NULL, '') FROM strings ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"Hello", "HuLlD", "MotörHead"}));
+	result = con.Query("select CONCAT_WS(a, NULL, '', '') FROM strings ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {"Hello", "HuLlD", "MotörHead"}));
+
+	// now non-constant separator with a mix of constant and non-constant strings to concatenate
+	result = con.Query("select CONCAT_WS(a, NULL, b, '') FROM strings ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"WorldHello", "", "RÄcksMotörHead"}));
 }
 
 TEST_CASE("UPPER/LOWER test", "[function]") {
