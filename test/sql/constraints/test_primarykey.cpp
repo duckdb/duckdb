@@ -141,41 +141,48 @@ TEST_CASE("PRIMARY KEY and update/delete on multiple columns", "[constraints]") 
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	 // create a table
+	 //! create a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, PRIMARY KEY(a, b));"));
     REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 'hello'), (12, 'world'), (13, 'blablabla')"));
 
-	 // update one of the columns, should work as it does not introduce duplicates
-	 REQUIRE_NO_FAIL(con.Query("UPDATE test SET b='hello';"));
-//	 //! Set every key one higher, should also work without conflicts
-	 REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=a+1;"));
-//	 //! Set only the first key higher, should not work as this introduces a
-//	 //! duplicate key!
-//	 REQUIRE_FAIL(con.Query("UPDATE test SET a=a+1 WHERE a<=12;"));
-//	 //! Set all keys to 4, results in a conflict!
-	 REQUIRE_FAIL(con.Query("UPDATE test SET a=4;"));
-//
-	 result = con.Query("SELECT * FROM test;");
-	 REQUIRE(CHECK_COLUMN(result, 0, {12, 13, 14}));
-	 REQUIRE(CHECK_COLUMN(result, 1, {Value("hello"), Value("hello"), Value("hello")}));
-//
-//	 // delete and insert the same value should just work
-	 REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE a=12"));
-	 REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (12, 'hello');"));
-//
-//	 // insert a duplicate should fail
-	 REQUIRE_FAIL(con.Query("INSERT INTO test VALUES (12, 'hello');"));
-//
-//	 // update one key
-//    REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE a=12"));
-//    REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (4, 'hello');"));
-//	 REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=4 WHERE a=12;"));
-//
+	 //! update one of the columns, should work as it does not introduce duplicates
+	 REQUIRE_NO_FAIL(con.Query("UPDATE test SET b='pandas';"));
+    result = con.Query("SELECT * FROM test ORDER BY a;");
+    REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
+    REQUIRE(CHECK_COLUMN(result, 1, {Value("pandas"), Value("pandas"), Value("pandas")}));
+	 //! Set every key one higher, should also work without conflicts
+    REQUIRE_FAIL(con.Query("UPDATE test SET a=a+1;"));
+
 	 result = con.Query("SELECT * FROM test ORDER BY a;");
-	 REQUIRE(CHECK_COLUMN(result, 0, {4, 13, 14}));
-	 REQUIRE(CHECK_COLUMN(result, 1, {Value("hello"), Value("hello"), Value("hello")}));
-//
-//	 // set a column to NULL should fail
+	 REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
+	 REQUIRE(CHECK_COLUMN(result, 1, {Value("pandas"), Value("pandas"), Value("pandas")}));
+
+	 //! Set only the first key higher, should not work as this introduces a duplicate key!
+	 REQUIRE_FAIL(con.Query("UPDATE test SET a=13 WHERE a=12;"));
+
+	 //! Set all keys to 4, results in a conflict!
+	 REQUIRE_FAIL(con.Query("UPDATE test SET a=4;"));
+    result = con.Query("SELECT * FROM test ORDER BY a;");
+    REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
+    REQUIRE(CHECK_COLUMN(result, 1, {Value("pandas"), Value("pandas"), Value("pandas")}));
+
+	 //! delete and insert the same value should just work
+	 REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE a=12"));
+	 REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (12, 'pandas');"));
+
+	 //! insert a duplicate should fail
+	 REQUIRE_FAIL(con.Query("INSERT INTO test VALUES (12, 'pandas');"));
+
+	 //! update one key
+    REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE a=12"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (4, 'pandas');"));
+    REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=4 WHERE a=12;"));
+
+	 result = con.Query("SELECT * FROM test ORDER BY a;");
+	 REQUIRE(CHECK_COLUMN(result, 0, {4, 11, 13}));
+	 REQUIRE(CHECK_COLUMN(result, 1, {Value("pandas"), Value("pandas"), Value("pandas")}));
+
+	 //! set a column to NULL should fail
 	 REQUIRE_FAIL(con.Query("UPDATE test SET b=NULL WHERE a=13;"));
 }
 

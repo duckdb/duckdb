@@ -55,7 +55,6 @@ void PhysicalUpdate::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		if (is_index_update) {
 			// index update, perform a delete and an append instead
 			table.Delete(tableref, context, row_ids);
-			//table.RemoveFromIndexes(row_ids);
 			for (index_t i = 0; i < columns.size(); i++) {
 				mock_chunk.data[columns[i]].Reference(update_chunk.data[i]);
 			}

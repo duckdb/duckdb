@@ -91,24 +91,23 @@ void Node4::erase(ART &art, unique_ptr<Node> &node, int pos) {
 	// This is a one way node
 	if (n->count == 1) {
 		auto childref = n->child[0].get();
-		// concatenate prefixes
+		//! concatenate prefixes
 		auto new_length = node->prefix_length + childref->prefix_length + 1;
-        // have to allocate space in our prefix array
-        if (childref->prefix_length < new_length){
-            auto new_prefix = unique_ptr<uint8_t[]>(new uint8_t[new_length]);
-            childref->prefix = move(new_prefix);
-        }
-		// first move the existing prefix (if any)
-		for (uint32_t i = 0; i < childref->prefix_length; i++) {
-			childref->prefix[new_length - (i + 1)] = childref->prefix[childref->prefix_length - (i + 1)];
-		}
+        //! have to allocate space in our prefix array
+        unique_ptr<uint8_t[]> new_prefix = unique_ptr<uint8_t[]>(new uint8_t[new_length]);;
 
-		// now move the current key as part of the prefix
-		childref->prefix[node->prefix_length] = n->key[0];
-		// finally add the old prefix
-		for (uint32_t i = 0; i < node->prefix_length; i++) {
-			childref->prefix[i] = node->prefix[i];
+		//! first move the existing prefix (if any)
+		for (uint32_t i = 0; i < childref->prefix_length; i++) {
+            new_prefix[new_length - (i + 1)] = childref->prefix[childref->prefix_length - (i + 1)];
 		}
+		//! now move the current key as part of the prefix
+        new_prefix[node->prefix_length] = n->key[0];
+		//! finally add the old prefix
+		for (uint32_t i = 0; i < node->prefix_length; i++) {
+            new_prefix[i] = node->prefix[i];
+		}
+		//! set new prefix and move the child
+        childref->prefix = move(new_prefix);
 		childref->prefix_length = new_length;
 		node = move(n->child[0]);
 	}

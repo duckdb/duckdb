@@ -259,18 +259,6 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	}
 }
 
-//! check if the columns are unique
-static void VerifyUniqueConstraint(TableCatalogEntry &table, unordered_set<index_t> &keys, DataChunk &chunk) {
-//	if (keys.size() > 1){
-//
-//	}
-	for (auto &key : keys) {
-		if (!VectorOperations::Unique(chunk.data[key])) {
-			throw ConstraintException("duplicate key value violates primary key or unique constraint");
-		}
-	}
-}
-
 void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk) {
 	for (auto &constraint : table.bound_constraints) {
 		switch (constraint->type) {

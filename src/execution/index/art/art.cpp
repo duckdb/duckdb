@@ -126,7 +126,8 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	// now insert the elements into the index
 	auto row_identifiers = (row_t *)row_ids.data;
 	index_t failed_index = INVALID_INDEX;
-	for (index_t i = 0; i < row_ids.count; i++) {
+    auto rows = keys.size() / expression_result.column_count;
+	for (index_t i = 0; i < rows; i++) {
 		if (!keys[i]) {
 			continue;
 		}
@@ -134,17 +135,17 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 		row_t row_id = row_identifiers[row_ids.sel_vector ? row_ids.sel_vector[i] : i];
         unique_ptr<Key> key;
         // if the index is compound we need to concatenate the keys
-        if (input.column_count > 1){
+        if (expression_result.column_count > 1){
             // check length of compound key
             index_t keyLen = 0;
-            for (index_t cur_col = 0 ; cur_col < input.column_count; cur_col++){
+            for (index_t cur_col = 0 ; cur_col < expression_result.column_count; cur_col++){
                 keyLen += keys[i + cur_col * row_ids.count]->len;
             }
             // reserve key size
             unique_ptr<data_t[]> compound_data = unique_ptr<data_t[]>(new data_t[keyLen]);
             // concatenate keys
             keyLen = 0;
-            for (index_t cur_col = 0 ; cur_col < input.column_count; cur_col++){
+            for (index_t cur_col = 0 ; cur_col < expression_result.column_count; cur_col++){
                 auto key_value = keys[i + cur_col * row_ids.count]->data.get();
                 for (index_t key_idx = 0; key_idx < keys[i + cur_col * row_ids.count]->len; key_idx++){
                     compound_data[keyLen++] =  key_value[key_idx];
@@ -235,6 +236,9 @@ void ART::VerifyAppend(DataChunk &chunk) {
             // check length of compound key
             index_t keyLen = 0;
             for (index_t cur_col = 0; cur_col < expression_result.column_count; cur_col++) {
+                if (!keys[i + cur_col * rows]){
+                    throw ConstraintException("NULL key value violates primary key");
+                }
                 keyLen += keys[i + cur_col * rows]->len;
             }
             // reserve key size
@@ -242,8 +246,10 @@ void ART::VerifyAppend(DataChunk &chunk) {
             // concatenate keys
             keyLen = 0;
             for (index_t cur_col = 0; cur_col < expression_result.column_count; cur_col++) {
-                compound_data[keyLen] = *keys[i + cur_col * rows]->data.get();
-                keyLen += keys[i + cur_col * rows]->len;
+                auto key_value = keys[i + cur_col * rows]->data.get();
+                for (index_t key_idx = 0; key_idx < keys[i + cur_col * rows]->len; key_idx++){
+                    compound_data[keyLen++] =  key_value[key_idx];
+                }
             }
             key = make_unique<Key>(move(compound_data), keyLen);
         } else {
@@ -355,7 +361,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 //        row_t row_id = row_identifiers[row_ids.sel_vector ? row_ids.sel_vector[i] : i];
         unique_ptr<Key> key;
         // if the index is compound we need to concatenate the keys
-        if (column_ids.size() > 1){
+        if (this->unbound_expressions.size() > 1){
             // check length of compound key
             index_t keyLen = 0;
             for (index_t cur_col = 0 ; cur_col < input.column_count; cur_col++){
@@ -365,7 +371,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
             unique_ptr<data_t[]> compound_data = unique_ptr<data_t[]>(new data_t[keyLen]);
             // concatenate keys
             keyLen = 0;
-            for (index_t cur_col = 0 ; cur_col < input.column_count; cur_col++){
+            for (index_t cur_col = 0 ; cur_col < this->unbound_expressions.size(); cur_col++){
                 auto key_value = keys[i + cur_col * row_ids.count]->data.get();
                 for (index_t key_idx = 0; key_idx < keys[i + cur_col * row_ids.count]->len; key_idx++){
                     compound_data[keyLen++] =  key_value[key_idx];
