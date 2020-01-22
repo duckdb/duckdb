@@ -76,9 +76,8 @@ void Vector::SetValue(uint64_t index_, Value val) {
 	}
 	Value newVal = val.CastAs(type);
 
-	// set the NULL bit in the null mask
-	SetNull(index_, newVal.is_null);
 	uint64_t index = sel_vector ? sel_vector[index_] : index_;
+	nullmask[index] = newVal.is_null;
 	switch (type) {
 	case TypeId::BOOLEAN:
 		((int8_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.boolean;
@@ -118,15 +117,8 @@ void Vector::SetValue(uint64_t index_, Value val) {
 }
 
 void Vector::SetStringValue(uint64_t index, const char *value) {
-	if (type != TypeId::VARCHAR) {
-		throw InvalidTypeException(type, "Can only set string value of VARCHAR vectors!");
-	}
-	SetNull(index, value ? false : true);
-	if (value) {
-		((const char **)data)[index] = string_heap.AddString(value);
-	} else {
-		((const char **)data)[index] = nullptr;
-	}
+	assert(type == TypeId::VARCHAR);
+	SetValue(index, value ? Value(value) : Value());
 }
 
 Value Vector::GetValue(uint64_t index) const {
@@ -137,7 +129,7 @@ Value Vector::GetValue(uint64_t index) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		entry = 0;
 	}
-	if (ValueIsNull(index)) {
+	if (nullmask[entry]) {
 		return Value(type);
 	}
 	switch (type) {

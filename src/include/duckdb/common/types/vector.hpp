@@ -92,10 +92,6 @@ public:
 	Value GetValue(index_t index) const;
 	//! Sets the [index] element of the Vector to the specified Value
 	void SetValue(index_t index, Value val);
-	//! Returns whether or not the value at the specified position is NULL
-	inline bool ValueIsNull(index_t index) const {
-		return nullmask[sel_vector ? sel_vector[index] : index];
-	}
 	//! Sets the value at the specified index to NULL
 	inline void SetNull(index_t index, bool null) {
 		nullmask[sel_vector ? sel_vector[index] : index] = null;
