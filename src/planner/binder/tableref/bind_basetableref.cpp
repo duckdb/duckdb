@@ -24,6 +24,11 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &expr) {
         } else {
             auto result = make_unique<BoundCTERef>(ctebinding->index);
             auto b = (GenericBinding *)ctebinding;
+
+            if(!expr.alias.empty()) {
+                bind_context.AddGenericBinding(ctebinding->index, expr.alias, b->names, b->types);
+            }
+
             result->types = b->types;
             result->bound_columns = b->names;
             return move(result);
