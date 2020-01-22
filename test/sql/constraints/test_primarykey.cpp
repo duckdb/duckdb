@@ -186,6 +186,41 @@ TEST_CASE("PRIMARY KEY and update/delete on multiple columns", "[constraints]") 
 	 REQUIRE_FAIL(con.Query("UPDATE test SET b=NULL WHERE a=13;"));
 }
 
+TEST_CASE("PRIMARY KEY prefix stress test multiple columns", "[constraints]") {
+    unique_ptr<QueryResult> result;
+    DuckDB db(nullptr);
+    Connection con(db);
+
+    //! create a table
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, PRIMARY KEY(a, b));"));
+
+    //! Insert 300 values
+    for (index_t idx =0 ; idx < 300; idx ++ ){
+     REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ("+to_string(idx)+", 'hello_"+to_string(idx)+"')"));
+    }
+
+    //! Inserting same values should fail
+    for (index_t idx =0 ; idx < 300; idx ++ ){
+        REQUIRE_FAIL(con.Query("INSERT INTO test VALUES ("+to_string(idx)+", 'hello_"+to_string(idx)+"')"));
+    }
+
+    //! Update integer a on 1000 should work since there are no duplicates
+    REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=a+1000;"));
+
+    //! Now inserting same 1000 values should work
+    for (index_t idx =0 ; idx < 300; idx ++ ){
+        REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ("+to_string(idx)+", 'hello_"+to_string(idx)+"')"));
+    }
+
+    //! This update should fail and stress test the deletes on hello_ prefixes
+    REQUIRE_FAIL(con.Query("UPDATE test SET a=a+1000;"));
+
+    //! Should fail for same reason as above, just checking element per element to see if no one is escaping
+    for (index_t idx =0 ; idx < 300; idx ++ ){
+        REQUIRE_FAIL(con.Query("INSERT INTO test VALUES ("+to_string(idx+1000)+", 'hello_"+to_string(idx)+"')"));
+    }
+}
+
 TEST_CASE("PRIMARY KEY and update/delete in the same transaction", "[constraints]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
