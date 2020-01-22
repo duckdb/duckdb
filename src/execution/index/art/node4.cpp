@@ -4,7 +4,7 @@
 
 using namespace duckdb;
 
-Node4::Node4(ART &art, size_t compressionLength) : Node(art, NodeType::N4,compressionLength) {
+Node4::Node4(ART &art, size_t compressionLength) : Node(art, NodeType::N4, compressionLength) {
 	memset(key, 0, sizeof(key));
 }
 
@@ -93,21 +93,22 @@ void Node4::erase(ART &art, unique_ptr<Node> &node, int pos) {
 		auto childref = n->child[0].get();
 		//! concatenate prefixes
 		auto new_length = node->prefix_length + childref->prefix_length + 1;
-        //! have to allocate space in our prefix array
-        unique_ptr<uint8_t[]> new_prefix = unique_ptr<uint8_t[]>(new uint8_t[new_length]);;
+		//! have to allocate space in our prefix array
+		unique_ptr<uint8_t[]> new_prefix = unique_ptr<uint8_t[]>(new uint8_t[new_length]);
+		;
 
 		//! first move the existing prefix (if any)
 		for (uint32_t i = 0; i < childref->prefix_length; i++) {
-            new_prefix[new_length - (i + 1)] = childref->prefix[childref->prefix_length - (i + 1)];
+			new_prefix[new_length - (i + 1)] = childref->prefix[childref->prefix_length - (i + 1)];
 		}
 		//! now move the current key as part of the prefix
-        new_prefix[node->prefix_length] = n->key[0];
+		new_prefix[node->prefix_length] = n->key[0];
 		//! finally add the old prefix
 		for (uint32_t i = 0; i < node->prefix_length; i++) {
-            new_prefix[i] = node->prefix[i];
+			new_prefix[i] = node->prefix[i];
 		}
 		//! set new prefix and move the child
-        childref->prefix = move(new_prefix);
+		childref->prefix = move(new_prefix);
 		childref->prefix_length = new_length;
 		node = move(n->child[0]);
 	}

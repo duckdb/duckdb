@@ -25,11 +25,11 @@ index_t Node::GetMin() {
 
 uint32_t Node::PrefixMismatch(ART &art, Node *node, Key &key, uint64_t depth) {
 	uint64_t pos;
-    for (pos = 0; pos < node->prefix_length; pos++) {
-        if (key[depth + pos] != node->prefix[pos]) {
-            return pos;
-        }
-    }
+	for (pos = 0; pos < node->prefix_length; pos++) {
+		if (key[depth + pos] != node->prefix[pos]) {
+			return pos;
+		}
+	}
 	return pos;
 }
 

@@ -29,10 +29,10 @@ TEST_CASE("Test Index Scan Optimizer for Integers", "[index-optimizer]") {
 	}
 }
 
-//FIXME: These tests make no sense with the current matching system
+// FIXME: These tests make no sense with the current matching system
 // Write proper tests after reworking optimization
 
-//TEST_CASE("Test Index Scan Optimizer for Floats", "[index-optimizer-float]") {
+// TEST_CASE("Test Index Scan Optimizer for Floats", "[index-optimizer-float]") {
 //    ExpressionHelper helper;
 //    auto &con = helper.con;
 //    string int_types[2] = {"real","double"}; // {"tinyint", "smallint", "integer", "bigint"};
@@ -51,7 +51,7 @@ TEST_CASE("Test Index Scan Optimizer for Integers", "[index-optimizer]") {
 //    }
 //}
 //
-//TEST_CASE("Test Index Scan Optimizer for Strings", "[index-optimizer-string]") {
+// TEST_CASE("Test Index Scan Optimizer for Strings", "[index-optimizer-string]") {
 //    ExpressionHelper helper;
 //    auto &con = helper.con;
 //

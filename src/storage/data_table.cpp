@@ -273,10 +273,10 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chu
 			break;
 		}
 		case ConstraintType::UNIQUE: {
-            //! check whether or not the chunk can be inserted into the indexes
-            for (auto &index : indexes) {
-                index->VerifyAppend(chunk);
-            }
+			//! check whether or not the chunk can be inserted into the indexes
+			for (auto &index : indexes) {
+				index->VerifyAppend(chunk);
+			}
 			break;
 		}
 		case ConstraintType::FOREIGN_KEY:
@@ -284,7 +284,6 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chu
 			throw NotImplementedException("Constraint type not implemented!");
 		}
 	}
-
 }
 
 void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {

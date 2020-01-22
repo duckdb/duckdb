@@ -3,7 +3,7 @@
 
 using namespace duckdb;
 
-Node256::Node256(ART &art, size_t compressionLength) : Node(art, NodeType::N256,compressionLength) {
+Node256::Node256(ART &art, size_t compressionLength) : Node(art, NodeType::N256, compressionLength) {
 }
 
 index_t Node256::GetChildPos(uint8_t k) {

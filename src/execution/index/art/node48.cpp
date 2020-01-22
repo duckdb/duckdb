@@ -4,7 +4,7 @@
 
 using namespace duckdb;
 
-Node48::Node48(ART &art, size_t compressionLength) : Node(art, NodeType::N48,compressionLength) {
+Node48::Node48(ART &art, size_t compressionLength) : Node(art, NodeType::N48, compressionLength) {
 	for (uint64_t i = 0; i < 256; i++) {
 		childIndex[i] = Node::EMPTY_MARKER;
 	}
