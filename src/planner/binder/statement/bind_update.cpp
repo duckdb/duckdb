@@ -9,6 +9,8 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 
+#include <algorithm>
+
 using namespace duckdb;
 using namespace std;
 
@@ -101,6 +103,9 @@ unique_ptr<BoundSQLStatement> Binder::Bind(UpdateStatement &stmt) {
 			throw BinderException("Referenced update column %s not found in table!", colname.c_str());
 		}
 		auto &column = table->GetColumn(colname);
+		if (std::find(result->column_ids.begin(), result->column_ids.end(), column.oid) != result->column_ids.end()) {
+			throw BinderException("Multiple assignments to same column \"%s\"", colname.c_str());
+		}
 		result->column_ids.push_back(column.oid);
 
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
