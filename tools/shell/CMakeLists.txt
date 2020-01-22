@@ -1,34 +1,14 @@
-file(GLOB
-     SHELL_SRC_FILES
-     *.c
-     sqlite3.h)
-find_library(READLINE_LIB readline)
-find_library(EDITLINE_LIB editline)
+add_definitions(-DSQLITE_OMIT_LOAD_EXTENSION=1)
 
-set(HAVE_READLINE 0)
-set(HAVE_EDITLINE 0)
-
-if(EDITLINE_LIB)
-  set(HAVE_EDITLINE 1)
-  set(LINE_LIB ${EDITLINE_LIB})
-elseif(READLINE_LIB)
-  set(HAVE_READLINE 1)
-  set(LINE_LIB ${READLINE_LIB})
+SET (SHELL_SOURCES shell.c)
+if(NOT WIN32)
+	add_definitions(-DHAVE_LINENOISE=1)
+	SET (SHELL_SOURCES ${SHELL_SOURCES} linenoise.c)
 endif()
 
-execute_process(COMMAND git
-                        log
-                        -1
-                        --format=%h
-                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-                OUTPUT_VARIABLE GIT_COMMIT_HASH
-                OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-configure_file("include/shell_config.h.in"
-               "${CMAKE_BINARY_DIR}/tools/shell/include/shell_config.h")
 include_directories(include)
-include_directories(${CMAKE_BINARY_DIR}/tools/shell/include)
 include_directories(../sqlite3_api_wrapper/include)
-
-add_executable(shell shell.c)
-target_link_libraries(shell ${LINE_LIB} sqlite3_api_wrapper)
+add_executable(shell ${SHELL_SOURCES})
+target_link_libraries(shell sqlite3_api_wrapper_static)
+set_target_properties(shell PROPERTIES OUTPUT_NAME duckdb_cli)
+set_target_properties(shell PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
