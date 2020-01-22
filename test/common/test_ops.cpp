@@ -17,7 +17,7 @@ using namespace std;
 TEST_CASE("Casting vectors", "[vector_ops]") {
 	Vector v(TypeId::BOOLEAN, true, false);
 	v.count = 3;
-	v.SetNull(0, 1);
+	v.SetValue(0, Value());
 	v.SetValue(1, Value::BOOLEAN(true));
 	v.SetValue(2, Value::BOOLEAN(false));
 
@@ -46,7 +46,7 @@ TEST_CASE("Casting vectors", "[vector_ops]") {
 TEST_CASE("Aggregating boolean vectors", "[vector_ops]") {
 	Vector v(TypeId::BOOLEAN, true, false);
 	v.count = 3;
-	v.SetNull(0, 1);
+	v.SetValue(0, Value());
 	v.SetValue(1, Value::BOOLEAN(true));
 	v.SetValue(2, Value::BOOLEAN(false));
 
@@ -129,7 +129,7 @@ TEST_CASE("Compare vectors", "[vector_ops]") {
 	v.count = 3;
 	v.SetValue(0, Value::BOOLEAN(true));
 	v.SetValue(1, Value::BOOLEAN(false));
-	v.SetNull(2, true);
+	v.SetValue(2, Value());
 
 	require_compare(v);
 	v.Cast(TypeId::SMALLINT);
@@ -230,16 +230,16 @@ static void require_arith(TypeId t) {
 	v1.SetValue(0, Value::BIGINT(1));
 	v1.SetValue(1, Value::BIGINT(2));
 	v1.SetValue(2, Value::BIGINT(3));
-	v1.SetNull(3, true);
+	v1.SetValue(3, Value());
 	v1.SetValue(4, Value::BIGINT(42));
-	v1.SetNull(5, true);
+	v1.SetValue(5, Value());
 
 	v2.SetValue(0, Value::BIGINT(4));
 	v2.SetValue(1, Value::BIGINT(5));
 	v2.SetValue(2, Value::BIGINT(6));
 	v2.SetValue(3, Value::BIGINT(7));
-	v2.SetNull(4, true);
-	v2.SetNull(5, true);
+	v2.SetValue(4, Value());
+	v2.SetValue(5, Value());
 
 	Vector r(t, true, false);
 	r.count = v1.count;
@@ -304,17 +304,17 @@ static void require_mod(TypeId t) {
 	v1.SetValue(1, Value::BIGINT(10));
 	v1.SetValue(2, Value::BIGINT(10));
 	v1.SetValue(3, Value::BIGINT(10));
-	v1.SetNull(4, true);
+	v1.SetValue(4, Value());
 	v1.SetValue(5, Value::BIGINT(10));
-	v1.SetNull(6, true);
+	v1.SetValue(6, Value());
 
 	v2.SetValue(0, Value::BIGINT(2));
 	v2.SetValue(1, Value::BIGINT(4));
 	v2.SetValue(2, Value::BIGINT(7));
 	v2.SetValue(3, Value::BIGINT(0));
 	v2.SetValue(4, Value::BIGINT(42));
-	v2.SetNull(5, true);
-	v2.SetNull(6, true);
+	v2.SetValue(5, Value());
+	v2.SetValue(6, Value());
 
 	Vector r(t, true, false);
 	r.count = v1.count;

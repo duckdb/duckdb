@@ -79,9 +79,7 @@ public:
 	//! The null mask of the vector, if the Vector has any NULL values
 	nullmask_t nullmask;
 public:
-	//! Create a vector that references the specified value. Note that if the
-	//! value goes out of scope or is deleted, the data in the vector becomes
-	//! corrupt. Use a ConstantVector if you want to use this method safely.
+	//! Create a vector that references the specified value.
 	void Reference(Value &value);
 
 	//! Destroys the vector, deleting any owned data and resetting it to an
@@ -92,13 +90,6 @@ public:
 	Value GetValue(index_t index) const;
 	//! Sets the [index] element of the Vector to the specified Value
 	void SetValue(index_t index, Value val);
-	//! Sets the value at the specified index to NULL
-	inline void SetNull(index_t index, bool null) {
-		nullmask[sel_vector ? sel_vector[index] : index] = null;
-	}
-	//! Sets the value of the vector at the specified index to the specified
-	//! string. Can only be used for VARCHAR vectors
-	void SetStringValue(index_t index, const char *value);
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.

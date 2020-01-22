@@ -31,7 +31,7 @@ Value WindowSegmentTree::AggegateFinal() {
 
 	Value r(result_type);
 	Vector result(r);
-	result.SetNull(0, false);
+	result.nullmask[0] = false;
 	aggregate.finalize(statev, result);
 
 	return result.GetValue(0);

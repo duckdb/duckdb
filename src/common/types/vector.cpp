@@ -116,11 +116,6 @@ void Vector::SetValue(uint64_t index_, Value val) {
 	}
 }
 
-void Vector::SetStringValue(uint64_t index, const char *value) {
-	assert(type == TypeId::VARCHAR);
-	SetValue(index, value ? Value(value) : Value());
-}
-
 Value Vector::GetValue(uint64_t index) const {
 	if (index >= count) {
 		throw OutOfRangeException("GetValue() out of range");
