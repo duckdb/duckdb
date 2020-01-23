@@ -42,17 +42,17 @@ void VectorOperations::AppendFromStorage(Vector &source, Vector &target, bool ha
 	}
 
 	switch (source.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		vector_append_loop<int8_t>(source, target, has_null);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		vector_append_loop<int16_t>(source, target, has_null);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		vector_append_loop<int32_t>(source, target, has_null);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		vector_append_loop<int64_t>(source, target, has_null);
 		break;
 	case TypeId::FLOAT:

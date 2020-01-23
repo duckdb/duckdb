@@ -100,17 +100,17 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, sel_t tside[], in
 	assert(res_true.type == res_false.type && res_true.type == result.type);
 
 	switch (result.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		case_loop<int8_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		case_loop<int16_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		case_loop<int32_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		case_loop<int64_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
 	case TypeId::FLOAT:

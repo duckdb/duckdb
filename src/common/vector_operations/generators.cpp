@@ -28,25 +28,25 @@ void VectorOperations::GenerateSequence(Vector &result, int64_t start, int64_t i
 		throw InvalidTypeException(result.type, "Can only generate sequences for numeric values!");
 	}
 	switch (result.type) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		if (start > numeric_limits<int8_t>::max() || increment > numeric_limits<int8_t>::max()) {
 			throw Exception("Sequence start or increment out of type range");
 		}
 		templated_generate_sequence<int8_t>(result, (int8_t)start, (int8_t)increment);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		if (start > numeric_limits<int16_t>::max() || increment > numeric_limits<int16_t>::max()) {
 			throw Exception("Sequence start or increment out of type range");
 		}
 		templated_generate_sequence<int16_t>(result, (int16_t)start, (int16_t)increment);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		if (start > numeric_limits<int32_t>::max() || increment > numeric_limits<int32_t>::max()) {
 			throw Exception("Sequence start or increment out of type range");
 		}
 		templated_generate_sequence<int32_t>(result, (int32_t)start, (int32_t)increment);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		templated_generate_sequence<int64_t>(result, start, increment);
 		break;
 	case TypeId::FLOAT:

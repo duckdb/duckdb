@@ -17,17 +17,17 @@ template <class OP> static void numeric_scatter_loop(Vector &source, Vector &des
 		throw InvalidTypeException(dest.type, "Cannot scatter to non-pointer type!");
 	}
 	switch (source.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		scatter_templated_loop<int8_t, OP>(source, dest);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		scatter_templated_loop<int16_t, OP>(source, dest);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		scatter_templated_loop<int32_t, OP>(source, dest);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		scatter_templated_loop<int64_t, OP>(source, dest);
 		break;
 	case TypeId::FLOAT:
@@ -112,17 +112,17 @@ template <class T, bool IGNORE_NULL> static void scatter_set_loop(Vector &source
 template <bool IGNORE_NULL = false>
 static void scatter_set_all_loop(Vector &source, data_ptr_t dest[], index_t offset) {
 	switch (source.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		scatter_set_loop<int8_t, IGNORE_NULL>(source, dest, offset);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		scatter_set_loop<int16_t, IGNORE_NULL>(source, dest, offset);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		scatter_set_loop<int32_t, IGNORE_NULL>(source, dest, offset);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		scatter_set_loop<int64_t, IGNORE_NULL>(source, dest, offset);
 		break;
 	case TypeId::HASH:

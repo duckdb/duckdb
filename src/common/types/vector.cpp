@@ -19,8 +19,8 @@ Vector::Vector(TypeId type, bool create_data, bool zero_data)
 	}
 }
 
-Vector::Vector(TypeId type, data_ptr_t dataptr) :
-	vector_type(VectorType::FLAT_VECTOR), type(type), count(0), sel_vector(nullptr), data(dataptr) {
+Vector::Vector(TypeId type, data_ptr_t dataptr)
+    : vector_type(VectorType::FLAT_VECTOR), type(type), count(0), sel_vector(nullptr), data(dataptr) {
 	if (dataptr && type == TypeId::INVALID) {
 		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
 	}
@@ -30,7 +30,8 @@ Vector::Vector(Value value) : vector_type(VectorType::CONSTANT_VECTOR), sel_vect
 	Reference(value);
 }
 
-Vector::Vector() : vector_type(VectorType::FLAT_VECTOR), type(TypeId::INVALID), count(0), sel_vector(nullptr), data(nullptr) {
+Vector::Vector()
+    : vector_type(VectorType::FLAT_VECTOR), type(TypeId::INVALID), count(0), sel_vector(nullptr), data(nullptr) {
 }
 
 Vector::~Vector() {
@@ -79,19 +80,19 @@ void Vector::SetValue(uint64_t index_, Value val) {
 	uint64_t index = sel_vector ? sel_vector[index_] : index_;
 	nullmask[index] = newVal.is_null;
 	switch (type) {
-	case TypeId::BOOLEAN:
+	case TypeId::BOOL:
 		((int8_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.boolean;
 		break;
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		((int8_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.tinyint;
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		((int16_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.smallint;
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		((int32_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.integer;
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		((int64_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.bigint;
 		break;
 	case TypeId::FLOAT:
@@ -128,15 +129,15 @@ Value Vector::GetValue(uint64_t index) const {
 		return Value(type);
 	}
 	switch (type) {
-	case TypeId::BOOLEAN:
+	case TypeId::BOOL:
 		return Value::BOOLEAN(((int8_t *)data)[entry]);
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		return Value::TINYINT(((int8_t *)data)[entry]);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return Value::SMALLINT(((int16_t *)data)[entry]);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return Value::INTEGER(((int32_t *)data)[entry]);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return Value::BIGINT(((int64_t *)data)[entry]);
 	case TypeId::HASH:
 		return Value::HASH(((uint64_t *)data)[entry]);
@@ -302,7 +303,7 @@ void Vector::Print() {
 }
 
 void Vector::Normalify() {
-	switch(vector_type) {
+	switch (vector_type) {
 	case VectorType::FLAT_VECTOR:
 		// already a flat vector
 		return;
@@ -327,7 +328,7 @@ void Vector::Verify() {
 		// of them are deallocated/corrupt
 		if (vector_type == VectorType::CONSTANT_VECTOR) {
 			if (!nullmask[0]) {
-				auto string = ((const char**) data)[0];
+				auto string = ((const char **)data)[0];
 				assert(string);
 				assert(strlen(string) != (size_t)-1);
 				assert(Value::IsUTF8String(string));

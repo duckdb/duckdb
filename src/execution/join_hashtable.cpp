@@ -165,7 +165,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		}
 		info.payload_chunk.data[0].Reference(keys.data[info.correlated_types.size()]);
 		info.payload_chunk.data[1].Reference(keys.data[info.correlated_types.size()]);
-		info.payload_chunk.data[0].type = info.payload_chunk.data[1].type = TypeId::BIGINT;
+		info.payload_chunk.data[0].type = info.payload_chunk.data[1].type = TypeId::INT64;
 		info.payload_chunk.sel_vector = info.group_chunk.sel_vector = info.group_chunk.data[0].sel_vector;
 		info.correlated_counts->AddChunk(info.group_chunk, info.payload_chunk);
 	}
@@ -691,7 +691,7 @@ void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &
 
 void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	assert(result.column_count == left.column_count + 1);
-	assert(result.data[left.column_count].type == TypeId::BOOLEAN);
+	assert(result.data[left.column_count].type == TypeId::BOOL);
 	assert(!left.sel_vector);
 	// this method should only be called for a non-empty HT
 	assert(ht.count > 0);

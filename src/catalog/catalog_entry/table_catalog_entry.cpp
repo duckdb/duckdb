@@ -137,7 +137,7 @@ vector<TypeId> TableCatalogEntry::GetTypes(const vector<column_t> &column_ids) {
 	vector<TypeId> result;
 	for (auto &index : column_ids) {
 		if (index == COLUMN_IDENTIFIER_ROW_ID) {
-			result.push_back(TypeId::BIGINT);
+			result.push_back(TypeId::INT64);
 		} else {
 			result.push_back(GetInternalType(columns[index].type));
 		}

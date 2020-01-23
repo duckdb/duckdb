@@ -11,7 +11,7 @@ using namespace duckdb;
 using namespace std;
 
 template <bool INVERSE> void is_null_loop(Vector &input, Vector &result) {
-	assert(result.type == TypeId::BOOLEAN);
+	assert(result.type == TypeId::BOOL);
 
 	result.vector_type = input.vector_type;
 	result.nullmask.reset();

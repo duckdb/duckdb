@@ -158,7 +158,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 	}
 	if (expr->IsFoldable()) {
 		// scalar condition, evaluate it
-		auto result = ExpressionExecutor::EvaluateScalar(*expr).CastAs(TypeId::BOOLEAN);
+		auto result = ExpressionExecutor::EvaluateScalar(*expr).CastAs(TypeId::BOOL);
 		// check if the filter passes
 		if (result.is_null || !result.value_.boolean) {
 			// the filter does not pass the scalar test, create an empty result

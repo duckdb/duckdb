@@ -21,15 +21,15 @@ public:
 		owned_data = unique_ptr<data_t[]>(new data_t[sizeof(T) * STANDARD_VECTOR_SIZE]);
 		data = owned_data.get();
 		if (std::is_same<T, bool>::value) {
-			type = TypeId::BOOLEAN;
+			type = TypeId::BOOL;
 		} else if (std::is_same<T, int8_t>::value) {
-			type = TypeId::TINYINT;
+			type = TypeId::INT8;
 		} else if (std::is_same<T, int16_t>::value) {
-			type = TypeId::SMALLINT;
+			type = TypeId::INT16;
 		} else if (std::is_same<T, int>::value) {
-			type = TypeId::INTEGER;
+			type = TypeId::INT32;
 		} else if (std::is_same<T, int64_t>::value) {
-			type = TypeId::BIGINT;
+			type = TypeId::INT64;
 		} else if (std::is_same<T, uint64_t>::value) {
 			type = TypeId::HASH;
 		} else if (std::is_same<T, double>::value) {

@@ -126,10 +126,9 @@ void SuperLargeHashTable::Resize(index_t size) {
 			assert(addresses.count == new_addresses.count);
 			assert(addresses.sel_vector == new_addresses.sel_vector);
 
-			auto new_address_data = (data_ptr_t*) new_addresses.GetData();
-			VectorOperations::Exec(addresses, [&](index_t i, index_t k) {
-				memcpy(new_address_data[i], data_pointers[i], payload_width);
-			});
+			auto new_address_data = (data_ptr_t *)new_addresses.GetData();
+			VectorOperations::Exec(
+			    addresses, [&](index_t i, index_t k) { memcpy(new_address_data[i], data_pointers[i], payload_width); });
 		}
 
 		assert(this->entries == new_table->entries);
@@ -196,7 +195,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			// a selection vector
 			sel_t distinct_sel_vector[STANDARD_VECTOR_SIZE];
 			index_t match_count = 0;
-			auto probe_result_data = (bool*) probe_result.GetData();
+			auto probe_result_data = (bool *)probe_result.GetData();
 			for (index_t probe_idx = 0; probe_idx < probe_result.count; probe_idx++) {
 				index_t sel_idx = payload.sel_vector ? payload.sel_vector[probe_idx] : probe_idx;
 				if (probe_result_data[sel_idx]) {
@@ -252,7 +251,7 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 		assert(result.column_count > aggr_idx);
 		// assert(aggregates[aggr_idx] == ExpressionType::AGGREGATE_COUNT_STAR ||
 		//       aggregates[aggr_idx] == ExpressionType::AGGREGATE_COUNT);
-		assert(payload_types[aggr_idx] == TypeId::BIGINT);
+		assert(payload_types[aggr_idx] == TypeId::INT64);
 
 		VectorOperations::Gather::Set(addresses, result.data[aggr_idx]);
 		VectorOperations::AddInPlace(addresses,
@@ -283,20 +282,20 @@ void templated_compare_group_vector(data_ptr_t group_pointers[], Vector &groups,
 static void CompareGroupVector(data_ptr_t group_pointers[], Vector &groups, sel_t sel_vector[], index_t &sel_count,
                                sel_t no_match_vector[], index_t &no_match_count) {
 	switch (groups.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		templated_compare_group_vector<int8_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
 		                                       no_match_count);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		templated_compare_group_vector<int16_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
 		                                        no_match_count);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		templated_compare_group_vector<int32_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
 		                                        no_match_count);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		templated_compare_group_vector<int64_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
 		                                        no_match_count);
 		break;
@@ -367,7 +366,7 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 
 	// we need to be able to fit at least one vector of data
 	assert(capacity - entries > STANDARD_VECTOR_SIZE);
-	assert(new_group.type == TypeId::BOOLEAN);
+	assert(new_group.type == TypeId::BOOL);
 	assert(addresses.type == TypeId::POINTER);
 
 	new_group.sel_vector = groups.data[0].sel_vector;

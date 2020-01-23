@@ -17,14 +17,17 @@ using namespace std;
 // AND/OR
 //===--------------------------------------------------------------------===//
 template <class OP, class NULLOP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-static void templated_boolean_function_loop(bool *__restrict ldata, bool *__restrict rdata, bool *__restrict result_data, index_t count,
-                                        sel_t *__restrict sel_vector, nullmask_t &left_nullmask, nullmask_t &right_nullmask, nullmask_t &result_nullmask) {
+static void templated_boolean_function_loop(bool *__restrict ldata, bool *__restrict rdata,
+                                            bool *__restrict result_data, index_t count, sel_t *__restrict sel_vector,
+                                            nullmask_t &left_nullmask, nullmask_t &right_nullmask,
+                                            nullmask_t &result_nullmask) {
 	if (left_nullmask.any() || right_nullmask.any()) {
 		VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
 			index_t left_idx = LEFT_CONSTANT ? 0 : i;
 			index_t right_idx = RIGHT_CONSTANT ? 0 : i;
 			result_data[i] = OP::Operation(ldata[left_idx], rdata[right_idx]);
-			result_nullmask[i] = NULLOP::Operation(ldata[left_idx], rdata[right_idx], left_nullmask[left_idx], right_nullmask[right_idx]);
+			result_nullmask[i] = NULLOP::Operation(ldata[left_idx], rdata[right_idx], left_nullmask[left_idx],
+			                                       right_nullmask[right_idx]);
 		});
 	} else {
 		VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
@@ -33,9 +36,8 @@ static void templated_boolean_function_loop(bool *__restrict ldata, bool *__rest
 	}
 }
 
-template <class OP, class NULLOP>
-static void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result) {
-	assert(left.type == TypeId::BOOLEAN && right.type == TypeId::BOOLEAN && result.type == TypeId::BOOLEAN);
+template <class OP, class NULLOP> static void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result) {
+	assert(left.type == TypeId::BOOL && right.type == TypeId::BOOL && result.type == TypeId::BOOL);
 	assert(left.count == right.count && left.sel_vector == right.sel_vector);
 	result.count = left.count;
 	result.sel_vector = left.sel_vector;
@@ -47,20 +49,24 @@ static void templated_boolean_nullmask(Vector &left, Vector &right, Vector &resu
 	if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
 		// operation on two constants, result is constant vector
 		result.vector_type = VectorType::CONSTANT_VECTOR;
-		templated_boolean_function_loop<OP, NULLOP, true, false>(ldata, rdata, result_data, 1, nullptr, left.nullmask, right.nullmask, result.nullmask);
+		templated_boolean_function_loop<OP, NULLOP, true, false>(ldata, rdata, result_data, 1, nullptr, left.nullmask,
+		                                                         right.nullmask, result.nullmask);
 	} else if (left.vector_type == VectorType::CONSTANT_VECTOR) {
 		// left side is constant, result is regular vector
 		result.vector_type = VectorType::FLAT_VECTOR;
-		templated_boolean_function_loop<OP, NULLOP, true, false>(ldata, rdata, result_data, result.count, result.sel_vector, left.nullmask, right.nullmask, result.nullmask);
+		templated_boolean_function_loop<OP, NULLOP, true, false>(
+		    ldata, rdata, result_data, result.count, result.sel_vector, left.nullmask, right.nullmask, result.nullmask);
 	} else if (right.vector_type == VectorType::CONSTANT_VECTOR) {
 		// right side is constant, result is regular vector
 		result.vector_type = VectorType::FLAT_VECTOR;
-		templated_boolean_function_loop<OP, NULLOP, false, true>(ldata, rdata, result_data, result.count, result.sel_vector, left.nullmask, right.nullmask, result.nullmask);
+		templated_boolean_function_loop<OP, NULLOP, false, true>(
+		    ldata, rdata, result_data, result.count, result.sel_vector, left.nullmask, right.nullmask, result.nullmask);
 	} else {
 		// no constant vectors: perform general loop
 		assert(left.count == right.count);
 		result.vector_type = VectorType::FLAT_VECTOR;
-		templated_boolean_function_loop<OP, NULLOP, false, false>(ldata, rdata, result_data, result.count, result.sel_vector, left.nullmask, right.nullmask, result.nullmask);
+		templated_boolean_function_loop<OP, NULLOP, false, false>(
+		    ldata, rdata, result_data, result.count, result.sel_vector, left.nullmask, right.nullmask, result.nullmask);
 	}
 }
 
@@ -79,6 +85,6 @@ struct NotOperator {
 };
 
 void VectorOperations::Not(Vector &input, Vector &result) {
-	assert(input.type == TypeId::BOOLEAN && result.type == TypeId::BOOLEAN);
+	assert(input.type == TypeId::BOOL && result.type == TypeId::BOOL);
 	UnaryExecutor::Execute<bool, bool, NotOperator>(input, result);
 }

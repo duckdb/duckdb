@@ -38,17 +38,17 @@ void VectorOperations::Set(Vector &result, Value value) {
 		// set all values in the nullmask to 0
 		result.nullmask.reset();
 		switch (result.type) {
-		case TypeId::BOOLEAN:
-		case TypeId::TINYINT:
+		case TypeId::BOOL:
+		case TypeId::INT8:
 			templated_set_loop<int8_t>(result, value.value_.tinyint);
 			break;
-		case TypeId::SMALLINT:
+		case TypeId::INT16:
 			templated_set_loop<int16_t>(result, value.value_.smallint);
 			break;
-		case TypeId::INTEGER:
+		case TypeId::INT32:
 			templated_set_loop<int32_t>(result, value.value_.integer);
 			break;
-		case TypeId::BIGINT:
+		case TypeId::INT64:
 			templated_set_loop<int64_t>(result, value.value_.bigint);
 			break;
 		case TypeId::FLOAT:
@@ -91,17 +91,17 @@ void VectorOperations::FillNullMask(Vector &v) {
 		return;
 	}
 	switch (v.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		templated_fill_nullmask<int8_t>(v);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		templated_fill_nullmask<int16_t>(v);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		templated_fill_nullmask<int32_t>(v);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		templated_fill_nullmask<int64_t>(v);
 		break;
 	case TypeId::FLOAT:

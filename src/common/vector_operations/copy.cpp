@@ -59,17 +59,17 @@ template <bool SET_NULL> void generic_copy_loop(Vector &source, void *target, in
 	assert(offset + element_count <= source.count);
 
 	switch (source.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		copy_loop<int8_t, SET_NULL>(source, target, offset, element_count);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		copy_loop<int16_t, SET_NULL>(source, target, offset, element_count);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		copy_loop<int32_t, SET_NULL>(source, target, offset, element_count);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		copy_loop<int64_t, SET_NULL>(source, target, offset, element_count);
 		break;
 	case TypeId::HASH:

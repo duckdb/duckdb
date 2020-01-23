@@ -29,7 +29,7 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState 
 
 		// init result to false
 		Vector intermediate;
-		intermediate.Initialize(TypeId::BOOLEAN);
+		intermediate.Initialize(TypeId::BOOL);
 		intermediate.count = left.count;
 		intermediate.sel_vector = left.sel_vector;
 		VectorOperations::Set(intermediate, Value(false));
@@ -38,7 +38,7 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState 
 		// for every child, OR the result of the comparision with the left
 		// to get the overall result.
 		for (index_t child = 1; child < expr.children.size(); child++) {
-			Vector comp_res(TypeId::BOOLEAN, true, false);
+			Vector comp_res(TypeId::BOOL, true, false);
 
 			auto &vector_to_check = state->arguments.data[child];
 			Execute(*expr.children[child], state->child_states[child].get(), vector_to_check);
@@ -49,7 +49,7 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState 
 				comp_res.Move(intermediate);
 			} else {
 				// otherwise OR together
-				Vector new_result(TypeId::BOOLEAN, true, false);
+				Vector new_result(TypeId::BOOL, true, false);
 				VectorOperations::Or(intermediate, comp_res, new_result);
 				new_result.Move(intermediate);
 			}

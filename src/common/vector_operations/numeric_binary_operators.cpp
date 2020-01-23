@@ -14,25 +14,26 @@ using namespace std;
 
 struct NumericBinaryExecutor {
 private:
-	template<class T, class OP, bool IGNORE_NULL, class NULL_CHECK>
+	template <class T, class OP, bool IGNORE_NULL, class NULL_CHECK>
 	static inline void TemplatedExecute(Vector &left, Vector &right, Vector &result) {
 		BinaryExecutor::Execute<T, T, T, OP, IGNORE_NULL, NULL_CHECK>(left, right, result);
 	}
+
 public:
-	template <class OP, bool IGNORE_NULL=false, class NULL_CHECK=DefaultNullCheckOperator>
+	template <class OP, bool IGNORE_NULL = false, class NULL_CHECK = DefaultNullCheckOperator>
 	static inline void Execute(Vector &left, Vector &right, Vector &result) {
 		assert(left.type == right.type && left.type == result.type);
 		switch (left.type) {
-		case TypeId::TINYINT:
+		case TypeId::INT8:
 			TemplatedExecute<int8_t, OP, IGNORE_NULL, NULL_CHECK>(left, right, result);
 			break;
-		case TypeId::SMALLINT:
+		case TypeId::INT16:
 			TemplatedExecute<int16_t, OP, IGNORE_NULL, NULL_CHECK>(left, right, result);
 			break;
-		case TypeId::INTEGER:
+		case TypeId::INT32:
 			TemplatedExecute<int32_t, OP, IGNORE_NULL, NULL_CHECK>(left, right, result);
 			break;
-		case TypeId::BIGINT:
+		case TypeId::INT64:
 			TemplatedExecute<int64_t, OP, IGNORE_NULL, NULL_CHECK>(left, right, result);
 			break;
 		case TypeId::FLOAT:
@@ -72,8 +73,7 @@ void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result) {
 }
 
 struct ZeroIsNullOperator {
-	template<class LEFT_TYPE, class RIGHT_TYPE>
-	static inline bool Operation(LEFT_TYPE left, RIGHT_TYPE right) {
+	template <class LEFT_TYPE, class RIGHT_TYPE> static inline bool Operation(LEFT_TYPE left, RIGHT_TYPE right) {
 		return right == 0;
 	}
 };
@@ -94,7 +94,6 @@ template <> double Modulo::Operation(double left, double right) {
 	assert(right != 0);
 	return fmod(left, right);
 }
-
 
 void VectorOperations::Modulo(Vector &left, Vector &right, Vector &result) {
 	NumericBinaryExecutor::Execute<duckdb::Modulo, true, ZeroIsNullOperator>(left, right, result);

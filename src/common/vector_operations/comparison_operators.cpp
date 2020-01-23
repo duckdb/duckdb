@@ -14,28 +14,27 @@ using namespace std;
 
 struct ComparisonExecutor {
 private:
-	template<class T, class OP, bool IGNORE_NULL=false>
+	template <class T, class OP, bool IGNORE_NULL = false>
 	static inline void TemplatedExecute(Vector &left, Vector &right, Vector &result) {
 		BinaryExecutor::Execute<T, T, bool, OP, IGNORE_NULL>(left, right, result);
 	}
 
 public:
-	template <class OP>
-	static inline void Execute(Vector &left, Vector &right, Vector &result) {
-		assert(left.type == right.type && result.type == TypeId::BOOLEAN);
+	template <class OP> static inline void Execute(Vector &left, Vector &right, Vector &result) {
+		assert(left.type == right.type && result.type == TypeId::BOOL);
 		// the inplace loops take the result as the last parameter
 		switch (left.type) {
-		case TypeId::BOOLEAN:
-		case TypeId::TINYINT:
+		case TypeId::BOOL:
+		case TypeId::INT8:
 			TemplatedExecute<int8_t, OP>(left, right, result);
 			break;
-		case TypeId::SMALLINT:
+		case TypeId::INT16:
 			TemplatedExecute<int16_t, OP>(left, right, result);
 			break;
-		case TypeId::INTEGER:
+		case TypeId::INT32:
 			TemplatedExecute<int32_t, OP>(left, right, result);
 			break;
-		case TypeId::BIGINT:
+		case TypeId::INT64:
 			TemplatedExecute<int64_t, OP>(left, right, result);
 			break;
 		case TypeId::POINTER:
@@ -48,7 +47,7 @@ public:
 			TemplatedExecute<double, OP>(left, right, result);
 			break;
 		case TypeId::VARCHAR:
-			TemplatedExecute<const char*, OP, true>(left, right, result);
+			TemplatedExecute<const char *, OP, true>(left, right, result);
 			break;
 		default:
 			throw InvalidTypeException(left.type, "Invalid type for comparison");

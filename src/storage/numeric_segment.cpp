@@ -218,14 +218,14 @@ static void append_loop(SegmentStatistics &stats, data_ptr_t target, index_t tar
 
 static NumericSegment::append_function_t GetAppendFunction(TypeId type) {
 	switch (type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		return append_loop<int8_t>;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return append_loop<int16_t>;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return append_loop<int32_t>;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return append_loop<int64_t>;
 	case TypeId::FLOAT:
 		return append_loop<float>;
@@ -287,14 +287,14 @@ static void update_loop(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t b
 
 static NumericSegment::update_function_t GetUpdateFunction(TypeId type) {
 	switch (type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		return update_loop<int8_t>;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return update_loop<int16_t>;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return update_loop<int32_t>;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return update_loop<int64_t>;
 	case TypeId::FLOAT:
 		return update_loop<float>;
@@ -356,14 +356,14 @@ static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_p
 
 static NumericSegment::merge_update_function_t GetMergeUpdateFunction(TypeId type) {
 	switch (type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		return merge_update_loop<int8_t>;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return merge_update_loop<int16_t>;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return merge_update_loop<int32_t>;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return merge_update_loop<int64_t>;
 	case TypeId::FLOAT:
 		return merge_update_loop<float>;
@@ -389,14 +389,14 @@ template <class T> static void update_info_fetch(Transaction &transaction, Updat
 
 static NumericSegment::update_info_fetch_function_t GetUpdateInfoFetchFunction(TypeId type) {
 	switch (type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		return update_info_fetch<int8_t>;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return update_info_fetch<int16_t>;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return update_info_fetch<int32_t>;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return update_info_fetch<int64_t>;
 	case TypeId::FLOAT:
 		return update_info_fetch<float>;
@@ -432,14 +432,14 @@ static void update_info_append(Transaction &transaction, UpdateInfo *info, index
 
 static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction(TypeId type) {
 	switch (type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		return update_info_append<int8_t>;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return update_info_append<int16_t>;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return update_info_append<int32_t>;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return update_info_append<int64_t>;
 	case TypeId::FLOAT:
 		return update_info_append<float>;
@@ -466,14 +466,14 @@ template <class T> static void rollback_update(UpdateInfo *info, data_ptr_t base
 
 static NumericSegment::rollback_update_function_t GetRollbackUpdateFunction(TypeId type) {
 	switch (type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		return rollback_update<int8_t>;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return rollback_update<int16_t>;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return rollback_update<int32_t>;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return rollback_update<int64_t>;
 	case TypeId::FLOAT:
 		return rollback_update<float>;

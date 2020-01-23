@@ -64,14 +64,14 @@ template <class NLTYPE, class OP>
 static index_t nested_loop_join_inner_operator(Vector &left, Vector &right, index_t &lpos, index_t &rpos,
                                                sel_t lvector[], sel_t rvector[], index_t current_match_count) {
 	switch (left.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		return NLTYPE::template Operation<int8_t, OP>(left, right, lpos, rpos, lvector, rvector, current_match_count);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return NLTYPE::template Operation<int16_t, OP>(left, right, lpos, rpos, lvector, rvector, current_match_count);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return NLTYPE::template Operation<int32_t, OP>(left, right, lpos, rpos, lvector, rvector, current_match_count);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return NLTYPE::template Operation<int64_t, OP>(left, right, lpos, rpos, lvector, rvector, current_match_count);
 	case TypeId::FLOAT:
 		return NLTYPE::template Operation<float, OP>(left, right, lpos, rpos, lvector, rvector, current_match_count);

@@ -117,7 +117,7 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 				assert(hash_table->join_type == JoinType::MARK);
 				assert(chunk.column_count == state->child_chunk.column_count + 1);
 				auto &result_vector = chunk.data[state->child_chunk.column_count];
-				assert(result_vector.type == TypeId::BOOLEAN);
+				assert(result_vector.type == TypeId::BOOL);
 				result_vector.count = state->child_chunk.size();
 				// for every data vector, we just reference the child chunk
 				for (index_t i = 0; i < state->child_chunk.column_count; i++) {

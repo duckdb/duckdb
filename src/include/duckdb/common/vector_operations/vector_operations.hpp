@@ -128,7 +128,7 @@ struct VectorOperations {
 		static void Min(Vector &source, Vector &dest);
 		//! dest[i] = dest[i] + 1
 		//! For this operation the destination type does not need to match source.type
-		//! Instead, this can **only** be used when the destination type is TypeId::BIGINT
+		//! Instead, this can **only** be used when the destination type is TypeId::INT64
 		static void AddOne(Vector &source, Vector &dest);
 		//! dest[i] = dest[i]
 		static void SetFirst(Vector &source, Vector &dest);

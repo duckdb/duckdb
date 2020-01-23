@@ -7,13 +7,13 @@ using namespace std;
 
 template <class MJ, class L_ARG, class R_ARG> static index_t merge_join(L_ARG &l, R_ARG &r) {
 	switch (l.type) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		return MJ::template Operation<int8_t>(l, r);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return MJ::template Operation<int16_t>(l, r);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return MJ::template Operation<int32_t>(l, r);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return MJ::template Operation<int64_t>(l, r);
 	case TypeId::FLOAT:
 		return MJ::template Operation<float>(l, r);

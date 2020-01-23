@@ -530,7 +530,7 @@ bool duckdb_value_boolean(duckdb_result *result, index_t col, index_t row) {
 	if (val.is_null) {
 		return false;
 	} else {
-		return val.CastAs(TypeId::BOOLEAN).value_.boolean;
+		return val.CastAs(TypeId::BOOL).value_.boolean;
 	}
 }
 
@@ -539,7 +539,7 @@ int8_t duckdb_value_int8(duckdb_result *result, index_t col, index_t row) {
 	if (val.is_null) {
 		return 0;
 	} else {
-		return val.CastAs(TypeId::TINYINT).value_.tinyint;
+		return val.CastAs(TypeId::INT8).value_.tinyint;
 	}
 }
 
@@ -548,7 +548,7 @@ int16_t duckdb_value_int16(duckdb_result *result, index_t col, index_t row) {
 	if (val.is_null) {
 		return 0;
 	} else {
-		return val.CastAs(TypeId::SMALLINT).value_.smallint;
+		return val.CastAs(TypeId::INT16).value_.smallint;
 	}
 }
 
@@ -557,7 +557,7 @@ int32_t duckdb_value_int32(duckdb_result *result, index_t col, index_t row) {
 	if (val.is_null) {
 		return 0;
 	} else {
-		return val.CastAs(TypeId::INTEGER).value_.integer;
+		return val.CastAs(TypeId::INT32).value_.integer;
 	}
 }
 
@@ -566,7 +566,7 @@ int64_t duckdb_value_int64(duckdb_result *result, index_t col, index_t row) {
 	if (val.is_null) {
 		return 0;
 	} else {
-		return val.CastAs(TypeId::BIGINT).value_.bigint;
+		return val.CastAs(TypeId::INT64).value_.bigint;
 	}
 }
 
