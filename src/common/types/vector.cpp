@@ -183,6 +183,7 @@ void Vector::Move(Vector &other) {
 }
 
 void Vector::Flatten() {
+	Normalify();
 	if (!sel_vector) {
 		return;
 	}
@@ -200,6 +201,7 @@ void Vector::Copy(Vector &other, uint64_t offset) {
 	if (other.sel_vector) {
 		throw NotImplementedException("Copy to vector with sel_vector not supported!");
 	}
+	Normalify();
 
 	other.nullmask.reset();
 	if (!TypeIsConstantSize(type)) {
@@ -245,6 +247,8 @@ void Vector::Append(Vector &other) {
 	if (count + other.count > STANDARD_VECTOR_SIZE) {
 		throw OutOfRangeException("Cannot append to vector: vector is full!");
 	}
+	other.Normalify();
+	assert(vector_type == VectorType::FLAT_VECTOR);
 	uint64_t old_count = count;
 	count += other.count;
 	// merge NULL mask
@@ -321,6 +325,9 @@ void Vector::Normalify() {
 }
 
 void Vector::Verify() {
+	if (count == 0) {
+		return;
+	}
 #ifdef DEBUG
 	if (type == TypeId::VARCHAR) {
 		// we just touch all the strings and let the sanitizer figure out if any

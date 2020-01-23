@@ -14,35 +14,35 @@ using namespace std;
 
 struct NumericBinaryExecutor {
 private:
-	template<class T, class OP, bool IGNORE_NULL, class NULL_CHECK>
+	template<class T, class OP, bool IGNORE_NULL, class OPWRAPPER>
 	static inline void TemplatedExecute(Vector &left, Vector &right, Vector &result) {
-		BinaryExecutor::Execute<T, T, T, OP, IGNORE_NULL, NULL_CHECK>(left, right, result);
+		BinaryExecutor::Execute<T, T, T, OP, IGNORE_NULL, OPWRAPPER>(left, right, result);
 	}
 public:
-	template <class OP, bool IGNORE_NULL=false, class NULL_CHECK=DefaultNullCheckOperator>
+	template <class OP, bool IGNORE_NULL=false, class OPWRAPPER=BinarySingleArgumentOperatorWrapper>
 	static inline void Execute(Vector &left, Vector &right, Vector &result) {
 		assert(left.type == right.type && left.type == result.type);
 		switch (left.type) {
 		case TypeId::TINYINT:
-			TemplatedExecute<int8_t, OP, IGNORE_NULL, NULL_CHECK>(left, right, result);
+			TemplatedExecute<int8_t, OP, IGNORE_NULL, OPWRAPPER>(left, right, result);
 			break;
 		case TypeId::SMALLINT:
-			TemplatedExecute<int16_t, OP, IGNORE_NULL, NULL_CHECK>(left, right, result);
+			TemplatedExecute<int16_t, OP, IGNORE_NULL, OPWRAPPER>(left, right, result);
 			break;
 		case TypeId::INTEGER:
-			TemplatedExecute<int32_t, OP, IGNORE_NULL, NULL_CHECK>(left, right, result);
+			TemplatedExecute<int32_t, OP, IGNORE_NULL, OPWRAPPER>(left, right, result);
 			break;
 		case TypeId::BIGINT:
-			TemplatedExecute<int64_t, OP, IGNORE_NULL, NULL_CHECK>(left, right, result);
+			TemplatedExecute<int64_t, OP, IGNORE_NULL, OPWRAPPER>(left, right, result);
 			break;
 		case TypeId::FLOAT:
-			TemplatedExecute<float, OP, IGNORE_NULL, NULL_CHECK>(left, right, result);
+			TemplatedExecute<float, OP, IGNORE_NULL, OPWRAPPER>(left, right, result);
 			break;
 		case TypeId::DOUBLE:
-			TemplatedExecute<double, OP, IGNORE_NULL, NULL_CHECK>(left, right, result);
+			TemplatedExecute<double, OP, IGNORE_NULL, OPWRAPPER>(left, right, result);
 			break;
 		case TypeId::POINTER:
-			TemplatedExecute<uint64_t, OP, IGNORE_NULL, NULL_CHECK>(left, right, result);
+			TemplatedExecute<uint64_t, OP, IGNORE_NULL, OPWRAPPER>(left, right, result);
 			break;
 		default:
 			throw InvalidTypeException(left.type, "Invalid type for numeric operator");
@@ -71,15 +71,23 @@ void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result) {
 	NumericBinaryExecutor::Execute<duckdb::Multiply>(left, right, result);
 }
 
-struct ZeroIsNullOperator {
-	template<class LEFT_TYPE, class RIGHT_TYPE>
-	static inline bool Operation(LEFT_TYPE left, RIGHT_TYPE right) {
-		return right == 0;
+//===--------------------------------------------------------------------===//
+// Divide
+//===--------------------------------------------------------------------===//
+struct BinaryZeroIsNullWrapper {
+	template<class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, nullmask_t &nullmask, index_t idx) {
+		if (right == 0) {
+			nullmask[idx] = true;
+			return 0;
+		} else {
+			return OP::template Operation<LEFT_TYPE>(left, right);
+		}
 	}
 };
 
 void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
-	NumericBinaryExecutor::Execute<duckdb::Divide, true, ZeroIsNullOperator>(left, right, result);
+	NumericBinaryExecutor::Execute<duckdb::Divide, true, BinaryZeroIsNullWrapper>(left, right, result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -97,5 +105,5 @@ template <> double Modulo::Operation(double left, double right) {
 
 
 void VectorOperations::Modulo(Vector &left, Vector &right, Vector &result) {
-	NumericBinaryExecutor::Execute<duckdb::Modulo, true, ZeroIsNullOperator>(left, right, result);
+	NumericBinaryExecutor::Execute<duckdb::Modulo, true, BinaryZeroIsNullWrapper>(left, right, result);
 }

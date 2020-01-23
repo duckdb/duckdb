@@ -57,6 +57,9 @@ void VectorOperations::Set(Vector &result, Value value) {
 		case TypeId::DOUBLE:
 			templated_set_loop<double>(result, value.value_.double_);
 			break;
+		case TypeId::HASH:
+			templated_set_loop<uint64_t>(result, value.value_.hash);
+			break;
 		case TypeId::POINTER:
 			templated_set_loop<uintptr_t>(result, value.value_.pointer);
 			break;

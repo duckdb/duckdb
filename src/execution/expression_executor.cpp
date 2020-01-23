@@ -70,30 +70,7 @@ void ExpressionExecutor::ExecuteExpression(Vector &result) {
 void ExpressionExecutor::ExecuteExpression(index_t expr_idx, Vector &result) {
 	assert(expr_idx < expressions.size());
 	assert(result.type == expressions[expr_idx]->return_type);
-
-	auto owned_data = move(result.owned_data);
-	auto initial_data = result.GetData();
 	Execute(*expressions[expr_idx], states[expr_idx]->root_state.get(), result);
-	if (chunk) {
-		// we have an input chunk: result of this vector should have the same length as input chunk
-		// check if the result is a single constant value
-		if (result.vector_type == VectorType::CONSTANT_VECTOR) {
-			// have to duplicate the constant value to match the rows in the
-			// other columns
-			auto constant_value = result.GetValue(0);
-			result.vector_type = VectorType::FLAT_VECTOR;
-			result.data = initial_data;
-			result.count = chunk->size();
-			result.sel_vector = chunk->sel_vector;
-			VectorOperations::Set(result, constant_value);
-		} else if (result.count != chunk->size()) {
-			throw Exception("Computed vector length does not match expected length!");
-		}
-		assert(result.sel_vector == chunk->sel_vector);
-	}
-	if (result.data == initial_data) {
-		result.owned_data = move(owned_data);
-	}
 }
 
 Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
