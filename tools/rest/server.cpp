@@ -73,13 +73,13 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 		}
 		assert(v);
 		switch (v->type) {
-		case TypeId::BOOLEAN:
-		case TypeId::TINYINT:
-		case TypeId::SMALLINT:
-		case TypeId::INTEGER:
-		case TypeId::BIGINT: {
+		case TypeId::BOOL:
+		case TypeId::INT8:
+		case TypeId::INT16:
+		case TypeId::INT32:
+		case TypeId::INT64: {
 			// int types
-			v->Cast(TypeId::BIGINT);
+			v->Cast(TypeId::INT64);
 			auto data_ptr = (int64_t *)v->GetData();
 			VectorOperations::Exec(*v, [&](index_t i, index_t k) {
 				if (!v->nullmask[i]) {
