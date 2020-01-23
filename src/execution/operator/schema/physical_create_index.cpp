@@ -9,7 +9,7 @@ using namespace duckdb;
 using namespace std;
 
 void PhysicalCreateIndex::CreateARTIndex() {
-	auto art = make_unique<ART>(*table.storage, column_ids, move(unbound_expressions));
+	auto art = make_unique<ART>(*table.storage, column_ids, move(unbound_expressions), info->unique);
 
 	table.storage->AddIndex(move(art), expressions);
 }

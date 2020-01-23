@@ -69,9 +69,6 @@ TEST_CASE("Test temporary table creation", "[catalog]") {
 
 	REQUIRE_FAIL(con.Query("CREATE TABLE temp.integersy(i INTEGER)"));
 
-	// no indexes on temp tables
-	REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
-
 	REQUIRE_FAIL(con.Query("CREATE SCHEMA temp"));
 
 	REQUIRE_FAIL(con.Query("DROP TABLE main.integersx"));

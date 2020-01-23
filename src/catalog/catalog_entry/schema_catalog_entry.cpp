@@ -93,7 +93,10 @@ void SchemaCatalogEntry::DropSequence(Transaction &transaction, DropInfo *info) 
 
 bool SchemaCatalogEntry::CreateIndex(Transaction &transaction, CreateIndexInfo *info) {
 	auto index = make_unique_base<CatalogEntry, IndexCatalogEntry>(catalog, this, info);
-	unordered_set<CatalogEntry *> dependencies{this};
+	unordered_set<CatalogEntry *> dependencies;
+	if (name != TEMP_SCHEMA) {
+		dependencies.insert(this);
+	}
 	if (!indexes.CreateEntry(transaction, info->index_name, move(index), dependencies)) {
 		if (!info->if_not_exists) {
 			throw CatalogException("Index with name \"%s\" already exists!", info->index_name.c_str());
