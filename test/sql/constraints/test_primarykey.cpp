@@ -337,7 +337,7 @@ TEST_CASE("PRIMARY KEY and concurency conflicts", "[constraints]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 4, 5}));
 }
 
-TEST_CASE("ART FP String Constraint", "[art-string-unique]") {
+TEST_CASE("ART FP String Constraint", "[constraints]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -367,4 +367,85 @@ TEST_CASE("ART FP String Constraint", "[art-string-unique]") {
 	REQUIRE_FAIL(con.Query("INSERT INTO numbers VALUES (NULL, 4);"));
 	//! update NULL is also not allowed
 	REQUIRE_FAIL(con.Query("UPDATE numbers SET i=NULL;"));
+}
+
+TEST_CASE("PRIMARY KEY constraint on more than two columns", "[constraints]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query(
+	    "CREATE TABLE numbers(a integer, b integer, c integer, d integer, e integer, PRIMARY KEY(a,b,c,d,e))"));
+
+	//! insert two conflicting pairs at the same time
+	REQUIRE_FAIL(con.Query("INSERT INTO numbers VALUES (1,1,1,1,1), (1,1,1,1,1)"));
+
+	//! insert unique values
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (1,1,1,1,1),(1,2,1,1,1),(1,1,2,1,1),(2,2,2,2,2)"));
+
+	//! insert a duplicate value as part of a chain of values
+	REQUIRE_FAIL(con.Query("INSERT INTO numbers VALUES (1,1,1,1,1),(1,1,1,1,4);"));
+
+	//! now insert just the second value
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (1,1,1,1,4);"));
+
+	//! this should fail since will cause a duplicate
+	REQUIRE_FAIL(con.Query("UPDATE numbers SET c=1 WHERE c=2"));
+}
+
+TEST_CASE("PRIMARY KEY constraint that only covers a subset of the columns", "[constraints]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(
+	    con.Query("CREATE TABLE numbers(a integer, b integer, c integer, d integer, e integer, PRIMARY KEY(a,b))"));
+
+	//! insert two conflicting pairs at the same time
+	REQUIRE_FAIL(con.Query("INSERT INTO numbers VALUES (1,1,1,1,1), (1,1,1,1,1)"));
+
+	//! insert unique values
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (1,1,1,1,1),(1,2,1,1,1),(2,1,2,1,1),(2,2,2,2,2)"));
+
+	//! insert a duplicate value as part of a chain of values
+	REQUIRE_FAIL(con.Query("INSERT INTO numbers VALUES (1,1,1,1,1),(1,5,1,1,4);"));
+
+	//! now insert just the second value
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (1,5,1,1,4);"));
+
+	//! this should  work since is not part of primary key
+	REQUIRE_NO_FAIL(con.Query("UPDATE numbers SET c=1 WHERE c=2"));
+
+	//! this should  fail since is will cause a duplicate
+	REQUIRE_FAIL(con.Query("UPDATE numbers SET b=1 WHERE b=2"));
+
+	//! this should  work since it won't cause a duplicate
+	REQUIRE_NO_FAIL(con.Query("UPDATE numbers SET b=3 WHERE b=2"));
+}
+
+TEST_CASE("PRIMARY KEY constraint on multiple string columns with overlapping values", "[constraints]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tst(a varchar, b varchar,PRIMARY KEY(a,b))"));
+
+	//! insert two conflicting pairs at the same time
+	REQUIRE_FAIL(con.Query("INSERT INTO tst VALUES ('hell', 'hello'), ('hell','hello')"));
+
+	//! insert unique values
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO tst VALUES ('hell', 'hello'), ('hello','hell'), ('hel','hell'), ('hell','hel')"));
+
+	//! insert a duplicate value as part of a chain of values
+	REQUIRE_FAIL(con.Query("INSERT INTO tst VALUES ('hell', 'hello'),('hel', 'hello');"));
+
+	//! now insert just the second value
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO tst VALUES ('hel', 'hello');"));
+
+	//! this should  fail since is will cause a duplicate
+	REQUIRE_FAIL(con.Query("UPDATE tst SET b='hello' WHERE b='hel' "));
+
+	//! this should  work since it won't cause a duplicate
+	REQUIRE_NO_FAIL(con.Query("UPDATE tst SET b='hell' WHERE b='hel'"));
 }

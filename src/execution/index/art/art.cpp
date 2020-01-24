@@ -361,7 +361,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 		if (this->unbound_expressions.size() > 1) {
 			// check length of compound key
 			index_t keyLen = 0;
-			for (index_t cur_col = 0; cur_col < input.column_count; cur_col++) {
+			for (index_t cur_col = 0; cur_col < this->unbound_expressions.size(); cur_col++) {
 				keyLen += keys[i + cur_col * row_ids.count]->len;
 			}
 			// reserve key size
