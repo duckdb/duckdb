@@ -658,7 +658,9 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 		executor.Execute(intermediate, result);
 
 		// insert into the index
-		index->Insert(lock, result, intermediate.data[intermediate.column_count - 1]);
+		if(!index->Insert(lock, result, intermediate.data[intermediate.column_count - 1])){
+            throw ConstraintException("Cant create unique index, table contains duplicate data on indexed column(s)");
+		}
 	}
 	indexes.push_back(move(index));
 }
