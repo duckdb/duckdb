@@ -325,7 +325,7 @@ string Value::ToString(SQLType sql_type) const {
 	case SQLTypeId::VARCHAR:
 		return str_value;
 	case SQLTypeId::STRUCT: {
-		string ret = "";
+		string ret = "<";
 		for (size_t i = 0; i < struct_value.size(); i++) {
 			auto &child = struct_value[i];
 			ret += child.first + ": " + child.second.ToString();
@@ -333,6 +333,7 @@ string Value::ToString(SQLType sql_type) const {
 				ret += ", ";
 			}
 		}
+		ret+=">";
 		return ret;
 	}
 	default:

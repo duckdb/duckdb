@@ -213,21 +213,43 @@ void Vector::Copy(Vector &other, uint64_t offset) {
 
 	other.nullmask.reset();
 	if (!TypeIsConstantSize(type)) {
-		assert(type == TypeId::VARCHAR);
-		other.count = count - offset;
-		auto source = (const char **)data;
-		auto target = (const char **)other.data;
-		VectorOperations::Exec(
-		    *this,
-		    [&](uint64_t i, uint64_t k) {
-			    if (nullmask[i]) {
-				    other.nullmask[k - offset] = true;
-				    target[k - offset] = nullptr;
-			    } else {
-				    target[k - offset] = other.string_heap.AddString(source[i]);
-			    }
-		    },
-		    offset);
+		switch(type) {
+		case TypeId::VARCHAR: {
+			other.count = count - offset;
+			auto source = (const char **)data;
+			auto target = (const char **)other.data;
+			VectorOperations::Exec(
+			    *this,
+			    [&](uint64_t i, uint64_t k) {
+				    if (nullmask[i]) {
+					    other.nullmask[k - offset] = true;
+					    target[k - offset] = nullptr;
+				    } else {
+					    target[k - offset] = other.string_heap.AddString(source[i]);
+				    }
+			    },
+			    offset);
+		}
+		break;
+		case TypeId::STRUCT: {
+			// the main vector only has a nullmask, so set that with offset
+			// recursively apply to children
+			assert(offset <= count);
+			other.count = count - offset;
+			VectorOperations::Exec(
+			    *this, [&](index_t i, index_t k) { other.nullmask[k - offset] = nullmask[i]; }, offset);
+			for (auto& child : children) {
+				auto child_copy = make_unique<Vector>();
+				child_copy->Initialize(child.second->type);
+				child.second->Copy(*child_copy, offset); // TODO the offset is obvious for struct, not so for list/map
+				other.children.push_back(pair<string, unique_ptr<Vector>>(child.first, move(child_copy)));
+			}
+		}
+		break;
+		default:
+			throw NotImplementedException("Copy type ");
+
+		}
 	} else {
 		VectorOperations::Copy(*this, other, offset);
 	}

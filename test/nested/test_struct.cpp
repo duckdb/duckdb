@@ -82,7 +82,7 @@ private:
 		SQLType struct_type(SQLTypeId::STRUCT);
 		struct_type.struct_type.push_back(pair<string, SQLType>("first", SQLType::INTEGER));
 		struct_type.struct_type.push_back(pair<string, SQLType>("second", SQLType::DOUBLE));
-		return TableFunction("my_scan", {}, {SQLType::INTEGER, struct_type}, {"some_int", "some_string"},
+		return TableFunction("my_scan", {}, {SQLType::INTEGER, struct_type}, {"some_int", "some_struct"},
 		                     my_scan_function_init, my_scan_function, nullptr);
 	}
 };
@@ -101,7 +101,6 @@ unique_ptr<BoundFunctionExpression> resolve_function(Connection &con, string nam
 }
 
 TEST_CASE("Test filter and projection of nested struct", "[nested]") {
-	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -111,6 +110,11 @@ TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 	con.context->transaction.BeginTransaction();
 	auto &trans = con.context->transaction.ActiveTransaction();
 	con.context->catalog.CreateTableFunction(trans, &info);
+
+	auto result = con.Query("SELECT * FROM my_scan() where some_int > 7");
+	result->Print();
+
+
 
 	vector<TypeId> types{TypeId::INT32, TypeId::STRUCT};
 
@@ -157,4 +161,7 @@ TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 		filter->GetChunk(*con.context, result_chunk, state.get());
 		result_chunk.Print();
 	} while (result_chunk.size() > 0);
+
+
+
 }
