@@ -13,6 +13,7 @@ public:
     }
     unique_ptr<PhysicalOperatorState> top_state;
     unique_ptr<PhysicalOperatorState> bottom_state;
+
     bool top_done = false;
 
     bool recursing = false;
@@ -59,7 +60,8 @@ void PhysicalRecursiveCTE::GetChunkInternal(ClientContext &context, DataChunk &c
 
             (*iteration)++;
 
-            state->bottom_state->finished = false;
+            state->bottom_state = children[1]->GetOperatorState();
+//            state->bottom_state->finished = false;
 
             state->intermediate_empty = true;
             state->finished = false;
