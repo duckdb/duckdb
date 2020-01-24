@@ -21,6 +21,7 @@ static void avg_initialize(data_ptr_t payload, TypeId return_type) {
 
 static void avg_update(Vector inputs[], index_t input_count, Vector &state) {
 	assert(input_count == 1);
+	inputs[0].Normalify();
 
 	auto states = (avg_state_t **)state.GetData();
 	auto input_data = (double *)inputs[0].GetData();

@@ -218,9 +218,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 
 			aggr->function.update(&distinct_payload, 1, distinct_addresses);
 			payload_idx++;
-		}
-
-		else {
+		} else {
 			auto input_count = max(size_t(1), aggr->children.size());
 			aggr->function.update(&payload.data[payload_idx], input_count, addresses);
 			payload_idx += input_count;

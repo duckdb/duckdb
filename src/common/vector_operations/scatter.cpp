@@ -83,11 +83,23 @@ void VectorOperations::Scatter::Min(Vector &source, Vector &dest) {
 void VectorOperations::Scatter::AddOne(Vector &source, Vector &dest) {
 	assert(dest.type == TypeId::POINTER);
 	auto destinations = (int64_t **)dest.GetData();
-	VectorOperations::Exec(source.sel_vector, source.count, [&](index_t i, index_t k) {
-		if (!source.nullmask[i]) {
-			(*destinations[i])++;
+	if (source.vector_type == VectorType::CONSTANT_VECTOR) {
+		if (source.nullmask[0]) {
+			// constant NULL, ignore value
+			return;
 		}
-	});
+		VectorOperations::Exec(dest, [&](index_t i, index_t k) {
+			(*destinations[i])++;
+		});
+
+	} else {
+		assert(source.vector_type == VectorType::FLAT_VECTOR);
+		VectorOperations::Exec(source, [&](index_t i, index_t k) {
+			if (!source.nullmask[i]) {
+				(*destinations[i])++;
+			}
+		});
+	}
 }
 
 template <class T, bool IGNORE_NULL> static void scatter_set_loop(Vector &source, data_ptr_t dest[], index_t offset) {

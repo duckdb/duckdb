@@ -214,7 +214,7 @@ struct VectorOperations {
 	//! Exec over the set of indexes, calls the callback function with (i) =
 	//! index, dependent on selection vector and (k) = count
 	template <class T> static void Exec(const Vector &vector, T &&fun, index_t offset = 0, index_t count = 0) {
-		assert(vector.vector_type == VectorType::FLAT_VECTOR);
+		assert(vector.vector_type == VectorType::FLAT_VECTOR || (vector.vector_type == VectorType::CONSTANT_VECTOR && vector.count == 1 && !vector.sel_vector));
 		if (count == 0) {
 			count = vector.count;
 		} else {

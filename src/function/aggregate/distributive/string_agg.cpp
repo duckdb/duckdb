@@ -11,11 +11,12 @@ namespace duckdb {
 typedef const char *string_agg_state_t;
 
 void string_agg_update(Vector inputs[], index_t input_count, Vector &state) {
-	assert(input_count == 2);
+	assert(input_count == 2 && inputs[0].type == TypeId::VARCHAR && inputs[1].type == TypeId::VARCHAR);
+	inputs[0].Normalify();
+	inputs[1].Normalify();
+
 	auto &strs = inputs[0];
 	auto &seps = inputs[1];
-	assert(strs.type == TypeId::VARCHAR);
-	assert(seps.type == TypeId::VARCHAR);
 
 	auto str_data = (const char **)strs.GetData();
 	auto sep_data = (const char **)seps.GetData();
