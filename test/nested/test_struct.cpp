@@ -138,7 +138,7 @@ TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 	filter_expressions.push_back(move(gte_expr));
 
 	auto filter = make_unique<PhysicalFilter>(types, move(filter_expressions));
-	//	filter->children.push_back(move(scan_function));
+		filter->children.push_back(move(scan_function));
 
 	// PROJECTION[some_int, EXTRACT_STRUCT_MEMBER()]
 
@@ -146,15 +146,15 @@ TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 	proj_expressions.push_back(make_unique_base<Expression, BoundReferenceExpression>(TypeId::INT32, 0));
 	proj_expressions.push_back(make_unique_base<Expression, BoundReferenceExpression>(TypeId::STRUCT, 1));
 	auto projection = make_unique<PhysicalProjection>(types, move(proj_expressions));
-	projection->children.push_back(move(filter));
+	//projection->children.push_back(move(filter));
 
 	// execute!
 	DataChunk result_chunk;
-	result_chunk.Initialize(scan_function->types);
-	auto state = scan_function->GetOperatorState();
+	result_chunk.Initialize(filter->types);
+	auto state = filter->GetOperatorState();
 
 	do {
-		scan_function->GetChunk(*con.context, result_chunk, state.get());
+		filter->GetChunk(*con.context, result_chunk, state.get());
 		result_chunk.Print();
 	} while (result_chunk.size() > 0);
 }
