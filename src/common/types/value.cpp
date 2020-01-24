@@ -324,6 +324,17 @@ string Value::ToString(SQLType sql_type) const {
 		return Timestamp::ToString(value_.bigint);
 	case SQLTypeId::VARCHAR:
 		return str_value;
+	case SQLTypeId::STRUCT: {
+		string ret = "";
+		for (size_t i = 0; i < struct_value.size(); i++) {
+			auto &child = struct_value[i];
+			ret += child.first + ": " + child.second.ToString();
+			if (i < struct_value.size() - 1) {
+				ret += ", ";
+			}
+		}
+		return ret;
+	}
 	default:
 		throw NotImplementedException("Unimplemented type for printing");
 	}

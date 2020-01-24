@@ -60,6 +60,8 @@ string TypeIdToString(TypeId type) {
 		return "VARCHAR";
 	case TypeId::VARBINARY:
 		return "VARBINARY";
+	case TypeId::STRUCT:
+		return "STRUCT<?>";
 	default:
 		throw ConversionException("Invalid TypeId %d", type);
 	}
@@ -87,6 +89,8 @@ index_t GetTypeIdSize(TypeId type) {
 		return sizeof(uintptr_t);
 	case TypeId::VARCHAR:
 		return sizeof(void *);
+	case TypeId::STRUCT:
+		return 16; // FIXME 8 bytes for offset, 8 bytes for length
 	case TypeId::VARBINARY:
 		return sizeof(blob_t);
 	default:
@@ -114,6 +118,8 @@ SQLType SQLTypeFromInternalType(TypeId type) {
 		return SQLType::VARCHAR;
 	case TypeId::VARBINARY:
 		return SQLType(SQLTypeId::VARBINARY);
+	case TypeId::STRUCT:
+		return SQLType(SQLTypeId::STRUCT); // TODO we do not know the child types here
 	default:
 		throw ConversionException("Invalid TypeId %d", type);
 	}
@@ -181,6 +187,8 @@ string SQLTypeIdToString(SQLTypeId id) {
 		return "NULL";
 	case SQLTypeId::ANY:
 		return "ANY";
+	case SQLTypeId::STRUCT:
+		return "STRUCT<?>";
 	default:
 		return "INVALID";
 	}
@@ -188,7 +196,12 @@ string SQLTypeIdToString(SQLTypeId id) {
 
 string SQLTypeToString(SQLType type) {
 	// FIXME: display width/scale
-	return SQLTypeIdToString(type.id);
+	switch (type.id) {
+	case SQLTypeId::STRUCT:
+		return "A STRUCT!";
+	default:
+		return SQLTypeIdToString(type.id);
+	}
 }
 
 bool SQLType::IsIntegral() const {
@@ -246,8 +259,10 @@ TypeId GetInternalType(SQLType type) {
 		return TypeId::VARCHAR;
 	case SQLTypeId::VARBINARY:
 		return TypeId::VARBINARY;
+	case SQLTypeId::STRUCT:
+		return TypeId::STRUCT;
 	default:
-		throw ConversionException("Invalid SQLType %d", type);
+		throw ConversionException("Invalid SQLType %d", SQLTypeToString(type).c_str());
 	}
 }
 

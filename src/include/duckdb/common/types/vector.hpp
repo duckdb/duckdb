@@ -68,7 +68,8 @@ public:
 	// implicit copying of Vectors is not allowed
 	Vector(const Vector &) = delete;
 
-	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated constant, if it is compressed)
+	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated
+	//! constant, if it is compressed)
 	VectorType vector_type;
 	//! The type of the elements stored in the vector (e.g. integer, float)
 	TypeId type;
@@ -78,6 +79,9 @@ public:
 	sel_t *sel_vector;
 	//! The null mask of the vector, if the Vector has any NULL values
 	nullmask_t nullmask;
+
+	std::vector<std::pair<std::string, unique_ptr<Vector>>> children;
+
 public:
 	//! Create a vector that references the specified value.
 	void Reference(Value &value);
@@ -135,6 +139,7 @@ public:
 	data_ptr_t GetData() {
 		return data;
 	}
+
 protected:
 	//! A pointer to the data.
 	data_ptr_t data;

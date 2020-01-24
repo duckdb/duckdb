@@ -133,6 +133,8 @@ public:
 	//! The value of the object, if it is of a variable size type
 	string str_value;
 
+	std::vector<std::pair<std::string, Value>> struct_value;
+
 	//! Serializes a Value to a stand-alone binary blob
 	void Serialize(Serializer &serializer);
 	//! Deserializes a Value from a blob

@@ -179,13 +179,18 @@ enum class SQLTypeId : uint8_t {
 	DECIMAL = 20,
 	CHAR = 21,
 	VARCHAR = 22,
-	VARBINARY = 23
+	VARBINARY = 23,
+
+	STRUCT = 100
 };
 
 struct SQLType {
 	SQLTypeId id;
 	uint16_t width;
 	uint8_t scale;
+
+	// TODO serialize this
+	std::vector<std::pair<std::string, SQLType>> struct_type;
 
 	SQLType(SQLTypeId id = SQLTypeId::INVALID, uint16_t width = 0, uint8_t scale = 0)
 	    : id(id), width(width), scale(scale) {

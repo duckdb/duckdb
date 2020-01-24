@@ -152,6 +152,15 @@ Value Vector::GetValue(uint64_t index) const {
 		assert(str);
 		return Value(string(str));
 	}
+	case TypeId::STRUCT: {
+		Value ret(TypeId::STRUCT);
+		ret.is_null = false;
+		// we can derive the value schema from the vector schema
+		for (auto &struct_child : children) {
+			ret.struct_value.push_back(pair<string, Value>(struct_child.first, struct_child.second->GetValue(entry)));
+		}
+		return ret;
+	}
 	default:
 		throw NotImplementedException("Unimplemented type for conversion");
 	}
