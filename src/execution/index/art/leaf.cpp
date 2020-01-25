@@ -6,7 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-Leaf::Leaf(ART &art, unique_ptr<Key> value, row_t row_id) : Node(art, NodeType::NLeaf) {
+Leaf::Leaf(ART &art, unique_ptr<Key> value, row_t row_id) : Node(art, NodeType::NLeaf, 0) {
 	this->value = move(value);
 	this->capacity = 1;
 	this->row_ids = unique_ptr<row_t[]>(new row_t[this->capacity]);

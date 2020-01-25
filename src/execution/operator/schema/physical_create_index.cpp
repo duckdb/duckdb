@@ -9,7 +9,7 @@ using namespace duckdb;
 using namespace std;
 
 void PhysicalCreateIndex::CreateARTIndex() {
-	auto art = make_unique<ART>(*table.storage, column_ids, move(unbound_expressions));
+	auto art = make_unique<ART>(*table.storage, column_ids, move(unbound_expressions), info->unique);
 
 	table.storage->AddIndex(move(art), expressions);
 }
@@ -27,8 +27,6 @@ void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &ch
 	}
 
 	// create the chunk to hold intermediate expression results
-	// "Multidimensional indexes not supported yet"
-	assert(expressions.size() == 1);
 
 	switch (info->index_type) {
 	case IndexType::ART: {

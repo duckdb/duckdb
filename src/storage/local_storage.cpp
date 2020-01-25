@@ -301,8 +301,7 @@ void LocalStorage::RevertCommit(LocalStorage::CommitState &commit_state) {
 		auto table = entry.first;
 		auto storage = table_storage[table].get();
 		auto &append_state = *entry.second;
-
-		if (table->indexes.size() > 0) {
+		if (table->indexes.size() > 0 && !(table->schema == "temp")) {
 			row_t current_row = append_state.row_start;
 			// remove the data from the indexes, if there are any indexes
 			ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {

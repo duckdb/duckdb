@@ -4,19 +4,20 @@
 
 using namespace duckdb;
 
-Node::Node(ART &art, NodeType type) : prefix_length(0), count(0), type(type) {
-	this->prefix = unique_ptr<uint8_t[]>(new uint8_t[art.maxPrefix]);
+Node::Node(ART &art, NodeType type, size_t compressedPrefixSize) : prefix_length(0), count(0), type(type) {
+	this->prefix = unique_ptr<uint8_t[]>(new uint8_t[compressedPrefixSize]);
 }
 
 void Node::CopyPrefix(ART &art, Node *src, Node *dst) {
 	dst->prefix_length = src->prefix_length;
-	memcpy(dst->prefix.get(), src->prefix.get(), std::min(src->prefix_length, art.maxPrefix));
+	memcpy(dst->prefix.get(), src->prefix.get(), src->prefix_length);
 }
 
 unique_ptr<Node> *Node::GetChild(index_t pos) {
 	assert(0);
 	return nullptr;
 }
+
 index_t Node::GetMin() {
 	assert(0);
 	return 0;
@@ -24,15 +25,10 @@ index_t Node::GetMin() {
 
 uint32_t Node::PrefixMismatch(ART &art, Node *node, Key &key, uint64_t depth) {
 	uint64_t pos;
-	// TODO: node->prefix_length > node->max_prefix_length
-	if (node->prefix_length <= art.maxPrefix) {
-		for (pos = 0; pos < node->prefix_length; pos++) {
-			if (key[depth + pos] != node->prefix[pos]) {
-				return pos;
-			}
+	for (pos = 0; pos < node->prefix_length; pos++) {
+		if (key[depth + pos] != node->prefix[pos]) {
+			return pos;
 		}
-	} else {
-		throw NotImplementedException("Operation not implemented");
 	}
 	return pos;
 }
