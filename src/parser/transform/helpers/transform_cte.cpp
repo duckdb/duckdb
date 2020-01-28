@@ -68,6 +68,11 @@ void Transformer::TransformCTE(PGWithClause *de_with_clause, SelectStatement &se
 
 unique_ptr<QueryNode> Transformer::TransformRecursiveCTE(PGCommonTableExpr *cte) {
     auto stmt = (PGSelectStmt *)cte->ctequery;
+
+    if(!stmt->all) {
+        throw Exception("UNION semantics for recursive CTEs is not implemented.");
+    }
+
     unique_ptr<QueryNode> node;
     switch (stmt->op) {
         case PG_SETOP_UNION:
@@ -79,6 +84,7 @@ unique_ptr<QueryNode> Transformer::TransformRecursiveCTE(PGCommonTableExpr *cte)
             result->union_all = stmt->all;
             result->left = TransformSelectNode(stmt->larg);
             result->right = TransformSelectNode(stmt->rarg);
+
             if (!result->left || !result->right) {
                 throw Exception("Failed to transform setop children.");
             }
