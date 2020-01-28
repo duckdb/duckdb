@@ -32,6 +32,16 @@ unique_ptr<BoundQueryNode> Binder::Bind(RecursiveCTENode &statement) {
     result->right_binder->bind_context.AddGenericBinding(result->setop_index, statement.ctename, result->left->names, result->left->types);
     result->right = result->right_binder->Bind(*statement.right);
 
+    switch (result->right->type) {
+        case QueryNodeType::SELECT_NODE:
+            if(!((BoundSelectNode *) result->right.get())->aggregates.empty()) {
+                throw Exception("Aggregate functions are not allowed in a recursive query's recursive term");
+            }
+            break;
+        default:
+            break;
+    }
+
     result->names = result->left->names;
 
     // move the correlated expressions from the child binders to this binder
