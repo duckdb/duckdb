@@ -393,6 +393,7 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 
 	HashGroups(groups, addresses);
 	// FIXME: optimize for constant group index
+	groups.Normalify();
 	addresses.Normalify();
 
 	sel_t sel_vector[STANDARD_VECTOR_SIZE], empty_vector[STANDARD_VECTOR_SIZE];

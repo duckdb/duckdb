@@ -157,8 +157,7 @@ Value Vector::GetValue(uint64_t index) const {
 }
 
 void Vector::Reference(Vector &other) {
-	assert(!owned_data);
-
+	Destroy();
 	vector_type = other.vector_type;
 	count = other.count;
 	data = other.data;
@@ -306,22 +305,7 @@ void Vector::Print() {
 }
 
 void Vector::Normalify() {
-	switch(vector_type) {
-	case VectorType::FLAT_VECTOR:
-		// already a flat vector
-		return;
-	case VectorType::CONSTANT_VECTOR: {
-		auto constant_value = GetValue(0);
-		Vector new_result(type, true, false);
-		new_result.count = count;
-		new_result.sel_vector = sel_vector;
-		VectorOperations::Set(new_result, constant_value);
-		new_result.Move(*this);
-		break;
-	}
-	default:
-		throw NotImplementedException("FIXME: unimplemented type for normalify");
-	}
+	VectorOperations::Flatten(*this);
 }
 
 void Vector::Verify() {

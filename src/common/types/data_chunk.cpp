@@ -88,6 +88,7 @@ void DataChunk::Move(DataChunk &other) {
 }
 
 void DataChunk::Flatten() {
+	Normalify();
 	if (!sel_vector) {
 		return;
 	}
@@ -96,6 +97,12 @@ void DataChunk::Flatten() {
 		data[i].Flatten();
 	}
 	sel_vector = nullptr;
+}
+
+void DataChunk::Normalify() {
+	for (index_t i = 0; i < column_count; i++) {
+		data[i].Normalify();
+	}
 }
 
 void DataChunk::Append(DataChunk &other) {

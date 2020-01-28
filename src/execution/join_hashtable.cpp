@@ -6,6 +6,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/static_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -82,7 +83,13 @@ JoinHashTable::~JoinHashTable() {
 
 void JoinHashTable::ApplyBitmask(Vector &hashes) {
 	auto indices = (uint64_t *)hashes.GetData();
-	VectorOperations::Exec(hashes, [&](index_t i, index_t k) { indices[i] = indices[i] & bitmask; });
+	if (hashes.vector_type == VectorType::CONSTANT_VECTOR) {
+		assert(!hashes.nullmask[0]);
+		indices[0] = indices[0] & bitmask;
+	} else {
+		hashes.Normalify();
+		VectorOperations::Exec(hashes, [&](index_t i, index_t k) { indices[i] = indices[i] & bitmask; });
+	}
 }
 
 void JoinHashTable::Hash(DataChunk &keys, Vector &hashes) {
@@ -142,6 +149,9 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	// move strings to the string heap
 	keys.MoveStringsToHeap(string_heap);
 	payload.MoveStringsToHeap(string_heap);
+
+	keys.Normalify();
+	payload.Normalify();
 
 	// for any columns for which null values are equal, fill the NullMask
 	assert(keys.column_count == null_values_are_equal.size());
@@ -339,6 +349,9 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 
 	// use bitmask to get index in array
 	ApplyBitmask(hashes);
+
+	// FIXME: optimize for constant key vector
+	hashes.Normalify();
 
 	// now create the initial pointers from the hashes
 	auto ptrs = (data_ptr_t *)ss->pointers.GetData();

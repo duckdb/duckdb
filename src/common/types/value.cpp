@@ -330,7 +330,14 @@ string Value::ToString(SQLType sql_type) const {
 }
 
 string Value::ToString() const {
-	return ToString(SQLTypeFromInternalType(type));
+	switch(type) {
+	case TypeId::POINTER:
+		return to_string(value_.pointer);
+	case TypeId::HASH:
+		return to_string(value_.hash);
+	default:
+		return ToString(SQLTypeFromInternalType(type));
+	}
 }
 
 //===--------------------------------------------------------------------===//
