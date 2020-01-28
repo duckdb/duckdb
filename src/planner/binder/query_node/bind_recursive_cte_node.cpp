@@ -15,8 +15,8 @@ using namespace std;
 unique_ptr<BoundQueryNode> Binder::Bind(RecursiveCTENode &statement) {
     auto result = make_unique<BoundRecursiveCTENode>();
 
-    // first recursively visit the set operations
-    // both the left and right sides have an independent BindContext and Binder
+    // first recursively visit the recursive CTE operations
+    // the left side is visited first and is added to the BindContext of the right side
     assert(statement.left);
     assert(statement.right);
 
@@ -26,12 +26,14 @@ unique_ptr<BoundQueryNode> Binder::Bind(RecursiveCTENode &statement) {
     result->left_binder = make_unique<Binder>(context, this);
     result->left = result->left_binder->Bind(*statement.left);
 
+    // This allows the right side to reference the CTE recursively
     bind_context.AddGenericBinding(result->setop_index, statement.ctename, result->left->names, result->left->types);
 
     result->right_binder = make_unique<Binder>(context, this);
     result->right_binder->bind_context.AddGenericBinding(result->setop_index, statement.ctename, result->left->names, result->left->types);
     result->right = result->right_binder->Bind(*statement.right);
 
+    // Check if there are aggregates present in the recursive term
     switch (result->right->type) {
         case QueryNodeType::SELECT_NODE:
             if(!((BoundSelectNode *) result->right.get())->aggregates.empty()) {
@@ -54,7 +56,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(RecursiveCTENode &statement) {
                         "same number of result columns");
     }
 
-    // figure out the types of the setop result by picking the max of both
+    // figure out the types of the recursive CTE result by picking the max of both
     for (index_t i = 0; i < result->left->types.size(); i++) {
         auto result_type = MaxSQLType(result->left->types[i], result->right->types[i]);
         result->types.push_back(result_type);

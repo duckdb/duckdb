@@ -16,15 +16,20 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &expr) {
 	// check if the table name refers to a CTE
 	auto cte = FindCTE(expr.table_name);
 	if (cte) {
+	    // Check if there is a CTE binding in the BindContext
         auto ctebinding = bind_context.GetCTEBinding(expr.table_name);
         if(ctebinding == nullptr) {
+            // Move CTE to subquery and bind recursively
             SubqueryRef subquery(move(cte));
             subquery.alias = expr.alias.empty() ? expr.table_name : expr.alias;
             return Bind(subquery);
         } else {
+            // There is a CTE binding in the BindContext.
+            // This can only be the case if there is a recursive CTE present.
             auto result = make_unique<BoundCTERef>(ctebinding->index);
             auto b = (GenericBinding *)ctebinding;
 
+            // Reference to CTE might have an alias.
             if(!expr.alias.empty()) {
                 bind_context.AddGenericBinding(ctebinding->index, expr.alias, b->names, b->types);
             }
