@@ -28,7 +28,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op
 
     auto chunk_scan = make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::CHUNK_SCAN);
 
-    auto cte = rec_ctes.find(op.table_index);
+    auto cte = rec_ctes.find(op.cte_index);
     chunk_scan->collection = cte->second.get();
     return move(chunk_scan);
 }

@@ -13,5 +13,5 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundCTERef &ref) {
         types.push_back(GetInternalType(expr.id));
     }
 
-    return make_unique<LogicalCTERef>(index, types, ref.bound_columns);
+    return make_unique<LogicalCTERef>(index, ref.cte_index, types, ref.bound_columns);
 }

@@ -49,7 +49,12 @@ public:
 	//! Adds a base table with the given alias to the BindContext.
 	void AddGenericBinding(index_t index, const string &alias, vector<string> names, vector<SQLType> types);
 
-	unordered_set<string> hidden_columns;
+    //! Adds a base table with the given alias to the CTE BindContext.
+    //! We need this to correctly bind recursive CTEs with multiple references.
+    void AddCTEBinding(index_t index, const string &alias, vector<string> names, vector<SQLType> types);
+
+
+    unordered_set<string> hidden_columns;
 
 private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);
@@ -58,5 +63,8 @@ private:
 	unordered_map<string, unique_ptr<Binding>> bindings;
 	//! The list of bindings in insertion order
 	vector<std::pair<string, Binding *>> bindings_list;
+
+    //! The set of CTE bindings
+    unordered_map<string, unique_ptr<Binding>> cte_bindings;
 };
 } // namespace duckdb

@@ -26,13 +26,11 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &expr) {
         } else {
             // There is a CTE binding in the BindContext.
             // This can only be the case if there is a recursive CTE present.
-            auto result = make_unique<BoundCTERef>(ctebinding->index);
+            auto index = GenerateTableIndex();
+            auto result = make_unique<BoundCTERef>(index, ctebinding->index);
             auto b = (GenericBinding *)ctebinding;
 
-            // Reference to CTE might have an alias.
-            if(!expr.alias.empty()) {
-                bind_context.AddGenericBinding(ctebinding->index, expr.alias, b->names, b->types);
-            }
+            bind_context.AddGenericBinding(index, expr.alias.empty() ? expr.table_name : expr.alias, b->names, b->types);
 
             result->types = b->types;
             result->bound_columns = b->names;

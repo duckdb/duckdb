@@ -30,7 +30,9 @@ unique_ptr<BoundQueryNode> Binder::Bind(RecursiveCTENode &statement) {
     bind_context.AddGenericBinding(result->setop_index, statement.ctename, result->left->names, result->left->types);
 
     result->right_binder = make_unique<Binder>(context, this);
-    result->right_binder->bind_context.AddGenericBinding(result->setop_index, statement.ctename, result->left->names, result->left->types);
+
+    // Add bindings of left side to temporary CTE bindings context
+    result->right_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, result->left->names, result->left->types);
     result->right = result->right_binder->Bind(*statement.right);
 
     // Check if there are aggregates present in the recursive term
