@@ -4,7 +4,6 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/types/static_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 
@@ -595,7 +594,7 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 	// we handle the entire chunk in one call to Next().
 	// for every pointer, we keep chasing pointers and doing comparisons.
 	// this results in a boolean array indicating whether or not the tuple has a match
-	StaticVector<bool> comparison_result;
+	Vector comparison_result(TypeId::BOOL);
 	while (pointers.count > 0) {
 		// resolve the predicates for the current set of pointers
 		ResolvePredicates(keys, comparison_result);
@@ -795,7 +794,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &
 	// this join is similar to the semi join except that
 	// (1) we actually return data from the RHS and
 	// (2) we return NULL for that data if there is no match
-	StaticVector<bool> comparison_result;
+	Vector comparison_result(TypeId::BOOL);
 
 	auto build_pointers = (data_ptr_t *)build_pointer_vector.GetData();
 	index_t result_count = 0;

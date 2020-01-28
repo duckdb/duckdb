@@ -2,7 +2,6 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/types/static_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
@@ -118,8 +117,8 @@ void SuperLargeHashTable::Resize(index_t size) {
 
 			groups.Verify();
 			assert(groups.size() == entry);
-			StaticPointerVector new_addresses;
-			StaticVector<bool> new_group_dummy;
+			Vector new_addresses(TypeId::POINTER);
+			Vector new_group_dummy(TypeId::BOOL);
 			new_table->FindOrCreateGroups(groups, new_addresses, new_group_dummy);
 
 			// NB: both address vectors already point to the payload start
@@ -156,8 +155,8 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		return;
 	}
 
-	StaticPointerVector addresses;
-	StaticVector<bool> new_group_dummy;
+	Vector addresses(TypeId::POINTER);
+	Vector new_group_dummy(TypeId::BOOL);
 
 	FindOrCreateGroups(groups, addresses, new_group_dummy);
 
@@ -185,8 +184,8 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			probe_chunk.sel_vector = groups.sel_vector;
 			probe_chunk.Verify();
 
-			StaticPointerVector dummy_addresses;
-			StaticVector<bool> probe_result;
+			Vector dummy_addresses(TypeId::POINTER);
+			Vector probe_result(TypeId::BOOL);
 			probe_result.count = payload.data[payload_idx].count;
 			// this is the actual meat, find out which groups plus payload
 			// value have not been seen yet
@@ -242,8 +241,8 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 	}
 	// find the groups associated with the addresses
 	// FIXME: this should not use the FindOrCreateGroups, creating them is unnecessary
-	StaticPointerVector addresses;
-	StaticVector<bool> new_group_dummy;
+	Vector addresses(TypeId::POINTER);
+	Vector new_group_dummy(TypeId::BOOL);
 	FindOrCreateGroups(groups, addresses, new_group_dummy);
 	// now fetch the aggregates
 	for (index_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
@@ -348,7 +347,7 @@ static void CompareGroupVector(data_ptr_t group_pointers[], Vector &groups, sel_
 
 void SuperLargeHashTable::HashGroups(DataChunk &groups, Vector &addresses) {
 	// create a set of hashes for the groups
-	StaticVector<uint64_t> hashes;
+	Vector hashes(TypeId::HASH);
 	groups.Hash(hashes);
 
 	// now compute the entry in the table based on the hash using a modulo
