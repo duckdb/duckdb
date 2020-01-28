@@ -63,7 +63,7 @@ static void age_function(DataChunk &input, ExpressionState &state, Vector &resul
 	string output_buffer;
 	BinaryExecutor::Execute<timestamp_t, timestamp_t, const char *, true>(
 	    input1, input2, result, [&](timestamp_t input1, timestamp_t input2) {
-		    return result.string_heap.AddString(age_scalar_function(input1, input2, output_buffer));
+		    return result.AddString(age_scalar_function(input1, input2, output_buffer));
 	    });
 }
 

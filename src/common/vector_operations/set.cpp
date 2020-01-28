@@ -64,7 +64,7 @@ void VectorOperations::Set(Vector &result, Value value) {
 			templated_set_loop<uintptr_t>(result, value.value_.pointer);
 			break;
 		case TypeId::VARCHAR: {
-			auto str = result.string_heap.AddString(value.str_value);
+			auto str = result.AddString(value.str_value);
 			auto dataptr = (const char **)result.GetData();
 			VectorOperations::Exec(result.sel_vector, result.count, [&](index_t i, index_t k) { dataptr[i] = str; });
 			break;
@@ -125,69 +125,5 @@ void VectorOperations::FillNullMask(Vector &v) {
 		break;
 	default:
 		throw NotImplementedException("Type not implemented for null mask");
-	}
-}
-
-
-//===--------------------------------------------------------------------===//
-// Flatten the vector
-//===--------------------------------------------------------------------===//
-template<class T>
-static void flatten_constant_vector_loop(Vector &input) {
-	Vector new_result(input.type, true, false);
-	new_result.count = input.count;
-	new_result.sel_vector = input.sel_vector;
-	if (input.nullmask[0]) {
-		new_result.nullmask.set();
-	} else {
-		auto data = (T*) input.GetData();
-		templated_set_loop<T>(new_result, data[0]);
-		input.string_heap.Move(new_result.string_heap);
-	}
-	new_result.Move(input);
-}
-
-void VectorOperations::Flatten(Vector &input) {
-	switch(input.vector_type) {
-	case VectorType::FLAT_VECTOR:
-		// already a flat vector
-		break;
-	case VectorType::CONSTANT_VECTOR: {
-		switch(input.type) {
-		case TypeId::BOOL:
-		case TypeId::INT8:
-			flatten_constant_vector_loop<int8_t>(input);
-			break;
-		case TypeId::INT16:
-			flatten_constant_vector_loop<int16_t>(input);
-			break;
-		case TypeId::INT32:
-			flatten_constant_vector_loop<int32_t>(input);
-			break;
-		case TypeId::INT64:
-			flatten_constant_vector_loop<int64_t>(input);
-			break;
-		case TypeId::FLOAT:
-			flatten_constant_vector_loop<float>(input);
-			break;
-		case TypeId::DOUBLE:
-			flatten_constant_vector_loop<double>(input);
-			break;
-		case TypeId::HASH:
-			flatten_constant_vector_loop<uint64_t>(input);
-			break;
-		case TypeId::POINTER:
-			flatten_constant_vector_loop<uintptr_t>(input);
-			break;
-		case TypeId::VARCHAR:
-			flatten_constant_vector_loop<const char *>(input);
-			break;
-		default:
-			throw NotImplementedException("Unimplemented type for VectorOperations::Flatten");
-		}
-		break;
-	}
-	default:
-		throw NotImplementedException("FIXME: unimplemented type for normalify");
 	}
 }

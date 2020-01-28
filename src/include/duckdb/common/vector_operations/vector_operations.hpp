@@ -194,8 +194,6 @@ struct VectorOperations {
 	static void Set(Vector &result, Value value);
 	//! Fill the null mask of a value, setting every NULL value to NullValue<T>()
 	static void FillNullMask(Vector &v);
-	//! Flatten the vector, removing any compression and turning it into a FLAT_VECTOR
-	static void Flatten(Vector &v);
 	//===--------------------------------------------------------------------===//
 	// Exec
 	//===--------------------------------------------------------------------===//

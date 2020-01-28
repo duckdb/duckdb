@@ -50,7 +50,7 @@ void DataChunk::Reset() {
 		data[i].count = 0;
 		data[i].sel_vector = nullptr;
 		data[i].buffer.reset();
-		data[i].string_heap.Destroy();
+		data[i].auxiliary.reset();
 		data[i].nullmask.reset();
 		ptr += GetTypeIdSize(data[i].type) * STANDARD_VECTOR_SIZE;
 	}
@@ -194,7 +194,7 @@ void DataChunk::Deserialize(Deserializer &source) {
 					strings[j] = nullptr;
 					data[i].nullmask[j] = true;
 				} else {
-					strings[j] = data[i].string_heap.AddString(str);
+					strings[j] = data[i].AddString(str);
 				}
 			}
 		}

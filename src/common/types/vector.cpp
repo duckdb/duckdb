@@ -38,12 +38,7 @@ Vector::Vector()
     : vector_type(VectorType::FLAT_VECTOR), type(TypeId::INVALID), count(0), sel_vector(nullptr), data(nullptr) {
 }
 
-Vector::~Vector() {
-	Destroy();
-}
-
 void Vector::Reference(Value &value) {
-	Destroy();
 	vector_type = VectorType::CONSTANT_VECTOR;
 	sel_vector = nullptr;
 	type = value.type;
@@ -57,21 +52,12 @@ void Vector::Initialize(TypeId new_type, bool zero_data) {
 	if (new_type != TypeId::INVALID) {
 		type = new_type;
 	}
-	string_heap.Destroy();
+	auxiliary.reset();
 	buffer = VectorBuffer::CreateStandardVector(type);
 	data = buffer->GetData();
 	if (zero_data) {
 		memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
 	}
-	nullmask.reset();
-}
-
-void Vector::Destroy() {
-	buffer.reset();
-	string_heap.Destroy();
-	data = nullptr;
-	count = 0;
-	sel_vector = nullptr;
 	nullmask.reset();
 }
 
@@ -112,7 +98,7 @@ void Vector::SetValue(uint64_t index_, Value val) {
 		if (newVal.is_null) {
 			((const char **)data)[index] = nullptr;
 		} else {
-			((const char **)data)[index] = string_heap.AddString(newVal.str_value);
+			((const char **)data)[index] = AddString(newVal.str_value);
 		}
 		break;
 	}
@@ -165,6 +151,7 @@ void Vector::Reference(Vector &other) {
 	vector_type = other.vector_type;
 	count = other.count;
 	buffer = other.buffer;
+	auxiliary = other.auxiliary;
 	data = other.data;
 	sel_vector = other.sel_vector;
 	type = other.type;
@@ -172,18 +159,7 @@ void Vector::Reference(Vector &other) {
 }
 
 void Vector::Move(Vector &other) {
-	other.Destroy();
-
-	other.vector_type = vector_type;
-	other.buffer = buffer;
-	string_heap.Move(other.string_heap);
-	other.count = count;
-	other.data = data;
-	other.sel_vector = sel_vector;
-	other.type = type;
-	other.nullmask = nullmask;
-
-	Destroy();
+	other.Reference(*this);
 }
 
 void Vector::Flatten() {
@@ -220,7 +196,7 @@ void Vector::Copy(Vector &other, uint64_t offset) {
 				    other.nullmask[k - offset] = true;
 				    target[k - offset] = nullptr;
 			    } else {
-				    target[k - offset] = other.string_heap.AddString(source[i]);
+				    target[k - offset] = other.AddString(source[i]);
 			    }
 		    },
 		    offset);
@@ -265,7 +241,7 @@ void Vector::Append(Vector &other) {
 			if (other.nullmask[i]) {
 				target[old_count + k] = nullptr;
 			} else {
-				target[old_count + k] = string_heap.AddString(source[i]);
+				target[old_count + k] = AddString(source[i]);
 			}
 		});
 	} else {
@@ -309,8 +285,70 @@ void Vector::Print() {
 	Printer::Print(ToString());
 }
 
+template<class T>
+static void flatten_constant_vector_loop(data_ptr_t data, data_ptr_t old_data, index_t count, sel_t *sel_vector) {
+	auto constant = *((T*) old_data);
+	auto output = (T*) data;
+	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
+		output[i] = constant;
+	});
+}
+
 void Vector::Normalify() {
-	VectorOperations::Flatten(*this);
+	switch(vector_type) {
+	case VectorType::FLAT_VECTOR:
+		// already a flat vector
+		break;
+	case VectorType::CONSTANT_VECTOR: {
+		vector_type = VectorType::FLAT_VECTOR;
+		// allocate a new buffer for the vector
+		auto old_buffer = move(buffer);
+		auto old_data = data;
+		buffer = VectorBuffer::CreateStandardVector(type);
+		data = buffer->GetData();
+		if (nullmask[0]) {
+			// constant NULL, set nullmask
+			nullmask.set();
+			return;
+		}
+		// non-null constant: have to repeat the constant
+		switch(type) {
+		case TypeId::BOOL:
+		case TypeId::INT8:
+			flatten_constant_vector_loop<int8_t>(data, old_data, count, sel_vector);
+			break;
+		case TypeId::INT16:
+			flatten_constant_vector_loop<int16_t>(data, old_data, count, sel_vector);
+			break;
+		case TypeId::INT32:
+			flatten_constant_vector_loop<int32_t>(data, old_data, count, sel_vector);
+			break;
+		case TypeId::INT64:
+			flatten_constant_vector_loop<int64_t>(data, old_data, count, sel_vector);
+			break;
+		case TypeId::FLOAT:
+			flatten_constant_vector_loop<float>(data, old_data, count, sel_vector);
+			break;
+		case TypeId::DOUBLE:
+			flatten_constant_vector_loop<double>(data, old_data, count, sel_vector);
+			break;
+		case TypeId::HASH:
+			flatten_constant_vector_loop<uint64_t>(data, old_data, count, sel_vector);
+			break;
+		case TypeId::POINTER:
+			flatten_constant_vector_loop<uintptr_t>(data, old_data, count, sel_vector);
+			break;
+		case TypeId::VARCHAR:
+			flatten_constant_vector_loop<const char *>(data, old_data, count, sel_vector);
+			break;
+		default:
+			throw NotImplementedException("Unimplemented type for VectorOperations::Flatten");
+		}
+		break;
+	}
+	default:
+		throw NotImplementedException("FIXME: unimplemented type for normalify");
+	}
 }
 
 void Vector::Verify() {
@@ -339,4 +377,34 @@ void Vector::Verify() {
 		}
 	}
 #endif
+}
+
+const char *Vector::AddString(const char *data, index_t len) {
+	if (!auxiliary) {
+		auxiliary = make_buffer<VectorStringBuffer>();
+	}
+	assert(auxiliary->type == VectorBufferType::STRING_BUFFER);
+	auto &string_buffer = (VectorStringBuffer&) *auxiliary;
+	return string_buffer.AddString(data, len);
+}
+
+const char *Vector::AddString(const char *data) {
+	return AddString(data, strlen(data));
+}
+
+const char *Vector::AddString(const string &data) {
+	return AddString(data.c_str(), data.size());
+}
+
+void Vector::AddHeapReference(Vector &other) {
+	if (!other.auxiliary) {
+		return;
+	}
+	if (!auxiliary) {
+		auxiliary = make_buffer<VectorStringBuffer>();
+	}
+	assert(auxiliary->type == VectorBufferType::STRING_BUFFER);
+	assert(other.auxiliary->type == VectorBufferType::STRING_BUFFER);
+	auto &string_buffer = (VectorStringBuffer&) *auxiliary;
+	string_buffer.AddHeapReference(other.auxiliary);
 }

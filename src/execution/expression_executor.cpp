@@ -44,7 +44,6 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 	result.Reset();
 	for (index_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(i, result.data[i]);
-		result.heap.MergeHeap(result.data[i].string_heap);
 	}
 	result.sel_vector = result.data[0].sel_vector;
 	result.Verify();

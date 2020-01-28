@@ -121,8 +121,8 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, sel_t tside[], in
 		break;
 	case TypeId::VARCHAR:
 		case_loop<const char *>(res_true, res_false, result, tside, tcount, fside, fcount);
-		result.string_heap.MergeHeap(res_true.string_heap);
-		result.string_heap.MergeHeap(res_false.string_heap);
+		result.AddHeapReference(res_true);
+		result.AddHeapReference(res_false);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for case expression");

@@ -34,12 +34,12 @@ void string_agg_update(Vector inputs[], index_t input_count, Vector &state) {
 		auto str = str_data[i];
 		auto sep = sep_data[i];
 		if (IsNullValue(*state_ptr)) {
-			*state_ptr = strs.string_heap.AddString(str);
+			*state_ptr = strs.AddString(str);
 		} else {
 			buffer = *state_ptr;
 			buffer += sep;
 			buffer += str;
-			*state_ptr = strs.string_heap.AddString(buffer.c_str());
+			*state_ptr = strs.AddString(buffer.c_str());
 		}
 	});
 }

@@ -57,7 +57,7 @@ template <str_function CASE_FUNCTION> static void caseconvert_function(Vector &i
 		assert(strlen(input_data[i]) < current_len);
 		CASE_FUNCTION(input_data[i], output.get());
 
-		result_data[i] = result.string_heap.AddString(output.get());
+		result_data[i] = result.AddString(output.get());
 	});
 }
 

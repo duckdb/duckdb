@@ -10,7 +10,6 @@
 
 #include "duckdb/common/bitset.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
@@ -67,7 +66,6 @@ public:
 	    If zero_data is true, the allocated data will be zero-initialized.
 	*/
 	Vector(TypeId type, bool create_data, bool zero_data);
-	~Vector();
 	// implicit copying of Vectors is not allowed
 	Vector(const Vector &) = delete;
 
@@ -84,10 +82,6 @@ public:
 public:
 	//! Create a vector that references the specified value.
 	void Reference(Value &value);
-
-	//! Destroys the vector, deleting any owned data and resetting it to an
-	//! empty vector of the specified type.
-	void Destroy();
 
 	//! Returns the [index] element of the Vector as a Value.
 	Value GetValue(index_t index) const;
@@ -123,23 +117,32 @@ public:
 	string ToString() const;
 	void Print();
 
-	//! Turn the vector into a flat vector
+	//! Flatten the vector, removing any compression and turning it into a FLAT_VECTOR
 	void Normalify();
 
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
 	void Verify();
 
-	//! The stringheap of the vector
-	StringHeap string_heap;
-
 	data_ptr_t GetData() {
 		return data;
 	}
+
+	//! Add a string to the string heap of the vector (auxiliary data)
+	const char *AddString(const char *data, index_t len);
+	//! Add a string to the string heap of the vector (auxiliary data)
+	const char *AddString(const char *data);
+	//! Add a string to the string heap of the vector (auxiliary data)
+	const char *AddString(const string &data);
+
+	//! Add a reference from this vector to the string heap of the provided vector
+	void AddHeapReference(Vector &other);
 protected:
 	//! A pointer to the data.
 	data_ptr_t data;
 	//! The main buffer holding the data of the vector
 	buffer_ptr<VectorBuffer> buffer;
+	//! The secondary buffer holding auxiliary data of the vector, for example, a string vector uses this to store strings
+	buffer_ptr<VectorBuffer> auxiliary;
 };
 } // namespace duckdb

@@ -58,14 +58,14 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 	// now write the final result to the result vector and add the strings to the heap
 	auto result_data = (const char **)result.GetData();
 	VectorOperations::Exec(result, [&](index_t i, index_t k) {
-		result_data[i] = result.string_heap.AddString(results[k]);
+		result_data[i] = result.AddString(results[k]);
 	});
 }
 
 static void concat_operator(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<const char*, const char*, const char*, true>(args.data[0], args.data[1], result, [&](const char *a, const char *b) {
 		string concat = string(a) + b;
-		return result.string_heap.AddString(concat);
+		return result.AddString(concat);
 	});
 }
 
@@ -191,7 +191,7 @@ static void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &
 	// now write the final result to the result vector and add the strings to the heap
 	auto result_data = (const char **)result.GetData();
 	VectorOperations::Exec(result, [&](index_t i, index_t k) {
-		result_data[i] = result.string_heap.AddString(results[k]);
+		result_data[i] = result.AddString(results[k]);
 	});
 }
 
