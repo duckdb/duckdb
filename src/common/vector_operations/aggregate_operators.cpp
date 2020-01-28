@@ -8,7 +8,6 @@
 
 #include "duckdb/common/operator/constant_operators.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
-#include "duckdb/common/types/static_vector.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/fold_loops.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"

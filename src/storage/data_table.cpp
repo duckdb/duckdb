@@ -4,7 +4,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/static_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/constraints/list.hpp"
@@ -374,7 +373,7 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 		return true;
 	}
 	// first generate the vector of row identifiers
-	StaticVector<row_t> row_identifiers;
+	Vector row_identifiers(ROW_TYPE);
 	row_identifiers.sel_vector = chunk.sel_vector;
 	row_identifiers.count = chunk.size();
 	VectorOperations::GenerateSequence(row_identifiers, row_start);
@@ -403,7 +402,7 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row
 		return;
 	}
 	// first generate the vector of row identifiers
-	StaticVector<row_t> row_identifiers;
+	Vector row_identifiers(ROW_TYPE);
 	row_identifiers.sel_vector = chunk.sel_vector;
 	row_identifiers.count = chunk.size();
 	VectorOperations::GenerateSequence(row_identifiers, row_start);

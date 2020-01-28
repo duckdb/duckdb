@@ -19,6 +19,10 @@ Vector::Vector(TypeId type, bool create_data, bool zero_data)
 	}
 }
 
+Vector::Vector(TypeId type) : Vector(type, true, false) {
+
+}
+
 Vector::Vector(TypeId type, data_ptr_t dataptr)
     : vector_type(VectorType::FLAT_VECTOR), type(type), count(0), sel_vector(nullptr), data(dataptr) {
 	if (dataptr && type == TypeId::INVALID) {
@@ -43,8 +47,8 @@ void Vector::Reference(Value &value) {
 	vector_type = VectorType::CONSTANT_VECTOR;
 	sel_vector = nullptr;
 	type = value.type;
-	owned_data = unique_ptr<data_t[]>(new data_t[GetTypeIdSize(type)]);
-	data = owned_data.get();
+	buffer = VectorBuffer::CreateConstantVector(type);
+	data = buffer->GetData();
 	count = 1;
 	SetValue(0, value);
 }
@@ -54,8 +58,8 @@ void Vector::Initialize(TypeId new_type, bool zero_data) {
 		type = new_type;
 	}
 	string_heap.Destroy();
-	owned_data = unique_ptr<data_t[]>(new data_t[STANDARD_VECTOR_SIZE * GetTypeIdSize(type)]);
-	data = owned_data.get();
+	buffer = VectorBuffer::CreateStandardVector(type);
+	data = buffer->GetData();
 	if (zero_data) {
 		memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
 	}
@@ -63,7 +67,7 @@ void Vector::Initialize(TypeId new_type, bool zero_data) {
 }
 
 void Vector::Destroy() {
-	owned_data.reset();
+	buffer.reset();
 	string_heap.Destroy();
 	data = nullptr;
 	count = 0;
@@ -158,9 +162,9 @@ Value Vector::GetValue(uint64_t index) const {
 }
 
 void Vector::Reference(Vector &other) {
-	Destroy();
 	vector_type = other.vector_type;
 	count = other.count;
+	buffer = other.buffer;
 	data = other.data;
 	sel_vector = other.sel_vector;
 	type = other.type;
@@ -171,7 +175,7 @@ void Vector::Move(Vector &other) {
 	other.Destroy();
 
 	other.vector_type = vector_type;
-	other.owned_data = move(owned_data);
+	other.buffer = buffer;
 	string_heap.Move(other.string_heap);
 	other.count = count;
 	other.data = data;

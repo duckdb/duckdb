@@ -49,7 +49,7 @@ void DataChunk::Reset() {
 		data[i].data = ptr;
 		data[i].count = 0;
 		data[i].sel_vector = nullptr;
-		data[i].owned_data = nullptr;
+		data[i].buffer.reset();
 		data[i].string_heap.Destroy();
 		data[i].nullmask.reset();
 		ptr += GetTypeIdSize(data[i].type) * STANDARD_VECTOR_SIZE;
@@ -208,20 +208,17 @@ void DataChunk::MoveStringsToHeap(StringHeap &heap) {
 		if (data[c].type == TypeId::VARCHAR) {
 			// move strings of this chunk to the specified heap
 			auto source_strings = (const char **)data[c].GetData();
+			auto old_buffer = move(data[c].buffer);
 			if (data[c].vector_type == VectorType::CONSTANT_VECTOR) {
-				if (!data[c].owned_data) {
-					data[c].owned_data = unique_ptr<data_t[]>(new data_t[sizeof(data_ptr_t)]);
-					data[c].data = data[c].owned_data.get();
-				}
+				data[c].buffer = VectorBuffer::CreateConstantVector(TypeId::VARCHAR);
+				data[c].data = data[c].buffer->GetData();
 				auto target_strings = (const char **)data[c].GetData();
 				if (!data[c].nullmask[0]) {
 					target_strings[0] = heap.AddString(source_strings[0]);
 				}
 			} else {
-				if (!data[c].owned_data) {
-					data[c].owned_data = unique_ptr<data_t[]>(new data_t[STANDARD_VECTOR_SIZE * sizeof(data_ptr_t)]);
-					data[c].data = data[c].owned_data.get();
-				}
+				data[c].buffer = VectorBuffer::CreateStandardVector(TypeId::VARCHAR);
+				data[c].data = data[c].buffer->GetData();
 				auto target_strings = (const char **)data[c].GetData();
 				VectorOperations::ExecType<const char *>(data[c], [&](const char *str, index_t i, index_t k) {
 					if (!data[c].nullmask[i]) {

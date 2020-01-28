@@ -1,6 +1,5 @@
 #include "duckdb/execution/expression_executor.hpp"
 
-#include "duckdb/common/types/static_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;

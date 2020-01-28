@@ -108,7 +108,7 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 		index_t base_id = MAX_ROW_ID + storage->collection.count;
 
 		// first generate the vector of row identifiers
-		StaticVector<row_t> row_identifiers;
+		Vector row_identifiers(ROW_TYPE);
 		row_identifiers.sel_vector = chunk.sel_vector;
 		row_identifiers.count = chunk.size();
 		VectorOperations::GenerateSequence(row_identifiers, base_id);

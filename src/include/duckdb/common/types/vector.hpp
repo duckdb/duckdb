@@ -13,6 +13,7 @@
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/types/vector_buffer.hpp"
 
 namespace duckdb {
 //! Type used for nullmasks
@@ -55,6 +56,8 @@ public:
 	Vector();
 	//! Create a vector of size one holding the passed on value
 	Vector(Value value);
+	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
+	Vector(TypeId type);
 	//! Create a non-owning vector that references the specified data
 	Vector(TypeId type, data_ptr_t dataptr);
 	//! Create an owning vector that holds at most STANDARD_VECTOR_SIZE entries.
@@ -129,8 +132,6 @@ public:
 
 	//! The stringheap of the vector
 	StringHeap string_heap;
-	//! If the vector owns data, this is the unique_ptr holds the actual data.
-	unique_ptr<data_t[]> owned_data;
 
 	data_ptr_t GetData() {
 		return data;
@@ -138,5 +139,7 @@ public:
 protected:
 	//! A pointer to the data.
 	data_ptr_t data;
+	//! The main buffer holding the data of the vector
+	buffer_ptr<VectorBuffer> buffer;
 };
 } // namespace duckdb
