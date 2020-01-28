@@ -68,8 +68,8 @@ string QueryResult::HeaderToString() {
 		result += name + "\t";
 	}
 	result += "\n";
-	for (auto &type : types) {
-		result += TypeIdToString(type) + "\t";
+	for (auto &type : sql_types) {
+		result += SQLTypeToString(type) + "\t";
 	}
 	result += "\n";
 	return result;

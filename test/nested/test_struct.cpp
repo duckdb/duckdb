@@ -57,19 +57,20 @@ void my_scan_function(ClientContext &context, DataChunk &input, DataChunk &outpu
 
 	for (size_t row = 0; row < this_rows; row++) {
 		// need to construct struct stuff here
-
-		cv1_data[row] = 1;
-		cv2_data[row] = 2;
+		cv1_data[row] = row;
+		cv2_data[row] = row;
+		output.data[1].nullmask[row] = row % 2 == 0;
 	}
 
 	cv1->count = this_rows;
 	cv2->count = this_rows;
+	cv1->vector_type = VectorType::FLAT_VECTOR;
+	cv2->vector_type = VectorType::FLAT_VECTOR;
 
 	// TODO we need to verify the schema here
 	v.children.push_back(pair<string, unique_ptr<Vector>>("first", move(cv1)));
 	v.children.push_back(pair<string, unique_ptr<Vector>>("second", move(cv2)));
 
-	output.data[1].nullmask.none();
 	output.data[1].count = this_rows;
 }
 
@@ -103,6 +104,7 @@ unique_ptr<BoundFunctionExpression> resolve_function(Connection &con, string nam
 TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.DisableProfiling();
 
 	MyScanFunction scan_fun;
 	CreateTableFunctionInfo info(scan_fun);
@@ -111,57 +113,10 @@ TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 	auto &trans = con.context->transaction.ActiveTransaction();
 	con.context->catalog.CreateTableFunction(trans, &info);
 
-	auto result = con.Query("SELECT * FROM my_scan() where some_int > 7");
+	auto result = con.Query("SELECT some_int, some_struct FROM my_scan() WHERE some_int > 7 LIMIT 10 ");
 	result->Print();
 
-
-
-	vector<TypeId> types{TypeId::INT32, TypeId::STRUCT};
-
-	// TABLE_FUNCTION my_scan
-	vector<unique_ptr<ParsedExpression>> children; // empty
-	FunctionExpression fun_expr(DEFAULT_SCHEMA, "my_scan", children);
-	auto scan_function_catalog_entry = con.context->catalog.GetTableFunction(trans, &fun_expr);
-	vector<unique_ptr<Expression>> parameters; // empty
-	auto scan_function = make_unique<PhysicalTableFunction>(types, scan_function_catalog_entry, move(parameters));
-
-	//  FILTER[some_int<=7 some_int>=3]
-	vector<unique_ptr<Expression>> filter_expressions;
-
-	auto lte_expr = make_unique_base<Expression, BoundComparisonExpression>(
-	    ExpressionType::COMPARE_LESSTHANOREQUALTO,
-	    make_unique_base<Expression, BoundReferenceExpression>(TypeId::INT32, 0),
-	    make_unique_base<Expression, BoundConstantExpression>(Value::INTEGER(7)));
-
-	auto gte_expr = make_unique_base<Expression, BoundComparisonExpression>(
-	    ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-	    make_unique_base<Expression, BoundReferenceExpression>(TypeId::INT32, 0),
-	    make_unique_base<Expression, BoundConstantExpression>(Value::INTEGER(3)));
-
-	filter_expressions.push_back(move(lte_expr));
-	filter_expressions.push_back(move(gte_expr));
-
-	auto filter = make_unique<PhysicalFilter>(types, move(filter_expressions));
-		filter->children.push_back(move(scan_function));
-
-	// PROJECTION[some_int, EXTRACT_STRUCT_MEMBER()]
-
-	vector<unique_ptr<Expression>> proj_expressions;
-	proj_expressions.push_back(make_unique_base<Expression, BoundReferenceExpression>(TypeId::INT32, 0));
-	proj_expressions.push_back(make_unique_base<Expression, BoundReferenceExpression>(TypeId::STRUCT, 1));
-	auto projection = make_unique<PhysicalProjection>(types, move(proj_expressions));
-	//projection->children.push_back(move(filter));
-
-	// execute!
-	DataChunk result_chunk;
-	result_chunk.Initialize(filter->types);
-	auto state = filter->GetOperatorState();
-
-	do {
-		filter->GetChunk(*con.context, result_chunk, state.get());
-		result_chunk.Print();
-	} while (result_chunk.size() > 0);
-
-
-
+	// TODO sorting
+	// TODO hash tables
+	// TODO ?
 }

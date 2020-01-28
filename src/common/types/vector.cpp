@@ -174,6 +174,15 @@ void Vector::Reference(Vector &other) {
 	sel_vector = other.sel_vector;
 	type = other.type;
 	nullmask = other.nullmask;
+	if (type == TypeId::STRUCT) {
+		for (size_t i = 0; i < other.children.size(); i++) {
+			auto& other_child_vec = other.children[i].second;
+			auto child_ref = make_unique<Vector>();
+			child_ref->Initialize(other_child_vec->type);
+			child_ref->Reference(*other_child_vec.get());
+			children.push_back(pair<string, unique_ptr<Vector>>(other.children[i].first, move(child_ref)));
+		}
+	}
 }
 
 void Vector::Move(Vector &other) {
@@ -285,16 +294,34 @@ void Vector::Append(Vector &other) {
 	// merge NULL mask
 	VectorOperations::Exec(other, [&](uint64_t i, uint64_t k) { nullmask[old_count + k] = other.nullmask[i]; });
 	if (!TypeIsConstantSize(type)) {
-		assert(type == TypeId::VARCHAR);
-		auto source = (const char **)other.data;
-		auto target = (const char **)data;
-		VectorOperations::Exec(other, [&](uint64_t i, uint64_t k) {
-			if (other.nullmask[i]) {
-				target[old_count + k] = nullptr;
-			} else {
-				target[old_count + k] = string_heap.AddString(source[i]);
+		switch(type) {
+		case TypeId::VARCHAR: {
+			auto source = (const char **)other.data;
+			auto target = (const char **)data;
+			VectorOperations::Exec(other, [&](uint64_t i, uint64_t k) {
+				if (other.nullmask[i]) {
+					target[old_count + k] = nullptr;
+				} else {
+					target[old_count + k] = string_heap.AddString(source[i]);
+				}
+			});
+		}
+		break;
+		case TypeId::STRUCT: {
+			// the main vector only has a nullmask, so set that with offset
+			// recursively apply to children
+			assert(children.size() == other.children.size());
+			for (size_t i = 0; i < children.size(); i++) {
+				assert(children[i].first == other.children[i].first);
+				assert(children[i].second->type == other.children[i].second->type);
+				children[i].second->Append(*other.children[i].second.get());
 			}
-		});
+		}
+		break;
+		default:
+			throw NotImplementedException("Append type ");
+		}
+
 	} else {
 		VectorOperations::Copy(other, data + old_count * GetTypeIdSize(type));
 	}

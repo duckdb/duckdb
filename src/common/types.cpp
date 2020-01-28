@@ -198,7 +198,17 @@ string SQLTypeToString(SQLType type) {
 	// FIXME: display width/scale
 	switch (type.id) {
 	case SQLTypeId::STRUCT:
-		return "A STRUCT!";
+	{
+		string ret = "STRUCT<";
+		for (size_t i = 0; i < type.struct_type.size(); i++) {
+			ret += type.struct_type[i].first + ": " + SQLTypeToString(type.struct_type[i].second);
+			if (i < type.struct_type.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += ">";
+		return ret;
+	}
 	default:
 		return SQLTypeIdToString(type.id);
 	}
