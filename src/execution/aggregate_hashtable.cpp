@@ -6,6 +6,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 
 #include <cmath>
 #include <map>
@@ -216,9 +217,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 
 			aggr->function.update(&distinct_payload, 1, distinct_addresses);
 			payload_idx++;
-		}
-
-		else {
+		} else {
 			auto input_count = max(size_t(1), aggr->children.size());
 			aggr->function.update(&payload.data[payload_idx], input_count, addresses);
 			payload_idx += input_count;
@@ -264,17 +263,33 @@ void templated_compare_group_vector(data_ptr_t group_pointers[], Vector &groups,
                                     sel_t no_match_vector[], index_t &no_match_count) {
 	auto data = (T *)groups.GetData();
 	index_t current_count = 0;
-	for (index_t i = 0; i < sel_count; i++) {
-		index_t index = sel_vector[i];
-		auto entry = group_pointers[index];
-		if ((*((T *)entry)) == data[index]) {
-			// match, continue to next group (if any)
-			sel_vector[current_count++] = index;
-		} else {
-			// no match, move to next group
-			no_match_vector[no_match_count++] = index;
+	if (groups.vector_type == VectorType::CONSTANT_VECTOR) {
+		for (index_t i = 0; i < sel_count; i++) {
+			index_t index = sel_vector[i];
+			auto entry = group_pointers[index];
+			if ((*((T *)entry)) == data[0]) {
+				// match, continue to next group (if any)
+				sel_vector[current_count++] = index;
+			} else {
+				// no match, move to next group
+				no_match_vector[no_match_count++] = index;
+			}
+			group_pointers[index] += sizeof(T);
 		}
-		group_pointers[index] += sizeof(T);
+	} else {
+		assert(groups.vector_type == VectorType::FLAT_VECTOR);
+		for (index_t i = 0; i < sel_count; i++) {
+			index_t index = sel_vector[i];
+			auto entry = group_pointers[index];
+			if ((*((T *)entry)) == data[index]) {
+				// match, continue to next group (if any)
+				sel_vector[current_count++] = index;
+			} else {
+				// no match, move to next group
+				no_match_vector[no_match_count++] = index;
+			}
+			group_pointers[index] += sizeof(T);
+		}
 	}
 	sel_count = current_count;
 }
@@ -336,19 +351,23 @@ void SuperLargeHashTable::HashGroups(DataChunk &groups, Vector &addresses) {
 	StaticVector<uint64_t> hashes;
 	groups.Hash(hashes);
 
-	auto data_pointers = (data_ptr_t *)addresses.GetData();
-
 	// now compute the entry in the table based on the hash using a modulo
 	// multiply the position by the tuple size and add the base address
-	VectorOperations::ExecType<uint64_t>(hashes, [&](uint64_t element, index_t i, index_t k) {
+	UnaryExecutor::Execute<uint64_t, data_ptr_t>(hashes, addresses, [&](uint64_t element) {
 		assert((element & bitmask) == (element % capacity));
-		data_pointers[i] = data + ((element & bitmask) * tuple_size);
+		return data + ((element & bitmask) * tuple_size);
 	});
 
-	addresses.sel_vector = hashes.sel_vector;
-	addresses.count = hashes.count;
+	// auto data_pointers = (data_ptr_t *)addresses.GetData();
+	// VectorOperations::ExecType<uint64_t>(hashes, [&](uint64_t element, index_t i, index_t k) {
+	// 	assert((element & bitmask) == (element % capacity));
+	// 	data_pointers[i] = data + ((element & bitmask) * tuple_size);
+	// });
 
-	assert(addresses.sel_vector == groups.sel_vector);
+	// addresses.sel_vector = hashes.sel_vector;
+	// addresses.count = hashes.count;
+
+	// assert(addresses.sel_vector == groups.sel_vector);
 }
 
 // this is to support distinct aggregations where we need to record whether we
@@ -372,6 +391,9 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 	new_group.sel_vector = groups.data[0].sel_vector;
 
 	HashGroups(groups, addresses);
+	// FIXME: optimize for constant group index
+	groups.Normalify();
+	addresses.Normalify();
 
 	sel_t sel_vector[STANDARD_VECTOR_SIZE], empty_vector[STANDARD_VECTOR_SIZE];
 	index_t sel_count = groups.size();

@@ -23,8 +23,10 @@ static void covar_initialize(data_ptr_t payload, TypeId return_type) {
 }
 
 static void covar_update(Vector inputs[], index_t input_count, Vector &state) {
-	assert(input_count == 2);
 	// Streaming approximate covariance
+	assert(input_count == 2);
+	inputs[0].Normalify();
+	inputs[1].Normalify();
 
 	auto states = (covar_state_t **)state.GetData();
 	auto xdata = (double *)inputs[0].GetData();

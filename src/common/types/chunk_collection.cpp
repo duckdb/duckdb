@@ -14,6 +14,8 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 	if (new_chunk.size() == 0) {
 		return;
 	}
+	new_chunk.Normalify();
+
 	// we have to ensure that every chunk in the ChunkCollection is completely
 	// filled, otherwise our O(1) lookup in GetValue and SetValue does not work
 	// first fill the latest chunk, if it exists

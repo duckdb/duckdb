@@ -88,6 +88,7 @@ void DataChunk::Move(DataChunk &other) {
 }
 
 void DataChunk::Flatten() {
+	Normalify();
 	if (!sel_vector) {
 		return;
 	}
@@ -96,6 +97,12 @@ void DataChunk::Flatten() {
 		data[i].Flatten();
 	}
 	sel_vector = nullptr;
+}
+
+void DataChunk::Normalify() {
+	for (index_t i = 0; i < column_count; i++) {
+		data[i].Normalify();
+	}
 }
 
 void DataChunk::Append(DataChunk &other) {
@@ -200,17 +207,28 @@ void DataChunk::MoveStringsToHeap(StringHeap &heap) {
 	for (index_t c = 0; c < column_count; c++) {
 		if (data[c].type == TypeId::VARCHAR) {
 			// move strings of this chunk to the specified heap
-			auto source_strings = (const char **)data[c].data;
-			if (!data[c].owned_data) {
-				data[c].owned_data = unique_ptr<data_t[]>(new data_t[STANDARD_VECTOR_SIZE * sizeof(data_ptr_t)]);
-				data[c].data = data[c].owned_data.get();
-			}
-			auto target_strings = (const char **)data[c].data;
-			VectorOperations::ExecType<const char *>(data[c], [&](const char *str, index_t i, index_t k) {
-				if (!data[c].nullmask[i]) {
-					target_strings[i] = heap.AddString(source_strings[i]);
+			auto source_strings = (const char **)data[c].GetData();
+			if (data[c].vector_type == VectorType::CONSTANT_VECTOR) {
+				if (!data[c].owned_data) {
+					data[c].owned_data = unique_ptr<data_t[]>(new data_t[sizeof(data_ptr_t)]);
+					data[c].data = data[c].owned_data.get();
 				}
-			});
+				auto target_strings = (const char **)data[c].GetData();
+				if (!data[c].nullmask[0]) {
+					target_strings[0] = heap.AddString(source_strings[0]);
+				}
+			} else {
+				if (!data[c].owned_data) {
+					data[c].owned_data = unique_ptr<data_t[]>(new data_t[STANDARD_VECTOR_SIZE * sizeof(data_ptr_t)]);
+					data[c].data = data[c].owned_data.get();
+				}
+				auto target_strings = (const char **)data[c].GetData();
+				VectorOperations::ExecType<const char *>(data[c], [&](const char *str, index_t i, index_t k) {
+					if (!data[c].nullmask[i]) {
+						target_strings[i] = heap.AddString(source_strings[i]);
+					}
+				});
+			}
 		}
 	}
 }

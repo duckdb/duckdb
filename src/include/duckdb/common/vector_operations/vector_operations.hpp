@@ -194,6 +194,8 @@ struct VectorOperations {
 	static void Set(Vector &result, Value value);
 	//! Fill the null mask of a value, setting every NULL value to NullValue<T>()
 	static void FillNullMask(Vector &v);
+	//! Flatten the vector, removing any compression and turning it into a FLAT_VECTOR
+	static void Flatten(Vector &v);
 	//===--------------------------------------------------------------------===//
 	// Exec
 	//===--------------------------------------------------------------------===//
@@ -214,12 +216,18 @@ struct VectorOperations {
 	//! Exec over the set of indexes, calls the callback function with (i) =
 	//! index, dependent on selection vector and (k) = count
 	template <class T> static void Exec(const Vector &vector, T &&fun, index_t offset = 0, index_t count = 0) {
-		if (count == 0) {
-			count = vector.count;
+		if (vector.vector_type == VectorType::CONSTANT_VECTOR) {
+			assert(count == 0 && offset == 0);
+			Exec(nullptr, 1, fun, offset);
 		} else {
-			count += offset;
+			assert(vector.vector_type == VectorType::FLAT_VECTOR);
+			if (count == 0) {
+				count = vector.count;
+			} else {
+				count += offset;
+			}
+			Exec(vector.sel_vector, count, fun, offset);
 		}
-		Exec(vector.sel_vector, count, fun, offset);
 	}
 
 	//! Exec over a specific type. Note that it is up to the caller to verify

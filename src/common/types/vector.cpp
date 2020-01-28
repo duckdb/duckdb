@@ -167,8 +167,7 @@ Value Vector::GetValue(uint64_t index) const {
 }
 
 void Vector::Reference(Vector &other) {
-	assert(!owned_data);
-
+	Destroy();
 	vector_type = other.vector_type;
 	count = other.count;
 	data = other.data;
@@ -193,6 +192,7 @@ void Vector::Move(Vector &other) {
 }
 
 void Vector::Flatten() {
+	Normalify();
 	if (!sel_vector) {
 		return;
 	}
@@ -210,6 +210,7 @@ void Vector::Copy(Vector &other, uint64_t offset) {
 	if (other.sel_vector) {
 		throw NotImplementedException("Copy to vector with sel_vector not supported!");
 	}
+	Normalify();
 
 	other.nullmask.reset();
 	if (!TypeIsConstantSize(type)) {
@@ -277,6 +278,8 @@ void Vector::Append(Vector &other) {
 	if (count + other.count > STANDARD_VECTOR_SIZE) {
 		throw OutOfRangeException("Cannot append to vector: vector is full!");
 	}
+	other.Normalify();
+	assert(vector_type == VectorType::FLAT_VECTOR);
 	uint64_t old_count = count;
 	count += other.count;
 	// merge NULL mask
@@ -334,25 +337,13 @@ void Vector::Print() {
 }
 
 void Vector::Normalify() {
-	switch (vector_type) {
-	case VectorType::FLAT_VECTOR:
-		// already a flat vector
-		return;
-	case VectorType::CONSTANT_VECTOR: {
-		auto constant_value = GetValue(0);
-		Vector new_result(type, true, false);
-		new_result.count = count;
-		new_result.sel_vector = sel_vector;
-		VectorOperations::Set(new_result, constant_value);
-		new_result.Move(*this);
-		break;
-	}
-	default:
-		throw NotImplementedException("FIXME: unimplemented type for normalify");
-	}
+	VectorOperations::Flatten(*this);
 }
 
 void Vector::Verify() {
+	if (count == 0) {
+		return;
+	}
 #ifdef DEBUG
 	if (type == TypeId::VARCHAR) {
 		// we just touch all the strings and let the sanitizer figure out if any

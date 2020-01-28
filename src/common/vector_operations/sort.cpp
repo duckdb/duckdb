@@ -129,6 +129,7 @@ void VectorOperations::Sort(Vector &vector, sel_t *sel_vector, index_t count, se
 }
 
 void VectorOperations::Sort(Vector &vector, sel_t result[]) {
+	vector.Normalify();
 	// first we extract NULL values
 	sel_t not_null_sel_vector[STANDARD_VECTOR_SIZE], null_sel_vector[STANDARD_VECTOR_SIZE];
 	sel_t *sel_vector;
@@ -164,6 +165,10 @@ template <class T> bool is_unique(Vector &vector, sel_t sel_vector[]) {
 }
 
 bool VectorOperations::Unique(Vector &vector) {
+	if (vector.vector_type == VectorType::CONSTANT_VECTOR) {
+		// constant vector, value is unique if count is 1 OR value is a constant NULL
+		return vector.count == 1 || vector.nullmask[0];
+	}
 	// first we extract NULL values
 	sel_t sort_sel[STANDARD_VECTOR_SIZE];
 	// first sort the vector
