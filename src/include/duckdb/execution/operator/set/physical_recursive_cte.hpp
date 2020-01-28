@@ -18,13 +18,10 @@ namespace duckdb {
 
         bool union_all;
         std::shared_ptr<ChunkCollection> working_table;
-        std::shared_ptr<index_t> iteration;
         ChunkCollection intermediate_table;
-
     public:
         void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
         unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-//        string ExtraRenderInformation() const override;
     };
 
 }; // namespace duckdb

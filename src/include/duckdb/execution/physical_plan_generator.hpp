@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include <duckdb/execution/operator/set/physical_recursive_cte.hpp>
 #include "duckdb/common/common.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -25,7 +25,7 @@ public:
 	}
 
 	unordered_set<CatalogEntry *> dependencies;
-    unordered_map<index_t, std::pair<std::shared_ptr<ChunkCollection>, std::shared_ptr<index_t>>> rec_ctes;
+    unordered_map<index_t, std::shared_ptr<ChunkCollection>> rec_ctes;
 
 public:
 	//! Creates a plan from the logical operator. This involves resolving column bindings and generating physical

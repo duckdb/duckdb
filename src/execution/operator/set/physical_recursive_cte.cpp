@@ -26,7 +26,7 @@ PhysicalRecursiveCTE::PhysicalRecursiveCTE(LogicalOperator &op, bool union_all, 
     children.push_back(move(bottom));
 }
 
-// first exhaust top, then exhaust bottom. state to remember which.
+// first exhaust non recursive term, then exhaust recursive term iteratively until no (new) rows are generated.
 void PhysicalRecursiveCTE::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
     auto state = reinterpret_cast<PhysicalRecursiveCTEState *>(state_);
 
@@ -58,13 +58,9 @@ void PhysicalRecursiveCTE::GetChunkInternal(ClientContext &context, DataChunk &c
             intermediate_table.count = 0;
             intermediate_table.chunks.clear();
 
-            (*iteration)++;
-
             state->bottom_state = children[1]->GetOperatorState();
-//            state->bottom_state->finished = false;
 
             state->intermediate_empty = true;
-            state->finished = false;
             continue;
         }
 
@@ -81,11 +77,3 @@ unique_ptr<PhysicalOperatorState> PhysicalRecursiveCTE::GetOperatorState() {
     state->bottom_state = children[1]->GetOperatorState();
     return (move(state));
 }
-
-//string PhysicalRecursiveCTE::ExtraRenderInformation() const {
-//    string extra_info;
-//    for (auto &expr : this) {
-//        extra_info += expr->GetName() + "\n";
-//    }
-//    return extra_info;
-//}

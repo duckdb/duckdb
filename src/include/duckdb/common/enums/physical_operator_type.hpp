@@ -43,7 +43,6 @@ enum class PhysicalOperatorType : uint8_t {
 	EXTERNAL_FILE_SCAN,
 	QUERY_DERIVED_SCAN,
 	EXPRESSION_SCAN,
-	CTE_SCAN,
 	// -----------------------------
 	// Joins
 	// -----------------------------
