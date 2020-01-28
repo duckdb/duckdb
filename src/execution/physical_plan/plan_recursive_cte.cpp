@@ -30,10 +30,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op) {
     assert(op.children.size() == 0);
 
-    auto chunk_scan = make_unique<PhysicalCTEScan>(op.types, PhysicalOperatorType::CTE_SCAN);
+    auto chunk_scan = make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::CHUNK_SCAN);
 
     auto cte = rec_ctes.find(op.table_index);
     chunk_scan->collection = cte->second.first.get();
-    chunk_scan->remote_iteration = cte->second.second.get();
     return move(chunk_scan);
 }
