@@ -24,7 +24,7 @@ void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionSta
 			// move the result
 			result.Reference(state->arguments.data[i]);
 		} else {
-			Vector intermediate(TypeId::BOOLEAN, true, false);
+			Vector intermediate(TypeId::BOOL, true, false);
 			// AND/OR together
 			switch (expr.type) {
 			case ExpressionType::CONJUNCTION_AND:

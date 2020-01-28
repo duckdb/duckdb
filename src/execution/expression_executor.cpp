@@ -164,7 +164,7 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, Vecto
 }
 
 index_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, sel_t result[]) {
-	assert(expr.return_type == TypeId::BOOLEAN);
+	assert(expr.return_type == TypeId::BOOL);
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_BETWEEN:
 		return Select((BoundBetweenExpression &)expr, state, result);
@@ -182,7 +182,7 @@ index_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *sta
 	// resolve the true/false expression first
 	// then use that to generate the selection vector
 	bool intermediate_bools[STANDARD_VECTOR_SIZE];
-	Vector intermediate(TypeId::BOOLEAN, (data_ptr_t)intermediate_bools);
+	Vector intermediate(TypeId::BOOL, (data_ptr_t)intermediate_bools);
 	Execute(expr, state, intermediate);
 
 	auto intermediate_result = (bool *)intermediate.GetData();

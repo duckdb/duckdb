@@ -192,16 +192,16 @@ static void update_chunk(Vector &data, Vector &updates, Vector &row_identifiers,
 	assert(updates.sel_vector == row_identifiers.sel_vector);
 
 	switch (data.type) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		update_data<int8_t>(data, updates, row_identifiers, base_index);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		update_data<int16_t>(data, updates, row_identifiers, base_index);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		update_data<int32_t>(data, updates, row_identifiers, base_index);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		update_data<int64_t>(data, updates, row_identifiers, base_index);
 		break;
 	case TypeId::FLOAT:

@@ -57,7 +57,7 @@ void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &outp
 		auto index = i - data.offset;
 		auto &column = data.entry->columns[i];
 		// return values:
-		// "cid", TypeId::INTEGER
+		// "cid", TypeId::INT32
 		assert(column.oid < (index_t)std::numeric_limits<int32_t>::max());
 
 		output.data[0].SetValue(index, Value::INTEGER((int32_t)column.oid));
@@ -65,13 +65,13 @@ void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &outp
 		output.data[1].SetValue(index, Value(column.name));
 		// "type", TypeId::VARCHAR
 		output.data[2].SetValue(index, Value(SQLTypeToString(column.type)));
-		// "notnull", TypeId::BOOLEAN
+		// "notnull", TypeId::BOOL
 		// FIXME: look at constraints
 		output.data[3].SetValue(index, Value::BOOLEAN(false));
 		// "dflt_value", TypeId::VARCHAR
 		string def_value = column.default_value ? column.default_value->ToString() : "NULL";
 		output.data[4].SetValue(index, Value(def_value));
-		// "pk", TypeId::BOOLEAN
+		// "pk", TypeId::BOOL
 		// FIXME: look at constraints
 		output.data[5].SetValue(index, Value::BOOLEAN(false));
 	}

@@ -115,7 +115,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		auto column = state.column_ids[i];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// scan row id
-			assert(result.data[i].type == TypeId::BIGINT);
+			assert(result.data[i].type == TypeId::INT64);
 			result.data[i].count = max_count;
 			VectorOperations::GenerateSequence(result.data[i], base_row + current_row);
 		} else {
@@ -185,7 +185,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 		auto column = column_ids[col_idx];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// row id column: fill in the row ids
-			assert(result.data[col_idx].type == TypeId::BIGINT);
+			assert(result.data[col_idx].type == TypeId::INT64);
 			result.data[col_idx].count = count;
 			auto data = (row_t *)result.data[col_idx].GetData();
 			for (index_t i = 0; i < count; i++) {
@@ -241,7 +241,7 @@ static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, st
 
 static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, DataChunk &chunk) {
 	ExpressionExecutor executor(expr);
-	Vector result(TypeId::INTEGER, true, false);
+	Vector result(TypeId::INT32, true, false);
 	try {
 		executor.ExecuteExpression(chunk, result);
 	} catch (Exception &ex) {
@@ -623,7 +623,7 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, 
 		auto column = state.column_ids[i];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// scan row id
-			assert(result.data[i].type == TypeId::BIGINT);
+			assert(result.data[i].type == TypeId::INT64);
 			result.data[i].count = count;
 			VectorOperations::GenerateSequence(result.data[i], base_row + current_row);
 		} else {

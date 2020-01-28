@@ -157,7 +157,7 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 			}
 		} else {
 			// COUNT(*)
-			payload_types.push_back(TypeId::BIGINT);
+			payload_types.push_back(TypeId::INT64);
 		}
 	}
 	if (payload_types.size() > 0) {

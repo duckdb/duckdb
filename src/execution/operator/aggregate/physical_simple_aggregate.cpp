@@ -87,7 +87,7 @@ PhysicalSimpleAggregateOperatorState::PhysicalSimpleAggregateOperatorState(Physi
 			}
 		} else {
 			// COUNT(*)
-			payload_types.push_back(TypeId::BIGINT);
+			payload_types.push_back(TypeId::INT64);
 		}
 		// initialize the aggregate values
 		assert(aggr.function.simple_initialize);

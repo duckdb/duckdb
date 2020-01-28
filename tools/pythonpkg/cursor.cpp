@@ -399,14 +399,14 @@ static PyObject *mafunc_ref = NULL;
 
 static uint8_t duckdb_type_to_numpy_type(duckdb::TypeId type, duckdb::SQLTypeId sql_type) {
 	switch (type) {
-	case duckdb::TypeId::BOOLEAN:
-	case duckdb::TypeId::TINYINT:
+	case duckdb::TypeId::BOOL:
+	case duckdb::TypeId::INT8:
 		return NPY_INT8;
-	case duckdb::TypeId::SMALLINT:
+	case duckdb::TypeId::INT16:
 		return NPY_INT16;
-	case duckdb::TypeId::INTEGER:
+	case duckdb::TypeId::INT32:
 		return NPY_INT32;
-	case duckdb::TypeId::BIGINT:
+	case duckdb::TypeId::INT64:
 		if (sql_type == duckdb::SQLTypeId::TIMESTAMP) {
 			return NPY_DATETIME;
 		} else {
@@ -499,7 +499,7 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 					((PyObject **)array_data)[offset + chunk_idx] = str_obj;
 				}
 				break;
-			case duckdb::TypeId::BIGINT:
+			case duckdb::TypeId::INT64:
 				if (result->sql_types[col_idx].id == duckdb::SQLTypeId::TIMESTAMP) {
 					int64_t *array_data_ptr = reinterpret_cast<int64_t *>(array_data + (offset * duckdb_type_size));
 					duckdb::timestamp_t *chunk_data_ptr = reinterpret_cast<int64_t *>(chunk->data[col_idx].GetData());
@@ -601,17 +601,17 @@ PyObject *duckdb_cursor_iternext(duckdb_Cursor *self) {
 			continue;
 		}
 		switch (dval.type) {
-		case duckdb::TypeId::BOOLEAN:
-		case duckdb::TypeId::TINYINT:
+		case duckdb::TypeId::BOOL:
+		case duckdb::TypeId::INT8:
 			val = Py_BuildValue("b", dval.value_.tinyint);
 			break;
-		case duckdb::TypeId::SMALLINT:
+		case duckdb::TypeId::INT16:
 			val = Py_BuildValue("h", dval.value_.smallint);
 			break;
-		case duckdb::TypeId::INTEGER:
+		case duckdb::TypeId::INT32:
 			val = Py_BuildValue("i", dval.value_.integer);
 			break;
-		case duckdb::TypeId::BIGINT:
+		case duckdb::TypeId::INT64:
 			val = Py_BuildValue("L", dval.value_.bigint);
 			break;
 		case duckdb::TypeId::FLOAT:

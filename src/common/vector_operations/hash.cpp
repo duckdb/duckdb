@@ -51,17 +51,17 @@ void VectorOperations::Hash(Vector &input, Vector &result) {
 	result.sel_vector = input.sel_vector;
 	result.count = input.count;
 	switch (input.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		templated_loop_hash<int8_t>(input, result);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		templated_loop_hash<int16_t>(input, result);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		templated_loop_hash<int32_t>(input, result);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		templated_loop_hash<int64_t>(input, result);
 		break;
 	case TypeId::FLOAT:
@@ -118,17 +118,17 @@ void VectorOperations::CombineHash(Vector &hashes, Vector &input) {
 	assert(input.sel_vector == hashes.sel_vector && input.count == hashes.count);
 	assert(!hashes.nullmask.any());
 	switch (input.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		templated_loop_combine_hash<int8_t>(input, hashes);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		templated_loop_combine_hash<int16_t>(input, hashes);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		templated_loop_combine_hash<int32_t>(input, hashes);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		templated_loop_combine_hash<int64_t>(input, hashes);
 		break;
 	case TypeId::FLOAT:

@@ -40,7 +40,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundUpdateStatemen
 	}
 	// add the row id column to the projection list
 	projection_expressions.push_back(make_unique<BoundColumnRefExpression>(
-	    TypeId::BIGINT, ColumnBinding(get.table_index, get.column_ids.size() - 1)));
+	    TypeId::INT64, ColumnBinding(get.table_index, get.column_ids.size() - 1)));
 	// now create the projection
 	auto proj = make_unique<LogicalProjection>(stmt.proj_index, move(projection_expressions));
 	proj->AddChild(move(root));

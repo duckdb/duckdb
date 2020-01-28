@@ -28,7 +28,7 @@ template <class T> bool IsSorted(Vector &v) {
 
 TEST_CASE("Sorting vectors works", "[sort]") {
 	sel_t sel[STANDARD_VECTOR_SIZE];
-	Vector v(TypeId::INTEGER, true, false);
+	Vector v(TypeId::INT32, true, false);
 	v.count = STANDARD_VECTOR_SIZE;
 	auto data = (int *)v.GetData();
 	// sort without NULLs

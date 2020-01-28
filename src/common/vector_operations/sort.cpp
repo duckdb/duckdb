@@ -99,16 +99,16 @@ void VectorOperations::Sort(Vector &vector, sel_t *sel_vector, index_t count, se
 	VectorOperations::Exec(sel_vector, count, [&](uint64_t i, uint64_t k) { assert(!vector.nullmask[i]); });
 #endif
 	switch (vector.type) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		templated_quicksort<int8_t>(vector, sel_vector, count, result);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		templated_quicksort<int16_t>(vector, sel_vector, count, result);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		templated_quicksort<int32_t>(vector, sel_vector, count, result);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		templated_quicksort<int64_t>(vector, sel_vector, count, result);
 		break;
 	case TypeId::FLOAT:
@@ -175,13 +175,13 @@ bool VectorOperations::Unique(Vector &vector) {
 	VectorOperations::Sort(vector, sort_sel);
 	// now check whether or not the result contains unique values
 	switch (vector.type) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		return is_unique<int8_t>(vector, sort_sel);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return is_unique<int16_t>(vector, sort_sel);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return is_unique<int32_t>(vector, sort_sel);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return is_unique<int64_t>(vector, sort_sel);
 	case TypeId::FLOAT:
 		return is_unique<float>(vector, sort_sel);

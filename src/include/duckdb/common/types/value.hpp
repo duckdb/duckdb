@@ -26,10 +26,10 @@ class Value {
 
 public:
 	//! Create an empty NULL value of the specified type
-	Value(TypeId type = TypeId::INTEGER) : type(type), is_null(true) {
+	Value(TypeId type = TypeId::INT32) : type(type), is_null(true) {
 	}
 	//! Create a BIGINT value
-	Value(int32_t val) : type(TypeId::INTEGER), is_null(false) {
+	Value(int32_t val) : type(TypeId::INT32), is_null(false) {
 		value_.integer = val;
 	}
 	//! Create a FLOAT value

@@ -59,32 +59,30 @@ void Appender::EndRow() {
 	}
 }
 
-template<class SRC, class DST>
-void Appender::AppendValueInternal(Vector &col, SRC input) {
+template <class SRC, class DST> void Appender::AppendValueInternal(Vector &col, SRC input) {
 	((DST *)col.GetData())[col.count++] = Cast::Operation<SRC, DST>(input);
 }
 
-template<class T>
-void Appender::AppendValueInternal(T input) {
+template <class T> void Appender::AppendValueInternal(T input) {
 	CheckInvalidated();
 	if (column >= chunk.column_count) {
 		throw Exception("Too many appends for chunk!");
 	}
 	auto &col = chunk.data[column];
-	switch(col.type) {
-	case TypeId::BOOLEAN:
+	switch (col.type) {
+	case TypeId::BOOL:
 		AppendValueInternal<T, bool>(col, input);
 		break;
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		AppendValueInternal<T, int8_t>(col, input);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		AppendValueInternal<T, int16_t>(col, input);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		AppendValueInternal<T, int32_t>(col, input);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		AppendValueInternal<T, int64_t>(col, input);
 		break;
 	case TypeId::FLOAT:
@@ -121,7 +119,7 @@ template <> void Appender::Append(int64_t value) {
 }
 
 template <> void Appender::Append(const char *value) {
-	AppendValueInternal<const char*>(value);
+	AppendValueInternal<const char *>(value);
 }
 
 template <> void Appender::Append(double value) {
@@ -163,7 +161,7 @@ void Appender::Flush() {
 	try {
 		// check that all vectors have the same length before appending
 		index_t chunk_size = chunk.size();
-		for(index_t i = 1; i < chunk.column_count; i++) {
+		for (index_t i = 1; i < chunk.column_count; i++) {
 			if (chunk.data[i].count != chunk_size) {
 				throw Exception("Failed to Flush appender: vectors have different number of rows");
 			}

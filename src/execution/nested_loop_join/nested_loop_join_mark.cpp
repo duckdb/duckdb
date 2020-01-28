@@ -19,14 +19,14 @@ template <class T, class OP> static void mark_join_templated(Vector &left, Vecto
 
 template <class OP> static void mark_join_operator(Vector &left, Vector &right, bool found_match[]) {
 	switch (left.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		return mark_join_templated<int8_t, OP>(left, right, found_match);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return mark_join_templated<int16_t, OP>(left, right, found_match);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return mark_join_templated<int32_t, OP>(left, right, found_match);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return mark_join_templated<int64_t, OP>(left, right, found_match);
 	case TypeId::FLOAT:
 		return mark_join_templated<float, OP>(left, right, found_match);

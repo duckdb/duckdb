@@ -56,7 +56,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 			// - (2) the group containing a NULL value [in which case FALSE becomes NULL]
 			auto &info = hash_join.hash_table->correlated_mark_join_info;
 
-			vector<TypeId> payload_types = {TypeId::BIGINT, TypeId::BIGINT}; // COUNT types
+			vector<TypeId> payload_types = {TypeId::INT64, TypeId::INT64}; // COUNT types
 			vector<AggregateFunction> aggregate_functions = {CountStarFun::GetFunction(), CountFun::GetFunction()};
 			vector<BoundAggregateExpression *> correlated_aggregates;
 			for (index_t i = 0; i < aggregate_functions.size(); ++i) {

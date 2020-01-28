@@ -17,7 +17,7 @@ namespace duckdb {
 class PhysicalAlter : public PhysicalOperator {
 public:
 	PhysicalAlter(unique_ptr<AlterInfo> info)
-	    : PhysicalOperator(PhysicalOperatorType::ALTER, {TypeId::BOOLEAN}), info(move(info)) {
+	    : PhysicalOperator(PhysicalOperatorType::ALTER, {TypeId::BOOL}), info(move(info)) {
 	}
 
 	unique_ptr<AlterInfo> info;

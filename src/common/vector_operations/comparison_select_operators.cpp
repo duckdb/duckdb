@@ -15,14 +15,14 @@ using namespace std;
 template <class OP> static index_t templated_select_operation(Vector &left, Vector &right, sel_t result[]) {
 	// the inplace loops take the result as the last parameter
 	switch (left.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		return BinaryExecutor::Select<int8_t, int8_t, OP>(left, right, result);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return BinaryExecutor::Select<int16_t, int16_t, OP>(left, right, result);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return BinaryExecutor::Select<int32_t, int32_t, OP>(left, right, result);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return BinaryExecutor::Select<int64_t, int64_t, OP>(left, right, result);
 	case TypeId::POINTER:
 		return BinaryExecutor::Select<uint64_t, uint64_t, OP>(left, right, result);

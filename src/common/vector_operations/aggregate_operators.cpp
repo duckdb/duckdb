@@ -19,13 +19,13 @@ using namespace std;
 
 template <class OP> static bool numeric_fold_loop(Vector &input, Value &result) {
 	switch (input.type) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		return templated_unary_fold<int8_t, int8_t, OP>(input, &result.value_.tinyint);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return templated_unary_fold<int16_t, int16_t, OP>(input, &result.value_.smallint);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return templated_unary_fold<int32_t, int32_t, OP>(input, &result.value_.integer);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return templated_unary_fold<int64_t, int64_t, OP>(input, &result.value_.bigint);
 	case TypeId::FLOAT:
 		return templated_unary_fold<float, float, OP>(input, &result.value_.float_);
@@ -38,7 +38,7 @@ template <class OP> static bool numeric_fold_loop(Vector &input, Value &result) 
 
 template <class OP> static bool generic_fold_loop(Vector &input, Value &result) {
 	switch (input.type) {
-	case TypeId::BOOLEAN: {
+	case TypeId::BOOL: {
 		bool res;
 		if (!templated_unary_fold<bool, bool, OP>(input, &res)) {
 			return false;

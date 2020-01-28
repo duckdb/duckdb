@@ -33,7 +33,7 @@ vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 
 void LogicalGet::ResolveTypes() {
 	if (column_ids.size() == 0) {
-		types = {TypeId::INTEGER};
+		types = {TypeId::INT32};
 	} else {
 		types = table->GetTypes(column_ids);
 	}

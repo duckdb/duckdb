@@ -64,17 +64,17 @@ template <class LOOP, class OP> static void generic_gather_loop(Vector &source, 
 		throw InvalidTypeException(source.type, "Cannot gather from non-pointer type!");
 	}
 	switch (dest.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		LOOP::template Operation<int8_t, OP>(source, dest, offset);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		LOOP::template Operation<int16_t, OP>(source, dest, offset);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		LOOP::template Operation<int32_t, OP>(source, dest, offset);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		LOOP::template Operation<int64_t, OP>(source, dest, offset);
 		break;
 	case TypeId::FLOAT:

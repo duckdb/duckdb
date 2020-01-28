@@ -18,21 +18,22 @@ private:
 	static inline void TemplatedExecute(Vector &left, Vector &right, Vector &result) {
 		BinaryExecutor::Execute<T, T, T, OP, IGNORE_NULL, OPWRAPPER>(left, right, result);
 	}
+
 public:
 	template <class OP, bool IGNORE_NULL=false, class OPWRAPPER=BinarySingleArgumentOperatorWrapper>
 	static inline void Execute(Vector &left, Vector &right, Vector &result) {
 		assert(left.type == right.type && left.type == result.type);
 		switch (left.type) {
-		case TypeId::TINYINT:
+		case TypeId::INT8:
 			TemplatedExecute<int8_t, OP, IGNORE_NULL, OPWRAPPER>(left, right, result);
 			break;
-		case TypeId::SMALLINT:
+		case TypeId::INT16:
 			TemplatedExecute<int16_t, OP, IGNORE_NULL, OPWRAPPER>(left, right, result);
 			break;
-		case TypeId::INTEGER:
+		case TypeId::INT32:
 			TemplatedExecute<int32_t, OP, IGNORE_NULL, OPWRAPPER>(left, right, result);
 			break;
-		case TypeId::BIGINT:
+		case TypeId::INT64:
 			TemplatedExecute<int64_t, OP, IGNORE_NULL, OPWRAPPER>(left, right, result);
 			break;
 		case TypeId::FLOAT:
@@ -102,7 +103,6 @@ template <> double Modulo::Operation(double left, double right) {
 	assert(right != 0);
 	return fmod(left, right);
 }
-
 
 void VectorOperations::Modulo(Vector &left, Vector &right, Vector &result) {
 	NumericBinaryExecutor::Execute<duckdb::Modulo, true, BinaryZeroIsNullWrapper>(left, right, result);

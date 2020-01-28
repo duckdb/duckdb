@@ -34,14 +34,14 @@ struct ExclusiveBetweenOperator {
 template <class OP>
 static index_t between_loop_type_switch(Vector &input, Vector &lower, Vector &upper, sel_t result[]) {
 	switch (input.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		return TernaryExecutor::Select<int8_t, int8_t, int8_t, OP>(input, lower, upper, result);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return TernaryExecutor::Select<int16_t, int16_t, int16_t, OP>(input, lower, upper, result);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return TernaryExecutor::Select<int32_t, int32_t, int32_t, OP>(input, lower, upper, result);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return TernaryExecutor::Select<int64_t, int64_t, int64_t, OP>(input, lower, upper, result);
 	case TypeId::FLOAT:
 		return TernaryExecutor::Select<float, float, float, OP>(input, lower, upper, result);
@@ -70,8 +70,8 @@ void ExpressionExecutor::Execute(BoundBetweenExpression &expr, ExpressionState *
 	Execute(*expr.lower, state->child_states[1].get(), lower);
 	Execute(*expr.upper, state->child_states[2].get(), upper);
 
-	Vector intermediate1(TypeId::BOOLEAN, true, false);
-	Vector intermediate2(TypeId::BOOLEAN, true, false);
+	Vector intermediate1(TypeId::BOOL, true, false);
+	Vector intermediate2(TypeId::BOOL, true, false);
 
 	if (expr.upper_inclusive && expr.lower_inclusive) {
 		VectorOperations::GreaterThanEquals(input, lower, intermediate1);

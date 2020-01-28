@@ -17,17 +17,17 @@ bool IsNullValue(data_ptr_t ptr, TypeId type) {
 //! Writes NullValue<T> value of a specific type to a memory address
 void SetNullValue(data_ptr_t ptr, TypeId type) {
 	switch (type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		*((int8_t *)ptr) = NullValue<int8_t>();
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		*((int16_t *)ptr) = NullValue<int16_t>();
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		*((int32_t *)ptr) = NullValue<int32_t>();
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		*((int64_t *)ptr) = NullValue<int64_t>();
 		break;
 	case TypeId::FLOAT:

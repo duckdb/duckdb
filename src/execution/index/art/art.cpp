@@ -24,16 +24,16 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expres
 		is_little_endian = false;
 	}
 	switch (types[0]) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		maxPrefix = sizeof(int8_t);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		maxPrefix = sizeof(int16_t);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		maxPrefix = sizeof(int32_t);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		maxPrefix = sizeof(int64_t);
 		break;
 	case TypeId::FLOAT:
@@ -100,16 +100,16 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	keys.reserve(STANDARD_VECTOR_SIZE);
 
 	switch (input.data[0].type) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		generate_keys<int8_t>(input, keys, is_little_endian);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		generate_keys<int16_t>(input, keys, is_little_endian);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		generate_keys<int32_t>(input, keys, is_little_endian);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		generate_keys<int64_t>(input, keys, is_little_endian);
 		break;
 	case TypeId::FLOAT:
@@ -124,7 +124,7 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 }
 
 bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
-	assert(row_ids.type == TypeId::BIGINT);
+	assert(row_ids.type == TypeId::INT64);
 	assert(input.size() == row_ids.count);
 	assert(types[0] == input.data[0].type);
 
@@ -354,13 +354,13 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 static unique_ptr<Key> CreateKey(ART &art, TypeId type, Value &value) {
 	assert(type == value.type);
 	switch (type) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		return Key::CreateKey<int8_t>(value.value_.tinyint, art.is_little_endian);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return Key::CreateKey<int16_t>(value.value_.smallint, art.is_little_endian);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return Key::CreateKey<int32_t>(value.value_.integer, art.is_little_endian);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return Key::CreateKey<int64_t>(value.value_.bigint, art.is_little_endian);
 	case TypeId::FLOAT:
 		return Key::CreateKey<float>(value.value_.float_, art.is_little_endian);

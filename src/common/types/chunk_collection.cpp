@@ -98,14 +98,14 @@ static int32_t compare_value(Vector &left_vec, Vector &right_vec, index_t vector
 	}
 
 	switch (left_vec.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		return templated_compare_value<int8_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return templated_compare_value<int16_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return templated_compare_value<int32_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return templated_compare_value<int64_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
 	case TypeId::FLOAT:
 		return templated_compare_value<float>(left_vec, right_vec, vector_idx_left, vector_idx_right);
@@ -257,9 +257,8 @@ static void templated_set_values(ChunkCollection *src_coll, Vector &tgt_vec, ind
 
 		auto &src_chunk = src_coll->chunks[chunk_idx_src];
 		Vector &src_vec = src_chunk->data[col_idx];
-		auto source_data = (TYPE*) src_vec.GetData();
-		auto target_data = (TYPE*) tgt_vec.GetData();
-
+		auto source_data = (TYPE *)src_vec.GetData();
+		auto target_data = (TYPE *)tgt_vec.GetData();
 
 		tgt_vec.nullmask[row_idx] = src_vec.nullmask[vector_idx_src];
 		if (tgt_vec.nullmask[row_idx]) {
@@ -278,17 +277,17 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, index_t order[],
 		target.data[col_idx].count = remaining_data;
 
 		switch (types[col_idx]) {
-		case TypeId::BOOLEAN:
-		case TypeId::TINYINT:
+		case TypeId::BOOL:
+		case TypeId::INT8:
 			templated_set_values<int8_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::SMALLINT:
+		case TypeId::INT16:
 			templated_set_values<int16_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::INTEGER:
+		case TypeId::INT32:
 			templated_set_values<int32_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::BIGINT:
+		case TypeId::INT64:
 			templated_set_values<int64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case TypeId::FLOAT:
@@ -418,17 +417,17 @@ index_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, index_t order[]
 		target.data[col_idx].count = remaining_data;
 
 		switch (types[col_idx]) {
-		case TypeId::BOOLEAN:
-		case TypeId::TINYINT:
+		case TypeId::BOOL:
+		case TypeId::INT8:
 			templated_set_values<int8_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::SMALLINT:
+		case TypeId::INT16:
 			templated_set_values<int16_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::INTEGER:
+		case TypeId::INT32:
 			templated_set_values<int32_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::BIGINT:
+		case TypeId::INT64:
 			templated_set_values<int64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case TypeId::FLOAT:
