@@ -1,11 +1,9 @@
-#include <duckdb/planner/tableref/bound_cteref.hpp>
-#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/planner/tableref/bound_cteref.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/query_node/bound_recursive_cte_node.hpp"
 
 using namespace duckdb;
