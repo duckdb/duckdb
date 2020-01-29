@@ -24,6 +24,10 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundRecursiveCTENo
     left_node = CastLogicalOperatorToTypes(node.left->types, node.types, move(left_node));
     right_node = CastLogicalOperatorToTypes(node.right->types, node.types, move(right_node));
 
+    if(node.right_binder->bind_context.cte_references[node.ctename] == 0) {
+        auto root = make_unique<LogicalSetOperation>(node.setop_index, node.types.size(), move(left_node), move(right_node), LogicalOperatorType::UNION);
+        return VisitQueryNode(node, move(root));
+    }
     auto root = make_unique<LogicalRecursiveCTE>(node.setop_index, node.types.size(), node.union_all, move(left_node), move(right_node), LogicalOperatorType::RECURSIVE_CTE);
 
     return VisitQueryNode(node, move(root));

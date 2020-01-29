@@ -87,7 +87,6 @@ void BindContext::AddGenericBinding(index_t index, const string &alias, vector<s
 	AddBinding(alias, make_unique<GenericBinding>(alias, move(types), move(names), index));
 }
 
-
 void BindContext::AddCTEBinding(index_t index, const string &alias, vector<string> names, vector<SQLType> types) {
     auto binding = make_unique<GenericBinding>(alias, move(types), move(names), index);
 
@@ -95,4 +94,5 @@ void BindContext::AddCTEBinding(index_t index, const string &alias, vector<strin
         throw BinderException("Duplicate alias \"%s\" in query!", alias.c_str());
     }
     cte_bindings[alias] = move(binding);
+    cte_references[alias] = 0;
 }

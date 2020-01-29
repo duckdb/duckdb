@@ -56,6 +56,9 @@ public:
 
     unordered_set<string> hidden_columns;
 
+    //! Keep track of recursive CTE references
+    unordered_map<string, index_t> cte_references;
+
 private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);
 

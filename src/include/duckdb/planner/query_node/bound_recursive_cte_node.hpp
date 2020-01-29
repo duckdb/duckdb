@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/query_node/bound.hpp
+// duckdb/planner/query_node/bound_recursive_cte_node.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -18,6 +18,9 @@ namespace duckdb {
     public:
         BoundRecursiveCTENode() : BoundQueryNode(QueryNodeType::RECURSIVE_CTE_NODE) {
         }
+
+        //! Keep track of the CTE name this node represents
+        string ctename;
 
         bool union_all;
         //! The left side of the set operation

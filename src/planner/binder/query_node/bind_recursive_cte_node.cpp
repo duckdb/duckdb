@@ -18,6 +18,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(RecursiveCTENode &statement) {
     assert(statement.left);
     assert(statement.right);
 
+    result->ctename = statement.ctename;
     result->union_all = statement.union_all;
     result->setop_index = GenerateTableIndex();
 
