@@ -68,7 +68,6 @@ void PhysicalRecursiveCTE::GetChunkInternal(ClientContext &context, DataChunk &c
         intermediate_table.Append(chunk);
         return;
     }
-
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalRecursiveCTE::GetOperatorState() {
