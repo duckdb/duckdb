@@ -1,8 +1,7 @@
-#include <duckdb/common/enums/set_operation_type.hpp>
+#include "duckdb/common/enums/set_operation_type.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
-#include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 
