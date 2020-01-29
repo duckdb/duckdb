@@ -103,14 +103,17 @@ unique_ptr<QueryNode> Transformer::TransformRecursiveCTE(PGCommonTableExpr *cte)
         default:
             throw NotImplementedException("Statement type %d not implemented!", stmt->op);
     }
-    // transform the common properties
-    // both the set operations and the regular select can have an ORDER BY/LIMIT attached to them
-    TransformOrderBy(stmt->sortClause, node->orders);
-    if (stmt->limitCount) {
-        node->limit = TransformExpression(stmt->limitCount);
+
+    if(!node->orders.empty()) {
+        throw Exception("ORDER BY in a recursive query is not implemented");
     }
+
+    if (stmt->limitCount) {
+        throw Exception("LIMIT in a recursive query is not implemented");
+    }
+
     if (stmt->limitOffset) {
-        node->offset = TransformExpression(stmt->limitOffset);
+        throw Exception("OFFSET in a recursive query is not implemented");
     }
     return node;
 }
