@@ -10,8 +10,10 @@ using namespace std;
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
     assert(op.children.size() == 2);
 
+    // Create the working_table that the PhysicalRecursiveCTE will use for evaluation.
     auto working_table = std::make_shared<ChunkCollection>();
 
+    // Add the ChunkCollection to the context of this PhysicalPlanGenerator
     rec_ctes[op.table_index] = working_table;
 
     auto left = CreatePlan(*op.children[0]);
@@ -28,7 +30,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op
 
     auto chunk_scan = make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::CHUNK_SCAN);
 
+    // CreatePlan of a LogicalRecursiveCTE must have happened before.
     auto cte = rec_ctes.find(op.cte_index);
+    if(cte == rec_ctes.end()) {
+        throw Exception("Referenced recursive CTE does not exist.");
+    }
     chunk_scan->collection = cte->second.get();
     return move(chunk_scan);
 }

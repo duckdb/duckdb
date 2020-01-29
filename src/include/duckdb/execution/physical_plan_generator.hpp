@@ -25,6 +25,8 @@ public:
 	}
 
 	unordered_set<CatalogEntry *> dependencies;
+	//! Recursive CTEs require at least one ChunkScan, referencing the working_table.
+	//! This data structure is used to establish it.
     unordered_map<index_t, std::shared_ptr<ChunkCollection>> rec_ctes;
 
 public:
