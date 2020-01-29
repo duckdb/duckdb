@@ -63,15 +63,15 @@ void Transformer::TransformCTE(PGWithClause *de_with_clause, SelectStatement &se
 unique_ptr<QueryNode> Transformer::TransformRecursiveCTE(PGCommonTableExpr *cte) {
     auto stmt = (PGSelectStmt *)cte->ctequery;
 
-    if(!stmt->all) {
-        throw Exception("UNION semantics for recursive CTEs is not implemented.");
-    }
-
     unique_ptr<QueryNode> node;
     switch (stmt->op) {
         case PG_SETOP_UNION:
         case PG_SETOP_EXCEPT:
         case PG_SETOP_INTERSECT: {
+            if(!stmt->all) {
+                throw Exception("UNION semantics for recursive CTEs is not implemented.");
+            }
+
             node = make_unique<RecursiveCTENode>();
             auto result = (RecursiveCTENode *)node.get();
             result->ctename = string(cte->ctename);
@@ -100,7 +100,8 @@ unique_ptr<QueryNode> Transformer::TransformRecursiveCTE(PGCommonTableExpr *cte)
             break;
         }
         default:
-            throw NotImplementedException("Statement type %d not implemented!", stmt->op);
+            // This CTE is not recursive. Fallback to regular query transformation.
+            return TransformSelectNode((PGSelectStmt *)cte->ctequery);
     }
 
     if(!node->orders.empty()) {
