@@ -64,6 +64,42 @@ TEST_CASE("Test Recursive Common Table Expressions (CTE)", "[rec_cte]") {
     REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 4}));
 
 
+    // strings and multiple columns
+    result = con.Query("with recursive t as (select 1 as x, 'hello' as y union all select x+1, y || '-' || 'hello' from t where x < 3) select * from t;");
+    REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+    REQUIRE(CHECK_COLUMN(result, 1, {"hello", "hello-hello", "hello-hello-hello"}));
+
+    // referencing same CTE multiple times
+    result = con.Query("with recursive t as (select 1 as x union all select x+1 from t where x < 3) select min(a1.x) from t a1, t a2;");
+    REQUIRE(CHECK_COLUMN(result, 0, {1}));
+    // nested uncorrelated subquery
+    result = con.Query("with recursive t as (select 1 as x union all select x+(SELECT 1) from t where x < 3) select * from t;");
+    REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+
+
+    // nested correlated subquery
+//    result = con.Query("with recursive t as (select 1 as x union all select (SELECT x+1) from t where x < 3) select * from t;");
+//    REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+
+    // use with recursive in table creation
+    REQUIRE_NO_FAIL(con.Query("create table integers as with recursive t as (select 1 as x union all select x+1 from t where x < 3) select * from t;"));
+
+    // more complex uncorrelated subquery
+    result = con.Query("with recursive t as (select (select min(x) from integers) as x union all select x+1 from t where x < 3) select * from t;");
+    REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+
     // aggregate functions are not allowed in the recursive term of ctes
     REQUIRE_FAIL(con.Query("with recursive t as (select 1 as x union all select sum(x+1) from t where x < 3) select * from t"));
+
+    // order by is not allowed in the recursive term of ctes
+    REQUIRE_FAIL(con.Query("with recursive t as (select 1 as x union all select sum(x+1) from t where x < 3 order by x) select * from t"));
+
+    // limit is not allowed in the recursive term of ctes
+    REQUIRE_FAIL(con.Query("with recursive t as (select 1 as x union all select sum(x+1) from t where x < 3 LIMIT 1) select * from t"));
+
+    // offset is not allowed in the recursive term of ctes
+    REQUIRE_FAIL(con.Query("with recursive t as (select 1 as x union all select sum(x+1) from t where x < 3 OFFSET 1) select * from t"));
+
+    // offset is not allowed in the recursive term of ctes
+    REQUIRE_FAIL(con.Query("with recursive t as (select 1 as x union all select sum(x+1) from t where x < 3 LIMIT 1 OFFSET 1) select * from t"));
 }
