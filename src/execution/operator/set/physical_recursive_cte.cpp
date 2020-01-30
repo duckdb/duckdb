@@ -3,6 +3,8 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/common/types/static_vector.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -13,6 +15,7 @@ public:
     }
     unique_ptr<PhysicalOperatorState> top_state;
     unique_ptr<PhysicalOperatorState> bottom_state;
+    unique_ptr<SuperLargeHashTable> ht;
 
     bool top_done = false;
 
@@ -33,7 +36,15 @@ void PhysicalRecursiveCTE::GetChunkInternal(ClientContext &context, DataChunk &c
     if(!state->recursing) {
         do {
             children[0]->GetChunk(context, chunk, state->top_state.get());
-            working_table->Append(chunk);
+            if(!union_all) {
+                index_t match_count = ProbeHT(chunk, state);
+                if(match_count > 0) {
+                    working_table->Append(chunk);
+                }
+            } else {
+                working_table->Append(chunk);
+            }
+
             if(chunk.size() != 0) return;
         } while (chunk.size() != 0);
         state->recursing = true;
@@ -64,15 +75,57 @@ void PhysicalRecursiveCTE::GetChunkInternal(ClientContext &context, DataChunk &c
             continue;
         }
 
-        state->intermediate_empty = false;
-        intermediate_table.Append(chunk);
+        if(!union_all) {
+            // If we evaluate using UNION semantics, we have to eliminate duplicates before appending them to
+            // intermediate tables.
+            index_t match_count = ProbeHT(chunk, state);
+            if(match_count > 0) {
+                intermediate_table.Append(chunk);
+                state->intermediate_empty = false;
+            }
+        } else {
+            intermediate_table.Append(chunk);
+            state->intermediate_empty = false;
+        }
+
         return;
     }
+}
+
+index_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, PhysicalOperatorState *state_) {
+    auto state = reinterpret_cast<PhysicalRecursiveCTEState *>(state_);
+
+    StaticPointerVector dummy_addresses;
+    StaticVector<bool> probe_result;
+
+    probe_result.count = chunk.data.get()->count;
+
+    // Use the HT to find duplicate rows
+    state->ht->FindOrCreateGroups(chunk, dummy_addresses, probe_result);
+
+    // Update the sel_vector of the DataChunk
+    index_t match_count = 0;
+    for (index_t probe_idx = 0; probe_idx < probe_result.count; probe_idx++) {
+        index_t sel_idx = probe_idx;
+        if (probe_result.data[sel_idx]) {
+            chunk.owned_sel_vector[match_count++] = sel_idx;
+        }
+    }
+
+    for (index_t i = 0; i < chunk.column_count; i++) {
+        chunk.data[i].count = match_count;
+        chunk.data[i].sel_vector = chunk.owned_sel_vector;
+    }
+
+    chunk.sel_vector = chunk.owned_sel_vector;
+
+    return match_count;
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalRecursiveCTE::GetOperatorState() {
     auto state = make_unique<PhysicalRecursiveCTEState>();
     state->top_state = children[0]->GetOperatorState();
     state->bottom_state = children[1]->GetOperatorState();
+    state->ht = make_unique<SuperLargeHashTable>(1024, types, vector<TypeId>(), vector<BoundAggregateExpression *>());
     return (move(state));
 }

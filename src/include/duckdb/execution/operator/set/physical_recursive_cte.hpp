@@ -22,6 +22,10 @@ namespace duckdb {
     public:
         void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
         unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+
+    private:
+        //! Probe Hash Table and eliminate duplicate rows
+        index_t ProbeHT(DataChunk &chunk, PhysicalOperatorState *state);
     };
 
 }; // namespace duckdb

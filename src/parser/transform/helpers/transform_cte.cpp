@@ -68,9 +68,9 @@ unique_ptr<QueryNode> Transformer::TransformRecursiveCTE(PGCommonTableExpr *cte)
         case PG_SETOP_UNION:
         case PG_SETOP_EXCEPT:
         case PG_SETOP_INTERSECT: {
-            if(!stmt->all) {
-                throw Exception("UNION semantics for recursive CTEs is not implemented.");
-            }
+//            if(!stmt->all) {
+//                throw Exception("UNION semantics for recursive CTEs is not implemented.");
+//            }
 
             node = make_unique<RecursiveCTENode>();
             auto result = (RecursiveCTENode *)node.get();
