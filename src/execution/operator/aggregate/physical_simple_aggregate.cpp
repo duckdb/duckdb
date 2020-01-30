@@ -33,6 +33,7 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 		if (state->child_chunk.size() == 0) {
 			break;
 		}
+		state->child_chunk.Normalify();
 		// now resolve the aggregates for each of the children
 		index_t payload_idx = 0, payload_expr_idx = 0;
 		DataChunk &payload_chunk = state->payload_chunk;

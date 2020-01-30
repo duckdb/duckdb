@@ -249,8 +249,9 @@ void Vector::Append(Vector &other) {
 	}
 }
 
-uint64_t Vector::NotNullSelVector(const Vector &vector, sel_t *not_null_vector, sel_t *&result_assignment,
+uint64_t Vector::NotNullSelVector(Vector &vector, sel_t *not_null_vector, sel_t *&result_assignment,
                                   sel_t *null_vector) {
+	vector.Normalify();
 	if (vector.nullmask.any()) {
 		uint64_t result_count = 0, null_count = 0;
 		VectorOperations::Exec(vector.sel_vector, vector.count, [&](uint64_t i, uint64_t k) {

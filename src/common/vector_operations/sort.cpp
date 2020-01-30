@@ -95,6 +95,7 @@ void VectorOperations::Sort(Vector &vector, sel_t *sel_vector, index_t count, se
 	if (count == 0) {
 		return;
 	}
+	vector.Normalify();
 #ifdef DEBUG
 	VectorOperations::Exec(sel_vector, count, [&](uint64_t i, uint64_t k) { assert(!vector.nullmask[i]); });
 #endif
