@@ -75,7 +75,6 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 			if (aggr.children.size()) {
 				for (index_t j = 0; j < aggr.children.size(); ++j) {
 					state->payload_executor.ExecuteExpression(payload_expr_idx, payload_chunk.data[payload_idx]);
-					payload_chunk.heap.MergeHeap(payload_chunk.data[payload_idx].string_heap);
 					++payload_idx;
 					++payload_expr_idx;
 				}

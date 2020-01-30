@@ -93,7 +93,7 @@ static void regexp_replace_function(DataChunk &args, ExpressionState &state, Vec
 		    RE2 re(pattern, options);
 		    std::string sstring(string);
 		    RE2::Replace(&sstring, re, replace);
-		    return result.string_heap.AddString(sstring);
+		    return result.AddString(sstring);
 	    });
 }
 

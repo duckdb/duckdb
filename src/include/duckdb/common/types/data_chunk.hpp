@@ -45,9 +45,6 @@ public:
 	//! The (optional) selection vector of the DataChunk. Each of the member
 	//! vectors reference this selection vector.
 	sel_t *sel_vector;
-
-	// strings owned by the chunk
-	StringHeap heap;
 	//! The selection vector of a chunk, if it owns it
 	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
 

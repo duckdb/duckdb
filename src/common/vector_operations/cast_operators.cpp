@@ -13,7 +13,7 @@ using namespace std;
 template <class SRC, class OP> static void string_cast(Vector &source, Vector &result) {
 	assert(result.type == TypeId::VARCHAR);
 	UnaryExecutor::Execute<SRC, const char *, true>(source, result, [&](SRC input) {
-		return result.string_heap.AddString(OP::template Operation<SRC, string>(input));
+		return result.AddString(OP::template Operation<SRC, string>(input));
 	});
 }
 
