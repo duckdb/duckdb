@@ -224,6 +224,7 @@ public:
 	static const SQLType TIMESTAMP;
 	static const SQLType TIME;
 	static const SQLType VARCHAR;
+	static const SQLType STRUCT;
 
 	//! A list of all NUMERIC types (integral and floating point types)
 	static const vector<SQLType> NUMERIC;

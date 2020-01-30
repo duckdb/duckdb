@@ -22,6 +22,7 @@ const SQLType SQLType::TIMESTAMP = SQLType(SQLTypeId::TIMESTAMP);
 const SQLType SQLType::TIME = SQLType(SQLTypeId::TIME);
 
 const SQLType SQLType::VARCHAR = SQLType(SQLTypeId::VARCHAR);
+const SQLType SQLType::STRUCT = SQLType(SQLTypeId::STRUCT);
 
 const vector<SQLType> SQLType::NUMERIC = {
     SQLType::TINYINT, SQLType::SMALLINT, SQLType::INTEGER,           SQLType::BIGINT,

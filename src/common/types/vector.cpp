@@ -250,11 +250,18 @@ void Vector::Copy(Vector &other, uint64_t offset) {
 			// recursively apply to children
 			assert(offset <= count);
 			other.count = count - offset;
+			other.sel_vector = nullptr;
+			assert(offset == 0);
 			VectorOperations::Exec(
 			    *this, [&](index_t i, index_t k) { other.nullmask[k - offset] = nullmask[i]; }, offset);
 			for (auto& child : children) {
 				auto child_copy = make_unique<Vector>();
 				child_copy->Initialize(child.second->type);
+
+				// TODO this needs to be set elsewhere!
+				child.second->sel_vector = sel_vector;
+				child.second->count = count;
+
 				child.second->Copy(*child_copy, offset); // TODO the offset is obvious for struct, not so for list/map
 				other.children.push_back(pair<string, unique_ptr<Vector>>(child.first, move(child_copy)));
 			}

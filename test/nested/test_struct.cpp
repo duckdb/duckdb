@@ -6,6 +6,7 @@
 #include "duckdb.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/execution/operator/list.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
 #include "duckdb/function/function.hpp"
@@ -88,18 +89,36 @@ private:
 	}
 };
 
-unique_ptr<BoundFunctionExpression> resolve_function(Connection &con, string name, vector<SQLType> function_args,
-                                                     bool is_operator = true) {
-	auto catalog_entry =
-	    con.context->catalog.GetFunction(con.context->transaction.ActiveTransaction(), DEFAULT_SCHEMA, name, false);
-	assert(catalog_entry->type == CatalogType::SCALAR_FUNCTION);
-	auto scalar_fun = (ScalarFunctionCatalogEntry *)catalog_entry;
 
-	index_t best_function = Function::BindFunction(scalar_fun->name, scalar_fun->functions, function_args);
-	auto fun = scalar_fun->functions[best_function];
+// TODO this needs versions for the different return types, essentially all types.
+// TODO should move to the binder
+static void extract_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	assert(input.column_count == 2);
+	auto &input1 = input.data[0];
+	auto &input2 = input.data[1];
+	assert(input1.type == TypeId::STRUCT);
+	assert(input2.type == TypeId::VARCHAR);
 
-	return make_unique<BoundFunctionExpression>(GetInternalType(fun.return_type), fun, is_operator);
+	// TODO input2 might be a vector too
+	auto key = input2.GetValue(0).str_value;
+	for (auto& child : input1.children) {
+		if (child.first == key) {
+			result.Reference(*child.second.get());
+			result.count = input1.count;
+			result.sel_vector = input1.sel_vector;
+			result.nullmask = input1.nullmask;
+			return;
+		}
+	}
+	throw Exception("Could not find struct key");
 }
+
+class StructExtractFunction : public ScalarFunction {
+public:
+	StructExtractFunction() : ScalarFunction("struct_extract", {SQLType::STRUCT, SQLType::VARCHAR}, SQLType::INTEGER, extract_function){};
+};
+
+
 
 TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 	DuckDB db(nullptr);
@@ -107,13 +126,18 @@ TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 	con.DisableProfiling();
 
 	MyScanFunction scan_fun;
-	CreateTableFunctionInfo info(scan_fun);
+	CreateTableFunctionInfo scan_info(scan_fun);
+	StructExtractFunction extract_fun;
+	CreateScalarFunctionInfo extract_info(extract_fun);
+
+
 	con.context->transaction.SetAutoCommit(false);
 	con.context->transaction.BeginTransaction();
 	auto &trans = con.context->transaction.ActiveTransaction();
-	con.context->catalog.CreateTableFunction(trans, &info);
+	con.context->catalog.CreateTableFunction(trans, &scan_info);
+	con.context->catalog.CreateFunction(trans, &extract_info);
 
-	auto result = con.Query("SELECT some_int, some_struct FROM my_scan() WHERE some_int > 7 LIMIT 10 ");
+	auto result = con.Query("SELECT some_int, some_struct, struct_extract(some_struct, 'first') FROM my_scan() WHERE some_int > 7 LIMIT 10 ");
 	result->Print();
 
 	// TODO sorting
