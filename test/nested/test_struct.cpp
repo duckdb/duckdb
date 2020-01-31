@@ -137,10 +137,9 @@ TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 	con.context->catalog.CreateTableFunction(trans, &scan_info);
 	con.context->catalog.CreateFunction(trans, &extract_info);
 
-	auto result = con.Query("SELECT some_int, some_struct, struct_extract(some_struct, 'first') FROM my_scan() WHERE some_int > 7 LIMIT 10 ");
+	auto result = con.Query("SELECT some_int, some_struct, struct_extract(some_struct, 'first') FROM my_scan() WHERE some_int > 7 ORDER BY some_int LIMIT 100 ");
 	result->Print();
 
-	// TODO sorting
 	// TODO hash tables
 	// TODO ?
 }

@@ -102,6 +102,24 @@ void Vector::SetValue(uint64_t index_, Value val) {
 		}
 		break;
 	}
+	case TypeId::STRUCT: {
+		for (size_t i = 0; i < val.struct_value.size(); i++) {
+			auto& struct_child = val.struct_value[i];
+			if (i == children.size()) {
+				// TODO should this child vector already exist here?
+				auto cv = make_unique<Vector>(TypeId::INT32);
+				cv->Initialize(struct_child.second.type, true);
+				cv->count = count;
+				children.push_back(pair<string, unique_ptr<Vector>>(struct_child.first, move(cv)));
+			}
+			auto& vec_child = children[i];
+			if(vec_child.first != struct_child.first) {
+				throw Exception("Struct child name mismatch");
+			}
+			vec_child.second->SetValue(index, struct_child.second);
+		}
+	}
+	break;
 	default:
 		throw NotImplementedException("Unimplemented type for adding");
 	}
