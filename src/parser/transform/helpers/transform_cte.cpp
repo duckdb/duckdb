@@ -68,10 +68,6 @@ unique_ptr<QueryNode> Transformer::TransformRecursiveCTE(PGCommonTableExpr *cte)
         case PG_SETOP_UNION:
         case PG_SETOP_EXCEPT:
         case PG_SETOP_INTERSECT: {
-//            if(!stmt->all) {
-//                throw Exception("UNION semantics for recursive CTEs is not implemented.");
-//            }
-
             node = make_unique<RecursiveCTENode>();
             auto result = (RecursiveCTENode *)node.get();
             result->ctename = string(cte->ctename);
@@ -86,7 +82,8 @@ unique_ptr<QueryNode> Transformer::TransformRecursiveCTE(PGCommonTableExpr *cte)
             result->select_distinct = true;
             switch (stmt->op) {
                 case PG_SETOP_UNION:
-                    result->select_distinct = !stmt->all;
+                    // We don't need a DISTINCT operation on top of a recursive UNION CTE.
+                    result->select_distinct = false;
                     break;
                 default:
                     throw Exception("Unexpected setop type for recursive CTE");
