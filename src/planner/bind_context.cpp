@@ -88,11 +88,11 @@ void BindContext::AddGenericBinding(index_t index, const string &alias, vector<s
 }
 
 void BindContext::AddCTEBinding(index_t index, const string &alias, vector<string> names, vector<SQLType> types) {
-    auto binding = make_unique<GenericBinding>(alias, move(types), move(names), index);
+    auto binding = make_shared<GenericBinding>(alias, move(types), move(names), index);
 
     if (cte_bindings.find(alias) != cte_bindings.end()) {
         throw BinderException("Duplicate alias \"%s\" in query!", alias.c_str());
     }
     cte_bindings[alias] = move(binding);
-    cte_references[alias] = 0;
+    cte_references[alias] = std::make_shared<index_t>(0);
 }

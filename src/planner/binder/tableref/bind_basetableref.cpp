@@ -32,7 +32,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &expr) {
 
             bind_context.AddGenericBinding(index, expr.alias.empty() ? expr.table_name : expr.alias, b->names, b->types);
             // Update references to CTE
-            bind_context.cte_references[expr.table_name]++;
+            auto cteref = bind_context.cte_references[expr.table_name];
+            (*cteref)++;
 
             result->types = b->types;
             result->bound_columns = b->names;

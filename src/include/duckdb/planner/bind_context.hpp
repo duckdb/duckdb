@@ -57,7 +57,10 @@ public:
     unordered_set<string> hidden_columns;
 
     //! Keep track of recursive CTE references
-    unordered_map<string, index_t> cte_references;
+    unordered_map<string, std::shared_ptr<index_t>> cte_references;
+
+    unordered_map<string, std::shared_ptr<Binding>> GetCTEBindings() { return cte_bindings; }
+    void SetCTEBindings(unordered_map<string, std::shared_ptr<Binding>> bindings) { cte_bindings = bindings; }
 
 private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);
@@ -68,6 +71,6 @@ private:
 	vector<std::pair<string, Binding *>> bindings_list;
 
     //! The set of CTE bindings
-    unordered_map<string, unique_ptr<Binding>> cte_bindings;
+    unordered_map<string, std::shared_ptr<Binding>> cte_bindings;
 };
 } // namespace duckdb
