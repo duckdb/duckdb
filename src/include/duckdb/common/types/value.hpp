@@ -134,6 +134,7 @@ public:
 	string str_value;
 
 	std::vector<std::pair<std::string, Value>> struct_value;
+	std::vector<Value> list_value;
 
 	//! Serializes a Value to a stand-alone binary blob
 	void Serialize(Serializer &serializer);

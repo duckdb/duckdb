@@ -32,6 +32,15 @@ struct string_t {
 	uint32_t length;
 };
 
+struct list_entry_t {
+	list_entry_t() = default;
+	list_entry_t(uint64_t offset, uint64_t length) : offset(offset), length(length) {
+	}
+
+	uint64_t offset;
+	uint64_t length;
+};
+
 //===--------------------------------------------------------------------===//
 // Internal Types
 //===--------------------------------------------------------------------===//
@@ -181,7 +190,8 @@ enum class SQLTypeId : uint8_t {
 	VARCHAR = 22,
 	VARBINARY = 23,
 
-	STRUCT = 100
+	STRUCT = 100,
+	LIST = 101
 };
 
 struct SQLType {
@@ -190,7 +200,7 @@ struct SQLType {
 	uint8_t scale;
 
 	// TODO serialize this
-	std::vector<std::pair<std::string, SQLType>> struct_type;
+	std::vector<std::pair<std::string, SQLType>> child_type;
 
 	SQLType(SQLTypeId id = SQLTypeId::INVALID, uint16_t width = 0, uint8_t scale = 0)
 	    : id(id), width(width), scale(scale) {
@@ -225,6 +235,7 @@ public:
 	static const SQLType TIME;
 	static const SQLType VARCHAR;
 	static const SQLType STRUCT;
+	static const SQLType LIST;
 
 	//! A list of all NUMERIC types (integral and floating point types)
 	static const vector<SQLType> NUMERIC;

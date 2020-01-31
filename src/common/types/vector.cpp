@@ -20,7 +20,6 @@ Vector::Vector(TypeId type, bool create_data, bool zero_data)
 }
 
 Vector::Vector(TypeId type) : Vector(type, true, false) {
-
 }
 
 Vector::Vector(TypeId type, data_ptr_t dataptr)
@@ -48,15 +47,17 @@ void Vector::Reference(Value &value) {
 	SetValue(0, value);
 }
 
-void Vector::Initialize(TypeId new_type, bool zero_data) {
+void Vector::Initialize(TypeId new_type, bool zero_data, index_t count) {
 	if (new_type != TypeId::INVALID) {
 		type = new_type;
 	}
 	auxiliary.reset();
-	buffer = VectorBuffer::CreateStandardVector(type);
-	data = buffer->GetData();
-	if (zero_data) {
-		memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
+	if (GetTypeIdSize(type) > 0) {
+		buffer = VectorBuffer::CreateStandardVector(type, count);
+		data = buffer->GetData();
+		if (zero_data) {
+			memset(data, 0, count * GetTypeIdSize(type));
+		}
 	}
 	nullmask.reset();
 }
@@ -104,7 +105,7 @@ void Vector::SetValue(uint64_t index_, Value val) {
 	}
 	case TypeId::STRUCT: {
 		for (size_t i = 0; i < val.struct_value.size(); i++) {
-			auto& struct_child = val.struct_value[i];
+			auto &struct_child = val.struct_value[i];
 			if (i == children.size()) {
 				// TODO should this child vector already exist here?
 				auto cv = make_unique<Vector>(TypeId::INT32);
@@ -112,13 +113,17 @@ void Vector::SetValue(uint64_t index_, Value val) {
 				cv->count = count;
 				children.push_back(pair<string, unique_ptr<Vector>>(struct_child.first, move(cv)));
 			}
-			auto& vec_child = children[i];
-			if(vec_child.first != struct_child.first) {
+			auto &vec_child = children[i];
+			if (vec_child.first != struct_child.first) {
 				throw Exception("Struct child name mismatch");
 			}
 			vec_child.second->SetValue(index, struct_child.second);
 		}
+	} break;
+	case TypeId::LIST: {
+		// TODO hmmm how do we make space for the value?
 	}
+
 	break;
 	default:
 		throw NotImplementedException("Unimplemented type for adding");
@@ -169,8 +174,19 @@ Value Vector::GetValue(uint64_t index) const {
 		}
 		return ret;
 	}
+	case TypeId::LIST: {
+		Value ret(TypeId::LIST);
+		ret.is_null = false;
+		// get offset and length
+		auto offlen = ((list_entry_t *)data)[entry];
+		assert(children.size() == 1);
+		for (index_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
+			ret.list_value.push_back(children[0].second->GetValue(i));
+		}
+		return ret;
+	}
 	default:
-		throw NotImplementedException("Unimplemented type for conversion");
+		throw NotImplementedException("Unimplemented type for value access");
 	}
 }
 
@@ -183,11 +199,11 @@ void Vector::Reference(Vector &other) {
 	sel_vector = other.sel_vector;
 	type = other.type;
 	nullmask = other.nullmask;
-	if (type == TypeId::STRUCT) {
+	if (type == TypeId::STRUCT || type == TypeId::LIST) {
 		for (size_t i = 0; i < other.children.size(); i++) {
-			auto& other_child_vec = other.children[i].second;
+			auto &other_child_vec = other.children[i].second;
 			auto child_ref = make_unique<Vector>();
-			child_ref->Initialize(other_child_vec->type);
+			child_ref->type = other_child_vec->type;
 			child_ref->Reference(*other_child_vec.get());
 			children.push_back(pair<string, unique_ptr<Vector>>(other.children[i].first, move(child_ref)));
 		}
@@ -221,7 +237,7 @@ void Vector::Copy(Vector &other, uint64_t offset) {
 
 	other.nullmask.reset();
 	if (!TypeIsConstantSize(type)) {
-		switch(type) {
+		switch (type) {
 		case TypeId::VARCHAR: {
 			other.count = count - offset;
 			auto source = (const char **)data;
@@ -237,8 +253,7 @@ void Vector::Copy(Vector &other, uint64_t offset) {
 				    }
 			    },
 			    offset);
-		}
-		break;
+		} break;
 		case TypeId::STRUCT: {
 			// the main vector only has a nullmask, so set that with offset
 			// recursively apply to children
@@ -248,7 +263,7 @@ void Vector::Copy(Vector &other, uint64_t offset) {
 			assert(offset == 0);
 			VectorOperations::Exec(
 			    *this, [&](index_t i, index_t k) { other.nullmask[k - offset] = nullmask[i]; }, offset);
-			for (auto& child : children) {
+			for (auto &child : children) {
 				auto child_copy = make_unique<Vector>();
 				child_copy->Initialize(child.second->type);
 
@@ -259,11 +274,32 @@ void Vector::Copy(Vector &other, uint64_t offset) {
 				child.second->Copy(*child_copy, offset); // TODO the offset is obvious for struct, not so for list/map
 				other.children.push_back(pair<string, unique_ptr<Vector>>(child.first, move(child_copy)));
 			}
-		}
-		break;
+		} break;
+		case TypeId::LIST: {
+			// copy main vector
+			// FIXME
+			assert(offset == 0);
+			other.Initialize(TypeId::LIST);
+			other.count = count - offset;
+			other.sel_vector = nullptr;
+			VectorOperations::Exec(
+			    *this, [&](index_t i, index_t k) { other.nullmask[k - offset] = nullmask[i]; }, offset);
+
+			// FIXME :/
+			memcpy(other.data, data, count * GetTypeIdSize(type));
+
+			// copy child
+			assert(children.size() == 1); // TODO if size() = 0, we would have all NULLs?
+			auto &child = children[0].second;
+			auto child_copy = make_unique<Vector>();
+			child_copy->Initialize(child->type, true, child->count);
+			child->Copy(*child_copy.get(), offset);
+
+			other.children.push_back(pair<string, unique_ptr<Vector>>("", move(child_copy)));
+
+		} break;
 		default:
 			throw NotImplementedException("Copy type ");
-
 		}
 
 	} else {
@@ -300,7 +336,7 @@ void Vector::Append(Vector &other) {
 	// merge NULL mask
 	VectorOperations::Exec(other, [&](uint64_t i, uint64_t k) { nullmask[old_count + k] = other.nullmask[i]; });
 	if (!TypeIsConstantSize(type)) {
-		switch(type) {
+		switch (type) {
 		case TypeId::VARCHAR: {
 			auto source = (const char **)other.data;
 			auto target = (const char **)data;
@@ -311,8 +347,7 @@ void Vector::Append(Vector &other) {
 					target[old_count + k] = AddString(source[i]);
 				}
 			});
-		}
-		break;
+		} break;
 		case TypeId::STRUCT: {
 			// the main vector only has a nullmask, so set that with offset
 			// recursively apply to children
@@ -321,10 +356,8 @@ void Vector::Append(Vector &other) {
 				assert(children[i].first == other.children[i].first);
 				assert(children[i].second->type == other.children[i].second->type);
 				children[i].second->Append(*other.children[i].second.get());
-
 			}
-		}
-		break;
+		} break;
 		default:
 			throw NotImplementedException("Append type ");
 		}
@@ -371,17 +404,15 @@ void Vector::Print() {
 	Printer::Print(ToString());
 }
 
-template<class T>
+template <class T>
 static void flatten_constant_vector_loop(data_ptr_t data, data_ptr_t old_data, index_t count, sel_t *sel_vector) {
-	auto constant = *((T*) old_data);
-	auto output = (T*) data;
-	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
-		output[i] = constant;
-	});
+	auto constant = *((T *)old_data);
+	auto output = (T *)data;
+	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) { output[i] = constant; });
 }
 
 void Vector::Normalify() {
-	switch(vector_type) {
+	switch (vector_type) {
 	case VectorType::FLAT_VECTOR:
 		// already a flat vector
 		break;
@@ -398,7 +429,7 @@ void Vector::Normalify() {
 			return;
 		}
 		// non-null constant: have to repeat the constant
-		switch(type) {
+		switch (type) {
 		case TypeId::BOOL:
 		case TypeId::INT8:
 			flatten_constant_vector_loop<int8_t>(data, old_data, count, sel_vector);
@@ -470,7 +501,7 @@ const char *Vector::AddString(const char *data, index_t len) {
 		auxiliary = make_buffer<VectorStringBuffer>();
 	}
 	assert(auxiliary->type == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = (VectorStringBuffer&) *auxiliary;
+	auto &string_buffer = (VectorStringBuffer &)*auxiliary;
 	return string_buffer.AddString(data, len);
 }
 
@@ -491,6 +522,6 @@ void Vector::AddHeapReference(Vector &other) {
 	}
 	assert(auxiliary->type == VectorBufferType::STRING_BUFFER);
 	assert(other.auxiliary->type == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = (VectorStringBuffer&) *auxiliary;
+	auto &string_buffer = (VectorStringBuffer &)*auxiliary;
 	string_buffer.AddHeapReference(other.auxiliary);
 }

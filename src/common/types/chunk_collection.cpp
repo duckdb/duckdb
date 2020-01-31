@@ -315,8 +315,7 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, index_t order[],
 				tgt_vec.SetValue(row_idx, src_vec.GetValue(vector_idx_src));
 			}
 
-		}
-			break;
+		} break;
 		default:
 			throw NotImplementedException("Type is unsupported in MaterializeSortedChunk()");
 		}
@@ -457,7 +456,9 @@ index_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, index_t order[]
 		case TypeId::VARCHAR:
 			templated_set_values<char *>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::STRUCT: {
+			// TODO this is ugly and sloooow!
+		case TypeId::STRUCT:
+		case TypeId::LIST: {
 			for (index_t row_idx = 0; row_idx < remaining_data; row_idx++) {
 				index_t chunk_idx_src = order[start_offset + row_idx] / STANDARD_VECTOR_SIZE;
 				index_t vector_idx_src = order[start_offset + row_idx] % STANDARD_VECTOR_SIZE;
@@ -473,8 +474,8 @@ index_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, index_t order[]
 				tgt_vec.SetValue(row_idx, src_vec.GetValue(vector_idx_src));
 			}
 
-		}
-			break;
+		} break;
+
 		default:
 			throw NotImplementedException("Type is unsupported in MaterializeHeapChunk()");
 		}

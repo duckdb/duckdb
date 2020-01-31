@@ -333,7 +333,19 @@ string Value::ToString(SQLType sql_type) const {
 				ret += ", ";
 			}
 		}
-		ret+=">";
+		ret += ">";
+		return ret;
+	}
+	case SQLTypeId::LIST: {
+		string ret = "[";
+		for (size_t i = 0; i < list_value.size(); i++) {
+			auto &child = list_value[i];
+			ret += child.ToString();
+			if (i < list_value.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += "]";
 		return ret;
 	}
 	default:
@@ -342,7 +354,7 @@ string Value::ToString(SQLType sql_type) const {
 }
 
 string Value::ToString() const {
-	switch(type) {
+	switch (type) {
 	case TypeId::POINTER:
 		return to_string(value_.pointer);
 	case TypeId::HASH:

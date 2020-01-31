@@ -94,7 +94,7 @@ public:
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
-	void Initialize(TypeId new_type, bool zero_data = false);
+	void Initialize(TypeId new_type, bool zero_data = false, index_t count = STANDARD_VECTOR_SIZE);
 	//! Casts the vector to the specified type
 	void Cast(TypeId new_type = TypeId::INVALID);
 	//! Appends the other vector to this vector.
@@ -141,12 +141,14 @@ public:
 
 	//! Add a reference from this vector to the string heap of the provided vector
 	void AddHeapReference(Vector &other);
+
 protected:
 	//! A pointer to the data.
 	data_ptr_t data;
 	//! The main buffer holding the data of the vector
 	buffer_ptr<VectorBuffer> buffer;
-	//! The secondary buffer holding auxiliary data of the vector, for example, a string vector uses this to store strings
+	//! The secondary buffer holding auxiliary data of the vector, for example, a string vector uses this to store
+	//! strings
 	buffer_ptr<VectorBuffer> auxiliary;
 };
 } // namespace duckdb
