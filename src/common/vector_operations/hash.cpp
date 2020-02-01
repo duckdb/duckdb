@@ -32,14 +32,15 @@ static inline void tight_loop_hash(T *__restrict ldata, uint64_t *__restrict res
 }
 
 template <class T> void templated_loop_hash(Vector &input, Vector &result) {
-	auto ldata = (T *)input.GetData();
 	auto result_data = (uint64_t *)result.GetData();
 
 	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
+		auto ldata = (T *)input.GetData();
 		result.vector_type = VectorType::CONSTANT_VECTOR;
 		result_data[0] = HashOp::Operation(ldata[0], input.nullmask[0]);
 	} else {
-		assert(input.vector_type == VectorType::FLAT_VECTOR);
+		input.Normalify();
+		auto ldata = (T *)input.GetData();
 		result.vector_type = VectorType::FLAT_VECTOR;
 		tight_loop_hash<T>(ldata, result_data, input.count, input.sel_vector, input.nullmask);
 	}

@@ -114,9 +114,8 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		auto column = state.column_ids[i];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// scan row id
-			assert(result.data[i].type == TypeId::INT64);
-			result.data[i].count = max_count;
-			VectorOperations::GenerateSequence(result.data[i], base_row + current_row);
+			assert(result.data[i].type == ROW_TYPE);
+			result.data[i].Sequence(base_row + current_row, 1, max_count);
 		} else {
 			// scan actual base column
 			columns[column].Scan(transaction, state.column_scans[i], result.data[i]);
@@ -376,7 +375,7 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 	Vector row_identifiers(ROW_TYPE);
 	row_identifiers.sel_vector = chunk.sel_vector;
 	row_identifiers.count = chunk.size();
-	VectorOperations::GenerateSequence(row_identifiers, row_start);
+	VectorOperations::GenerateSequence(row_identifiers, row_start, 1, true);
 
 	index_t failed_index = INVALID_INDEX;
 	// now append the entries to the indices
@@ -405,7 +404,7 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row
 	Vector row_identifiers(ROW_TYPE);
 	row_identifiers.sel_vector = chunk.sel_vector;
 	row_identifiers.count = chunk.size();
-	VectorOperations::GenerateSequence(row_identifiers, row_start);
+	VectorOperations::GenerateSequence(row_identifiers, row_start, 1, true);
 
 	// now remove the entries from the indices
 	RemoveFromIndexes(state, chunk, row_identifiers);
@@ -453,6 +452,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 
 	Transaction &transaction = context.ActiveTransaction();
 
+	row_identifiers.Normalify();
 	auto ids = (row_t *)row_identifiers.GetData();
 	auto sel_vector = row_identifiers.sel_vector;
 	auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
@@ -622,9 +622,8 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, 
 		auto column = state.column_ids[i];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// scan row id
-			assert(result.data[i].type == TypeId::INT64);
-			result.data[i].count = count;
-			VectorOperations::GenerateSequence(result.data[i], base_row + current_row);
+			assert(result.data[i].type == ROW_TYPE);
+			result.data[i].Sequence(base_row + current_row, 1, count);
 		} else {
 			// scan actual base column
 			columns[column].IndexScan(state.column_scans[i], result.data[i]);

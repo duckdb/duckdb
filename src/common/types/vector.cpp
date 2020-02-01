@@ -5,12 +5,11 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
-using namespace duckdb;
 using namespace std;
 
 namespace duckdb {
+
 nullmask_t ZERO_MASK = nullmask_t(0);
-}
 
 Vector::Vector(TypeId type, bool create_data, bool zero_data)
     : vector_type(VectorType::FLAT_VECTOR), type(type), count(0), sel_vector(nullptr), data(nullptr) {
@@ -269,14 +268,42 @@ uint64_t Vector::NotNullSelVector(Vector &vector, sel_t *not_null_vector, sel_t 
 	}
 }
 
+string VectorTypeToString(VectorType type) {
+	switch(type) {
+	case VectorType::FLAT_VECTOR:
+		return "FLAT";
+	case VectorType::SEQUENCE_VECTOR:
+		return "SEQUENCE";
+	case VectorType::CONSTANT_VECTOR:
+		return "CONSTANT";
+	default:
+		return "UNKNOWN";
+	}
+}
+
 string Vector::ToString() const {
-	string retval = TypeIdToString(type) + ": " + to_string(count) + " = [ ";
-	if (vector_type == VectorType::FLAT_VECTOR) {
+	string retval = VectorTypeToString(vector_type) + " " + TypeIdToString(type) + ": " + to_string(count) + " = [ ";
+	switch(vector_type) {
+	case VectorType::FLAT_VECTOR:
 		for (index_t i = 0; i < count; i++) {
 			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
 		}
-	} else {
+		break;
+	case VectorType::CONSTANT_VECTOR:
 		retval += GetValue(0).ToString();
+		break;
+	case VectorType::SEQUENCE_VECTOR: {
+		int64_t start, increment;
+		GetSequence(start, increment);
+		for (index_t i = 0; i < count; i++) {
+			index_t idx = sel_vector ? sel_vector[i] : i;
+			retval += to_string(start + increment * idx) + (i == count - 1 ? "" : ", ");
+		}
+		break;
+	}
+	default:
+		retval += "UNKNOWN VECTOR TYPE";
+		break;
 	}
 	retval += "]";
 	return retval;
@@ -347,9 +374,37 @@ void Vector::Normalify() {
 		}
 		break;
 	}
+	case VectorType::SEQUENCE_VECTOR: {
+		int64_t start, increment;
+		GetSequence(start, increment);
+
+		vector_type = VectorType::FLAT_VECTOR;
+		buffer = VectorBuffer::CreateStandardVector(type);
+		data = buffer->GetData();
+		VectorOperations::GenerateSequence(*this, start, increment);
+		break;
+	}
 	default:
 		throw NotImplementedException("FIXME: unimplemented type for normalify");
 	}
+}
+
+void Vector::Sequence(int64_t start, int64_t increment, index_t count) {
+	vector_type = VectorType::SEQUENCE_VECTOR;
+	this->count = count;
+	this->buffer = make_buffer<VectorBuffer>(sizeof(int64_t) * 2);
+	auto data = buffer->GetData();
+	memcpy(data, &start, sizeof(int64_t));
+	memcpy(data + sizeof(int64_t), &increment, sizeof(int64_t));
+	nullmask.reset();
+	auxiliary.reset();
+}
+
+void Vector::GetSequence(int64_t &start, int64_t &increment) const {
+	assert(vector_type == VectorType::SEQUENCE_VECTOR);
+	auto data = buffer->GetData();
+	start = *((int64_t*) data);
+	increment = *((int64_t*) (data + sizeof(int64_t)));
 }
 
 void Vector::Verify() {
@@ -408,4 +463,6 @@ void Vector::AddHeapReference(Vector &other) {
 	assert(other.auxiliary->type == VectorBufferType::STRING_BUFFER);
 	auto &string_buffer = (VectorStringBuffer&) *auxiliary;
 	string_buffer.AddHeapReference(other.auxiliary);
+}
+
 }

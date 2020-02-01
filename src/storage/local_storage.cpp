@@ -80,9 +80,8 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 	for (index_t i = 0; i < column_ids.size(); i++) {
 		auto id = column_ids[i];
 		if (id == COLUMN_IDENTIFIER_ROW_ID) {
-			// row identifier: return MAX_ROW_ID plus the row offset in the chunk
-			result.data[i].count = chunk_count;
-			VectorOperations::GenerateSequence(result.data[i], MAX_ROW_ID + state.chunk_index * STANDARD_VECTOR_SIZE);
+			// row identifier: return a sequence of rowids starting from MAX_ROW_ID plus the row offset in the chunk
+			result.data[i].Sequence(MAX_ROW_ID + state.chunk_index * STANDARD_VECTOR_SIZE, 1, chunk_count);
 		} else {
 			result.data[i].Reference(chunk.data[id]);
 		}
@@ -111,7 +110,7 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 		Vector row_identifiers(ROW_TYPE);
 		row_identifiers.sel_vector = chunk.sel_vector;
 		row_identifiers.count = chunk.size();
-		VectorOperations::GenerateSequence(row_identifiers, base_id);
+		VectorOperations::GenerateSequence(row_identifiers, base_id, 1, true);
 
 		// now append the entries to the indices
 		for (auto &index : storage->indexes) {
@@ -132,8 +131,9 @@ LocalTableStorage *LocalStorage::GetStorage(DataTable *table) {
 }
 
 static index_t GetChunk(Vector &row_identifiers) {
+	row_identifiers.Normalify();
 	auto ids = (row_t *)row_identifiers.GetData();
-	auto first_id = ids[0] - MAX_ROW_ID;
+	auto first_id = ids[row_identifiers.sel_vector ? row_identifiers.sel_vector[0] : 0] - MAX_ROW_ID;
 
 	index_t chunk_idx = first_id / STANDARD_VECTOR_SIZE;
 	// verify that all row ids belong to the same chunk

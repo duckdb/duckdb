@@ -92,7 +92,14 @@ void VectorOperations::Scatter::AddOne(Vector &source, Vector &dest) {
 			(*destinations[i])++;
 		});
 
+	} else if (source.vector_type == VectorType::SEQUENCE_VECTOR) {
+		VectorOperations::Exec(source.sel_vector, source.count, [&](index_t i, index_t k) {
+			if (!source.nullmask[i]) {
+				(*destinations[i])++;
+			}
+		});
 	} else {
+		source.Normalify();
 		assert(source.vector_type == VectorType::FLAT_VECTOR);
 		VectorOperations::Exec(source, [&](index_t i, index_t k) {
 			if (!source.nullmask[i]) {

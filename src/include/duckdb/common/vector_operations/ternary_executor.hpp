@@ -51,7 +51,7 @@ private:
 		if (b.vector_type == VectorType::CONSTANT_VECTOR) {
 			ExecuteAB<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, FUN, IGNORE_NULL, A_CONSTANT, true>(a, b, c, result, fun);
 		} else {
-			assert(b.vector_type == VectorType::FLAT_VECTOR);
+			b.Normalify();
 			ExecuteAB<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, FUN, IGNORE_NULL, A_CONSTANT, false>(a, b, c, result, fun);
 		}
 	}
@@ -61,7 +61,7 @@ private:
 		if (c.vector_type == VectorType::CONSTANT_VECTOR) {
 			ExecuteABC<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, FUN, IGNORE_NULL, A_CONSTANT, B_CONSTANT, true>(a, b, c, result, fun);
 		} else {
-			assert(c.vector_type == VectorType::FLAT_VECTOR);
+			c.Normalify();
 			ExecuteABC<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, FUN, IGNORE_NULL, A_CONSTANT, B_CONSTANT, false>(a, b, c, result, fun);
 		}
 	}
@@ -116,6 +116,7 @@ private:
 		if (A_CONSTANT && B_CONSTANT && C_CONSTANT) {
 			// everything is constant, result is constant
 			result.vector_type = VectorType::CONSTANT_VECTOR;
+			result.nullmask[0] = false;
 			assert(!a.nullmask[0] && !b.nullmask[0] && !c.nullmask[0]);
 			result_data[0] = fun(adata[0], bdata[0], cdata[0]);
 			return;
@@ -140,7 +141,7 @@ public:
 		if (a.vector_type == VectorType::CONSTANT_VECTOR) {
 			ExecuteA<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, FUN, IGNORE_NULL, true>(a, b, c, result, fun);
 		} else {
-			assert(a.vector_type == VectorType::FLAT_VECTOR);
+			a.Normalify();
 			ExecuteA<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, FUN, IGNORE_NULL, false>(a, b, c, result, fun);
 		}
 	}
@@ -175,7 +176,7 @@ private:
 			}
 			return SelectAB<A_TYPE, B_TYPE, C_TYPE, OP, A_CONSTANT, true>(a, b, c, result);
 		} else {
-			assert(b.vector_type == VectorType::FLAT_VECTOR);
+			b.Normalify();
 			return SelectAB<A_TYPE, B_TYPE, C_TYPE, OP, A_CONSTANT, false>(a, b, c, result);
 		}
 	}
@@ -188,7 +189,7 @@ private:
 			}
 			return SelectABC<A_TYPE, B_TYPE, C_TYPE, OP, A_CONSTANT, B_CONSTANT, true>(a, b, c, result);
 		} else {
-			assert(c.vector_type == VectorType::FLAT_VECTOR);
+			c.Normalify();
 			return SelectABC<A_TYPE, B_TYPE, C_TYPE, OP, A_CONSTANT, B_CONSTANT, false>(a, b, c, result);
 		}
 	}
@@ -226,7 +227,7 @@ public:
 			}
 			return SelectA<A_TYPE, B_TYPE, C_TYPE, OP, true>(a, b, c, result);
 		} else {
-			assert(a.vector_type == VectorType::FLAT_VECTOR);
+			a.Normalify();
 			return SelectA<A_TYPE, B_TYPE, C_TYPE, OP, false>(a, b, c, result);
 		}
 	}

@@ -356,17 +356,6 @@ void SuperLargeHashTable::HashGroups(DataChunk &groups, Vector &addresses) {
 		assert((element & bitmask) == (element % capacity));
 		return data + ((element & bitmask) * tuple_size);
 	});
-
-	// auto data_pointers = (data_ptr_t *)addresses.GetData();
-	// VectorOperations::ExecType<uint64_t>(hashes, [&](uint64_t element, index_t i, index_t k) {
-	// 	assert((element & bitmask) == (element % capacity));
-	// 	data_pointers[i] = data + ((element & bitmask) * tuple_size);
-	// });
-
-	// addresses.sel_vector = hashes.sel_vector;
-	// addresses.count = hashes.count;
-
-	// assert(addresses.sel_vector == groups.sel_vector);
 }
 
 // this is to support distinct aggregations where we need to record whether we
