@@ -124,6 +124,11 @@ public:
 	//! Flatten the vector, removing any compression and turning it into a FLAT_VECTOR
 	void Normalify();
 
+	//! Turn the vector into a sequence vector
+	void Sequence(int64_t start, int64_t increment, index_t count);
+	//! Get the sequence attributes of a sequence vector
+	void GetSequence(int64_t &start, int64_t &increment) const;
+
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
 	void Verify();
@@ -150,5 +155,6 @@ protected:
 	//! The secondary buffer holding auxiliary data of the vector, for example, a string vector uses this to store
 	//! strings
 	buffer_ptr<VectorBuffer> auxiliary;
+private:
 };
 } // namespace duckdb

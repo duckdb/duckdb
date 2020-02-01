@@ -27,6 +27,27 @@ string BenchmarkInfo() override {
 }
 FINISH_BENCHMARK(LineitemSimpleAggregate)
 
+
+
+DUCKDB_BENCHMARK(LineitemCount, "[aggregate]")
+void Load(DuckDBBenchmarkState *state) override {
+	// load the data into the tpch schema
+	tpch::dbgen(SF, state->db);
+}
+string GetQuery() override {
+	return "SELECT COUNT(*) FROM lineitem";
+}
+string VerifyResult(QueryResult *result) override {
+	if (!result->success) {
+		return result->error;
+	}
+	return string();
+}
+string BenchmarkInfo() override {
+	return "Execute the query \"SELECT COUNT(*) FROM lineitem\" on SF1";
+}
+FINISH_BENCHMARK(LineitemCount)
+
 DUCKDB_BENCHMARK(LineitemGroupAggregate, "[aggregate]")
 void Load(DuckDBBenchmarkState *state) override {
 	// load the data into the tpch schema

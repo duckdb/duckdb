@@ -24,15 +24,22 @@ static NotImplementedException UnimplementedCast(SQLType source_type, SQLType ta
 
 // NULL cast only works if all values in source are NULL, otherwise an unimplemented cast exception is thrown
 static void null_cast(Vector &source, Vector &result, SQLType source_type, SQLType target_type) {
+	if (source.vector_type == VectorType::CONSTANT_VECTOR) {
+		if (!source.nullmask[0]) {
+			throw UnimplementedCast(source_type, target_type);
+		}
+	} else {
+		source.Normalify();
+		VectorOperations::Exec(source, [&](index_t i, index_t k) {
+			if (!source.nullmask[i]) {
+				throw UnimplementedCast(source_type, target_type);
+			}
+		});
+	}
 	result.vector_type = source.vector_type;
 	result.nullmask = source.nullmask;
 	result.sel_vector = source.sel_vector;
 	result.count = source.count;
-	VectorOperations::Exec(source, [&](index_t i, index_t k) {
-		if (!source.nullmask[i]) {
-			throw UnimplementedCast(source_type, target_type);
-		}
-	});
 }
 
 template <class SRC>

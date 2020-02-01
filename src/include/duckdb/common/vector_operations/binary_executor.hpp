@@ -72,75 +72,59 @@ private:
 		}
 	}
 
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
-	static void ExecuteConstantConstant(Vector &left, Vector &right, Vector &result, LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata, RESULT_TYPE *__restrict result_data, FUNC fun) {
-		// both left and right are constant: result is constant vector
-		result.vector_type = VectorType::CONSTANT_VECTOR;
-		result.nullmask[0] = left.nullmask[0] || right.nullmask[0];
-		if (IGNORE_NULL && result.nullmask[0]) {
-			return;
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL, bool LEFT_CONSTANT>
+	static void ExecuteA(Vector &left, Vector &right, Vector &result, FUNC fun) {
+		if (right.vector_type == VectorType::CONSTANT_VECTOR) {
+			ExecuteAB<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, LEFT_CONSTANT, true>(left, right, result, fun);
+		} else {
+			right.Normalify();
+			ExecuteAB<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, LEFT_CONSTANT, false>(left, right, result, fun);
 		}
-		result_data[0] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(fun, ldata[0], rdata[0], result.nullmask, 0);
 	}
 
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
-	static void ExecuteConstantFlat(Vector &left, Vector &right, Vector &result, LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata, RESULT_TYPE *__restrict result_data, FUNC fun) {
-		// left side is constant: result is flat vector
-		result.vector_type = VectorType::FLAT_VECTOR;
-		if (left.nullmask[0]) {
-			// left side is constant NULL, return a constant NULL
-			result.vector_type = VectorType::CONSTANT_VECTOR;
-			result.nullmask[0] = true;
-			return;
-		}
-		result.nullmask = right.nullmask;
-		ExecuteLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, true, false>(
-			ldata, rdata, result_data, result.count, result.sel_vector, result.nullmask, fun);
-	}
-
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
-	static void ExecuteFlatConstant(Vector &left, Vector &right, Vector &result, LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata, RESULT_TYPE *__restrict result_data, FUNC fun) {
-		// right side is constant: result is flat vector
-		result.vector_type = VectorType::FLAT_VECTOR;
-		if (right.nullmask[0]) {
-			result.vector_type = VectorType::CONSTANT_VECTOR;
-			result.nullmask[0] = true;
-			return;
-		}
-		result.nullmask = left.nullmask;
-		ExecuteLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, false, true>(
-			ldata, rdata, result_data, result.count, result.sel_vector, result.nullmask, fun);
-	}
-
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
-	static void ExecuteStandard(Vector &left, Vector &right, Vector &result, LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata, RESULT_TYPE *__restrict result_data, FUNC fun) {
-		// neither side is a constant: loop over everything
-		assert(left.count == right.count);
-		assert(left.sel_vector == right.sel_vector);
-		assert(left.vector_type == VectorType::FLAT_VECTOR && right.vector_type == VectorType::FLAT_VECTOR);
-		// OR nullmasks together
-		result.vector_type = VectorType::FLAT_VECTOR;
-		result.nullmask = left.nullmask | right.nullmask;
-		ExecuteLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, false, false>(
-			ldata, rdata, result_data, result.count, result.sel_vector, result.nullmask, fun);
-	}
-
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
-	static void ExecuteSwitch(Vector &left, Vector &right, Vector &result, FUNC fun) {		auto ldata = (LEFT_TYPE *)left.GetData();
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
+	static void ExecuteAB(Vector &left, Vector &right, Vector &result, FUNC fun) {
+		auto ldata = (LEFT_TYPE *)left.GetData();
 		auto rdata = (RIGHT_TYPE *)right.GetData();
 		auto result_data = (RESULT_TYPE *)result.GetData();
-		assert(left.count == right.count && left.sel_vector == right.sel_vector);
 
-		result.count = left.count;
-		result.sel_vector = left.sel_vector;
-		if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
-			ExecuteConstantConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(left, right, result, ldata, rdata, result_data, fun);
-		} else if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::FLAT_VECTOR) {
-			ExecuteConstantFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(left, right, result, ldata, rdata, result_data, fun);
-		} else if (left.vector_type == VectorType::FLAT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
-			ExecuteFlatConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(left, right, result, ldata, rdata, result_data, fun);
+		if ((LEFT_CONSTANT && left.nullmask[0]) || (RIGHT_CONSTANT && right.nullmask[0])) {
+			// either left or right is constant NULL: result is constant NULL
+			result.vector_type = VectorType::CONSTANT_VECTOR;
+			result.nullmask[0] = true;
+			return;
+		}
+		if (LEFT_CONSTANT && RIGHT_CONSTANT) {
+			// both left and right are non-null constants: result is constant vector
+			result.vector_type = VectorType::CONSTANT_VECTOR;
+			result.nullmask[0] = false;
+			result_data[0] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(fun, ldata[0], rdata[0], result.nullmask, 0);
+			return;
+		}
+
+		result.vector_type = VectorType::FLAT_VECTOR;
+		if (LEFT_CONSTANT) {
+			result.nullmask = right.nullmask;
+		} else if (RIGHT_CONSTANT) {
+			result.nullmask = left.nullmask;
 		} else {
-			ExecuteStandard<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(left, right, result, ldata, rdata, result_data, fun);
+			result.nullmask = left.nullmask | right.nullmask;
+		}
+		ExecuteLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, LEFT_CONSTANT, RIGHT_CONSTANT>(
+			ldata, rdata, result_data, result.count, result.sel_vector, result.nullmask, fun);
+	}
+
+
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
+	static void ExecuteSwitch(Vector &left, Vector &right, Vector &result, FUNC fun) {
+		assert(left.count == right.count && left.sel_vector == right.sel_vector);
+		result.sel_vector = left.sel_vector;
+		result.count = left.count;
+		if (left.vector_type == VectorType::CONSTANT_VECTOR) {
+			ExecuteA<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, true>(left, right, result, fun);
+		} else {
+			left.Normalify();
+			ExecuteA<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, false>(left, right, result, fun);
 		}
 	}
 public:
@@ -183,12 +167,12 @@ private:
 public:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 	static index_t Select(Vector &left, Vector &right, sel_t result[]) {
-		auto ldata = (LEFT_TYPE *)left.GetData();
-		auto rdata = (RIGHT_TYPE *)right.GetData();
 
 		assert(left.count == right.count && left.sel_vector == right.sel_vector);
-
 		if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
+			auto ldata = (LEFT_TYPE *)left.GetData();
+			auto rdata = (RIGHT_TYPE *)right.GetData();
+
 			// both sides are constant, return either 0 or the count
 			// in this case we do not fill in the result selection vector at all
 			if (left.nullmask[0] || right.nullmask[0] || !OP::Operation(ldata[0], rdata[0])) {
@@ -196,28 +180,29 @@ public:
 			} else {
 				return left.count;
 			}
-		} else if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::FLAT_VECTOR) {
+		} else if (left.vector_type == VectorType::CONSTANT_VECTOR) {
 			if (left.nullmask[0]) {
 				// left side is constant NULL; no results
 				return 0;
 			}
+			right.Normalify();
 			// left side is normal constant, use right nullmask and do computation
-			return SelectLoop<LEFT_TYPE, RIGHT_TYPE, OP, true, false>(ldata, rdata, result, right.count,
+			return SelectLoop<LEFT_TYPE, RIGHT_TYPE, OP, true, false>((LEFT_TYPE *)left.GetData(), (RIGHT_TYPE *)right.GetData(), result, right.count,
 																			right.sel_vector, right.nullmask);
-		} else if (left.vector_type == VectorType::FLAT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
+		} else if (right.vector_type == VectorType::CONSTANT_VECTOR) {
 			if (right.nullmask[0]) {
 				// right side is constant NULL, no results
 				return 0;
 			}
-			return SelectLoop<LEFT_TYPE, RIGHT_TYPE, OP, false, true>(ldata, rdata, result, left.count,
+			left.Normalify();
+			return SelectLoop<LEFT_TYPE, RIGHT_TYPE, OP, false, true>((LEFT_TYPE *)left.GetData(), (RIGHT_TYPE *)right.GetData(), result, left.count,
 																			left.sel_vector, left.nullmask);
 		} else {
-			assert(left.count == right.count);
-			assert(left.sel_vector == right.sel_vector);
-			assert(left.vector_type == VectorType::FLAT_VECTOR && right.vector_type == VectorType::FLAT_VECTOR);
+			left.Normalify();
+			right.Normalify();
 			// OR nullmasks together
 			auto nullmask = left.nullmask | right.nullmask;
-			return SelectLoop<LEFT_TYPE, RIGHT_TYPE, OP, false, false>(ldata, rdata, result, left.count,
+			return SelectLoop<LEFT_TYPE, RIGHT_TYPE, OP, false, false>((LEFT_TYPE *)left.GetData(), (RIGHT_TYPE *)right.GetData(), result, left.count,
 																			left.sel_vector, nullmask);
 		}
 	}

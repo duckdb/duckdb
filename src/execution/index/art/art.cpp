@@ -124,7 +124,7 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 }
 
 bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
-	assert(row_ids.type == TypeId::INT64);
+	assert(row_ids.type == ROW_TYPE);
 	assert(input.size() == row_ids.count);
 	assert(types[0] == input.data[0].type);
 
@@ -133,6 +133,7 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	GenerateKeys(input, keys);
 
 	// now insert the elements into the index
+	row_ids.Normalify();
 	auto row_identifiers = (row_t *)row_ids.GetData();
 	index_t failed_index = INVALID_INDEX;
 	for (index_t i = 0; i < row_ids.count; i++) {
@@ -294,12 +295,11 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	GenerateKeys(expression_result, keys);
 
 	// now erase the elements from the database
-	auto row_identifiers = (row_t *)row_ids.GetData();
-	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) {
+	VectorOperations::ExecNumeric<row_t>(row_ids, [&](row_t row_id, index_t i, index_t k) {
 		if (!keys[k]) {
 			return;
 		}
-		Erase(tree, *keys[k], 0, row_identifiers[i]);
+		Erase(tree, *keys[k], 0, row_id);
 		// assert that the entry was erased properly
 		assert(!is_unique || Lookup(tree, *keys[k], 0) == nullptr);
 	});
