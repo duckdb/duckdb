@@ -17,7 +17,9 @@ namespace duckdb {
 template <class LEFT_TYPE, class RESULT_TYPE, class OP, bool INPUT_CONSTANT>
 static inline void templated_inplace_loop_function(LEFT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data,
                                                index_t count, sel_t *__restrict sel_vector) {
-	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
+	if (!INPUT_CONSTANT) {
+		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
+	}
 	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
 		OP::Operation(result_data[i], ldata[INPUT_CONSTANT ? 0 : i]);
 	});
@@ -25,10 +27,11 @@ static inline void templated_inplace_loop_function(LEFT_TYPE *__restrict ldata, 
 
 template <class LEFT_TYPE, class RESULT_TYPE, class OP> void templated_inplace_loop(Vector &input, Vector &result) {
 	assert(input.type == result.type);
+	assert(result.vector_type == VectorType::FLAT_VECTOR);
 
-	auto ldata = (LEFT_TYPE *)input.GetData();
 	auto result_data = (RESULT_TYPE *)result.GetData();
 	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
+		auto ldata = (LEFT_TYPE *)input.GetData();
 		// constant vector
 		if (input.nullmask[0]) {
 			result.nullmask.set();
@@ -36,6 +39,8 @@ template <class LEFT_TYPE, class RESULT_TYPE, class OP> void templated_inplace_l
 			templated_inplace_loop_function<LEFT_TYPE, RESULT_TYPE, OP, true>(ldata, result_data, result.count, result.sel_vector);
 		}
 	} else {
+		input.Normalify();
+		auto ldata = (LEFT_TYPE *)input.GetData();
 		assert(input.count == result.count);
 		assert(result.sel_vector == input.sel_vector);
 		// OR nullmasks together
