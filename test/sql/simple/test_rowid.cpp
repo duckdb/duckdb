@@ -97,6 +97,9 @@ TEST_CASE("Test Row IDs used in different types of operations", "[rowid]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {1}));
 	REQUIRE(CHECK_COLUMN(result, 4, {0}));
 
+	result = con.Query("SELECT COUNT(*) FROM a");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
 	// grouped aggregates
 	result = con.Query("SELECT SUM(rowid), MIN(rowid), MAX(rowid), COUNT(rowid), FIRST(rowid) FROM a GROUP BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));

@@ -53,34 +53,6 @@ TEST_CASE("Aggregating boolean vectors", "[vector_ops]") {
 	REQUIRE(VectorOperations::HasNull(v));
 }
 
-static void require_aggrs(Vector &v) {
-	REQUIRE(VectorOperations::Min(v).CastAs(TypeId::INT64) == Value::BIGINT(2));
-	REQUIRE(VectorOperations::Max(v).CastAs(TypeId::INT64) == Value::BIGINT(40));
-	REQUIRE(VectorOperations::Count(v).CastAs(TypeId::INT64) == Value::BIGINT(2));
-	REQUIRE(VectorOperations::Sum(v).CastAs(TypeId::INT64) == Value::BIGINT(42));
-}
-
-TEST_CASE("Aggregating numeric vectors", "[vector_ops]") {
-	Vector v(TypeId::INT8, true, false);
-	v.count = 2;
-	v.SetValue(0, Value::TINYINT(40));
-	v.SetValue(1, Value::TINYINT(2));
-
-	REQUIRE(!VectorOperations::HasNull(v));
-
-	require_aggrs(v);
-	v.Cast(TypeId::INT16);
-	require_aggrs(v);
-	v.Cast(TypeId::INT32);
-	require_aggrs(v);
-	v.Cast(TypeId::INT64);
-	require_aggrs(v);
-	v.Cast(TypeId::FLOAT);
-	require_aggrs(v);
-	v.Cast(TypeId::DOUBLE);
-	require_aggrs(v);
-}
-
 static void require_compare(Vector &val) {
 	Vector v1(val.type, true, false);
 	val.Copy(v1);

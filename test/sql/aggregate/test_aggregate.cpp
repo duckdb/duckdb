@@ -132,8 +132,13 @@ TEST_CASE("Test COVAR operators", "[aggregate]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
 
-	// test average on empty set
+	// test covar on empty set
 	result = con.Query("SELECT COVAR_POP(x,y), COVAR_SAMP(x,y) FROM integers WHERE x > 100");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+
+	// test covar with only null inputs
+	result = con.Query("SELECT COVAR_POP(NULL, NULL), COVAR_SAMP(NULL, NULL) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
 }
