@@ -420,8 +420,10 @@ TEST_CASE("Test joins with various columns that are only used in the join", "[jo
 	result = con.Query("SELECT COUNT(*) FROM test, test2 WHERE test.b = test2.b");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	// now a sum
-	result = con.Query("SELECT SUM(test.a) FROM test, test2 WHERE test.b = test2.b");
+	result = con.Query("SELECT SUM(test.a), MIN(test.a), MAX(test.a) FROM test, test2 WHERE test.b = test2.b");
 	REQUIRE(CHECK_COLUMN(result, 0, {34}));
+	REQUIRE(CHECK_COLUMN(result, 1, {11}));
+	REQUIRE(CHECK_COLUMN(result, 2, {12}));
 
 	// count of multi-way join
 	result = con.Query("SELECT COUNT(*) FROM test a1, test a2, test a3 WHERE a1.b=a2.b AND a2.b=a3.b");

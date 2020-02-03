@@ -30,11 +30,9 @@ static void null_cast(Vector &source, Vector &result, SQLType source_type, SQLTy
 		}
 	} else {
 		source.Normalify();
-		VectorOperations::Exec(source, [&](index_t i, index_t k) {
-			if (!source.nullmask[i]) {
-				throw UnimplementedCast(source_type, target_type);
-			}
-		});
+		if (VectorOperations::HasNull(source)) {
+			throw UnimplementedCast(source_type, target_type);
+		}
 	}
 	result.vector_type = source.vector_type;
 	result.nullmask = source.nullmask;

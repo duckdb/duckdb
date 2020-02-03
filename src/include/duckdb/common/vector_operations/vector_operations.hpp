@@ -58,6 +58,8 @@ struct VectorOperations {
 	static void IsNotNull(Vector &A, Vector &result);
 	//! result = IS NULL (A)
 	static void IsNull(Vector &A, Vector &result);
+	// Returns whether or not a vector has a NULL value
+	static bool HasNull(Vector &A);
 
 	//===--------------------------------------------------------------------===//
 	// Boolean Operations
@@ -101,19 +103,6 @@ struct VectorOperations {
 	// result = A <= B
 	static index_t SelectLessThanEquals(Vector &A, Vector &B, sel_t result[]);
 
-	//===--------------------------------------------------------------------===//
-	// Aggregates
-	//===--------------------------------------------------------------------===//
-	// SUM(A)
-	static Value Sum(Vector &A);
-	// COUNT(A)
-	static Value Count(Vector &A);
-	// MAX(A)
-	static Value Max(Vector &A);
-	// MIN(A)
-	static Value Min(Vector &A);
-	// Returns whether or not a vector has a NULL value
-	static bool HasNull(Vector &A);
 	//===--------------------------------------------------------------------===//
 	// Scatter methods
 	//===--------------------------------------------------------------------===//

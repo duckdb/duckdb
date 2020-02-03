@@ -1,8 +1,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/operator/aggregate_operators.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/operator/aggregate_operators.hpp"
 
 using namespace duckdb;
 using namespace std;

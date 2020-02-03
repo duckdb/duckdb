@@ -31,3 +31,21 @@ void VectorOperations::IsNotNull(Vector &input, Vector &result) {
 void VectorOperations::IsNull(Vector &input, Vector &result) {
 	is_null_loop<false>(input, result);
 }
+
+bool VectorOperations::HasNull(Vector &input) {
+	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
+		return input.nullmask[0];
+	} else {
+		input.Normalify();
+		if (!input.nullmask.any()) {
+			return false;
+		}
+		bool has_null = false;
+		VectorOperations::Exec(input, [&](index_t i, index_t k) {
+			if (input.nullmask[i]) {
+				has_null = true;
+			}
+		});
+		return has_null;
+	}
+}
