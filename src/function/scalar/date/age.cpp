@@ -50,9 +50,9 @@ static void age_function(DataChunk &input, ExpressionState &state, Vector &resul
 		auto current_timestamp = Timestamp::GetCurrentTimestamp();
 		auto value_timestamp = Value::TIMESTAMP(current_timestamp);
 		Vector vector_timestamp(value_timestamp);
-		vector_timestamp.Move(input2);
+		input2.Reference(vector_timestamp);
 	} else {
-		input.data[1].Move(input2);
+		input2.Reference(input.data[1]);
 	}
 	assert(input1.type == TypeId::INT64);
 	assert(input2.type == TypeId::INT64);

@@ -69,7 +69,7 @@ void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionSta
 			default:
 				throw NotImplementedException("Unknown conjunction type!");
 			}
-			intermediate.Move(result);
+			result.Reference(intermediate);
 		}
 	}
 }

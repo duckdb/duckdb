@@ -107,6 +107,9 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 	auto lowercase_name = StringUtil::Lower(function_name);
 
 	if (root->over) {
+		if (root->agg_distinct) {
+			throw ParserException("DISTINCT is not implemented for window functions!");
+		}
 
 		auto win_fun_type = WindowToExpressionType(lowercase_name);
 		if (win_fun_type == ExpressionType::INVALID) {
@@ -141,7 +144,6 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 			}
 		}
 		auto window_spec = reinterpret_cast<PGWindowDef *>(root->over);
-
 		if (window_spec->name) {
 			auto it = window_clauses.find(StringUtil::Lower(string(window_spec->name)));
 			if (it == window_clauses.end()) {

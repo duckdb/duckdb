@@ -46,12 +46,12 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState 
 
 			if (child == 1) {
 				// first child: move to result
-				comp_res.Move(intermediate);
+				intermediate.Reference(comp_res);
 			} else {
 				// otherwise OR together
 				Vector new_result(TypeId::BOOL, true, false);
 				VectorOperations::Or(intermediate, comp_res, new_result);
-				new_result.Move(intermediate);
+				intermediate.Reference(new_result);
 			}
 		}
 		if (expr.type == ExpressionType::COMPARE_NOT_IN) {
@@ -59,7 +59,7 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState 
 			VectorOperations::Not(intermediate, result);
 		} else {
 			// directly use the result
-			intermediate.Move(result);
+			result.Reference(intermediate);
 		}
 	} else if (expr.children.size() == 1) {
 		auto &child = state->arguments.data[0];
