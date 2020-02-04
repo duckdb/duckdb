@@ -38,10 +38,10 @@ void my_scan_function(ClientContext &context, DataChunk &input, DataChunk &outpu
 		int_data[row] = row % 10;
 	}
 	output.data[0].count = this_rows;
+	output.data[1].count = this_rows;
 	for (size_t row = 0; row < this_rows; row++) {
 		output.data[1].SetValue(row, Value("hello_" + std::to_string(row)));
 	}
-	output.data[1].count = this_rows;
 }
 
 class MyScanFunction : public TableFunction {

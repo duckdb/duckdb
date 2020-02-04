@@ -47,6 +47,7 @@ template<class OP>
 static aggregate_simple_update_t MinMaxFunction(SQLType sql_type) {
 	auto type = GetInternalType(sql_type);
 	switch (type) {
+	case TypeId::BOOL:
 	case TypeId::INT8:
 		return minmax_simple_update<int8_t, OP>;
 	case TypeId::INT16:
@@ -59,8 +60,6 @@ static aggregate_simple_update_t MinMaxFunction(SQLType sql_type) {
 		return minmax_simple_update<float, OP>;
 	case TypeId::DOUBLE:
 		return minmax_simple_update<double, OP>;
-	case TypeId::BOOL:
-		return minmax_simple_update<bool, OP>;
 	case TypeId::VARCHAR:
 		return minmax_simple_update<const char*, OP>;
 	default:
