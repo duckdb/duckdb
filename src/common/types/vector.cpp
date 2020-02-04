@@ -19,7 +19,6 @@ Vector::Vector(TypeId type, bool create_data, bool zero_data)
 }
 
 Vector::Vector(TypeId type) : Vector(type, true, false) {
-
 }
 
 Vector::Vector(TypeId type, data_ptr_t dataptr)
@@ -269,7 +268,7 @@ uint64_t Vector::NotNullSelVector(Vector &vector, sel_t *not_null_vector, sel_t 
 }
 
 string VectorTypeToString(VectorType type) {
-	switch(type) {
+	switch (type) {
 	case VectorType::FLAT_VECTOR:
 		return "FLAT";
 	case VectorType::SEQUENCE_VECTOR:
@@ -283,7 +282,7 @@ string VectorTypeToString(VectorType type) {
 
 string Vector::ToString() const {
 	string retval = VectorTypeToString(vector_type) + " " + TypeIdToString(type) + ": " + to_string(count) + " = [ ";
-	switch(vector_type) {
+	switch (vector_type) {
 	case VectorType::FLAT_VECTOR:
 		for (index_t i = 0; i < count; i++) {
 			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
@@ -313,17 +312,15 @@ void Vector::Print() {
 	Printer::Print(ToString());
 }
 
-template<class T>
+template <class T>
 static void flatten_constant_vector_loop(data_ptr_t data, data_ptr_t old_data, index_t count, sel_t *sel_vector) {
-	auto constant = *((T*) old_data);
-	auto output = (T*) data;
-	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
-		output[i] = constant;
-	});
+	auto constant = *((T *)old_data);
+	auto output = (T *)data;
+	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) { output[i] = constant; });
 }
 
 void Vector::Normalify() {
-	switch(vector_type) {
+	switch (vector_type) {
 	case VectorType::FLAT_VECTOR:
 		// already a flat vector
 		break;
@@ -340,7 +337,7 @@ void Vector::Normalify() {
 			return;
 		}
 		// non-null constant: have to repeat the constant
-		switch(type) {
+		switch (type) {
 		case TypeId::BOOL:
 		case TypeId::INT8:
 			flatten_constant_vector_loop<int8_t>(data, old_data, count, sel_vector);
@@ -403,8 +400,8 @@ void Vector::Sequence(int64_t start, int64_t increment, index_t count) {
 void Vector::GetSequence(int64_t &start, int64_t &increment) const {
 	assert(vector_type == VectorType::SEQUENCE_VECTOR);
 	auto data = buffer->GetData();
-	start = *((int64_t*) data);
-	increment = *((int64_t*) (data + sizeof(int64_t)));
+	start = *((int64_t *)data);
+	increment = *((int64_t *)(data + sizeof(int64_t)));
 }
 
 void Vector::Verify() {
@@ -440,7 +437,7 @@ const char *Vector::AddString(const char *data, index_t len) {
 		auxiliary = make_buffer<VectorStringBuffer>();
 	}
 	assert(auxiliary->type == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = (VectorStringBuffer&) *auxiliary;
+	auto &string_buffer = (VectorStringBuffer &)*auxiliary;
 	return string_buffer.AddString(data, len);
 }
 
@@ -461,8 +458,8 @@ void Vector::AddHeapReference(Vector &other) {
 	}
 	assert(auxiliary->type == VectorBufferType::STRING_BUFFER);
 	assert(other.auxiliary->type == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = (VectorStringBuffer&) *auxiliary;
+	auto &string_buffer = (VectorStringBuffer &)*auxiliary;
 	string_buffer.AddHeapReference(other.auxiliary);
 }
 
-}
+} // namespace duckdb

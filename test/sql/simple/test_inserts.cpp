@@ -4,7 +4,6 @@
 using namespace duckdb;
 using namespace std;
 
-
 TEST_CASE("Test insert into and updates of constant values", "[simpleinserts]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

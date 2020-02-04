@@ -64,7 +64,7 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 	for (index_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 
-		Vector state_vector(Value::POINTER((uintptr_t) state->aggregates[aggr_idx].get()));
+		Vector state_vector(Value::POINTER((uintptr_t)state->aggregates[aggr_idx].get()));
 		aggregate.function.finalize(state_vector, chunk.data[aggr_idx]);
 	}
 	state->finished = true;

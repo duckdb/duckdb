@@ -26,8 +26,8 @@ static void stddev_update(Vector inputs[], index_t input_count, Vector &state) {
 	// Streaming approximate standard deviation using Welford's
 	// method, DOI: 10.2307/1266577
 
-	auto states = (stddev_state_t **) state.GetData();
-	auto input_data = (double*) inputs[0].GetData();
+	auto states = (stddev_state_t **)state.GetData();
+	auto input_data = (double *)inputs[0].GetData();
 	VectorOperations::Exec(state, [&](index_t i, index_t k) {
 		if (inputs[0].nullmask[i]) {
 			return;
@@ -75,7 +75,7 @@ static void stddev_combine(Vector &state, Vector &combined) {
 static void varsamp_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming stddev of sample
 	auto states = (stddev_state_t **)state.GetData();
-	auto result_data = (double *) result.GetData();
+	auto result_data = (double *)result.GetData();
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
 		auto state_ptr = states[i];
 
@@ -91,8 +91,8 @@ static void varsamp_finalize(Vector &state, Vector &result) {
 
 static void varpop_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming stddev of sample
-	auto states = (stddev_state_t **) state.GetData();
-	auto result_data = (double *) result.GetData();
+	auto states = (stddev_state_t **)state.GetData();
+	auto result_data = (double *)result.GetData();
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
 		auto state_ptr = states[i];
 
@@ -108,8 +108,8 @@ static void varpop_finalize(Vector &state, Vector &result) {
 
 static void stddevsamp_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming stddev of sample
-	auto states = (stddev_state_t **) state.GetData();
-	auto result_data = (double *) result.GetData();
+	auto states = (stddev_state_t **)state.GetData();
+	auto result_data = (double *)result.GetData();
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
 		auto state_ptr = states[i];
 
@@ -125,8 +125,8 @@ static void stddevsamp_finalize(Vector &state, Vector &result) {
 
 static void stddevpop_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming stddev of sample
-	auto states = (stddev_state_t **) state.GetData();
-	auto result_data = (double *) result.GetData();
+	auto states = (stddev_state_t **)state.GetData();
+	auto result_data = (double *)result.GetData();
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
 		auto state_ptr = states[i];
 

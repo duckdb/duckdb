@@ -159,7 +159,8 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Generate functions
 	//===--------------------------------------------------------------------===//
-	static void GenerateSequence(Vector &result, int64_t start = 0, int64_t increment = 1, bool ignore_sel_vector = false);
+	static void GenerateSequence(Vector &result, int64_t start = 0, int64_t increment = 1,
+	                             bool ignore_sel_vector = false);
 	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//
@@ -228,12 +229,11 @@ struct VectorOperations {
 		    vector, [&](index_t i, index_t k) { fun(data[i], i, k); }, offset, limit);
 	}
 
-	template <typename T, class FUNC>
-	static void ExecNumeric(Vector &vector, FUNC &&fun) {
+	template <typename T, class FUNC> static void ExecNumeric(Vector &vector, FUNC &&fun) {
 		if (vector.vector_type == VectorType::SEQUENCE_VECTOR) {
 			int64_t start, increment;
 			vector.GetSequence(start, increment);
-			for(index_t i = 0; i < vector.count; i++) {
+			for (index_t i = 0; i < vector.count; i++) {
 				index_t idx = vector.sel_vector ? vector.sel_vector[i] : i;
 				fun((T)(start + increment * idx), idx, i);
 			}
@@ -243,9 +243,7 @@ struct VectorOperations {
 		} else {
 			assert(vector.vector_type == VectorType::FLAT_VECTOR);
 			auto data = (T *)vector.GetData();
-			VectorOperations::Exec(vector, [&](index_t i, index_t k) {
-				fun(data[i], i, k);
-			});
+			VectorOperations::Exec(vector, [&](index_t i, index_t k) { fun(data[i], i, k); });
 		}
 	}
 };

@@ -82,7 +82,8 @@ TEST_CASE("NULL IF with strings", "[case]") {
 	result = con.Query("SELECT NULLIF(CAST(a AS VARCHAR), 11) FROM test;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value("13"), Value("12")}));
 
-	result = con.Query("SELECT a, CASE WHEN a>11 THEN CAST(a AS VARCHAR) ELSE CAST(b AS VARCHAR) END FROM test ORDER BY 1;");
+	result =
+	    con.Query("SELECT a, CASE WHEN a>11 THEN CAST(a AS VARCHAR) ELSE CAST(b AS VARCHAR) END FROM test ORDER BY 1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value("22"), Value("12"), Value("13")}));
 }

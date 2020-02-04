@@ -37,17 +37,18 @@ static void regexp_matches_function(DataChunk &args, ExpressionState &state, Vec
 
 	if (info.constant_pattern) {
 		// FIXME: this should be a unary loop
-		BinaryExecutor::Execute<const char*, const char*, bool, true>(strings, patterns, result, [&](const char *string, const char *pattern) {
-			return RE2::PartialMatch(string, *info.constant_pattern);
-		});
+		BinaryExecutor::Execute<const char *, const char *, bool, true>(
+		    strings, patterns, result,
+		    [&](const char *string, const char *pattern) { return RE2::PartialMatch(string, *info.constant_pattern); });
 	} else {
-		BinaryExecutor::Execute<const char*, const char*, bool, true>(strings, patterns, result, [&](const char *string, const char *pattern) {
-			RE2 re(pattern, options);
-			if (!re.ok()) {
-				throw Exception(re.error());
-			}
-			return RE2::PartialMatch(string, re);
-		});
+		BinaryExecutor::Execute<const char *, const char *, bool, true>(strings, patterns, result,
+		                                                                [&](const char *string, const char *pattern) {
+			                                                                RE2 re(pattern, options);
+			                                                                if (!re.ok()) {
+				                                                                throw Exception(re.error());
+			                                                                }
+			                                                                return RE2::PartialMatch(string, re);
+		                                                                });
 	}
 }
 
@@ -88,8 +89,7 @@ static void regexp_replace_function(DataChunk &args, ExpressionState &state, Vec
 	options.set_log_errors(false);
 
 	TernaryExecutor::Execute<const char *, const char *, const char *, const char *, true>(
-	    strings, patterns, replaces, result,
-	    [&](const char *string, const char *pattern, const char *replace) {
+	    strings, patterns, replaces, result, [&](const char *string, const char *pattern, const char *replace) {
 		    RE2 re(pattern, options);
 		    std::string sstring(string);
 		    RE2::Replace(&sstring, re, replace);

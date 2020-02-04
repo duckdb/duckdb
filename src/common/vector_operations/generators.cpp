@@ -19,12 +19,12 @@ void generate_sequence_function(T *__restrict result_data, T value, T increment,
 		});
 	} else {
 		if (sel_vector) {
-			for(index_t i = 0; i < count; i++) {
+			for (index_t i = 0; i < count; i++) {
 				auto idx = sel_vector[i];
 				result_data[idx] = value + increment * idx;
 			}
 		} else {
-			for(index_t i = 0; i < count; i++) {
+			for (index_t i = 0; i < count; i++) {
 				result_data[i] = value;
 				value += increment;
 			}

@@ -191,8 +191,9 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 			}
 			// set the match flags in the RHS
 			if (state->rhs_found_match) {
-				for(index_t i = 0; i < result_count; i++) {
-					state->rhs_found_match[state->right_position * STANDARD_VECTOR_SIZE + (chunk.sel_vector ? chunk.sel_vector[i] : i)] = true;
+				for (index_t i = 0; i < result_count; i++) {
+					state->rhs_found_match[state->right_position * STANDARD_VECTOR_SIZE +
+					                       (chunk.sel_vector ? chunk.sel_vector[i] : i)] = true;
 				}
 			}
 		} else {

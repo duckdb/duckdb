@@ -41,8 +41,10 @@ void PhysicalLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 				chunk.data[i].count = chunk_count;
 			}
 			// now set up the selection vector of the chunk
-			for(index_t idx = 0; idx < chunk_count; idx++) {
-				chunk.owned_sel_vector[idx] = state->child_chunk.sel_vector ? state->child_chunk.sel_vector[start_position + idx] : start_position + idx;
+			for (index_t idx = 0; idx < chunk_count; idx++) {
+				chunk.owned_sel_vector[idx] = state->child_chunk.sel_vector
+				                                  ? state->child_chunk.sel_vector[start_position + idx]
+				                                  : start_position + idx;
 			}
 			chunk.sel_vector = chunk.owned_sel_vector;
 		}

@@ -20,7 +20,7 @@ void string_agg_update(Vector inputs[], index_t input_count, Vector &state) {
 
 	auto str_data = (const char **)strs.GetData();
 	auto sep_data = (const char **)seps.GetData();
-	auto states = (string_agg_state_t **) state.GetData();
+	auto states = (string_agg_state_t **)state.GetData();
 
 	//  Share a reusable buffer for the block
 	std::string buffer;

@@ -504,9 +504,10 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 					int64_t *array_data_ptr = reinterpret_cast<int64_t *>(array_data + (offset * duckdb_type_size));
 					duckdb::timestamp_t *chunk_data_ptr = reinterpret_cast<int64_t *>(chunk->data[col_idx].GetData());
 					for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
-						//array_data_ptr[chunk_idx] = duckdb::Timestamp::GetEpoch(chunk_data_ptr[chunk_idx]) * 1000;
+						// array_data_ptr[chunk_idx] = duckdb::Timestamp::GetEpoch(chunk_data_ptr[chunk_idx]) * 1000;
 						auto timestamp = chunk_data_ptr[chunk_idx];
-						array_data_ptr[chunk_idx] = duckdb::Date::Epoch(duckdb::Timestamp::GetDate(timestamp)) * 1000 + (int64_t)(duckdb::Timestamp::GetTime(timestamp));
+						array_data_ptr[chunk_idx] = duckdb::Date::Epoch(duckdb::Timestamp::GetDate(timestamp)) * 1000 +
+						                            (int64_t)(duckdb::Timestamp::GetTime(timestamp));
 					}
 					break;
 				}    // else fall-through-to-default

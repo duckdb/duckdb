@@ -88,9 +88,7 @@ void VectorOperations::Scatter::AddOne(Vector &source, Vector &dest) {
 			// constant NULL, ignore value
 			return;
 		}
-		VectorOperations::Exec(dest, [&](index_t i, index_t k) {
-			(*destinations[i])++;
-		});
+		VectorOperations::Exec(dest, [&](index_t i, index_t k) { (*destinations[i])++; });
 
 	} else if (source.vector_type == VectorType::SEQUENCE_VECTOR) {
 		VectorOperations::Exec(source.sel_vector, source.count, [&](index_t i, index_t k) {

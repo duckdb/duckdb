@@ -48,5 +48,4 @@ struct Modulo {
 template <> float Modulo::Operation(float left, float right);
 template <> double Modulo::Operation(double left, double right);
 
-
 } // namespace duckdb

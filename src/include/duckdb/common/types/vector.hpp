@@ -69,7 +69,8 @@ public:
 	// implicit copying of Vectors is not allowed
 	Vector(const Vector &) = delete;
 
-	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated constant, if it is compressed)
+	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated
+	//! constant, if it is compressed)
 	VectorType vector_type;
 	//! The type of the elements stored in the vector (e.g. integer, float)
 	TypeId type;
@@ -79,6 +80,7 @@ public:
 	sel_t *sel_vector;
 	//! The null mask of the vector, if the Vector has any NULL values
 	nullmask_t nullmask;
+
 public:
 	//! Create a vector that references the specified value.
 	void Reference(Value &value);
@@ -142,13 +144,16 @@ public:
 
 	//! Add a reference from this vector to the string heap of the provided vector
 	void AddHeapReference(Vector &other);
+
 protected:
 	//! A pointer to the data.
 	data_ptr_t data;
 	//! The main buffer holding the data of the vector
 	buffer_ptr<VectorBuffer> buffer;
-	//! The secondary buffer holding auxiliary data of the vector, for example, a string vector uses this to store strings
+	//! The secondary buffer holding auxiliary data of the vector, for example, a string vector uses this to store
+	//! strings
 	buffer_ptr<VectorBuffer> auxiliary;
+
 private:
 };
 } // namespace duckdb

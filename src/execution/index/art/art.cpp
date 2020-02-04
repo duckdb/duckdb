@@ -71,8 +71,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 //===--------------------------------------------------------------------===//
 // Insert
 //===--------------------------------------------------------------------===//
-template <class T>
-static void generate_keys(Vector &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+template <class T> static void generate_keys(Vector &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
 	auto input_data = (T *)input.GetData();
 	VectorOperations::Exec(input, [&](index_t i, index_t k) {
 		if (input.nullmask[i]) {
@@ -83,8 +82,7 @@ static void generate_keys(Vector &input, vector<unique_ptr<Key>> &keys, bool is_
 	});
 }
 
-template <class T>
-static void concatenate_keys(Vector &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+template <class T> static void concatenate_keys(Vector &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
 	auto input_data = (T *)input.GetData();
 	VectorOperations::Exec(input, [&](index_t i, index_t k) {
 		if (input.nullmask[i] || !keys[k]) {

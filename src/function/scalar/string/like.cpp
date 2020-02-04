@@ -10,15 +10,13 @@ namespace duckdb {
 static bool like_operator(const char *s, const char *pattern, const char *escape);
 
 struct LikeOperator {
-	template<class TA, class TB, class TR>
-	static inline TR Operation(TA left, TB right) {
+	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
 		return like_operator(left, right, nullptr);
 	}
 };
 
 struct NotLikeOperator {
-	template<class TA, class TB, class TR>
-	static inline TR Operation(TA left, TB right) {
+	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
 		return !like_operator(left, right, nullptr);
 	}
 };
