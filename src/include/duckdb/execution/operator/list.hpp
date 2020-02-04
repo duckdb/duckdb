@@ -40,3 +40,4 @@
 #include "duckdb/execution/operator/schema/physical_create_view.hpp"
 #include "duckdb/execution/operator/schema/physical_drop.hpp"
 #include "duckdb/execution/operator/set/physical_union.hpp"
+#include "duckdb/execution/operator/set/physical_recursive_cte.hpp"

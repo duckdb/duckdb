@@ -29,6 +29,14 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 	return result;
 }
 
+Binding* BindContext::GetCTEBinding(const string &ctename) {
+    auto match = cte_bindings.find(ctename);
+    if(match == cte_bindings.end()) {
+        return nullptr;
+    }
+    return match->second.get();
+}
+
 BindResult BindContext::BindColumn(ColumnRefExpression &colref, index_t depth) {
 	if (colref.table_name.empty()) {
 		return BindResult(StringUtil::Format("Could not bind alias \"%s\"!", colref.column_name.c_str()));
@@ -77,4 +85,14 @@ void BindContext::AddTableFunction(index_t index, const string &alias, TableFunc
 
 void BindContext::AddGenericBinding(index_t index, const string &alias, vector<string> names, vector<SQLType> types) {
 	AddBinding(alias, make_unique<GenericBinding>(alias, move(types), move(names), index));
+}
+
+void BindContext::AddCTEBinding(index_t index, const string &alias, vector<string> names, vector<SQLType> types) {
+    auto binding = make_shared<GenericBinding>(alias, move(types), move(names), index);
+
+    if (cte_bindings.find(alias) != cte_bindings.end()) {
+        throw BinderException("Duplicate alias \"%s\" in query!", alias.c_str());
+    }
+    cte_bindings[alias] = move(binding);
+    cte_references[alias] = std::make_shared<index_t>(0);
 }
