@@ -243,26 +243,6 @@ void Vector::Append(Vector &other) {
 	}
 }
 
-uint64_t Vector::NotNullSelVector(Vector &vector, sel_t *not_null_vector, sel_t *&result_assignment,
-                                  sel_t *null_vector) {
-	vector.Normalify();
-	if (vector.nullmask.any()) {
-		uint64_t result_count = 0, null_count = 0;
-		VectorOperations::Exec(vector.sel_vector, vector.count, [&](uint64_t i, uint64_t k) {
-			if (!vector.nullmask[i]) {
-				not_null_vector[result_count++] = i;
-			} else if (null_vector) {
-				null_vector[null_count++] = i;
-			}
-		});
-		result_assignment = not_null_vector;
-		return result_count;
-	} else {
-		result_assignment = vector.sel_vector;
-		return vector.count;
-	}
-}
-
 string VectorTypeToString(VectorType type) {
 	switch (type) {
 	case VectorType::FLAT_VECTOR:

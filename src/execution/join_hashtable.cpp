@@ -105,7 +105,7 @@ static index_t CreateNotNullSelVector(DataChunk &keys, sel_t *not_null_sel_vecto
 	for (index_t i = 0; i < keys.column_count; i++) {
 		keys.data[i].sel_vector = sel_vector;
 		keys.data[i].count = result_count;
-		result_count = Vector::NotNullSelVector(keys.data[i], not_null_sel_vector, sel_vector, nullptr);
+		result_count = VectorOperations::NotNullSelVector(keys.data[i], not_null_sel_vector, sel_vector, nullptr);
 	}
 	// now assign the final count and selection vectors
 	for (index_t i = 0; i < keys.column_count; i++) {

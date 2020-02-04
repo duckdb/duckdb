@@ -104,13 +104,6 @@ public:
 	//! Causes this vector to reference the data held by the other vector.
 	void Reference(Vector &other);
 
-	//! Creates a selection vector that points only to non-null values for the
-	//! given null mask. Returns the amount of not-null values.
-	//! result_assignment will be set to either result_vector (if there are null
-	//! values) or to nullptr (if there are no null values)
-	static index_t NotNullSelVector(Vector &vector, sel_t *not_null_vector, sel_t *&result_assignment,
-	                                sel_t *null_vector = nullptr);
-
 	//! Converts this Vector to a printable string representation
 	string ToString() const;
 	void Print();
