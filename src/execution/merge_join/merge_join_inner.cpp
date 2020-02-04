@@ -54,8 +54,8 @@ template <class T> index_t MergeJoinInner::LessThan::Operation(ScalarMergeInfo &
 		return 0;
 	}
 	assert(l.sel_vector && r.sel_vector);
-	auto ldata = (T *)l.v.data;
-	auto rdata = (T *)r.v.data;
+	auto ldata = (T *)l.v.GetData();
+	auto rdata = (T *)r.v.GetData();
 	index_t result_count = 0;
 	while (true) {
 		if (l.pos < l.count && duckdb::LessThan::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
@@ -87,8 +87,8 @@ template <class T> index_t MergeJoinInner::LessThanEquals::Operation(ScalarMerge
 		return 0;
 	}
 	assert(l.sel_vector && r.sel_vector);
-	auto ldata = (T *)l.v.data;
-	auto rdata = (T *)r.v.data;
+	auto ldata = (T *)l.v.GetData();
+	auto rdata = (T *)r.v.GetData();
 	index_t result_count = 0;
 	while (true) {
 		if (l.pos < l.count &&

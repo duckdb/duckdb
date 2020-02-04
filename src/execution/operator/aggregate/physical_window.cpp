@@ -1,7 +1,6 @@
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 
 #include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/common/types/constant_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/window_segment_tree.hpp"

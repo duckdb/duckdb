@@ -210,10 +210,10 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 
 	// we replace the original subquery with a BoundColumnRefExpression refering to the mark column
 	unique_ptr<Expression> result =
-	    make_unique<BoundColumnRefExpression>("IN (...)", TypeId::BOOLEAN, ColumnBinding(chunk_index, 0));
+	    make_unique<BoundColumnRefExpression>("IN (...)", TypeId::BOOL, ColumnBinding(chunk_index, 0));
 	if (!is_regular_in) {
 		// NOT IN: invert
-		auto invert = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, TypeId::BOOLEAN);
+		auto invert = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, TypeId::BOOL);
 		invert->children.push_back(move(result));
 		result = move(invert);
 	}

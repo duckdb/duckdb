@@ -23,8 +23,8 @@ static void vector_append_function(T *__restrict source, T *__restrict target, i
 }
 
 template <class T> static void vector_append_loop(Vector &left, Vector &right, bool has_null) {
-	auto ldata = (T *)left.data;
-	auto rdata = (T *)right.data;
+	auto ldata = (T *)left.GetData();
+	auto rdata = (T *)right.GetData();
 	if (has_null) {
 		vector_append_function<T, true>(ldata, rdata, left.count, left.sel_vector, right.nullmask, right.count);
 	} else {
@@ -42,17 +42,17 @@ void VectorOperations::AppendFromStorage(Vector &source, Vector &target, bool ha
 	}
 
 	switch (source.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		vector_append_loop<int8_t>(source, target, has_null);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		vector_append_loop<int16_t>(source, target, has_null);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		vector_append_loop<int32_t>(source, target, has_null);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		vector_append_loop<int64_t>(source, target, has_null);
 		break;
 	case TypeId::FLOAT:

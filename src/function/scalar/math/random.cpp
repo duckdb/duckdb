@@ -31,7 +31,7 @@ static void random_function(DataChunk &args, ExpressionState &state, Vector &res
 		result.sel_vector = state.root.executor->chunk->sel_vector;
 	}
 
-	double *result_data = (double *)result.data;
+	auto result_data = (double *)result.GetData();
 	VectorOperations::Exec(result,
 	                       [&](index_t i, index_t k) { result_data[i] = info.dist(info.context.random_engine); });
 }

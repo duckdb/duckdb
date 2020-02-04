@@ -81,7 +81,7 @@ void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, in
 
 	auto &base_nullmask = *((nullmask_t *)base);
 	auto base_data = (int32_t *)(base + sizeof(nullmask_t));
-	auto result_data = (char **)result.data;
+	auto result_data = (char **)result.GetData();
 
 	if (string_updates && string_updates[vector_index]) {
 		// there are updates: merge them in
@@ -115,7 +115,7 @@ void StringSegment::FetchUpdateData(ColumnScanState &state, Transaction &transac
 	// fetch data from updates
 	auto handle = state.primary_handle.get();
 
-	auto result_data = (char **)result.data;
+	auto result_data = (char **)result.GetData();
 	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
 		auto info_data = (string_location_t *)current->tuple_data;
 		for (index_t i = 0; i < current->N; i++) {
@@ -231,7 +231,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 	auto base = baseptr + vector_index * vector_size;
 	auto &base_nullmask = *((nullmask_t *)base);
 	auto base_data = (int32_t *)(base + sizeof(nullmask_t));
-	auto result_data = (char **)result.data;
+	auto result_data = (char **)result.GetData();
 
 	result_data[result.count] = nullptr;
 	// first see if there is any updated version of this tuple we must fetch
@@ -315,7 +315,7 @@ index_t StringSegment::Append(SegmentStatistics &stats, Vector &data, index_t of
 void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data_ptr_t end, index_t target_offset,
                                Vector &source, index_t offset, index_t count) {
 	assert(offset + count <= source.count);
-	auto ldata = (char **)source.data;
+	auto ldata = (char **)source.GetData();
 	auto &result_nullmask = *((nullmask_t *)target);
 	auto result_data = (int32_t *)(target + sizeof(nullmask_t));
 
@@ -509,7 +509,7 @@ string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats,
                                                        index_t vector_offset) {
 	auto info = make_unique<StringUpdateInfo>();
 	info->count = update.count;
-	auto strings = (char **)update.data;
+	auto strings = (char **)update.GetData();
 	for (index_t i = 0; i < update.count; i++) {
 		info->ids[i] = ids[i] - vector_offset;
 		// copy the string into the block
@@ -528,7 +528,7 @@ string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, 
 	auto info = make_unique<StringUpdateInfo>();
 
 	// perform a merge between the new and old indexes
-	auto strings = (char **)update.data;
+	auto strings = (char **)update.GetData();
 	auto pick_new = [&](index_t id, index_t idx, index_t count) {
 		info->ids[count] = id;
 		if (!update.nullmask[idx]) {

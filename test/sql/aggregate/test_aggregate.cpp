@@ -30,6 +30,52 @@ TEST_CASE("Test COUNT operator", "[aggregate]") {
 	REQUIRE(CHECK_COLUMN(result, 5, {1}));
 }
 
+TEST_CASE("Test aggregates with scalar inputs", "[aggregate]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// test aggregate on scalar values
+	result = con.Query("SELECT COUNT(1), MIN(1), FIRST(1), MAX(1), SUM(1), STRING_AGG('hello', ',')");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1}));
+	REQUIRE(CHECK_COLUMN(result, 3, {1}));
+	REQUIRE(CHECK_COLUMN(result, 4, {1}));
+	REQUIRE(CHECK_COLUMN(result, 5, {"hello"}));
+
+	// test aggregate on scalar NULLs
+	result = con.Query("SELECT COUNT(NULL), MIN(NULL), FIRST(NULL), MAX(NULL), SUM(NULL), STRING_AGG(NULL, NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (NULL)"));
+
+	// test aggregates on a set of values with scalar inputs
+	result = con.Query("SELECT COUNT(1), MIN(1), FIRST(1), MAX(1), SUM(1), STRING_AGG('hello', ',') FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1}));
+	REQUIRE(CHECK_COLUMN(result, 3, {1}));
+	REQUIRE(CHECK_COLUMN(result, 4, {3}));
+	REQUIRE(CHECK_COLUMN(result, 5, {"hello,hello,hello"}));
+
+	// test aggregates on a set of values with scalar NULL values as inputs
+	result = con.Query(
+	    "SELECT COUNT(NULL), MIN(NULL), FIRST(NULL), MAX(NULL), SUM(NULL), STRING_AGG(NULL, NULL) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
+}
+
 TEST_CASE("Test COVAR operators", "[aggregate]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -87,8 +133,13 @@ TEST_CASE("Test COVAR operators", "[aggregate]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
 
-	// test average on empty set
+	// test covar on empty set
 	result = con.Query("SELECT COVAR_POP(x,y), COVAR_SAMP(x,y) FROM integers WHERE x > 100");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+
+	// test covar with only null inputs
+	result = con.Query("SELECT COVAR_POP(NULL, NULL), COVAR_SAMP(NULL, NULL) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
 }

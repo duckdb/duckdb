@@ -17,7 +17,7 @@ namespace duckdb {
 class PhysicalCreateSchema : public PhysicalOperator {
 public:
 	PhysicalCreateSchema(unique_ptr<CreateSchemaInfo> info)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE_SCHEMA, {TypeId::BOOLEAN}), info(move(info)) {
+	    : PhysicalOperator(PhysicalOperatorType::CREATE_SCHEMA, {TypeId::BOOL}), info(move(info)) {
 	}
 
 	unique_ptr<CreateSchemaInfo> info;

@@ -503,7 +503,7 @@ void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column,
 		parse_chunk.data[column].nullmask[row_entry] = true;
 	} else {
 		auto &v = parse_chunk.data[column];
-		auto parse_data = ((const char **)v.data);
+		auto parse_data = (const char **)v.GetData();
 		if (escape_positions.size() > 0) {
 			// remove escape characters (if any)
 			string old_val = str_val;
@@ -516,7 +516,7 @@ void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column,
 			}
 			new_val += old_val.substr(prev_pos, old_val.size() - prev_pos);
 			escape_positions.clear();
-			parse_data[row_entry] = v.string_heap.AddString(new_val.c_str());
+			parse_data[row_entry] = v.AddString(new_val.c_str());
 		} else {
 			parse_data[row_entry] = str_val;
 		}
@@ -549,7 +549,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 		if (sql_types[col_idx].id == SQLTypeId::VARCHAR) {
 			// target type is varchar: no need to convert
 			// just test that all strings are valid utf-8 strings
-			auto parse_data = (const char **)parse_chunk.data[col_idx].data;
+			auto parse_data = (const char **)parse_chunk.data[col_idx].GetData();
 			VectorOperations::Exec(parse_chunk.data[col_idx], [&](index_t i, index_t k) {
 				if (!parse_chunk.data[col_idx].nullmask[i]) {
 					if (!Value::IsUTF8String(parse_data[i])) {

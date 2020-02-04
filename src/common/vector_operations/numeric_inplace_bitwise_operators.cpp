@@ -13,19 +13,18 @@ using namespace duckdb;
 using namespace std;
 
 template <class OP> static void templated_inplace_bitwise_operation(Vector &result, Vector &input) {
-	INPLACE_TYPE_CHECK(input, result);
 	// the inplace loops take the result as the last parameter
 	switch (input.type) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		templated_inplace_loop<int8_t, int8_t, OP>(input, result);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		templated_inplace_loop<int16_t, int16_t, OP>(input, result);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		templated_inplace_loop<int32_t, int32_t, OP>(input, result);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		templated_inplace_loop<int64_t, int64_t, OP>(input, result);
 		break;
 	case TypeId::HASH:

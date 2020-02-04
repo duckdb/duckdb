@@ -57,7 +57,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			if (aggr.expressions.size() == 0 && aggr.groups.size() == 0) {
 				// removed all expressions from the aggregate: push a COUNT(*)
 				aggr.expressions.push_back(
-				    make_unique<BoundAggregateExpression>(TypeId::BIGINT, CountStarFun::GetFunction(), false));
+				    make_unique<BoundAggregateExpression>(TypeId::INT64, CountStarFun::GetFunction(), false));
 			}
 		}
 
@@ -154,12 +154,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 	case LogicalOperatorType::RECURSIVE_CTE: {
-	    everything_referenced = true;
-	    break;
+		everything_referenced = true;
+		break;
 	}
 	case LogicalOperatorType::CTE_REF: {
-	    everything_referenced = true;
-	    break;
+		everything_referenced = true;
+		break;
 	}
 	default:
 		break;

@@ -21,17 +21,20 @@ static void avg_initialize(data_ptr_t payload, TypeId return_type) {
 
 static void avg_update(Vector inputs[], index_t input_count, Vector &state) {
 	assert(input_count == 1);
+	inputs[0].Normalify();
 
+	auto states = (avg_state_t **)state.GetData();
+	auto input_data = (double *)inputs[0].GetData();
 	VectorOperations::Exec(state, [&](index_t i, index_t k) {
 		if (inputs[0].nullmask[i]) {
 			return;
 		}
 
-		auto state_ptr = (avg_state_t *)((data_ptr_t *)state.data)[i];
+		auto state_ptr = states[i];
 
 		// update count and running sum
 		state_ptr->count++;
-		const auto new_value = ((double *)inputs[0].data)[i];
+		const auto new_value = input_data[i];
 		state_ptr->sum += new_value;
 		// see Finalize() method below for final step
 	});
@@ -39,8 +42,8 @@ static void avg_update(Vector inputs[], index_t input_count, Vector &state) {
 
 static void avg_combine(Vector &state, Vector &combined) {
 	// combine streaming avg states
-	auto combined_data = (avg_state_t **)combined.data;
-	auto state_data = (avg_state_t *)state.data;
+	auto combined_data = (avg_state_t **)combined.GetData();
+	auto state_data = (avg_state_t *)state.GetData();
 
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
 		auto combined_ptr = combined_data[i];
@@ -57,13 +60,15 @@ static void avg_combine(Vector &state, Vector &combined) {
 
 static void avg_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming avg
+	auto states = (avg_state_t **)state.GetData();
+	auto result_data = (double *)result.GetData();
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-		auto state_ptr = (avg_state_t *)((data_ptr_t *)state.data)[i];
+		auto state_ptr = states[i];
 
 		if (state_ptr->count == 0) {
 			result.nullmask[i] = true;
 		} else {
-			((double *)result.data)[i] = state_ptr->sum / state_ptr->count;
+			result_data[i] = state_ptr->sum / state_ptr->count;
 		}
 	});
 }

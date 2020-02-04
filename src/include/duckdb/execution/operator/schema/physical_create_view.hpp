@@ -17,7 +17,7 @@ namespace duckdb {
 class PhysicalCreateView : public PhysicalOperator {
 public:
 	PhysicalCreateView(unique_ptr<CreateViewInfo> info)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE_VIEW, {TypeId::BOOLEAN}), info(move(info)) {
+	    : PhysicalOperator(PhysicalOperatorType::CREATE_VIEW, {TypeId::BOOL}), info(move(info)) {
 	}
 
 	unique_ptr<CreateViewInfo> info;

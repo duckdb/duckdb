@@ -13,7 +13,7 @@ public:
 	PhysicalSimpleAggregateOperatorState(PhysicalSimpleAggregate *parent, PhysicalOperator *child);
 
 	//! The aggregate values
-	vector<Value> aggregates;
+	vector<unique_ptr<data_t[]>> aggregates;
 
 	ExpressionExecutor child_executor;
 	//! The payload chunk
@@ -33,6 +33,7 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 		if (state->child_chunk.size() == 0) {
 			break;
 		}
+
 		// now resolve the aggregates for each of the children
 		index_t payload_idx = 0, payload_expr_idx = 0;
 		DataChunk &payload_chunk = state->payload_chunk;
@@ -42,7 +43,7 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 			auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 			index_t payload_cnt = 0;
 			// resolve the child expression of the aggregate (if any)
-			if (aggregate.children.size()) {
+			if (aggregate.children.size() > 0) {
 				for (index_t i = 0; i < aggregate.children.size(); ++i) {
 					state->child_executor.ExecuteExpression(payload_expr_idx,
 					                                        payload_chunk.data[payload_idx + payload_cnt]);
@@ -54,16 +55,17 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 				payload_cnt++;
 			}
 			// perform the actual aggregation
-			assert(aggregate.function.simple_update);
 			aggregate.function.simple_update(&payload_chunk.data[payload_idx], payload_cnt,
-			                                 state->aggregates[aggr_idx]);
+			                                 state->aggregates[aggr_idx].get());
 			payload_idx += payload_cnt;
 		}
 	}
 	// initialize the result chunk with the aggregate values
 	for (index_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-		chunk.data[aggr_idx].count = 1;
-		chunk.data[aggr_idx].SetValue(0, state->aggregates[aggr_idx]);
+		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
+
+		Vector state_vector(Value::POINTER((uintptr_t)state->aggregates[aggr_idx].get()));
+		aggregate.function.finalize(state_vector, chunk.data[aggr_idx]);
 	}
 	state->finished = true;
 }
@@ -87,11 +89,12 @@ PhysicalSimpleAggregateOperatorState::PhysicalSimpleAggregateOperatorState(Physi
 			}
 		} else {
 			// COUNT(*)
-			payload_types.push_back(TypeId::BIGINT);
+			payload_types.push_back(TypeId::INT64);
 		}
 		// initialize the aggregate values
-		assert(aggr.function.simple_initialize);
-		aggregates.push_back(aggr.function.simple_initialize());
+		auto state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size(aggr.return_type)]);
+		aggr.function.initialize(state.get(), aggr.return_type);
+		aggregates.push_back(move(state));
 	}
 	payload_chunk.Initialize(payload_types);
 }

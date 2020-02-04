@@ -75,7 +75,6 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 			if (aggr.children.size()) {
 				for (index_t j = 0; j < aggr.children.size(); ++j) {
 					state->payload_executor.ExecuteExpression(payload_expr_idx, payload_chunk.data[payload_idx]);
-					payload_chunk.heap.MergeHeap(payload_chunk.data[payload_idx].string_heap);
 					++payload_idx;
 					++payload_expr_idx;
 				}
@@ -107,13 +106,16 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 	// for aggregations without groups
 	if (elements_found == 0 && state->tuples_scanned == 0 && is_implicit_aggr) {
 		assert(state->aggregate_chunk.column_count == aggregates.size());
-		// for each column in the aggregates, seit either to NULL or 0
+		// for each column in the aggregates, set to initial state
 		for (index_t i = 0; i < state->aggregate_chunk.column_count; i++) {
-			state->aggregate_chunk.data[i].count = 1;
 			assert(aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-			auto aggr = (BoundAggregateExpression *)(&*aggregates[i]);
-			state->aggregate_chunk.data[i].SetValue(
-			    0, aggr->function.simple_initialize ? aggr->function.simple_initialize() : Value());
+			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
+			auto aggr_state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size(aggr.return_type)]);
+			aggr.function.initialize(aggr_state.get(), aggr.return_type);
+
+			Vector state_vector(Value::POINTER((uintptr_t)aggr_state.get()));
+			state->aggregate_chunk.data[i].count = 1;
+			aggr.function.finalize(state_vector, state->aggregate_chunk.data[i]);
 		}
 		state->finished = true;
 	}
@@ -157,7 +159,7 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 			}
 		} else {
 			// COUNT(*)
-			payload_types.push_back(TypeId::BIGINT);
+			payload_types.push_back(TypeId::INT64);
 		}
 	}
 	if (payload_types.size() > 0) {

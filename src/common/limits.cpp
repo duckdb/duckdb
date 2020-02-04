@@ -10,13 +10,13 @@ namespace duckdb {
 // hashtables
 int64_t MinimumValue(TypeId type) {
 	switch (type) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		return MinimumValue<int8_t>();
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return MinimumValue<int16_t>();
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return MinimumValue<int32_t>();
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return MinimumValue<int64_t>();
 	case TypeId::HASH:
 		return MinimumValue<uint64_t>();
@@ -29,13 +29,13 @@ int64_t MinimumValue(TypeId type) {
 
 uint64_t MaximumValue(TypeId type) {
 	switch (type) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		return MaximumValue<int8_t>();
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return MaximumValue<int16_t>();
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return MaximumValue<int32_t>();
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return MaximumValue<int64_t>();
 	case TypeId::HASH:
 		return MaximumValue<uint64_t>();
@@ -47,16 +47,16 @@ uint64_t MaximumValue(TypeId type) {
 }
 
 TypeId MinimalType(int64_t value) {
-	if (value >= MinimumValue(TypeId::TINYINT) && (uint64_t)value <= MaximumValue(TypeId::TINYINT)) {
-		return TypeId::TINYINT;
+	if (value >= MinimumValue(TypeId::INT8) && (uint64_t)value <= MaximumValue(TypeId::INT8)) {
+		return TypeId::INT8;
 	}
-	if (value >= MinimumValue(TypeId::SMALLINT) && (uint64_t)value <= MaximumValue(TypeId::SMALLINT)) {
-		return TypeId::SMALLINT;
+	if (value >= MinimumValue(TypeId::INT16) && (uint64_t)value <= MaximumValue(TypeId::INT16)) {
+		return TypeId::INT16;
 	}
-	if (value >= MinimumValue(TypeId::INTEGER) && (uint64_t)value <= MaximumValue(TypeId::INTEGER)) {
-		return TypeId::INTEGER;
+	if (value >= MinimumValue(TypeId::INT32) && (uint64_t)value <= MaximumValue(TypeId::INT32)) {
+		return TypeId::INT32;
 	}
-	return TypeId::BIGINT;
+	return TypeId::INT64;
 }
 
 } // namespace duckdb

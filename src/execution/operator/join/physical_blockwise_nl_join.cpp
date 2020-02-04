@@ -1,6 +1,5 @@
 #include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
 
-#include "duckdb/common/types/static_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
@@ -105,7 +104,6 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 	// every step that we do not have output results we shift the vectors of the RHS one up or down
 	// this creates a new "alignment" between the tuples, exhausting all possible O(n^2) combinations
 	// while allowing us to use vectorized execution for every step
-	StaticVector<bool> result;
 	index_t result_count = 0;
 	do {
 		if (state->fill_in_rhs) {
@@ -160,43 +158,43 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 		}
 		auto &lchunk = state->child_chunk;
 		auto &rchunk = *state->right_chunks.chunks[state->right_position];
-		for (index_t i = 0; i < chunk.column_count; i++) {
-			assert(!chunk.data[i].sel_vector);
-			chunk.data[i].count = rchunk.size();
-		}
+
 		// fill in the current element of the LHS into the chunk
 		assert(chunk.column_count == lchunk.column_count + rchunk.column_count);
 		for (index_t i = 0; i < lchunk.column_count; i++) {
-			VectorOperations::Set(chunk.data[i], lchunk.data[i].GetValue(state->left_position));
+			auto lvalue = lchunk.data[i].GetValue(state->left_position);
+			chunk.data[i].Reference(lvalue);
+			chunk.data[i].count = rchunk.size();
 		}
 		// for the RHS we just reference the entire vector
 		for (index_t i = 0; i < rchunk.column_count; i++) {
 			chunk.data[lchunk.column_count + i].Reference(rchunk.data[i]);
 		}
 		// now perform the computation
-		state->executor.ExecuteExpression(chunk, result);
-
-		// create the result
-		VectorOperations::ExecType<bool>(result, [&](bool match, index_t i, index_t k) {
-			if (match && !result.nullmask[i]) {
-				// found a match!
-				// set the match flags
-				if (state->lhs_found_match) {
-					state->lhs_found_match[state->left_position] = true;
-					if (state->rhs_found_match) {
-						state->rhs_found_match[state->right_position * STANDARD_VECTOR_SIZE + i] = true;
-					}
-				}
-				chunk.owned_sel_vector[result_count++] = i;
-			}
-		});
-
+		result_count = state->executor.SelectExpression(chunk, chunk.owned_sel_vector);
 		if (result_count > 0) {
-			// had a result! set the selection vector of the child elements
-			chunk.sel_vector = chunk.owned_sel_vector;
+			// found a match!
+			// set the match flags in the LHS
+			if (state->lhs_found_match) {
+				state->lhs_found_match[state->left_position] = true;
+			}
+			if (result_count == chunk.size()) {
+				// everything was matched, remove selection vector
+				chunk.sel_vector = nullptr;
+			} else {
+				// partial match
+				chunk.sel_vector = chunk.owned_sel_vector;
+			}
 			for (index_t i = 0; i < chunk.column_count; i++) {
 				chunk.data[i].sel_vector = chunk.sel_vector;
 				chunk.data[i].count = result_count;
+			}
+			// set the match flags in the RHS
+			if (state->rhs_found_match) {
+				for (index_t i = 0; i < result_count; i++) {
+					state->rhs_found_match[state->right_position * STANDARD_VECTOR_SIZE +
+					                       (chunk.sel_vector ? chunk.sel_vector[i] : i)] = true;
+				}
 			}
 		} else {
 			// no result: reset the chunk

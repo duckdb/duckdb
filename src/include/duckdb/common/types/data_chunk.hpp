@@ -45,9 +45,6 @@ public:
 	//! The (optional) selection vector of the DataChunk. Each of the member
 	//! vectors reference this selection vector.
 	sel_t *sel_vector;
-
-	// strings owned by the chunk
-	StringHeap heap;
 	//! The selection vector of a chunk, if it owns it
 	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
 
@@ -80,6 +77,9 @@ public:
 
 	//! Removes the selection vector from the chunk
 	void Flatten();
+
+	//! Turn all the vectors from the chunk into flat vectors
+	void Normalify();
 
 	//! Resets the DataChunk to its state right after the DataChunk::Initialize
 	//! function was called. This sets the count to 0, and resets each member

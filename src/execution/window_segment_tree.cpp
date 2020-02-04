@@ -1,6 +1,5 @@
 #include "duckdb/execution/window_segment_tree.hpp"
 
-#include "duckdb/common/types/constant_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <cmath>
@@ -28,11 +27,11 @@ void WindowSegmentTree::AggregateInit() {
 }
 
 Value WindowSegmentTree::AggegateFinal() {
-	ConstantVector statev(Value::POINTER((index_t)state.data()));
+	Vector statev(Value::POINTER((index_t)state.data()));
 
 	Value r(result_type);
-	ConstantVector result(r);
-	result.SetNull(0, false);
+	Vector result(r);
+	result.nullmask[0] = false;
 	aggregate.finalize(statev, result);
 
 	return result.GetValue(0);

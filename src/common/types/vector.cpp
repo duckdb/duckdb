@@ -5,106 +5,57 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
-using namespace duckdb;
 using namespace std;
 
 namespace duckdb {
+
 nullmask_t ZERO_MASK = nullmask_t(0);
-}
 
 Vector::Vector(TypeId type, bool create_data, bool zero_data)
-    : type(type), count(0), data(nullptr), sel_vector(nullptr) {
+    : vector_type(VectorType::FLAT_VECTOR), type(type), count(0), sel_vector(nullptr), data(nullptr) {
 	if (create_data) {
 		Initialize(type, zero_data);
 	}
 }
 
-Vector::Vector(TypeId type, data_ptr_t dataptr) : type(type), count(0), data(dataptr), sel_vector(nullptr) {
+Vector::Vector(TypeId type) : Vector(type, true, false) {
+}
+
+Vector::Vector(TypeId type, data_ptr_t dataptr)
+    : vector_type(VectorType::FLAT_VECTOR), type(type), count(0), sel_vector(nullptr), data(dataptr) {
 	if (dataptr && type == TypeId::INVALID) {
 		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
 	}
 }
 
-Vector::Vector(Value value) : Vector(value.type, true, false) {
-	count = 1;
-	SetValue(0, value);
+Vector::Vector(Value value) : vector_type(VectorType::CONSTANT_VECTOR), sel_vector(nullptr) {
+	Reference(value);
 }
 
-Vector::Vector() : type(TypeId::INVALID), count(0), data(nullptr), sel_vector(nullptr) {
-}
-
-Vector::~Vector() {
-	Destroy();
+Vector::Vector()
+    : vector_type(VectorType::FLAT_VECTOR), type(TypeId::INVALID), count(0), sel_vector(nullptr), data(nullptr) {
 }
 
 void Vector::Reference(Value &value) {
-	Destroy();
+	vector_type = VectorType::CONSTANT_VECTOR;
+	sel_vector = nullptr;
 	type = value.type;
+	buffer = VectorBuffer::CreateConstantVector(type);
+	data = buffer->GetData();
 	count = 1;
-	if (value.is_null) {
-		nullmask[0] = true;
-	}
-	switch (value.type) {
-	case TypeId::BOOLEAN:
-		data = (data_ptr_t)&value.value_.boolean;
-		break;
-	case TypeId::TINYINT:
-		data = (data_ptr_t)&value.value_.tinyint;
-		break;
-	case TypeId::SMALLINT:
-		data = (data_ptr_t)&value.value_.smallint;
-		break;
-	case TypeId::INTEGER:
-		data = (data_ptr_t)&value.value_.integer;
-		break;
-	case TypeId::BIGINT:
-		data = (data_ptr_t)&value.value_.bigint;
-		break;
-	case TypeId::FLOAT:
-		data = (data_ptr_t)&value.value_.float_;
-		break;
-	case TypeId::DOUBLE:
-		data = (data_ptr_t)&value.value_.double_;
-		break;
-	case TypeId::HASH:
-		data = (data_ptr_t)&value.value_.hash;
-		break;
-	case TypeId::POINTER:
-		data = (data_ptr_t)&value.value_.pointer;
-		break;
-	case TypeId::VARCHAR: {
-		// make size-1 array of char vector
-		owned_data = unique_ptr<data_t[]>(new data_t[sizeof(data_ptr_t)]);
-		data = owned_data.get();
-		// reference the string value of the Value
-		auto strings = (const char **)data;
-		strings[0] = value.str_value.c_str();
-		break;
-	}
-	default:
-		throw NotImplementedException("Unimplemented type");
-	}
+	SetValue(0, value);
 }
 
 void Vector::Initialize(TypeId new_type, bool zero_data) {
 	if (new_type != TypeId::INVALID) {
 		type = new_type;
 	}
-	string_heap.Destroy();
-	owned_data = unique_ptr<data_t[]>(new data_t[STANDARD_VECTOR_SIZE * GetTypeIdSize(type)]);
-	data = owned_data.get();
+	auxiliary.reset();
+	buffer = VectorBuffer::CreateStandardVector(type);
+	data = buffer->GetData();
 	if (zero_data) {
 		memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
 	}
-	nullmask.reset();
-}
-
-void Vector::Destroy() {
-	owned_data.reset();
-	string_heap.Destroy();
-	data = nullptr;
-	count = 0;
-	sel_vector = nullptr;
 	nullmask.reset();
 }
 
@@ -114,23 +65,22 @@ void Vector::SetValue(uint64_t index_, Value val) {
 	}
 	Value newVal = val.CastAs(type);
 
-	// set the NULL bit in the null mask
-	SetNull(index_, newVal.is_null);
 	uint64_t index = sel_vector ? sel_vector[index_] : index_;
+	nullmask[index] = newVal.is_null;
 	switch (type) {
-	case TypeId::BOOLEAN:
+	case TypeId::BOOL:
 		((int8_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.boolean;
 		break;
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		((int8_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.tinyint;
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		((int16_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.smallint;
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		((int32_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.integer;
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		((int64_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.bigint;
 		break;
 	case TypeId::FLOAT:
@@ -146,7 +96,7 @@ void Vector::SetValue(uint64_t index_, Value val) {
 		if (newVal.is_null) {
 			((const char **)data)[index] = nullptr;
 		} else {
-			((const char **)data)[index] = string_heap.AddString(newVal.str_value);
+			((const char **)data)[index] = AddString(newVal.str_value);
 		}
 		break;
 	}
@@ -155,36 +105,27 @@ void Vector::SetValue(uint64_t index_, Value val) {
 	}
 }
 
-void Vector::SetStringValue(uint64_t index, const char *value) {
-	if (type != TypeId::VARCHAR) {
-		throw InvalidTypeException(type, "Can only set string value of VARCHAR vectors!");
-	}
-	SetNull(index, value ? false : true);
-	if (value) {
-		((const char **)data)[index] = string_heap.AddString(value);
-	} else {
-		((const char **)data)[index] = nullptr;
-	}
-}
-
 Value Vector::GetValue(uint64_t index) const {
 	if (index >= count) {
 		throw OutOfRangeException("GetValue() out of range");
 	}
-	if (ValueIsNull(index)) {
+	uint64_t entry = sel_vector ? sel_vector[index] : index;
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		entry = 0;
+	}
+	if (nullmask[entry]) {
 		return Value(type);
 	}
-	uint64_t entry = sel_vector ? sel_vector[index] : index;
 	switch (type) {
-	case TypeId::BOOLEAN:
+	case TypeId::BOOL:
 		return Value::BOOLEAN(((int8_t *)data)[entry]);
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		return Value::TINYINT(((int8_t *)data)[entry]);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return Value::SMALLINT(((int16_t *)data)[entry]);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return Value::INTEGER(((int32_t *)data)[entry]);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return Value::BIGINT(((int64_t *)data)[entry]);
 	case TypeId::HASH:
 		return Value::HASH(((uint64_t *)data)[entry]);
@@ -205,9 +146,10 @@ Value Vector::GetValue(uint64_t index) const {
 }
 
 void Vector::Reference(Vector &other) {
-	assert(!owned_data);
-
+	vector_type = other.vector_type;
 	count = other.count;
+	buffer = other.buffer;
+	auxiliary = other.auxiliary;
 	data = other.data;
 	sel_vector = other.sel_vector;
 	type = other.type;
@@ -215,20 +157,11 @@ void Vector::Reference(Vector &other) {
 }
 
 void Vector::Move(Vector &other) {
-	other.Destroy();
-
-	other.owned_data = move(owned_data);
-	string_heap.Move(other.string_heap);
-	other.count = count;
-	other.data = data;
-	other.sel_vector = sel_vector;
-	other.type = type;
-	other.nullmask = nullmask;
-
-	Destroy();
+	other.Reference(*this);
 }
 
 void Vector::Flatten() {
+	Normalify();
 	if (!sel_vector) {
 		return;
 	}
@@ -246,6 +179,7 @@ void Vector::Copy(Vector &other, uint64_t offset) {
 	if (other.sel_vector) {
 		throw NotImplementedException("Copy to vector with sel_vector not supported!");
 	}
+	Normalify();
 
 	other.nullmask.reset();
 	if (!TypeIsConstantSize(type)) {
@@ -260,7 +194,7 @@ void Vector::Copy(Vector &other, uint64_t offset) {
 				    other.nullmask[k - offset] = true;
 				    target[k - offset] = nullptr;
 			    } else {
-				    target[k - offset] = other.string_heap.AddString(source[i]);
+				    target[k - offset] = other.AddString(source[i]);
 			    }
 		    },
 		    offset);
@@ -291,6 +225,8 @@ void Vector::Append(Vector &other) {
 	if (count + other.count > STANDARD_VECTOR_SIZE) {
 		throw OutOfRangeException("Cannot append to vector: vector is full!");
 	}
+	other.Normalify();
+	assert(vector_type == VectorType::FLAT_VECTOR);
 	uint64_t old_count = count;
 	count += other.count;
 	// merge NULL mask
@@ -303,7 +239,7 @@ void Vector::Append(Vector &other) {
 			if (other.nullmask[i]) {
 				target[old_count + k] = nullptr;
 			} else {
-				target[old_count + k] = string_heap.AddString(source[i]);
+				target[old_count + k] = AddString(source[i]);
 			}
 		});
 	} else {
@@ -311,8 +247,9 @@ void Vector::Append(Vector &other) {
 	}
 }
 
-uint64_t Vector::NotNullSelVector(const Vector &vector, sel_t *not_null_vector, sel_t *&result_assignment,
+uint64_t Vector::NotNullSelVector(Vector &vector, sel_t *not_null_vector, sel_t *&result_assignment,
                                   sel_t *null_vector) {
+	vector.Normalify();
 	if (vector.nullmask.any()) {
 		uint64_t result_count = 0, null_count = 0;
 		VectorOperations::Exec(vector.sel_vector, vector.count, [&](uint64_t i, uint64_t k) {
@@ -330,10 +267,42 @@ uint64_t Vector::NotNullSelVector(const Vector &vector, sel_t *not_null_vector, 
 	}
 }
 
+string VectorTypeToString(VectorType type) {
+	switch (type) {
+	case VectorType::FLAT_VECTOR:
+		return "FLAT";
+	case VectorType::SEQUENCE_VECTOR:
+		return "SEQUENCE";
+	case VectorType::CONSTANT_VECTOR:
+		return "CONSTANT";
+	default:
+		return "UNKNOWN";
+	}
+}
+
 string Vector::ToString() const {
-	string retval = TypeIdToString(type) + ": " + to_string(count) + " = [ ";
-	for (index_t i = 0; i < count; i++) {
-		retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
+	string retval = VectorTypeToString(vector_type) + " " + TypeIdToString(type) + ": " + to_string(count) + " = [ ";
+	switch (vector_type) {
+	case VectorType::FLAT_VECTOR:
+		for (index_t i = 0; i < count; i++) {
+			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
+		}
+		break;
+	case VectorType::CONSTANT_VECTOR:
+		retval += GetValue(0).ToString();
+		break;
+	case VectorType::SEQUENCE_VECTOR: {
+		int64_t start, increment;
+		GetSequence(start, increment);
+		for (index_t i = 0; i < count; i++) {
+			index_t idx = sel_vector ? sel_vector[i] : i;
+			retval += to_string(start + increment * idx) + (i == count - 1 ? "" : ", ");
+		}
+		break;
+	}
+	default:
+		retval += "UNKNOWN VECTOR TYPE";
+		break;
 	}
 	retval += "]";
 	return retval;
@@ -343,18 +312,154 @@ void Vector::Print() {
 	Printer::Print(ToString());
 }
 
+template <class T>
+static void flatten_constant_vector_loop(data_ptr_t data, data_ptr_t old_data, index_t count, sel_t *sel_vector) {
+	auto constant = *((T *)old_data);
+	auto output = (T *)data;
+	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) { output[i] = constant; });
+}
+
+void Vector::Normalify() {
+	switch (vector_type) {
+	case VectorType::FLAT_VECTOR:
+		// already a flat vector
+		break;
+	case VectorType::CONSTANT_VECTOR: {
+		vector_type = VectorType::FLAT_VECTOR;
+		// allocate a new buffer for the vector
+		auto old_buffer = move(buffer);
+		auto old_data = data;
+		buffer = VectorBuffer::CreateStandardVector(type);
+		data = buffer->GetData();
+		if (nullmask[0]) {
+			// constant NULL, set nullmask
+			nullmask.set();
+			return;
+		}
+		// non-null constant: have to repeat the constant
+		switch (type) {
+		case TypeId::BOOL:
+		case TypeId::INT8:
+			flatten_constant_vector_loop<int8_t>(data, old_data, count, sel_vector);
+			break;
+		case TypeId::INT16:
+			flatten_constant_vector_loop<int16_t>(data, old_data, count, sel_vector);
+			break;
+		case TypeId::INT32:
+			flatten_constant_vector_loop<int32_t>(data, old_data, count, sel_vector);
+			break;
+		case TypeId::INT64:
+			flatten_constant_vector_loop<int64_t>(data, old_data, count, sel_vector);
+			break;
+		case TypeId::FLOAT:
+			flatten_constant_vector_loop<float>(data, old_data, count, sel_vector);
+			break;
+		case TypeId::DOUBLE:
+			flatten_constant_vector_loop<double>(data, old_data, count, sel_vector);
+			break;
+		case TypeId::HASH:
+			flatten_constant_vector_loop<uint64_t>(data, old_data, count, sel_vector);
+			break;
+		case TypeId::POINTER:
+			flatten_constant_vector_loop<uintptr_t>(data, old_data, count, sel_vector);
+			break;
+		case TypeId::VARCHAR:
+			flatten_constant_vector_loop<const char *>(data, old_data, count, sel_vector);
+			break;
+		default:
+			throw NotImplementedException("Unimplemented type for VectorOperations::Flatten");
+		}
+		break;
+	}
+	case VectorType::SEQUENCE_VECTOR: {
+		int64_t start, increment;
+		GetSequence(start, increment);
+
+		vector_type = VectorType::FLAT_VECTOR;
+		buffer = VectorBuffer::CreateStandardVector(type);
+		data = buffer->GetData();
+		VectorOperations::GenerateSequence(*this, start, increment);
+		break;
+	}
+	default:
+		throw NotImplementedException("FIXME: unimplemented type for normalify");
+	}
+}
+
+void Vector::Sequence(int64_t start, int64_t increment, index_t count) {
+	vector_type = VectorType::SEQUENCE_VECTOR;
+	this->count = count;
+	this->buffer = make_buffer<VectorBuffer>(sizeof(int64_t) * 2);
+	auto data = buffer->GetData();
+	memcpy(data, &start, sizeof(int64_t));
+	memcpy(data + sizeof(int64_t), &increment, sizeof(int64_t));
+	nullmask.reset();
+	auxiliary.reset();
+}
+
+void Vector::GetSequence(int64_t &start, int64_t &increment) const {
+	assert(vector_type == VectorType::SEQUENCE_VECTOR);
+	auto data = buffer->GetData();
+	start = *((int64_t *)data);
+	increment = *((int64_t *)(data + sizeof(int64_t)));
+}
+
 void Vector::Verify() {
+	if (count == 0) {
+		return;
+	}
 #ifdef DEBUG
 	if (type == TypeId::VARCHAR) {
 		// we just touch all the strings and let the sanitizer figure out if any
 		// of them are deallocated/corrupt
-		VectorOperations::ExecType<const char *>(*this, [&](const char *string, uint64_t i, uint64_t k) {
-			if (!nullmask[i]) {
+		if (vector_type == VectorType::CONSTANT_VECTOR) {
+			if (!nullmask[0]) {
+				auto string = ((const char **)data)[0];
 				assert(string);
 				assert(strlen(string) != (size_t)-1);
 				assert(Value::IsUTF8String(string));
 			}
-		});
+		} else {
+			VectorOperations::ExecType<const char *>(*this, [&](const char *string, uint64_t i, uint64_t k) {
+				if (!nullmask[i]) {
+					assert(string);
+					assert(strlen(string) != (size_t)-1);
+					assert(Value::IsUTF8String(string));
+				}
+			});
+		}
 	}
 #endif
 }
+
+const char *Vector::AddString(const char *data, index_t len) {
+	if (!auxiliary) {
+		auxiliary = make_buffer<VectorStringBuffer>();
+	}
+	assert(auxiliary->type == VectorBufferType::STRING_BUFFER);
+	auto &string_buffer = (VectorStringBuffer &)*auxiliary;
+	return string_buffer.AddString(data, len);
+}
+
+const char *Vector::AddString(const char *data) {
+	return AddString(data, strlen(data));
+}
+
+const char *Vector::AddString(const string &data) {
+	return AddString(data.c_str(), data.size());
+}
+
+void Vector::AddHeapReference(Vector &other) {
+	if (!other.auxiliary) {
+		return;
+	}
+	if (!auxiliary) {
+		auxiliary = make_buffer<VectorStringBuffer>();
+	}
+	assert(auxiliary->type == VectorBufferType::STRING_BUFFER);
+	assert(other.auxiliary->type == VectorBufferType::STRING_BUFFER);
+	auto &string_buffer = (VectorStringBuffer &)*auxiliary;
+	string_buffer.AddHeapReference(other.auxiliary);
+}
+
+} // namespace duckdb

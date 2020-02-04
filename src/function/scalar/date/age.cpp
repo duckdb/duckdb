@@ -2,12 +2,13 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
 
 using namespace std;
 
 namespace duckdb {
 
-static const char *age_scalar_function(timestamp_t input1, timestamp_t input2, index_t result_index, string &output) {
+static const char *age_scalar_function(timestamp_t input1, timestamp_t input2, string &output) {
 	auto interval = Timestamp::GetDifference(input1, input2);
 	auto timestamp = Timestamp::IntervalToTimestamp(interval);
 	auto years = timestamp.year;
@@ -53,16 +54,16 @@ static void age_function(DataChunk &input, ExpressionState &state, Vector &resul
 	} else {
 		input.data[1].Move(input2);
 	}
-	assert(input1.type == TypeId::BIGINT);
-	assert(input2.type == TypeId::BIGINT);
+	assert(input1.type == TypeId::INT64);
+	assert(input2.type == TypeId::INT64);
 
 	result.count = input1.count;
 	result.sel_vector = input1.sel_vector;
 
 	string output_buffer;
-	VectorOperations::BinaryExec<timestamp_t, timestamp_t, const char *>(
-	    input1, input2, result, [&](timestamp_t input1, timestamp_t input2, index_t result_index) {
-		    return result.string_heap.AddString(age_scalar_function(input1, input2, result_index, output_buffer));
+	BinaryExecutor::Execute<timestamp_t, timestamp_t, const char *, true>(
+	    input1, input2, result, [&](timestamp_t input1, timestamp_t input2) {
+		    return result.AddString(age_scalar_function(input1, input2, output_buffer));
 	    });
 }
 

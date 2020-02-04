@@ -28,6 +28,6 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundDeleteStatemen
 	del->AddChild(move(root));
 	// we push an BoundColumnRef binding to the row_id index
 	del->expressions.push_back(make_unique<BoundColumnRefExpression>(
-	    TypeId::BIGINT, ColumnBinding(get.table_index, get.column_ids.size() - 1)));
+	    TypeId::INT64, ColumnBinding(get.table_index, get.column_ids.size() - 1)));
 	return move(del);
 }

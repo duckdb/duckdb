@@ -146,27 +146,27 @@ unique_ptr<QueryResult> QueryDatabase(vector<SQLType> result_types, sqlite3 *sql
 				// normal value, convert type
 				switch (result_types[i].id) {
 				case SQLTypeId::BOOLEAN:
-					((int8_t *)result_chunk.data[i].data)[result_chunk.data[i].count] =
+					((int8_t *)result_chunk.data[i].GetData())[result_chunk.data[i].count] =
 					    sqlite3_column_int(stmt, i) == 0 ? 0 : 1;
 					break;
 				case SQLTypeId::TINYINT:
-					((int8_t *)result_chunk.data[i].data)[result_chunk.data[i].count] =
+					((int8_t *)result_chunk.data[i].GetData())[result_chunk.data[i].count] =
 					    (int8_t)sqlite3_column_int(stmt, i);
 					break;
 				case SQLTypeId::SMALLINT:
-					((int16_t *)result_chunk.data[i].data)[result_chunk.data[i].count] =
+					((int16_t *)result_chunk.data[i].GetData())[result_chunk.data[i].count] =
 					    (int16_t)sqlite3_column_int(stmt, i);
 					break;
 				case SQLTypeId::INTEGER:
-					((int32_t *)result_chunk.data[i].data)[result_chunk.data[i].count] =
+					((int32_t *)result_chunk.data[i].GetData())[result_chunk.data[i].count] =
 					    (int32_t)sqlite3_column_int(stmt, i);
 					break;
 				case SQLTypeId::BIGINT:
-					((int64_t *)result_chunk.data[i].data)[result_chunk.data[i].count] =
+					((int64_t *)result_chunk.data[i].GetData())[result_chunk.data[i].count] =
 					    (int64_t)sqlite3_column_int64(stmt, i);
 					break;
 				case SQLTypeId::DECIMAL:
-					((double *)result_chunk.data[i].data)[result_chunk.data[i].count] =
+					((double *)result_chunk.data[i].GetData())[result_chunk.data[i].count] =
 					    (double)sqlite3_column_double(stmt, i);
 					break;
 				case SQLTypeId::VARCHAR: {
@@ -178,7 +178,8 @@ unique_ptr<QueryResult> QueryDatabase(vector<SQLType> result_types, sqlite3 *sql
 				}
 				case SQLTypeId::DATE: {
 					auto unix_time = sqlite3_column_int64(stmt, i);
-					((date_t *)result_chunk.data[i].data)[result_chunk.data[i].count] = Date::EpochToDate(unix_time);
+					((date_t *)result_chunk.data[i].GetData())[result_chunk.data[i].count] =
+					    Date::EpochToDate(unix_time);
 					break;
 				}
 				default:

@@ -6,8 +6,8 @@ using namespace duckdb;
 using namespace std;
 
 template <class T, class OP> static void mark_join_templated(Vector &left, Vector &right, bool found_match[]) {
-	auto ldata = (T *)left.data;
-	auto rdata = (T *)right.data;
+	auto ldata = (T *)left.GetData();
+	auto rdata = (T *)right.GetData();
 	VectorOperations::Exec(left, [&](index_t left_position, index_t k) {
 		VectorOperations::Exec(right, [&](index_t right_position, index_t k) {
 			if (OP::Operation(ldata[left_position], rdata[right_position])) {
@@ -19,14 +19,14 @@ template <class T, class OP> static void mark_join_templated(Vector &left, Vecto
 
 template <class OP> static void mark_join_operator(Vector &left, Vector &right, bool found_match[]) {
 	switch (left.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		return mark_join_templated<int8_t, OP>(left, right, found_match);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return mark_join_templated<int16_t, OP>(left, right, found_match);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return mark_join_templated<int32_t, OP>(left, right, found_match);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return mark_join_templated<int64_t, OP>(left, right, found_match);
 	case TypeId::FLOAT:
 		return mark_join_templated<float, OP>(left, right, found_match);

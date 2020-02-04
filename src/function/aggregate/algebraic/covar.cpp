@@ -23,24 +23,29 @@ static void covar_initialize(data_ptr_t payload, TypeId return_type) {
 }
 
 static void covar_update(Vector inputs[], index_t input_count, Vector &state) {
-	assert(input_count == 2);
 	// Streaming approximate covariance
+	assert(input_count == 2);
+	inputs[0].Normalify();
+	inputs[1].Normalify();
 
+	auto states = (covar_state_t **)state.GetData();
+	auto xdata = (double *)inputs[0].GetData();
+	auto ydata = (double *)inputs[1].GetData();
 	VectorOperations::Exec(state, [&](index_t i, index_t k) {
 		if (inputs[0].nullmask[i] || inputs[1].nullmask[i]) {
 			return;
 		}
 
-		auto state_ptr = (covar_state_t *)((data_ptr_t *)state.data)[i];
+		auto state_ptr = states[i];
 
 		// update running mean and d^2
 		const uint64_t n = ++(state_ptr->count);
 
-		const double x = ((double *)inputs[0].data)[i];
+		const double x = xdata[i];
 		const double dx = (x - state_ptr->meanx);
 		const double meanx = state_ptr->meanx + dx / n;
 
-		const double y = ((double *)inputs[1].data)[i];
+		const double y = ydata[i];
 		const double dy = (y - state_ptr->meany);
 		const double meany = state_ptr->meany + dy / n;
 
@@ -55,8 +60,8 @@ static void covar_update(Vector inputs[], index_t input_count, Vector &state) {
 
 static void covar_combine(Vector &state, Vector &combined) {
 	// combine streaming covar states
-	auto combined_data = (covar_state_t **)combined.data;
-	auto state_data = (covar_state_t *)state.data;
+	auto combined_data = (covar_state_t **)combined.GetData();
+	auto state_data = (covar_state_t *)state.GetData();
 
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
 		auto combined_ptr = combined_data[i];
@@ -85,8 +90,10 @@ static void covar_combine(Vector &state, Vector &combined) {
 
 static void covarpop_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming population covariance
+	auto states = (covar_state_t **)state.GetData();
+	auto result_data = (double *)result.GetData();
 	VectorOperations::Exec(result, [&](uint64_t i, uint64_t k) {
-		auto state_ptr = (covar_state_t *)((data_ptr_t *)state.data)[i];
+		auto state_ptr = states[i];
 
 		if (state_ptr->count == 0) {
 			result.nullmask[i] = true;
@@ -94,14 +101,16 @@ static void covarpop_finalize(Vector &state, Vector &result) {
 		}
 		double res = state_ptr->co_moment / state_ptr->count;
 
-		((double *)result.data)[i] = res;
+		result_data[i] = res;
 	});
 }
 
 static void covarsamp_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming sample covariance
+	auto states = (covar_state_t **)state.GetData();
+	auto result_data = (double *)result.GetData();
 	VectorOperations::Exec(result, [&](uint64_t i, uint64_t k) {
-		auto state_ptr = (covar_state_t *)((data_ptr_t *)state.data)[i];
+		auto state_ptr = states[i];
 
 		if (state_ptr->count < 2) {
 			result.nullmask[i] = true;
@@ -109,7 +118,7 @@ static void covarsamp_finalize(Vector &state, Vector &result) {
 		}
 		double res = state_ptr->co_moment / (state_ptr->count - 1);
 
-		((double *)result.data)[i] = res;
+		result_data[i] = res;
 	});
 }
 

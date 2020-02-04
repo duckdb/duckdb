@@ -27,16 +27,16 @@ void SegmentStatistics::Reset() {
 	max_string_length = 0;
 	has_overflow_strings = false;
 	switch (type) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		initialize_max_min<int8_t>(minimum.get(), maximum.get());
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		initialize_max_min<int16_t>(minimum.get(), maximum.get());
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		initialize_max_min<int32_t>(minimum.get(), maximum.get());
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		initialize_max_min<int64_t>(minimum.get(), maximum.get());
 		break;
 	case TypeId::FLOAT:

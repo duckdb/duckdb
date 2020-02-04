@@ -1,8 +1,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/operator/aggregate_operators.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/operator/aggregate_operators.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -25,10 +25,10 @@ template <class OP, bool IGNORE_NULL> static Value templated_binary_operation(co
 	result.is_null = false;
 	if (left.type != right.type) {
 		if (TypeIsIntegral(left.type) && TypeIsIntegral(right.type) &&
-		    (left.type < TypeId::BIGINT || right.type < TypeId::BIGINT)) {
+		    (left.type < TypeId::INT64 || right.type < TypeId::INT64)) {
 			// upcast integer types if necessary
-			Value left_cast = left.CastAs(TypeId::BIGINT);
-			Value right_cast = right.CastAs(TypeId::BIGINT);
+			Value left_cast = left.CastAs(TypeId::INT64);
+			Value right_cast = right.CastAs(TypeId::INT64);
 			result = templated_binary_operation<OP, IGNORE_NULL>(left_cast, right_cast);
 			if (result.is_null) {
 				result.type = max(left.type, right.type);
@@ -50,19 +50,19 @@ template <class OP, bool IGNORE_NULL> static Value templated_binary_operation(co
 	}
 	result.type = left.type;
 	switch (left.type) {
-	case TypeId::BOOLEAN:
+	case TypeId::BOOL:
 		result.value_.boolean = OP::Operation(left.value_.boolean, right.value_.boolean);
 		break;
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		result.value_.tinyint = OP::Operation(left.value_.tinyint, right.value_.tinyint);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		result.value_.smallint = OP::Operation(left.value_.smallint, right.value_.smallint);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		result.value_.integer = OP::Operation(left.value_.integer, right.value_.integer);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		result.value_.bigint = OP::Operation(left.value_.bigint, right.value_.bigint);
 		break;
 	case TypeId::FLOAT:
@@ -113,16 +113,16 @@ Value ValueOperations::Modulo(const Value &left, const Value &right) {
 	result.is_null = false;
 	result.type = left.type;
 	switch (left.type) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		return Value::TINYINT(left.value_.tinyint % right.value_.tinyint);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return Value::SMALLINT(left.value_.smallint % right.value_.smallint);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return Value::INTEGER(left.value_.integer % right.value_.integer);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		result.value_.bigint = left.value_.bigint % right.value_.bigint;
 		break;
 	default:

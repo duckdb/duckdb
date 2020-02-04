@@ -10,7 +10,7 @@ namespace duckdb {
 // & [bitwise_and]
 //===--------------------------------------------------------------------===//
 struct BitwiseANDOperator {
-	template <class T> static inline T Operation(T left, T right) {
+	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
 		return left & right;
 	}
 };
@@ -28,7 +28,7 @@ void BitwiseAndFun::RegisterFunction(BuiltinFunctions &set) {
 // | [bitwise_or]
 //===--------------------------------------------------------------------===//
 struct BitwiseOROperator {
-	template <class T> static inline T Operation(T left, T right) {
+	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
 		return left | right;
 	}
 };
@@ -46,7 +46,7 @@ void BitwiseOrFun::RegisterFunction(BuiltinFunctions &set) {
 // # [bitwise_xor]
 //===--------------------------------------------------------------------===//
 struct BitwiseXOROperator {
-	template <class T> static inline T Operation(T left, T right) {
+	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
 		return left ^ right;
 	}
 };
@@ -64,7 +64,7 @@ void BitwiseXorFun::RegisterFunction(BuiltinFunctions &set) {
 // << [bitwise_left_shift]
 //===--------------------------------------------------------------------===//
 struct BitwiseShiftLeftOperator {
-	template <class T> static inline T Operation(T left, T right) {
+	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
 		return left << right;
 	}
 };
@@ -82,7 +82,7 @@ void LeftShiftFun::RegisterFunction(BuiltinFunctions &set) {
 // >> [bitwise_right_shift]
 //===--------------------------------------------------------------------===//
 struct BitwiseShiftRightOperator {
-	template <class T> static inline T Operation(T left, T right) {
+	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
 		return left >> right;
 	}
 };

@@ -86,7 +86,7 @@ template <class T, class OP> void templated_quicksort(T *data, sel_t *sel_vector
 }
 
 template <class T> static void templated_quicksort(Vector &vector, sel_t *sel_vector, index_t count, sel_t result[]) {
-	auto data = (T *)vector.data;
+	auto data = (T *)vector.GetData();
 	// quicksort without nulls
 	templated_quicksort<T, duckdb::LessThanEquals>(data, sel_vector, count, result);
 }
@@ -95,20 +95,21 @@ void VectorOperations::Sort(Vector &vector, sel_t *sel_vector, index_t count, se
 	if (count == 0) {
 		return;
 	}
+	vector.Normalify();
 #ifdef DEBUG
 	VectorOperations::Exec(sel_vector, count, [&](uint64_t i, uint64_t k) { assert(!vector.nullmask[i]); });
 #endif
 	switch (vector.type) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		templated_quicksort<int8_t>(vector, sel_vector, count, result);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		templated_quicksort<int16_t>(vector, sel_vector, count, result);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		templated_quicksort<int32_t>(vector, sel_vector, count, result);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		templated_quicksort<int64_t>(vector, sel_vector, count, result);
 		break;
 	case TypeId::FLOAT:
@@ -129,6 +130,7 @@ void VectorOperations::Sort(Vector &vector, sel_t *sel_vector, index_t count, se
 }
 
 void VectorOperations::Sort(Vector &vector, sel_t result[]) {
+	vector.Normalify();
 	// first we extract NULL values
 	sel_t not_null_sel_vector[STANDARD_VECTOR_SIZE], null_sel_vector[STANDARD_VECTOR_SIZE];
 	sel_t *sel_vector;
@@ -151,7 +153,7 @@ void VectorOperations::Sort(Vector &vector, sel_t result[]) {
 #include "duckdb/common/operator/comparison_operators.hpp"
 
 template <class T> bool is_unique(Vector &vector, sel_t sel_vector[]) {
-	auto data = (T *)vector.data;
+	auto data = (T *)vector.GetData();
 	for (index_t i = 1; i < vector.count; i++) {
 		if (vector.nullmask[sel_vector[i]]) {
 			continue;
@@ -164,19 +166,23 @@ template <class T> bool is_unique(Vector &vector, sel_t sel_vector[]) {
 }
 
 bool VectorOperations::Unique(Vector &vector) {
+	if (vector.vector_type == VectorType::CONSTANT_VECTOR) {
+		// constant vector, value is unique if count is 1 OR value is a constant NULL
+		return vector.count == 1 || vector.nullmask[0];
+	}
 	// first we extract NULL values
 	sel_t sort_sel[STANDARD_VECTOR_SIZE];
 	// first sort the vector
 	VectorOperations::Sort(vector, sort_sel);
 	// now check whether or not the result contains unique values
 	switch (vector.type) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		return is_unique<int8_t>(vector, sort_sel);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return is_unique<int16_t>(vector, sort_sel);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return is_unique<int32_t>(vector, sort_sel);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return is_unique<int64_t>(vector, sort_sel);
 	case TypeId::FLOAT:
 		return is_unique<float>(vector, sort_sel);

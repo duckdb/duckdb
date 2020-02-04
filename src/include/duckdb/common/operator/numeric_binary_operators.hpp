@@ -38,18 +38,14 @@ struct Divide {
 	}
 };
 
-struct ModuloInt {
+struct Modulo {
 	template <class T> static inline T Operation(T left, T right) {
 		assert(right != 0);
 		return left % right;
 	}
 };
 
-struct ModuloReal {
-	template <class T> static inline T Operation(T left, T right) {
-		assert(right != 0);
-		return fmod(left, right);
-	}
-};
+template <> float Modulo::Operation(float left, float right);
+template <> double Modulo::Operation(double left, double right);
 
 } // namespace duckdb

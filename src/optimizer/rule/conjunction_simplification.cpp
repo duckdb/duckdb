@@ -38,7 +38,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 	// the constant_expr is a scalar expression that we have to fold
 	// use an ExpressionExecutor to execute the expression
 	assert(constant_expr->IsFoldable());
-	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr).CastAs(TypeId::BOOLEAN);
+	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr).CastAs(TypeId::BOOL);
 	if (constant_value.is_null) {
 		// we can't simplify conjunctions with a constant NULL
 		return nullptr;
