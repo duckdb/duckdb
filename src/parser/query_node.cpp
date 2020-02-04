@@ -2,6 +2,7 @@
 
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/parser/query_node/recursive_cte_node.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -81,6 +82,9 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &source) {
 	case QueryNodeType::SET_OPERATION_NODE:
 		result = SetOperationNode::Deserialize(source);
 		break;
+    case QueryNodeType::RECURSIVE_CTE_NODE:
+	    result = RecursiveCTENode::Deserialize(source);
+	    break;
 	default:
 		throw SerializationException("Could not deserialize Query Node: unknown type!");
 	}

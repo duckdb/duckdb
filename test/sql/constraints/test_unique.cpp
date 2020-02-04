@@ -46,6 +46,142 @@ TEST_CASE("Single UNIQUE constraint", "[constraints]") {
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
 }
 
+TEST_CASE("UNIQUE constraint on temporary tables", "[constraints]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY TABLE integers(i INTEGER, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE UNIQUE INDEX uidx ON integers (i) "));
+
+	// insert unique values
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (3, 4), (2, 5)"));
+
+	result = con.Query("SELECT * FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4, 5}));
+
+	// insert a duplicate value as part of a chain of values, this should fail
+	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES (6, 6), (3, 4);"));
+
+	// unique constraints accept NULL values, unlike PRIMARY KEY columns
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (NULL, 6), (NULL, 7)"));
+
+	// but if we try to replace them like this it's going to fail
+	REQUIRE_FAIL(con.Query("UPDATE integers SET i=77 WHERE i IS NULL"));
+
+	result = con.Query("SELECT * FROM integers ORDER BY i, j");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {6, 7, 5, 4}));
+
+	// we can replace them like this though
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=77 WHERE i IS NULL AND j=6"));
+
+	result = con.Query("SELECT * FROM integers ORDER BY i, j");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 3, 77}));
+	REQUIRE(CHECK_COLUMN(result, 1, {7, 5, 4, 6}));
+
+	for (index_t i = 0; i < 10; i++) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (NULL, 6), (NULL, 7)"));
+	}
+	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES  (3, 4)"));
+
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+}
+
+TEST_CASE("NULL values and a multi-column UNIQUE constraint", "[constraints]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY TABLE integers(i INTEGER, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE UNIQUE INDEX uidx ON integers (i,j) "));
+
+	// insert unique values
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (3, 4), (2, 5)"));
+
+	result = con.Query("SELECT * FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4, 5}));
+
+	// insert a duplicate value as part of a chain of values, this should fail
+	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES (6, 6), (3, 4);"));
+
+	// unique constraints accept NULL values, unlike PRIMARY KEY columns
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (NULL, 6), (NULL, 6), (NULL, 7)"));
+
+	// but if we try to replace them like this it's going to fail
+	REQUIRE_FAIL(con.Query("UPDATE integers SET i=77 WHERE i IS NULL"));
+
+	result = con.Query("SELECT * FROM integers ORDER BY i, j");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value(), 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {6, 6, 7, 5, 4}));
+
+	// we can replace them like this though
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=77 WHERE i IS NULL AND j=7"));
+
+	result = con.Query("SELECT * FROM integers ORDER BY i, j");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), 2, 3, 77}));
+	REQUIRE(CHECK_COLUMN(result, 1, {6, 6, 5, 4, 7}));
+
+	for (index_t i = 0; i < 10; i++) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (NULL, 6), (NULL, 7)"));
+	}
+	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES  (3, 4)"));
+
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+}
+
+TEST_CASE("UNIQUE constraint on temporary tables with Strings", "[constraints]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY TABLE integers(i INTEGER, j VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE UNIQUE INDEX \"uidx\" ON \"integers\" (\"j\") "));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (3, '4'), (2, '5')"));
+
+	result = con.Query("SELECT * FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"4", "5"}));
+
+	// insert a duplicate value as part of a chain of values, this should fail
+	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES (6, '6'), (3, '4');"));
+
+	// unique constraints accept NULL values, unlike PRIMARY KEY columns
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (6,NULL), (7,NULL)"));
+
+	// but if we try to replace them like this it's going to fail
+	REQUIRE_FAIL(con.Query("UPDATE integers SET j='77' WHERE j IS NULL"));
+
+	result = con.Query("SELECT * FROM integers ORDER BY i, j");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 6, 7}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"5", "4", Value(), Value()}));
+
+	// we can replace them like this though
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET j='7777777777777777777777777777' WHERE j IS NULL AND i=6"));
+	for (index_t i = 0; i < 10; i++) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (6,NULL), (7,NULL)"));
+	}
+	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES  (3, '4')"));
+	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES  (3, '4')"));
+
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+}
+
+TEST_CASE("UNIQUE constraint on temporary tables with duplicate data", "[constraints]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY TABLE integers(i INTEGER, j VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (3, '4'), (2, '4')"));
+
+	REQUIRE_FAIL(con.Query("CREATE UNIQUE INDEX uidx ON integers (j) "));
+
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+}
+
 TEST_CASE("Multiple constraints", "[constraints]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

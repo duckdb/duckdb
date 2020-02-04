@@ -45,5 +45,7 @@ class LogicalPruneColumns;
 class LogicalWindow;
 class LogicalExecute;
 class LogicalSimple;
+class LogicalRecursiveCTE;
+class LogicalCTERef;
 
 } // namespace duckdb

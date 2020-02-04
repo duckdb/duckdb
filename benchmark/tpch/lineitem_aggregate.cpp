@@ -131,3 +131,28 @@ string BenchmarkInfo() override {
 	return "Execute the query \"" + GetQuery() + "\" on SF1";
 }
 FINISH_BENCHMARK(LineitemJoinAggregateWithFilter)
+
+DUCKDB_BENCHMARK(TPCHQ1IntKeys, "[aggregate]")
+void Load(DuckDBBenchmarkState *state) override {
+	// load the data into the tpch schema
+	tpch::dbgen(SF, state->db, DEFAULT_SCHEMA, "_normal");
+	Connection conn(state->db);
+	conn.Query("CREATE TABLE lineitem AS select l_orderkey, l_partkey,  l_suppkey,    l_linenumber,    l_quantity,    "
+	           "l_extendedprice,    l_discount,    l_tax, case l_returnflag when 'N' then 0 when 'R' then 1 when 'A' "
+	           "then 2 else NULL end l_returnflag, case l_linestatus when 'F' then 0 when 'O' then 1 else NULL end "
+	           "l_linestatus, l_shipdate,     l_commitdate,     l_receiptdate,   l_shipinstruct,    l_shipmode,    "
+	           "l_comment from lineitem_normal");
+}
+string GetQuery() override {
+	return tpch::get_query(1);
+}
+string VerifyResult(QueryResult *result) override {
+	if (!result->success) {
+		return result->error;
+	}
+	return string();
+}
+string BenchmarkInfo() override {
+	return "Execute the query \"" + GetQuery() + "\" on SF1";
+}
+FINISH_BENCHMARK(TPCHQ1IntKeys)

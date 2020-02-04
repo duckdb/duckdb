@@ -19,7 +19,9 @@ public:
 	                   vector<unique_ptr<Expression>> expressions, unique_ptr<CreateIndexInfo> info)
 	    : LogicalOperator(LogicalOperatorType::CREATE_INDEX), table(table), column_ids(column_ids),
 	      info(std::move(info)) {
-		this->unbound_expressions.push_back(expressions[0]->Copy());
+		for (auto &expr : expressions) {
+			this->unbound_expressions.push_back(expr->Copy());
+		}
 		this->expressions = move(expressions);
 	}
 

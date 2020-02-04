@@ -118,6 +118,7 @@ private:
 
 	unique_ptr<BoundQueryNode> Bind(SelectNode &node);
 	unique_ptr<BoundQueryNode> Bind(SetOperationNode &node);
+    unique_ptr<BoundQueryNode> Bind(RecursiveCTENode &node);
 
 	unique_ptr<BoundTableRef> Bind(TableRef &ref);
 	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);

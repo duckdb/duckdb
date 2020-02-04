@@ -257,17 +257,6 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	}
 }
 
-static void VerifyUniqueConstraint(TableCatalogEntry &table, unordered_set<index_t> &keys, DataChunk &chunk) {
-	// not implemented for multiple keys
-	assert(keys.size() == 1);
-	// check if the columns are unique
-	for (auto &key : keys) {
-		if (!VectorOperations::Unique(chunk.data[key])) {
-			throw ConstraintException("duplicate key value violates primary key or unique constraint");
-		}
-	}
-}
-
 void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk) {
 	for (auto &constraint : table.bound_constraints) {
 		switch (constraint->type) {
@@ -282,19 +271,16 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chu
 			break;
 		}
 		case ConstraintType::UNIQUE: {
-			// we check these constraint in the unique index
-			auto &unique = *reinterpret_cast<BoundUniqueConstraint *>(constraint.get());
-			VerifyUniqueConstraint(table, unique.keys, chunk);
+			//! check whether or not the chunk can be inserted into the indexes
+			for (auto &index : indexes) {
+				index->VerifyAppend(chunk);
+			}
 			break;
 		}
 		case ConstraintType::FOREIGN_KEY:
 		default:
 			throw NotImplementedException("Constraint type not implemented!");
 		}
-	}
-	// check whether or not the chunk can be inserted into the indexes
-	for (auto &index : indexes) {
-		index->VerifyAppend(chunk);
 	}
 }
 
@@ -670,7 +656,9 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 		executor.Execute(intermediate, result);
 
 		// insert into the index
-		index->Insert(lock, result, intermediate.data[intermediate.column_count - 1]);
+		if (!index->Insert(lock, result, intermediate.data[intermediate.column_count - 1])) {
+			throw ConstraintException("Cant create unique index, table contains duplicate data on indexed column(s)");
+		}
 	}
 	indexes.push_back(move(index));
 }

@@ -1,6 +1,6 @@
 Package: duckdb
 Title: DBI Package for DuckDB
-Version: 0.1.1
+Version: 0.1.3
 Author: Hannes Muehleisen <hannes@cwi.nl>
 Maintainer: Hannes Muehleisen <hannes@cwi.nl>
 Description: TODO

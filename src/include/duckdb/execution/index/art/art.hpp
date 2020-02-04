@@ -62,9 +62,6 @@ public:
 	unique_ptr<Node> tree;
 	//! True if machine is little endian
 	bool is_little_endian;
-	//! The maximum prefix length for compressed paths stored in the
-	//! header, if the path is longer it is loaded from the database on demand
-	uint32_t maxPrefix;
 	//! Whether or not the ART is an index built to enforce a UNIQUE constraint
 	bool is_unique;
 

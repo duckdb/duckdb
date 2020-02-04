@@ -39,6 +39,7 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source) {
 	case TableReferenceType::EXPRESSION_LIST:
 		result = ExpressionListRef::Deserialize(source);
 		break;
+    case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
 		return nullptr;
 	}
