@@ -183,7 +183,7 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 			if (state->cached_chunk.size() > 0) {
 				// finished probing but cached data remains, return cached chunk
 				for (index_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
-					state->cached_chunk.data[col_idx].Move(chunk.data[col_idx]);
+					chunk.data[col_idx].Reference(state->cached_chunk.data[col_idx]);
 				}
 				chunk.sel_vector = state->cached_chunk.sel_vector;
 				state->cached_chunk.Reset();
@@ -195,7 +195,7 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 			if (state->cached_chunk.size() >= (1024 - 64)) {
 				// chunk cache full: return it
 				for (index_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
-					state->cached_chunk.data[col_idx].Move(chunk.data[col_idx]);
+					chunk.data[col_idx].Reference(state->cached_chunk.data[col_idx]);
 				}
 				chunk.sel_vector = state->cached_chunk.sel_vector;
 				state->cached_chunk.Reset();

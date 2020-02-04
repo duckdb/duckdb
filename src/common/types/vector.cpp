@@ -156,10 +156,6 @@ void Vector::Reference(Vector &other) {
 	nullmask = other.nullmask;
 }
 
-void Vector::Move(Vector &other) {
-	other.Reference(*this);
-}
-
 void Vector::Flatten() {
 	Normalify();
 	if (!sel_vector) {
@@ -167,7 +163,7 @@ void Vector::Flatten() {
 	}
 	Vector other(type, true, false);
 	this->Copy(other);
-	other.Move(*this);
+	this->Reference(other);
 }
 
 void Vector::Copy(Vector &other, uint64_t offset) {
@@ -212,7 +208,7 @@ void Vector::Cast(TypeId new_type) {
 	}
 	Vector new_vector(new_type, true, false);
 	VectorOperations::Cast(*this, new_vector);
-	new_vector.Move(*this);
+	this->Reference(new_vector);
 }
 
 void Vector::Append(Vector &other) {

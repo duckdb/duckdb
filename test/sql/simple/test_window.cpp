@@ -210,6 +210,7 @@ TEST_CASE("Wisconsin-derived window test cases", "[window]") {
 
 	result = con.Query("SELECT COUNT(*) OVER () FROM tenk1");
 	REQUIRE(result->types.size() == 1);
+
 	// FIXME	REQUIRE(CHECK_COLUMN(result, 0, {10, 10, 10, 10, 10, 10, 10, 10, 10, 10}));
 
 	result = con.Query("SELECT sum(four) OVER (PARTITION BY ten ORDER BY unique2) AS sum_1, ten, four FROM tenk1 WHERE "
