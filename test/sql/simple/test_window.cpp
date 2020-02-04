@@ -21,6 +21,9 @@ TEST_CASE("Most scalar window functions", "[window]") {
 	REQUIRE_FAIL(con.Query("SELECT avg(row_number() over ()) over ()"));
 	REQUIRE_FAIL(con.Query("SELECT avg(42) over (partition by row_number() over ())"));
 	REQUIRE_FAIL(con.Query("SELECT avg(42) over (order by row_number() over ())"));
+	// distinct aggregates not supported for window functions
+	REQUIRE_FAIL(con.Query("SELECT COUNT(DISTINCT 42) OVER ()"));
+	REQUIRE_FAIL(con.Query("WITH t AS (SELECT col0 AS a, col1 AS b FROM (VALUES(1,2),(1,1),(1,2),(2,1),(2,1),(2,2),(2,3),(2,4)) v) SELECT *, COUNT(b) OVER(PARTITION BY a), COUNT(DISTINCT b) OVER(PARTITION BY a) FROM t;"));
 }
 
 TEST_CASE("Most basic window function", "[window]") {
