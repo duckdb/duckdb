@@ -206,68 +206,63 @@ static index_t list_payload_size(TypeId return_type) {
 	return sizeof(Vector);
 }
 
+// NB: the result of this is copied around
 static void list_initialize(data_ptr_t payload, TypeId return_type) {
 	memset(payload, 0, sizeof(Vector));
 	auto v = (Vector*) payload;
-	v->Initialize(TypeId::INT32, true, 100);  // FIXME size?
-	v->count = 0;
+	v->type = TypeId::INVALID;
 }
 
 static void list_update(Vector inputs[], index_t input_count, Vector &state) {
 	assert(input_count == 1);
 	inputs[0].Normalify();
 
-	auto states = (Vector*)state.GetData();
+	auto states = (Vector**)state.GetData();
 	auto input_data = (int32_t *)inputs[0].GetData();
+
 	VectorOperations::Exec(state, [&](index_t i, index_t k) {
-		auto& state = states[i];
-		state.count++;
+		auto state = states[i];
+		if (state->type == TypeId::INVALID) {
+			state->Initialize(TypeId::INT32, true, 100);  // FIXME size? needs to grow this!
+			state->count = 0;
+		}
+		state->count++;
 		auto v = Value();
 		if (!inputs[0].nullmask[i]) {
 			v = Value::INTEGER(input_data[i]);
 		}
-		state.SetValue(state.count-1, v);
+		state->SetValue(state->count-1, v); // FIXME this is evil and slow
 	});
 }
 
 static void list_combine(Vector &state, Vector &combined) {
-	printf("list_combine()\n");
-	// combine streaming avg states
-//	auto combined_data = (unique_ptr<Vector> **)combined.GetData();
-//	auto state_data = (unique_ptr<Vector>[])state.GetData();
-
-//	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-//		auto combined_ptr = combined_data[i];
-//		auto state_ptr = state_data + i;
-//
-//		if (0 == combined_ptr->count) {
-//			*combined_ptr = *state_ptr;
-//		} else if (state_ptr->count) {
-//			combined_ptr->count += state_ptr->count;
-//			combined_ptr->sum += state_ptr->sum;
-//		}
-//	});
+	throw Exception("eek");
+	// TODO should be rather straightforward, copy vectors together
 }
 
 static void list_finalize(Vector &state, Vector &result) {
-	// compute finalization of streaming avg
-//	auto states = (unique_ptr<Vector>[]) state.GetData();
-//	auto result_data = (double *) result.GetData();
-//	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-//		auto state_ptr = states[i];
-//
-//		if (state_ptr->count == 0) {
-//			result.nullmask[i] = true;
-//		} else {
-//			result_data[i] = state_ptr->sum / state_ptr->count;
-//		}
-//	});
-	printf("list_finalize()\n");
-	result.Initialize(TypeId::LIST, 0, state.count);
+	auto states = (Vector**)state.GetData();
+
+	result.Initialize(TypeId::LIST, false, state.count);
+	auto list_struct_data = (list_entry_t *)result.GetData();
+
+	// first get total len of child vec
+	size_t total_len = 0;
+	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+		auto state_ptr = states[i];
+		list_struct_data[i].length = state_ptr->count;
+		list_struct_data[i].offset = total_len;
+		total_len += state_ptr->count;
+	});
+
 	auto list_child = make_unique<Vector>();
-	list_child->Initialize(TypeId::INT32, false, 42);
-	list_child->nullmask.all();
-	result.nullmask.all();
+	list_child->Initialize(TypeId::INT32, false, total_len);
+	list_child->count = 0;
+	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+		auto state_ptr = states[i];
+		list_child->Append(*state_ptr);
+	});
+	assert(list_child->count == total_len);
 	result.children.push_back(pair<string, unique_ptr<Vector>>("", move(list_child)));
 }
 
@@ -306,12 +301,17 @@ TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 	result->Print();
 
 
-	result = con.Query("SELECT some_group_key, LIST(some_int) from my_scan() GROUP BY some_group_key ");
+	con.Query("CREATE TABLE list_data (g INTEGER, e INTEGER)");
+	con.Query("INSERT INTO list_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6)");
+
+	result = con.Query("SELECT g, LIST(e) from list_data GROUP BY g ");
 	result->Print();
 
-	// TODO aggr/join
-	// TODO map
-	// aggr into list
+	// TODO project into struct (ez!)
+	// TODO flatten list in join
 
+	// TODO map
+	// TODO aggr/join
 	// TODO ?
+
 }
