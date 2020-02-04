@@ -128,6 +128,8 @@ SQLType SQLTypeFromInternalType(TypeId type) {
 		return SQLType(SQLTypeId::VARBINARY);
 	case TypeId::STRUCT:
 		return SQLType(SQLTypeId::STRUCT); // TODO we do not know the child types here
+	case TypeId::LIST:
+		return SQLType(SQLTypeId::LIST);
 	default:
 		throw ConversionException("Invalid TypeId %d", type);
 	}

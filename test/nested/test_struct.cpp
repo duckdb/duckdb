@@ -13,6 +13,8 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -41,10 +43,15 @@ void my_scan_function(ClientContext &context, DataChunk &input, DataChunk &outpu
 	data.nrow -= this_rows;
 
 	auto int_data = (int32_t *)output.data[0].GetData();
+	auto group_data = (int32_t *)output.data[4].GetData();
+
 	for (size_t row = 0; row < this_rows; row++) {
 		int_data[row] = row % 10;
+		group_data[row] = row % 4;
+
 	}
 	output.data[0].count = this_rows;
+	output.data[4].count = this_rows;
 
 	// TODO: the nested stuff should probably live in the data chunks's data area as well (?)
 	auto &sv = output.data[1];
@@ -158,8 +165,8 @@ private:
 		SQLType list_struct_type(SQLTypeId::LIST);
 		list_struct_type.child_type.push_back(pair<string, SQLType>("", struct_type2));
 
-		return TableFunction("my_scan", {}, {SQLType::INTEGER, struct_type, list_type, list_struct_type},
-		                     {"some_int", "some_struct", "some_list", "some_list_struct"}, my_scan_function_init,
+		return TableFunction("my_scan", {}, {SQLType::INTEGER, struct_type, list_type, list_struct_type, SQLType::INTEGER},
+		                     {"some_int", "some_struct", "some_list", "some_list_struct", "some_group_key"}, my_scan_function_init,
 		                     my_scan_function, nullptr);
 	}
 };
@@ -193,6 +200,79 @@ public:
 	    : ScalarFunction("struct_extract", {SQLType::STRUCT, SQLType::VARCHAR}, SQLType::INTEGER, extract_function){};
 };
 
+
+
+static index_t list_payload_size(TypeId return_type) {
+	return sizeof(Vector);
+}
+
+static void list_initialize(data_ptr_t payload, TypeId return_type) {
+	memset(payload, 0, sizeof(Vector));
+	auto v = (Vector*) payload;
+	v->Initialize(TypeId::INT32, true, 100);  // FIXME size?
+	v->count = 0;
+}
+
+static void list_update(Vector inputs[], index_t input_count, Vector &state) {
+	assert(input_count == 1);
+	inputs[0].Normalify();
+
+	auto states = (Vector*)state.GetData();
+	auto input_data = (int32_t *)inputs[0].GetData();
+	VectorOperations::Exec(state, [&](index_t i, index_t k) {
+		auto& state = states[i];
+		state.count++;
+		auto v = Value();
+		if (!inputs[0].nullmask[i]) {
+			v = Value::INTEGER(input_data[i]);
+		}
+		state.SetValue(state.count-1, v);
+	});
+}
+
+static void list_combine(Vector &state, Vector &combined) {
+	printf("list_combine()\n");
+	// combine streaming avg states
+//	auto combined_data = (unique_ptr<Vector> **)combined.GetData();
+//	auto state_data = (unique_ptr<Vector>[])state.GetData();
+
+//	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+//		auto combined_ptr = combined_data[i];
+//		auto state_ptr = state_data + i;
+//
+//		if (0 == combined_ptr->count) {
+//			*combined_ptr = *state_ptr;
+//		} else if (state_ptr->count) {
+//			combined_ptr->count += state_ptr->count;
+//			combined_ptr->sum += state_ptr->sum;
+//		}
+//	});
+}
+
+static void list_finalize(Vector &state, Vector &result) {
+	// compute finalization of streaming avg
+//	auto states = (unique_ptr<Vector>[]) state.GetData();
+//	auto result_data = (double *) result.GetData();
+//	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+//		auto state_ptr = states[i];
+//
+//		if (state_ptr->count == 0) {
+//			result.nullmask[i] = true;
+//		} else {
+//			result_data[i] = state_ptr->sum / state_ptr->count;
+//		}
+//	});
+	printf("list_finalize()\n");
+	result.Initialize(TypeId::LIST, 0, state.count);
+	auto list_child = make_unique<Vector>();
+	list_child->Initialize(TypeId::INT32, false, 42);
+	list_child->nullmask.all();
+	result.nullmask.all();
+	result.children.push_back(pair<string, unique_ptr<Vector>>("", move(list_child)));
+}
+
+
+
 TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -203,19 +283,35 @@ TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 	StructExtractFunction extract_fun;
 	CreateScalarFunctionInfo extract_info(extract_fun);
 
+	SQLType list_type(SQLTypeId::LIST);
+	list_type.child_type.push_back(pair<string, SQLType>("", SQLType::INTEGER));
+
+
+	auto agg = AggregateFunction("list", {SQLType::INTEGER}, list_type, list_payload_size, list_initialize,
+		                                  list_update, list_combine, list_finalize);
+
+	CreateAggregateFunctionInfo agg_info(agg);
+
 	con.context->transaction.SetAutoCommit(false);
 	con.context->transaction.BeginTransaction();
 	auto &trans = con.context->transaction.ActiveTransaction();
 	con.context->catalog.CreateTableFunction(trans, &scan_info);
 	con.context->catalog.CreateFunction(trans, &extract_info);
+	con.context->catalog.CreateFunction(trans, &agg_info);
+
 
 	// auto result = con.Query("SELECT some_int, some_struct, struct_extract(some_struct, 'first'), some_list FROM
 	// my_scan() WHERE some_int > 7 ORDER BY some_int LIMIT 100 ");
 	auto result = con.Query("SELECT some_int, some_list_struct FROM my_scan() WHERE some_int > 7 ");
 	result->Print();
 
+
+	result = con.Query("SELECT some_group_key, LIST(some_int) from my_scan() GROUP BY some_group_key ");
+	result->Print();
+
 	// TODO aggr/join
 	// TODO map
+	// aggr into list
 
 	// TODO ?
 }
