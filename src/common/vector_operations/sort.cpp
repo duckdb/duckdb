@@ -134,7 +134,7 @@ void VectorOperations::Sort(Vector &vector, sel_t result[]) {
 	// first we extract NULL values
 	sel_t not_null_sel_vector[STANDARD_VECTOR_SIZE], null_sel_vector[STANDARD_VECTOR_SIZE];
 	sel_t *sel_vector;
-	index_t count = Vector::NotNullSelVector(vector, not_null_sel_vector, sel_vector, null_sel_vector);
+	index_t count = VectorOperations::NotNullSelVector(vector, not_null_sel_vector, sel_vector, null_sel_vector);
 	if (count == vector.count) {
 		// no NULL values
 		// we don't need to use the selection vector at all
