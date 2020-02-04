@@ -151,7 +151,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 			all_scalar = false;
 		}
 	}
-	if (expr.children.size() == 1) {
+	if (expr.children.size() == 2) {
 		// only one child
 		// IN: turn into X = 1
 		// NOT IN: turn into X <> 1

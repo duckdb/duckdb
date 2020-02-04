@@ -56,7 +56,7 @@ test_compile: # test compilation of individual cpp files
 	python scripts/amalgamation.py --compile
 
 format:
-	python scripts/format.py
+	python3 scripts/format.py
 
 third_party/sqllogictest:
 	git clone --depth=1 https://github.com/cwida/sqllogictest.git third_party/sqllogictest

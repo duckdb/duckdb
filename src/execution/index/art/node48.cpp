@@ -4,7 +4,7 @@
 
 using namespace duckdb;
 
-Node48::Node48(ART &art) : Node(art, NodeType::N48) {
+Node48::Node48(ART &art, size_t compressionLength) : Node(art, NodeType::N48, compressionLength) {
 	for (uint64_t i = 0; i < 256; i++) {
 		childIndex[i] = Node::EMPTY_MARKER;
 	}
@@ -69,7 +69,7 @@ void Node48::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_pt
 		n->count++;
 	} else {
 		// Grow to Node256
-		auto newNode = make_unique<Node256>(art);
+		auto newNode = make_unique<Node256>(art, n->prefix_length);
 		for (index_t i = 0; i < 256; i++) {
 			if (n->childIndex[i] != Node::EMPTY_MARKER) {
 				newNode->child[i] = move(n->child[n->childIndex[i]]);
@@ -89,7 +89,7 @@ void Node48::erase(ART &art, unique_ptr<Node> &node, int pos) {
 	n->childIndex[pos] = Node::EMPTY_MARKER;
 	n->count--;
 	if (node->count <= 12) {
-		auto newNode = make_unique<Node16>(art);
+		auto newNode = make_unique<Node16>(art, n->prefix_length);
 		CopyPrefix(art, n, newNode.get());
 		for (index_t i = 0; i < 256; i++) {
 			if (n->childIndex[i] != Node::EMPTY_MARKER) {

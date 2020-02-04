@@ -11,9 +11,6 @@ using namespace std;
 ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions,
          bool is_unique)
     : Index(IndexType::ART, table, column_ids, move(unbound_expressions)), is_unique(is_unique) {
-	if (this->unbound_expressions.size() > 1) {
-		throw NotImplementedException("Multiple columns in ART index not supported");
-	}
 	tree = nullptr;
 	expression_result.Initialize(types);
 	int n = 1;
@@ -25,22 +22,12 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expres
 	}
 	switch (types[0]) {
 	case TypeId::INT8:
-		maxPrefix = sizeof(int8_t);
-		break;
 	case TypeId::INT16:
-		maxPrefix = sizeof(int16_t);
-		break;
 	case TypeId::INT32:
-		maxPrefix = sizeof(int32_t);
-		break;
 	case TypeId::INT64:
-		maxPrefix = sizeof(int64_t);
-		break;
 	case TypeId::FLOAT:
-		maxPrefix = sizeof(float);
-		break;
 	case TypeId::DOUBLE:
-		maxPrefix = sizeof(double);
+	case TypeId::VARCHAR:
 		break;
 	default:
 		throw InvalidTypeException(types[0], "Invalid type for index");
@@ -51,15 +38,14 @@ ART::~ART() {
 }
 
 bool ART::LeafMatches(Node *node, Key &key, unsigned depth) {
-	if (depth != maxPrefix) {
-		auto leaf = static_cast<Leaf *>(node);
-		Key &leaf_key = *leaf->value;
-		for (index_t i = depth; i < maxPrefix; i++) {
-			if (leaf_key[i] != key[i]) {
-				return false;
-			}
+	auto leaf = static_cast<Leaf *>(node);
+	Key &leaf_key = *leaf->value;
+	for (index_t i = depth; i < leaf_key.len; i++) {
+		if (leaf_key[i] != key[i]) {
+			return false;
 		}
 	}
+
 	return true;
 }
 
@@ -85,10 +71,11 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 //===--------------------------------------------------------------------===//
 // Insert
 //===--------------------------------------------------------------------===//
-template <class T> static void generate_keys(DataChunk &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
-	auto input_data = (T *)input.data[0].GetData();
-	VectorOperations::Exec(input.data[0], [&](index_t i, index_t k) {
-		if (input.data[0].nullmask[i]) {
+template <class T>
+static void generate_keys(Vector &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+	auto input_data = (T *)input.GetData();
+	VectorOperations::Exec(input, [&](index_t i, index_t k) {
+		if (input.nullmask[i]) {
 			keys.push_back(nullptr);
 		} else {
 			keys.push_back(Key::CreateKey<T>(input_data[i], is_little_endian));
@@ -96,30 +83,81 @@ template <class T> static void generate_keys(DataChunk &input, vector<unique_ptr
 	});
 }
 
+template <class T>
+static void concatenate_keys(Vector &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+	auto input_data = (T *)input.GetData();
+	VectorOperations::Exec(input, [&](index_t i, index_t k) {
+		if (input.nullmask[i] || !keys[k]) {
+			// either this column is NULL, or the previous column is NULL!
+			keys[k] = nullptr;
+		} else {
+			// concatenate the keys
+			auto old_key = move(keys[k]);
+			auto new_key = Key::CreateKey<T>(input_data[i], is_little_endian);
+			auto keyLen = old_key->len + new_key->len;
+			auto compound_data = unique_ptr<data_t[]>(new data_t[keyLen]);
+			memcpy(compound_data.get(), old_key->data.get(), old_key->len);
+			memcpy(compound_data.get() + old_key->len, new_key->data.get(), new_key->len);
+			keys[k] = make_unique<Key>(move(compound_data), keyLen);
+		}
+	});
+}
+
 void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	keys.reserve(STANDARD_VECTOR_SIZE);
-
+	// generate keys for the first input column
 	switch (input.data[0].type) {
 	case TypeId::INT8:
-		generate_keys<int8_t>(input, keys, is_little_endian);
+		generate_keys<int8_t>(input.data[0], keys, is_little_endian);
 		break;
 	case TypeId::INT16:
-		generate_keys<int16_t>(input, keys, is_little_endian);
+		generate_keys<int16_t>(input.data[0], keys, is_little_endian);
 		break;
 	case TypeId::INT32:
-		generate_keys<int32_t>(input, keys, is_little_endian);
+		generate_keys<int32_t>(input.data[0], keys, is_little_endian);
 		break;
 	case TypeId::INT64:
-		generate_keys<int64_t>(input, keys, is_little_endian);
+		generate_keys<int64_t>(input.data[0], keys, is_little_endian);
 		break;
 	case TypeId::FLOAT:
-		generate_keys<float>(input, keys, is_little_endian);
+		generate_keys<float>(input.data[0], keys, is_little_endian);
 		break;
 	case TypeId::DOUBLE:
-		generate_keys<double>(input, keys, is_little_endian);
+		generate_keys<double>(input.data[0], keys, is_little_endian);
+		break;
+	case TypeId::VARCHAR:
+		generate_keys<char *>(input.data[0], keys, is_little_endian);
 		break;
 	default:
 		throw InvalidTypeException(input.data[0].type, "Invalid type for index");
+	}
+	for (index_t i = 1; i < input.column_count; i++) {
+		// for each fo the remaining columns, concatenate
+		switch (input.data[i].type) {
+		case TypeId::INT8:
+			concatenate_keys<int8_t>(input.data[i], keys, is_little_endian);
+			break;
+		case TypeId::INT16:
+			concatenate_keys<int16_t>(input.data[i], keys, is_little_endian);
+			break;
+		case TypeId::INT32:
+			concatenate_keys<int32_t>(input.data[i], keys, is_little_endian);
+			break;
+		case TypeId::INT64:
+			concatenate_keys<int64_t>(input.data[i], keys, is_little_endian);
+			break;
+		case TypeId::FLOAT:
+			concatenate_keys<float>(input.data[i], keys, is_little_endian);
+			break;
+		case TypeId::DOUBLE:
+			concatenate_keys<double>(input.data[i], keys, is_little_endian);
+			break;
+		case TypeId::VARCHAR:
+			concatenate_keys<char *>(input.data[i], keys, is_little_endian);
+			break;
+		default:
+			throw InvalidTypeException(input.data[0].type, "Invalid type for index");
+		}
 	}
 }
 
@@ -140,6 +178,7 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 		if (!keys[i]) {
 			continue;
 		}
+
 		row_t row_id = row_identifiers[row_ids.sel_vector ? row_ids.sel_vector[i] : i];
 		if (!Insert(tree, move(keys[i]), 0, row_id)) {
 			// failed to insert because of constraint violation
@@ -152,6 +191,8 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 		// generate keys again
 		keys.clear();
 		GenerateKeys(input, keys);
+		unique_ptr<Key> key;
+
 		// now erase the entries
 		for (index_t i = 0; i < failed_index; i++) {
 			if (!keys[i]) {
@@ -178,10 +219,8 @@ void ART::VerifyAppend(DataChunk &chunk) {
 	if (!is_unique) {
 		return;
 	}
-
 	// unique index, check
 	lock_guard<mutex> l(lock);
-
 	// first resolve the expressions for the index
 	ExecuteExpressions(chunk, expression_result);
 
@@ -189,8 +228,7 @@ void ART::VerifyAppend(DataChunk &chunk) {
 	vector<unique_ptr<Key>> keys;
 	GenerateKeys(expression_result, keys);
 
-	// now insert the elements into the index
-	for (index_t i = 0; i < expression_result.size(); i++) {
+	for (index_t i = 0; i < chunk.size(); i++) {
 		if (!keys[i]) {
 			continue;
 		}
@@ -224,19 +262,20 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 		Key &existingKey = *leaf->value;
 		uint32_t newPrefixLength = 0;
 		// Leaf node is already there, update row_id vector
-		if (depth + newPrefixLength == maxPrefix) {
+		if (depth + newPrefixLength == existingKey.len && existingKey.len == key.len) {
 			return InsertToLeaf(*leaf, row_id);
 		}
 		while (existingKey[depth + newPrefixLength] == key[depth + newPrefixLength]) {
 			newPrefixLength++;
 			// Leaf node is already there, update row_id vector
-			if (depth + newPrefixLength == maxPrefix) {
+			if (depth + newPrefixLength == existingKey.len && existingKey.len == key.len) {
 				return InsertToLeaf(*leaf, row_id);
 			}
 		}
-		unique_ptr<Node> newNode = make_unique<Node4>(*this);
+
+		unique_ptr<Node> newNode = make_unique<Node4>(*this, newPrefixLength);
 		newNode->prefix_length = newPrefixLength;
-		memcpy(newNode->prefix.get(), &key[depth], std::min(newPrefixLength, maxPrefix));
+		memcpy(newNode->prefix.get(), &key[depth], newPrefixLength);
 		Node4::insert(*this, newNode, existingKey[depth + newPrefixLength], node);
 		unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, move(value), row_id);
 		Node4::insert(*this, newNode, key[depth + newPrefixLength], leaf_node);
@@ -249,21 +288,15 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 		uint32_t mismatchPos = Node::PrefixMismatch(*this, node.get(), key, depth);
 		if (mismatchPos != node->prefix_length) {
 			// Prefix differs, create new node
-			unique_ptr<Node> newNode = make_unique<Node4>(*this);
+			unique_ptr<Node> newNode = make_unique<Node4>(*this, mismatchPos);
 			newNode->prefix_length = mismatchPos;
-			memcpy(newNode->prefix.get(), node->prefix.get(), std::min(mismatchPos, maxPrefix));
+			memcpy(newNode->prefix.get(), node->prefix.get(), mismatchPos);
 			// Break up prefix
-			if (node->prefix_length < maxPrefix) {
-				auto node_ptr = node.get();
-				Node4::insert(*this, newNode, node->prefix[mismatchPos], node);
-				node_ptr->prefix_length -= (mismatchPos + 1);
-				memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatchPos + 1,
-				        std::min(node_ptr->prefix_length, maxPrefix));
-			} else {
-				throw NotImplementedException("PrefixLength > MaxPrefixLength");
-			}
+			auto node_ptr = node.get();
+			Node4::insert(*this, newNode, node->prefix[mismatchPos], node);
+			node_ptr->prefix_length -= (mismatchPos + 1);
+			memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatchPos + 1, node_ptr->prefix_length);
 			unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, move(value), row_id);
-
 			Node4::insert(*this, newNode, key[depth + mismatchPos], leaf_node);
 			node = move(newNode);
 			return true;
@@ -277,7 +310,6 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 		auto child = node->GetChild(pos);
 		return Insert(*child, move(value), depth + 1, row_id);
 	}
-
 	unique_ptr<Node> newNode = make_unique<Leaf>(*this, move(value), row_id);
 	Node::InsertLeaf(*this, node, key[depth], newNode);
 	return true;
@@ -295,14 +327,17 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	GenerateKeys(expression_result, keys);
 
 	// now erase the elements from the database
-	VectorOperations::ExecNumeric<row_t>(row_ids, [&](row_t row_id, index_t i, index_t k) {
-		if (!keys[k]) {
-			return;
+	row_ids.Normalify();
+	auto row_identifiers = (int64_t *)row_ids.GetData();
+
+	for (index_t i = 0; i < row_ids.count; i++) {
+		if (!keys[i]) {
+			continue;
 		}
-		Erase(tree, *keys[k], 0, row_id);
+		Erase(tree, *keys[i], 0, row_identifiers[i]);
 		// assert that the entry was erased properly
-		assert(!is_unique || Lookup(tree, *keys[k], 0) == nullptr);
-	});
+		assert(!is_unique || Lookup(tree, *keys[i], 0) == nullptr);
+	}
 }
 
 void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) {
@@ -366,6 +401,8 @@ static unique_ptr<Key> CreateKey(ART &art, TypeId type, Value &value) {
 		return Key::CreateKey<float>(value.value_.float_, art.is_little_endian);
 	case TypeId::DOUBLE:
 		return Key::CreateKey<double>(value.value_.double_, art.is_little_endian);
+	case TypeId::VARCHAR:
+		return Key::CreateKey<string>(value.str_value, art.is_little_endian);
 	default:
 		throw InvalidTypeException(type, "Invalid type for index");
 	}
@@ -384,38 +421,25 @@ void ART::SearchEqual(vector<row_t> &result_ids, ARTIndexScanState *state) {
 }
 
 Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
-	bool skippedPrefix = false; // Did we optimistically skip some prefix without checking it?
 	auto node_val = node.get();
 
 	while (node_val) {
 		if (node_val->type == NodeType::NLeaf) {
-			if (!skippedPrefix && depth == maxPrefix) {
-				// No check required
-				return node_val;
-			}
-
-			if (depth != maxPrefix) {
-				// Check leaf
-				auto leaf = static_cast<Leaf *>(node_val);
-				Key &leafKey = *leaf->value;
-				for (index_t i = (skippedPrefix ? 0 : depth); i < maxPrefix; i++) {
-					if (leafKey[i] != key[i]) {
-						return nullptr;
-					}
+			auto leaf = static_cast<Leaf *>(node_val);
+			Key &leafKey = *leaf->value;
+			//! Check leaf
+			for (index_t i = depth; i < leafKey.len; i++) {
+				if (leafKey[i] != key[i]) {
+					return nullptr;
 				}
 			}
 			return node_val;
 		}
-
 		if (node_val->prefix_length) {
-			if (node_val->prefix_length < maxPrefix) {
-				for (index_t pos = 0; pos < node_val->prefix_length; pos++) {
-					if (key[depth + pos] != node_val->prefix[pos]) {
-						return nullptr;
-					}
+			for (index_t pos = 0; pos < node_val->prefix_length; pos++) {
+				if (key[depth + pos] != node_val->prefix[pos]) {
+					return nullptr;
 				}
-			} else {
-				skippedPrefix = true;
 			}
 			depth += node_val->prefix_length;
 		}

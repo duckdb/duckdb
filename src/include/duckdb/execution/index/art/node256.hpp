@@ -13,7 +13,7 @@ namespace duckdb {
 
 class Node256 : public Node {
 public:
-	Node256(ART &art);
+	Node256(ART &art, size_t compressionLength);
 
 	unique_ptr<Node> child[256];
 

@@ -65,8 +65,10 @@ unique_ptr<LogicalOperator> IndexScan::TransformFilterToIndexScan(unique_ptr<Log
 	for (size_t j = 0; j < storage.indexes.size(); j++) {
 		auto &index = storage.indexes[j];
 
-		assert(index->unbound_expressions.size() == 1);
+		//		assert(index->unbound_expressions.size() == 1);
 		// first rewrite the index expression so the ColumnBindings align with the column bindings of the current table
+		if (index->unbound_expressions.size() > 1)
+			continue;
 		auto index_expression = index->unbound_expressions[0]->Copy();
 		bool rewrite_possible = true;
 		RewriteIndexExpression(*index, *get, *index_expression, rewrite_possible);

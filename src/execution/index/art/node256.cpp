@@ -3,7 +3,7 @@
 
 using namespace duckdb;
 
-Node256::Node256(ART &art) : Node(art, NodeType::N256) {
+Node256::Node256(ART &art, size_t compressionLength) : Node(art, NodeType::N256, compressionLength) {
 }
 
 index_t Node256::GetChildPos(uint8_t k) {
@@ -59,7 +59,7 @@ void Node256::erase(ART &art, unique_ptr<Node> &node, int pos) {
 	n->child[pos].reset();
 	n->count--;
 	if (node->count <= 36) {
-		auto newNode = make_unique<Node48>(art);
+		auto newNode = make_unique<Node48>(art, n->prefix_length);
 		CopyPrefix(art, n, newNode.get());
 		for (index_t i = 0; i < 256; i++) {
 			if (n->child[i]) {

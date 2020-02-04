@@ -13,7 +13,7 @@ namespace duckdb {
 
 class Node16 : public Node {
 public:
-	Node16(ART &art);
+	Node16(ART &art, size_t compressionLength);
 
 	uint8_t key[16];
 	unique_ptr<Node> child[16];

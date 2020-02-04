@@ -61,27 +61,23 @@ TEST_CASE("Multiple PRIMARY KEY constraint", "[constraints]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	// FIXME: not supported by ART yet
-	REQUIRE_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j VARCHAR, PRIMARY KEY(i, j))"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j VARCHAR, PRIMARY KEY(i, j))"));
 
-	// REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j VARCHAR, PRIMARY KEY(i, j))"));
+	// insert unique values
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (3, 'hello'), (3, 'world')"));
 
-	// // insert unique values
-	// REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (3, 'hello'), (3, 'world')"));
+	result = con.Query("SELECT * FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "world"}));
 
-	// result = con.Query("SELECT * FROM integers");
-	// REQUIRE(CHECK_COLUMN(result, 0, {3, 3}));
-	// REQUIRE(CHECK_COLUMN(result, 1, {"hello", "world"}));
+	// insert a duplicate value as part of a chain of values
+	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES (6, 'bla'), (3, 'hello');"));
+	// now insert just the first value
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (6, 'bla');"));
 
-	// // insert a duplicate value as part of a chain of values
-	// REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES (6, 'bla'), (3, 'hello');"));
-
-	// // now insert just the first value
-	// REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (6, 'bla');"));
-
-	// result = con.Query("SELECT * FROM integers");
-	// REQUIRE(CHECK_COLUMN(result, 0, {3, 3, 6}));
-	// REQUIRE(CHECK_COLUMN(result, 1, {"hello", "world", "bla"}));
+	result = con.Query("SELECT * FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 3, 6}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "world", "bla"}));
 }
 
 TEST_CASE("PRIMARY KEY and transactions", "[constraints]") {
@@ -145,43 +141,85 @@ TEST_CASE("PRIMARY KEY and update/delete on multiple columns", "[constraints]") 
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	// FIXME: not supported by ART yet
-	REQUIRE_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, PRIMARY KEY(a, b));"));
+	//! create a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, PRIMARY KEY(a, b));"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 'hello'), (12, 'world'), (13, 'blablabla')"));
 
-	// // create a table
-	// REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, PRIMARY KEY(a, b));"));
-	// REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 'hello'), (12, "
-	//                           "'world'), (13, 'blablabla')"));
-	// // update one of the columns, should work as it does not introduce duplicates
-	// REQUIRE_NO_FAIL(con.Query("UPDATE test SET b='hello';"));
-	// //! Set every key one higher, should also work without conflicts
-	// REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=a+1;"));
-	// //! Set only the first key higher, should not work as this introduces a
-	// //! duplicate key!
-	// REQUIRE_FAIL(con.Query("UPDATE test SET a=a+1 WHERE a<=12;"));
-	// //! Set all keys to 4, results in a conflict!
-	// REQUIRE_FAIL(con.Query("UPDATE test SET a=4;"));
+	//! update one of the columns, should work as it does not introduce duplicates
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET b='pandas';"));
+	result = con.Query("SELECT * FROM test ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value("pandas"), Value("pandas"), Value("pandas")}));
+	//! Set every key one higher, should also work without conflicts
+	REQUIRE_FAIL(con.Query("UPDATE test SET a=a+1;"));
 
-	// result = con.Query("SELECT * FROM test;");
-	// REQUIRE(CHECK_COLUMN(result, 0, {12, 13, 14}));
-	// REQUIRE(CHECK_COLUMN(result, 1, {Value("hello"), Value("hello"), Value("hello")}));
+	result = con.Query("SELECT * FROM test ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value("pandas"), Value("pandas"), Value("pandas")}));
 
-	// // delete and insert the same value should just work
-	// REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE a=12"));
-	// REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (12, 'hello');"));
+	//! Set only the first key higher, should not work as this introduces a duplicate key!
+	REQUIRE_FAIL(con.Query("UPDATE test SET a=13 WHERE a=12;"));
 
-	// // insert a duplicate should fail
-	// REQUIRE_FAIL(con.Query("INSERT INTO test VALUES (12, 'hello');"));
+	//! Set all keys to 4, results in a conflict!
+	REQUIRE_FAIL(con.Query("UPDATE test SET a=4;"));
+	result = con.Query("SELECT * FROM test ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value("pandas"), Value("pandas"), Value("pandas")}));
 
-	// // update one key
-	// REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=4 WHERE a=12;"));
+	//! delete and insert the same value should just work
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE a=12"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (12, 'pandas');"));
 
-	// result = con.Query("SELECT * FROM test ORDER BY a;");
-	// REQUIRE(CHECK_COLUMN(result, 0, {4, 13, 14}));
-	// REQUIRE(CHECK_COLUMN(result, 1, {Value("hello"), Value("hello"), Value("hello")}));
+	//! insert a duplicate should fail
+	REQUIRE_FAIL(con.Query("INSERT INTO test VALUES (12, 'pandas');"));
 
-	// // set a column to NULL should fail
-	// REQUIRE_FAIL(con.Query("UPDATE test SET b=NULL WHERE a=13;"));
+	//! update one key
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE a=12"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (4, 'pandas');"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=4 WHERE a=12;"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 11, 13}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value("pandas"), Value("pandas"), Value("pandas")}));
+
+	//! set a column to NULL should fail
+	REQUIRE_FAIL(con.Query("UPDATE test SET b=NULL WHERE a=13;"));
+}
+
+TEST_CASE("PRIMARY KEY prefix stress test multiple columns", "[constraints]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	//! create a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, PRIMARY KEY(a, b));"));
+
+	//! Insert 300 values
+	for (index_t idx = 0; idx < 300; idx++) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (" + to_string(idx) + ", 'hello_" + to_string(idx) + "')"));
+	}
+
+	//! Inserting same values should fail
+	for (index_t idx = 0; idx < 300; idx++) {
+		REQUIRE_FAIL(con.Query("INSERT INTO test VALUES (" + to_string(idx) + ", 'hello_" + to_string(idx) + "')"));
+	}
+
+	//! Update integer a on 1000 should work since there are no duplicates
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=a+1000;"));
+
+	//! Now inserting same 1000 values should work
+	for (index_t idx = 0; idx < 300; idx++) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (" + to_string(idx) + ", 'hello_" + to_string(idx) + "')"));
+	}
+
+	//! This update should fail and stress test the deletes on hello_ prefixes
+	REQUIRE_FAIL(con.Query("UPDATE test SET a=a+1000;"));
+
+	//! Should fail for same reason as above, just checking element per element to see if no one is escaping
+	for (index_t idx = 0; idx < 300; idx++) {
+		REQUIRE_FAIL(
+		    con.Query("INSERT INTO test VALUES (" + to_string(idx + 1000) + ", 'hello_" + to_string(idx) + "')"));
+	}
 }
 
 TEST_CASE("PRIMARY KEY and update/delete in the same transaction", "[constraints]") {
@@ -220,13 +258,13 @@ TEST_CASE("Test appending the same value many times to a primary key column", "[
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
+	con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)");
 	// insert a bunch of values into the index and query the index
 	for (int32_t val = 0; val < 100; val++) {
 		result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
 		REQUIRE(CHECK_COLUMN(result, 0, {0}));
 
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", val));
+		con.Query("INSERT INTO integers VALUES ($1)", val);
 
 		result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
@@ -239,14 +277,13 @@ TEST_CASE("Test appending the same value many times to a primary key column", "[
 	}
 	// now insert the same values, this should fail this time
 	for (int32_t it = 0; it < 10; it++) {
-		for (int32_t val = 64; val < 65; val++) {
-			result = con.Query("SELECT COUNT(*) FROM integers WHERE i + i = 64+" + to_string(val));
-			REQUIRE(CHECK_COLUMN(result, 0, {1}));
-			result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
-			REQUIRE(CHECK_COLUMN(result, 0, {1}));
-			result = con.Query("INSERT INTO integers VALUES ($1)", val);
-			REQUIRE_FAIL(result);
-		}
+		int32_t val = 64;
+		result = con.Query("SELECT COUNT(*) FROM integers WHERE i + i = 64+" + to_string(val));
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+		result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+		result = con.Query("INSERT INTO integers VALUES ($1)", val);
+		REQUIRE_FAIL(result);
 	}
 
 	// now test that the counts are correct
@@ -298,4 +335,117 @@ TEST_CASE("PRIMARY KEY and concurency conflicts", "[constraints]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 4, 5}));
 	result = con2.Query("SELECT * FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 4, 5}));
+}
+
+TEST_CASE("ART FP String Constraint", "[constraints]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i varchar PRIMARY KEY, j INTEGER)"));
+
+	//! insert two conflicting pairs at the same time
+	REQUIRE_FAIL(con.Query("INSERT INTO numbers VALUES ('1', 4), ('1', 5)"));
+
+	//! insert unique values
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES ('1', 4), ('2', 5)"));
+
+	result = con.Query("SELECT * FROM numbers");
+	REQUIRE(CHECK_COLUMN(result, 0, {"1", "2"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4, 5}));
+
+	//    //! insert a duplicate value as part of a chain of values
+	REQUIRE_FAIL(con.Query("INSERT INTO numbers VALUES ('6', 6), ('1', 4);"));
+	//
+	//    //! now insert just the first value
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES ('6', 6);"));
+	//
+	result = con.Query("SELECT * FROM numbers");
+	REQUIRE(CHECK_COLUMN(result, 0, {"1", "2", "6"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4, 5, 6}));
+	//! insert NULL value in PRIMARY KEY is not allowed
+	REQUIRE_FAIL(con.Query("INSERT INTO numbers VALUES (NULL, 4);"));
+	//! update NULL is also not allowed
+	REQUIRE_FAIL(con.Query("UPDATE numbers SET i=NULL;"));
+}
+
+TEST_CASE("PRIMARY KEY constraint on more than two columns", "[constraints]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query(
+	    "CREATE TABLE numbers(a integer, b integer, c integer, d integer, e integer, PRIMARY KEY(a,b,c,d,e))"));
+
+	//! insert two conflicting pairs at the same time
+	REQUIRE_FAIL(con.Query("INSERT INTO numbers VALUES (1,1,1,1,1), (1,1,1,1,1)"));
+
+	//! insert unique values
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (1,1,1,1,1),(1,2,1,1,1),(1,1,2,1,1),(2,2,2,2,2)"));
+
+	//! insert a duplicate value as part of a chain of values
+	REQUIRE_FAIL(con.Query("INSERT INTO numbers VALUES (1,1,1,1,1),(1,1,1,1,4);"));
+
+	//! now insert just the second value
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (1,1,1,1,4);"));
+
+	//! this should fail since will cause a duplicate
+	REQUIRE_FAIL(con.Query("UPDATE numbers SET c=1 WHERE c=2"));
+}
+
+TEST_CASE("PRIMARY KEY constraint that only covers a subset of the columns", "[constraints]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(
+	    con.Query("CREATE TABLE numbers(a integer, b integer, c integer, d integer, e integer, PRIMARY KEY(a,b))"));
+
+	//! insert two conflicting pairs at the same time
+	REQUIRE_FAIL(con.Query("INSERT INTO numbers VALUES (1,1,1,1,1), (1,1,1,1,1)"));
+
+	//! insert unique values
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (1,1,1,1,1),(1,2,1,1,1),(2,1,2,1,1),(2,2,2,2,2)"));
+
+	//! insert a duplicate value as part of a chain of values
+	REQUIRE_FAIL(con.Query("INSERT INTO numbers VALUES (1,1,1,1,1),(1,5,1,1,4);"));
+
+	//! now insert just the second value
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (1,5,1,1,4);"));
+
+	//! this should  work since is not part of primary key
+	REQUIRE_NO_FAIL(con.Query("UPDATE numbers SET c=1 WHERE c=2"));
+
+	//! this should  fail since is will cause a duplicate
+	REQUIRE_FAIL(con.Query("UPDATE numbers SET b=1 WHERE b=2"));
+
+	//! this should  work since it won't cause a duplicate
+	REQUIRE_NO_FAIL(con.Query("UPDATE numbers SET b=3 WHERE b=2"));
+}
+
+TEST_CASE("PRIMARY KEY constraint on multiple string columns with overlapping values", "[constraints]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tst(a varchar, b varchar,PRIMARY KEY(a,b))"));
+
+	//! insert two conflicting pairs at the same time
+	REQUIRE_FAIL(con.Query("INSERT INTO tst VALUES ('hell', 'hello'), ('hell','hello')"));
+
+	//! insert unique values
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO tst VALUES ('hell', 'hello'), ('hello','hell'), ('hel','hell'), ('hell','hel')"));
+
+	//! insert a duplicate value as part of a chain of values
+	REQUIRE_FAIL(con.Query("INSERT INTO tst VALUES ('hell', 'hello'),('hel', 'hello');"));
+
+	//! now insert just the second value
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO tst VALUES ('hel', 'hello');"));
+
+	//! this should  fail since is will cause a duplicate
+	REQUIRE_FAIL(con.Query("UPDATE tst SET b='hello' WHERE b='hel' "));
+
+	//! this should  work since it won't cause a duplicate
+	REQUIRE_NO_FAIL(con.Query("UPDATE tst SET b='hell' WHERE b='hel'"));
 }

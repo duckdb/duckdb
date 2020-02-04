@@ -1275,6 +1275,51 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE numbers"));
 }
 
+TEST_CASE("ART Strings", "[art-string]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(i varchar)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON strings(i)"));
+
+	//! Insert values and create index
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('test')"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('test1')"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('vest1')"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('somesuperbigstring')"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('somesuperbigstring1')"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('somesuperbigstring2')"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('somesuperbigstring')"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('maybesomesuperbigstring')"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES "
+	                          "('"
+	                          "maybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigst"
+	                          "ringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstring')"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES "
+	                          "('"
+	                          "maybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigst"
+	                          "ringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstring2')"));
+
+	result = con.Query("SELECT COUNT(i) FROM strings WHERE i = 'test'");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con.Query("SELECT COUNT(i) FROM strings WHERE i = 'somesuperbigstring'");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	result = con.Query("SELECT COUNT(i) FROM strings WHERE i = "
+	                   "'maybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringma"
+	                   "ybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstring'");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con.Query("SELECT COUNT(i) FROM strings WHERE i = "
+	                   "'maybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstringma"
+	                   "ybesomesuperbigstringmaybesomesuperbigstringmaybesomesuperbigstring2'");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result = con.Query("SELECT COUNT(i) FROM strings WHERE i >= 'somesuperbigstring' and i <='somesuperbigstringz'");
+	REQUIRE(CHECK_COLUMN(result, 0, {4}));
+	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE strings"));
+}
+
 TEST_CASE("ART Floating Point", "[art-float][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -1531,7 +1576,6 @@ TEST_CASE("ART Double Special Cases", "[art-double-special]") {
 	                   "CAST(POWER(1000,10000) AS DOUBLE)");
 	REQUIRE(CHECK_COLUMN(result, 0, {4}));
 }
-
 TEST_CASE("Test updates resulting from big index scans", "[art][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -1706,8 +1750,6 @@ TEST_CASE("Index Exceptions", "[art]") {
 	REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON integers(i COLLATE \"de_DE\")"));
 
 	REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON integers using blabla(i)"));
-
-	REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON integers(i,j)"));
 
 	REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON integers(k)"));
 
