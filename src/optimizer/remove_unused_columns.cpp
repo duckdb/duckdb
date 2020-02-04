@@ -154,12 +154,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 	case LogicalOperatorType::RECURSIVE_CTE: {
-	    everything_referenced = true;
-	    break;
+		everything_referenced = true;
+		break;
 	}
 	case LogicalOperatorType::CTE_REF: {
-	    everything_referenced = true;
-	    break;
+		everything_referenced = true;
+		break;
 	}
 	default:
 		break;

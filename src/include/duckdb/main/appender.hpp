@@ -69,10 +69,8 @@ public:
 	void Invalidate(string msg, bool close = false);
 
 private:
-	template<class T>
-	void AppendValueInternal(T value);
-	template<class SRC, class DST>
-	void AppendValueInternal(Vector &vector, SRC input);
+	template <class T> void AppendValueInternal(T value);
+	template <class SRC, class DST> void AppendValueInternal(Vector &vector, SRC input);
 
 	void CheckInvalidated();
 

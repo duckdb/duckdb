@@ -155,6 +155,7 @@ protected:
 	//! The secondary buffer holding auxiliary data of the vector, for example, a string vector uses this to store
 	//! strings
 	buffer_ptr<VectorBuffer> auxiliary;
+
 private:
 };
 } // namespace duckdb

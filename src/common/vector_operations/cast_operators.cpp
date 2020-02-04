@@ -12,9 +12,8 @@ using namespace std;
 
 template <class SRC, class OP> static void string_cast(Vector &source, Vector &result) {
 	assert(result.type == TypeId::VARCHAR);
-	UnaryExecutor::Execute<SRC, const char *, true>(source, result, [&](SRC input) {
-		return result.AddString(OP::template Operation<SRC, string>(input));
-	});
+	UnaryExecutor::Execute<SRC, const char *, true>(
+	    source, result, [&](SRC input) { return result.AddString(OP::template Operation<SRC, string>(input)); });
 }
 
 static NotImplementedException UnimplementedCast(SQLType source_type, SQLType target_type) {

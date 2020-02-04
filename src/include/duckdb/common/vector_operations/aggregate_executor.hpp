@@ -18,7 +18,7 @@ class AggregateExecutor {
 private:
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP, bool HAS_SEL_VECTOR>
 	static inline bool ExecuteLoop(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result, index_t count,
-										sel_t *__restrict sel_vector, nullmask_t &nullmask) {
+	                               sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 		ASSERT_RESTRICT(ldata, ldata + count, result, result + 1);
 		if (nullmask.any()) {
 			// skip null values in the operation
@@ -53,9 +53,9 @@ private:
 		}
 		return true;
 	}
+
 public:
-	template <class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static bool Execute(Vector &input, RESULT_TYPE *result) {
+	template <class INPUT_TYPE, class RESULT_TYPE, class OP> static bool Execute(Vector &input, RESULT_TYPE *result) {
 		auto ldata = (INPUT_TYPE *)input.GetData();
 		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
 			if (input.nullmask[0]) {
@@ -67,10 +67,10 @@ public:
 			input.Normalify();
 			if (input.sel_vector) {
 				return ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OP, true>(ldata, result, input.count, input.sel_vector,
-																			input.nullmask);
+				                                                      input.nullmask);
 			} else {
 				return ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OP, false>(ldata, result, input.count, input.sel_vector,
-																			input.nullmask);
+				                                                       input.nullmask);
 			}
 		}
 	}

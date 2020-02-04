@@ -25,9 +25,8 @@ static inline void tight_loop_hash(T *__restrict ldata, uint64_t *__restrict res
 			result_data[i] = HashOp::Operation(ldata[i], nullmask[i]);
 		});
 	} else {
-		VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
-			result_data[i] = HashOp::Operation(ldata[i], false);
-		});
+		VectorOperations::Exec(sel_vector, count,
+		                       [&](index_t i, index_t k) { result_data[i] = HashOp::Operation(ldata[i], false); });
 	}
 }
 
@@ -110,7 +109,8 @@ template <class T> void templated_loop_combine_hash(Vector &input, Vector &hashe
 	} else {
 		input.Normalify();
 		hashes.Normalify();
-		tight_loop_combine_hash<T>((T *)input.GetData(), (uint64_t *)hashes.GetData(), input.count, input.sel_vector, input.nullmask);
+		tight_loop_combine_hash<T>((T *)input.GetData(), (uint64_t *)hashes.GetData(), input.count, input.sel_vector,
+		                           input.nullmask);
 	}
 }
 

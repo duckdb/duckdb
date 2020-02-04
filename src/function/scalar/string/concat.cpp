@@ -30,9 +30,9 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 
 	// now perform the actual concatenation
 	vector<string> results(result.count);
-	for(index_t col_idx = 0; col_idx < args.column_count; col_idx++) {
+	for (index_t col_idx = 0; col_idx < args.column_count; col_idx++) {
 		auto &input = args.data[col_idx];
-		auto input_data = (const char **) input.GetData();
+		auto input_data = (const char **)input.GetData();
 		assert(input.vector_type == VectorType::FLAT_VECTOR || input.vector_type == VectorType::CONSTANT_VECTOR);
 		// loop over the vector and concat to all results
 		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
@@ -41,9 +41,7 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 				// constant null, skip
 				continue;
 			}
-			VectorOperations::Exec(result, [&](index_t i, index_t k) {
-				results[k] += input_data[0];
-			});
+			VectorOperations::Exec(result, [&](index_t i, index_t k) { results[k] += input_data[0]; });
 		} else {
 			// standard vector
 			VectorOperations::Exec(result, [&](index_t i, index_t k) {
@@ -57,24 +55,23 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 	}
 	// now write the final result to the result vector and add the strings to the heap
 	auto result_data = (const char **)result.GetData();
-	VectorOperations::Exec(result, [&](index_t i, index_t k) {
-		result_data[i] = result.AddString(results[k]);
-	});
+	VectorOperations::Exec(result, [&](index_t i, index_t k) { result_data[i] = result.AddString(results[k]); });
 }
 
 static void concat_operator(DataChunk &args, ExpressionState &state, Vector &result) {
-	BinaryExecutor::Execute<const char*, const char*, const char*, true>(args.data[0], args.data[1], result, [&](const char *a, const char *b) {
-		string concat = string(a) + b;
-		return result.AddString(concat);
-	});
+	BinaryExecutor::Execute<const char *, const char *, const char *, true>(args.data[0], args.data[1], result,
+	                                                                        [&](const char *a, const char *b) {
+		                                                                        string concat = string(a) + b;
+		                                                                        return result.AddString(concat);
+	                                                                        });
 }
 
 static void concat_ws_constant_sep(DataChunk &args, Vector &result, vector<string> &results, string sep) {
 	// now perform the actual concatenation
 	vector<bool> has_results(result.count, false);
-	for(index_t col_idx = 1; col_idx < args.column_count; col_idx++) {
+	for (index_t col_idx = 1; col_idx < args.column_count; col_idx++) {
 		auto &input = args.data[col_idx];
-		auto input_data = (const char **) input.GetData();
+		auto input_data = (const char **)input.GetData();
 		assert(input.vector_type == VectorType::FLAT_VECTOR || input.vector_type == VectorType::CONSTANT_VECTOR);
 		// loop over the vector and concat to all results
 		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
@@ -108,12 +105,12 @@ static void concat_ws_constant_sep(DataChunk &args, Vector &result, vector<strin
 }
 
 static void concat_ws_variable_sep(DataChunk &args, Vector &result, vector<string> &results, Vector &separator) {
-	auto sep_data = (const char**) separator.GetData();
+	auto sep_data = (const char **)separator.GetData();
 	// now perform the actual concatenation
 	vector<bool> has_results(result.count, false);
-	for(index_t col_idx = 1; col_idx < args.column_count; col_idx++) {
+	for (index_t col_idx = 1; col_idx < args.column_count; col_idx++) {
 		auto &input = args.data[col_idx];
-		auto input_data = (const char **) input.GetData();
+		auto input_data = (const char **)input.GetData();
 		assert(input.vector_type == VectorType::FLAT_VECTOR || input.vector_type == VectorType::CONSTANT_VECTOR);
 		// loop over the vector and concat to all results
 		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
@@ -151,7 +148,7 @@ static void concat_ws_variable_sep(DataChunk &args, Vector &result, vector<strin
 
 static void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &separator = args.data[0];
-	auto sep_data = (const char**) separator.GetData();
+	auto sep_data = (const char **)separator.GetData();
 
 	result.vector_type = VectorType::CONSTANT_VECTOR;
 	result.sel_vector = args.data[0].sel_vector;
@@ -187,12 +184,9 @@ static void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &
 		concat_ws_variable_sep(args, result, results, separator);
 	}
 
-
 	// now write the final result to the result vector and add the strings to the heap
 	auto result_data = (const char **)result.GetData();
-	VectorOperations::Exec(result, [&](index_t i, index_t k) {
-		result_data[i] = result.AddString(results[k]);
-	});
+	VectorOperations::Exec(result, [&](index_t i, index_t k) { result_data[i] = result.AddString(results[k]); });
 }
 
 void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
@@ -211,8 +205,7 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	// e.g.:
 	// concat_ws(',', NULL, NULL) = ""
 	// concat_ws(',', '', '') = ","
-	ScalarFunction concat =
-	    ScalarFunction("concat", {SQLType::VARCHAR}, SQLType::VARCHAR, concat_function);
+	ScalarFunction concat = ScalarFunction("concat", {SQLType::VARCHAR}, SQLType::VARCHAR, concat_function);
 	concat.varargs = SQLType::VARCHAR;
 	set.AddFunction(concat);
 

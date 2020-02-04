@@ -66,7 +66,8 @@ TEST_CASE("Test aggregates with scalar inputs", "[aggregate]") {
 	REQUIRE(CHECK_COLUMN(result, 5, {"hello,hello,hello"}));
 
 	// test aggregates on a set of values with scalar NULL values as inputs
-	result = con.Query("SELECT COUNT(NULL), MIN(NULL), FIRST(NULL), MAX(NULL), SUM(NULL), STRING_AGG(NULL, NULL) FROM integers");
+	result = con.Query(
+	    "SELECT COUNT(NULL), MIN(NULL), FIRST(NULL), MAX(NULL), SUM(NULL), STRING_AGG(NULL, NULL) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));

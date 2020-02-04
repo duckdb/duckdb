@@ -178,7 +178,8 @@ unique_ptr<QueryResult> QueryDatabase(vector<SQLType> result_types, sqlite3 *sql
 				}
 				case SQLTypeId::DATE: {
 					auto unix_time = sqlite3_column_int64(stmt, i);
-					((date_t *)result_chunk.data[i].GetData())[result_chunk.data[i].count] = Date::EpochToDate(unix_time);
+					((date_t *)result_chunk.data[i].GetData())[result_chunk.data[i].count] =
+					    Date::EpochToDate(unix_time);
 					break;
 				}
 				default:

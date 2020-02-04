@@ -27,8 +27,6 @@ string BenchmarkInfo() override {
 }
 FINISH_BENCHMARK(LineitemSimpleAggregate)
 
-
-
 DUCKDB_BENCHMARK(LineitemCount, "[aggregate]")
 void Load(DuckDBBenchmarkState *state) override {
 	// load the data into the tpch schema

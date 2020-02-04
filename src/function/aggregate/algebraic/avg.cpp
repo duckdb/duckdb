@@ -60,8 +60,8 @@ static void avg_combine(Vector &state, Vector &combined) {
 
 static void avg_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming avg
-	auto states = (avg_state_t **) state.GetData();
-	auto result_data = (double *) result.GetData();
+	auto states = (avg_state_t **)state.GetData();
+	auto result_data = (double *)result.GetData();
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
 		auto state_ptr = states[i];
 

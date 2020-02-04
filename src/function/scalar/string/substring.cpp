@@ -55,8 +55,7 @@ static void substring_function(DataChunk &args, ExpressionState &state, Vector &
 	unique_ptr<char[]> output;
 	TernaryExecutor::Execute<const char *, int, int, const char *, true>(
 	    input_vector, offset_vector, length_vector, result, [&](const char *input_string, int offset, int length) {
-		    return result.AddString(
-		        substring_scalar_function(input_string, offset, length, output, current_len));
+		    return result.AddString(substring_scalar_function(input_string, offset, length, output, current_len));
 	    });
 }
 

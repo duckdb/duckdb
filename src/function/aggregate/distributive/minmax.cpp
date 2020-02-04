@@ -28,9 +28,8 @@ static void max_combine(Vector &state, Vector &combined) {
 	VectorOperations::Scatter::Max(state, combined);
 }
 
-template<class T, class OP>
-static void minmax_simple_update(Vector inputs[], index_t input_count, data_ptr_t state_) {
-	auto state = (T*) state_;
+template <class T, class OP> static void minmax_simple_update(Vector inputs[], index_t input_count, data_ptr_t state_) {
+	auto state = (T *)state_;
 	T result;
 	if (!AggregateExecutor::Execute<T, T, OP>(inputs[0], &result)) {
 		// no non-null values encountered
@@ -43,8 +42,7 @@ static void minmax_simple_update(Vector inputs[], index_t input_count, data_ptr_
 	}
 }
 
-template<class OP>
-static aggregate_simple_update_t MinMaxFunction(SQLType sql_type) {
+template <class OP> static aggregate_simple_update_t MinMaxFunction(SQLType sql_type) {
 	auto type = GetInternalType(sql_type);
 	switch (type) {
 	case TypeId::BOOL:
@@ -61,7 +59,7 @@ static aggregate_simple_update_t MinMaxFunction(SQLType sql_type) {
 	case TypeId::DOUBLE:
 		return minmax_simple_update<double, OP>;
 	case TypeId::VARCHAR:
-		return minmax_simple_update<const char*, OP>;
+		return minmax_simple_update<const char *, OP>;
 	default:
 		throw NotImplementedException("FIXME: unimplemented type for MIN/MAX");
 	}

@@ -90,8 +90,8 @@ static void covar_combine(Vector &state, Vector &combined) {
 
 static void covarpop_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming population covariance
-	auto states = (covar_state_t **) state.GetData();
-	auto result_data = (double*) result.GetData();
+	auto states = (covar_state_t **)state.GetData();
+	auto result_data = (double *)result.GetData();
 	VectorOperations::Exec(result, [&](uint64_t i, uint64_t k) {
 		auto state_ptr = states[i];
 
@@ -107,8 +107,8 @@ static void covarpop_finalize(Vector &state, Vector &result) {
 
 static void covarsamp_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming sample covariance
-	auto states = (covar_state_t **) state.GetData();
-	auto result_data = (double*) result.GetData();
+	auto states = (covar_state_t **)state.GetData();
+	auto result_data = (double *)result.GetData();
 	VectorOperations::Exec(result, [&](uint64_t i, uint64_t k) {
 		auto state_ptr = states[i];
 

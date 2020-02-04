@@ -387,7 +387,7 @@ uint64_t Vector::NotNullSelVector(Vector &vector, sel_t *not_null_vector, sel_t 
 }
 
 string VectorTypeToString(VectorType type) {
-	switch(type) {
+	switch (type) {
 	case VectorType::FLAT_VECTOR:
 		return "FLAT";
 	case VectorType::SEQUENCE_VECTOR:
@@ -401,7 +401,7 @@ string VectorTypeToString(VectorType type) {
 
 string Vector::ToString() const {
 	string retval = VectorTypeToString(vector_type) + " " + TypeIdToString(type) + ": " + to_string(count) + " = [ ";
-	switch(vector_type) {
+	switch (vector_type) {
 	case VectorType::FLAT_VECTOR:
 		for (index_t i = 0; i < count; i++) {
 			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
@@ -519,8 +519,8 @@ void Vector::Sequence(int64_t start, int64_t increment, index_t count) {
 void Vector::GetSequence(int64_t &start, int64_t &increment) const {
 	assert(vector_type == VectorType::SEQUENCE_VECTOR);
 	auto data = buffer->GetData();
-	start = *((int64_t*) data);
-	increment = *((int64_t*) (data + sizeof(int64_t)));
+	start = *((int64_t *)data);
+	increment = *((int64_t *)(data + sizeof(int64_t)));
 }
 
 void Vector::Verify() {
@@ -581,4 +581,4 @@ void Vector::AddHeapReference(Vector &other) {
 	string_buffer.AddHeapReference(other.auxiliary);
 }
 
-}
+} // namespace duckdb

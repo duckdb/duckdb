@@ -14,13 +14,13 @@ using namespace std;
 
 struct NumericBinaryExecutor {
 private:
-	template<class T, class OP, bool IGNORE_NULL, class OPWRAPPER>
+	template <class T, class OP, bool IGNORE_NULL, class OPWRAPPER>
 	static inline void TemplatedExecute(Vector &left, Vector &right, Vector &result) {
 		BinaryExecutor::Execute<T, T, T, OP, IGNORE_NULL, OPWRAPPER>(left, right, result);
 	}
 
 public:
-	template <class OP, bool IGNORE_NULL=false, class OPWRAPPER=BinarySingleArgumentOperatorWrapper>
+	template <class OP, bool IGNORE_NULL = false, class OPWRAPPER = BinarySingleArgumentOperatorWrapper>
 	static inline void Execute(Vector &left, Vector &right, Vector &result) {
 		assert(left.type == right.type && left.type == result.type);
 		switch (left.type) {
@@ -76,7 +76,7 @@ void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result) {
 // Divide
 //===--------------------------------------------------------------------===//
 struct BinaryZeroIsNullWrapper {
-	template<class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, nullmask_t &nullmask, index_t idx) {
 		if (right == 0) {
 			nullmask[idx] = true;
