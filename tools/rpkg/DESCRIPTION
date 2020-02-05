@@ -10,7 +10,8 @@ Depends:
 License: MPL
 LazyData: true
 Encoding: UTF-8
-Imports: 
+Imports:
+    DBI,
     dbplyr,
     methods,
     testthat,
