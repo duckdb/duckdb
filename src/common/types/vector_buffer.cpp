@@ -6,7 +6,7 @@ using namespace duckdb;
 using namespace std;
 
 VectorBuffer::VectorBuffer(index_t data_size) : type(VectorBufferType::STANDARD_BUFFER) {
-	assert(data_size > 0);
+//	assert(data_size > 0);
 	data = unique_ptr<data_t[]>(new data_t[data_size]);
 }
 

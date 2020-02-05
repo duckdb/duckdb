@@ -231,7 +231,11 @@ static void list_update(Vector inputs[], index_t input_count, Vector &state) {
 		if (!inputs[0].nullmask[i]) {
 			v = Value::INTEGER(input_data[i]);
 		}
-		state->SetValue(state->count-1, v); // FIXME this is evil and slow
+		state->SetValue(state->count-1, v); // FIXME this is evil and slow.
+		// We could alternatively collect all values for the same vector in this input chunk and assign with selection vectors
+		// map<ptr, sel_vec>!
+		// worst case, one entry per input value, but meh
+		// todo: could abort?
 	});
 }
 
@@ -290,27 +294,31 @@ TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 	con.context->transaction.SetAutoCommit(false);
 	con.context->transaction.BeginTransaction();
 	auto &trans = con.context->transaction.ActiveTransaction();
-	con.context->catalog.CreateTableFunction(trans, &scan_info);
-	con.context->catalog.CreateFunction(trans, &extract_info);
+//	con.context->catalog.CreateTableFunction(trans, &scan_info);
+//	con.context->catalog.CreateFunction(trans, &extract_info);
 	con.context->catalog.CreateFunction(trans, &agg_info);
 
-
-	// auto result = con.Query("SELECT some_int, some_struct, struct_extract(some_struct, 'first'), some_list FROM
-	// my_scan() WHERE some_int > 7 ORDER BY some_int LIMIT 100 ");
-	auto result = con.Query("SELECT some_int, some_list_struct FROM my_scan() WHERE some_int > 7 ");
-	result->Print();
-
+//	// auto result = con.Query("SELECT some_int, some_struct, struct_extract(some_struct, 'first'), some_list FROM
+//	// my_scan() WHERE some_int > 7 ORDER BY some_int LIMIT 100 ");
+//	auto result = con.Query("SELECT some_int, some_list_struct FROM my_scan() WHERE some_int > 7 ");
+//	result->Print();
 
 	con.Query("CREATE TABLE list_data (g INTEGER, e INTEGER)");
-	con.Query("INSERT INTO list_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6)");
+	con.Query("INSERT INTO list_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (5, NULL)");
 
-	result = con.Query("SELECT g, LIST(e) from list_data GROUP BY g ");
+	auto result = con.Query("SELECT g, LIST(e) from list_data GROUP BY g");
 	result->Print();
 
-	// TODO project into struct (ez!)
+
+	result = con.Query("SELECT g, STRUCT_PACK(gg := g, ee := e) FROM list_data ");
+	result->Print();
+
+	// TODO project into struct
 	// TODO flatten list in join
 
-	// TODO map
+	// TODO binder support
+
+	// TODO map type
 	// TODO aggr/join
 	// TODO ?
 

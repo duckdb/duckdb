@@ -37,6 +37,7 @@ const vector<SQLType> SQLType::ALL_TYPES = {
     SQLType::BOOLEAN, SQLType::TINYINT,   SQLType::SMALLINT, SQLType::INTEGER, SQLType::BIGINT,
     SQLType::DATE,    SQLType::TIMESTAMP, SQLType::DOUBLE,   SQLType::FLOAT,   SQLType(SQLTypeId::DECIMAL),
     SQLType::VARCHAR};
+// TODO add LIST/STRUCT here
 
 const TypeId ROW_TYPE = TypeId::INT64;
 

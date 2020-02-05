@@ -32,7 +32,7 @@ void DataChunk::Initialize(vector<TypeId> &types) {
 	for (auto &type : types) {
 		size += GetTypeIdSize(type) * STANDARD_VECTOR_SIZE;
 	}
-	assert(size > 0);
+	//TODO disabled for structs which have no data assert(size > 0);
 	owned_data = unique_ptr<data_t[]>(new data_t[size]);
 	memset(owned_data.get(), 0, size);
 
