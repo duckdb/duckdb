@@ -107,7 +107,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 	auto lowercase_name = StringUtil::Lower(function_name);
 
 	if (root->agg_filter) {
-		throw ParserException("ORDER BY is not implemented for aggregates");
+		throw ParserException("FILTER is not implemented for aggregates");
 	}
 	if (root->agg_order) {
 		throw ParserException("ORDER BY is not implemented for aggregates");
