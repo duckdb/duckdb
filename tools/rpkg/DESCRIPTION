@@ -1,15 +1,16 @@
 Package: duckdb
-Title: DBI Package for DuckDB
+Title: DBI Package for the DuckDB database management system
 Version: 0.1.3
 Author: Hannes Muehleisen <hannes@cwi.nl>
 Maintainer: Hannes Muehleisen <hannes@cwi.nl>
 Description: TODO
 Depends: 
-    R (>= 3.5.0)
+    R (>= 3.5.0),
+    DBI
 License: MPL
 LazyData: true
 Encoding: UTF-8
-Imports: 
+Imports:
     DBI,
     dbplyr,
     methods,
