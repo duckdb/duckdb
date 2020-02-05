@@ -106,6 +106,13 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 
 	auto lowercase_name = StringUtil::Lower(function_name);
 
+	if (root->agg_filter) {
+		throw ParserException("ORDER BY is not implemented for aggregates");
+	}
+	if (root->agg_order) {
+		throw ParserException("ORDER BY is not implemented for aggregates");
+	}
+
 	if (root->over) {
 		if (root->agg_distinct) {
 			throw ParserException("DISTINCT is not implemented for window functions!");
