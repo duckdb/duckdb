@@ -28,6 +28,11 @@ TEST_CASE("Test COUNT operator", "[aggregate]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {3}));
 	REQUIRE(CHECK_COLUMN(result, 4, {2}));
 	REQUIRE(CHECK_COLUMN(result, 5, {1}));
+
+	// ORDERED aggregates are not supported
+	REQUIRE_FAIL(con.Query("SELECT COUNT(1 ORDER BY 1)"));
+	// FILTER clause not supported
+	REQUIRE_FAIL(con.Query("SELECT COUNT(1) FILTER (WHERE false)"));
 }
 
 TEST_CASE("Test aggregates with scalar inputs", "[aggregate]") {
