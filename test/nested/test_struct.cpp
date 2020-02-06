@@ -56,18 +56,13 @@ TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {5, 6}));
 	REQUIRE(CHECK_COLUMN(result, 1, {4, 6}));
 
+	result = con.Query("SELECT e, STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), 'xx') as ee FROM struct_data ORDER BY e DESC");
+	REQUIRE(CHECK_COLUMN(result, 0, {6, 5, 4, 3, 2, 1, Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {6, 5, 4, 3, 2, 1, Value()}));
 
 
 	//	FIXME scalars and aliases for scalars
 //	result = con.Query("SELECT STRUCT_PACK(a := 42, b := 43)");
-
-	// TODO projection
-
-	// TODO ORDER with NULL
-//	result = con.Query("SELECT e, STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), 'xx') as ee FROM struct_data ORDER BY e");
-//	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5, 6, Value()}));
-//	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3, 4, 5, 6, Value()}));
-
 
 }
 
