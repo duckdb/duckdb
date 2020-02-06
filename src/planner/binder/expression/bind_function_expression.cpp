@@ -44,8 +44,8 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	}
 
 	auto result = ScalarFunction::BindScalarFunction(context, *func, arguments, move(children), function.is_operator);
-	auto return_type = result->function.return_type;
-	return BindResult(move(result), return_type);
+	auto sql_return_type = result->sql_return_type;
+	return BindResult(move(result), sql_return_type);
 }
 
 BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function,

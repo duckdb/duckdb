@@ -40,10 +40,10 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 	}
 
 	auto& key_child = expr.children[1];
-	assert(expr.arguments[1].id == SQLTypeId::VARCHAR);
-	assert(key_child->return_type == TypeId::VARCHAR);
 
-	if (!key_child->IsScalar()) {
+
+	if (expr.arguments[1].id != SQLTypeId::VARCHAR ||
+			key_child->return_type != TypeId::VARCHAR || !key_child->IsScalar()) {
 		throw Exception("Key name for struct_extract needs to be a constant string");
 	}
 	Value key_val = ExpressionExecutor::EvaluateScalar(*key_child.get());
@@ -71,6 +71,7 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 	}
 
 	expr.return_type = GetInternalType(return_type);
+	expr.sql_return_type = return_type;
 	expr.children.pop_back();
 	return make_unique<StructExtractBindData>(key, key_index, GetInternalType(return_type));
 }

@@ -32,16 +32,24 @@ static unique_ptr<FunctionData> struct_pack_bind(BoundFunctionExpression &expr, 
 
 	// collect names and deconflict, construct return type
 	assert(expr.arguments.size() == expr.children.size());
+
+	if (expr.arguments.size()  == 0) {
+		throw Exception("Can't pack nothing into a struct");
+	}
 	for (index_t i = 0; i < expr.children.size(); i++) {
 		auto &child = expr.children[i];
+		if (child->alias.size() == 0) {
+			throw Exception("Need named argument for struct pack, e.g. STRUCT_PACK(a := b)");
+		}
 		if (name_collision_set.find(child->alias) != name_collision_set.end()) {
 			throw Exception("Duplicate struct entry name");
 		}
+		name_collision_set.insert(child->alias);
 		stype.child_type.push_back(make_pair(child->alias, expr.arguments[i]));
 	}
 
 	// this is more for completeness reasons
-	expr.function.return_type = stype;
+	expr.sql_return_type = stype;
 	return make_unique<StructPackBindData>(stype);
 }
 
