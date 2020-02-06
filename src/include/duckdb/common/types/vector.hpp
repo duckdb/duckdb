@@ -81,7 +81,6 @@ public:
 	//! The null mask of the vector, if the Vector has any NULL values
 	nullmask_t nullmask;
 
-	std::vector<std::pair<std::string, unique_ptr<Vector>>> children;
 
 public:
 	//! Create a vector that references the specified value.
@@ -136,6 +135,10 @@ public:
 	//! Add a reference from this vector to the string heap of the provided vector
 	void AddHeapReference(Vector &other);
 
+	child_list_t<unique_ptr<Vector>>& GetChildren();
+	void AddChild(unique_ptr<Vector> vector, string name="");
+
+
 protected:
 	//! A pointer to the data.
 	data_ptr_t data;
@@ -145,6 +148,10 @@ protected:
 	//! strings
 	buffer_ptr<VectorBuffer> auxiliary;
 
+	//! child vectors used for nested data
+	child_list_t<unique_ptr<Vector>> children;
+
 private:
+
 };
 } // namespace duckdb

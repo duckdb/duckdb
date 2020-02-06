@@ -557,4 +557,12 @@ void Vector::AddHeapReference(Vector &other) {
 	string_buffer.AddHeapReference(other.auxiliary);
 }
 
+child_list_t<unique_ptr<Vector>>& Vector::GetChildren() {
+	return children;
+}
+
+void Vector::AddChild(unique_ptr<Vector> vector, string name) {
+	children.push_back(make_pair(name, move(vector)));
+}
+
 } // namespace duckdb

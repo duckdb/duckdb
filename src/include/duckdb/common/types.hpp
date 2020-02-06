@@ -32,6 +32,9 @@ struct string_t {
 	uint32_t length;
 };
 
+template <class T>
+using child_list_t = std::vector<std::pair<std::string, T>>;
+
 struct list_entry_t {
 	list_entry_t() = default;
 	list_entry_t(uint64_t offset, uint64_t length) : offset(offset), length(length) {
@@ -200,7 +203,7 @@ struct SQLType {
 	uint8_t scale;
 
 	// TODO serialize this
-	std::vector<std::pair<std::string, SQLType>> child_type;
+	child_list_t<SQLType> child_type;
 
 	SQLType(SQLTypeId id = SQLTypeId::INVALID, uint16_t width = 0, uint8_t scale = 0)
 	    : id(id), width(width), scale(scale) {
@@ -236,6 +239,8 @@ public:
 	static const SQLType VARCHAR;
 	static const SQLType STRUCT;
 	static const SQLType LIST;
+	static const SQLType ANY;
+
 
 	//! A list of all NUMERIC types (integral and floating point types)
 	static const vector<SQLType> NUMERIC;

@@ -37,7 +37,7 @@ static void list_update(Vector inputs[], index_t input_count, Vector &state) {
 			// TODO need sqltype for this
 		}
 		state->count++;
-		for (auto& child : state->children) {
+		for (auto& child : state->GetChildren()) {
 			child.second->count++;
 		}
 		state->SetValue(state->count-1, inputs[0].GetValue(i)); // FIXME this is evil and slow.
@@ -76,7 +76,7 @@ static void list_finalize(Vector &state, Vector &result) {
 		list_child->Append(*state_ptr);
 	});
 	assert(list_child->count == total_len);
-	result.children.push_back(pair<string, unique_ptr<Vector>>("", move(list_child)));
+	result.AddChild(move(list_child));
 }
 
 

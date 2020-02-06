@@ -27,6 +27,8 @@ const SQLType SQLType::VARCHAR = SQLType(SQLTypeId::VARCHAR);
 const SQLType SQLType::STRUCT = SQLType(SQLTypeId::STRUCT);
 const SQLType SQLType::LIST = SQLType(SQLTypeId::LIST);
 
+const SQLType SQLType::ANY = SQLType(SQLTypeId::ANY);
+
 const vector<SQLType> SQLType::NUMERIC = {
     SQLType::TINYINT, SQLType::SMALLINT, SQLType::INTEGER,           SQLType::BIGINT,
     SQLType::FLOAT,   SQLType::DOUBLE,   SQLType(SQLTypeId::DECIMAL)};
@@ -289,8 +291,10 @@ TypeId GetInternalType(SQLType type) {
 		return TypeId::STRUCT;
 	case SQLTypeId::LIST:
 		return TypeId::LIST;
+	case SQLTypeId::ANY:
+		return TypeId::INVALID;
 	default:
-		throw ConversionException("Invalid SQLType %d", SQLTypeToString(type).c_str());
+		throw ConversionException("Invalid SQLType %s", SQLTypeToString(type).c_str());
 	}
 }
 

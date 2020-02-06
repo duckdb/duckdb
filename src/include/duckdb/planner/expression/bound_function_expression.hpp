@@ -23,6 +23,8 @@ public:
 	ScalarFunction function;
 	//! List of arguments to the function
 	vector<unique_ptr<Expression>> children;
+	//! Argument types
+	vector<SQLType> arguments;
 	//! Whether or not the function is an operator, only used for rendering
 	bool is_operator;
 	//! The bound function data (if any)

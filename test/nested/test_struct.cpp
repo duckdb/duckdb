@@ -40,28 +40,68 @@ TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 	con.Query("CREATE TABLE list_data (g INTEGER, e INTEGER)");
 	con.Query("INSERT INTO list_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (5, NULL)");
 
-	auto result = con.Query("SELECT g, LIST(e) from list_data GROUP BY g");
+
+	auto result = con.Query("SELECT g, STRUCT_PACK(gg := g, ee := e) FROM list_data ");
+	result->Print();
+
+	result = con.Query("SELECT g, STRUCT_PACK(gg := g, ee := e, ff := e) FROM list_data ");
+	result->Print();
+
+	result = con.Query("SELECT e, STRUCT_PACK(xx := e) FROM list_data ");
+	result->Print();
+
+	result = con.Query("SELECT e = STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), 'xx') as ee FROM list_data ORDER BY e");
 	result->Print();
 
 
-	result = con.Query("SELECT g, STRUCT_PACK(gg := g, ee := e) FROM list_data ");
+	 result = con.Query("SELECT g, LIST(e) from list_data GROUP BY g");
 	result->Print();
 
-	result = con.Query("SELECT e, STRUCT_PACK(xx := e), STRUCT_EXTRACT(STRUCT_PACK(xx := e), 'xx') FROM list_data ");
+	result = con.Query("SELECT g, LIST(CAST(e AS VARCHAR)) from list_data GROUP BY g");
 	result->Print();
 
+	result = con.Query("SELECT g, LIST(e/2.0) from list_data GROUP BY g");
+	result->Print();
+
+
+
+
+//	// TODO
 //	result = con.Query("SELECT g, LIST(STRUCT_PACK(xx := e)) FROM list_data GROUP BY g");
 //	result->Print();
-
-
-	// TODO
+//
+//	// TODO
 //	result = con.Query("SELECT STRUCT_PACK(a := 42, b := 43) ");
 //	result->Print();
 
-	// TODO flatten list in join
 
-	// TODO map type
-	// TODO aggr/join
 	// TODO ?
+
+//
+//
+//
+//	scalar modify params, evil but ok
+//	aggrs add function bind, pass binddata to callbacks, add cleanup function
+//
+//
+//
+//
+//	create table a (i integer, j list<integer>, k list<integer>)
+//
+//
+//	select * from  UNLIST(a, 'j')
+//
+//	LIST_EXTRACT(a, 42)
+//	a[42]
+//
+//
+//
+//	i integer, j integer, k list<integer>, OFFSETS
+//
+//
+//
+//
+//
+//	STRUCT_EXTRACT(a, 'b')
 
 }
