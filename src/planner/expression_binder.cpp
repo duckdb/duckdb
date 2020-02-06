@@ -156,6 +156,9 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, index_t depth,
 		auto be = (BoundExpression*) expr->get();
 		assert(be);
 		be->alias = alias;
+		if (!alias.empty()) {
+			be->expr->alias = alias;
+		}
 		return string();
 	}
 }

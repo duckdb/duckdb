@@ -41,11 +41,21 @@ TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3, 4, 5, 6, Value()}));
 
 
-	// TODO filter
-	//result = con.Query("SELECT e, STRUCT_PACK(xx := e, yy := g) as s FROM struct_data WHERE e > 5");
-//	FIXME scalars and aliases for scalars
+	result = con.Query("SELECT e, STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), 'xx') as s FROM struct_data WHERE e > 4");
+	REQUIRE(CHECK_COLUMN(result, 0, {5, 6}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5, 6}));
+
+	result = con.Query("SELECT e, STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), 'xx') as s FROM struct_data WHERE e IS NULL");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+
+	result = con.Query("SELECT e, STRUCT_EXTRACT(STRUCT_PACK(xx := e/2), 'xx') as s FROM struct_data WHERE e > 4");
+	REQUIRE(CHECK_COLUMN(result, 0, {5, 6}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2, 3}));
+
+
+	//	FIXME scalars and aliases for scalars
 //	result = con.Query("SELECT STRUCT_PACK(a := 42, b := 43)");
-//	result->Print();
 
 	// TODO projection
 

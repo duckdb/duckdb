@@ -23,6 +23,7 @@ static void struct_pack_fun(DataChunk &input, ExpressionState &state, Vector &re
 		new_child->Reference(input.data[i]);
 		result.AddChild(move(new_child), info.stype.child_type[i].first);
 	}
+	result.sel_vector = input.data[0].sel_vector;
 	result.count = input.data[0].count;
 }
 
