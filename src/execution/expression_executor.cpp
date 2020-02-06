@@ -118,9 +118,6 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(Expression &expr
 }
 
 void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, Vector &result) {
-	if (state) {
-		state->Reset();
-	}
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_BETWEEN:
 		Execute((BoundBetweenExpression &)expr, state, result);

@@ -57,15 +57,17 @@ static index_t between_loop_type_switch(Vector &input, Vector &lower, Vector &up
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundBetweenExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_unique<ExpressionState>(expr, root);
-	result->AddIntermediates({expr.input.get(), expr.lower.get(), expr.upper.get()});
+	result->AddChild(expr.input.get());
+	result->AddChild(expr.lower.get());
+	result->AddChild(expr.upper.get());
 	return result;
 }
 
 void ExpressionExecutor::Execute(BoundBetweenExpression &expr, ExpressionState *state, Vector &result) {
 	// resolve the children
-	auto &input = state->arguments.data[0];
-	auto &lower = state->arguments.data[1];
-	auto &upper = state->arguments.data[2];
+	Vector input(expr.input->return_type);
+	Vector lower(expr.lower->return_type);
+	Vector upper(expr.upper->return_type);
 	Execute(*expr.input, state->child_states[0].get(), input);
 	Execute(*expr.lower, state->child_states[1].get(), lower);
 	Execute(*expr.upper, state->child_states[2].get(), upper);
@@ -91,9 +93,9 @@ void ExpressionExecutor::Execute(BoundBetweenExpression &expr, ExpressionState *
 
 index_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState *state, sel_t result[]) {
 	// resolve the children
-	auto &input = state->arguments.data[0];
-	auto &lower = state->arguments.data[1];
-	auto &upper = state->arguments.data[2];
+	Vector input(expr.input->return_type);
+	Vector lower(expr.lower->return_type);
+	Vector upper(expr.upper->return_type);
 	Execute(*expr.input, state->child_states[0].get(), input);
 	Execute(*expr.lower, state->child_states[1].get(), lower);
 	Execute(*expr.upper, state->child_states[2].get(), upper);

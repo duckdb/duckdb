@@ -8,11 +8,9 @@ using namespace std;
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundOperatorExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_unique<ExpressionState>(expr, root);
-	vector<Expression *> children;
 	for (auto &child : expr.children) {
-		children.push_back(child.get());
+		result->AddChild(child.get());
 	}
-	result->AddIntermediates(children);
 	return result;
 }
 
@@ -23,7 +21,7 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState 
 		if (expr.children.size() < 2) {
 			throw Exception("IN needs at least two children");
 		}
-		auto &left = state->arguments.data[0];
+		Vector left(expr.children[0]->return_type);
 		// eval left side
 		Execute(*expr.children[0], state->child_states[0].get(), left);
 
@@ -38,9 +36,9 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState 
 		// for every child, OR the result of the comparision with the left
 		// to get the overall result.
 		for (index_t child = 1; child < expr.children.size(); child++) {
-			Vector comp_res(TypeId::BOOL, true, false);
+			Vector vector_to_check(expr.children[child]->return_type);
+			Vector comp_res(TypeId::BOOL);
 
-			auto &vector_to_check = state->arguments.data[child];
 			Execute(*expr.children[child], state->child_states[child].get(), vector_to_check);
 			VectorOperations::Equals(left, vector_to_check, comp_res);
 
@@ -62,7 +60,7 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState 
 			result.Reference(intermediate);
 		}
 	} else if (expr.children.size() == 1) {
-		auto &child = state->arguments.data[0];
+		Vector child(expr.children[0]->return_type);
 		Execute(*expr.children[0], state->child_states[0].get(), child);
 		switch (expr.type) {
 		case ExpressionType::OPERATOR_NOT: {

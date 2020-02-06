@@ -41,30 +41,29 @@ struct ConjunctionState : public ExpressionState {
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConjunctionExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_unique<ConjunctionState>(expr, root);
-	vector<Expression *> children;
 	for (auto &child : expr.children) {
-		children.push_back(child.get());
+		result->AddChild(child.get());
 	}
-	result->AddIntermediates(children);
 	return move(result);
 }
 
 void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionState *state, Vector &result) {
 	// execute the children
 	for (index_t i = 0; i < expr.children.size(); i++) {
-		Execute(*expr.children[i], state->child_states[i].get(), state->arguments.data[i]);
+		Vector current_result(TypeId::BOOL);
+		Execute(*expr.children[i], state->child_states[i].get(), current_result);
 		if (i == 0) {
 			// move the result
-			result.Reference(state->arguments.data[i]);
+			result.Reference(current_result);
 		} else {
-			Vector intermediate(TypeId::BOOL, true, false);
+			Vector intermediate(TypeId::BOOL);
 			// AND/OR together
 			switch (expr.type) {
 			case ExpressionType::CONJUNCTION_AND:
-				VectorOperations::And(state->arguments.data[i], result, intermediate);
+				VectorOperations::And(current_result, result, intermediate);
 				break;
 			case ExpressionType::CONJUNCTION_OR:
-				VectorOperations::Or(state->arguments.data[i], result, intermediate);
+				VectorOperations::Or(current_result, result, intermediate);
 				break;
 			default:
 				throw NotImplementedException("Unknown conjunction type!");

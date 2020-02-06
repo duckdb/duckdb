@@ -11,14 +11,16 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, sel_t tside[], in
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_unique<ExpressionState>(expr, root);
-	result->AddIntermediates({expr.check.get(), expr.result_if_true.get(), expr.result_if_false.get()});
+	result->AddChild(expr.check.get());
+	result->AddChild(expr.result_if_true.get());
+	result->AddChild(expr.result_if_false.get());
 	return result;
 }
 
 void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *state, Vector &result) {
-	auto &check = state->arguments.data[0];
-	auto &res_true = state->arguments.data[1];
-	auto &res_false = state->arguments.data[2];
+	Vector check(expr.check->return_type);
+	Vector res_true(expr.result_if_true->return_type);
+	Vector res_false(expr.result_if_false->return_type);
 
 	auto check_state = state->child_states[0].get();
 	auto res_true_state = state->child_states[1].get();

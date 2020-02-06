@@ -8,13 +8,13 @@ using namespace std;
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCastExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_unique<ExpressionState>(expr, root);
-	result->AddIntermediates({expr.child.get()});
+	result->AddChild(expr.child.get());
 	return result;
 }
 
 void ExpressionExecutor::Execute(BoundCastExpression &expr, ExpressionState *state, Vector &result) {
 	// resolve the child
-	auto &child = state->arguments.data[0];
+	Vector child(expr.child->return_type);
 	auto child_state = state->child_states[0].get();
 
 	Execute(*expr.child, child_state, child);
