@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -22,6 +23,7 @@ struct StructPackBindData : public FunctionData {
 	}
 };
 
+
 static void struct_pack_fun(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StructPackBindData &)*func_expr.bind_info;
@@ -34,6 +36,40 @@ static void struct_pack_fun(DataChunk &input, ExpressionState &state, Vector &re
 	}
 	result.count = input.data[0].count;
 }
+
+
+struct StructExtractBindData : public FunctionData {
+	string key;
+	index_t index;
+	TypeId type;
+
+	StructExtractBindData(string key, index_t index, TypeId type) : key(key), index(index), type(type) {
+	}
+
+	unique_ptr<FunctionData> Copy() override {
+		return make_unique<StructExtractBindData>(key, index, type);
+	}
+};
+
+static void struct_extract_fun(DataChunk &input, ExpressionState &state, Vector &result) {
+// eek
+	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &info = (StructExtractBindData &)*func_expr.bind_info;
+
+	// TODO exceptions
+	assert(input.column_count == 1);
+	auto& vec = input.data[0];
+
+
+	assert(info.index < vec.children.size());
+	auto& child = vec.children[info.index];
+	assert(child.first == info.key);
+	assert(child.second->type == info.type);
+
+	result.Reference(*child.second.get());
+	assert(result.count == vec.count);
+}
+
 
 
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, index_t depth) {
@@ -61,9 +97,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, index_
 		for (index_t i = 0; i < function.children.size(); i++) {
 			auto &child = (BoundExpression &)*function.children[i];
 			stype.child_type.push_back(pair<string, SQLType>(names[i], child.sql_type));
-
 			arguments.push_back(child.sql_type);
-			child.expr->alias = function.children[i]->alias;
 			children.push_back(move(child.expr));
 		}
 
@@ -77,6 +111,69 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, index_
 		return BindResult(move(result), return_type);
 	}
 
+
+	if (function.function_name == "struct_extract") {
+		string error;
+		assert(function.children.size() == 2);
+		// TODO exception
+
+		for (index_t i = 0; i < function.children.size(); i++) {
+			// TODO verify this
+			BindChild(function.children[i], depth, error);
+		}
+		if (!error.empty()) {
+			return BindResult(error);
+		}
+		// all children bound successfully
+		// extract the children and types
+		vector<SQLType> arguments;
+		vector<unique_ptr<Expression>> children;
+
+		auto& struct_child = ((BoundExpression &)* function.children[0]);
+		auto& key_child = ((BoundExpression &)* function.children[1]);
+
+		// TODO exception
+		assert(key_child.IsScalar() && key_child.sql_type.id == SQLTypeId::VARCHAR);
+		// evaluate name and put key in bind info
+
+		// TODO this might not be an ideal place to depend on the expression executor
+		ExpressionExecutor exec;
+		Value key_val = exec.EvaluateScalar(*key_child.expr.get());
+
+		// TODO exception
+		assert(key_val.type == TypeId::VARCHAR && !key_val.is_null && key_val.str_value.length() > 0);
+		string key = StringUtil::Lower(key_val.str_value);
+
+		// TODO exception
+		assert(struct_child.sql_type.id == SQLTypeId::STRUCT && struct_child.sql_type.child_type.size() > 0);
+
+		arguments.push_back(struct_child.sql_type);
+
+		SQLType return_type;
+		index_t key_index = 0;
+		bool found_key = false;
+
+		for (size_t i = 0; i < struct_child.sql_type.child_type.size(); i++) {
+			auto& child = struct_child.sql_type.child_type[i];
+			if (child.first == key) {
+				found_key = true;
+				key_index = i;
+				return_type = child.second;
+				break;
+			}
+		}
+		if (!found_key) {
+			assert(0);
+			// TODO exception
+		}
+
+		ScalarFunction extract_fun(arguments, return_type, struct_extract_fun);
+		auto result = make_unique<BoundFunctionExpression>(GetInternalType(return_type), extract_fun, false);
+		result->children.push_back(move(struct_child.expr));
+		result->bind_info = make_unique<StructExtractBindData>(key, key_index, GetInternalType(return_type));
+		return BindResult(move(result), return_type);
+	}
+
 	// lookup the function in the catalog
 	auto func = context.catalog.GetFunction(context.ActiveTransaction(), function.schema, function.function_name);
 	if (func->type == CatalogType::SCALAR_FUNCTION) {
@@ -87,11 +184,6 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, index_
 		return BindAggregate(function, (AggregateFunctionCatalogEntry *)func, depth);
 	}
 }
-
-
-//static void struct_extract_fun(DataChunk &input, ExpressionState &state, Vector &result) {
-//
-//}
 
 
 BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry *func,
@@ -113,19 +205,6 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		arguments.push_back(child.sql_type);
 		children.push_back(move(child.expr));
 	}
-
-//
-//	if (function.function_name == "struct_extract") { // FIXME not here!
-//		vector<SQLType> arguments;
-//		// first child needs to be anything, second child needs to be varchar
-//		if (children.size() != 2) {
-//			return BindResult("struct_extract needs two arguments, second one needs to be a string");
-//		}
-//		ScalarFunction extract_fun("struct_extract", arguments, arguments[0], struct_extract_fun);
-//		auto result = make_unique<BoundFunctionExpression>(children[0]->return_type, extract_fun, false);
-//		auto return_type = result->function.return_type;
-//		return BindResult(move(result), return_type);
-//	}
 
 	auto result = ScalarFunction::BindScalarFunction(context, *func, arguments, move(children), function.is_operator);
 	auto return_type = result->function.return_type;
