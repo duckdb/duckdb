@@ -105,10 +105,12 @@ void Vector::SetValue(uint64_t index_, Value val) {
 	case TypeId::STRUCT: {
 		for (size_t i = 0; i < val.struct_value.size(); i++) {
 			auto &struct_child = val.struct_value[i];
+			assert(vector_type == VectorType::CONSTANT_VECTOR || vector_type == VectorType::FLAT_VECTOR);
 			if (i == children.size()) {
 				// TODO should this child vector already exist here?
-				auto cv = make_unique<Vector>(TypeId::INT32);
+				auto cv = make_unique<Vector>();
 				cv->Initialize(struct_child.second.type, true);
+				cv->vector_type = vector_type;
 				cv->count = count;
 				children.push_back(pair<string, unique_ptr<Vector>>(struct_child.first, move(cv)));
 			}
@@ -461,8 +463,18 @@ void Vector::Normalify() {
 		case TypeId::VARCHAR:
 			flatten_constant_vector_loop<const char *>(data, old_data, count, sel_vector);
 			break;
+		case TypeId::STRUCT: {
+			for (auto& child : GetChildren()) {
+				assert(child.second->vector_type == VectorType::CONSTANT_VECTOR);
+				child.second->count = count;
+				child.second->sel_vector = sel_vector;
+				child.second->Normalify();
+			}
+			sel_vector = nullptr;
+		}
+			break;
 		default:
-			throw NotImplementedException("Unimplemented type for VectorOperations::Flatten");
+			throw NotImplementedException("Unimplemented type for VectorOperations::Normalify");
 		}
 		break;
 	}

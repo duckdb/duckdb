@@ -173,6 +173,13 @@ Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, i
 	return Value::TIMESTAMP(Date::FromDate(year, month, day), Time::FromTime(hour, min, sec, msec));
 }
 
+Value Value::STRUCT(child_list_t<Value> values) {
+	Value result(TypeId::STRUCT);
+	result.struct_value = move(values);
+	result.is_null = false;
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // CreateValue
 //===--------------------------------------------------------------------===//

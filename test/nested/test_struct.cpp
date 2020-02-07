@@ -11,6 +11,7 @@ using namespace std;
 TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 	DuckDB db(nullptr);
 	Connection con(db);
+	unique_ptr<QueryResult> result;
 	con.EnableQueryVerification();
 
 	con.Query("CREATE TABLE struct_data (g INTEGER, e INTEGER)");
@@ -32,9 +33,14 @@ TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 	REQUIRE_FAIL(con.Query("SELECT STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), g) FROM struct_data"));
 	REQUIRE_FAIL(con.Query("SELECT STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), '42) FROM struct_data"));
 
+	REQUIRE_FAIL(con.Query("CREATE TABLE test AS SELECT e, STRUCT_PACK(e) FROM struct_data"));
 
-	auto result = con.Query("SELECT e, STRUCT_PACK(e) FROM struct_data ");
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5, 6, Value()}));
+	result = con.Query("SELECT STRUCT_PACK(a := 42, b := 43)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::STRUCT({make_pair("a", Value::INTEGER(42)), make_pair("b", Value::INTEGER(43))})}));
+
+	result = con.Query("SELECT e, STRUCT_PACK(e) FROM struct_data ORDER BY e LIMIT 2");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::STRUCT({make_pair("e", Value())}), Value::STRUCT({make_pair("e", Value::INTEGER(1))})}));
 
 	result = con.Query("SELECT e, STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), 'xx') as ee FROM struct_data");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5, 6, Value()}));
@@ -60,10 +66,18 @@ TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {6, 5, 4, 3, 2, 1, Value()}));
 	REQUIRE(CHECK_COLUMN(result, 1, {6, 5, 4, 3, 2, 1, Value()}));
 
+	result = con.Query("SELECT e, STRUCT_EXTRACT(STRUCT_PACK(a := e, b := ROWID, c := 42), 'c') as ee FROM struct_data ORDER BY ROWID");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5, 6, Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {42, 42, 42, 42, 42, 42, 42}));
 
-	//	FIXME scalars and aliases for scalars
-//	result = con.Query("SELECT STRUCT_PACK(a := 42, b := 43)");
+	result = con.Query("SELECT STRUCT_EXTRACT(STRUCT_PACK(a := 42, b := 43), 'a') FROM struct_data");
+	REQUIRE(CHECK_COLUMN(result, 0, {42, 42, 42, 42, 42, 42, 42}));
 
+	result = con.Query("SELECT STRUCT_EXTRACT(STRUCT_PACK(a := 42, b := 43), 'a') s");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	result = con.Query("SELECT STRUCT_EXTRACT(STRUCT_EXTRACT(STRUCT_PACK(a := STRUCT_PACK(x := 'asdf', y := NULL), b := 43), 'a'), 'x') s");
+	REQUIRE(CHECK_COLUMN(result, 0, {"asdf"}));
 }
 
 
