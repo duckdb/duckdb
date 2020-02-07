@@ -11,10 +11,6 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/function_set.hpp"
 
-namespace re2 {
-class RE2;
-}
-
 namespace duckdb {
 
 
