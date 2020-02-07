@@ -152,6 +152,5 @@ protected:
 	child_list_t<unique_ptr<Vector>> children;
 
 private:
-
 };
 } // namespace duckdb

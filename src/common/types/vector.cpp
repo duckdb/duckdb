@@ -293,7 +293,6 @@ void Vector::Copy(Vector &other, uint64_t offset) {
 			child->Copy(*child_copy.get(), offset);
 
 			other.children.push_back(pair<string, unique_ptr<Vector>>("", move(child_copy)));
-
 		} break;
 		default:
 			throw NotImplementedException("Copy type ");

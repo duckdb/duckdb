@@ -314,7 +314,6 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, index_t order[],
 				// FIXME vectorize this!
 				tgt_vec.SetValue(row_idx, src_vec.GetValue(vector_idx_src));
 			}
-
 		} break;
 		default:
 			throw NotImplementedException("Type is unsupported in MaterializeSortedChunk()");
@@ -473,7 +472,6 @@ index_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, index_t order[]
 				// FIXME vectorize this!
 				tgt_vec.SetValue(row_idx, src_vec.GetValue(vector_idx_src));
 			}
-
 		} break;
 
 		default:
