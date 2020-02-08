@@ -299,8 +299,24 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, index_t order[],
 		case TypeId::VARCHAR:
 			templated_set_values<char *>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
+		case TypeId::STRUCT: {
+			for (index_t row_idx = 0; row_idx < remaining_data; row_idx++) {
+				index_t chunk_idx_src = order[start_offset + row_idx] / STANDARD_VECTOR_SIZE;
+				index_t vector_idx_src = order[start_offset + row_idx] % STANDARD_VECTOR_SIZE;
+
+				auto &src_chunk = chunks[chunk_idx_src];
+				Vector &src_vec = src_chunk->data[col_idx];
+				auto &tgt_vec = target.data[col_idx];
+				tgt_vec.nullmask[row_idx] = src_vec.nullmask[vector_idx_src];
+				if (tgt_vec.nullmask[row_idx]) {
+					continue;
+				}
+				// FIXME vectorize this!
+				tgt_vec.SetValue(row_idx, src_vec.GetValue(vector_idx_src));
+			}
+		} break;
 		default:
-			throw NotImplementedException("Type for setting");
+			throw NotImplementedException("Type is unsupported in MaterializeSortedChunk()");
 		}
 	}
 	target.Verify();
@@ -439,8 +455,27 @@ index_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, index_t order[]
 		case TypeId::VARCHAR:
 			templated_set_values<char *>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
+			// TODO this is ugly and sloooow!
+		case TypeId::STRUCT:
+		case TypeId::LIST: {
+			for (index_t row_idx = 0; row_idx < remaining_data; row_idx++) {
+				index_t chunk_idx_src = order[start_offset + row_idx] / STANDARD_VECTOR_SIZE;
+				index_t vector_idx_src = order[start_offset + row_idx] % STANDARD_VECTOR_SIZE;
+
+				auto &src_chunk = chunks[chunk_idx_src];
+				Vector &src_vec = src_chunk->data[col_idx];
+				auto &tgt_vec = target.data[col_idx];
+				tgt_vec.nullmask[row_idx] = src_vec.nullmask[vector_idx_src];
+				if (tgt_vec.nullmask[row_idx]) {
+					continue;
+				}
+				// FIXME vectorize this!
+				tgt_vec.SetValue(row_idx, src_vec.GetValue(vector_idx_src));
+			}
+		} break;
+
 		default:
-			throw NotImplementedException("Type for setting");
+			throw NotImplementedException("Type is unsupported in MaterializeHeapChunk()");
 		}
 	}
 	target.Verify();

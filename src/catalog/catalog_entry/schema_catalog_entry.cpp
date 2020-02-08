@@ -226,7 +226,7 @@ void SchemaCatalogEntry::CreateFunction(Transaction &transaction, CreateFunction
 CatalogEntry *SchemaCatalogEntry::GetFunction(Transaction &transaction, const string &name, bool if_exists) {
 	auto entry = functions.GetEntry(transaction, name);
 	if (!entry && !if_exists) {
-		throw CatalogException("Function with name %s does not exist!", name.c_str());
+		throw CatalogException("Function with name \"%s\" does not exist!", name.c_str());
 	}
 	return entry;
 }
@@ -234,7 +234,7 @@ CatalogEntry *SchemaCatalogEntry::GetFunction(Transaction &transaction, const st
 SequenceCatalogEntry *SchemaCatalogEntry::GetSequence(Transaction &transaction, const string &name) {
 	auto entry = sequences.GetEntry(transaction, name);
 	if (!entry) {
-		throw CatalogException("Sequence Function with name %s does not exist!", name.c_str());
+		throw CatalogException("Sequence Function with name \"%s\" does not exist!", name.c_str());
 	}
 	return (SequenceCatalogEntry *)entry;
 }

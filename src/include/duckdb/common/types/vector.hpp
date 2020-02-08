@@ -81,6 +81,7 @@ public:
 	//! The null mask of the vector, if the Vector has any NULL values
 	nullmask_t nullmask;
 
+
 public:
 	//! Create a vector that references the specified value.
 	void Reference(Value &value);
@@ -92,7 +93,7 @@ public:
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
-	void Initialize(TypeId new_type, bool zero_data = false);
+	void Initialize(TypeId new_type, bool zero_data = false, index_t count = STANDARD_VECTOR_SIZE);
 	//! Casts the vector to the specified type
 	void Cast(TypeId new_type = TypeId::INVALID);
 	//! Appends the other vector to this vector.
@@ -134,6 +135,10 @@ public:
 	//! Add a reference from this vector to the string heap of the provided vector
 	void AddHeapReference(Vector &other);
 
+	child_list_t<unique_ptr<Vector>>& GetChildren();
+	void AddChild(unique_ptr<Vector> vector, string name="");
+
+
 protected:
 	//! A pointer to the data.
 	data_ptr_t data;
@@ -142,6 +147,9 @@ protected:
 	//! The secondary buffer holding auxiliary data of the vector, for example, a string vector uses this to store
 	//! strings
 	buffer_ptr<VectorBuffer> auxiliary;
+
+	//! child vectors used for nested data
+	child_list_t<unique_ptr<Vector>> children;
 
 private:
 };

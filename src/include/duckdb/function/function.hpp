@@ -131,6 +131,7 @@ private:
 	void RegisterMathFunctions();
 	void RegisterOperators();
 	void RegisterStringFunctions();
+	void RegisterStructFunctions();
 	void RegisterSequenceFunctions();
 	void RegisterTrigonometricsFunctions();
 };

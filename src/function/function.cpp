@@ -57,6 +57,7 @@ void BuiltinFunctions::Initialize() {
 	RegisterOperators();
 	RegisterSequenceFunctions();
 	RegisterStringFunctions();
+	RegisterStructFunctions();
 	RegisterTrigonometricsFunctions();
 }
 
@@ -219,6 +220,8 @@ ScalarFunction::BindScalarFunction(ClientContext &context, ScalarFunctionCatalog
 	auto result =
 	    make_unique<BoundFunctionExpression>(GetInternalType(bound_function.return_type), bound_function, is_operator);
 	result->children = move(children);
+	result->arguments = arguments;
+	result->sql_return_type = bound_function.return_type;
 	if (bound_function.bind) {
 		result->bind_info = bound_function.bind(*result, context);
 	}

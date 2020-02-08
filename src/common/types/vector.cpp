@@ -46,15 +46,17 @@ void Vector::Reference(Value &value) {
 	SetValue(0, value);
 }
 
-void Vector::Initialize(TypeId new_type, bool zero_data) {
+void Vector::Initialize(TypeId new_type, bool zero_data, index_t count) {
 	if (new_type != TypeId::INVALID) {
 		type = new_type;
 	}
 	auxiliary.reset();
-	buffer = VectorBuffer::CreateStandardVector(type);
-	data = buffer->GetData();
-	if (zero_data) {
-		memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
+	if (GetTypeIdSize(type) > 0) {
+		buffer = VectorBuffer::CreateStandardVector(type, count);
+		data = buffer->GetData();
+		if (zero_data) {
+			memset(data, 0, count * GetTypeIdSize(type));
+		}
 	}
 	nullmask.reset();
 }
@@ -100,6 +102,30 @@ void Vector::SetValue(uint64_t index_, Value val) {
 		}
 		break;
 	}
+	case TypeId::STRUCT: {
+		for (size_t i = 0; i < val.struct_value.size(); i++) {
+			auto &struct_child = val.struct_value[i];
+			assert(vector_type == VectorType::CONSTANT_VECTOR || vector_type == VectorType::FLAT_VECTOR);
+			if (i == children.size()) {
+				// TODO should this child vector already exist here?
+				auto cv = make_unique<Vector>();
+				cv->Initialize(struct_child.second.type, true);
+				cv->vector_type = vector_type;
+				cv->count = count;
+				children.push_back(pair<string, unique_ptr<Vector>>(struct_child.first, move(cv)));
+			}
+			auto &vec_child = children[i];
+			if (vec_child.first != struct_child.first) {
+				throw Exception("Struct child name mismatch");
+			}
+			vec_child.second->SetValue(index, struct_child.second);
+		}
+	} break;
+	case TypeId::LIST: {
+		// TODO hmmm how do we make space for the value?
+	}
+
+	break;
 	default:
 		throw NotImplementedException("Unimplemented type for adding");
 	}
@@ -140,8 +166,28 @@ Value Vector::GetValue(uint64_t index) const {
 		assert(str);
 		return Value(string(str));
 	}
+	case TypeId::STRUCT: {
+		Value ret(TypeId::STRUCT);
+		ret.is_null = false;
+		// we can derive the value schema from the vector schema
+		for (auto &struct_child : children) {
+			ret.struct_value.push_back(pair<string, Value>(struct_child.first, struct_child.second->GetValue(entry)));
+		}
+		return ret;
+	}
+	case TypeId::LIST: {
+		Value ret(TypeId::LIST);
+		ret.is_null = false;
+		// get offset and length
+		auto offlen = ((list_entry_t *)data)[entry];
+		assert(children.size() == 1);
+		for (index_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
+			ret.list_value.push_back(children[0].second->GetValue(i));
+		}
+		return ret;
+	}
 	default:
-		throw NotImplementedException("Unimplemented type for conversion");
+		throw NotImplementedException("Unimplemented type for value access");
 	}
 }
 
@@ -154,6 +200,15 @@ void Vector::Reference(Vector &other) {
 	sel_vector = other.sel_vector;
 	type = other.type;
 	nullmask = other.nullmask;
+	if (type == TypeId::STRUCT || type == TypeId::LIST) {
+		for (size_t i = 0; i < other.children.size(); i++) {
+			auto &other_child_vec = other.children[i].second;
+			auto child_ref = make_unique<Vector>();
+			child_ref->type = other_child_vec->type;
+			child_ref->Reference(*other_child_vec.get());
+			children.push_back(pair<string, unique_ptr<Vector>>(other.children[i].first, move(child_ref)));
+		}
+	}
 }
 
 void Vector::Flatten() {
@@ -179,21 +234,70 @@ void Vector::Copy(Vector &other, uint64_t offset) {
 
 	other.nullmask.reset();
 	if (!TypeIsConstantSize(type)) {
-		assert(type == TypeId::VARCHAR);
-		other.count = count - offset;
-		auto source = (const char **)data;
-		auto target = (const char **)other.data;
-		VectorOperations::Exec(
-		    *this,
-		    [&](uint64_t i, uint64_t k) {
-			    if (nullmask[i]) {
-				    other.nullmask[k - offset] = true;
-				    target[k - offset] = nullptr;
-			    } else {
-				    target[k - offset] = other.AddString(source[i]);
-			    }
-		    },
-		    offset);
+		switch (type) {
+		case TypeId::VARCHAR: {
+			other.count = count - offset;
+			auto source = (const char **)data;
+			auto target = (const char **)other.data;
+			VectorOperations::Exec(
+			    *this,
+			    [&](uint64_t i, uint64_t k) {
+				    if (nullmask[i]) {
+					    other.nullmask[k - offset] = true;
+					    target[k - offset] = nullptr;
+				    } else {
+					    target[k - offset] = other.AddString(source[i]);
+				    }
+			    },
+			    offset);
+		} break;
+		case TypeId::STRUCT: {
+			// the main vector only has a nullmask, so set that with offset
+			// recursively apply to children
+			assert(offset <= count);
+			other.count = count - offset;
+			other.sel_vector = nullptr;
+			assert(offset == 0);
+			VectorOperations::Exec(
+			    *this, [&](index_t i, index_t k) { other.nullmask[k - offset] = nullmask[i]; }, offset);
+			for (auto &child : children) {
+				auto child_copy = make_unique<Vector>();
+				child_copy->Initialize(child.second->type);
+
+				// TODO this needs to be set elsewhere!
+				child.second->sel_vector = sel_vector;
+				child.second->count = count;
+
+				child.second->Copy(*child_copy, offset); // TODO the offset is obvious for struct, not so for list/map
+				other.children.push_back(pair<string, unique_ptr<Vector>>(child.first, move(child_copy)));
+			}
+		} break;
+		case TypeId::LIST: {
+			// copy main vector
+			// FIXME
+			assert(offset == 0);
+			other.Initialize(TypeId::LIST);
+			other.count = count - offset;
+			other.sel_vector = nullptr;
+			VectorOperations::Exec(
+			    *this, [&](index_t i, index_t k) { other.nullmask[k - offset] = nullmask[i]; }, offset);
+
+			// FIXME :/
+			memcpy(other.data, data, count * GetTypeIdSize(type));
+
+			// copy child
+			assert(children.size() == 1); // TODO if size() = 0, we would have all NULLs?
+			auto &child = children[0].second;
+			auto child_copy = make_unique<Vector>();
+			child_copy->Initialize(child->type, true, child->count);
+			child->Copy(*child_copy.get(), offset);
+
+			other.children.push_back(pair<string, unique_ptr<Vector>>("", move(child_copy)));
+		} break;
+		default:
+			throw NotImplementedException("Copy type ");
+		}
+
 	} else {
 		VectorOperations::Copy(*this, other, offset);
 	}
@@ -228,16 +332,32 @@ void Vector::Append(Vector &other) {
 	// merge NULL mask
 	VectorOperations::Exec(other, [&](uint64_t i, uint64_t k) { nullmask[old_count + k] = other.nullmask[i]; });
 	if (!TypeIsConstantSize(type)) {
-		assert(type == TypeId::VARCHAR);
-		auto source = (const char **)other.data;
-		auto target = (const char **)data;
-		VectorOperations::Exec(other, [&](uint64_t i, uint64_t k) {
-			if (other.nullmask[i]) {
-				target[old_count + k] = nullptr;
-			} else {
-				target[old_count + k] = AddString(source[i]);
+		switch (type) {
+		case TypeId::VARCHAR: {
+			auto source = (const char **)other.data;
+			auto target = (const char **)data;
+			VectorOperations::Exec(other, [&](uint64_t i, uint64_t k) {
+				if (other.nullmask[i]) {
+					target[old_count + k] = nullptr;
+				} else {
+					target[old_count + k] = AddString(source[i]);
+				}
+			});
+		} break;
+		case TypeId::STRUCT: {
+			// the main vector only has a nullmask, so set that with offset
+			// recursively apply to children
+			assert(children.size() == other.children.size());
+			for (size_t i = 0; i < children.size(); i++) {
+				assert(children[i].first == other.children[i].first);
+				assert(children[i].second->type == other.children[i].second->type);
+				children[i].second->Append(*other.children[i].second.get());
 			}
-		});
+		} break;
+		default:
+			throw NotImplementedException("Append type ");
+		}
+
 	} else {
 		VectorOperations::Copy(other, data + old_count * GetTypeIdSize(type));
 	}
@@ -342,8 +462,18 @@ void Vector::Normalify() {
 		case TypeId::VARCHAR:
 			flatten_constant_vector_loop<const char *>(data, old_data, count, sel_vector);
 			break;
+		case TypeId::STRUCT: {
+			for (auto& child : GetChildren()) {
+				assert(child.second->vector_type == VectorType::CONSTANT_VECTOR);
+				child.second->count = count;
+				child.second->sel_vector = sel_vector;
+				child.second->Normalify();
+			}
+			sel_vector = nullptr;
+		}
+			break;
 		default:
-			throw NotImplementedException("Unimplemented type for VectorOperations::Flatten");
+			throw NotImplementedException("Unimplemented type for VectorOperations::Normalify");
 		}
 		break;
 	}
@@ -436,6 +566,14 @@ void Vector::AddHeapReference(Vector &other) {
 	assert(other.auxiliary->type == VectorBufferType::STRING_BUFFER);
 	auto &string_buffer = (VectorStringBuffer &)*auxiliary;
 	string_buffer.AddHeapReference(other.auxiliary);
+}
+
+child_list_t<unique_ptr<Vector>>& Vector::GetChildren() {
+	return children;
+}
+
+void Vector::AddChild(unique_ptr<Vector> vector, string name) {
+	children.push_back(make_pair(name, move(vector)));
 }
 
 } // namespace duckdb

@@ -38,7 +38,7 @@ public:
 		return data.get();
 	}
 
-	static buffer_ptr<VectorBuffer> CreateStandardVector(TypeId type);
+	static buffer_ptr<VectorBuffer> CreateStandardVector(TypeId type, index_t count = STANDARD_VECTOR_SIZE);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(TypeId type);
 
 private:

@@ -109,6 +109,8 @@ private:
 	unique_ptr<ParsedExpression> TransformResTarget(PGResTarget *root);
 	unique_ptr<ParsedExpression> TransformNullTest(PGNullTest *root);
 	unique_ptr<ParsedExpression> TransformParamRef(PGParamRef *node);
+	unique_ptr<ParsedExpression> TransformNamedArg(PGNamedArgExpr *root);
+
 	unique_ptr<ParsedExpression> TransformSQLValueFunction(PGSQLValueFunction *node);
 
 	unique_ptr<ParsedExpression> TransformSubquery(PGSubLink *root);
